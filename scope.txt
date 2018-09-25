@@ -1,0 +1,15 @@
+
+
+todo
+	scad libraries
+
+tests
+	saftey
+	productivity
+
+designs
+	dryer knob
+	bari sax stand
+	el upright bass stand
+	brass stand
+	strings stand
