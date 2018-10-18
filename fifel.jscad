@@ -39,8 +39,8 @@ module fifel(){
 				//difference because we want the lip rest to have a hole in it so the air goes in!
 				difference() {
 
-					//this is the outer cylinder of the lip rest. This is the size of the opening and an additional amount so that it slopes from the bottom to the top
-					cylinder(r1=holeRadius[0]+2.5, r2 =holeRadius[0]+2, h = 6);
+					//this is the outer cylinder of the lip rest. This is the size of the opening and an additional amount so that it slopes from the bottom to the top. the scale at the begginning makes the thing all squashed and not super circular
+					scale([1.1,2,1]) cylinder(r1=holeRadius[0]+2.5, r2 =holeRadius[0]+2, h = 6);
 
 					//this is then the opening, which slopes the opposite way from the lip rest. this let's the chamber resonate better
 					translate([0,0,-1])cylinder(r1 = holeRadius[0], r2=holeRadius[0]-2, h = 7);
