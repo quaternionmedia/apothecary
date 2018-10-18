@@ -1,9 +1,9 @@
 //!OpenSCAD
-//file.jscad
-//lines that begin with '//' in javascript don't count as far as the computer is concerned, so it's easy to give instructions humans can read like this.
-//the next line sets the word  'holes' as the list of numbers outlined below. These lists get sperated by commas, and the semicolon at the end tells the computer that's the end of that statement.
+//the above line lets us generate this in jscad (even though we are using a scad syntax!!)
 
-//these numbers represent the distance from the head of the fife (the part where you blow air) to the center of each hole ( one for mouth, 7 for fingers)
+//lines that begin with '//' in javascript mostly (see first line of this file) don't count as far as the computer is concerned, so it's easy to give instructions humans can read like this.
+
+//the next line sets the word  'holes' as the list of numbers outlined below. These lists get sperated by commas, and the semicolon at the end tells the computer that's the end of that statement. These numbers represent the distance from the head of the fife (the part where you blow air) to the center of each hole ( one for mouth, 7 for fingers)
 holes = [20,60,70,90,110,130,150,170,190];
 
 //the next line is another list, but this time of how many degrees around the fife the opening gets rotated
@@ -21,7 +21,7 @@ bore = 20;
 //how thick the walls of the fife are
 wall = 4;
 
-//a module in openscad is basically a function. Let's you cdo a whole bunch of code all at once
+//a module in openscad is basically a function. Let's you do a whole bunch of code all at once
 module fifel(){
 
 	//difference takes the first shape and subtracts all the next shapes from it
