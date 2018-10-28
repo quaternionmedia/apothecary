@@ -55,3 +55,35 @@ module fifel(){
 fifel();
 
 //end of fifel!
+
+
+// fifel
+// alpha.2, jscad
+
+// bore = 20;
+// wall = 4;
+// slope = 2;
+// height = 215;
+//
+// function fifel () {
+//   return difference(
+//       union(
+//         cylinder({h: height, r1: bore+wall+slope, r2:bore+wall})
+//       ),
+//       union(
+//         translate([0,0,1], cylinder({h: height, r1: bore, r2:bore})),
+//         translate([0,0,30], rotate([0,90,0], cylinder({h:2*bore,r:5.5}))),
+//         translate([0,0,80], rotate([0,90,0], cylinder({h:2*bore,r:3}))),
+//         translate([0,0,110], rotate([0,90,0], cylinder({h:2*bore,r:3}))),
+//         translate([0,0,130], rotate([0,90,0], cylinder({h:2*bore,r:3}))),
+//         translate([0,0,150], rotate([0,90,0], cylinder({h:2*bore,r:3}))),
+//         translate([0,0,170], rotate([0,90,0], cylinder({h:2*bore,r:3}))),
+//         translate([0,0,190], rotate([0,90,0], cylinder({h:2*bore,r:3}))),
+//         translate([0,0,205], rotate([0,90,0], cylinder({h:2*bore,r:3})))
+//       )
+//     )
+// }
+//
+// function main () {
+//   return fifel();
+// }
