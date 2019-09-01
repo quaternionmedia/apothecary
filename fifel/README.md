@@ -7,5 +7,5 @@ A simple, customizeable flute, designed for easy 3D printing and playability.
 ### Design
 The flute begins as a solid cylinder of some height (currently set to the maximum size of our 3D printer), from which sucessive portions are 'bored' out (using the `difference()` function), such as hollowing the tube, the mouthpiece hole, and the finger holes. Each hole is placed porportionately according to create a (roughly) diatonic tuning. 
 
-See the comments in fifel/fifel.jscad for details
+See the comments in [./fifel.jscad] for details
 
