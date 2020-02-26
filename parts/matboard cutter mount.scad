@@ -5,7 +5,8 @@ h = 20;
 w = 10;
 d = 10.2;
 
-L = 2*25.4;
+L = 10;
+extension = .2;
 
 // rotate([0,90,0]) t_nut();
 module rail() {
@@ -26,9 +27,10 @@ module rail() {
  module bracket() {
      difference() {
          cube([20,20,L]);
-         translate([-4,1,0]) rotate([0,0,20]) cube([30,30,2*25.4]);
-         translate([0,3,L/4]) cube([15,5,L/2]);
-         translate([0,5,L/2]) rotate([0,90,0]) cylinder(r=1.5, h=20);
+         translate([-4,5,0]) rotate([0,0,20]) cube([30,30,L]);
+         translate([3,2,L/4]) cube([9,10,L]);
+         translate([0,7,L/4]) rotate([34,0,0]) cube([3,15,15]);
+         translate([0,7,L*.6]) rotate([0,90,0]) cylinder(r=1.75, h=20);
          
      }
      
@@ -36,19 +38,28 @@ module rail() {
  
  module bevel() {
      difference() {
-        cube([20,L,2]);
-        rotate([0,-45,0]) cube([2*sqrt(2),L,2*sqrt(2)]); 
+        cube([20,L,5]);
+        rotate([0,-45,0]) cube([5*sqrt(2),L,5*sqrt(2)]); 
      }
  }
  
  module assembly() {
-     linear_extrude(height=2*25.4) {
+     linear_extrude(height=L) {
          projection() rail();
      }
-    translate([-10,10.2,0]) bracket();
+    translate([-4.8,10.2,0]) cube([9.3,extension,L]);
+    translate([-10,10 + extension,0]) bracket();
  }
  
- difference() {
-     assembly();
-     translate([10,10.2,L]) rotate([90,180,-90]) bevel();
+ module mount() {
+     difference() {
+         assembly();
+         translate([11,8,L]) rotate([90,180,-90]) bevel();
+         translate([-5,0,0]) cube([10,10+extension,4]);
+     }
  }
+ // left
+ // mount();
+ 
+ // right
+ mirror([1,0,0]) mount();
