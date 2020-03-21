@@ -1,36 +1,40 @@
+#include <FastLED.h>
 #include <Control_Surface.h>
 
 HairlessMIDI_Interface midi;
 using namespace MIDI_Notes;
 NoteValueLED led = { LED_BUILTIN, note(C, 4) };
 
-// Include the library
-#include <Arduino_Helpers.h>
- 
+
+Array<CRGB, 8> leds = {};
+constexpr uint8_t ledpin = 6;
+NoteRangeFastLED<leds.length> midiled = {leds, note(C#, -2), CHANNEL_1};
+
+
+#include <Arduino_Helpers.h> 
 #include <AH/Hardware/Button.hpp>
  
-// Create a Button object that reads a push button connected to pin 2:
 Button pushbutton = {2};
- 
-// The pin with the LED connected:
-const pin_t ledPin = LED_BUILTIN;
+
  
 void setup() {
   pinMode(ledPin, OUTPUT);
+  
+  FastLED.addLeds<NEOPIXEL, ledpin>(leds.data, leds.length);
+  FastLED.setCorrection(TypicalPixelString);
+  midiled.setBrightness(128);
+  
   pushbutton.begin();
-  // You can invert the input, for use with normally closed (NC) switches:
-  // pushbutton.invert();
   Control_Surface.begin();
 }
- 
+
 void loop() {
   static bool ledState = LOW;
-  // Read the digital input, debounce the signal, and check the state of
-  // the button:
   if (pushbutton.update() == Button::Falling) {
-    ledState = !ledState; // Invert the state of the LED
-    // Update the LED with the new state
+    ledState = !ledState;
     digitalWrite(ledPin, ledState ? HIGH : LOW);
   }
-  Control_Surface.loop(); 
+  Control_Surface.loop();
+  FastLED.show();
+
 }
