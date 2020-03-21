@@ -18,7 +18,7 @@ minkowski() {
 }
 }
 
-module button(d=11) {
+module button(d=12.5) {
     cylinder(r=d, h=z);
 }
 
