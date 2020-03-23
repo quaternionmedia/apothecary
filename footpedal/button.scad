@@ -1,10 +1,10 @@
 $fn=128;
 r = 12.5;
-h = 15;
+h = 12;
 brim = 5;
 walls = 3;
-tolerence = .3;
-bottom = 4;
+tolerence = .4;
+bottom = 3;
 // width, height of contact element (paper clip)
 contactX = 10;
 contactZ = 1;
@@ -17,15 +17,17 @@ outerR = r + brim + walls;
 
 module contact() {
     // profile of contact device
-    cube([ contactX + tolerence, r * 4, contactY + tolerence ], center=true);
+    cube([ contactX + tolerence, r * 4, contactZ + tolerence ], center=true);
 }
 module button() {
     difference() {
         union() {
             cylinder(r=r, h=h);
-            cylinder(r= r + brim, h=2);
+            cylinder(r= r + brim, h=bottom);
         }
-        contact();
+        translate([0,0,contactZ / 2]) contact();
+        //hole for LED
+        translate([0,0,contactZ]) cube([ 5 + tolerence, 5 + tolerence, 2 + tolerence ], center=true);
     }
 }
 
@@ -56,5 +58,5 @@ module housing() {
 }
 
 
-//button();
-translate([0,0,-h]) housing();
+button();
+//translate([0,0,-h]) housing();
