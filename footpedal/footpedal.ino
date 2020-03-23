@@ -3,12 +3,10 @@
 
 HairlessMIDI_Interface midi;
 using namespace MIDI_Notes;
-NoteValueLED led = { LED_BUILTIN, note(C, 4) };
-
 
 Array<CRGB, 8> leds = {};
-constexpr uint8_t ledpin = 6;
-NoteRangeFastLED<leds.length> midiled = {leds, note(C#, -2), CHANNEL_1};
+#define ledpin 6
+NoteRangeFastLED<leds.length> midiled = {leds, note("C#", -2)};
 
 
 #include <Arduino_Helpers.h> 
@@ -18,7 +16,7 @@ Button pushbutton = {2};
 
  
 void setup() {
-  pinMode(ledPin, OUTPUT);
+  pinMode(ledpin, OUTPUT);
   
   FastLED.addLeds<NEOPIXEL, ledpin>(leds.data, leds.length);
   FastLED.setCorrection(TypicalPixelString);
@@ -32,7 +30,7 @@ void loop() {
   static bool ledState = LOW;
   if (pushbutton.update() == Button::Falling) {
     ledState = !ledState;
-    digitalWrite(ledPin, ledState ? HIGH : LOW);
+    digitalWrite(LED_BUILTIN, ledState ? HIGH : LOW);
   }
   Control_Surface.loop();
   FastLED.show();
