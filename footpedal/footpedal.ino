@@ -12,7 +12,12 @@ NoteRangeFastLED<leds.length> midiled = {leds, note("C#", -2)};
 #include <Arduino_Helpers.h> 
 #include <AH/Hardware/Button.hpp>
  
-Button pushbutton = {2};
+NoteButton b1 = {2, { note("C#", -2), CHANNEL_1 }};
+NoteButton b2 = {3, { note("D", -2), CHANNEL_1 }};
+NoteButton b3 = {4, { note("D#", -2), CHANNEL_1 }};
+NoteButton b4 = {5, { note("E", -2), CHANNEL_1 }};
+NoteButton b5 = {6, { note("F", -2), CHANNEL_1 }};
+NoteButton b6 = {7, { note("F#", -2), CHANNEL_1 }};
 
  
 void setup() {
