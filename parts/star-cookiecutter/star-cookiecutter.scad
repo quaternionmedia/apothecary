@@ -1,7 +1,7 @@
 //-- 5-pointed star
 //-- (c)  2010 Juan Gonzalez-Gomez (Obijuan) juan@iearobotics.com
 //-- GPL license
-use <parametric_star.scad>
+use <../parametric_star/parametric_star.scad>
 $fn=64;
 
 module star(r=15, wall=.1, h=10) {

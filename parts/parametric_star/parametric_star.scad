@@ -16,7 +16,7 @@
 module parametric_star(N=5, h=3, ri=15, re=30) {
 
   //-- Calculate and draw a 2D tip of the star
- //-- INPUT: 
+ //-- INPUT:
  //-- n: Number of the tip (from 0 to N-1)
   module tipstar(n) {
      i1 =  [ri*cos(-360*n/N+360/(N*2)), ri*sin(-360*n/N+360/(N*2))];
@@ -26,11 +26,11 @@ module parametric_star(N=5, h=3, ri=15, re=30) {
   }
 
   //-- Draw the 2D star and extrude
-  
-   //-- The star is the union of N 2D tips. 
+
+   //-- The star is the union of N 2D tips.
    //-- A inner cylinder is also needed for filling
    //-- A flat (2D) star is built. The it is extruded
-    linear_extrude(height=h) 
+    linear_extrude(height=h)
     union() {
       for (i=[0:N-1]) {
          tipstar(i);
@@ -41,4 +41,3 @@ module parametric_star(N=5, h=3, ri=15, re=30) {
 
 //-- Example
 parametric_star(N=5, ri=15/2,re=15);
-

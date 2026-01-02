@@ -1,4 +1,4 @@
-part = ""; //[20x Extrusion, 40x40 Extrusion, Wheel, OpenRail, 20mm Gantry Plate, Universal Gantry Plate, OpenRail Gantry Plate, 20x End Cap, T-Nut, Flat Linker, Angled Linker] 
+part = "20x Extrusion"; //[20x Extrusion, 40x40 Extrusion, Wheel, OpenRail, 20mm Gantry Plate, Universal Gantry Plate, OpenRail Gantry Plate, 20x End Cap, T-Nut, Flat Linker, Angled Linker]
 
 type = "20mm"; //[20mm, 40mm, 60mm, 80mm]
 
@@ -25,15 +25,15 @@ function circumradius(s=20, n) = s/(2*sin(180/n));
 function p2c_x(r,a) = r*cos(a);
 function p2c_y(r,a) = r*sin(a);
 
-module oval_hole(){
+module oval_hole(length, diameter, height){
     translate([-length/2,-diameter/2,0])
     cube([length,diameter,height]);
-    
+
     translate([length/2,0,0])
     cylinder(h=height, d=diameter);
-    
+
     translate([-length/2,0,0])
-    cylinder(h=height, d=diameter);    
+    cylinder(h=height, d=diameter);
 }
 
 //Basic outline of one quarter of extrusion
@@ -41,14 +41,14 @@ module vslot_unit(){
     difference(){
         union(){
             polygon(points=[[0,0],[0,3.7],[0.2*sqrt(2),3.9],[3.9-1.5*sqrt(0.5),3.9],[5.5,5.5+1.5*sqrt(0.5)],[5.5,8.2],[2.88,8.2],[2.88,8.3],[4.58,10],[8.5,10],[8.5,8.5],[10,8.5],[10,4.85],[8.3,2.88],[8.2,2.88],[8.2,5.5],[5.5+1.5*sqrt(0.5),5.5],[3.9,3.9-1.5*sqrt(0.5)],[3.9,0.2*sqrt(2)],[3.7,0]]);
-            
+
             translate([8.5,8.5,0])
             circle(d=3);
         }
-        
+
         union(){
             circle(d=5);
-            
+
             polygon(points=[[6.57,8.2],[8.2,8.2],[8.2,6.57],[7.66,6.57],[6.57,7.66]]);
         }
     }
@@ -58,11 +58,11 @@ module vslot_corner(){
     difference(){
         union(){
             polygon(points=[[0,0],[0,3.7],[0.2*sqrt(2),3.9],[2.4,3.9],[3.9,2.4],[3.9,0.2*sqrt(2)],[3.7,0]]);
-            
+
             translate([2.4,2.4,0])
             circle(d=3);
         }
-        
+
         circle(d=5);
     }
 }
@@ -73,7 +73,7 @@ module vslot_extension_unit(){
         union(){
             polygon(points=[[0,0],[0,3.7],[0.2*sqrt(2),3.9],[3.9-1.5*sqrt(0.5),3.9],[5.5,5.5+1.5*sqrt(0.5)],[5.5,8.2],[2.78,8.2],[4.58,10],[10,10],[10,8.2],[7.3,8.2],[7.3,7.3-1.5*sqrt(0.5)],[3.9,3.9-1.5*sqrt(0.5)],[3.9,0.2*sqrt(2)],[3.7,0]]);
         }
-        
+
         union(){
             circle(d=5);
         }
@@ -84,14 +84,14 @@ module vslot_extension_unit(){
 module vslot_extension_part(){
     translate([-20,0,0])
     vslot_extension_unit();
-    
+
     translate([-20,0,0])
     mirror([0,1,0])
     vslot_extension_unit();
-    
+
     rotate([0,0,180])
     vslot_extension_unit();
-    
+
     mirror([0,1,0])
     rotate([0,0,180])
     vslot_extension_unit();
@@ -105,12 +105,12 @@ module extrusion(sections, offset_r){
         for(i=[0:1])
             rotate([0,0,-i*90])
             vslot_unit();
-        
+
         translate([-20*(sections),0,0])
         for(i=[2:3])
             rotate([0,0,-i*90])
             vslot_unit();
-        
+
         if(type != "20mm")
             for(i=[0:sections-1])
                 translate([-20*i,0,0])
@@ -151,17 +151,17 @@ module openrail(){
         union(){
             //OpenRail cross section
             polygon(points=[[0,0.3],[0.3,0.3],[0.3,0],[2.075,0],[2.075,0.3],[2.375,0.3],[2.375,19.529],[4.75,19.529],[4.75,20.329],[2.375+0.5*sqrt(0.5),22.704-0.5*sqrt(0.5)],[2.375,22.704-0.5*sqrt(2)],[2.375-0.5*sqrt(0.5),22.704-0.5*sqrt(0.5)],[0,20.329]]);
-            
+
             translate([0.3,0.3,0])
             circle(d=0.6);
-            
+
             translate([2.075,0.3,0])
             circle(d=0.6);
-            
+
             translate([2.375,22.704-0.5*sqrt(2),0])
             circle(d=1);
         }
-        
+
         for(i=[0:floor(length/50)])
             translate([-delta,9.7543,50*(i+0.5)])
             rotate([0,90,0])
@@ -263,7 +263,7 @@ module plate (plate_type){
             cube([plate_spec[plate_type][0]-plate_spec[plate_type][3],plate_spec[plate_type][1]-plate_spec[plate_type][3],plate_spec[plate_type][2]/2]);
             cylinder(h=plate_spec[plate_type][2]/2, d=plate_spec[plate_type][3]);
         }
-        
+
         //The holes
         for (i=[4:len(plate_spec[plate_type])-1]){
             translate([plate_spec[plate_type][i][2],plate_spec[plate_type][i][3],-delta])
@@ -279,14 +279,14 @@ module end_cap(sections, offset_r){
             cube([17+20*sections,17,6]);
             cylinder(h=6, d=3);
         }
-        
+
         union(){
             extrusion(sections, offset_r);
-            
+
             for(i=[-1:2:1])
                 translate([8.2,8.2*i,0])
                 cylinder(h=15, d=3.4);
-            
+
             for(i=[-1:2:1])
                 translate([-8.2-20*sections,8.2*i,0])
                 cylinder(h=15, d=3.4);
@@ -300,7 +300,7 @@ module t_nut(){
         //2.5*tolerance allows T-Nut to move freely, reduce ratio for tighter fit
         offset(r=-2.5*tolerance)
         polygon(points=[[3.9-1.5*sqrt(0.5),3.9],[5.5,5.5+1.5*sqrt(0.5)],[5.5,8.2],[-5.5,8.2],[-5.5,5.5+1.5*sqrt(0.5)],[-3.9+1.5*sqrt(0.5),3.9]]);
-        
+
         translate([0,3.9+tolerance-delta,length/2])
         rotate([0,30,0])
         rotate([-90,0,0])
@@ -308,7 +308,7 @@ module t_nut(){
             // h = depth of nut hole
             // (d*sqrt(3)/2 = nut size, flat-to-flat
             cylinder(h=2.5, d=(2*5.5)/sqrt(3), $fn=6);
-            
+
             // d = diameter of hole for bolt thread
             cylinder(h=4.3-2*tolerance+2*delta, d=2.5);
         }
@@ -323,7 +323,7 @@ module linker_blank(){
         //2.5*tolerance allows T-Nut to move freely, reduce ratio for tighter fit
         offset(r=-2.5*tolerance)
         polygon(points=[[3.9-1.5*sqrt(0.5),3.9],[5.5,5.5+1.5*sqrt(0.5)],[5.5,8.2],[-5.5,8.2],[-5.5,5.5+1.5*sqrt(0.5)],[-3.9+1.5*sqrt(0.5),3.9]]);
-        
+
         for(i=[-floor(length/20):2:floor(length/20)])
         translate([0,3.9+tolerance-delta,5*i+length/2])
         rotate([0,30,0])
@@ -332,7 +332,7 @@ module linker_blank(){
             // h = depth of nut hole
             // (d*sqrt(3)/2 = nut size, flat-to-flat
             cylinder(h=2.5, d=(2*5.5)/sqrt(3), $fn=6);
-            
+
             // d = diameter of hole for bolt thread
             cylinder(h=4.3-2*tolerance+2*delta, d=2.5);
         }
@@ -362,7 +362,7 @@ module flat_linker(){
             linear_extrude(height=4.3-(5*tolerance))
             rotate([180,0,0])
             polygon(points=
-            [for (i = [0 : sections]) 
+            [for (i = [0 : sections])
             [circumradius(n=360/angle)*sin(i*angle),
             circumradius(n=360/angle)*cos(i*angle)]
             ]);
@@ -376,7 +376,7 @@ module flat_linker(){
                 cube([cord,cord,4.3-(5*tolerance)]);
             }
         }
-        union(){            
+        union(){
             rotate([0,0,a/2-90])
             translate([hole_offset,0,-delta])
             cylinder(d=2.5, h=4.3-(5*tolerance)+2*delta);

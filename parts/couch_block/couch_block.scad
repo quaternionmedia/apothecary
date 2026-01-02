@@ -9,7 +9,7 @@ x = 25.4;
 
 difference() {
 
-linear_extrude(height=2*x) {  
+linear_extrude(height=2*x) {
 minkowski() {
     polygon([
         [-1.5*x, 3.5*x],
@@ -17,8 +17,8 @@ minkowski() {
         [2.5*x, .5*x],
         [-2.5*x, .5*x]
         ]);
-    
-    
+
+
     circle(r=.5*x);
 };
 };
@@ -30,7 +30,7 @@ pilot_hole();
 };
 
 module pilot_hole() {
-    
+
 translate([0,0,x])
 rotate([-90,0,0])
 cylinder(r=.4*x, h=x*3.7);

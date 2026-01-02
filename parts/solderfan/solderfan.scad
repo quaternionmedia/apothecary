@@ -10,7 +10,7 @@ overhang=15;
 overhangSide=pow(2, .5)*overhang/2;
 
 module plateHole() {
-    cylinder(r=holeDiam/2, h=wall);    
+    cylinder(r=holeDiam/2, h=wall);
 }
 
 module lipCut() {
@@ -21,14 +21,14 @@ union() {
         //base
         cube([filterW+2*wall, filterW+2*wall, filterH+wall]);
         //filter cutout
-        translate([wall, wall, wall]) 
+        translate([wall, wall, wall])
             cube([filterW, filterW, filterH-wall]);
         //overhang cutouts
         translate([wall+overhangSide,wall,filterH])
             lipCut();
-        translate([wall+filterW-overhangSide,wall,filterH]) 
+        translate([wall+filterW-overhangSide,wall,filterH])
             lipCut();
-        translate([wall,wall+filterW-overhangSide,filterH]) 
+        translate([wall,wall+filterW-overhangSide,filterH])
             rotate([0,0,-90])
             lipCut();
         translate([wall+filterW-overhangSide,wall+filterW,filterH])
@@ -49,7 +49,7 @@ union() {
         translate([y, y, 0]) plateHole();
         translate([x, y, 0]) plateHole();
         translate([y, x, 0]) plateHole();
-    
+
     };
     //polyhedron()
 }

@@ -31,18 +31,18 @@ module rail() {
          translate([3,2,L/4]) cube([9,10,L]);
          translate([0,7,L/4]) rotate([34,0,0]) cube([3,15,15]);
          translate([0,7,L*.6]) rotate([0,90,0]) cylinder(r=1.75, h=20);
-         
+
      }
-     
+
  }
- 
+
  module bevel() {
      difference() {
         cube([20,L,5]);
-        rotate([0,-45,0]) cube([5*sqrt(2),L,5*sqrt(2)]); 
+        rotate([0,-45,0]) cube([5*sqrt(2),L,5*sqrt(2)]);
      }
  }
- 
+
  module assembly() {
      linear_extrude(height=L) {
          projection() rail();
@@ -50,7 +50,7 @@ module rail() {
     translate([-4.8,10.2,0]) cube([9.3,extension,L]);
     translate([-10,10 + extension,0]) bracket();
  }
- 
+
  module mount() {
      difference() {
          assembly();
@@ -60,6 +60,6 @@ module rail() {
  }
  // left
  // mount();
- 
+
  // right
  mirror([1,0,0]) mount();
