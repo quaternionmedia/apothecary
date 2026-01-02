@@ -1,0 +1,12 @@
+{
+  "name": "apothecary-viewer",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Local JSCAD web viewer assets for Apothecary",
+  "scripts": {
+    "viewer": "echo 'JSCAD viewer assets live under node_modules/@jscad/web/dist'"
+  },
+  "dependencies": {
+    "@jscad/web": "^2.6.0"
+  }
+}
