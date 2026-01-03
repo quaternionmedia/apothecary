@@ -37,7 +37,7 @@ class BasePart(BaseModel):
 
     # Display orientation: rotation [rx, ry, rz] in degrees to apply
     # for preferred "up" orientation (Z-up, sitting on ground plane)
-    display_rotation: Vector3D = Field(default_factory=lambda: Vector3D())
+    display_rotation: Vector3D = Field(default_factory=Vector3D)
 
     @property
     def exists(self) -> bool:

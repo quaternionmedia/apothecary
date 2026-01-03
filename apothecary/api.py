@@ -400,7 +400,7 @@ async def get_part_jscad(name: str, params: str | None = Query(None, alias="para
     a simple JSCAD module with a placeholder shape and the SCAD code as documentation.
     """
     part = _load_part_wrapper(name)
-    params_dict, params_json = _normalize_params(part, params)
+    _, params_json = _normalize_params(part, params)
 
     try:
         scad_code = part.source_file.read_text(encoding="utf-8")

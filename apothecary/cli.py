@@ -543,7 +543,7 @@ def dev(host: str, port: int, install: bool, skip_stl: bool, skip_elephant: bool
                 "",
             ]
 
-            for i, (data, x_pos) in enumerate(zip(part_data, x_positions, strict=False)):
+            for _i, (data, x_pos) in enumerate(zip(part_data, x_positions, strict=False)):
                 item = data["item"]
                 rel_path = item.path.relative_to(ROOT / "parts").with_suffix(".stl")
                 translate_x = x_pos - data["center_x"]
@@ -884,7 +884,7 @@ def _get_stl_bounding_box(stl_path: Path) -> tuple[float, float, float, float, f
     try:
         with open(stl_path, "rb") as f:
             # Check if binary or ASCII STL
-            header = f.read(80)
+            f.read(80)  # Skip 80-byte header
             num_triangles = struct.unpack("<I", f.read(4))[0]
 
             # Binary STL: 80 byte header + 4 byte count + 50 bytes per triangle
@@ -949,10 +949,6 @@ def parts_elephant_walk(output: str, gap: int, ensure_stl: bool):
     """
     # Per-part rotation overrides (rotate before calculating bounds)
     # Format: name -> (rx, ry, rz) rotation in degrees
-    ROTATIONS = {
-        # fifel is already tall in Z, no rotation needed
-        # footpedal and solderfan are already flat
-    }
 
     # Filter out elephant_walk itself and only include parts in subdirs
     items = [
@@ -1054,7 +1050,7 @@ def parts_elephant_walk(output: str, gap: int, ensure_stl: bool):
     ]
 
     # Generate import statements with calculated positions
-    for i, (data, x_pos) in enumerate(zip(part_data, x_positions, strict=False)):
+    for _i, (data, x_pos) in enumerate(zip(part_data, x_positions, strict=False)):
         item = data["item"]
         rel_path = item.path.relative_to(ROOT / "parts").with_suffix(".stl")
         # Translate to center the part at x_pos, and center Y at 0
@@ -1088,15 +1084,15 @@ def test_setup_e2e():
 
     # Check if playwright is installed
     try:
-        import playwright
+        import importlib.util
+        if importlib.util.find_spec("playwright") is not None:
+            try:
+                from importlib.metadata import version
 
-        try:
-            from importlib.metadata import version
-
-            pw_version = version("playwright")
-            _safe_echo(f"✓ Playwright installed (version {pw_version})")
-        except Exception:
-            _safe_echo("✓ Playwright installed")
+                pw_version = version("playwright")
+                _safe_echo(f"✓ Playwright installed (version {pw_version})")
+            except Exception:
+                _safe_echo("✓ Playwright installed")
     except ImportError:
         click.secho("✗ Playwright not installed", fg="red")
         click.echo("  Run: uv sync")
@@ -1167,15 +1163,15 @@ def test_validate_e2e():
     # Check Playwright dependency
     click.echo("Checking Playwright installation...")
     try:
-        import playwright
+        import importlib.util
+        if importlib.util.find_spec("playwright") is not None:
+            try:
+                from importlib.metadata import version
 
-        try:
-            from importlib.metadata import version
-
-            pw_version = version("playwright")
-            _safe_echo(f"✓ Playwright installed (version {pw_version})")
-        except Exception:
-            _safe_echo("✓ Playwright installed")
+                pw_version = version("playwright")
+                _safe_echo(f"✓ Playwright installed (version {pw_version})")
+            except Exception:
+                _safe_echo("✓ Playwright installed")
     except ImportError:
         click.secho("✗ Playwright not installed", fg="red")
         click.echo("   Run: uv sync")
@@ -1412,7 +1408,7 @@ def test_all(port: int, coverage: bool, headed: bool, fail_fast: bool):
         import urllib.request
 
         base_url = f"http://127.0.0.1:{port}"
-        for attempt in range(30):
+        for _attempt in range(30):
             try:
                 urllib.request.urlopen(f"{base_url}/health", timeout=1)
                 _safe_echo(f"✓ Server ready at {base_url}")
@@ -1488,7 +1484,6 @@ def test_all(port: int, coverage: bool, headed: bool, fail_fast: bool):
     total_time = time.time() - overall_start
     total_passed = results["unit"]["passed"] + results["e2e"]["passed"]
     total_failed = results["unit"]["failed"] + results["e2e"]["failed"]
-    total_skipped = results["unit"]["skipped"] + results["e2e"]["skipped"]
 
     click.echo("")
     click.secho("=" * 60, fg="cyan", bold=True)

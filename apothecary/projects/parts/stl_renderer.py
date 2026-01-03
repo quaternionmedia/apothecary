@@ -85,6 +85,7 @@ class OpenSCADRenderer:
                 if path.exists():
                     return path
         except (subprocess.TimeoutExpired, FileNotFoundError):
+            # Continue to next search method if command fails
             pass
 
         # Check common paths
