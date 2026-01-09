@@ -1,0 +1,11 @@
+{
+  "name": "example-json",
+  "objects": [
+    {
+      "type": "cube",
+      "size": {"x": 10, "y": 10, "z": 5},
+      "center": false,
+      "comment": "A JSON cube"
+    }
+  ]
+}

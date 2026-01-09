@@ -1,0 +1,82 @@
+# Python
+.python-version
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+.env
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+*.cover
+*.log
+
+# Linting / Formatting
+.ruff_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Node modules (for JSCAD viewer)
+node_modules/
+package-lock.json
+
+# Build outputs
+*.scad
+*.jscad
+*.jscad.js
+*.stl
+!examples/*.scad
+!examples/*.jscad
+!examples/*.jscad.js
+!parts/**/*.scad
+
+# Playwright
+playwright-report/
+test-results/
+playwright/.cache/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.bak
+*.orig

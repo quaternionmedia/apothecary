@@ -1,0 +1,12 @@
+This is a placeholder for the screenshot.
+
+To replace this with an actual screenshot:
+1. Take a screenshot of the viewer at http://127.0.0.1:8000/viewer
+2. Save it as docs/screenshot.png
+3. Delete this placeholder file
+
+Recommended screenshot:
+- Load the elephant_walk part to show all parts in one view
+- Use a clean browser window (no toolbars)
+- 1600x900 or similar widescreen aspect ratio
+- Include the parts dropdown and 3D viewer area

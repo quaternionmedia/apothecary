@@ -1,0 +1,39 @@
+name: 🧪 Test
+
+on:
+  push:
+    branches:
+    - main
+    - 'release/**'
+  pull_request:
+    branches:
+    - main
+  workflow_call:
+    inputs:
+      python_version:
+        description: The version of python to setup
+        type: string
+        default: 3.x
+
+jobs:
+  run_pytest:
+    name: 🥼 Run test suite
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📰 Checkout
+      uses: actions/checkout@v6
+
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ inputs.python_version }}
+
+    - name: 😎 Setup uv
+      uses: astral-sh/setup-uv@v7
+
+    - name: 🚧 Install dependencies
+      run: uv sync --locked --dev
+
+    - name: 🔬 Run test suite
+      run: uv run apothecary test all
