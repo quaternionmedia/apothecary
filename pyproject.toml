@@ -1,7 +1,7 @@
 [project]
 name = "apothecary"
 version = "0.1.0"
-description = "Lean OpenSCAD generation toolkit + curated printable parts"
+description = "OpenSCAD generation toolkit + curated printable parts"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -38,18 +38,16 @@ packages = ["apothecary"]
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
-markers = [
-    "e2e: end-to-end tests using Playwright",
-]
+markers = ["e2e: end-to-end tests using Playwright"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
 select = [
-    "E",  # pycodestyle errors
-    "F",  # pyflakes
-    "I",  # import sort
-    "B",  # bugbear
+    "E", # pycodestyle errors
+    "F", # pyflakes
+    "I", # import sort
+    "B", # bugbear
 ]
 ignore = []
 
@@ -63,6 +61,4 @@ target-version = ["py311"]
 
 [tool.coverage.run]
 source = ["apothecary"]
-omit = [
-    "apothecary/projects/parts/*",
-]
+omit = ["apothecary/projects/parts/*"]

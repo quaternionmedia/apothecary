@@ -1,6 +1,6 @@
 # 🧪 Apothecary
 
-Lean OpenSCAD generation toolkit + curated printable parts.
+OpenSCAD generation toolkit + curated printable parts.
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -48,14 +48,14 @@ uv run apothecary serve
 
 ## 📖 Documentation
 
-| Guide | Description |
-|-------|-------------|
-| [QUICKSTART.md](QUICKSTART.md) | Get running in 5 minutes |
-| [docs/](docs/README.md) | Full documentation index |
-| [docs/scene-json.md](docs/scene-json.md) | JSON format for scenes |
-| [docs/parts-authoring.md](docs/parts-authoring.md) | Add your own parts |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup & guidelines |
-| [CHANGELOG.md](CHANGELOG.md) | Version history |
+| Guide                                              | Description                    |
+| -------------------------------------------------- | ------------------------------ |
+| [QUICKSTART.md](QUICKSTART.md)                     | Get running in 5 minutes       |
+| [docs/](docs/README.md)                            | Full documentation index       |
+| [docs/scene-json.md](docs/scene-json.md)           | JSON format for scenes         |
+| [docs/parts-authoring.md](docs/parts-authoring.md) | Add your own parts             |
+| [CONTRIBUTING.md](CONTRIBUTING.md)                 | Development setup & guidelines |
+| [CHANGELOG.md](CHANGELOG.md)                       | Version history                |
 
 ## 🖥️ CLI Commands
 
@@ -94,16 +94,16 @@ apothecary check               # Verify installation
 
 Start the server and visit http://127.0.0.1:8000:
 
-| Endpoint | Description |
-|----------|-------------|
-| `/viewer` | Interactive 3D parts browser (Three.js) |
-| `/docs` | OpenAPI documentation (Swagger) |
-| `/parts` | List all parts (JSON) |
-| `/parts/{name}/scad` | Download OpenSCAD source |
-| `/parts/{name}/stl` | Download STL file |
-| `/parts/{name}/stl/generate` | Generate STL from SCAD |
-| `/openscad/status` | Check OpenSCAD availability |
-| `/health` | Health check |
+| Endpoint                     | Description                             |
+| ---------------------------- | --------------------------------------- |
+| `/viewer`                    | Interactive 3D parts browser (Three.js) |
+| `/docs`                      | OpenAPI documentation (Swagger)         |
+| `/parts`                     | List all parts (JSON)                   |
+| `/parts/{name}/scad`         | Download OpenSCAD source                |
+| `/parts/{name}/stl`          | Download STL file                       |
+| `/parts/{name}/stl/generate` | Generate STL from SCAD                  |
+| `/openscad/status`           | Check OpenSCAD availability             |
+| `/health`                    | Health check                            |
 
 ## 🐍 Python API
 
@@ -175,6 +175,7 @@ To skip auto-generation at startup: `APOTHECARY_SKIP_STL_GENERATION=1 apothecary
 ## 🤝 Contributing
 
 We welcome contributions! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for:
+
 - Development setup
 - Code style guidelines
 - Testing requirements
