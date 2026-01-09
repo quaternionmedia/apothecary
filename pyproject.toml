@@ -38,7 +38,10 @@ packages = ["apothecary"]
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
-markers = ["e2e: end-to-end tests using Playwright"]
+markers = [
+    "e2e: end-to-end tests using Playwright",
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
 
 [tool.ruff]
 line-length = 100
