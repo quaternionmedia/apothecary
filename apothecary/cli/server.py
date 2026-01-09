@@ -94,14 +94,14 @@ def serve(host: str, port: int, reload: bool, viewer_path: str | None, no_viewer
     "--install", is_flag=True, help="Run uv sync before starting (usually not needed with uv run)"
 )
 @click.option("--skip-stl", is_flag=True, help="Skip STL generation")
-@click.option("--skip-elephant", is_flag=True, help="Skip elephant walk regeneration")
-def dev(host: str, port: int, install: bool, skip_stl: bool, skip_elephant: bool):
+@click.option("--elephant", is_flag=True, help="Force regeneration of elephant walk file")
+def dev(host: str, port: int, install: bool, skip_stl: bool, elephant: bool):
     """Development workflow: regenerate files and start server.
 
     This convenience command runs the full dev setup:
     1. Optionally syncs dependencies (--install flag)
     2. Generates any missing STL files from SCAD sources
-    3. Regenerates the elephant walk file
+    3. Regenerates the elephant walk file if missing or --elephant flag is set
     4. Starts the dev server with auto-reload
 
     Example:
@@ -173,7 +173,7 @@ def dev(host: str, port: int, install: bool, skip_stl: bool, skip_elephant: bool
         click.echo("Step 2: Skipped (--skip-stl)")
 
     # Step 3: Regenerate elephant walk
-    if not skip_elephant:
+    if elephant or not (ROOT / "parts" / "elephant_walk.stl").exists():
         click.secho("Step 3: Regenerating elephant walk...", fg="cyan")
         elephant_path = ROOT / "parts" / "elephant_walk.scad"
 
