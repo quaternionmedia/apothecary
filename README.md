@@ -33,6 +33,9 @@ git clone https://github.com/yourorg/apothecary.git
 cd apothecary
 uv sync
 
+# Initialize submodules (Gridfinity, etc.)
+uv run apothecary submodules
+
 # Generate example
 uv run apothecary testrun -o example.scad
 
@@ -73,6 +76,10 @@ apothecary parts info NAME     # Show part details
 apothecary parts render NAME   # Generate include stub
 apothecary parts generate-stl --all  # Generate all STLs
 apothecary parts elephant-walk # Generate all-parts preview
+
+# Submodules (external libraries like Gridfinity)
+apothecary submodules          # Init & update all submodules
+apothecary submodules --status # Check submodule status
 
 # Server
 apothecary serve               # Start FastAPI server

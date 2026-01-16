@@ -91,7 +91,9 @@ def _vec(data):
 
 def _rehydrate(obj_dict):
     """Best-effort reconstruction of OpenSCAD objects from a plain dict.
-    Keeps logic intentionally minimal; adds a 'type' discriminator if present, otherwise infers by field set.
+
+    Keeps logic intentionally minimal; adds a 'type' discriminator if present,
+    otherwise infers by field set.
     """
     t = obj_dict.get("type")
     if t == "cube" or ("size" in obj_dict and isinstance(obj_dict.get("size"), dict)):
@@ -227,6 +229,12 @@ def _part_metadata(part) -> Dict[str, object]:
         "has_params": bool(part.params_model),
     }
 
+    # Check if this part has special STL generation requirements
+    stl_can_generate = True
+    stl_note = None
+    if hasattr(part, "can_generate_stl"):
+        stl_can_generate, stl_note = part.can_generate_stl()
+
     # Add file availability info
     metadata["files"] = {
         "scad": {"exists": part.source_file.exists(), "url": f"/parts/{part.name}/scad"},
@@ -235,6 +243,8 @@ def _part_metadata(part) -> Dict[str, object]:
             "exists": part.stl_file is not None,
             "url": f"/parts/{part.name}/stl" if part.stl_file else None,
             "generate_url": f"/parts/{part.name}/stl/generate",
+            "can_generate": stl_can_generate,
+            "note": stl_note,
         },
     }
 
@@ -272,7 +282,9 @@ async def health():
 @app.post("/render")
 async def render_scene(scene: Scene):
     """Render a scene to OpenSCAD code.
-    Attempts direct render; if underlying objects were deserialized without type info, rehydrate heuristically.
+
+    Attempts direct render; if underlying objects were deserialized without
+    type info, rehydrate heuristically.
     """
     try:
         return {
@@ -306,7 +318,7 @@ async def render_scene(scene: Scene):
                 "rehydrated": True,
             }
         except Exception as e:  # pragma: no cover
-            raise HTTPException(status_code=500, detail=f"render failed: {e}")
+            raise HTTPException(status_code=500, detail=f"render failed: {e}") from e
 
 
 @app.post("/render/template")
@@ -342,7 +354,7 @@ async def render_scene_with_template(scene: Scene, template: str = Body("{{ scen
                 "rehydrated": True,
             }
         except Exception as e:  # pragma: no cover
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.get("/parts")
@@ -493,6 +505,14 @@ async def generate_part_stl(name: str, force: bool = Query(False)):
             status_code=503, detail="OpenSCAD not installed. Cannot generate STL files."
         )
 
+    # Check if this part has special requirements
+    if hasattr(part, "can_generate_stl"):
+        can_gen, reason = part.can_generate_stl()
+        if not can_gen:
+            raise HTTPException(
+                status_code=503, detail=f"Cannot generate STL for '{name}': {reason}"
+            )
+
     # Check if we already have an up-to-date STL
     if not force and part.stl_file and part.stl_file.exists():
         return {
@@ -502,9 +522,18 @@ async def generate_part_stl(name: str, force: bool = Query(False)):
             "regenerated": False,
         }
 
-    # Generate STL
-    stl_path = part.source_file.with_suffix(".stl")
-    result = await renderer.render_stl_async(part.source_file, stl_path)
+    # Use part-specific OpenSCAD path if available (e.g., nightly build)
+    part_renderer = renderer
+    if hasattr(part, "get_openscad_path"):
+        custom_path = part.get_openscad_path()
+        if custom_path and custom_path != renderer.openscad_path:
+            from apothecary.projects.parts.stl_renderer import OpenSCADRenderer
+
+            part_renderer = OpenSCADRenderer(openscad_path=str(custom_path))
+
+    # Generate STL - use part's custom output path if defined
+    stl_path = part.get_stl_output_path()
+    result = await part_renderer.render_stl_async(part.source_file, stl_path)
 
     if not result.success:
         raise HTTPException(

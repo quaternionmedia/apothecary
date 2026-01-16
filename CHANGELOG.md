@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Git submodules command** – `apothecary submodules` to init/update external dependencies
+- **Gridfinity integration** – Parametric storage bin wrapper for gridfinity-rebuilt-openscad
+- **OpenSCAD Nightly detection** – Auto-detect development builds for parts requiring newer syntax
+- **Part STL customization** – Parts can define custom STL output paths and OpenSCAD requirements
 - **Elephant walk** – `apothecary parts elephant-walk` generates a preview file with all parts arranged in a line, using bounding boxes to prevent overlap
 - **Dev command** – `apothecary dev` for quick development workflow (generate STLs + start server)
 - **STL rendering** – OpenSCAD CLI integration for SCAD→STL conversion
