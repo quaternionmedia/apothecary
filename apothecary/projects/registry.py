@@ -83,40 +83,26 @@ def scan_projects(root: Path) -> List[ProjectInfo]:
             )
         )
 
+        # Gather all unique SCAD files in parts/ and subfolders
+        scad_files = set(parts_dir.rglob("*.scad"))
+
         # Add each part as a separate item
-        # Support both flat structure (parts/*.scad) and folder structure (parts/<name>/<name>.scad)
-        scad_files = set()
-
-        # Flat structure
-        for scad in parts_dir.glob("*.scad"):
-            scad_files.add(scad)
-
-        # Folder structure: parts/<part_name>/<part_name>.scad
-        for subdir in parts_dir.iterdir():
-            if subdir.is_dir():
-                # Look for a SCAD file with the same name as the folder
-                folder_name = subdir.name
-                scad_candidates = [
-                    subdir / f"{folder_name}.scad",
-                    # Also handle underscored names
-                    subdir / f"{folder_name.replace('-', '_')}.scad",
-                    subdir / f"{folder_name.replace('_', '-')}.scad",
-                ]
-                for candidate in scad_candidates:
-                    if candidate.exists():
-                        scad_files.add(candidate)
-                        break
-                else:
-                    # Fallback: any SCAD file in the folder
-                    for scad in subdir.glob("*.scad"):
-                        scad_files.add(scad)
-                        break
-
         for scad in sorted(scad_files):
             wrapper = _locate_wrapper_for_part(scad)
+            display_name = None
+            dotted_name = scad.stem
+            # If wrapper is a subfolder (e.g., rc/snowplow/__init__.py), use its DEFAULT
+            if wrapper:
+                try:
+                    import importlib
+                    mod = importlib.import_module(wrapper)
+                    display_name = getattr(mod.DEFAULT, "display_name", None)
+                    dotted_name = getattr(mod.DEFAULT, "name", dotted_name)
+                except Exception:
+                    display_name = None
             items.append(
                 ProjectInfo(
-                    name=scad.stem,
+                    name=display_name or dotted_name,
                     path=scad,
                     kind="part",
                     files=[scad],
@@ -159,9 +145,29 @@ def _sanitize_module_name(filename: str) -> str:
 
 def _locate_wrapper_for_part(scad_path: Path) -> str | None:
     """Return dotted module path for a wrapper if it exists, else None."""
-    module_name = _sanitize_module_name(scad_path.stem)
+    # Support wrappers in subfolders (e.g., rc/snowplow/__init__.py)
     parts_pkg_dir = Path(__file__).resolve().parent / "parts"
-    candidate = parts_pkg_dir / f"{module_name}.py"
-    if candidate.exists():
-        return f"apothecary.projects.parts.{module_name}"
+    try:
+        rel = scad_path.relative_to(parts_pkg_dir.parent.parent.parent / "parts")
+    except ValueError:
+        # Fallback: try relative to just 'parts' in cwd
+        try:
+            rel = scad_path.relative_to(Path.cwd() / "parts")
+        except ValueError:
+            rel = scad_path.name  # fallback to just the filename
+
+    # Try <parts>/<name>.py
+    flat_candidate = parts_pkg_dir / f"{scad_path.stem}.py"
+    if flat_candidate.exists():
+        return f"apothecary.projects.parts.{scad_path.stem}"
+
+    # Try <parts>/<subdir>/<name>.py and <parts>/<subdir>/__init__.py
+    if isinstance(rel, Path) and rel.parent != Path('.'):
+        submod = ".".join(rel.parts[:-1])
+        sub_candidate = parts_pkg_dir / rel.parent / f"{scad_path.stem}.py"
+        if sub_candidate.exists():
+            return f"apothecary.projects.parts.{submod}.{scad_path.stem}"
+        init_candidate = parts_pkg_dir / rel.parent / "__init__.py"
+        if init_candidate.exists():
+            return f"apothecary.projects.parts.{submod}"
     return None
