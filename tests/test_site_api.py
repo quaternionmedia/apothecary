@@ -3,7 +3,9 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from apothecary.api import app
+from apothecary.api import _find_node_by_path, app
+from apothecary.example_hierarchy import create_example_site
+from apothecary.projects.parts.stl_renderer import get_renderer
 
 client = TestClient(app)
 
@@ -36,8 +38,17 @@ def test_get_garage_site_default_layout_is_valid():
     assert data["name"] == "Garage"
     assert data["is_valid"] is True
     assert data["violations"] == []
-    names = [s["name"] for s in data["structures"]]
-    assert names == ["workbench", "printer_1", "printer_2", "printer_3"]
+    names = {s["name"] for s in data["structures"]}
+    assert {"workbench", "printer_1", "printer_2", "printer_3"} <= names
+    assert {
+        "garage_building",
+        "lighting",
+        "hvac",
+        "electrical",
+        "fluids",
+        "storage_shelving",
+        "cnc_router",
+    } <= names
 
 
 def test_get_garage_site_includes_substructures_and_features():
@@ -72,6 +83,37 @@ def test_get_garage_site_tree_recurses_past_one_level():
     assert chamfer["role"] == "feature"
 
 
+def test_tree_category_is_set_on_top_level_structures_and_inherited_below():
+    """category is only ever set on the top-level Structure in this example
+    (see example_hierarchy.py) -- everything beneath it must inherit that
+    same value from the nearest tagged ancestor, however deep.
+    """
+    data = client.get("/sites/garage").json()
+    tree = data["tree"]
+
+    by_name = {s["name"]: s for s in tree["children"]}
+    assert by_name["workbench"]["category"] == "furniture"
+    assert by_name["printer_1"]["category"] == "mechanical"
+    assert by_name["garage_building"]["category"] == "wall"
+    assert by_name["lighting"]["category"] == "electrical"
+    assert by_name["hvac"]["category"] == "mechanical"
+    assert by_name["electrical"]["category"] == "electrical"
+    assert by_name["fluids"]["category"] == "fluid"
+    assert by_name["storage_shelving"]["category"] == "furniture"
+    assert by_name["cnc_router"]["category"] == "mechanical"
+
+    garage_building = by_name["garage_building"]
+    north_wall = next(s for s in garage_building["children"] if s["name"] == "north_wall")
+    assert north_wall["category"] == "wall"
+
+    printer_1 = by_name["printer_1"]
+    gantry_system = next(s for s in printer_1["children"] if s["name"] == "gantry_system")
+    belt_tensioner_system = next(
+        s for s in gantry_system["children"] if s["name"] == "belt_tensioner_system"
+    )
+    assert belt_tensioner_system["category"] == "mechanical"
+
+
 def test_get_parts_library_site():
     response = client.get("/sites/parts_library")
     assert response.status_code == 200
@@ -91,9 +133,21 @@ def test_workbench_has_no_status_or_build_volume():
 
 def test_printers_default_to_idle_with_a_build_volume():
     data = client.get("/sites/garage").json()
-    for printer in data["structures"][1:]:
+    printers = [s for s in data["structures"] if s["name"].startswith("printer_")]
+    assert len(printers) == 3
+    for printer in printers:
         assert printer["status"] == "idle"
         assert printer["build_volume"] == [220.0, 220.0, 250.0]
+
+
+def test_cnc_router_has_no_build_volume():
+    """Unlike the printers, the CNC router stub isn't wired into the job
+    queue yet (see example_hierarchy.py's BENCH_MOUNTED_STRUCTURES comment).
+    """
+    data = client.get("/sites/garage").json()
+    router = next(s for s in data["structures"] if s["name"] == "cnc_router")
+    assert router["status"] == "idle"
+    assert router["build_volume"] is None
 
 
 def test_update_structure_status():
@@ -228,3 +282,73 @@ def test_site_viewer_page_renders():
 def test_site_viewer_page_unknown_site_is_404():
     response = client.get("/viewer/sites/nope")
     assert response.status_code == 404
+
+
+# =============================================================================
+# _find_node_by_path -- dotted-path resolution for the node-STL endpoint
+# =============================================================================
+
+
+def test_find_node_by_path_resolves_a_direct_child():
+    site = create_example_site()
+    node = _find_node_by_path(site, "garage_building")
+    assert node is not None
+    assert node.name == "garage_building"
+
+
+def test_find_node_by_path_resolves_through_additions_and_children():
+    """belt_tensioner_boss is an addition of belt_tensioner_system, which is
+    a child of gantry_system -- resolution must walk children, additions,
+    and subtractions uniformly, not just children.
+    """
+    site = create_example_site()
+    node = _find_node_by_path(
+        site, "printer_1.gantry_system.belt_tensioner_system.belt_tensioner_boss"
+    )
+    assert node is not None
+    assert node.name == "belt_tensioner_boss"
+
+
+def test_find_node_by_path_unknown_segment_returns_none():
+    site = create_example_site()
+    assert _find_node_by_path(site, "printer_1.no_such_child") is None
+    assert _find_node_by_path(site, "no_such_top_level") is None
+
+
+# =============================================================================
+# GET /sites/{name}/nodes/{path}/stl -- render any addressable node's own
+# subtree through the OpenSCAD CLI, cached by content hash (edge 2: real
+# geometry for composite nodes, not just leaves).
+# =============================================================================
+
+
+def test_node_stl_endpoint_unknown_site_is_404():
+    response = client.get("/sites/nope/nodes/garage_building/stl")
+    assert response.status_code == 404
+
+
+def test_node_stl_endpoint_unknown_node_is_404():
+    response = client.get("/sites/garage/nodes/no_such_node/stl")
+    assert response.status_code == 404
+
+
+@pytest.mark.skipif(not get_renderer().is_available, reason="OpenSCAD not installed")
+def test_node_stl_endpoint_renders_a_composite_node():
+    """garage_building has no part_ref and more than one wall union'd
+    together (plus a differenced-out door/window) -- exactly the shape a
+    single primitive descriptor can't represent, so this is real CSG output
+    from the OpenSCAD CLI, not a bounding box.
+    """
+    response = client.get("/sites/garage/nodes/garage_building/stl")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/sla"
+    assert len(response.content) > 0
+    assert response.content.startswith(b"solid") or len(response.content) > 84  # ASCII or binary STL
+
+
+@pytest.mark.skipif(not get_renderer().is_available, reason="OpenSCAD not installed")
+def test_node_stl_endpoint_caches_by_content_hash():
+    first = client.get("/sites/garage/nodes/printer_1.frame_system/stl")
+    second = client.get("/sites/garage/nodes/printer_1.frame_system/stl")
+    assert first.status_code == second.status_code == 200
+    assert first.content == second.content

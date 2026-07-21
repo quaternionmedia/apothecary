@@ -47,7 +47,7 @@
         #breadcrumb { font-size: 0.85rem; color: #999; }
         #breadcrumb .crumb { cursor: pointer; color: #9cd2ff; }
         #breadcrumb .crumb:hover { text-decoration: underline; }
-        .show-all-label {
+        .toolbar-toggle {
             display: flex; align-items: center; gap: 0.35rem;
             font-size: 0.85rem; color: #ccc; cursor: pointer; user-select: none;
         }
@@ -95,6 +95,36 @@
         .contents-item:hover { background: #2a2a2a; }
         .contents-item.selected { background: #0d3a66; color: #9cd2ff; }
         .contents-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+        /* Category filter chips: bulk "expand this whole subsystem, at any
+           depth beneath the current level" toggles -- the finer-grained,
+           per-subsystem replacement for the old all-or-nothing "show all
+           levels" checkbox. */
+        .category-filters { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.6rem; }
+        .category-chip {
+            display: flex; align-items: center; gap: 0.3rem;
+            padding: 0.2rem 0.5rem; border-radius: 10px; cursor: pointer; user-select: none;
+            font-size: 0.72rem; color: #ccc; background: #2a2a2a; border: 1px solid #444;
+        }
+        .category-chip.active { background: #0d3a66; border-color: #0d6efd; color: #9cd2ff; }
+        .category-chip .chip-swatch { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+        /* The hierarchy tree: a flat list of indented rows (depth encoded as
+           left-padding) rather than nested <ul>s -- same DOM shape as the
+           old one-level Contents list, just deeper. tree-caret expands/
+           collapses a row for browsing only, independent of whether that
+           subtree is actually instantiated in the 3D view (render-dot). */
+        .contents-tree .contents-item { gap: 0.35rem; }
+        .tree-caret {
+            width: 12px; flex-shrink: 0; text-align: center; color: #888; cursor: pointer;
+        }
+        .tree-caret-empty { cursor: default; }
+        .render-dot {
+            width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+            background: #444; border: 1px solid #666;
+        }
+        .render-dot.rendered { background: #4caf50; border-color: #7fdb84; }
+        .contents-item .item-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
         .prop-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
         .prop-row label { width: 70px; font-size: 0.8rem; color: #999; }
@@ -196,8 +226,8 @@
             <button type="button" id="load-btn">Load</button>
             <button type="button" id="zoom-out-btn" title="Zoom out one level (Backspace)" disabled>⤴ Zoom Out</button>
             <span id="breadcrumb"></span>
-            <label class="show-all-label" title="Render every descendant leaf at once, not just this level -- slower to load, but everything sits at its true global position">
-                <input type="checkbox" id="show-all-toggle"> Show all levels
+            <label class="toolbar-toggle" title="Snap dragged positions to a 50mm grid -- keeps hand-placed layouts exact instead of off by a few millimeters">
+                <input type="checkbox" id="snap-toggle" checked> Snap to grid
             </label>
             <div class="spacer"></div>
             <span id="validity-indicator" class="validity-indicator valid">Layout valid</span>
@@ -212,7 +242,9 @@
                 <div class="panel-section">
                     <div class="panel-header">Contents</div>
                     <div class="panel-body">
-                        <ul id="contents-list" class="contents-list"></ul>
+                        <div id="category-filters" class="category-filters"
+                             title="Expand every node of a subsystem at once, at any depth beneath the current level -- at the cost of render time, same tradeoff 'show all levels' used to offer, now scoped per subsystem instead of all-or-nothing"></div>
+                        <ul id="contents-list" class="contents-list contents-tree"></ul>
                     </div>
                 </div>
                 <div class="panel-section">
@@ -272,7 +304,20 @@
         const DEFAULT_SITE = "{{ default_site }}";
         const INITIAL_FOCUS = "{{ focus_path }}";
 
-        const ROLE_COLORS = { workbench: 0x8a5a3c };
+        // Subsystem colors -- a node's own ``category`` if set, else
+        // whatever the nearest ancestor's was (already resolved server-side,
+        // see api.py's _assembly_tree docstring on category inheritance).
+        // Distinct from PART_COLOR/SUBTRACTION_COLOR/STATUS_COLORS/
+        // BUILD_VOLUME_COLOR below, which all still take priority over this
+        // (see colorMesh) -- category is what everything *else* falls back
+        // to instead of the flat DEFAULT_COLOR every node used to share.
+        const CATEGORY_COLORS = {
+            wall: 0x9c8f7a,
+            furniture: 0x8a5a3c,
+            mechanical: 0x5b7a99,
+            fluid: 0x2f8fbf,
+            electrical: 0xd8c11a,
+        };
         const DEFAULT_COLOR = 0x4488cc;
         const PART_COLOR = 0x66cc66;
         const SUBTRACTION_COLOR = 0xcc7733;
@@ -293,6 +338,7 @@
         const PLACEHOLDER_SIZE = 40;   // mm -- box size for a child with no footprint
         const PLACEHOLDER_PITCH = 60;  // mm -- spacing between footprint-less siblings
         const WHEEL_RESISTANCE_THRESHOLD = 500;
+        const SNAP_INCREMENT = 50;    // mm -- matches WALL_THICKNESS; fine enough for by-hand placement
 
         function maxDepth(node) {
             if (!node.children.length) return 0;
@@ -308,30 +354,116 @@
             return node.children.some(treeHasBuildVolume);
         }
 
+        // The same color-priority chain used for both a rendered mesh
+        // (colorMesh) and a Contents-tree/category-chip swatch: a part's own
+        // color, then a subtraction-composed cutout, then operational status,
+        // then this node's (inherited) subsystem category, finally the flat
+        // default -- see CATEGORY_COLORS' comment for why category sits below
+        // status instead of above it.
+        function baseColorFor(node) {
+            const statusColor = node.status ? STATUS_COLORS[node.status] : undefined;
+            return node.part_ref
+                ? PART_COLOR
+                : node.composition === 'subtraction'
+                ? SUBTRACTION_COLOR
+                : (statusColor ?? CATEGORY_COLORS[node.category] ?? DEFAULT_COLOR);
+        }
+
+        // STLLoader hands back raw OpenSCAD-space geometry: apothecary's own
+        // (x, y, z) with z-up, completely untouched. Every other object in
+        // this scene -- boxes, primitives, camera, grid -- is positioned
+        // using the (x, z, y) swap documented on boxFromBounds, and that
+        // swap is a reflection, not a rotation (there is no rotation that
+        // swaps two axes while leaving the third fixed -- the transform's
+        // determinant is -1). Left uncorrected, a loaded STL's own "up"
+        // stays pointed along its OpenSCAD z-axis, which lands on three.js's
+        // depth axis instead of its up axis -- the "off by 90 degrees"
+        // orientation bug. Applying the same swap here keeps a real STL
+        // mesh's internal features (e.g. a wall's off-center door cutout) at
+        // the same place, facing the same way, as the placeholder box it
+        // replaces -- but a reflection also inverts triangle winding, so
+        // every triangle's vertex order is reversed too, keeping the
+        // outward-facing normals computeVertexNormals derives afterward
+        // correct instead of inside-out.
+        function applyScadAxisSwap(geometry) {
+            const position = geometry.attributes.position;
+            for (let i = 0; i < position.count; i++) {
+                const y = position.getY(i);
+                const z = position.getZ(i);
+                position.setY(i, z);
+                position.setZ(i, y);
+            }
+            for (let i = 0; i + 2 < position.count; i += 3) {
+                for (const getSet of [['getX', 'setX'], ['getY', 'setY'], ['getZ', 'setZ']]) {
+                    const [get, set] = getSet;
+                    const b = position[get](i + 1);
+                    const c = position[get](i + 2);
+                    position[set](i + 1, c);
+                    position[set](i + 2, b);
+                }
+            }
+            position.needsUpdate = true;
+        }
+
+        // A node's own bounds if it has any (a real footprint, or a leaf
+        // primitive); otherwise, for a composite node with no footprint of
+        // its own (e.g. a building shell around everything it contains, which
+        // deliberately carries no footprint -- see api.py's
+        // _assembly_tree docstring), the union of its descendants' bounds,
+        // recursively. Display-only: this never touches world_bounds/
+        // footprint themselves, so it can't introduce a false overlap --
+        // validation only ever looks at the real fields on the server.
+        function envelopeBounds(node) {
+            if (node.world_bounds) return node.world_bounds;
+            if (node.primitive) return node.primitive.bounds;
+            let result = null;
+            for (const child of node.children) {
+                const b = envelopeBounds(child);
+                if (!b) continue;
+                if (!result) {
+                    result = { min: [...b.min], max: [...b.max] };
+                } else {
+                    result.min = result.min.map((v, i) => Math.min(v, b.min[i]));
+                    result.max = result.max.map((v, i) => Math.max(v, b.max[i]));
+                }
+            }
+            return result;
+        }
+
+        // The dotted, site-rooted address for a child of whatever node sits
+        // at fullPathToParent -- the same addressing scheme the ADR names
+        // (enclosure.mounting_system.m3_boss_fl), and what the server's
+        // node-lookup (GET /sites/{name}/nodes/{path}/...) expects: no
+        // leading site-name segment, just the descendant chain.
+        function pathForChild(fullPathToParent, childName) {
+            return fullPathToParent ? `${fullPathToParent}.${childName}` : childName;
+        }
+
         // Every leaf beneath a node, recursively -- what "show all levels"
-        // renders instead of just the current focus's direct children. Each
-        // leaf carries a _path (dotted names from the starting node) because
-        // bare names collide across siblings in this exact example: all
-        // three printers have their own "belt_tensioner_boss". A plain
-        // name-keyed mesh registry would silently conflate them; the path
-        // is what nodeKey() below uses instead.
-        function collectLeaves(node, prefix = '', acc = []) {
-            const path = prefix ? `${prefix}.${node.name}` : node.name;
+        // renders instead of just the current focus's direct children.
+        // ``fullPathToNode`` is the caller-supplied full address of ``node``
+        // itself (see pathForChild); each collected leaf carries its own
+        // full ``_path`` because bare names collide across siblings in this
+        // exact example: all three printers have their own
+        // "belt_tensioner_boss". A plain name-keyed mesh registry would
+        // silently conflate them; the path is what nodeKey() below uses
+        // instead, and what identifies a node to the server.
+        function collectLeaves(node, fullPathToNode, acc = []) {
             if (node.children.length === 0) {
-                acc.push({ ...node, _path: path });
+                acc.push({ ...node, _path: fullPathToNode });
             } else {
-                node.children.forEach((child) => collectLeaves(child, path, acc));
+                for (const child of node.children) {
+                    collectLeaves(child, pathForChild(fullPathToNode, child.name), acc);
+                }
             }
             return acc;
         }
 
         // The identity a rendered node is tracked under -- meshByName,
-        // raycasting userData, selectedName -- all keyed by this, not bare
-        // name, so collectLeaves's path-carrying copies stay unambiguous.
-        // Direct children (the non-"show all" case) never carry a _path, so
-        // this is just their name, same as always.
+        // raycasting userData, selectedName, and the node's address for
+        // real-geometry fetches -- all keyed by this full dotted path.
         function nodeKey(node) {
-            return node._path || node.name;
+            return node._path;
         }
 
         // Standardized navigation over Assembly's fractal tree: the same
@@ -344,9 +476,10 @@
                 this.siteSelect = document.getElementById('site-select');
                 this.loadBtn = document.getElementById('load-btn');
                 this.zoomOutBtn = document.getElementById('zoom-out-btn');
-                this.showAllToggle = document.getElementById('show-all-toggle');
+                this.snapToggle = document.getElementById('snap-toggle');
                 this.breadcrumbEl = document.getElementById('breadcrumb');
                 this.minimapEl = document.getElementById('minimap');
+                this.categoryFiltersEl = document.getElementById('category-filters');
                 this.contentsEl = document.getElementById('contents-list');
                 this.selectedBodyEl = document.getElementById('selected-body');
                 this.jobsSectionEl = document.getElementById('jobs-section');
@@ -368,7 +501,15 @@
                 this.isValid = true;
                 this.selectedName = null;     // nodeKey() of the selected rendered node
                 this.meshByName = {};         // nodeKey() -> mesh
-                this.renderNodeByKey = {};    // nodeKey() -> node data, rebuilt each renderFocus()
+                this.renderNodeByKey = {};    // nodeKey() -> node data for every node in the
+                                              // hierarchy tree (not just what's rendered),
+                                              // rebuilt each renderFocus()
+                this.expandedCategories = new Set();  // categories rendered at full depth --
+                                                       // the per-subsystem replacement for the
+                                                       // old single "show all levels" toggle
+                this.treeExpanded = new Set();  // paths expanded for *browsing* in the
+                                                 // hierarchy tree -- independent of whether
+                                                 // that subtree is actually rendered
                 this.buildVolumeMeshByName = {};
                 this.violationNames = new Set();
                 this.wheelResistance = 0;
@@ -405,6 +546,7 @@
 
                 this.transformControls = new TransformControls(this.camera, this.renderer.domElement);
                 this.transformControls.setMode('translate');
+                this.transformControls.setTranslationSnap(SNAP_INCREMENT);
                 this.transformControls.addEventListener('dragging-changed', (event) => {
                     this.orbitControls.enabled = !event.value;
                 });
@@ -434,7 +576,9 @@
                 this.loadBtn.addEventListener('click', () => this.loadSite(this.siteSelect.value));
                 this.siteSelect.addEventListener('change', () => this.loadSite(this.siteSelect.value));
                 this.zoomOutBtn.addEventListener('click', () => this.zoomOut());
-                this.showAllToggle.addEventListener('change', () => this.renderFocus());
+                this.snapToggle.addEventListener('change', () => {
+                    this.transformControls.setTranslationSnap(this.snapToggle.checked ? SNAP_INCREMENT : null);
+                });
                 this.canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
                 this.canvas.addEventListener('dblclick', (e) => this.onDoubleClick(e));
                 this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: true });
@@ -551,9 +695,14 @@
             // where they came from rather than on nothing.
             zoomOut() {
                 if (!this.focusPath.length) return;
-                const exiting = this.focusPath[this.focusPath.length - 1];
+                // The full path to the node being exited, computed before
+                // truncating focusPath -- this is exactly the path that
+                // node will be keyed under once it's a direct child of the
+                // new (shallower) focus, so it lands selected, not just
+                // present.
+                const exitingPath = this.focusPath.join('.');
                 this.focusPath = this.focusPath.slice(0, -1);
-                this.selectedName = exiting;
+                this.selectedName = exitingPath;
                 this.renderFocus();
             }
 
@@ -563,40 +712,65 @@
                 this.renderFocus();
             }
 
-            // "Show all levels" renders every leaf beneath the focus at once
-            // (its true global position, at the cost of render time) instead
-            // of just this level's direct children. renderNodeByKey also
-            // always includes focus.children regardless of mode: the
-            // Contents list shows those directly, so a click there must
-            // resolve even when "show all levels" only rendered leaves in
-            // 3D (a composite ancestor like a printer Structure has no mesh
-            // of its own in that mode, but still needs a panel). Must be
-            // rebuilt every time this.tree is replaced with a fresh server
-            // response -- not just from renderFocus's full re-render, but
-            // also from submitLayout's lighter-weight patch, which swaps in
-            // a new this.tree without going through renderFocus (to avoid
+            // Category expansion (see expandedCategories, toggled from the
+            // Contents panel's category chips) replaces the old all-or-
+            // nothing "show all levels" checkbox: each direct child of focus
+            // renders collapsed (its own single box/mesh) unless its
+            // (inherited) category is expanded, in which case its whole
+            // subtree renders instead, every leaf at its true global
+            // position -- same "at the cost of render time" tradeoff as
+            // before, now scoped per subsystem instead of applying to
+            // everything at once. Every node handed back here carries a
+            // full, site-rooted _path (see pathForChild/collectLeaves),
+            // since that path is also each node's address for a
+            // real-geometry fetch (both the STL and the node-render routes
+            // key off it), not only its mesh-registry key.
+            currentRenderNodes(focus) {
+                const focusPrefix = this.focusPath.join('.');
+                const nodes = [];
+                for (const child of focus.children) {
+                    const path = pathForChild(focusPrefix, child.name);
+                    if (child.children.length && this.expandedCategories.has(child.category)) {
+                        collectLeaves(child, path, nodes);
+                    } else {
+                        nodes.push({ ...child, _path: path });
+                    }
+                }
+                return nodes;
+            }
+
+            // Populates renderNodeByKey with *every* descendant beneath
+            // focus, at every depth -- not just whatever currentRenderNodes
+            // actually instantiates as a mesh -- since the hierarchy tree
+            // (renderContentsList) lets you browse and select a node whose
+            // subtree isn't expanded/rendered in 3D at all. Must be rebuilt
+            // every time this.tree is replaced with a fresh server response
+            // -- not just from renderFocus's full re-render, but also from
+            // submitLayout's lighter-weight patch, which swaps in a new
+            // this.tree without going through renderFocus (to avoid
             // resetting the camera on every keystroke) -- otherwise a
             // second edit right after the first would mutate a node object
             // already disconnected from the new tree and never reach it.
-            currentRenderNodes(focus) {
-                return this.showAllToggle.checked ? collectLeaves(focus) : focus.children;
-            }
-
-            rebuildRenderNodeByKey(focus, renderNodes) {
+            rebuildRenderNodeByKey(focus) {
+                const focusPrefix = this.focusPath.join('.');
                 this.renderNodeByKey = {};
-                for (const node of focus.children) this.renderNodeByKey[nodeKey(node)] = node;
-                for (const node of renderNodes) this.renderNodeByKey[nodeKey(node)] = node;
+                const addAll = (node, path) => {
+                    this.renderNodeByKey[path] = { ...node, _path: path };
+                    for (const child of node.children) addAll(child, pathForChild(path, child.name));
+                };
+                for (const child of focus.children) addAll(child, pathForChild(focusPrefix, child.name));
             }
 
             renderFocus() {
                 const focus = this.currentFocusNode();
                 const renderNodes = this.currentRenderNodes(focus);
-                this.rebuildRenderNodeByKey(focus, renderNodes);
+                this.rebuildRenderNodeByKey(focus);
 
                 this.clearScene();
                 this.buildChildMeshes(renderNodes);
                 this.renderBreadcrumb();
                 this.renderMinimap();
+                this.renderCategoryFilters();
                 this.renderContentsList(focus);
                 this.renderSelectedPanel();
                 this.renderViolations();
@@ -671,9 +845,11 @@
                 // shape -- use its bounds too, so the placeholder box a node
                 // shows before its real mesh loads is already in the right
                 // place, not a synthetic grid slot that jumps once the real
-                // geometry arrives. Only a node with neither falls back to
-                // the synthetic per-index placeholder.
-                return node.world_bounds || (node.primitive && node.primitive.bounds) || this.placeholderBounds(node, index);
+                // geometry arrives. A composite node with neither (e.g. a
+                // building shell) falls back to the envelope of what it
+                // contains; only a genuinely empty node falls back further,
+                // to the synthetic per-index placeholder.
+                return envelopeBounds(node) || this.placeholderBounds(node, index);
             }
 
             buildChildMeshes(children) {
@@ -694,6 +870,12 @@
                     mesh.position.set(center[0], center[1], center[2]);
                     const key = nodeKey(child);
                     mesh.userData.key = key;
+                    // A unit BoxGeometry stretched to size via mesh.scale --
+                    // rebuildSingleMesh needs to tell this apart from a
+                    // real (already actual-size) mesh upgradeMesh drops in
+                    // later, since re-scaling an already-real mesh would
+                    // blow it up by its own real-world millimeter size.
+                    mesh.userData.isPlaceholder = true;
                     this.scene.add(mesh);
                     this.meshByName[key] = mesh;
 
@@ -713,13 +895,7 @@
                 if (!mesh) return;
                 const isViolating = this.violationNames.has(node.name);
                 const isSelected = this.selectedName === key;
-                const statusColor = node.status ? STATUS_COLORS[node.status] : undefined;
-                const baseColor = node.part_ref
-                    ? PART_COLOR
-                    : node.composition === 'subtraction'
-                    ? SUBTRACTION_COLOR
-                    : (statusColor ?? ROLE_COLORS[node.name] ?? DEFAULT_COLOR);
-                mesh.material.color.set(isViolating ? VIOLATION_COLOR : baseColor);
+                mesh.material.color.set(isViolating ? VIOLATION_COLOR : baseColorFor(node));
                 const edges = mesh.getObjectByName('edges');
                 if (edges) edges.material.color.set(isSelected ? SELECTED_EDGE_COLOR : 0x000000);
             }
@@ -860,33 +1036,121 @@
             // Contents list + selection
             // ---------------------------------------------------------------
 
-            renderContentsList(focus) {
-                this.contentsEl.innerHTML = '';
-                focus.children.forEach((child) => {
-                    const li = document.createElement('li');
-                    li.className = 'contents-item' + (this.selectedName === child.name ? ' selected' : '');
+            // The category chips above the tree: one per subsystem actually
+            // present anywhere beneath the current focus (not a fixed list --
+            // a site that never uses "fluid" shouldn't show a dead chip for
+            // it), each toggling expandedCategories and triggering a full
+            // renderFocus() (the rendered set genuinely changes, same as the
+            // old "show all levels" checkbox did).
+            renderCategoryFilters() {
+                this.categoryFiltersEl.innerHTML = '';
+                // renderNodeByKey (rebuilt just before this is called --
+                // see renderFocus) already covers every descendant beneath
+                // focus at every depth, so this alone is enough to find
+                // every category present without a second tree walk.
+                const present = new Set();
+                Object.values(this.renderNodeByKey).forEach((node) => {
+                    if (node.category) present.add(node.category);
+                });
+                if (present.size === 0) return;
+
+                for (const category of Object.keys(CATEGORY_COLORS).filter((c) => present.has(c))) {
+                    const chip = document.createElement('span');
+                    const active = this.expandedCategories.has(category);
+                    chip.className = 'category-chip' + (active ? ' active' : '');
+                    chip.title = `Expand every ${category} node at any depth beneath this level`;
 
                     const swatch = document.createElement('span');
-                    swatch.className = 'contents-swatch';
-                    const color = child.part_ref
-                        ? PART_COLOR
-                        : child.composition === 'subtraction'
-                        ? SUBTRACTION_COLOR
-                        : ((child.status && STATUS_COLORS[child.status]) ?? ROLE_COLORS[child.name] ?? DEFAULT_COLOR);
-                    swatch.style.background = '#' + color.toString(16).padStart(6, '0');
-                    li.appendChild(swatch);
+                    swatch.className = 'chip-swatch';
+                    swatch.style.background = '#' + CATEGORY_COLORS[category].toString(16).padStart(6, '0');
+                    chip.appendChild(swatch);
+                    chip.appendChild(document.createTextNode(category));
 
-                    const label = document.createElement('span');
-                    const inside = child.children.length
-                        ? ` — ${child.children.length} inside`
-                        : '';
-                    label.textContent = `${child.name} (${child.role})${inside}`;
-                    li.appendChild(label);
+                    chip.addEventListener('click', () => {
+                        if (active) this.expandedCategories.delete(category);
+                        else this.expandedCategories.add(category);
+                        this.renderFocus();
+                    });
+                    this.categoryFiltersEl.appendChild(chip);
+                }
+            }
 
-                    li.addEventListener('click', () => this.selectChild(child.name));
-                    li.addEventListener('dblclick', () => this.zoomIn(child.name));
-                    this.contentsEl.appendChild(li);
+            // The hierarchy tree: every descendant beneath focus, at every
+            // depth -- not just direct children -- replacing the old flat,
+            // one-level Contents list. Depth is encoded as left-padding on a
+            // flat sequence of rows rather than nested <ul>s (buildTreeRows
+            // returns a DocumentFragment, which flattens correctly when
+            // appended into another). Each row's disclosure caret only
+            // controls *browsing* (treeExpanded) -- independent of whether
+            // that subtree is actually instantiated as a mesh right now
+            // (render-dot, driven by meshByName -- see currentRenderNodes/
+            // expandedCategories for what controls that).
+            renderContentsList(focus) {
+                this.contentsEl.innerHTML = '';
+                const focusPrefix = this.focusPath.join('.');
+                focus.children.forEach((child) => {
+                    const path = pathForChild(focusPrefix, child.name);
+                    this.contentsEl.appendChild(this.buildTreeRows(child, path, 0));
                 });
+            }
+
+            buildTreeRows(node, path, depth) {
+                const fragment = document.createDocumentFragment();
+                const hasChildren = node.children.length > 0;
+                const isExpanded = this.treeExpanded.has(path);
+
+                const li = document.createElement('li');
+                li.className = 'contents-item' + (this.selectedName === path ? ' selected' : '');
+                li.style.paddingLeft = `${0.5 + depth * 0.9}rem`;
+
+                const caret = document.createElement('span');
+                caret.className = 'tree-caret' + (hasChildren ? '' : ' tree-caret-empty');
+                caret.textContent = hasChildren ? (isExpanded ? '▾' : '▸') : '';
+                if (hasChildren) {
+                    caret.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (isExpanded) this.treeExpanded.delete(path); else this.treeExpanded.add(path);
+                        this.renderContentsList(this.currentFocusNode());
+                    });
+                }
+                li.appendChild(caret);
+
+                const renderDot = document.createElement('span');
+                const isRendered = Boolean(this.meshByName[path]);
+                renderDot.className = 'render-dot' + (isRendered ? ' rendered' : '');
+                renderDot.title = isRendered ? 'Currently rendered in the 3D view' : 'Not currently rendered';
+                li.appendChild(renderDot);
+
+                const swatch = document.createElement('span');
+                swatch.className = 'contents-swatch';
+                swatch.style.background = '#' + baseColorFor(node).toString(16).padStart(6, '0');
+                li.appendChild(swatch);
+
+                const label = document.createElement('span');
+                label.className = 'item-label';
+                const inside = hasChildren ? ` — ${node.children.length} inside` : '';
+                label.textContent = `${node.name} (${node.role})${inside}`;
+                li.appendChild(label);
+
+                // Click/double-click anywhere on the row (matching the old
+                // flat list's behavior, and what tests click on) -- only the
+                // caret's own handler (above) intercepts and stops
+                // propagation, so it doesn't also select/zoom.
+                // selectChild/selectedName are keyed by full path (same as
+                // renderNodeByKey/meshByName); zoomIn is keyed by bare name
+                // (it pushes onto focusPath, which is bare names all the way
+                // down) -- two different identities for two different
+                // purposes, not an inconsistency.
+                li.addEventListener('click', () => this.selectChild(path));
+                li.addEventListener('dblclick', () => this.zoomIn(node.name));
+
+                fragment.appendChild(li);
+                if (hasChildren && isExpanded) {
+                    for (const child of node.children) {
+                        fragment.appendChild(this.buildTreeRows(child, pathForChild(path, child.name), depth + 1));
+                    }
+                }
+                return fragment;
             }
 
             // Position/status editing only works when the selected node is a
@@ -1059,7 +1323,18 @@
                 if (!mesh) return;
                 const bounds = this.boundsFor(node, 0);
                 const { size, center } = this.boxFromBounds(bounds);
-                mesh.scale.set(size[0] || 1, size[1] || 1, size[2] || 1);
+                // Only a still-placeholder box (a unit BoxGeometry stretched
+                // via mesh.scale) needs re-scaling to the new bounds -- an
+                // already-upgraded real mesh (STL or a Three.js primitive)
+                // is already actual-size geometry with scale left at (1,1,1);
+                // re-scaling it here by its own real-world millimeter size
+                // would balloon it into a screen-filling artifact (the bug
+                // this guard fixes: moving *any* item used to corrupt every
+                // already-real mesh currently on screen, not just the one
+                // being moved, since this runs for every rendered node).
+                if (mesh.userData.isPlaceholder) {
+                    mesh.scale.set(size[0] || 1, size[1] || 1, size[2] || 1);
+                }
                 mesh.position.set(center[0], center[1], center[2]);
                 this.updateBuildVolumeIndicator(node, bounds);
                 if (this.selectedName === key) this.transformControls.attach(mesh);
@@ -1147,7 +1422,7 @@
                     // already disconnected from this.tree and never reach it.
                     const focus = this.currentFocusNode();
                     const renderNodes = this.currentRenderNodes(focus);
-                    this.rebuildRenderNodeByKey(focus, renderNodes);
+                    this.rebuildRenderNodeByKey(focus);
                     renderNodes.forEach((node) => this.rebuildSingleMesh(node));
                     this.renderViolations();
                     this.renderSelectedPanel();
@@ -1380,8 +1655,9 @@
             zoomInFromWheel() {
                 const focus = this.currentFocusNode();
                 if (!focus.children.length) return;
-                if (this.selectedName && findChild(focus, this.selectedName)?.children.length) {
-                    this.zoomIn(this.selectedName);
+                const selected = this.selectedName ? this.renderNodeByKey[this.selectedName] : null;
+                if (selected && selected.children.length && focus.children.some((c) => c.name === selected.name)) {
+                    this.zoomIn(selected.name);
                     return;
                 }
                 const target = this.orbitControls.target;
@@ -1413,14 +1689,32 @@
             //     Cube/Cylinder/Sphere (optionally wrapped in one Translate --
             //     see api.py's _primitive_descriptor): build the exact Three.js
             //     primitive directly, no server round-trip needed.
-            // A composite node (more than one combined child) has no single
-            // primitive that represents it -- real CSG rendering of those is
-            // out of scope here, so they keep the bounding box.
+            // A composite node (more than one combined child, or a base
+            // shape richer than one Cube/Cylinder/Sphere) has no single
+            // primitive descriptor -- real CSG rendering of those means
+            // asking the server to run this node's own subtree through the
+            // same OpenSCAD engine the site's own render already uses (see
+            // api.py's GET /sites/{name}/nodes/{path}/stl), rather than a
+            // second, bespoke geometry engine on the client.
 
             async loadNodeGeometry(node) {
                 if (node.part_ref) return this.loadPartMesh(node);
                 if (node.children.length === 0 && node.primitive) return this.buildPrimitiveMesh(node);
-                return null;
+                return this.loadCompositeMesh(node);
+            }
+
+            async loadCompositeMesh(node) {
+                if (!node._path || !this.siteName) return null;
+                const stlUrl = `${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/nodes/${encodeURIComponent(node._path)}/stl`;
+                try {
+                    return await this.loadSTLMesh(node, stlUrl);
+                } catch (error) {
+                    // No renderable geometry (422), OpenSCAD unavailable (503),
+                    // or a render failure (500) -- the placeholder box already
+                    // on screen stands in for this node indefinitely.
+                    console.warn(`Could not load real geometry for ${node.name}:`, error);
+                    return null;
+                }
             }
 
             buildPrimitiveMesh(node) {
@@ -1473,13 +1767,16 @@
                     this.stlLoader.load(
                         url,
                         (geometry) => {
+                            applyScadAxisSwap(geometry);
                             geometry.computeVertexNormals();
                             geometry.center();
                             const mesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ flatShading: false }));
                             // Drop the real mesh into the same world slot the
-                            // placeholder box already occupied -- get_bounds()
-                            // and the real render should already agree closely.
-                            const bounds = node.world_bounds || this.placeholderBounds(node, 0);
+                            // placeholder box already occupied -- same fallback
+                            // chain as boundsFor, so a composite node without
+                            // its own footprint still lands where its envelope
+                            // (and therefore its placeholder box) already was.
+                            const bounds = envelopeBounds(node) || this.placeholderBounds(node, 0);
                             const { center } = this.boxFromBounds(bounds);
                             mesh.position.set(center[0], center[1], center[2]);
                             const edges = new THREE.EdgesGeometry(geometry, 30);

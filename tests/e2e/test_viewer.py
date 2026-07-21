@@ -65,13 +65,22 @@ def test_viewer_dark_theme(page: Page, base_url: str):
 
 @pytest.mark.e2e
 def test_viewer_shows_contents_for_the_loaded_site(page: Page, base_url: str):
-    """Test that the garage site's top-level structures appear in Contents."""
+    """Test that the garage site's top-level structures appear in Contents:
+    the workbench and its printer fleet, plus the building shell, utility
+    fixture stubs, storage, and the CNC router stub.
+    """
     page.goto(f"{base_url}/viewer/sites/garage")
     page.wait_for_timeout(600)
 
     items = page.locator("#contents-list .contents-item")
-    assert items.count() == 4  # workbench + 3 printers
-    expect(page.locator("#contents-list")).to_contain_text("workbench")
+    assert items.count() == 11
+    contents = page.locator("#contents-list")
+    for name in (
+        "workbench", "printer_1", "printer_2", "printer_3",
+        "garage_building", "lighting", "hvac", "electrical", "fluids",
+        "storage_shelving", "cnc_router",
+    ):
+        expect(contents).to_contain_text(name)
 
 
 @pytest.mark.e2e

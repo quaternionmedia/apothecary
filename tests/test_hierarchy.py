@@ -115,6 +115,16 @@ def test_structure_world_bounds_offsets_footprint_by_position():
     assert bounds.max_point == Vector3D(x=110, y=220, z=330)
 
 
+def test_structure_category_defaults_to_none_and_is_settable():
+    plain = Structure(name="s", substructures=[Substructure(name="ss", base=Cube())])
+    assert plain.category is None
+
+    tagged = Structure(
+        name="s", category="mechanical", substructures=[Substructure(name="ss", base=Cube())]
+    )
+    assert tagged.category == "mechanical"
+
+
 def test_structure_with_no_substructures_raises():
     empty = Structure(name="empty")
     try:

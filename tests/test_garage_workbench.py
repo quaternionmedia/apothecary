@@ -10,6 +10,7 @@ import itertools
 
 from apothecary.example_hierarchy import (
     BENCH_DEPTH,
+    BENCH_MOUNTED_STRUCTURES,
     BENCH_TOP_Z,
     BENCH_WIDTH,
     create_example_site,
@@ -22,13 +23,22 @@ from apothecary.primitives import Cube
 
 
 def _printer_structures(site):
-    return [s for s in site.children if s.name != "workbench"]
+    return [s for s in site.children if s.name in BENCH_MOUNTED_STRUCTURES]
 
 
-def test_site_has_one_bench_and_three_printers():
+def test_site_has_the_bench_printers_and_the_expanded_garage_systems():
     site = create_example_site()
-    names = [s.name for s in site.children]
-    assert names == ["workbench", "printer_1", "printer_2", "printer_3"]
+    names = {s.name for s in site.children}
+    assert {"workbench", "printer_1", "printer_2", "printer_3"} <= names
+    assert {
+        "garage_building",
+        "lighting",
+        "hvac",
+        "electrical",
+        "fluids",
+        "storage_shelving",
+        "cnc_router",
+    } <= names
 
 
 def test_every_printer_sits_exactly_on_the_bench_top_surface():
@@ -74,6 +84,38 @@ def test_bench_and_printers_render_with_expected_systems():
     assert rendered.count("Feature: left_post") == 3
     assert rendered.count("Feature: right_post") == 3
     assert rendered.count("Feature: gantry_bar") == 3
+
+
+def test_garage_shell_fixtures_storage_and_cnc_router_render():
+    site = create_example_site()
+    rendered = site.render()
+    assert "Structure: garage_building (Wood-framed, steel siding)" in rendered
+    for wall in ("north_wall", "south_wall", "west_wall", "east_wall"):
+        assert f"Substructure: {wall}" in rendered
+    assert "Feature: door_opening" in rendered
+    assert "Feature: window_opening" in rendered
+
+    for fixture, output in (
+        ("lighting", "light_output"),
+        ("hvac", "vent_output"),
+        ("electrical", "outlet_output"),
+        ("fluids", "spigot_output"),
+    ):
+        assert f"Structure: {fixture}" in rendered
+        assert f"Feature: {output}" in rendered
+
+    assert "Structure: storage_shelving (Powder-coated steel)" in rendered
+    assert rendered.count("Feature: shelf_") == 3
+
+    assert "Structure: cnc_router" in rendered
+    assert "Feature: cable_pass_through" in rendered  # unaffected by the additions above
+
+
+def test_cnc_router_has_no_build_volume_and_is_not_job_compatible():
+    site = create_example_site()
+    router = next(s for s in site.children if s.name == "cnc_router")
+    assert router.status == "idle"
+    assert router.build_volume is None
 
 
 def test_site_renders_valid_jscad():
@@ -160,10 +202,10 @@ def test_validate_garage_layout_skips_structures_with_no_footprint():
                 substructures=[Substructure(name="s", base=Cube())],
             ),
             Structure(
-                name="mystery_object",  # no footprint at all
+                name="mystery_object",  # no footprint, and not bench-mounted either
                 substructures=[Substructure(name="s", base=Cube())],
             ),
         ],
     )
     report = validate_garage_layout(site)
-    assert report.is_valid  # nothing to check mystery_object's position against
+    assert report.is_valid  # not in BENCH_MOUNTED_STRUCTURES -- nothing to check it against

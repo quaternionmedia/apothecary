@@ -62,6 +62,14 @@ class Assembly(BaseModel):
     /parts/{part_ref}/stl``) instead of only this node's ``footprint``
     bounding box — None everywhere except leaves built from the parts
     registry (see ``example_parts_library.py``).
+
+    ``category``, when set, names the subsystem this node belongs to (a
+    viewer's domain, e.g. "wall"/"furniture"/"mechanical"/"fluid"/
+    "electrical" -- a project invents its own vocabulary, same as ``role``).
+    Unset on most nodes: a viewer resolves the *effective* category by
+    walking up to the nearest ancestor that set one (see api.py's
+    ``_assembly_tree``), so tagging a handful of top-level Structures is
+    enough for every Substructure/Feature beneath them to inherit it.
     """
 
     name: str
@@ -77,6 +85,7 @@ class Assembly(BaseModel):
     children: List["Assembly"] = Field(default_factory=list)
     comment: Optional[str] = None
     part_ref: Optional[str] = None
+    category: Optional[str] = None
 
     def world_bounds(self) -> Optional[BoundingBox3D]:
         """This node's ``footprint``, offset by ``position`` into the parent's frame.
@@ -250,6 +259,7 @@ def Structure(
     material: Optional[str] = None,
     build_volume: Optional[Vector3D] = None,
     status: Optional[str] = None,
+    category: Optional[str] = None,
     substructures: Optional[List[Assembly]] = None,
 ) -> Assembly:
     """An independently-manufactured or independently-sourced rigid grouping within a Site."""
@@ -261,6 +271,7 @@ def Structure(
         material=material,
         build_volume=build_volume,
         status=status,
+        category=category,
         children=substructures or [],
     )
 

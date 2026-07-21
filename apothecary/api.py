@@ -11,12 +11,14 @@ On startup, missing STLs are automatically generated if OpenSCAD is available.
 """
 
 import asyncio
+import hashlib
 import json
 import os
 from contextlib import asynccontextmanager, suppress
 from importlib import import_module
+from pathlib import Path
 from random import choice
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
@@ -600,6 +602,37 @@ def _get_site_or_404(name: str) -> Assembly:
         raise HTTPException(status_code=404, detail=f"Site '{name}' not found") from None
 
 
+def _find_node_by_path(site: Assembly, path: str) -> Optional[Assembly]:
+    """Resolve a dotted, site-rooted path (e.g. ``printer_1.gantry_system``)
+    to the Assembly node it names, walking ``children``/``additions``/
+    ``subtractions`` together -- the same three-list-as-one-tree shape
+    ``_assembly_tree`` exposes to the client, so a path the viewer displays
+    is always resolvable back here. Returns None if any segment doesn't
+    match, rather than raising, so callers can choose their own 404 wording.
+    """
+    node = site
+    for segment in path.split("."):
+        candidates = [*node.children, *node.additions, *node.subtractions]
+        found = next((c for c in candidates if c.name == segment), None)
+        if found is None:
+            return None
+        node = found
+    return node
+
+
+_NODE_STL_CACHE_DIR = ROOT / ".cache" / "node_stl"
+
+
+def _node_stl_cache_paths(scad_text: str) -> tuple[Path, Path]:
+    """Content-hash-keyed cache location for a dynamically-addressed node's
+    render. Unlike a registered part (which has a fixed source file to key
+    off of), an arbitrary Assembly subtree has no path of its own on disk --
+    the rendered SCAD text itself is the only stable identity available.
+    """
+    digest = hashlib.sha256(scad_text.encode("utf-8")).hexdigest()[:20]
+    return _NODE_STL_CACHE_DIR / f"{digest}.scad", _NODE_STL_CACHE_DIR / f"{digest}.stl"
+
+
 def _bounds_dict(bounds: BoundingBox3D | None) -> Dict[str, List[float]] | None:
     if bounds is None:
         return None
@@ -678,7 +711,11 @@ def _primitive_descriptor(obj: OpenSCADObject, offset: Vector3D) -> Dict[str, ob
     return None
 
 
-def _assembly_tree(node: Assembly, parent_world_position: Vector3D | None = None) -> Dict[str, object]:
+def _assembly_tree(
+    node: Assembly,
+    parent_world_position: Vector3D | None = None,
+    parent_category: str | None = None,
+) -> Dict[str, object]:
     """Recursive serialization of an Assembly node and everything beneath it.
 
     Unlike ``_structure_summary`` (which flattens one extra level for the
@@ -701,9 +738,17 @@ def _assembly_tree(node: Assembly, parent_world_position: Vector3D | None = None
     reported ``position``/``world_bounds`` is genuinely in one consistent
     global frame, however deep -- the fractal viewer's camera framing and
     "show everything at once" mode both depend on this being true.
+
+    ``category`` is resolved the same inheriting way: most nodes never set
+    their own (see ``Assembly.category``'s docstring), so the reported
+    ``category`` is this node's own if set, else whatever the nearest
+    ancestor set -- a viewer can color-code a whole Structure's tree from
+    one tag on its root instead of needing every Substructure/Feature
+    tagged individually.
     """
     parent_world_position = parent_world_position or Vector3D()
     world_position = parent_world_position + node.position
+    category = node.category if node.category is not None else parent_category
     world_bounds = (
         BoundingBox3D(
             min_point=node.footprint.min_point + world_position,
@@ -725,6 +770,7 @@ def _assembly_tree(node: Assembly, parent_world_position: Vector3D | None = None
         "status": node.status,
         "comment": node.comment,
         "part_ref": node.part_ref,
+        "category": category,
         "position": {"x": world_position.x, "y": world_position.y, "z": world_position.z},
         "footprint": _bounds_dict(node.footprint),
         "world_bounds": _bounds_dict(world_bounds),
@@ -735,7 +781,7 @@ def _assembly_tree(node: Assembly, parent_world_position: Vector3D | None = None
         ),
         "primitive": _primitive_descriptor(node.base, world_position) if node.base is not None else None,
         "children": [
-            {**_assembly_tree(child, world_position), "composition": composition}
+            {**_assembly_tree(child, world_position, category), "composition": composition}
             for child, composition in composed
         ],
     }
@@ -835,6 +881,60 @@ async def reset_site_layout(name: str):
     payload = _site_payload(site, validator(site))
     payload["scad"] = site.render()
     return payload
+
+
+@app.get("/sites/{name}/nodes/{path}/stl")
+async def get_node_stl(name: str, path: str):
+    """Render any addressable Assembly node's own subtree to STL, on demand.
+
+    This is the real-geometry upgrade path for *composite* nodes in the
+    fractal viewer (a wall with a window cutout, a whole Structure) --
+    leaves already get exact primitives from ``_primitive_descriptor`` or,
+    for parts-library leaves, ``/parts/{part_ref}/stl``; anything with
+    nested booleans needs an actual CSG evaluation. Rather than a second,
+    bespoke geometry engine, this reuses the same OpenSCAD CLI pipeline
+    already serving ``/parts/{name}/stl`` -- the node's ``to_scad_object()``
+    is exactly the OpenSCAD subtree the site's own render already produces
+    for it, just rendered in isolation. Cached by content hash, since a
+    dynamically-addressed node (unlike a registered part) has no fixed file
+    path of its own to key a cache off of.
+    """
+    site = _get_site_or_404(name)
+    node = _find_node_by_path(site, path)
+    if node is None:
+        raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
+
+    try:
+        scad_text = node.to_scad_object().render()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422, detail=f"Node '{path}' has no renderable geometry: {exc}"
+        ) from None
+
+    scad_path, stl_path = _node_stl_cache_paths(scad_text)
+    if not stl_path.exists():
+        renderer = get_stl_renderer()
+        if not renderer.is_available:
+            raise HTTPException(
+                status_code=503, detail="OpenSCAD not installed. Cannot generate STL files."
+            )
+        scad_path.parent.mkdir(parents=True, exist_ok=True)
+        scad_path.write_text(scad_text, encoding="utf-8")
+        result = await renderer.render_stl_async(scad_path, stl_path, timeout=60)
+        if not result.success:
+            raise HTTPException(
+                status_code=500, detail=f"STL generation failed: {result.error_message}"
+            )
+
+    try:
+        stl_data = stl_path.read_bytes()
+        return Response(
+            content=stl_data,
+            media_type="application/sla",
+            headers={"Content-Disposition": f'attachment; filename="{node.name}.stl"'},
+        )
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to read STL: {exc}") from exc
 
 
 # -----------------------------------------------------------------------
