@@ -61,6 +61,13 @@ def _render_primitive(obj: OpenSCADObject) -> str:
 
 
 def _render_node(obj: OpenSCADObject) -> str:
+    # Named features (apothecary.hierarchy.Feature) unwrap to their geometry:
+    # JSCAD has no notion of the name, only the shape it renders to.
+    from .hierarchy import Feature  # local import: hierarchy is a prototype module
+
+    if isinstance(obj, Feature):
+        return _render_node(obj.geometry)
+
     # Primitives
     if isinstance(obj, (Cube, Sphere, Cylinder)):
         return _render_primitive(obj)
