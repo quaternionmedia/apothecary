@@ -17,16 +17,19 @@ exactly on the bench's top surface, stays within the bench's footprint, and
 doesn't overlap its neighbors — not just that the generated .scad "looks
 about right."
 
-Eventual goal (not attempted here): this bench-of-printers Site is the shape
-manufacturing-planning questions ("which printer can take this job," "is
-there free capacity") would eventually be asked against — each printer
-Structure is already the right unit to eventually attach a build volume,
-a queue, or a status to.
+Manufacturing planning, first slice: ``Job``/``JobStore``/``job_fits_printer``
+below give each printer Structure a queue -- create a job with the volume it
+needs, and assignment is capacity-checked against the printer's
+``build_volume`` and rejected if the printer isn't idle. No rotation/packing
+optimization, no multi-job scheduling -- one job per printer at a time,
+checked on the same three axes the job was specified in.
 """
 
 from __future__ import annotations
 
-from typing import List
+from typing import Dict, List, Optional
+
+from pydantic import BaseModel, Field
 
 from .hierarchy import Feature, LayoutReport, LayoutViolation, Site, Structure, Substructure
 from .models.bounds import BoundingBox3D
@@ -245,3 +248,70 @@ def validate_garage_layout(site: Site) -> LayoutReport:
             )
 
     return LayoutReport(violations=violations)
+
+
+JOB_STATUSES = ["queued", "assigned", "printing", "done"]
+
+
+class Job(BaseModel):
+    """A print job: a required volume, waiting for (or assigned to) a printer.
+
+    ``assigned_printer`` is kept even after a job is marked ``done`` -- a
+    record of which printer produced it, not just current-assignment state.
+    """
+
+    name: str
+    required_volume: Vector3D
+    status: str = "queued"
+    assigned_printer: Optional[str] = None
+
+
+def job_fits_printer(job: Job, printer: Structure) -> bool:
+    """Whether ``printer.build_volume`` is large enough for ``job.required_volume``.
+
+    Axis-aligned, no rotation: the job's X/Y/Z must each fit the printer's
+    build volume in that same axis. A printer with no ``build_volume`` set
+    (e.g. the workbench) never fits any job.
+    """
+    build_volume = printer.build_volume
+    if build_volume is None:
+        return False
+    required = job.required_volume
+    return (
+        required.x <= build_volume.x
+        and required.y <= build_volume.y
+        and required.z <= build_volume.z
+    )
+
+
+class JobStore:
+    """In-memory job queue, one list per site name (prototype -- see
+    site_store.py's SiteStore for the same caveats: in-process only, lost on
+    restart, not shared across worker processes).
+    """
+
+    def __init__(self) -> None:
+        self._jobs: Dict[str, List[Job]] = {}
+
+    def list_for_site(self, site_name: str) -> List[Job]:
+        return self._jobs.setdefault(site_name, [])
+
+    def add(self, site_name: str, job: Job) -> Job:
+        jobs = self.list_for_site(site_name)
+        if any(existing.name == job.name for existing in jobs):
+            raise ValueError(f"Job {job.name!r} already exists for site {site_name!r}")
+        jobs.append(job)
+        return job
+
+    def get(self, site_name: str, job_name: str) -> Job:
+        for job in self.list_for_site(site_name):
+            if job.name == job_name:
+                return job
+        raise KeyError(job_name)
+
+    def reset(self, site_name: str) -> None:
+        """Clear a site's job queue -- called when the site's own layout is
+        reset, since a reset re-idles every printer and a job still marked
+        "assigned" to one would otherwise be stale.
+        """
+        self._jobs[site_name] = []

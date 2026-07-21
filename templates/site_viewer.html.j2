@@ -95,6 +95,41 @@
         }
         .violations-clean { color: #6fdb75; font-size: 0.85rem; }
 
+        .job-form { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.75rem; }
+        .job-form input[type="text"], .job-form input[type="number"] {
+            padding: 0.35rem 0.5rem; border-radius: 4px;
+            border: 1px solid #444; background: #2a2a2a; color: #e0e0e0;
+        }
+        .job-form-dims { display: flex; gap: 0.4rem; }
+        .job-form-dims input { width: 0; flex: 1; }
+        .job-form button, .job-item button {
+            padding: 0.4rem 0.6rem; border-radius: 4px; cursor: pointer;
+            border: none; background: #0d6efd; color: white; font-size: 0.8rem;
+        }
+        .job-form button:hover, .job-item button:hover { background: #0b5ed7; }
+
+        .job-list { list-style: none; margin: 0; padding: 0; font-size: 0.8rem; }
+        .job-item {
+            padding: 0.5rem; margin-bottom: 0.4rem; border-radius: 4px;
+            background: #2a2a2a; border: 1px solid #383838;
+        }
+        .job-item-header { display: flex; justify-content: space-between; align-items: center; }
+        .job-status {
+            font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 3px; text-transform: uppercase;
+        }
+        .job-status-queued { background: #444; color: #ccc; }
+        .job-status-assigned, .job-status-printing { background: #664400; color: #ffcc66; }
+        .job-status-done { background: #1e4620; color: #6fdb75; }
+        .job-item-dims { color: #999; margin: 0.2rem 0; }
+        .job-item-actions { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.3rem; }
+        .job-item-actions select {
+            padding: 0.3rem; border-radius: 4px; border: 1px solid #444;
+            background: #2a2a2a; color: #e0e0e0; flex: 1;
+        }
+        .job-no-printers { color: #dc7a7a; font-size: 0.75rem; }
+        .job-assigned-to { color: #999; }
+        .job-done { color: #6fdb75; }
+
         .code-content {
             font-family: 'Consolas', 'Monaco', 'Menlo', monospace;
             font-size: 0.72rem; line-height: 1.4; color: #9cdcfe;
@@ -145,6 +180,21 @@
                     <div class="panel-header">Selected Structure</div>
                     <div class="panel-body" id="properties-body">
                         <div class="no-selection">Click a structure to select it</div>
+                    </div>
+                </div>
+                <div class="panel-section">
+                    <div class="panel-header">Jobs</div>
+                    <div class="panel-body">
+                        <form id="job-form" class="job-form">
+                            <input type="text" id="job-name" placeholder="Job name" required>
+                            <div class="job-form-dims">
+                                <input type="number" id="job-x" placeholder="X mm" step="10" min="0" required>
+                                <input type="number" id="job-y" placeholder="Y mm" step="10" min="0" required>
+                                <input type="number" id="job-z" placeholder="Z mm" step="10" min="0" required>
+                            </div>
+                            <button type="submit">+ Add Job</button>
+                        </form>
+                        <ul id="job-list" class="job-list"></ul>
                     </div>
                 </div>
                 <div class="panel-section">
@@ -212,8 +262,11 @@
                 this.violationsListEl = document.getElementById('violations-list');
                 this.violationsCleanEl = document.getElementById('violations-clean');
                 this.codeContentEl = document.getElementById('code-content');
+                this.jobFormEl = document.getElementById('job-form');
+                this.jobListEl = document.getElementById('job-list');
 
                 this.structures = [];          // last server response's structures[]
+                this.jobs = [];                 // last server response's jobs list
                 this.footprintByName = {};      // name -> local footprint {min,max} (pre-position)
                 this.positions = {};             // name -> {x,y,z} current override state
                 this.meshByName = {};
@@ -282,6 +335,10 @@
                 this.siteSelect.addEventListener('change', () => this.loadSite(this.siteSelect.value));
                 this.resetBtn.addEventListener('click', () => this.resetLayout());
                 this.canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
+                this.jobFormEl.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.createJob();
+                });
                 window.addEventListener('resize', () => this.onResize());
             }
 
@@ -331,6 +388,7 @@
                     const data = await response.json();
                     this.siteName = name;
                     this.applySiteData(data);
+                    await this.loadJobs();
                     this.setStatus(`Loaded: ${data.name}`, 'success');
                 } catch (err) {
                     this.setStatus(`Error: ${err.message}`, 'error');
@@ -656,11 +714,150 @@
                     if (!response.ok) throw new Error(`Reset failed (${response.status})`);
                     const data = await response.json();
                     this.applySiteData(data);
+                    await this.loadJobs();  // server clears the job queue on reset too
                     this.setStatus(`Reset: ${data.name}`, 'success');
                 } catch (err) {
                     this.setStatus(`Error: ${err.message}`, 'error');
                     console.error(err);
                 }
+            }
+
+            async loadJobs() {
+                if (!this.siteName) return;
+                const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/jobs`);
+                if (!response.ok) throw new Error(`Failed to load jobs (${response.status})`);
+                this.jobs = await response.json();
+                this.renderJobs();
+            }
+
+            renderJobs() {
+                this.jobListEl.innerHTML = '';
+                for (const job of this.jobs) {
+                    const li = document.createElement('li');
+                    li.className = 'job-item';
+                    const dims = job.required_volume.map((v) => v.toFixed(0)).join(' × ');
+
+                    let actionsHtml;
+                    if (job.status === 'queued') {
+                        actionsHtml = job.compatible_printers.length
+                            ? `<select class="job-printer-select">
+                                 ${job.compatible_printers.map((p) => `<option value="${p}">${p}</option>`).join('')}
+                               </select>
+                               <button type="button" class="job-assign-btn">Assign</button>`
+                            : '<span class="job-no-printers">No idle printer fits this job</span>';
+                    } else if (job.status === 'assigned' || job.status === 'printing') {
+                        actionsHtml = `<span class="job-assigned-to">on ${job.assigned_printer}</span>
+                                       <button type="button" class="job-complete-btn">Mark Done</button>`;
+                    } else {
+                        actionsHtml = `<span class="job-done">done${job.assigned_printer ? ' on ' + job.assigned_printer : ''}</span>`;
+                    }
+
+                    li.innerHTML = `
+                        <div class="job-item-header">
+                            <strong>${job.name}</strong>
+                            <span class="job-status job-status-${job.status}">${job.status}</span>
+                        </div>
+                        <div class="job-item-dims">${dims} mm</div>
+                        <div class="job-item-actions">${actionsHtml}</div>
+                    `;
+
+                    const assignBtn = li.querySelector('.job-assign-btn');
+                    if (assignBtn) {
+                        assignBtn.addEventListener('click', () => {
+                            const printer = li.querySelector('.job-printer-select').value;
+                            this.assignJob(job.name, printer);
+                        });
+                    }
+                    const completeBtn = li.querySelector('.job-complete-btn');
+                    if (completeBtn) {
+                        completeBtn.addEventListener('click', () => this.completeJob(job.name));
+                    }
+                    this.jobListEl.appendChild(li);
+                }
+            }
+
+            async createJob() {
+                const name = document.getElementById('job-name').value.trim();
+                const x = parseFloat(document.getElementById('job-x').value);
+                const y = parseFloat(document.getElementById('job-y').value);
+                const z = parseFloat(document.getElementById('job-z').value);
+                if (!name || !this.siteName) return;
+
+                this.setStatus(`Creating job ${name}...`, 'loading');
+                try {
+                    const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/jobs`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, required_volume: { x, y, z } }),
+                    });
+                    if (!response.ok) {
+                        const data = await response.json().catch(() => ({}));
+                        throw new Error(data.detail || `Create job failed (${response.status})`);
+                    }
+                    this.jobFormEl.reset();
+                    await this.loadJobs();
+                    this.setStatus(`Job ${name} queued`, 'success');
+                } catch (err) {
+                    this.setStatus(`Error: ${err.message}`, 'error');
+                    console.error(err);
+                }
+            }
+
+            async assignJob(jobName, printerName) {
+                this.setStatus(`Assigning ${jobName} to ${printerName}...`, 'loading');
+                try {
+                    const response = await fetch(
+                        `${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/jobs/${encodeURIComponent(jobName)}/assign`,
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ printer: printerName }),
+                        }
+                    );
+                    if (!response.ok) {
+                        const data = await response.json().catch(() => ({}));
+                        throw new Error(data.detail || `Assign failed (${response.status})`);
+                    }
+                    await this.refreshSiteData();
+                    await this.loadJobs();
+                    this.setStatus(`${jobName} assigned to ${printerName}`, 'success');
+                } catch (err) {
+                    this.setStatus(`Error: ${err.message}`, 'error');
+                    console.error(err);
+                }
+            }
+
+            async completeJob(jobName) {
+                this.setStatus(`Completing ${jobName}...`, 'loading');
+                try {
+                    const response = await fetch(
+                        `${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/jobs/${encodeURIComponent(jobName)}/complete`,
+                        { method: 'POST' }
+                    );
+                    if (!response.ok) throw new Error(`Complete failed (${response.status})`);
+                    await this.refreshSiteData();
+                    await this.loadJobs();
+                    this.setStatus(`${jobName} done`, 'success');
+                } catch (err) {
+                    this.setStatus(`Error: ${err.message}`, 'error');
+                    console.error(err);
+                }
+            }
+
+            // Re-fetches structures (positions/status/violations) without going
+            // through the position-editing /layout endpoint -- used after a job
+            // action, which changes a printer's status but not its position.
+            async refreshSiteData() {
+                const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}`);
+                if (!response.ok) throw new Error(`Failed to refresh site (${response.status})`);
+                const data = await response.json();
+                this.structures = data.structures;
+                for (const s of this.structures) {
+                    if (s.world_bounds) this.addOrUpdateMesh(s);
+                }
+                this.updateViolations(data.violations, data.is_valid);
+                this.renderTree();
+                this.renderProperties();
             }
 
             onPointerDown(event) {

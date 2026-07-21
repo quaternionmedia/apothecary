@@ -22,7 +22,14 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse,
 from pydantic import BaseModel, Field, ValidationError
 
 from .booleans import Difference, Intersection, Union
-from .example_hierarchy import PRINTER_STATUSES, create_example_site, validate_garage_layout
+from .example_hierarchy import (
+    PRINTER_STATUSES,
+    Job,
+    JobStore,
+    create_example_site,
+    job_fits_printer,
+    validate_garage_layout,
+)
 from .hierarchy import Site, Structure
 from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
@@ -548,6 +555,7 @@ async def get_part_files(name: str, request: Request):
 # =============================================================================
 
 _site_store = SiteStore({"garage": (create_example_site, validate_garage_layout)})
+_job_store = JobStore()
 
 
 def _get_site_or_404(name: str) -> Site:
@@ -674,13 +682,136 @@ async def update_structure_status(name: str, structure_name: str, body: StatusRe
 
 @app.post("/sites/{name}/reset")
 async def reset_site_layout(name: str):
-    """Discard all edits and rebuild the site fresh from its factory."""
+    """Discard all edits and rebuild the site fresh from its factory.
+
+    Also clears the site's job queue: a reset re-idles every printer, so a
+    job still marked "assigned" to one would otherwise be stale.
+    """
     _get_site_or_404(name)  # validates the name before resetting
     site = _site_store.reset(name)
+    _job_store.reset(name)
     validator = _site_store.validator(name)
     payload = _site_payload(site, validator(site))
     payload["scad"] = site.render()
     return payload
+
+
+# -----------------------------------------------------------------------
+# Jobs: capacity-checked assignment to printer Structures (manufacturing
+# planning, first slice). See example_hierarchy.py's Job/JobStore.
+# -----------------------------------------------------------------------
+
+
+class Dimensions(BaseModel):
+    x: float
+    y: float
+    z: float
+
+
+class CreateJobRequest(BaseModel):
+    name: str
+    required_volume: Dimensions
+
+
+class AssignJobRequest(BaseModel):
+    printer: str
+
+
+def _job_summary(job: Job, site: Site) -> Dict[str, object]:
+    compatible = [
+        s.name
+        for s in site.structures
+        if s.build_volume is not None and s.status == "idle" and job_fits_printer(job, s)
+    ]
+    return {
+        "name": job.name,
+        "required_volume": [job.required_volume.x, job.required_volume.y, job.required_volume.z],
+        "status": job.status,
+        "assigned_printer": job.assigned_printer,
+        "compatible_printers": compatible,
+    }
+
+
+@app.get("/sites/{name}/jobs")
+async def list_jobs(name: str):
+    site = _get_site_or_404(name)
+    return [_job_summary(job, site) for job in _job_store.list_for_site(name)]
+
+
+@app.post("/sites/{name}/jobs")
+async def create_job(name: str, body: CreateJobRequest):
+    site = _get_site_or_404(name)
+    job = Job(
+        name=body.name,
+        required_volume=Vector3D(
+            x=body.required_volume.x, y=body.required_volume.y, z=body.required_volume.z
+        ),
+    )
+    try:
+        _job_store.add(name, job)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return _job_summary(job, site)
+
+
+@app.post("/sites/{name}/jobs/{job_name}/assign")
+async def assign_job(name: str, job_name: str, body: AssignJobRequest):
+    """Assign a job to a printer, checked against its build volume and idle status.
+
+    Assigning flips the printer's own status to "printing" -- the two
+    concepts (job assignment, printer status) are meant to move together.
+    """
+    site = _get_site_or_404(name)
+    try:
+        job = _job_store.get(name, job_name)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Job '{job_name}' not found") from None
+
+    printer = next((s for s in site.structures if s.name == body.printer), None)
+    if printer is None or printer.build_volume is None:
+        raise HTTPException(status_code=404, detail=f"Printer '{body.printer}' not found")
+    if printer.status != "idle":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Printer '{body.printer}' is not idle (status={printer.status})",
+        )
+    if not job_fits_printer(job, printer):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Job '{job_name}' (required volume "
+                f"{[job.required_volume.x, job.required_volume.y, job.required_volume.z]}) "
+                f"does not fit printer '{body.printer}''s build volume "
+                f"{[printer.build_volume.x, printer.build_volume.y, printer.build_volume.z]}"
+            ),
+        )
+
+    job.status = "assigned"
+    job.assigned_printer = printer.name
+    printer.status = "printing"
+    return _job_summary(job, site)
+
+
+@app.post("/sites/{name}/jobs/{job_name}/complete")
+async def complete_job(name: str, job_name: str):
+    """Mark a job done and free its printer back to idle.
+
+    ``assigned_printer`` is left in place as a record of which printer did
+    the job, even though the job is no longer occupying it.
+    """
+    site = _get_site_or_404(name)
+    try:
+        job = _job_store.get(name, job_name)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Job '{job_name}' not found") from None
+
+    if job.assigned_printer:
+        printer = next((s for s in site.structures if s.name == job.assigned_printer), None)
+        if printer is not None:
+            printer.status = "idle"
+
+    job.status = "done"
+    return _job_summary(job, site)
 
 
 @app.get("/viewer/sites/{name}", response_class=HTMLResponse)
