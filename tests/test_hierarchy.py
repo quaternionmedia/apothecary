@@ -113,3 +113,35 @@ def test_structure_world_bounds_offsets_footprint_by_position():
     bounds = structure.world_bounds()
     assert bounds.min_point == Vector3D(x=100, y=200, z=300)
     assert bounds.max_point == Vector3D(x=110, y=220, z=330)
+
+
+def test_structure_with_no_substructures_raises():
+    empty = Structure(name="empty")
+    try:
+        empty.to_scad_object()
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert "empty" in str(exc)
+
+
+def test_substructure_world_bounds_is_none_without_a_footprint():
+    sub = Substructure(name="ss", base=Cube())
+    assert sub.world_bounds() is None
+
+
+def test_substructure_world_bounds_offsets_footprint_by_position():
+    sub = Substructure(
+        name="ss",
+        position=Vector3D(x=5, y=10, z=15),
+        footprint=BoundingBox3D(min_point=Vector3D(), max_point=Vector3D(x=1, y=2, z=3)),
+        base=Cube(),
+    )
+    bounds = sub.world_bounds()
+    assert bounds.min_point == Vector3D(x=5, y=10, z=15)
+    assert bounds.max_point == Vector3D(x=6, y=12, z=18)
+
+
+def test_substructure_with_nonzero_position_wraps_in_translate():
+    sub = Substructure(name="ss", position=Vector3D(x=1, y=2, z=3), base=Cube())
+    rendered = sub.to_scad_object().render()
+    assert "translate([1.0, 2.0, 3.0])" in rendered

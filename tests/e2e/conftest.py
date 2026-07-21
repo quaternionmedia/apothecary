@@ -23,6 +23,8 @@ from pathlib import Path
 import httpx
 import pytest
 
+from doc_capture import GENERATED_DOCS_ROOT, DocRecorder
+
 
 def pytest_addoption(parser):
     """Add custom pytest options for E2E tests."""
@@ -37,6 +39,17 @@ def pytest_addoption(parser):
         action="store",
         default="8765",
         help="Port for the test server (default: 8765)",
+    )
+    parser.addoption(
+        "--generate-docs",
+        action="store_true",
+        default=False,
+        help=(
+            "Enable doc-workflow screenshot/video capture (tests marked 'docs'). "
+            "Off by default so a normal test run never writes to docs/generated/. "
+            "Driven by `apothecary docs generate`, not meant to be passed by hand "
+            "to a full test run."
+        ),
     )
 
 
@@ -134,3 +147,51 @@ def base_url(request, test_server, server_port):
         )
 
     return url
+
+
+@pytest.fixture(scope="session")
+def docs_enabled(request) -> bool:
+    return request.config.getoption("--generate-docs")
+
+
+@pytest.fixture
+def browser_context_args(browser_context_args, docs_enabled):
+    """Record video for doc-workflow tests only, into a raw/ignored directory.
+
+    Overrides pytest-playwright's own fixture of the same name -- a
+    documented extension point. The raw .webm this produces is never
+    committed (see .gitignore) and not renamed to match its workflow; the
+    GIF `apothecary docs generate` assembles from the same steps'
+    screenshots is the actual doc deliverable.
+    """
+    if not docs_enabled:
+        return browser_context_args
+    raw_video_dir = GENERATED_DOCS_ROOT / "_videos_raw"
+    raw_video_dir.mkdir(parents=True, exist_ok=True)
+    return {
+        **browser_context_args,
+        "record_video_dir": str(raw_video_dir),
+        "record_video_size": {"width": 1280, "height": 800},
+    }
+
+
+@pytest.fixture
+def doc_recorder(page, docs_enabled):
+    """Factory: doc_recorder(workflow, title, intro) -> DocRecorder.
+
+    Every DocRecorder created through this fixture is finalized (manifest
+    written) automatically at teardown.
+    """
+    recorders = []
+
+    def _make(workflow: str, title: str, intro: str) -> DocRecorder:
+        recorder = DocRecorder(
+            page=page, workflow=workflow, title=title, intro=intro, enabled=docs_enabled
+        )
+        recorders.append(recorder)
+        return recorder
+
+    yield _make
+
+    for recorder in recorders:
+        recorder.finalize()

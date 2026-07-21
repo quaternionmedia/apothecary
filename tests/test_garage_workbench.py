@@ -15,7 +15,10 @@ from apothecary.example_hierarchy import (
     create_example_site,
     validate_garage_layout,
 )
+from apothecary.hierarchy import Site, Structure, Substructure
+from apothecary.models.bounds import BoundingBox3D
 from apothecary.models.vectors import Vector3D
+from apothecary.primitives import Cube
 
 
 def _printer_structures(site):
@@ -118,3 +121,49 @@ def test_validate_garage_layout_catches_wrong_height():
     assert not report.is_valid
     kinds = {v.kind for v in report.violations}
     assert "not_on_bench" in kinds
+
+
+def test_validate_garage_layout_with_no_workbench_only_runs_generic_check():
+    site = Site(
+        name="no_bench",
+        structures=[
+            Structure(name="printer_1", substructures=[Substructure(name="s", base=Cube())])
+        ],
+    )
+    report = validate_garage_layout(site)
+    assert report.is_valid  # no bench, no overlaps -- nothing to flag
+
+
+def test_validate_garage_layout_with_bench_missing_footprint_only_runs_generic_check():
+    site = Site(
+        name="bad_bench",
+        structures=[
+            Structure(name="workbench", substructures=[Substructure(name="s", base=Cube())]),
+            Structure(
+                name="printer_1",
+                footprint=BoundingBox3D(max_point=Vector3D(x=10, y=10, z=10)),
+                substructures=[Substructure(name="s", base=Cube())],
+            ),
+        ],
+    )
+    report = validate_garage_layout(site)
+    assert report.is_valid  # workbench has no footprint, so nothing to check printers against
+
+
+def test_validate_garage_layout_skips_structures_with_no_footprint():
+    site = Site(
+        name="garage",
+        structures=[
+            Structure(
+                name="workbench",
+                footprint=BoundingBox3D(max_point=Vector3D(x=100, y=100, z=10)),
+                substructures=[Substructure(name="s", base=Cube())],
+            ),
+            Structure(
+                name="mystery_object",  # no footprint at all
+                substructures=[Substructure(name="s", base=Cube())],
+            ),
+        ],
+    )
+    report = validate_garage_layout(site)
+    assert report.is_valid  # nothing to check mystery_object's position against
