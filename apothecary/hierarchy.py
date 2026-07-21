@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 
 from .booleans import Difference, Union
 from .core import OpenSCADObject
+from .models.bounds import BoundingBox3D
 from .models.units import PrintSettings
 from .models.vectors import Vector3D
 from .primitives import Cylinder
@@ -92,10 +93,24 @@ class Substructure(BaseModel):
 
     name: str
     position: Vector3D = Field(default_factory=Vector3D)
+    footprint: Optional[BoundingBox3D] = None
     base: Optional[OpenSCADObject] = None
     additions: List[Feature] = Field(default_factory=list)
     subtractions: List[Feature] = Field(default_factory=list)
     children: List["Substructure"] = Field(default_factory=list)
+
+    def world_bounds(self) -> Optional[BoundingBox3D]:
+        """This node's ``footprint``, offset by ``position`` into the parent's frame.
+
+        Returns ``None`` if no ``footprint`` was given — bounds are opt-in
+        metadata, not derived from the rendered geometry.
+        """
+        if self.footprint is None:
+            return None
+        return BoundingBox3D(
+            min_point=self.footprint.min_point + self.position,
+            max_point=self.footprint.max_point + self.position,
+        )
 
     def to_scad_object(self) -> OpenSCADObject:
         positives: List[OpenSCADObject] = []
@@ -130,8 +145,18 @@ class Structure(BaseModel):
 
     name: str
     position: Vector3D = Field(default_factory=Vector3D)
+    footprint: Optional[BoundingBox3D] = None
     material: Optional[str] = None
     substructures: List[Substructure] = Field(default_factory=list)
+
+    def world_bounds(self) -> Optional[BoundingBox3D]:
+        """This node's ``footprint``, offset by ``position`` into the Site's frame."""
+        if self.footprint is None:
+            return None
+        return BoundingBox3D(
+            min_point=self.footprint.min_point + self.position,
+            max_point=self.footprint.max_point + self.position,
+        )
 
     def to_scad_object(self) -> OpenSCADObject:
         if not self.substructures:

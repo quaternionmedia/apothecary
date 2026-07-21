@@ -1,7 +1,10 @@
-"""Tests for the Site/Structure/Substructure/Feature prototype (not ratified API)."""
+"""Tests for the Site/Structure/Substructure/Feature prototype (not ratified API).
 
-from apothecary.example_hierarchy import create_example_site
+See tests/test_garage_workbench.py for the worked-example / layout-verification tests.
+"""
+
 from apothecary.hierarchy import Feature, Site, Structure, Substructure
+from apothecary.models.bounds import BoundingBox3D
 from apothecary.models.units import HardwareSizes, PrintSettings
 from apothecary.models.vectors import Vector3D
 from apothecary.primitives import Cube
@@ -95,15 +98,18 @@ def test_site_renders_jscad():
     assert "export const main" in rendered
 
 
-def test_example_site_renders_all_three_systems():
-    site = create_example_site()
-    rendered = site.render()
-    assert "Structure: control_panel (PETG)" in rendered
-    assert "Substructure: mounting_system" in rendered
-    assert "Substructure: ventilation_system" in rendered
-    assert "Substructure: cable_routing_system" in rendered
-    # 4 corner bosses + 4 corner holes + 6 vent slots + 1 grommet hole
-    assert rendered.count("Feature: corner_boss_") == 4
-    assert rendered.count("Feature: corner_hole_") == 4
-    assert rendered.count("Feature: vent_slot_") == 6
-    assert "Feature: cable_grommet_hole" in rendered
+def test_structure_world_bounds_is_none_without_a_footprint():
+    structure = Structure(name="s", substructures=[Substructure(name="ss", base=Cube())])
+    assert structure.world_bounds() is None
+
+
+def test_structure_world_bounds_offsets_footprint_by_position():
+    structure = Structure(
+        name="s",
+        position=Vector3D(x=100, y=200, z=300),
+        footprint=BoundingBox3D(min_point=Vector3D(), max_point=Vector3D(x=10, y=20, z=30)),
+        substructures=[Substructure(name="ss", base=Cube())],
+    )
+    bounds = structure.world_bounds()
+    assert bounds.min_point == Vector3D(x=100, y=200, z=300)
+    assert bounds.max_point == Vector3D(x=110, y=220, z=330)
