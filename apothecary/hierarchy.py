@@ -4,7 +4,11 @@ PROTOTYPE — not ratified. This module exists to let the design in
 ``governance/qm/adr/DRAFT-site-structure-substructure-feature-hierarchy.md``
 be evaluated against real geometry before that ADR is ratified. It is
 additive: ``Scene`` and every existing primitive/boolean/transform are
-untouched, and nothing here is imported by the CLI or ``parts/`` registry yet.
+untouched. The API (``apothecary/api.py``) and a prototype migration of the
+``parts/`` registry (``apothecary/example_parts_library.py``) do import and
+build on this module now, feeding the fractal zoom viewer -- but both are
+themselves explicitly labeled prototype/unratified, evaluating this shape
+rather than treating it as ratified.
 
 The model is one generic, self-similar recursive node, :class:`Assembly` —
 not four separate classes. A build is a tree of ``Assembly`` nodes of
