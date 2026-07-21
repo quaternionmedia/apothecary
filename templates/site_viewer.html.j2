@@ -187,6 +187,17 @@
         const DEFAULT_COLOR = 0x4488cc;
         const SELECTED_EDGE_COLOR = 0xffffff;
         const VIOLATION_COLOR = 0xcc3333;
+        const BUILD_VOLUME_COLOR = 0x33ffdd;
+
+        // Mirrors example_hierarchy.PRINTER_STATUSES -- this prototype has no
+        // endpoint that reports the allowed set, so it's duplicated here.
+        const PRINTER_STATUSES = ['idle', 'printing', 'offline', 'maintenance'];
+        const STATUS_COLORS = {
+            idle: 0x4488cc,
+            printing: 0xffaa00,
+            offline: 0x555555,
+            maintenance: 0xaa3388,
+        };
 
         class SiteViewer {
             constructor() {
@@ -206,6 +217,7 @@
                 this.footprintByName = {};      // name -> local footprint {min,max} (pre-position)
                 this.positions = {};             // name -> {x,y,z} current override state
                 this.meshByName = {};
+                this.buildVolumeMeshByName = {};
                 this.violationStructureNames = new Set();
                 this.selectedName = null;
 
@@ -299,7 +311,13 @@
                     mesh.geometry.dispose();
                     mesh.material.dispose();
                 }
+                for (const mesh of Object.values(this.buildVolumeMeshByName)) {
+                    this.scene.remove(mesh);
+                    mesh.geometry.dispose();
+                    mesh.material.dispose();
+                }
                 this.meshByName = {};
+                this.buildVolumeMeshByName = {};
                 this.selectedName = null;
             }
 
@@ -377,14 +395,54 @@
                 mesh.scale.set(size[0], size[1], size[2]);
                 mesh.position.set(center[0], center[1], center[2]);
                 this.colorMesh(structure.name);
+                this.updateBuildVolumeIndicator(structure);
+            }
+
+            // A wireframe-only box showing the usable print area within a
+            // printer's physical footprint -- a separate scene object, not a
+            // child of the printer mesh, so its scale doesn't compound with
+            // the (non-uniformly stretched) parent box's scale.
+            updateBuildVolumeIndicator(structure) {
+                const existing = this.buildVolumeMeshByName[structure.name];
+                if (!structure.build_volume || !structure.world_bounds) {
+                    if (existing) {
+                        this.scene.remove(existing);
+                        existing.geometry.dispose();
+                        existing.material.dispose();
+                        delete this.buildVolumeMeshByName[structure.name];
+                    }
+                    return;
+                }
+
+                const bounds = structure.world_bounds;
+                const [bvApX, bvApY, bvApZ] = structure.build_volume;
+                const centerApX = (bounds.min[0] + bounds.max[0]) / 2;
+                const centerApY = (bounds.min[1] + bounds.max[1]) / 2;
+                const baseApZ = bounds.min[2];
+
+                const size = [bvApX, bvApZ, bvApY];
+                const center = [centerApX, baseApZ + bvApZ / 2, centerApY];
+
+                let mesh = existing;
+                if (!mesh) {
+                    const geometry = new THREE.BoxGeometry(1, 1, 1);
+                    const edges = new THREE.EdgesGeometry(geometry);
+                    mesh = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: BUILD_VOLUME_COLOR }));
+                    this.scene.add(mesh);
+                    this.buildVolumeMeshByName[structure.name] = mesh;
+                }
+                mesh.scale.set(size[0], size[1], size[2]);
+                mesh.position.set(center[0], center[1], center[2]);
             }
 
             colorMesh(name) {
                 const mesh = this.meshByName[name];
                 if (!mesh) return;
+                const structure = this.structures.find((s) => s.name === name);
                 const isViolating = this.violationStructureNames.has(name);
                 const isSelected = this.selectedName === name;
-                const baseColor = STRUCTURE_COLORS[name] ?? DEFAULT_COLOR;
+                const statusColor = structure && structure.status ? STATUS_COLORS[structure.status] : undefined;
+                const baseColor = statusColor ?? STRUCTURE_COLORS[name] ?? DEFAULT_COLOR;
                 mesh.material.color.set(isViolating ? VIOLATION_COLOR : baseColor);
                 const edges = mesh.getObjectByName('edges');
                 if (edges) edges.material.color.set(isSelected ? SELECTED_EDGE_COLOR : 0x000000);
@@ -400,9 +458,11 @@
                     label.className = 'tree-structure-label' + (this.selectedName === s.name ? ' selected' : '');
                     const swatch = document.createElement('span');
                     swatch.className = 'tree-swatch';
-                    swatch.style.background = '#' + (STRUCTURE_COLORS[s.name] ?? DEFAULT_COLOR).toString(16).padStart(6, '0');
+                    const swatchColor = (s.status && STATUS_COLORS[s.status]) ?? STRUCTURE_COLORS[s.name] ?? DEFAULT_COLOR;
+                    swatch.style.background = '#' + swatchColor.toString(16).padStart(6, '0');
                     label.appendChild(swatch);
-                    label.appendChild(document.createTextNode(s.name + (s.material ? ` (${s.material})` : '')));
+                    const labelText = s.name + (s.material ? ` (${s.material})` : '') + (s.status ? ` — ${s.status}` : '');
+                    label.appendChild(document.createTextNode(labelText));
                     label.addEventListener('click', () => this.selectStructure(s.name));
                     li.appendChild(label);
 
@@ -442,14 +502,26 @@
                     return;
                 }
                 const pos = this.positions[structure.name];
+                const statusRow = structure.status
+                    ? `<div class="prop-row"><label>Status</label>
+                         <select id="status-select">
+                           ${PRINTER_STATUSES.map((s) => `<option value="${s}"${s === structure.status ? ' selected' : ''}>${s}</option>`).join('')}
+                         </select>
+                       </div>`
+                    : '';
                 this.propertiesEl.innerHTML = `
                     <div class="prop-row"><label>Name</label><span>${structure.name}</span></div>
+                    ${statusRow}
                     <div class="prop-row"><label>X (mm)</label><input type="number" id="pos-x" step="10" value="${pos.x}"></div>
                     <div class="prop-row"><label>Y (mm)</label><input type="number" id="pos-y" step="10" value="${pos.y}"></div>
                     <div class="prop-row"><label>Z (mm)</label><input type="number" id="pos-z" step="10" value="${pos.z}"></div>
                     <div class="prop-readonly">
                         Material: ${structure.material ?? '—'}<br>
-                        Footprint: ${structure.footprint ? structure.footprint.max.map((v, i) => (v - structure.footprint.min[i]).toFixed(0)).join(' × ') + ' mm' : '—'}
+                        Footprint: ${structure.footprint ? structure.footprint.max.map((v, i) => (v - structure.footprint.min[i]).toFixed(0)).join(' × ') + ' mm' : '—'}<br>
+                        Build volume: ${structure.build_volume
+                            ? structure.build_volume.map((v) => v.toFixed(0)).join(' × ') + ' mm '
+                              + `<span style="display:inline-block;width:8px;height:8px;border:1px solid #${BUILD_VOLUME_COLOR.toString(16).padStart(6, '0')};vertical-align:middle;"></span>`
+                            : '—'}
                     </div>
                 `;
                 for (const axis of ['x', 'y', 'z']) {
@@ -458,6 +530,33 @@
                         this.applyPositionToMesh(structure.name);
                         this.submitLayout();
                     });
+                }
+                const statusSelect = document.getElementById('status-select');
+                if (statusSelect) {
+                    statusSelect.addEventListener('change', (e) => this.submitStatus(structure.name, e.target.value));
+                }
+            }
+
+            async submitStatus(name, status) {
+                this.setStatus(`Updating ${name} status...`, 'loading');
+                try {
+                    const response = await fetch(
+                        `${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/structures/${encodeURIComponent(name)}/status`,
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ status }),
+                        }
+                    );
+                    if (!response.ok) throw new Error(`Status update failed (${response.status})`);
+                    const data = await response.json();
+                    this.structures = data.structures;
+                    for (const n of Object.keys(this.meshByName)) this.colorMesh(n);
+                    this.renderTree();
+                    this.setStatus(`${name} is now ${status}`, 'success');
+                } catch (err) {
+                    this.setStatus(`Error: ${err.message}`, 'error');
+                    console.error(err);
                 }
             }
 

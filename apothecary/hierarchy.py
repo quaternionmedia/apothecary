@@ -203,12 +203,22 @@ def check_no_overlaps(structures: List["Structure"]) -> List[LayoutViolation]:
 
 
 class Structure(BaseModel):
-    """An independently-manufactured or independently-sourced rigid grouping within a Site."""
+    """An independently-manufactured or independently-sourced rigid grouping within a Site.
+
+    ``build_volume`` and ``status`` are optional and domain-agnostic in
+    shape (a size, a free-form string) rather than printer-specific typed
+    fields — a Structure that has no notion of either (a workbench) simply
+    leaves them unset, the same way ``material`` already works. Allowed
+    status values and any capacity-checking logic are scenario concerns and
+    live with the scenario (see example_hierarchy.py), not here.
+    """
 
     name: str
     position: Vector3D = Field(default_factory=Vector3D)
     footprint: Optional[BoundingBox3D] = None
     material: Optional[str] = None
+    build_volume: Optional[Vector3D] = None
+    status: Optional[str] = None
     substructures: List[Substructure] = Field(default_factory=list)
 
     def world_bounds(self) -> Optional[BoundingBox3D]:

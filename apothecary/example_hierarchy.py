@@ -57,6 +57,16 @@ POST_SIZE = 20.0
 PRINTER_X_POSITIONS = [100.0, 650.0, 1200.0]
 PRINTER_Y_POSITION = 150.0
 
+# Usable print area (mm) -- smaller than the printer's physical footprint,
+# the same way a real desktop FDM printer's chassis is bigger than its bed.
+PRINTER_BUILD_VOLUME = Vector3D(x=220.0, y=220.0, z=250.0)
+
+# Every printer Structure.status is one of these; enforced at the API layer
+# (see api.py's PRINTER_STATUSES-checking endpoint), not in hierarchy.py --
+# a Structure's status is a free-form string there, this is the scenario's
+# closed set of meaningful values for *this* example.
+PRINTER_STATUSES = ["idle", "printing", "offline", "maintenance"]
+
 
 def _leg_corners() -> list[tuple[float, float]]:
     far_x = BENCH_WIDTH - LEG_INSET - LEG_SIZE
@@ -116,7 +126,7 @@ def _build_workbench() -> Structure:
     )
 
 
-def _build_printer(name: str, *, x: float, y: float) -> Structure:
+def _build_printer(name: str, *, x: float, y: float, status: str = "idle") -> Structure:
     frame_system = Substructure(
         name="frame_system",
         base=Cube(
@@ -167,6 +177,8 @@ def _build_printer(name: str, *, x: float, y: float) -> Structure:
             min_point=Vector3D(),
             max_point=Vector3D(x=PRINTER_WIDTH, y=PRINTER_DEPTH, z=PRINTER_HEIGHT),
         ),
+        build_volume=PRINTER_BUILD_VOLUME,
+        status=status,
         substructures=[frame_system, gantry_system],
     )
 

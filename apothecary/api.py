@@ -22,7 +22,7 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse,
 from pydantic import BaseModel, Field, ValidationError
 
 from .booleans import Difference, Intersection, Union
-from .example_hierarchy import create_example_site, validate_garage_layout
+from .example_hierarchy import PRINTER_STATUSES, create_example_site, validate_garage_layout
 from .hierarchy import Site, Structure
 from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
@@ -570,6 +570,7 @@ def _structure_summary(structure: Structure) -> Dict[str, object]:
     return {
         "name": structure.name,
         "material": structure.material,
+        "status": structure.status,
         "position": {
             "x": structure.position.x,
             "y": structure.position.y,
@@ -577,6 +578,11 @@ def _structure_summary(structure: Structure) -> Dict[str, object]:
         },
         "footprint": _bounds_dict(structure.footprint),
         "world_bounds": _bounds_dict(structure.world_bounds()),
+        "build_volume": (
+            [structure.build_volume.x, structure.build_volume.y, structure.build_volume.z]
+            if structure.build_volume
+            else None
+        ),
         "substructures": [
             {
                 "name": sub.name,
@@ -604,6 +610,10 @@ class PositionOverride(BaseModel):
 
 class LayoutRequest(BaseModel):
     positions: Dict[str, PositionOverride] = Field(default_factory=dict)
+
+
+class StatusRequest(BaseModel):
+    status: str
 
 
 @app.get("/sites")
@@ -635,6 +645,31 @@ async def update_site_layout(name: str, body: LayoutRequest):
     payload = _site_payload(site, validator(site))
     payload["scad"] = site.render()
     return payload
+
+
+@app.post("/sites/{name}/structures/{structure_name}/status")
+async def update_structure_status(name: str, structure_name: str, body: StatusRequest):
+    """Set a Structure's status (persisted). Validated against PRINTER_STATUSES.
+
+    This is the garage scenario's closed set, not a hierarchy-wide rule --
+    ``Structure.status`` itself is a free-form string; a future site with a
+    different notion of status would validate against its own set here.
+    """
+    if body.status not in PRINTER_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid status {body.status!r}; must be one of {PRINTER_STATUSES}",
+        )
+    site = _get_site_or_404(name)
+    structure = next((s for s in site.structures if s.name == structure_name), None)
+    if structure is None:
+        raise HTTPException(
+            status_code=404, detail=f"Structure '{structure_name}' not found in site '{name}'"
+        )
+    structure.status = body.status
+
+    validator = _site_store.validator(name)
+    return _site_payload(site, validator(site))
 
 
 @app.post("/sites/{name}/reset")

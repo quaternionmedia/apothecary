@@ -51,6 +51,51 @@ def test_get_garage_site_includes_substructures_and_features():
     assert substructure_names == {"frame_system", "gantry_system"}
 
 
+def test_workbench_has_no_status_or_build_volume():
+    data = client.get("/sites/garage").json()
+    workbench = data["structures"][0]
+    assert workbench["status"] is None
+    assert workbench["build_volume"] is None
+
+
+def test_printers_default_to_idle_with_a_build_volume():
+    data = client.get("/sites/garage").json()
+    for printer in data["structures"][1:]:
+        assert printer["status"] == "idle"
+        assert printer["build_volume"] == [220.0, 220.0, 250.0]
+
+
+def test_update_structure_status():
+    response = client.post("/sites/garage/structures/printer_1/status", json={"status": "printing"})
+    assert response.status_code == 200
+    printer_1 = next(s for s in response.json()["structures"] if s["name"] == "printer_1")
+    assert printer_1["status"] == "printing"
+
+    # persists across a plain GET, same as position edits
+    data = client.get("/sites/garage").json()
+    printer_1 = next(s for s in data["structures"] if s["name"] == "printer_1")
+    assert printer_1["status"] == "printing"
+
+
+def test_update_structure_status_rejects_unknown_value():
+    response = client.post(
+        "/sites/garage/structures/printer_1/status", json={"status": "on_fire"}
+    )
+    assert response.status_code == 400
+
+
+def test_update_structure_status_unknown_structure_is_404():
+    response = client.post(
+        "/sites/garage/structures/not_a_real_structure/status", json={"status": "idle"}
+    )
+    assert response.status_code == 404
+
+
+def test_update_structure_status_unknown_site_is_404():
+    response = client.post("/sites/nope/structures/printer_1/status", json={"status": "idle"})
+    assert response.status_code == 404
+
+
 def test_layout_endpoint_with_no_overrides_matches_default():
     response = client.post("/sites/garage/layout", json={"positions": {}})
     assert response.status_code == 200
