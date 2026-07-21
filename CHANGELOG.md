@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Fractal `Assembly` model** (prototype, unratified) – Site/Structure/Substructure/Feature collapsed into one generic recursive class (`apothecary/hierarchy.py`); depth is unbounded rather than four fixed levels
+- **Revision/diff building blocks** (prototype) – `apothecary/revisions.py`: `Revision`, `RevisionGraph` (branching history), `diff_assemblies` (path-addressed structural diff) — first slice toward planning/comparing design iterations, no compositing/merge yet
+- **Fractal zoom viewer** (prototype, unratified) – `/viewer/sites/{name}` navigates any registered site's Assembly tree at any depth with standardized controls (click to select, double-click or scroll-past-resistance to zoom in, one zoom-out control) and an abstract depth-ladder minimap
+- **Parts library as a fractal tree** – the registered `parts/` library is migrated in as leaf `Assembly` nodes (`apothecary/example_parts_library.py`, new `part_ref` field), reachable by zooming into the `parts_library` site instead of a separate parts browser
 - **Elephant walk** – `apothecary parts elephant-walk` generates a preview file with all parts arranged in a line, using bounding boxes to prevent overlap
 - **Dev command** – `apothecary dev` for quick development workflow (generate STLs + start server)
 - **STL rendering** – OpenSCAD CLI integration for SCAD→STL conversion
@@ -24,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive E2E tests using Playwright
 
 ### Changed
+- **`/sites/{name}` payload** – gains an additive recursive `tree` key (the whole Assembly tree, including additions/subtractions) alongside the existing flattened `structures` list
 - **Calibration cube** – Default size reduced to 10mm, labels as relief (not extruded), axes preview-only
 - **Parts reorganized** – Each part now has its own folder (`parts/<name>/<name>.scad`)
 - **Viewer renders actual STL** – No more placeholder geometry; auto-generates if missing
@@ -33,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reduced `api.py` from 827 to ~450 lines
 
 ### Removed
+- **Standalone parts browser and Site/Structure hierarchy viewer** – `templates/viewer.html.j2` and `templates/site_viewer.html.j2`, along with `/viewer/random` and `/viewer/parts/{name}`, absorbed into the fractal zoom viewer (`/viewer` now redirects to it)
 - `render_context.py` (orphaned, unused)
 - `openscad_framework.py` (deprecated compatibility shim)
 - `star_cookeicutter.py` (legacy misspelling)
