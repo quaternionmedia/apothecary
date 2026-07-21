@@ -15,6 +15,7 @@ Usage:
 """
 
 import os
+import re
 import subprocess
 import sys
 import time
@@ -159,32 +160,45 @@ def docs_enabled(request) -> bool:
 
 
 @pytest.fixture
-def browser_context_args(browser_context_args, docs_enabled):
-    """Record video for doc-workflow tests only, into a raw/ignored directory.
+def browser_context_args(browser_context_args, docs_enabled, request):
+    """Record video for doc-workflow tests only, one subdirectory per test.
 
     Overrides pytest-playwright's own fixture of the same name -- a
-    documented extension point. The raw .webm this produces is never
-    committed (see .gitignore) and not renamed to match its workflow; the
-    GIF `apothecary docs generate` assembles from the same steps'
-    screenshots is the actual doc deliverable.
+    documented extension point. Playwright only assigns the actual .webm
+    its final filename once the context closes, well after this test's own
+    body (and doc_recorder's finalizer, below) has already run -- so rather
+    than guess which file belongs to which workflow afterward, each test
+    gets its own directory (named for the test itself, which pytest
+    guarantees is unique within a run) with exactly one video in it.
+    `apothecary docs generate` matches that video back to a workflow via
+    the marker file doc_recorder's finalizer writes alongside it.
     """
     if not docs_enabled:
         return browser_context_args
-    raw_video_dir = GENERATED_DOCS_ROOT / "_videos_raw"
-    raw_video_dir.mkdir(parents=True, exist_ok=True)
+    video_dir = GENERATED_DOCS_ROOT / "_videos_raw" / _slugify_test_name(request.node.name)
+    video_dir.mkdir(parents=True, exist_ok=True)
     return {
         **browser_context_args,
-        "record_video_dir": str(raw_video_dir),
+        "record_video_dir": str(video_dir),
         "record_video_size": {"width": 1280, "height": 800},
     }
 
 
+def _slugify_test_name(name: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9_-]+", "-", name).strip("-")
+
+
 @pytest.fixture
-def doc_recorder(page, docs_enabled):
+def doc_recorder(page, docs_enabled, request):
     """Factory: doc_recorder(workflow, title, intro) -> DocRecorder.
 
     Every DocRecorder created through this fixture is finalized (manifest
-    written) automatically at teardown.
+    written) automatically at teardown. Also drops a marker file naming
+    every workflow this test recorded into that test's own video directory
+    (see browser_context_args) -- the video itself isn't written until the
+    context closes, after this fixture's teardown runs, so the marker is
+    how `apothecary docs generate` later finds which workflow(s) a given
+    .webm belongs to.
     """
     recorders = []
 
@@ -199,3 +213,11 @@ def doc_recorder(page, docs_enabled):
 
     for recorder in recorders:
         recorder.finalize()
+
+    if docs_enabled and recorders:
+        video_dir = GENERATED_DOCS_ROOT / "_videos_raw" / _slugify_test_name(request.node.name)
+        video_dir.mkdir(parents=True, exist_ok=True)
+        marker = video_dir / "workflows.txt"
+        marker.write_text(
+            "\n".join(r.workflow for r in recorders) + "\n", encoding="utf-8"
+        )

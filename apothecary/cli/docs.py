@@ -4,9 +4,11 @@ The doc-workflow tests (tests/e2e/test_docs_*.py, marked both `e2e` and
 `docs`) are the single source of truth: each `docs.step("...")` call inside
 one of them is both an assertion point and a documentation paragraph. This
 module runs those tests with screenshot/video capture turned on
-(`--generate-docs`, see tests/e2e/conftest.py) and turns the resulting
-manifests into Markdown + an animated GIF per workflow -- so editing a test
-is how you edit the docs.
+(`--generate-docs`, see tests/e2e/conftest.py) and turns the results into,
+per workflow: Markdown, a step-by-step animated GIF (the deliverable meant
+for embedding somewhere a real video won't play, e.g. a PR description),
+and the actual Playwright screen recording of that same run, embedded in
+the Markdown as real video -- so editing a test is how you edit the docs.
 
 Everything under docs/generated/ is a build artifact (see .gitignore) --
 regenerate it with `apothecary docs generate` whenever the doc-workflow
@@ -38,6 +40,15 @@ WORKFLOW_DOC_TEMPLATE = """# {title}
 ## Walkthrough GIF
 
 ![{title} walkthrough]({workflow}.gif)
+{video_section}"""
+
+VIDEO_SECTION_TEMPLATE = """
+## Walkthrough video
+
+The real Playwright recording of this run, not a re-enactment -- if this
+test changes, so does this video, next time `apothecary docs generate` runs.
+
+<video controls src="{workflow}.webm" width="800"></video>
 """
 
 STEP_TEMPLATE = """### {index}. {description}
@@ -67,6 +78,15 @@ def generate(host: str, port: int, keep_raw_video: bool):
     runs only the tests marked 'docs', then assembles a GIF and a Markdown
     page per workflow into docs/generated/.
     """
+    # A previous invocation's raw recordings (especially from a run that
+    # failed before reaching cleanup, below) must not still be here --
+    # _extract_workflow_videos picks "the" video for a given test out of
+    # whatever's in its directory, so a stale leftover from an earlier run
+    # would silently outrank (or get mistaken for) this run's actual video.
+    raw_video_dir = GENERATED_DOCS_ROOT / "_videos_raw"
+    if raw_video_dir.exists():
+        shutil.rmtree(raw_video_dir)
+
     click.echo(f"Starting temporary server at http://{host}:{port} for doc generation...")
     server_proc, base_url = _start_server(host, port)
 
@@ -97,6 +117,9 @@ def generate(host: str, port: int, keep_raw_video: bool):
         raise SystemExit(
             f"Doc-workflow tests failed (exit {result.returncode}); docs were not regenerated."
         )
+
+    click.echo("Extracting per-workflow videos...")
+    _extract_workflow_videos()
 
     click.echo("Assembling GIFs and rendering Markdown...")
     if GENERATED_DOCS_ROOT.exists():
@@ -177,12 +200,55 @@ def _render_workflow(workflow_dir: Path) -> None:
         )
         for step in manifest["steps"]
     )
+    has_video = (workflow_dir / f"{workflow}.webm").exists()
+    video_section = VIDEO_SECTION_TEMPLATE.format(workflow=workflow) if has_video else ""
     doc = WORKFLOW_DOC_TEMPLATE.format(
-        title=manifest["title"], intro=manifest["intro"], steps=steps_md, workflow=workflow
+        title=manifest["title"],
+        intro=manifest["intro"],
+        steps=steps_md,
+        workflow=workflow,
+        video_section=video_section,
     )
     doc_path = workflow_dir / f"{workflow}.md"
     doc_path.write_text(doc, encoding="utf-8")
-    click.echo(f"  {workflow}: {doc_path}")
+    click.echo(f"  {workflow}: {doc_path}" + (" (+ video)" if has_video else ""))
+
+
+def _extract_workflow_videos() -> None:
+    """Match each doc-workflow test's recorded .webm to the workflow(s) it
+    produced, and copy it into that workflow's own docs/generated/ dir as
+    ``<workflow>.webm`` -- see conftest.py's browser_context_args/
+    doc_recorder for how the marker file and one-video-per-test-directory
+    layout this depends on gets created.
+
+    A no-op if doc generation didn't request video (record_video_dir unset)
+    or a given test's video hasn't been written yet for some other reason --
+    the GIF/Markdown a workflow gets from _render_workflow either way is
+    never conditional on this having succeeded.
+    """
+    raw_video_dir = GENERATED_DOCS_ROOT / "_videos_raw"
+    if not raw_video_dir.exists():
+        return
+
+    for test_dir in sorted(p for p in raw_video_dir.iterdir() if p.is_dir()):
+        marker = test_dir / "workflows.txt"
+        if not marker.exists():
+            continue
+        videos = list(test_dir.glob("*.webm"))
+        if not videos:
+            click.echo(f"  Warning: no video found for {test_dir.name}, skipping")
+            continue
+        if len(videos) > 1:
+            click.echo(
+                f"  Warning: {len(videos)} videos found for {test_dir.name}, using the first"
+            )
+        video_path = videos[0]
+
+        workflows = [line.strip() for line in marker.read_text(encoding="utf-8").splitlines() if line.strip()]
+        for workflow in workflows:
+            workflow_dir = GENERATED_DOCS_ROOT / workflow
+            workflow_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(video_path, workflow_dir / f"{workflow}.webm")
 
 
 def _assemble_gif(screenshot_paths: list[Path], output_path: Path, duration_ms: int = 1200) -> None:

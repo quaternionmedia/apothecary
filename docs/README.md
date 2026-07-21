@@ -40,11 +40,15 @@ apothecary docs clean      # removes it
 ```
 
 `docs/generated/` (Markdown + step-by-step screenshots + an assembled GIF
-per workflow) is gitignored, not committed — a build artifact, the same way
-STLs are. Run the command above to produce it locally; there is nothing to
-browse on GitHub until you do. Raw Playwright `.webm` recordings are
-captured as an intermediate and always discarded (`--keep-raw-video` to
-keep them) in favor of the assembled GIF.
++ the real Playwright screen recording, per workflow) is gitignored, not
+committed — a build artifact, the same way STLs are. Run the command above
+to produce it locally; there is nothing to browse on GitHub until you do.
+The GIF (hand-assembled from the same step screenshots) is the deliverable
+meant for embedding somewhere real video won't play, e.g. a PR description;
+the `.webm` alongside it in each workflow's Markdown is the unedited
+recording of that same test run. The intermediate per-test recordings this
+is extracted from (`docs/generated/_videos_raw/`) are discarded afterward
+(`--keep-raw-video` to keep them).
 
 A normal test run (`apothecary test all`, CI) exercises the same test as
 ordinary E2E coverage of the fractal zoom viewer — capture only turns on
