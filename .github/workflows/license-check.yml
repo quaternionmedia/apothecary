@@ -49,4 +49,4 @@ jobs:
         run: |
           uv run --with pip-licenses pip-licenses \
             --ignore-packages apothecary \
-            --allow-only="MIT;MIT License;MIT AND Python-2.0;BSD License;BSD-3-Clause;Apache Software License;Apache-2.0;Apache Software License; BSD License;Apache Software License; MIT License;Mozilla Public License 2.0 (MPL 2.0);MPL-2.0;PSF-2.0;Python Software Foundation License;Unlicense;Artistic License; GNU General Public License (GPL); GNU General Public License v2 or later (GPLv2+)"
+            --allow-only="MIT;MIT License;MIT-CMU;MIT AND Python-2.0;BSD License;BSD-3-Clause;Apache Software License;Apache-2.0;Apache Software License; BSD License;Apache Software License; MIT License;Mozilla Public License 2.0 (MPL 2.0);MPL-2.0;PSF-2.0;Python Software Foundation License;Unlicense;Artistic License; GNU General Public License (GPL); GNU General Public License v2 or later (GPLv2+)"
