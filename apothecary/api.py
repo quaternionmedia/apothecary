@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from .booleans import Difference, Intersection, Union
 from .example_hierarchy import create_example_site, validate_garage_layout
-from .hierarchy import Structure
+from .hierarchy import Site, Structure
 from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
 from .primitives import Cube, Cylinder, Sphere
@@ -31,6 +31,7 @@ from .projects.parts.skeleton import ROOT
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
 from .projects.registry import scan_projects
 from .scene import Scene
+from .site_store import SiteStore, UnknownSiteError
 from .templates import TemplateRenderer
 from .transforms import Rotate, Scale, Translate
 from .viewer import render_site_viewer_page, render_viewer_page
@@ -540,24 +541,20 @@ async def get_part_files(name: str, request: Request):
 # =============================================================================
 # Site/Structure/Substructure/Feature hierarchy (prototype, unratified)
 #
-# Sites carry no persistence layer: each request rebuilds the registered
-# site fresh from its factory and applies any position overrides the client
-# sends, the same stateless pattern /render already uses for Scene. There is
-# no server-side "current state" between requests -- the client is expected
-# to hold the full set of position overrides and resend it each time.
+# Backed by a process-lifetime SiteStore (see site_store.py): edits persist
+# across requests, unlike /render's stateless Scene handling. Known
+# limitation: in-memory only, lost on restart, not shared across worker
+# processes -- fine for a single-process dev server.
 # =============================================================================
 
-_SITE_REGISTRY = {
-    "garage": (create_example_site, validate_garage_layout),
-}
+_site_store = SiteStore({"garage": (create_example_site, validate_garage_layout)})
 
 
-def _load_site(name: str):
-    entry = _SITE_REGISTRY.get(name)
-    if entry is None:
-        raise HTTPException(status_code=404, detail=f"Site '{name}' not found")
-    factory, validator = entry
-    return factory(), validator
+def _get_site_or_404(name: str) -> Site:
+    try:
+        return _site_store.get(name)
+    except UnknownSiteError:
+        raise HTTPException(status_code=404, detail=f"Site '{name}' not found") from None
 
 
 def _bounds_dict(bounds: BoundingBox3D | None) -> Dict[str, List[float]] | None:
@@ -611,28 +608,41 @@ class LayoutRequest(BaseModel):
 
 @app.get("/sites")
 async def list_sites():
-    return sorted(_SITE_REGISTRY.keys())
+    return _site_store.names()
 
 
 @app.get("/sites/{name}")
 async def get_site(name: str):
-    site, validator = _load_site(name)
+    site = _get_site_or_404(name)
+    validator = _site_store.validator(name)
     return _site_payload(site, validator(site))
 
 
 @app.post("/sites/{name}/layout")
 async def update_site_layout(name: str, body: LayoutRequest):
-    """Apply position overrides, re-validate, and return regenerated OpenSCAD.
+    """Apply position overrides (persisted), re-validate, and return regenerated OpenSCAD.
 
     ``body.positions`` need only include the structures the client has
-    moved from their defaults; everything else keeps the factory's position.
+    moved; everything else keeps its current persisted position.
     """
-    site, validator = _load_site(name)
+    site = _get_site_or_404(name)
     for structure in site.structures:
         override = body.positions.get(structure.name)
         if override is not None:
             structure.position = Vector3D(x=override.x, y=override.y, z=override.z)
 
+    validator = _site_store.validator(name)
+    payload = _site_payload(site, validator(site))
+    payload["scad"] = site.render()
+    return payload
+
+
+@app.post("/sites/{name}/reset")
+async def reset_site_layout(name: str):
+    """Discard all edits and rebuild the site fresh from its factory."""
+    _get_site_or_404(name)  # validates the name before resetting
+    site = _site_store.reset(name)
+    validator = _site_store.validator(name)
     payload = _site_payload(site, validator(site))
     payload["scad"] = site.render()
     return payload
@@ -641,11 +651,11 @@ async def update_site_layout(name: str, body: LayoutRequest):
 @app.get("/viewer/sites/{name}", response_class=HTMLResponse)
 async def site_viewer(name: str, request: Request):
     """Site/Structure hierarchy viewer: box-per-structure 3D manipulation (prototype)."""
-    if name not in _SITE_REGISTRY:
+    if name not in _site_store.names():
         raise HTTPException(status_code=404, detail=f"Site '{name}' not found")
     base_url = str(request.base_url).rstrip("/")
     return HTMLResponse(
-        render_site_viewer_page(sorted(_SITE_REGISTRY.keys()), base_url, default_site=name)
+        render_site_viewer_page(_site_store.names(), base_url, default_site=name)
     )
 
 

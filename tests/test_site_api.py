@@ -1,10 +1,21 @@
 """API tests for the Site/Structure hierarchy endpoints (prototype, unratified)."""
 
+import pytest
 from fastapi.testclient import TestClient
 
 from apothecary.api import app
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def reset_garage_site():
+    """The site store persists edits across requests (see site_store.py), so
+    reset garage to its factory defaults before every test in this module --
+    otherwise a test that moves a printer would leak state into the next one.
+    """
+    client.post("/sites/garage/reset")
+    yield
 
 
 def test_list_sites():
@@ -95,6 +106,39 @@ def test_layout_endpoint_valid_move_updates_world_bounds_and_scad():
 
 def test_layout_endpoint_unknown_site_is_404():
     response = client.post("/sites/nope/layout", json={"positions": {}})
+    assert response.status_code == 404
+
+
+def test_layout_edits_persist_across_get_requests():
+    client.post(
+        "/sites/garage/layout",
+        json={"positions": {"printer_1": {"x": 300, "y": 150, "z": 780}}},
+    )
+    data = client.get("/sites/garage").json()
+    printer_1 = next(s for s in data["structures"] if s["name"] == "printer_1")
+    assert printer_1["position"]["x"] == 300.0
+
+
+def test_reset_endpoint_discards_edits():
+    client.post(
+        "/sites/garage/layout",
+        json={"positions": {"printer_1": {"x": 300, "y": 150, "z": 780}}},
+    )
+    response = client.post("/sites/garage/reset")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_valid"] is True
+    printer_1 = next(s for s in data["structures"] if s["name"] == "printer_1")
+    assert printer_1["position"]["x"] == 100.0  # PRINTER_X_POSITIONS[0] default
+
+    # confirm it actually persisted the reset, not just returned a fresh copy
+    data_after = client.get("/sites/garage").json()
+    printer_1_after = next(s for s in data_after["structures"] if s["name"] == "printer_1")
+    assert printer_1_after["position"]["x"] == 100.0
+
+
+def test_reset_endpoint_unknown_site_is_404():
+    response = client.post("/sites/nope/reset")
     assert response.status_code == 404
 
 

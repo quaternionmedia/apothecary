@@ -548,7 +548,20 @@
             }
 
             async resetLayout() {
-                if (this.siteName) await this.loadSite(this.siteName);
+                if (!this.siteName) return;
+                this.setStatus('Resetting layout...', 'loading');
+                try {
+                    const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/reset`, {
+                        method: 'POST',
+                    });
+                    if (!response.ok) throw new Error(`Reset failed (${response.status})`);
+                    const data = await response.json();
+                    this.applySiteData(data);
+                    this.setStatus(`Reset: ${data.name}`, 'success');
+                } catch (err) {
+                    this.setStatus(`Error: ${err.message}`, 'error');
+                    console.error(err);
+                }
             }
 
             onPointerDown(event) {
