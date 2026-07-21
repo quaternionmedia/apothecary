@@ -9,12 +9,16 @@ browser and the former Site/Structure hierarchy viewer; the registered
 
 Architecture Notes:
 -------------------
-Nodes render as bounding-box wireframes today because OpenSCAD/STL geometry
-cannot be directly rendered in a browser without a render round-trip. The
-per-node geometry loader is architected as an async seam (see
-``fractal_viewer.html.j2``'s ``loadNodeGeometry``) so real geometry (Three.js
-primitives translated client-side, or OpenSCAD-rendered STL) can be plugged
-in later without restructuring the navigation code around it.
+Every node's bounding-box wireframe renders synchronously; real geometry
+upgrades it afterward, in the background (see ``fractal_viewer.html.j2``'s
+``loadNodeGeometry``), so navigation never blocks on a fetch. Two sources:
+a leaf whose own geometry is a plain Cube/Cylinder/Sphere is translated
+directly into a Three.js primitive, no server round-trip needed (see
+``api.py``'s ``_primitive_descriptor``); a ``part_ref`` leaf fetches its real
+OpenSCAD-rendered STL, generating it on demand if missing. A composite node
+(more than one combined child) has no single primitive that represents it --
+real CSG rendering of those stays a bounding box, a deliberate scope
+boundary, not a gap waiting to be noticed.
 """
 
 import html

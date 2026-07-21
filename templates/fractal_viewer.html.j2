@@ -259,6 +259,7 @@
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { TransformControls } from 'three/addons/controls/TransformControls.js';
+        import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 
         const BASE_URL = "{{ base_url }}";
         const DEFAULT_SITE = "{{ default_site }}";
@@ -267,6 +268,7 @@
         const ROLE_COLORS = { workbench: 0x8a5a3c };
         const DEFAULT_COLOR = 0x4488cc;
         const PART_COLOR = 0x66cc66;
+        const SUBTRACTION_COLOR = 0xcc7733;
         const SELECTED_EDGE_COLOR = 0xffffff;
         const VIOLATION_COLOR = 0xcc3333;
         const BUILD_VOLUME_COLOR = 0x33ffdd;
@@ -335,6 +337,10 @@
                 this.buildVolumeMeshByName = {};
                 this.violationNames = new Set();
                 this.wheelResistance = 0;
+                this.stlLoader = new STLLoader();
+                this.loadGeneration = 0;  // guards against a slow real-geometry
+                                          // fetch upgrading a mesh after the
+                                          // user has already navigated away
 
                 this.initThreeJS();
                 this.bindEvents();
@@ -631,6 +637,8 @@
                 const statusColor = node.status ? STATUS_COLORS[node.status] : undefined;
                 const baseColor = node.part_ref
                     ? PART_COLOR
+                    : node.composition === 'subtraction'
+                    ? SUBTRACTION_COLOR
                     : (statusColor ?? ROLE_COLORS[name] ?? DEFAULT_COLOR);
                 mesh.material.color.set(isViolating ? VIOLATION_COLOR : baseColor);
                 const edges = mesh.getObjectByName('edges');
@@ -751,6 +759,8 @@
                     swatch.className = 'contents-swatch';
                     const color = child.part_ref
                         ? PART_COLOR
+                        : child.composition === 'subtraction'
+                        ? SUBTRACTION_COLOR
                         : ((child.status && STATUS_COLORS[child.status]) ?? ROLE_COLORS[child.name] ?? DEFAULT_COLOR);
                     swatch.style.background = '#' + color.toString(16).padStart(6, '0');
                     li.appendChild(swatch);
@@ -1257,24 +1267,134 @@
             }
 
             // ---------------------------------------------------------------
-            // Wave-loading seam (v1: instant/synchronous; the only place a
-            // future real-geometry upgrade -- Three.js primitives translated
-            // from a node's OpenSCAD tree, or a fetched STL for a part_ref
-            // leaf -- needs to change).
+            // Real geometry, loaded in a wave after the placeholder boxes
             // ---------------------------------------------------------------
+            //
+            // The bounding-box wireframe is already visible synchronously (see
+            // buildChildMeshes) -- everything here only ever *upgrades* what's
+            // already on screen, in the background, without blocking
+            // navigation. Two sources of real geometry:
+            //   - a part_ref leaf: fetch its real STL (generating on demand if
+            //     missing, same as the old standalone part viewer did).
+            //   - any other leaf whose own base geometry is a plain
+            //     Cube/Cylinder/Sphere (optionally wrapped in one Translate --
+            //     see api.py's _primitive_descriptor): build the exact Three.js
+            //     primitive directly, no server round-trip needed.
+            // A composite node (more than one combined child) has no single
+            // primitive that represents it -- real CSG rendering of those is
+            // out of scope here, so they keep the bounding box.
 
             async loadNodeGeometry(node) {
-                // v1: the bounding-box wireframe is already built synchronously
-                // by buildChildMeshes; this resolves immediately as a stand-in
-                // for a future real fetch (e.g. GET /parts/{part_ref}/stl).
-                return Promise.resolve(node);
+                if (node.part_ref) return this.loadPartMesh(node);
+                if (node.children.length === 0 && node.primitive) return this.buildPrimitiveMesh(node);
+                return null;
             }
 
+            buildPrimitiveMesh(node) {
+                const { size, center } = this.boxFromBounds(node.primitive.bounds);
+                let geometry;
+                if (node.primitive.type === 'cube') {
+                    geometry = new THREE.BoxGeometry(size[0], size[1], size[2]);
+                } else if (node.primitive.type === 'cylinder') {
+                    // OpenSCAD cylinders are Z-aligned; after the standing
+                    // apothecary(z-up) -> three(y-up) axis swap used
+                    // everywhere else, that's three's own Y axis -- no extra
+                    // rotation needed.
+                    geometry = new THREE.CylinderGeometry(node.primitive.r2, node.primitive.r1, node.primitive.h, 32);
+                } else if (node.primitive.type === 'sphere') {
+                    geometry = new THREE.SphereGeometry(node.primitive.r, 24, 16);
+                } else {
+                    return null;
+                }
+                const mesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ flatShading: false }));
+                mesh.position.set(center[0], center[1], center[2]);
+                const edges = new THREE.EdgesGeometry(geometry, 30);
+                const wireframe = new THREE.LineSegments(
+                    edges, new THREE.LineBasicMaterial({ color: 0x000000, opacity: 0.3, transparent: true })
+                );
+                wireframe.name = 'edges';
+                mesh.add(wireframe);
+                return mesh;
+            }
+
+            async loadPartMesh(node) {
+                const stlUrl = `${BASE_URL}/parts/${encodeURIComponent(node.part_ref)}/stl`;
+                try {
+                    return await this.loadSTLMesh(node, stlUrl);
+                } catch (firstError) {
+                    // Not generated yet -- trigger generation, then try once more.
+                    try {
+                        const genUrl = `${BASE_URL}/parts/${encodeURIComponent(node.part_ref)}/stl/generate`;
+                        const response = await fetch(genUrl, { method: 'POST' });
+                        if (!response.ok) return null;
+                        return await this.loadSTLMesh(node, `${stlUrl}?t=${Date.now()}`);
+                    } catch (secondError) {
+                        console.warn(`Could not load real geometry for ${node.name}:`, secondError);
+                        return null;
+                    }
+                }
+            }
+
+            loadSTLMesh(node, url) {
+                return new Promise((resolve, reject) => {
+                    this.stlLoader.load(
+                        url,
+                        (geometry) => {
+                            geometry.computeVertexNormals();
+                            geometry.center();
+                            const mesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ flatShading: false }));
+                            // Drop the real mesh into the same world slot the
+                            // placeholder box already occupied -- get_bounds()
+                            // and the real render should already agree closely.
+                            const bounds = node.world_bounds || this.placeholderBounds(node, 0);
+                            const { center } = this.boxFromBounds(bounds);
+                            mesh.position.set(center[0], center[1], center[2]);
+                            const edges = new THREE.EdgesGeometry(geometry, 30);
+                            const wireframe = new THREE.LineSegments(
+                                edges, new THREE.LineBasicMaterial({ color: 0x000000, opacity: 0.3, transparent: true })
+                            );
+                            wireframe.name = 'edges';
+                            mesh.add(wireframe);
+                            resolve(mesh);
+                        },
+                        undefined,
+                        (error) => reject(error)
+                    );
+                });
+            }
+
+            // Swaps a placeholder box for real geometry in place -- disposes
+            // the old mesh, re-tags the new one so raycasting/selection keep
+            // working, and re-applies the same status/violation/selection
+            // coloring every mesh gets.
+            upgradeMesh(node, realMesh) {
+                const existing = this.meshByName[node.name];
+                if (!existing) return; // navigated away since the wave started
+                this.scene.remove(existing);
+                existing.geometry.dispose();
+                existing.material.dispose();
+                realMesh.userData.name = node.name;
+                this.scene.add(realMesh);
+                this.meshByName[node.name] = realMesh;
+                this.colorMesh(node.name, node);
+                if (this.selectedName === node.name) this.transformControls.attach(realMesh);
+            }
+
+            // The wave is exactly the set of nodes with a mesh on screen right
+            // now (the current focus's children) -- upgrading anything else
+            // (the focus itself, its parent) has nowhere to land until a
+            // geometry cache exists to carry a prefetch across a zoom, which
+            // is real future work, not this increment. Within that set,
+            // "wave" is the sequential await order below: each mesh upgrades
+            // as its own load resolves, not all-or-nothing.
             async scheduleWaveLoad(focusNode) {
-                const parent = this.parentOfFocus();
-                const wave = [focusNode, ...focusNode.children, ...(parent ? [parent] : [])];
-                for (const node of wave) {
-                    await this.loadNodeGeometry(node);
+                // A generation counter: if the user navigates again before a
+                // slow STL fetch resolves, that stale result must not
+                // upgrade a mesh belonging to the level they've since left.
+                const generation = ++this.loadGeneration;
+                for (const node of focusNode.children) {
+                    const mesh = await this.loadNodeGeometry(node);
+                    if (mesh && generation === this.loadGeneration) this.upgradeMesh(node, mesh);
                 }
             }
         }

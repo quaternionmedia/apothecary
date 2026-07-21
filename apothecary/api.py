@@ -23,6 +23,7 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse,
 from pydantic import BaseModel, Field, ValidationError
 
 from .booleans import Difference, Intersection, Union
+from .core import OpenSCADObject
 from .example_hierarchy import (
     PRINTER_STATUSES,
     Job,
@@ -635,6 +636,48 @@ def _structure_summary(structure: Assembly) -> Dict[str, object]:
     }
 
 
+def _primitive_descriptor(obj: OpenSCADObject, offset: Vector3D) -> Dict[str, object] | None:
+    """Best-effort translation of a leaf's own geometry into a lightweight,
+    client-renderable primitive descriptor -- Cube/Cylinder/Sphere, optionally
+    wrapped in one Translate (accumulated into ``offset``, which starts as
+    the node's own ``position`` so the returned bounds are already
+    world-space, matching ``world_bounds``). This covers every leaf in this
+    repo's own examples. Returns None for anything richer (nested booleans,
+    Rotate, Scale, multiple children) -- the viewer falls back to a
+    bounding-box wireframe for those, a deliberate scope boundary, not a
+    bug: real CSG rendering of composite nodes is future work.
+    """
+    if isinstance(obj, Translate):
+        if len(obj.children) != 1:
+            return None
+        return _primitive_descriptor(obj.children[0], offset + obj.v)
+
+    if isinstance(obj, Cube):
+        size = obj.size if isinstance(obj.size, Vector3D) else Vector3D(x=obj.size, y=obj.size, z=obj.size)
+        local_min = Vector3D(x=-size.x / 2, y=-size.y / 2, z=-size.z / 2) if obj.center else Vector3D()
+        bounds = BoundingBox3D(min_point=local_min + offset, max_point=local_min + size + offset)
+        return {"type": "cube", "size": [size.x, size.y, size.z], "bounds": _bounds_dict(bounds)}
+
+    if isinstance(obj, Cylinder):
+        r1 = obj.r if obj.r is not None else (obj.r1 if obj.r1 is not None else 1.0)
+        r2 = obj.r if obj.r is not None else (obj.r2 if obj.r2 is not None else r1)
+        max_r = max(r1, r2)
+        z0 = -obj.h / 2 if obj.center else 0.0
+        local_min = Vector3D(x=-max_r, y=-max_r, z=z0)
+        local_max = Vector3D(x=max_r, y=max_r, z=z0 + obj.h)
+        bounds = BoundingBox3D(min_point=local_min + offset, max_point=local_max + offset)
+        return {"type": "cylinder", "h": obj.h, "r1": r1, "r2": r2, "bounds": _bounds_dict(bounds)}
+
+    if isinstance(obj, Sphere):
+        r = obj.r
+        bounds = BoundingBox3D(
+            min_point=Vector3D(x=-r, y=-r, z=-r) + offset, max_point=Vector3D(x=r, y=r, z=r) + offset
+        )
+        return {"type": "sphere", "r": r, "bounds": _bounds_dict(bounds)}
+
+    return None
+
+
 def _assembly_tree(node: Assembly) -> Dict[str, object]:
     """Recursive serialization of an Assembly node and everything beneath it.
 
@@ -668,6 +711,7 @@ def _assembly_tree(node: Assembly) -> Dict[str, object]:
             if node.build_volume
             else None
         ),
+        "primitive": _primitive_descriptor(node.base, node.position) if node.base is not None else None,
         "children": [
             {**_assembly_tree(child), "composition": composition}
             for child, composition in composed
