@@ -31,7 +31,15 @@ from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-from .hierarchy import Feature, LayoutReport, LayoutViolation, Site, Structure, Substructure
+from .hierarchy import (
+    Assembly,
+    Feature,
+    LayoutReport,
+    LayoutViolation,
+    Site,
+    Structure,
+    Substructure,
+)
 from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
 from .primitives import Cube, Cylinder
@@ -82,7 +90,7 @@ def _leg_corners() -> list[tuple[float, float]]:
     ]
 
 
-def _build_workbench() -> Structure:
+def _build_workbench() -> Assembly:
     tabletop = Translate(
         v=Vector3D(z=LEG_HEIGHT),
         children=[Cube(size=Vector3D(x=BENCH_WIDTH, y=BENCH_DEPTH, z=TABLETOP_THICKNESS))],
@@ -129,7 +137,7 @@ def _build_workbench() -> Structure:
     )
 
 
-def _build_printer(name: str, *, x: float, y: float, status: str = "idle") -> Structure:
+def _build_printer(name: str, *, x: float, y: float, status: str = "idle") -> Assembly:
     frame_system = Substructure(
         name="frame_system",
         base=Cube(
@@ -139,8 +147,47 @@ def _build_printer(name: str, *, x: float, y: float, status: str = "idle") -> St
     )
 
     post_height = PRINTER_HEIGHT - PRINTER_BASE_HEIGHT - POST_SIZE
+
+    # A Substructure nested inside a Substructure, containing a Feature with
+    # its own child Feature: Structure -> Substructure -> Substructure ->
+    # Feature -> Feature, one level deeper than the ADR's fixed four -- a
+    # shape the old Feature class (a leaf with no children slot at all)
+    # could not represent. Demonstrates apothecary/hierarchy.py's Assembly is
+    # genuinely unbounded in depth, not just recursive at one level.
+    tensioner_boss = Feature.boss(
+        "belt_tensioner_boss",
+        position=Vector3D(
+            x=POST_SIZE + 10, y=PRINTER_DEPTH - POST_SIZE - 10, z=PRINTER_BASE_HEIGHT
+        ),
+        diameter=10,
+        height=8,
+    )
+    tensioner_boss.children = [
+        Feature.boss(
+            "belt_tensioner_relief_chamfer",
+            position=Vector3D(
+                x=POST_SIZE + 10, y=PRINTER_DEPTH - POST_SIZE - 10, z=PRINTER_BASE_HEIGHT + 8
+            ),
+            diameter=12,
+            height=1,
+        )
+    ]
+    belt_tensioner_system = Substructure(
+        name="belt_tensioner_system",
+        footprint=BoundingBox3D(
+            min_point=Vector3D(
+                x=POST_SIZE, y=PRINTER_DEPTH - POST_SIZE - 20, z=PRINTER_BASE_HEIGHT
+            ),
+            max_point=Vector3D(
+                x=POST_SIZE + 20, y=PRINTER_DEPTH - POST_SIZE, z=PRINTER_BASE_HEIGHT + 9
+            ),
+        ),
+        additions=[tensioner_boss],
+    )
+
     gantry_system = Substructure(
         name="gantry_system",
+        children=[belt_tensioner_system],
         additions=[
             Feature(
                 name="left_post",
@@ -186,7 +233,7 @@ def _build_printer(name: str, *, x: float, y: float, status: str = "idle") -> St
     )
 
 
-def create_example_site() -> Site:
+def create_example_site() -> Assembly:
     """A garage: one workbench Structure plus a fleet of printer Structures on top of it."""
 
     workbench = _build_workbench()
@@ -198,7 +245,7 @@ def create_example_site() -> Site:
     return Site(name="Garage", structures=[workbench, *printers])
 
 
-def validate_garage_layout(site: Site) -> LayoutReport:
+def validate_garage_layout(site: Assembly) -> LayoutReport:
     """Garage-specific layout rules, layered on top of ``Site.validate()``'s generic overlap check.
 
     Every Structure other than the workbench must rest exactly on the
@@ -208,7 +255,7 @@ def validate_garage_layout(site: Site) -> LayoutReport:
     """
     violations: List[LayoutViolation] = list(site.validate().violations)
 
-    bench = next((s for s in site.structures if s.name == "workbench"), None)
+    bench = next((s for s in site.children if s.name == "workbench"), None)
     if bench is None:
         return LayoutReport(violations=violations)
 
@@ -216,7 +263,7 @@ def validate_garage_layout(site: Site) -> LayoutReport:
     if bench_bounds is None:
         return LayoutReport(violations=violations)
 
-    for structure in site.structures:
+    for structure in site.children:
         if structure is bench:
             continue
         bounds = structure.world_bounds()
@@ -266,7 +313,7 @@ class Job(BaseModel):
     assigned_printer: Optional[str] = None
 
 
-def job_fits_printer(job: Job, printer: Structure) -> bool:
+def job_fits_printer(job: Job, printer: Assembly) -> bool:
     """Whether ``printer.build_volume`` is large enough for ``job.required_volume``.
 
     Axis-aligned, no rotation: the job's X/Y/Z must each fit the printer's

@@ -21,7 +21,7 @@ def reset_garage_site():
 def test_list_sites():
     response = client.get("/sites")
     assert response.status_code == 200
-    assert response.json() == ["garage"]
+    assert response.json() == ["garage", "parts_library"]
 
 
 def test_get_unknown_site_is_404():
@@ -49,6 +49,37 @@ def test_get_garage_site_includes_substructures_and_features():
     printer_1 = data["structures"][1]
     substructure_names = {s["name"] for s in printer_1["substructures"]}
     assert substructure_names == {"frame_system", "gantry_system"}
+
+
+def test_get_garage_site_tree_recurses_past_one_level():
+    """``tree`` (unlike the flattened ``structures``) walks the whole fractal
+    depth -- the belt_tensioner_boss -> belt_tensioner_relief_chamfer nesting
+    is four levels below printer_1, well past what ``structures`` flattens.
+    """
+    data = client.get("/sites/garage").json()
+    printer_1 = next(s for s in data["tree"]["children"] if s["name"] == "printer_1")
+    gantry_system = next(s for s in printer_1["children"] if s["name"] == "gantry_system")
+    belt_tensioner_system = next(
+        s for s in gantry_system["children"] if s["name"] == "belt_tensioner_system"
+    )
+    belt_tensioner_boss = next(
+        s for s in belt_tensioner_system["children"] if s["name"] == "belt_tensioner_boss"
+    )
+    assert belt_tensioner_boss["composition"] == "addition"
+    chamfer = next(
+        s for s in belt_tensioner_boss["children"] if s["name"] == "belt_tensioner_relief_chamfer"
+    )
+    assert chamfer["role"] == "feature"
+
+
+def test_get_parts_library_site():
+    response = client.get("/sites/parts_library")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "Parts Library"
+    assert data["is_valid"] is True
+    assert len(data["tree"]["children"]) > 0
+    assert all(child["part_ref"] for child in data["tree"]["children"])
 
 
 def test_workbench_has_no_status_or_build_volume():

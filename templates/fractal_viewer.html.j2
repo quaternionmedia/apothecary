@@ -1,0 +1,1285 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Apothecary Fractal Viewer</title>
+    <style>
+        * { box-sizing: border-box; }
+        html, body {
+            height: 100%; margin: 0;
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #1a1a1a; color: #e0e0e0;
+        }
+
+        .app-container { display: flex; flex-direction: column; height: 100vh; }
+        .main-content { display: flex; flex: 1; overflow: hidden; }
+
+        .toolbar {
+            display: flex; gap: 0.75rem; padding: 0.75rem 1rem;
+            background: #252525; border-bottom: 1px solid #333;
+            align-items: center; flex-wrap: wrap;
+        }
+        .toolbar h1 { margin: 0; font-size: 1.25rem; font-weight: 600; color: #fff; }
+        .toolbar .badge {
+            font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 3px;
+            background: #664400; color: #ffcc66; font-weight: 600;
+        }
+        .toolbar select {
+            min-width: 160px; padding: 0.5rem; border-radius: 4px;
+            border: 1px solid #444; background: #333; color: #e0e0e0;
+        }
+        .toolbar button {
+            padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;
+            border: none; font-size: 0.9rem; transition: background 0.15s;
+            background: #404040; color: #e0e0e0;
+        }
+        .toolbar button:hover { background: #505050; }
+        .toolbar button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .toolbar .spacer { flex: 1; }
+        .validity-indicator {
+            font-size: 0.85rem; padding: 0.35rem 0.75rem; border-radius: 4px;
+            font-weight: 600;
+        }
+        .validity-indicator.valid { background: #1e4620; color: #6fdb75; }
+        .validity-indicator.invalid { background: #4a1e1e; color: #ff8080; }
+
+        #breadcrumb { font-size: 0.85rem; color: #999; }
+        #breadcrumb .crumb { cursor: pointer; color: #9cd2ff; }
+        #breadcrumb .crumb:hover { text-decoration: underline; }
+
+        .viewer-panel { flex: 2; position: relative; background: #111; }
+        #viewer-canvas { width: 100%; height: 100%; display: block; }
+        .viewer-hint {
+            position: absolute; bottom: 1rem; left: 1rem;
+            background: rgba(0,0,0,0.7); padding: 0.5rem 0.75rem;
+            border-radius: 4px; font-size: 0.75rem; color: #888;
+            pointer-events: none;
+        }
+
+        /* Minimap: a very abstract depth ladder, not a node-link graph --
+           one tick per possible depth in the loaded tree, filled from the
+           root to however deep the current focus is. */
+        #minimap {
+            position: absolute; top: 1rem; right: 1rem;
+            display: flex; flex-direction: column; gap: 4px;
+            background: rgba(0,0,0,0.5); padding: 0.5rem; border-radius: 6px;
+        }
+        .minimap-tick {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: #333; border: 1px solid #555;
+        }
+        .minimap-tick.filled { background: #0d6efd; border-color: #9cd2ff; }
+
+        .side-panel {
+            flex: 1; min-width: 320px; max-width: 420px;
+            background: #1e1e1e; border-left: 1px solid #333;
+            display: flex; flex-direction: column; overflow-y: auto;
+        }
+        .panel-section { border-bottom: 1px solid #333; }
+        .panel-header {
+            padding: 0.6rem 1rem; background: #252525;
+            font-weight: 600; font-size: 0.85rem; color: #ccc;
+        }
+        .panel-body { padding: 0.75rem 1rem; }
+
+        .contents-list { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; }
+        .contents-item {
+            cursor: pointer; padding: 0.4rem 0.5rem; border-radius: 4px;
+            display: flex; align-items: center; gap: 0.5rem;
+        }
+        .contents-item:hover { background: #2a2a2a; }
+        .contents-item.selected { background: #0d3a66; color: #9cd2ff; }
+        .contents-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+        .prop-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+        .prop-row label { width: 70px; font-size: 0.8rem; color: #999; }
+        .prop-row input[type="number"] {
+            flex: 1; padding: 0.35rem 0.5rem; border-radius: 4px;
+            border: 1px solid #444; background: #2a2a2a; color: #e0e0e0;
+            width: 90px;
+        }
+        .prop-readonly { font-size: 0.78rem; color: #888; margin-top: 0.4rem; line-height: 1.5; }
+        .no-selection { color: #666; font-size: 0.85rem; font-style: italic; }
+        .zoom-in-btn {
+            margin-top: 0.6rem; padding: 0.4rem 0.6rem; border-radius: 4px; cursor: pointer;
+            border: none; background: #0d6efd; color: white; font-size: 0.8rem; width: 100%;
+        }
+        .zoom-in-btn:hover { background: #0b5ed7; }
+
+        .part-actions { display: flex; gap: 0.5rem; margin: 0.5rem 0; }
+        .part-actions button, .part-actions a {
+            padding: 0.4rem 0.6rem; border-radius: 4px; cursor: pointer;
+            border: none; background: #404040; color: #e0e0e0; font-size: 0.78rem;
+            text-decoration: none; display: inline-block;
+        }
+        .part-actions button:hover, .part-actions a:hover { background: #505050; }
+
+        .violations-list { list-style: none; margin: 0; padding: 0; font-size: 0.8rem; }
+        .violations-list li {
+            padding: 0.4rem 0.5rem; margin-bottom: 0.3rem; border-radius: 4px;
+            background: #3a1f1f; color: #ff9d9d;
+        }
+        .violations-clean { color: #6fdb75; font-size: 0.85rem; }
+
+        .job-form { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.75rem; }
+        .job-form input[type="text"], .job-form input[type="number"] {
+            padding: 0.35rem 0.5rem; border-radius: 4px;
+            border: 1px solid #444; background: #2a2a2a; color: #e0e0e0;
+        }
+        .job-form-dims { display: flex; gap: 0.4rem; }
+        .job-form-dims input { width: 0; flex: 1; }
+        .job-form button, .job-item button {
+            padding: 0.4rem 0.6rem; border-radius: 4px; cursor: pointer;
+            border: none; background: #0d6efd; color: white; font-size: 0.8rem;
+        }
+        .job-form button:hover, .job-item button:hover { background: #0b5ed7; }
+
+        .job-list { list-style: none; margin: 0; padding: 0; font-size: 0.8rem; }
+        .job-item {
+            padding: 0.5rem; margin-bottom: 0.4rem; border-radius: 4px;
+            background: #2a2a2a; border: 1px solid #383838;
+        }
+        .job-item-header { display: flex; justify-content: space-between; align-items: center; }
+        .job-status {
+            font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 3px; text-transform: uppercase;
+        }
+        .job-status-queued { background: #444; color: #ccc; }
+        .job-status-assigned, .job-status-printing { background: #664400; color: #ffcc66; }
+        .job-status-done { background: #1e4620; color: #6fdb75; }
+        .job-item-dims { color: #999; margin: 0.2rem 0; }
+        .job-item-actions { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.3rem; }
+        .job-item-actions select {
+            padding: 0.3rem; border-radius: 4px; border: 1px solid #444;
+            background: #2a2a2a; color: #e0e0e0; flex: 1;
+        }
+        .job-no-printers { color: #dc7a7a; font-size: 0.75rem; }
+        .job-assigned-to { color: #999; }
+        .job-done { color: #6fdb75; }
+
+        .code-header {
+            padding: 0.4rem 0; font-weight: 600; font-size: 0.8rem; color: #ccc;
+        }
+        .code-content {
+            font-family: 'Consolas', 'Monaco', 'Menlo', monospace;
+            font-size: 0.72rem; line-height: 1.4; color: #9cdcfe;
+            white-space: pre-wrap; word-break: break-all;
+            max-height: 260px; overflow: auto;
+        }
+
+        .status {
+            padding: 0.5rem 1rem; background: #252525;
+            border-top: 1px solid #333; font-size: 0.85rem; color: #888;
+        }
+        .status.loading { color: #ffc107; }
+        .status.error { color: #dc3545; }
+        .status.success { color: #28a745; }
+
+        @media (max-width: 768px) {
+            .main-content { flex-direction: column; }
+            .side-panel { max-width: none; max-height: 50%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="toolbar">
+            <h1>🧪 Apothecary</h1>
+            <span class="badge">FRACTAL VIEWER — unratified prototype</span>
+            <select id="site-select"{{ select_disabled }}>
+                {{ site_options | safe }}
+            </select>
+            <button type="button" id="load-btn">Load</button>
+            <button type="button" id="zoom-out-btn" title="Zoom out one level (Backspace)" disabled>⤴ Zoom Out</button>
+            <span id="breadcrumb"></span>
+            <div class="spacer"></div>
+            <span id="validity-indicator" class="validity-indicator valid">Layout valid</span>
+        </div>
+        <div class="main-content">
+            <div class="viewer-panel">
+                <canvas id="viewer-canvas"></canvas>
+                <div id="minimap"></div>
+                <div class="viewer-hint">Click to select • Double-click (or scroll past the edge) to zoom in • Drag arrows to move • Shift+drag to pan</div>
+            </div>
+            <div class="side-panel">
+                <div class="panel-section">
+                    <div class="panel-header">Contents</div>
+                    <div class="panel-body">
+                        <ul id="contents-list" class="contents-list"></ul>
+                    </div>
+                </div>
+                <div class="panel-section">
+                    <div class="panel-header">Selected</div>
+                    <div class="panel-body" id="selected-body">
+                        <div class="no-selection">Click a node to select it</div>
+                    </div>
+                </div>
+                <div class="panel-section" id="jobs-section" style="display: none;">
+                    <div class="panel-header">Jobs</div>
+                    <div class="panel-body">
+                        <form id="job-form" class="job-form">
+                            <input type="text" id="job-name" placeholder="Job name" required>
+                            <div class="job-form-dims">
+                                <input type="number" id="job-x" placeholder="X mm" step="10" min="0" required>
+                                <input type="number" id="job-y" placeholder="Y mm" step="10" min="0" required>
+                                <input type="number" id="job-z" placeholder="Z mm" step="10" min="0" required>
+                            </div>
+                            <button type="submit">+ Add Job</button>
+                        </form>
+                        <ul id="job-list" class="job-list"></ul>
+                    </div>
+                </div>
+                <div class="panel-section">
+                    <div class="panel-header">Layout Validation</div>
+                    <div class="panel-body">
+                        <ul id="violations-list" class="violations-list"></ul>
+                        <div id="violations-clean" class="violations-clean">Layout valid</div>
+                    </div>
+                </div>
+                <div class="panel-section">
+                    <div class="panel-header">Generated OpenSCAD</div>
+                    <div class="panel-body">
+                        <div id="code-content" class="code-content">Load a site to see generated OpenSCAD</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="status" class="status">Loading site…</div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { TransformControls } from 'three/addons/controls/TransformControls.js';
+
+        const BASE_URL = "{{ base_url }}";
+        const DEFAULT_SITE = "{{ default_site }}";
+        const INITIAL_FOCUS = "{{ focus_path }}";
+
+        const ROLE_COLORS = { workbench: 0x8a5a3c };
+        const DEFAULT_COLOR = 0x4488cc;
+        const PART_COLOR = 0x66cc66;
+        const SELECTED_EDGE_COLOR = 0xffffff;
+        const VIOLATION_COLOR = 0xcc3333;
+        const BUILD_VOLUME_COLOR = 0x33ffdd;
+
+        // Mirrors example_hierarchy.PRINTER_STATUSES -- this prototype has no
+        // endpoint that reports the allowed set, so it's duplicated here.
+        const PRINTER_STATUSES = ['idle', 'printing', 'offline', 'maintenance'];
+        const STATUS_COLORS = {
+            idle: 0x4488cc,
+            printing: 0xffaa00,
+            offline: 0x555555,
+            maintenance: 0xaa3388,
+        };
+
+        const PLACEHOLDER_SIZE = 40;   // mm -- box size for a child with no footprint
+        const PLACEHOLDER_PITCH = 60;  // mm -- spacing between footprint-less siblings
+        const WHEEL_RESISTANCE_THRESHOLD = 500;
+
+        function maxDepth(node) {
+            if (!node.children.length) return 0;
+            return 1 + Math.max(...node.children.map(maxDepth));
+        }
+
+        function findChild(node, name) {
+            return node.children.find((c) => c.name === name);
+        }
+
+        function treeHasBuildVolume(node) {
+            if (node.build_volume) return true;
+            return node.children.some(treeHasBuildVolume);
+        }
+
+        // Standardized navigation over Assembly's fractal tree: the same
+        // click/double-click/scroll/zoom-out controls apply at any depth,
+        // because every node -- Site, Structure, Substructure, Feature, or a
+        // migrated parts-library leaf -- is the same shape.
+        class FractalViewer {
+            constructor() {
+                this.canvas = document.getElementById('viewer-canvas');
+                this.siteSelect = document.getElementById('site-select');
+                this.loadBtn = document.getElementById('load-btn');
+                this.zoomOutBtn = document.getElementById('zoom-out-btn');
+                this.breadcrumbEl = document.getElementById('breadcrumb');
+                this.minimapEl = document.getElementById('minimap');
+                this.contentsEl = document.getElementById('contents-list');
+                this.selectedBodyEl = document.getElementById('selected-body');
+                this.jobsSectionEl = document.getElementById('jobs-section');
+                this.jobFormEl = document.getElementById('job-form');
+                this.jobListEl = document.getElementById('job-list');
+                this.violationsListEl = document.getElementById('violations-list');
+                this.violationsCleanEl = document.getElementById('violations-clean');
+                this.validityEl = document.getElementById('validity-indicator');
+                this.codeContentEl = document.getElementById('code-content');
+                this.statusEl = document.getElementById('status');
+
+                this.tree = null;            // full recursive tree for the loaded site
+                this.siteName = null;
+                this.focusPath = [];          // names from root -- the only navigation state
+                this.maxDepthValue = 0;
+                this.hasBuildVolumes = false;
+                this.jobs = [];
+                this.violations = [];
+                this.isValid = true;
+                this.selectedName = null;     // selected child of the current focus
+                this.meshByName = {};
+                this.buildVolumeMeshByName = {};
+                this.violationNames = new Set();
+                this.wheelResistance = 0;
+
+                this.initThreeJS();
+                this.bindEvents();
+                this.onResize();
+                this.animate();
+
+                if (this.siteSelect.value) this.loadSite(this.siteSelect.value, INITIAL_FOCUS);
+            }
+
+            initThreeJS() {
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x111111);
+
+                this.camera = new THREE.PerspectiveCamera(
+                    50, this.canvas.clientWidth / this.canvas.clientHeight, 1, 20000
+                );
+                this.camera.position.set(600, 500, 800);
+
+                this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
+                this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight);
+                this.renderer.setPixelRatio(window.devicePixelRatio);
+
+                this.orbitControls = new OrbitControls(this.camera, this.renderer.domElement);
+                this.orbitControls.enableDamping = true;
+                this.orbitControls.dampingFactor = 0.05;
+                this.orbitControls.zoomSpeed = 0.6;
+
+                this.transformControls = new TransformControls(this.camera, this.renderer.domElement);
+                this.transformControls.setMode('translate');
+                this.transformControls.addEventListener('dragging-changed', (event) => {
+                    this.orbitControls.enabled = !event.value;
+                });
+                this.transformControls.addEventListener('objectChange', () => this.onGizmoDrag());
+                this.transformControls.addEventListener('mouseUp', () => this.commitCurrentDrag());
+                this.scene.add(this.transformControls);
+
+                const ambient = new THREE.AmbientLight(0x606060, 1.5);
+                this.scene.add(ambient);
+                const key = new THREE.DirectionalLight(0xffffff, 1.0);
+                key.position.set(400, 600, 400);
+                this.scene.add(key);
+                const fill = new THREE.DirectionalLight(0xffffff, 0.5);
+                fill.position.set(-400, 300, -200);
+                this.scene.add(fill);
+
+                this.gridHelper = new THREE.GridHelper(2000, 40, 0x444444, 0x2a2a2a);
+                this.scene.add(this.gridHelper);
+                this.axesHelper = new THREE.AxesHelper(150);
+                this.scene.add(this.axesHelper);
+
+                this.raycaster = new THREE.Raycaster();
+                this.pointer = new THREE.Vector2();
+            }
+
+            bindEvents() {
+                this.loadBtn.addEventListener('click', () => this.loadSite(this.siteSelect.value));
+                this.siteSelect.addEventListener('change', () => this.loadSite(this.siteSelect.value));
+                this.zoomOutBtn.addEventListener('click', () => this.zoomOut());
+                this.canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
+                this.canvas.addEventListener('dblclick', (e) => this.onDoubleClick(e));
+                this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: true });
+                window.addEventListener('keydown', (e) => {
+                    if (e.key === 'Backspace' && document.activeElement.tagName !== 'INPUT') {
+                        e.preventDefault();
+                        this.zoomOut();
+                    }
+                });
+                this.jobFormEl.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.createJob();
+                });
+                window.addEventListener('resize', () => this.onResize());
+            }
+
+            onResize() {
+                const width = this.canvas.clientWidth;
+                const height = this.canvas.clientHeight;
+                this.camera.aspect = width / height;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(width, height);
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                this.orbitControls.update();
+                this.renderer.render(this.scene, this.camera);
+            }
+
+            setStatus(message, type = '') {
+                this.statusEl.textContent = message;
+                this.statusEl.className = 'status' + (type ? ' ' + type : '');
+            }
+
+            // ---------------------------------------------------------------
+            // Loading and navigation state
+            // ---------------------------------------------------------------
+
+            async loadSite(name, focusPathStr = '') {
+                if (!name) return;
+                this.setStatus(`Loading ${name}...`, 'loading');
+                try {
+                    const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(name)}`);
+                    if (!response.ok) throw new Error(`Failed to load site (${response.status})`);
+                    const data = await response.json();
+                    this.siteName = name;
+                    this.tree = data.tree;
+                    this.maxDepthValue = maxDepth(this.tree);
+                    this.hasBuildVolumes = treeHasBuildVolume(this.tree);
+                    this.violations = data.violations;
+                    this.isValid = data.is_valid;
+                    this.focusPath = this.resolveFocusPath(focusPathStr);
+                    this.selectedName = null;
+                    this.jobs = this.hasBuildVolumes ? await this.fetchJobs() : [];
+                    this.renderFocus();
+                    this.setStatus(`Loaded: ${data.name}`, 'success');
+                } catch (err) {
+                    this.setStatus(`Error: ${err.message}`, 'error');
+                    console.error(err);
+                }
+            }
+
+            // Validates a dotted path against the loaded tree, truncating at
+            // the first segment that doesn't resolve -- a stale or hand-typed
+            // ?focus= link degrades to "as deep as it can go", not a crash.
+            resolveFocusPath(focusPathStr) {
+                const segments = focusPathStr ? focusPathStr.split('.').filter(Boolean) : [];
+                let node = this.tree;
+                const resolved = [];
+                for (const name of segments) {
+                    const child = findChild(node, name);
+                    if (!child) break;
+                    resolved.push(name);
+                    node = child;
+                }
+                return resolved;
+            }
+
+            currentFocusNode() {
+                let node = this.tree;
+                for (const name of this.focusPath) {
+                    const child = findChild(node, name);
+                    if (!child) {
+                        this.focusPath = [];
+                        return this.tree;
+                    }
+                    node = child;
+                }
+                return node;
+            }
+
+            parentOfFocus() {
+                if (!this.focusPath.length) return null;
+                let node = this.tree;
+                for (const name of this.focusPath.slice(0, -1)) node = findChild(node, name);
+                return node;
+            }
+
+            // The standardized "+1" control: zooming in only makes sense for
+            // a node that itself has something inside it -- a true leaf (no
+            // children) has nowhere to go.
+            zoomIn(name) {
+                const focus = this.currentFocusNode();
+                const child = findChild(focus, name);
+                if (!child || !child.children.length) return;
+                this.focusPath = [...this.focusPath, name];
+                this.selectedName = null;
+                this.renderFocus();
+            }
+
+            // The standardized "-1" control: the node just exited becomes
+            // selected at the new (shallower) level, so the user lands back
+            // where they came from rather than on nothing.
+            zoomOut() {
+                if (!this.focusPath.length) return;
+                const exiting = this.focusPath[this.focusPath.length - 1];
+                this.focusPath = this.focusPath.slice(0, -1);
+                this.selectedName = exiting;
+                this.renderFocus();
+            }
+
+            jumpTo(depth) {
+                this.focusPath = this.focusPath.slice(0, depth);
+                this.selectedName = null;
+                this.renderFocus();
+            }
+
+            renderFocus() {
+                const focus = this.currentFocusNode();
+                this.clearScene();
+                this.buildChildMeshes(focus.children);
+                this.renderBreadcrumb();
+                this.renderMinimap();
+                this.renderContentsList(focus);
+                this.renderSelectedPanel();
+                this.renderViolations();
+                this.renderJobsSection();
+                this.frameCameraForChildren(focus.children);
+                this.scheduleWaveLoad(focus);
+            }
+
+            // ---------------------------------------------------------------
+            // Three.js scene for the current focus's children
+            // ---------------------------------------------------------------
+
+            clearScene() {
+                this.transformControls.detach();
+                for (const mesh of Object.values(this.meshByName)) {
+                    this.scene.remove(mesh);
+                    mesh.geometry.dispose();
+                    mesh.material.dispose();
+                }
+                for (const mesh of Object.values(this.buildVolumeMeshByName)) {
+                    this.scene.remove(mesh);
+                    mesh.geometry.dispose();
+                    mesh.material.dispose();
+                }
+                this.meshByName = {};
+                this.buildVolumeMeshByName = {};
+            }
+
+            // Axis convention throughout: apothecary (x, y, z) with z-up maps
+            // to three.js (x, z, y) with y-up.
+            boxFromBounds(bounds) {
+                const size = [
+                    bounds.max[0] - bounds.min[0],
+                    bounds.max[2] - bounds.min[2],
+                    bounds.max[1] - bounds.min[1],
+                ];
+                const center = [
+                    (bounds.min[0] + bounds.max[0]) / 2,
+                    (bounds.min[2] + bounds.max[2]) / 2,
+                    (bounds.min[1] + bounds.max[1]) / 2,
+                ];
+                return { size, center };
+            }
+
+            // A node with no footprint (most Substructures/Features -- they
+            // were never given spatial metadata, only geometry) still needs
+            // *something* visible and clickable to navigate through. Offset
+            // by index so siblings that all lack a footprint don't perfectly
+            // overlap.
+            placeholderBounds(node, index) {
+                const half = PLACEHOLDER_SIZE / 2;
+                const offsetX = (index % 5) * PLACEHOLDER_PITCH;
+                const offsetY = Math.floor(index / 5) * PLACEHOLDER_PITCH;
+                return {
+                    min: [
+                        node.position.x + offsetX - half,
+                        node.position.y + offsetY - half,
+                        node.position.z,
+                    ],
+                    max: [
+                        node.position.x + offsetX + half,
+                        node.position.y + offsetY + half,
+                        node.position.z + PLACEHOLDER_SIZE,
+                    ],
+                };
+            }
+
+            boundsFor(node, index) {
+                return node.world_bounds || this.placeholderBounds(node, index);
+            }
+
+            buildChildMeshes(children) {
+                children.forEach((child, index) => {
+                    const bounds = this.boundsFor(child, index);
+                    const { size, center } = this.boxFromBounds(bounds);
+
+                    const geometry = new THREE.BoxGeometry(1, 1, 1);
+                    const material = new THREE.MeshPhongMaterial({ transparent: true, opacity: 0.65 });
+                    const mesh = new THREE.Mesh(geometry, material);
+                    const edges = new THREE.EdgesGeometry(geometry);
+                    const wireframe = new THREE.LineSegments(
+                        edges, new THREE.LineBasicMaterial({ color: 0x000000 })
+                    );
+                    wireframe.name = 'edges';
+                    mesh.add(wireframe);
+                    mesh.scale.set(size[0] || 1, size[1] || 1, size[2] || 1);
+                    mesh.position.set(center[0], center[1], center[2]);
+                    mesh.userData.name = child.name;
+                    this.scene.add(mesh);
+                    this.meshByName[child.name] = mesh;
+
+                    this.colorMesh(child.name, child);
+                    this.updateBuildVolumeIndicator(child, bounds);
+                });
+            }
+
+            colorMesh(name, node) {
+                const mesh = this.meshByName[name];
+                if (!mesh) return;
+                const isViolating = this.violationNames.has(name);
+                const isSelected = this.selectedName === name;
+                const statusColor = node.status ? STATUS_COLORS[node.status] : undefined;
+                const baseColor = node.part_ref
+                    ? PART_COLOR
+                    : (statusColor ?? ROLE_COLORS[name] ?? DEFAULT_COLOR);
+                mesh.material.color.set(isViolating ? VIOLATION_COLOR : baseColor);
+                const edges = mesh.getObjectByName('edges');
+                if (edges) edges.material.color.set(isSelected ? SELECTED_EDGE_COLOR : 0x000000);
+            }
+
+            // A wireframe-only box showing the usable print area within a
+            // printer's physical footprint -- a separate scene object so its
+            // scale doesn't compound with the (non-uniformly stretched)
+            // parent box's scale.
+            updateBuildVolumeIndicator(node, bounds) {
+                const existing = this.buildVolumeMeshByName[node.name];
+                if (!node.build_volume) {
+                    if (existing) {
+                        this.scene.remove(existing);
+                        existing.geometry.dispose();
+                        existing.material.dispose();
+                        delete this.buildVolumeMeshByName[node.name];
+                    }
+                    return;
+                }
+
+                const [bvApX, bvApY, bvApZ] = node.build_volume;
+                const centerApX = (bounds.min[0] + bounds.max[0]) / 2;
+                const centerApY = (bounds.min[1] + bounds.max[1]) / 2;
+                const baseApZ = bounds.min[2];
+                const size = [bvApX, bvApZ, bvApY];
+                const center = [centerApX, baseApZ + bvApZ / 2, centerApY];
+
+                let mesh = existing;
+                if (!mesh) {
+                    const geometry = new THREE.BoxGeometry(1, 1, 1);
+                    const edges = new THREE.EdgesGeometry(geometry);
+                    mesh = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: BUILD_VOLUME_COLOR }));
+                    this.scene.add(mesh);
+                    this.buildVolumeMeshByName[node.name] = mesh;
+                }
+                mesh.scale.set(size[0], size[1], size[2]);
+                mesh.position.set(center[0], center[1], center[2]);
+            }
+
+            frameCameraForChildren(children) {
+                if (!children.length) return;
+                const bounds = children.map((c, i) => this.boundsFor(c, i));
+                const minX = Math.min(...bounds.map((b) => b.min[0]));
+                const maxX = Math.max(...bounds.map((b) => b.max[0]));
+                const minY = Math.min(...bounds.map((b) => b.min[1]));
+                const maxY = Math.max(...bounds.map((b) => b.max[1]));
+                const maxZ = Math.max(...bounds.map((b) => b.max[2]));
+
+                const spanX = Math.max(maxX - minX, 40);
+                const spanY = Math.max(maxY - minY, 40);
+                const targetX = (minX + maxX) / 2;
+                const targetY = (minY + maxY) / 2;
+                const distance = Math.max(200, Math.max(spanX, spanY) * 1.6);
+
+                this.orbitControls.target.set(targetX, maxZ / 3, targetY);
+                this.camera.position.set(
+                    targetX + distance * 0.6,
+                    maxZ / 3 + distance * 0.5,
+                    targetY + distance * 0.6
+                );
+                this.orbitControls.minDistance = Math.max(20, Math.max(spanX, spanY) * 0.1);
+                this.orbitControls.maxDistance = distance * 4;
+                this.orbitControls.update();
+            }
+
+            // ---------------------------------------------------------------
+            // Breadcrumb + minimap
+            // ---------------------------------------------------------------
+
+            renderBreadcrumb() {
+                this.breadcrumbEl.innerHTML = '';
+                const rootCrumb = document.createElement('span');
+                rootCrumb.className = 'crumb';
+                rootCrumb.textContent = this.siteName;
+                rootCrumb.addEventListener('click', () => this.jumpTo(0));
+                this.breadcrumbEl.appendChild(rootCrumb);
+
+                this.focusPath.forEach((name, i) => {
+                    this.breadcrumbEl.appendChild(document.createTextNode(' › '));
+                    const crumb = document.createElement('span');
+                    crumb.className = 'crumb';
+                    crumb.textContent = name;
+                    crumb.addEventListener('click', () => this.jumpTo(i + 1));
+                    this.breadcrumbEl.appendChild(crumb);
+                });
+
+                this.zoomOutBtn.disabled = this.focusPath.length === 0;
+            }
+
+            // Deliberately a depth ladder, not a node-link graph: one tick
+            // per possible depth in the whole loaded tree, filled from the
+            // root through however deep the current focus is.
+            renderMinimap() {
+                this.minimapEl.innerHTML = '';
+                for (let depth = 0; depth <= this.maxDepthValue; depth++) {
+                    const tick = document.createElement('div');
+                    const filled = depth <= this.focusPath.length;
+                    tick.className = 'minimap-tick' + (filled ? ' filled' : '');
+                    const label = depth === 0 ? this.siteName : this.focusPath[depth - 1];
+                    tick.title = filled ? `Depth ${depth}: ${label ?? this.siteName}` : `Depth ${depth}`;
+                    this.minimapEl.appendChild(tick);
+                }
+            }
+
+            // ---------------------------------------------------------------
+            // Contents list + selection
+            // ---------------------------------------------------------------
+
+            renderContentsList(focus) {
+                this.contentsEl.innerHTML = '';
+                focus.children.forEach((child) => {
+                    const li = document.createElement('li');
+                    li.className = 'contents-item' + (this.selectedName === child.name ? ' selected' : '');
+
+                    const swatch = document.createElement('span');
+                    swatch.className = 'contents-swatch';
+                    const color = child.part_ref
+                        ? PART_COLOR
+                        : ((child.status && STATUS_COLORS[child.status]) ?? ROLE_COLORS[child.name] ?? DEFAULT_COLOR);
+                    swatch.style.background = '#' + color.toString(16).padStart(6, '0');
+                    li.appendChild(swatch);
+
+                    const label = document.createElement('span');
+                    const inside = child.children.length
+                        ? ` — ${child.children.length} inside`
+                        : '';
+                    label.textContent = `${child.name} (${child.role})${inside}`;
+                    li.appendChild(label);
+
+                    li.addEventListener('click', () => this.selectChild(child.name));
+                    li.addEventListener('dblclick', () => this.zoomIn(child.name));
+                    this.contentsEl.appendChild(li);
+                });
+            }
+
+            selectChild(name) {
+                this.selectedName = name;
+                const focus = this.currentFocusNode();
+                const child = findChild(focus, name);
+                const mesh = this.meshByName[name];
+
+                if (mesh && this.focusPath.length === 0 && !child.part_ref) {
+                    this.transformControls.attach(mesh);
+                } else {
+                    this.transformControls.detach();
+                }
+
+                this.renderContentsList(focus);
+                this.renderSelectedPanel();
+                for (const n of Object.keys(this.meshByName)) this.colorMesh(n, findChild(focus, n));
+            }
+
+            // The one place the three possible "Selected" panels are chosen:
+            // a parts-library leaf always gets the absorbed part view
+            // (regardless of depth); otherwise, position/status editing only
+            // works at the root (the /layout and /status endpoints only ever
+            // address a site's direct children), so anything deeper gets a
+            // read-only panel.
+            renderSelectedPanel() {
+                const focus = this.currentFocusNode();
+                const selected = findChild(focus, this.selectedName);
+                if (!selected) {
+                    this.selectedBodyEl.innerHTML = '<div class="no-selection">Click a node to select it</div>';
+                    return;
+                }
+                if (selected.part_ref) {
+                    this.renderPartPanel(selected);
+                } else if (this.focusPath.length === 0) {
+                    this.renderEditablePanel(selected);
+                } else {
+                    this.renderGenericPanel(selected);
+                }
+            }
+
+            zoomInAffordanceHtml(node) {
+                if (!node.children.length) return '';
+                return `<button type="button" class="zoom-in-btn">⤵ Zoom into ${node.name} (${node.children.length})</button>`;
+            }
+
+            bindZoomInAffordance(node) {
+                this.selectedBodyEl.querySelector('.zoom-in-btn')
+                    ?.addEventListener('click', () => this.zoomIn(node.name));
+            }
+
+            renderGenericPanel(node) {
+                this.selectedBodyEl.innerHTML = `
+                    <div class="prop-row"><label>Name</label><span>${node.name}</span></div>
+                    <div class="prop-row"><label>Role</label><span>${node.role}</span></div>
+                    <div class="prop-readonly">
+                        Material: ${node.material ?? '—'}<br>
+                        Comment: ${node.comment ?? '—'}<br>
+                        Footprint: ${node.footprint ? node.footprint.max.map((v, i) => (v - node.footprint.min[i]).toFixed(0)).join(' × ') + ' mm' : '—'}
+                    </div>
+                    ${this.zoomInAffordanceHtml(node)}
+                `;
+                this.bindZoomInAffordance(node);
+            }
+
+            renderEditablePanel(node) {
+                const statusRow = node.status !== null
+                    ? `<div class="prop-row"><label>Status</label>
+                         <select id="status-select">
+                           ${PRINTER_STATUSES.map((s) => `<option value="${s}"${s === node.status ? ' selected' : ''}>${s}</option>`).join('')}
+                         </select>
+                       </div>`
+                    : '';
+                this.selectedBodyEl.innerHTML = `
+                    <div class="prop-row"><label>Name</label><span>${node.name}</span></div>
+                    ${statusRow}
+                    <div class="prop-row"><label>X (mm)</label><input type="number" id="pos-x" step="10" value="${node.position.x}"></div>
+                    <div class="prop-row"><label>Y (mm)</label><input type="number" id="pos-y" step="10" value="${node.position.y}"></div>
+                    <div class="prop-row"><label>Z (mm)</label><input type="number" id="pos-z" step="10" value="${node.position.z}"></div>
+                    <div class="prop-readonly">
+                        Material: ${node.material ?? '—'}<br>
+                        Footprint: ${node.footprint ? node.footprint.max.map((v, i) => (v - node.footprint.min[i]).toFixed(0)).join(' × ') + ' mm' : '—'}<br>
+                        Build volume: ${node.build_volume
+                            ? node.build_volume.map((v) => v.toFixed(0)).join(' × ') + ' mm '
+                              + `<span style="display:inline-block;width:8px;height:8px;border:1px solid #${BUILD_VOLUME_COLOR.toString(16).padStart(6, '0')};vertical-align:middle;"></span>`
+                            : '—'}
+                    </div>
+                    ${this.zoomInAffordanceHtml(node)}
+                `;
+                for (const axis of ['x', 'y', 'z']) {
+                    document.getElementById(`pos-${axis}`).addEventListener('change', (e) => {
+                        node.position[axis] = parseFloat(e.target.value) || 0;
+                        this.recomputeWorldBounds(node);
+                        this.rebuildSingleMesh(node);
+                        this.submitLayout();
+                    });
+                }
+                const statusSelect = document.getElementById('status-select');
+                if (statusSelect) {
+                    statusSelect.addEventListener('change', (e) => this.submitStatus(node.name, e.target.value));
+                }
+                this.bindZoomInAffordance(node);
+            }
+
+            renderPartPanel(node) {
+                this.selectedBodyEl.innerHTML = `
+                    <div class="prop-row"><label>Part</label><span>${node.part_ref}</span></div>
+                    <div class="part-actions">
+                        <button type="button" id="part-regenerate-btn">⚙️ Regenerate STL</button>
+                        <a href="${BASE_URL}/parts/${encodeURIComponent(node.part_ref)}/scad">💾 Download SCAD</a>
+                    </div>
+                    <div class="code-header">SCAD Source (the absorbed part view)</div>
+                    <div id="part-scad-content" class="code-content">Loading…</div>
+                `;
+                this.loadPartScad(node.part_ref);
+                document.getElementById('part-regenerate-btn')
+                    .addEventListener('click', () => this.regeneratePart(node.part_ref));
+            }
+
+            async loadPartScad(name) {
+                try {
+                    const response = await fetch(`${BASE_URL}/parts/${encodeURIComponent(name)}/scad`);
+                    const text = response.ok ? await response.text() : `(no SCAD source: ${response.status})`;
+                    const el = document.getElementById('part-scad-content');
+                    if (el) el.textContent = text;
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+
+            async regeneratePart(name) {
+                this.setStatus(`Regenerating ${name}...`, 'loading');
+                try {
+                    const response = await fetch(
+                        `${BASE_URL}/parts/${encodeURIComponent(name)}/stl/generate?force=true`,
+                        { method: 'POST' }
+                    );
+                    if (!response.ok) throw new Error(`Regenerate failed (${response.status})`);
+                    this.setStatus(`${name} regenerated`, 'success');
+                } catch (err) {
+                    this.setStatus(`Error: ${err.message}`, 'error');
+                    console.error(err);
+                }
+            }
+
+            // Recomputes world_bounds locally after a position edit (mirrors
+            // the server's Assembly.world_bounds()) so the mesh can update
+            // instantly instead of waiting on the round-trip.
+            recomputeWorldBounds(node) {
+                if (!node.footprint) return;
+                node.world_bounds = {
+                    min: node.footprint.min.map((v, i) => v + [node.position.x, node.position.y, node.position.z][i]),
+                    max: node.footprint.max.map((v, i) => v + [node.position.x, node.position.y, node.position.z][i]),
+                };
+            }
+
+            rebuildSingleMesh(node) {
+                const mesh = this.meshByName[node.name];
+                if (!mesh) return;
+                const bounds = node.world_bounds || this.placeholderBounds(node, 0);
+                const { size, center } = this.boxFromBounds(bounds);
+                mesh.scale.set(size[0] || 1, size[1] || 1, size[2] || 1);
+                mesh.position.set(center[0], center[1], center[2]);
+                this.updateBuildVolumeIndicator(node, bounds);
+                if (this.selectedName === node.name) this.transformControls.attach(mesh);
+            }
+
+            // ---------------------------------------------------------------
+            // Root-level editing: position drag, status, layout submission
+            // (only meaningful at focusPath.length === 0 -- see
+            // renderSelectedPanel's comment on why).
+            // ---------------------------------------------------------------
+
+            async submitStatus(name, status) {
+                this.setStatus(`Updating ${name} status...`, 'loading');
+                try {
+                    const response = await fetch(
+                        `${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/structures/${encodeURIComponent(name)}/status`,
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ status }),
+                        }
+                    );
+                    if (!response.ok) throw new Error(`Status update failed (${response.status})`);
+                    await this.refreshTree();
+                    this.setStatus(`${name} is now ${status}`, 'success');
+                } catch (err) {
+                    this.setStatus(`Error: ${err.message}`, 'error');
+                    console.error(err);
+                }
+            }
+
+            // Axis convention: apothecary (x, y, z) z-up maps to three.js
+            // (x, z, y) y-up -- addOrUpdateMesh-equivalents apply this
+            // forward; this is its inverse (drag position -> apothecary).
+            onGizmoDrag() {
+                if (!this.selectedName || this.focusPath.length !== 0) return;
+                const focus = this.currentFocusNode();
+                const node = findChild(focus, this.selectedName);
+                const mesh = this.meshByName[this.selectedName];
+                if (!node || !mesh || !node.footprint) return;
+
+                const halfExtentApX = (node.footprint.max[0] - node.footprint.min[0]) / 2;
+                const halfExtentApY = (node.footprint.max[1] - node.footprint.min[1]) / 2;
+                const halfExtentApZ = (node.footprint.max[2] - node.footprint.min[2]) / 2;
+
+                const worldMinApX = mesh.position.x - halfExtentApX;
+                const worldMinApY = mesh.position.z - halfExtentApY;
+                const worldMinApZ = mesh.position.y - halfExtentApZ;
+
+                node.position = {
+                    x: worldMinApX - node.footprint.min[0],
+                    y: worldMinApY - node.footprint.min[1],
+                    z: worldMinApZ - node.footprint.min[2],
+                };
+                this.recomputeWorldBounds(node);
+                this.renderSelectedPanel();
+            }
+
+            commitCurrentDrag() {
+                if (this.selectedName && this.focusPath.length === 0) this.submitLayout();
+            }
+
+            async submitLayout() {
+                if (!this.siteName || this.focusPath.length !== 0) return;
+                this.setStatus('Validating layout...', 'loading');
+                const positions = {};
+                for (const child of this.tree.children) {
+                    positions[child.name] = child.position;
+                }
+                try {
+                    const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/layout`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ positions }),
+                    });
+                    if (!response.ok) throw new Error(`Layout update failed (${response.status})`);
+                    const data = await response.json();
+                    this.tree = data.tree;
+                    this.violations = data.violations;
+                    this.isValid = data.is_valid;
+                    if (data.scad) this.codeContentEl.textContent = data.scad;
+                    const focus = this.currentFocusNode();
+                    focus.children.forEach((child) => this.rebuildSingleMesh(child));
+                    this.renderViolations();
+                    this.renderSelectedPanel();
+                    this.setStatus(this.isValid ? 'Layout valid' : 'Layout has violations', this.isValid ? 'success' : 'error');
+                } catch (err) {
+                    this.setStatus(`Error: ${err.message}`, 'error');
+                    console.error(err);
+                }
+            }
+
+            renderViolations() {
+                this.violationNames = new Set(this.violations.flatMap((v) => v.structures));
+                this.violationsListEl.innerHTML = '';
+                if (this.violations.length) {
+                    this.violationsCleanEl.style.display = 'none';
+                    for (const v of this.violations) {
+                        const li = document.createElement('li');
+                        li.textContent = v.message;
+                        this.violationsListEl.appendChild(li);
+                    }
+                } else {
+                    this.violationsCleanEl.style.display = '';
+                }
+                this.validityEl.textContent = this.isValid
+                    ? 'Layout valid'
+                    : `${this.violations.length} violation${this.violations.length === 1 ? '' : 's'}`;
+                this.validityEl.className = 'validity-indicator ' + (this.isValid ? 'valid' : 'invalid');
+                const focus = this.currentFocusNode();
+                for (const n of Object.keys(this.meshByName)) this.colorMesh(n, findChild(focus, n));
+            }
+
+            // Re-fetches the whole tree (status/violations/positions may have
+            // changed) without disturbing navigation state.
+            async refreshTree() {
+                const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}`);
+                if (!response.ok) throw new Error(`Failed to refresh site (${response.status})`);
+                const data = await response.json();
+                this.tree = data.tree;
+                this.violations = data.violations;
+                this.isValid = data.is_valid;
+                this.renderFocus();
+            }
+
+            // ---------------------------------------------------------------
+            // Jobs (site-wide -- visible whenever the loaded tree has any
+            // build_volume anywhere, regardless of current zoom depth)
+            // ---------------------------------------------------------------
+
+            renderJobsSection() {
+                this.jobsSectionEl.style.display = this.hasBuildVolumes ? '' : 'none';
+                if (this.hasBuildVolumes) this.renderJobs();
+            }
+
+            async fetchJobs() {
+                const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/jobs`);
+                if (!response.ok) throw new Error(`Failed to load jobs (${response.status})`);
+                return response.json();
+            }
+
+            renderJobs() {
+                this.jobListEl.innerHTML = '';
+                for (const job of this.jobs) {
+                    const li = document.createElement('li');
+                    li.className = 'job-item';
+                    const dims = job.required_volume.map((v) => v.toFixed(0)).join(' × ');
+
+                    let actionsHtml;
+                    if (job.status === 'queued') {
+                        actionsHtml = job.compatible_printers.length
+                            ? `<select class="job-printer-select">
+                                 ${job.compatible_printers.map((p) => `<option value="${p}">${p}</option>`).join('')}
+                               </select>
+                               <button type="button" class="job-assign-btn">Assign</button>`
+                            : '<span class="job-no-printers">No idle printer fits this job</span>';
+                    } else if (job.status === 'assigned' || job.status === 'printing') {
+                        actionsHtml = `<span class="job-assigned-to">on ${job.assigned_printer}</span>
+                                       <button type="button" class="job-complete-btn">Mark Done</button>`;
+                    } else {
+                        actionsHtml = `<span class="job-done">done${job.assigned_printer ? ' on ' + job.assigned_printer : ''}</span>`;
+                    }
+
+                    li.innerHTML = `
+                        <div class="job-item-header">
+                            <strong>${job.name}</strong>
+                            <span class="job-status job-status-${job.status}">${job.status}</span>
+                        </div>
+                        <div class="job-item-dims">${dims} mm</div>
+                        <div class="job-item-actions">${actionsHtml}</div>
+                    `;
+
+                    li.querySelector('.job-assign-btn')?.addEventListener('click', () => {
+                        const printer = li.querySelector('.job-printer-select').value;
+                        this.assignJob(job.name, printer);
+                    });
+                    li.querySelector('.job-complete-btn')?.addEventListener('click', () => this.completeJob(job.name));
+                    this.jobListEl.appendChild(li);
+                }
+            }
+
+            async createJob() {
+                const name = document.getElementById('job-name').value.trim();
+                const x = parseFloat(document.getElementById('job-x').value);
+                const y = parseFloat(document.getElementById('job-y').value);
+                const z = parseFloat(document.getElementById('job-z').value);
+                if (!name || !this.siteName) return;
+
+                this.setStatus(`Creating job ${name}...`, 'loading');
+                try {
+                    const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/jobs`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, required_volume: { x, y, z } }),
+                    });
+                    if (!response.ok) {
+                        const data = await response.json().catch(() => ({}));
+                        throw new Error(data.detail || `Create job failed (${response.status})`);
+                    }
+                    this.jobFormEl.reset();
+                    this.jobs = await this.fetchJobs();
+                    this.renderJobs();
+                    this.setStatus(`Job ${name} queued`, 'success');
+                } catch (err) {
+                    this.setStatus(`Error: ${err.message}`, 'error');
+                    console.error(err);
+                }
+            }
+
+            async assignJob(jobName, printerName) {
+                this.setStatus(`Assigning ${jobName} to ${printerName}...`, 'loading');
+                try {
+                    const response = await fetch(
+                        `${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/jobs/${encodeURIComponent(jobName)}/assign`,
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ printer: printerName }),
+                        }
+                    );
+                    if (!response.ok) {
+                        const data = await response.json().catch(() => ({}));
+                        throw new Error(data.detail || `Assign failed (${response.status})`);
+                    }
+                    await this.refreshTree();
+                    this.jobs = await this.fetchJobs();
+                    this.renderJobs();
+                    this.setStatus(`${jobName} assigned to ${printerName}`, 'success');
+                } catch (err) {
+                    this.setStatus(`Error: ${err.message}`, 'error');
+                    console.error(err);
+                }
+            }
+
+            async completeJob(jobName) {
+                this.setStatus(`Completing ${jobName}...`, 'loading');
+                try {
+                    const response = await fetch(
+                        `${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/jobs/${encodeURIComponent(jobName)}/complete`,
+                        { method: 'POST' }
+                    );
+                    if (!response.ok) throw new Error(`Complete failed (${response.status})`);
+                    await this.refreshTree();
+                    this.jobs = await this.fetchJobs();
+                    this.renderJobs();
+                    this.setStatus(`${jobName} done`, 'success');
+                } catch (err) {
+                    this.setStatus(`Error: ${err.message}`, 'error');
+                    console.error(err);
+                }
+            }
+
+            // ---------------------------------------------------------------
+            // Pointer / wheel navigation
+            // ---------------------------------------------------------------
+
+            raycastChild(event) {
+                const rect = this.canvas.getBoundingClientRect();
+                this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+                this.raycaster.setFromCamera(this.pointer, this.camera);
+                const intersects = this.raycaster.intersectObjects(Object.values(this.meshByName), false);
+                return intersects.length ? intersects[0].object.userData.name : null;
+            }
+
+            onPointerDown(event) {
+                if (this.transformControls.dragging) return;
+                const name = this.raycastChild(event);
+                if (name) this.selectChild(name);
+            }
+
+            onDoubleClick(event) {
+                const name = this.raycastChild(event);
+                if (name) this.zoomIn(name);
+            }
+
+            // Scroll dollies the camera as usual; once OrbitControls clamps
+            // the distance at either extreme, further scroll in the same
+            // direction accumulates instead of doing nothing, and crossing a
+            // resistance threshold triggers the same zoom-in/zoom-out a
+            // click or the toolbar button would -- continuous and discrete
+            // navigation both drive the same two actions.
+            onWheel(event) {
+                const distance = this.orbitControls.getDistance();
+                const atMin = distance <= this.orbitControls.minDistance * 1.05;
+                const atMax = distance >= this.orbitControls.maxDistance * 0.95;
+                const zoomingIn = event.deltaY < 0;
+                const zoomingOut = event.deltaY > 0;
+
+                if ((zoomingIn && atMin) || (zoomingOut && atMax)) {
+                    this.wheelResistance += Math.abs(event.deltaY);
+                    if (this.wheelResistance > WHEEL_RESISTANCE_THRESHOLD) {
+                        this.wheelResistance = 0;
+                        if (zoomingIn) this.zoomInFromWheel();
+                        else this.zoomOut();
+                    }
+                } else {
+                    this.wheelResistance = 0;
+                }
+            }
+
+            // No continuous hover-tracking is wired (would need per-frame
+            // raycasting for marginal benefit) -- prefer the already-selected
+            // child, else whichever child sits closest to the camera's
+            // current look-at point, as a reasonable proxy for "what the
+            // user is looking at."
+            zoomInFromWheel() {
+                const focus = this.currentFocusNode();
+                if (!focus.children.length) return;
+                if (this.selectedName && findChild(focus, this.selectedName)?.children.length) {
+                    this.zoomIn(this.selectedName);
+                    return;
+                }
+                const target = this.orbitControls.target;
+                let closest = null;
+                let closestDist = Infinity;
+                focus.children.forEach((child, index) => {
+                    if (!child.children.length) return;
+                    const { center } = this.boxFromBounds(this.boundsFor(child, index));
+                    const dist = Math.hypot(center[0] - target.x, center[1] - target.y, center[2] - target.z);
+                    if (dist < closestDist) {
+                        closestDist = dist;
+                        closest = child.name;
+                    }
+                });
+                if (closest) this.zoomIn(closest);
+            }
+
+            // ---------------------------------------------------------------
+            // Wave-loading seam (v1: instant/synchronous; the only place a
+            // future real-geometry upgrade -- Three.js primitives translated
+            // from a node's OpenSCAD tree, or a fetched STL for a part_ref
+            // leaf -- needs to change).
+            // ---------------------------------------------------------------
+
+            async loadNodeGeometry(node) {
+                // v1: the bounding-box wireframe is already built synchronously
+                // by buildChildMeshes; this resolves immediately as a stand-in
+                // for a future real fetch (e.g. GET /parts/{part_ref}/stl).
+                return Promise.resolve(node);
+            }
+
+            async scheduleWaveLoad(focusNode) {
+                const parent = this.parentOfFocus();
+                const wave = [focusNode, ...focusNode.children, ...(parent ? [parent] : [])];
+                for (const node of wave) {
+                    await this.loadNodeGeometry(node);
+                }
+            }
+        }
+
+        new FractalViewer();
+    </script>
+</body>
+</html>

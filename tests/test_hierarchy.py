@@ -3,7 +3,7 @@
 See tests/test_garage_workbench.py for the worked-example / layout-verification tests.
 """
 
-from apothecary.hierarchy import Feature, Site, Structure, Substructure
+from apothecary.hierarchy import Assembly, Feature, Site, Structure, Substructure
 from apothecary.models.bounds import BoundingBox3D
 from apothecary.models.units import HardwareSizes, PrintSettings
 from apothecary.models.vectors import Vector3D
@@ -19,7 +19,7 @@ def test_feature_clearance_hole_uses_print_settings_tolerance():
         depth=10,
         print_settings=ps,
     )
-    rendered = feature.render()
+    rendered = feature.to_scad_object().render()
     assert "Feature: test_hole" in rendered
     # M3 (3.0) + 2*0.3 tolerance = 3.6 diameter -> r=1.8
     assert "r=1.8" in rendered
@@ -145,3 +145,36 @@ def test_substructure_with_nonzero_position_wraps_in_translate():
     sub = Substructure(name="ss", position=Vector3D(x=1, y=2, z=3), base=Cube())
     rendered = sub.to_scad_object().render()
     assert "translate([1.0, 2.0, 3.0])" in rendered
+
+
+def test_feature_can_have_a_child_feature_one_level_deeper_than_the_fixed_four():
+    """Assembly is one generic recursive class, not four fixed levels -- a
+    Feature (a leaf under the old model, with no children slot at all) can
+    itself carry a child Feature, proving depth is genuinely unbounded.
+    """
+    chamfer = Feature.boss("chamfer", position=Vector3D(), diameter=6, height=1)
+    boss = Feature.boss("boss", position=Vector3D(), diameter=4, height=2)
+    boss.children = [chamfer]
+
+    assert isinstance(boss, Assembly)
+    assert boss.children[0] is chamfer
+
+    rendered = boss.to_scad_object().render()
+    assert "Feature: boss" in rendered
+    assert "Feature: chamfer" in rendered
+
+
+def test_validate_recurses_below_the_root_not_just_at_site_level():
+    """The overlap check generalizes to every level: two Substructures that
+    are siblings under the same Structure, not just two Structures under a
+    Site, are checked against each other.
+    """
+    overlapping_box = BoundingBox3D(max_point=Vector3D(x=10, y=10, z=10))
+    sub_a = Substructure(name="sub_a", footprint=overlapping_box, base=Cube())
+    sub_b = Substructure(name="sub_b", footprint=overlapping_box, base=Cube())
+    structure = Structure(name="panel", substructures=[sub_a, sub_b])
+
+    report = structure.validate()
+    assert not report.is_valid
+    assert report.violations[0].kind == "overlap"
+    assert set(report.violations[0].structures) == {"sub_a", "sub_b"}

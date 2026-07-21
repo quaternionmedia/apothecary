@@ -1,20 +1,20 @@
 """
-Viewer module for the Apothecary 3D parts browser.
+Viewer module for the Apothecary fractal zoom viewer.
 
-This module provides the HTML-based viewer for browsing and previewing
-OpenSCAD parts. It uses Three.js for 3D rendering with placeholder geometry.
+Renders one HTML-based viewer that navigates any registered site's
+``Assembly`` tree (see ``apothecary.hierarchy``) at any depth with the same
+controls at every level -- it absorbs both the former standalone parts
+browser and the former Site/Structure hierarchy viewer; the registered
+``parts/`` library is reached by zooming down to a leaf, not a separate page.
 
 Architecture Notes:
 -------------------
-The viewer displays placeholder 3D shapes because OpenSCAD files cannot be
-directly rendered in a browser. To render actual geometry, you would need:
-
-1. Server-side: Run OpenSCAD to export STL/OBJ, then serve the mesh
-2. Client-side: Parse OpenSCAD syntax and recreate geometry (complex)
-3. Hybrid: Use a WASM-compiled OpenSCAD (not yet mature)
-
-The current approach provides a functional preview experience while keeping
-the architecture simple and ready for future enhancements.
+Nodes render as bounding-box wireframes today because OpenSCAD/STL geometry
+cannot be directly rendered in a browser without a render round-trip. The
+per-node geometry loader is architected as an async seam (see
+``fractal_viewer.html.j2``'s ``loadNodeGeometry``) so real geometry (Three.js
+primitives translated client-side, or OpenSCAD-rendered STL) can be plugged
+in later without restructuring the navigation code around it.
 """
 
 import html
@@ -45,57 +45,30 @@ class ViewerRenderer:
             autoescape=False,  # We handle escaping manually for HTML attributes
         )
 
-    def render_viewer(
-        self, part_names: List[str], base_url: str, default_part: Optional[str] = None
+    def render_fractal_viewer(
+        self,
+        site_names: List[str],
+        base_url: str,
+        default_site: Optional[str] = None,
+        focus_path: str = "",
     ) -> str:
-        """
-        Render the viewer HTML page.
+        """Render the fractal zoom viewer HTML page (prototype).
 
-        Args:
-            part_names: List of available part names
-            base_url: Base URL for API calls (e.g., "http://localhost:8765")
-            default_part: Part to auto-load on page load
-
-        Returns:
-            Complete HTML page as a string
-        """
-        template = self.env.get_template("viewer.html.j2")
-
-        # Build the options HTML with optional selected default
-        if part_names:
-            options_html = "\n".join(
-                f'<option value="{html.escape(name)}"{" selected" if name == default_part else ""}>{html.escape(name)}</option>'
-                for name in part_names
-            )
-            select_disabled = ""
-            button_disabled = ""
-        else:
-            options_html = '<option value="" disabled>No parts found</option>'
-            select_disabled = " disabled"
-            button_disabled = " disabled"
-
-        return template.render(
-            part_options=options_html,
-            select_disabled=select_disabled,
-            button_disabled=button_disabled,
-            base_url=base_url.rstrip("/"),
-            default_part=default_part or "",
-        )
-
-    def render_site_viewer(
-        self, site_names: List[str], base_url: str, default_site: Optional[str] = None
-    ) -> str:
-        """Render the Site/Structure hierarchy viewer HTML page (prototype).
+        Absorbs the previous parts browser and Site/Structure hierarchy
+        viewer into one page: navigates any registered site's Assembly tree
+        at any depth with the same controls at every level.
 
         Args:
             site_names: List of available site names (see apothecary.api's site registry)
             base_url: Base URL for API calls
             default_site: Site to auto-load on page load
+            focus_path: Optional dotted path (e.g. "workbench.frame_system")
+                to open the view already zoomed to that node
 
         Returns:
             Complete HTML page as a string
         """
-        template = self.env.get_template("site_viewer.html.j2")
+        template = self.env.get_template("fractal_viewer.html.j2")
 
         if site_names:
             options_html = "\n".join(
@@ -112,6 +85,7 @@ class ViewerRenderer:
             select_disabled=select_disabled,
             base_url=base_url.rstrip("/"),
             default_site=default_site or "",
+            focus_path=focus_path or "",
         )
 
 
@@ -127,35 +101,24 @@ def get_viewer_renderer() -> ViewerRenderer:
     return _renderer
 
 
-def render_viewer_page(
-    part_names: List[str], base_url: str, default_part: Optional[str] = None
+def render_fractal_viewer_page(
+    site_names: List[str],
+    base_url: str,
+    default_site: Optional[str] = None,
+    focus_path: str = "",
 ) -> str:
     """
-    Convenience function to render the viewer page.
-
-    Args:
-        part_names: List of available part names
-        base_url: Base URL for API calls
-        default_part: Part to auto-load on page load
-
-    Returns:
-        Complete HTML page as a string
-    """
-    return get_viewer_renderer().render_viewer(part_names, base_url, default_part)
-
-
-def render_site_viewer_page(
-    site_names: List[str], base_url: str, default_site: Optional[str] = None
-) -> str:
-    """
-    Convenience function to render the Site/Structure hierarchy viewer page (prototype).
+    Convenience function to render the fractal zoom viewer page (prototype).
 
     Args:
         site_names: List of available site names
         base_url: Base URL for API calls
         default_site: Site to auto-load on page load
+        focus_path: Optional dotted path to open the view already zoomed to
 
     Returns:
         Complete HTML page as a string
     """
-    return get_viewer_renderer().render_site_viewer(site_names, base_url, default_site)
+    return get_viewer_renderer().render_fractal_viewer(
+        site_names, base_url, default_site, focus_path
+    )

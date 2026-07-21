@@ -85,13 +85,13 @@ Please start the server with: apothecary serve --port 8765
   - SCAD/JSCAD downloads
   - Scene rendering
 
-- `test_viewer.py` - Tests for the viewer interface
+- `test_viewer.py` - Tests for the fractal zoom viewer interface
   - Page loading and structure
-  - Button interactions
-  - Download functionality
+  - Zoom navigation and the minimap
+  - The absorbed parts-library part view
 
-- `test_docs_parts_viewer.py`, `test_docs_site_viewer.py` - doc-workflow
-  tests (marked both `e2e` and `docs`) — see below
+- `test_docs_fractal_viewer.py` - doc-workflow test (marked both `e2e` and
+  `docs`) — see below
 
 ## Doc-workflow tests
 

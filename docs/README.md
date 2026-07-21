@@ -29,10 +29,10 @@ Welcome to the Apothecary documentation. This index links to all available guide
 
 ## Generated Documentation (screenshots, GIFs, walkthroughs)
 
-The parts viewer and the Site/Structure viewer are documented by their own
-Playwright E2E tests, not by hand-maintained prose: each `docs.step("...")`
-call in `tests/e2e/test_docs_*.py` is both a checked assertion point and a
-sentence of documentation. Editing a test is how you edit these docs.
+The fractal zoom viewer is documented by its own Playwright E2E test, not by
+hand-maintained prose: each `docs.step("...")` call in
+`tests/e2e/test_docs_fractal_viewer.py` is both a checked assertion point and
+a sentence of documentation. Editing that test is how you edit these docs.
 
 ```bash
 apothecary docs generate   # runs the doc-workflow tests, writes docs/generated/
@@ -46,9 +46,9 @@ browse on GitHub until you do. Raw Playwright `.webm` recordings are
 captured as an intermediate and always discarded (`--keep-raw-video` to
 keep them) in favor of the assembled GIF.
 
-A normal test run (`apothecary test all`, CI) exercises the same tests as
-ordinary E2E coverage of the parts viewer and the Site/Structure viewer —
-capture only turns on with the explicit `--generate-docs` flag.
+A normal test run (`apothecary test all`, CI) exercises the same test as
+ordinary E2E coverage of the fractal zoom viewer — capture only turns on
+with the explicit `--generate-docs` flag.
 
 ## API Documentation
 

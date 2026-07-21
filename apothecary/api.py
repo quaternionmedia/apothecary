@@ -31,7 +31,8 @@ from .example_hierarchy import (
     job_fits_printer,
     validate_garage_layout,
 )
-from .hierarchy import Site, Structure
+from .example_parts_library import create_parts_library_site, validate_parts_library
+from .hierarchy import Assembly
 from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
 from .primitives import Cube, Cylinder, Sphere
@@ -42,7 +43,7 @@ from .scene import Scene
 from .site_store import SiteStore, UnknownSiteError
 from .templates import TemplateRenderer
 from .transforms import Rotate, Scale, Translate
-from .viewer import render_site_viewer_page, render_viewer_page
+from .viewer import render_fractal_viewer_page
 
 
 async def _generate_missing_stls():
@@ -582,11 +583,16 @@ async def get_part_files(name: str, request: Request):
 # processes -- fine for a single-process dev server.
 # =============================================================================
 
-_site_store = SiteStore({"garage": (create_example_site, validate_garage_layout)})
+_site_store = SiteStore(
+    {
+        "garage": (create_example_site, validate_garage_layout),
+        "parts_library": (create_parts_library_site, validate_parts_library),
+    }
+)
 _job_store = JobStore()
 
 
-def _get_site_or_404(name: str) -> Site:
+def _get_site_or_404(name: str) -> Assembly:
     try:
         return _site_store.get(name)
     except UnknownSiteError:
@@ -602,7 +608,7 @@ def _bounds_dict(bounds: BoundingBox3D | None) -> Dict[str, List[float]] | None:
     }
 
 
-def _structure_summary(structure: Structure) -> Dict[str, object]:
+def _structure_summary(structure: Assembly) -> Dict[str, object]:
     return {
         "name": structure.name,
         "material": structure.material,
@@ -624,7 +630,47 @@ def _structure_summary(structure: Structure) -> Dict[str, object]:
                 "name": sub.name,
                 "features": [f.name for f in (*sub.additions, *sub.subtractions)],
             }
-            for sub in structure.substructures
+            for sub in structure.children
+        ],
+    }
+
+
+def _assembly_tree(node: Assembly) -> Dict[str, object]:
+    """Recursive serialization of an Assembly node and everything beneath it.
+
+    Unlike ``_structure_summary`` (which flattens one extra level for the
+    old, depth-capped viewers), this walks the *whole* tree -- the shape the
+    fractal zoom viewer needs to navigate unbounded depth. ``children``,
+    ``additions``, and ``subtractions`` are all real Assembly nodes (a
+    garage printer's ``left_post``/``gantry_bar`` Features are additions, not
+    children), so all three are combined into one navigable ``children``
+    list here, each tagged with how it composes into its parent's geometry --
+    navigation doesn't care about that distinction, but a viewer showing
+    "what's inside" vs. "what's added/removed" might.
+    """
+    composed = (
+        [(c, "child") for c in node.children]
+        + [(c, "addition") for c in node.additions]
+        + [(c, "subtraction") for c in node.subtractions]
+    )
+    return {
+        "name": node.name,
+        "role": node.role,
+        "material": node.material,
+        "status": node.status,
+        "comment": node.comment,
+        "part_ref": node.part_ref,
+        "position": {"x": node.position.x, "y": node.position.y, "z": node.position.z},
+        "footprint": _bounds_dict(node.footprint),
+        "world_bounds": _bounds_dict(node.world_bounds()),
+        "build_volume": (
+            [node.build_volume.x, node.build_volume.y, node.build_volume.z]
+            if node.build_volume
+            else None
+        ),
+        "children": [
+            {**_assembly_tree(child), "composition": composition}
+            for child, composition in composed
         ],
     }
 
@@ -632,7 +678,8 @@ def _structure_summary(structure: Structure) -> Dict[str, object]:
 def _site_payload(site, report) -> Dict[str, object]:
     return {
         "name": site.name,
-        "structures": [_structure_summary(s) for s in site.structures],
+        "structures": [_structure_summary(s) for s in site.children],
+        "tree": _assembly_tree(site),
         "violations": [v.model_dump() for v in report.violations],
         "is_valid": report.is_valid,
     }
@@ -672,7 +719,7 @@ async def update_site_layout(name: str, body: LayoutRequest):
     moved; everything else keeps its current persisted position.
     """
     site = _get_site_or_404(name)
-    for structure in site.structures:
+    for structure in site.children:
         override = body.positions.get(structure.name)
         if override is not None:
             structure.position = Vector3D(x=override.x, y=override.y, z=override.z)
@@ -697,7 +744,7 @@ async def update_structure_status(name: str, structure_name: str, body: StatusRe
             detail=f"Invalid status {body.status!r}; must be one of {PRINTER_STATUSES}",
         )
     site = _get_site_or_404(name)
-    structure = next((s for s in site.structures if s.name == structure_name), None)
+    structure = next((s for s in site.children if s.name == structure_name), None)
     if structure is None:
         raise HTTPException(
             status_code=404, detail=f"Structure '{structure_name}' not found in site '{name}'"
@@ -745,10 +792,10 @@ class AssignJobRequest(BaseModel):
     printer: str
 
 
-def _job_summary(job: Job, site: Site) -> Dict[str, object]:
+def _job_summary(job: Job, site: Assembly) -> Dict[str, object]:
     compatible = [
         s.name
-        for s in site.structures
+        for s in site.children
         if s.build_volume is not None and s.status == "idle" and job_fits_printer(job, s)
     ]
     return {
@@ -795,7 +842,7 @@ async def assign_job(name: str, job_name: str, body: AssignJobRequest):
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Job '{job_name}' not found") from None
 
-    printer = next((s for s in site.structures if s.name == body.printer), None)
+    printer = next((s for s in site.children if s.name == body.printer), None)
     if printer is None or printer.build_volume is None:
         raise HTTPException(status_code=404, detail=f"Printer '{body.printer}' not found")
     if printer.status != "idle":
@@ -834,7 +881,7 @@ async def complete_job(name: str, job_name: str):
         raise HTTPException(status_code=404, detail=f"Job '{job_name}' not found") from None
 
     if job.assigned_printer:
-        printer = next((s for s in site.structures if s.name == job.assigned_printer), None)
+        printer = next((s for s in site.children if s.name == job.assigned_printer), None)
         if printer is not None:
             printer.status = "idle"
 
@@ -842,14 +889,37 @@ async def complete_job(name: str, job_name: str):
     return _job_summary(job, site)
 
 
+@app.get("/viewer")
+async def viewer_home():
+    """Redirect to the fractal zoom viewer for the first registered site.
+
+    There is no longer a standalone parts browser or bare Site browser --
+    both are absorbed into one viewer (see ``site_viewer`` below); this is
+    just its default entry point.
+    """
+    default_site = _site_store.names()[0]
+    return RedirectResponse(f"/viewer/sites/{default_site}", status_code=307)
+
+
 @app.get("/viewer/sites/{name}", response_class=HTMLResponse)
-async def site_viewer(name: str, request: Request):
-    """Site/Structure hierarchy viewer: box-per-structure 3D manipulation (prototype)."""
+async def site_viewer(name: str, request: Request, focus: str = Query(default="")):
+    """Fractal zoom viewer: navigates any registered site's Assembly tree at
+    any depth with standardized controls (prototype).
+
+    Absorbs both previous viewers: the registered ``parts/`` library is
+    reachable by selecting the ``parts_library`` site and zooming down to a
+    leaf (``part_ref`` set) -- the old part-viewer experience, no longer a
+    separate page. ``focus`` is an optional dotted path (e.g.
+    ``workbench.frame_system``) used to deep-link directly to a node instead
+    of always opening at the root.
+    """
     if name not in _site_store.names():
         raise HTTPException(status_code=404, detail=f"Site '{name}' not found")
     base_url = str(request.base_url).rstrip("/")
     return HTMLResponse(
-        render_site_viewer_page(_site_store.names(), base_url, default_site=name)
+        render_fractal_viewer_page(
+            _site_store.names(), base_url, default_site=name, focus_path=focus
+        )
     )
 
 
@@ -867,49 +937,3 @@ async def openscad_status():
         "version": renderer.get_version(),
         "path": str(renderer.openscad_path) if renderer.openscad_path else None,
     }
-
-
-@app.get("/viewer", response_class=HTMLResponse)
-async def viewer_home(request: Request, part: str = Query(default="elephant_walk")):
-    """
-    Integrated 3D parts viewer with Three.js.
-
-    Displays a browser-based viewer with:
-    - Part selection dropdown
-    - 3D preview (placeholder geometry)
-    - OpenSCAD source code display
-    - Download buttons for SCAD and JSCAD formats
-
-    Args:
-        part: Default part to load (defaults to elephant_walk)
-    """
-    parts = _available_part_names()
-    base_url = str(request.base_url).rstrip("/")
-    # Pass the default part to the viewer
-    default_part = part if part in parts else (parts[0] if parts else None)
-    return HTMLResponse(render_viewer_page(parts, base_url, default_part=default_part))
-
-
-@app.get("/viewer/random")
-async def viewer_random(request: Request):
-    """
-    Redirect to the viewer with a random part selected.
-
-    Returns a redirect to the main viewer page. The random part
-    selection is handled client-side for simplicity.
-    """
-    names = _available_part_names()
-    if not names:
-        raise HTTPException(status_code=404, detail="No parts available")
-    picked = choice(names)
-    # Redirect to main viewer - client can auto-load if needed
-    return RedirectResponse(f"/viewer?part={picked}", status_code=307)
-
-
-@app.get("/viewer/parts/{name}")
-async def viewer_part(name: str, request: Request):
-    """
-    Redirect to the viewer with a specific part selected.
-    """
-    part = _load_part_wrapper(name)  # Validates part exists
-    return RedirectResponse(f"/viewer?part={part.name}", status_code=307)

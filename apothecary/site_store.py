@@ -17,10 +17,10 @@ from __future__ import annotations
 
 from typing import Callable, Dict, List, Tuple
 
-from .hierarchy import LayoutReport, Site
+from .hierarchy import Assembly, LayoutReport
 
-SiteFactory = Callable[[], Site]
-SiteValidator = Callable[[Site], LayoutReport]
+SiteFactory = Callable[[], Assembly]
+SiteValidator = Callable[[Assembly], LayoutReport]
 
 
 class UnknownSiteError(KeyError):
@@ -32,7 +32,7 @@ class SiteStore:
 
     def __init__(self, registry: Dict[str, Tuple[SiteFactory, SiteValidator]]):
         self._registry = registry
-        self._sites: Dict[str, Site] = {}
+        self._sites: Dict[str, Assembly] = {}
 
     def _entry(self, name: str) -> Tuple[SiteFactory, SiteValidator]:
         entry = self._registry.get(name)
@@ -43,7 +43,7 @@ class SiteStore:
     def names(self) -> List[str]:
         return sorted(self._registry.keys())
 
-    def get(self, name: str) -> Site:
+    def get(self, name: str) -> Assembly:
         """Return the persisted Site, building it from its factory on first access."""
         factory, _validator = self._entry(name)
         if name not in self._sites:
@@ -54,7 +54,7 @@ class SiteStore:
         _factory, validator = self._entry(name)
         return validator
 
-    def reset(self, name: str) -> Site:
+    def reset(self, name: str) -> Assembly:
         """Discard all edits and rebuild the site fresh from its factory."""
         factory, _validator = self._entry(name)
         self._sites[name] = factory()

@@ -70,22 +70,12 @@ def test_parts_random_scad_endpoint():
     assert len(r.text) > 10
 
 
-def test_viewer_random_redirects():
-    """Test that /viewer/random redirects to viewer with a random part."""
+def test_viewer_home_redirects_to_first_registered_site():
+    """/viewer no longer serves a standalone parts browser -- it redirects to
+    the fractal viewer for the first registered site (see api.py's
+    viewer_home; parts are reached by navigating into "parts_library").
+    """
     client = TestClient(app)
-    r = client.get("/viewer/random", follow_redirects=False)
+    r = client.get("/viewer", follow_redirects=False)
     assert r.status_code == 307
-    location = r.headers.get("location", "")
-    # Now redirects to main viewer with part query param
-    assert location.startswith("/viewer?part=")
-
-
-def test_viewer_specific_part_redirect():
-    """Test that /viewer/parts/{name} redirects to viewer with part selected."""
-    client = TestClient(app)
-    part_name = next(iter(_expected_part_names()))
-    r = client.get(f"/viewer/parts/{part_name}", follow_redirects=False)
-    assert r.status_code == 307
-    location = r.headers.get("location", "")
-    # Redirects to main viewer with part query param
-    assert location.startswith("/viewer?part=")
+    assert r.headers.get("location", "") == "/viewer/sites/garage"

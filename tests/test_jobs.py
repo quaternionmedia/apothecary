@@ -7,7 +7,7 @@ from apothecary.models.vectors import Vector3D
 
 
 def _printer(site, name="printer_1"):
-    return next(s for s in site.structures if s.name == name)
+    return next(s for s in site.children if s.name == name)
 
 
 def test_job_fits_printer_within_build_volume():

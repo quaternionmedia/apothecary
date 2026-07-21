@@ -22,12 +22,12 @@ from apothecary.primitives import Cube
 
 
 def _printer_structures(site):
-    return [s for s in site.structures if s.name != "workbench"]
+    return [s for s in site.children if s.name != "workbench"]
 
 
 def test_site_has_one_bench_and_three_printers():
     site = create_example_site()
-    names = [s.name for s in site.structures]
+    names = [s.name for s in site.children]
     assert names == ["workbench", "printer_1", "printer_2", "printer_3"]
 
 
@@ -92,7 +92,7 @@ def test_validate_garage_layout_is_clean_by_default():
 
 def test_validate_garage_layout_catches_overlap():
     site = create_example_site()
-    printer_1, printer_2 = site.structures[1], site.structures[2]
+    printer_1, printer_2 = site.children[1], site.children[2]
     printer_2.position = Vector3D(x=printer_1.position.x, y=printer_1.position.y, z=printer_1.position.z)
 
     report = validate_garage_layout(site)
@@ -103,7 +103,7 @@ def test_validate_garage_layout_catches_overlap():
 
 def test_validate_garage_layout_catches_overhang():
     site = create_example_site()
-    printer_1 = site.structures[1]
+    printer_1 = site.children[1]
     printer_1.position = Vector3D(x=BENCH_WIDTH - 10, y=printer_1.position.y, z=printer_1.position.z)
 
     report = validate_garage_layout(site)
@@ -114,7 +114,7 @@ def test_validate_garage_layout_catches_overhang():
 
 def test_validate_garage_layout_catches_wrong_height():
     site = create_example_site()
-    printer_1 = site.structures[1]
+    printer_1 = site.children[1]
     printer_1.position = Vector3D(x=printer_1.position.x, y=printer_1.position.y, z=0)
 
     report = validate_garage_layout(site)
