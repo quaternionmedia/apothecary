@@ -10,9 +10,10 @@ Note: STL files are generated on-demand and not stored in git.
 On startup, missing STLs are automatically generated if OpenSCAD is available.
 """
 
+import asyncio
 import json
 import os
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from importlib import import_module
 from random import choice
 from typing import Dict, List
@@ -87,13 +88,40 @@ async def _generate_missing_stls():
             print(f"FAILED: {result.error_message}")
 
 
+async def _generate_missing_stls_in_background():
+    """Wrapper run as a background task -- see lifespan() for why."""
+    try:
+        await _generate_missing_stls()
+    except Exception as exc:  # pragma: no cover - defensive; log, don't crash the server
+        print(f"Background STL generation failed: {exc}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan handler - runs on startup and shutdown."""
+    """Application lifespan handler - runs on startup and shutdown.
+
+    STL generation for missing parts runs as a background task, not
+    awaited here. Real OpenSCAD renders can take tens of seconds per part
+    (CGAL boolean ops -- one part in this repo's own library takes ~39s),
+    and _generate_missing_stls() renders every missing part sequentially;
+    awaiting it here meant /health -- and every other route -- was
+    unreachable until all of them finished, which starved every client
+    that polls /health with a short timeout (apothecary test all,
+    tests/e2e's --start-server fixture, and a plain first-run
+    `apothecary serve` alike). Parts already handle "not generated yet"
+    gracefully (placeholder geometry in the viewer, on-demand
+    /parts/{name}/stl/generate), so backgrounding this is a strict
+    improvement, not a behavior change callers need to adapt to.
+    """
     # Startup
-    await _generate_missing_stls()
+    stl_task = asyncio.create_task(_generate_missing_stls_in_background())
+    app.state.stl_generation_task = stl_task  # keep a strong reference (asyncio GC gotcha)
     yield
-    # Shutdown (nothing to clean up)
+    # Shutdown: don't leave a render subprocess dangling if we're still generating
+    if not stl_task.done():
+        stl_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await stl_task
 
 
 def _vec(data):

@@ -89,12 +89,16 @@ def test_server(request, server_port):
         server_port,
     ]
 
+    # DEVNULL, not PIPE: nothing here ever reads server_proc.stdout/stderr,
+    # and an unread PIPE deadlocks once its OS buffer fills (confirmed by
+    # direct reproduction against this same server-launch pattern in
+    # apothecary/cli/testing.py -- see the comment there).
     server_proc = subprocess.Popen(
         server_cmd,
         cwd=root,
         env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
 
     base_url = f"http://127.0.0.1:{server_port}"
