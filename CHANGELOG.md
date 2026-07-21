@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fractal zoom viewer** (prototype, unratified) – `/viewer/sites/{name}` navigates any registered site's Assembly tree at any depth with standardized controls (click to select, double-click or scroll-past-resistance to zoom in, one zoom-out control) and an abstract depth-ladder minimap
 - **Parts library as a fractal tree** – the registered `parts/` library is migrated in as leaf `Assembly` nodes (`apothecary/example_parts_library.py`, new `part_ref` field), reachable by zooming into the `parts_library` site instead of a separate parts browser
 - **Real geometry in the fractal viewer** – placeholder boxes upgrade in the background to real geometry: a leaf's own Cube/Cylinder/Sphere renders as an exact Three.js primitive (`_primitive_descriptor` in `api.py`), and a `part_ref` leaf loads its real OpenSCAD-rendered STL, generating it on demand if missing. Composite nodes (more than one combined child) keep the bounding box — real CSG rendering of those stays future work.
+- **"Show all levels" toggle** – renders every leaf beneath the current focus at once, at its true global position, instead of just this level's direct children — at the cost of render time, per its own label
 - **Elephant walk** – `apothecary parts elephant-walk` generates a preview file with all parts arranged in a line, using bounding boxes to prevent overlap
 - **Dev command** – `apothecary dev` for quick development workflow (generate STLs + start server)
 - **STL rendering** – OpenSCAD CLI integration for SCAD→STL conversion
@@ -48,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `E2E_SETUP.md` (consolidated into CONTRIBUTING.md)
 
 ### Fixed
+- **Fractal viewer: world position was only ever one level deep** – `Assembly.world_bounds()`/`api.py`'s tree serialization only offset a node by its own `position`, not its accumulated ancestor chain, so anything nested more than one level below a site's direct children rendered as if its parent were sitting at the origin. Fixed by threading cumulative world position through `_assembly_tree`'s recursion — the root cause of camera framing looking "too zoomed in and not centered" once you zoomed past the first level.
+- **Fractal viewer: camera framing and grid size** – framing now considers all three axes (not just the horizontal footprint) and targets the true 3D center instead of an arbitrary height guess; the grid/axes helpers resize to match whatever's actually in view instead of a fixed 2000mm grid, often far too small a few levels deep
 - Viewer loads without console errors
 - Parts dropdown properly populates on page load
 - `.gitignore` no longer lists tracked `parts/` folder

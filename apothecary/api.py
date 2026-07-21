@@ -678,7 +678,7 @@ def _primitive_descriptor(obj: OpenSCADObject, offset: Vector3D) -> Dict[str, ob
     return None
 
 
-def _assembly_tree(node: Assembly) -> Dict[str, object]:
+def _assembly_tree(node: Assembly, parent_world_position: Vector3D | None = None) -> Dict[str, object]:
     """Recursive serialization of an Assembly node and everything beneath it.
 
     Unlike ``_structure_summary`` (which flattens one extra level for the
@@ -690,7 +690,29 @@ def _assembly_tree(node: Assembly) -> Dict[str, object]:
     list here, each tagged with how it composes into its parent's geometry --
     navigation doesn't care about that distinction, but a viewer showing
     "what's inside" vs. "what's added/removed" might.
+
+    ``Assembly.world_bounds()`` only offsets by *this* node's own
+    ``position`` -- correct for a direct child of the root (the only depth
+    the old, depth-capped viewers ever showed), wrong for anything deeper,
+    since a node's ``position`` is relative to its immediate parent, not the
+    root. A Structure two levels down from the site root would render as if
+    its parent were sitting at the origin. ``parent_world_position``
+    accumulates every ancestor's position on the way down so every node's
+    reported ``position``/``world_bounds`` is genuinely in one consistent
+    global frame, however deep -- the fractal viewer's camera framing and
+    "show everything at once" mode both depend on this being true.
     """
+    parent_world_position = parent_world_position or Vector3D()
+    world_position = parent_world_position + node.position
+    world_bounds = (
+        BoundingBox3D(
+            min_point=node.footprint.min_point + world_position,
+            max_point=node.footprint.max_point + world_position,
+        )
+        if node.footprint is not None
+        else None
+    )
+
     composed = (
         [(c, "child") for c in node.children]
         + [(c, "addition") for c in node.additions]
@@ -703,17 +725,17 @@ def _assembly_tree(node: Assembly) -> Dict[str, object]:
         "status": node.status,
         "comment": node.comment,
         "part_ref": node.part_ref,
-        "position": {"x": node.position.x, "y": node.position.y, "z": node.position.z},
+        "position": {"x": world_position.x, "y": world_position.y, "z": world_position.z},
         "footprint": _bounds_dict(node.footprint),
-        "world_bounds": _bounds_dict(node.world_bounds()),
+        "world_bounds": _bounds_dict(world_bounds),
         "build_volume": (
             [node.build_volume.x, node.build_volume.y, node.build_volume.z]
             if node.build_volume
             else None
         ),
-        "primitive": _primitive_descriptor(node.base, node.position) if node.base is not None else None,
+        "primitive": _primitive_descriptor(node.base, world_position) if node.base is not None else None,
         "children": [
-            {**_assembly_tree(child), "composition": composition}
+            {**_assembly_tree(child, world_position), "composition": composition}
             for child, composition in composed
         ],
     }

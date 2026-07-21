@@ -47,6 +47,10 @@
         #breadcrumb { font-size: 0.85rem; color: #999; }
         #breadcrumb .crumb { cursor: pointer; color: #9cd2ff; }
         #breadcrumb .crumb:hover { text-decoration: underline; }
+        .show-all-label {
+            display: flex; align-items: center; gap: 0.35rem;
+            font-size: 0.85rem; color: #ccc; cursor: pointer; user-select: none;
+        }
 
         .viewer-panel { flex: 2; position: relative; background: #111; }
         #viewer-canvas { width: 100%; height: 100%; display: block; }
@@ -192,6 +196,9 @@
             <button type="button" id="load-btn">Load</button>
             <button type="button" id="zoom-out-btn" title="Zoom out one level (Backspace)" disabled>⤴ Zoom Out</button>
             <span id="breadcrumb"></span>
+            <label class="show-all-label" title="Render every descendant leaf at once, not just this level -- slower to load, but everything sits at its true global position">
+                <input type="checkbox" id="show-all-toggle"> Show all levels
+            </label>
             <div class="spacer"></div>
             <span id="validity-indicator" class="validity-indicator valid">Layout valid</span>
         </div>
@@ -301,6 +308,32 @@
             return node.children.some(treeHasBuildVolume);
         }
 
+        // Every leaf beneath a node, recursively -- what "show all levels"
+        // renders instead of just the current focus's direct children. Each
+        // leaf carries a _path (dotted names from the starting node) because
+        // bare names collide across siblings in this exact example: all
+        // three printers have their own "belt_tensioner_boss". A plain
+        // name-keyed mesh registry would silently conflate them; the path
+        // is what nodeKey() below uses instead.
+        function collectLeaves(node, prefix = '', acc = []) {
+            const path = prefix ? `${prefix}.${node.name}` : node.name;
+            if (node.children.length === 0) {
+                acc.push({ ...node, _path: path });
+            } else {
+                node.children.forEach((child) => collectLeaves(child, path, acc));
+            }
+            return acc;
+        }
+
+        // The identity a rendered node is tracked under -- meshByName,
+        // raycasting userData, selectedName -- all keyed by this, not bare
+        // name, so collectLeaves's path-carrying copies stay unambiguous.
+        // Direct children (the non-"show all" case) never carry a _path, so
+        // this is just their name, same as always.
+        function nodeKey(node) {
+            return node._path || node.name;
+        }
+
         // Standardized navigation over Assembly's fractal tree: the same
         // click/double-click/scroll/zoom-out controls apply at any depth,
         // because every node -- Site, Structure, Substructure, Feature, or a
@@ -311,6 +344,7 @@
                 this.siteSelect = document.getElementById('site-select');
                 this.loadBtn = document.getElementById('load-btn');
                 this.zoomOutBtn = document.getElementById('zoom-out-btn');
+                this.showAllToggle = document.getElementById('show-all-toggle');
                 this.breadcrumbEl = document.getElementById('breadcrumb');
                 this.minimapEl = document.getElementById('minimap');
                 this.contentsEl = document.getElementById('contents-list');
@@ -332,8 +366,9 @@
                 this.jobs = [];
                 this.violations = [];
                 this.isValid = true;
-                this.selectedName = null;     // selected child of the current focus
-                this.meshByName = {};
+                this.selectedName = null;     // nodeKey() of the selected rendered node
+                this.meshByName = {};         // nodeKey() -> mesh
+                this.renderNodeByKey = {};    // nodeKey() -> node data, rebuilt each renderFocus()
                 this.buildVolumeMeshByName = {};
                 this.violationNames = new Set();
                 this.wheelResistance = 0;
@@ -399,6 +434,7 @@
                 this.loadBtn.addEventListener('click', () => this.loadSite(this.siteSelect.value));
                 this.siteSelect.addEventListener('change', () => this.loadSite(this.siteSelect.value));
                 this.zoomOutBtn.addEventListener('click', () => this.zoomOut());
+                this.showAllToggle.addEventListener('change', () => this.renderFocus());
                 this.canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
                 this.canvas.addEventListener('dblclick', (e) => this.onDoubleClick(e));
                 this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: true });
@@ -527,18 +563,46 @@
                 this.renderFocus();
             }
 
+            // "Show all levels" renders every leaf beneath the focus at once
+            // (its true global position, at the cost of render time) instead
+            // of just this level's direct children. renderNodeByKey also
+            // always includes focus.children regardless of mode: the
+            // Contents list shows those directly, so a click there must
+            // resolve even when "show all levels" only rendered leaves in
+            // 3D (a composite ancestor like a printer Structure has no mesh
+            // of its own in that mode, but still needs a panel). Must be
+            // rebuilt every time this.tree is replaced with a fresh server
+            // response -- not just from renderFocus's full re-render, but
+            // also from submitLayout's lighter-weight patch, which swaps in
+            // a new this.tree without going through renderFocus (to avoid
+            // resetting the camera on every keystroke) -- otherwise a
+            // second edit right after the first would mutate a node object
+            // already disconnected from the new tree and never reach it.
+            currentRenderNodes(focus) {
+                return this.showAllToggle.checked ? collectLeaves(focus) : focus.children;
+            }
+
+            rebuildRenderNodeByKey(focus, renderNodes) {
+                this.renderNodeByKey = {};
+                for (const node of focus.children) this.renderNodeByKey[nodeKey(node)] = node;
+                for (const node of renderNodes) this.renderNodeByKey[nodeKey(node)] = node;
+            }
+
             renderFocus() {
                 const focus = this.currentFocusNode();
+                const renderNodes = this.currentRenderNodes(focus);
+                this.rebuildRenderNodeByKey(focus, renderNodes);
+
                 this.clearScene();
-                this.buildChildMeshes(focus.children);
+                this.buildChildMeshes(renderNodes);
                 this.renderBreadcrumb();
                 this.renderMinimap();
                 this.renderContentsList(focus);
                 this.renderSelectedPanel();
                 this.renderViolations();
                 this.renderJobsSection();
-                this.frameCameraForChildren(focus.children);
-                this.scheduleWaveLoad(focus);
+                this.frameCameraForChildren(renderNodes);
+                this.scheduleWaveLoad(renderNodes);
             }
 
             // ---------------------------------------------------------------
@@ -601,7 +665,15 @@
             }
 
             boundsFor(node, index) {
-                return node.world_bounds || this.placeholderBounds(node, index);
+                // world_bounds (a real footprint) is authoritative; a node
+                // with no footprint but a translatable primitive (most
+                // Features) still has a real, correctly world-positioned
+                // shape -- use its bounds too, so the placeholder box a node
+                // shows before its real mesh loads is already in the right
+                // place, not a synthetic grid slot that jumps once the real
+                // geometry arrives. Only a node with neither falls back to
+                // the synthetic per-index placeholder.
+                return node.world_bounds || (node.primitive && node.primitive.bounds) || this.placeholderBounds(node, index);
             }
 
             buildChildMeshes(children) {
@@ -620,26 +692,33 @@
                     mesh.add(wireframe);
                     mesh.scale.set(size[0] || 1, size[1] || 1, size[2] || 1);
                     mesh.position.set(center[0], center[1], center[2]);
-                    mesh.userData.name = child.name;
+                    const key = nodeKey(child);
+                    mesh.userData.key = key;
                     this.scene.add(mesh);
-                    this.meshByName[child.name] = mesh;
+                    this.meshByName[key] = mesh;
 
-                    this.colorMesh(child.name, child);
+                    this.colorMesh(key, child);
                     this.updateBuildVolumeIndicator(child, bounds);
                 });
             }
 
-            colorMesh(name, node) {
-                const mesh = this.meshByName[name];
+            // ``key`` indexes meshByName/selectedName (nodeKey() -- a dotted
+            // path in "show all levels" mode, since bare names collide
+            // across siblings there); violation membership is checked
+            // against ``node.name`` instead, since that's what the server
+            // reports and, in this example, violations only ever occur
+            // between uniquely-named root-level Structures anyway.
+            colorMesh(key, node) {
+                const mesh = this.meshByName[key];
                 if (!mesh) return;
-                const isViolating = this.violationNames.has(name);
-                const isSelected = this.selectedName === name;
+                const isViolating = this.violationNames.has(node.name);
+                const isSelected = this.selectedName === key;
                 const statusColor = node.status ? STATUS_COLORS[node.status] : undefined;
                 const baseColor = node.part_ref
                     ? PART_COLOR
                     : node.composition === 'subtraction'
                     ? SUBTRACTION_COLOR
-                    : (statusColor ?? ROLE_COLORS[name] ?? DEFAULT_COLOR);
+                    : (statusColor ?? ROLE_COLORS[node.name] ?? DEFAULT_COLOR);
                 mesh.material.color.set(isViolating ? VIOLATION_COLOR : baseColor);
                 const edges = mesh.getObjectByName('edges');
                 if (edges) edges.material.color.set(isSelected ? SELECTED_EDGE_COLOR : 0x000000);
@@ -680,30 +759,62 @@
                 mesh.position.set(center[0], center[1], center[2]);
             }
 
-            frameCameraForChildren(children) {
-                if (!children.length) return;
-                const bounds = children.map((c, i) => this.boundsFor(c, i));
+            // Frames every axis, not just the horizontal footprint, and
+            // targets the true 3D center (average of min/max on all three
+            // axes) -- a node's position/world_bounds are now a genuinely
+            // consistent global frame (see api.py's _assembly_tree), so this
+            // no longer needs the old maxZ/3 guess, which only happened to
+            // work when everything sat near the world origin.
+            frameCameraForChildren(nodes) {
+                if (!nodes.length) return;
+                const bounds = nodes.map((c, i) => this.boundsFor(c, i));
                 const minX = Math.min(...bounds.map((b) => b.min[0]));
                 const maxX = Math.max(...bounds.map((b) => b.max[0]));
                 const minY = Math.min(...bounds.map((b) => b.min[1]));
                 const maxY = Math.max(...bounds.map((b) => b.max[1]));
+                const minZ = Math.min(...bounds.map((b) => b.min[2]));
                 const maxZ = Math.max(...bounds.map((b) => b.max[2]));
 
-                const spanX = Math.max(maxX - minX, 40);
-                const spanY = Math.max(maxY - minY, 40);
-                const targetX = (minX + maxX) / 2;
-                const targetY = (minY + maxY) / 2;
-                const distance = Math.max(200, Math.max(spanX, spanY) * 1.6);
+                const spanX = Math.max(maxX - minX, 20);
+                const spanY = Math.max(maxY - minY, 20);
+                const spanZ = Math.max(maxZ - minZ, 20);
+                const maxSpan = Math.max(spanX, spanY, spanZ);
 
-                this.orbitControls.target.set(targetX, maxZ / 3, targetY);
+                const targetX = (minX + maxX) / 2;
+                const targetYAp = (minY + maxY) / 2;  // apothecary Y (depth) -> three Z
+                const targetZAp = (minZ + maxZ) / 2;  // apothecary Z (height) -> three Y
+                const distance = Math.max(150, maxSpan * 1.8);
+
+                this.orbitControls.target.set(targetX, targetZAp, targetYAp);
                 this.camera.position.set(
-                    targetX + distance * 0.6,
-                    maxZ / 3 + distance * 0.5,
-                    targetY + distance * 0.6
+                    targetX + distance * 0.7,
+                    targetZAp + distance * 0.55,
+                    targetYAp + distance * 0.7
                 );
-                this.orbitControls.minDistance = Math.max(20, Math.max(spanX, spanY) * 0.1);
-                this.orbitControls.maxDistance = distance * 4;
+                this.orbitControls.minDistance = Math.max(10, maxSpan * 0.08);
+                this.orbitControls.maxDistance = Math.max(500, distance * 5);
                 this.orbitControls.update();
+
+                this.updateHelpersForSpan(maxSpan);
+            }
+
+            // The grid/axes helpers are fixed-size by default, which is
+            // often too small once you're several levels deep (a single
+            // Feature might span 10mm) or too small when zoomed out over the
+            // whole garage (spans ~1800mm) -- rebuild them to match whatever
+            // is actually in view, the same way the old standalone part
+            // viewer's updateHelpersForSize did for a single loaded part.
+            updateHelpersForSpan(span) {
+                const gridSize = Math.max(100, Math.ceil((span * 2.5) / 50) * 50);
+                const gridDivisions = Math.max(10, Math.round(gridSize / (span < 100 ? 5 : 50)));
+
+                this.scene.remove(this.gridHelper);
+                this.gridHelper = new THREE.GridHelper(gridSize, gridDivisions, 0x444444, 0x2a2a2a);
+                this.scene.add(this.gridHelper);
+
+                this.scene.remove(this.axesHelper);
+                this.axesHelper = new THREE.AxesHelper(Math.max(20, span * 0.4));
+                this.scene.add(this.axesHelper);
             }
 
             // ---------------------------------------------------------------
@@ -778,13 +889,23 @@
                 });
             }
 
-            selectChild(name) {
-                this.selectedName = name;
-                const focus = this.currentFocusNode();
-                const child = findChild(focus, name);
-                const mesh = this.meshByName[name];
+            // Position/status editing only works when the selected node is a
+            // *direct* child of the root: /layout and /status only ever
+            // address a site's direct children. Normally that's the same
+            // thing as focusPath being empty, but "show all levels" can
+            // render (and let you select) a leaf many levels deeper while
+            // still focused at the root, so both conditions are checked.
+            isEditableSelection(focus, node) {
+                return this.focusPath.length === 0 && focus.children.some((c) => c.name === node.name);
+            }
 
-                if (mesh && this.focusPath.length === 0 && !child.part_ref) {
+            selectChild(key) {
+                this.selectedName = key;
+                const focus = this.currentFocusNode();
+                const node = this.renderNodeByKey[key];
+                const mesh = this.meshByName[key];
+
+                if (mesh && node && this.isEditableSelection(focus, node) && !node.part_ref) {
                     this.transformControls.attach(mesh);
                 } else {
                     this.transformControls.detach();
@@ -792,25 +913,25 @@
 
                 this.renderContentsList(focus);
                 this.renderSelectedPanel();
-                for (const n of Object.keys(this.meshByName)) this.colorMesh(n, findChild(focus, n));
+                for (const k of Object.keys(this.meshByName)) this.colorMesh(k, this.renderNodeByKey[k]);
             }
 
             // The one place the three possible "Selected" panels are chosen:
             // a parts-library leaf always gets the absorbed part view
             // (regardless of depth); otherwise, position/status editing only
-            // works at the root (the /layout and /status endpoints only ever
-            // address a site's direct children), so anything deeper gets a
-            // read-only panel.
+            // works for a direct child of the root (see isEditableSelection),
+            // so anything deeper -- or any leaf shown via "show all levels"
+            // that isn't itself a direct child -- gets a read-only panel.
             renderSelectedPanel() {
                 const focus = this.currentFocusNode();
-                const selected = findChild(focus, this.selectedName);
+                const selected = this.renderNodeByKey[this.selectedName];
                 if (!selected) {
                     this.selectedBodyEl.innerHTML = '<div class="no-selection">Click a node to select it</div>';
                     return;
                 }
                 if (selected.part_ref) {
                     this.renderPartPanel(selected);
-                } else if (this.focusPath.length === 0) {
+                } else if (this.isEditableSelection(focus, selected)) {
                     this.renderEditablePanel(selected);
                 } else {
                     this.renderGenericPanel(selected);
@@ -933,14 +1054,15 @@
             }
 
             rebuildSingleMesh(node) {
-                const mesh = this.meshByName[node.name];
+                const key = nodeKey(node);
+                const mesh = this.meshByName[key];
                 if (!mesh) return;
-                const bounds = node.world_bounds || this.placeholderBounds(node, 0);
+                const bounds = this.boundsFor(node, 0);
                 const { size, center } = this.boxFromBounds(bounds);
                 mesh.scale.set(size[0] || 1, size[1] || 1, size[2] || 1);
                 mesh.position.set(center[0], center[1], center[2]);
                 this.updateBuildVolumeIndicator(node, bounds);
-                if (this.selectedName === node.name) this.transformControls.attach(mesh);
+                if (this.selectedName === key) this.transformControls.attach(mesh);
             }
 
             // ---------------------------------------------------------------
@@ -974,8 +1096,7 @@
             // forward; this is its inverse (drag position -> apothecary).
             onGizmoDrag() {
                 if (!this.selectedName || this.focusPath.length !== 0) return;
-                const focus = this.currentFocusNode();
-                const node = findChild(focus, this.selectedName);
+                const node = this.renderNodeByKey[this.selectedName];
                 const mesh = this.meshByName[this.selectedName];
                 if (!node || !mesh || !node.footprint) return;
 
@@ -1019,8 +1140,15 @@
                     this.violations = data.violations;
                     this.isValid = data.is_valid;
                     if (data.scad) this.codeContentEl.textContent = data.scad;
+                    // this.tree is now a brand new object from the server --
+                    // renderNodeByKey must be rebuilt against it (not a full
+                    // renderFocus(), which would also reset the camera and
+                    // grid mid-edit), or the next edit would mutate a node
+                    // already disconnected from this.tree and never reach it.
                     const focus = this.currentFocusNode();
-                    focus.children.forEach((child) => this.rebuildSingleMesh(child));
+                    const renderNodes = this.currentRenderNodes(focus);
+                    this.rebuildRenderNodeByKey(focus, renderNodes);
+                    renderNodes.forEach((node) => this.rebuildSingleMesh(node));
                     this.renderViolations();
                     this.renderSelectedPanel();
                     this.setStatus(this.isValid ? 'Layout valid' : 'Layout has violations', this.isValid ? 'success' : 'error');
@@ -1047,8 +1175,7 @@
                     ? 'Layout valid'
                     : `${this.violations.length} violation${this.violations.length === 1 ? '' : 's'}`;
                 this.validityEl.className = 'validity-indicator ' + (this.isValid ? 'valid' : 'invalid');
-                const focus = this.currentFocusNode();
-                for (const n of Object.keys(this.meshByName)) this.colorMesh(n, findChild(focus, n));
+                for (const key of Object.keys(this.meshByName)) this.colorMesh(key, this.renderNodeByKey[key]);
             }
 
             // Re-fetches the whole tree (status/violations/positions may have
@@ -1200,18 +1327,24 @@
                 this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
                 this.raycaster.setFromCamera(this.pointer, this.camera);
                 const intersects = this.raycaster.intersectObjects(Object.values(this.meshByName), false);
-                return intersects.length ? intersects[0].object.userData.name : null;
+                return intersects.length ? intersects[0].object.userData.key : null;
             }
 
             onPointerDown(event) {
                 if (this.transformControls.dragging) return;
-                const name = this.raycastChild(event);
-                if (name) this.selectChild(name);
+                const key = this.raycastChild(event);
+                if (key) this.selectChild(key);
             }
 
             onDoubleClick(event) {
-                const name = this.raycastChild(event);
-                if (name) this.zoomIn(name);
+                // zoomIn expects a direct child's bare name; a "show all
+                // levels" key can be a deeper dotted path instead, but
+                // zoomIn only ever acts on a node with children to zoom
+                // into, and every node this renders is a leaf (zero
+                // children) in that mode -- so this is always a safe no-op
+                // there, not a crash.
+                const key = this.raycastChild(event);
+                if (key) this.zoomIn(key);
             }
 
             // Scroll dollies the camera as usual; once OrbitControls clamps
@@ -1368,31 +1501,33 @@
             // working, and re-applies the same status/violation/selection
             // coloring every mesh gets.
             upgradeMesh(node, realMesh) {
-                const existing = this.meshByName[node.name];
+                const key = nodeKey(node);
+                const existing = this.meshByName[key];
                 if (!existing) return; // navigated away since the wave started
                 this.scene.remove(existing);
                 existing.geometry.dispose();
                 existing.material.dispose();
-                realMesh.userData.name = node.name;
+                realMesh.userData.key = key;
                 this.scene.add(realMesh);
-                this.meshByName[node.name] = realMesh;
-                this.colorMesh(node.name, node);
-                if (this.selectedName === node.name) this.transformControls.attach(realMesh);
+                this.meshByName[key] = realMesh;
+                this.colorMesh(key, node);
+                if (this.selectedName === key) this.transformControls.attach(realMesh);
             }
 
-            // The wave is exactly the set of nodes with a mesh on screen right
-            // now (the current focus's children) -- upgrading anything else
-            // (the focus itself, its parent) has nowhere to land until a
+            // The wave is exactly the set of nodes with a mesh on screen
+            // right now (renderFocus's renderNodes -- direct children
+            // normally, every leaf when "show all levels" is on). Upgrading
+            // anything not currently rendered has nowhere to land until a
             // geometry cache exists to carry a prefetch across a zoom, which
             // is real future work, not this increment. Within that set,
             // "wave" is the sequential await order below: each mesh upgrades
             // as its own load resolves, not all-or-nothing.
-            async scheduleWaveLoad(focusNode) {
+            async scheduleWaveLoad(renderNodes) {
                 // A generation counter: if the user navigates again before a
                 // slow STL fetch resolves, that stale result must not
                 // upgrade a mesh belonging to the level they've since left.
                 const generation = ++this.loadGeneration;
-                for (const node of focusNode.children) {
+                for (const node of renderNodes) {
                     const mesh = await this.loadNodeGeometry(node);
                     if (mesh && generation === this.loadGeneration) this.upgradeMesh(node, mesh);
                 }
