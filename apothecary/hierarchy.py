@@ -21,6 +21,7 @@ Vocabulary (outermost to innermost), per the ADR:
 
 from __future__ import annotations
 
+import itertools
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
@@ -140,6 +141,67 @@ class Substructure(BaseModel):
 Substructure.model_rebuild()
 
 
+class LayoutViolation(BaseModel):
+    """One concrete way a Site's Structures fail to coexist in space."""
+
+    kind: str
+    message: str
+    structures: List[str] = Field(default_factory=list)
+
+
+class LayoutReport(BaseModel):
+    """The result of checking a Site's Structures against each other."""
+
+    violations: List[LayoutViolation] = Field(default_factory=list)
+
+    @property
+    def is_valid(self) -> bool:
+        return not self.violations
+
+
+def _penetrates(a: BoundingBox3D, b: BoundingBox3D) -> bool:
+    """True only for a genuine positive-volume overlap, not boundary contact.
+
+    ``BoundingBox3D.intersects`` is inclusive of touching faces (``<=``/``>=``),
+    which is the right general contract for that method (e.g. "does this
+    point's box touch that one") but wrong for *this* check: a Structure
+    resting exactly on another's surface — the normal case for anything
+    placed on a Site — shares a boundary plane by design, not by defect.
+    """
+    return (
+        a.min_point.x < b.max_point.x
+        and a.max_point.x > b.min_point.x
+        and a.min_point.y < b.max_point.y
+        and a.max_point.y > b.min_point.y
+        and a.min_point.z < b.max_point.z
+        and a.max_point.z > b.min_point.z
+    )
+
+
+def check_no_overlaps(structures: List["Structure"]) -> List[LayoutViolation]:
+    """Pairwise overlap check between every Structure that carries a footprint.
+
+    A Structure without a ``footprint`` is skipped, not treated as
+    non-overlapping by assumption — it simply isn't checked. Structures that
+    merely touch (e.g. one resting on another's surface) are not violations;
+    see :func:`_penetrates`.
+    """
+    bounded = [(s, s.world_bounds()) for s in structures]
+    bounded = [(s, b) for s, b in bounded if b is not None]
+
+    violations: List[LayoutViolation] = []
+    for (structure_a, bounds_a), (structure_b, bounds_b) in itertools.combinations(bounded, 2):
+        if _penetrates(bounds_a, bounds_b):
+            violations.append(
+                LayoutViolation(
+                    kind="overlap",
+                    message=f"{structure_a.name} and {structure_b.name} overlap",
+                    structures=[structure_a.name, structure_b.name],
+                )
+            )
+    return violations
+
+
 class Structure(BaseModel):
     """An independently-manufactured or independently-sourced rigid grouping within a Site."""
 
@@ -186,3 +248,12 @@ class Site(BaseModel):
 
     def render_jscad(self) -> str:
         return self.to_scene().render_jscad()
+
+    def validate(self) -> LayoutReport:
+        """Generic layout check: no two Structures physically overlap.
+
+        Site-specific rules (e.g. "must rest on this other Structure's
+        surface") are not this method's job — see, for example,
+        ``example_hierarchy.validate_garage_layout``, which builds on this.
+        """
+        return LayoutReport(violations=check_no_overlaps(self.structures))

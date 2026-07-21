@@ -26,7 +26,9 @@ a queue, or a status to.
 
 from __future__ import annotations
 
-from .hierarchy import Feature, Site, Structure, Substructure
+from typing import List
+
+from .hierarchy import Feature, LayoutReport, LayoutViolation, Site, Structure, Substructure
 from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
 from .primitives import Cube, Cylinder
@@ -179,3 +181,55 @@ def create_example_site() -> Site:
     ]
 
     return Site(name="Garage", structures=[workbench, *printers])
+
+
+def validate_garage_layout(site: Site) -> LayoutReport:
+    """Garage-specific layout rules, layered on top of ``Site.validate()``'s generic overlap check.
+
+    Every Structure other than the workbench must rest exactly on the
+    workbench's top surface and stay within its footprint -- a scenario
+    rule ("things sit on the bench"), not a general hierarchy invariant, so
+    it lives here rather than in ``hierarchy.py``.
+    """
+    violations: List[LayoutViolation] = list(site.validate().violations)
+
+    bench = next((s for s in site.structures if s.name == "workbench"), None)
+    if bench is None:
+        return LayoutReport(violations=violations)
+
+    bench_bounds = bench.world_bounds()
+    if bench_bounds is None:
+        return LayoutReport(violations=violations)
+
+    for structure in site.structures:
+        if structure is bench:
+            continue
+        bounds = structure.world_bounds()
+        if bounds is None:
+            continue
+
+        if bounds.min_point.z != bench_bounds.max_point.z:
+            violations.append(
+                LayoutViolation(
+                    kind="not_on_bench",
+                    message=(
+                        f"{structure.name} is not resting on the bench surface "
+                        f"(z={bounds.min_point.z}, bench top={bench_bounds.max_point.z})"
+                    ),
+                    structures=[structure.name],
+                )
+            )
+            continue
+
+        within_x = bench_bounds.min_point.x <= bounds.min_point.x and bounds.max_point.x <= bench_bounds.max_point.x
+        within_y = bench_bounds.min_point.y <= bounds.min_point.y and bounds.max_point.y <= bench_bounds.max_point.y
+        if not (within_x and within_y):
+            violations.append(
+                LayoutViolation(
+                    kind="out_of_bounds",
+                    message=f"{structure.name} overhangs the bench",
+                    structures=[structure.name],
+                )
+            )
+
+    return LayoutReport(violations=violations)

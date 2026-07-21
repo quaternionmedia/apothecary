@@ -13,7 +13,9 @@ from apothecary.example_hierarchy import (
     BENCH_TOP_Z,
     BENCH_WIDTH,
     create_example_site,
+    validate_garage_layout,
 )
+from apothecary.models.vectors import Vector3D
 
 
 def _printer_structures(site):
@@ -76,3 +78,43 @@ def test_site_renders_valid_jscad():
     rendered = site.render_jscad()
     assert "export const main" in rendered
     assert "cube(" in rendered
+
+
+def test_validate_garage_layout_is_clean_by_default():
+    site = create_example_site()
+    report = validate_garage_layout(site)
+    assert report.is_valid
+    assert report.violations == []
+
+
+def test_validate_garage_layout_catches_overlap():
+    site = create_example_site()
+    printer_1, printer_2 = site.structures[1], site.structures[2]
+    printer_2.position = Vector3D(x=printer_1.position.x, y=printer_1.position.y, z=printer_1.position.z)
+
+    report = validate_garage_layout(site)
+    assert not report.is_valid
+    kinds = {v.kind for v in report.violations}
+    assert "overlap" in kinds
+
+
+def test_validate_garage_layout_catches_overhang():
+    site = create_example_site()
+    printer_1 = site.structures[1]
+    printer_1.position = Vector3D(x=BENCH_WIDTH - 10, y=printer_1.position.y, z=printer_1.position.z)
+
+    report = validate_garage_layout(site)
+    assert not report.is_valid
+    kinds = {v.kind for v in report.violations}
+    assert "out_of_bounds" in kinds
+
+
+def test_validate_garage_layout_catches_wrong_height():
+    site = create_example_site()
+    printer_1 = site.structures[1]
+    printer_1.position = Vector3D(x=printer_1.position.x, y=printer_1.position.y, z=0)
+
+    report = validate_garage_layout(site)
+    assert not report.is_valid
+    kinds = {v.kind for v in report.violations}
+    assert "not_on_bench" in kinds

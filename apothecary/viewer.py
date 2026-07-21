@@ -82,6 +82,38 @@ class ViewerRenderer:
             default_part=default_part or "",
         )
 
+    def render_site_viewer(
+        self, site_names: List[str], base_url: str, default_site: Optional[str] = None
+    ) -> str:
+        """Render the Site/Structure hierarchy viewer HTML page (prototype).
+
+        Args:
+            site_names: List of available site names (see apothecary.api's site registry)
+            base_url: Base URL for API calls
+            default_site: Site to auto-load on page load
+
+        Returns:
+            Complete HTML page as a string
+        """
+        template = self.env.get_template("site_viewer.html.j2")
+
+        if site_names:
+            options_html = "\n".join(
+                f'<option value="{html.escape(name)}"{" selected" if name == default_site else ""}>{html.escape(name)}</option>'
+                for name in site_names
+            )
+            select_disabled = ""
+        else:
+            options_html = '<option value="" disabled>No sites found</option>'
+            select_disabled = " disabled"
+
+        return template.render(
+            site_options=options_html,
+            select_disabled=select_disabled,
+            base_url=base_url.rstrip("/"),
+            default_site=default_site or "",
+        )
+
 
 # Module-level singleton for convenience
 _renderer: Optional[ViewerRenderer] = None
@@ -110,3 +142,20 @@ def render_viewer_page(
         Complete HTML page as a string
     """
     return get_viewer_renderer().render_viewer(part_names, base_url, default_part)
+
+
+def render_site_viewer_page(
+    site_names: List[str], base_url: str, default_site: Optional[str] = None
+) -> str:
+    """
+    Convenience function to render the Site/Structure hierarchy viewer page (prototype).
+
+    Args:
+        site_names: List of available site names
+        base_url: Base URL for API calls
+        default_site: Site to auto-load on page load
+
+    Returns:
+        Complete HTML page as a string
+    """
+    return get_viewer_renderer().render_site_viewer(site_names, base_url, default_site)

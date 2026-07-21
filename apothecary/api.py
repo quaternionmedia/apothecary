@@ -19,9 +19,12 @@ from typing import Dict, List
 
 from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from .booleans import Difference, Intersection, Union
+from .example_hierarchy import create_example_site, validate_garage_layout
+from .hierarchy import Structure
+from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
 from .primitives import Cube, Cylinder, Sphere
 from .projects.parts.skeleton import ROOT
@@ -30,7 +33,7 @@ from .projects.registry import scan_projects
 from .scene import Scene
 from .templates import TemplateRenderer
 from .transforms import Rotate, Scale, Translate
-from .viewer import render_viewer_page
+from .viewer import render_site_viewer_page, render_viewer_page
 
 
 async def _generate_missing_stls():
@@ -532,6 +535,118 @@ async def get_part_files(name: str, request: Request):
     base_url = str(request.base_url).rstrip("/")
 
     return part_files.to_api_dict(base_url)
+
+
+# =============================================================================
+# Site/Structure/Substructure/Feature hierarchy (prototype, unratified)
+#
+# Sites carry no persistence layer: each request rebuilds the registered
+# site fresh from its factory and applies any position overrides the client
+# sends, the same stateless pattern /render already uses for Scene. There is
+# no server-side "current state" between requests -- the client is expected
+# to hold the full set of position overrides and resend it each time.
+# =============================================================================
+
+_SITE_REGISTRY = {
+    "garage": (create_example_site, validate_garage_layout),
+}
+
+
+def _load_site(name: str):
+    entry = _SITE_REGISTRY.get(name)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Site '{name}' not found")
+    factory, validator = entry
+    return factory(), validator
+
+
+def _bounds_dict(bounds: BoundingBox3D | None) -> Dict[str, List[float]] | None:
+    if bounds is None:
+        return None
+    return {
+        "min": [bounds.min_point.x, bounds.min_point.y, bounds.min_point.z],
+        "max": [bounds.max_point.x, bounds.max_point.y, bounds.max_point.z],
+    }
+
+
+def _structure_summary(structure: Structure) -> Dict[str, object]:
+    return {
+        "name": structure.name,
+        "material": structure.material,
+        "position": {
+            "x": structure.position.x,
+            "y": structure.position.y,
+            "z": structure.position.z,
+        },
+        "footprint": _bounds_dict(structure.footprint),
+        "world_bounds": _bounds_dict(structure.world_bounds()),
+        "substructures": [
+            {
+                "name": sub.name,
+                "features": [f.name for f in (*sub.additions, *sub.subtractions)],
+            }
+            for sub in structure.substructures
+        ],
+    }
+
+
+def _site_payload(site, report) -> Dict[str, object]:
+    return {
+        "name": site.name,
+        "structures": [_structure_summary(s) for s in site.structures],
+        "violations": [v.model_dump() for v in report.violations],
+        "is_valid": report.is_valid,
+    }
+
+
+class PositionOverride(BaseModel):
+    x: float
+    y: float
+    z: float
+
+
+class LayoutRequest(BaseModel):
+    positions: Dict[str, PositionOverride] = Field(default_factory=dict)
+
+
+@app.get("/sites")
+async def list_sites():
+    return sorted(_SITE_REGISTRY.keys())
+
+
+@app.get("/sites/{name}")
+async def get_site(name: str):
+    site, validator = _load_site(name)
+    return _site_payload(site, validator(site))
+
+
+@app.post("/sites/{name}/layout")
+async def update_site_layout(name: str, body: LayoutRequest):
+    """Apply position overrides, re-validate, and return regenerated OpenSCAD.
+
+    ``body.positions`` need only include the structures the client has
+    moved from their defaults; everything else keeps the factory's position.
+    """
+    site, validator = _load_site(name)
+    for structure in site.structures:
+        override = body.positions.get(structure.name)
+        if override is not None:
+            structure.position = Vector3D(x=override.x, y=override.y, z=override.z)
+
+    payload = _site_payload(site, validator(site))
+    payload["scad"] = site.render()
+    return payload
+
+
+@app.get("/viewer/sites/{name}", response_class=HTMLResponse)
+async def site_viewer(name: str, request: Request):
+    """Site/Structure hierarchy viewer: box-per-structure 3D manipulation (prototype)."""
+    if name not in _SITE_REGISTRY:
+        raise HTTPException(status_code=404, detail=f"Site '{name}' not found")
+    base_url = str(request.base_url).rstrip("/")
+    return HTMLResponse(
+        render_site_viewer_page(sorted(_SITE_REGISTRY.keys()), base_url, default_site=name)
+    )
 
 
 @app.get("/openscad/status")
