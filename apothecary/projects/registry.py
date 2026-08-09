@@ -125,6 +125,11 @@ def scan_projects(root: Path) -> List[ProjectInfo]:
                 )
             )
 
+        # Also scan for submodule parts (wrappers that point to nested submodule SCAD files)
+        discovered_names = {p.name for p in items if p.kind == "part"}
+        submodule_parts = _scan_submodule_parts(root, discovered_names)
+        items.extend(submodule_parts)
+
     return items
 
 
@@ -165,3 +170,62 @@ def _locate_wrapper_for_part(scad_path: Path) -> str | None:
     if candidate.exists():
         return f"apothecary.projects.parts.{module_name}"
     return None
+
+
+def _scan_submodule_parts(root: Path, already_discovered: set) -> List[ProjectInfo]:
+    """
+    Scan for part wrappers that reference submodule SCAD files.
+
+    These are parts like 'gridfinity' where the SCAD file lives inside a git
+    submodule and wasn't discovered by the normal directory scan.
+    """
+    items: List[ProjectInfo] = []
+    parts_pkg_dir = Path(__file__).resolve().parent / "parts"
+
+    # Known submodule parts - wrappers that reference nested SCAD files
+    # Format: (wrapper_module_name, part_name)
+    SUBMODULE_PARTS = [
+        ("gridfinity", "gridfinity"),
+    ]
+
+    for module_name, part_name in SUBMODULE_PARTS:
+        if part_name in already_discovered:
+            continue
+
+        wrapper_file = parts_pkg_dir / f"{module_name}.py"
+        if not wrapper_file.exists():
+            continue
+
+        # Try to import and get the DEFAULT instance
+        try:
+            from importlib import import_module
+
+            mod = import_module(f"apothecary.projects.parts.{module_name}")
+            if hasattr(mod, "DEFAULT"):
+                part = mod.DEFAULT
+                scad_path = part.source_file
+
+                items.append(
+                    ProjectInfo(
+                        name=part_name,
+                        path=scad_path,
+                        kind="part",
+                        files=[scad_path] if scad_path.exists() else [],
+                        readme=(root / "parts" / part_name / "README.md").exists(),
+                        wrapper=f"apothecary.projects.parts.{module_name}",
+                    )
+                )
+        except Exception:
+            # If import fails, still register as a known part
+            items.append(
+                ProjectInfo(
+                    name=part_name,
+                    path=root / "parts" / part_name,
+                    kind="part",
+                    files=[],
+                    readme=(root / "parts" / part_name / "README.md").exists(),
+                    wrapper=f"apothecary.projects.parts.{module_name}",
+                )
+            )
+
+    return items

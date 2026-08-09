@@ -19,6 +19,12 @@ Welcome to the Apothecary documentation. This index links to all available guide
 | [Parts Authoring](parts-authoring.md) | How to create and register new parts |
 | [Geometry Models](models.md) | Vectors, bounds, colors, shapes, and units |
 
+## External Libraries
+
+| Document | Description |
+|----------|-------------|
+| [Gridfinity](../parts/gridfinity/README.md) | Modular storage bin system (requires submodule) |
+
 ## Reference
 
 | Document | Description |

@@ -67,7 +67,7 @@ def parts_render(name: str, params_json: str | None, template: str | None, outpu
         try:
             params_data = json.loads(params_json)
         except Exception as e:
-            raise click.ClickException(f"Invalid JSON for --params-json: {e}")
+            raise click.ClickException(f"Invalid JSON for --params-json: {e}") from e
     if part.params_model:
         params = part.params_model(**params_data)
         params_json_out = params.model_dump_json()
@@ -138,6 +138,42 @@ def parts_generate_stl(name: str | None, generate_all: bool, force: bool, timeou
             scad_path = item.path
             stl_path = scad_path.with_suffix(".stl")
 
+            # Try to load part wrapper for display_rotation and custom STL path
+            rotation = None
+            can_generate = True
+            skip_reason = None
+            custom_openscad = None
+            part = None
+            try:
+                mod = _load_part_wrapper(item.name)
+                if hasattr(mod, "DEFAULT"):
+                    part = mod.DEFAULT
+                    # Use custom STL output path if available
+                    if hasattr(part, "get_stl_output_path"):
+                        stl_path = part.get_stl_output_path()
+                    # Check if part can generate STL
+                    if hasattr(part, "can_generate_stl"):
+                        can_gen, reason = part.can_generate_stl()
+                        if not can_gen:
+                            can_generate = False
+                            skip_reason = reason
+                    # Get custom OpenSCAD path (e.g., nightly build)
+                    if hasattr(part, "get_openscad_path"):
+                        custom_openscad = part.get_openscad_path()
+                    # Get display rotation
+                    if hasattr(part, "display_rotation"):
+                        rot = part.display_rotation
+                        if rot and rot.to_list() != [0, 0, 0]:
+                            rotation = rot.to_list()
+            except Exception:
+                pass  # Fall back to defaults
+
+            # Skip parts that can't generate STL
+            if not can_generate:
+                _safe_echo(f"  • {item.name}: Cannot generate ({skip_reason})")
+                skip_count += 1
+                continue
+
             # Check if we should skip
             if stl_path.exists() and not force:
                 _safe_echo(f"  • {item.name}: STL exists (use --force to regenerate)")
@@ -146,23 +182,20 @@ def parts_generate_stl(name: str | None, generate_all: bool, force: bool, timeou
 
             click.echo(f"  Generating {item.name}...", nl=False)
 
-            # Try to load part wrapper for display_rotation
-            rotation = None
-            try:
-                mod = _load_part_wrapper(item.name)
-                if hasattr(mod, "DEFAULT") and hasattr(mod.DEFAULT, "display_rotation"):
-                    rot = mod.DEFAULT.display_rotation
-                    if rot and rot.to_list() != [0, 0, 0]:
-                        rotation = rot.to_list()
-            except Exception:
-                pass  # Fall back to no rotation
+            # Use custom OpenSCAD path if needed
+            part_renderer = renderer
+            if custom_openscad and custom_openscad != renderer.openscad_path:
+                from ..projects.parts.stl_renderer import OpenSCADRenderer
+
+                part_renderer = OpenSCADRenderer(openscad_path=str(custom_openscad))
+                click.echo(f" (using {custom_openscad.name})", nl=False)
 
             if rotation:
-                result = renderer.render_stl_with_rotation(
+                result = part_renderer.render_stl_with_rotation(
                     scad_path, stl_path, rotation=rotation, timeout=timeout
                 )
             else:
-                result = renderer.render_stl(scad_path, stl_path, timeout=timeout)
+                result = part_renderer.render_stl(scad_path, stl_path, timeout=timeout)
 
             if result.success:
                 click.secho(f" ✓ ({result.render_time_seconds:.1f}s)", fg="green")
@@ -185,7 +218,23 @@ def parts_generate_stl(name: str | None, generate_all: bool, force: bool, timeou
         if not part.source_file.exists():
             raise click.ClickException(f"Source file not found: {part.source_file}")
 
-        stl_path = part.source_file.with_suffix(".stl")
+        # Check if this part has special requirements
+        if hasattr(part, "can_generate_stl"):
+            can_gen, reason = part.can_generate_stl()
+            if not can_gen:
+                raise click.ClickException(f"Cannot generate STL for '{name}': {reason}")
+
+        # Use part-specific OpenSCAD path if available (e.g., nightly build)
+        part_renderer = renderer
+        if hasattr(part, "get_openscad_path"):
+            custom_path = part.get_openscad_path()
+            if custom_path and custom_path != renderer.openscad_path:
+                from ..projects.parts.stl_renderer import OpenSCADRenderer
+
+                part_renderer = OpenSCADRenderer(openscad_path=str(custom_path))
+                click.echo(f"Using OpenSCAD: {custom_path} (required by {name})")
+
+        stl_path = part.get_stl_output_path()
 
         if stl_path.exists() and not force:
             click.echo(f"STL already exists: {stl_path}")
@@ -198,11 +247,11 @@ def parts_generate_stl(name: str | None, generate_all: bool, force: bool, timeou
         rotation = part.display_rotation.to_list() if part.display_rotation else None
         if rotation and rotation != [0, 0, 0]:
             click.echo(f"  Applying display rotation: {rotation}")
-            result = renderer.render_stl_with_rotation(
+            result = part_renderer.render_stl_with_rotation(
                 part.source_file, stl_path, rotation=rotation, timeout=timeout
             )
         else:
-            result = renderer.render_stl(part.source_file, stl_path, timeout=timeout)
+            result = part_renderer.render_stl(part.source_file, stl_path, timeout=timeout)
 
         if result.success:
             _safe_echo(f"✓ Generated: {stl_path} ({result.render_time_seconds:.1f}s)")
