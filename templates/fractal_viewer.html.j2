@@ -229,6 +229,17 @@
             <label class="toolbar-toggle" title="Snap dragged positions to a 50mm grid -- keeps hand-placed layouts exact instead of off by a few millimeters">
                 <input type="checkbox" id="snap-toggle" checked> Snap to grid
             </label>
+            <label class="toolbar-toggle" title="How much of each compound node to draw. Full renders its real geometry; Black box draws only its bounding extent; Dot collapses it to a marker. Leaves always render in full -- they have no subassembly to stand in for. Set per node from the Selected panel.">
+                Detail
+                <select id="detail-mode">
+                    <option value="full">Full</option>
+                    <option value="box">Black box</option>
+                    <option value="dot">Dot</option>
+                </select>
+            </label>
+            <label class="toolbar-toggle" title="Outline each compound node's full assembly extent, so a subassembly reads as one thing even when its parts are drawn separately">
+                <input type="checkbox" id="overlay-toggle" checked> Assembly outlines
+            </label>
             <div class="spacer"></div>
             <span id="validity-indicator" class="validity-indicator valid">Layout valid</span>
         </div>
@@ -339,6 +350,31 @@
         const PLACEHOLDER_PITCH = 60;  // mm -- spacing between footprint-less siblings
         const WHEEL_RESISTANCE_THRESHOLD = 500;
         const SNAP_INCREMENT = 50;    // mm -- matches WALL_THICKNESS; fine enough for by-hand placement
+
+        // How far out of the current level you can dolly, as a multiple of the
+        // framing distance. This is also where the "scroll past the edge to
+        // zoom out" gesture fires (see onWheel), because that gesture triggers
+        // at the clamp -- so raising it buys viewing range and moves the
+        // gesture's edge outward by the same amount, deliberately.
+        const MAX_DOLLY_FACTOR = 8;
+        const MIN_DOLLY_FACTOR = 0.08;
+        // The far plane has to clear the furthest the camera can dolly plus the
+        // scene's own extent behind the target, or the world is clipped away
+        // exactly when you pull back to look at the largest scale. This used to
+        // be a fixed 20000 while the dolly clamp reached ~54000 on the garage.
+        const FAR_PLANE_HEADROOM = 2.5;
+        const MIN_FAR_PLANE = 40000;
+
+        // Detail levels for a compound node (one with children). A leaf has no
+        // subassembly to stand in for, so it always renders full.
+        const DETAIL_FULL = 'full';   // fetch or build its real geometry
+        const DETAIL_BOX = 'box';     // black box: its bounding box, nothing inside
+        const DETAIL_DOT = 'dot';     // a marker at its center, minimal footprint
+        const DETAIL_LABELS = { full: 'Full', box: 'Black box', dot: 'Dot' };
+        const COMPOUND_OVERLAY_COLOR = 0xffcc44;
+        const OVERLAY_INFLATE = 1.02;  // keeps the outline off the node's own faces
+        const DOT_RADIUS_FRACTION = 0.06;  // of the node's own span
+        const DOT_MIN_RADIUS = 8;          // mm -- still clickable when zoomed out
 
         function maxDepth(node) {
             if (!node.children.length) return 0;
@@ -477,6 +513,8 @@
                 this.loadBtn = document.getElementById('load-btn');
                 this.zoomOutBtn = document.getElementById('zoom-out-btn');
                 this.snapToggle = document.getElementById('snap-toggle');
+                this.detailModeEl = document.getElementById('detail-mode');
+                this.overlayToggle = document.getElementById('overlay-toggle');
                 this.breadcrumbEl = document.getElementById('breadcrumb');
                 this.minimapEl = document.getElementById('minimap');
                 this.categoryFiltersEl = document.getElementById('category-filters');
@@ -511,6 +549,12 @@
                                                  // hierarchy tree -- independent of whether
                                                  // that subtree is actually rendered
                 this.buildVolumeMeshByName = {};
+                this.compoundOverlayByKey = {};  // nodeKey() -> the assembly-extent wireframe
+                this.showCompoundOverlays = true;
+                this.detailMode = DETAIL_FULL;   // default for every compound node
+                this.detailOverrides = new Map();  // nodeKey() -> detail level, set per node
+                                                    // from the Selected panel; survives a
+                                                    // re-render but not a zoom to a new level
                 this.violationNames = new Set();
                 this.wheelResistance = 0;
                 this.stlLoader = new STLLoader();
@@ -578,6 +622,19 @@
                 this.zoomOutBtn.addEventListener('click', () => this.zoomOut());
                 this.snapToggle.addEventListener('change', () => {
                     this.transformControls.setTranslationSnap(this.snapToggle.checked ? SNAP_INCREMENT : null);
+                });
+                // Changing the global default drops every per-node override:
+                // otherwise picking "Dot" would silently leave whichever nodes
+                // you had already set to Full still rendering full, and the
+                // control would look broken rather than overridden.
+                this.detailModeEl.addEventListener('change', () => {
+                    this.detailMode = this.detailModeEl.value;
+                    this.detailOverrides.clear();
+                    this.renderFocus();
+                });
+                this.overlayToggle.addEventListener('change', () => {
+                    this.showCompoundOverlays = this.overlayToggle.checked;
+                    this.renderFocus();
                 });
                 this.canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
                 this.canvas.addEventListener('dblclick', (e) => this.onDoubleClick(e));
@@ -795,8 +852,14 @@
                     mesh.geometry.dispose();
                     mesh.material.dispose();
                 }
+                for (const overlay of Object.values(this.compoundOverlayByKey)) {
+                    this.scene.remove(overlay);
+                    overlay.geometry.dispose();
+                    overlay.material.dispose();
+                }
                 this.meshByName = {};
                 this.buildVolumeMeshByName = {};
+                this.compoundOverlayByKey = {};
             }
 
             // Axis convention throughout: apothecary (x, y, z) with z-up maps
@@ -852,10 +915,79 @@
                 return envelopeBounds(node) || this.placeholderBounds(node, index);
             }
 
-            buildChildMeshes(children) {
-                children.forEach((child, index) => {
+            // A leaf is always drawn in full -- "black box" and "dot" exist to
+            // stand in for a subassembly, and a leaf has no inside to hide. So
+            // the detail level only ever applies to a node with children, and
+            // a per-node override beats the toolbar default.
+            effectiveDetailFor(node, key) {
+                if (!node.children || !node.children.length) return DETAIL_FULL;
+                return this.detailOverrides.get(key) || this.detailMode;
+            }
+
+            // A marker sized from the node it replaces rather than a fixed
+            // radius: one constant would be invisible on the garage and
+            // swallow a Feature. Kept clickable at the far end by a floor.
+            buildDotMesh(size, center) {
+                const span = Math.max(size[0], size[1], size[2]);
+                const radius = Math.max(DOT_MIN_RADIUS, span * DOT_RADIUS_FRACTION);
+                const geometry = new THREE.SphereGeometry(radius, 16, 12);
+                // Colour is left to colorMesh, like every other mesh -- it
+                // recolours the whole scene on each selection change, so a
+                // colour set here would be overwritten on the first click.
+                const material = new THREE.MeshPhongMaterial({ transparent: true, opacity: 0.9 });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(center[0], center[1], center[2]);
+                return mesh;
+            }
+
+            // The outline is what makes a subassembly read as one object
+            // when its children are drawn separately -- without it, an
+            // expanded subsystem is just loose parts sharing a neighbourhood.
+            // Slightly inflated so it never z-fights the node's own box.
+            addCompoundOverlay(key, size, center) {
+                const geometry = new THREE.BoxGeometry(1, 1, 1);
+                const edges = new THREE.EdgesGeometry(geometry);
+                const overlay = new THREE.LineSegments(
+                    edges,
+                    new THREE.LineBasicMaterial({
+                        color: COMPOUND_OVERLAY_COLOR, transparent: true, opacity: 0.55,
+                    })
+                );
+                overlay.scale.set((size[0] || 1) * OVERLAY_INFLATE, (size[1] || 1) * OVERLAY_INFLATE, (size[2] || 1) * OVERLAY_INFLATE);
+                overlay.position.set(center[0], center[1], center[2]);
+                overlay.renderOrder = 1;
+                this.scene.add(overlay);
+                this.compoundOverlayByKey[key] = overlay;
+            }
+
+            // ``indexOffset`` keeps a single-node rebuild (rebuildDetailForKey)
+            // landing on the same synthetic placeholder slot it had in the
+            // full pass -- placeholderBounds positions footprint-less siblings
+            // purely by index, so rebuilding one as index 0 would teleport it.
+            buildChildMeshes(children, indexOffset = 0) {
+                children.forEach((child, i) => {
+                    const index = indexOffset + i;
                     const bounds = this.boundsFor(child, index);
                     const { size, center } = this.boxFromBounds(bounds);
+                    const key = nodeKey(child);
+                    const detail = this.effectiveDetailFor(child, key);
+                    const isCompound = !!(child.children && child.children.length);
+
+                    if (isCompound && this.showCompoundOverlays) {
+                        this.addCompoundOverlay(key, size, center);
+                    }
+
+                    if (detail === DETAIL_DOT) {
+                        const dot = this.buildDotMesh(size, center);
+                        dot.userData.key = key;
+                        dot.userData.isPlaceholder = false;
+                        dot.userData.isDot = true;
+                        this.scene.add(dot);
+                        this.meshByName[key] = dot;
+                        this.colorMesh(key, child);
+                        this.updateBuildVolumeIndicator(child, bounds);
+                        return;
+                    }
 
                     const geometry = new THREE.BoxGeometry(1, 1, 1);
                     const material = new THREE.MeshPhongMaterial({ transparent: true, opacity: 0.65 });
@@ -868,7 +1000,6 @@
                     mesh.add(wireframe);
                     mesh.scale.set(size[0] || 1, size[1] || 1, size[2] || 1);
                     mesh.position.set(center[0], center[1], center[2]);
-                    const key = nodeKey(child);
                     mesh.userData.key = key;
                     // A unit BoxGeometry stretched to size via mesh.scale --
                     // rebuildSingleMesh needs to tell this apart from a
@@ -898,6 +1029,12 @@
                 mesh.material.color.set(isViolating ? VIOLATION_COLOR : baseColorFor(node));
                 const edges = mesh.getObjectByName('edges');
                 if (edges) edges.material.color.set(isSelected ? SELECTED_EDGE_COLOR : 0x000000);
+                // A dot has no edge wireframe to brighten, so selection shows
+                // as emissive instead -- otherwise clicking one gives no
+                // feedback at all.
+                if (mesh.userData.isDot && mesh.material.emissive) {
+                    mesh.material.emissive.set(isSelected ? SELECTED_EDGE_COLOR : 0x000000);
+                }
             }
 
             // A wireframe-only box showing the usable print area within a
@@ -967,11 +1104,35 @@
                     targetZAp + distance * 0.55,
                     targetYAp + distance * 0.7
                 );
-                this.orbitControls.minDistance = Math.max(10, maxSpan * 0.08);
-                this.orbitControls.maxDistance = Math.max(500, distance * 5);
+                this.orbitControls.minDistance = Math.max(10, maxSpan * MIN_DOLLY_FACTOR);
+                this.orbitControls.maxDistance = Math.max(2000, distance * MAX_DOLLY_FACTOR);
                 this.orbitControls.update();
 
+                this.updateCameraClipping(maxSpan);
                 this.updateHelpersForSpan(maxSpan);
+            }
+
+            // The far plane was a fixed 20000 set once at startup, while the
+            // dolly clamp is derived per level and reaches roughly 9x the
+            // framing distance -- about 54000 on the garage. Everything
+            // between those two numbers was being clipped away, so pulling
+            // back to look at the largest scale emptied the view instead of
+            // widening it. Both ends now move together, per level.
+            //
+            // Near moves with the scene too: holding near at 1 while far grows
+            // past 10^5 spends most of the depth buffer on the first
+            // millimetre and z-fights at the far end. It stays small enough
+            // not to clip a Feature you have zoomed right into.
+            updateCameraClipping(span) {
+                const far = Math.max(
+                    MIN_FAR_PLANE,
+                    this.orbitControls.maxDistance * FAR_PLANE_HEADROOM + span * 4
+                );
+                const near = Math.min(1, Math.max(0.05, span * 0.0004));
+                if (this.camera.far === far && this.camera.near === near) return;
+                this.camera.far = far;
+                this.camera.near = near;
+                this.camera.updateProjectionMatrix();
             }
 
             // The grid/axes helpers are fixed-size by default, which is
@@ -981,8 +1142,13 @@
             // is actually in view, the same way the old standalone part
             // viewer's updateHelpersForSize did for a single loaded part.
             updateHelpersForSpan(span) {
-                const gridSize = Math.max(100, Math.ceil((span * 2.5) / 50) * 50);
-                const gridDivisions = Math.max(10, Math.round(gridSize / (span < 100 ? 5 : 50)));
+                // Reaches further than the old 2.5x so the ground plane does
+                // not simply end mid-view once you dolly out to the new clamp;
+                // divisions are capped because cell count, not extent, is what
+                // costs anything to draw.
+                const gridSize = Math.max(100, Math.ceil((span * 6) / 50) * 50);
+                const rawDivisions = Math.round(gridSize / (span < 100 ? 5 : 50));
+                const gridDivisions = Math.min(200, Math.max(10, rawDivisions));
 
                 this.scene.remove(this.gridHelper);
                 this.gridHelper = new THREE.GridHelper(gridSize, gridDivisions, 0x444444, 0x2a2a2a);
@@ -1212,6 +1378,66 @@
                     ?.addEventListener('click', () => this.zoomIn(node.name));
             }
 
+            // Per-node detail, offered only where it means something: a leaf
+            // has no subassembly to collapse, so it gets no control rather
+            // than a control that does nothing.
+            detailAffordanceHtml(node) {
+                if (!node.children.length) return '';
+                const current = this.effectiveDetailFor(node, this.selectedName);
+                const options = Object.entries(DETAIL_LABELS)
+                    .map(([value, label]) =>
+                        `<option value="${value}"${value === current ? ' selected' : ''}>${label}</option>`)
+                    .join('');
+                return `<div class="prop-row">
+                          <label>Detail</label>
+                          <select class="detail-select" title="How much of this subassembly to draw. Overrides the toolbar default for this node only.">${options}</select>
+                        </div>`;
+            }
+
+            bindDetailAffordance() {
+                const select = this.selectedBodyEl.querySelector('.detail-select');
+                if (!select) return;
+                const key = this.selectedName;
+                select.addEventListener('change', () => {
+                    // Matching the toolbar default is stored as "no override",
+                    // so a later change to the default still reaches this node
+                    // instead of it being silently pinned.
+                    if (select.value === this.detailMode) this.detailOverrides.delete(key);
+                    else this.detailOverrides.set(key, select.value);
+                    this.rebuildDetailForKey(key);
+                });
+            }
+
+            // Rebuilds just this node rather than the whole level: a full
+            // renderFocus would reframe the camera, which is disorienting when
+            // all you did was collapse one subassembly.
+            rebuildDetailForKey(key) {
+                const node = this.renderNodeByKey[key];
+                if (!node) return;
+                const existing = this.meshByName[key];
+                if (existing) {
+                    this.transformControls.detach();
+                    this.scene.remove(existing);
+                    existing.geometry.dispose();
+                    existing.material.dispose();
+                    delete this.meshByName[key];
+                }
+                const overlay = this.compoundOverlayByKey[key];
+                if (overlay) {
+                    this.scene.remove(overlay);
+                    overlay.geometry.dispose();
+                    overlay.material.dispose();
+                    delete this.compoundOverlayByKey[key];
+                }
+                const index = this.currentRenderNodes(this.currentFocusNode())
+                    .findIndex((n) => nodeKey(n) === key);
+                this.buildChildMeshes([node], Math.max(0, index));
+                if (this.effectiveDetailFor(node, key) === DETAIL_FULL) {
+                    this.scheduleWaveLoad([node]);
+                }
+                this.renderSelectedPanel();
+            }
+
             renderGenericPanel(node) {
                 this.selectedBodyEl.innerHTML = `
                     <div class="prop-row"><label>Name</label><span>${node.name}</span></div>
@@ -1221,8 +1447,10 @@
                         Comment: ${node.comment ?? '—'}<br>
                         Footprint: ${node.footprint ? node.footprint.max.map((v, i) => (v - node.footprint.min[i]).toFixed(0)).join(' × ') + ' mm' : '—'}
                     </div>
+                    ${this.detailAffordanceHtml(node)}
                     ${this.zoomInAffordanceHtml(node)}
                 `;
+                this.bindDetailAffordance();
                 this.bindZoomInAffordance(node);
             }
 
@@ -1248,8 +1476,10 @@
                               + `<span style="display:inline-block;width:8px;height:8px;border:1px solid #${BUILD_VOLUME_COLOR.toString(16).padStart(6, '0')};vertical-align:middle;"></span>`
                             : '—'}
                     </div>
+                    ${this.detailAffordanceHtml(node)}
                     ${this.zoomInAffordanceHtml(node)}
                 `;
+                this.bindDetailAffordance();
                 for (const axis of ['x', 'y', 'z']) {
                     document.getElementById(`pos-${axis}`).addEventListener('change', (e) => {
                         node.position[axis] = parseFloat(e.target.value) || 0;
@@ -1336,6 +1566,14 @@
                     mesh.scale.set(size[0] || 1, size[1] || 1, size[2] || 1);
                 }
                 mesh.position.set(center[0], center[1], center[2]);
+                // The assembly outline is a separate scene object, so it does
+                // not inherit the drag -- without this it stays behind at the
+                // node's old position and reads as a second, phantom assembly.
+                const overlay = this.compoundOverlayByKey[key];
+                if (overlay) {
+                    overlay.scale.set((size[0] || 1) * OVERLAY_INFLATE, (size[1] || 1) * OVERLAY_INFLATE, (size[2] || 1) * OVERLAY_INFLATE);
+                    overlay.position.set(center[0], center[1], center[2]);
+                }
                 this.updateBuildVolumeIndicator(node, bounds);
                 if (this.selectedName === key) this.transformControls.attach(mesh);
             }
@@ -1825,13 +2063,21 @@
                 // upgrade a mesh belonging to the level they've since left.
                 const generation = ++this.loadGeneration;
                 for (const node of renderNodes) {
+                    // A node the user asked to see as a black box or a dot is
+                    // the one case where not fetching is the point: skipping
+                    // here is what makes the control save the render, rather
+                    // than just draw something else over it.
+                    if (this.effectiveDetailFor(node, nodeKey(node)) !== DETAIL_FULL) continue;
                     const mesh = await this.loadNodeGeometry(node);
                     if (mesh && generation === this.loadGeneration) this.upgradeMesh(node, mesh);
                 }
             }
         }
 
-        new FractalViewer();
+        // Exposed so tests can assert against the actual scene -- camera
+        // clipping, mesh counts, overlay presence -- rather than against a
+        // screenshot, which cannot tell "drawn" from "drawn correctly".
+        window.fractalViewer = new FractalViewer();
     </script>
 </body>
 </html>
