@@ -715,8 +715,14 @@ def _primitive_descriptor(obj: OpenSCADObject, offset: Vector3D) -> Dict[str, ob
         return _primitive_descriptor(obj.children[0], offset + obj.v)
 
     if isinstance(obj, Cube):
-        size = obj.size if isinstance(obj.size, Vector3D) else Vector3D(x=obj.size, y=obj.size, z=obj.size)
-        local_min = Vector3D(x=-size.x / 2, y=-size.y / 2, z=-size.z / 2) if obj.center else Vector3D()
+        size = (
+            obj.size
+            if isinstance(obj.size, Vector3D)
+            else Vector3D(x=obj.size, y=obj.size, z=obj.size)
+        )
+        local_min = (
+            Vector3D(x=-size.x / 2, y=-size.y / 2, z=-size.z / 2) if obj.center else Vector3D()
+        )
         bounds = BoundingBox3D(min_point=local_min + offset, max_point=local_min + size + offset)
         return {"type": "cube", "size": [size.x, size.y, size.z], "bounds": _bounds_dict(bounds)}
 
@@ -733,7 +739,8 @@ def _primitive_descriptor(obj: OpenSCADObject, offset: Vector3D) -> Dict[str, ob
     if isinstance(obj, Sphere):
         r = obj.r
         bounds = BoundingBox3D(
-            min_point=Vector3D(x=-r, y=-r, z=-r) + offset, max_point=Vector3D(x=r, y=r, z=r) + offset
+            min_point=Vector3D(x=-r, y=-r, z=-r) + offset,
+            max_point=Vector3D(x=r, y=r, z=r) + offset,
         )
         return {"type": "sphere", "r": r, "bounds": _bounds_dict(bounds)}
 
@@ -808,7 +815,9 @@ def _assembly_tree(
             if node.build_volume
             else None
         ),
-        "primitive": _primitive_descriptor(node.base, world_position) if node.base is not None else None,
+        "primitive": (
+            _primitive_descriptor(node.base, world_position) if node.base is not None else None
+        ),
         "children": [
             {**_assembly_tree(child, world_position, category), "composition": composition}
             for child, composition in composed

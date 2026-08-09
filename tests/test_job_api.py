@@ -99,9 +99,7 @@ def test_assign_unknown_printer_is_404():
 
 def test_assign_to_workbench_is_404_not_a_printer():
     _create_job()
-    response = client.post(
-        "/sites/garage/jobs/small_bracket/assign", json={"printer": "workbench"}
-    )
+    response = client.post("/sites/garage/jobs/small_bracket/assign", json={"printer": "workbench"})
     assert response.status_code == 404
 
 

@@ -47,12 +47,10 @@ class TestGetSubmoduleStatus:
     def test_parses_gitmodules(self, tmp_path):
         """Test parsing .gitmodules file."""
         gitmodules = tmp_path / ".gitmodules"
-        gitmodules.write_text(
-            """[submodule "parts/gridfinity/gridfinity-rebuilt-openscad"]
+        gitmodules.write_text("""[submodule "parts/gridfinity/gridfinity-rebuilt-openscad"]
 	path = parts/gridfinity/gridfinity-rebuilt-openscad
 	url = https://github.com/kennetek/gridfinity-rebuilt-openscad.git
-"""
-        )
+""")
 
         result = _get_submodule_status(tmp_path)
 
@@ -63,12 +61,10 @@ class TestGetSubmoduleStatus:
     def test_detects_initialized_status(self, tmp_path):
         """Test detection of initialized vs not initialized."""
         gitmodules = tmp_path / ".gitmodules"
-        gitmodules.write_text(
-            """[submodule "test-sub"]
+        gitmodules.write_text("""[submodule "test-sub"]
 	path = test-sub
 	url = https://example.com/test.git
-"""
-        )
+""")
 
         # Uninitialized - directory doesn't exist
         result = _get_submodule_status(tmp_path)
@@ -85,12 +81,10 @@ class TestGetSubmoduleStatus:
     def test_ignores_git_only_directory(self, tmp_path):
         """Test that directory with only .git is not considered initialized."""
         gitmodules = tmp_path / ".gitmodules"
-        gitmodules.write_text(
-            """[submodule "test-sub"]
+        gitmodules.write_text("""[submodule "test-sub"]
 	path = test-sub
 	url = https://example.com/test.git
-"""
-        )
+""")
 
         # Create directory with only .git
         sub_dir = tmp_path / "test-sub"

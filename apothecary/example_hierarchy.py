@@ -46,7 +46,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from .hierarchy import (
     Assembly,
@@ -277,7 +277,9 @@ def _build_printer(name: str, *, x: float, y: float, status: str = "idle") -> As
                 name="right_post",
                 geometry=Translate(
                     v=Vector3D(
-                        x=PRINTER_WIDTH - POST_SIZE, y=PRINTER_DEPTH - POST_SIZE, z=PRINTER_BASE_HEIGHT
+                        x=PRINTER_WIDTH - POST_SIZE,
+                        y=PRINTER_DEPTH - POST_SIZE,
+                        z=PRINTER_BASE_HEIGHT,
                     ),
                     children=[Cube(size=Vector3D(x=POST_SIZE, y=POST_SIZE, z=post_height))],
                 ),
@@ -319,7 +321,9 @@ def _wall_substructure(
     whole building -- see _build_garage_building), positioned in the
     building's own local frame the same way every other Substructure is.
     """
-    size = Vector3D(x=max_point.x - min_point.x, y=max_point.y - min_point.y, z=max_point.z - min_point.z)
+    size = Vector3D(
+        x=max_point.x - min_point.x, y=max_point.y - min_point.y, z=max_point.z - min_point.z
+    )
     return Substructure(
         name=name,
         position=min_point,
@@ -433,7 +437,9 @@ def _build_lighting() -> Assembly:
         material="Aluminum housing, LED panel",
         position=LIGHTING_POSITION,
         housing_size=Vector3D(x=400.0, y=100.0, z=50.0),
-        output=Feature.boss("light_output", position=Vector3D(x=200, y=50, z=-1), diameter=100, height=2),
+        output=Feature.boss(
+            "light_output", position=Vector3D(x=200, y=50, z=-1), diameter=100, height=2
+        ),
         # Lighting runs on the same wiring system as the receptacles --
         # standard M/E/P (mechanical/electrical/plumbing) trade grouping.
         category="electrical",
@@ -446,7 +452,9 @@ def _build_hvac() -> Assembly:
         material="Galvanized steel ductwork",
         position=HVAC_POSITION,
         housing_size=Vector3D(x=300.0, y=300.0, z=100.0),
-        output=Feature.boss("vent_output", position=Vector3D(x=150, y=150, z=-1), diameter=200, height=2),
+        output=Feature.boss(
+            "vent_output", position=Vector3D(x=150, y=150, z=-1), diameter=200, height=2
+        ),
         category="mechanical",
     )
 
@@ -457,7 +465,9 @@ def _build_electrical() -> Assembly:
         material="PVC junction box",
         position=ELECTRICAL_POSITION,
         housing_size=Vector3D(x=100.0, y=150.0, z=200.0),
-        output=Feature.boss("outlet_output", position=Vector3D(x=50, y=75, z=90), diameter=60, height=15),
+        output=Feature.boss(
+            "outlet_output", position=Vector3D(x=50, y=75, z=90), diameter=60, height=15
+        ),
         category="electrical",
     )
 
@@ -468,7 +478,9 @@ def _build_fluids() -> Assembly:
         material="Copper pipe stub",
         position=FLUIDS_POSITION,
         housing_size=Vector3D(x=100.0, y=100.0, z=300.0),
-        output=Feature.boss("spigot_output", position=Vector3D(x=50, y=50, z=280), diameter=30, height=40),
+        output=Feature.boss(
+            "spigot_output", position=Vector3D(x=50, y=50, z=280), diameter=30, height=40
+        ),
         category="fluid",
     )
 
@@ -484,13 +496,18 @@ def _build_storage() -> Assembly:
             name=name,
             geometry=Translate(
                 v=Vector3D(z=height),
-                children=[Cube(size=Vector3D(x=STORAGE_SIZE.x, y=STORAGE_SIZE.y, z=SHELF_THICKNESS))],
+                children=[
+                    Cube(size=Vector3D(x=STORAGE_SIZE.x, y=STORAGE_SIZE.y, z=SHELF_THICKNESS))
+                ],
             ),
         )
 
     shelf_unit = Substructure(
         name="shelf_unit",
-        base=Cube(size=Vector3D(x=STORAGE_SIZE.x, y=SHELF_THICKNESS, z=STORAGE_SIZE.z), comment="Back panel"),
+        base=Cube(
+            size=Vector3D(x=STORAGE_SIZE.x, y=SHELF_THICKNESS, z=STORAGE_SIZE.z),
+            comment="Back panel",
+        ),
         additions=[_shelf(f"shelf_{i + 1}", height) for i, height in enumerate(SHELF_HEIGHTS)],
         footprint=BoundingBox3D(min_point=Vector3D(), max_point=STORAGE_SIZE),
     )
@@ -595,8 +612,14 @@ def validate_garage_layout(site: Assembly) -> LayoutReport:
             )
             continue
 
-        within_x = bench_bounds.min_point.x <= bounds.min_point.x and bounds.max_point.x <= bench_bounds.max_point.x
-        within_y = bench_bounds.min_point.y <= bounds.min_point.y and bounds.max_point.y <= bench_bounds.max_point.y
+        within_x = (
+            bench_bounds.min_point.x <= bounds.min_point.x
+            and bounds.max_point.x <= bench_bounds.max_point.x
+        )
+        within_y = (
+            bench_bounds.min_point.y <= bounds.min_point.y
+            and bounds.max_point.y <= bench_bounds.max_point.y
+        )
         if not (within_x and within_y):
             violations.append(
                 LayoutViolation(

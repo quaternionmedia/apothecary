@@ -135,7 +135,9 @@ def test_validate_garage_layout_is_clean_by_default():
 def test_validate_garage_layout_catches_overlap():
     site = create_example_site()
     printer_1, printer_2 = site.children[1], site.children[2]
-    printer_2.position = Vector3D(x=printer_1.position.x, y=printer_1.position.y, z=printer_1.position.z)
+    printer_2.position = Vector3D(
+        x=printer_1.position.x, y=printer_1.position.y, z=printer_1.position.z
+    )
 
     report = validate_garage_layout(site)
     assert not report.is_valid
@@ -146,7 +148,9 @@ def test_validate_garage_layout_catches_overlap():
 def test_validate_garage_layout_catches_overhang():
     site = create_example_site()
     printer_1 = site.children[1]
-    printer_1.position = Vector3D(x=BENCH_WIDTH - 10, y=printer_1.position.y, z=printer_1.position.z)
+    printer_1.position = Vector3D(
+        x=BENCH_WIDTH - 10, y=printer_1.position.y, z=printer_1.position.z
+    )
 
     report = validate_garage_layout(site)
     assert not report.is_valid

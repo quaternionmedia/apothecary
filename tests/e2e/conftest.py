@@ -23,7 +23,6 @@ from pathlib import Path
 
 import httpx
 import pytest
-
 from doc_capture import GENERATED_DOCS_ROOT, DocRecorder
 
 
@@ -218,6 +217,4 @@ def doc_recorder(page, docs_enabled, request):
         video_dir = GENERATED_DOCS_ROOT / "_videos_raw" / _slugify_test_name(request.node.name)
         video_dir.mkdir(parents=True, exist_ok=True)
         marker = video_dir / "workflows.txt"
-        marker.write_text(
-            "\n".join(r.workflow for r in recorders) + "\n", encoding="utf-8"
-        )
+        marker.write_text("\n".join(r.workflow for r in recorders) + "\n", encoding="utf-8")

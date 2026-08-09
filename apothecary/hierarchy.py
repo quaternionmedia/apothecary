@@ -132,9 +132,7 @@ class Assembly(BaseModel):
         body: OpenSCADObject
         if self.subtractions:
             subtraction_objs = [s.to_scad_object() for s in self.subtractions]
-            body = Difference(
-                children=[positive, *subtraction_objs], comment=self.comment or label
-            )
+            body = Difference(children=[positive, *subtraction_objs], comment=self.comment or label)
         else:
             positive.comment = self.comment or label
             body = positive
@@ -349,7 +347,9 @@ class Feature:
         height: float,
     ) -> Assembly:
         """A cylindrical boss (a positive standoff, e.g. for a self-tapping screw)."""
-        geometry = Translate(v=position, children=[Cylinder(h=height, r=diameter / 2, center=False)])
+        geometry = Translate(
+            v=position, children=[Cylinder(h=height, r=diameter / 2, center=False)]
+        )
         return Assembly(name=name, role="feature", base=geometry)
 
 

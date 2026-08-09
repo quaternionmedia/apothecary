@@ -163,9 +163,7 @@ def test_update_structure_status():
 
 
 def test_update_structure_status_rejects_unknown_value():
-    response = client.post(
-        "/sites/garage/structures/printer_1/status", json={"status": "on_fire"}
-    )
+    response = client.post("/sites/garage/structures/printer_1/status", json={"status": "on_fire"})
     assert response.status_code == 400
 
 
@@ -343,7 +341,9 @@ def test_node_stl_endpoint_renders_a_composite_node():
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/sla"
     assert len(response.content) > 0
-    assert response.content.startswith(b"solid") or len(response.content) > 84  # ASCII or binary STL
+    assert (
+        response.content.startswith(b"solid") or len(response.content) > 84
+    )  # ASCII or binary STL
 
 
 @pytest.mark.skipif(not get_renderer().is_available, reason="OpenSCAD not installed")

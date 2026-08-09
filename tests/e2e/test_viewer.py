@@ -5,6 +5,7 @@ Covers the unified viewer that absorbed the former standalone parts browser
 and the former Site/Structure hierarchy viewer -- see
 apothecary/api.py's site_viewer handler and templates/fractal_viewer.html.j2.
 """
+
 import pytest
 from playwright.sync_api import Page, expect
 
@@ -59,8 +60,9 @@ def test_viewer_dark_theme(page: Page, base_url: str):
 
     body = page.locator("body")
     bg_color = body.evaluate("el => getComputedStyle(el).backgroundColor")
-    assert "26" in bg_color or "1a" in bg_color.lower() or "rgb(26" in bg_color, \
-        f"Expected dark background, got {bg_color}"
+    assert (
+        "26" in bg_color or "1a" in bg_color.lower() or "rgb(26" in bg_color
+    ), f"Expected dark background, got {bg_color}"
 
 
 @pytest.mark.e2e
@@ -76,9 +78,17 @@ def test_viewer_shows_contents_for_the_loaded_site(page: Page, base_url: str):
     assert items.count() == 11
     contents = page.locator("#contents-list")
     for name in (
-        "workbench", "printer_1", "printer_2", "printer_3",
-        "garage_building", "lighting", "hvac", "electrical", "fluids",
-        "storage_shelving", "cnc_router",
+        "workbench",
+        "printer_1",
+        "printer_2",
+        "printer_3",
+        "garage_building",
+        "lighting",
+        "hvac",
+        "electrical",
+        "fluids",
+        "storage_shelving",
+        "cnc_router",
     ):
         expect(contents).to_contain_text(name)
 
@@ -206,8 +216,9 @@ def test_viewer_loads_each_part_jscad(page: Page, base_url: str):
         part_name = part["name"]
 
         jscad_response = page.request.get(f"{base_url}/parts/{part_name}/jscad")
-        assert jscad_response.ok, \
-            f"Part {part_name}: JSCAD endpoint returned {jscad_response.status}"
+        assert (
+            jscad_response.ok
+        ), f"Part {part_name}: JSCAD endpoint returned {jscad_response.status}"
 
         content = jscad_response.text()
         assert len(content) > 0, f"Part {part_name}: Empty JSCAD response"
@@ -227,8 +238,7 @@ def test_viewer_loads_each_part_scad(page: Page, base_url: str):
         part_name = part["name"]
 
         scad_response = page.request.get(f"{base_url}/parts/{part_name}/scad")
-        assert scad_response.ok, \
-            f"Part {part_name}: SCAD endpoint returned {scad_response.status}"
+        assert scad_response.ok, f"Part {part_name}: SCAD endpoint returned {scad_response.status}"
 
         content = scad_response.text()
         assert len(content) > 0, f"Part {part_name}: Empty SCAD response"
@@ -245,11 +255,18 @@ def test_viewer_integrated_loads_without_critical_errors(page: Page, base_url: s
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(2000)
 
-    critical_errors = [e for e in console_errors if not any(ignore in e.lower() for ignore in [
-        "extension",
-        "favicon",
-        "chrome-extension",
-    ])]
+    critical_errors = [
+        e
+        for e in console_errors
+        if not any(
+            ignore in e.lower()
+            for ignore in [
+                "extension",
+                "favicon",
+                "chrome-extension",
+            ]
+        )
+    ]
 
     assert len(critical_errors) == 0, f"Console errors found: {critical_errors}"
 
@@ -266,8 +283,7 @@ def test_viewer_integrated_loads_without_critical_errors(page: Page, base_url: s
 
 def _viewer_state(page: Page) -> dict:
     """Read camera/scene counters straight out of the running viewer."""
-    return page.evaluate(
-        """() => {
+    return page.evaluate("""() => {
             const v = window.fractalViewer;
             return {
                 far: v.camera.far,
@@ -276,8 +292,7 @@ def _viewer_state(page: Page) -> dict:
                 overlays: Object.keys(v.compoundOverlayByKey).length,
                 dots: Object.values(v.meshByName).filter((m) => m.userData.isDot).length,
             };
-        }"""
-    )
+        }""")
 
 
 def _load_garage(page: Page, base_url: str) -> dict:
