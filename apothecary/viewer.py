@@ -76,7 +76,9 @@ class ViewerRenderer:
 
         if site_names:
             options_html = "\n".join(
-                f'<option value="{html.escape(name)}"{" selected" if name == default_site else ""}>{html.escape(name)}</option>'
+                f'<option value="{html.escape(name)}"'
+                f'{" selected" if name == default_site else ""}>'
+                f"{html.escape(name)}</option>"
                 for name in site_names
             )
             select_disabled = ""

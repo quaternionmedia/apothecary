@@ -56,4 +56,7 @@ class Cylinder(OpenSCADObject):
             )
         )
         fn_str = f", $fn={self.fn}" if self.fn else ""
-        return f"{comment_str}cylinder(h={self.h}, {radius_str}, center={str(self.center).lower()}{fn_str});"
+        return (
+            f"{comment_str}cylinder(h={self.h}, {radius_str}, "
+            f"center={str(self.center).lower()}{fn_str});"
+        )
