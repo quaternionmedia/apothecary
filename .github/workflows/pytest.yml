@@ -23,6 +23,11 @@ jobs:
     steps:
     - name: 📰 Checkout
       uses: actions/checkout@v6
+      with:
+        # The gridfinity part is a wrapper around a vendored submodule. Without
+        # its sources the part cannot render, and three tests fail on a
+        # checkout that looks otherwise complete.
+        submodules: true
 
     - name: 🐍 Setup Python
       uses: actions/setup-python@v6
@@ -34,6 +39,12 @@ jobs:
 
     - name: 🚧 Install dependencies
       run: uv sync --locked --dev
+
+    - name: 🎭 Install Playwright browsers
+      # `apothecary test all` runs the E2E phase unconditionally. Without a
+      # browser that phase exits non-zero having collected nothing, which
+      # until now was invisible because the runner swallowed the code.
+      run: uv run playwright install --with-deps chromium
 
     - name: 🔬 Run test suite
       run: uv run apothecary test all
