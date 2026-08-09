@@ -73,6 +73,13 @@ playwright-report/
 test-results/
 playwright/.cache/
 
+# Generated docs (screenshots, GIFs, raw video, rendered Markdown) --
+# build artifacts of the E2E doc-workflow tests; regenerate with
+# `apothecary docs generate`. Raw Playwright video is always ignored (even
+# if this whole directory policy changes later).
+docs/generated/
+*.webm
+
 # OS
 .DS_Store
 Thumbs.db

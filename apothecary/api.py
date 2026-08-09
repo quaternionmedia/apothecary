@@ -10,27 +10,43 @@ Note: STL files are generated on-demand and not stored in git.
 On startup, missing STLs are automatically generated if OpenSCAD is available.
 """
 
+import asyncio
+import hashlib
 import json
 import os
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from importlib import import_module
+from pathlib import Path
 from random import choice
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from .booleans import Difference, Intersection, Union
+from .core import OpenSCADObject
+from .example_hierarchy import (
+    PRINTER_STATUSES,
+    Job,
+    JobStore,
+    create_example_site,
+    job_fits_printer,
+    validate_garage_layout,
+)
+from .example_parts_library import create_parts_library_site, validate_parts_library
+from .hierarchy import Assembly
+from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
 from .primitives import Cube, Cylinder, Sphere
 from .projects.parts.skeleton import ROOT
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
 from .projects.registry import scan_projects
 from .scene import Scene
+from .site_store import SiteStore, UnknownSiteError
 from .templates import TemplateRenderer
 from .transforms import Rotate, Scale, Translate
-from .viewer import render_viewer_page
+from .viewer import render_fractal_viewer_page
 
 
 async def _generate_missing_stls():
@@ -76,13 +92,40 @@ async def _generate_missing_stls():
             print(f"FAILED: {result.error_message}")
 
 
+async def _generate_missing_stls_in_background():
+    """Wrapper run as a background task -- see lifespan() for why."""
+    try:
+        await _generate_missing_stls()
+    except Exception as exc:  # pragma: no cover - defensive; log, don't crash the server
+        print(f"Background STL generation failed: {exc}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan handler - runs on startup and shutdown."""
+    """Application lifespan handler - runs on startup and shutdown.
+
+    STL generation for missing parts runs as a background task, not
+    awaited here. Real OpenSCAD renders can take tens of seconds per part
+    (CGAL boolean ops -- one part in this repo's own library takes ~39s),
+    and _generate_missing_stls() renders every missing part sequentially;
+    awaiting it here meant /health -- and every other route -- was
+    unreachable until all of them finished, which starved every client
+    that polls /health with a short timeout (apothecary test all,
+    tests/e2e's --start-server fixture, and a plain first-run
+    `apothecary serve` alike). Parts already handle "not generated yet"
+    gracefully (placeholder geometry in the viewer, on-demand
+    /parts/{name}/stl/generate), so backgrounding this is a strict
+    improvement, not a behavior change callers need to adapt to.
+    """
     # Startup
-    await _generate_missing_stls()
+    stl_task = asyncio.create_task(_generate_missing_stls_in_background())
+    app.state.stl_generation_task = stl_task  # keep a strong reference (asyncio GC gotcha)
     yield
-    # Shutdown (nothing to clean up)
+    # Shutdown: don't leave a render subprocess dangling if we're still generating
+    if not stl_task.done():
+        stl_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await stl_task
 
 
 def _vec(data):
@@ -563,6 +606,518 @@ async def get_part_files(name: str, request: Request):
     return part_files.to_api_dict(base_url)
 
 
+# =============================================================================
+# Site/Structure/Substructure/Feature hierarchy (prototype, unratified)
+#
+# Backed by a process-lifetime SiteStore (see site_store.py): edits persist
+# across requests, unlike /render's stateless Scene handling. Known
+# limitation: in-memory only, lost on restart, not shared across worker
+# processes -- fine for a single-process dev server.
+# =============================================================================
+
+_site_store = SiteStore(
+    {
+        "garage": (create_example_site, validate_garage_layout),
+        "parts_library": (create_parts_library_site, validate_parts_library),
+    }
+)
+_job_store = JobStore()
+
+
+def _get_site_or_404(name: str) -> Assembly:
+    try:
+        return _site_store.get(name)
+    except UnknownSiteError:
+        raise HTTPException(status_code=404, detail=f"Site '{name}' not found") from None
+
+
+def _find_node_by_path(site: Assembly, path: str) -> Optional[Assembly]:
+    """Resolve a dotted, site-rooted path (e.g. ``printer_1.gantry_system``)
+    to the Assembly node it names, walking ``children``/``additions``/
+    ``subtractions`` together -- the same three-list-as-one-tree shape
+    ``_assembly_tree`` exposes to the client, so a path the viewer displays
+    is always resolvable back here. Returns None if any segment doesn't
+    match, rather than raising, so callers can choose their own 404 wording.
+    """
+    node = site
+    for segment in path.split("."):
+        candidates = [*node.children, *node.additions, *node.subtractions]
+        found = next((c for c in candidates if c.name == segment), None)
+        if found is None:
+            return None
+        node = found
+    return node
+
+
+_NODE_STL_CACHE_DIR = ROOT / ".cache" / "node_stl"
+
+
+def _node_stl_cache_paths(scad_text: str) -> tuple[Path, Path]:
+    """Content-hash-keyed cache location for a dynamically-addressed node's
+    render. Unlike a registered part (which has a fixed source file to key
+    off of), an arbitrary Assembly subtree has no path of its own on disk --
+    the rendered SCAD text itself is the only stable identity available.
+    """
+    digest = hashlib.sha256(scad_text.encode("utf-8")).hexdigest()[:20]
+    return _NODE_STL_CACHE_DIR / f"{digest}.scad", _NODE_STL_CACHE_DIR / f"{digest}.stl"
+
+
+def _bounds_dict(bounds: BoundingBox3D | None) -> Dict[str, List[float]] | None:
+    if bounds is None:
+        return None
+    return {
+        "min": [bounds.min_point.x, bounds.min_point.y, bounds.min_point.z],
+        "max": [bounds.max_point.x, bounds.max_point.y, bounds.max_point.z],
+    }
+
+
+def _structure_summary(structure: Assembly) -> Dict[str, object]:
+    return {
+        "name": structure.name,
+        "material": structure.material,
+        "status": structure.status,
+        "position": {
+            "x": structure.position.x,
+            "y": structure.position.y,
+            "z": structure.position.z,
+        },
+        "footprint": _bounds_dict(structure.footprint),
+        "world_bounds": _bounds_dict(structure.world_bounds()),
+        "build_volume": (
+            [structure.build_volume.x, structure.build_volume.y, structure.build_volume.z]
+            if structure.build_volume
+            else None
+        ),
+        "substructures": [
+            {
+                "name": sub.name,
+                "features": [f.name for f in (*sub.additions, *sub.subtractions)],
+            }
+            for sub in structure.children
+        ],
+    }
+
+
+def _primitive_descriptor(obj: OpenSCADObject, offset: Vector3D) -> Dict[str, object] | None:
+    """Best-effort translation of a leaf's own geometry into a lightweight,
+    client-renderable primitive descriptor -- Cube/Cylinder/Sphere, optionally
+    wrapped in one Translate (accumulated into ``offset``, which starts as
+    the node's own ``position`` so the returned bounds are already
+    world-space, matching ``world_bounds``). This covers every leaf in this
+    repo's own examples. Returns None for anything richer (nested booleans,
+    Rotate, Scale, multiple children) -- the viewer falls back to a
+    bounding-box wireframe for those, a deliberate scope boundary, not a
+    bug: real CSG rendering of composite nodes is future work.
+    """
+    if isinstance(obj, Translate):
+        if len(obj.children) != 1:
+            return None
+        return _primitive_descriptor(obj.children[0], offset + obj.v)
+
+    if isinstance(obj, Cube):
+        size = obj.size if isinstance(obj.size, Vector3D) else Vector3D(x=obj.size, y=obj.size, z=obj.size)
+        local_min = Vector3D(x=-size.x / 2, y=-size.y / 2, z=-size.z / 2) if obj.center else Vector3D()
+        bounds = BoundingBox3D(min_point=local_min + offset, max_point=local_min + size + offset)
+        return {"type": "cube", "size": [size.x, size.y, size.z], "bounds": _bounds_dict(bounds)}
+
+    if isinstance(obj, Cylinder):
+        r1 = obj.r if obj.r is not None else (obj.r1 if obj.r1 is not None else 1.0)
+        r2 = obj.r if obj.r is not None else (obj.r2 if obj.r2 is not None else r1)
+        max_r = max(r1, r2)
+        z0 = -obj.h / 2 if obj.center else 0.0
+        local_min = Vector3D(x=-max_r, y=-max_r, z=z0)
+        local_max = Vector3D(x=max_r, y=max_r, z=z0 + obj.h)
+        bounds = BoundingBox3D(min_point=local_min + offset, max_point=local_max + offset)
+        return {"type": "cylinder", "h": obj.h, "r1": r1, "r2": r2, "bounds": _bounds_dict(bounds)}
+
+    if isinstance(obj, Sphere):
+        r = obj.r
+        bounds = BoundingBox3D(
+            min_point=Vector3D(x=-r, y=-r, z=-r) + offset, max_point=Vector3D(x=r, y=r, z=r) + offset
+        )
+        return {"type": "sphere", "r": r, "bounds": _bounds_dict(bounds)}
+
+    return None
+
+
+def _assembly_tree(
+    node: Assembly,
+    parent_world_position: Vector3D | None = None,
+    parent_category: str | None = None,
+) -> Dict[str, object]:
+    """Recursive serialization of an Assembly node and everything beneath it.
+
+    Unlike ``_structure_summary`` (which flattens one extra level for the
+    old, depth-capped viewers), this walks the *whole* tree -- the shape the
+    fractal zoom viewer needs to navigate unbounded depth. ``children``,
+    ``additions``, and ``subtractions`` are all real Assembly nodes (a
+    garage printer's ``left_post``/``gantry_bar`` Features are additions, not
+    children), so all three are combined into one navigable ``children``
+    list here, each tagged with how it composes into its parent's geometry --
+    navigation doesn't care about that distinction, but a viewer showing
+    "what's inside" vs. "what's added/removed" might.
+
+    ``Assembly.world_bounds()`` only offsets by *this* node's own
+    ``position`` -- correct for a direct child of the root (the only depth
+    the old, depth-capped viewers ever showed), wrong for anything deeper,
+    since a node's ``position`` is relative to its immediate parent, not the
+    root. A Structure two levels down from the site root would render as if
+    its parent were sitting at the origin. ``parent_world_position``
+    accumulates every ancestor's position on the way down so every node's
+    reported ``position``/``world_bounds`` is genuinely in one consistent
+    global frame, however deep -- the fractal viewer's camera framing and
+    "show everything at once" mode both depend on this being true.
+
+    ``category`` is resolved the same inheriting way: most nodes never set
+    their own (see ``Assembly.category``'s docstring), so the reported
+    ``category`` is this node's own if set, else whatever the nearest
+    ancestor set -- a viewer can color-code a whole Structure's tree from
+    one tag on its root instead of needing every Substructure/Feature
+    tagged individually.
+    """
+    parent_world_position = parent_world_position or Vector3D()
+    world_position = parent_world_position + node.position
+    category = node.category if node.category is not None else parent_category
+    world_bounds = (
+        BoundingBox3D(
+            min_point=node.footprint.min_point + world_position,
+            max_point=node.footprint.max_point + world_position,
+        )
+        if node.footprint is not None
+        else None
+    )
+
+    composed = (
+        [(c, "child") for c in node.children]
+        + [(c, "addition") for c in node.additions]
+        + [(c, "subtraction") for c in node.subtractions]
+    )
+    return {
+        "name": node.name,
+        "role": node.role,
+        "material": node.material,
+        "status": node.status,
+        "comment": node.comment,
+        "part_ref": node.part_ref,
+        "category": category,
+        "position": {"x": world_position.x, "y": world_position.y, "z": world_position.z},
+        "footprint": _bounds_dict(node.footprint),
+        "world_bounds": _bounds_dict(world_bounds),
+        "build_volume": (
+            [node.build_volume.x, node.build_volume.y, node.build_volume.z]
+            if node.build_volume
+            else None
+        ),
+        "primitive": _primitive_descriptor(node.base, world_position) if node.base is not None else None,
+        "children": [
+            {**_assembly_tree(child, world_position, category), "composition": composition}
+            for child, composition in composed
+        ],
+    }
+
+
+def _site_payload(site, report) -> Dict[str, object]:
+    return {
+        "name": site.name,
+        "structures": [_structure_summary(s) for s in site.children],
+        "tree": _assembly_tree(site),
+        "violations": [v.model_dump() for v in report.violations],
+        "is_valid": report.is_valid,
+    }
+
+
+class PositionOverride(BaseModel):
+    x: float
+    y: float
+    z: float
+
+
+class LayoutRequest(BaseModel):
+    positions: Dict[str, PositionOverride] = Field(default_factory=dict)
+
+
+class StatusRequest(BaseModel):
+    status: str
+
+
+@app.get("/sites")
+async def list_sites():
+    return _site_store.names()
+
+
+@app.get("/sites/{name}")
+async def get_site(name: str):
+    site = _get_site_or_404(name)
+    validator = _site_store.validator(name)
+    return _site_payload(site, validator(site))
+
+
+@app.post("/sites/{name}/layout")
+async def update_site_layout(name: str, body: LayoutRequest):
+    """Apply position overrides (persisted), re-validate, and return regenerated OpenSCAD.
+
+    ``body.positions`` need only include the structures the client has
+    moved; everything else keeps its current persisted position.
+    """
+    site = _get_site_or_404(name)
+    for structure in site.children:
+        override = body.positions.get(structure.name)
+        if override is not None:
+            structure.position = Vector3D(x=override.x, y=override.y, z=override.z)
+
+    validator = _site_store.validator(name)
+    payload = _site_payload(site, validator(site))
+    payload["scad"] = site.render()
+    return payload
+
+
+@app.post("/sites/{name}/structures/{structure_name}/status")
+async def update_structure_status(name: str, structure_name: str, body: StatusRequest):
+    """Set a Structure's status (persisted). Validated against PRINTER_STATUSES.
+
+    This is the garage scenario's closed set, not a hierarchy-wide rule --
+    ``Structure.status`` itself is a free-form string; a future site with a
+    different notion of status would validate against its own set here.
+    """
+    if body.status not in PRINTER_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid status {body.status!r}; must be one of {PRINTER_STATUSES}",
+        )
+    site = _get_site_or_404(name)
+    structure = next((s for s in site.children if s.name == structure_name), None)
+    if structure is None:
+        raise HTTPException(
+            status_code=404, detail=f"Structure '{structure_name}' not found in site '{name}'"
+        )
+    structure.status = body.status
+
+    validator = _site_store.validator(name)
+    return _site_payload(site, validator(site))
+
+
+@app.post("/sites/{name}/reset")
+async def reset_site_layout(name: str):
+    """Discard all edits and rebuild the site fresh from its factory.
+
+    Also clears the site's job queue: a reset re-idles every printer, so a
+    job still marked "assigned" to one would otherwise be stale.
+    """
+    _get_site_or_404(name)  # validates the name before resetting
+    site = _site_store.reset(name)
+    _job_store.reset(name)
+    validator = _site_store.validator(name)
+    payload = _site_payload(site, validator(site))
+    payload["scad"] = site.render()
+    return payload
+
+
+@app.get("/sites/{name}/nodes/{path}/stl")
+async def get_node_stl(name: str, path: str):
+    """Render any addressable Assembly node's own subtree to STL, on demand.
+
+    This is the real-geometry upgrade path for *composite* nodes in the
+    fractal viewer (a wall with a window cutout, a whole Structure) --
+    leaves already get exact primitives from ``_primitive_descriptor`` or,
+    for parts-library leaves, ``/parts/{part_ref}/stl``; anything with
+    nested booleans needs an actual CSG evaluation. Rather than a second,
+    bespoke geometry engine, this reuses the same OpenSCAD CLI pipeline
+    already serving ``/parts/{name}/stl`` -- the node's ``to_scad_object()``
+    is exactly the OpenSCAD subtree the site's own render already produces
+    for it, just rendered in isolation. Cached by content hash, since a
+    dynamically-addressed node (unlike a registered part) has no fixed file
+    path of its own to key a cache off of.
+    """
+    site = _get_site_or_404(name)
+    node = _find_node_by_path(site, path)
+    if node is None:
+        raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
+
+    try:
+        scad_text = node.to_scad_object().render()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422, detail=f"Node '{path}' has no renderable geometry: {exc}"
+        ) from None
+
+    scad_path, stl_path = _node_stl_cache_paths(scad_text)
+    if not stl_path.exists():
+        renderer = get_stl_renderer()
+        if not renderer.is_available:
+            raise HTTPException(
+                status_code=503, detail="OpenSCAD not installed. Cannot generate STL files."
+            )
+        scad_path.parent.mkdir(parents=True, exist_ok=True)
+        scad_path.write_text(scad_text, encoding="utf-8")
+        result = await renderer.render_stl_async(scad_path, stl_path, timeout=60)
+        if not result.success:
+            raise HTTPException(
+                status_code=500, detail=f"STL generation failed: {result.error_message}"
+            )
+
+    try:
+        stl_data = stl_path.read_bytes()
+        return Response(
+            content=stl_data,
+            media_type="application/sla",
+            headers={"Content-Disposition": f'attachment; filename="{node.name}.stl"'},
+        )
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to read STL: {exc}") from exc
+
+
+# -----------------------------------------------------------------------
+# Jobs: capacity-checked assignment to printer Structures (manufacturing
+# planning, first slice). See example_hierarchy.py's Job/JobStore.
+# -----------------------------------------------------------------------
+
+
+class Dimensions(BaseModel):
+    x: float
+    y: float
+    z: float
+
+
+class CreateJobRequest(BaseModel):
+    name: str
+    required_volume: Dimensions
+
+
+class AssignJobRequest(BaseModel):
+    printer: str
+
+
+def _job_summary(job: Job, site: Assembly) -> Dict[str, object]:
+    compatible = [
+        s.name
+        for s in site.children
+        if s.build_volume is not None and s.status == "idle" and job_fits_printer(job, s)
+    ]
+    return {
+        "name": job.name,
+        "required_volume": [job.required_volume.x, job.required_volume.y, job.required_volume.z],
+        "status": job.status,
+        "assigned_printer": job.assigned_printer,
+        "compatible_printers": compatible,
+    }
+
+
+@app.get("/sites/{name}/jobs")
+async def list_jobs(name: str):
+    site = _get_site_or_404(name)
+    return [_job_summary(job, site) for job in _job_store.list_for_site(name)]
+
+
+@app.post("/sites/{name}/jobs")
+async def create_job(name: str, body: CreateJobRequest):
+    site = _get_site_or_404(name)
+    job = Job(
+        name=body.name,
+        required_volume=Vector3D(
+            x=body.required_volume.x, y=body.required_volume.y, z=body.required_volume.z
+        ),
+    )
+    try:
+        _job_store.add(name, job)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return _job_summary(job, site)
+
+
+@app.post("/sites/{name}/jobs/{job_name}/assign")
+async def assign_job(name: str, job_name: str, body: AssignJobRequest):
+    """Assign a job to a printer, checked against its build volume and idle status.
+
+    Assigning flips the printer's own status to "printing" -- the two
+    concepts (job assignment, printer status) are meant to move together.
+    """
+    site = _get_site_or_404(name)
+    try:
+        job = _job_store.get(name, job_name)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Job '{job_name}' not found") from None
+
+    printer = next((s for s in site.children if s.name == body.printer), None)
+    if printer is None or printer.build_volume is None:
+        raise HTTPException(status_code=404, detail=f"Printer '{body.printer}' not found")
+    if printer.status != "idle":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Printer '{body.printer}' is not idle (status={printer.status})",
+        )
+    if not job_fits_printer(job, printer):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Job '{job_name}' (required volume "
+                f"{[job.required_volume.x, job.required_volume.y, job.required_volume.z]}) "
+                f"does not fit printer '{body.printer}''s build volume "
+                f"{[printer.build_volume.x, printer.build_volume.y, printer.build_volume.z]}"
+            ),
+        )
+
+    job.status = "assigned"
+    job.assigned_printer = printer.name
+    printer.status = "printing"
+    return _job_summary(job, site)
+
+
+@app.post("/sites/{name}/jobs/{job_name}/complete")
+async def complete_job(name: str, job_name: str):
+    """Mark a job done and free its printer back to idle.
+
+    ``assigned_printer`` is left in place as a record of which printer did
+    the job, even though the job is no longer occupying it.
+    """
+    site = _get_site_or_404(name)
+    try:
+        job = _job_store.get(name, job_name)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Job '{job_name}' not found") from None
+
+    if job.assigned_printer:
+        printer = next((s for s in site.children if s.name == job.assigned_printer), None)
+        if printer is not None:
+            printer.status = "idle"
+
+    job.status = "done"
+    return _job_summary(job, site)
+
+
+@app.get("/viewer")
+async def viewer_home():
+    """Redirect to the fractal zoom viewer for the first registered site.
+
+    There is no longer a standalone parts browser or bare Site browser --
+    both are absorbed into one viewer (see ``site_viewer`` below); this is
+    just its default entry point.
+    """
+    default_site = _site_store.names()[0]
+    return RedirectResponse(f"/viewer/sites/{default_site}", status_code=307)
+
+
+@app.get("/viewer/sites/{name}", response_class=HTMLResponse)
+async def site_viewer(name: str, request: Request, focus: str = Query(default="")):
+    """Fractal zoom viewer: navigates any registered site's Assembly tree at
+    any depth with standardized controls (prototype).
+
+    Absorbs both previous viewers: the registered ``parts/`` library is
+    reachable by selecting the ``parts_library`` site and zooming down to a
+    leaf (``part_ref`` set) -- the old part-viewer experience, no longer a
+    separate page. ``focus`` is an optional dotted path (e.g.
+    ``workbench.frame_system``) used to deep-link directly to a node instead
+    of always opening at the root.
+    """
+    if name not in _site_store.names():
+        raise HTTPException(status_code=404, detail=f"Site '{name}' not found")
+    base_url = str(request.base_url).rstrip("/")
+    return HTMLResponse(
+        render_fractal_viewer_page(
+            _site_store.names(), base_url, default_site=name, focus_path=focus
+        )
+    )
+
+
 @app.get("/openscad/status")
 async def openscad_status():
     """
@@ -577,49 +1132,3 @@ async def openscad_status():
         "version": renderer.get_version(),
         "path": str(renderer.openscad_path) if renderer.openscad_path else None,
     }
-
-
-@app.get("/viewer", response_class=HTMLResponse)
-async def viewer_home(request: Request, part: str = Query(default="elephant_walk")):
-    """
-    Integrated 3D parts viewer with Three.js.
-
-    Displays a browser-based viewer with:
-    - Part selection dropdown
-    - 3D preview (placeholder geometry)
-    - OpenSCAD source code display
-    - Download buttons for SCAD and JSCAD formats
-
-    Args:
-        part: Default part to load (defaults to elephant_walk)
-    """
-    parts = _available_part_names()
-    base_url = str(request.base_url).rstrip("/")
-    # Pass the default part to the viewer
-    default_part = part if part in parts else (parts[0] if parts else None)
-    return HTMLResponse(render_viewer_page(parts, base_url, default_part=default_part))
-
-
-@app.get("/viewer/random")
-async def viewer_random(request: Request):
-    """
-    Redirect to the viewer with a random part selected.
-
-    Returns a redirect to the main viewer page. The random part
-    selection is handled client-side for simplicity.
-    """
-    names = _available_part_names()
-    if not names:
-        raise HTTPException(status_code=404, detail="No parts available")
-    picked = choice(names)
-    # Redirect to main viewer - client can auto-load if needed
-    return RedirectResponse(f"/viewer?part={picked}", status_code=307)
-
-
-@app.get("/viewer/parts/{name}")
-async def viewer_part(name: str, request: Request):
-    """
-    Redirect to the viewer with a specific part selected.
-    """
-    part = _load_part_wrapper(name)  # Validates part exists
-    return RedirectResponse(f"/viewer?part={part.name}", status_code=307)

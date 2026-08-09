@@ -337,12 +337,17 @@ def test_all(port: int, coverage: bool, headed: bool, fail_fast: bool):
             str(port),
         ]
 
+        # DEVNULL, not PIPE: nothing here ever reads server_proc.stdout/stderr,
+        # and an unread PIPE deadlocks once its OS buffer fills -- confirmed by
+        # direct reproduction, the server stops responding after ~68 requests'
+        # worth of uvicorn access-log lines once background STL generation
+        # lets the E2E phase actually run long enough to hit it.
         server_proc = subprocess.Popen(
             server_cmd,
             cwd=ROOT,
             env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
 
         # Wait for server to be ready

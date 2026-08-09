@@ -78,16 +78,36 @@ Please start the server with: apothecary serve --port 8765
 - `conftest.py` - Pytest fixtures and configuration
   - `base_url` - Base URL for test server (validates connection)
   - Uses pytest-playwright's built-in `page` fixture
+  - `doc_recorder` / `--generate-docs` - see "Doc-workflow tests" below
 
 - `test_api.py` - Tests for API endpoints
   - Parts listing and retrieval
   - SCAD/JSCAD downloads
   - Scene rendering
 
-- `test_viewer.py` - Tests for the viewer interface
+- `test_viewer.py` - Tests for the fractal zoom viewer interface
   - Page loading and structure
-  - Button interactions
-  - Download functionality
+  - Zoom navigation and the minimap
+  - The absorbed parts-library part view
+
+- `test_docs_fractal_viewer.py` - doc-workflow test (marked both `e2e` and
+  `docs`) — see below
+
+## Doc-workflow tests
+
+`test_docs_*.py` are ordinary E2E tests (they run, and must pass, as part
+of any normal `apothecary test all` / CI run) that *also* narrate
+themselves: each step calls `doc_recorder(...).step("description")`. That
+call is a no-op unless pytest runs with `--generate-docs`, in which case it
+takes a screenshot and appends the description to a manifest under
+`docs/generated/<workflow>/`.
+
+You won't normally invoke `--generate-docs` by hand — `apothecary docs
+generate` (see `docs/README.md`) starts a server, runs just the tests
+marked `docs` with the flag on, then assembles a GIF and renders Markdown
+from each workflow's manifest. To add a new doc-workflow step, edit the
+test: add a `docs.step(...)` call at the point you want a screenshot, and
+re-run `apothecary docs generate` — no separate doc file to keep in sync.
 
 ## Writing New Tests
 

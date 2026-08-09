@@ -103,7 +103,7 @@ Start the server and visit http://127.0.0.1:8000:
 
 | Endpoint                     | Description                             |
 | ---------------------------- | --------------------------------------- |
-| `/viewer`                    | Interactive 3D parts browser (Three.js) |
+| `/viewer`                    | Fractal zoom viewer (Three.js): navigates any registered site's Assembly tree at any depth, including the parts library |
 | `/docs`                      | OpenAPI documentation (Swagger)         |
 | `/parts`                     | List all parts (JSON)                   |
 | `/parts/{name}/scad`         | Download OpenSCAD source                |
