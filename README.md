@@ -29,7 +29,7 @@ OpenSCAD generation toolkit + curated printable parts.
 
 ```bash
 # Install
-git clone https://github.com/yourorg/apothecary.git
+git clone https://github.com/quaternionmedia/apothecary.git
 cd apothecary
 uv sync
 
