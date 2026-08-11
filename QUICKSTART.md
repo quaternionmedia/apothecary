@@ -12,7 +12,7 @@ Get up and running with Apothecary in under 5 minutes.
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourorg/apothecary.git
+git clone https://github.com/quaternionmedia/apothecary.git
 cd apothecary
 
 # Install dependencies
