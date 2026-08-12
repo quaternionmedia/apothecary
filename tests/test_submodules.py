@@ -1,5 +1,6 @@
 """Tests for submodules CLI command."""
 
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
@@ -34,6 +35,33 @@ class TestSubmodulesCommand:
             result = runner.invoke(cli, ["submodules"])
             assert result.exit_code == 1
             assert "git" in result.output.lower()
+
+    def test_submodules_init_does_not_pass_recursive(self):
+        """`git submodule init` does not support --recursive."""
+        runner = CliRunner()
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        with patch("apothecary.cli.system.subprocess.run", side_effect=fake_run):
+            with patch(
+                "apothecary.cli.system._get_submodule_status",
+                return_value=[
+                    {
+                        "name": "governance/qm",
+                        "path": "governance/qm",
+                        "url": "https://github.com/quaternionmedia/qm.git",
+                        "initialized": True,
+                    }
+                ],
+            ):
+                result = runner.invoke(cli, ["submodules"])
+
+        assert result.exit_code == 0
+        assert calls[0] == ["git", "submodule", "init"]
+        assert calls[1] == ["git", "submodule", "update", "--recursive", "--init"]
 
 
 class TestGetSubmoduleStatus:

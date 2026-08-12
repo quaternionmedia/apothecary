@@ -318,8 +318,6 @@ def submodules(init: bool, update: bool, recursive: bool, show_status: bool):
         click.secho("Initializing submodules...", bold=True)
         try:
             cmd = ["git", "submodule", "init"]
-            if recursive:
-                cmd.append("--recursive")
 
             result = subprocess.run(
                 cmd,
