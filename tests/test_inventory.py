@@ -1,5 +1,6 @@
-from click.testing import CliRunner
 import json
+
+from click.testing import CliRunner
 
 from apothecary.cli import cli
 

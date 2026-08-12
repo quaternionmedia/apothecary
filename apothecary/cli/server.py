@@ -21,7 +21,10 @@ from .utils import _get_stl_bounding_box
 @click.option(
     "--viewer-path",
     type=click.Path(file_okay=False, dir_okay=True, resolve_path=True, exists=True),
-    help="Serve the JSCAD web viewer from this directory (defaults to node_modules/@jscad/web if present)",
+    help=(
+        "Serve the JSCAD web viewer from this directory "
+        "(defaults to node_modules/@jscad/web if present)"
+    ),
 )
 @click.option("--no-viewer", is_flag=True, help="Disable the JSCAD viewer even if assets exist")
 def serve(host: str, port: int, reload: bool, viewer_path: str | None, no_viewer: bool):

@@ -1,6 +1,10 @@
 from pathlib import Path
 
-from apothecary.projects.registry import scan_templates, summarize_structure, _locate_wrapper_for_part
+from apothecary.projects.registry import (
+    _locate_wrapper_for_part,
+    scan_templates,
+    summarize_structure,
+)
 
 
 def test_scan_templates_and_summarize():

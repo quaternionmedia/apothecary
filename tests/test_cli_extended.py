@@ -1,6 +1,7 @@
-from pathlib import Path
-from click.testing import CliRunner
 import json
+from pathlib import Path
+
+from click.testing import CliRunner
 
 from apothecary.cli import cli
 
@@ -10,9 +11,7 @@ def test_cli_validate_with_example_scene(tmp_path):
     # Build a small scene JSON manually to avoid validation issues
     scene_json = {
         "name": "vtest",
-        "objects": [
-            {"type": "cube", "size": {"x": 1, "y": 2, "z": 3}, "center": False}
-        ],
+        "objects": [{"type": "cube", "size": {"x": 1, "y": 2, "z": 3}, "center": False}],
     }
     f = tmp_path / "scene.json"
     f.write_text(json.dumps(scene_json), encoding="utf-8")

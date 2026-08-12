@@ -2,8 +2,8 @@ from fastapi.testclient import TestClient
 
 from apothecary.api import app
 from apothecary.example import create_example_scene
-from apothecary.projects.registry import scan_projects
 from apothecary.projects.parts.skeleton import ROOT
+from apothecary.projects.registry import scan_projects
 
 
 def test_health_endpoint():

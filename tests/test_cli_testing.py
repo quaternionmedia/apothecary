@@ -1,13 +1,11 @@
 """Tests for CLI testing commands."""
 
 import importlib.util
-from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
 
 from apothecary.cli import cli
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures

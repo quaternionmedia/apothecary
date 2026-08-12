@@ -45,7 +45,7 @@ def test_setup_e2e():
     except ImportError:
         click.secho("✗ Playwright not installed", fg="red")
         click.echo("  Run: uv sync")
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
     click.echo("")
     click.echo("Installing Playwright browsers (chromium)...")
@@ -71,10 +71,10 @@ def test_setup_e2e():
             raise SystemExit(1)
     except subprocess.TimeoutExpired:
         click.secho("✗ Installation timed out after 5 minutes", fg="red")
-        raise SystemExit(1)
+        raise SystemExit(1) from None
     except Exception as e:
         click.secho(f"✗ Error: {e}", fg="red")
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @test.command("validate-e2e")
@@ -198,7 +198,7 @@ def test_run_e2e(headed: bool, slowmo: int, browser: str, base_url: str):
         raise SystemExit(result.returncode)
     except Exception as e:
         click.secho(f"✗ Error running tests: {e}", fg="red")
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @test.command("run")
@@ -234,7 +234,7 @@ def test_run(e2e: bool, coverage: bool):
         raise SystemExit(result.returncode)
     except Exception as e:
         click.secho(f"✗ Error running tests: {e}", fg="red")
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @test.command("all")
@@ -442,10 +442,12 @@ def test_all(port: int, coverage: bool, headed: bool, fail_fast: bool):
     click.echo(f"  {'Test Suite':<15} {'Passed':>10} {'Failed':>10} {'Time':>10}")
     click.echo(f"  {'-'*15} {'-'*10} {'-'*10} {'-'*10}")
     click.echo(
-        f"  {'Unit':<15} {results['unit']['passed']:>10} {results['unit']['failed']:>10} {results['unit']['time']:>9.1f}s"
+        f"  {'Unit':<15} {results['unit']['passed']:>10} {results['unit']['failed']:>10} "
+        f"{results['unit']['time']:>9.1f}s"
     )
     click.echo(
-        f"  {'E2E':<15} {results['e2e']['passed']:>10} {results['e2e']['failed']:>10} {results['e2e']['time']:>9.1f}s"
+        f"  {'E2E':<15} {results['e2e']['passed']:>10} {results['e2e']['failed']:>10} "
+        f"{results['e2e']['time']:>9.1f}s"
     )
     click.echo(f"  {'-'*15} {'-'*10} {'-'*10} {'-'*10}")
     click.echo(f"  {'TOTAL':<15} {total_passed:>10} {total_failed:>10} {total_time:>9.1f}s")

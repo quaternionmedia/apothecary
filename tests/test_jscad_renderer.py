@@ -1,6 +1,6 @@
-from pathlib import Path
 import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -24,4 +24,3 @@ def test_scene_render_jscad_passes_node_check(tmp_path: Path):
         ["node", "--check", str(target)], capture_output=True, text=True, check=False
     )
     assert proc.returncode == 0, proc.stderr or proc.stdout
-

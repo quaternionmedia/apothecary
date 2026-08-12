@@ -3,6 +3,8 @@
 See tests/test_garage_workbench.py for the worked-example / layout-verification tests.
 """
 
+import pytest
+
 from apothecary.hierarchy import Assembly, Feature, Site, Structure, Substructure
 from apothecary.models.bounds import BoundingBox3D
 from apothecary.models.units import HardwareSizes, PrintSettings
@@ -27,11 +29,8 @@ def test_feature_clearance_hole_uses_print_settings_tolerance():
 
 def test_substructure_with_only_subtractions_and_no_base_raises():
     empty = Substructure(name="empty")
-    try:
+    with pytest.raises(ValueError, match="empty"):
         empty.to_scad_object()
-        assert False, "expected ValueError"
-    except ValueError as exc:
-        assert "empty" in str(exc)
 
 
 def test_substructure_composes_positive_and_negative_features():
@@ -40,9 +39,7 @@ def test_substructure_composes_positive_and_negative_features():
         base=Cube(size=Vector3D(x=10, y=10, z=10)),
         additions=[Feature.boss("pad", position=Vector3D(), diameter=4, height=2)],
         subtractions=[
-            Feature.clearance_hole(
-                "hole", position=Vector3D(), nominal_diameter=3, depth=10
-            )
+            Feature.clearance_hole("hole", position=Vector3D(), nominal_diameter=3, depth=10)
         ],
     )
     rendered = sub.to_scad_object().render()
@@ -56,9 +53,7 @@ def test_structure_names_its_material_in_the_rendered_comment():
     structure = Structure(
         name="panel",
         material="PETG",
-        substructures=[
-            Substructure(name="s1", base=Cube(size=Vector3D(x=1, y=1, z=1)))
-        ],
+        substructures=[Substructure(name="s1", base=Cube(size=Vector3D(x=1, y=1, z=1)))],
     )
     rendered = structure.to_scad_object().render()
     assert "Structure: panel (PETG)" in rendered
@@ -70,9 +65,7 @@ def test_site_compiles_to_a_scene_and_renders_openscad():
         structures=[
             Structure(
                 name="s",
-                substructures=[
-                    Substructure(name="ss", base=Cube(size=Vector3D(x=1, y=1, z=1)))
-                ],
+                substructures=[Substructure(name="ss", base=Cube(size=Vector3D(x=1, y=1, z=1)))],
             )
         ],
     )
@@ -88,9 +81,7 @@ def test_site_renders_jscad():
         structures=[
             Structure(
                 name="s",
-                substructures=[
-                    Substructure(name="ss", base=Cube(size=Vector3D(x=1, y=1, z=1)))
-                ],
+                substructures=[Substructure(name="ss", base=Cube(size=Vector3D(x=1, y=1, z=1)))],
             )
         ],
     )
@@ -127,11 +118,8 @@ def test_structure_category_defaults_to_none_and_is_settable():
 
 def test_structure_with_no_substructures_raises():
     empty = Structure(name="empty")
-    try:
+    with pytest.raises(ValueError, match="empty"):
         empty.to_scad_object()
-        assert False, "expected ValueError"
-    except ValueError as exc:
-        assert "empty" in str(exc)
 
 
 def test_substructure_world_bounds_is_none_without_a_footprint():

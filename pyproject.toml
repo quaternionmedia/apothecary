@@ -53,6 +53,10 @@ target-version = "py311"
 # errors a bare `ruff check .` reports, and black would rewrite files inside
 # a submodule working tree -- which shows up as an unexplained dirty pin.
 extend-exclude = ["parts/gridfinity/gridfinity-rebuilt-openscad"]
+
+# Under [lint], not top-level: ruff deprecated the top-level spelling and
+# printed a warning on every run, which trains people to ignore its output.
+[tool.ruff.lint]
 select = [
     "E", # pycodestyle errors
     "F", # pyflakes

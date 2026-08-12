@@ -5,6 +5,7 @@ Covers the unified viewer that absorbed the former standalone parts browser
 and the former Site/Structure hierarchy viewer -- see
 apothecary/api.py's site_viewer handler and templates/fractal_viewer.html.j2.
 """
+
 import pytest
 from playwright.sync_api import Page, expect
 
@@ -59,8 +60,9 @@ def test_viewer_dark_theme(page: Page, base_url: str):
 
     body = page.locator("body")
     bg_color = body.evaluate("el => getComputedStyle(el).backgroundColor")
-    assert "26" in bg_color or "1a" in bg_color.lower() or "rgb(26" in bg_color, \
-        f"Expected dark background, got {bg_color}"
+    assert (
+        "26" in bg_color or "1a" in bg_color.lower() or "rgb(26" in bg_color
+    ), f"Expected dark background, got {bg_color}"
 
 
 @pytest.mark.e2e
@@ -76,9 +78,17 @@ def test_viewer_shows_contents_for_the_loaded_site(page: Page, base_url: str):
     assert items.count() == 11
     contents = page.locator("#contents-list")
     for name in (
-        "workbench", "printer_1", "printer_2", "printer_3",
-        "garage_building", "lighting", "hvac", "electrical", "fluids",
-        "storage_shelving", "cnc_router",
+        "workbench",
+        "printer_1",
+        "printer_2",
+        "printer_3",
+        "garage_building",
+        "lighting",
+        "hvac",
+        "electrical",
+        "fluids",
+        "storage_shelving",
+        "cnc_router",
     ):
         expect(contents).to_contain_text(name)
 
@@ -206,8 +216,9 @@ def test_viewer_loads_each_part_jscad(page: Page, base_url: str):
         part_name = part["name"]
 
         jscad_response = page.request.get(f"{base_url}/parts/{part_name}/jscad")
-        assert jscad_response.ok, \
-            f"Part {part_name}: JSCAD endpoint returned {jscad_response.status}"
+        assert (
+            jscad_response.ok
+        ), f"Part {part_name}: JSCAD endpoint returned {jscad_response.status}"
 
         content = jscad_response.text()
         assert len(content) > 0, f"Part {part_name}: Empty JSCAD response"
@@ -227,8 +238,7 @@ def test_viewer_loads_each_part_scad(page: Page, base_url: str):
         part_name = part["name"]
 
         scad_response = page.request.get(f"{base_url}/parts/{part_name}/scad")
-        assert scad_response.ok, \
-            f"Part {part_name}: SCAD endpoint returned {scad_response.status}"
+        assert scad_response.ok, f"Part {part_name}: SCAD endpoint returned {scad_response.status}"
 
         content = scad_response.text()
         assert len(content) > 0, f"Part {part_name}: Empty SCAD response"
@@ -245,10 +255,115 @@ def test_viewer_integrated_loads_without_critical_errors(page: Page, base_url: s
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(2000)
 
-    critical_errors = [e for e in console_errors if not any(ignore in e.lower() for ignore in [
-        "extension",
-        "favicon",
-        "chrome-extension",
-    ])]
+    critical_errors = [
+        e
+        for e in console_errors
+        if not any(
+            ignore in e.lower()
+            for ignore in [
+                "extension",
+                "favicon",
+                "chrome-extension",
+            ]
+        )
+    ]
 
     assert len(critical_errors) == 0, f"Console errors found: {critical_errors}"
+
+
+# ---------------------------------------------------------------------------
+# Viewing range, assembly outlines, and per-node detail
+#
+# These assert against the live scene through window.fractalViewer rather than
+# against a screenshot: a screenshot cannot distinguish "the far plane clipped
+# the world away" from "the world is behind you", which is the exact bug the
+# clipping change fixes.
+# ---------------------------------------------------------------------------
+
+
+def _viewer_state(page: Page) -> dict:
+    """Read camera/scene counters straight out of the running viewer."""
+    return page.evaluate("""() => {
+            const v = window.fractalViewer;
+            return {
+                far: v.camera.far,
+                maxDolly: v.orbitControls.maxDistance,
+                meshes: Object.keys(v.meshByName).length,
+                overlays: Object.keys(v.compoundOverlayByKey).length,
+                dots: Object.values(v.meshByName).filter((m) => m.userData.isDot).length,
+            };
+        }""")
+
+
+def _load_garage(page: Page, base_url: str) -> dict:
+    page.goto(f"{base_url}/viewer/sites/garage")
+    page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(1500)
+    return _viewer_state(page)
+
+
+@pytest.mark.e2e
+def test_far_plane_clears_the_furthest_the_camera_can_dolly(page: Page, base_url: str):
+    """The whole point of the render-distance change.
+
+    The far plane used to be a fixed 20000 while the dolly clamp was derived
+    per level and reached ~54000 on the garage, so pulling back to look at the
+    largest scale clipped the world away instead of showing more of it.
+    """
+    state = _load_garage(page, base_url)
+
+    assert state["far"] > state["maxDolly"], (
+        f"far plane {state['far']} is inside the dolly clamp {state['maxDolly']}; "
+        "the scene clips when zoomed out"
+    )
+    assert state["far"] > 20000, "far plane is still the old fixed 20000"
+
+
+@pytest.mark.e2e
+def test_assembly_outlines_toggle_off_and_on(page: Page, base_url: str):
+    """Each compound node gets one outline, and the toolbar toggle removes them."""
+    state = _load_garage(page, base_url)
+    assert state["overlays"] > 0, "expected an outline per compound node"
+
+    page.locator("#overlay-toggle").uncheck()
+    page.wait_for_timeout(800)
+    assert _viewer_state(page)["overlays"] == 0
+
+    page.locator("#overlay-toggle").check()
+    page.wait_for_timeout(800)
+    assert _viewer_state(page)["overlays"] == state["overlays"]
+
+
+@pytest.mark.e2e
+def test_detail_mode_collapses_compound_nodes_to_dots(page: Page, base_url: str):
+    """`Dot` replaces every compound node's box with a marker; `box` restores it."""
+    state = _load_garage(page, base_url)
+    assert state["dots"] == 0
+
+    page.locator("#detail-mode").select_option("dot")
+    page.wait_for_timeout(1200)
+    dotted = _viewer_state(page)
+    assert dotted["dots"] > 0, "no node collapsed to a dot"
+    assert dotted["meshes"] == state["meshes"], "detail level changed how many nodes render"
+
+    page.locator("#detail-mode").select_option("box")
+    page.wait_for_timeout(1200)
+    assert _viewer_state(page)["dots"] == 0
+
+
+@pytest.mark.e2e
+def test_detail_can_be_overridden_for_one_node(page: Page, base_url: str):
+    """A per-node override applies to that node alone, not the whole level."""
+    _load_garage(page, base_url)
+
+    page.locator("#contents-list .contents-item").first.click()
+    page.wait_for_timeout(500)
+
+    detail_select = page.locator(".detail-select")
+    if detail_select.count() == 0:
+        pytest.skip("first contents row is a leaf; it has no subassembly to collapse")
+
+    detail_select.first.select_option("dot")
+    page.wait_for_timeout(1000)
+
+    assert _viewer_state(page)["dots"] == 1, "override should affect exactly the selected node"

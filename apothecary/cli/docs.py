@@ -244,7 +244,9 @@ def _extract_workflow_videos() -> None:
             )
         video_path = videos[0]
 
-        workflows = [line.strip() for line in marker.read_text(encoding="utf-8").splitlines() if line.strip()]
+        workflows = [
+            line.strip() for line in marker.read_text(encoding="utf-8").splitlines() if line.strip()
+        ]
         for workflow in workflows:
             workflow_dir = GENERATED_DOCS_ROOT / workflow
             workflow_dir.mkdir(parents=True, exist_ok=True)
