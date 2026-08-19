@@ -72,6 +72,8 @@ apothecary parts list          # List available parts
 apothecary parts info NAME     # Show part details
 apothecary parts render NAME   # Generate include stub
 apothecary parts generate-stl --all  # Generate all STLs
+apothecary parts generate-stl NAME -p wall=3   # Override a parameter
+apothecary parts verify NAME         # Declared bounds vs real geometry
 apothecary parts elephant-walk # Generate all-parts preview
 
 # Server

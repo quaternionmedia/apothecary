@@ -91,3 +91,53 @@ def _get_stl_bounding_box(stl_path: Path) -> tuple[float, float, float, float, f
         return (min_x, max_x, min_y, max_y, min_z, max_z)
     except Exception:
         return None
+
+
+def _coerce_scalar(text: str):
+    """Best-effort literal for a part that declares no parameter model."""
+    lowered = text.lower()
+    if lowered in ("true", "false"):
+        return lowered == "true"
+    for cast in (int, float):
+        try:
+            return cast(text)
+        except ValueError:
+            pass
+    return text
+
+
+def _parse_param_overrides(part, pairs) -> dict:
+    """Turn ``name=value`` strings into validated parameter overrides.
+
+    Validation happens against the part's own ``params_model``, so a misspelled
+    name or an out-of-range value fails here rather than after a render that
+    silently ignored it -- OpenSCAD accepts any ``-D`` name, defined or not.
+    """
+    raw: dict[str, str] = {}
+    for pair in pairs or ():
+        if "=" not in pair:
+            raise click.ClickException(f"--param expects name=value, got {pair!r}")
+        name, value = pair.split("=", 1)
+        raw[name.strip()] = value.strip()
+
+    if not raw:
+        return {}
+
+    model_cls = getattr(part, "params_model", None)
+    if model_cls is None:
+        return {name: _coerce_scalar(value) for name, value in raw.items()}
+
+    known = set(model_cls.model_fields)
+    unknown = sorted(set(raw) - known)
+    if unknown:
+        raise click.ClickException(
+            f"unknown parameter(s): {', '.join(unknown)}. "
+            f"{part.name} declares: {', '.join(sorted(known))}"
+        )
+
+    try:
+        validated = model_cls(**raw)
+    except Exception as exc:
+        raise click.ClickException(f"invalid parameters: {exc}") from exc
+
+    return {name: getattr(validated, name) for name in raw}

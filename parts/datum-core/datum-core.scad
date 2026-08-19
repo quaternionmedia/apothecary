@@ -155,7 +155,10 @@ if (show == "tray") {
     lid();
 } else {
     tray();
-    translate([0, 0, tray_h + explode_gap + lid_t])
+    // The lid is modelled plate-down and flips to sit over the tray, so its
+    // lip hangs below the plate. Clearing lid_t + lip_h makes explode_gap the
+    // air you can actually see between the two pieces.
+    translate([0, 0, tray_h + explode_gap + lid_t + lip_h])
         rotate([180, 0, 0])
             lid();
 }

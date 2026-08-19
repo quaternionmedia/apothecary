@@ -1,14 +1,21 @@
 """Parts-related CLI commands: parts group and subcommands."""
 
 import json
+import tempfile
 from pathlib import Path
 
 import click
 
 from ..projects.parts.skeleton import ROOT
+from ..projects.parts.stl_renderer import read_params_sidecar, write_params_sidecar
 from ..projects.registry import scan_projects
 from ..templates import TemplateRenderer
-from .utils import _get_stl_bounding_box, _load_part_wrapper, _safe_echo
+from .utils import (
+    _get_stl_bounding_box,
+    _load_part_wrapper,
+    _parse_param_overrides,
+    _safe_echo,
+)
 
 
 @click.group()
@@ -47,12 +54,121 @@ def parts_info(name: str, json_out: bool):
         "readme": str(part.readme_path) if part.readme_path and part.readme_path.exists() else None,
         "params_model": list(part.params_model.model_fields.keys()) if part.params_model else [],
         "bounds": bounds.model_dump(mode="json") if bounds else None,
+        "stl_params": read_params_sidecar(part.source_file.with_suffix(".stl")),
     }
     if json_out:
         click.echo(json.dumps(data, indent=2))
     else:
         for k, v in data.items():
             click.echo(f"{k}: {v}")
+
+
+@parts.command("verify")
+@click.argument("name", required=False)
+@click.option("--all", "verify_all", is_flag=True, help="Verify every part that declares bounds")
+@click.option(
+    "--param",
+    "-p",
+    "param_pairs",
+    multiple=True,
+    metavar="NAME=VALUE",
+    help="Override a part parameter before measuring. Repeatable.",
+)
+@click.option(
+    "--tolerance",
+    default=0.5,
+    show_default=True,
+    help="Permitted difference per axis, in mm.",
+)
+@click.option("--timeout", default=120, help="Timeout per part in seconds")
+def parts_verify(
+    name: str | None,
+    verify_all: bool,
+    param_pairs: tuple[str, ...],
+    tolerance: float,
+    timeout: int,
+):
+    """Check a part's declared bounds against the geometry OpenSCAD produces.
+
+    A wrapper's ``get_bounds`` is hand-written Python beside hand-written
+    OpenSCAD, and nothing has been keeping the two honest. Anything consuming
+    the declared envelope -- catalog layout, an assembly sizing itself around
+    the part -- is wrong by exactly the amount they have drifted apart.
+
+    Renders to a temporary file, so the STL you are iterating on is untouched.
+    """
+    from ..projects.parts.stl_renderer import get_renderer
+
+    renderer = get_renderer()
+    if not renderer.is_available:
+        raise click.ClickException("OpenSCAD not found; cannot measure geometry.")
+
+    if verify_all:
+        names = sorted({p.name for p in scan_projects(ROOT) if p.kind == "part" and p.wrapper})
+    elif name:
+        names = [name]
+    else:
+        raise click.ClickException("Specify a part name or use --all")
+
+    drifted, checked, skipped = [], 0, []
+
+    for part_name in names:
+        try:
+            part = _load_part_wrapper(part_name).DEFAULT
+        except click.ClickException:
+            skipped.append((part_name, "no wrapper"))
+            continue
+
+        if not part.source_file.exists():
+            skipped.append((part_name, "no source file"))
+            continue
+
+        params = _parse_param_overrides(part, param_pairs)
+        declared = part.get_bounds(params or None)
+        if declared is None:
+            skipped.append((part_name, "declares no bounds"))
+            continue
+
+        with tempfile.TemporaryDirectory() as tmp:
+            measured_stl = Path(tmp) / f"{part_name}.stl"
+            result = renderer.render_stl(
+                part.source_file, measured_stl, timeout=timeout, params=params or None
+            )
+            if not result.success:
+                skipped.append((part_name, f"render failed: {result.error_message}"))
+                continue
+            box = _get_stl_bounding_box(measured_stl)
+
+        if box is None:
+            skipped.append((part_name, "could not measure STL"))
+            continue
+
+        min_x, max_x, min_y, max_y, min_z, max_z = box
+        actual = (max_x - min_x, max_y - min_y, max_z - min_z)
+        want = (declared.size.x, declared.size.y, declared.size.z)
+        deltas = [abs(a - w) for a, w in zip(actual, want, strict=False)]
+        ok = all(d <= tolerance for d in deltas)
+        checked += 1
+
+        if ok:
+            _safe_echo(f"✓ {part_name}", fg="green")
+        else:
+            drifted.append(part_name)
+            _safe_echo(f"✗ {part_name}", fg="red")
+
+        if not ok or verify_all is False:
+            click.echo(f"    {'axis':<6}{'declared':>12}{'measured':>12}{'delta':>10}")
+            for axis, w, a, d in zip("xyz", want, actual, deltas, strict=False):
+                flag = "" if d <= tolerance else "   <-- drift"
+                click.echo(f"    {axis:<6}{w:>12.2f}{a:>12.2f}{d:>10.2f}{flag}")
+
+    click.echo("")
+    for part_name, reason in skipped:
+        _safe_echo(f"• {part_name}: skipped, {reason}")
+    click.echo(f"{checked} verified, {len(drifted)} drifted, {len(skipped)} skipped")
+
+    if drifted:
+        raise SystemExit(1)
 
 
 @parts.command("render")
@@ -104,8 +220,22 @@ def parts_render(name: str, params_json: str | None, template: str | None, outpu
 @click.argument("name", required=False)
 @click.option("--all", "generate_all", is_flag=True, help="Generate STL for all parts")
 @click.option("--force", is_flag=True, help="Regenerate even if STL exists")
+@click.option(
+    "--param",
+    "-p",
+    "param_pairs",
+    multiple=True,
+    metavar="NAME=VALUE",
+    help="Override a part parameter. Repeatable. Implies --force.",
+)
 @click.option("--timeout", default=120, type=int, help="Timeout per part in seconds")
-def parts_generate_stl(name: str | None, generate_all: bool, force: bool, timeout: int):
+def parts_generate_stl(
+    name: str | None,
+    generate_all: bool,
+    force: bool,
+    timeout: int,
+    param_pairs: tuple[str, ...] = (),
+):
     """Generate STL files from SCAD sources.
 
     STL files are not committed to git (they're in .gitignore).
@@ -192,24 +322,33 @@ def parts_generate_stl(name: str | None, generate_all: bool, force: bool, timeou
 
         stl_path = part.source_file.with_suffix(".stl")
 
-        if stl_path.exists() and not force:
+        # Validate before rendering: OpenSCAD accepts any -D name, defined or
+        # not, so a typo would render the defaults and look like a success.
+        params = _parse_param_overrides(part, param_pairs)
+
+        if stl_path.exists() and not force and not params:
             click.echo(f"STL already exists: {stl_path}")
             click.echo("Use --force to regenerate")
             return
 
         click.echo(f"Generating STL for {part.name}...")
+        if params:
+            click.echo(f"  Parameters: {params}")
 
         # Apply display rotation if defined
         rotation = part.display_rotation.to_list() if part.display_rotation else None
         if rotation and rotation != [0, 0, 0]:
             click.echo(f"  Applying display rotation: {rotation}")
             result = renderer.render_stl_with_rotation(
-                part.source_file, stl_path, rotation=rotation, timeout=timeout
+                part.source_file, stl_path, rotation=rotation, timeout=timeout, params=params
             )
         else:
-            result = renderer.render_stl(part.source_file, stl_path, timeout=timeout)
+            result = renderer.render_stl(
+                part.source_file, stl_path, timeout=timeout, params=params
+            )
 
         if result.success:
+            write_params_sidecar(stl_path, params)
             _safe_echo(f"✓ Generated: {stl_path} ({result.render_time_seconds:.1f}s)")
         else:
             raise click.ClickException(f"Generation failed: {result.error_message}")

@@ -18,9 +18,10 @@ from contextlib import asynccontextmanager, suppress
 from importlib import import_module
 from pathlib import Path
 from random import choice
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import Body, FastAPI, HTTPException, Query, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field, ValidationError
 
@@ -41,6 +42,7 @@ from .models.vectors import Vector3D
 from .primitives import Cube, Cylinder, Sphere
 from .projects.parts.skeleton import ROOT
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
+from .projects.parts.stl_renderer import write_params_sidecar
 from .projects.registry import scan_projects
 from .scene import Scene
 from .site_store import SiteStore, UnknownSiteError
@@ -529,8 +531,21 @@ async def get_part_stl(name: str):
         raise HTTPException(status_code=500, detail=f"Failed to read STL: {exc}") from exc
 
 
+class StlGenerateRequest(BaseModel):
+    """Body for a parameterised STL generation."""
+
+    params: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Parameter overrides, validated against the part's own model.",
+    )
+
+
 @app.post("/parts/{name}/stl/generate")
-async def generate_part_stl(name: str, force: bool = Query(False)):
+async def generate_part_stl(
+    name: str,
+    force: bool = Query(False),
+    body: Optional[StlGenerateRequest] = None,
+):
     """
     Generate an STL file from the part's SCAD source.
 
@@ -539,6 +554,9 @@ async def generate_part_stl(name: str, force: bool = Query(False)):
     Args:
         name: Part name
         force: If True, regenerate even if STL already exists
+        params: Parameter overrides, validated against the part's own model
+            before rendering. Supplying any implies a regeneration, since the
+            STL on disk was rendered from something else.
 
     Returns:
         Generation status with download URL on success
@@ -551,8 +569,29 @@ async def generate_part_stl(name: str, force: bool = Query(False)):
             status_code=503, detail="OpenSCAD not installed. Cannot generate STL files."
         )
 
+    # OpenSCAD accepts any -D name, defined or not, so an unrecognised
+    # parameter would render the defaults and report success. Reject it here.
+    params = body.params if body else {}
+    overrides = {}
+    if params:
+        model_cls = getattr(part, "params_model", None)
+        if model_cls is not None:
+            unknown = sorted(set(params) - set(model_cls.model_fields))
+            if unknown:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"unknown parameter(s): {', '.join(unknown)}",
+                )
+            try:
+                validated = model_cls(**params)
+            except ValidationError as exc:
+                raise HTTPException(status_code=422, detail=exc.errors()) from exc
+            overrides = {key: getattr(validated, key) for key in params}
+        else:
+            overrides = dict(params)
+
     # Check if we already have an up-to-date STL
-    if not force and part.stl_file and part.stl_file.exists():
+    if not force and not overrides and part.stl_file and part.stl_file.exists():
         return {
             "success": True,
             "message": "STL already exists (use force=true to regenerate)",
@@ -562,12 +601,14 @@ async def generate_part_stl(name: str, force: bool = Query(False)):
 
     # Generate STL
     stl_path = part.source_file.with_suffix(".stl")
-    result = await renderer.render_stl_async(part.source_file, stl_path)
+    result = await renderer.render_stl_async(part.source_file, stl_path, params=overrides or None)
 
     if not result.success:
         raise HTTPException(
             status_code=500, detail=f"STL generation failed: {result.error_message}"
         )
+
+    write_params_sidecar(stl_path, overrides)
 
     return {
         "success": True,
@@ -575,6 +616,8 @@ async def generate_part_stl(name: str, force: bool = Query(False)):
         "stl_url": f"/parts/{name}/stl",
         "regenerated": True,
         "render_time_seconds": result.render_time_seconds,
+        "params": jsonable_encoder(overrides),
+        "bounds": jsonable_encoder(part.get_bounds(overrides or None)),
     }
 
 

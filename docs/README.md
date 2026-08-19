@@ -17,6 +17,7 @@ Welcome to the Apothecary documentation. This index links to all available guide
 |----------|-------------|
 | [Scene JSON Format](scene-json.md) | JSON schema for scenes, primitives, booleans, and transforms |
 | [Parts Authoring](parts-authoring.md) | How to create and register new parts |
+| [Iterating a Part](iterating-a-part.md) | Parameter overrides, the render loop, and checking bounds against geometry |
 | [Geometry Models](models.md) | Vectors, bounds, colors, shapes, and units |
 
 ## Reference

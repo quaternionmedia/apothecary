@@ -89,3 +89,4 @@ desktop.ini
 *.tmp
 *.bak
 *.orig
+*.params.json
