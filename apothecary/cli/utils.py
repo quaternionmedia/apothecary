@@ -7,14 +7,21 @@ from pathlib import Path
 import click
 
 
-def _safe_echo(message: str):
-    """Echo message with safe encoding handling for Windows."""
+def _safe_echo(message: str, **style):
+    """Echo message with safe encoding handling for Windows.
+
+    Accepts the same styling keywords as ``click.secho``; with none it behaves
+    as ``click.echo``. A console on a legacy code page -- cp1252 is still the
+    default on Windows -- raises rather than dropping the glyph, so every line
+    carrying one has to come through here.
+    """
     try:
-        click.echo(message)
+        click.secho(message, **style)
     except UnicodeEncodeError:
         # Fallback: replace special characters with ASCII equivalents
         message = message.replace("✓", "[OK]").replace("✗", "[X]").replace("⚠️", "[!]")
-        click.echo(message)
+        message = message.replace("•", "-")
+        click.secho(message, **style)
 
 
 def _load_part_wrapper(name: str):

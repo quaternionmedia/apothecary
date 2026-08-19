@@ -11,7 +11,7 @@ import uvicorn
 
 from ..projects.parts.skeleton import ROOT
 from ..projects.registry import scan_projects
-from .utils import _get_stl_bounding_box
+from .utils import _get_stl_bounding_box, _safe_echo
 
 
 @click.command()
@@ -33,11 +33,11 @@ def serve(host: str, port: int, reload: bool, viewer_path: str | None, no_viewer
     viewer_available = False
     if no_viewer:
         os.environ["APOTHECARY_VIEWER_PATH"] = ""
-        click.echo("⚠️  JSCAD viewer disabled via --no-viewer")
+        _safe_echo("⚠️  JSCAD viewer disabled via --no-viewer")
     elif viewer_path:
         os.environ["APOTHECARY_VIEWER_PATH"] = viewer_path
         viewer_available = True
-        click.echo(f"✓ Using JSCAD viewer from: {viewer_path}")
+        _safe_echo(f"✓ Using JSCAD viewer from: {viewer_path}")
     else:
         # Check default location
         default_viewer = ROOT / "node_modules" / "@jscad" / "web"
@@ -47,28 +47,28 @@ def serve(host: str, port: int, reload: bool, viewer_path: str | None, no_viewer
             viewer_check = Path(env_viewer.strip())
             if viewer_check.exists():
                 viewer_available = True
-                click.echo(f"✓ Using JSCAD viewer from environment: {viewer_check}")
+                _safe_echo(f"✓ Using JSCAD viewer from environment: {viewer_check}")
             else:
-                click.secho(
+                _safe_echo(
                     "⚠️  Warning: APOTHECARY_VIEWER_PATH set but path doesn't exist", fg="yellow"
                 )
         elif default_viewer.exists():
             viewer_available = True
             # Set the environment variable so the app mount will work
             os.environ["APOTHECARY_VIEWER_PATH"] = str(default_viewer)
-            click.echo(f"✓ JSCAD viewer found at: {default_viewer}")
+            _safe_echo(f"✓ JSCAD viewer found at: {default_viewer}")
         else:
             # Even if assets not found, still try to set it to the expected path
             # in case they get installed later
             os.environ["APOTHECARY_VIEWER_PATH"] = str(default_viewer)
-            click.secho("⚠️  Warning: JSCAD viewer assets not found", fg="yellow", bold=True)
+            _safe_echo("⚠️  Warning: JSCAD viewer assets not found", fg="yellow", bold=True)
             click.echo("   The /viewer endpoints will return 503 errors.")
             click.echo("")
             click.secho("   To enable the viewer:", fg="yellow")
-            click.echo("   • Run: apothecary install")
-            click.echo("   • Or manually: npm install @jscad/web")
-            click.echo("   • Or pass: --viewer-path /path/to/viewer/dist")
-            click.echo("   • Or use: --no-viewer to suppress this warning")
+            _safe_echo("   • Run: apothecary install")
+            _safe_echo("   • Or manually: npm install @jscad/web")
+            _safe_echo("   • Or pass: --viewer-path /path/to/viewer/dist")
+            _safe_echo("   • Or use: --no-viewer to suppress this warning")
             click.echo("")
 
     # NOW import the app after environment variables are set
@@ -108,7 +108,7 @@ def dev(host: str, port: int, install: bool, skip_stl: bool, elephant: bool):
         apothecary dev
         apothecary dev --install --port 3000
     """
-    click.secho("🧪 Apothecary Dev Mode", bold=True)
+    _safe_echo("🧪 Apothecary Dev Mode", bold=True)
     click.echo("")
 
     # Step 1: Sync dependencies (optional)
@@ -132,9 +132,9 @@ def dev(host: str, port: int, install: bool, skip_stl: bool, elephant: bool):
             )
 
         if result.returncode == 0:
-            click.secho("  ✓ Dependencies synced", fg="green")
+            _safe_echo("  ✓ Dependencies synced", fg="green")
         else:
-            click.secho(f"  ✗ Sync failed: {result.stderr}", fg="red")
+            _safe_echo(f"  ✗ Sync failed: {result.stderr}", fg="red")
             raise SystemExit(1)
     else:
         click.echo("Step 1: Skipped (use --install to sync)")
@@ -161,14 +161,14 @@ def dev(host: str, port: int, install: bool, skip_stl: bool, elephant: bool):
                 click.echo(f"  Generating {item.name}...", nl=False)
                 result = renderer.render_stl(item.path, stl_path, timeout=120)
                 if result.success:
-                    click.secho(" ✓", fg="green")
+                    _safe_echo(" ✓", fg="green")
                     generated += 1
                 else:
-                    click.secho(" ✗", fg="red")
+                    _safe_echo(" ✗", fg="red")
 
-            click.secho(f"  ✓ {generated} generated, {skipped} already exist", fg="green")
+            _safe_echo(f"  ✓ {generated} generated, {skipped} already exist", fg="green")
         else:
-            click.secho("  ⚠ OpenSCAD not found, skipping STL generation", fg="yellow")
+            _safe_echo("  ⚠ OpenSCAD not found, skipping STL generation", fg="yellow")
     else:
         click.echo("Step 2: Skipped (--skip-stl)")
 
@@ -257,18 +257,18 @@ def dev(host: str, port: int, install: bool, skip_stl: bool, elephant: bool):
             click.echo("  Rendering elephant_walk.stl...", nl=False)
             result = renderer.render_stl(elephant_path, stl_path, timeout=180)
             if result.success:
-                click.secho(f" ✓ ({result.render_time_seconds:.1f}s)", fg="green")
+                _safe_echo(f" ✓ ({result.render_time_seconds:.1f}s)", fg="green")
             else:
-                click.secho(f" ✗ {result.error_message}", fg="red")
+                _safe_echo(f" ✗ {result.error_message}", fg="red")
         else:
-            click.secho("  ⚠ Skipped (no parts or OpenSCAD not found)", fg="yellow")
+            _safe_echo("  ⚠ Skipped (no parts or OpenSCAD not found)", fg="yellow")
     else:
         click.echo("Step 3: Skipped (--skip-elephant)")
 
     # Step 4: Start dev server
     click.echo("")
     click.secho(f"Step 4: Starting dev server on http://{host}:{port}", fg="cyan")
-    click.secho("  → Viewer: http://" + host + ":" + str(port) + "/viewer", fg="green")
+    _safe_echo("  → Viewer: http://" + host + ":" + str(port) + "/viewer", fg="green")
     click.echo("")
 
     uvicorn.run("apothecary.api:app", host=host, port=port, reload=True)

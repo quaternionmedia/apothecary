@@ -1,5 +1,6 @@
 """System-related CLI commands: system, check, install."""
 
+import importlib.metadata
 import json
 import os
 import shutil
@@ -10,6 +11,7 @@ from pathlib import Path
 import click
 
 from ..projects.parts.skeleton import ROOT
+from ..projects.parts.stl_renderer import OpenSCADRenderer
 from ..projects.registry import scan_projects
 from .utils import _safe_echo
 
@@ -29,7 +31,7 @@ def check():
 
     # Check Python version
     py_version = sys.version.split()[0]
-    click.echo(f"✓ Python: {py_version}")
+    _safe_echo(f"✓ Python: {py_version}")
     click.echo(f"  Executable: {sys.executable}")
     click.echo("")
 
@@ -38,11 +40,11 @@ def check():
     required = ["fastapi", "jinja2", "pydantic", "click", "uvicorn"]
     for pkg in required:
         try:
-            mod = __import__(pkg)
-            version = getattr(mod, "__version__", "unknown")
-            click.echo(f"  ✓ {pkg}: {version}")
+            __import__(pkg)
+            version = importlib.metadata.version(pkg)
+            _safe_echo(f"  ✓ {pkg}: {version}")
         except ImportError:
-            click.secho(f"  ✗ {pkg}: NOT FOUND", fg="red")
+            _safe_echo(f"  ✗ {pkg}: NOT FOUND", fg="red")
     click.echo("")
 
     # Check JSCAD viewer assets
@@ -54,16 +56,16 @@ def check():
     if env_viewer:
         env_path = Path(env_viewer)
         if env_path.exists():
-            click.echo(f"  ✓ Found via APOTHECARY_VIEWER_PATH: {env_path}")
+            _safe_echo(f"  ✓ Found via APOTHECARY_VIEWER_PATH: {env_path}")
             viewer_found = True
         else:
-            click.secho(f"  ✗ APOTHECARY_VIEWER_PATH set but not found: {env_path}", fg="red")
+            _safe_echo(f"  ✗ APOTHECARY_VIEWER_PATH set but not found: {env_path}", fg="red")
 
     if default_viewer.exists():
-        click.echo(f"  ✓ Found at default location: {default_viewer}")
+        _safe_echo(f"  ✓ Found at default location: {default_viewer}")
         viewer_found = True
     elif not viewer_found:
-        click.secho("  ✗ Not found at default location", fg="yellow")
+        _safe_echo("  ✗ Not found at default location", fg="yellow")
         click.echo(f"     Expected: {default_viewer}")
 
     if not viewer_found:
@@ -76,6 +78,20 @@ def check():
 
     click.echo("")
 
+    # Check OpenSCAD availability for STL generation workflows
+    click.secho("OpenSCAD:", bold=True)
+    renderer = OpenSCADRenderer()
+    if renderer.is_available:
+        _safe_echo(f"  ✓ Available: {renderer.openscad_path}")
+        version = renderer.get_version()
+        if version:
+            _safe_echo(f"  ✓ Version: {version}")
+    else:
+        _safe_echo("  ✗ OpenSCAD not found", fg="yellow")
+        click.echo("     STL rendering endpoints and commands will be unavailable")
+
+    click.echo("")
+
     # Check for parts
     click.secho("Parts:", bold=True)
     items = [p for p in scan_projects(ROOT) if p.kind == "part"]
@@ -83,7 +99,7 @@ def check():
     if items:
         for item in items[:5]:
             status = "✓" if item.wrapper else "•"
-            click.echo(f"    {status} {item.name}")
+            _safe_echo(f"    {status} {item.name}")
         if len(items) > 5:
             click.echo(f"    ... and {len(items) - 5} more")
 
@@ -204,6 +220,6 @@ def install(viewer: bool, force: bool, npm_cmd: str):
 
     click.echo("")
     click.echo("Next steps:")
-    click.echo("  • Run 'apothecary check' to verify installation")
-    click.echo("  • Run 'apothecary serve' to start the API server")
-    click.echo("  • Visit http://127.0.0.1:8000/viewer to use JSCAD viewer")
+    _safe_echo("  • Run 'apothecary check' to verify installation")
+    _safe_echo("  • Run 'apothecary serve' to start the API server")
+    _safe_echo("  • Visit http://127.0.0.1:8000/viewer to use JSCAD viewer")
