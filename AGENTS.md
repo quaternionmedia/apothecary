@@ -44,6 +44,17 @@ what was actually verified.
 Apothecary is an OpenSCAD generation toolkit (Pydantic scene models → OpenSCAD/JSCAD)
 plus a curated parts library, CLI, and FastAPI viewer. Python 3.11+, managed with `uv`.
 
+The governance corpus is a submodule at `governance/qm`, and a plain clone
+leaves it empty. `git clone --recurse-submodules`, or after the fact:
+
+```bash
+git submodule update --init    # governance/qm, or it is an empty directory
+```
+
+Without it every record this file cites is unreadable, the governance CI gates
+fail for a reason that has nothing to do with your change, and an agent reads
+this file's summary of the corpus instead of the corpus.
+
 ```bash
 uv sync                        # install dependencies
 uv run apothecary test all     # full test suite (unit + E2E)
