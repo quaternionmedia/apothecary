@@ -212,7 +212,9 @@ class OpenSCADRenderer:
                 capture_output=True,
                 text=True,
                 timeout=timeout,
-                cwd=str(scad_path.parent),  # Run in source directory for includes
+                # OpenSCAD resolves a relative import() against the source
+                # file's own directory, so this is for the process, not paths.
+                cwd=str(scad_path.parent),
             )
 
             elapsed = (datetime.now() - start_time).total_seconds()

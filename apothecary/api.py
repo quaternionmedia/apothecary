@@ -686,9 +686,15 @@ def _node_stl_cache_paths(scad_text: str) -> tuple[Path, Path]:
     render. Unlike a registered part (which has a fixed source file to key
     off of), an arbitrary Assembly subtree has no path of its own on disk --
     the rendered SCAD text itself is the only stable identity available.
+
+    A scene referring to registered parts imports them by repository-relative
+    path, and OpenSCAD resolves a relative ``import()`` against the *source
+    file's* own directory rather than the process working directory. So the
+    source has to sit at the repository root to render at all, while the STL
+    it produces belongs in the cache. It is scratch: written, rendered, removed.
     """
     digest = hashlib.sha256(scad_text.encode("utf-8")).hexdigest()[:20]
-    return _NODE_STL_CACHE_DIR / f"{digest}.scad", _NODE_STL_CACHE_DIR / f"{digest}.stl"
+    return ROOT / f".node-stl-{digest}.scad", _NODE_STL_CACHE_DIR / f"{digest}.stl"
 
 
 def _bounds_dict(bounds: BoundingBox3D | None) -> Dict[str, List[float]] | None:
@@ -976,9 +982,12 @@ async def get_node_stl(name: str, path: str):
             raise HTTPException(
                 status_code=503, detail="OpenSCAD not installed. Cannot generate STL files."
             )
-        scad_path.parent.mkdir(parents=True, exist_ok=True)
+        stl_path.parent.mkdir(parents=True, exist_ok=True)
         scad_path.write_text(scad_text, encoding="utf-8")
-        result = await renderer.render_stl_async(scad_path, stl_path, timeout=60)
+        try:
+            result = await renderer.render_stl_async(scad_path, stl_path, timeout=60)
+        finally:
+            scad_path.unlink(missing_ok=True)
         if not result.success:
             raise HTTPException(
                 status_code=500, detail=f"STL generation failed: {result.error_message}"

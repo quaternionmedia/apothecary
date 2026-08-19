@@ -1,0 +1,102 @@
+"""A catalog leaf refers to a part instead of describing its own shape.
+
+`to_scad_object()` knew only how to build geometry from `base`, `additions`
+and `children`, so every node in the parts library raised. One missing case
+emptied three surfaces of the viewer at once: the canvas got 422 from the
+node-STL route, the contents list had no meshes to show, and the generated
+OpenSCAD panel kept its placeholder because the layout route 500'd before it
+could return any.
+"""
+
+from __future__ import annotations
+
+import pytest
+from fastapi.testclient import TestClient
+
+from apothecary.api import app
+from apothecary.example_parts_library import create_parts_library_site
+from apothecary.hierarchy import Assembly, part_stl_path
+from apothecary.primitives import Import
+from apothecary.projects.parts.stl_renderer import get_renderer
+
+client = TestClient(app)
+
+
+class TestImportPrimitive:
+    def test_renders_an_openscad_import(self):
+        assert Import(file="parts/datum-core/datum-core.stl").render() == (
+            'import("parts/datum-core/datum-core.stl", convexity=10);'
+        )
+
+    def test_windows_separators_become_posix(self):
+        # The same scene has to render identically on either platform.
+        assert '"a/b/c.stl"' in Import(file=r"a\b\c.stl").render()
+
+    def test_comment_precedes_the_call(self):
+        rendered = Import(file="x.stl", comment="Part: x").render()
+        assert rendered.splitlines()[0] == "// Part: x"
+
+
+class TestPartStlPath:
+    def test_registered_part_resolves_repository_relative(self):
+        # Never absolute: generated SCAD is shown to people and an absolute
+        # path there leaks the local layout of whoever generated it.
+        assert part_stl_path("datum-core") == "parts/datum-core/datum-core.stl"
+
+    def test_unregistered_part_is_none(self):
+        assert part_stl_path("no-such-part") is None
+
+
+class TestCatalogLeafCompiles:
+    def test_part_ref_leaf_imports_its_geometry(self):
+        leaf = Assembly(name="datum-core", role="part", part_ref="datum-core")
+        rendered = leaf.to_scad_object().render()
+        assert 'import("parts/datum-core/datum-core.stl"' in rendered
+
+    def test_missing_stl_names_the_command_that_fixes_it(self):
+        leaf = Assembly(name="ghost", role="part", part_ref="no-such-part")
+        with pytest.raises(ValueError, match="apothecary parts generate-stl no-such-part"):
+            leaf.to_scad_object()
+
+    def test_a_leaf_with_neither_still_reports_the_original_error(self):
+        bare = Assembly(name="bare", role="part")
+        with pytest.raises(ValueError, match="has no base, additions, or children"):
+            bare.to_scad_object()
+
+    def test_the_whole_catalog_renders(self):
+        # This is the one that was failing: a site made entirely of part_ref
+        # leaves could not render at all.
+        scad = create_parts_library_site().render()
+        assert scad.count("import(") >= 10
+
+
+class TestViewerSurfaces:
+    def test_layout_returns_generated_scad(self):
+        """The panel says 'Load a site to see generated OpenSCAD' until this
+        response carries a `scad` key, so an error here reads as a blank panel.
+        """
+        site = client.get("/sites/parts_library").json()
+        positions = {s["name"]: s["position"] for s in site["structures"]}
+        response = client.post("/sites/parts_library/layout", json={"positions": positions})
+        assert response.status_code == 200, response.text
+
+        body = response.json()
+        assert body["is_valid"] is True
+        assert body["scad"].count("import(") >= 10
+
+    @pytest.mark.slow
+    def test_node_stl_renders_a_catalog_leaf(self):
+        if not get_renderer().is_available:
+            pytest.skip("OpenSCAD not installed")
+        response = client.get("/sites/parts_library/nodes/datum-core/stl")
+        assert response.status_code == 200, response.text
+        assert len(response.content) > 1000
+
+    @pytest.mark.slow
+    def test_node_render_leaves_no_scratch_behind(self):
+        if not get_renderer().is_available:
+            pytest.skip("OpenSCAD not installed")
+        from apothecary.projects.parts.skeleton import ROOT
+
+        client.get("/sites/parts_library/nodes/calibration_cube/stl")
+        assert list(ROOT.glob(".node-stl-*.scad")) == []

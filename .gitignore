@@ -90,3 +90,6 @@ desktop.ini
 *.bak
 *.orig
 *.params.json
+
+# Scratch SCAD for on-demand node renders (written, rendered, removed)
+.node-stl-*.scad

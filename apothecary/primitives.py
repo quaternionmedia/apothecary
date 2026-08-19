@@ -57,3 +57,22 @@ class Cylinder(OpenSCADObject):
         )
         fn_str = f", $fn={self.fn}" if self.fn else ""
         return f"{comment_str}cylinder(h={self.h}, {radius_str}, center={str(self.center).lower()}{fn_str});"
+
+
+class Import(OpenSCADObject):
+    """Geometry loaded from a mesh file rather than constructed.
+
+    A catalog leaf refers to a registered part instead of describing its own
+    shape, and the generated OpenSCAD for one is the same `import()` the
+    elephant-walk generator already emits. The path is written POSIX-style so
+    the same scene renders identically on Windows.
+    """
+
+    file: str
+    convexity: int = Field(10, gt=0)
+
+    def render(self, *_, **__) -> str:
+        comment_str = f"// {self.comment}\n" if self.comment else ""
+        path = self.file.replace("\\", "/")
+        return f'{comment_str}import("{path}", convexity={self.convexity});'
+

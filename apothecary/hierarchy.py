@@ -43,9 +43,25 @@ from .core import OpenSCADObject
 from .models.bounds import BoundingBox3D
 from .models.units import PrintSettings
 from .models.vectors import Vector3D
-from .primitives import Cylinder
+from .primitives import Cylinder, Import
 from .scene import Scene
 from .transforms import Translate
+
+
+def part_stl_path(part_ref: str) -> Optional[str]:
+    """A registered part's STL, relative to the repository root, or None.
+
+    Imported lazily: the registry reaches back into this package, and a
+    top-level import would close the loop.
+    """
+    from .projects.parts.skeleton import ROOT
+    from .projects.registry import scan_projects
+
+    for entry in scan_projects(ROOT):
+        if entry.kind == "part" and entry.name == part_ref:
+            stl = entry.path.with_suffix(".stl")
+            return stl.relative_to(ROOT).as_posix() if stl.exists() else None
+    return None
 
 
 class Assembly(BaseModel):
@@ -118,6 +134,21 @@ class Assembly(BaseModel):
             positives.append(self.base)
         positives.extend(addition.to_scad_object() for addition in self.additions)
         positives.extend(child.to_scad_object() for child in self.children)
+
+        # A catalog leaf refers to a registered part instead of describing its
+        # own shape, so its geometry is imported rather than constructed.
+        # Without this a whole site of them -- which is what the parts library
+        # is -- cannot render at all, and the viewer's canvas, contents and
+        # generated-OpenSCAD panel all come up empty together.
+        if not positives and self.part_ref is not None:
+            stl = part_stl_path(self.part_ref)
+            if stl is None:
+                raise ValueError(
+                    f"{self.role.capitalize()} {self.name!r} refers to part "
+                    f"{self.part_ref!r}, which is not registered or has no STL. "
+                    f"Generate one with `apothecary parts generate-stl {self.part_ref}`."
+                )
+            positives.append(Import(file=stl))
 
         if not positives:
             raise ValueError(

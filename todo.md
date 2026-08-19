@@ -35,6 +35,13 @@
    SCAD disagreeing about *size*, but a parameter declared in the `Params` model
    and absent from the SCAD file (or the reverse) is still undetected.
 
+6. **Fixed: catalog leaves had no geometry path.** `to_scad_object()` built
+   geometry only from `base`/`additions`/`children`, so every `part_ref` leaf
+   raised and the whole `parts_library` site was unrenderable. One missing case
+   emptied three viewer surfaces at once — canvas (422), contents, and the
+   generated-OpenSCAD panel (500 on the layout route, so its placeholder never
+   left). Catalog leaves now compile to `import()`.
+
 ## Next Steps
 - [ ] Fix JSCAD import syntax and add regression test (e.g., `node --check`)
 - [ ] Update packaging to include `parts/` and `templates/` in wheel
