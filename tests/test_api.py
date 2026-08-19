@@ -52,6 +52,28 @@ def test_parts_detail_and_scad_download():
     assert "module parametric_star" in scad.text
 
 
+def test_parts_metadata_uses_repo_relative_paths():
+    client = TestClient(app)
+    r = client.get("/parts/parametric_star")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["source_file"].startswith("parts/")
+    assert ":/" not in data["source_file"]
+    if data.get("readme"):
+        assert not data["readme"].startswith("/")
+        assert ":/" not in data["readme"]
+
+
+def test_parts_include_uses_repo_relative_include_path():
+    client = TestClient(app)
+    r = client.get("/parts/parametric_star")
+    assert r.status_code == 200
+    include = r.json()["include"]
+    assert "include <parts/" in include
+    assert "C:/" not in include
+    assert "\\\\" not in include
+
+
 def test_parts_random_endpoint_returns_metadata():
     client = TestClient(app)
     r = client.get("/parts/random")

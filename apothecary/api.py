@@ -226,6 +226,17 @@ def _available_part_names() -> List[str]:
     return sorted({p.name for p in scan_projects(ROOT) if p.kind == "part" and p.wrapper})
 
 
+def _repo_relative_path(path: Path) -> str:
+    """Return a repository-relative POSIX path when possible.
+
+    API responses should avoid exposing absolute local filesystem paths.
+    """
+    try:
+        return path.relative_to(ROOT).as_posix()
+    except ValueError:
+        return path.name
+
+
 def _normalize_params(part, params_query: str | None) -> tuple[Dict[str, object], str]:
     data: Dict[str, object] = {}
     if params_query:
@@ -254,7 +265,7 @@ def _render_part_include(part, params_json: str) -> str:
     ctx = {
         "part": part,
         "params_json": params_json,
-        "source_posix": part.source_file.as_posix(),
+        "source_posix": _repo_relative_path(part.source_file),
     }
     return renderer.render_template(template_str, ctx)
 
@@ -265,8 +276,12 @@ def _part_metadata(part) -> Dict[str, object]:
         "description": part.description,
         "category": part.category,
         "tags": part.tags,
-        "readme": str(part.readme_path) if part.readme_path and part.readme_path.exists() else None,
-        "source_file": part.source_file.as_posix(),
+        "readme": (
+            _repo_relative_path(part.readme_path)
+            if part.readme_path and part.readme_path.exists()
+            else None
+        ),
+        "source_file": _repo_relative_path(part.source_file),
         "has_params": bool(part.params_model),
     }
 
