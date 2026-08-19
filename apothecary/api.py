@@ -852,12 +852,28 @@ def _assembly_tree(
 
 
 def _site_payload(site, report) -> Dict[str, object]:
+    """The site as the viewer consumes it, including its generated OpenSCAD.
+
+    ``scad`` used to be attached only by the layout route, so a site that had
+    merely been loaded -- never dragged -- left the viewer's code panel showing
+    its "Load a site..." placeholder indefinitely. It is string generation over
+    a tree already in memory, not an OpenSCAD process, so every read carries it.
+
+    A node that cannot compile is reported as a comment rather than a 500: the
+    panel is one of several surfaces on the page, and the rest of them work.
+    """
+    try:
+        scad = site.render()
+    except ValueError as exc:
+        scad = f"// This site has no generated OpenSCAD: {exc}"
+
     return {
         "name": site.name,
         "structures": [_structure_summary(s) for s in site.children],
         "tree": _assembly_tree(site),
         "violations": [v.model_dump() for v in report.violations],
         "is_valid": report.is_valid,
+        "scad": scad,
     }
 
 
@@ -901,9 +917,7 @@ async def update_site_layout(name: str, body: LayoutRequest):
             structure.position = Vector3D(x=override.x, y=override.y, z=override.z)
 
     validator = _site_store.validator(name)
-    payload = _site_payload(site, validator(site))
-    payload["scad"] = site.render()
-    return payload
+    return _site_payload(site, validator(site))
 
 
 @app.post("/sites/{name}/structures/{structure_name}/status")

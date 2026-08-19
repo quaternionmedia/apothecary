@@ -634,6 +634,7 @@
                     this.focusPath = this.resolveFocusPath(focusPathStr);
                     this.selectedName = null;
                     this.jobs = this.hasBuildVolumes ? await this.fetchJobs() : [];
+                    if (data.scad) this.codeContentEl.textContent = data.scad;
                     this.renderFocus();
                     this.setStatus(`Loaded: ${data.name}`, 'success');
                 } catch (err) {
@@ -728,6 +729,14 @@
             currentRenderNodes(focus) {
                 const focusPrefix = this.focusPath.join('.');
                 const nodes = [];
+                // A leaf has nothing beneath it, and rendering "the focus
+                // node's children" therefore rendered an empty scene for the
+                // one thing a reader was asking to look at -- no meshes, no
+                // contents, no geometry fetched at all. Zooming into a part
+                // shows the part.
+                if (!focus.children.length) {
+                    return [{ ...focus, _path: focusPrefix }];
+                }
                 for (const child of focus.children) {
                     const path = pathForChild(focusPrefix, child.name);
                     if (child.children.length && this.expandedCategories.has(child.category)) {
@@ -759,6 +768,9 @@
                     for (const child of node.children) addAll(child, pathForChild(path, child.name));
                 };
                 for (const child of focus.children) addAll(child, pathForChild(focusPrefix, child.name));
+                // Same reason as currentRenderNodes: a focused leaf is its own
+                // render node, so it needs a key or selecting it finds nothing.
+                if (!focus.children.length) addAll(focus, focusPrefix);
             }
 
             renderFocus() {
@@ -1088,8 +1100,11 @@
             renderContentsList(focus) {
                 this.contentsEl.innerHTML = '';
                 const focusPrefix = this.focusPath.join('.');
-                focus.children.forEach((child) => {
-                    const path = pathForChild(focusPrefix, child.name);
+                // A focused leaf lists itself, for the same reason it renders
+                // itself: the panel is about what is on screen.
+                const listed = focus.children.length ? focus.children : [focus];
+                listed.forEach((child) => {
+                    const path = child === focus ? focusPrefix : pathForChild(focusPrefix, child.name);
                     this.contentsEl.appendChild(this.buildTreeRows(child, path, 0));
                 });
             }

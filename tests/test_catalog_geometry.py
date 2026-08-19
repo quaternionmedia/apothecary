@@ -100,3 +100,36 @@ class TestViewerSurfaces:
 
         client.get("/sites/parts_library/nodes/calibration_cube/stl")
         assert list(ROOT.glob(".node-stl-*.scad")) == []
+
+
+class TestSitePayloadCarriesScad:
+    """The viewer's code panel reads `scad` off an ordinary site read."""
+
+    def test_get_site_includes_generated_scad(self):
+        body = client.get("/sites/parts_library").json()
+        assert body["scad"].count("import(") >= 10
+
+    def test_layout_still_includes_it(self):
+        site = client.get("/sites/parts_library").json()
+        positions = {s["name"]: s["position"] for s in site["structures"]}
+        body = client.post("/sites/parts_library/layout", json={"positions": positions}).json()
+        assert body["scad"].count("import(") >= 10
+
+    def test_a_site_that_cannot_compile_reports_it_rather_than_500ing(self, monkeypatch):
+        """One uncompilable node must not take the whole page down with it."""
+        import apothecary.api as api
+
+        class Boom:
+            name = "boom"
+            children: list = []
+
+            def render(self):
+                raise ValueError("nope")
+
+        class Report:
+            violations: list = []
+            is_valid = True
+
+        monkeypatch.setattr(api, "_assembly_tree", lambda site: {})
+        payload = api._site_payload(Boom(), Report())
+        assert payload["scad"].startswith("// This site has no generated OpenSCAD")
