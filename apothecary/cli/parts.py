@@ -33,6 +33,10 @@ def parts_list(json_out: bool):
 def parts_info(name: str, json_out: bool):
     mod = _load_part_wrapper(name)
     part = mod.DEFAULT
+    # A consumer sizing an assembly around this part needs the envelope, not
+    # just the file path. Parts that neither override get_bounds nor set
+    # default_bounds report null rather than a guess.
+    bounds = part.get_bounds()
     data = {
         "name": part.name,
         "source_file": str(part.source_file),
@@ -42,6 +46,7 @@ def parts_info(name: str, json_out: bool):
         "description": part.description,
         "readme": str(part.readme_path) if part.readme_path and part.readme_path.exists() else None,
         "params_model": list(part.params_model.model_fields.keys()) if part.params_model else [],
+        "bounds": bounds.model_dump(mode="json") if bounds else None,
     }
     if json_out:
         click.echo(json.dumps(data, indent=2))
@@ -165,10 +170,10 @@ def parts_generate_stl(name: str | None, generate_all: bool, force: bool, timeou
                 result = renderer.render_stl(scad_path, stl_path, timeout=timeout)
 
             if result.success:
-                click.secho(f" ✓ ({result.render_time_seconds:.1f}s)", fg="green")
+                _safe_echo(f" ✓ ({result.render_time_seconds:.1f}s)", fg="green")
                 success_count += 1
             else:
-                click.secho(f" ✗ {result.error_message}", fg="red")
+                _safe_echo(f" ✗ {result.error_message}", fg="red")
                 fail_count += 1
 
         click.echo("")
@@ -266,9 +271,9 @@ def parts_elephant_walk(output: str, gap: int, ensure_stl: bool):
                     click.echo(f"  {item.name}...", nl=False)
                     result = renderer.render_stl(item.path, stl_path, timeout=120)
                     if result.success:
-                        click.secho(" ✓", fg="green")
+                        _safe_echo(" ✓", fg="green")
                     else:
-                        click.secho(f" ✗ {result.error_message}", fg="red")
+                        _safe_echo(f" ✗ {result.error_message}", fg="red")
                 click.echo("")
 
     # Calculate bounding boxes and positions
