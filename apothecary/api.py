@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError
 
 from .booleans import Difference, Intersection, Union
@@ -315,6 +316,18 @@ def _part_payload(part, params_query: str | None) -> Dict[str, object]:
         }
     )
     return metadata
+
+
+# The viewer's 3D library, served from this origin rather than a CDN. A CDN
+# copy is unreachable offline and is exactly what an ad blocker or a corporate
+# proxy drops -- and when it goes, the page's script never executes at all, so
+# the canvas, the contents list and the code panel come up empty together while
+# the static markup still reads "Layout valid". Frontend dependencies are
+# vendored per the house-stack record for the same reason.
+THREE_DIR = ROOT / "node_modules" / "three"
+THREE_IS_VENDORED = (THREE_DIR / "build" / "three.module.js").is_file()
+if THREE_IS_VENDORED:
+    app.mount("/vendor/three", StaticFiles(directory=THREE_DIR), name="three")
 
 
 @app.get("/")
@@ -1165,7 +1178,11 @@ async def site_viewer(name: str, request: Request, focus: str = Query(default=""
     base_url = str(request.base_url).rstrip("/")
     return HTMLResponse(
         render_fractal_viewer_page(
-            _site_store.names(), base_url, default_site=name, focus_path=focus
+            _site_store.names(),
+            base_url,
+            default_site=name,
+            focus_path=focus,
+            three_is_vendored=THREE_IS_VENDORED,
         )
     )
 

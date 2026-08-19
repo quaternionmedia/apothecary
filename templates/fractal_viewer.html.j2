@@ -286,11 +286,18 @@
         <div id="status" class="status">Loading site…</div>
     </div>
 
+    {% if not three_is_vendored %}
+    <div style="background:#7f1d1d;color:#fff;padding:12px 16px;font:14px/1.5 system-ui">
+        <strong>The 3D library is not installed.</strong>
+        Nothing will render below. Run <code>npm install</code> in the repository
+        root (or <code>apothecary install</code>), then reload.
+    </div>
+    {% endif %}
     <script type="importmap">
     {
         "imports": {
-            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            "three": "/vendor/three/build/three.module.js",
+            "three/addons/": "/vendor/three/examples/jsm/"
         }
     }
     </script>
@@ -685,7 +692,11 @@
             zoomIn(name) {
                 const focus = this.currentFocusNode();
                 const child = findChild(focus, name);
-                if (!child || !child.children.length) return;
+                // A leaf is a legitimate destination: it renders as itself, and
+                // reaching one is how the parts library gives back the old
+                // part-viewer experience. Refusing childless nodes made every
+                // entry in a catalog of leaves un-navigable.
+                if (!child) return;
                 this.focusPath = [...this.focusPath, name];
                 this.selectedName = null;
                 this.renderFocus();
@@ -1671,7 +1682,7 @@
                 const focus = this.currentFocusNode();
                 if (!focus.children.length) return;
                 const selected = this.selectedName ? this.renderNodeByKey[this.selectedName] : null;
-                if (selected && selected.children.length && focus.children.some((c) => c.name === selected.name)) {
+                if (selected && focus.children.some((c) => c.name === selected.name)) {
                     this.zoomIn(selected.name);
                     return;
                 }
@@ -1679,7 +1690,6 @@
                 let closest = null;
                 let closestDist = Infinity;
                 focus.children.forEach((child, index) => {
-                    if (!child.children.length) return;
                     const { center } = this.boxFromBounds(this.boundsFor(child, index));
                     const dist = Math.hypot(center[0] - target.x, center[1] - target.y, center[2] - target.z);
                     if (dist < closestDist) {

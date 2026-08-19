@@ -78,6 +78,19 @@ def check():
 
     click.echo("")
 
+    # The fractal viewer's 3D library. Without it the viewer page loads,
+    # renders nothing, and still shows its static "Layout valid" chip -- so
+    # the absence has to be reported somewhere a person will look.
+    click.secho("3D library (three.js):", bold=True)
+    three_build = ROOT / "node_modules" / "three" / "build" / "three.module.js"
+    if three_build.is_file():
+        _safe_echo(f"  ✓ Vendored: {three_build.parent.parent}")
+    else:
+        _safe_echo("  ✗ three.js not installed", fg="yellow")
+        click.echo("     The fractal viewer will render nothing. Run: npm install")
+
+    click.echo("")
+
     # Check OpenSCAD availability for STL generation workflows
     click.secho("OpenSCAD:", bold=True)
     renderer = OpenSCADRenderer()
