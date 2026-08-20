@@ -30,7 +30,8 @@ a printable object.
 | `connector_w`, `connector_h` | 9.4 × 3.6 | Edge connector opening, plus `connector_margin` each side |
 | `contact_pitch_x/y` | 18 | Contact opening spacing, a 2 × 2 grid |
 | `indicator_x`, `indicator_y` | 0, 14 | Light pipe position, relative to the board centre |
-| `lip_clearance` | 0.25 | Lid lip to cavity wall. Print-process dependent |
+| `walls` | 3 | Side wall thickness. House constant, print-validated |
+| `tolerence` | 0.4 | Total fit clearance; the lid lip gets half per side. House constant |
 
 ## Fit is unverified
 
@@ -50,4 +51,4 @@ What has to be checked against a real board before this is printed in anger:
 ## Bounds
 
 `apothecary parts info datum-core` reports the envelope. At the defaults the
-tray is 45.6 × 45.6 × 15.6 mm.
+tray is 46.8 × 46.8 × 15.6 mm.

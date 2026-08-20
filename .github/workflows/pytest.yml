@@ -35,5 +35,11 @@ jobs:
     - name: 🚧 Install dependencies
       run: uv sync --locked --dev
 
+    - name: 📖 Run the walkthrough
+      # Named explicitly rather than reached through testpaths: pytest ignores
+      # testpaths the moment it receives a path argument, so a walkthrough
+      # wired that way is one nobody runs and it stays green forever.
+      run: uv run pytest walkthrough -q
+
     - name: 🔬 Run test suite
       run: uv run apothecary test all

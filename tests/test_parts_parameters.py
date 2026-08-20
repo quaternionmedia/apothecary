@@ -44,11 +44,11 @@ class TestScadLiteral:
             scad_literal({"a": 1})
 
     def test_definitions_are_flag_value_pairs(self):
-        assert scad_definitions({"show": "lid", "wall": 2.4}) == [
+        assert scad_definitions({"show": "lid", "walls": 3}) == [
             "-D",
             'show="lid"',
             "-D",
-            "wall=2.4",
+            "walls=3",
         ]
         assert scad_definitions(None) == []
 
@@ -92,4 +92,4 @@ class TestBoundsMatchGeometry:
         result = CliRunner().invoke(cli, ["parts", "info", "datum-core", "--json-out"])
         assert result.exit_code == 0
         size = json.loads(result.output)["bounds"]["size"]
-        assert size == pytest.approx({"x": 45.6, "y": 45.6, "z": 15.6})
+        assert size == pytest.approx({"x": 46.8, "y": 46.8, "z": 15.6})

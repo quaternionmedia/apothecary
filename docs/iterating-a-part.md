@@ -71,8 +71,8 @@ compares:
 $ uv run apothecary parts verify datum-core -p show=exploded
 ✓ datum-core
     axis      declared    measured     delta
-    x            45.60       45.60      0.00
-    y            45.60       45.60      0.00
+    x            46.80       46.80      0.00
+    y            46.80       46.80      0.00
     z            32.60       32.60      0.00
 ```
 
@@ -98,7 +98,7 @@ curl -X POST localhost:8765/parts/datum-core/stl/generate \
   "success": true,
   "stl_url": "/parts/datum-core/stl",
   "params": {"show": "exploded", "headroom": 14.0},
-  "bounds": {"size": {"x": 45.6, "y": 45.6, "z": 38.6}, ...}
+  "bounds": {"size": {"x": 46.8, "y": 46.8, "z": 38.6}, ...}
 }
 ```
 

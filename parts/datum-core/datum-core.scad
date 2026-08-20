@@ -20,8 +20,14 @@ board_y = 40;
 board_t = 1.6;
 board_clearance = 0.4;
 
+/* [Print settings] */
+// House constants, print-validated on QM hardware -- parts/footpedal/button.scad.
+// They are manufacturing facts, not this board's: a consumer overrides them for
+// its own printer, it does not own them. (The spelling matches the original.)
+walls = 3;
+tolerence = .4;
+
 /* [Shell] */
-wall = 2.4;
 floor_t = 2.0;
 lid_t = 2.0;
 corner_r = 3.0;
@@ -53,12 +59,16 @@ contact_pitch_y = 18.0;
 
 /* [Lid fit] */
 lip_h = 3.0;
-lip_clearance = 0.25;
 
 /* [Assembly preview] */
 explode_gap = 12.0;
 
 // ---------------------------------------------------------------- derived --
+
+// Side wall and per-side lip gap both come from the print settings above:
+// tolerence is the total fit clearance, so each side gets half of it.
+wall = walls;
+lip_clearance = tolerence / 2;
 
 cavity_x = board_x + 2 * board_clearance;
 cavity_y = board_y + 2 * board_clearance;

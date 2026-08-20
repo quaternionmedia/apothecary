@@ -73,4 +73,4 @@ def test_cli_parts_info_reports_bounds():
 
     data = json.loads(result.output)
     assert data["bounds"] is not None
-    assert data["bounds"]["size"] == pytest.approx({"x": 45.6, "y": 45.6, "z": 15.6})
+    assert data["bounds"]["size"] == pytest.approx({"x": 46.8, "y": 46.8, "z": 15.6})

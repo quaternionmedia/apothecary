@@ -2,6 +2,18 @@
 
 Welcome to the Apothecary documentation. This index links to all available guides.
 
+## The walkthrough
+
+`walkthrough/` is the executable path through this repository: four pages, run
+by `pytest walkthrough`. Start there.
+
+| Page | |
+|---|---|
+| [01 — The parts registry](../walkthrough/01-a-part.md) | What a part is, and how its envelope is checked |
+| [02 — Which numbers are whose](../walkthrough/02-fitting.md) | The seam, and driving it with overrides |
+| [03 — Navigating a sub-assembly](../walkthrough/03-an-assembly.md) | datum-core as an addressable tree |
+| [04 — Serving it](../walkthrough/04-serving-it.md) | The API and the viewer |
+
 ## Getting Started
 
 | Document | Description |
@@ -18,6 +30,7 @@ Welcome to the Apothecary documentation. This index links to all available guide
 | [Scene JSON Format](scene-json.md) | JSON schema for scenes, primitives, booleans, and transforms |
 | [Parts Authoring](parts-authoring.md) | How to create and register new parts |
 | [Iterating a Part](iterating-a-part.md) | Parameter overrides, the render loop, and checking bounds against geometry |
+| [Fitting a Part](fitting-a-part.md) | The seam standard: which numbers belong to a consumer and which to this repository |
 | [Geometry Models](models.md) | Vectors, bounds, colors, shapes, and units |
 
 ## Reference

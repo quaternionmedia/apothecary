@@ -25,12 +25,12 @@ SCAD_FILE = ROOT / "parts" / "datum-core" / "datum-core.scad"
 # Every constant the assembly claims to share with the printable part.
 SHARED = [
     "board_x", "board_y", "board_t", "board_clearance",
-    "wall", "floor_t", "lid_t", "corner_r", "standoff_h", "headroom",
+    "walls", "tolerence", "floor_t", "lid_t", "corner_r", "standoff_h", "headroom",
     "mount_inset", "boss_d", "screw_d",
     "connector_w", "connector_h", "connector_margin",
     "indicator_d", "indicator_x", "indicator_y",
     "contact_d", "contact_pitch_x", "contact_pitch_y",
-    "lip_h", "lip_clearance", "explode_gap",
+    "lip_h", "explode_gap",
 ]
 
 
@@ -56,7 +56,7 @@ class TestTheTwoDescriptionsAgree:
 
     def test_derived_envelope_matches_the_part(self):
         # What `apothecary parts info datum-core` reports for the tray.
-        assert (dc.OUTER_X, dc.OUTER_Y, dc.TRAY_H) == pytest.approx((45.6, 45.6, 15.6))
+        assert (dc.OUTER_X, dc.OUTER_Y, dc.TRAY_H) == pytest.approx((46.8, 46.8, 15.6))
 
 
 class TestTheTreeIsNavigable:

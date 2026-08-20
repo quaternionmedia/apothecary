@@ -37,8 +37,11 @@ package = true
 packages = ["apothecary"]
 
 [tool.pytest.ini_options]
-addopts = "-q"
-testpaths = ["tests"]
+# The walkthrough pages are executable. Named on the command line, not left to
+# testpaths: pytest ignores testpaths the moment it receives a path argument,
+# so a walkthrough reached only that way is one nobody runs.
+addopts = "-q --doctest-glob=*.md"
+testpaths = ["walkthrough", "tests"]
 markers = [
     "e2e: end-to-end tests using Playwright",
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",

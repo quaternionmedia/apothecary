@@ -30,7 +30,8 @@ class Params(BaseModel):
         board_y: Board depth in mm
         board_t: Board thickness in mm
         board_clearance: Gap between the board edge and the cavity wall
-        wall: Side wall thickness
+        walls: Side wall thickness (house constant)
+        tolerence: Total fit clearance (house constant)
         floor_t: Tray floor thickness
         lid_t: Lid plate thickness
         standoff_h: Floor to board underside
@@ -39,11 +40,14 @@ class Params(BaseModel):
     """
 
     show: str = Field("tray", pattern="^(tray|lid|exploded)$")
-    board_x: float = Field(40, gt=0)
-    board_y: float = Field(40, gt=0)
+    # Manufacturing facts, house defaults. A consumer overrides these for its
+    # own printer; it does not own them.
+    walls: float = Field(3.0, gt=0)
+    tolerence: float = Field(0.4, ge=0)
+    board_x: float = Field(40.0, gt=0)
+    board_y: float = Field(40.0, gt=0)
     board_t: float = Field(1.6, gt=0)
     board_clearance: float = Field(0.4, ge=0)
-    wall: float = Field(2.4, gt=0)
     floor_t: float = Field(2.0, gt=0)
     lid_t: float = Field(2.0, gt=0)
     standoff_h: float = Field(4.0, ge=0)
@@ -63,8 +67,8 @@ class DatumCorePart(BasePart):
         """
         values = Params(**(params or {}))
 
-        outer_x = values.board_x + 2 * values.board_clearance + 2 * values.wall
-        outer_y = values.board_y + 2 * values.board_clearance + 2 * values.wall
+        outer_x = values.board_x + 2 * values.board_clearance + 2 * values.walls
+        outer_y = values.board_y + 2 * values.board_clearance + 2 * values.walls
         tray_h = values.floor_t + values.standoff_h + values.board_t + values.headroom
         lid_h = values.lid_t + values.lip_h
 

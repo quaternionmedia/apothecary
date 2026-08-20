@@ -34,7 +34,12 @@ BOARD_Y = 40.0
 BOARD_T = 1.6
 BOARD_CLEARANCE = 0.4
 
-WALL = 2.4
+# House constants, print-validated on QM hardware (parts/footpedal/button.scad).
+# Manufacturing facts, not this board's.
+WALLS = 3.0
+TOLERENCE = 0.4
+
+WALL = WALLS
 FLOOR_T = 2.0
 LID_T = 2.0
 CORNER_R = 3.0
@@ -58,7 +63,8 @@ CONTACT_PITCH_X = 18.0
 CONTACT_PITCH_Y = 18.0
 
 LIP_H = 3.0
-LIP_CLEARANCE = 0.25
+# tolerence is the total fit clearance, so each side gets half.
+LIP_CLEARANCE = TOLERENCE / 2
 
 EXPLODE_GAP = 12.0
 
