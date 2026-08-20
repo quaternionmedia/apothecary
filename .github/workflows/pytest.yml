@@ -47,7 +47,13 @@ jobs:
       # every viewer test fails against a page that looks loaded but is inert.
       # `npm ci` rather than `npm install`: the lockfile is committed and this
       # is the command that honours it.
-      run: npm ci
+      #
+      # `--ignore-scripts` because @jscad/web's postInstall cannot resolve its
+      # own `copy-dir` under ci's stricter install order and fails the step.
+      # Nothing is lost: its dist ships in the tarball, verified present after
+      # a scriptless install, and `three` -- the one this viewer serves -- has
+      # no install script at all.
+      run: npm ci --ignore-scripts
 
     - name: 📐 Install OpenSCAD
       # The viewer E2E test asserts the page loads with no console errors. With
