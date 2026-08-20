@@ -62,7 +62,7 @@ def serve(host: str, port: int, reload: bool, viewer_path: str | None, no_viewer
             # in case they get installed later
             os.environ["APOTHECARY_VIEWER_PATH"] = str(default_viewer)
             _safe_echo("⚠️  Warning: JSCAD viewer assets not found", fg="yellow", bold=True)
-            click.echo("   The /viewer endpoints will return 503 errors.")
+            click.echo("   Nothing serves these assets today -- see below.")
             click.echo("")
             click.secho("   To enable the viewer:", fg="yellow")
             _safe_echo("   • Run: apothecary install")
@@ -76,8 +76,14 @@ def serve(host: str, port: int, reload: bool, viewer_path: str | None, no_viewer
 
     # Start the server
     click.echo(f"Starting server on http://{host}:{port}")
+    # One entry point. Everything else here is an API the viewer reads.
+    click.echo(f"  Viewer: http://{host}:{port}/viewer")
+    # The JSCAD assets above are mounted by no route -- the fractal viewer is
+    # the only viewer, and it needs the vendored three.js, not these. The flags
+    # are kept because they are published; the messages no longer claim the
+    # viewer breaks without them.
     if not viewer_available and not no_viewer:
-        click.echo("(API endpoints will work, but viewer endpoints are unavailable)")
+        click.echo("(the JSCAD assets are unused by any route; the viewer is unaffected)")
 
     if reload:
         # When reload is enabled, uvicorn needs an import string

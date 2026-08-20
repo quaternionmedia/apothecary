@@ -194,6 +194,24 @@
         .code-header {
             padding: 0.4rem 0; font-weight: 600; font-size: 0.8rem; color: #ccc;
         }
+        .param { margin: 10px 0 12px; }
+        .param.is-contested { border-left: 3px solid #e0a33e; padding-left: 9px; }
+        .param .head { display: flex; justify-content: space-between; align-items: baseline; }
+        .param .name { font-weight: 600; }
+        .param .val { font-variant-numeric: tabular-nums; color: #4a9eff; }
+        .param input[type=range] { width: 100%; margin-top: 4px; accent-color: #4a9eff; }
+        .param select { width: 100%; background: #14161a; color: #d7dae0;
+                        border: 1px solid #2a2f38; padding: 3px; }
+        .badge-contested { background: #e0a33e; color: #14161a; font-size: 10px;
+                           font-weight: 700; padding: 1px 5px; border-radius: 999px; }
+        .cand { display: block; width: 100%; text-align: left; margin-top: 5px;
+                padding: 5px 7px; background: #14161a; color: #d7dae0;
+                border: 1px solid #2a2f38; border-radius: 4px; cursor: pointer; font: inherit; }
+        .cand:hover { border-color: #e0a33e; }
+        .cand.active { border-color: #e0a33e; background: #2a2318; }
+        .cand b { color: #e0a33e; font-variant-numeric: tabular-nums; }
+        .cand .src, .cand .note { color: #8a929e; font-size: 11px; display: block; }
+        .envelope { font-variant-numeric: tabular-nums; color: #5ec27e; margin: 6px 0; }
         .code-content {
             font-family: 'Consolas', 'Monaco', 'Menlo', monospace;
             font-size: 0.72rem; line-height: 1.4; color: #9cdcfe;
@@ -1294,16 +1312,133 @@
             renderPartPanel(node) {
                 this.selectedBodyEl.innerHTML = `
                     <div class="prop-row"><label>Part</label><span>${node.part_ref}</span></div>
+                    <div class="envelope" id="part-envelope"></div>
                     <div class="part-actions">
                         <button type="button" id="part-regenerate-btn">⚙️ Regenerate STL</button>
                         <a href="${BASE_URL}/parts/${encodeURIComponent(node.part_ref)}/scad">💾 Download SCAD</a>
                     </div>
+                    <div class="code-header">Parameters</div>
+                    <div id="part-params">Loading…</div>
                     <div class="code-header">SCAD Source (the absorbed part view)</div>
                     <div id="part-scad-content" class="code-content">Loading…</div>
                 `;
                 this.loadPartScad(node.part_ref);
+                this.loadPartParams(node.part_ref);
                 document.getElementById('part-regenerate-btn')
                     .addEventListener('click', () => this.regeneratePart(node.part_ref));
+            }
+
+            // The part's parameters, as controls, in the one panel that already
+            // describes a part. A separate dashboard page would be a second
+            // entry point onto the same object, and this viewer is the only one.
+            async loadPartParams(name) {
+                const host = document.getElementById('part-params');
+                this.partParams = {};
+                this.partParamsFor = name;
+                try {
+                    const response = await fetch(
+                        `${BASE_URL}/parts/${encodeURIComponent(name)}/params`);
+                    if (!response.ok) { host.textContent = 'No parameters declared.'; return; }
+                    const spec = await response.json();
+                    this.showEnvelope(spec.bounds);
+                    host.innerHTML = '';
+                    // Contested first: a number the sources disagree about is the
+                    // one a reader most needs to find.
+                    const ordered = [...spec.fields].sort(
+                        (a, b) => b.contested.length - a.contested.length);
+                    for (const field of ordered) {
+                        this.partParams[field.name] = field.default;
+                        host.appendChild(this.buildParamControl(field));
+                    }
+                } catch (err) {
+                    host.textContent = `Could not read parameters: ${err.message}`;
+                }
+            }
+
+            showEnvelope(bounds) {
+                const el = document.getElementById('part-envelope');
+                if (!el) return;
+                el.textContent = bounds
+                    ? `envelope ${bounds.size.x.toFixed(2)} × ${bounds.size.y.toFixed(2)}`
+                      + ` × ${bounds.size.z.toFixed(2)} mm`
+                    : '';
+            }
+
+            buildParamControl(field) {
+                const wrap = document.createElement('div');
+                wrap.className = 'param' + (field.contested.length ? ' is-contested' : '');
+                const head = document.createElement('div');
+                head.className = 'head';
+                const name = document.createElement('span');
+                name.className = 'name';
+                name.textContent = field.name;
+                if (field.contested.length) {
+                    const badge = document.createElement('span');
+                    badge.className = 'badge-contested';
+                    badge.textContent = 'contested';
+                    name.append(' ', badge);
+                }
+                const val = document.createElement('span');
+                val.className = 'val';
+                head.append(name, val);
+                wrap.appendChild(head);
+
+                if (field.type === 'enum') {
+                    const select = document.createElement('select');
+                    for (const option of (field.pattern.match(/\w+/g) || [])) {
+                        const el = document.createElement('option');
+                        el.value = el.textContent = option;
+                        if (option === field.default) el.selected = true;
+                        select.appendChild(el);
+                    }
+                    val.textContent = field.default;
+                    select.onchange = () => {
+                        this.partParams[field.name] = select.value;
+                        val.textContent = select.value;
+                    };
+                    wrap.appendChild(select);
+                } else if (field.type === 'number') {
+                    const input = document.createElement('input');
+                    input.type = 'range';
+                    input.min = field.min; input.max = field.max;
+                    input.step = (field.max - field.min) / 200;
+                    input.value = field.default;
+                    val.textContent = Number(field.default).toFixed(2);
+                    input.oninput = () => {
+                        this.partParams[field.name] = Number(input.value);
+                        val.textContent = Number(input.value).toFixed(2);
+                        this.markCandidates(field, wrap);
+                    };
+                    wrap.appendChild(input);
+                    wrap._input = input;
+                }
+
+                for (const candidate of field.contested) {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'cand';
+                    button.dataset.value = candidate.value;
+                    button.innerHTML =
+                        `<b>${candidate.value}</b><span class="src">${candidate.source}</span>`
+                        + (candidate.note ? `<span class="note">${candidate.note}</span>` : '');
+                    button.onclick = () => {
+                        this.partParams[field.name] = candidate.value;
+                        if (wrap._input) wrap._input.value = candidate.value;
+                        val.textContent = Number(candidate.value).toFixed(2);
+                        this.markCandidates(field, wrap);
+                    };
+                    wrap.appendChild(button);
+                }
+                if (field.contested.length) this.markCandidates(field, wrap);
+                return wrap;
+            }
+
+            markCandidates(field, wrap) {
+                for (const button of wrap.querySelectorAll('.cand')) {
+                    button.classList.toggle(
+                        'active',
+                        Number(button.dataset.value) === Number(this.partParams[field.name]));
+                }
             }
 
             async loadPartScad(name) {
@@ -1320,11 +1455,27 @@
             async regeneratePart(name) {
                 this.setStatus(`Regenerating ${name}...`, 'loading');
                 try {
+                    // Whatever the controls are set to, so turning a contested
+                    // number and pressing regenerate shows what it does.
+                    const params = this.partParamsFor === name ? (this.partParams ?? {}) : {};
                     const response = await fetch(
                         `${BASE_URL}/parts/${encodeURIComponent(name)}/stl/generate?force=true`,
-                        { method: 'POST' }
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ params }),
+                        }
                     );
-                    if (!response.ok) throw new Error(`Regenerate failed (${response.status})`);
+                    if (!response.ok) {
+                        const detail = await response.text();
+                        throw new Error(`${response.status}: ${detail.slice(0, 140)}`);
+                    }
+                    const body = await response.json();
+                    this.showEnvelope(body.bounds);
+                    // The mesh on screen is the old geometry until it reloads.
+                    const target = Object.values(this.renderNodeByKey ?? {})
+                        .find((n) => n.part_ref === name);
+                    if (target) this.rebuildSingleMesh(target);
                     this.setStatus(`${name} regenerated`, 'success');
                 } catch (err) {
                     this.setStatus(`Error: ${err.message}`, 'error');

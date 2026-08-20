@@ -41,17 +41,21 @@ which is the difference between fitting an opening and not:
     >>> round(DEFAULT.get_bounds(P(walls=2.4).model_dump()).size.x, 2)
     45.6
 
-## The dashboard
+## Where you turn them
 
-`/viewer/parts/datum-core` puts each parameter on a slider over a live render,
-contested ones first, with every candidate as a button that sets it. Turn the
-number, press Render, watch the envelope move.
+In the viewer. Select a part and its panel carries every parameter as a
+control, contested ones first, each candidate a button that sets it. Turn the
+number, press Regenerate, watch the envelope move.
+
+There is one viewer and no second page onto the same object, so a link to a
+part lands there:
 
     >>> from fastapi.testclient import TestClient
     >>> from apothecary.api import app
     >>> client = TestClient(app)
-    >>> client.get("/viewer/parts/datum-core").status_code
-    200
+    >>> r = client.get("/viewer/parts/datum-core", follow_redirects=False)
+    >>> r.status_code, r.headers["location"]
+    (307, '/viewer/sites/parts_library?focus=datum-core')
 
 The controls are built from the part's own model, so a slider cannot offer a
 value the renderer would refuse:
@@ -70,6 +74,6 @@ dashboard read the declaration.
 | | |
 |---|---|
 | See the disagreements | `apothecary parts info datum-core --json-out` |
-| Turn them | `/viewer/parts/datum-core` |
+| Turn them | the viewer, with the part selected |
 | Render one candidate | `apothecary parts generate-stl datum-core -p walls=2.4` |
 | Check the envelope it gives | `apothecary parts verify datum-core -p walls=2.4` |

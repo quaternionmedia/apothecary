@@ -129,21 +129,3 @@ def render_fractal_viewer_page(
     return get_viewer_renderer().render_fractal_viewer(
         site_names, base_url, default_site, focus_path, three_is_vendored
     )
-
-
-def render_part_dashboard_page(
-    part_name: str, base_url: str, three_is_vendored: bool = True
-) -> str:
-    """Sliders for one part's parameters, over a live render of it.
-
-    Exists for the numbers this project's sources disagree about. A dashboard
-    that puts the candidates on the slider, each with its provenance, turns an
-    argument about which document is right into a thing a person can look at.
-    """
-    template = get_viewer_renderer().env.get_template("part_dashboard.html.j2")
-    return template.render(
-        part_name=part_name,
-        base_url=base_url.rstrip("/"),
-        three_is_vendored=three_is_vendored,
-    )
-

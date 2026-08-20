@@ -3,8 +3,9 @@
 `datum-core` has three: the wall thickness and fit clearance, which the
 enclosure record and `parts/datum/datum.scad` disagree about, and the board
 depth, where the datum packet gives a bound and that part gives a specific
-board. Each candidate is recorded with its provenance and put on a slider, so
-the choice is made by looking rather than by whoever edits last.
+board. Each candidate is recorded with its provenance and surfaced as a
+control in the viewer, so the choice is made by looking rather than by whoever
+edits last.
 """
 
 from __future__ import annotations
@@ -80,20 +81,34 @@ class TestParamsEndpoint:
         assert client.get("/parts/no-such-part/params").status_code == 404
 
 
-class TestDashboardPage:
-    def test_it_serves(self):
-        response = client.get("/viewer/parts/datum-core")
-        assert response.status_code == 200
-        assert "datum-core" in response.text
+class TestOneEntryPoint:
+    """The fractal viewer is the only viewer. A part is reached by navigating
+    to it, not by a second page onto the same object.
+    """
 
-    def test_an_unknown_part_is_404_at_the_page_not_the_fetch(self):
-        """Better a 404 than a page that loads and then cannot explain itself."""
-        assert client.get("/viewer/parts/no-such-part").status_code == 404
+    def test_the_part_link_lands_in_the_viewer(self):
+        response = client.get("/viewer/parts/datum-core", follow_redirects=False)
+        assert response.status_code == 307
+        assert response.headers["location"] == (
+            "/viewer/sites/parts_library?focus=datum-core"
+        )
 
-    def test_it_reaches_no_cdn(self):
-        page = client.get("/viewer/parts/datum-core").text
+    def test_an_unknown_part_is_404_before_the_redirect(self):
+        """Better a 404 here than a redirect onto a view that cannot explain
+        why it is empty.
+        """
+        assert client.get("/viewer/parts/no-such-part", follow_redirects=False).status_code == 404
+
+    def test_there_is_no_second_viewer_template(self):
+        from apothecary.projects.parts.skeleton import ROOT
+
+        assert not (ROOT / "templates" / "part_dashboard.html.j2").exists()
+
+    def test_the_controls_live_in_the_one_viewer(self):
+        page = client.get("/viewer/sites/parts_library").text
+        assert "loadPartParams" in page
+        assert "badge-contested" in page
         assert "jsdelivr" not in page
-        assert '"three": "/vendor/three/build/three.module.js"' in page
 
 
 class TestChangingAContestedValueChangesTheObject:

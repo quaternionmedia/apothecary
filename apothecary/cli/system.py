@@ -89,7 +89,7 @@ def check():
     click.echo("")
 
     # Check JSCAD viewer assets
-    click.secho("JSCAD Viewer:", bold=True)
+    click.secho("JSCAD viewer assets (unused by any route):", bold=True)
     default_viewer = ROOT / "node_modules" / "@jscad" / "web" / "dist"
     env_viewer = os.getenv("APOTHECARY_VIEWER_PATH", "").strip()
 

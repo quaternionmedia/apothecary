@@ -17,6 +17,7 @@ import os
 from contextlib import asynccontextmanager, suppress
 from importlib import import_module
 from pathlib import Path
+from urllib.parse import quote
 from random import choice
 from typing import Any, Dict, List, Optional
 
@@ -50,7 +51,7 @@ from .scene import Scene
 from .site_store import SiteStore, UnknownSiteError
 from .templates import TemplateRenderer
 from .transforms import Rotate, Scale, Translate
-from .viewer import render_fractal_viewer_page, render_part_dashboard_page
+from .viewer import render_fractal_viewer_page
 
 
 async def _generate_missing_stls():
@@ -1281,18 +1282,18 @@ async def site_viewer(name: str, request: Request, focus: str = Query(default=""
     )
 
 
-@app.get("/viewer/parts/{name}", response_class=HTMLResponse)
-async def part_dashboard(name: str, request: Request):
-    """A slider board for one part, over a live render.
+@app.get("/viewer/parts/{name}")
+async def part_view(name: str):
+    """A part is reached by navigating to it, not by a second viewer.
 
-    The fractal viewer navigates an assembly; this turns one part's parameters
-    and shows what each does. Parameters whose value this project's sources
-    disagree about are listed first, with every candidate and its source.
+    This deep-link survives because links to it were handed out, but it now
+    lands in the one viewer, focused on the part, where the parameter controls
+    and the contested values live. Two pages onto one object is how a codebase
+    ends up with two answers about it.
     """
-    _load_part_wrapper(name)  # 404 here rather than from the page's own fetch
-    base_url = str(request.base_url).rstrip("/")
-    return HTMLResponse(
-        render_part_dashboard_page(name, base_url, three_is_vendored=THREE_IS_VENDORED)
+    _load_part_wrapper(name)  # 404 here rather than after a redirect
+    return RedirectResponse(
+        f"/viewer/sites/parts_library?focus={quote(name, safe='')}", status_code=307
     )
 
 
