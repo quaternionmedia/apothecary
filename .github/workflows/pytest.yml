@@ -40,6 +40,15 @@ jobs:
     - name: 🚧 Install dependencies
       run: uv sync --locked --dev
 
+    - name: 📦 Install the viewer's JS dependencies
+      # The fractal viewer serves three.js from this origin rather than a CDN,
+      # so node_modules is a build prerequisite and not an optional extra.
+      # Without it /vendor/three answers 404, the module script never runs, and
+      # every viewer test fails against a page that looks loaded but is inert.
+      # `npm ci` rather than `npm install`: the lockfile is committed and this
+      # is the command that honours it.
+      run: npm ci
+
     - name: 📐 Install OpenSCAD
       # The viewer E2E test asserts the page loads with no console errors. With
       # no openscad on PATH the STL endpoints answer 503 ("OpenSCAD not
