@@ -38,6 +38,7 @@ markup still read "Layout valid".
 
 | | |
 |---|---|
+| Install what it needs | `apothecary install` — once, or the page renders nothing |
 | Start it | `apothecary serve --port 8765` |
 | Check the install | `apothecary check` |
 | The assembly | `/viewer/sites/datum-core` |

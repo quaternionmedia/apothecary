@@ -198,18 +198,22 @@ def install(viewer: bool, force: bool, npm_cmd: str):
                 _safe_echo("  ✗ package.json not found")
                 click.echo(f"    Expected at: {package_json}")
                 click.echo("    Creating minimal package.json...")
+                # Must match the committed package.json. `three` is not
+                # optional: the fractal viewer serves it from this origin
+                # rather than a CDN, so a fabricated file that omits it
+                # produces a viewer that loads and renders nothing.
                 package_data = {
                     "name": "apothecary-viewer",
                     "version": "0.0.0",
                     "private": True,
-                    "description": "Local JSCAD web viewer assets for Apothecary",
-                    "dependencies": {"@jscad/web": "^2.6.0"},
+                    "description": "Local JS dependencies for Apothecary's viewers",
+                    "dependencies": {"@jscad/web": "^2.6.0", "three": "^0.160.0"},
                 }
                 package_json.write_text(json.dumps(package_data, indent=2), encoding="utf-8")
                 _safe_echo("  ✓ Created package.json")
                 fixes_applied = True
 
-            click.echo(f"  Installing JSCAD viewer with {npm_cmd}...")
+            click.echo(f"  Installing the viewer's JS dependencies with {npm_cmd}...")
             try:
                 result = subprocess.run(
                     [npm_cmd, "install", "--ignore-scripts"],

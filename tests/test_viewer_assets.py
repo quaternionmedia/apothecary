@@ -86,3 +86,36 @@ class TestMissingLibraryIsAnnounced:
             ["parts_library"], "http://testserver", "parts_library", "", three_is_vendored=True
         )
         assert "The 3D library is not installed" not in page
+
+
+class TestOnboardingInstallsWhatTheViewerNeeds:
+    """`apothecary install` is the onboarding step, and the viewer is dead
+    without the JS dependencies it fetches.
+    """
+
+    def test_the_fabricated_package_json_matches_the_committed_one(self):
+        """`install` writes a package.json when none exists. One that omits
+        `three` produces a viewer that loads and renders nothing.
+        """
+        import json
+        import re
+
+        from apothecary.projects.parts.skeleton import ROOT
+
+        source = (ROOT / "apothecary" / "cli" / "system.py").read_text(encoding="utf-8")
+        block = re.search(r"package_data = \{(.*?)\n                \}", source, re.S)
+        assert block, "install no longer fabricates a package.json; drop this test"
+
+        fabricated = set(re.findall(r'"(@?[\w/.-]+)":\s*"\^', block.group(0)))
+        committed = set(
+            json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["dependencies"]
+        )
+        assert fabricated == committed
+
+    def test_three_is_a_declared_dependency(self):
+        import json
+
+        from apothecary.projects.parts.skeleton import ROOT
+
+        deps = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["dependencies"]
+        assert "three" in deps
