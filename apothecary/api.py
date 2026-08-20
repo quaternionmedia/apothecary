@@ -50,7 +50,7 @@ from .scene import Scene
 from .site_store import SiteStore, UnknownSiteError
 from .templates import TemplateRenderer
 from .transforms import Rotate, Scale, Translate
-from .viewer import render_fractal_viewer_page
+from .viewer import render_fractal_viewer_page, render_part_dashboard_page
 
 
 async def _generate_missing_stls():
@@ -667,6 +667,61 @@ async def generate_part_stl(
     }
 
 
+@app.get("/parts/{name}/params")
+async def get_part_params(name: str):
+    """What a part accepts, in a form a control surface can build itself from.
+
+    Types, defaults and bounds come from the part's own Pydantic model, so the
+    dashboard cannot drift from what the renderer will actually accept.
+    ``contested`` carries the parameters whose value this project's sources
+    disagree about, with the provenance of each candidate -- an ambiguity a
+    reader can turn is worth more than one they have to argue about.
+    """
+    part = _load_part_wrapper(name)
+    model_cls = getattr(part, "params_model", None)
+    if model_cls is None:
+        raise HTTPException(status_code=404, detail=f"Part '{name}' declares no parameters")
+
+    schema = model_cls.model_json_schema()
+    defaults = model_cls()
+
+    fields = []
+    for field_name, spec in schema.get("properties", {}).items():
+        default = getattr(defaults, field_name)
+        candidates = [c.model_dump() for c in part.contested.get(field_name, [])]
+        # A slider needs a range. Pydantic states one only where the field
+        # constrains it, so the rest get a span around the default wide enough
+        # to be worth dragging -- and wide enough to reach every candidate.
+        interesting = [default, *(c["value"] for c in candidates)]
+        low = spec.get("minimum", spec.get("exclusiveMinimum"))
+        high = spec.get("maximum")
+        if not isinstance(default, (int, float)):
+            low = high = None
+        else:
+            low = max(0.0, min(interesting) * 0.25) if low is None else float(low)
+            high = max(interesting) * 2.5 if high is None else float(high)
+
+        fields.append(
+            {
+                "name": field_name,
+                "type": "enum" if spec.get("pattern") else ("number" if high else "text"),
+                "default": default,
+                "min": low,
+                "max": high,
+                "pattern": spec.get("pattern"),
+                "description": spec.get("description"),
+                "contested": candidates,
+            }
+        )
+
+    return {
+        "part": part.name,
+        "description": part.description,
+        "fields": fields,
+        "bounds": jsonable_encoder(part.get_bounds()),
+    }
+
+
 @app.get("/parts/{name}/files")
 async def get_part_files(name: str, request: Request):
     """
@@ -1223,6 +1278,21 @@ async def site_viewer(name: str, request: Request, focus: str = Query(default=""
             focus_path=focus,
             three_is_vendored=THREE_IS_VENDORED,
         )
+    )
+
+
+@app.get("/viewer/parts/{name}", response_class=HTMLResponse)
+async def part_dashboard(name: str, request: Request):
+    """A slider board for one part, over a live render.
+
+    The fractal viewer navigates an assembly; this turns one part's parameters
+    and shows what each does. Parameters whose value this project's sources
+    disagree about are listed first, with every candidate and its source.
+    """
+    _load_part_wrapper(name)  # 404 here rather than from the page's own fetch
+    base_url = str(request.base_url).rstrip("/")
+    return HTMLResponse(
+        render_part_dashboard_page(name, base_url, three_is_vendored=THREE_IS_VENDORED)
     )
 
 

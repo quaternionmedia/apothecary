@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 
 from apothecary.models import BoundingBox3D, Color, Vector3D
 
-from .base import BasePart
+from .base import BasePart, ContestedValue
 from .skeleton import ROOT
 
 
@@ -96,6 +96,57 @@ def create(metadata_root: Path) -> DatumCorePart:
         tags=["datum", "enclosure", "case", "control-surface", "pcb"],
         readme_path=metadata_root / "parts" / "datum-core" / "README.md",
         preview_color=Color.from_hex("#3E7CB1"),
+        # Three numbers this project's own sources state differently. None is a
+        # typo to be quietly corrected: each has a document behind it, and the
+        # dashboard exists so the choice is made by looking rather than arguing.
+        contested={
+            "walls": [
+                ContestedValue(
+                    value=3.0,
+                    source=(
+                        "governance/qm/adr/"
+                        "DRAFT-enclosure-parts-live-in-apothecary.md, clause 3"
+                    ),
+                    note="House constant from parts/footpedal/button.scad, print-validated "
+                    "on QM hardware. The record requires a part that differs to say why.",
+                ),
+                ContestedValue(
+                    value=2.4,
+                    source="parts/datum/datum.scad",
+                    note="Cites the same record for this value, which the record does not "
+                    "contain. Lighter, and unvalidated on hardware.",
+                ),
+            ],
+            "tolerence": [
+                ContestedValue(
+                    value=0.4,
+                    source=(
+                        "governance/qm/adr/"
+                        "DRAFT-enclosure-parts-live-in-apothecary.md, clause 3"
+                    ),
+                    note="House constant. Total fit clearance; the lid lip takes half per side.",
+                ),
+                ContestedValue(
+                    value=0.2,
+                    source="parts/datum/datum.scad",
+                    note="Tighter fit. Same misattribution as walls.",
+                ),
+            ],
+            "board_y": [
+                ContestedValue(
+                    value=40.0,
+                    source="datum HANDOFF.md, WP-4",
+                    note="Board outline is specified as at most 40 x 40 mm, so this is the "
+                    "worst case an enclosure must accept.",
+                ),
+                ContestedValue(
+                    value=30.0,
+                    source="parts/datum/datum.scad",
+                    note="A specific board rather than the bound. No schematic exists to "
+                    "settle which is real.",
+                ),
+            ],
+        },
     )
 
 

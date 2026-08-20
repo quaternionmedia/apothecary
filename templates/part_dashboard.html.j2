@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ part_name }} — part dashboard</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1b1e24; --line: #2a2f38;
+    --ink: #d7dae0; --dim: #8a929e; --accent: #4a9eff;
+    --contested: #e0a33e; --ok: #5ec27e;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.5 system-ui, sans-serif; display: flex; height: 100vh; }
+  #canvas-wrap { flex: 1; position: relative; min-width: 0; }
+  canvas { display: block; width: 100%; height: 100%; }
+  #panel { width: 420px; border-left: 1px solid var(--line); background: var(--panel);
+           overflow-y: auto; padding: 16px; }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  .sub { color: var(--dim); margin-bottom: 16px; }
+  .field { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .field.is-contested { border-left: 3px solid var(--contested); padding-left: 10px; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; }
+  label { font-weight: 600; }
+  .val { font-variant-numeric: tabular-nums; color: var(--accent); }
+  input[type=range] { width: 100%; margin: 6px 0 0; accent-color: var(--accent); }
+  select { width: 100%; background: var(--bg); color: var(--ink);
+           border: 1px solid var(--line); padding: 4px; }
+  .cands { margin-top: 8px; }
+  .cand { display: block; width: 100%; text-align: left; margin-top: 6px; padding: 6px 8px;
+          background: var(--bg); color: var(--ink); border: 1px solid var(--line);
+          border-radius: 4px; cursor: pointer; }
+  .cand:hover { border-color: var(--contested); }
+  .cand.active { border-color: var(--contested); background: #2a2318; }
+  .cand b { color: var(--contested); font-variant-numeric: tabular-nums; }
+  .cand .src { color: var(--dim); font-size: 12px; display: block; }
+  .cand .note { color: var(--dim); font-size: 12px; display: block; margin-top: 3px; }
+  .badge { background: var(--contested); color: #14161a; font-size: 11px; font-weight: 700;
+           padding: 1px 6px; border-radius: 999px; }
+  #render { width: 100%; padding: 10px; margin: 4px 0 14px; cursor: pointer;
+            background: var(--accent); color: #0b0d10; border: 0; border-radius: 4px;
+            font-weight: 700; }
+  #render:disabled { opacity: .5; cursor: default; }
+  #status { position: absolute; left: 12px; bottom: 12px; background: rgba(0,0,0,.65);
+            padding: 6px 10px; border-radius: 4px; color: var(--dim); }
+  #bounds { font-variant-numeric: tabular-nums; color: var(--ok); margin-bottom: 14px; }
+  .warn { background: #7f1d1d; color: #fff; padding: 10px 14px; }
+</style>
+</head>
+<body>
+{% if not three_is_vendored %}
+<div class="warn"><strong>The 3D library is not installed.</strong>
+  Run <code>npm install</code>, then reload.</div>
+{% endif %}
+<div id="canvas-wrap"><canvas id="c"></canvas><div id="status">Loading…</div></div>
+<div id="panel">
+  <h1>{{ part_name }}</h1>
+  <div class="sub" id="desc"></div>
+  <div id="bounds"></div>
+  <button id="render">Render</button>
+  <div id="fields"></div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+    "three": "/vendor/three/build/three.module.js",
+    "three/addons/": "/vendor/three/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+
+const BASE = {{ base_url|tojson }};
+const PART = {{ part_name|tojson }};
+const statusEl = document.getElementById('status');
+const setStatus = (t) => statusEl.textContent = t;
+
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x14161a);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 5000);
+const controls = new OrbitControls(camera, canvas);
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const key = new THREE.DirectionalLight(0xffffff, 0.9);
+key.position.set(1, 1, 1);
+scene.add(key);
+scene.add(new THREE.GridHelper(200, 20, 0x2a2f38, 0x22262d));
+
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== w || canvas.height !== h) {
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+}
+(function loop() { resize(); controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
+
+let mesh = null;
+const loader = new STLLoader();
+
+// STLLoader hands back raw OpenSCAD-space geometry, z-up. three.js is y-up.
+// Swapping the two axes is a reflection rather than a rotation -- there is no
+// rotation that swaps two axes and leaves the third -- so the winding of every
+// triangle is reversed too, or the normals come out inside-out. Same transform
+// the fractal viewer applies, so a part looks the same in both.
+function applyScadAxisSwap(geometry) {
+  const position = geometry.attributes.position;
+  for (let i = 0; i < position.count; i++) {
+    const y = position.getY(i), z = position.getZ(i);
+    position.setY(i, z);
+    position.setZ(i, y);
+  }
+  for (let i = 0; i + 2 < position.count; i += 3) {
+    for (const [get, set] of [['getX', 'setX'], ['getY', 'setY'], ['getZ', 'setZ']]) {
+      const b = position[get](i + 1), c = position[get](i + 2);
+      position[set](i + 1, c);
+      position[set](i + 2, b);
+    }
+  }
+  position.needsUpdate = true;
+  geometry.computeVertexNormals();
+}
+
+function frame(geometry) {
+  geometry.computeBoundingBox();
+  const b = geometry.boundingBox, size = new THREE.Vector3(), mid = new THREE.Vector3();
+  b.getSize(size); b.getCenter(mid);
+  const span = Math.max(size.x, size.y, size.z) || 50;
+  camera.position.set(mid.x + span * 1.5, mid.y + span * 1.1, mid.z + span * 1.5);
+  controls.target.copy(mid);
+  camera.near = span / 100; camera.far = span * 50;
+  camera.updateProjectionMatrix();
+}
+
+function showSTL(url) {
+  return new Promise((resolve, reject) => {
+    loader.load(url, (geometry) => {
+      if (mesh) { scene.remove(mesh); mesh.geometry.dispose(); }
+      applyScadAxisSwap(geometry);
+      const material = new THREE.MeshLambertMaterial({ color: 0x3e7cb1 });
+      mesh = new THREE.Mesh(geometry, material);
+      scene.add(mesh);
+      frame(geometry);
+      resolve();
+    }, undefined, reject);
+  });
+}
+
+// ---- parameters -------------------------------------------------------------
+
+const state = {};
+let spec = null;
+
+function buildField(f) {
+  const wrap = document.createElement('div');
+  wrap.className = 'field' + (f.contested.length ? ' is-contested' : '');
+
+  const row = document.createElement('div');
+  row.className = 'row';
+  const label = document.createElement('label');
+  label.textContent = f.name;
+  if (f.contested.length) {
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.textContent = 'contested';
+    label.appendChild(document.createTextNode(' '));
+    label.appendChild(badge);
+  }
+  const val = document.createElement('span');
+  val.className = 'val';
+  row.append(label, val);
+  wrap.appendChild(row);
+
+  if (f.type === 'enum') {
+    const options = (f.pattern.match(/\w+/g) || []).filter((o) => o !== 'tray' || true);
+    const select = document.createElement('select');
+    for (const o of options) {
+      const opt = document.createElement('option');
+      opt.value = opt.textContent = o;
+      if (o === f.default) opt.selected = true;
+      select.appendChild(opt);
+    }
+    select.onchange = () => { state[f.name] = select.value; val.textContent = select.value; };
+    val.textContent = f.default;
+    wrap.appendChild(select);
+  } else if (f.type === 'number') {
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.min = f.min; input.max = f.max;
+    input.step = (f.max - f.min) / 200;
+    input.value = f.default;
+    val.textContent = Number(f.default).toFixed(2);
+    input.oninput = () => {
+      state[f.name] = Number(input.value);
+      val.textContent = Number(input.value).toFixed(2);
+      markActive(f, wrap);
+    };
+    wrap.appendChild(input);
+    wrap._input = input;
+  }
+
+  if (f.contested.length) {
+    const cands = document.createElement('div');
+    cands.className = 'cands';
+    for (const c of f.contested) {
+      const btn = document.createElement('button');
+      btn.className = 'cand';
+      btn.dataset.value = c.value;
+      btn.innerHTML = `<b>${c.value}</b> <span class="src">${c.source}</span>` +
+                      (c.note ? `<span class="note">${c.note}</span>` : '');
+      btn.onclick = () => {
+        state[f.name] = c.value;
+        if (wrap._input) { wrap._input.value = c.value; }
+        val.textContent = Number(c.value).toFixed(2);
+        markActive(f, wrap);
+      };
+      cands.appendChild(btn);
+    }
+    wrap.appendChild(cands);
+  }
+  return wrap;
+}
+
+function markActive(f, wrap) {
+  for (const btn of wrap.querySelectorAll('.cand')) {
+    btn.classList.toggle('active', Number(btn.dataset.value) === Number(state[f.name]));
+  }
+}
+
+function showBounds(bounds) {
+  if (!bounds) { document.getElementById('bounds').textContent = ''; return; }
+  const s = bounds.size;
+  document.getElementById('bounds').textContent =
+    `envelope  ${s.x.toFixed(2)} x ${s.y.toFixed(2)} x ${s.z.toFixed(2)} mm`;
+}
+
+async function load() {
+  const res = await fetch(`${BASE}/parts/${encodeURIComponent(PART)}/params`);
+  if (!res.ok) { setStatus(`Could not read parameters (${res.status})`); return; }
+  spec = await res.json();
+  document.getElementById('desc').textContent = spec.description || '';
+  showBounds(spec.bounds);
+
+  const host = document.getElementById('fields');
+  const contestedFirst = [...spec.fields].sort(
+    (a, b) => b.contested.length - a.contested.length);
+  for (const f of contestedFirst) {
+    state[f.name] = f.default;
+    const wrap = buildField(f);
+    host.appendChild(wrap);
+    if (f.contested.length) markActive(f, wrap);
+  }
+
+  setStatus('Rendering at defaults…');
+  await regenerate();
+}
+
+async function regenerate() {
+  const button = document.getElementById('render');
+  button.disabled = true;
+  setStatus('Rendering…');
+  try {
+    const res = await fetch(`${BASE}/parts/${encodeURIComponent(PART)}/stl/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ params: state }),
+    });
+    if (!res.ok) {
+      const detail = await res.text();
+      setStatus(`Render refused: ${detail.slice(0, 160)}`);
+      return;
+    }
+    const body = await res.json();
+    showBounds(body.bounds);
+    await showSTL(`${BASE}${body.stl_url}?t=${Date.now()}`);
+    setStatus(`Rendered in ${body.render_time_seconds?.toFixed?.(1) ?? '?'}s`);
+  } catch (err) {
+    setStatus(`Error: ${err.message}`);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+document.getElementById('render').onclick = regenerate;
+load();
+</script>
+</body>
+</html>
