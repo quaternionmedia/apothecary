@@ -133,3 +133,31 @@ class TestSitePayloadCarriesScad:
         monkeypatch.setattr(api, "_assembly_tree", lambda site: {})
         payload = api._site_payload(Boom(), Report())
         assert payload["scad"].startswith("// This site has no generated OpenSCAD")
+
+
+class TestHull:
+    """A rounded rectangular prism is what an enclosure shell actually is, and
+    a cube would misreport the corner radius everything is fitted around.
+    """
+
+    def test_renders_an_openscad_hull(self):
+        from apothecary import Hull
+        from apothecary.primitives import Cylinder
+
+        rendered = Hull(children=[Cylinder(h=2, r=3), Cylinder(h=2, r=3)]).render()
+        assert rendered.startswith("hull() {")
+        assert rendered.count("cylinder(") == 2
+
+    def test_carries_its_comment(self):
+        from apothecary import Hull
+
+        assert Hull(children=[], comment="Shell").render().splitlines()[0] == "// Shell"
+
+    def test_is_part_of_the_public_surface(self):
+        """Its siblings are exported; a boolean nobody can import is a private
+        one wearing a public name.
+        """
+        import apothecary
+
+        assert "Hull" in apothecary.__all__
+        assert "Import" in apothecary.__all__
