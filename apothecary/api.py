@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from .booleans import Difference, Intersection, Union
 from .core import OpenSCADObject
+from .datum_core_site import create_datum_core_site, validate_datum_core
 from .example_hierarchy import (
     PRINTER_STATUSES,
     Job,
@@ -661,9 +662,14 @@ _site_store = SiteStore(
     {
         "garage": (create_example_site, validate_garage_layout),
         "parts_library": (create_parts_library_site, validate_parts_library),
+        "datum-core": (create_datum_core_site, validate_datum_core),
     }
 )
 _job_store = JobStore()
+
+# The site /viewer opens on. Named rather than "whichever sorts first", so that
+# registering a new site cannot silently move the front door.
+DEFAULT_VIEWER_SITE = "garage"
 
 
 def _get_site_or_404(name: str) -> Assembly:
@@ -1157,7 +1163,8 @@ async def viewer_home():
     both are absorbed into one viewer (see ``site_viewer`` below); this is
     just its default entry point.
     """
-    default_site = _site_store.names()[0]
+    names = _site_store.names()
+    default_site = DEFAULT_VIEWER_SITE if DEFAULT_VIEWER_SITE in names else names[0]
     return RedirectResponse(f"/viewer/sites/{default_site}", status_code=307)
 
 

@@ -92,10 +92,12 @@ def test_parts_random_scad_endpoint():
     assert len(r.text) > 10
 
 
-def test_viewer_home_redirects_to_first_registered_site():
+def test_viewer_home_redirects_to_the_named_default_site():
     """/viewer no longer serves a standalone parts browser -- it redirects to
-    the fractal viewer for the first registered site (see api.py's
-    viewer_home; parts are reached by navigating into "parts_library").
+    the fractal viewer for api.py's DEFAULT_VIEWER_SITE. It used to redirect to
+    whichever site sorted first, which meant registering one could move the
+    front door without anyone deciding to (parts are reached by navigating into
+    "parts_library"; datum-core is its own site).
     """
     client = TestClient(app)
     r = client.get("/viewer", follow_redirects=False)
