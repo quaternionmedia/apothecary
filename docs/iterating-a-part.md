@@ -21,7 +21,7 @@ was validated and then discarded — nothing passed it to OpenSCAD. `-p` closes
 that gap:
 
 ```bash
-uv run apothecary parts generate-stl datum-core -p show=exploded
+uv run apothecary parts generate-stl datum-core -p headroom=12
 uv run apothecary parts generate-stl datum-core -p board_x=60 -p headroom=20
 ```
 
@@ -51,7 +51,7 @@ one, so each render drops a sidecar beside it recording the inputs:
 $ uv run apothecary parts info datum-core --json-out | jq .stl_params
 {
   "generated": "2026-08-19T12:47:25",
-  "params": {"show": "exploded"}
+  "params": {"headroom": 12.0}
 }
 ```
 
@@ -68,7 +68,7 @@ is wrong by however far they have drifted.
 compares:
 
 ```
-$ uv run apothecary parts verify datum-core -p show=exploded
+$ uv run apothecary parts verify datum-core -p headroom=12
 ✓ datum-core
     axis      declared    measured     delta
     x            46.80       46.80      0.00
@@ -90,14 +90,14 @@ The same overrides, for driving the loop from the viewer rather than a shell:
 ```bash
 curl -X POST localhost:8765/parts/datum-core/stl/generate \
   -H 'Content-Type: application/json' \
-  -d '{"params": {"show": "exploded", "headroom": 14}}'
+  -d '{"params": {"headroom": 14}}'
 ```
 
 ```json
 {
   "success": true,
   "stl_url": "/parts/datum-core/stl",
-  "params": {"show": "exploded", "headroom": 14.0},
+  "params": {"headroom": 14.0},
   "bounds": {"size": {"x": 46.8, "y": 46.8, "z": 38.6}, ...}
 }
 ```

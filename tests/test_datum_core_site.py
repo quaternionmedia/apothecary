@@ -20,24 +20,27 @@ from apothecary.projects.parts.skeleton import ROOT
 
 client = TestClient(app)
 
-SCAD_FILE = ROOT / "parts" / "datum-core" / "datum-core.scad"
+CORE_SCAD = ROOT / "parts" / "datum-core" / "datum-core.scad"
+CAP_SCAD = ROOT / "parts" / "datum-cap" / "datum-cap.scad"
 
 # Every constant the assembly claims to share with the printable part.
-SHARED = [
+# The tray's numbers live in datum-core.scad, the cover's in datum-cap.scad.
+SHARED_CORE = [
     "board_x", "board_y", "board_t", "board_clearance",
-    "walls", "tolerence", "floor_t", "lid_t", "corner_r", "standoff_h", "headroom",
+    "walls", "tolerence", "floor_t", "corner_r", "standoff_h", "headroom",
     "mount_inset", "boss_d", "screw_d",
     "connector_w", "connector_h", "connector_margin",
-    "indicator_d", "indicator_x", "indicator_y",
+]
+SHARED_CAP = [
+    "lid_t", "lip_h", "indicator_d", "indicator_x", "indicator_y",
     "contact_d", "contact_pitch_x", "contact_pitch_y",
-    "lip_h", "explode_gap",
 ]
 
 
-def scad_defaults() -> dict[str, float]:
-    """Top-level numeric assignments from the SCAD file."""
+def scad_defaults(path=None) -> dict[str, float]:
+    """Top-level numeric assignments from a SCAD file."""
     values = {}
-    for line in SCAD_FILE.read_text(encoding="utf-8").splitlines():
+    for line in (path or CORE_SCAD).read_text(encoding="utf-8").splitlines():
         match = re.match(r"^(\w+)\s*=\s*(-?[\d.]+)\s*;", line)
         if match:
             values[match.group(1)] = float(match.group(2))
@@ -45,14 +48,19 @@ def scad_defaults() -> dict[str, float]:
 
 
 class TestTheTwoDescriptionsAgree:
-    def test_the_scad_file_is_parseable(self):
-        assert SCAD_FILE.is_file()
-        assert len(scad_defaults()) >= len(SHARED)
+    def test_both_scad_files_are_parseable(self):
+        assert CORE_SCAD.is_file() and CAP_SCAD.is_file()
+        assert len(scad_defaults(CORE_SCAD)) >= len(SHARED_CORE)
+        assert len(scad_defaults(CAP_SCAD)) >= len(SHARED_CAP)
 
-    @pytest.mark.parametrize("name", SHARED)
-    def test_each_shared_dimension_matches(self, name):
-        """The assembly is a model of the part, so its numbers are the part's."""
-        assert scad_defaults()[name] == pytest.approx(getattr(dc, name.upper()))
+    @pytest.mark.parametrize("name", SHARED_CORE)
+    def test_each_tray_dimension_matches(self, name):
+        """The assembly models the parts, so its numbers are theirs."""
+        assert scad_defaults(CORE_SCAD)[name] == pytest.approx(getattr(dc, name.upper()))
+
+    @pytest.mark.parametrize("name", SHARED_CAP)
+    def test_each_cover_dimension_matches(self, name):
+        assert scad_defaults(CAP_SCAD)[name] == pytest.approx(getattr(dc, name.upper()))
 
     def test_derived_envelope_matches_the_part(self):
         # What `apothecary parts info datum-core` reports for the tray.

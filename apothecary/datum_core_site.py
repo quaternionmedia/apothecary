@@ -25,52 +25,55 @@ from .hierarchy import Assembly, Feature, LayoutReport, Site, Structure, Substru
 from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
 from .primitives import Cylinder
+from .projects.parts.datum_cap import Params as CapParams
+from .projects.parts.datum_core import Params as CoreParams
 from .transforms import Rotate, Translate
 
-# --- the SCAD file's defaults, in one place ---------------------------------
+# --- the parts' own defaults, read rather than restated ---------------------
+#
+# These used to be typed out again here, twelve of them, kept in step with the
+# wrappers by a test. A gate compensating for a duplication is worse than not
+# duplicating: the assembly now reads the parts it models.
 
-BOARD_X = 40.0
-BOARD_Y = 40.0
-BOARD_T = 1.6
-BOARD_CLEARANCE = 0.4
+_CORE = CoreParams()
+_CAP = CapParams()
 
-# House constants, print-validated on QM hardware (parts/footpedal/button.scad).
-# Manufacturing facts, not this board's.
-WALLS = 3.0
-TOLERENCE = 0.4
+BOARD_X = _CORE.board_x
+BOARD_Y = _CORE.board_y
+BOARD_T = _CORE.board_t
+BOARD_CLEARANCE = _CORE.board_clearance
 
+WALLS = _CORE.walls
+TOLERENCE = _CORE.tolerence
 WALL = WALLS
-FLOOR_T = 2.0
-LID_T = 2.0
-CORNER_R = 3.0
-STANDOFF_H = 4.0
-HEADROOM = 8.0
+FLOOR_T = _CORE.floor_t
+STANDOFF_H = _CORE.standoff_h
+HEADROOM = _CORE.headroom
 
+LID_T = _CAP.lid_t
+LIP_H = _CAP.lip_h
+LIP_CLEARANCE = TOLERENCE / 2
+
+CONTACT_D = _CAP.contact_d
+CONTACT_PITCH_X = _CAP.contact_pitch_x
+CONTACT_PITCH_Y = _CAP.contact_pitch_y
+INDICATOR_D = _CAP.indicator_d
+
+# Geometry the SCAD files carry that no parameter model exposes yet.
+CORNER_R = 3.0
 MOUNT_INSET = 3.5
 BOSS_D = 5.0
 SCREW_D = 2.2
-
 CONNECTOR_W = 9.4
 CONNECTOR_H = 3.6
 CONNECTOR_MARGIN = 0.6
-
-INDICATOR_D = 4.0
 INDICATOR_X = 0.0
 INDICATOR_Y = 14.0
-
-CONTACT_D = 12.0
-CONTACT_PITCH_X = 18.0
-CONTACT_PITCH_Y = 18.0
-
-LIP_H = 3.0
-# tolerence is the total fit clearance, so each side gets half.
-LIP_CLEARANCE = TOLERENCE / 2
-
 EXPLODE_GAP = 12.0
 
-# The SCAD file renders at $fn=64. Matching it matters for more than looks:
-# at OpenSCAD's default facet count a hulled corner falls short of its own
-# radius, and the model then reports an envelope 0.3 mm under the part's.
+# The SCAD files render at $fn=64. Matching it matters for more than looks: at
+# OpenSCAD's default facet count a hulled corner falls short of its own radius,
+# and the model then reports an envelope under the part's.
 CURVE_FACETS = 64
 
 # --- derived, exactly as the SCAD derives them ------------------------------

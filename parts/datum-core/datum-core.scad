@@ -1,7 +1,8 @@
-// datum-core -- a two-piece enclosure for a 40 x 40 mm control-surface board.
+// datum-core -- the tray of an enclosure for a 40 x 40 mm control-surface board.
 //
-// Four contact openings, one indicator light pipe, one edge connector cutout,
-// and four board standoffs. Every dimension below is a parameter; the defaults
+// One edge connector cutout, an antenna relief, and four board standoffs. The
+// cover is a separate part, datum-cap: the enclosure record asks for one core
+// body with separate pieces around it. Every dimension below is a parameter; the defaults
 // describe a generic 40 mm board and render on their own, with no knowledge of
 // any particular PCB.
 //
@@ -9,10 +10,6 @@
 // here rather than in a consumer.
 
 $fn = 64;
-
-/* [What to render] */
-// tray = the printable base, lid = the printable cover, exploded = both
-show = "tray"; // [tray, lid, exploded]
 
 /* [Board] */
 board_x = 40;
@@ -29,7 +26,6 @@ tolerence = .4;
 
 /* [Shell] */
 floor_t = 2.0;
-lid_t = 2.0;
 corner_r = 3.0;
 // board underside to floor
 standoff_h = 4.0;
@@ -47,6 +43,13 @@ connector_w = 9.4;
 connector_h = 3.6;
 connector_margin = 0.6;
 
+/* [Antenna] */
+// A radio module wants no material in front of its antenna. The wall is
+// thinned rather than removed, so the enclosure stays closed: ported from
+// parts/datum/, which had this and this part did not.
+antenna_band = 8.0;
+antenna_wall = 0.8;
+
 /* [Indicator] */
 indicator_d = 4.0;
 indicator_x = 0;
@@ -57,18 +60,10 @@ contact_d = 12.0;
 contact_pitch_x = 18.0;
 contact_pitch_y = 18.0;
 
-/* [Lid fit] */
-lip_h = 3.0;
-
-/* [Assembly preview] */
-explode_gap = 12.0;
-
 // ---------------------------------------------------------------- derived --
 
-// Side wall and per-side lip gap both come from the print settings above:
-// tolerence is the total fit clearance, so each side gets half of it.
+// The side wall comes from the print settings above.
 wall = walls;
-lip_clearance = tolerence / 2;
 
 cavity_x = board_x + 2 * board_clearance;
 cavity_y = board_y + 2 * board_clearance;
@@ -129,6 +124,11 @@ module tray() {
         // Through the +Y wall, sitting on the board the way a connector does.
         translate([0, cavity_y / 2 - 0.5, connector_z])
             connector_cut(wall + 1.5);
+
+        // Antenna relief on the -Y wall, opposite the connector: the wall is
+        // thinned to antenna_wall over a band, not cut through.
+        translate([-cavity_x / 2, -outer_y / 2 - 0.01, board_z])
+            cube([cavity_x, wall - antenna_wall + 0.01, antenna_band]);
     }
 
     translate([0, 0, floor_t])
@@ -136,39 +136,6 @@ module tray() {
             standoff();
 }
 
-// Modelled plate-down, which is how it prints.
-module lid() {
-    difference() {
-        union() {
-            rrect(outer_x, outer_y, lid_t, corner_r);
-            translate([0, 0, lid_t])
-                rrect(cavity_x - 2 * lip_clearance,
-                      cavity_y - 2 * lip_clearance,
-                      lip_h,
-                      max(0.1, corner_r - wall));
-        }
-
-        translate([0, 0, -0.1])
-            contact_positions()
-                cylinder(d = contact_d, h = lid_t + lip_h + 0.2);
-
-        translate([indicator_x, indicator_y, -0.1])
-            cylinder(d = indicator_d, h = lid_t + lip_h + 0.2);
-    }
-}
-
 // ------------------------------------------------------------------ render --
 
-if (show == "tray") {
-    tray();
-} else if (show == "lid") {
-    lid();
-} else {
-    tray();
-    // The lid is modelled plate-down and flips to sit over the tray, so its
-    // lip hangs below the plate. Clearing lid_t + lip_h makes explode_gap the
-    // air you can actually see between the two pieces.
-    translate([0, 0, tray_h + explode_gap + lid_t + lip_h])
-        rotate([180, 0, 0])
-            lid();
-}
+tray();

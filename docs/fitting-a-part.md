@@ -83,13 +83,32 @@ copy of the SCAD file.
    |---|---|---|
    | SCAD defaults ↔ assembly model | `tests/test_datum_core_site.py` | wired |
    | Declared bounds ↔ rendered geometry | `apothecary parts verify` | wired |
-   | Fit profile ↔ part params | — | **not built** |
-   | Fit profile ↔ the schematic | — | needs WP-4 |
+   | Black box ↔ part params | `projects/assemblies/datum_bench.py` | built |
+   | Black box ↔ the schematic | `shims/kicad.py`, via `KiCadProvider` | built, unfed — no schematic exists |
 
-## What datum's profile would look like
+## This seam is already built, and this page nearly missed it
 
-Illustrative. Not implemented — the gate in row three of that table is the
-missing piece, and building it is the next step after this standard is agreed.
+`apothecary/models/blackbox.py` implements it. A `BlackBox` describes an
+artifact apothecary places but does not author — its envelope, its fastening
+points, its keepouts — and `BlackBoxProvider` is a Protocol, so where that
+description *comes from* is a separate, replaceable question. `StubProvider`
+returns hand-entered datasheet numbers; `KiCadProvider` in
+`apothecary/shims/kicad.py` reads a real board outline through the same
+interface, and swapping one for the other changes no geometry code.
+
+`apothecary/projects/assemblies/datum_bench.py` drives `parts/datum` through
+it and reports which envelopes are still guesses, so a review starts from what
+nobody has measured.
+
+That is this page's standard, implemented, and better factored than the JSON
+document sketched below: the seam is a protocol with more than one
+implementation rather than a file format. **An earlier version of this page
+said the profile was not built. It was, and the page had not looked.** What is
+described below is kept only as an illustration of the shape.
+
+## What a profile document would look like
+
+Illustrative, and superseded by the provider protocol above.
 
 ```json
 {

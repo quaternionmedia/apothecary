@@ -55,7 +55,7 @@ class TestParamsEndpoint:
     def test_it_describes_every_parameter(self):
         body = client.get("/parts/datum-core/params").json()
         names = {f["name"] for f in body["fields"]}
-        assert {"walls", "tolerence", "board_x", "board_y", "show"} <= names
+        assert {"walls", "tolerence", "board_x", "board_y", "headroom"} <= names
 
     def test_numeric_fields_carry_a_range_a_slider_can_use(self):
         body = client.get("/parts/datum-core/params").json()

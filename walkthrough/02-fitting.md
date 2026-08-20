@@ -41,8 +41,8 @@ OpenSCAD accepts any `-D` name whether the file defines it or not: an unchecked
 typo renders the defaults and exits 0.
 
     >>> from apothecary.projects.parts.stl_renderer import scad_definitions
-    >>> scad_definitions({"show": "exploded", "walls": 2})
-    ['-D', 'show="exploded"', '-D', 'walls=2']
+    >>> scad_definitions({"tag": "draft", "walls": 2})
+    ['-D', 'tag="draft"', '-D', 'walls=2']
 
 A string carries its quotes, because `-D` values are parsed as source and a
 bare word is an identifier:
@@ -55,9 +55,9 @@ bare word is an identifier:
 
 | | |
 |---|---|
-| Render a variant | `apothecary parts generate-stl datum-core -p show=exploded` |
+| Render a variant | `apothecary parts generate-stl datum-core -p headroom=12` |
 | A different printer | `apothecary parts generate-stl datum-core -p walls=2 -p tolerence=0.3` |
-| Check a variant's envelope | `apothecary parts verify datum-core -p show=exploded` |
+| Check a variant's envelope | `apothecary parts verify datum-core -p headroom=12` |
 | What produced the STL on disk | `apothecary parts info datum-core --json-out` → `stl_params` |
 | See the change | `apothecary serve`, then select the part — page 04 |
 

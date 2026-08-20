@@ -44,9 +44,9 @@ class TestScadLiteral:
             scad_literal({"a": 1})
 
     def test_definitions_are_flag_value_pairs(self):
-        assert scad_definitions({"show": "lid", "walls": 3}) == [
+        assert scad_definitions({"tag": "lid", "walls": 3}) == [
             "-D",
-            'show="lid"',
+            'tag="lid"',
             "-D",
             "walls=3",
         ]
@@ -67,7 +67,7 @@ class TestParameterValidation:
 
     def test_value_outside_the_model_is_refused(self):
         result = CliRunner().invoke(
-            cli, ["parts", "generate-stl", "datum-core", "-p", "show=banana"]
+            cli, ["parts", "generate-stl", "datum-core", "-p", "walls=-1"]
         )
         assert result.exit_code != 0
         assert "invalid parameters" in result.output
@@ -82,9 +82,15 @@ class TestParameterValidation:
 class TestBoundsMatchGeometry:
     """The declared envelope, measured against what OpenSCAD actually emits."""
 
-    @pytest.mark.parametrize("show,height", [("tray", 15.6), ("lid", 5.0), ("exploded", 32.6)])
-    def test_each_variant_verifies(self, show, height):
-        result = CliRunner().invoke(cli, ["parts", "verify", "datum-core", "-p", f"show={show}"])
+    @pytest.mark.parametrize(
+        "part,height",
+        [("datum-core", 15.6), ("datum-cap", 5.0)],
+    )
+    def test_each_piece_verifies(self, part, height):
+        """One part, one envelope. These used to be `show` variants of a single
+        part, which made its bounds depend on which mode you asked for.
+        """
+        result = CliRunner().invoke(cli, ["parts", "verify", part])
         assert result.exit_code == 0, result.output
         assert f"{height:.2f}" in result.output
 
