@@ -279,6 +279,11 @@ def test_all(port: int, coverage: bool, headed: bool, fail_fast: bool):
             sys.executable,
             "-m",
             "pytest",
+            # `walkthrough` is named here, not left to testpaths: pytest ignores
+            # testpaths the moment it receives a path argument, and "tests/" is
+            # one. Without this the executable pages are collected by nobody
+            # while this command still reports green.
+            "walkthrough",
             "tests/",
             "--ignore=tests/e2e",
             "-v",

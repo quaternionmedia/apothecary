@@ -42,12 +42,35 @@
    generated-OpenSCAD panel (500 on the layout route, so its placeholder never
    left). Catalog leaves now compile to `import()`.
 
+## Gates that exist on paper but run nowhere
+
+Found by asking what the checks do *not* cover, 2026-08-20. An unwired gate is
+indistinguishable from a passing one.
+
+7. **`.pre-commit-config.yaml` configures black, ruff, ruff-format,
+   end-of-file-fixer and trailing-whitespace, and no workflow runs
+   pre-commit.** Style is enforced only for contributors who installed the
+   hooks. `ruff check apothecary/ tests/` currently reports 46 violations —
+   25 E501, 9 B904, 8 I001, 2 F401, 2 B011 — which is the proof they are not
+   running. Ten of those are auto-fixable. Wiring the gate means either fixing
+   all 46 first or scoping it to changed files; both are a decision, which is
+   why this is written down rather than done.
+
+8. **`apothecary parts verify --all` gates nothing.** Five of the twelve parts
+   that declare bounds report an envelope their geometry does not have:
+   `V-Slot`, `couch_block`, `dryerknob`, `gridfinity`, `parametric_star`.
+   Anything laying out around them is wrong by the difference. datum's CI
+   verifies `datum-core` only, because that is the part it depends on. Wiring
+   `--all` here fails until those five are reconciled — see item 4.
+
 ## Next Steps
 - [ ] Fix JSCAD import syntax and add regression test (e.g., `node --check`)
 - [ ] Update packaging to include `parts/` and `templates/` in wheel
 - [ ] Sanitize `/parts` payload to emit relative paths only
 - [ ] Add OpenSCAD availability check to `apothecary check` command
-- [ ] Reconcile the four drifted wrappers against their geometry
+- [ ] Reconcile the five drifted wrappers against their geometry, then wire
+      `apothecary parts verify --all` into CI
+- [ ] Decide how pre-commit gets enforced, and wire it
 - [ ] Cross-check parameter *names* between each Params model and its SCAD file
 - [ ] Wire `apothecary parts verify --all` into CI
 - [ ] Consider WASM OpenSCAD for browser-side STL generation

@@ -119,3 +119,29 @@ class TestOnboardingInstallsWhatTheViewerNeeds:
 
         deps = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["dependencies"]
         assert "three" in deps
+
+
+class TestTheDocumentedCommandRunsTheWalkthrough:
+    """`apothecary test all` is what contributors are told to run.
+
+    pytest ignores `testpaths` the moment it receives a path argument, and that
+    command passes `tests/`. A walkthrough reached only through `testpaths` is
+    therefore collected by nobody while the command still reports green -- the
+    failure the one-executable-walkthrough record measured, in the one command
+    a contributor actually types.
+    """
+
+    def test_the_unit_phase_names_the_walkthrough_directory(self):
+        from apothecary.projects.parts.skeleton import ROOT
+
+        source = (ROOT / "apothecary" / "cli" / "testing.py").read_text(encoding="utf-8")
+        unit = source[source.index("unit_cmd = ["):]
+        unit = unit[: unit.index("]")]
+        assert '"walkthrough"' in unit, "test all would not collect the walkthrough"
+        assert '"tests/"' in unit
+
+    def test_ci_names_it_too(self):
+        from apothecary.projects.parts.skeleton import ROOT
+
+        workflow = (ROOT / ".github" / "workflows" / "pytest.yml").read_text(encoding="utf-8")
+        assert "pytest walkthrough" in workflow
