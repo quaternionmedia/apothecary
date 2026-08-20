@@ -1,4 +1,11 @@
-"""Testing-related CLI commands: test group and subcommands."""
+"""Testing-related CLI commands: test group and subcommands.
+
+Every command here signals failure with ``raise SystemExit(code)``, never
+``return code``. Click discards a command's return value, so a ``return 1``
+leaves the process exiting 0 and a failing suite reports success -- which is
+exactly how the CI test gate stayed green while tests were failing. If you add
+a command, exit the same way.
+"""
 
 import os
 import subprocess
@@ -38,7 +45,7 @@ def test_setup_e2e():
     except ImportError:
         _safe_echo("✗ Playwright not installed", fg="red")
         click.echo("  Run: uv sync")
-        return 1
+        raise SystemExit(1)
 
     click.echo("")
     click.echo("Installing Playwright browsers (chromium)...")
@@ -61,13 +68,13 @@ def test_setup_e2e():
             _safe_echo("✗ Browser installation failed", fg="red")
             if result.stderr:
                 click.echo(f"  Error: {result.stderr[:200]}")
-            return 1
+            raise SystemExit(1)
     except subprocess.TimeoutExpired:
         _safe_echo("✗ Installation timed out after 5 minutes", fg="red")
-        return 1
+        raise SystemExit(1)
     except Exception as e:
         _safe_echo(f"✗ Error: {e}", fg="red")
-        return 1
+        raise SystemExit(1)
 
 
 @test.command("validate-e2e")
@@ -147,13 +154,13 @@ def test_validate_e2e():
         click.echo("")
         click.echo("Run E2E tests with:")
         click.echo("  apothecary test run-e2e")
-        return 0
+        raise SystemExit(0)
     else:
         _safe_echo("✗ Some checks failed", fg="red", bold=True)
         click.echo("")
         click.echo("Run setup with:")
         click.echo("  apothecary test setup-e2e")
-        return 1
+        raise SystemExit(1)
 
 
 @test.command("run-e2e")
@@ -188,10 +195,10 @@ def test_run_e2e(headed: bool, slowmo: int, browser: str, base_url: str):
 
     try:
         result = subprocess.run(cmd, cwd=ROOT)
-        return result.returncode
+        raise SystemExit(result.returncode)
     except Exception as e:
         _safe_echo(f"✗ Error running tests: {e}", fg="red")
-        return 1
+        raise SystemExit(1)
 
 
 @test.command("run")
@@ -224,10 +231,10 @@ def test_run(e2e: bool, coverage: bool):
             click.echo("")
             click.echo("Coverage report generated: htmlcov/index.html")
 
-        return result.returncode
+        raise SystemExit(result.returncode)
     except Exception as e:
         _safe_echo(f"✗ Error running tests: {e}", fg="red")
-        return 1
+        raise SystemExit(1)
 
 
 @test.command("all")
@@ -447,8 +454,8 @@ def test_all(port: int, coverage: bool, headed: bool, fail_fast: bool):
     if total_failed == 0:
         _safe_echo(f"  ✓ ALL {total_passed} TESTS PASSED", fg="green", bold=True)
         click.echo("")
-        return 0
+        raise SystemExit(0)
     else:
         _safe_echo(f"  ✗ {total_failed} TEST(S) FAILED", fg="red", bold=True)
         click.echo("")
-        return 1
+        raise SystemExit(1)

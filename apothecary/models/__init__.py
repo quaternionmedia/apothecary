@@ -5,6 +5,13 @@ Provides shared geometry primitives, color models, and unit utilities
 for OpenSCAD generation.
 """
 
+from .blackbox import (
+    BlackBox,
+    BlackBoxProvider,
+    Keepout,
+    MountPoint,
+    StubProvider,
+)
 from .bounds import (
     BoundingBox2D,
     BoundingBox3D,
@@ -48,6 +55,11 @@ from .vectors import (
 )
 
 __all__ = [
+    "BlackBox",
+    "BlackBoxProvider",
+    "Keepout",
+    "MountPoint",
+    "StubProvider",
     # Vectors
     "Vector2D",
     "Vector3D",

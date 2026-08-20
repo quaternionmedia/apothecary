@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Git submodules command** – `apothecary submodules` to init/update external dependencies
+- **Gridfinity integration** – Parametric storage bin wrapper for gridfinity-rebuilt-openscad
+- **OpenSCAD Nightly detection** – Auto-detect development builds for parts requiring newer syntax
+- **Part STL customization** – Parts can define custom STL output paths and OpenSCAD requirements
 - **Fractal `Assembly` model** (prototype, unratified) – Site/Structure/Substructure/Feature collapsed into one generic recursive class (`apothecary/hierarchy.py`); depth is unbounded rather than four fixed levels
 - **Revision/diff building blocks** (prototype) – `apothecary/revisions.py`: `Revision`, `RevisionGraph` (branching history), `diff_assemblies` (path-addressed structural diff) — first slice toward planning/comparing design iterations, no compositing/merge yet
 - **Fractal zoom viewer** (prototype, unratified) – `/viewer/sites/{name}` navigates any registered site's Assembly tree at any depth with standardized controls (click to select, double-click or scroll-past-resistance to zoom in, one zoom-out control) and an abstract depth-ladder minimap

@@ -7,7 +7,7 @@ from .inventory import inventory
 from .parts import parts
 from .render import render_scene, render_scene_jscad, template_generate, testrun, validate
 from .server import dev, serve
-from .system import check, install, system
+from .system import check, install, submodules, system
 from .testing import test
 
 
@@ -20,6 +20,7 @@ def cli():
 cli.add_command(system)
 cli.add_command(check)
 cli.add_command(install)
+cli.add_command(submodules)
 cli.add_command(testrun)
 cli.add_command(render_scene)
 cli.add_command(render_scene_jscad)

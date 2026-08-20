@@ -1,7 +1,7 @@
 # AGENTS.md
 
 This project is governed by the Quaternion Media constitution, vendored at
-`governance/qm` (a submodule pinned to this project's `project/<name>`
+`governance/qm` (a submodule pinned to this project's `project/apothecary`
 branch of that repo). If you are an AI coding agent opening this repo with
 no other briefing, read this file fully before your first commit or edit.
 

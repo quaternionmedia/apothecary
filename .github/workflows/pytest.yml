@@ -23,6 +23,11 @@ jobs:
     steps:
     - name: 📰 Checkout
       uses: actions/checkout@v6
+      with:
+        # The gridfinity part is a wrapper around a vendored submodule. Without
+        # its sources the part cannot render, and three tests fail on a
+        # checkout that looks otherwise complete.
+        submodules: true
 
     - name: 🐍 Setup Python
       uses: actions/setup-python@v6
@@ -34,6 +39,20 @@ jobs:
 
     - name: 🚧 Install dependencies
       run: uv sync --locked --dev
+
+    - name: 📐 Install OpenSCAD
+      # The viewer E2E test asserts the page loads with no console errors. With
+      # no openscad on PATH the STL endpoints answer 503 ("OpenSCAD not
+      # installed") and the page fills with failed resource loads. A developer
+      # machine hides this behind a populated .cache/ of previously rendered
+      # STLs; a fresh checkout has none.
+      run: sudo apt-get update && sudo apt-get install -y openscad
+
+    - name: 🎭 Install Playwright browsers
+      # `apothecary test all` runs the E2E phase unconditionally. Without a
+      # browser that phase exits non-zero having collected nothing, which
+      # until now was invisible because the runner swallowed the code.
+      run: uv run playwright install --with-deps chromium
 
     - name: 📖 Run the walkthrough
       # Named explicitly rather than reached through testpaths: pytest ignores

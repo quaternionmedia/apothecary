@@ -29,9 +29,12 @@ OpenSCAD generation toolkit + curated printable parts.
 
 ```bash
 # Install
-git clone https://github.com/yourorg/apothecary.git
+git clone https://github.com/quaternionmedia/apothecary.git
 cd apothecary
 uv sync
+
+# Initialize submodules (Gridfinity, etc.)
+uv run apothecary submodules
 
 # Generate example
 uv run apothecary testrun -o example.scad
@@ -75,6 +78,10 @@ apothecary parts generate-stl --all  # Generate all STLs
 apothecary parts generate-stl NAME -p wall=3   # Override a parameter
 apothecary parts verify NAME         # Declared bounds vs real geometry
 apothecary parts elephant-walk # Generate all-parts preview
+
+# Submodules (external libraries like Gridfinity)
+apothecary submodules          # Init & update all submodules
+apothecary submodules --status # Check submodule status
 
 # Server
 apothecary serve               # Start FastAPI server

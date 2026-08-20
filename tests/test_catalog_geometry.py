@@ -54,9 +54,18 @@ class TestCatalogLeafCompiles:
         assert 'import("parts/datum-core/datum-core.stl"' in rendered
 
     def test_missing_stl_names_the_command_that_fixes_it(self):
+        """Asking for one node's geometry is a direct request, so it fails."""
         leaf = Assembly(name="ghost", role="part", part_ref="no-such-part")
         with pytest.raises(ValueError, match="apothecary parts generate-stl no-such-part"):
-            leaf.to_scad_object()
+            leaf.to_scad_object(strict=True)
+
+    def test_an_unbuilt_part_says_so_instead_of_failing(self):
+        """STLs are build artifacts, so a catalog routinely holds a part nobody
+        has built yet. One of those must not take every other part down with it.
+        """
+        leaf = Assembly(name="ghost", role="part", part_ref="no-such-part")
+        rendered = leaf.to_scad_object().render()
+        assert "apothecary parts generate-stl no-such-part" in rendered
 
     def test_a_leaf_with_neither_still_reports_the_original_error(self):
         bare = Assembly(name="bare", role="part")
@@ -68,6 +77,12 @@ class TestCatalogLeafCompiles:
         # leaves could not render at all.
         scad = create_parts_library_site().render()
         assert scad.count("import(") >= 10
+
+    def test_the_catalog_survives_a_part_nobody_has_built(self):
+        from apothecary.hierarchy import Site
+
+        site = Site("catalog", structures=[Assembly(name="ghost", part_ref="no-such-part")])
+        assert "generate-stl no-such-part" in site.render()
 
 
 class TestViewerSurfaces:

@@ -33,6 +33,12 @@ by `pytest walkthrough`. Start there.
 | [Fitting a Part](fitting-a-part.md) | The seam standard: which numbers belong to a consumer and which to this repository |
 | [Geometry Models](models.md) | Vectors, bounds, colors, shapes, and units |
 
+## External Libraries
+
+| Document | Description |
+|----------|-------------|
+| [Gridfinity](../parts/gridfinity/README.md) | Modular storage bin system (requires submodule) |
+
 ## Reference
 
 | Document | Description |

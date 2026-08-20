@@ -82,6 +82,18 @@ class OpenSCADRenderer:
         "/snap/bin/openscad",
     ]
 
+    # Nightly/development build paths (newer features)
+    OPENSCAD_NIGHTLY_PATHS = [
+        # Windows
+        r"C:\Program Files\OpenSCAD (Nightly)\openscad.exe",
+        r"C:\Program Files (x86)\OpenSCAD (Nightly)\openscad.exe",
+        # macOS
+        "/Applications/OpenSCAD (Nightly).app/Contents/MacOS/OpenSCAD",
+        # Linux (common nightly locations)
+        "/usr/local/bin/openscad-nightly",
+        "/opt/openscad-nightly/bin/openscad",
+    ]
+
     def __init__(self, openscad_path: Optional[str] = None):
         """
         Initialize the renderer.
@@ -132,6 +144,39 @@ class OpenSCADRenderer:
     def is_available(self) -> bool:
         """Check if OpenSCAD is available."""
         return self.openscad_path is not None and self.openscad_path.exists()
+
+    def find_nightly(self) -> Optional[Path]:
+        """
+        Find OpenSCAD Nightly/development build.
+
+        Returns:
+            Path to nightly OpenSCAD executable if found, None otherwise.
+        """
+        for path_str in self.OPENSCAD_NIGHTLY_PATHS:
+            path = Path(path_str)
+            if path.exists():
+                return path
+        return None
+
+    def get_nightly_version(self) -> Optional[str]:
+        """
+        Get version string of the nightly build if available.
+
+        Returns:
+            Version string or None if nightly not found.
+        """
+        nightly = self.find_nightly()
+        if not nightly:
+            return None
+
+        try:
+            result = subprocess.run(
+                [str(nightly), "--version"], capture_output=True, text=True, timeout=10
+            )
+            version = result.stderr.strip() or result.stdout.strip()
+            return version if version else None
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return None
 
     def get_version(self) -> Optional[str]:
         """Get OpenSCAD version string."""
