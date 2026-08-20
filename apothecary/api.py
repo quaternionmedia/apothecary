@@ -694,13 +694,25 @@ async def get_part_params(name: str):
         # constrains it, so the rest get a span around the default wide enough
         # to be worth dragging -- and wide enough to reach every candidate.
         interesting = [default, *(c["value"] for c in candidates)]
-        low = spec.get("minimum", spec.get("exclusiveMinimum"))
+        low = spec.get("minimum")
+        # gt=0 arrives as exclusiveMinimum, and a slider stopping exactly there
+        # offers a value the model then refuses -- which is the one thing this
+        # endpoint exists to prevent.
+        exclusive_low = spec.get("exclusiveMinimum")
         high = spec.get("maximum")
         if not isinstance(default, (int, float)):
             low = high = None
         else:
-            low = max(0.0, min(interesting) * 0.25) if low is None else float(low)
+            if low is None:
+                low = float(exclusive_low) if exclusive_low is not None else None
+            else:
+                low = float(low)
+            if low is None:
+                low = max(0.0, min(interesting) * 0.25)
             high = max(interesting) * 2.5 if high is None else float(high)
+            if exclusive_low is not None and low <= float(exclusive_low):
+                # One slider step above the bound it may not touch.
+                low = float(exclusive_low) + (high - float(exclusive_low)) / 200
 
         fields.append(
             {

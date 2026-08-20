@@ -58,12 +58,17 @@ part lands there:
     (307, '/viewer/sites/parts_library?focus=datum-core')
 
 The controls are built from the part's own model, so a slider cannot offer a
-value the renderer would refuse:
+value the renderer would refuse. That is not free: `gt=0` reaches the schema as
+an *exclusive* minimum, and a slider stopping exactly on it hands back a value
+the model rejects.
 
+    >>> from apothecary.projects.parts.datum_core import Params
     >>> spec = client.get("/parts/datum-core/params").json()
     >>> walls = next(f for f in spec["fields"] if f["name"] == "walls")
     >>> walls["min"] <= 2.4 <= walls["max"] and walls["min"] <= 3.0 <= walls["max"]
     True
+    >>> Params(walls=walls["min"]) and Params(walls=walls["max"]) and "accepted"
+    'accepted'
 
 ## Recording one
 

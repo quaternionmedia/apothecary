@@ -77,6 +77,20 @@ class TestParamsEndpoint:
         assert any("DRAFT-enclosure-parts-live-in-apothecary" in s for s in sources)
         assert any("parts/datum/datum.scad" in s for s in sources)
 
+    def test_no_slider_offers_a_value_the_model_refuses(self):
+        """The claim this endpoint exists to make. `gt=0` arrives as
+        exclusiveMinimum, and a slider stopping exactly on it hands the user a
+        value the renderer then rejects -- six of them did.
+        """
+        from apothecary.projects.parts.datum_core import Params
+
+        body = client.get("/parts/datum-core/params").json()
+        for field in body["fields"]:
+            if field["type"] != "number":
+                continue
+            for endpoint in (field["min"], field["max"]):
+                Params(**{field["name"]: endpoint})  # raises if refused
+
     def test_an_unknown_part_is_404(self):
         assert client.get("/parts/no-such-part/params").status_code == 404
 
