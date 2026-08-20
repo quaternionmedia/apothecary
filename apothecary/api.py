@@ -17,9 +17,9 @@ import os
 from contextlib import asynccontextmanager, suppress
 from importlib import import_module
 from pathlib import Path
-from urllib.parse import quote
 from random import choice
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
 from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
