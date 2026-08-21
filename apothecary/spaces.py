@@ -127,7 +127,17 @@ def _readiness_problems(part, report) -> List[Problem]:
             continue
 
         if check.name == "Declared bounds match geometry":
-            kind = "unbounded" if "declares no bounds" in check.detail else "drift"
+            if "declares no bounds" in check.detail:
+                kind = "unbounded"
+            elif check.state == "unknown":
+                # Nothing was measured, so nothing can have drifted. On a fresh
+                # checkout no part is rendered yet, and calling that drift told
+                # a reader the declared size disagreed with geometry that was
+                # never looked at. The missing render is already open on its
+                # own, as `unprintable`, with the command that closes it.
+                continue
+            else:
+                kind = "drift"
         elif check.name == "Fitted to measured artifacts":
             kind = "unmeasured"
         elif check.name in ("Print settings declared", "Fits the printer", "Geometry renders"):

@@ -93,6 +93,51 @@ class TestTheIndexIsDerived:
         assert all(g.addresses for g in gates)
 
 
+class TestAnUnmeasuredPartHasNotDrifted:
+    """CI found this: on a fresh checkout nothing is rendered, so every bounds
+    check comes back "needs a render" -- and the index called all of them
+    `drift`, telling a reader the declared size disagreed with geometry that
+    was never measured. Drift is a claim about a comparison that happened.
+    """
+
+    def test_needs_a_render_is_not_reported_as_drift(self):
+        from apothecary.projects.parts.datum_core import DEFAULT as CORE
+        from apothecary.projects.parts.readiness import UNKNOWN, Check, Readiness
+        from apothecary.spaces import _readiness_problems
+
+        report = Readiness(
+            part=CORE.name,
+            checks=[Check("Declared bounds match geometry", UNKNOWN, "needs a render")],
+        )
+        assert _readiness_problems(CORE, report) == []
+
+    def test_a_measured_disagreement_still_is(self):
+        from apothecary.projects.parts.datum_core import DEFAULT as CORE
+        from apothecary.projects.parts.readiness import BLOCKED, Check, Readiness
+        from apothecary.spaces import _readiness_problems
+
+        report = Readiness(
+            part=CORE.name,
+            checks=[
+                Check("Declared bounds match geometry", BLOCKED, "off by 1.22 mm", "fix it")
+            ],
+        )
+        assert [p.kind for p in _readiness_problems(CORE, report)] == ["drift"]
+
+    def test_a_part_with_no_declared_bounds_is_still_unbounded(self):
+        from apothecary.projects.parts.datum_core import DEFAULT as CORE
+        from apothecary.projects.parts.readiness import BLOCKED, Check, Readiness
+        from apothecary.spaces import _readiness_problems
+
+        report = Readiness(
+            part=CORE.name,
+            checks=[
+                Check("Declared bounds match geometry", BLOCKED, "the part declares no bounds")
+            ],
+        )
+        assert [p.kind for p in _readiness_problems(CORE, report)] == ["unbounded"]
+
+
 class TestServedFromTheApi:
     def test_the_route_matches_the_function(self):
         body = client.get("/problems").json()
