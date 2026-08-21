@@ -10,6 +10,7 @@ from ..projects.parts.skeleton import ROOT
 from ..projects.parts.stl_renderer import read_params_sidecar, write_params_sidecar
 from ..projects.registry import scan_projects
 from ..templates import TemplateRenderer
+from . import status
 from .utils import (
     _get_stl_bounding_box,
     _load_part_wrapper,
@@ -112,7 +113,7 @@ def parts_verify(
 
     drifted, checked, skipped = [], 0, []
 
-    for part_name in names:
+    for part_name in status.iterate(names, "Verifying"):
         try:
             part = _load_part_wrapper(part_name).DEFAULT
         except click.ClickException:
@@ -151,10 +152,10 @@ def parts_verify(
         checked += 1
 
         if ok:
-            _safe_echo(f"✓ {part_name}", fg="green")
+            status.line("pass", part_name, indent=0)
         else:
             drifted.append(part_name)
-            _safe_echo(f"✗ {part_name}", fg="red")
+            status.line("fail", part_name, indent=0)
 
         if not ok or verify_all is False:
             click.echo(f"    {'axis':<6}{'declared':>12}{'measured':>12}{'delta':>10}")
@@ -164,8 +165,12 @@ def parts_verify(
 
     click.echo("")
     for part_name, reason in skipped:
-        _safe_echo(f"• {part_name}: skipped, {reason}")
-    click.echo(f"{checked} verified, {len(drifted)} drifted, {len(skipped)} skipped")
+        status.line("skip", f"{part_name}: {reason}", indent=0)
+    status.verdict(
+        not drifted,
+        f"{checked} verified, {len(drifted)} drifted, {len(skipped)} skipped",
+        warn=not drifted and bool(skipped),
+    )
 
     if drifted:
         raise SystemExit(1)
@@ -193,7 +198,7 @@ def parts_checklist(name, check_all, build_volume, tolerance):
     A question that could not be asked is reported as `????`, never as a tick.
     Exits non-zero if anything is blocked, so it can gate a build.
     """
-    from ..projects.parts.readiness import BLOCKED, PASS, assess
+    from ..projects.parts.readiness import PASS, assess
 
     volume = None
     if build_volume:
@@ -211,24 +216,27 @@ def parts_checklist(name, check_all, build_volume, tolerance):
     else:
         raise click.ClickException("Specify a part name or use --all")
 
-    mark = {PASS: "OK  ", BLOCKED: "STOP", "unknown": "????"}
     any_blocked = False
+    reports = []
 
-    for part_name in names:
-        part = _load_part_wrapper(part_name).DEFAULT
-        report = assess(part, build_volume=volume, tolerance=tolerance)
+    # Assessing renders and measures, so it is slow enough to watch.
+    with status.progress(names, "Assessing") as bar:
+        for part_name in bar:
+            part = _load_part_wrapper(part_name).DEFAULT
+            reports.append((part_name, assess(part, build_volume=volume, tolerance=tolerance)))
 
+    for part_name, report in reports:
         click.echo("")
-        click.secho(f"{part_name}", bold=True)
+        status.heading(part_name)
         for check in report.checks:
-            _safe_echo(f"  [{mark[check.state]}] {check.name}")
+            status.line(check.state, check.name)
             if check.detail:
-                click.echo(f"           {check.detail}")
+                status.detail(check.detail)
             if check.fix and check.state != PASS:
-                click.echo(f"           -> {check.fix}")
+                status.fix(check.fix)
 
         if report.ready:
-            _safe_echo("  ready to build", fg="green")
+            status.verdict(True, "ready to build")
         else:
             any_blocked = any_blocked or bool(report.blocked)
             summary = []
@@ -236,10 +244,16 @@ def parts_checklist(name, check_all, build_volume, tolerance):
                 summary.append(f"{len(report.blocked)} blocking")
             if report.unknown:
                 summary.append(f"{len(report.unknown)} unanswered")
-            _safe_echo(
-                "  not ready: " + ", ".join(summary),
-                fg="red" if report.blocked else "yellow",
-            )
+            status.verdict(False, "not ready: " + ", ".join(summary), warn=not report.blocked)
+
+    if len(reports) > 1:
+        ready = sum(1 for _, r in reports if r.ready)
+        click.echo("")
+        status.verdict(
+            ready == len(reports),
+            f"{ready} of {len(reports)} ready to build",
+            warn=ready < len(reports) and not any_blocked,
+        )
 
     click.echo("")
     if any_blocked:
@@ -344,7 +358,7 @@ def parts_generate_stl(
         fail_count = 0
         skip_count = 0
 
-        for item in items:
+        for item in status.iterate(items, "Rendering"):
             scad_path = item.path
             stl_path = scad_path.with_suffix(".stl")
 
@@ -408,10 +422,10 @@ def parts_generate_stl(
                 result = part_renderer.render_stl(scad_path, stl_path, timeout=timeout)
 
             if result.success:
-                _safe_echo(f" ✓ ({result.render_time_seconds:.1f}s)", fg="green")
+                _safe_echo(click.style(f" OK ({result.render_time_seconds:.1f}s)", fg="green"))
                 success_count += 1
             else:
-                _safe_echo(f" ✗ {result.error_message}", fg="red")
+                _safe_echo(click.style(f" FAIL {result.error_message}", fg="red"))
                 fail_count += 1
 
         click.echo("")
@@ -473,7 +487,11 @@ def parts_generate_stl(
 
         if result.success:
             write_params_sidecar(stl_path, params)
-            _safe_echo(f"✓ Generated: {stl_path} ({result.render_time_seconds:.1f}s)")
+            status.line(
+                "pass",
+                f"Generated {stl_path.name} in {result.render_time_seconds:.1f}s",
+                indent=0,
+            )
         else:
             raise click.ClickException(f"Generation failed: {result.error_message}")
 

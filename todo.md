@@ -63,6 +63,39 @@ indistinguishable from a passing one.
    verifies `datum-core` only, because that is the part it depends on. Wiring
    `--all` here fails until those five are reconciled — see item 4.
 
+## Build-readiness triage, 2026-08-20
+
+`apothecary parts checklist --all --build-volume 220,220,250`, every part
+rendered first. **0 of 16 ready.** Grouped by what it would take to clear:
+
+**Fixable here, no decision needed**
+
+| Blocker | Parts | What to do |
+|---|---|---|
+| Declares no bounds | 7 — contranot, `datum`, fifel, footpedal, matboard cutter mount, solderfan, star-cookiecutter | give each wrapper a `get_bounds`; until then nothing can lay out around them |
+| Bounds drift from geometry | 4 — V-Slot, couch_block, dryerknob, parametric_star | reconcile wrapper and SCAD (item 8) |
+| No print settings | 11 | set `print_settings`; `datum-core` and `datum-cap` now carry the house constants |
+
+Note the checklist blocks on "declares no bounds" where `parts verify` skips
+it. Both are right for their question: a drift check has nothing to compare,
+but a part that cannot say how big it is is not ready to build.
+
+**Needs a decision, not a commit**
+
+| Blocker | Parts | Waiting on |
+|---|---|---|
+| Disputed dimensions | 2 — datum-core, datum-cap | which of `walls`/`tolerence`/`board_y` is authoritative |
+
+**Needs measurement, not code**
+
+| Blocker | Parts | Waiting on |
+|---|---|---|
+| Fitted to guessed envelopes | 16, all of them | the board outline and the mounting surface are `StubProvider` values. A `KiCadProvider` fed a real schematic clears it |
+
+Two parts still cannot render (`elephant_walk` depends on sibling STLs;
+`gridfinity` needs its submodule and a long render), which is why they show
+extra unanswered checks rather than blocks.
+
 ## Next Steps
 - [ ] Fix JSCAD import syntax and add regression test (e.g., `node --check`)
 - [ ] Update packaging to include `parts/` and `templates/` in wheel

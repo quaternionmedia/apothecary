@@ -15,6 +15,7 @@ by `pytest walkthrough`. Start there.
 | [04 — Serving it](../walkthrough/04-serving-it.md) | The API and the viewer |
 | [05 — Contested numbers](../walkthrough/05-contested-numbers.md) | Numbers the sources disagree about, and the dashboard for turning them |
 | [06 — Ready to build](../walkthrough/06-ready-to-build.md) | Whether a part can be printed and checked against a real one |
+| [07 — Status and progress](../walkthrough/07-status-and-progress.md) | One vocabulary for how the CLI reports state |
 
 ## Getting Started
 
