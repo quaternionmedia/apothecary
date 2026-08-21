@@ -735,6 +735,42 @@ async def get_part_params(name: str):
     }
 
 
+@app.get("/parts/{name}/checklist")
+async def get_part_checklist(name: str, build_volume: Optional[str] = Query(None)):
+    """Whether this part is ready to print and check against a real one.
+
+    The same assessment `apothecary parts checklist` prints, so the viewer and
+    the command line cannot disagree about whether something is buildable.
+    A question that could not be asked is reported as `unknown`, never as a
+    pass.
+    """
+    from .projects.parts.readiness import assess
+
+    part = _load_part_wrapper(name)
+
+    volume = None
+    if build_volume:
+        try:
+            parsed = tuple(float(v) for v in build_volume.split(","))
+        except ValueError:
+            raise HTTPException(status_code=422, detail="build_volume wants X,Y,Z") from None
+        if len(parsed) != 3:
+            raise HTTPException(status_code=422, detail="build_volume wants three numbers")
+        volume = parsed
+
+    report = assess(part, build_volume=volume)
+    return {
+        "part": report.part,
+        "ready": report.ready,
+        "blocked": len(report.blocked),
+        "unknown": len(report.unknown),
+        "checks": [
+            {"name": c.name, "state": c.state, "detail": c.detail, "fix": c.fix}
+            for c in report.checks
+        ],
+    }
+
+
 @app.get("/parts/{name}/files")
 async def get_part_files(name: str, request: Request):
     """

@@ -194,6 +194,17 @@
         .code-header {
             padding: 0.4rem 0; font-weight: 600; font-size: 0.8rem; color: #ccc;
         }
+        .check { display: flex; gap: 8px; margin: 4px 0; align-items: baseline; }
+        .check .mark { font-size: 10px; font-weight: 700; padding: 1px 5px;
+                       border-radius: 3px; flex: none; }
+        .mark.pass { background: #1f4d33; color: #7fe0a5; }
+        .mark.blocked { background: #5c1f1f; color: #ff9b9b; }
+        .mark.unknown { background: #4a4326; color: #e0cf8e; }
+        .check .body { min-width: 0; }
+        .check .why { color: #8a929e; font-size: 11px; display: block; }
+        .verdict { font-weight: 700; margin: 8px 0 4px; }
+        .verdict.ready { color: #5ec27e; }
+        .verdict.not-ready { color: #e0a33e; }
         .param { margin: 10px 0 12px; }
         .param.is-contested { border-left: 3px solid #e0a33e; padding-left: 9px; }
         .param .head { display: flex; justify-content: space-between; align-items: baseline; }
@@ -1317,15 +1328,62 @@
                         <button type="button" id="part-regenerate-btn">⚙️ Regenerate STL</button>
                         <a href="${BASE_URL}/parts/${encodeURIComponent(node.part_ref)}/scad">💾 Download SCAD</a>
                     </div>
+                    <div class="code-header">Build readiness</div>
+                    <div id="part-checklist">Loading…</div>
                     <div class="code-header">Parameters</div>
                     <div id="part-params">Loading…</div>
                     <div class="code-header">SCAD Source (the absorbed part view)</div>
                     <div id="part-scad-content" class="code-content">Loading…</div>
                 `;
                 this.loadPartScad(node.part_ref);
+                this.loadPartChecklist(node.part_ref);
                 this.loadPartParams(node.part_ref);
                 document.getElementById('part-regenerate-btn')
                     .addEventListener('click', () => this.regeneratePart(node.part_ref));
+            }
+
+            // Whether the part is ready to print and check against a real one.
+            // The same assessment the CLI prints, so the two cannot disagree
+            // about what is buildable.
+            async loadPartChecklist(name) {
+                const host = document.getElementById('part-checklist');
+                try {
+                    const response = await fetch(
+                        `${BASE_URL}/parts/${encodeURIComponent(name)}/checklist`);
+                    if (!response.ok) { host.textContent = 'No checklist available.'; return; }
+                    const report = await response.json();
+                    host.innerHTML = '';
+
+                    const verdict = document.createElement('div');
+                    verdict.className = 'verdict ' + (report.ready ? 'ready' : 'not-ready');
+                    verdict.textContent = report.ready
+                        ? 'Ready to build'
+                        : `Not ready — ${report.blocked} blocking, ${report.unknown} unanswered`;
+                    host.appendChild(verdict);
+
+                    for (const check of report.checks) {
+                        const row = document.createElement('div');
+                        row.className = 'check';
+                        const mark = document.createElement('span');
+                        mark.className = 'mark ' + check.state;
+                        mark.textContent = { pass: 'OK', blocked: 'STOP', unknown: '?' }[check.state];
+                        const body = document.createElement('div');
+                        body.className = 'body';
+                        body.textContent = check.name;
+                        // An unanswered question shows its reason and its fix;
+                        // a tick does not need explaining.
+                        if (check.state !== 'pass' && (check.detail || check.fix)) {
+                            const why = document.createElement('span');
+                            why.className = 'why';
+                            why.textContent = [check.detail, check.fix].filter(Boolean).join(' — ');
+                            body.appendChild(why);
+                        }
+                        row.append(mark, body);
+                        host.appendChild(row);
+                    }
+                } catch (err) {
+                    host.textContent = `Could not read the checklist: ${err.message}`;
+                }
             }
 
             // The part's parameters, as controls, in the one panel that already

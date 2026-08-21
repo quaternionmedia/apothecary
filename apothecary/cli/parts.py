@@ -171,6 +171,81 @@ def parts_verify(
         raise SystemExit(1)
 
 
+@parts.command("checklist")
+@click.argument("name", required=False)
+@click.option("--all", "check_all", is_flag=True, help="Every part with a wrapper")
+@click.option(
+    "--build-volume",
+    default=None,
+    metavar="X,Y,Z",
+    help="Printer build volume in mm, to check the part fits it.",
+)
+@click.option(
+    "--tolerance", default=0.5, show_default=True, help="Permitted bounds difference, in mm."
+)
+def parts_checklist(name, check_all, build_volume, tolerance):
+    """Is this part ready to print and check against a real one?
+
+    Answers from what this repository already knows: the geometry, the bounds
+    against the real mesh, the print settings, the dimensions its sources
+    disagree about, and the black boxes it is fitted around.
+
+    A question that could not be asked is reported as `????`, never as a tick.
+    Exits non-zero if anything is blocked, so it can gate a build.
+    """
+    from ..projects.parts.readiness import BLOCKED, PASS, assess
+
+    volume = None
+    if build_volume:
+        try:
+            volume = tuple(float(v) for v in build_volume.split(","))
+            if len(volume) != 3:
+                raise ValueError
+        except ValueError:
+            raise click.ClickException("--build-volume wants three numbers: X,Y,Z") from None
+
+    if check_all:
+        names = sorted({p.name for p in scan_projects(ROOT) if p.kind == "part" and p.wrapper})
+    elif name:
+        names = [name]
+    else:
+        raise click.ClickException("Specify a part name or use --all")
+
+    mark = {PASS: "OK  ", BLOCKED: "STOP", "unknown": "????"}
+    any_blocked = False
+
+    for part_name in names:
+        part = _load_part_wrapper(part_name).DEFAULT
+        report = assess(part, build_volume=volume, tolerance=tolerance)
+
+        click.echo("")
+        click.secho(f"{part_name}", bold=True)
+        for check in report.checks:
+            _safe_echo(f"  [{mark[check.state]}] {check.name}")
+            if check.detail:
+                click.echo(f"           {check.detail}")
+            if check.fix and check.state != PASS:
+                click.echo(f"           -> {check.fix}")
+
+        if report.ready:
+            _safe_echo("  ready to build", fg="green")
+        else:
+            any_blocked = any_blocked or bool(report.blocked)
+            summary = []
+            if report.blocked:
+                summary.append(f"{len(report.blocked)} blocking")
+            if report.unknown:
+                summary.append(f"{len(report.unknown)} unanswered")
+            _safe_echo(
+                "  not ready: " + ", ".join(summary),
+                fg="red" if report.blocked else "yellow",
+            )
+
+    click.echo("")
+    if any_blocked:
+        raise SystemExit(1)
+
+
 @parts.command("render")
 @click.argument("name")
 @click.option("--params-json", type=str, help="JSON string of parameter overrides")

@@ -21,7 +21,7 @@ from typing import Dict, Optional
 
 from pydantic import BaseModel, Field
 
-from apothecary.models import BoundingBox3D, Color, Vector3D
+from apothecary.models import BoundingBox3D, Color, PrintSettings, Vector3D
 
 from .base import BasePart, ContestedValue
 from .skeleton import ROOT
@@ -81,6 +81,11 @@ def create(metadata_root: Path) -> DatumCapPart:
         category="enclosure",
         tags=["datum", "enclosure", "cover", "lid", "control-surface"],
         readme_path=metadata_root / "parts" / "datum-cap" / "README.md",
+        # The house constants, so a slicer profile is not guesswork and the
+        # part's own `walls`/`tolerence` are not a second opinion about them.
+        print_settings=PrintSettings(
+            nozzle_diameter=0.4, layer_height=0.2, wall_thickness=3.0, tolerance=0.4
+        ),
         preview_color=Color.from_hex("#5A9367"),
         # The same disagreement datum-core carries: these two pieces have to be
         # made on the same printer, so they share the manufacturing facts.
@@ -96,7 +101,7 @@ def create(metadata_root: Path) -> DatumCapPart:
                 ),
                 ContestedValue(
                     value=2.4,
-                    source="parts/datum/datum.scad, before it was retired",
+                    source="parts/datum/datum.scad",
                     note="Cited that record for a value the record does not contain.",
                 ),
             ],
@@ -111,7 +116,7 @@ def create(metadata_root: Path) -> DatumCapPart:
                 ),
                 ContestedValue(
                     value=0.2,
-                    source="parts/datum/datum.scad, before it was retired",
+                    source="parts/datum/datum.scad",
                     note="Tighter fit, same misattribution.",
                 ),
             ],

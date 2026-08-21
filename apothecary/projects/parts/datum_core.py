@@ -15,7 +15,7 @@ from typing import Dict, Optional
 
 from pydantic import BaseModel, Field
 
-from apothecary.models import BoundingBox3D, Color, Vector3D
+from apothecary.models import BoundingBox3D, Color, PrintSettings, Vector3D
 
 from .base import BasePart, ContestedValue
 from .skeleton import ROOT
@@ -84,6 +84,11 @@ def create(metadata_root: Path) -> DatumCorePart:
         category="enclosure",
         tags=["datum", "enclosure", "case", "control-surface", "pcb"],
         readme_path=metadata_root / "parts" / "datum-core" / "README.md",
+        # The house constants, so a slicer profile is not guesswork and the
+        # part's own `walls`/`tolerence` are not a second opinion about them.
+        print_settings=PrintSettings(
+            nozzle_diameter=0.4, layer_height=0.2, wall_thickness=3.0, tolerance=0.4
+        ),
         preview_color=Color.from_hex("#3E7CB1"),
         # Three numbers this project's own sources state differently. None is a
         # typo to be quietly corrected: each has a document behind it, and the
