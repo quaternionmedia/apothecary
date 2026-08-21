@@ -16,6 +16,7 @@ by `pytest walkthrough`. Start there.
 | [05 — Contested numbers](../walkthrough/05-contested-numbers.md) | Numbers the sources disagree about, and the dashboard for turning them |
 | [06 — Ready to build](../walkthrough/06-ready-to-build.md) | Whether a part can be printed and checked against a real one |
 | [07 — Status and progress](../walkthrough/07-status-and-progress.md) | One vocabulary for how the CLI reports state |
+| [08 — Problems and solutions](../walkthrough/08-problems-and-solutions.md) | What is unresolved, who can close it, and what exists to close it with |
 
 ## Getting Started
 
@@ -34,6 +35,7 @@ by `pytest walkthrough`. Start there.
 | [Parts Authoring](parts-authoring.md) | How to create and register new parts |
 | [Iterating a Part](iterating-a-part.md) | Parameter overrides, the render loop, and checking bounds against geometry |
 | [Fitting a Part](fitting-a-part.md) | The seam standard: which numbers belong to a consumer and which to this repository |
+| [Boundaries](boundaries.md) | Which repository owns what between datum and apothecary, and what happens at the crossing |
 | [Geometry Models](models.md) | Vectors, bounds, colors, shapes, and units |
 
 ## External Libraries

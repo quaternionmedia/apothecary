@@ -735,6 +735,19 @@ async def get_part_params(name: str):
     }
 
 
+def _parse_build_volume(raw: Optional[str]):
+    """`X,Y,Z` as a tuple, or None. Refuses anything else rather than guessing."""
+    if not raw:
+        return None
+    try:
+        parsed = tuple(float(v) for v in raw.split(","))
+    except ValueError:
+        raise HTTPException(status_code=422, detail="build_volume wants X,Y,Z") from None
+    if len(parsed) != 3:
+        raise HTTPException(status_code=422, detail="build_volume wants three numbers")
+    return parsed
+
+
 @app.get("/parts/{name}/checklist")
 async def get_part_checklist(name: str, build_volume: Optional[str] = Query(None)):
     """Whether this part is ready to print and check against a real one.
@@ -748,17 +761,7 @@ async def get_part_checklist(name: str, build_volume: Optional[str] = Query(None
 
     part = _load_part_wrapper(name)
 
-    volume = None
-    if build_volume:
-        try:
-            parsed = tuple(float(v) for v in build_volume.split(","))
-        except ValueError:
-            raise HTTPException(status_code=422, detail="build_volume wants X,Y,Z") from None
-        if len(parsed) != 3:
-            raise HTTPException(status_code=422, detail="build_volume wants three numbers")
-        volume = parsed
-
-    report = assess(part, build_volume=volume)
+    report = assess(part, build_volume=_parse_build_volume(build_volume))
     return {
         "part": report.part,
         "ready": report.ready,
@@ -1343,6 +1346,48 @@ async def part_view(name: str):
     return RedirectResponse(
         f"/viewer/sites/parts_library?focus={quote(name, safe='')}", status_code=307
     )
+
+
+@app.get("/problems")
+async def get_problems(
+    owner: Optional[str] = Query(None, description="apothecary | datum | human | measurement"),
+    kind: Optional[str] = Query(None),
+    build_volume: Optional[str] = Query(None),
+):
+    """Every open question this repository can state, and who can close it.
+
+    Derived from models that already exist -- contested values, the build
+    checklist, layout validators, the black-box seam -- so it cannot drift from
+    the repository the way a hand-maintained list does.
+    """
+    from .spaces import problems as open_problems
+
+    volume = _parse_build_volume(build_volume)
+    found = open_problems(build_volume=volume)
+    if owner:
+        found = [p for p in found if p.owner == owner]
+    if kind:
+        found = [p for p in found if p.kind == kind]
+    return {"count": len(found), "problems": [p.to_dict() for p in found]}
+
+
+@app.get("/solutions")
+async def get_solutions(kind: Optional[str] = Query(None)):
+    """What this repository offers against those problems."""
+    from .spaces import capabilities
+
+    found = capabilities()
+    if kind:
+        found = [c for c in found if c.kind == kind]
+    return {"count": len(found), "capabilities": [c.to_dict() for c in found]}
+
+
+@app.get("/spaces")
+async def get_spaces(build_volume: Optional[str] = Query(None)):
+    """Both spaces at a glance, and any problem kind nothing here addresses."""
+    from .spaces import summary
+
+    return summary(build_volume=_parse_build_volume(build_volume))
 
 
 @app.get("/openscad/status")

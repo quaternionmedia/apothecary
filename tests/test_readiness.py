@@ -71,12 +71,26 @@ class TestTheChecksAnswerHonestly:
     def test_the_stub_check_actually_reads_the_assembly(self):
         """It once reported "no stubs remain" without looking, because
         `build()` returns a tuple and it read the tuple as an Assembly.
+
+        The part the assembly actually drives is `parts/datum`, so that is
+        where the stubs surface.
         """
-        report = assess(CORE)
+        from apothecary.projects.parts.datum import DEFAULT as DATUM_PART
+
+        report = assess(DATUM_PART)
         stubs = next(c for c in report.checks if c.name == "Fitted to measured artifacts")
         assert stubs.state == UNKNOWN
         assert "still guessed" in stubs.detail
         assert "board" in stubs.detail
+
+    def test_a_part_the_assembly_does_not_place_is_not_told_about_its_stubs(self):
+        """`calibration_cube` was reported as fitted to datum's board, because
+        the check read the bench for every part in the library.
+        """
+        report = assess(CORE)
+        stubs = next(c for c in report.checks if c.name == "Fitted to measured artifacts")
+        assert stubs.state == PASS
+        assert "not fitted to a black box" in stubs.detail
 
     def test_every_non_passing_check_says_what_to_do(self):
         report = assess(CORE)

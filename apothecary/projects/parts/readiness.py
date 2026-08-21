@@ -231,6 +231,18 @@ def _stub_check(part) -> Check:
             "Fitted to measured artifacts", UNKNOWN, "the assembly reports no placements"
         )
 
+    # Only for a part the assembly actually places. This used to report the
+    # bench's stubs for every part in the library, so `calibration_cube` was
+    # told it was fitted to a board it has never heard of.
+    source = part.source_file.name
+    placed = any(source in (getattr(p, "note", "") or "") for p in placements)
+    if not placed:
+        return Check(
+            "Fitted to measured artifacts",
+            PASS,
+            "not fitted to a black box — nothing external to measure",
+        )
+
     stubs = [p for p in placements if getattr(p, "stub", False)]
     if not stubs:
         return Check(

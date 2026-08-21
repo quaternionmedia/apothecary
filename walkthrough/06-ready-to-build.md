@@ -23,17 +23,30 @@ never counts as ready:
     False
 
 A checklist that ticks a box it could not check is worse than no checklist.
-This module shipped that defect once: it read `build()` as one object when it
-returns two, so it reported "no stubs remain" about an assembly it had never
-looked at. It reads the assembly now:
+This module shipped that defect twice. First it read `build()` as one object
+when it returns two, so it reported "no stubs remain" about an assembly it had
+never looked at. Then, once it read the assembly properly, it reported *that*
+assembly's stubs for every part in the library — `calibration_cube` was told it
+was fitted to a board it has never heard of.
 
-    >>> stubs = next(c for c in report.checks if c.name == "Fitted to measured artifacts")
+It is part-specific now, and the answer differs between the two enclosure
+parts for a reason worth knowing:
+
+    >>> from apothecary.projects.parts.datum import DEFAULT as datum_part
+    >>> fitted = next(c for c in report.checks if c.name == "Fitted to measured artifacts")
+    >>> fitted.state
+    'pass'
+    >>> theirs = assess(datum_part)
+    >>> stubs = next(c for c in theirs.checks if c.name == "Fitted to measured artifacts")
     >>> stubs.state, "still guessed" in stubs.detail
     ('unknown', True)
 
-That is `models/blackbox.py` earning its `source` field — a reader can tell a
-measured envelope from a guessed one, and today the board and the mounting
-surface are both guesses.
+`parts/datum` is the part `projects/assemblies/datum_bench.py` drives through
+the black-box seam, so it inherits the board and mounting-surface stubs.
+`datum-core` is not wired to that seam at all — which is not a clean bill of
+health so much as a gap, and `docs/boundaries.md` names it as one. That is
+`models/blackbox.py` earning its `source` field: a reader can tell a measured
+envelope from a guessed one, and from a part that is not fitted to either.
 
 ## What blocks datum-core today
 
