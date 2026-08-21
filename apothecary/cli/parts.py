@@ -55,7 +55,7 @@ def parts_info(name: str, json_out: bool):
         "readme": str(part.readme_path) if part.readme_path and part.readme_path.exists() else None,
         "params_model": list(part.params_model.model_fields.keys()) if part.params_model else [],
         "bounds": bounds.model_dump(mode="json") if bounds else None,
-        "stl_params": read_params_sidecar(part.source_file.with_suffix(".stl")),
+        "stl_params": read_params_sidecar(part.get_stl_output_path()),
     }
     if json_out:
         click.echo(json.dumps(data, indent=2))

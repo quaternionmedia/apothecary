@@ -261,7 +261,11 @@ def assess(part, build_volume: Optional[tuple] = None, tolerance: float = 0.5) -
     from apothecary.projects.parts.stl_renderer import get_renderer
 
     renderer = get_renderer()
-    stl_path = part.source_file.with_suffix(".stl")
+    # The part decides where its STL lives. gridfinity's SCAD is inside a
+    # third-party submodule and its wrapper overrides this precisely so the
+    # render does not land in somebody else's checkout; assuming
+    # source_file.with_suffix looked in the wrong place for it.
+    stl_path = part.get_stl_output_path()
 
     checks = _geometry_checks(part, renderer, stl_path)
     if any(c.name == "Geometry renders" and c.ok for c in checks):

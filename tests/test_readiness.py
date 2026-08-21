@@ -128,3 +128,33 @@ class TestServedFromTheOneEntryPoint:
         page = client.get("/viewer/sites/parts_library").text
         assert "loadPartChecklist" in page
         assert "part-checklist" in page
+
+
+class TestThePartDecidesWhereItsStlLives:
+    """`gridfinity`'s SCAD is inside a third-party submodule, and its wrapper
+    overrides `get_stl_output_path` precisely so the render does not land in
+    somebody else's checkout. Assuming `source_file.with_suffix('.stl')`
+    looked in the wrong place — and the render that put it there left
+    untracked content in that submodule.
+    """
+
+    def test_readiness_reads_the_path_the_part_names(self):
+        from apothecary.cli.utils import _load_part_wrapper
+
+        part = _load_part_wrapper("gridfinity").DEFAULT
+        assert part.get_stl_output_path() != part.source_file.with_suffix(".stl")
+
+        report = assess(part)
+        renders = next(c for c in report.checks if c.name == "Geometry renders")
+        # Either it is built or it is not, but the answer must come from the
+        # path the part names, not from inside the submodule.
+        assert renders.state in (PASS, UNKNOWN)
+        assert "gridfinity-rebuilt-openscad" not in renders.detail
+
+    def test_no_render_lands_inside_the_submodule(self):
+        from apothecary.projects.parts.skeleton import ROOT
+
+        submodule = ROOT / "parts" / "gridfinity" / "gridfinity-rebuilt-openscad"
+        assert not list(submodule.glob("*.stl")), (
+            "a render landed in a third-party checkout"
+        )
