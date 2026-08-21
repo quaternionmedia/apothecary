@@ -774,6 +774,60 @@ async def get_part_checklist(name: str, build_volume: Optional[str] = Query(None
     }
 
 
+@app.post("/parts/{name}/validate")
+async def validate_part_params(name: str, body: Optional[StlGenerateRequest] = None):
+    """Check a staged parameter set without rendering anything.
+
+    The step between moving a slider and spending thirty seconds of OpenSCAD on
+    it: the values go through the part's own model, and the envelope they would
+    produce comes back. A set that cannot be rendered is rejected here, where it
+    costs nothing.
+    """
+    part = _load_part_wrapper(name)
+    params = body.params if body else {}
+
+    model_cls = getattr(part, "params_model", None)
+    if model_cls is None:
+        return {"valid": True, "params": {}, "errors": [], "bounds": None}
+
+    unknown = sorted(set(params) - set(model_cls.model_fields))
+    if unknown:
+        return {
+            "valid": False,
+            "params": {},
+            "errors": [{"field": u, "message": "no such parameter"} for u in unknown],
+            "bounds": None,
+        }
+
+    try:
+        validated = model_cls(**params)
+    except ValidationError as exc:
+        return {
+            "valid": False,
+            "params": {},
+            "errors": [
+                {"field": ".".join(str(p) for p in e["loc"]), "message": e["msg"]}
+                for e in exc.errors()
+            ],
+            "bounds": None,
+        }
+
+    staged = {key: getattr(validated, key) for key in params}
+    # The envelope the staged set would produce, so a reader sees the
+    # consequence before paying for the render.
+    try:
+        bounds = part.get_bounds(staged or None)
+    except Exception:  # pragma: no cover - a wrapper that cannot size itself
+        bounds = None
+
+    return {
+        "valid": True,
+        "params": jsonable_encoder(staged),
+        "errors": [],
+        "bounds": jsonable_encoder(bounds),
+    }
+
+
 @app.get("/parts/{name}/files")
 async def get_part_files(name: str, request: Request):
     """

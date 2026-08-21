@@ -34,6 +34,50 @@ file as defaults — a part has to render for someone who has never heard of
     >>> Params().board_x, Params().board_y
     (40.0, 40.0)
 
+## Every number in the file is a control
+
+A dimension that lives only in the SCAD file cannot be staged, validated or
+iterated — it can only be edited, which is the loop this tooling replaces. So
+every top-level number in a part's SCAD has a parameter, and a test holds the
+two together in both directions:
+
+    >>> import re
+    >>> from apothecary.projects.parts.datum_core import DEFAULT
+    >>> text = DEFAULT.source_file.read_text(encoding="utf-8")
+    >>> numbers = {m.group(1) for m in re.finditer(r"^(\w+)\s*=\s*-?[\d.]+\s*;", text, re.M)}
+    >>> numbers == set(DEFAULT.params_model.model_fields)
+    True
+
+Both directions matter. A number with no parameter is untunable; a parameter
+with no number renders nothing when moved — `datum-core` carried six of those
+after the cover moved to `datum-cap`.
+
+## Staging, then iterating
+
+A render is thirty seconds of OpenSCAD; validation is a Pydantic call. Moving a
+slider stages a value and validates the whole staged set, which costs nothing:
+
+    >>> from fastapi.testclient import TestClient
+    >>> from apothecary.api import app
+    >>> client = TestClient(app)
+    >>> staged = client.post(
+    ...     "/parts/datum-core/validate", json={"params": {"walls": 2.4}}
+    ... ).json()
+    >>> staged["valid"], round(staged["bounds"]["size"]["x"], 1)
+    (True, 45.6)
+
+The envelope comes back before anything is rendered, so the consequence of a
+change is visible before it is paid for. A set that could never render is
+refused here:
+
+    >>> client.post(
+    ...     "/parts/datum-core/validate", json={"params": {"walls": -1}}
+    ... ).json()["valid"]
+    False
+
+In the viewer the staged changes are marked, counted and shown against their
+previous values, and **Apply** is the only thing that renders.
+
 ## Overrides reach OpenSCAD
 
 Validated against the part's own model *before* anything renders, because

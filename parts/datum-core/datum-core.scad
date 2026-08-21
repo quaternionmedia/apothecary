@@ -50,16 +50,6 @@ connector_margin = 0.6;
 antenna_band = 8.0;
 antenna_wall = 0.8;
 
-/* [Indicator] */
-indicator_d = 4.0;
-indicator_x = 0;
-indicator_y = 14;
-
-/* [Contacts] */
-contact_d = 12.0;
-contact_pitch_x = 18.0;
-contact_pitch_y = 18.0;
-
 // ---------------------------------------------------------------- derived --
 
 // The side wall comes from the print settings above.
@@ -86,12 +76,6 @@ module rrect(x, y, h, r) {
 module mount_positions() {
     for (sx = [-1, 1], sy = [-1, 1])
         translate([sx * (board_x / 2 - mount_inset), sy * (board_y / 2 - mount_inset), 0])
-            children();
-}
-
-module contact_positions() {
-    for (sx = [-1, 1], sy = [-1, 1])
-        translate([sx * contact_pitch_x / 2, sy * contact_pitch_y / 2, 0])
             children();
 }
 

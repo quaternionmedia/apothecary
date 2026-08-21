@@ -53,6 +53,9 @@ class Params(BaseModel):
     contact_pitch_x: float = Field(18.0, gt=0)
     contact_pitch_y: float = Field(18.0, gt=0)
     indicator_d: float = Field(4.0, gt=0)
+    indicator_x: float = Field(0.0)
+    indicator_y: float = Field(14.0)
+    corner_r: float = Field(3.0, gt=0)
 
 
 class DatumCapPart(BasePart):

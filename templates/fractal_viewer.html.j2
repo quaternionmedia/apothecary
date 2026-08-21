@@ -205,6 +205,21 @@
         .verdict { font-weight: 700; margin: 8px 0 4px; }
         .verdict.ready { color: #5ec27e; }
         .verdict.not-ready { color: #e0a33e; }
+        .staged { border-left: 3px solid #4a9eff; padding-left: 9px; }
+        .staged .val { color: #4a9eff; font-weight: 700; }
+        .was { color: #8a929e; font-size: 11px; }
+        #stage-bar { position: sticky; top: 0; z-index: 2; background: #1b1e24;
+                     border-bottom: 1px solid #2a2f38; padding: 8px 0; margin-bottom: 6px; }
+        #stage-summary { font-size: 12px; margin-bottom: 6px; }
+        #stage-summary.clean { color: #8a929e; }
+        #stage-summary.valid { color: #5ec27e; }
+        #stage-summary.invalid { color: #ff9b9b; }
+        .stage-actions { display: flex; gap: 6px; }
+        .stage-actions button { flex: 1; padding: 6px; border: 0; border-radius: 4px;
+                                font-weight: 700; cursor: pointer; font: inherit; }
+        #apply-btn { background: #4a9eff; color: #0b0d10; }
+        #apply-btn:disabled { opacity: .4; cursor: default; }
+        #revert-btn { background: #2a2f38; color: #d7dae0; }
         .param { margin: 10px 0 12px; }
         .param.is-contested { border-left: 3px solid #e0a33e; padding-left: 9px; }
         .param .head { display: flex; justify-content: space-between; align-items: baseline; }
@@ -1331,6 +1346,13 @@
                     <div class="code-header">Build readiness</div>
                     <div id="part-checklist">Loading…</div>
                     <div class="code-header">Parameters</div>
+                    <div id="stage-bar">
+                      <div id="stage-summary" class="clean">No staged changes</div>
+                      <div class="stage-actions">
+                        <button type="button" id="apply-btn" disabled>Apply</button>
+                        <button type="button" id="revert-btn">Revert</button>
+                      </div>
+                    </div>
                     <div id="part-params">Loading…</div>
                     <div class="code-header">SCAD Source (the absorbed part view)</div>
                     <div id="part-scad-content" class="code-content">Loading…</div>
@@ -1386,13 +1408,138 @@
                 }
             }
 
+            // ---- staging -------------------------------------------------
+            //
+            // A slider moves a staged value, never the design. The staged set
+            // is validated against the part's own model on every change --
+            // which costs nothing -- and only a valid set can be applied,
+            // which is the thirty seconds of OpenSCAD.
+
+            stagedDiff() {
+                const diff = {};
+                for (const [name, value] of Object.entries(this.partParams ?? {})) {
+                    const was = this.committedParams?.[name];
+                    if (Number(value) !== Number(was) && value !== was) {
+                        diff[name] = { from: was, to: value };
+                    }
+                }
+                return diff;
+            }
+
+            markStagedControls(diff) {
+                for (const wrap of document.querySelectorAll('.param')) {
+                    const label = wrap.querySelector('.name');
+                    if (!label) continue;
+                    const name = label.childNodes[0].textContent.trim();
+                    const entry = diff[name];
+                    wrap.classList.toggle('staged', Boolean(entry));
+                    const existing = wrap.querySelector('.was');
+                    if (existing) existing.remove();
+                    if (entry) {
+                        const was = document.createElement('span');
+                        was.className = 'was';
+                        was.textContent = ` was ${entry.from}`;
+                        wrap.querySelector('.val').after(was);
+                    }
+                }
+            }
+
+            async refreshStage() {
+                const name = this.partParamsFor;
+                const summary = document.getElementById('stage-summary');
+                const apply = document.getElementById('apply-btn');
+                if (!name || !summary || !apply) return;
+
+                const diff = this.stagedDiff();
+                const count = Object.keys(diff).length;
+                this.markStagedControls(diff);
+
+                if (!count) {
+                    summary.className = 'clean';
+                    summary.textContent = 'No staged changes';
+                    apply.disabled = true;
+                    apply.textContent = 'Apply';
+                    return;
+                }
+
+                summary.className = 'clean';
+                summary.textContent = `Validating ${count} change${count > 1 ? 's' : ''}…`;
+                apply.disabled = true;
+
+                const seq = (this._stageSeq = (this._stageSeq ?? 0) + 1);
+                let report;
+                try {
+                    const response = await fetch(
+                        `${BASE_URL}/parts/${encodeURIComponent(name)}/validate`,
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ params: this.partParams }),
+                        }
+                    );
+                    report = await response.json();
+                } catch (err) {
+                    summary.className = 'invalid';
+                    summary.textContent = `Could not validate: ${err.message}`;
+                    return;
+                }
+                // A slower validation must not overwrite a newer one.
+                if (seq !== this._stageSeq) return;
+
+                this.stagedValid = Boolean(report.valid);
+                if (!report.valid) {
+                    summary.className = 'invalid';
+                    summary.textContent = report.errors
+                        .map((e) => `${e.field}: ${e.message}`)
+                        .join('; ');
+                    apply.disabled = true;
+                    return;
+                }
+
+                summary.className = 'valid';
+                const size = report.bounds?.size;
+                const envelope = size
+                    ? ` → ${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)} mm`
+                    : '';
+                summary.textContent =
+                    `${count} change${count > 1 ? 's' : ''} staged, valid${envelope}`;
+                apply.disabled = false;
+                apply.textContent = `Apply ${count} change${count > 1 ? 's' : ''}`;
+                this.showEnvelope(report.bounds);
+            }
+
+            bindStageActions(name) {
+                const apply = document.getElementById('apply-btn');
+                const revert = document.getElementById('revert-btn');
+                if (apply) {
+                    apply.onclick = async () => {
+                        if (!this.stagedValid) return;
+                        await this.regeneratePart(name);
+                        // What rendered is now what is committed.
+                        this.committedParams = { ...this.partParams };
+                        this.refreshStage();
+                    };
+                }
+                if (revert) {
+                    revert.onclick = () => {
+                        this.partParams = { ...this.committedParams };
+                        this.loadPartParams(name);
+                    };
+                }
+            }
+
             // The part's parameters, as controls, in the one panel that already
             // describes a part. A separate dashboard page would be a second
             // entry point onto the same object, and this viewer is the only one.
             async loadPartParams(name) {
                 const host = document.getElementById('part-params');
+                // `committed` is what the STL on disk was rendered from;
+                // `staged` is what the sliders currently say. Nothing renders
+                // until the difference has been validated and applied.
                 this.partParams = {};
+                this.committedParams = {};
                 this.partParamsFor = name;
+                this.stagedValid = true;
                 try {
                     const response = await fetch(
                         `${BASE_URL}/parts/${encodeURIComponent(name)}/params`);
@@ -1406,8 +1553,11 @@
                         (a, b) => b.contested.length - a.contested.length);
                     for (const field of ordered) {
                         this.partParams[field.name] = field.default;
+                        this.committedParams[field.name] = field.default;
                         host.appendChild(this.buildParamControl(field));
                     }
+                    this.bindStageActions(name);
+                    this.refreshStage();
                 } catch (err) {
                     host.textContent = `Could not read parameters: ${err.message}`;
                 }
@@ -1453,6 +1603,7 @@
                     select.onchange = () => {
                         this.partParams[field.name] = select.value;
                         val.textContent = select.value;
+                        this.refreshStage();
                     };
                     wrap.appendChild(select);
                 } else if (field.type === 'number') {
@@ -1466,6 +1617,7 @@
                         this.partParams[field.name] = Number(input.value);
                         val.textContent = Number(input.value).toFixed(2);
                         this.markCandidates(field, wrap);
+                        this.refreshStage();
                     };
                     wrap.appendChild(input);
                     wrap._input = input;
@@ -1484,6 +1636,7 @@
                         if (wrap._input) wrap._input.value = candidate.value;
                         val.textContent = Number(candidate.value).toFixed(2);
                         this.markCandidates(field, wrap);
+                        this.refreshStage();
                     };
                     wrap.appendChild(button);
                 }

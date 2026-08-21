@@ -34,6 +34,15 @@ class Params(BaseModel):
         floor_t: Tray floor thickness
         standoff_h: Floor to board underside
         headroom: Board top to lid underside
+        corner_r: Shell corner radius
+        mount_inset: Mounting hole centres, inset from the board edge
+        boss_d: Standoff boss diameter
+        screw_d: Pilot hole for the board screw
+        connector_w: Edge connector opening width
+        connector_h: Edge connector opening height
+        connector_margin: Clearance added to the connector opening per side
+        antenna_band: Height of the thinned strip at the antenna wall
+        antenna_wall: Thickness left at the antenna wall
     """
 
     # Manufacturing facts, house defaults. A consumer overrides these for its
@@ -47,6 +56,18 @@ class Params(BaseModel):
     floor_t: float = Field(2.0, gt=0)
     standoff_h: float = Field(4.0, ge=0)
     headroom: float = Field(8.0, ge=0)
+    # Every remaining top-level number in the SCAD file. A dimension with no
+    # control is a dimension nobody tunes; test_parameter_coverage holds this
+    # model to the file so the two cannot part company.
+    corner_r: float = Field(3.0, gt=0)
+    mount_inset: float = Field(3.5, gt=0)
+    boss_d: float = Field(5.0, gt=0)
+    screw_d: float = Field(2.2, gt=0)
+    connector_w: float = Field(9.4, gt=0)
+    connector_h: float = Field(3.6, gt=0)
+    connector_margin: float = Field(0.6, ge=0)
+    antenna_band: float = Field(8.0, ge=0)
+    antenna_wall: float = Field(0.8, gt=0)
 
 
 class DatumCorePart(BasePart):
