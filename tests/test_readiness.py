@@ -130,6 +130,58 @@ class TestServedFromTheOneEntryPoint:
         assert "part-checklist" in page
 
 
+class TestAStaleRenderIsNotDrift:
+    """datum-core was reported as drifted by 1.2 mm. Nothing had drifted: the
+    SCAD was untouched, the wrapper's `walls` default had moved to the house
+    constant, and the STL on disk still answered the old question. A forced
+    re-render put declared and measured at 46.8 exactly.
+
+    So the wrapper counts as an input, not just the SCAD -- and an out-of-date
+    render is a render to redo, never a disagreement to investigate.
+    """
+
+    def test_a_render_older_than_its_wrapper_is_flagged_for_regeneration(self):
+        import os
+
+        stl = CORE.get_stl_output_path()
+        if not stl.exists():
+            pytest.skip("datum-core is not built here")
+        was = (stl.stat().st_atime, stl.stat().st_mtime)
+        try:
+            os.utime(stl, (was[0], 0))  # older than anything in the repo
+            report = assess(CORE)
+            renders = next(c for c in report.checks if c.name == "Geometry renders")
+            assert renders.state == UNKNOWN
+            assert "older than" in renders.detail
+            assert "--force" in renders.fix
+        finally:
+            os.utime(stl, was)
+
+    def test_a_stale_render_never_reports_bounds_it_did_not_measure(self):
+        import os
+
+        stl = CORE.get_stl_output_path()
+        if not stl.exists():
+            pytest.skip("datum-core is not built here")
+        was = (stl.stat().st_atime, stl.stat().st_mtime)
+        try:
+            os.utime(stl, (was[0], 0))
+            report = assess(CORE)
+            bounds = [c for c in report.checks if c.name == "Declared bounds match geometry"]
+            assert len(bounds) == 1, "the bounds check was added twice"
+            assert bounds[0].state == UNKNOWN
+        finally:
+            os.utime(stl, was)
+
+    def test_a_current_render_still_passes(self):
+        stl = CORE.get_stl_output_path()
+        if not stl.exists():
+            pytest.skip("datum-core is not built here")
+        report = assess(CORE)
+        renders = next(c for c in report.checks if c.name == "Geometry renders")
+        assert renders.state == PASS
+
+
 class TestThePartDecidesWhereItsStlLives:
     """`gridfinity`'s SCAD is inside a third-party submodule, and its wrapper
     overrides `get_stl_output_path` precisely so the render does not land in

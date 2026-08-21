@@ -64,6 +64,26 @@ class Readiness:
         return not self.blocked and not self.unknown
 
 
+def _sources_newer_than(part, stl_path: Path) -> List[str]:
+    """Inputs that changed after the render, if any.
+
+    The wrapper counts, not just the SCAD. datum-core's geometry was reported
+    as drifted by 1.2 mm for exactly this reason: the SCAD was untouched and
+    the wrapper's `walls` default had moved to the house constant, so the STL
+    on disk answered a question nobody was asking any more. A re-render put
+    declared and measured at 46.8 to the millimetre.
+    """
+    import inspect
+
+    rendered = stl_path.stat().st_mtime
+    inputs = [part.source_file]
+    try:
+        inputs.append(Path(inspect.getfile(type(part))))
+    except (TypeError, OSError):  # a part defined somewhere unreadable
+        pass
+    return [f.name for f in inputs if f.exists() and f.stat().st_mtime > rendered]
+
+
 def _geometry_checks(part, renderer, stl_path: Path) -> List[Check]:
     checks = []
 
@@ -97,6 +117,19 @@ def _geometry_checks(part, renderer, stl_path: Path) -> List[Check]:
                 UNKNOWN,
                 "not built yet",
                 f"apothecary parts generate-stl {part.name}",
+            )
+        )
+        checks.append(Check("Declared bounds match geometry", UNKNOWN, "needs a render"))
+        return checks
+
+    newer = _sources_newer_than(part, stl_path)
+    if newer:
+        checks.append(
+            Check(
+                "Geometry renders",
+                UNKNOWN,
+                f"the render is older than {', '.join(newer)}",
+                f"apothecary parts generate-stl {part.name} --force",
             )
         )
         checks.append(Check("Declared bounds match geometry", UNKNOWN, "needs a render"))
