@@ -13,7 +13,7 @@ import pytest
 from apothecary.models import BoundingBox3D, Vector3D
 from apothecary.models.blackbox import BlackBox, MountPoint, StubProvider
 from apothecary.projects.assemblies import build
-from apothecary.projects.parts import datum as datum_part
+from apothecary.projects.parts import datum_core as datum_part
 from apothecary.shims.kicad import KiCadProvider, t1_core_stub
 
 
@@ -38,9 +38,9 @@ def test_enclosure_is_derived_from_the_board_not_hardcoded():
     )
     a = datum_part.params_for(small)
     b = datum_part.params_for(big)
-    assert b.outer_w > a.outer_w and b.outer_d > a.outer_d
+    assert b.outer_x > a.outer_x and b.outer_y > a.outer_y
     # The enclosure clears the board on every side by wall + tolerance.
-    assert a.outer_w == pytest.approx(20 + 2 * a.tol + 2 * a.wall)
+    assert a.outer_x == pytest.approx(20 + 2 * a.board_clearance + 2 * a.walls)
 
 
 def test_mount_inset_is_taken_from_the_board_geometry():
@@ -53,7 +53,7 @@ def test_mount_inset_is_taken_from_the_board_geometry():
     )
     params = datum_part.params_for(board)
     assert params.mount_inset == pytest.approx(5.0)
-    assert params.mount_hole == pytest.approx(3.0)
+    assert params.screw_d == pytest.approx(3.0)
 
 
 def test_a_board_with_no_mounts_still_produces_an_enclosure():
@@ -65,7 +65,7 @@ def test_a_board_with_no_mounts_still_produces_an_enclosure():
         ),
     )
     params = datum_part.params_for(bare)
-    assert params.outer_w > 0 and params.outer_h > 0
+    assert params.outer_x > 0 and params.outer_z > 0
 
 
 def test_swapping_the_provider_changes_geometry_and_nothing_else():
@@ -80,8 +80,8 @@ def test_swapping_the_provider_changes_geometry_and_nothing_else():
     )
     _, default_asm = build()
     _, swapped = build(provider=other)
-    assert swapped.params.board_w == pytest.approx(64)
-    assert swapped.params.board_w != default_asm.params.board_w
+    assert swapped.params.board_x == pytest.approx(64)
+    assert swapped.params.board_x != default_asm.params.board_x
     # Same board name, same placements, different numbers: the seam held.
     assert [p.name for p in swapped.placements] == [p.name for p in default_asm.placements]
 
@@ -125,19 +125,22 @@ def test_unknown_black_box_names_what_is_available():
 
 def test_part_is_registered_with_print_settings():
     part = datum_part.DEFAULT
-    assert part.name == "datum"
-    assert part.source_file.name == "datum.scad"
+    assert part.name == "datum_core"
+    assert part.source_file.name == "datum_core.scad"
     assert part.print_settings is not None
-    assert part.print_settings.wall_thickness == pytest.approx(datum_part.HOUSE_WALL)
+    # Derived, not restated: the declared print setting and the parameter
+    # default are one house constant, and a test that typed the number again
+    # would pass while they drifted apart.
+    assert part.print_settings.wall_thickness == pytest.approx(datum_part.Params().walls)
 
 
 def test_scad_source_exists_and_declares_every_parameter():
-    """Every DatumParams field must be settable via -D, or an iteration cannot render."""
+    """Every Params field must be settable via -D, or an iteration cannot render."""
     src = datum_part.DEFAULT.source_file
     assert src.exists(), f"{src} missing"
     text = src.read_text(encoding="utf-8")
-    for field in datum_part.DatumParams.model_fields:
-        assert f"{field} =" in text, f"{field} is not a variable in datum.scad"
+    for field in datum_part.Params.model_fields:
+        assert f"{field} =" in text, f"{field} is not a variable in datum_core.scad"
 
 
 def test_objects_are_actually_translated_into_place():
@@ -153,9 +156,10 @@ def test_objects_are_actually_translated_into_place():
     assert scad.count("translate(") == len(scene.objects), "every object is placed"
     # The board sits on its standoffs, not on the floor and not at the origin.
     params = assembly.params
-    expected_z = params.wall + params.standoff
+    expected_z = params.floor_t + params.standoff_h
     assert (
-        f"translate([{params.wall + params.tol}, {params.wall + params.tol}, {expected_z}]" in scad
+        f"translate([{params.walls + params.board_clearance}, "
+        f"{params.walls + params.board_clearance}, {expected_z}]" in scad
     )
 
 

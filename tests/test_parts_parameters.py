@@ -58,7 +58,7 @@ class TestParameterValidation:
 
     def test_unknown_parameter_is_named_and_refused(self):
         result = CliRunner().invoke(
-            cli, ["parts", "generate-stl", "datum-core", "-p", "headrooom=10"]
+            cli, ["parts", "generate-stl", "datum_core", "-p", "headrooom=10"]
         )
         assert result.exit_code != 0
         assert "unknown parameter(s): headrooom" in result.output
@@ -67,13 +67,13 @@ class TestParameterValidation:
 
     def test_value_outside_the_model_is_refused(self):
         result = CliRunner().invoke(
-            cli, ["parts", "generate-stl", "datum-core", "-p", "walls=-1"]
+            cli, ["parts", "generate-stl", "datum_core", "-p", "walls=-1"]
         )
         assert result.exit_code != 0
         assert "invalid parameters" in result.output
 
     def test_pair_without_a_value_is_refused(self):
-        result = CliRunner().invoke(cli, ["parts", "generate-stl", "datum-core", "-p", "show"])
+        result = CliRunner().invoke(cli, ["parts", "generate-stl", "datum_core", "-p", "show"])
         assert result.exit_code != 0
         assert "name=value" in result.output
 
@@ -84,7 +84,7 @@ class TestBoundsMatchGeometry:
 
     @pytest.mark.parametrize(
         "part,height",
-        [("datum-core", 15.6), ("datum-cap", 5.0)],
+        [("datum_core", 15.6), ("datum_cap", 5.0)],
     )
     def test_each_piece_verifies(self, part, height):
         """One part, one envelope. These used to be `show` variants of a single
@@ -95,7 +95,7 @@ class TestBoundsMatchGeometry:
         assert f"{height:.2f}" in result.output
 
     def test_info_reports_the_same_bounds_it_verifies(self):
-        result = CliRunner().invoke(cli, ["parts", "info", "datum-core", "--json-out"])
+        result = CliRunner().invoke(cli, ["parts", "info", "datum_core", "--json-out"])
         assert result.exit_code == 0
         size = json.loads(result.output)["bounds"]["size"]
         assert size == pytest.approx({"x": 46.8, "y": 46.8, "z": 15.6})

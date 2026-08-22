@@ -97,7 +97,7 @@ def test_viewer_home_redirects_to_the_named_default_site():
     the fractal viewer for api.py's DEFAULT_VIEWER_SITE. It used to redirect to
     whichever site sorted first, which meant registering one could move the
     front door without anyone deciding to (parts are reached by navigating into
-    "parts_library"; datum-core is its own site).
+    "parts_library"; datum_core is its own site).
     """
     client = TestClient(app)
     r = client.get("/viewer", follow_redirects=False)

@@ -10,7 +10,7 @@ import click
 import uvicorn
 
 from ..projects.parts.skeleton import ROOT
-from ..projects.registry import scan_projects
+from ..projects.registry import scan_projects, stl_output_for
 from .utils import _get_stl_bounding_box, _safe_echo
 
 
@@ -160,7 +160,7 @@ def dev(host: str, port: int, install: bool, skip_stl: bool, elephant: bool):
             for item in items:
                 if "elephant" in item.name.lower():
                     continue  # Skip elephant_walk, regenerated separately
-                stl_path = item.path.with_suffix(".stl")
+                stl_path = stl_output_for(item)
                 if stl_path.exists():
                     skipped += 1
                     continue
@@ -196,7 +196,7 @@ def dev(host: str, port: int, install: bool, skip_stl: bool, elephant: bool):
             # Calculate bounding boxes
             part_data = []
             for item in items:
-                stl_path = item.path.with_suffix(".stl")
+                stl_path = stl_output_for(item)
                 bbox = _get_stl_bounding_box(stl_path)
                 if bbox:
                     min_x, max_x, min_y, max_y, min_z, max_z = bbox
@@ -248,7 +248,7 @@ def dev(host: str, port: int, install: bool, skip_stl: bool, elephant: bool):
 
             for _i, (data, x_pos) in enumerate(zip(part_data, x_positions, strict=False)):
                 item = data["item"]
-                rel_path = item.path.relative_to(ROOT / "parts").with_suffix(".stl")
+                rel_path = stl_output_for(item).relative_to(ROOT / "parts")
                 translate_x = x_pos - data["center_x"]
                 translate_y = -data["center_y"]
                 lines.append(f"// {item.name}")

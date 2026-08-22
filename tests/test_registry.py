@@ -20,5 +20,5 @@ def test_locate_wrapper_for_known_parts():
     scad = root / "parts" / "parametric_star.scad"
     assert _locate_wrapper_for_part(scad) == "apothecary.projects.parts.parametric_star"
     # cookiecutter (modern spelling) should have a wrapper
-    scad2 = root / "parts" / "star-cookiecutter.scad"
+    scad2 = root / "parts" / "star_cookiecutter.scad"
     assert _locate_wrapper_for_part(scad2) == "apothecary.projects.parts.star_cookiecutter"

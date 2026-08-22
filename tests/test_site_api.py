@@ -23,7 +23,7 @@ def reset_garage_site():
 def test_list_sites():
     response = client.get("/sites")
     assert response.status_code == 200
-    assert response.json() == ["datum-core", "garage", "parts_library"]
+    assert response.json() == ["datum_core", "garage", "parts_library"]
 
 
 def test_get_unknown_site_is_404():

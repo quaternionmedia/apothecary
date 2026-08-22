@@ -12,7 +12,7 @@ Nothing registers a part but that naming. `scan_projects` finds the folder;
 `_locate_wrapper_for_part` finds the wrapper by sanitising the name.
 
     >>> from apothecary.projects.registry import scan_projects, _sanitize_module_name
-    >>> _sanitize_module_name("datum-core")
+    >>> _sanitize_module_name("datum_core")
     'datum_core'
 
 The wrapper is what gives a part a description, a category and — the part that
@@ -20,7 +20,7 @@ matters to anything assembling around it — an envelope.
 
     >>> from apothecary.projects.parts.datum_core import DEFAULT
     >>> DEFAULT.name
-    'datum-core'
+    'datum_core'
     >>> DEFAULT.category
     'enclosure'
 
@@ -42,7 +42,7 @@ CI. On the existing library it finds four of six parts wrong — see `todo.md`.
 | | |
 |---|---|
 | List what is registered | `apothecary parts list` |
-| Everything about one part | `apothecary parts info datum-core --json-out` |
-| Render its STL | `apothecary parts generate-stl datum-core` |
-| Check the envelope is true | `apothecary parts verify datum-core` |
+| Everything about one part | `apothecary parts info datum_core --json-out` |
+| Render its STL | `apothecary parts generate-stl datum_core` |
+| Check the envelope is true | `apothecary parts verify datum_core` |
 | Check every part's envelope | `apothecary parts verify --all` |

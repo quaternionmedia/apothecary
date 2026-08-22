@@ -687,11 +687,38 @@
                     this.jobs = this.hasBuildVolumes ? await this.fetchJobs() : [];
                     if (data.scad) this.codeContentEl.textContent = data.scad;
                     this.renderFocus();
+                    // A ?focus= deep link should land on the part, not one
+                    // click short of it. /viewer/parts/<name> promises the
+                    // parameter controls, and those only exist once a node is
+                    // selected -- focusing alone left the panel unbuilt.
+                    this.selectFocusedPart();
                     this.setStatus(`Loaded: ${data.name}`, 'success');
                 } catch (err) {
                     this.setStatus(`Error: ${err.message}`, 'error');
                     console.error(err);
                 }
+            }
+
+            // Select whatever the deep link was aiming at, so the part
+            // panel is open on arrival.
+            //
+            // A part usually appears twice on the way down: once as the
+            // structure the focus path names, and once as the leaf inside it
+            // carrying the geometry. Focusing lands on the former; the
+            // parameters live on the latter.
+            selectFocusedPart() {
+                if (!this.focusPath.length) return;
+                const focus = this.currentFocusNode();
+                const prefix = this.focusPath.join('.');
+                if (!focus.children.length) {
+                    this.selectChild(prefix);  // focus is itself the leaf
+                    return;
+                }
+                const wanted = this.focusPath[this.focusPath.length - 1];
+                const child =
+                    focus.children.find((c) => c.name === wanted) ||
+                    (focus.children.length === 1 ? focus.children[0] : null);
+                if (child) this.selectChild(pathForChild(prefix, child.name));
             }
 
             // Validates a dotted path against the loaded tree, truncating at

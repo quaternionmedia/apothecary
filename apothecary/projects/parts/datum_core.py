@@ -1,5 +1,5 @@
 """
-datum-core - enclosure for a 40 x 40 mm control-surface board.
+datum_core - enclosure for a 40 x 40 mm control-surface board.
 
 Four contact openings, one indicator light pipe, an edge connector cutout and
 four board standoffs, in a printable tray and a printable lid.
@@ -16,6 +16,7 @@ from typing import Dict, Optional
 from pydantic import BaseModel, Field
 
 from apothecary.models import BoundingBox3D, Color, PrintSettings, Vector3D
+from apothecary.models.blackbox import BlackBox
 
 from .base import BasePart, ContestedValue
 from .skeleton import ROOT
@@ -69,6 +70,73 @@ class Params(BaseModel):
     antenna_band: float = Field(8.0, ge=0)
     antenna_wall: float = Field(0.8, gt=0)
 
+    # The envelope, defined once. `get_bounds` and any consumer that needs to
+    # place this tray in a scene read these rather than each restating the
+    # arithmetic and drifting apart.
+    @property
+    def outer_x(self) -> float:
+        return self.board_x + 2 * self.board_clearance + 2 * self.walls
+
+    @property
+    def outer_y(self) -> float:
+        return self.board_y + 2 * self.board_clearance + 2 * self.walls
+
+    @property
+    def outer_z(self) -> float:
+        return self.floor_t + self.standoff_h + self.board_t + self.headroom
+
+    def to_scad_overrides(self) -> Dict[str, float]:
+        """The ``-D name=value`` set for rendering this iteration."""
+        return {k: float(v) for k, v in self.model_dump().items()}
+
+
+def params_for(board: BlackBox, **overrides: float) -> Params:
+    """Derive tray parameters from a black box.
+
+    The entire adapter between "something described the board" and "the tray
+    fits it". A provider swap -- a hand-entered stub today, a KiCad outline
+    later -- is invisible past this line.
+
+    This seam arrived with ``parts/datum``, the single-piece tray this part
+    supersedes. The geometry was replaced by a core and a separate cap; the
+    seam was the part worth keeping, so it moved here rather than retiring
+    with it.
+    """
+    env = board.envelope
+    inset = (
+        min(
+            min(m.position.x, env.width - m.position.x, m.position.y, env.height - m.position.y)
+            for m in board.mounts
+        )
+        if board.mounts
+        else Params.model_fields["mount_inset"].default
+    )
+    hole = (
+        board.mounts[0].hole_diameter
+        if board.mounts
+        else Params.model_fields["screw_d"].default
+    )
+
+    values: Dict[str, float] = {
+        "board_x": env.width,
+        "board_y": env.height,  # this library's height is the Y extent
+        "board_t": env.depth,  # and depth is Z
+        "mount_inset": inset,
+        "screw_d": hole,
+    }
+
+    # The board's own keepouts choose the openings. `parts/datum` called these
+    # usb_w/usb_h; the core names them for what they are, an edge connector.
+    for keepout in board.keepouts:
+        if keepout.name == "usb-c-mating":
+            values["connector_w"] = keepout.box.width
+            values["connector_h"] = keepout.box.depth
+        elif keepout.name == "antenna":
+            values["antenna_band"] = keepout.box.depth
+
+    values.update(overrides)
+    return Params(**values)
+
 
 class DatumCorePart(BasePart):
     """Enclosure whose bounds follow from the board it is sized around."""
@@ -78,24 +146,20 @@ class DatumCorePart(BasePart):
 
         One object, one envelope. It used to branch on a ``show`` parameter
         that selected between the tray and the cover, which is two parts
-        wearing one name -- the cover is ``datum-cap``.
+        wearing one name -- the cover is ``datum_cap``.
         """
         values = Params(**(params or {}))
 
-        outer_x = values.board_x + 2 * values.board_clearance + 2 * values.walls
-        outer_y = values.board_y + 2 * values.board_clearance + 2 * values.walls
-        height = values.floor_t + values.standoff_h + values.board_t + values.headroom
-
         return BoundingBox3D(
-            min_point=Vector3D(x=-outer_x / 2, y=-outer_y / 2, z=0),
-            max_point=Vector3D(x=outer_x / 2, y=outer_y / 2, z=height),
+            min_point=Vector3D(x=-values.outer_x / 2, y=-values.outer_y / 2, z=0),
+            max_point=Vector3D(x=values.outer_x / 2, y=values.outer_y / 2, z=values.outer_z),
         )
 
 
 def create(metadata_root: Path) -> DatumCorePart:
-    scad = metadata_root / "parts" / "datum-core" / "datum-core.scad"
+    scad = metadata_root / "parts" / "datum_core" / "datum_core.scad"
     return DatumCorePart(
-        name="datum-core",
+        name="datum_core",
         source_file=scad,
         description=(
             "Enclosure tray for a 40 x 40 mm control-surface board: standoffs, "
@@ -104,7 +168,7 @@ def create(metadata_root: Path) -> DatumCorePart:
         params_model=Params,
         category="enclosure",
         tags=["datum", "enclosure", "case", "control-surface", "pcb"],
-        readme_path=metadata_root / "parts" / "datum-core" / "README.md",
+        readme_path=metadata_root / "parts" / "datum_core" / "README.md",
         # The house constants, so a slicer profile is not guesswork and the
         # part's own `walls`/`tolerence` are not a second opinion about them.
         print_settings=PrintSettings(
@@ -114,39 +178,16 @@ def create(metadata_root: Path) -> DatumCorePart:
         # Three numbers this project's own sources state differently. None is a
         # typo to be quietly corrected: each has a document behind it, and the
         # dashboard exists so the choice is made by looking rather than arguing.
+        # `walls` and `tolerence` were contested only by parts/datum, the
+        # single-piece tray this part supersedes. It carried 2.4 and 0.2 while
+        # citing the enclosure record for values that record does not contain.
+        # Retiring it settled both: the house constants stand unopposed, and a
+        # part that wants to differ must now say why, as clause 3 requires.
+        #
+        # board_y is not settled and must not look settled. Two live sources
+        # still disagree about how big the board is, and neither is the retired
+        # part -- so the dissent is cited where it actually lives now.
         contested={
-            "walls": [
-                ContestedValue(
-                    value=3.0,
-                    source=(
-                        "governance/qm/adr/"
-                        "DRAFT-enclosure-parts-live-in-apothecary.md, clause 3"
-                    ),
-                    note="House constant from parts/footpedal/button.scad, print-validated "
-                    "on QM hardware. The record requires a part that differs to say why.",
-                ),
-                ContestedValue(
-                    value=2.4,
-                    source="parts/datum/datum.scad",
-                    note="Cites the same record for this value, which the record does not "
-                    "contain. Lighter, and unvalidated on hardware.",
-                ),
-            ],
-            "tolerence": [
-                ContestedValue(
-                    value=0.4,
-                    source=(
-                        "governance/qm/adr/"
-                        "DRAFT-enclosure-parts-live-in-apothecary.md, clause 3"
-                    ),
-                    note="House constant. Total fit clearance; the lid lip takes half per side.",
-                ),
-                ContestedValue(
-                    value=0.2,
-                    source="parts/datum/datum.scad",
-                    note="Tighter fit. Same misattribution as walls.",
-                ),
-            ],
             "board_y": [
                 ContestedValue(
                     value=40.0,
@@ -156,8 +197,9 @@ def create(metadata_root: Path) -> DatumCorePart:
                 ),
                 ContestedValue(
                     value=30.0,
-                    source="parts/datum/datum.scad",
-                    note="A specific board rather than the bound. No schematic exists to "
+                    source="apothecary/shims/kicad.py, t1_core_stub",
+                    note="The hand-entered envelope the black-box seam serves today: a "
+                    "specific board rather than the bound. No schematic exists to "
                     "settle which is real.",
                 ),
             ],

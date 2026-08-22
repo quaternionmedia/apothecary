@@ -126,7 +126,7 @@ both present before you wonder why something is empty.
 dropdown switches sites, and `parts_library` is every registered part. Select a
 part and its panel carries the part's parameters, its generated OpenSCAD, and
 any values this project's sources disagree about. There is no separate parts
-browser — a link like `/viewer/parts/datum-core` redirects here.
+browser — a link like `/viewer/parts/datum_core` redirects here.
 
 > **Note**: STL files are generated automatically on server startup if OpenSCAD is installed.
 > They're not stored in git (see `.gitignore`). To manually regenerate all STLs:

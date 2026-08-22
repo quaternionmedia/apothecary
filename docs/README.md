@@ -11,7 +11,7 @@ by `pytest walkthrough`. Start there.
 |---|---|
 | [01 — The parts registry](../walkthrough/01-a-part.md) | What a part is, and how its envelope is checked |
 | [02 — Which numbers are whose](../walkthrough/02-fitting.md) | The seam, and driving it with overrides |
-| [03 — Navigating a sub-assembly](../walkthrough/03-an-assembly.md) | datum-core as an addressable tree |
+| [03 — Navigating a sub-assembly](../walkthrough/03-an-assembly.md) | datum_core as an addressable tree |
 | [04 — Serving it](../walkthrough/04-serving-it.md) | The API and the viewer |
 | [05 — Contested numbers](../walkthrough/05-contested-numbers.md) | Numbers the sources disagree about, and the dashboard for turning them |
 | [06 — Ready to build](../walkthrough/06-ready-to-build.md) | Whether a part can be printed and checked against a real one |

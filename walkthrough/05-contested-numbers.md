@@ -2,21 +2,22 @@
 
 **Hermetic.**
 
-Some numbers are not settled. `datum-core` has three, and none is a typo to be
-quietly corrected — each has a document behind it:
+Some numbers are not settled, and none is a typo to be quietly corrected —
+each has a document behind it:
 
     >>> from apothecary.projects.parts.datum_core import DEFAULT
     >>> sorted(DEFAULT.contested)
-    ['board_y', 'tolerence', 'walls']
+    ['board_y']
 
-`walls` is the case that shows why prose does not resolve this. The enclosure
-record's clause 3 says the house constant is 3; `parts/datum/datum.scad` uses
-2.4 and cites that same record for it, which the record does not say.
+`board_y` is the case that shows why prose does not resolve this. The datum
+packet specifies the board outline as at most 40 mm, so an enclosure must
+accept that. The black-box stub the seam serves today describes a specific
+30 mm board. Both are live, and no schematic exists to settle them.
 
-    >>> [c.value for c in DEFAULT.contested["walls"]]
-    [3.0, 2.4]
-    >>> DEFAULT.contested["walls"][0].source
-    'governance/qm/adr/DRAFT-enclosure-parts-live-in-apothecary.md, clause 3'
+    >>> [c.value for c in DEFAULT.contested["board_y"]]
+    [40.0, 30.0]
+    >>> DEFAULT.contested["board_y"][0].source
+    'datum HANDOFF.md, WP-4'
 
 Every candidate carries where it came from. A value with no provenance is an
 opinion, and an opinion cannot be adjudicated:
@@ -24,15 +25,27 @@ opinion, and an opinion cannot be adjudicated:
     >>> all(c.source and c.note for v in DEFAULT.contested.values() for c in v)
     True
 
-The part ships one of the candidates rather than inventing a third — the
-record's, since that is the one with authority:
+## A disagreement can be settled by retiring one of its sides
 
-    >>> DEFAULT.params_model().walls
-    3.0
+This page listed three until recently. `walls` and `tolerence` were disputed
+only by `parts/datum`, a single-piece tray that carried 2.4 and 0.2 while
+citing the enclosure record for values that record does not contain. When the
+compound — `datum_core` plus `datum_cap` — replaced it, the dissenting source
+stopped existing and the house constants were left unopposed:
+
+    >>> DEFAULT.params_model().walls, DEFAULT.params_model().tolerence
+    (3.0, 0.4)
+
+That is a real resolution, not a silencing, because what went away was an
+artifact making a claim it could not support. The distinction matters: a
+citation is provenance only while a reader can go and look, so a candidate
+pointing at a deleted file is worse than no candidate at all. `board_y` stayed
+precisely because both of its sources are still there to be read.
 
 ## The disagreement has a consequence
 
-That is the whole reason to surface it. 0.6 mm of wall is 1.2 mm of envelope,
+That is the whole reason to surface it. The wall thickness is settled now, but
+it shows the shape of the consequence: 0.6 mm of wall is 1.2 mm of envelope,
 which is the difference between fitting an opening and not:
 
     >>> P = DEFAULT.params_model
@@ -53,9 +66,9 @@ part lands there:
     >>> from fastapi.testclient import TestClient
     >>> from apothecary.api import app
     >>> client = TestClient(app)
-    >>> r = client.get("/viewer/parts/datum-core", follow_redirects=False)
+    >>> r = client.get("/viewer/parts/datum_core", follow_redirects=False)
     >>> r.status_code, r.headers["location"]
-    (307, '/viewer/sites/parts_library?focus=datum-core')
+    (307, '/viewer/sites/parts_library?focus=datum_core')
 
 The controls are built from the part's own model, so a slider cannot offer a
 value the renderer would refuse. That is not free: `gt=0` reaches the schema as
@@ -63,7 +76,7 @@ an *exclusive* minimum, and a slider stopping exactly on it hands back a value
 the model rejects.
 
     >>> from apothecary.projects.parts.datum_core import Params
-    >>> spec = client.get("/parts/datum-core/params").json()
+    >>> spec = client.get("/parts/datum_core/params").json()
     >>> walls = next(f for f in spec["fields"] if f["name"] == "walls")
     >>> walls["min"] <= 2.4 <= walls["max"] and walls["min"] <= 3.0 <= walls["max"]
     True
@@ -78,7 +91,7 @@ dashboard read the declaration.
 
 | | |
 |---|---|
-| See the disagreements | `apothecary parts info datum-core --json-out` |
+| See the disagreements | `apothecary parts info datum_core --json-out` |
 | Turn them | the viewer, with the part selected |
-| Render one candidate | `apothecary parts generate-stl datum-core -p walls=2.4` |
-| Check the envelope it gives | `apothecary parts verify datum-core -p walls=2.4` |
+| Render one candidate | `apothecary parts generate-stl datum_core -p walls=2.4` |
+| Check the envelope it gives | `apothecary parts verify datum_core -p walls=2.4` |

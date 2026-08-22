@@ -2,7 +2,7 @@
 
 **Hermetic.**
 
-`datum-core` is sized around a board this repository does not own. That makes
+`datum_core` is sized around a board this repository does not own. That makes
 every dimension in it one of two kinds, and the split is the whole seam:
 
 > The consumer owns requirements and interfaces.
@@ -49,8 +49,8 @@ two together in both directions:
     True
 
 Both directions matter. A number with no parameter is untunable; a parameter
-with no number renders nothing when moved — `datum-core` carried six of those
-after the cover moved to `datum-cap`.
+with no number renders nothing when moved — `datum_core` carried six of those
+after the cover moved to `datum_cap`.
 
 ## Staging, then iterating
 
@@ -61,7 +61,7 @@ slider stages a value and validates the whole staged set, which costs nothing:
     >>> from apothecary.api import app
     >>> client = TestClient(app)
     >>> staged = client.post(
-    ...     "/parts/datum-core/validate", json={"params": {"walls": 2.4}}
+    ...     "/parts/datum_core/validate", json={"params": {"walls": 2.4}}
     ... ).json()
     >>> staged["valid"], round(staged["bounds"]["size"]["x"], 1)
     (True, 45.6)
@@ -71,7 +71,7 @@ change is visible before it is paid for. A set that could never render is
 refused here:
 
     >>> client.post(
-    ...     "/parts/datum-core/validate", json={"params": {"walls": -1}}
+    ...     "/parts/datum_core/validate", json={"params": {"walls": -1}}
     ... ).json()["valid"]
     False
 
@@ -99,10 +99,10 @@ bare word is an identifier:
 
 | | |
 |---|---|
-| Render a variant | `apothecary parts generate-stl datum-core -p headroom=12` |
-| A different printer | `apothecary parts generate-stl datum-core -p walls=2 -p tolerence=0.3` |
-| Check a variant's envelope | `apothecary parts verify datum-core -p headroom=12` |
-| What produced the STL on disk | `apothecary parts info datum-core --json-out` → `stl_params` |
+| Render a variant | `apothecary parts generate-stl datum_core -p headroom=12` |
+| A different printer | `apothecary parts generate-stl datum_core -p walls=2 -p tolerence=0.3` |
+| Check a variant's envelope | `apothecary parts verify datum_core -p headroom=12` |
+| What produced the STL on disk | `apothecary parts info datum_core --json-out` → `stl_params` |
 | See the change | `apothecary serve`, then select the part — page 04 |
 
 The whole loop, from a cold checkout:
@@ -110,9 +110,9 @@ The whole loop, from a cold checkout:
 ```bash
 uv run apothecary install                              # once; the viewer needs it
 uv run apothecary serve --port 8765                    # look at it
-# edit parts/datum-core/datum-core.scad
-uv run apothecary parts generate-stl datum-core        # render
-uv run apothecary parts verify datum-core              # bounds vs real geometry
+# edit parts/datum_core/datum_core.scad
+uv run apothecary parts generate-stl datum_core        # render
+uv run apothecary parts verify datum_core              # bounds vs real geometry
 ```
 
 A consuming project checks its own agreement separately — `datum` does it with

@@ -1,7 +1,7 @@
-// datum-cap -- the cover for a datum-core tray.
+// datum_cap -- the cover for a datum_core tray.
 //
 // Four contact openings on a 2 x 2 grid and one indicator light pipe, over a
-// lip that drops into the core's cavity. Split from datum-core because the
+// lip that drops into the core's cavity. Split from datum_core because the
 // enclosure record asks for one core body and separate pieces around it, and
 // because a `show` parameter selecting between two objects is two parts
 // wearing one name -- its bounds depended on which mode you asked for.

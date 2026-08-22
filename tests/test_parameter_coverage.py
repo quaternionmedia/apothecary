@@ -14,7 +14,7 @@ import pytest
 from apothecary.projects.parts.datum_cap import DEFAULT as CAP
 from apothecary.projects.parts.datum_core import DEFAULT as CORE
 
-PARTS = [pytest.param(CORE, id="datum-core"), pytest.param(CAP, id="datum-cap")]
+PARTS = [pytest.param(CORE, id="datum_core"), pytest.param(CAP, id="datum_cap")]
 
 
 def scad_numerics(path) -> list[str]:
@@ -34,7 +34,7 @@ def test_every_scad_number_has_a_parameter(part):
 def test_no_parameter_is_dead(part):
     """A parameter with no number behind it renders nothing when moved.
 
-    `datum-core` carried six of these after the cover moved to `datum-cap` --
+    `datum_core` carried six of these after the cover moved to `datum_cap` --
     indicator and contact dimensions the file no longer used.
     """
     numerics = set(scad_numerics(part.source_file))

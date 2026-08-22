@@ -67,7 +67,7 @@ class Readiness:
 def _sources_newer_than(part, stl_path: Path) -> List[str]:
     """Inputs that changed after the render, if any.
 
-    The wrapper counts, not just the SCAD. datum-core's geometry was reported
+    The wrapper counts, not just the SCAD. datum_core's geometry was reported
     as drifted by 1.2 mm for exactly this reason: the SCAD was untouched and
     the wrapper's `walls` default had moved to the house constant, so the STL
     on disk answered a question nobody was asking any more. A re-render put

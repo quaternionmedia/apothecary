@@ -46,7 +46,7 @@ from .primitives import Cube, Cylinder, Sphere
 from .projects.parts.skeleton import ROOT
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
 from .projects.parts.stl_renderer import write_params_sidecar
-from .projects.registry import scan_projects
+from .projects.registry import scan_projects, stl_output_for
 from .scene import Scene
 from .site_store import SiteStore, UnknownSiteError
 from .templates import TemplateRenderer
@@ -76,7 +76,7 @@ async def _generate_missing_stls():
     missing = []
 
     for part in parts:
-        stl_path = part.path.with_suffix(".stl")
+        stl_path = stl_output_for(part)
         if not stl_path.exists():
             missing.append(part)
 
@@ -86,7 +86,7 @@ async def _generate_missing_stls():
     print(f"Generating {len(missing)} missing STL file(s)...")
 
     for part in missing:
-        stl_path = part.path.with_suffix(".stl")
+        stl_path = stl_output_for(part)
         print(f"  Generating {part.name}...", end=" ", flush=True)
 
         result = await renderer.render_stl_async(part.path, stl_path, timeout=120)
@@ -855,7 +855,7 @@ _site_store = SiteStore(
     {
         "garage": (create_example_site, validate_garage_layout),
         "parts_library": (create_parts_library_site, validate_parts_library),
-        "datum-core": (create_datum_core_site, validate_datum_core),
+        "datum_core": (create_datum_core_site, validate_datum_core),
     }
 )
 _job_store = JobStore()
@@ -1396,9 +1396,15 @@ async def part_view(name: str):
     and the contested values live. Two pages onto one object is how a codebase
     ends up with two answers about it.
     """
-    _load_part_wrapper(name)  # 404 here rather than after a redirect
+    part = _load_part_wrapper(name)  # 404 here rather than after a redirect
+    # Focus on the part's own name, not on whatever spelling was typed. The
+    # library was consolidated to underscore case and links to `datum-core`
+    # were handed out before that; the wrapper lookup already tolerates the
+    # old spelling, and this makes the viewer land on the part rather than on
+    # a focus string matching nothing.
+    canonical = part.name or name
     return RedirectResponse(
-        f"/viewer/sites/parts_library?focus={quote(name, safe='')}", status_code=307
+        f"/viewer/sites/parts_library?focus={quote(canonical, safe='')}", status_code=307
     )
 
 

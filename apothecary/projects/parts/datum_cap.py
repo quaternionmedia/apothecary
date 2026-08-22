@@ -1,16 +1,16 @@
 """
-datum-cap - the cover for a datum-core tray.
+datum_cap - the cover for a datum_core tray.
 
 Four contact openings on a 2 x 2 grid and one indicator light pipe, over a lip
 that drops into the core's cavity.
 
-Split out of datum-core rather than selected by a parameter there. A `show`
+Split out of datum_core rather than selected by a parameter there. A `show`
 enum picking between the tray and the cover made one part's bounds depend on
 which mode you asked for, and the enclosure record asks for one core body with
 separate pieces around it.
 
 The board dimensions are assumptions carried as parameters, not measurements:
-no schematic exists. They match datum-core's, because the two pieces have to
+no schematic exists. They match datum_core's, because the two pieces have to
 fit each other.
 """
 
@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 
 from apothecary.models import BoundingBox3D, Color, PrintSettings, Vector3D
 
-from .base import BasePart, ContestedValue
+from .base import BasePart
 from .skeleton import ROOT
 
 
@@ -75,55 +75,30 @@ class DatumCapPart(BasePart):
 
 
 def create(metadata_root: Path) -> DatumCapPart:
-    scad = metadata_root / "parts" / "datum-cap" / "datum-cap.scad"
+    scad = metadata_root / "parts" / "datum_cap" / "datum_cap.scad"
     return DatumCapPart(
-        name="datum-cap",
+        name="datum_cap",
         source_file=scad,
-        description="Cover for a datum-core tray: four contact openings and an indicator pipe",
+        description="Cover for a datum_core tray: four contact openings and an indicator pipe",
         params_model=Params,
         category="enclosure",
         tags=["datum", "enclosure", "cover", "lid", "control-surface"],
-        readme_path=metadata_root / "parts" / "datum-cap" / "README.md",
+        readme_path=metadata_root / "parts" / "datum_cap" / "README.md",
         # The house constants, so a slicer profile is not guesswork and the
         # part's own `walls`/`tolerence` are not a second opinion about them.
         print_settings=PrintSettings(
             nozzle_diameter=0.4, layer_height=0.2, wall_thickness=3.0, tolerance=0.4
         ),
         preview_color=Color.from_hex("#5A9367"),
-        # The same disagreement datum-core carries: these two pieces have to be
+        # The same disagreement datum_core carries: these two pieces have to be
         # made on the same printer, so they share the manufacturing facts.
-        contested={
-            "walls": [
-                ContestedValue(
-                    value=3.0,
-                    source=(
-                        "governance/qm/adr/"
-                        "DRAFT-enclosure-parts-live-in-apothecary.md, clause 3"
-                    ),
-                    note="House constant, print-validated on QM hardware.",
-                ),
-                ContestedValue(
-                    value=2.4,
-                    source="parts/datum/datum.scad",
-                    note="Cited that record for a value the record does not contain.",
-                ),
-            ],
-            "tolerence": [
-                ContestedValue(
-                    value=0.4,
-                    source=(
-                        "governance/qm/adr/"
-                        "DRAFT-enclosure-parts-live-in-apothecary.md, clause 3"
-                    ),
-                    note="House constant. The lip takes half of it per side.",
-                ),
-                ContestedValue(
-                    value=0.2,
-                    source="parts/datum/datum.scad",
-                    note="Tighter fit, same misattribution.",
-                ),
-            ],
-        },
+        # Nothing contested remains. `walls` and `tolerence` were disputed
+        # only by parts/datum, the single-piece tray the compound replaced,
+        # which carried 2.4 and 0.2 while citing the enclosure record for
+        # values that record does not contain. Retiring it left the house
+        # constants unopposed -- a resolution, not a silencing, because what
+        # went away was an artifact making a claim it could not support.
+        contested={},
     )
 
 

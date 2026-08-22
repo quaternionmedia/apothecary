@@ -1,6 +1,6 @@
-"""datum-core as a navigable assembly, not one opaque solid.
+"""datum_core as a navigable assembly, not one opaque solid.
 
-``parts/datum-core/`` is the printable article: two SCAD pieces that render to
+``parts/datum_core/`` is the printable article: two SCAD pieces that render to
 two STLs. That is the right shape for printing and the wrong shape for reading
 -- a reviewer asking "how tall is the standoff" or "where does the connector
 come through" gets one 500 KB mesh and no answer.
@@ -325,8 +325,8 @@ def _lid() -> Assembly:
 
 
 def create_datum_core_site() -> Assembly:
-    """datum-core, decomposed far enough to answer questions about it."""
-    return Site("datum-core", structures=[_tray(), _lid()])
+    """datum_core, decomposed far enough to answer questions about it."""
+    return Site("datum_core", structures=[_tray(), _lid()])
 
 
 def validate_datum_core(site: Assembly) -> LayoutReport:

@@ -18,7 +18,7 @@ client = TestClient(app)
 
 
 def validate(params):
-    return client.post("/parts/datum-core/validate", json={"params": params}).json()
+    return client.post("/parts/datum_core/validate", json={"params": params}).json()
 
 
 class TestValidationIsCheapAndHonest:

@@ -5,7 +5,7 @@
 A printable part is one solid. That is the right shape for a printer and the
 wrong shape for a reader: "how tall is the standoff" has no answer in a mesh.
 
-`datum-core` is therefore also an `Assembly` tree — the same enclosure, with
+`datum_core` is therefore also an `Assembly` tree — the same enclosure, with
 every feature addressable.
 
     >>> from apothecary.datum_core_site import create_datum_core_site
@@ -32,7 +32,7 @@ Four levels deep, and every node compiles on its own:
     >>> paths = list(walk(site))
     >>> len(paths), max(p.count(".") for p in paths)
     (22, 4)
-    >>> "datum-core.tray.mounting.boss-front-left.pilot-hole" in paths
+    >>> "datum_core.tray.mounting.boss-front-left.pilot-hole" in paths
     True
 
 ## It is a model, so it is gated
@@ -66,5 +66,5 @@ rather than leaving it to the eye:
 | | |
 |---|---|
 | Every registered site | `curl localhost:8765/sites` |
-| One node's geometry | `curl localhost:8765/sites/datum-core/nodes/tray.shell/stl` |
-| The generated OpenSCAD | `curl localhost:8765/sites/datum-core` → `scad` |
+| One node's geometry | `curl localhost:8765/sites/datum_core/nodes/tray.shell/stl` |
+| The generated OpenSCAD | `curl localhost:8765/sites/datum_core` → `scad` |

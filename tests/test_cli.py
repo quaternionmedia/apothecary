@@ -48,9 +48,9 @@ def test_safe_echo_falls_back_on_a_legacy_code_page(monkeypatch):
     utils._safe_echo("✓ Python: 3.11.12")
     utils._safe_echo("  ✗ OpenSCAD not found", fg="yellow")
     # cp1252 carries a bullet at 0x95, so this one never reaches the fallback.
-    utils._safe_echo("    • datum-core")
+    utils._safe_echo("    • datum_core")
 
-    assert written == ["[OK] Python: 3.11.12", "  [X] OpenSCAD not found", "    • datum-core"]
+    assert written == ["[OK] Python: 3.11.12", "  [X] OpenSCAD not found", "    • datum_core"]
 
 
 def test_cli_check_runs_on_a_legacy_code_page(monkeypatch):
@@ -68,7 +68,7 @@ def test_cli_check_runs_on_a_legacy_code_page(monkeypatch):
 def test_cli_parts_info_reports_bounds():
     """A consumer sizing an assembly needs the envelope, not just a path."""
     runner = CliRunner()
-    result = runner.invoke(cli, ["parts", "info", "datum-core", "--json-out"])
+    result = runner.invoke(cli, ["parts", "info", "datum_core", "--json-out"])
     assert result.exit_code == 0
 
     data = json.loads(result.output)

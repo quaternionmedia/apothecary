@@ -1,7 +1,7 @@
 # Fitting a part to something it does not own
 
 A standard for the seam between a project that owns facts about a physical
-thing and this repository, which owns geometry. Written against `datum-core`,
+thing and this repository, which owns geometry. Written against `datum_core`,
 but the shape is meant to hold from a single unfitted part up to a multi-
 structure build.
 
@@ -23,7 +23,7 @@ One sentence decides every argument about where a number lives:
 
 `datum` does not get an opinion on wall thickness, and apothecary does not get
 an opinion on where the connector is. Each of those was previously held by the
-wrong repository: every dimension of `datum-core` lived in apothecary's SCAD,
+wrong repository: every dimension of `datum_core` lived in apothecary's SCAD,
 including the ones the PCB determines.
 
 The test for which side a number belongs to: **would it change if you printed
@@ -47,7 +47,7 @@ the tree gets deeper.
 | Rung | Example | Fit profile | Notes |
 |---|---|---|---|
 | 1. Unfitted part | `calibration_cube` | none | Nothing external to fit. `PrintSettings` alone |
-| 2. Fitted part | `datum-core` tray | one | The profile drives parameter overrides |
+| 2. Fitted part | `datum_core` tray | one | The profile drives parameter overrides |
 | 3. Sub-assembly | tray + lid | one | Several nodes consume different subsets. Interfaces *between* the pieces — the lip clearance — stay apothecary's |
 | 4. Site | `garage` | one per structure | Plus layout constraints; the validator is still apothecary's |
 | 5. Third-party interfaces | a DIN rail, a VESA pattern | profile references named external interfaces | The external standard is a third owner, cited not copied |
@@ -126,7 +126,7 @@ Illustrative, and superseded by the provider protocol above.
 Every one of those is a fact the PCB determines and `datum` is entitled to
 assert. None of them is a wall thickness, a corner radius or a facet count.
 
-## What this changes about datum-core today
+## What this changes about datum_core today
 
 `walls` and `tolerence` are now parameters carrying the house constants from
 `parts/footpedal/button.scad`, print-validated on QM hardware, rather than the

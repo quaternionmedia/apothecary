@@ -32,7 +32,7 @@ def datum_core_is_built():
     """
     from apothecary.projects.parts.skeleton import ROOT
 
-    stl = ROOT / "parts" / "datum-core" / "datum-core.stl"
+    stl = ROOT / "parts" / "datum_core" / "datum_core.stl"
     if stl.exists():
         return
     renderer = get_renderer()
@@ -44,8 +44,8 @@ def datum_core_is_built():
 
 class TestImportPrimitive:
     def test_renders_an_openscad_import(self):
-        assert Import(file="parts/datum-core/datum-core.stl").render() == (
-            'import("parts/datum-core/datum-core.stl", convexity=10);'
+        assert Import(file="parts/datum_core/datum_core.stl").render() == (
+            'import("parts/datum_core/datum_core.stl", convexity=10);'
         )
 
     def test_windows_separators_become_posix(self):
@@ -61,7 +61,7 @@ class TestPartStlPath:
     def test_registered_part_resolves_repository_relative(self):
         # Never absolute: generated SCAD is shown to people and an absolute
         # path there leaks the local layout of whoever generated it.
-        assert part_stl_path("datum-core") == "parts/datum-core/datum-core.stl"
+        assert part_stl_path("datum_core") == "parts/datum_core/datum_core.stl"
 
     def test_unregistered_part_is_none(self):
         assert part_stl_path("no-such-part") is None
@@ -69,9 +69,9 @@ class TestPartStlPath:
 
 class TestCatalogLeafCompiles:
     def test_part_ref_leaf_imports_its_geometry(self):
-        leaf = Assembly(name="datum-core", role="part", part_ref="datum-core")
+        leaf = Assembly(name="datum_core", role="part", part_ref="datum_core")
         rendered = leaf.to_scad_object().render()
-        assert 'import("parts/datum-core/datum-core.stl"' in rendered
+        assert 'import("parts/datum_core/datum_core.stl"' in rendered
 
     def test_missing_stl_names_the_command_that_fixes_it(self):
         """Asking for one node's geometry is a direct request, so it fails."""
@@ -96,7 +96,7 @@ class TestCatalogLeafCompiles:
         # This is the one that was failing: a site made entirely of part_ref
         # leaves could not render at all.
         scad = create_parts_library_site().render()
-        assert "parts/datum-core/datum-core.stl" in scad
+        assert "parts/datum_core/datum_core.stl" in scad
 
     def test_the_catalog_survives_a_part_nobody_has_built(self):
         from apothecary.hierarchy import Site
@@ -117,13 +117,13 @@ class TestViewerSurfaces:
 
         body = response.json()
         assert body["is_valid"] is True
-        assert "parts/datum-core/datum-core.stl" in body["scad"]
+        assert "parts/datum_core/datum_core.stl" in body["scad"]
 
     @pytest.mark.slow
     def test_node_stl_renders_a_catalog_leaf(self):
         if not get_renderer().is_available:
             pytest.skip("OpenSCAD not installed")
-        response = client.get("/sites/parts_library/nodes/datum-core/stl")
+        response = client.get("/sites/parts_library/nodes/datum_core/stl")
         assert response.status_code == 200, response.text
         assert len(response.content) > 1000
 
@@ -142,13 +142,13 @@ class TestSitePayloadCarriesScad:
 
     def test_get_site_includes_generated_scad(self):
         body = client.get("/sites/parts_library").json()
-        assert "parts/datum-core/datum-core.stl" in body["scad"]
+        assert "parts/datum_core/datum_core.stl" in body["scad"]
 
     def test_layout_still_includes_it(self):
         site = client.get("/sites/parts_library").json()
         positions = {s["name"]: s["position"] for s in site["structures"]}
         body = client.post("/sites/parts_library/layout", json={"positions": positions}).json()
-        assert "parts/datum-core/datum-core.stl" in body["scad"]
+        assert "parts/datum_core/datum_core.stl" in body["scad"]
 
     def test_a_site_that_cannot_compile_reports_it_rather_than_500ing(self, monkeypatch):
         """One uncompilable node must not take the whole page down with it."""

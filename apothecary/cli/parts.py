@@ -8,7 +8,7 @@ import click
 
 from ..projects.parts.skeleton import ROOT
 from ..projects.parts.stl_renderer import read_params_sidecar, write_params_sidecar
-from ..projects.registry import scan_projects
+from ..projects.registry import scan_projects, stl_output_for
 from ..templates import TemplateRenderer
 from . import status
 from .utils import (
@@ -541,14 +541,14 @@ def parts_elephant_walk(output: str, gap: int, ensure_stl: bool):
         if renderer.is_available:
             missing = []
             for item in items:
-                stl_path = item.path.with_suffix(".stl")
+                stl_path = stl_output_for(item)
                 if not stl_path.exists():
                     missing.append(item)
 
             if missing:
                 click.echo(f"Generating {len(missing)} missing STL files...")
                 for item in missing:
-                    stl_path = item.path.with_suffix(".stl")
+                    stl_path = stl_output_for(item)
                     click.echo(f"  {item.name}...", nl=False)
                     result = renderer.render_stl(item.path, stl_path, timeout=120)
                     if result.success:
@@ -561,7 +561,7 @@ def parts_elephant_walk(output: str, gap: int, ensure_stl: bool):
     click.echo("Calculating bounding boxes...")
     part_data = []
     for item in items:
-        stl_path = item.path.with_suffix(".stl")
+        stl_path = stl_output_for(item)
         bbox = _get_stl_bounding_box(stl_path)
         if bbox:
             min_x, max_x, min_y, max_y, min_z, max_z = bbox
@@ -626,7 +626,7 @@ def parts_elephant_walk(output: str, gap: int, ensure_stl: bool):
     # Generate import statements with calculated positions
     for _i, (data, x_pos) in enumerate(zip(part_data, x_positions, strict=False)):
         item = data["item"]
-        rel_path = item.path.relative_to(ROOT / "parts").with_suffix(".stl")
+        rel_path = stl_output_for(item).relative_to(ROOT / "parts")
         # Translate to center the part at x_pos, and center Y at 0
         translate_x = x_pos - data["center_x"]
         translate_y = -data["center_y"]

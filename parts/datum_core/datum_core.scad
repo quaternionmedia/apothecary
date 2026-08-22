@@ -1,7 +1,7 @@
-// datum-core -- the tray of an enclosure for a 40 x 40 mm control-surface board.
+// datum_core -- the tray of an enclosure for a 40 x 40 mm control-surface board.
 //
 // One edge connector cutout, an antenna relief, and four board standoffs. The
-// cover is a separate part, datum-cap: the enclosure record asks for one core
+// cover is a separate part, datum_cap: the enclosure record asks for one core
 // body with separate pieces around it. Every dimension below is a parameter; the defaults
 // describe a generic 40 mm board and render on their own, with no knowledge of
 // any particular PCB.
@@ -46,7 +46,7 @@ connector_margin = 0.6;
 /* [Antenna] */
 // A radio module wants no material in front of its antenna. The wall is
 // thinned rather than removed, so the enclosure stays closed: ported from
-// parts/datum/, which had this and this part did not.
+// the single-piece tray this part replaced, which had it and this did not.
 antenna_band = 8.0;
 antenna_wall = 0.8;
 

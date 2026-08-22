@@ -14,7 +14,7 @@ class Params(BaseModel):
 
 
 def create(metadata_root: Path) -> BasePart:
-    scad = metadata_root / "parts" / "star-cookiecutter" / "star-cookiecutter.scad"
+    scad = metadata_root / "parts" / "star_cookiecutter" / "star_cookiecutter.scad"
     return BasePart(
         name="star_cookiecutter",
         source_file=scad,

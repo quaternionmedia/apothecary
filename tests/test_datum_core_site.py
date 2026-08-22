@@ -1,4 +1,4 @@
-"""datum-core exists twice: as a printable SCAD file and as a navigable tree.
+"""datum_core exists twice: as a printable SCAD file and as a navigable tree.
 
 Two descriptions of one object drift the moment nothing compares them, so the
 first test here reads the SCAD file's own defaults and holds the assembly to
@@ -20,11 +20,11 @@ from apothecary.projects.parts.skeleton import ROOT
 
 client = TestClient(app)
 
-CORE_SCAD = ROOT / "parts" / "datum-core" / "datum-core.scad"
-CAP_SCAD = ROOT / "parts" / "datum-cap" / "datum-cap.scad"
+CORE_SCAD = ROOT / "parts" / "datum_core" / "datum_core.scad"
+CAP_SCAD = ROOT / "parts" / "datum_cap" / "datum_cap.scad"
 
 # Every constant the assembly claims to share with the printable part.
-# The tray's numbers live in datum-core.scad, the cover's in datum-cap.scad.
+# The tray's numbers live in datum_core.scad, the cover's in datum_cap.scad.
 SHARED_CORE = [
     "board_x", "board_y", "board_t", "board_clearance",
     "walls", "tolerence", "floor_t", "corner_r", "standoff_h", "headroom",
@@ -63,7 +63,7 @@ class TestTheTwoDescriptionsAgree:
         assert scad_defaults(CAP_SCAD)[name] == pytest.approx(getattr(dc, name.upper()))
 
     def test_derived_envelope_matches_the_part(self):
-        # What `apothecary parts info datum-core` reports for the tray.
+        # What `apothecary parts info datum_core` reports for the tray.
         assert (dc.OUTER_X, dc.OUTER_Y, dc.TRAY_H) == pytest.approx((46.8, 46.8, 15.6))
 
 
@@ -80,12 +80,12 @@ class TestTheTreeIsNavigable:
     def test_every_expected_node_is_present(self):
         names = {path for path, _ in self._walk(self.site)}
         for expected in (
-            "datum-core.tray.shell.cavity",
-            "datum-core.tray.shell.connector-opening",
-            "datum-core.tray.mounting.boss-front-left.pilot-hole",
-            "datum-core.lid.plate.indicator-light-pipe",
-            "datum-core.lid.plate.contact-back-right",
-            "datum-core.lid.lip",
+            "datum_core.tray.shell.cavity",
+            "datum_core.tray.shell.connector-opening",
+            "datum_core.tray.mounting.boss-front-left.pilot-hole",
+            "datum_core.lid.plate.indicator-light-pipe",
+            "datum_core.lid.plate.contact-back-right",
+            "datum_core.lid.lip",
         ):
             assert expected in names, expected
 
@@ -143,10 +143,10 @@ class TestLayoutValidation:
 
 class TestServedAsASite:
     def test_it_is_registered(self):
-        assert "datum-core" in client.get("/sites").json()
+        assert "datum_core" in client.get("/sites").json()
 
     def test_the_tree_reaches_the_viewer(self):
-        body = client.get("/sites/datum-core").json()
+        body = client.get("/sites/datum_core").json()
         assert body["is_valid"] is True
         assert {s["name"] for s in body["structures"]} == {"tray", "lid"}
         assert "hull()" in body["scad"]
@@ -160,6 +160,6 @@ class TestServedAsASite:
 
         if not get_renderer().is_available:
             pytest.skip("OpenSCAD not installed")
-        response = client.get(f"/sites/datum-core/nodes/{path}/stl")
+        response = client.get(f"/sites/datum_core/nodes/{path}/stl")
         assert response.status_code == 200, response.text
         assert len(response.content) > 500

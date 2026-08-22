@@ -1,11 +1,17 @@
 """A number two documents state differently is not settled by editing one.
 
-`datum-core` has three: the wall thickness and fit clearance, which the
-enclosure record and `parts/datum/datum.scad` disagree about, and the board
-depth, where the datum packet gives a bound and that part gives a specific
-board. Each candidate is recorded with its provenance and surfaced as a
-control in the viewer, so the choice is made by looking rather than by whoever
-edits last.
+`datum_core` had three. Two of them -- wall thickness and fit clearance --
+were disputed only by `parts/datum`, the single-piece tray this part replaced,
+which carried lighter values while citing the enclosure record for numbers
+that record does not contain. Retiring that part settled both: the house
+constants now stand unopposed.
+
+What remains is `board_y`, and it is the interesting kind: the datum packet
+gives a bound of 40 mm and the black-box stub the seam serves today gives a
+specific 30 mm board. Both sources are live, no schematic exists to settle
+them, and deleting either would be answering the question by silencing it.
+Each candidate is recorded with its provenance and surfaced as a control in
+the viewer, so the choice is made by looking rather than by whoever edits last.
 """
 
 from __future__ import annotations
@@ -21,10 +27,18 @@ client = TestClient(app)
 
 
 class TestContestedAreDeclared:
-    def test_the_three_known_disagreements_are_recorded(self):
-        assert set(DEFAULT.contested) == {"walls", "tolerence", "board_y"}
+    def test_the_known_disagreement_is_recorded(self):
+        assert set(DEFAULT.contested) == {"board_y"}
 
-    @pytest.mark.parametrize("name", ["walls", "tolerence", "board_y"])
+    def test_a_settled_number_is_no_longer_contested(self):
+        """Retiring the part that disagreed is a resolution, and the index has
+        to stop reporting a dispute that no longer has two sides. The house
+        constants are what the part ships; nothing live proposes otherwise.
+        """
+        assert "walls" not in DEFAULT.contested
+        assert "tolerence" not in DEFAULT.contested
+
+    @pytest.mark.parametrize("name", ["board_y"])
     def test_every_candidate_cites_a_source(self, name):
         """A value with no provenance is an opinion, and cannot be adjudicated."""
         for candidate in DEFAULT.contested[name]:
@@ -53,29 +67,42 @@ class TestContestedAreDeclared:
 
 class TestParamsEndpoint:
     def test_it_describes_every_parameter(self):
-        body = client.get("/parts/datum-core/params").json()
+        body = client.get("/parts/datum_core/params").json()
         names = {f["name"] for f in body["fields"]}
         assert {"walls", "tolerence", "board_x", "board_y", "headroom"} <= names
 
     def test_numeric_fields_carry_a_range_a_slider_can_use(self):
-        body = client.get("/parts/datum-core/params").json()
+        body = client.get("/parts/datum_core/params").json()
         for field in body["fields"]:
             if field["type"] == "number":
                 assert field["min"] < field["max"], field["name"]
 
     def test_the_range_reaches_every_candidate(self):
         """A slider that cannot reach a candidate cannot be used to judge it."""
-        body = client.get("/parts/datum-core/params").json()
+        body = client.get("/parts/datum_core/params").json()
         for field in body["fields"]:
             for candidate in field["contested"]:
                 assert field["min"] <= candidate["value"] <= field["max"], field["name"]
 
     def test_candidates_carry_their_provenance_to_the_client(self):
-        body = client.get("/parts/datum-core/params").json()
-        walls = next(f for f in body["fields"] if f["name"] == "walls")
-        sources = {c["source"] for c in walls["contested"]}
-        assert any("DRAFT-enclosure-parts-live-in-apothecary" in s for s in sources)
-        assert any("parts/datum/datum.scad" in s for s in sources)
+        body = client.get("/parts/datum_core/params").json()
+        board_y = next(f for f in body["fields"] if f["name"] == "board_y")
+        sources = {c["source"] for c in board_y["contested"]}
+        assert any("HANDOFF" in s for s in sources)
+        assert any("kicad" in s for s in sources)
+
+    def test_no_candidate_cites_a_file_that_no_longer_exists(self):
+        """A citation is only provenance while a reader can go and look. The
+        retired part's SCAD was cited by every candidate here, and leaving
+        those in place would have pointed at nothing.
+        """
+        from apothecary.projects.parts.skeleton import ROOT
+
+        for candidates in DEFAULT.contested.values():
+            for candidate in candidates:
+                path = candidate.source.split(",")[0].strip()
+                if "/" in path and not path.startswith("governance/"):
+                    assert (ROOT / path).exists(), candidate.source
 
     def test_no_slider_offers_a_value_the_model_refuses(self):
         """The claim this endpoint exists to make. `gt=0` arrives as
@@ -84,7 +111,7 @@ class TestParamsEndpoint:
         """
         from apothecary.projects.parts.datum_core import Params
 
-        body = client.get("/parts/datum-core/params").json()
+        body = client.get("/parts/datum_core/params").json()
         for field in body["fields"]:
             if field["type"] != "number":
                 continue
@@ -101,10 +128,10 @@ class TestOneEntryPoint:
     """
 
     def test_the_part_link_lands_in_the_viewer(self):
-        response = client.get("/viewer/parts/datum-core", follow_redirects=False)
+        response = client.get("/viewer/parts/datum_core", follow_redirects=False)
         assert response.status_code == 307
         assert response.headers["location"] == (
-            "/viewer/sites/parts_library?focus=datum-core"
+            "/viewer/sites/parts_library?focus=datum_core"
         )
 
     def test_an_unknown_part_is_404_before_the_redirect(self):

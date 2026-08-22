@@ -7,9 +7,9 @@ the source between every attempt.
 
 ```bash
 uv run apothecary serve --port 8765          # viewer
-uv run apothecary parts info datum-core      # what it is, and how big
-uv run apothecary parts generate-stl datum-core -p headroom=12
-uv run apothecary parts verify datum-core -p headroom=12
+uv run apothecary parts info datum_core      # what it is, and how big
+uv run apothecary parts generate-stl datum_core -p headroom=12
+uv run apothecary parts verify datum_core -p headroom=12
 ```
 
 Reload the viewer and the new geometry is there.
@@ -21,8 +21,8 @@ was validated and then discarded — nothing passed it to OpenSCAD. `-p` closes
 that gap:
 
 ```bash
-uv run apothecary parts generate-stl datum-core -p headroom=12
-uv run apothecary parts generate-stl datum-core -p board_x=60 -p headroom=20
+uv run apothecary parts generate-stl datum_core -p headroom=12
+uv run apothecary parts generate-stl datum_core -p board_x=60 -p headroom=20
 ```
 
 Repeatable, and validated against the part's own model *before* anything
@@ -32,8 +32,8 @@ exits 0. A typo is caught in well under a second instead of looking like a
 successful render of the wrong thing.
 
 ```
-$ uv run apothecary parts generate-stl datum-core -p headrooom=10
-Error: unknown parameter(s): headrooom. datum-core declares: board_clearance,
+$ uv run apothecary parts generate-stl datum_core -p headrooom=10
+Error: unknown parameter(s): headrooom. datum_core declares: board_clearance,
 board_t, board_x, board_y, explode_gap, floor_t, headroom, lid_t, lip_h, show,
 standoff_h, wall
 ```
@@ -48,7 +48,7 @@ viewer serves. That makes an overridden render indistinguishable from a default
 one, so each render drops a sidecar beside it recording the inputs:
 
 ```bash
-$ uv run apothecary parts info datum-core --json-out | jq .stl_params
+$ uv run apothecary parts info datum_core --json-out | jq .stl_params
 {
   "generated": "2026-08-19T12:47:25",
   "params": {"headroom": 12.0}
@@ -68,8 +68,8 @@ is wrong by however far they have drifted.
 compares:
 
 ```
-$ uv run apothecary parts verify datum-core -p headroom=12
-✓ datum-core
+$ uv run apothecary parts verify datum_core -p headroom=12
+✓ datum_core
     axis      declared    measured     delta
     x            46.80       46.80      0.00
     y            46.80       46.80      0.00
@@ -88,7 +88,7 @@ unchecked, not correct.
 The same overrides, for driving the loop from the viewer rather than a shell:
 
 ```bash
-curl -X POST localhost:8765/parts/datum-core/stl/generate \
+curl -X POST localhost:8765/parts/datum_core/stl/generate \
   -H 'Content-Type: application/json' \
   -d '{"params": {"headroom": 14}}'
 ```
@@ -96,7 +96,7 @@ curl -X POST localhost:8765/parts/datum-core/stl/generate \
 ```json
 {
   "success": true,
-  "stl_url": "/parts/datum-core/stl",
+  "stl_url": "/parts/datum_core/stl",
   "params": {"headroom": 14.0},
   "bounds": {"size": {"x": 46.8, "y": 46.8, "z": 38.6}, ...}
 }

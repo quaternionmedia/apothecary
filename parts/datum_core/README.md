@@ -1,4 +1,4 @@
-# datum-core
+# datum_core
 
 A two-piece enclosure for a 40 × 40 mm control-surface board: a printable tray
 with four standoffs and an edge-connector cutout, and a printable lid with four
@@ -10,9 +10,9 @@ Every dimension is a parameter.
 ## Render
 
 ```bash
-openscad -o datum-core.stl parts/datum-core/datum-core.scad                 # tray
-openscad -o lid.stl -D 'show="lid"' parts/datum-core/datum-core.scad        # lid
-openscad -o both.stl -D 'show="exploded"' parts/datum-core/datum-core.scad  # assembly
+openscad -o datum_core.stl parts/datum_core/datum_core.scad                 # tray
+openscad -o lid.stl -D 'show="lid"' parts/datum_core/datum_core.scad        # lid
+openscad -o both.stl -D 'show="exploded"' parts/datum_core/datum_core.scad  # assembly
 ```
 
 `show="exploded"` is the one to look at while tuning fit. It is a preview, not
@@ -50,5 +50,5 @@ What has to be checked against a real board before this is printed in anger:
 
 ## Bounds
 
-`apothecary parts info datum-core` reports the envelope. At the defaults the
+`apothecary parts info datum_core` reports the envelope. At the defaults the
 tray is 46.8 × 46.8 × 15.6 mm.

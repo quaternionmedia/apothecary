@@ -29,34 +29,40 @@ never looked at. Then, once it read the assembly properly, it reported *that*
 assembly's stubs for every part in the library — `calibration_cube` was told it
 was fitted to a board it has never heard of.
 
-It is part-specific now, and the answer differs between the two enclosure
-parts for a reason worth knowing:
+It is part-specific now, and the answer differs between parts for a reason
+worth knowing:
 
-    >>> from apothecary.projects.parts.datum import DEFAULT as datum_part
-    >>> fitted = next(c for c in report.checks if c.name == "Fitted to measured artifacts")
-    >>> fitted.state
-    'pass'
-    >>> theirs = assess(datum_part)
-    >>> stubs = next(c for c in theirs.checks if c.name == "Fitted to measured artifacts")
+    >>> from apothecary.projects.parts.calibration_cube import DEFAULT as cube
+    >>> stubs = next(c for c in report.checks if c.name == "Fitted to measured artifacts")
     >>> stubs.state, "still guessed" in stubs.detail
     ('unknown', True)
+    >>> theirs = assess(cube)
+    >>> fitted = next(c for c in theirs.checks if c.name == "Fitted to measured artifacts")
+    >>> fitted.state
+    'pass'
 
-`parts/datum` is the part `projects/assemblies/datum_bench.py` drives through
-the black-box seam, so it inherits the board and mounting-surface stubs.
-`datum-core` is not wired to that seam at all — which is not a clean bill of
-health so much as a gap, and `docs/boundaries.md` names it as one. That is
+`datum_core` is the part `projects/assemblies/datum_bench.py` drives through
+the black-box seam, so it inherits the board and mounting-surface stubs. It did
+not always: the seam arrived with `parts/datum`, the single-piece tray the
+compound replaced, and moved here rather than being retired with it — the
+geometry was superseded, the seam was the part worth keeping.
+
+`calibration_cube` is fitted to nothing, and says so. That is
 `models/blackbox.py` earning its `source` field: a reader can tell a measured
-envelope from a guessed one, and from a part that is not fitted to either.
+envelope from a guessed one, and both from a part that is not fitted to either.
+Note which way round the good news runs — the `pass` belongs to the part nobody
+has made a claim about, and the `unknown` to the one carrying real, unmeasured
+dependencies.
 
-## What blocks datum-core today
+## What blocks datum_core today
 
     >>> disputed = next(c for c in report.checks if c.name == "No disputed dimensions")
     >>> disputed.state
     'blocked'
 
-Its own sources disagree about three of its dimensions. A part cannot be called
-ready to build while nobody has decided how big it is — page 05 is where those
-are turned, and each candidate carries where it came from.
+Its own sources still disagree about how deep the board is. A part cannot be
+called ready to build while nobody has decided how big it is — page 05 is where
+that is turned, and each candidate carries where it came from.
 
 Every check that is not a pass says what to do about it:
 
@@ -67,10 +73,10 @@ Every check that is not a pass says what to do about it:
 
 | | |
 |---|---|
-| One part | `apothecary parts checklist datum-core` |
-| Against a printer | `apothecary parts checklist datum-core --build-volume 220,220,250` |
+| One part | `apothecary parts checklist datum_core` |
+| Against a printer | `apothecary parts checklist datum_core --build-volume 220,220,250` |
 | Every part | `apothecary parts checklist --all` |
 | In the viewer | select a part — **Build readiness** sits above its parameters |
-| Over HTTP | `/parts/datum-core/checklist?build_volume=220,220,250` |
+| Over HTTP | `/parts/datum_core/checklist?build_volume=220,220,250` |
 
 It exits non-zero when something is blocking, so it can gate a build.

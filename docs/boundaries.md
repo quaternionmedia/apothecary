@@ -54,7 +54,7 @@ by a reviewed bump. (The enclosure record's clause 5 asks for a *released
 version* consumed through the CLI or API; a commit pin consumed by path is
 where that stands today, and the gap is deliberate rather than forgotten.)
 
-**Parts are useful to strangers.** Clause 2 again. `datum-core` renders as a
+**Parts are useful to strangers.** Clause 2 again. `datum_core` renders as a
 sensible 40 mm tray for someone who has never heard of `datum`, and only the
 consumer's black box makes it that project's enclosure.
 
@@ -83,10 +83,10 @@ shows up rather than hiding.
 
 Stated because an unstated exception becomes the rule.
 
-- **`parts/datum` and `parts/datum-core` both describe one object.** The first
+- **`parts/datum` and `parts/datum_core` both describe one object.** The first
   is what `projects/assemblies/datum_bench.py` drives through the black-box
   seam; the second is the detailed enclosure with the navigable assembly and
-  the contested values. Neither is a superset. They should meet — `datum-core`
+  the contested values. Neither is a superset. They should meet — `datum_core`
   taking its board envelope from a `BlackBox` rather than its own defaults —
   and that is a design step nobody has taken.
 - **`datum_core_site.py` lives here and models `datum`'s enclosure.** It is

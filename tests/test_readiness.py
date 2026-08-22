@@ -54,13 +54,18 @@ class TestTheChecksAnswerHonestly:
         assert "X" in fit.detail
 
     def test_contested_dimensions_block(self):
-        """datum-core has three; a part cannot be called ready while its own
-        sources disagree about how big it is.
+        """A part cannot be called ready while its own sources disagree about
+        how big it is.
+
+        `walls` and `tolerence` were contested only by `parts/datum`, the
+        single-piece tray this part replaced; retiring it left the house
+        constants unopposed. `board_y` is the one that survives, because the
+        two sources that disagree about the board are both still live.
         """
         report = assess(CORE)
         disputed = next(c for c in report.checks if c.name == "No disputed dimensions")
         assert disputed.state == BLOCKED
-        assert "walls" in disputed.detail
+        assert "board_y" in disputed.detail
 
     def test_print_settings_are_reported_when_declared(self):
         report = assess(CORE)
@@ -72,12 +77,11 @@ class TestTheChecksAnswerHonestly:
         """It once reported "no stubs remain" without looking, because
         `build()` returns a tuple and it read the tuple as an Assembly.
 
-        The part the assembly actually drives is `parts/datum`, so that is
-        where the stubs surface.
+        The bench drives `datum_core` -- the compound that replaced the
+        single-piece `parts/datum` and inherited its black-box seam -- so that
+        is where the stubs surface.
         """
-        from apothecary.projects.parts.datum import DEFAULT as DATUM_PART
-
-        report = assess(DATUM_PART)
+        report = assess(CORE)
         stubs = next(c for c in report.checks if c.name == "Fitted to measured artifacts")
         assert stubs.state == UNKNOWN
         assert "still guessed" in stubs.detail
@@ -87,7 +91,9 @@ class TestTheChecksAnswerHonestly:
         """`calibration_cube` was reported as fitted to datum's board, because
         the check read the bench for every part in the library.
         """
-        report = assess(CORE)
+        from apothecary.projects.parts.calibration_cube import DEFAULT as CUBE
+
+        report = assess(CUBE)
         stubs = next(c for c in report.checks if c.name == "Fitted to measured artifacts")
         assert stubs.state == PASS
         assert "not fitted to a black box" in stubs.detail
@@ -100,7 +106,7 @@ class TestTheChecksAnswerHonestly:
 
 
 class TestBothPiecesAreAssessable:
-    @pytest.mark.parametrize("part", [CORE, CAP], ids=["datum-core", "datum-cap"])
+    @pytest.mark.parametrize("part", [CORE, CAP], ids=["datum_core", "datum_cap"])
     def test_each_piece_produces_a_full_report(self, part):
         report = assess(part, build_volume=(220.0, 220.0, 250.0))
         assert report.part == part.name
@@ -109,14 +115,14 @@ class TestBothPiecesAreAssessable:
 
 class TestServedFromTheOneEntryPoint:
     def test_the_endpoint_mirrors_the_command(self):
-        body = client.get("/parts/datum-core/checklist").json()
+        body = client.get("/parts/datum_core/checklist").json()
         report = assess(CORE)
         assert body["ready"] is report.ready
         assert len(body["checks"]) == len(report.checks)
 
     def test_a_bad_build_volume_is_refused(self):
-        assert client.get("/parts/datum-core/checklist?build_volume=nope").status_code == 422
-        assert client.get("/parts/datum-core/checklist?build_volume=1,2").status_code == 422
+        assert client.get("/parts/datum_core/checklist?build_volume=nope").status_code == 422
+        assert client.get("/parts/datum_core/checklist?build_volume=1,2").status_code == 422
 
     def test_an_unknown_part_is_404(self):
         assert client.get("/parts/no-such-part/checklist").status_code == 404
@@ -131,7 +137,7 @@ class TestServedFromTheOneEntryPoint:
 
 
 class TestAStaleRenderIsNotDrift:
-    """datum-core was reported as drifted by 1.2 mm. Nothing had drifted: the
+    """datum_core was reported as drifted by 1.2 mm. Nothing had drifted: the
     SCAD was untouched, the wrapper's `walls` default had moved to the house
     constant, and the STL on disk still answered the old question. A forced
     re-render put declared and measured at 46.8 exactly.
@@ -145,7 +151,7 @@ class TestAStaleRenderIsNotDrift:
 
         stl = CORE.get_stl_output_path()
         if not stl.exists():
-            pytest.skip("datum-core is not built here")
+            pytest.skip("datum_core is not built here")
         was = (stl.stat().st_atime, stl.stat().st_mtime)
         try:
             os.utime(stl, (was[0], 0))  # older than anything in the repo
@@ -162,7 +168,7 @@ class TestAStaleRenderIsNotDrift:
 
         stl = CORE.get_stl_output_path()
         if not stl.exists():
-            pytest.skip("datum-core is not built here")
+            pytest.skip("datum_core is not built here")
         was = (stl.stat().st_atime, stl.stat().st_mtime)
         try:
             os.utime(stl, (was[0], 0))
@@ -174,9 +180,24 @@ class TestAStaleRenderIsNotDrift:
             os.utime(stl, was)
 
     def test_a_current_render_still_passes(self):
+        """The other half of the claim: the check must not cry stale at a
+        render that is up to date, or the signal is worthless.
+
+        This builds its own precondition rather than reading whatever the
+        working tree happens to hold. Editing the wrapper makes the STL stale
+        by design, so a test that merely assumed a fresh one would fail for a
+        reason that is not a defect -- which it did, twice, while this branch
+        was being written.
+        """
+        from apothecary.projects.parts.stl_renderer import get_renderer
+
+        renderer = get_renderer()
+        if renderer is None or not renderer.is_available:
+            pytest.skip("OpenSCAD not installed; cannot make a current render")
         stl = CORE.get_stl_output_path()
-        if not stl.exists():
-            pytest.skip("datum-core is not built here")
+        result = renderer.render_stl(CORE.source_file, stl, timeout=300)
+        assert result.success, result.error_message
+
         report = assess(CORE)
         renders = next(c for c in report.checks if c.name == "Geometry renders")
         assert renders.state == PASS
