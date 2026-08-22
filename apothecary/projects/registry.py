@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from importlib import import_module
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
@@ -26,6 +27,26 @@ def _gather(dirpath: Path, patterns: Iterable[str]) -> List[Path]:
     for pat in patterns:
         files.extend(sorted(dirpath.glob(pat)))
     return files
+
+
+def stl_output_for(item: ProjectInfo) -> Path:
+    """Where this part's STL belongs. The part decides, not the caller.
+
+    `item.path.with_suffix(".stl")` is the obvious guess and it is wrong for
+    any part whose SCAD is not in the folder the render belongs in. gridfinity
+    is the live example: its source sits inside a third-party submodule and its
+    wrapper overrides this precisely so a render does not land in somebody
+    else's checkout. Every caller that guessed wrote a stray file in there.
+    """
+    if item.wrapper:
+        try:
+            part = getattr(import_module(item.wrapper), "DEFAULT", None)
+            getter = getattr(part, "get_stl_output_path", None)
+            if callable(getter):
+                return Path(getter())
+        except Exception:  # a wrapper that will not import is not a path answer
+            pass
+    return item.path.with_suffix(".stl")
 
 
 def scan_projects(root: Path) -> List[ProjectInfo]:

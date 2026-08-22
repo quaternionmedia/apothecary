@@ -43,9 +43,25 @@ from .core import OpenSCADObject
 from .models.bounds import BoundingBox3D
 from .models.units import PrintSettings
 from .models.vectors import Vector3D
-from .primitives import Cylinder
+from .primitives import Cylinder, Import
 from .scene import Scene
 from .transforms import Translate
+
+
+def part_stl_path(part_ref: str) -> Optional[str]:
+    """A registered part's STL, relative to the repository root, or None.
+
+    Imported lazily: the registry reaches back into this package, and a
+    top-level import would close the loop.
+    """
+    from .projects.parts.skeleton import ROOT
+    from .projects.registry import scan_projects
+
+    for entry in scan_projects(ROOT):
+        if entry.kind == "part" and entry.name == part_ref:
+            stl = entry.path.with_suffix(".stl")
+            return stl.relative_to(ROOT).as_posix() if stl.exists() else None
+    return None
 
 
 class Assembly(BaseModel):
@@ -100,7 +116,7 @@ class Assembly(BaseModel):
             max_point=self.footprint.max_point + self.position,
         )
 
-    def to_scad_object(self) -> OpenSCADObject:
+    def to_scad_object(self, strict: bool = False) -> OpenSCADObject:
         """Compile this node (and everything beneath it) to one OpenSCAD object.
 
         The single algorithm that replaces what the four fixed classes used
@@ -116,8 +132,29 @@ class Assembly(BaseModel):
         positives: List[OpenSCADObject] = []
         if self.base is not None:
             positives.append(self.base)
-        positives.extend(addition.to_scad_object() for addition in self.additions)
-        positives.extend(child.to_scad_object() for child in self.children)
+        positives.extend(addition.to_scad_object(strict) for addition in self.additions)
+        positives.extend(child.to_scad_object(strict) for child in self.children)
+
+        # A catalog leaf refers to a registered part instead of describing its
+        # own shape, so its geometry is imported rather than constructed.
+        # Without this a whole site of them -- which is what the parts library
+        # is -- cannot render at all, and the viewer's canvas, contents and
+        # generated-OpenSCAD panel all come up empty together.
+        if not positives and self.part_ref is not None:
+            stl = part_stl_path(self.part_ref)
+            if stl is None:
+                unbuilt = (
+                    f"{self.role.capitalize()} {self.name!r} refers to part "
+                    f"{self.part_ref!r}, which is not registered or has no STL. "
+                    f"Generate one with `apothecary parts generate-stl {self.part_ref}`."
+                )
+                if strict:
+                    raise ValueError(unbuilt)
+                # STLs are build artifacts, so a catalog routinely contains a
+                # part nobody has built yet. It says so; it does not take every
+                # other part on the site down with it.
+                return Union(children=[], comment=unbuilt)
+            positives.append(Import(file=stl))
 
         if not positives:
             raise ValueError(
@@ -131,7 +168,7 @@ class Assembly(BaseModel):
 
         body: OpenSCADObject
         if self.subtractions:
-            subtraction_objs = [s.to_scad_object() for s in self.subtractions]
+            subtraction_objs = [s.to_scad_object(strict) for s in self.subtractions]
             body = Difference(
                 children=[positive, *subtraction_objs], comment=self.comment or label
             )
@@ -145,7 +182,9 @@ class Assembly(BaseModel):
 
     def to_scene(self) -> Scene:
         """Compile this node's ``children`` to a :class:`Scene`, treating this node as the root."""
-        return Scene(name=self.name, objects=[child.to_scad_object() for child in self.children])
+        return Scene(
+            name=self.name, objects=[child.to_scad_object() for child in self.children]
+        )
 
     def render(self) -> str:
         return self.to_scene().render()

@@ -43,7 +43,7 @@ def test_setup_e2e():
             except Exception:
                 _safe_echo("✓ Playwright installed")
     except ImportError:
-        click.secho("✗ Playwright not installed", fg="red")
+        _safe_echo("✗ Playwright not installed", fg="red")
         click.echo("  Run: uv sync")
         raise SystemExit(1)
 
@@ -59,21 +59,21 @@ def test_setup_e2e():
         )
 
         if result.returncode == 0:
-            click.secho("✓ Chromium browser installed successfully", fg="green", bold=True)
+            _safe_echo("✓ Chromium browser installed successfully", fg="green", bold=True)
             click.echo("")
             click.echo("Setup complete! Run E2E tests with:")
             click.echo("  apothecary test run-e2e")
             click.echo("  or: pytest tests/e2e/ -v")
         else:
-            click.secho("✗ Browser installation failed", fg="red")
+            _safe_echo("✗ Browser installation failed", fg="red")
             if result.stderr:
                 click.echo(f"  Error: {result.stderr[:200]}")
             raise SystemExit(1)
     except subprocess.TimeoutExpired:
-        click.secho("✗ Installation timed out after 5 minutes", fg="red")
+        _safe_echo("✗ Installation timed out after 5 minutes", fg="red")
         raise SystemExit(1)
     except Exception as e:
-        click.secho(f"✗ Error: {e}", fg="red")
+        _safe_echo(f"✗ Error: {e}", fg="red")
         raise SystemExit(1)
 
 
@@ -101,7 +101,7 @@ def test_validate_e2e():
             missing_files.append(file)
 
     if missing_files:
-        click.secho("✗ Missing files:", fg="red")
+        _safe_echo("✗ Missing files:", fg="red")
         for f in missing_files:
             click.echo(f"   - {f}")
         all_checks_passed = False
@@ -123,7 +123,7 @@ def test_validate_e2e():
             except Exception:
                 _safe_echo("✓ Playwright installed")
     except ImportError:
-        click.secho("✗ Playwright not installed", fg="red")
+        _safe_echo("✗ Playwright not installed", fg="red")
         click.echo("   Run: uv sync")
         all_checks_passed = False
     click.echo("")
@@ -139,24 +139,24 @@ def test_validate_e2e():
                 browser.close()
                 _safe_echo("✓ Chromium browser installed")
             except Exception as e:
-                click.secho(f"✗ Chromium not installed: {e}", fg="red")
+                _safe_echo(f"✗ Chromium not installed: {e}", fg="red")
                 click.echo("   Run: apothecary test:setup-e2e")
                 all_checks_passed = False
     except Exception as e:
-        click.secho(f"✗ Error checking browsers: {e}", fg="red")
+        _safe_echo(f"✗ Error checking browsers: {e}", fg="red")
         all_checks_passed = False
     click.echo("")
 
     # Summary
     click.echo("=" * 50)
     if all_checks_passed:
-        click.secho("✓ All checks passed!", fg="green", bold=True)
+        _safe_echo("✓ All checks passed!", fg="green", bold=True)
         click.echo("")
         click.echo("Run E2E tests with:")
         click.echo("  apothecary test run-e2e")
         raise SystemExit(0)
     else:
-        click.secho("✗ Some checks failed", fg="red", bold=True)
+        _safe_echo("✗ Some checks failed", fg="red", bold=True)
         click.echo("")
         click.echo("Run setup with:")
         click.echo("  apothecary test setup-e2e")
@@ -197,7 +197,7 @@ def test_run_e2e(headed: bool, slowmo: int, browser: str, base_url: str):
         result = subprocess.run(cmd, cwd=ROOT)
         raise SystemExit(result.returncode)
     except Exception as e:
-        click.secho(f"✗ Error running tests: {e}", fg="red")
+        _safe_echo(f"✗ Error running tests: {e}", fg="red")
         raise SystemExit(1)
 
 
@@ -233,7 +233,7 @@ def test_run(e2e: bool, coverage: bool):
 
         raise SystemExit(result.returncode)
     except Exception as e:
-        click.secho(f"✗ Error running tests: {e}", fg="red")
+        _safe_echo(f"✗ Error running tests: {e}", fg="red")
         raise SystemExit(1)
 
 
@@ -279,6 +279,11 @@ def test_all(port: int, coverage: bool, headed: bool, fail_fast: bool):
             sys.executable,
             "-m",
             "pytest",
+            # `walkthrough` is named here, not left to testpaths: pytest ignores
+            # testpaths the moment it receives a path argument, and "tests/" is
+            # one. Without this the executable pages are collected by nobody
+            # while this command still reports green.
+            "walkthrough",
             "tests/",
             "--ignore=tests/e2e",
             "-v",
@@ -314,7 +319,7 @@ def test_all(port: int, coverage: bool, headed: bool, fail_fast: bool):
         if unit_ok:
             _safe_echo(f"\n✓ Unit tests PASSED ({results['unit']['time']:.1f}s)")
         else:
-            click.secho(f"\n✗ Unit tests FAILED ({results['unit']['time']:.1f}s)", fg="red")
+            _safe_echo(f"\n✗ Unit tests FAILED ({results['unit']['time']:.1f}s)", fg="red")
             if fail_fast:
                 click.echo("\nStopping due to --fail-fast")
                 raise SystemExit(1)
@@ -367,7 +372,7 @@ def test_all(port: int, coverage: bool, headed: bool, fail_fast: bool):
             except Exception:
                 time.sleep(0.5)
         else:
-            click.secho("✗ Server failed to start", fg="red")
+            _safe_echo("✗ Server failed to start", fg="red")
             raise SystemExit(1)
 
         click.echo("")
@@ -415,7 +420,7 @@ def test_all(port: int, coverage: bool, headed: bool, fail_fast: bool):
         if e2e_ok:
             _safe_echo(f"\n✓ E2E tests PASSED ({results['e2e']['time']:.1f}s)")
         else:
-            click.secho(f"\n✗ E2E tests FAILED ({results['e2e']['time']:.1f}s)", fg="red")
+            _safe_echo(f"\n✗ E2E tests FAILED ({results['e2e']['time']:.1f}s)", fg="red")
             click.echo(e2e_result.stderr[-500:] if e2e_result.stderr else "")
 
     finally:
@@ -452,10 +457,10 @@ def test_all(port: int, coverage: bool, headed: bool, fail_fast: bool):
     click.echo("")
 
     if total_failed == 0:
-        click.secho(f"  ✓ ALL {total_passed} TESTS PASSED", fg="green", bold=True)
+        _safe_echo(f"  ✓ ALL {total_passed} TESTS PASSED", fg="green", bold=True)
         click.echo("")
         raise SystemExit(0)
     else:
-        click.secho(f"  ✗ {total_failed} TEST(S) FAILED", fg="red", bold=True)
+        _safe_echo(f"  ✗ {total_failed} TEST(S) FAILED", fg="red", bold=True)
         click.echo("")
         raise SystemExit(1)

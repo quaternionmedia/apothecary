@@ -194,6 +194,50 @@
         .code-header {
             padding: 0.4rem 0; font-weight: 600; font-size: 0.8rem; color: #ccc;
         }
+        .check { display: flex; gap: 8px; margin: 4px 0; align-items: baseline; }
+        .check .mark { font-size: 10px; font-weight: 700; padding: 1px 5px;
+                       border-radius: 3px; flex: none; }
+        .mark.pass { background: #1f4d33; color: #7fe0a5; }
+        .mark.blocked { background: #5c1f1f; color: #ff9b9b; }
+        .mark.unknown { background: #4a4326; color: #e0cf8e; }
+        .check .body { min-width: 0; }
+        .check .why { color: #8a929e; font-size: 11px; display: block; }
+        .verdict { font-weight: 700; margin: 8px 0 4px; }
+        .verdict.ready { color: #5ec27e; }
+        .verdict.not-ready { color: #e0a33e; }
+        .staged { border-left: 3px solid #4a9eff; padding-left: 9px; }
+        .staged .val { color: #4a9eff; font-weight: 700; }
+        .was { color: #8a929e; font-size: 11px; }
+        #stage-bar { position: sticky; top: 0; z-index: 2; background: #1b1e24;
+                     border-bottom: 1px solid #2a2f38; padding: 8px 0; margin-bottom: 6px; }
+        #stage-summary { font-size: 12px; margin-bottom: 6px; }
+        #stage-summary.clean { color: #8a929e; }
+        #stage-summary.valid { color: #5ec27e; }
+        #stage-summary.invalid { color: #ff9b9b; }
+        .stage-actions { display: flex; gap: 6px; }
+        .stage-actions button { flex: 1; padding: 6px; border: 0; border-radius: 4px;
+                                font-weight: 700; cursor: pointer; font: inherit; }
+        #apply-btn { background: #4a9eff; color: #0b0d10; }
+        #apply-btn:disabled { opacity: .4; cursor: default; }
+        #revert-btn { background: #2a2f38; color: #d7dae0; }
+        .param { margin: 10px 0 12px; }
+        .param.is-contested { border-left: 3px solid #e0a33e; padding-left: 9px; }
+        .param .head { display: flex; justify-content: space-between; align-items: baseline; }
+        .param .name { font-weight: 600; }
+        .param .val { font-variant-numeric: tabular-nums; color: #4a9eff; }
+        .param input[type=range] { width: 100%; margin-top: 4px; accent-color: #4a9eff; }
+        .param select { width: 100%; background: #14161a; color: #d7dae0;
+                        border: 1px solid #2a2f38; padding: 3px; }
+        .badge-contested { background: #e0a33e; color: #14161a; font-size: 10px;
+                           font-weight: 700; padding: 1px 5px; border-radius: 999px; }
+        .cand { display: block; width: 100%; text-align: left; margin-top: 5px;
+                padding: 5px 7px; background: #14161a; color: #d7dae0;
+                border: 1px solid #2a2f38; border-radius: 4px; cursor: pointer; font: inherit; }
+        .cand:hover { border-color: #e0a33e; }
+        .cand.active { border-color: #e0a33e; background: #2a2318; }
+        .cand b { color: #e0a33e; font-variant-numeric: tabular-nums; }
+        .cand .src, .cand .note { color: #8a929e; font-size: 11px; display: block; }
+        .envelope { font-variant-numeric: tabular-nums; color: #5ec27e; margin: 6px 0; }
         .code-content {
             font-family: 'Consolas', 'Monaco', 'Menlo', monospace;
             font-size: 0.72rem; line-height: 1.4; color: #9cdcfe;
@@ -286,11 +330,18 @@
         <div id="status" class="status">Loading site…</div>
     </div>
 
+    {% if not three_is_vendored %}
+    <div style="background:#7f1d1d;color:#fff;padding:12px 16px;font:14px/1.5 system-ui">
+        <strong>The 3D library is not installed.</strong>
+        Nothing will render below. Run <code>npm install</code> in the repository
+        root (or <code>apothecary install</code>), then reload.
+    </div>
+    {% endif %}
     <script type="importmap">
     {
         "imports": {
-            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            "three": "/vendor/three/build/three.module.js",
+            "three/addons/": "/vendor/three/examples/jsm/"
         }
     }
     </script>
@@ -634,12 +685,40 @@
                     this.focusPath = this.resolveFocusPath(focusPathStr);
                     this.selectedName = null;
                     this.jobs = this.hasBuildVolumes ? await this.fetchJobs() : [];
+                    if (data.scad) this.codeContentEl.textContent = data.scad;
                     this.renderFocus();
+                    // A ?focus= deep link should land on the part, not one
+                    // click short of it. /viewer/parts/<name> promises the
+                    // parameter controls, and those only exist once a node is
+                    // selected -- focusing alone left the panel unbuilt.
+                    this.selectFocusedPart();
                     this.setStatus(`Loaded: ${data.name}`, 'success');
                 } catch (err) {
                     this.setStatus(`Error: ${err.message}`, 'error');
                     console.error(err);
                 }
+            }
+
+            // Select whatever the deep link was aiming at, so the part
+            // panel is open on arrival.
+            //
+            // A part usually appears twice on the way down: once as the
+            // structure the focus path names, and once as the leaf inside it
+            // carrying the geometry. Focusing lands on the former; the
+            // parameters live on the latter.
+            selectFocusedPart() {
+                if (!this.focusPath.length) return;
+                const focus = this.currentFocusNode();
+                const prefix = this.focusPath.join('.');
+                if (!focus.children.length) {
+                    this.selectChild(prefix);  // focus is itself the leaf
+                    return;
+                }
+                const wanted = this.focusPath[this.focusPath.length - 1];
+                const child =
+                    focus.children.find((c) => c.name === wanted) ||
+                    (focus.children.length === 1 ? focus.children[0] : null);
+                if (child) this.selectChild(pathForChild(prefix, child.name));
             }
 
             // Validates a dotted path against the loaded tree, truncating at
@@ -684,7 +763,11 @@
             zoomIn(name) {
                 const focus = this.currentFocusNode();
                 const child = findChild(focus, name);
-                if (!child || !child.children.length) return;
+                // A leaf is a legitimate destination: it renders as itself, and
+                // reaching one is how the parts library gives back the old
+                // part-viewer experience. Refusing childless nodes made every
+                // entry in a catalog of leaves un-navigable.
+                if (!child) return;
                 this.focusPath = [...this.focusPath, name];
                 this.selectedName = null;
                 this.renderFocus();
@@ -728,6 +811,14 @@
             currentRenderNodes(focus) {
                 const focusPrefix = this.focusPath.join('.');
                 const nodes = [];
+                // A leaf has nothing beneath it, and rendering "the focus
+                // node's children" therefore rendered an empty scene for the
+                // one thing a reader was asking to look at -- no meshes, no
+                // contents, no geometry fetched at all. Zooming into a part
+                // shows the part.
+                if (!focus.children.length) {
+                    return [{ ...focus, _path: focusPrefix }];
+                }
                 for (const child of focus.children) {
                     const path = pathForChild(focusPrefix, child.name);
                     if (child.children.length && this.expandedCategories.has(child.category)) {
@@ -759,6 +850,9 @@
                     for (const child of node.children) addAll(child, pathForChild(path, child.name));
                 };
                 for (const child of focus.children) addAll(child, pathForChild(focusPrefix, child.name));
+                // Same reason as currentRenderNodes: a focused leaf is its own
+                // render node, so it needs a key or selecting it finds nothing.
+                if (!focus.children.length) addAll(focus, focusPrefix);
             }
 
             renderFocus() {
@@ -1088,8 +1182,11 @@
             renderContentsList(focus) {
                 this.contentsEl.innerHTML = '';
                 const focusPrefix = this.focusPath.join('.');
-                focus.children.forEach((child) => {
-                    const path = pathForChild(focusPrefix, child.name);
+                // A focused leaf lists itself, for the same reason it renders
+                // itself: the panel is about what is on screen.
+                const listed = focus.children.length ? focus.children : [focus];
+                listed.forEach((child) => {
+                    const path = child === focus ? focusPrefix : pathForChild(focusPrefix, child.name);
                     this.contentsEl.appendChild(this.buildTreeRows(child, path, 0));
                 });
             }
@@ -1268,16 +1365,318 @@
             renderPartPanel(node) {
                 this.selectedBodyEl.innerHTML = `
                     <div class="prop-row"><label>Part</label><span>${node.part_ref}</span></div>
+                    <div class="envelope" id="part-envelope"></div>
                     <div class="part-actions">
                         <button type="button" id="part-regenerate-btn">⚙️ Regenerate STL</button>
                         <a href="${BASE_URL}/parts/${encodeURIComponent(node.part_ref)}/scad">💾 Download SCAD</a>
                     </div>
+                    <div class="code-header">Build readiness</div>
+                    <div id="part-checklist">Loading…</div>
+                    <div class="code-header">Parameters</div>
+                    <div id="stage-bar">
+                      <div id="stage-summary" class="clean">No staged changes</div>
+                      <div class="stage-actions">
+                        <button type="button" id="apply-btn" disabled>Apply</button>
+                        <button type="button" id="revert-btn">Revert</button>
+                      </div>
+                    </div>
+                    <div id="part-params">Loading…</div>
                     <div class="code-header">SCAD Source (the absorbed part view)</div>
                     <div id="part-scad-content" class="code-content">Loading…</div>
                 `;
                 this.loadPartScad(node.part_ref);
+                this.loadPartChecklist(node.part_ref);
+                this.loadPartParams(node.part_ref);
                 document.getElementById('part-regenerate-btn')
                     .addEventListener('click', () => this.regeneratePart(node.part_ref));
+            }
+
+            // Whether the part is ready to print and check against a real one.
+            // The same assessment the CLI prints, so the two cannot disagree
+            // about what is buildable.
+            async loadPartChecklist(name) {
+                const host = document.getElementById('part-checklist');
+                try {
+                    const response = await fetch(
+                        `${BASE_URL}/parts/${encodeURIComponent(name)}/checklist`);
+                    if (!response.ok) { host.textContent = 'No checklist available.'; return; }
+                    const report = await response.json();
+                    host.innerHTML = '';
+
+                    const verdict = document.createElement('div');
+                    verdict.className = 'verdict ' + (report.ready ? 'ready' : 'not-ready');
+                    verdict.textContent = report.ready
+                        ? 'Ready to build'
+                        : `Not ready — ${report.blocked} blocking, ${report.unknown} unanswered`;
+                    host.appendChild(verdict);
+
+                    for (const check of report.checks) {
+                        const row = document.createElement('div');
+                        row.className = 'check';
+                        const mark = document.createElement('span');
+                        mark.className = 'mark ' + check.state;
+                        mark.textContent = { pass: 'OK', blocked: 'STOP', unknown: '?' }[check.state];
+                        const body = document.createElement('div');
+                        body.className = 'body';
+                        body.textContent = check.name;
+                        // An unanswered question shows its reason and its fix;
+                        // a tick does not need explaining.
+                        if (check.state !== 'pass' && (check.detail || check.fix)) {
+                            const why = document.createElement('span');
+                            why.className = 'why';
+                            why.textContent = [check.detail, check.fix].filter(Boolean).join(' — ');
+                            body.appendChild(why);
+                        }
+                        row.append(mark, body);
+                        host.appendChild(row);
+                    }
+                } catch (err) {
+                    host.textContent = `Could not read the checklist: ${err.message}`;
+                }
+            }
+
+            // ---- staging -------------------------------------------------
+            //
+            // A slider moves a staged value, never the design. The staged set
+            // is validated against the part's own model on every change --
+            // which costs nothing -- and only a valid set can be applied,
+            // which is the thirty seconds of OpenSCAD.
+
+            stagedDiff() {
+                const diff = {};
+                for (const [name, value] of Object.entries(this.partParams ?? {})) {
+                    const was = this.committedParams?.[name];
+                    if (Number(value) !== Number(was) && value !== was) {
+                        diff[name] = { from: was, to: value };
+                    }
+                }
+                return diff;
+            }
+
+            markStagedControls(diff) {
+                for (const wrap of document.querySelectorAll('.param')) {
+                    const label = wrap.querySelector('.name');
+                    if (!label) continue;
+                    const name = label.childNodes[0].textContent.trim();
+                    const entry = diff[name];
+                    wrap.classList.toggle('staged', Boolean(entry));
+                    const existing = wrap.querySelector('.was');
+                    if (existing) existing.remove();
+                    if (entry) {
+                        const was = document.createElement('span');
+                        was.className = 'was';
+                        was.textContent = ` was ${entry.from}`;
+                        wrap.querySelector('.val').after(was);
+                    }
+                }
+            }
+
+            async refreshStage() {
+                const name = this.partParamsFor;
+                const summary = document.getElementById('stage-summary');
+                const apply = document.getElementById('apply-btn');
+                if (!name || !summary || !apply) return;
+
+                const diff = this.stagedDiff();
+                const count = Object.keys(diff).length;
+                this.markStagedControls(diff);
+
+                if (!count) {
+                    summary.className = 'clean';
+                    summary.textContent = 'No staged changes';
+                    apply.disabled = true;
+                    apply.textContent = 'Apply';
+                    return;
+                }
+
+                summary.className = 'clean';
+                summary.textContent = `Validating ${count} change${count > 1 ? 's' : ''}…`;
+                apply.disabled = true;
+
+                const seq = (this._stageSeq = (this._stageSeq ?? 0) + 1);
+                let report;
+                try {
+                    const response = await fetch(
+                        `${BASE_URL}/parts/${encodeURIComponent(name)}/validate`,
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ params: this.partParams }),
+                        }
+                    );
+                    report = await response.json();
+                } catch (err) {
+                    summary.className = 'invalid';
+                    summary.textContent = `Could not validate: ${err.message}`;
+                    return;
+                }
+                // A slower validation must not overwrite a newer one.
+                if (seq !== this._stageSeq) return;
+
+                this.stagedValid = Boolean(report.valid);
+                if (!report.valid) {
+                    summary.className = 'invalid';
+                    summary.textContent = report.errors
+                        .map((e) => `${e.field}: ${e.message}`)
+                        .join('; ');
+                    apply.disabled = true;
+                    return;
+                }
+
+                summary.className = 'valid';
+                const size = report.bounds?.size;
+                const envelope = size
+                    ? ` → ${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)} mm`
+                    : '';
+                summary.textContent =
+                    `${count} change${count > 1 ? 's' : ''} staged, valid${envelope}`;
+                apply.disabled = false;
+                apply.textContent = `Apply ${count} change${count > 1 ? 's' : ''}`;
+                this.showEnvelope(report.bounds);
+            }
+
+            bindStageActions(name) {
+                const apply = document.getElementById('apply-btn');
+                const revert = document.getElementById('revert-btn');
+                if (apply) {
+                    apply.onclick = async () => {
+                        if (!this.stagedValid) return;
+                        await this.regeneratePart(name);
+                        // What rendered is now what is committed.
+                        this.committedParams = { ...this.partParams };
+                        this.refreshStage();
+                    };
+                }
+                if (revert) {
+                    revert.onclick = () => {
+                        this.partParams = { ...this.committedParams };
+                        this.loadPartParams(name);
+                    };
+                }
+            }
+
+            // The part's parameters, as controls, in the one panel that already
+            // describes a part. A separate dashboard page would be a second
+            // entry point onto the same object, and this viewer is the only one.
+            async loadPartParams(name) {
+                const host = document.getElementById('part-params');
+                // `committed` is what the STL on disk was rendered from;
+                // `staged` is what the sliders currently say. Nothing renders
+                // until the difference has been validated and applied.
+                this.partParams = {};
+                this.committedParams = {};
+                this.partParamsFor = name;
+                this.stagedValid = true;
+                try {
+                    const response = await fetch(
+                        `${BASE_URL}/parts/${encodeURIComponent(name)}/params`);
+                    if (!response.ok) { host.textContent = 'No parameters declared.'; return; }
+                    const spec = await response.json();
+                    this.showEnvelope(spec.bounds);
+                    host.innerHTML = '';
+                    // Contested first: a number the sources disagree about is the
+                    // one a reader most needs to find.
+                    const ordered = [...spec.fields].sort(
+                        (a, b) => b.contested.length - a.contested.length);
+                    for (const field of ordered) {
+                        this.partParams[field.name] = field.default;
+                        this.committedParams[field.name] = field.default;
+                        host.appendChild(this.buildParamControl(field));
+                    }
+                    this.bindStageActions(name);
+                    this.refreshStage();
+                } catch (err) {
+                    host.textContent = `Could not read parameters: ${err.message}`;
+                }
+            }
+
+            showEnvelope(bounds) {
+                const el = document.getElementById('part-envelope');
+                if (!el) return;
+                el.textContent = bounds
+                    ? `envelope ${bounds.size.x.toFixed(2)} × ${bounds.size.y.toFixed(2)}`
+                      + ` × ${bounds.size.z.toFixed(2)} mm`
+                    : '';
+            }
+
+            buildParamControl(field) {
+                const wrap = document.createElement('div');
+                wrap.className = 'param' + (field.contested.length ? ' is-contested' : '');
+                const head = document.createElement('div');
+                head.className = 'head';
+                const name = document.createElement('span');
+                name.className = 'name';
+                name.textContent = field.name;
+                if (field.contested.length) {
+                    const badge = document.createElement('span');
+                    badge.className = 'badge-contested';
+                    badge.textContent = 'contested';
+                    name.append(' ', badge);
+                }
+                const val = document.createElement('span');
+                val.className = 'val';
+                head.append(name, val);
+                wrap.appendChild(head);
+
+                if (field.type === 'enum') {
+                    const select = document.createElement('select');
+                    for (const option of (field.pattern.match(/\w+/g) || [])) {
+                        const el = document.createElement('option');
+                        el.value = el.textContent = option;
+                        if (option === field.default) el.selected = true;
+                        select.appendChild(el);
+                    }
+                    val.textContent = field.default;
+                    select.onchange = () => {
+                        this.partParams[field.name] = select.value;
+                        val.textContent = select.value;
+                        this.refreshStage();
+                    };
+                    wrap.appendChild(select);
+                } else if (field.type === 'number') {
+                    const input = document.createElement('input');
+                    input.type = 'range';
+                    input.min = field.min; input.max = field.max;
+                    input.step = (field.max - field.min) / 200;
+                    input.value = field.default;
+                    val.textContent = Number(field.default).toFixed(2);
+                    input.oninput = () => {
+                        this.partParams[field.name] = Number(input.value);
+                        val.textContent = Number(input.value).toFixed(2);
+                        this.markCandidates(field, wrap);
+                        this.refreshStage();
+                    };
+                    wrap.appendChild(input);
+                    wrap._input = input;
+                }
+
+                for (const candidate of field.contested) {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'cand';
+                    button.dataset.value = candidate.value;
+                    button.innerHTML =
+                        `<b>${candidate.value}</b><span class="src">${candidate.source}</span>`
+                        + (candidate.note ? `<span class="note">${candidate.note}</span>` : '');
+                    button.onclick = () => {
+                        this.partParams[field.name] = candidate.value;
+                        if (wrap._input) wrap._input.value = candidate.value;
+                        val.textContent = Number(candidate.value).toFixed(2);
+                        this.markCandidates(field, wrap);
+                        this.refreshStage();
+                    };
+                    wrap.appendChild(button);
+                }
+                if (field.contested.length) this.markCandidates(field, wrap);
+                return wrap;
+            }
+
+            markCandidates(field, wrap) {
+                for (const button of wrap.querySelectorAll('.cand')) {
+                    button.classList.toggle(
+                        'active',
+                        Number(button.dataset.value) === Number(this.partParams[field.name]));
+                }
             }
 
             async loadPartScad(name) {
@@ -1294,11 +1693,27 @@
             async regeneratePart(name) {
                 this.setStatus(`Regenerating ${name}...`, 'loading');
                 try {
+                    // Whatever the controls are set to, so turning a contested
+                    // number and pressing regenerate shows what it does.
+                    const params = this.partParamsFor === name ? (this.partParams ?? {}) : {};
                     const response = await fetch(
                         `${BASE_URL}/parts/${encodeURIComponent(name)}/stl/generate?force=true`,
-                        { method: 'POST' }
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ params }),
+                        }
                     );
-                    if (!response.ok) throw new Error(`Regenerate failed (${response.status})`);
+                    if (!response.ok) {
+                        const detail = await response.text();
+                        throw new Error(`${response.status}: ${detail.slice(0, 140)}`);
+                    }
+                    const body = await response.json();
+                    this.showEnvelope(body.bounds);
+                    // The mesh on screen is the old geometry until it reloads.
+                    const target = Object.values(this.renderNodeByKey ?? {})
+                        .find((n) => n.part_ref === name);
+                    if (target) this.rebuildSingleMesh(target);
                     this.setStatus(`${name} regenerated`, 'success');
                 } catch (err) {
                     this.setStatus(`Error: ${err.message}`, 'error');
@@ -1656,7 +2071,7 @@
                 const focus = this.currentFocusNode();
                 if (!focus.children.length) return;
                 const selected = this.selectedName ? this.renderNodeByKey[this.selectedName] : null;
-                if (selected && selected.children.length && focus.children.some((c) => c.name === selected.name)) {
+                if (selected && focus.children.some((c) => c.name === selected.name)) {
                     this.zoomIn(selected.name);
                     return;
                 }
@@ -1664,7 +2079,6 @@
                 let closest = null;
                 let closestDist = Infinity;
                 focus.children.forEach((child, index) => {
-                    if (!child.children.length) return;
                     const { center } = this.boxFromBounds(this.boundsFor(child, index));
                     const dist = Math.hypot(center[0] - target.x, center[1] - target.y, center[2] - target.z);
                     if (dist < closestDist) {

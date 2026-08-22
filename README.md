@@ -42,10 +42,15 @@ uv run apothecary testrun -o example.scad
 # Explore parts
 uv run apothecary parts list
 
-# Start web viewer
+# Start the viewer (one-time: install its JS dependencies first)
+uv run apothecary install
 uv run apothecary serve
 # Open http://127.0.0.1:8000/viewer
 ```
+
+The viewer serves three.js from this origin rather than a CDN, so it works
+offline — and `apothecary install` is not optional: without it the page renders
+nothing and says so in a banner.
 
 **[→ Full Quickstart Guide](QUICKSTART.md)**
 
@@ -75,6 +80,8 @@ apothecary parts list          # List available parts
 apothecary parts info NAME     # Show part details
 apothecary parts render NAME   # Generate include stub
 apothecary parts generate-stl --all  # Generate all STLs
+apothecary parts generate-stl NAME -p wall=3   # Override a parameter
+apothecary parts verify NAME         # Declared bounds vs real geometry
 apothecary parts elephant-walk # Generate all-parts preview
 
 # Submodules (external libraries like Gridfinity)

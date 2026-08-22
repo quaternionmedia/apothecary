@@ -29,9 +29,9 @@ translate([295.90, 100.00, 0])
 translate([319.40, -14.90, 0])
     import("footpedal/footpedal.stl");
 
-// matboard cutter mount (20.0 x 19.9 x 10.0 mm)
+// matboard_cutter_mount (20.0 x 19.9 x 10.0 mm)
 translate([520.40, -13.97, 0])
-    import("matboard cutter mount/matboard cutter mount.stl");
+    import("matboard_cutter_mount/matboard_cutter_mount.stl");
 
 // parametric_star (27.1 x 28.5 x 3.0 mm)
 translate([552.54, -0.00, 0])
@@ -41,10 +41,10 @@ translate([552.54, -0.00, 0])
 translate([577.54, 6.00, 0])
     import("solderfan/solderfan.stl");
 
-// star-cookiecutter (58.3 x 61.1 x 11.0 mm)
+// star_cookiecutter (58.3 x 61.1 x 11.0 mm)
 translate([747.81, -0.00, 0])
-    import("star-cookiecutter/star-cookiecutter.stl");
+    import("star_cookiecutter/star_cookiecutter.stl");
 
-// V-Slot (20.0 x 20.0 x 20.0 mm)
+// v_slot (20.0 x 20.0 x 20.0 mm)
 translate([799.81, -0.00, 0])
-    import("V-Slot/V-Slot.stl");
+    import("v_slot/v_slot.stl");

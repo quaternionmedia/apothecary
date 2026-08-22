@@ -96,21 +96,37 @@ uv run apothecary parts render parametric_star -o star.scad
 
 ## Start the Web Interface
 
-Launch the FastAPI server with an interactive 3D viewer:
+**The viewer needs its JavaScript dependencies installed first.** It serves
+three.js from this origin rather than a CDN, so without them the page loads,
+renders nothing, and shows a red banner saying so. This is a one-time step:
 
 ```bash
-# Quick start (generates missing STLs and starts server)
+uv run apothecary install     # or: npm install --ignore-scripts
+```
+
+Then start the server:
+
+```bash
+# Generates any missing STLs, then serves
 uv run apothecary dev
 
-# Or start server only
+# Or serve only
 uv run apothecary serve
+uv run apothecary serve --port 8765
 
-# Open in browser
-# http://127.0.0.1:8000/viewer  - 3D parts browser
+# In a browser
+# http://127.0.0.1:8000/viewer  - the viewer
 # http://127.0.0.1:8000/docs    - API documentation
 ```
 
-The viewer loads `elephant_walk` by default – a preview showing all parts arranged in a line.
+`uv run apothecary check` tells you whether OpenSCAD and the 3D library are
+both present before you wonder why something is empty.
+
+**`/viewer` is the only entry point.** It opens on the `garage` site; the
+dropdown switches sites, and `parts_library` is every registered part. Select a
+part and its panel carries the part's parameters, its generated OpenSCAD, and
+any values this project's sources disagree about. There is no separate parts
+browser — a link like `/viewer/parts/datum_core` redirects here.
 
 > **Note**: STL files are generated automatically on server startup if OpenSCAD is installed.
 > They're not stored in git (see `.gitignore`). To manually regenerate all STLs:

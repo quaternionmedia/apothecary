@@ -1,7 +1,7 @@
 """Worked example: the registered ``parts/`` library as a fractal tree.
 
 PROTOTYPE — migrates the existing ``parts/`` registry (``elephant_walk``,
-``star-cookiecutter``, ...) into the same ``Assembly`` shape the garage
+``star_cookiecutter``, ...) into the same ``Assembly`` shape the garage
 example uses, as leaf (``role="part"``) nodes under one Site. This is what
 lets the fractal zoom viewer reach "the old part-viewer experience" by
 navigating down to a leaf, rather than keeping parts browsing as a separate

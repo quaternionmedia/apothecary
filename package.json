@@ -7,6 +7,7 @@
     "viewer": "echo 'JSCAD viewer assets live under node_modules/@jscad/web/dist'"
   },
   "dependencies": {
-    "@jscad/web": "^2.6.0"
+    "@jscad/web": "^2.6.0",
+    "three": "^0.160.0"
   }
 }

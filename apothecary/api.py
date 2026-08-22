@@ -18,14 +18,18 @@ from contextlib import asynccontextmanager, suppress
 from importlib import import_module
 from pathlib import Path
 from random import choice
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
 from fastapi import Body, FastAPI, HTTPException, Query, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError
 
 from .booleans import Difference, Intersection, Union
 from .core import OpenSCADObject
+from .datum_core_site import create_datum_core_site, validate_datum_core
 from .example_hierarchy import (
     PRINTER_STATUSES,
     Job,
@@ -41,7 +45,8 @@ from .models.vectors import Vector3D
 from .primitives import Cube, Cylinder, Sphere
 from .projects.parts.skeleton import ROOT
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
-from .projects.registry import scan_projects
+from .projects.parts.stl_renderer import write_params_sidecar
+from .projects.registry import scan_projects, stl_output_for
 from .scene import Scene
 from .site_store import SiteStore, UnknownSiteError
 from .templates import TemplateRenderer
@@ -71,7 +76,7 @@ async def _generate_missing_stls():
     missing = []
 
     for part in parts:
-        stl_path = part.path.with_suffix(".stl")
+        stl_path = stl_output_for(part)
         if not stl_path.exists():
             missing.append(part)
 
@@ -81,7 +86,7 @@ async def _generate_missing_stls():
     print(f"Generating {len(missing)} missing STL file(s)...")
 
     for part in missing:
-        stl_path = part.path.with_suffix(".stl")
+        stl_path = stl_output_for(part)
         print(f"  Generating {part.name}...", end=" ", flush=True)
 
         result = await renderer.render_stl_async(part.path, stl_path, timeout=120)
@@ -228,6 +233,17 @@ def _available_part_names() -> List[str]:
     return sorted({p.name for p in scan_projects(ROOT) if p.kind == "part" and p.wrapper})
 
 
+def _repo_relative_path(path: Path) -> str:
+    """Return a repository-relative POSIX path when possible.
+
+    API responses should avoid exposing absolute local filesystem paths.
+    """
+    try:
+        return path.relative_to(ROOT).as_posix()
+    except ValueError:
+        return path.name
+
+
 def _normalize_params(part, params_query: str | None) -> tuple[Dict[str, object], str]:
     data: Dict[str, object] = {}
     if params_query:
@@ -256,7 +272,7 @@ def _render_part_include(part, params_json: str) -> str:
     ctx = {
         "part": part,
         "params_json": params_json,
-        "source_posix": part.source_file.as_posix(),
+        "source_posix": _repo_relative_path(part.source_file),
     }
     return renderer.render_template(template_str, ctx)
 
@@ -267,8 +283,12 @@ def _part_metadata(part) -> Dict[str, object]:
         "description": part.description,
         "category": part.category,
         "tags": part.tags,
-        "readme": str(part.readme_path) if part.readme_path and part.readme_path.exists() else None,
-        "source_file": part.source_file.as_posix(),
+        "readme": (
+            _repo_relative_path(part.readme_path)
+            if part.readme_path and part.readme_path.exists()
+            else None
+        ),
+        "source_file": _repo_relative_path(part.source_file),
         "has_params": bool(part.params_model),
     }
 
@@ -308,6 +328,18 @@ def _part_payload(part, params_query: str | None) -> Dict[str, object]:
         }
     )
     return metadata
+
+
+# The viewer's 3D library, served from this origin rather than a CDN. A CDN
+# copy is unreachable offline and is exactly what an ad blocker or a corporate
+# proxy drops -- and when it goes, the page's script never executes at all, so
+# the canvas, the contents list and the code panel come up empty together while
+# the static markup still reads "Layout valid". Frontend dependencies are
+# vendored per the house-stack record for the same reason.
+THREE_DIR = ROOT / "node_modules" / "three"
+THREE_IS_VENDORED = (THREE_DIR / "build" / "three.module.js").is_file()
+if THREE_IS_VENDORED:
+    app.mount("/vendor/three", StaticFiles(directory=THREE_DIR), name="three")
 
 
 @app.get("/")
@@ -526,8 +558,21 @@ async def get_part_stl(name: str):
         raise HTTPException(status_code=500, detail=f"Failed to read STL: {exc}") from exc
 
 
+class StlGenerateRequest(BaseModel):
+    """Body for a parameterised STL generation."""
+
+    params: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Parameter overrides, validated against the part's own model.",
+    )
+
+
 @app.post("/parts/{name}/stl/generate")
-async def generate_part_stl(name: str, force: bool = Query(False)):
+async def generate_part_stl(
+    name: str,
+    force: bool = Query(False),
+    body: Optional[StlGenerateRequest] = None,
+):
     """
     Generate an STL file from the part's SCAD source.
 
@@ -536,6 +581,9 @@ async def generate_part_stl(name: str, force: bool = Query(False)):
     Args:
         name: Part name
         force: If True, regenerate even if STL already exists
+        params: Parameter overrides, validated against the part's own model
+            before rendering. Supplying any implies a regeneration, since the
+            STL on disk was rendered from something else.
 
     Returns:
         Generation status with download URL on success
@@ -548,6 +596,27 @@ async def generate_part_stl(name: str, force: bool = Query(False)):
             status_code=503, detail="OpenSCAD not installed. Cannot generate STL files."
         )
 
+    # OpenSCAD accepts any -D name, defined or not, so an unrecognised
+    # parameter would render the defaults and report success. Reject it here.
+    params = body.params if body else {}
+    overrides = {}
+    if params:
+        model_cls = getattr(part, "params_model", None)
+        if model_cls is not None:
+            unknown = sorted(set(params) - set(model_cls.model_fields))
+            if unknown:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"unknown parameter(s): {', '.join(unknown)}",
+                )
+            try:
+                validated = model_cls(**params)
+            except ValidationError as exc:
+                raise HTTPException(status_code=422, detail=exc.errors()) from exc
+            overrides = {key: getattr(validated, key) for key in params}
+        else:
+            overrides = dict(params)
+
     # Check if this part has special requirements
     if hasattr(part, "can_generate_stl"):
         can_gen, reason = part.can_generate_stl()
@@ -557,7 +626,7 @@ async def generate_part_stl(name: str, force: bool = Query(False)):
             )
 
     # Check if we already have an up-to-date STL
-    if not force and part.stl_file and part.stl_file.exists():
+    if not force and not overrides and part.stl_file and part.stl_file.exists():
         return {
             "success": True,
             "message": "STL already exists (use force=true to regenerate)",
@@ -574,14 +643,19 @@ async def generate_part_stl(name: str, force: bool = Query(False)):
 
             part_renderer = OpenSCADRenderer(openscad_path=str(custom_path))
 
-    # Generate STL - use part's custom output path if defined
+    # Generate STL - the part's own output path, and whatever overrides were
+    # validated above; a part naming its own renderer must still honour them.
     stl_path = part.get_stl_output_path()
-    result = await part_renderer.render_stl_async(part.source_file, stl_path)
+    result = await part_renderer.render_stl_async(
+        part.source_file, stl_path, params=overrides or None
+    )
 
     if not result.success:
         raise HTTPException(
             status_code=500, detail=f"STL generation failed: {result.error_message}"
         )
+
+    write_params_sidecar(stl_path, overrides)
 
     return {
         "success": True,
@@ -589,6 +663,168 @@ async def generate_part_stl(name: str, force: bool = Query(False)):
         "stl_url": f"/parts/{name}/stl",
         "regenerated": True,
         "render_time_seconds": result.render_time_seconds,
+        "params": jsonable_encoder(overrides),
+        "bounds": jsonable_encoder(part.get_bounds(overrides or None)),
+    }
+
+
+@app.get("/parts/{name}/params")
+async def get_part_params(name: str):
+    """What a part accepts, in a form a control surface can build itself from.
+
+    Types, defaults and bounds come from the part's own Pydantic model, so the
+    dashboard cannot drift from what the renderer will actually accept.
+    ``contested`` carries the parameters whose value this project's sources
+    disagree about, with the provenance of each candidate -- an ambiguity a
+    reader can turn is worth more than one they have to argue about.
+    """
+    part = _load_part_wrapper(name)
+    model_cls = getattr(part, "params_model", None)
+    if model_cls is None:
+        raise HTTPException(status_code=404, detail=f"Part '{name}' declares no parameters")
+
+    schema = model_cls.model_json_schema()
+    defaults = model_cls()
+
+    fields = []
+    for field_name, spec in schema.get("properties", {}).items():
+        default = getattr(defaults, field_name)
+        candidates = [c.model_dump() for c in part.contested.get(field_name, [])]
+        # A slider needs a range. Pydantic states one only where the field
+        # constrains it, so the rest get a span around the default wide enough
+        # to be worth dragging -- and wide enough to reach every candidate.
+        interesting = [default, *(c["value"] for c in candidates)]
+        low = spec.get("minimum")
+        # gt=0 arrives as exclusiveMinimum, and a slider stopping exactly there
+        # offers a value the model then refuses -- which is the one thing this
+        # endpoint exists to prevent.
+        exclusive_low = spec.get("exclusiveMinimum")
+        high = spec.get("maximum")
+        if not isinstance(default, (int, float)):
+            low = high = None
+        else:
+            if low is None:
+                low = float(exclusive_low) if exclusive_low is not None else None
+            else:
+                low = float(low)
+            if low is None:
+                low = max(0.0, min(interesting) * 0.25)
+            high = max(interesting) * 2.5 if high is None else float(high)
+            if exclusive_low is not None and low <= float(exclusive_low):
+                # One slider step above the bound it may not touch.
+                low = float(exclusive_low) + (high - float(exclusive_low)) / 200
+
+        fields.append(
+            {
+                "name": field_name,
+                "type": "enum" if spec.get("pattern") else ("number" if high else "text"),
+                "default": default,
+                "min": low,
+                "max": high,
+                "pattern": spec.get("pattern"),
+                "description": spec.get("description"),
+                "contested": candidates,
+            }
+        )
+
+    return {
+        "part": part.name,
+        "description": part.description,
+        "fields": fields,
+        "bounds": jsonable_encoder(part.get_bounds()),
+    }
+
+
+def _parse_build_volume(raw: Optional[str]):
+    """`X,Y,Z` as a tuple, or None. Refuses anything else rather than guessing."""
+    if not raw:
+        return None
+    try:
+        parsed = tuple(float(v) for v in raw.split(","))
+    except ValueError:
+        raise HTTPException(status_code=422, detail="build_volume wants X,Y,Z") from None
+    if len(parsed) != 3:
+        raise HTTPException(status_code=422, detail="build_volume wants three numbers")
+    return parsed
+
+
+@app.get("/parts/{name}/checklist")
+async def get_part_checklist(name: str, build_volume: Optional[str] = Query(None)):
+    """Whether this part is ready to print and check against a real one.
+
+    The same assessment `apothecary parts checklist` prints, so the viewer and
+    the command line cannot disagree about whether something is buildable.
+    A question that could not be asked is reported as `unknown`, never as a
+    pass.
+    """
+    from .projects.parts.readiness import assess
+
+    part = _load_part_wrapper(name)
+
+    report = assess(part, build_volume=_parse_build_volume(build_volume))
+    return {
+        "part": report.part,
+        "ready": report.ready,
+        "blocked": len(report.blocked),
+        "unknown": len(report.unknown),
+        "checks": [
+            {"name": c.name, "state": c.state, "detail": c.detail, "fix": c.fix}
+            for c in report.checks
+        ],
+    }
+
+
+@app.post("/parts/{name}/validate")
+async def validate_part_params(name: str, body: Optional[StlGenerateRequest] = None):
+    """Check a staged parameter set without rendering anything.
+
+    The step between moving a slider and spending thirty seconds of OpenSCAD on
+    it: the values go through the part's own model, and the envelope they would
+    produce comes back. A set that cannot be rendered is rejected here, where it
+    costs nothing.
+    """
+    part = _load_part_wrapper(name)
+    params = body.params if body else {}
+
+    model_cls = getattr(part, "params_model", None)
+    if model_cls is None:
+        return {"valid": True, "params": {}, "errors": [], "bounds": None}
+
+    unknown = sorted(set(params) - set(model_cls.model_fields))
+    if unknown:
+        return {
+            "valid": False,
+            "params": {},
+            "errors": [{"field": u, "message": "no such parameter"} for u in unknown],
+            "bounds": None,
+        }
+
+    try:
+        validated = model_cls(**params)
+    except ValidationError as exc:
+        return {
+            "valid": False,
+            "params": {},
+            "errors": [
+                {"field": ".".join(str(p) for p in e["loc"]), "message": e["msg"]}
+                for e in exc.errors()
+            ],
+            "bounds": None,
+        }
+
+    staged = {key: getattr(validated, key) for key in params}
+    # The envelope the staged set would produce, so a reader sees the
+    # consequence before paying for the render.
+    try:
+        bounds = part.get_bounds(staged or None)
+    except Exception:  # pragma: no cover - a wrapper that cannot size itself
+        bounds = None
+
+    return {
+        "valid": True,
+        "params": jsonable_encoder(staged),
+        "errors": [],
+        "bounds": jsonable_encoder(bounds),
     }
 
 
@@ -619,9 +855,14 @@ _site_store = SiteStore(
     {
         "garage": (create_example_site, validate_garage_layout),
         "parts_library": (create_parts_library_site, validate_parts_library),
+        "datum_core": (create_datum_core_site, validate_datum_core),
     }
 )
 _job_store = JobStore()
+
+# The site /viewer opens on. Named rather than "whichever sorts first", so that
+# registering a new site cannot silently move the front door.
+DEFAULT_VIEWER_SITE = "garage"
 
 
 def _get_site_or_404(name: str) -> Assembly:
@@ -657,9 +898,15 @@ def _node_stl_cache_paths(scad_text: str) -> tuple[Path, Path]:
     render. Unlike a registered part (which has a fixed source file to key
     off of), an arbitrary Assembly subtree has no path of its own on disk --
     the rendered SCAD text itself is the only stable identity available.
+
+    A scene referring to registered parts imports them by repository-relative
+    path, and OpenSCAD resolves a relative ``import()`` against the *source
+    file's* own directory rather than the process working directory. So the
+    source has to sit at the repository root to render at all, while the STL
+    it produces belongs in the cache. It is scratch: written, rendered, removed.
     """
     digest = hashlib.sha256(scad_text.encode("utf-8")).hexdigest()[:20]
-    return _NODE_STL_CACHE_DIR / f"{digest}.scad", _NODE_STL_CACHE_DIR / f"{digest}.stl"
+    return ROOT / f".node-stl-{digest}.scad", _NODE_STL_CACHE_DIR / f"{digest}.stl"
 
 
 def _bounds_dict(bounds: BoundingBox3D | None) -> Dict[str, List[float]] | None:
@@ -817,12 +1064,28 @@ def _assembly_tree(
 
 
 def _site_payload(site, report) -> Dict[str, object]:
+    """The site as the viewer consumes it, including its generated OpenSCAD.
+
+    ``scad`` used to be attached only by the layout route, so a site that had
+    merely been loaded -- never dragged -- left the viewer's code panel showing
+    its "Load a site..." placeholder indefinitely. It is string generation over
+    a tree already in memory, not an OpenSCAD process, so every read carries it.
+
+    A node that cannot compile is reported as a comment rather than a 500: the
+    panel is one of several surfaces on the page, and the rest of them work.
+    """
+    try:
+        scad = site.render()
+    except ValueError as exc:
+        scad = f"// This site has no generated OpenSCAD: {exc}"
+
     return {
         "name": site.name,
         "structures": [_structure_summary(s) for s in site.children],
         "tree": _assembly_tree(site),
         "violations": [v.model_dump() for v in report.violations],
         "is_valid": report.is_valid,
+        "scad": scad,
     }
 
 
@@ -866,9 +1129,7 @@ async def update_site_layout(name: str, body: LayoutRequest):
             structure.position = Vector3D(x=override.x, y=override.y, z=override.z)
 
     validator = _site_store.validator(name)
-    payload = _site_payload(site, validator(site))
-    payload["scad"] = site.render()
-    return payload
+    return _site_payload(site, validator(site))
 
 
 @app.post("/sites/{name}/structures/{structure_name}/status")
@@ -934,7 +1195,7 @@ async def get_node_stl(name: str, path: str):
         raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
 
     try:
-        scad_text = node.to_scad_object().render()
+        scad_text = node.to_scad_object(strict=True).render()
     except ValueError as exc:
         raise HTTPException(
             status_code=422, detail=f"Node '{path}' has no renderable geometry: {exc}"
@@ -947,9 +1208,12 @@ async def get_node_stl(name: str, path: str):
             raise HTTPException(
                 status_code=503, detail="OpenSCAD not installed. Cannot generate STL files."
             )
-        scad_path.parent.mkdir(parents=True, exist_ok=True)
+        stl_path.parent.mkdir(parents=True, exist_ok=True)
         scad_path.write_text(scad_text, encoding="utf-8")
-        result = await renderer.render_stl_async(scad_path, stl_path, timeout=60)
+        try:
+            result = await renderer.render_stl_async(scad_path, stl_path, timeout=60)
+        finally:
+            scad_path.unlink(missing_ok=True)
         if not result.success:
             raise HTTPException(
                 status_code=500, detail=f"STL generation failed: {result.error_message}"
@@ -1092,7 +1356,8 @@ async def viewer_home():
     both are absorbed into one viewer (see ``site_viewer`` below); this is
     just its default entry point.
     """
-    default_site = _site_store.names()[0]
+    names = _site_store.names()
+    default_site = DEFAULT_VIEWER_SITE if DEFAULT_VIEWER_SITE in names else names[0]
     return RedirectResponse(f"/viewer/sites/{default_site}", status_code=307)
 
 
@@ -1113,9 +1378,76 @@ async def site_viewer(name: str, request: Request, focus: str = Query(default=""
     base_url = str(request.base_url).rstrip("/")
     return HTMLResponse(
         render_fractal_viewer_page(
-            _site_store.names(), base_url, default_site=name, focus_path=focus
+            _site_store.names(),
+            base_url,
+            default_site=name,
+            focus_path=focus,
+            three_is_vendored=THREE_IS_VENDORED,
         )
     )
+
+
+@app.get("/viewer/parts/{name}")
+async def part_view(name: str):
+    """A part is reached by navigating to it, not by a second viewer.
+
+    This deep-link survives because links to it were handed out, but it now
+    lands in the one viewer, focused on the part, where the parameter controls
+    and the contested values live. Two pages onto one object is how a codebase
+    ends up with two answers about it.
+    """
+    part = _load_part_wrapper(name)  # 404 here rather than after a redirect
+    # Focus on the part's own name, not on whatever spelling was typed. The
+    # library was consolidated to underscore case and links to `datum-core`
+    # were handed out before that; the wrapper lookup already tolerates the
+    # old spelling, and this makes the viewer land on the part rather than on
+    # a focus string matching nothing.
+    canonical = part.name or name
+    return RedirectResponse(
+        f"/viewer/sites/parts_library?focus={quote(canonical, safe='')}", status_code=307
+    )
+
+
+@app.get("/problems")
+async def get_problems(
+    owner: Optional[str] = Query(None, description="apothecary | datum | human | measurement"),
+    kind: Optional[str] = Query(None),
+    build_volume: Optional[str] = Query(None),
+):
+    """Every open question this repository can state, and who can close it.
+
+    Derived from models that already exist -- contested values, the build
+    checklist, layout validators, the black-box seam -- so it cannot drift from
+    the repository the way a hand-maintained list does.
+    """
+    from .spaces import problems as open_problems
+
+    volume = _parse_build_volume(build_volume)
+    found = open_problems(build_volume=volume)
+    if owner:
+        found = [p for p in found if p.owner == owner]
+    if kind:
+        found = [p for p in found if p.kind == kind]
+    return {"count": len(found), "problems": [p.to_dict() for p in found]}
+
+
+@app.get("/solutions")
+async def get_solutions(kind: Optional[str] = Query(None)):
+    """What this repository offers against those problems."""
+    from .spaces import capabilities
+
+    found = capabilities()
+    if kind:
+        found = [c for c in found if c.kind == kind]
+    return {"count": len(found), "capabilities": [c.to_dict() for c in found]}
+
+
+@app.get("/spaces")
+async def get_spaces(build_volume: Optional[str] = Query(None)):
+    """Both spaces at a glance, and any problem kind nothing here addresses."""
+    from .spaces import summary
+
+    return summary(build_volume=_parse_build_volume(build_volume))
 
 
 @app.get("/openscad/status")
