@@ -5,6 +5,7 @@ import click
 from .docs import docs
 from .inventory import inventory
 from .parts import parts
+from .preflight import preflight
 from .render import render_scene, render_scene_jscad, template_generate, testrun, validate
 from .server import dev, serve
 from .spaces import problems, solutions
@@ -35,6 +36,7 @@ cli.add_command(dev)
 # Register command groups
 cli.add_command(inventory)
 cli.add_command(parts)
+cli.add_command(preflight)
 cli.add_command(test)
 cli.add_command(docs)
 

@@ -30,6 +30,20 @@ dev = [
     "pillow>=10.0.0",
 ]
 
+# What `apothecary preflight` needs to run the workflows the way CI does. The
+# workflows install their own tools with `python -m pip install ...`, and a
+# uv-managed environment has no pip, so those steps fail for an environment
+# reason rather than a real one.
+#
+#     uv run --group preflight apothecary preflight
+preflight = [
+    "pip",
+    "pyyaml>=6.0",
+    # The extra, not bare `reuse`: without it the package wants libmagic at
+    # import time and dies before it lints anything. A Windows box has none.
+    "reuse[charset-normalizer]>=3.0",
+]
+
 [tool.uv]
 package = true
 
