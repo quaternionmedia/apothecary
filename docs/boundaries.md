@@ -47,12 +47,18 @@ places but does not author — its envelope, its mounts, its keepouts — and
 one for the other changes no geometry code. `source` on each box is what lets a
 reader tell a measured envelope from a guessed one.
 
-**A pin, not a path.** `datum.hil.APOTHECARY_PIN` names the apothecary commit
-`datum` was verified against, and `datum`'s own CI checks that pin out and
-renders every part it depends on. Geometry changes land here and arrive there
-by a reviewed bump. (The enclosure record's clause 5 asks for a *released
-version* consumed through the CLI or API; a commit pin consumed by path is
-where that stands today, and the gap is deliberate rather than forgotten.)
+**A pin, not a path.** `datum.apothecary` names what `datum` depends on here,
+and `datum`'s own CI checks that reference out and renders every part through
+this repository's CLI. Geometry changes land here and arrive there by a
+reviewed bump.
+
+Clause 5 asks for a *released* version, and this repository has never published
+one — so the consumer pins a commit by necessity, not by choice, and the gap is
+owned here rather than there. Both sides now check it rather than describe it:
+`datum apothecary --check` reports the deviation while nothing is published and
+fails the moment something is, and `apothecary release` says what stands
+between this commit and being something a consumer may pin. See
+`walkthrough/10-being-depended-on.md`.
 
 **Parts are useful to strangers.** Clause 2 again. `datum_core` renders as a
 sensible 40 mm tray for someone who has never heard of `datum`, and only the
@@ -93,7 +99,9 @@ Stated because an unstated exception becomes the rule.
   apothecary geometry by the test above, but its existence is entirely due to
   one consumer. If a second consumer never appears, it is a candidate for
   moving.
-- **Clause 5 is half met**, as noted above.
+- **Clause 5 is unmet, and owned here**, as noted above: nothing has ever
+  been released. Both sides check it now, and the consumer's check arms
+  itself the moment this repository publishes.
 
 ## What the line is not
 
