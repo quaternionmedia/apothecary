@@ -1,18 +1,25 @@
 """Docs generation CLI: regenerate docs/generated/ from the E2E doc-workflow tests.
 
-The doc-workflow tests (tests/e2e/test_docs_*.py, marked both `e2e` and
-`docs`) are the single source of truth: each `docs.step("...")` call inside
-one of them is both an assertion point and a documentation paragraph. This
-module runs those tests with screenshot/video capture turned on
-(`--generate-docs`, see tests/e2e/conftest.py) and turns the results into,
-per workflow: Markdown, a step-by-step animated GIF (the deliverable meant
-for embedding somewhere a real video won't play, e.g. a PR description),
-and the actual Playwright screen recording of that same run, embedded in
-the Markdown as real video -- so editing a test is how you edit the docs.
+**This does not produce the walkthrough.** The walkthrough is written by the run
+that asserts it, on the ordinary test command -- see
+tests/e2e/test_docs_photo_walkthrough.py and the guards in
+tests/test_the_walkthrough_is_named.py. It was produced here once, which made
+the viewer half of one path a second page behind a command somebody had to
+remember, and the remembered page went stale. What is left here is the fractal
+viewer workflow, which nothing else describes.
+
+The doc-workflow tests (tests/e2e/test_docs_*.py marked `docs`) are the single
+source of truth for what they cover: each `docs.step("...")` call inside one of
+them is both an assertion point and a documentation paragraph. This module runs
+those tests with screenshot/video capture turned on (`--generate-docs`, see
+tests/e2e/conftest.py) and turns the results into, per workflow: Markdown, a
+step-by-step animated GIF (the deliverable meant for embedding somewhere a real
+video will not play, e.g. a PR description), and the actual Playwright screen
+recording of that same run, embedded in the Markdown as real video -- so editing
+a test is how you edit those docs.
 
 Everything under docs/generated/ is a build artifact (see .gitignore) --
-regenerate it with `apothecary docs generate` whenever the doc-workflow
-tests change.
+regenerate it with `apothecary docs generate` whenever those tests change.
 """
 
 from __future__ import annotations

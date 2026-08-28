@@ -46,6 +46,7 @@ markers = [
     "e2e: end-to-end tests using Playwright",
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "docs: e2e doc-workflow tests that generate docs/generated/ when run with --generate-docs",
+    "walkthrough: the one demonstration; it writes walkthrough/ and the ordinary test command runs it",
 ]
 
 [tool.ruff]

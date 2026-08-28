@@ -23,34 +23,7 @@ from pathlib import Path
 
 import httpx
 import pytest
-from doc_capture import GENERATED_DOCS_ROOT, DocRecorder
-
-
-def pytest_addoption(parser):
-    """Add custom pytest options for E2E tests."""
-    parser.addoption(
-        "--start-server",
-        action="store_true",
-        default=False,
-        help="Automatically start the test server before E2E tests",
-    )
-    parser.addoption(
-        "--server-port",
-        action="store",
-        default="8765",
-        help="Port for the test server (default: 8765)",
-    )
-    parser.addoption(
-        "--generate-docs",
-        action="store_true",
-        default=False,
-        help=(
-            "Enable doc-workflow screenshot/video capture (tests marked 'docs'). "
-            "Off by default so a normal test run never writes to docs/generated/. "
-            "Driven by `apothecary docs generate`, not meant to be passed by hand "
-            "to a full test run."
-        ),
-    )
+from doc_capture import GENERATED_DOCS_ROOT, DocRecorder, Walkthrough
 
 
 @pytest.fixture(scope="session")
@@ -264,3 +237,33 @@ def doc_recorder(page, docs_enabled, request):
         video_dir.mkdir(parents=True, exist_ok=True)
         marker = video_dir / "workflows.txt"
         marker.write_text("\n".join(r.workflow for r in recorders) + "\n", encoding="utf-8")
+
+
+@pytest.fixture
+def walkthrough(page):
+    """The one demonstration's recorder, written out however the run ends.
+
+    Deliberately not gated on --generate-docs, which is what the screenshot
+    machinery above still uses. The walkthrough is the page a newcomer meets;
+    producing it only when somebody remembers a flag is what made it a second
+    description of behaviour rather than a record of a run.
+    """
+    made: list[Walkthrough] = []
+
+    def _make(ordinal, slug, title, intro, runtime, does_not_show):
+        recorder = Walkthrough(
+            page=page,
+            ordinal=ordinal,
+            slug=slug,
+            title=title,
+            intro=intro,
+            runtime=runtime,
+            does_not_show=does_not_show,
+        )
+        made.append(recorder)
+        return recorder
+
+    yield _make
+
+    for recorder in made:
+        recorder.write()

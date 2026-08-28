@@ -24,6 +24,12 @@ from .utils import _safe_echo
 # behaviour.
 WALKTHROUGH = "walkthrough"
 
+# The marker on the run that writes the walkthrough. Same word as the directory,
+# deliberately: there is one demonstration, and its run and its page share a name.
+# It is selected by the ordinary test command even though it drives a browser,
+# because a page produced only when somebody remembers a flag is stale by default.
+DEMONSTRATION = "walkthrough"
+
 
 @click.group()
 def test():
@@ -207,28 +213,57 @@ def test_run_e2e(headed: bool, slowmo: int, browser: str, base_url: str):
         raise SystemExit(1)
 
 
+def run_command(e2e: bool = False, coverage: bool = False) -> list[str]:
+    """The argv `apothecary test run` executes. A function so a guard can read it.
+
+    Its first version was a block of code inside the command, and the guard on it
+    scanned that code for a word. The word was in the command's own docstring, so
+    the guard passed with the command gutted -- caught by breaking it on purpose.
+    Returning the argv lets the guard assert on what will actually be run.
+    """
+    # --start-server always, because the demonstration drives a real browser
+    # against a real server and the command that runs it has to supply one.
+    # Leaving that to the reader is what turned the viewer half of the
+    # walkthrough into a command somebody had to remember.
+    cmd = [
+        sys.executable,
+        "-m",
+        "pytest",
+        "-v",
+        "--doctest-glob=*.md",
+        "--start-server",
+    ]
+
+    # The walkthrough directory is named rather than left to `testpaths`, because
+    # a page that is not named does not run.
+    cmd.extend(["tests/", WALKTHROUGH])
+
+    if not e2e:
+        # Everything that is not a browser test, plus the one browser test that
+        # writes the walkthrough. Excluding it here would leave the page to
+        # whoever remembered to ask for it.
+        cmd.extend(["-m", f"not e2e or {DEMONSTRATION}"])
+
+    if coverage:
+        cmd.extend(["--cov=apothecary", "--cov-report=html"])
+
+    return cmd
+
+
 @test.command("run")
 @click.option("--e2e", is_flag=True, help="Include E2E tests")
 @click.option("--coverage", is_flag=True, help="Run with coverage report")
 def test_run(e2e: bool, coverage: bool):
-    """Run unit tests, the walkthrough, and optionally the browser tests."""
+    """Run unit tests, the demonstration, and optionally the rest of the browser tests."""
     click.secho("Running Tests", bold=True)
     click.echo("")
 
-    # The walkthrough is named here rather than left to `testpaths`, because a
-    # page that is not named does not run — and a walkthrough that does not run
-    # is a description of behaviour with nothing holding it to the behaviour.
-    cmd = [sys.executable, "-m", "pytest", "-v", "--doctest-glob=*.md"]
+    cmd = run_command(e2e=e2e, coverage=coverage)
 
     if not e2e:
-        cmd.extend(["tests/", WALKTHROUGH, "--ignore=tests/e2e"])
-        click.echo("Running unit tests and the walkthrough...")
+        click.echo("Running unit tests and the demonstration...")
     else:
-        cmd.extend(["tests/", WALKTHROUGH])
-        click.echo("Running everything (unit, walkthrough, browser)...")
-
-    if coverage:
-        cmd.extend(["--cov=apothecary", "--cov-report=html"])
+        click.echo("Running everything (unit, demonstration, browser)...")
 
     click.echo("")
 
