@@ -4,7 +4,7 @@
 |---|---|
 | **Kind** | repo-edit |
 | **Repo** | quaternionmedia/apothecary (`feat/photo-shape-vocabulary`) |
-| **State** | the option builder is built and tested; the drawing has not started |
+| **State** | the option builder and the two routes are built and tested; the drawing has not started |
 | **Depends on** | rad is a unification engine — the foundational principle; Photo → shapes → words → placed scenes → links |
 | **Graduates to** | rad host integration for apothecary (qm `project/apothecary`) |
 | **Verified** | Counted by `apothecary census`, which reads `templates/fractal_viewer.html.j2` and refuses to give a number when it meets anything unclassified. Twenty controls of its own, four things done to the scene, six places in the lists, three ways of taking hold of a piece, no ring. `grep -i menu` across the whole tree returns zero hits; `rad` appears only as `math.radians`. |
@@ -53,6 +53,20 @@ to a ring, at most twelve characters to a label, and shortening rather than
 trailing off. It changes nothing; a choice becomes an intent and the intent is
 what the rest of the program acts on. The state machine and the drawing stay
 where they are, because porting them would make this a second implementation.
+
+**The two routes**, `apothecary/routes/menu.py` — the project's first
+`APIRouter`. `POST /menu/resolve` hands back the ring for what you are pointing
+at; `POST /menu/intent` carries out a chosen option, says the viewer carries it
+out, or refuses. Migration step 1, so nothing visible changes: the toolbar is
+untouched and the ring is not drawn.
+
+The refusal is the part worth keeping. Every option a ring can offer is written
+down in `CARRIED_BY` as the server's, the viewer's, or nobody's, and an option
+classified as nobody's comes back 501 naming itself rather than a cheerful 200 —
+a wedge that can be pressed with no effect and no complaint is indistinguishable
+from one that worked. Two tests hold the two lists together: every action the
+resolver can produce must be classified, and everything classified as the
+server's must have an arm in the route. Both were watched failing.
 
 **Grouping, nearly for free.** The viewer already gathers nodes by category and
 offers them as filters, so naming each piece's word as its category makes that a

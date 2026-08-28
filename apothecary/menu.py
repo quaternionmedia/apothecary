@@ -426,7 +426,83 @@ def every_action(rings: Sequence[Ring]) -> Dict[str, str]:
     return found
 
 
+class Carries(str, Enum):
+    """Who does the thing an option names.
+
+    Written down rather than inferred, because the three are easy to confuse and
+    the confusion is silent. An action nobody carries out looks exactly like an
+    action the viewer handles: the ring shows a wedge, the wedge can be pressed,
+    and nothing happens. Saying which of the three an action is makes "not built
+    yet" a report rather than a shrug.
+    """
+
+    SERVER = "the server carries it out"
+    VIEWER = "the viewer carries it out"
+    UNBUILT = "nothing carries it out yet"
+
+
+class UnknownAction(KeyError):
+    """An action no ring should be producing, or one nobody has classified.
+
+    Raised rather than defaulted. A default here would mean a new option added
+    to a ring silently becomes whatever the default is, which is the failure
+    this whole table exists to prevent.
+    """
+
+
+# Every action any ring can produce, and who carries it out. Actions that name a
+# thing -- an arrangement, a word, a group -- are written as their prefix, since
+# `site:garage` and `site:bench` are one entry and not two.
+#
+# The rule for reading this: SERVER means the intent endpoint does it and the
+# answer says what changed. VIEWER means the intent endpoint does nothing and
+# says so, because the work is where the drawing is. UNBUILT means the option is
+# on the ring and there is nothing behind it, which is refused loudly.
+CARRIED_BY: Dict[str, Carries] = {
+    # The viewer's own business: what is on screen, and where you are looking.
+    "fit": Carries.VIEWER,
+    "fit-selection": Carries.VIEWER,
+    "zoom-in": Carries.VIEWER,
+    "explain": Carries.VIEWER,
+    # Taking hold of a piece happens under a finger. The commit that follows it
+    # is a change to the arrangement and is not on any ring yet -- when it
+    # arrives it is its own action, carried by the server.
+    "move": Carries.VIEWER,
+    # Choosing which arrangement to look at, and which pieces to show, are both
+    # about what is on screen rather than what the arrangement is.
+    "site": Carries.VIEWER,
+    "group": Carries.VIEWER,
+    # Discarding every edit and rebuilding from the factory.
+    "reset": Carries.SERVER,
+    # Turning one node's subtree into a shape.
+    "render-stl": Carries.SERVER,
+    # A piece built from a picture can be swapped for a different word. The ring
+    # offers it because the vocabulary is real; nothing acts on the choice.
+    "word": Carries.UNBUILT,
+}
+
+
+def carried_by(action: str) -> Carries:
+    """Who carries out this action. Raises rather than guessing.
+
+    ``site:garage`` is looked up as ``site``. An action nobody has classified is
+    an error here rather than a wedge that does nothing.
+    """
+    if action in CARRIED_BY:
+        return CARRIED_BY[action]
+    head = action.split(":", 1)[0]
+    if head in CARRIED_BY:
+        return CARRIED_BY[head]
+    raise UnknownAction(
+        f"nothing says who carries out {action!r}. Add it to CARRIED_BY, as "
+        "itself or as its prefix, and say which of the three it is -- a wedge "
+        "nobody classified is a wedge that silently does nothing."
+    )
+
+
 __all__ = [
+    "CARRIED_BY",
+    "Carries",
     "Context",
     "Intent",
     "LONGEST_LABEL",
@@ -435,7 +511,9 @@ __all__ = [
     "Pointing",
     "Ring",
     "RingTooFull",
+    "UnknownAction",
     "Where",
+    "carried_by",
     "check_ring",
     "every_action",
     "resolve",

@@ -1465,3 +1465,11 @@ async def openscad_status():
         "version": renderer.get_version(),
         "path": str(renderer.openscad_path) if renderer.openscad_path else None,
     }
+
+
+# The project's first APIRouter, mounted last. Its handlers reach back into the
+# helpers above, so this module has to be finished before it is imported --
+# importing it at the top would close a circle.
+from .routes.menu import router as menu_router  # noqa: E402
+
+app.include_router(menu_router)
