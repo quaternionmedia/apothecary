@@ -22,6 +22,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 from pathlib import Path
@@ -153,6 +154,13 @@ def _start_server(host: str, port: int):
     env = os.environ.copy()
     env["APOTHECARY_SKIP_STL_GENERATION"] = "1"
     env["APOTHECARY_VIEWER_PATH"] = ""
+    # The picture walkthrough asks the server to look at a picture, and the
+    # server reads pictures from one folder and refuses everywhere else. Both
+    # sides have to agree which folder that is, so it is decided here and
+    # handed to the server and to the tests alike.
+    pictures = Path(tempfile.mkdtemp(prefix="apothecary-docs-pictures-"))
+    env["APOTHECARY_PICTURE_ROOT"] = str(pictures)
+    os.environ["APOTHECARY_PICTURE_ROOT"] = str(pictures)
 
     server_cmd = [
         sys.executable,
@@ -244,7 +252,9 @@ def _extract_workflow_videos() -> None:
             )
         video_path = videos[0]
 
-        workflows = [line.strip() for line in marker.read_text(encoding="utf-8").splitlines() if line.strip()]
+        workflows = [
+            line.strip() for line in marker.read_text(encoding="utf-8").splitlines() if line.strip()
+        ]
         for workflow in workflows:
             workflow_dir = GENERATED_DOCS_ROOT / workflow
             workflow_dir.mkdir(parents=True, exist_ok=True)

@@ -18,6 +18,12 @@ import click
 from ..projects.parts.skeleton import ROOT
 from .utils import _safe_echo
 
+# The one walkthrough this repository carries. Named on every command line that
+# runs tests, because a page nobody names does not run, and a walkthrough that
+# does not run is prose about behaviour with nothing holding it to the
+# behaviour.
+WALKTHROUGH = "walkthrough"
+
 
 @click.group()
 def test():
@@ -205,19 +211,21 @@ def test_run_e2e(headed: bool, slowmo: int, browser: str, base_url: str):
 @click.option("--e2e", is_flag=True, help="Include E2E tests")
 @click.option("--coverage", is_flag=True, help="Run with coverage report")
 def test_run(e2e: bool, coverage: bool):
-    """Run unit tests (and optionally E2E tests)."""
+    """Run unit tests, the walkthrough, and optionally the browser tests."""
     click.secho("Running Tests", bold=True)
     click.echo("")
 
-    # Build pytest command
-    cmd = [sys.executable, "-m", "pytest", "-v"]
+    # The walkthrough is named here rather than left to `testpaths`, because a
+    # page that is not named does not run — and a walkthrough that does not run
+    # is a description of behaviour with nothing holding it to the behaviour.
+    cmd = [sys.executable, "-m", "pytest", "-v", "--doctest-glob=*.md"]
 
     if not e2e:
-        cmd.extend(["tests/", "--ignore=tests/e2e"])
-        click.echo("Running unit tests only...")
+        cmd.extend(["tests/", WALKTHROUGH, "--ignore=tests/e2e"])
+        click.echo("Running unit tests and the walkthrough...")
     else:
-        cmd.append("tests/")
-        click.echo("Running all tests (unit + E2E)...")
+        cmd.extend(["tests/", WALKTHROUGH])
+        click.echo("Running everything (unit, walkthrough, browser)...")
 
     if coverage:
         cmd.extend(["--cov=apothecary", "--cov-report=html"])

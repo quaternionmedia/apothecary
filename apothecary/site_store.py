@@ -54,6 +54,30 @@ class SiteStore:
         _factory, validator = self._entry(name)
         return validator
 
+    def add(self, name: str, factory: SiteFactory, validator: SiteValidator) -> str:
+        """Register another arrangement, replacing any of the same name.
+
+        The register was built with everything it holds decided in advance,
+        which is fine while every arrangement is written into the program. An
+        arrangement built from a picture is not: it exists because somebody
+        pointed at a photograph a moment ago, and the viewer can only show it if
+        the register will take it now.
+        """
+        self._registry[name] = (factory, validator)
+        self._sites.pop(name, None)
+        return name
+
+    def remove(self, name: str) -> bool:
+        """Take an arrangement off the register again.
+
+        Anything added while the program is running can be taken away again.
+        Without this, whatever adds one has no way to tidy up after itself, and
+        a register that only grows is one that leaks between whoever is using
+        it.
+        """
+        self._sites.pop(name, None)
+        return self._registry.pop(name, None) is not None
+
     def reset(self, name: str) -> Assembly:
         """Discard all edits and rebuild the site fresh from its factory."""
         factory, _validator = self._entry(name)

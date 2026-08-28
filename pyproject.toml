@@ -11,6 +11,9 @@ dependencies = [
     "click>=8.1.7",
     "uvicorn>=0.30.0",
     "playwright>=1.57.0",
+    # Reading pixels for the plain shape finder. Runs entirely on this
+    # machine; see docs/plans/proposals/runs-and-stays-local.md.
+    "pillow>=10.0.0",
 ]
 
 [project.scripts]

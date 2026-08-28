@@ -289,8 +289,8 @@
     <script type="importmap">
     {
         "imports": {
-            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            "three": "/static/vendor/three/three.module.js",
+            "three/addons/": "/static/vendor/three/addons/"
         }
     }
     </script>
@@ -319,6 +319,37 @@
             electrical: 0xd8c11a,
         };
         const DEFAULT_COLOR = 0x4488cc;
+
+        // A colour for a group nobody wrote down in advance.
+        //
+        // CATEGORY_COLORS above is a fixed list, which was fine while every
+        // group was written into the program. It stopped being fine when groups
+        // started coming from a picture: a word is whatever the vocabulary
+        // holds, and the vocabulary is meant to grow. A group not on the list
+        // got no colour and, worse, no filter chip at all — so it was invisible
+        // rather than merely plain.
+        //
+        // Same name, same colour, every time, so a group does not change colour
+        // between one look and the next.
+        function colorForCategory(category) {
+            if (CATEGORY_COLORS[category] !== undefined) return CATEGORY_COLORS[category];
+            let hash = 0;
+            for (let i = 0; i < category.length; i++) {
+                hash = (hash * 31 + category.charCodeAt(i)) >>> 0;
+            }
+            const hue = hash % 360;
+            const [r, g, b] = hslToRgb(hue / 360, 0.42, 0.55);
+            return (r << 16) | (g << 8) | b;
+        }
+
+        function hslToRgb(h, s, l) {
+            const f = (n) => {
+                const k = (n + h * 12) % 12;
+                const a = s * Math.min(l, 1 - l);
+                return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))));
+            };
+            return [f(0), f(8), f(4)];
+        }
         const PART_COLOR = 0x66cc66;
         const SUBTRACTION_COLOR = 0xcc7733;
         const SELECTED_EDGE_COLOR = 0xffffff;
@@ -366,7 +397,7 @@
                 ? PART_COLOR
                 : node.composition === 'subtraction'
                 ? SUBTRACTION_COLOR
-                : (statusColor ?? CATEGORY_COLORS[node.category] ?? DEFAULT_COLOR);
+                : (statusColor ?? (node.category ? colorForCategory(node.category) : DEFAULT_COLOR));
         }
 
         // STLLoader hands back raw OpenSCAD-space geometry: apothecary's own
@@ -1054,7 +1085,13 @@
                 });
                 if (present.size === 0) return;
 
-                for (const category of Object.keys(CATEGORY_COLORS).filter((c) => present.has(c))) {
+                // The ones written down first, in the order they were written,
+                // then anything else in alphabetical order. Every group present
+                // gets a chip: a group with no chip cannot be filtered, and a
+                // group that cannot be filtered may as well not be there.
+                const known = Object.keys(CATEGORY_COLORS).filter((c) => present.has(c));
+                const rest = [...present].filter((c) => !(c in CATEGORY_COLORS)).sort();
+                for (const category of [...known, ...rest]) {
                     const chip = document.createElement('span');
                     const active = this.expandedCategories.has(category);
                     chip.className = 'category-chip' + (active ? ' active' : '');
@@ -1062,7 +1099,7 @@
 
                     const swatch = document.createElement('span');
                     swatch.className = 'chip-swatch';
-                    swatch.style.background = '#' + CATEGORY_COLORS[category].toString(16).padStart(6, '0');
+                    swatch.style.background = '#' + colorForCategory(category).toString(16).padStart(6, '0');
                     chip.appendChild(swatch);
                     chip.appendChild(document.createTextNode(category));
 
