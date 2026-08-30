@@ -1,212 +1,204 @@
-# Handoff — photographs into pieces
+# Handoff — the picture path, and the seam under the ring
 
-**Stamped 2026-08-28.** apothecary at `00dbf99` (one commit on
-`evolve/photo-shapes-and-light-language`, base `f1c1543`), governance pinned at
-`20e00bd`, read against qm `main` at `a5072a3`. **Every figure below was true at
-those commits and nowhere else.** Re-derive before quoting one — the commands are
-given beside each.
+**Stamped 2026-08-30.** apothecary at `cba0209` on
+`evolve/photo-shapes-and-light-language`, base `f1c1543`, **three commits, none
+pushed**. Governance pinned at `20e00bd`. qm `origin/main` at `a5072a3`, with two
+unpushed branches described below.
 
-**This is not the entry point.** `README.md` in this folder is the way in;
-`HIL-REVIEW.md` is what a person deciding about this work should read.
+**Every figure on this page was true at those commits and nowhere else.**
+Re-derive before quoting one; the command is beside each. The page this replaces
+carried three different figures for one test suite, and none of them matched the
+machine.
 
 ---
 
 ## The one-paragraph version
 
-The picture path is built, measured, and has survived four adversarial reviews.
-Nothing is ratified, nothing is pushed, and **the interface work has not
-started** — that is the whole of what is left of the original plan, and it is the
-larger half. The two things blocking anybody else picking this up are neither
-technical: a person has to open the pull request, and a person has to answer six
-questions that no check can answer. Everything else on this page is detail.
+The picture path works and is demonstrated by one run that writes its own page.
+The seam the ring will speak through exists and carries no traffic yet. Nothing
+is pushed, nothing is ratified, and **governance adoption has not moved** — the
+pin is 233 commits behind the corpus, three records sit `Proposed`, and no gate
+has run against any of this work. The next agent's job is governance, and none of
+it is blocked on the code.
 
 ## State
 
 | | |
 |---|---|
-| apothecary | `00dbf99`, working tree clean, **never pushed** |
+| apothecary | `cba0209`, tree clean apart from `.cache/`, **never pushed** |
 | Base | `f1c1543` on `main` |
-| Governance pin | `20e00bd` — this project's own branch tip, moved forward 124 changes this session |
-| Governance not yet passed down | **233 changes** on qm `main`; five new principles among them |
-| Tests | **712 passing, 2 skipped** — `APOTHECARY_PICTURE_ROOT=/tmp/pics uv run pytest tests walkthrough -q --doctest-glob='*.md'` |
-| Records this project has ratified | **none.** Two drafts, both `Proposed` |
-| rad | `evolve/rad-unification-principle` at `30b3b6d`, also never pushed |
+| Governance pin | `20e00bd`, this project's own branch tip |
+| Behind the corpus | **233** — `git -C governance/qm rev-list --count origin/project/apothecary..origin/main` |
+| Tests | **2 failed, 722 passed, 1 skipped** — see *Before your first command* |
+| Records | three on qm `project/apothecary`, all `Proposed`, none numbered, none ratified |
+| Tags | none. No release claim has been made about any of this |
+
+**Two unpushed branches in qm** (`c:\Users\peter\repos\qm\qm`), neither checked
+out anywhere — no worktree holds either, so both can be checked out directly:
+
+- `adr/apothecary-what-v0-0-2-asserts` at `4973952`, based on
+  `project/apothecary`. Two commits, `adr/` only. Adds
+  `adr/DRAFT-what-v0-0-2-asserts.md` and one line to `adr/README.md`.
+- `perspective/2026-08-30-a-guard-that-reads-prose` at `e154ff9`, based on
+  `origin/main`. One commit, `perspectives/` only.
 
 ## Before your first command
 
-A plain checkout **cannot run its own tests**, and each of the three failures
-reads like broken code rather than missing setup. One of them was already
-failing in the starting point.
+A plain checkout cannot run its own tests, and the failures read like broken code
+rather than missing setup.
 
-    git submodule update --init --recursive     # part of the parts library lives elsewhere
-    apt-get install -y openscad                 # turns a design into a printable file
+    git submodule update --init --recursive
     uv sync
 
-Then, everything in one go:
+Then, with a server of its own:
+
+    uv run apothecary test run --e2e
+
+That command starts its own server and runs everything, including the
+demonstration. To reproduce the figure above exactly, start a server yourself and
+run the suite against it:
 
     mkdir -p /tmp/pics
     APOTHECARY_PICTURE_ROOT=/tmp/pics uv run apothecary serve --port 8765 &
-    APOTHECARY_PICTURE_ROOT=/tmp/pics uv run pytest tests walkthrough -q --doctest-glob='*.md'
+    APOTHECARY_PICTURE_ROOT=/tmp/pics uv run pytest tests walkthrough -rs --doctest-glob='*.md'
 
-**712 and 2 skipped.** A smaller number means something is switched off rather
-than passing — that has happened here, twice, and both times the run was green.
+**On Windows, set `PYTHONIOENCODING=utf-8`** or `apothecary serve` dies encoding a
+tick mark on a cp1252 console. That is the console, not the code.
+
+**Two failures are expected on Windows and are not yours.** Both are in
+`tests/test_photo_in_the_viewer.py`: `os.mkfifo` does not exist on Windows, and a
+symlink to `/etc/hostname` resolves to nothing so the server answers 404 where the
+test expects 403. Confirmed by running that file alone. On Linux the suite should
+be clean; if it is not, that is a finding.
+
+**One skip, and it misreports itself.** `tests/test_cli_testing.py` skips saying
+"Chromium not available" when the reason underneath is a Playwright
+sync-API-inside-asyncio error. Chromium is available. The skip names the wrong
+cause and is worth fixing.
 
 ## What exists
 
-**The picture path.** A photograph is read into flat shapes, each shape gets a
-name from a five-word vocabulary, the pieces are placed with or without a
-real-world size, and the whole thing is an ordinary arrangement the existing
-viewer already knows how to show. Two finders behind one seam. A harness that
-measures a finder against known answers.
+**The picture path.** A photograph becomes flat shapes, each matched to one of
+five words, placed as an ordinary arrangement — sized if told how wide the
+picture is, marked unsized rather than guessed if not. A folder of photographs is
+sorted into what belongs with what, with the pairs it declines reported as
+answers rather than gaps. It ranks the questions worth asking; a person answers
+in plain sentences; their word wins outright, carries downstream, and scores the
+machine. Two contradictory answers are refused rather than averaged.
 
-**Sorting many photographs at once** — `apothecary/gathering/`, 11 modules. Which
-are of the same thing, which are neighbouring parts of one larger thing, which
-stand alone, which could not be read, and which pairs it cannot decide. Measured:
-about **a fifth of the groups that are there, and never one built out of
-photographs that did not belong together**, across 32 folders of 27 drawn
-pictures, 17 of which were never used while choosing the thresholds.
+**One demonstration, and it writes its own page.**
+`tests/e2e/test_docs_photo_walkthrough.py` walks the whole chain — the model half
+in-process, the viewer half in a real browser — and emits
+`walkthrough/01-photographs-into-pieces.md` plus its screenshots. The ordinary
+test command runs it, so the page is a record of a run rather than a description
+beside one. **The page is output.** Editing it by hand is editing the output of a
+program; the next run puts it back.
 
-**Working with a person** — `judgement.py`, `questions.py`. Five plain sentences
-a person types; their word wins outright, carries to everything that follows,
-and scores the machine. The machine's half is arithmetic: no model, no service,
-no network, no randomness, and four tests read the source and refuse it if that
-changes.
-
-**Two meters.** `apothecary census` counts the controls the viewer puts on screen
-(**20**, and unifying takes that to nothing) and the steps a person types per
-named job (**10 across 8 jobs, 7 of them carried by nothing but typing**).
-
-**One walkthrough that runs** — `walkthrough/01-photographs-into-pieces.md`,
-executed by the suite, named on the command line with a guard for that.
+**The seam under the ring.** `apothecary/routes/menu.py`, the project's first
+`APIRouter`: `POST /menu/resolve` returns the ring for what you are pointing at,
+`POST /menu/intent` carries a chosen option out, says the viewer carries it, or
+refuses. Migration step 1 of `docs/plans/edits/apothecary-surface.md`, which is
+the step where nothing visible changes. The viewer does not call either route —
+`grep -c 'menu/resolve' templates/fractal_viewer.html.j2` returns 0.
 
 ## What does not exist
 
-Any change to the viewer. Links between arrangements (`links.py` was planned and
-never written). The ring itself. Any pushed branch, any ratified record, any
-selected detector. Anything that survives a restart.
+The ring is not drawn — `grep -i ring` on the viewer's markup returns hits that
+are all inside `stringify`, `toString`, `docstring`, `triggering`, `rendering`
+and `coloring`. There is no `apothecary/links.py`, so arrangements cannot be
+linked. Nothing survives a restart. No detector has been selected, and the
+sorting's accuracy is measured only on pictures it drew itself. A printable model
+needs `openscad` on `PATH`.
 
 ---
 
-## Traps, in the order you will hit them
+## For the agent applying governance
 
-**1. Delivery is a pull request a person opens.** The branch cannot be pushed
-from an assistant session — the proxy returns `403, not in this session's
-authorized repository set`, verified by dry run. And `handbook/async-contract.md`
-§7 says local-only is a standing state that overrides delivery. A stop hook will
-tell you to push four times; it is wrong four times.
+**None of this is blocked on the code.** In rough order of what unblocks the
+most:
 
-**2. Git will stamp the committer with a vendor address.** Human-only
-contributorship forbids it. Every commit here sets both author and committer
-explicitly. `git config user.email` for this repo fixes it once.
+**1. Propagate.** 233 commits of corpus have not reached `project/apothecary`;
+the pin is from 2026-08-12. The route is a `propagate/apothecary-<date>` pull
+request from `main` into `project/apothecary`, merged and never rebased, because
+this repository's submodule pins the tip. `project-seed/ci/check_pr_base.py`
+refuses the wrong direction. **This is a person's to start** — say so rather than
+starting it if that has not changed.
 
-**3. This project's records are not in this project.** They live on qm's
-`project/apothecary` branch. A pull request into that branch may touch `adr/` and
-nothing else, and a `project/*` branch is never the *head* of a PR.
+*One cost of the gap is now concrete:* another session holds an unmerged qm
+branch renaming principles from `P6`-style numbers to slugs. This project's two
+older records cite `P4`, `P5` and `P6`. If that lands, they cite identifiers the
+corpus no longer uses.
 
-**4. There is no namespace for the branch you are on.** The rulebook names five;
-none is "a project's work in progress heading toward a record". This branch uses
-the organisation's own namespace because there is nothing better. Practice has
-invented two answers and blessed neither. **Ask; do not guess.**
+**2. Close the `v0.0.1` floor, or say why not.** Two mechanical gaps, both from
+`governance-status.yaml`: `one-pr-check.yml` is absent from this repository's
+workflows, and its `adr-lint.yml` declares no `RECORDS_DIR`. Note that the
+missing workflow is the gate enforcing the one-pull-request rule, and this
+repository's slot is currently over. **The mechanical set never qualifies** — the
+phase ladder's §6 — so closing both leaves `v0.0.1` still needing a human who has
+reviewed and tested it. Nobody has.
 
-**5. Drafts have no memory.** Before ratification, rewrite a record whole as
-though you always thought that. The change history is the record of how the
-thinking moved.
+**3. Free the pull request slot.** `uv run qm slot --repo quaternionmedia/apothecary`
+reports two human pull requests open, `#13` (draft, 2026-08-09) and `#18`
+(ready, 2026-08-20), both the reviewer's. One survives; the rest are closed or
+folded. **Folding is a git operation with an order to it: close the pull request
+first, then push its commits onto the branch that survives.** Pushing first
+merges it, with no review and no way to undo the record. This is a decision for
+the person, not a task.
 
-**6. A skip is not a pass, and a skip is about the machine — never the subject.**
-Four skips here were about the subject and are now assertions. If you write
-`pytest.skip("it did not happen to do the thing")`, you have written a green
-test that checks nothing.
+**4. Three obligations are undischarged**, of the eight
+`project-seed/adr/README.md` creates: service inventory, control-plane instance
+record, risk register. Verified against `adr/DRAFT-constitution-adoption-scope.md`
+on `project/apothecary` — it has no service inventory, no quarterly upstream scan,
+and the word "risk" does not appear in it. All three are made more material by
+the feature line: a detector reached over a network is a §6 service, and provider
+abandonment is a risk with nowhere to be written down.
 
-**7. A check is evidence only after it has been seen to fail.** Break the thing
-it protects, watch it go red, put it back, and **write the mutation down beside
-the guard**. The newest files here do; older ones record it centrally in
-`EVIDENCE.md` instead. That gap is real and small.
+**5. The `v0.0.2` record is drafted and waiting.**
+`adr/DRAFT-what-v0-0-2-asserts.md` on `adr/apothecary-what-v0-0-2-asserts`. It
+defines the rung as one path end to end with a single demonstration as its
+evidence. Its §1 and §2 hold today; §3, §4 and §5 do not. **It is `Proposed` and
+pends on rad's core-extraction decision** — `rad/adr/DRAFT-rad-core-extraction.md`
+is itself `Proposed`, pending a human decision. An assistant drafts; a person
+ratifies.
 
-**8. A bound that fires must be reported.** One here was silent — the sorting
-stops after the best sixty pairings and said nothing, so "did not look that far"
-and "no match" were one sentence. Fixed. Look for the others.
+## What is blocked, and on whom
 
-**9. Nothing is ratified anywhere, including upstream.** Ratification needs a
-second code owner and there is one person. Do not wait for it and do not fake it.
+| Blocked | On |
+|---|---|
+| Pushing anything | A person. Nothing here has been pushed, deliberately |
+| Ratifying any record | A person, and a second code owner that does not exist |
+| The `v0.0.2` rung's §5 | rad's core-extraction decision, which is a person's |
+| Which pull request survives in apothecary | A person. Do not close either on your own judgment |
+| Propagation | Org-side, a person's |
 
----
+## Standing constraints
 
-## What to do next, in priority order
-
-**1. Open the pull request.** Everything else waits on it. `git am` the patch
-onto `f1c1543`, check the governance pin says `20e00bd`, open it into `main`.
-
-**2. Answer the six questions in `HIL-REVIEW.md` §2.** Four of them block
-building anything about storage. No check will ever answer them.
-
-**3. Write what this project's `v0.0.2` asserts.** The phase ladder names this
-project, by name, for claiming a rung it has never defined — "has not got a
-v0.0.2; it has a word". One record on `project/apothecary` settles it. An
-assistant drafts; a person ratifies.
-
-**4. Start the interface work, or say it is not happening.** Seven of eight jobs
-are carried by nothing but typing, and each is an open item under the rule that
-a change which can only be typed schedules interface work. The most valuable one
-is answering the sorting's questions: today a file is carried out and back by
-hand because there is nowhere to be asked a question and answer it in the same
-place.
-
-**5. Propagate the 233 changes.** Org-side, a person's, and until it happens the
-five new principles bind this project only by its own choice.
-
-**6. The rest of the original plan.** `links.py`, the migration that deletes the
-old viewer controls, the `unification` topic entry in rad's tests, and the six
-records owed on `project/apothecary`. All described in the stubs under
-`edits/` and `features/`.
-
----
-
-## Hard stops
-
-- **Do not push.** See trap 1.
+- **Keep everything local.** The unpushed state is deliberate, not an oversight.
 - **Do not add a co-author trailer naming an address no human reads**, and check
-  the committer as well as the author.
-- **Do not ratify anything.** A human ratifies; you draft.
-- **Do not create a repository to fill a gap.** An empty repo reads as an adopted
-  project to the org's own status tooling.
+  the committer as well as the author. `git config user.email` for this clone is
+  already the reviewer's.
+- **Do not ratify anything.**
 - **Do not put a model, a service, or a network call anywhere in
-  `apothecary/gathering/`, `vision/` or `vocabulary/`.** Four tests refuse it,
-  and the reason is in `proposals/people-and-machines.md` — the promises made
-  about a person's word only mean something against something repeatable.
-- **Do not quote a number from these pages without re-deriving it.** Four
-  reviewers found four wrong ones, including the number the whole unification
-  argument rested on.
+  `apothecary/gathering/`, `vision/` or `vocabulary/`.** Four tests refuse it.
+- **Do not hand-edit `walkthrough/01-photographs-into-pieces.md`.** It is output.
 
-## What was corrected, and what that should tell you
+## What could not be verified here
 
-Across this session, four independent reviewers were asked to break the work.
-Everything below was written down as fact and was false:
+- **Everything green on this page is this project's own suite on one Windows
+  machine.** No organisation-side gate has run against any of it, because nothing
+  is pushed. Whether the two Windows failures vanish on Linux is inference.
+- **`check_pr_base.py` could not run at all.** It resolves both refs through
+  `origin`, and neither branch is pushed. That is a step this machine cannot
+  reproduce rather than a step that passed.
+- The screenshots under `walkthrough/screenshots/` are binary and will differ on
+  every run. The page's prose and figures do not: generated twice, `diff` says
+  identical.
 
-| Claimed | Actually |
-|---|---|
-| Twelve ways into the viewer | Twenty. The hand tally was wrong and the counter was built until it agreed with it |
-| Fourteen browser tests fail from a shared server | Three unrelated causes, one of them a fixture that switched the whole browser suite off |
-| No group ever mixed unrelated photographs | True of three seeds, false on thirteen of twenty-five |
-| A person's word wins | A machine's guess could destroy a group a person built |
-| The same gathering always gives the same answer | Handing one folder in nine orders gave five answers |
+## What is dirty, and why it was left
 
-And twice, most of the tests would have passed with the code broken —
-twenty-four of twenty-seven injected faults caught by nothing.
-
-**The pattern is the finding.** Reading produces claims about shape and misses
-claims about behaviour. Everything in `EVIDENCE.md` is graded run, read, or
-guessed for that reason. Anything not re-derived by somebody else is worth
-distrusting.
-
-## Where the reasoning lives
-
-| Page | What it is for |
-|---|---|
-| [`README.md`](README.md) | The way in. Plain, for anyone |
-| [`HIL-REVIEW.md`](HIL-REVIEW.md) | A person deciding what to do with this |
-| [`GOVERNANCE-REFRESH.md`](GOVERNANCE-REFRESH.md) | What the rulebook's 233 changes cost this work |
-| [`EVIDENCE.md`](EVIDENCE.md) | Every claim, graded, with how to re-check it |
-| [`CONCERNS.md`](CONCERNS.md) | Twenty items needing a person; six block building |
-| [`ORIENTATION.md`](ORIENTATION.md) | The organisation's rules, in plain language |
-| `features/`, `edits/`, `integration/` | One short page per change, postponed idea, and connection |
-| `walkthrough/01-photographs-into-pieces.md` | The demonstration. It runs |
+`.cache/` is untracked and was left alone. It holds two things: the runtime STL
+cache the API writes (`_NODE_STL_CACHE_DIR`), and `.cache/apothecaryhandoff20260828.tar.gz`
+with its extracted `export/`, which is the archive this session was picked up
+from. It is not ignored, so it shows in every `git status` here and has done
+since before this session. Ignoring it would also hide the archive, which is why
+it was not done rather than an oversight.
