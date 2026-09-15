@@ -27,6 +27,7 @@ dev = [
     "ruff>=0.5.0",
     "black>=24.4.0",
     "pre-commit>=3.7.0",
+    "pillow>=10.0.0",
 ]
 
 [tool.uv]
@@ -41,11 +42,17 @@ testpaths = ["tests"]
 markers = [
     "e2e: end-to-end tests using Playwright",
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "docs: e2e doc-workflow tests that generate docs/generated/ when run with --generate-docs",
 ]
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Vendored third-party submodules are not ours to lint or restyle. Without
+# this, gridfinity-rebuilt-openscad's own test suite supplies 88 of the 132
+# errors a bare `ruff check .` reports, and black would rewrite files inside
+# a submodule working tree -- which shows up as an unexplained dirty pin.
+extend-exclude = ["parts/gridfinity/gridfinity-rebuilt-openscad"]
 select = [
     "E", # pycodestyle errors
     "F", # pyflakes
@@ -61,6 +68,7 @@ indent-style = "space"
 [tool.black]
 line-length = 100
 target-version = ["py311"]
+extend-exclude = "parts/gridfinity/gridfinity-rebuilt-openscad/"
 
 [tool.coverage.run]
 source = ["apothecary"]

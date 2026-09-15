@@ -1,0 +1,7 @@
+[submodule "governance/qm"]
+	path = governance/qm
+	url = https://github.com/quaternionmedia/qm.git
+	branch = project/apothecary
+[submodule "parts/gridfinity/gridfinity-rebuilt-openscad"]
+	path = parts/gridfinity/gridfinity-rebuilt-openscad
+	url = https://github.com/kennetek/gridfinity-rebuilt-openscad.git

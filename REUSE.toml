@@ -1,0 +1,29 @@
+version = 1
+SPDX-PackageName = "apothecary"
+SPDX-PackageSupplier = "Quaternion Media <peter.kagstrom@gmail.com>"
+SPDX-PackageDownloadLocation = "https://github.com/quaternionmedia/apothecary"
+
+# MIT throughout, which is what this repository has claimed publicly since its
+# README was written -- the badge and the "MIT License. See LICENSE" line were
+# already there; the file they pointed at was not. Declaring anything else now
+# would contradict a claim people have been able to read and rely on.
+#
+# datum's hardware licensing record also builds on it: "The apothecary
+# repository, whose parts library this project extends, is MIT."
+#
+# Declared here rather than as per-file headers because .scad and .j2 sources
+# carry no convention for one, and the Python surface is large enough that
+# headers would be noise rather than signal.
+
+[[annotations]]
+path = "**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Copyright (c) 2026 Quaternion Media"
+SPDX-License-Identifier = "MIT"
+
+# The governance submodule is licensed in its own repository.
+[[annotations]]
+path = "governance/**"
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright (c) 2026 Quaternion Media"
+SPDX-License-Identifier = "CC-BY-SA-4.0"

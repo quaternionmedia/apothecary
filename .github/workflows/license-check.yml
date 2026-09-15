@@ -1,0 +1,52 @@
+name: License check
+
+# Enforcement path for the QM open-license-exclusion-and-upstream-remediation
+# record (governance/qm/records/DRAFT-open-license-exclusion-and-upstream-remediation.md),
+# §4: "a dependency-manifest report per package ecosystem for everything else."
+# Apothecary ships no container image, so this is the dependency-manifest path,
+# not the SBOM-per-image path (see adr/DRAFT-constitution-adoption-scope.md).
+#
+# `apothecary` itself is excluded from the scan: this audits third-party
+# dependencies against the OSI/FSF allowlist, not the project's own
+# (separately tracked) license metadata gap.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  license-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install dependencies
+        run: uv sync --locked --dev
+
+      - name: Generate license report
+        run: |
+          uv run --with pip-licenses pip-licenses \
+            --format=json \
+            --with-urls \
+            --ignore-packages apothecary \
+            --output-file=licenses.json
+
+      - name: Upload license report
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-report
+          path: licenses.json
+
+      - name: Enforce OSI/FSF allowlist
+        run: |
+          uv run --with pip-licenses pip-licenses \
+            --ignore-packages apothecary \
+            --allow-only="MIT;MIT License;MIT-CMU;MIT AND Python-2.0;BSD License;BSD-2-Clause;BSD-3-Clause;Apache Software License;Apache-2.0;Apache Software License; BSD License;Apache Software License; MIT License;Mozilla Public License 2.0 (MPL 2.0);MPL-2.0;PSF-2.0;Python Software Foundation License;Unlicense;Artistic License; GNU General Public License (GPL); GNU General Public License v2 or later (GPLv2+)"

@@ -1,0 +1,1837 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Apothecary Fractal Viewer</title>
+    <style>
+        * { box-sizing: border-box; }
+        html, body {
+            height: 100%; margin: 0;
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #1a1a1a; color: #e0e0e0;
+        }
+
+        .app-container { display: flex; flex-direction: column; height: 100vh; }
+        .main-content { display: flex; flex: 1; overflow: hidden; }
+
+        .toolbar {
+            display: flex; gap: 0.75rem; padding: 0.75rem 1rem;
+            background: #252525; border-bottom: 1px solid #333;
+            align-items: center; flex-wrap: wrap;
+        }
+        .toolbar h1 { margin: 0; font-size: 1.25rem; font-weight: 600; color: #fff; }
+        .toolbar .badge {
+            font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 3px;
+            background: #664400; color: #ffcc66; font-weight: 600;
+        }
+        .toolbar select {
+            min-width: 160px; padding: 0.5rem; border-radius: 4px;
+            border: 1px solid #444; background: #333; color: #e0e0e0;
+        }
+        .toolbar button {
+            padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;
+            border: none; font-size: 0.9rem; transition: background 0.15s;
+            background: #404040; color: #e0e0e0;
+        }
+        .toolbar button:hover { background: #505050; }
+        .toolbar button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .toolbar .spacer { flex: 1; }
+        .validity-indicator {
+            font-size: 0.85rem; padding: 0.35rem 0.75rem; border-radius: 4px;
+            font-weight: 600;
+        }
+        .validity-indicator.valid { background: #1e4620; color: #6fdb75; }
+        .validity-indicator.invalid { background: #4a1e1e; color: #ff8080; }
+
+        #breadcrumb { font-size: 0.85rem; color: #999; }
+        #breadcrumb .crumb { cursor: pointer; color: #9cd2ff; }
+        #breadcrumb .crumb:hover { text-decoration: underline; }
+        .toolbar-toggle {
+            display: flex; align-items: center; gap: 0.35rem;
+            font-size: 0.85rem; color: #ccc; cursor: pointer; user-select: none;
+        }
+
+        .viewer-panel { flex: 2; position: relative; background: #111; }
+        #viewer-canvas { width: 100%; height: 100%; display: block; }
+        .viewer-hint {
+            position: absolute; bottom: 1rem; left: 1rem;
+            background: rgba(0,0,0,0.7); padding: 0.5rem 0.75rem;
+            border-radius: 4px; font-size: 0.75rem; color: #888;
+            pointer-events: none;
+        }
+
+        /* Minimap: a very abstract depth ladder, not a node-link graph --
+           one tick per possible depth in the loaded tree, filled from the
+           root to however deep the current focus is. */
+        #minimap {
+            position: absolute; top: 1rem; right: 1rem;
+            display: flex; flex-direction: column; gap: 4px;
+            background: rgba(0,0,0,0.5); padding: 0.5rem; border-radius: 6px;
+        }
+        .minimap-tick {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: #333; border: 1px solid #555;
+        }
+        .minimap-tick.filled { background: #0d6efd; border-color: #9cd2ff; }
+
+        .side-panel {
+            flex: 1; min-width: 320px; max-width: 420px;
+            background: #1e1e1e; border-left: 1px solid #333;
+            display: flex; flex-direction: column; overflow-y: auto;
+        }
+        .panel-section { border-bottom: 1px solid #333; }
+        .panel-header {
+            padding: 0.6rem 1rem; background: #252525;
+            font-weight: 600; font-size: 0.85rem; color: #ccc;
+        }
+        .panel-body { padding: 0.75rem 1rem; }
+
+        .contents-list { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; }
+        .contents-item {
+            cursor: pointer; padding: 0.4rem 0.5rem; border-radius: 4px;
+            display: flex; align-items: center; gap: 0.5rem;
+        }
+        .contents-item:hover { background: #2a2a2a; }
+        .contents-item.selected { background: #0d3a66; color: #9cd2ff; }
+        .contents-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+        /* Category filter chips: bulk "expand this whole subsystem, at any
+           depth beneath the current level" toggles -- the finer-grained,
+           per-subsystem replacement for the old all-or-nothing "show all
+           levels" checkbox. */
+        .category-filters { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.6rem; }
+        .category-chip {
+            display: flex; align-items: center; gap: 0.3rem;
+            padding: 0.2rem 0.5rem; border-radius: 10px; cursor: pointer; user-select: none;
+            font-size: 0.72rem; color: #ccc; background: #2a2a2a; border: 1px solid #444;
+        }
+        .category-chip.active { background: #0d3a66; border-color: #0d6efd; color: #9cd2ff; }
+        .category-chip .chip-swatch { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+        /* The hierarchy tree: a flat list of indented rows (depth encoded as
+           left-padding) rather than nested <ul>s -- same DOM shape as the
+           old one-level Contents list, just deeper. tree-caret expands/
+           collapses a row for browsing only, independent of whether that
+           subtree is actually instantiated in the 3D view (render-dot). */
+        .contents-tree .contents-item { gap: 0.35rem; }
+        .tree-caret {
+            width: 12px; flex-shrink: 0; text-align: center; color: #888; cursor: pointer;
+        }
+        .tree-caret-empty { cursor: default; }
+        .render-dot {
+            width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+            background: #444; border: 1px solid #666;
+        }
+        .render-dot.rendered { background: #4caf50; border-color: #7fdb84; }
+        .contents-item .item-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        .prop-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+        .prop-row label { width: 70px; font-size: 0.8rem; color: #999; }
+        .prop-row input[type="number"] {
+            flex: 1; padding: 0.35rem 0.5rem; border-radius: 4px;
+            border: 1px solid #444; background: #2a2a2a; color: #e0e0e0;
+            width: 90px;
+        }
+        .prop-readonly { font-size: 0.78rem; color: #888; margin-top: 0.4rem; line-height: 1.5; }
+        .no-selection { color: #666; font-size: 0.85rem; font-style: italic; }
+        .zoom-in-btn {
+            margin-top: 0.6rem; padding: 0.4rem 0.6rem; border-radius: 4px; cursor: pointer;
+            border: none; background: #0d6efd; color: white; font-size: 0.8rem; width: 100%;
+        }
+        .zoom-in-btn:hover { background: #0b5ed7; }
+
+        .part-actions { display: flex; gap: 0.5rem; margin: 0.5rem 0; }
+        .part-actions button, .part-actions a {
+            padding: 0.4rem 0.6rem; border-radius: 4px; cursor: pointer;
+            border: none; background: #404040; color: #e0e0e0; font-size: 0.78rem;
+            text-decoration: none; display: inline-block;
+        }
+        .part-actions button:hover, .part-actions a:hover { background: #505050; }
+
+        .violations-list { list-style: none; margin: 0; padding: 0; font-size: 0.8rem; }
+        .violations-list li {
+            padding: 0.4rem 0.5rem; margin-bottom: 0.3rem; border-radius: 4px;
+            background: #3a1f1f; color: #ff9d9d;
+        }
+        .violations-clean { color: #6fdb75; font-size: 0.85rem; }
+
+        .job-form { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.75rem; }
+        .job-form input[type="text"], .job-form input[type="number"] {
+            padding: 0.35rem 0.5rem; border-radius: 4px;
+            border: 1px solid #444; background: #2a2a2a; color: #e0e0e0;
+        }
+        .job-form-dims { display: flex; gap: 0.4rem; }
+        .job-form-dims input { width: 0; flex: 1; }
+        .job-form button, .job-item button {
+            padding: 0.4rem 0.6rem; border-radius: 4px; cursor: pointer;
+            border: none; background: #0d6efd; color: white; font-size: 0.8rem;
+        }
+        .job-form button:hover, .job-item button:hover { background: #0b5ed7; }
+
+        .job-list { list-style: none; margin: 0; padding: 0; font-size: 0.8rem; }
+        .job-item {
+            padding: 0.5rem; margin-bottom: 0.4rem; border-radius: 4px;
+            background: #2a2a2a; border: 1px solid #383838;
+        }
+        .job-item-header { display: flex; justify-content: space-between; align-items: center; }
+        .job-status {
+            font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 3px; text-transform: uppercase;
+        }
+        .job-status-queued { background: #444; color: #ccc; }
+        .job-status-assigned, .job-status-printing { background: #664400; color: #ffcc66; }
+        .job-status-done { background: #1e4620; color: #6fdb75; }
+        .job-item-dims { color: #999; margin: 0.2rem 0; }
+        .job-item-actions { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.3rem; }
+        .job-item-actions select {
+            padding: 0.3rem; border-radius: 4px; border: 1px solid #444;
+            background: #2a2a2a; color: #e0e0e0; flex: 1;
+        }
+        .job-no-printers { color: #dc7a7a; font-size: 0.75rem; }
+        .job-assigned-to { color: #999; }
+        .job-done { color: #6fdb75; }
+
+        .code-header {
+            padding: 0.4rem 0; font-weight: 600; font-size: 0.8rem; color: #ccc;
+        }
+        .code-content {
+            font-family: 'Consolas', 'Monaco', 'Menlo', monospace;
+            font-size: 0.72rem; line-height: 1.4; color: #9cdcfe;
+            white-space: pre-wrap; word-break: break-all;
+            max-height: 260px; overflow: auto;
+        }
+
+        .status {
+            padding: 0.5rem 1rem; background: #252525;
+            border-top: 1px solid #333; font-size: 0.85rem; color: #888;
+        }
+        .status.loading { color: #ffc107; }
+        .status.error { color: #dc3545; }
+        .status.success { color: #28a745; }
+
+        @media (max-width: 768px) {
+            .main-content { flex-direction: column; }
+            .side-panel { max-width: none; max-height: 50%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="toolbar">
+            <h1>🧪 Apothecary</h1>
+            <span class="badge">FRACTAL VIEWER — unratified prototype</span>
+            <select id="site-select"{{ select_disabled }}>
+                {{ site_options | safe }}
+            </select>
+            <button type="button" id="load-btn">Load</button>
+            <button type="button" id="zoom-out-btn" title="Zoom out one level (Backspace)" disabled>⤴ Zoom Out</button>
+            <span id="breadcrumb"></span>
+            <label class="toolbar-toggle" title="Snap dragged positions to a 50mm grid -- keeps hand-placed layouts exact instead of off by a few millimeters">
+                <input type="checkbox" id="snap-toggle" checked> Snap to grid
+            </label>
+            <div class="spacer"></div>
+            <span id="validity-indicator" class="validity-indicator valid">Layout valid</span>
+        </div>
+        <div class="main-content">
+            <div class="viewer-panel">
+                <canvas id="viewer-canvas"></canvas>
+                <div id="minimap"></div>
+                <div class="viewer-hint">Click to select • Double-click (or scroll past the edge) to zoom in • Drag arrows to move • Shift+drag to pan</div>
+            </div>
+            <div class="side-panel">
+                <div class="panel-section">
+                    <div class="panel-header">Contents</div>
+                    <div class="panel-body">
+                        <div id="category-filters" class="category-filters"
+                             title="Expand every node of a subsystem at once, at any depth beneath the current level -- at the cost of render time, same tradeoff 'show all levels' used to offer, now scoped per subsystem instead of all-or-nothing"></div>
+                        <ul id="contents-list" class="contents-list contents-tree"></ul>
+                    </div>
+                </div>
+                <div class="panel-section">
+                    <div class="panel-header">Selected</div>
+                    <div class="panel-body" id="selected-body">
+                        <div class="no-selection">Click a node to select it</div>
+                    </div>
+                </div>
+                <div class="panel-section" id="jobs-section" style="display: none;">
+                    <div class="panel-header">Jobs</div>
+                    <div class="panel-body">
+                        <form id="job-form" class="job-form">
+                            <input type="text" id="job-name" placeholder="Job name" required>
+                            <div class="job-form-dims">
+                                <input type="number" id="job-x" placeholder="X mm" step="10" min="0" required>
+                                <input type="number" id="job-y" placeholder="Y mm" step="10" min="0" required>
+                                <input type="number" id="job-z" placeholder="Z mm" step="10" min="0" required>
+                            </div>
+                            <button type="submit">+ Add Job</button>
+                        </form>
+                        <ul id="job-list" class="job-list"></ul>
+                    </div>
+                </div>
+                <div class="panel-section">
+                    <div class="panel-header">Layout Validation</div>
+                    <div class="panel-body">
+                        <ul id="violations-list" class="violations-list"></ul>
+                        <div id="violations-clean" class="violations-clean">Layout valid</div>
+                    </div>
+                </div>
+                <div class="panel-section">
+                    <div class="panel-header">Generated OpenSCAD</div>
+                    <div class="panel-body">
+                        <div id="code-content" class="code-content">Load a site to see generated OpenSCAD</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="status" class="status">Loading site…</div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { TransformControls } from 'three/addons/controls/TransformControls.js';
+        import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+
+        const BASE_URL = "{{ base_url }}";
+        const DEFAULT_SITE = "{{ default_site }}";
+        const INITIAL_FOCUS = "{{ focus_path }}";
+
+        // Subsystem colors -- a node's own ``category`` if set, else
+        // whatever the nearest ancestor's was (already resolved server-side,
+        // see api.py's _assembly_tree docstring on category inheritance).
+        // Distinct from PART_COLOR/SUBTRACTION_COLOR/STATUS_COLORS/
+        // BUILD_VOLUME_COLOR below, which all still take priority over this
+        // (see colorMesh) -- category is what everything *else* falls back
+        // to instead of the flat DEFAULT_COLOR every node used to share.
+        const CATEGORY_COLORS = {
+            wall: 0x9c8f7a,
+            furniture: 0x8a5a3c,
+            mechanical: 0x5b7a99,
+            fluid: 0x2f8fbf,
+            electrical: 0xd8c11a,
+        };
+        const DEFAULT_COLOR = 0x4488cc;
+        const PART_COLOR = 0x66cc66;
+        const SUBTRACTION_COLOR = 0xcc7733;
+        const SELECTED_EDGE_COLOR = 0xffffff;
+        const VIOLATION_COLOR = 0xcc3333;
+        const BUILD_VOLUME_COLOR = 0x33ffdd;
+
+        // Mirrors example_hierarchy.PRINTER_STATUSES -- this prototype has no
+        // endpoint that reports the allowed set, so it's duplicated here.
+        const PRINTER_STATUSES = ['idle', 'printing', 'offline', 'maintenance'];
+        const STATUS_COLORS = {
+            idle: 0x4488cc,
+            printing: 0xffaa00,
+            offline: 0x555555,
+            maintenance: 0xaa3388,
+        };
+
+        const PLACEHOLDER_SIZE = 40;   // mm -- box size for a child with no footprint
+        const PLACEHOLDER_PITCH = 60;  // mm -- spacing between footprint-less siblings
+        const WHEEL_RESISTANCE_THRESHOLD = 500;
+        const SNAP_INCREMENT = 50;    // mm -- matches WALL_THICKNESS; fine enough for by-hand placement
+
+        function maxDepth(node) {
+            if (!node.children.length) return 0;
+            return 1 + Math.max(...node.children.map(maxDepth));
+        }
+
+        function findChild(node, name) {
+            return node.children.find((c) => c.name === name);
+        }
+
+        function treeHasBuildVolume(node) {
+            if (node.build_volume) return true;
+            return node.children.some(treeHasBuildVolume);
+        }
+
+        // The same color-priority chain used for both a rendered mesh
+        // (colorMesh) and a Contents-tree/category-chip swatch: a part's own
+        // color, then a subtraction-composed cutout, then operational status,
+        // then this node's (inherited) subsystem category, finally the flat
+        // default -- see CATEGORY_COLORS' comment for why category sits below
+        // status instead of above it.
+        function baseColorFor(node) {
+            const statusColor = node.status ? STATUS_COLORS[node.status] : undefined;
+            return node.part_ref
+                ? PART_COLOR
+                : node.composition === 'subtraction'
+                ? SUBTRACTION_COLOR
+                : (statusColor ?? CATEGORY_COLORS[node.category] ?? DEFAULT_COLOR);
+        }
+
+        // STLLoader hands back raw OpenSCAD-space geometry: apothecary's own
+        // (x, y, z) with z-up, completely untouched. Every other object in
+        // this scene -- boxes, primitives, camera, grid -- is positioned
+        // using the (x, z, y) swap documented on boxFromBounds, and that
+        // swap is a reflection, not a rotation (there is no rotation that
+        // swaps two axes while leaving the third fixed -- the transform's
+        // determinant is -1). Left uncorrected, a loaded STL's own "up"
+        // stays pointed along its OpenSCAD z-axis, which lands on three.js's
+        // depth axis instead of its up axis -- the "off by 90 degrees"
+        // orientation bug. Applying the same swap here keeps a real STL
+        // mesh's internal features (e.g. a wall's off-center door cutout) at
+        // the same place, facing the same way, as the placeholder box it
+        // replaces -- but a reflection also inverts triangle winding, so
+        // every triangle's vertex order is reversed too, keeping the
+        // outward-facing normals computeVertexNormals derives afterward
+        // correct instead of inside-out.
+        function applyScadAxisSwap(geometry) {
+            const position = geometry.attributes.position;
+            for (let i = 0; i < position.count; i++) {
+                const y = position.getY(i);
+                const z = position.getZ(i);
+                position.setY(i, z);
+                position.setZ(i, y);
+            }
+            for (let i = 0; i + 2 < position.count; i += 3) {
+                for (const getSet of [['getX', 'setX'], ['getY', 'setY'], ['getZ', 'setZ']]) {
+                    const [get, set] = getSet;
+                    const b = position[get](i + 1);
+                    const c = position[get](i + 2);
+                    position[set](i + 1, c);
+                    position[set](i + 2, b);
+                }
+            }
+            position.needsUpdate = true;
+        }
+
+        // A node's own bounds if it has any (a real footprint, or a leaf
+        // primitive); otherwise, for a composite node with no footprint of
+        // its own (e.g. a building shell around everything it contains, which
+        // deliberately carries no footprint -- see api.py's
+        // _assembly_tree docstring), the union of its descendants' bounds,
+        // recursively. Display-only: this never touches world_bounds/
+        // footprint themselves, so it can't introduce a false overlap --
+        // validation only ever looks at the real fields on the server.
+        function envelopeBounds(node) {
+            if (node.world_bounds) return node.world_bounds;
+            if (node.primitive) return node.primitive.bounds;
+            let result = null;
+            for (const child of node.children) {
+                const b = envelopeBounds(child);
+                if (!b) continue;
+                if (!result) {
+                    result = { min: [...b.min], max: [...b.max] };
+                } else {
+                    result.min = result.min.map((v, i) => Math.min(v, b.min[i]));
+                    result.max = result.max.map((v, i) => Math.max(v, b.max[i]));
+                }
+            }
+            return result;
+        }
+
+        // The dotted, site-rooted address for a child of whatever node sits
+        // at fullPathToParent -- the same addressing scheme the ADR names
+        // (enclosure.mounting_system.m3_boss_fl), and what the server's
+        // node-lookup (GET /sites/{name}/nodes/{path}/...) expects: no
+        // leading site-name segment, just the descendant chain.
+        function pathForChild(fullPathToParent, childName) {
+            return fullPathToParent ? `${fullPathToParent}.${childName}` : childName;
+        }
+
+        // Every leaf beneath a node, recursively -- what "show all levels"
+        // renders instead of just the current focus's direct children.
+        // ``fullPathToNode`` is the caller-supplied full address of ``node``
+        // itself (see pathForChild); each collected leaf carries its own
+        // full ``_path`` because bare names collide across siblings in this
+        // exact example: all three printers have their own
+        // "belt_tensioner_boss". A plain name-keyed mesh registry would
+        // silently conflate them; the path is what nodeKey() below uses
+        // instead, and what identifies a node to the server.
+        function collectLeaves(node, fullPathToNode, acc = []) {
+            if (node.children.length === 0) {
+                acc.push({ ...node, _path: fullPathToNode });
+            } else {
+                for (const child of node.children) {
+                    collectLeaves(child, pathForChild(fullPathToNode, child.name), acc);
+                }
+            }
+            return acc;
+        }
+
+        // The identity a rendered node is tracked under -- meshByName,
+        // raycasting userData, selectedName, and the node's address for
+        // real-geometry fetches -- all keyed by this full dotted path.
+        function nodeKey(node) {
+            return node._path;
+        }
+
+        // Standardized navigation over Assembly's fractal tree: the same
+        // click/double-click/scroll/zoom-out controls apply at any depth,
+        // because every node -- Site, Structure, Substructure, Feature, or a
+        // migrated parts-library leaf -- is the same shape.
+        class FractalViewer {
+            constructor() {
+                this.canvas = document.getElementById('viewer-canvas');
+                this.siteSelect = document.getElementById('site-select');
+                this.loadBtn = document.getElementById('load-btn');
+                this.zoomOutBtn = document.getElementById('zoom-out-btn');
+                this.snapToggle = document.getElementById('snap-toggle');
+                this.breadcrumbEl = document.getElementById('breadcrumb');
+                this.minimapEl = document.getElementById('minimap');
+                this.categoryFiltersEl = document.getElementById('category-filters');
+                this.contentsEl = document.getElementById('contents-list');
+                this.selectedBodyEl = document.getElementById('selected-body');
+                this.jobsSectionEl = document.getElementById('jobs-section');
+                this.jobFormEl = document.getElementById('job-form');
+                this.jobListEl = document.getElementById('job-list');
+                this.violationsListEl = document.getElementById('violations-list');
+                this.violationsCleanEl = document.getElementById('violations-clean');
+                this.validityEl = document.getElementById('validity-indicator');
+                this.codeContentEl = document.getElementById('code-content');
+                this.statusEl = document.getElementById('status');
+
+                this.tree = null;            // full recursive tree for the loaded site
+                this.siteName = null;
+                this.focusPath = [];          // names from root -- the only navigation state
+                this.maxDepthValue = 0;
+                this.hasBuildVolumes = false;
+                this.jobs = [];
+                this.violations = [];
+                this.isValid = true;
+                this.selectedName = null;     // nodeKey() of the selected rendered node
+                this.meshByName = {};         // nodeKey() -> mesh
+                this.renderNodeByKey = {};    // nodeKey() -> node data for every node in the
+                                              // hierarchy tree (not just what's rendered),
+                                              // rebuilt each renderFocus()
+                this.expandedCategories = new Set();  // categories rendered at full depth --
+                                                       // the per-subsystem replacement for the
+                                                       // old single "show all levels" toggle
+                this.treeExpanded = new Set();  // paths expanded for *browsing* in the
+                                                 // hierarchy tree -- independent of whether
+                                                 // that subtree is actually rendered
+                this.buildVolumeMeshByName = {};
+                this.violationNames = new Set();
+                this.wheelResistance = 0;
+                this.stlLoader = new STLLoader();
+                this.loadGeneration = 0;  // guards against a slow real-geometry
+                                          // fetch upgrading a mesh after the
+                                          // user has already navigated away
+
+                this.initThreeJS();
+                this.bindEvents();
+                this.onResize();
+                this.animate();
+
+                if (this.siteSelect.value) this.loadSite(this.siteSelect.value, INITIAL_FOCUS);
+            }
+
+            initThreeJS() {
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x111111);
+
+                this.camera = new THREE.PerspectiveCamera(
+                    50, this.canvas.clientWidth / this.canvas.clientHeight, 1, 20000
+                );
+                this.camera.position.set(600, 500, 800);
+
+                this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
+                this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight);
+                this.renderer.setPixelRatio(window.devicePixelRatio);
+
+                this.orbitControls = new OrbitControls(this.camera, this.renderer.domElement);
+                this.orbitControls.enableDamping = true;
+                this.orbitControls.dampingFactor = 0.05;
+                this.orbitControls.zoomSpeed = 0.6;
+
+                this.transformControls = new TransformControls(this.camera, this.renderer.domElement);
+                this.transformControls.setMode('translate');
+                this.transformControls.setTranslationSnap(SNAP_INCREMENT);
+                this.transformControls.addEventListener('dragging-changed', (event) => {
+                    this.orbitControls.enabled = !event.value;
+                });
+                this.transformControls.addEventListener('objectChange', () => this.onGizmoDrag());
+                this.transformControls.addEventListener('mouseUp', () => this.commitCurrentDrag());
+                this.scene.add(this.transformControls);
+
+                const ambient = new THREE.AmbientLight(0x606060, 1.5);
+                this.scene.add(ambient);
+                const key = new THREE.DirectionalLight(0xffffff, 1.0);
+                key.position.set(400, 600, 400);
+                this.scene.add(key);
+                const fill = new THREE.DirectionalLight(0xffffff, 0.5);
+                fill.position.set(-400, 300, -200);
+                this.scene.add(fill);
+
+                this.gridHelper = new THREE.GridHelper(2000, 40, 0x444444, 0x2a2a2a);
+                this.scene.add(this.gridHelper);
+                this.axesHelper = new THREE.AxesHelper(150);
+                this.scene.add(this.axesHelper);
+
+                this.raycaster = new THREE.Raycaster();
+                this.pointer = new THREE.Vector2();
+            }
+
+            bindEvents() {
+                this.loadBtn.addEventListener('click', () => this.loadSite(this.siteSelect.value));
+                this.siteSelect.addEventListener('change', () => this.loadSite(this.siteSelect.value));
+                this.zoomOutBtn.addEventListener('click', () => this.zoomOut());
+                this.snapToggle.addEventListener('change', () => {
+                    this.transformControls.setTranslationSnap(this.snapToggle.checked ? SNAP_INCREMENT : null);
+                });
+                this.canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
+                this.canvas.addEventListener('dblclick', (e) => this.onDoubleClick(e));
+                this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: true });
+                window.addEventListener('keydown', (e) => {
+                    if (e.key === 'Backspace' && document.activeElement.tagName !== 'INPUT') {
+                        e.preventDefault();
+                        this.zoomOut();
+                    }
+                });
+                this.jobFormEl.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.createJob();
+                });
+                window.addEventListener('resize', () => this.onResize());
+            }
+
+            onResize() {
+                const width = this.canvas.clientWidth;
+                const height = this.canvas.clientHeight;
+                this.camera.aspect = width / height;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(width, height);
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                this.orbitControls.update();
+                this.renderer.render(this.scene, this.camera);
+            }
+
+            setStatus(message, type = '') {
+                this.statusEl.textContent = message;
+                this.statusEl.className = 'status' + (type ? ' ' + type : '');
+            }
+
+            // ---------------------------------------------------------------
+            // Loading and navigation state
+            // ---------------------------------------------------------------
+
+            async loadSite(name, focusPathStr = '') {
+                if (!name) return;
+                this.setStatus(`Loading ${name}...`, 'loading');
+                try {
+                    const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(name)}`);
+                    if (!response.ok) throw new Error(`Failed to load site (${response.status})`);
+                    const data = await response.json();
+                    this.siteName = name;
+                    this.tree = data.tree;
+                    this.maxDepthValue = maxDepth(this.tree);
+                    this.hasBuildVolumes = treeHasBuildVolume(this.tree);
+                    this.violations = data.violations;
+                    this.isValid = data.is_valid;
+                    this.focusPath = this.resolveFocusPath(focusPathStr);
+                    this.selectedName = null;
+                    this.jobs = this.hasBuildVolumes ? await this.fetchJobs() : [];
+                    this.renderFocus();
+                    this.setStatus(`Loaded: ${data.name}`, 'success');
+                } catch (err) {
+                    this.setStatus(`Error: ${err.message}`, 'error');
+                    console.error(err);
+                }
+            }
+
+            // Validates a dotted path against the loaded tree, truncating at
+            // the first segment that doesn't resolve -- a stale or hand-typed
+            // ?focus= link degrades to "as deep as it can go", not a crash.
+            resolveFocusPath(focusPathStr) {
+                const segments = focusPathStr ? focusPathStr.split('.').filter(Boolean) : [];
+                let node = this.tree;
+                const resolved = [];
+                for (const name of segments) {
+                    const child = findChild(node, name);
+                    if (!child) break;
+                    resolved.push(name);
+                    node = child;
+                }
+                return resolved;
+            }
+
+            currentFocusNode() {
+                let node = this.tree;
+                for (const name of this.focusPath) {
+                    const child = findChild(node, name);
+                    if (!child) {
+                        this.focusPath = [];
+                        return this.tree;
+                    }
+                    node = child;
+                }
+                return node;
+            }
+
+            parentOfFocus() {
+                if (!this.focusPath.length) return null;
+                let node = this.tree;
+                for (const name of this.focusPath.slice(0, -1)) node = findChild(node, name);
+                return node;
+            }
+
+            // The standardized "+1" control: zooming in only makes sense for
+            // a node that itself has something inside it -- a true leaf (no
+            // children) has nowhere to go.
+            zoomIn(name) {
+                const focus = this.currentFocusNode();
+                const child = findChild(focus, name);
+                if (!child || !child.children.length) return;
+                this.focusPath = [...this.focusPath, name];
+                this.selectedName = null;
+                this.renderFocus();
+            }
+
+            // The standardized "-1" control: the node just exited becomes
+            // selected at the new (shallower) level, so the user lands back
+            // where they came from rather than on nothing.
+            zoomOut() {
+                if (!this.focusPath.length) return;
+                // The full path to the node being exited, computed before
+                // truncating focusPath -- this is exactly the path that
+                // node will be keyed under once it's a direct child of the
+                // new (shallower) focus, so it lands selected, not just
+                // present.
+                const exitingPath = this.focusPath.join('.');
+                this.focusPath = this.focusPath.slice(0, -1);
+                this.selectedName = exitingPath;
+                this.renderFocus();
+            }
+
+            jumpTo(depth) {
+                this.focusPath = this.focusPath.slice(0, depth);
+                this.selectedName = null;
+                this.renderFocus();
+            }
+
+            // Category expansion (see expandedCategories, toggled from the
+            // Contents panel's category chips) replaces the old all-or-
+            // nothing "show all levels" checkbox: each direct child of focus
+            // renders collapsed (its own single box/mesh) unless its
+            // (inherited) category is expanded, in which case its whole
+            // subtree renders instead, every leaf at its true global
+            // position -- same "at the cost of render time" tradeoff as
+            // before, now scoped per subsystem instead of applying to
+            // everything at once. Every node handed back here carries a
+            // full, site-rooted _path (see pathForChild/collectLeaves),
+            // since that path is also each node's address for a
+            // real-geometry fetch (both the STL and the node-render routes
+            // key off it), not only its mesh-registry key.
+            currentRenderNodes(focus) {
+                const focusPrefix = this.focusPath.join('.');
+                const nodes = [];
+                for (const child of focus.children) {
+                    const path = pathForChild(focusPrefix, child.name);
+                    if (child.children.length && this.expandedCategories.has(child.category)) {
+                        collectLeaves(child, path, nodes);
+                    } else {
+                        nodes.push({ ...child, _path: path });
+                    }
+                }
+                return nodes;
+            }
+
+            // Populates renderNodeByKey with *every* descendant beneath
+            // focus, at every depth -- not just whatever currentRenderNodes
+            // actually instantiates as a mesh -- since the hierarchy tree
+            // (renderContentsList) lets you browse and select a node whose
+            // subtree isn't expanded/rendered in 3D at all. Must be rebuilt
+            // every time this.tree is replaced with a fresh server response
+            // -- not just from renderFocus's full re-render, but also from
+            // submitLayout's lighter-weight patch, which swaps in a new
+            // this.tree without going through renderFocus (to avoid
+            // resetting the camera on every keystroke) -- otherwise a
+            // second edit right after the first would mutate a node object
+            // already disconnected from the new tree and never reach it.
+            rebuildRenderNodeByKey(focus) {
+                const focusPrefix = this.focusPath.join('.');
+                this.renderNodeByKey = {};
+                const addAll = (node, path) => {
+                    this.renderNodeByKey[path] = { ...node, _path: path };
+                    for (const child of node.children) addAll(child, pathForChild(path, child.name));
+                };
+                for (const child of focus.children) addAll(child, pathForChild(focusPrefix, child.name));
+            }
+
+            renderFocus() {
+                const focus = this.currentFocusNode();
+                const renderNodes = this.currentRenderNodes(focus);
+                this.rebuildRenderNodeByKey(focus);
+
+                this.clearScene();
+                this.buildChildMeshes(renderNodes);
+                this.renderBreadcrumb();
+                this.renderMinimap();
+                this.renderCategoryFilters();
+                this.renderContentsList(focus);
+                this.renderSelectedPanel();
+                this.renderViolations();
+                this.renderJobsSection();
+                this.frameCameraForChildren(renderNodes);
+                this.scheduleWaveLoad(renderNodes);
+            }
+
+            // ---------------------------------------------------------------
+            // Three.js scene for the current focus's children
+            // ---------------------------------------------------------------
+
+            clearScene() {
+                this.transformControls.detach();
+                for (const mesh of Object.values(this.meshByName)) {
+                    this.scene.remove(mesh);
+                    mesh.geometry.dispose();
+                    mesh.material.dispose();
+                }
+                for (const mesh of Object.values(this.buildVolumeMeshByName)) {
+                    this.scene.remove(mesh);
+                    mesh.geometry.dispose();
+                    mesh.material.dispose();
+                }
+                this.meshByName = {};
+                this.buildVolumeMeshByName = {};
+            }
+
+            // Axis convention throughout: apothecary (x, y, z) with z-up maps
+            // to three.js (x, z, y) with y-up.
+            boxFromBounds(bounds) {
+                const size = [
+                    bounds.max[0] - bounds.min[0],
+                    bounds.max[2] - bounds.min[2],
+                    bounds.max[1] - bounds.min[1],
+                ];
+                const center = [
+                    (bounds.min[0] + bounds.max[0]) / 2,
+                    (bounds.min[2] + bounds.max[2]) / 2,
+                    (bounds.min[1] + bounds.max[1]) / 2,
+                ];
+                return { size, center };
+            }
+
+            // A node with no footprint (most Substructures/Features -- they
+            // were never given spatial metadata, only geometry) still needs
+            // *something* visible and clickable to navigate through. Offset
+            // by index so siblings that all lack a footprint don't perfectly
+            // overlap.
+            placeholderBounds(node, index) {
+                const half = PLACEHOLDER_SIZE / 2;
+                const offsetX = (index % 5) * PLACEHOLDER_PITCH;
+                const offsetY = Math.floor(index / 5) * PLACEHOLDER_PITCH;
+                return {
+                    min: [
+                        node.position.x + offsetX - half,
+                        node.position.y + offsetY - half,
+                        node.position.z,
+                    ],
+                    max: [
+                        node.position.x + offsetX + half,
+                        node.position.y + offsetY + half,
+                        node.position.z + PLACEHOLDER_SIZE,
+                    ],
+                };
+            }
+
+            boundsFor(node, index) {
+                // world_bounds (a real footprint) is authoritative; a node
+                // with no footprint but a translatable primitive (most
+                // Features) still has a real, correctly world-positioned
+                // shape -- use its bounds too, so the placeholder box a node
+                // shows before its real mesh loads is already in the right
+                // place, not a synthetic grid slot that jumps once the real
+                // geometry arrives. A composite node with neither (e.g. a
+                // building shell) falls back to the envelope of what it
+                // contains; only a genuinely empty node falls back further,
+                // to the synthetic per-index placeholder.
+                return envelopeBounds(node) || this.placeholderBounds(node, index);
+            }
+
+            buildChildMeshes(children) {
+                children.forEach((child, index) => {
+                    const bounds = this.boundsFor(child, index);
+                    const { size, center } = this.boxFromBounds(bounds);
+
+                    const geometry = new THREE.BoxGeometry(1, 1, 1);
+                    const material = new THREE.MeshPhongMaterial({ transparent: true, opacity: 0.65 });
+                    const mesh = new THREE.Mesh(geometry, material);
+                    const edges = new THREE.EdgesGeometry(geometry);
+                    const wireframe = new THREE.LineSegments(
+                        edges, new THREE.LineBasicMaterial({ color: 0x000000 })
+                    );
+                    wireframe.name = 'edges';
+                    mesh.add(wireframe);
+                    mesh.scale.set(size[0] || 1, size[1] || 1, size[2] || 1);
+                    mesh.position.set(center[0], center[1], center[2]);
+                    const key = nodeKey(child);
+                    mesh.userData.key = key;
+                    // A unit BoxGeometry stretched to size via mesh.scale --
+                    // rebuildSingleMesh needs to tell this apart from a
+                    // real (already actual-size) mesh upgradeMesh drops in
+                    // later, since re-scaling an already-real mesh would
+                    // blow it up by its own real-world millimeter size.
+                    mesh.userData.isPlaceholder = true;
+                    this.scene.add(mesh);
+                    this.meshByName[key] = mesh;
+
+                    this.colorMesh(key, child);
+                    this.updateBuildVolumeIndicator(child, bounds);
+                });
+            }
+
+            // ``key`` indexes meshByName/selectedName (nodeKey() -- a dotted
+            // path in "show all levels" mode, since bare names collide
+            // across siblings there); violation membership is checked
+            // against ``node.name`` instead, since that's what the server
+            // reports and, in this example, violations only ever occur
+            // between uniquely-named root-level Structures anyway.
+            colorMesh(key, node) {
+                const mesh = this.meshByName[key];
+                if (!mesh) return;
+                const isViolating = this.violationNames.has(node.name);
+                const isSelected = this.selectedName === key;
+                mesh.material.color.set(isViolating ? VIOLATION_COLOR : baseColorFor(node));
+                const edges = mesh.getObjectByName('edges');
+                if (edges) edges.material.color.set(isSelected ? SELECTED_EDGE_COLOR : 0x000000);
+            }
+
+            // A wireframe-only box showing the usable print area within a
+            // printer's physical footprint -- a separate scene object so its
+            // scale doesn't compound with the (non-uniformly stretched)
+            // parent box's scale.
+            updateBuildVolumeIndicator(node, bounds) {
+                const existing = this.buildVolumeMeshByName[node.name];
+                if (!node.build_volume) {
+                    if (existing) {
+                        this.scene.remove(existing);
+                        existing.geometry.dispose();
+                        existing.material.dispose();
+                        delete this.buildVolumeMeshByName[node.name];
+                    }
+                    return;
+                }
+
+                const [bvApX, bvApY, bvApZ] = node.build_volume;
+                const centerApX = (bounds.min[0] + bounds.max[0]) / 2;
+                const centerApY = (bounds.min[1] + bounds.max[1]) / 2;
+                const baseApZ = bounds.min[2];
+                const size = [bvApX, bvApZ, bvApY];
+                const center = [centerApX, baseApZ + bvApZ / 2, centerApY];
+
+                let mesh = existing;
+                if (!mesh) {
+                    const geometry = new THREE.BoxGeometry(1, 1, 1);
+                    const edges = new THREE.EdgesGeometry(geometry);
+                    mesh = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: BUILD_VOLUME_COLOR }));
+                    this.scene.add(mesh);
+                    this.buildVolumeMeshByName[node.name] = mesh;
+                }
+                mesh.scale.set(size[0], size[1], size[2]);
+                mesh.position.set(center[0], center[1], center[2]);
+            }
+
+            // Frames every axis, not just the horizontal footprint, and
+            // targets the true 3D center (average of min/max on all three
+            // axes) -- a node's position/world_bounds are now a genuinely
+            // consistent global frame (see api.py's _assembly_tree), so this
+            // no longer needs the old maxZ/3 guess, which only happened to
+            // work when everything sat near the world origin.
+            frameCameraForChildren(nodes) {
+                if (!nodes.length) return;
+                const bounds = nodes.map((c, i) => this.boundsFor(c, i));
+                const minX = Math.min(...bounds.map((b) => b.min[0]));
+                const maxX = Math.max(...bounds.map((b) => b.max[0]));
+                const minY = Math.min(...bounds.map((b) => b.min[1]));
+                const maxY = Math.max(...bounds.map((b) => b.max[1]));
+                const minZ = Math.min(...bounds.map((b) => b.min[2]));
+                const maxZ = Math.max(...bounds.map((b) => b.max[2]));
+
+                const spanX = Math.max(maxX - minX, 20);
+                const spanY = Math.max(maxY - minY, 20);
+                const spanZ = Math.max(maxZ - minZ, 20);
+                const maxSpan = Math.max(spanX, spanY, spanZ);
+
+                const targetX = (minX + maxX) / 2;
+                const targetYAp = (minY + maxY) / 2;  // apothecary Y (depth) -> three Z
+                const targetZAp = (minZ + maxZ) / 2;  // apothecary Z (height) -> three Y
+                const distance = Math.max(150, maxSpan * 1.8);
+
+                this.orbitControls.target.set(targetX, targetZAp, targetYAp);
+                this.camera.position.set(
+                    targetX + distance * 0.7,
+                    targetZAp + distance * 0.55,
+                    targetYAp + distance * 0.7
+                );
+                this.orbitControls.minDistance = Math.max(10, maxSpan * 0.08);
+                this.orbitControls.maxDistance = Math.max(500, distance * 5);
+                this.orbitControls.update();
+
+                this.updateHelpersForSpan(maxSpan);
+            }
+
+            // The grid/axes helpers are fixed-size by default, which is
+            // often too small once you're several levels deep (a single
+            // Feature might span 10mm) or too small when zoomed out over the
+            // whole garage (spans ~1800mm) -- rebuild them to match whatever
+            // is actually in view, the same way the old standalone part
+            // viewer's updateHelpersForSize did for a single loaded part.
+            updateHelpersForSpan(span) {
+                const gridSize = Math.max(100, Math.ceil((span * 2.5) / 50) * 50);
+                const gridDivisions = Math.max(10, Math.round(gridSize / (span < 100 ? 5 : 50)));
+
+                this.scene.remove(this.gridHelper);
+                this.gridHelper = new THREE.GridHelper(gridSize, gridDivisions, 0x444444, 0x2a2a2a);
+                this.scene.add(this.gridHelper);
+
+                this.scene.remove(this.axesHelper);
+                this.axesHelper = new THREE.AxesHelper(Math.max(20, span * 0.4));
+                this.scene.add(this.axesHelper);
+            }
+
+            // ---------------------------------------------------------------
+            // Breadcrumb + minimap
+            // ---------------------------------------------------------------
+
+            renderBreadcrumb() {
+                this.breadcrumbEl.innerHTML = '';
+                const rootCrumb = document.createElement('span');
+                rootCrumb.className = 'crumb';
+                rootCrumb.textContent = this.siteName;
+                rootCrumb.addEventListener('click', () => this.jumpTo(0));
+                this.breadcrumbEl.appendChild(rootCrumb);
+
+                this.focusPath.forEach((name, i) => {
+                    this.breadcrumbEl.appendChild(document.createTextNode(' › '));
+                    const crumb = document.createElement('span');
+                    crumb.className = 'crumb';
+                    crumb.textContent = name;
+                    crumb.addEventListener('click', () => this.jumpTo(i + 1));
+                    this.breadcrumbEl.appendChild(crumb);
+                });
+
+                this.zoomOutBtn.disabled = this.focusPath.length === 0;
+            }
+
+            // Deliberately a depth ladder, not a node-link graph: one tick
+            // per possible depth in the whole loaded tree, filled from the
+            // root through however deep the current focus is.
+            renderMinimap() {
+                this.minimapEl.innerHTML = '';
+                for (let depth = 0; depth <= this.maxDepthValue; depth++) {
+                    const tick = document.createElement('div');
+                    const filled = depth <= this.focusPath.length;
+                    tick.className = 'minimap-tick' + (filled ? ' filled' : '');
+                    const label = depth === 0 ? this.siteName : this.focusPath[depth - 1];
+                    tick.title = filled ? `Depth ${depth}: ${label ?? this.siteName}` : `Depth ${depth}`;
+                    this.minimapEl.appendChild(tick);
+                }
+            }
+
+            // ---------------------------------------------------------------
+            // Contents list + selection
+            // ---------------------------------------------------------------
+
+            // The category chips above the tree: one per subsystem actually
+            // present anywhere beneath the current focus (not a fixed list --
+            // a site that never uses "fluid" shouldn't show a dead chip for
+            // it), each toggling expandedCategories and triggering a full
+            // renderFocus() (the rendered set genuinely changes, same as the
+            // old "show all levels" checkbox did).
+            renderCategoryFilters() {
+                this.categoryFiltersEl.innerHTML = '';
+                // renderNodeByKey (rebuilt just before this is called --
+                // see renderFocus) already covers every descendant beneath
+                // focus at every depth, so this alone is enough to find
+                // every category present without a second tree walk.
+                const present = new Set();
+                Object.values(this.renderNodeByKey).forEach((node) => {
+                    if (node.category) present.add(node.category);
+                });
+                if (present.size === 0) return;
+
+                for (const category of Object.keys(CATEGORY_COLORS).filter((c) => present.has(c))) {
+                    const chip = document.createElement('span');
+                    const active = this.expandedCategories.has(category);
+                    chip.className = 'category-chip' + (active ? ' active' : '');
+                    chip.title = `Expand every ${category} node at any depth beneath this level`;
+
+                    const swatch = document.createElement('span');
+                    swatch.className = 'chip-swatch';
+                    swatch.style.background = '#' + CATEGORY_COLORS[category].toString(16).padStart(6, '0');
+                    chip.appendChild(swatch);
+                    chip.appendChild(document.createTextNode(category));
+
+                    chip.addEventListener('click', () => {
+                        if (active) this.expandedCategories.delete(category);
+                        else this.expandedCategories.add(category);
+                        this.renderFocus();
+                    });
+                    this.categoryFiltersEl.appendChild(chip);
+                }
+            }
+
+            // The hierarchy tree: every descendant beneath focus, at every
+            // depth -- not just direct children -- replacing the old flat,
+            // one-level Contents list. Depth is encoded as left-padding on a
+            // flat sequence of rows rather than nested <ul>s (buildTreeRows
+            // returns a DocumentFragment, which flattens correctly when
+            // appended into another). Each row's disclosure caret only
+            // controls *browsing* (treeExpanded) -- independent of whether
+            // that subtree is actually instantiated as a mesh right now
+            // (render-dot, driven by meshByName -- see currentRenderNodes/
+            // expandedCategories for what controls that).
+            renderContentsList(focus) {
+                this.contentsEl.innerHTML = '';
+                const focusPrefix = this.focusPath.join('.');
+                focus.children.forEach((child) => {
+                    const path = pathForChild(focusPrefix, child.name);
+                    this.contentsEl.appendChild(this.buildTreeRows(child, path, 0));
+                });
+            }
+
+            buildTreeRows(node, path, depth) {
+                const fragment = document.createDocumentFragment();
+                const hasChildren = node.children.length > 0;
+                const isExpanded = this.treeExpanded.has(path);
+
+                const li = document.createElement('li');
+                li.className = 'contents-item' + (this.selectedName === path ? ' selected' : '');
+                li.style.paddingLeft = `${0.5 + depth * 0.9}rem`;
+
+                const caret = document.createElement('span');
+                caret.className = 'tree-caret' + (hasChildren ? '' : ' tree-caret-empty');
+                caret.textContent = hasChildren ? (isExpanded ? '▾' : '▸') : '';
+                if (hasChildren) {
+                    caret.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (isExpanded) this.treeExpanded.delete(path); else this.treeExpanded.add(path);
+                        this.renderContentsList(this.currentFocusNode());
+                    });
+                }
+                li.appendChild(caret);
+
+                const renderDot = document.createElement('span');
+                const isRendered = Boolean(this.meshByName[path]);
+                renderDot.className = 'render-dot' + (isRendered ? ' rendered' : '');
+                renderDot.title = isRendered ? 'Currently rendered in the 3D view' : 'Not currently rendered';
+                li.appendChild(renderDot);
+
+                const swatch = document.createElement('span');
+                swatch.className = 'contents-swatch';
+                swatch.style.background = '#' + baseColorFor(node).toString(16).padStart(6, '0');
+                li.appendChild(swatch);
+
+                const label = document.createElement('span');
+                label.className = 'item-label';
+                const inside = hasChildren ? ` — ${node.children.length} inside` : '';
+                label.textContent = `${node.name} (${node.role})${inside}`;
+                li.appendChild(label);
+
+                // Click/double-click anywhere on the row (matching the old
+                // flat list's behavior, and what tests click on) -- only the
+                // caret's own handler (above) intercepts and stops
+                // propagation, so it doesn't also select/zoom.
+                // selectChild/selectedName are keyed by full path (same as
+                // renderNodeByKey/meshByName); zoomIn is keyed by bare name
+                // (it pushes onto focusPath, which is bare names all the way
+                // down) -- two different identities for two different
+                // purposes, not an inconsistency.
+                li.addEventListener('click', () => this.selectChild(path));
+                li.addEventListener('dblclick', () => this.zoomIn(node.name));
+
+                fragment.appendChild(li);
+                if (hasChildren && isExpanded) {
+                    for (const child of node.children) {
+                        fragment.appendChild(this.buildTreeRows(child, pathForChild(path, child.name), depth + 1));
+                    }
+                }
+                return fragment;
+            }
+
+            // Position/status editing only works when the selected node is a
+            // *direct* child of the root: /layout and /status only ever
+            // address a site's direct children. Normally that's the same
+            // thing as focusPath being empty, but "show all levels" can
+            // render (and let you select) a leaf many levels deeper while
+            // still focused at the root, so both conditions are checked.
+            isEditableSelection(focus, node) {
+                return this.focusPath.length === 0 && focus.children.some((c) => c.name === node.name);
+            }
+
+            selectChild(key) {
+                this.selectedName = key;
+                const focus = this.currentFocusNode();
+                const node = this.renderNodeByKey[key];
+                const mesh = this.meshByName[key];
+
+                if (mesh && node && this.isEditableSelection(focus, node) && !node.part_ref) {
+                    this.transformControls.attach(mesh);
+                } else {
+                    this.transformControls.detach();
+                }
+
+                this.renderContentsList(focus);
+                this.renderSelectedPanel();
+                for (const k of Object.keys(this.meshByName)) this.colorMesh(k, this.renderNodeByKey[k]);
+            }
+
+            // The one place the three possible "Selected" panels are chosen:
+            // a parts-library leaf always gets the absorbed part view
+            // (regardless of depth); otherwise, position/status editing only
+            // works for a direct child of the root (see isEditableSelection),
+            // so anything deeper -- or any leaf shown via "show all levels"
+            // that isn't itself a direct child -- gets a read-only panel.
+            renderSelectedPanel() {
+                const focus = this.currentFocusNode();
+                const selected = this.renderNodeByKey[this.selectedName];
+                if (!selected) {
+                    this.selectedBodyEl.innerHTML = '<div class="no-selection">Click a node to select it</div>';
+                    return;
+                }
+                if (selected.part_ref) {
+                    this.renderPartPanel(selected);
+                } else if (this.isEditableSelection(focus, selected)) {
+                    this.renderEditablePanel(selected);
+                } else {
+                    this.renderGenericPanel(selected);
+                }
+            }
+
+            zoomInAffordanceHtml(node) {
+                if (!node.children.length) return '';
+                return `<button type="button" class="zoom-in-btn">⤵ Zoom into ${node.name} (${node.children.length})</button>`;
+            }
+
+            bindZoomInAffordance(node) {
+                this.selectedBodyEl.querySelector('.zoom-in-btn')
+                    ?.addEventListener('click', () => this.zoomIn(node.name));
+            }
+
+            renderGenericPanel(node) {
+                this.selectedBodyEl.innerHTML = `
+                    <div class="prop-row"><label>Name</label><span>${node.name}</span></div>
+                    <div class="prop-row"><label>Role</label><span>${node.role}</span></div>
+                    <div class="prop-readonly">
+                        Material: ${node.material ?? '—'}<br>
+                        Comment: ${node.comment ?? '—'}<br>
+                        Footprint: ${node.footprint ? node.footprint.max.map((v, i) => (v - node.footprint.min[i]).toFixed(0)).join(' × ') + ' mm' : '—'}
+                    </div>
+                    ${this.zoomInAffordanceHtml(node)}
+                `;
+                this.bindZoomInAffordance(node);
+            }
+
+            renderEditablePanel(node) {
+                const statusRow = node.status !== null
+                    ? `<div class="prop-row"><label>Status</label>
+                         <select id="status-select">
+                           ${PRINTER_STATUSES.map((s) => `<option value="${s}"${s === node.status ? ' selected' : ''}>${s}</option>`).join('')}
+                         </select>
+                       </div>`
+                    : '';
+                this.selectedBodyEl.innerHTML = `
+                    <div class="prop-row"><label>Name</label><span>${node.name}</span></div>
+                    ${statusRow}
+                    <div class="prop-row"><label>X (mm)</label><input type="number" id="pos-x" step="10" value="${node.position.x}"></div>
+                    <div class="prop-row"><label>Y (mm)</label><input type="number" id="pos-y" step="10" value="${node.position.y}"></div>
+                    <div class="prop-row"><label>Z (mm)</label><input type="number" id="pos-z" step="10" value="${node.position.z}"></div>
+                    <div class="prop-readonly">
+                        Material: ${node.material ?? '—'}<br>
+                        Footprint: ${node.footprint ? node.footprint.max.map((v, i) => (v - node.footprint.min[i]).toFixed(0)).join(' × ') + ' mm' : '—'}<br>
+                        Build volume: ${node.build_volume
+                            ? node.build_volume.map((v) => v.toFixed(0)).join(' × ') + ' mm '
+                              + `<span style="display:inline-block;width:8px;height:8px;border:1px solid #${BUILD_VOLUME_COLOR.toString(16).padStart(6, '0')};vertical-align:middle;"></span>`
+                            : '—'}
+                    </div>
+                    ${this.zoomInAffordanceHtml(node)}
+                `;
+                for (const axis of ['x', 'y', 'z']) {
+                    document.getElementById(`pos-${axis}`).addEventListener('change', (e) => {
+                        node.position[axis] = parseFloat(e.target.value) || 0;
+                        this.recomputeWorldBounds(node);
+                        this.rebuildSingleMesh(node);
+                        this.submitLayout();
+                    });
+                }
+                const statusSelect = document.getElementById('status-select');
+                if (statusSelect) {
+                    statusSelect.addEventListener('change', (e) => this.submitStatus(node.name, e.target.value));
+                }
+                this.bindZoomInAffordance(node);
+            }
+
+            renderPartPanel(node) {
+                this.selectedBodyEl.innerHTML = `
+                    <div class="prop-row"><label>Part</label><span>${node.part_ref}</span></div>
+                    <div class="part-actions">
+                        <button type="button" id="part-regenerate-btn">⚙️ Regenerate STL</button>
+                        <a href="${BASE_URL}/parts/${encodeURIComponent(node.part_ref)}/scad">💾 Download SCAD</a>
+                    </div>
+                    <div class="code-header">SCAD Source (the absorbed part view)</div>
+                    <div id="part-scad-content" class="code-content">Loading…</div>
+                `;
+                this.loadPartScad(node.part_ref);
+                document.getElementById('part-regenerate-btn')
+                    .addEventListener('click', () => this.regeneratePart(node.part_ref));
+            }
+
+            async loadPartScad(name) {
+                try {
+                    const response = await fetch(`${BASE_URL}/parts/${encodeURIComponent(name)}/scad`);
+                    const text = response.ok ? await response.text() : `(no SCAD source: ${response.status})`;
+                    const el = document.getElementById('part-scad-content');
+                    if (el) el.textContent = text;
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+
+            async regeneratePart(name) {
+                this.setStatus(`Regenerating ${name}...`, 'loading');
+                try {
+                    const response = await fetch(
+                        `${BASE_URL}/parts/${encodeURIComponent(name)}/stl/generate?force=true`,
+                        { method: 'POST' }
+                    );
+                    if (!response.ok) throw new Error(`Regenerate failed (${response.status})`);
+                    this.setStatus(`${name} regenerated`, 'success');
+                } catch (err) {
+                    this.setStatus(`Error: ${err.message}`, 'error');
+                    console.error(err);
+                }
+            }
+
+            // Recomputes world_bounds locally after a position edit (mirrors
+            // the server's Assembly.world_bounds()) so the mesh can update
+            // instantly instead of waiting on the round-trip.
+            recomputeWorldBounds(node) {
+                if (!node.footprint) return;
+                node.world_bounds = {
+                    min: node.footprint.min.map((v, i) => v + [node.position.x, node.position.y, node.position.z][i]),
+                    max: node.footprint.max.map((v, i) => v + [node.position.x, node.position.y, node.position.z][i]),
+                };
+            }
+
+            rebuildSingleMesh(node) {
+                const key = nodeKey(node);
+                const mesh = this.meshByName[key];
+                if (!mesh) return;
+                const bounds = this.boundsFor(node, 0);
+                const { size, center } = this.boxFromBounds(bounds);
+                // Only a still-placeholder box (a unit BoxGeometry stretched
+                // via mesh.scale) needs re-scaling to the new bounds -- an
+                // already-upgraded real mesh (STL or a Three.js primitive)
+                // is already actual-size geometry with scale left at (1,1,1);
+                // re-scaling it here by its own real-world millimeter size
+                // would balloon it into a screen-filling artifact (the bug
+                // this guard fixes: moving *any* item used to corrupt every
+                // already-real mesh currently on screen, not just the one
+                // being moved, since this runs for every rendered node).
+                if (mesh.userData.isPlaceholder) {
+                    mesh.scale.set(size[0] || 1, size[1] || 1, size[2] || 1);
+                }
+                mesh.position.set(center[0], center[1], center[2]);
+                this.updateBuildVolumeIndicator(node, bounds);
+                if (this.selectedName === key) this.transformControls.attach(mesh);
+            }
+
+            // ---------------------------------------------------------------
+            // Root-level editing: position drag, status, layout submission
+            // (only meaningful at focusPath.length === 0 -- see
+            // renderSelectedPanel's comment on why).
+            // ---------------------------------------------------------------
+
+            async submitStatus(name, status) {
+                this.setStatus(`Updating ${name} status...`, 'loading');
+                try {
+                    const response = await fetch(
+                        `${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/structures/${encodeURIComponent(name)}/status`,
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ status }),
+                        }
+                    );
+                    if (!response.ok) throw new Error(`Status update failed (${response.status})`);
+                    await this.refreshTree();
+                    this.setStatus(`${name} is now ${status}`, 'success');
+                } catch (err) {
+                    this.setStatus(`Error: ${err.message}`, 'error');
+                    console.error(err);
+                }
+            }
+
+            // Axis convention: apothecary (x, y, z) z-up maps to three.js
+            // (x, z, y) y-up -- addOrUpdateMesh-equivalents apply this
+            // forward; this is its inverse (drag position -> apothecary).
+            onGizmoDrag() {
+                if (!this.selectedName || this.focusPath.length !== 0) return;
+                const node = this.renderNodeByKey[this.selectedName];
+                const mesh = this.meshByName[this.selectedName];
+                if (!node || !mesh || !node.footprint) return;
+
+                const halfExtentApX = (node.footprint.max[0] - node.footprint.min[0]) / 2;
+                const halfExtentApY = (node.footprint.max[1] - node.footprint.min[1]) / 2;
+                const halfExtentApZ = (node.footprint.max[2] - node.footprint.min[2]) / 2;
+
+                const worldMinApX = mesh.position.x - halfExtentApX;
+                const worldMinApY = mesh.position.z - halfExtentApY;
+                const worldMinApZ = mesh.position.y - halfExtentApZ;
+
+                node.position = {
+                    x: worldMinApX - node.footprint.min[0],
+                    y: worldMinApY - node.footprint.min[1],
+                    z: worldMinApZ - node.footprint.min[2],
+                };
+                this.recomputeWorldBounds(node);
+                this.renderSelectedPanel();
+            }
+
+            commitCurrentDrag() {
+                if (this.selectedName && this.focusPath.length === 0) this.submitLayout();
+            }
+
+            async submitLayout() {
+                if (!this.siteName || this.focusPath.length !== 0) return;
+                this.setStatus('Validating layout...', 'loading');
+                const positions = {};
+                for (const child of this.tree.children) {
+                    positions[child.name] = child.position;
+                }
+                try {
+                    const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/layout`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ positions }),
+                    });
+                    if (!response.ok) throw new Error(`Layout update failed (${response.status})`);
+                    const data = await response.json();
+                    this.tree = data.tree;
+                    this.violations = data.violations;
+                    this.isValid = data.is_valid;
+                    if (data.scad) this.codeContentEl.textContent = data.scad;
+                    // this.tree is now a brand new object from the server --
+                    // renderNodeByKey must be rebuilt against it (not a full
+                    // renderFocus(), which would also reset the camera and
+                    // grid mid-edit), or the next edit would mutate a node
+                    // already disconnected from this.tree and never reach it.
+                    const focus = this.currentFocusNode();
+                    const renderNodes = this.currentRenderNodes(focus);
+                    this.rebuildRenderNodeByKey(focus);
+                    renderNodes.forEach((node) => this.rebuildSingleMesh(node));
+                    this.renderViolations();
+                    this.renderSelectedPanel();
+                    this.setStatus(this.isValid ? 'Layout valid' : 'Layout has violations', this.isValid ? 'success' : 'error');
+                } catch (err) {
+                    this.setStatus(`Error: ${err.message}`, 'error');
+                    console.error(err);
+                }
+            }
+
+            renderViolations() {
+                this.violationNames = new Set(this.violations.flatMap((v) => v.structures));
+                this.violationsListEl.innerHTML = '';
+                if (this.violations.length) {
+                    this.violationsCleanEl.style.display = 'none';
+                    for (const v of this.violations) {
+                        const li = document.createElement('li');
+                        li.textContent = v.message;
+                        this.violationsListEl.appendChild(li);
+                    }
+                } else {
+                    this.violationsCleanEl.style.display = '';
+                }
+                this.validityEl.textContent = this.isValid
+                    ? 'Layout valid'
+                    : `${this.violations.length} violation${this.violations.length === 1 ? '' : 's'}`;
+                this.validityEl.className = 'validity-indicator ' + (this.isValid ? 'valid' : 'invalid');
+                for (const key of Object.keys(this.meshByName)) this.colorMesh(key, this.renderNodeByKey[key]);
+            }
+
+            // Re-fetches the whole tree (status/violations/positions may have
+            // changed) without disturbing navigation state.
+            async refreshTree() {
+                const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}`);
+                if (!response.ok) throw new Error(`Failed to refresh site (${response.status})`);
+                const data = await response.json();
+                this.tree = data.tree;
+                this.violations = data.violations;
+                this.isValid = data.is_valid;
+                this.renderFocus();
+            }
+
+            // ---------------------------------------------------------------
+            // Jobs (site-wide -- visible whenever the loaded tree has any
+            // build_volume anywhere, regardless of current zoom depth)
+            // ---------------------------------------------------------------
+
+            renderJobsSection() {
+                this.jobsSectionEl.style.display = this.hasBuildVolumes ? '' : 'none';
+                if (this.hasBuildVolumes) this.renderJobs();
+            }
+
+            async fetchJobs() {
+                const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/jobs`);
+                if (!response.ok) throw new Error(`Failed to load jobs (${response.status})`);
+                return response.json();
+            }
+
+            renderJobs() {
+                this.jobListEl.innerHTML = '';
+                for (const job of this.jobs) {
+                    const li = document.createElement('li');
+                    li.className = 'job-item';
+                    const dims = job.required_volume.map((v) => v.toFixed(0)).join(' × ');
+
+                    let actionsHtml;
+                    if (job.status === 'queued') {
+                        actionsHtml = job.compatible_printers.length
+                            ? `<select class="job-printer-select">
+                                 ${job.compatible_printers.map((p) => `<option value="${p}">${p}</option>`).join('')}
+                               </select>
+                               <button type="button" class="job-assign-btn">Assign</button>`
+                            : '<span class="job-no-printers">No idle printer fits this job</span>';
+                    } else if (job.status === 'assigned' || job.status === 'printing') {
+                        actionsHtml = `<span class="job-assigned-to">on ${job.assigned_printer}</span>
+                                       <button type="button" class="job-complete-btn">Mark Done</button>`;
+                    } else {
+                        actionsHtml = `<span class="job-done">done${job.assigned_printer ? ' on ' + job.assigned_printer : ''}</span>`;
+                    }
+
+                    li.innerHTML = `
+                        <div class="job-item-header">
+                            <strong>${job.name}</strong>
+                            <span class="job-status job-status-${job.status}">${job.status}</span>
+                        </div>
+                        <div class="job-item-dims">${dims} mm</div>
+                        <div class="job-item-actions">${actionsHtml}</div>
+                    `;
+
+                    li.querySelector('.job-assign-btn')?.addEventListener('click', () => {
+                        const printer = li.querySelector('.job-printer-select').value;
+                        this.assignJob(job.name, printer);
+                    });
+                    li.querySelector('.job-complete-btn')?.addEventListener('click', () => this.completeJob(job.name));
+                    this.jobListEl.appendChild(li);
+                }
+            }
+
+            async createJob() {
+                const name = document.getElementById('job-name').value.trim();
+                const x = parseFloat(document.getElementById('job-x').value);
+                const y = parseFloat(document.getElementById('job-y').value);
+                const z = parseFloat(document.getElementById('job-z').value);
+                if (!name || !this.siteName) return;
+
+                this.setStatus(`Creating job ${name}...`, 'loading');
+                try {
+                    const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/jobs`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, required_volume: { x, y, z } }),
+                    });
+                    if (!response.ok) {
+                        const data = await response.json().catch(() => ({}));
+                        throw new Error(data.detail || `Create job failed (${response.status})`);
+                    }
+                    this.jobFormEl.reset();
+                    this.jobs = await this.fetchJobs();
+                    this.renderJobs();
+                    this.setStatus(`Job ${name} queued`, 'success');
+                } catch (err) {
+                    this.setStatus(`Error: ${err.message}`, 'error');
+                    console.error(err);
+                }
+            }
+
+            async assignJob(jobName, printerName) {
+                this.setStatus(`Assigning ${jobName} to ${printerName}...`, 'loading');
+                try {
+                    const response = await fetch(
+                        `${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/jobs/${encodeURIComponent(jobName)}/assign`,
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ printer: printerName }),
+                        }
+                    );
+                    if (!response.ok) {
+                        const data = await response.json().catch(() => ({}));
+                        throw new Error(data.detail || `Assign failed (${response.status})`);
+                    }
+                    await this.refreshTree();
+                    this.jobs = await this.fetchJobs();
+                    this.renderJobs();
+                    this.setStatus(`${jobName} assigned to ${printerName}`, 'success');
+                } catch (err) {
+                    this.setStatus(`Error: ${err.message}`, 'error');
+                    console.error(err);
+                }
+            }
+
+            async completeJob(jobName) {
+                this.setStatus(`Completing ${jobName}...`, 'loading');
+                try {
+                    const response = await fetch(
+                        `${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/jobs/${encodeURIComponent(jobName)}/complete`,
+                        { method: 'POST' }
+                    );
+                    if (!response.ok) throw new Error(`Complete failed (${response.status})`);
+                    await this.refreshTree();
+                    this.jobs = await this.fetchJobs();
+                    this.renderJobs();
+                    this.setStatus(`${jobName} done`, 'success');
+                } catch (err) {
+                    this.setStatus(`Error: ${err.message}`, 'error');
+                    console.error(err);
+                }
+            }
+
+            // ---------------------------------------------------------------
+            // Pointer / wheel navigation
+            // ---------------------------------------------------------------
+
+            raycastChild(event) {
+                const rect = this.canvas.getBoundingClientRect();
+                this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+                this.raycaster.setFromCamera(this.pointer, this.camera);
+                const intersects = this.raycaster.intersectObjects(Object.values(this.meshByName), false);
+                return intersects.length ? intersects[0].object.userData.key : null;
+            }
+
+            onPointerDown(event) {
+                if (this.transformControls.dragging) return;
+                const key = this.raycastChild(event);
+                if (key) this.selectChild(key);
+            }
+
+            onDoubleClick(event) {
+                // zoomIn expects a direct child's bare name; a "show all
+                // levels" key can be a deeper dotted path instead, but
+                // zoomIn only ever acts on a node with children to zoom
+                // into, and every node this renders is a leaf (zero
+                // children) in that mode -- so this is always a safe no-op
+                // there, not a crash.
+                const key = this.raycastChild(event);
+                if (key) this.zoomIn(key);
+            }
+
+            // Scroll dollies the camera as usual; once OrbitControls clamps
+            // the distance at either extreme, further scroll in the same
+            // direction accumulates instead of doing nothing, and crossing a
+            // resistance threshold triggers the same zoom-in/zoom-out a
+            // click or the toolbar button would -- continuous and discrete
+            // navigation both drive the same two actions.
+            onWheel(event) {
+                const distance = this.orbitControls.getDistance();
+                const atMin = distance <= this.orbitControls.minDistance * 1.05;
+                const atMax = distance >= this.orbitControls.maxDistance * 0.95;
+                const zoomingIn = event.deltaY < 0;
+                const zoomingOut = event.deltaY > 0;
+
+                if ((zoomingIn && atMin) || (zoomingOut && atMax)) {
+                    this.wheelResistance += Math.abs(event.deltaY);
+                    if (this.wheelResistance > WHEEL_RESISTANCE_THRESHOLD) {
+                        this.wheelResistance = 0;
+                        if (zoomingIn) this.zoomInFromWheel();
+                        else this.zoomOut();
+                    }
+                } else {
+                    this.wheelResistance = 0;
+                }
+            }
+
+            // No continuous hover-tracking is wired (would need per-frame
+            // raycasting for marginal benefit) -- prefer the already-selected
+            // child, else whichever child sits closest to the camera's
+            // current look-at point, as a reasonable proxy for "what the
+            // user is looking at."
+            zoomInFromWheel() {
+                const focus = this.currentFocusNode();
+                if (!focus.children.length) return;
+                const selected = this.selectedName ? this.renderNodeByKey[this.selectedName] : null;
+                if (selected && selected.children.length && focus.children.some((c) => c.name === selected.name)) {
+                    this.zoomIn(selected.name);
+                    return;
+                }
+                const target = this.orbitControls.target;
+                let closest = null;
+                let closestDist = Infinity;
+                focus.children.forEach((child, index) => {
+                    if (!child.children.length) return;
+                    const { center } = this.boxFromBounds(this.boundsFor(child, index));
+                    const dist = Math.hypot(center[0] - target.x, center[1] - target.y, center[2] - target.z);
+                    if (dist < closestDist) {
+                        closestDist = dist;
+                        closest = child.name;
+                    }
+                });
+                if (closest) this.zoomIn(closest);
+            }
+
+            // ---------------------------------------------------------------
+            // Real geometry, loaded in a wave after the placeholder boxes
+            // ---------------------------------------------------------------
+            //
+            // The bounding-box wireframe is already visible synchronously (see
+            // buildChildMeshes) -- everything here only ever *upgrades* what's
+            // already on screen, in the background, without blocking
+            // navigation. Two sources of real geometry:
+            //   - a part_ref leaf: fetch its real STL (generating on demand if
+            //     missing, same as the old standalone part viewer did).
+            //   - any other leaf whose own base geometry is a plain
+            //     Cube/Cylinder/Sphere (optionally wrapped in one Translate --
+            //     see api.py's _primitive_descriptor): build the exact Three.js
+            //     primitive directly, no server round-trip needed.
+            // A composite node (more than one combined child, or a base
+            // shape richer than one Cube/Cylinder/Sphere) has no single
+            // primitive descriptor -- real CSG rendering of those means
+            // asking the server to run this node's own subtree through the
+            // same OpenSCAD engine the site's own render already uses (see
+            // api.py's GET /sites/{name}/nodes/{path}/stl), rather than a
+            // second, bespoke geometry engine on the client.
+
+            async loadNodeGeometry(node) {
+                if (node.part_ref) return this.loadPartMesh(node);
+                if (node.children.length === 0 && node.primitive) return this.buildPrimitiveMesh(node);
+                return this.loadCompositeMesh(node);
+            }
+
+            async loadCompositeMesh(node) {
+                if (!node._path || !this.siteName) return null;
+                const stlUrl = `${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/nodes/${encodeURIComponent(node._path)}/stl`;
+                try {
+                    return await this.loadSTLMesh(node, stlUrl);
+                } catch (error) {
+                    // No renderable geometry (422), OpenSCAD unavailable (503),
+                    // or a render failure (500) -- the placeholder box already
+                    // on screen stands in for this node indefinitely.
+                    console.warn(`Could not load real geometry for ${node.name}:`, error);
+                    return null;
+                }
+            }
+
+            buildPrimitiveMesh(node) {
+                const { size, center } = this.boxFromBounds(node.primitive.bounds);
+                let geometry;
+                if (node.primitive.type === 'cube') {
+                    geometry = new THREE.BoxGeometry(size[0], size[1], size[2]);
+                } else if (node.primitive.type === 'cylinder') {
+                    // OpenSCAD cylinders are Z-aligned; after the standing
+                    // apothecary(z-up) -> three(y-up) axis swap used
+                    // everywhere else, that's three's own Y axis -- no extra
+                    // rotation needed.
+                    geometry = new THREE.CylinderGeometry(node.primitive.r2, node.primitive.r1, node.primitive.h, 32);
+                } else if (node.primitive.type === 'sphere') {
+                    geometry = new THREE.SphereGeometry(node.primitive.r, 24, 16);
+                } else {
+                    return null;
+                }
+                const mesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ flatShading: false }));
+                mesh.position.set(center[0], center[1], center[2]);
+                const edges = new THREE.EdgesGeometry(geometry, 30);
+                const wireframe = new THREE.LineSegments(
+                    edges, new THREE.LineBasicMaterial({ color: 0x000000, opacity: 0.3, transparent: true })
+                );
+                wireframe.name = 'edges';
+                mesh.add(wireframe);
+                return mesh;
+            }
+
+            async loadPartMesh(node) {
+                const stlUrl = `${BASE_URL}/parts/${encodeURIComponent(node.part_ref)}/stl`;
+                try {
+                    return await this.loadSTLMesh(node, stlUrl);
+                } catch (firstError) {
+                    // Not generated yet -- trigger generation, then try once more.
+                    try {
+                        const genUrl = `${BASE_URL}/parts/${encodeURIComponent(node.part_ref)}/stl/generate`;
+                        const response = await fetch(genUrl, { method: 'POST' });
+                        if (!response.ok) return null;
+                        return await this.loadSTLMesh(node, `${stlUrl}?t=${Date.now()}`);
+                    } catch (secondError) {
+                        console.warn(`Could not load real geometry for ${node.name}:`, secondError);
+                        return null;
+                    }
+                }
+            }
+
+            loadSTLMesh(node, url) {
+                return new Promise((resolve, reject) => {
+                    this.stlLoader.load(
+                        url,
+                        (geometry) => {
+                            applyScadAxisSwap(geometry);
+                            geometry.computeVertexNormals();
+                            geometry.center();
+                            const mesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ flatShading: false }));
+                            // Drop the real mesh into the same world slot the
+                            // placeholder box already occupied -- same fallback
+                            // chain as boundsFor, so a composite node without
+                            // its own footprint still lands where its envelope
+                            // (and therefore its placeholder box) already was.
+                            const bounds = envelopeBounds(node) || this.placeholderBounds(node, 0);
+                            const { center } = this.boxFromBounds(bounds);
+                            mesh.position.set(center[0], center[1], center[2]);
+                            const edges = new THREE.EdgesGeometry(geometry, 30);
+                            const wireframe = new THREE.LineSegments(
+                                edges, new THREE.LineBasicMaterial({ color: 0x000000, opacity: 0.3, transparent: true })
+                            );
+                            wireframe.name = 'edges';
+                            mesh.add(wireframe);
+                            resolve(mesh);
+                        },
+                        undefined,
+                        (error) => reject(error)
+                    );
+                });
+            }
+
+            // Swaps a placeholder box for real geometry in place -- disposes
+            // the old mesh, re-tags the new one so raycasting/selection keep
+            // working, and re-applies the same status/violation/selection
+            // coloring every mesh gets.
+            upgradeMesh(node, realMesh) {
+                const key = nodeKey(node);
+                const existing = this.meshByName[key];
+                if (!existing) return; // navigated away since the wave started
+                this.scene.remove(existing);
+                existing.geometry.dispose();
+                existing.material.dispose();
+                realMesh.userData.key = key;
+                this.scene.add(realMesh);
+                this.meshByName[key] = realMesh;
+                this.colorMesh(key, node);
+                if (this.selectedName === key) this.transformControls.attach(realMesh);
+            }
+
+            // The wave is exactly the set of nodes with a mesh on screen
+            // right now (renderFocus's renderNodes -- direct children
+            // normally, every leaf when "show all levels" is on). Upgrading
+            // anything not currently rendered has nowhere to land until a
+            // geometry cache exists to carry a prefetch across a zoom, which
+            // is real future work, not this increment. Within that set,
+            // "wave" is the sequential await order below: each mesh upgrades
+            // as its own load resolves, not all-or-nothing.
+            async scheduleWaveLoad(renderNodes) {
+                // A generation counter: if the user navigates again before a
+                // slow STL fetch resolves, that stale result must not
+                // upgrade a mesh belonging to the level they've since left.
+                const generation = ++this.loadGeneration;
+                for (const node of renderNodes) {
+                    const mesh = await this.loadNodeGeometry(node);
+                    if (mesh && generation === this.loadGeneration) this.upgradeMesh(node, mesh);
+                }
+            }
+        }
+
+        new FractalViewer();
+    </script>
+</body>
+</html>

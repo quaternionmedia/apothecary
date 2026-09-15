@@ -12,11 +12,14 @@ Get up and running with Apothecary in under 5 minutes.
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourorg/apothecary.git
+git clone https://github.com/quaternionmedia/apothecary.git
 cd apothecary
 
 # Install dependencies
 uv sync
+
+# Initialize git submodules (for external parts like Gridfinity)
+uv run apothecary submodules
 
 # Verify installation
 uv run apothecary system
@@ -130,6 +133,10 @@ The viewer loads `elephant_walk` by default – a preview showing all parts arra
 ```bash
 # System info
 apothecary system
+
+# Initialize/update git submodules (Gridfinity, etc.)
+apothecary submodules
+apothecary submodules --status  # Check submodule status only
 
 # List everything in the repo
 apothecary inventory structure

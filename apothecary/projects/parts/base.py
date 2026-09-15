@@ -52,8 +52,17 @@ class BasePart(BaseModel):
     @property
     def stl_file(self) -> Optional[Path]:
         """Get the STL file path if it exists."""
-        stl_path = self.source_file.with_suffix(".stl")
+        stl_path = self.get_stl_output_path()
         return stl_path if stl_path.exists() else None
+
+    def get_stl_output_path(self) -> Path:
+        """
+        Get the path where STL should be written.
+
+        Override in subclasses for custom STL locations (e.g., submodule parts).
+        Default is same directory as source file with .stl extension.
+        """
+        return self.source_file.with_suffix(".stl")
 
     @computed_field
     @property
