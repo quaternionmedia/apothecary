@@ -57,6 +57,7 @@ uv run apothecary serve
 | [docs/](docs/README.md)                            | Full documentation index       |
 | [docs/scene-json.md](docs/scene-json.md)           | JSON format for scenes         |
 | [docs/parts-authoring.md](docs/parts-authoring.md) | Add your own parts             |
+| [docs/firmware.md](docs/firmware.md)               | Program boards from parts' sketches |
 | [CONTRIBUTING.md](CONTRIBUTING.md)                 | Development setup & guidelines |
 | [CHANGELOG.md](CHANGELOG.md)                       | Version history                |
 
@@ -81,6 +82,18 @@ apothecary parts elephant-walk # Generate all-parts preview
 apothecary submodules          # Init & update all submodules
 apothecary submodules --status # Check submodule status
 
+# Firmware (Arduino / ESP32 / RP2040 ...)
+apothecary firmware install --avr --esp32   # Install arduino-cli (checksum-verified) + cores
+apothecary firmware validate   # Check the toolchain; exit 1 if unusable
+apothecary firmware boards     # Connected boards (--all: every known FQBN)
+apothecary firmware sketches   # Sketches found under parts/<name>/<name>.ino
+apothecary firmware compile footpedal        # Build (FQBN from parts/footpedal/firmware.json)
+apothecary firmware upload footpedal -p /dev/ttyUSB0   # Compile + upload
+apothecary firmware flash-bin /dev/ttyUSB0 0x10000:app.bin --chip esp32   # esptool raw flash
+apothecary firmware devices    # What's plugged in, chip identity, and what each should be running
+apothecary firmware probe /dev/ttyUSB0          # esptool chip/MAC/flash (resets the board)
+apothecary firmware listen /dev/ttyUSB0 --reset # Serial for a few seconds; names the running sketch
+
 # Server
 apothecary serve               # Start FastAPI server
 apothecary serve --port 8765   # Custom port
@@ -104,6 +117,8 @@ Start the server and visit http://127.0.0.1:8000:
 | Endpoint                     | Description                             |
 | ---------------------------- | --------------------------------------- |
 | `/viewer`                    | Fractal zoom viewer (Three.js): navigates any registered site's Assembly tree at any depth, including the parts library |
+| `/firmware`                  | Firmware workbench: install the toolchain, install cores/libraries, pick a sketch, compile and upload to a connected board, or esptool-flash raw binaries — with live task output. Devices panel shows each port's chip identity (esptool probe), the sketch it *should* be running (last apothecary upload, with drift flags), and what it *is* running (serial banner) — plus a live serial terminal |
+| `/firmware/devices/stream`   | Server-sent events of a board's serial output; the fractal viewer's "⌨ Serial log" toggle floats it over the 3D view |
 | `/docs`                      | OpenAPI documentation (Swagger)         |
 | `/parts`                     | List all parts (JSON)                   |
 | `/parts/{name}/scad`         | Download OpenSCAD source                |
