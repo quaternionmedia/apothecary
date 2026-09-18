@@ -6,6 +6,9 @@ from pathlib import Path
 
 import click
 
+from ..projects.parts.skeleton import ROOT
+from ..projects.registry import resolve_wrapper_module
+
 
 def _safe_echo(message: str):
     """Echo message with safe encoding handling for Windows."""
@@ -19,8 +22,7 @@ def _safe_echo(message: str):
 
 def _load_part_wrapper(name: str):
     """Import a part wrapper by part name (stem)."""
-    module_name = name.lower().replace("-", "_").replace(" ", "_").replace(".", "_")
-    full = f"apothecary.projects.parts.{module_name}"
+    full = resolve_wrapper_module(name, ROOT)
     try:
         mod = import_module(full)
     except ModuleNotFoundError as e:

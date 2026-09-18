@@ -1,7 +1,8 @@
+from apothecary import Translate, Union, Vector3D
+
 from .blade import SnowplowBlade
 from .mount import SnowplowMount
 
-from apothecary import Union, Translate, Vector3D
 
 def snowplow_assembly(
     blade_width=120.0,
@@ -27,19 +28,16 @@ def snowplow_assembly(
         bolt_diameter=bolt_diameter,
         bolt_spacing=bolt_spacing,
     ).geometry()
-    return Union(children=[
-        Translate(v=Vector3D(x=0, y=0, z=blade_height / 2), children=[blade]),
-        Translate(v=Vector3D(x=0, y=-blade_thickness, z=mount_height / 2), children=[mount]),
-    ])
+    return Union(
+        children=[
+            Translate(v=Vector3D(x=0, y=0, z=blade_height / 2), children=[blade]),
+            Translate(v=Vector3D(x=0, y=-blade_thickness, z=mount_height / 2), children=[mount]),
+        ]
+    )
 
-# For registry: expose DEFAULT and name
-class PartWrapper:
-    # Registry/CLI name for discovery (dotted for internal, display for UI)
-    name = "rc.snowplow"
-    display_name = "RC Snowplow"
-    @staticmethod
-    def params_model():
-        from apothecary.projects.parts.rc_snowplow import Params
-        return Params
 
-DEFAULT = PartWrapper()
+# Registry wrapper: the BasePart lives in rc_snowplow.py; re-export it here so
+# parts/rc/snowplow/snowplow.scad resolves to this package.
+from apothecary.projects.parts.rc_snowplow import DEFAULT, Params, SnowplowPart  # noqa: E402
+
+__all__ = ["DEFAULT", "Params", "SnowplowPart", "snowplow_assembly"]

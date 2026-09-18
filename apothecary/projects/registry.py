@@ -83,31 +83,17 @@ def scan_projects(root: Path) -> List[ProjectInfo]:
             )
         )
 
-        # Gather all unique SCAD files in parts/ and subfolders
-        scad_files = set(parts_dir.rglob("*.scad"))
-
-        # Add each part as a separate item
-        for scad in sorted(scad_files):
-            wrapper = _locate_wrapper_for_part(scad)
-            display_name = None
-            dotted_name = scad.stem
-            # If wrapper is a subfolder (e.g., rc/snowplow/__init__.py), use its DEFAULT
-            if wrapper:
-                try:
-                    import importlib
-                    mod = importlib.import_module(wrapper)
-                    display_name = getattr(mod.DEFAULT, "display_name", None)
-                    dotted_name = getattr(mod.DEFAULT, "name", dotted_name)
-                except Exception:
-                    display_name = None
+        # Add each part as a separate item. Supports flat parts/<name>.scad,
+        # folder parts/<name>/<name>.scad, and nested parts/<a>/<b>/<b>.scad.
+        for scad in sorted(_discover_part_scads(parts_dir)):
             items.append(
                 ProjectInfo(
-                    name=display_name or dotted_name,
+                    name=scad.stem,
                     path=scad,
                     kind="part",
                     files=[scad],
                     readme=False,
-                    wrapper=wrapper,
+                    wrapper=_locate_wrapper_for_part(scad),
                 )
             )
 
@@ -142,39 +128,91 @@ def summarize_structure(root: Path) -> Dict[str, Any]:
     return summary
 
 
+def resolve_wrapper_module(name: str, root: Path) -> str:
+    """Dotted wrapper module for a part *name* as listed by ``scan_projects``.
+
+    Prefers the wrapper the registry discovered (which is what lets nested
+    packages such as ``parts.rc.snowplow`` serve ``parts/rc/snowplow/``), and
+    falls back to the flat ``apothecary.projects.parts.<sanitized name>``
+    convention so callers can still address a wrapper that has no SCAD yet.
+    """
+    for p in scan_projects(root):
+        if p.kind == "part" and p.name == name and p.wrapper:
+            return p.wrapper
+    return f"apothecary.projects.parts.{_sanitize_module_name(name)}"
+
+
 def _sanitize_module_name(filename: str) -> str:
     base = filename.lower().replace(" ", "_").replace("-", "_")
     base = base.replace(".", "_")
     return base
 
 
+def _discover_part_scads(parts_dir: Path) -> set[Path]:
+    """Find the one SCAD file that represents each part under ``parts/``.
+
+    Flat files (``parts/<name>.scad``) are parts. A folder is a part if it
+    holds ``<folder>.scad`` (dash/underscore variants tolerated), else its
+    first SCAD file. A folder with no SCAD files is a category (``parts/rc/``)
+    and is searched recursively. Git submodule roots are skipped: their
+    contents are library internals, registered instead by
+    ``_scan_submodule_parts`` via an explicit wrapper.
+    """
+    scads: set[Path] = set(parts_dir.glob("*.scad"))
+
+    def visit(subdir: Path) -> None:
+        if (subdir / ".git").exists():
+            return
+        folder_name = subdir.name
+        for candidate in (
+            subdir / f"{folder_name}.scad",
+            subdir / f"{folder_name.replace('-', '_')}.scad",
+            subdir / f"{folder_name.replace('_', '-')}.scad",
+        ):
+            if candidate.exists():
+                scads.add(candidate)
+                return
+        found = sorted(subdir.glob("*.scad"))
+        if found:
+            scads.add(found[0])
+            return
+        for child in sorted(subdir.iterdir()):
+            if child.is_dir():
+                visit(child)
+
+    for subdir in sorted(parts_dir.iterdir()):
+        if subdir.is_dir():
+            visit(subdir)
+    return scads
+
+
 def _locate_wrapper_for_part(scad_path: Path) -> str | None:
-    """Return dotted module path for a wrapper if it exists, else None."""
-    # Support wrappers in subfolders (e.g., rc/snowplow/__init__.py)
+    """Return dotted module path for a wrapper if it exists, else None.
+
+    Flat wrappers live at ``apothecary/projects/parts/<name>.py``. Nested parts
+    (``parts/rc/snowplow/snowplow.scad``) may instead use a package mirroring
+    the folder: ``parts/rc/snowplow/<name>.py`` or ``parts/rc/snowplow/__init__.py``.
+    """
+    module_name = _sanitize_module_name(scad_path.stem)
     parts_pkg_dir = Path(__file__).resolve().parent / "parts"
-    try:
-        rel = scad_path.relative_to(parts_pkg_dir.parent.parent.parent / "parts")
-    except ValueError:
-        # Fallback: try relative to just 'parts' in cwd
-        try:
-            rel = scad_path.relative_to(Path.cwd() / "parts")
-        except ValueError:
-            rel = scad_path.name  # fallback to just the filename
 
-    # Try <parts>/<name>.py
-    flat_candidate = parts_pkg_dir / f"{scad_path.stem}.py"
+    flat_candidate = parts_pkg_dir / f"{module_name}.py"
     if flat_candidate.exists():
-        return f"apothecary.projects.parts.{scad_path.stem}"
+        return f"apothecary.projects.parts.{module_name}"
 
-    # Try <parts>/<subdir>/<name>.py and <parts>/<subdir>/__init__.py
-    if isinstance(rel, Path) and rel.parent != Path('.'):
-        submod = ".".join(rel.parts[:-1])
-        sub_candidate = parts_pkg_dir / rel.parent / f"{scad_path.stem}.py"
-        if sub_candidate.exists():
-            return f"apothecary.projects.parts.{submod}.{scad_path.stem}"
-        init_candidate = parts_pkg_dir / rel.parent / "__init__.py"
-        if init_candidate.exists():
-            return f"apothecary.projects.parts.{submod}"
+    repo_parts_dir = parts_pkg_dir.parents[2] / "parts"
+    try:
+        rel_dir = scad_path.resolve().relative_to(repo_parts_dir).parent
+    except ValueError:
+        return None
+    if rel_dir == Path("."):
+        return None
+    sub_pkg = ".".join(_sanitize_module_name(part) for part in rel_dir.parts)
+    pkg_dir = parts_pkg_dir.joinpath(*(_sanitize_module_name(part) for part in rel_dir.parts))
+    if (pkg_dir / f"{module_name}.py").exists():
+        return f"apothecary.projects.parts.{sub_pkg}.{module_name}"
+    if (pkg_dir / "__init__.py").exists():
+        return f"apothecary.projects.parts.{sub_pkg}"
     return None
 
 
