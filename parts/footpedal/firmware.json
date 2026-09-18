@@ -1,0 +1,6 @@
+{
+  "fqbn": "arduino:avr:uno",
+  "cores": ["arduino:avr"],
+  "libraries": ["FastLED", "Control Surface"],
+  "note": "HairlessMIDI_Interface targets boards without native USB (Uno/Nano/Mega). Default is Uno; override --fqbn for a Nano (arduino:avr:nano:cpu=atmega328old for CH340 clones) or Mega."
+}

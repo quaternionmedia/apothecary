@@ -3,6 +3,7 @@
 import click
 
 from .docs import docs
+from .firmware import firmware
 from .inventory import inventory
 from .parts import parts
 from .render import render_scene, render_scene_jscad, template_generate, testrun, validate
@@ -34,6 +35,7 @@ cli.add_command(inventory)
 cli.add_command(parts)
 cli.add_command(test)
 cli.add_command(docs)
+cli.add_command(firmware)
 
 
 def main():  # pragma: no cover - entry point
