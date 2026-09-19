@@ -46,7 +46,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from .hierarchy import (
     Assembly,
@@ -102,7 +102,17 @@ PRINTER_STATUSES = ["idle", "printing", "offline", "maintenance"]
 # itself, wall-/ceiling-mounted fixtures, floor-standing tools, shelving) is
 # still checked for generic overlap by Site.validate(), just not against
 # this bench-specific rule.
-BENCH_MOUNTED_STRUCTURES = {"printer_1", "printer_2", "printer_3"}
+BENCH_MOUNTED_STRUCTURES = {"printer_1", "printer_2", "printer_3", "esp32_blink", "footpedal"}
+
+# Two boards on the bench east of printer_3 (x 1200..1500), so the firmware
+# seam has scene nodes to bind real devices to: a bare ESP32 devkit running
+# parts/esp32_blink/ and the footpedal part (parts/footpedal/, which carries
+# its own sketch). Both sit inside the 600mm bench depth and clear of the
+# printers' y 150..450 band.
+ESP32_BLINK_SIZE = Vector3D(x=55.0, y=28.0, z=13.0)  # a WROOM-32 devkit
+ESP32_BLINK_POSITION = Vector3D(x=1600.0, y=60.0, z=BENCH_TOP_Z)
+FOOTPEDAL_SIZE = Vector3D(x=180.0, y=100.0, z=30.0)  # FootpedalParams defaults
+FOOTPEDAL_POSITION = Vector3D(x=1580.0, y=470.0, z=BENCH_TOP_Z)
 
 # --- Garage building shell (mm) -- wraps around the workbench with room to
 # walk in front of it; a hollow rectangular shell, not a solid one, so the
@@ -214,6 +224,28 @@ def _build_workbench() -> Assembly:
     )
 
 
+# The printer's controller board, inside the base enclosure: a Creality
+# 4.2.x-sized PCB. This is the node a real printer's serial port is pinned
+# to (see firmware/bindings.py): the board is what Apothecary talks to, and
+# the printer Structure above it takes its status from the board's polls
+# (api.py's _sync_printer_status walks up to the nearest status-bearing
+# ancestor). Binding the Structure itself still works; the board is where
+# the monitoring belongs.
+MAINBOARD_SIZE = Vector3D(x=102.0, y=74.0, z=15.0)
+MAINBOARD_POSITION = Vector3D(x=20.0, y=20.0, z=5.0)
+
+
+def _build_mainboard() -> Assembly:
+    board = Substructure(
+        name="mainboard",
+        position=MAINBOARD_POSITION,
+        base=Cube(size=MAINBOARD_SIZE, comment="Controller board -- pin the printer's port here"),
+        footprint=BoundingBox3D(min_point=Vector3D(), max_point=MAINBOARD_SIZE),
+    )
+    board.category = "electrical"
+    return board
+
+
 def _build_printer(name: str, *, x: float, y: float, status: str = "idle") -> Assembly:
     frame_system = Substructure(
         name="frame_system",
@@ -221,6 +253,7 @@ def _build_printer(name: str, *, x: float, y: float, status: str = "idle") -> As
             size=Vector3D(x=PRINTER_WIDTH, y=PRINTER_DEPTH, z=PRINTER_BASE_HEIGHT),
             comment="Printer base / electronics enclosure",
         ),
+        children=[_build_mainboard()],
     )
 
     post_height = PRINTER_HEIGHT - PRINTER_BASE_HEIGHT - POST_SIZE
@@ -277,7 +310,9 @@ def _build_printer(name: str, *, x: float, y: float, status: str = "idle") -> As
                 name="right_post",
                 geometry=Translate(
                     v=Vector3D(
-                        x=PRINTER_WIDTH - POST_SIZE, y=PRINTER_DEPTH - POST_SIZE, z=PRINTER_BASE_HEIGHT
+                        x=PRINTER_WIDTH - POST_SIZE,
+                        y=PRINTER_DEPTH - POST_SIZE,
+                        z=PRINTER_BASE_HEIGHT,
                     ),
                     children=[Cube(size=Vector3D(x=POST_SIZE, y=POST_SIZE, z=post_height))],
                 ),
@@ -319,7 +354,9 @@ def _wall_substructure(
     whole building -- see _build_garage_building), positioned in the
     building's own local frame the same way every other Substructure is.
     """
-    size = Vector3D(x=max_point.x - min_point.x, y=max_point.y - min_point.y, z=max_point.z - min_point.z)
+    size = Vector3D(
+        x=max_point.x - min_point.x, y=max_point.y - min_point.y, z=max_point.z - min_point.z
+    )
     return Substructure(
         name=name,
         position=min_point,
@@ -433,7 +470,9 @@ def _build_lighting() -> Assembly:
         material="Aluminum housing, LED panel",
         position=LIGHTING_POSITION,
         housing_size=Vector3D(x=400.0, y=100.0, z=50.0),
-        output=Feature.boss("light_output", position=Vector3D(x=200, y=50, z=-1), diameter=100, height=2),
+        output=Feature.boss(
+            "light_output", position=Vector3D(x=200, y=50, z=-1), diameter=100, height=2
+        ),
         # Lighting runs on the same wiring system as the receptacles --
         # standard M/E/P (mechanical/electrical/plumbing) trade grouping.
         category="electrical",
@@ -446,7 +485,9 @@ def _build_hvac() -> Assembly:
         material="Galvanized steel ductwork",
         position=HVAC_POSITION,
         housing_size=Vector3D(x=300.0, y=300.0, z=100.0),
-        output=Feature.boss("vent_output", position=Vector3D(x=150, y=150, z=-1), diameter=200, height=2),
+        output=Feature.boss(
+            "vent_output", position=Vector3D(x=150, y=150, z=-1), diameter=200, height=2
+        ),
         category="mechanical",
     )
 
@@ -457,7 +498,9 @@ def _build_electrical() -> Assembly:
         material="PVC junction box",
         position=ELECTRICAL_POSITION,
         housing_size=Vector3D(x=100.0, y=150.0, z=200.0),
-        output=Feature.boss("outlet_output", position=Vector3D(x=50, y=75, z=90), diameter=60, height=15),
+        output=Feature.boss(
+            "outlet_output", position=Vector3D(x=50, y=75, z=90), diameter=60, height=15
+        ),
         category="electrical",
     )
 
@@ -468,7 +511,9 @@ def _build_fluids() -> Assembly:
         material="Copper pipe stub",
         position=FLUIDS_POSITION,
         housing_size=Vector3D(x=100.0, y=100.0, z=300.0),
-        output=Feature.boss("spigot_output", position=Vector3D(x=50, y=50, z=280), diameter=30, height=40),
+        output=Feature.boss(
+            "spigot_output", position=Vector3D(x=50, y=50, z=280), diameter=30, height=40
+        ),
         category="fluid",
     )
 
@@ -484,13 +529,18 @@ def _build_storage() -> Assembly:
             name=name,
             geometry=Translate(
                 v=Vector3D(z=height),
-                children=[Cube(size=Vector3D(x=STORAGE_SIZE.x, y=STORAGE_SIZE.y, z=SHELF_THICKNESS))],
+                children=[
+                    Cube(size=Vector3D(x=STORAGE_SIZE.x, y=STORAGE_SIZE.y, z=SHELF_THICKNESS))
+                ],
             ),
         )
 
     shelf_unit = Substructure(
         name="shelf_unit",
-        base=Cube(size=Vector3D(x=STORAGE_SIZE.x, y=SHELF_THICKNESS, z=STORAGE_SIZE.z), comment="Back panel"),
+        base=Cube(
+            size=Vector3D(x=STORAGE_SIZE.x, y=SHELF_THICKNESS, z=STORAGE_SIZE.z),
+            comment="Back panel",
+        ),
         additions=[_shelf(f"shelf_{i + 1}", height) for i, height in enumerate(SHELF_HEIGHTS)],
         footprint=BoundingBox3D(min_point=Vector3D(), max_point=STORAGE_SIZE),
     )
@@ -525,10 +575,43 @@ def _build_cnc_router() -> Assembly:
     )
 
 
+def _build_esp32_blink() -> Assembly:
+    """A bare devkit on the bench: not a registered part, so ``sketch_ref``
+    names the firmware it runs. No children, so the viewer renders its
+    exact Cube primitive rather than a placeholder box.
+    """
+    return Assembly(
+        name="esp32_blink",
+        role="structure",
+        position=ESP32_BLINK_POSITION,
+        base=Cube(size=ESP32_BLINK_SIZE, comment="ESP32 devkit (stub)"),
+        footprint=BoundingBox3D(min_point=Vector3D(), max_point=ESP32_BLINK_SIZE),
+        category="electrical",
+        sketch_ref="esp32_blink",
+    )
+
+
+def _build_footpedal() -> Assembly:
+    """The footpedal part on the bench. ``part_ref`` gives the viewer the real
+    STL and gives the firmware seam the sketch in the same folder; the Cube
+    is only the envelope the site render and layout checks need.
+    """
+    return Assembly(
+        name="footpedal",
+        role="structure",
+        position=FOOTPEDAL_POSITION,
+        base=Cube(size=FOOTPEDAL_SIZE, comment="footpedal envelope (real STL in the viewer)"),
+        footprint=BoundingBox3D(min_point=Vector3D(), max_point=FOOTPEDAL_SIZE),
+        category="electrical",
+        part_ref="footpedal",
+    )
+
+
 def create_example_site() -> Assembly:
     """A garage: a workbench with a fleet of printers on top of it, inside its
-    own building shell, alongside abstract utility fixtures, storage, and a
-    subtractive-manufacturing stub -- see this module's docstring.
+    own building shell, alongside abstract utility fixtures, storage, a
+    subtractive-manufacturing stub, and two boards the firmware seam can
+    talk to -- see this module's docstring.
     """
 
     workbench = _build_workbench()
@@ -549,6 +632,8 @@ def create_example_site() -> Assembly:
             _build_fluids(),
             _build_storage(),
             _build_cnc_router(),
+            _build_esp32_blink(),
+            _build_footpedal(),
         ],
     )
 
@@ -595,8 +680,14 @@ def validate_garage_layout(site: Assembly) -> LayoutReport:
             )
             continue
 
-        within_x = bench_bounds.min_point.x <= bounds.min_point.x and bounds.max_point.x <= bench_bounds.max_point.x
-        within_y = bench_bounds.min_point.y <= bounds.min_point.y and bounds.max_point.y <= bench_bounds.max_point.y
+        within_x = (
+            bench_bounds.min_point.x <= bounds.min_point.x
+            and bounds.max_point.x <= bench_bounds.max_point.x
+        )
+        within_y = (
+            bench_bounds.min_point.y <= bounds.min_point.y
+            and bounds.max_point.y <= bench_bounds.max_point.y
+        )
         if not (within_x and within_y):
             violations.append(
                 LayoutViolation(

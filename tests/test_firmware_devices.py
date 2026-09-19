@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
-from conftest import fake_cli_calls
 from fastapi.testclient import TestClient
+from firmware_helpers import fake_cli_calls
 
 from apothecary.api import app
 from apothecary.cli import cli
@@ -181,6 +181,30 @@ def test_probe_uses_esptool_only_for_unmatched_or_esp(fake_arduino_cli, monkeypa
     assert calls == [["--chip", "auto", "--port", "/dev/ttyFAKE1", "flash_id"]]
     with pytest.raises(Exception, match="no board detected"):
         devices.probe_device("/dev/ttyNOPE")
+
+
+def test_probe_treats_esp8266_as_espressif(fake_arduino_cli, monkeypatch):
+    from apothecary.firmware import toolchains
+    from apothecary.firmware.models import DeviceInfo
+
+    assert devices.is_espressif_fqbn("esp8266:esp8266:nodemcuv2")
+    assert devices.is_espressif_fqbn("esp32:esp32:esp32")
+    assert not devices.is_espressif_fqbn("arduino:avr:uno")
+
+    monkeypatch.setattr(toolchains, "_ESPTOOL", Esptool(argv_prefix=[str(fake_arduino_cli)]))
+    real = devices.detected_devices
+
+    def with_esp8266(cli=None, state=None):
+        found = real(cli, state)
+        found.append(
+            DeviceInfo(port="/dev/ttyFAKE2", fqbn="esp8266:esp8266:nodemcuv2", board_name="NodeMCU")
+        )
+        return found
+
+    monkeypatch.setattr(devices, "detected_devices", with_esp8266)
+    esp = devices.probe_device("/dev/ttyFAKE2")
+    assert esp.chip == "ESP32-D0WD-V3" and esp.probed_at is not None  # fake esptool answers
+    assert devices.get_state().cached_device("/dev/ttyFAKE2").mac == "aa:bb:cc:dd:ee:ff"
 
 
 # --- observed: listen / stream ----------------------------------------------------------

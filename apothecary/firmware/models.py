@@ -46,6 +46,7 @@ class BoardInfo(BaseModel):
     fqbn: Optional[str] = None
     vid: Optional[str] = None
     pid: Optional[str] = None
+    serial_number: Optional[str] = None  # USB iSerial; generic on some bridges (CP2102: "0001")
 
 
 class KnownBoard(BaseModel):
@@ -64,13 +65,30 @@ class CoreInfo(BaseModel):
     latest: Optional[str] = None
 
 
+class DisplaySpec(BaseModel):
+    """Where a sketch's screen sits on its part, for the viewer's screen-emulation mode.
+
+    Coordinates are in the part's own OpenSCAD frame (millimetres, z-up), so
+    a viewer places the screen at ``node.position + position`` in world
+    space. ``normal`` is the direction the screen faces; ``up`` orients its
+    text; ``size`` is width × height.
+    """
+
+    position: List[float] = Field(min_length=3, max_length=3)
+    normal: List[float] = Field(default=[0.0, 0.0, 1.0], min_length=3, max_length=3)
+    up: List[float] = Field(default=[0.0, 1.0, 0.0], min_length=3, max_length=3)
+    size: List[float] = Field(min_length=2, max_length=2)
+
+
 class SketchInfo(BaseModel):
     """An Arduino sketch discovered under ``parts/``.
 
     A sketch is a folder holding ``<folder>.ino`` -- arduino-cli's own layout
     rule. An optional ``firmware.json`` sidecar in that folder supplies
     defaults (``fqbn``, ``cores``, ``libraries``, ``note``) so the GUI and CLI
-    can offer them without the user re-typing them for every build.
+    can offer them without the user re-typing them for every build, plus
+    what the viewer needs to show the board's console in the scene
+    (``baud``, ``display``).
     """
 
     name: str
@@ -81,6 +99,8 @@ class SketchInfo(BaseModel):
     cores: List[str] = Field(default_factory=list)
     libraries: List[str] = Field(default_factory=list)
     note: Optional[str] = None
+    baud: int = 115200
+    display: Optional[DisplaySpec] = None
 
     def to_json(self) -> dict:
         d = self.model_dump()
@@ -235,6 +255,8 @@ class DeviceInfo(BaseModel):
     flash_size: Optional[str] = None
     flash_manufacturer: Optional[str] = None
     probed_at: Optional[datetime] = None
+    serial_number: Optional[str] = None
+    printer: Optional["PrinterInfo"] = None  # a G-code firmware answered M115 on this port
 
     @property
     def identity(self) -> str:
@@ -288,3 +310,149 @@ class ListenRequest(ProbeRequest):
     seconds: float = Field(3.0, ge=0.5, le=15)
     baud: int = Field(115200, ge=300, le=2000000)
     reset: bool = False  # probe first so the boot banner is captured
+
+
+# --- printers: a G-code firmware (Marlin and kin) on a serial port ----------------
+
+
+class PrinterInfo(BaseModel):
+    """What ``M115`` says a board is: firmware, machine, capabilities.
+
+    Parsed from the ``KEY:value`` line and the ``Cap:NAME:0|1`` lines Marlin
+    prints after it. ``uuid`` is the build's compiled-in id, shared by every
+    board running the same build -- an identity of the firmware, not the
+    board, so ``DeviceInfo.identity`` does not use it.
+    """
+
+    firmware_name: str
+    machine_type: Optional[str] = None
+    protocol_version: Optional[str] = None
+    source_code_url: Optional[str] = None
+    extruder_count: int = 1
+    uuid: Optional[str] = None
+    capabilities: dict = Field(default_factory=dict)  # Cap:AUTOREPORT_TEMP -> True
+    baud: int = 115200
+    boot_lines: List[str] = Field(default_factory=list)  # banner captured after the DTR reset
+    identified_at: Optional[datetime] = None
+
+
+class Heater(BaseModel):
+    actual: float
+    target: float = 0.0
+    power: Optional[int] = None  # PWM duty from the `@:` field
+
+
+class PrinterStatus(BaseModel):
+    """One poll of a printer: temperatures, position, endstops, SD progress.
+
+    ``state`` is drawn from the garage site's ``PRINTER_STATUSES`` (idle,
+    printing, offline, maintenance) so a node bound to this port can take
+    it verbatim; ``heating`` is folded into ``printing``/``idle`` by whether
+    an SD print is in progress.
+    """
+
+    port: str
+    polled_at: datetime
+    state: str = "idle"
+    hotends: List[Heater] = Field(default_factory=list)
+    bed: Optional[Heater] = None
+    position: Optional[dict] = None  # {"x":..,"y":..,"z":..,"e":..} from M114
+    endstops: dict = Field(default_factory=dict)  # x_min -> "open" | "TRIGGERED"
+    filament_present: Optional[bool] = None  # M119's `filament:` line, when a runout sensor exists
+    sd_printing: bool = False
+    sd_progress: Optional[float] = None  # 0..1, from M27
+    print_time_s: Optional[int] = None  # from M31
+    raw: List[str] = Field(default_factory=list)  # every line the poll received, for the log
+    synced: List[dict] = Field(default_factory=list)  # scene nodes this poll updated (api.py)
+
+    @property
+    def heating(self) -> bool:
+        return any(h.target > 0 and h.actual < h.target - 3 for h in [*self.hotends, self.bed] if h)
+
+
+class PrinterQueryRequest(ProbeRequest):
+    command: str = Field(min_length=2, max_length=16)
+
+
+class PrinterControlArmRequest(ProbeRequest):
+    armed: bool = True
+    ttl_s: float = Field(300.0, ge=10, le=3600)
+
+
+class PrinterControlRequest(ProbeRequest):
+    command: str = Field(min_length=2, max_length=80)
+
+
+class PrinterQueryResult(BaseModel):
+    port: str
+    command: str
+    lines: List[str] = Field(default_factory=list)
+    queried_at: datetime
+
+
+class PrinterIdentifyRequest(ProbeRequest):
+    baud: int = Field(115200, ge=300, le=2000000)
+    reset: bool = False  # reboot the board to capture its banner -- never mid-print
+
+
+# --- bindings: which board is which scene node -----------------------------------
+
+MAC_RE = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
+
+
+def validate_identity(value: str) -> str:
+    """A ``DeviceInfo.identity``: a MAC (normalised to lower case) or a serial port."""
+    v = value.strip()
+    if MAC_RE.match(v.lower()):
+        return v.lower()
+    if PORT_RE.match(v):
+        return v
+    raise ValueError(f"not a device identity (MAC or serial port): {value!r}")
+
+
+class ManualBinding(BaseModel):
+    """A device the user pinned to a scene node, overriding the by-sketch rule."""
+
+    site: str
+    path: str  # dotted node path, as GET /sites/{name}/nodes/{path}/stl addresses it
+    identity: str  # DeviceInfo.identity: MAC or port
+    bound_at: datetime
+
+
+class NodeBinding(BaseModel):
+    """One scene node that (could) have a board, and which board that is right now.
+
+    ``binding_source`` says how ``device`` was chosen: ``manual`` (pinned by
+    the user), ``sketch`` (the last board Apothecary flashed this node's
+    sketch onto), or ``None`` when nothing has been flashed yet. ``device``
+    is ``None`` when the chosen board is not currently plugged in;
+    ``note`` says why.
+    """
+
+    path: str
+    name: str
+    part_ref: Optional[str] = None
+    sketch_ref: Optional[str] = None
+    sketch: Optional[str] = None  # resolved sketch name
+    baud: int = 115200
+    display: Optional[DisplaySpec] = None
+    binding_source: Optional[str] = None  # "manual" | "sketch" | None
+    identity: Optional[str] = None
+    device: Optional[DeviceInfo] = None
+    expected: Optional[ExpectedFirmware] = None
+    candidates: List[str] = Field(default_factory=list)  # other ports running the same sketch
+    printer_status: Optional[PrinterStatus] = None  # last poll of a bound printer, if any
+    note: Optional[str] = None
+
+
+class DeviceAttachRequest(BaseModel):
+    identity: str
+
+    @field_validator("identity")
+    @classmethod
+    def _identity(cls, v: str) -> str:
+        return validate_identity(v)
+
+
+# DeviceInfo names PrinterInfo before it is defined; finish the model now that it is.
+DeviceInfo.model_rebuild()

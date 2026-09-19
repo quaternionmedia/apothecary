@@ -50,6 +50,10 @@ class SiteStore:
             self._sites[name] = factory()
         return self._sites[name]
 
+    def loaded(self) -> List[str]:
+        """Sites built so far -- the only ones whose in-memory state anyone has edited."""
+        return list(self._sites)
+
     def validator(self, name: str) -> SiteValidator:
         _factory, validator = self._entry(name)
         return validator

@@ -35,7 +35,13 @@ from .example_hierarchy import (
     validate_garage_layout,
 )
 from .example_parts_library import create_parts_library_site, validate_parts_library
+from .firmware import devices as firmware_devices
+from .firmware import gcode as firmware_gcode
+from .firmware.api import _device_view as firmware_device_view
 from .firmware.api import router as firmware_router
+from .firmware.bindings import bindings_for_site
+from .firmware.models import DeviceAttachRequest
+from .firmware.toolchains import ToolchainError
 from .hierarchy import Assembly
 from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
@@ -311,6 +317,7 @@ def _part_payload(part, params_query: str | None) -> Dict[str, object]:
 
 
 app.include_router(firmware_router)
+
 
 @app.get("/")
 async def root():
@@ -717,8 +724,14 @@ def _primitive_descriptor(obj: OpenSCADObject, offset: Vector3D) -> Dict[str, ob
         return _primitive_descriptor(obj.children[0], offset + obj.v)
 
     if isinstance(obj, Cube):
-        size = obj.size if isinstance(obj.size, Vector3D) else Vector3D(x=obj.size, y=obj.size, z=obj.size)
-        local_min = Vector3D(x=-size.x / 2, y=-size.y / 2, z=-size.z / 2) if obj.center else Vector3D()
+        size = (
+            obj.size
+            if isinstance(obj.size, Vector3D)
+            else Vector3D(x=obj.size, y=obj.size, z=obj.size)
+        )
+        local_min = (
+            Vector3D(x=-size.x / 2, y=-size.y / 2, z=-size.z / 2) if obj.center else Vector3D()
+        )
         bounds = BoundingBox3D(min_point=local_min + offset, max_point=local_min + size + offset)
         return {"type": "cube", "size": [size.x, size.y, size.z], "bounds": _bounds_dict(bounds)}
 
@@ -735,7 +748,8 @@ def _primitive_descriptor(obj: OpenSCADObject, offset: Vector3D) -> Dict[str, ob
     if isinstance(obj, Sphere):
         r = obj.r
         bounds = BoundingBox3D(
-            min_point=Vector3D(x=-r, y=-r, z=-r) + offset, max_point=Vector3D(x=r, y=r, z=r) + offset
+            min_point=Vector3D(x=-r, y=-r, z=-r) + offset,
+            max_point=Vector3D(x=r, y=r, z=r) + offset,
         )
         return {"type": "sphere", "r": r, "bounds": _bounds_dict(bounds)}
 
@@ -801,6 +815,7 @@ def _assembly_tree(
         "status": node.status,
         "comment": node.comment,
         "part_ref": node.part_ref,
+        "sketch_ref": node.sketch_ref,
         "category": category,
         "position": {"x": world_position.x, "y": world_position.y, "z": world_position.z},
         "footprint": _bounds_dict(node.footprint),
@@ -810,7 +825,9 @@ def _assembly_tree(
             if node.build_volume
             else None
         ),
-        "primitive": _primitive_descriptor(node.base, world_position) if node.base is not None else None,
+        "primitive": (
+            _primitive_descriptor(node.base, world_position) if node.base is not None else None
+        ),
         "children": [
             {**_assembly_tree(child, world_position, category), "composition": composition}
             for child, composition in composed
@@ -966,6 +983,132 @@ async def get_node_stl(name: str, path: str):
         )
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"Failed to read STL: {exc}") from exc
+
+
+# -----------------------------------------------------------------------
+# Devices of a site: which board sits at which node (see firmware/bindings.py).
+# These live here, not on the firmware router, because they need the site
+# store; the firmware package stays importable on its own.
+# -----------------------------------------------------------------------
+
+
+def status_bearer_for(site: Assembly, path: str) -> Optional[str]:
+    """The path of ``path`` itself if it carries a status, else its nearest ancestor that does.
+
+    A printer's port is pinned to its *board* (``printer_1.frame_system.mainboard``),
+    which has no status of its own; the printer Structure above it is what
+    the polls drive. ``None`` when nothing up the path carries a status (a
+    footpedal, say).
+    """
+    parts = path.split(".")
+    for depth in range(len(parts), 0, -1):
+        candidate = ".".join(parts[:depth])
+        node = _find_node_by_path(site, candidate)
+        if node is not None and node.status is not None:
+            return candidate
+    return None
+
+
+def _sync_printer_status(status) -> List[Dict[str, object]]:
+    """A printer poll drives the status of the node its port is pinned to -- or the
+    nearest ancestor that carries a status, when the pin is on a board inside it.
+
+    Registered on ``firmware.devices.STATUS_LISTENERS`` at import. Nodes
+    with no status anywhere up the path are left alone (a footpedal), and a
+    hand-set ``maintenance`` is never overridden by a poll -- the printer
+    may well be idle *because* someone is working on it.
+    """
+    out: List[Dict[str, object]] = []
+    if status.state not in PRINTER_STATUSES:
+        return out
+    state = firmware_devices.get_state()
+    for site_name in _site_store.loaded():
+        site = _site_store.get(site_name)
+        for binding in state.bindings(site_name):
+            if binding.identity != status.port:
+                continue
+            target = status_bearer_for(site, binding.path)
+            if target is None:
+                continue
+            node = _find_node_by_path(site, target)
+            row: Dict[str, object] = {"site": site_name, "path": target}
+            if target != binding.path:
+                row["via"] = binding.path
+            if node.status == "maintenance":
+                out.append({**row, "status": node.status, "changed": False, "held": True})
+                continue
+            changed = node.status != status.state
+            node.status = status.state
+            out.append({**row, "status": node.status, "changed": changed})
+    return out
+
+
+firmware_devices.STATUS_LISTENERS.append(_sync_printer_status)
+
+
+def _site_devices_payload(name: str, site: Assembly, fresh: bool = False) -> Dict[str, object]:
+    problem = None
+    try:
+        found = firmware_devices.detected_devices(fresh=fresh)
+    except ToolchainError as exc:
+        found, problem = [], str(exc)
+    # Refresh printers whose link is already held (0.1 s, no reset); a
+    # never-opened port is left alone so this view never reboots a board.
+    links = firmware_gcode.get_printer_links()
+    for d in found:
+        if d.printer is not None and links.get(d.port) is not None:
+            firmware_devices.printer_status(d.port)
+    rows = bindings_for_site(name, site, devices=found)
+    return {
+        "site": name,
+        "bindings": [r.model_dump(mode="json") for r in rows],
+        "devices": [firmware_device_view(d) for d in found],
+        "streaming": firmware_devices.get_streams().open_ports,
+        "problem": problem,
+    }
+
+
+def _binding_row_or_404(name: str, path: str) -> Dict[str, object]:
+    site = _get_site_or_404(name)
+    rows = _site_devices_payload(name, site)["bindings"]
+    row = next((r for r in rows if r["path"] == path), None)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
+    return row
+
+
+@app.get("/sites/{name}/devices")
+def site_devices(name: str, fresh: bool = False):
+    """Every node of the site that names firmware, with the board bound to it.
+
+    Plain ``def``: ``detected_devices`` shells out to arduino-cli, so this
+    runs in the threadpool rather than blocking the event loop. ``fresh``
+    bypasses the short port-scan cache (a rescan button, the auto-refresh).
+    """
+    site = _get_site_or_404(name)
+    return _site_devices_payload(name, site, fresh=fresh)
+
+
+@app.put("/sites/{name}/nodes/{path}/device")
+def attach_device(name: str, path: str, body: DeviceAttachRequest):
+    """Pin a device (MAC or port) to a node; overrides the by-sketch rule."""
+    site = _get_site_or_404(name)
+    if _find_node_by_path(site, path) is None:
+        raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
+    firmware_devices.get_state().set_binding(name, path, body.identity)
+    return _binding_row_or_404(name, path)
+
+
+@app.delete("/sites/{name}/nodes/{path}/device")
+def detach_device(name: str, path: str):
+    """Drop a pin; the node goes back to the by-sketch rule (or to nothing)."""
+    site = _get_site_or_404(name)
+    if _find_node_by_path(site, path) is None:
+        raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
+    firmware_devices.get_state().clear_binding(name, path)
+    rows = _site_devices_payload(name, site)["bindings"]
+    row = next((r for r in rows if r["path"] == path), None)
+    return row or {"path": path, "name": path.rsplit(".", 1)[-1], "binding_source": None}
 
 
 # -----------------------------------------------------------------------
