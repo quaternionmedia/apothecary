@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import click
+from pydantic import ValidationError
 
 from ..projects.parts.skeleton import ROOT
 from ..projects.registry import scan_projects
@@ -68,32 +69,31 @@ def parts_render(name: str, params_json: str | None, template: str | None, outpu
             params_data = json.loads(params_json)
         except Exception as e:
             raise click.ClickException(f"Invalid JSON for --params-json: {e}") from e
+    params = None
     if part.params_model:
-        params = part.params_model(**params_data)
-        params_json_out = params.model_dump_json()
-    else:
-        params_json_out = "{}"
-    # Determine output path: default to parts/<part_name>/<part_name>.scad
-    if output == "part.scad" or not output:
-        part_dir = Path("parts") / part.name.replace(".", "/")
-        part_dir.mkdir(parents=True, exist_ok=True)
-        output_path = part_dir / f"{part.name.split('.')[-1]}.scad"
-    else:
-        output_path = Path(output)
+        try:
+            params = part.params_model(**params_data)
+        except ValidationError as e:
+            raise click.ClickException(f"Invalid parameters for '{part.name}': {e}") from e
+    params_json_out = params.model_dump_json() if params else "{}"
+    output_path = Path(output)
 
     # Special case: rc.snowplow is a Python parametric part, generate SCAD from Python
     if part.name == "rc.snowplow":
-        # Import and use the parametric assembly
-        import importlib
-        snowplow_mod = importlib.import_module("apothecary.projects.parts.rc.snowplow")
-        params = json.loads(params_json) if params_json else {}
-        assembly = snowplow_mod.snowplow_assembly(**params) if params else snowplow_mod.snowplow_assembly()
-        code = assembly.render()
+        from ..projects.parts.rc.snowplow import snowplow_assembly
+
+        code = snowplow_assembly(**(params.model_dump() if params else {})).render()
         output_path.write_text(code, encoding="utf-8")
         click.echo(f"Rendered parametric part '{part.name}' -> {output_path}")
         return
 
-    # Otherwise, use template rendering (legacy/generic)
+    # Otherwise, use template rendering (legacy/generic). The stub includes the
+    # source file, so writing it over that file would destroy the part.
+    if output_path.resolve() == part.source_file.resolve():
+        raise click.ClickException(
+            f"Refusing to overwrite the part's own source file {part.source_file}; "
+            "pass a different --output path."
+        )
     if template:
         tpl_str = Path(template).read_text(encoding="utf-8")
     else:
@@ -119,8 +119,15 @@ def parts_render(name: str, params_json: str | None, template: str | None, outpu
 @click.option("--all", "generate_all", is_flag=True, help="Generate STL for all parts")
 @click.option("--force", is_flag=True, help="Regenerate even if STL exists")
 @click.option("--timeout", default=120, type=int, help="Timeout per part in seconds")
-@click.option("--openscad-path", type=click.Path(exists=True, dir_okay=False), default=None, help="Path to OpenSCAD executable")
-def parts_generate_stl(name: str | None, generate_all: bool, force: bool, timeout: int, openscad_path: str | None):
+@click.option(
+    "--openscad-path",
+    type=click.Path(exists=True, dir_okay=False),
+    default=None,
+    help="Path to OpenSCAD executable",
+)
+def parts_generate_stl(
+    name: str | None, generate_all: bool, force: bool, timeout: int, openscad_path: str | None
+):
     """Generate STL files from SCAD sources.
 
     STL files are not committed to git (they're in .gitignore).
@@ -133,7 +140,9 @@ def parts_generate_stl(name: str | None, generate_all: bool, force: bool, timeou
     """
     from ..projects.parts.stl_renderer import OpenSCADRenderer
 
-    renderer = OpenSCADRenderer(openscad_path=openscad_path) if openscad_path else OpenSCADRenderer()
+    renderer = (
+        OpenSCADRenderer(openscad_path=openscad_path) if openscad_path else OpenSCADRenderer()
+    )
 
     if not renderer.is_available:
         raise click.ClickException(

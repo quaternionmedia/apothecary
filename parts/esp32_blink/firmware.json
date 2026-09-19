@@ -4,5 +4,12 @@
     "esp32:esp32"
   ],
   "libraries": [],
-  "note": "Generic classic ESP32 (WROOM-32 devkits); verified on ESP32-D0WD-V3. For an S3 use esp32:esp32:esp32s3, for a C3 esp32:esp32:esp32c3. Announces `apothecary esp32_blink: hello` at boot and every ~5 s."
+  "note": "Generic classic ESP32 (WROOM-32 devkits); verified on ESP32-D0WD-V3. For an S3 use esp32:esp32:esp32s3, for a C3 esp32:esp32:esp32c3. Announces `apothecary esp32_blink: hello` at boot and every ~5 s.",
+  "baud": 115200,
+  "display": {
+    "position": [27.5, 14.0, 13.5],
+    "normal": [0, 0, 1],
+    "up": [0, 1, 0],
+    "size": [40, 20]
+  }
 }
