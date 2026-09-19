@@ -34,6 +34,12 @@ Welcome to the Apothecary documentation. This index links to all available guide
 | [Parts README](../parts/README.md) | Raw SCAD files and naming conventions |
 | [E2E Testing](../tests/e2e/README.md) | Running Playwright end-to-end tests |
 
+## Plans
+
+| Document | Description |
+|----------|-------------|
+| [Consolidation, 2026-09-19](plans/consolidation-2026-09-19.md) | Landing the printer seam on the integration branch: where the lines are, the order of operations, the census gate, and what a person has to decide |
+
 ## Generated Documentation (screenshots, GIFs, walkthroughs)
 
 The fractal zoom viewer and the printer monitor are documented by their own
