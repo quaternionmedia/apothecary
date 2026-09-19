@@ -138,6 +138,7 @@ apothecary system
 apothecary firmware install --avr      # one-time: arduino-cli + the AVR core
 apothecary firmware boards             # what's plugged in
 apothecary firmware upload footpedal   # compile + upload; or use the /firmware page
+apothecary firmware printer /dev/ttyUSB1   # a 3D printer's board: identify + poll (see docs/firmware.md)
 
 # Initialize/update git submodules (Gridfinity, etc.)
 apothecary submodules

@@ -18,7 +18,7 @@ Welcome to the Apothecary documentation. This index links to all available guide
 | [Scene JSON Format](scene-json.md) | JSON schema for scenes, primitives, booleans, and transforms |
 | [Parts Authoring](parts-authoring.md) | How to create and register new parts |
 | [Geometry Models](models.md) | Vectors, bounds, colors, shapes, and units |
-| [Firmware](firmware.md) | Program Arduinos/ESP32s from sketches kept with their parts; toolchain install, device identity, live serial |
+| [Firmware](firmware.md) | Program Arduinos/ESP32s from sketches kept with their parts; toolchain install, device identity, live serial; monitor a G-code printer and let it drive its scene node |
 
 ## External Libraries
 
@@ -36,10 +36,22 @@ Welcome to the Apothecary documentation. This index links to all available guide
 
 ## Generated Documentation (screenshots, GIFs, walkthroughs)
 
-The fractal zoom viewer is documented by its own Playwright E2E test, not by
-hand-maintained prose: each `docs.step("...")` call in
-`tests/e2e/test_docs_fractal_viewer.py` is both a checked assertion point and
-a sentence of documentation. Editing that test is how you edit these docs.
+The fractal zoom viewer and the printer monitor are documented by their own
+Playwright E2E tests, not by hand-maintained prose: each `docs.step("...")`
+call in `tests/e2e/test_docs_fractal_viewer.py` and
+`tests/e2e/test_docs_printer_monitor.py` is both a checked assertion point
+and a sentence of documentation. Editing those tests is how you edit these
+docs. Once generated:
+
+| Walkthrough | Page |
+|---|---|
+| Fractal zoom viewer | [`generated/fractal-viewer/fractal-viewer.md`](generated/fractal-viewer/fractal-viewer.md) |
+| Printer monitor (Device panel, polling overlay, G-code queries, firmware page) | [`generated/printer-monitor/printer-monitor.md`](generated/printer-monitor/printer-monitor.md) |
+
+The doc server runs with two scripted serial ports and a simulated printer
+mid-print (`apothecary docs generate --real-devices` to use the host's
+instead), so the screenshots are identical on every machine and never touch
+a real board.
 
 ```bash
 apothecary docs generate   # runs the doc-workflow tests, writes docs/generated/

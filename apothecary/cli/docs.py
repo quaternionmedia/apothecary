@@ -22,6 +22,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 from pathlib import Path
@@ -71,12 +72,25 @@ def docs():
     is_flag=True,
     help="Keep the raw Playwright .webm recordings (normally deleted after GIF assembly)",
 )
-def generate(host: str, port: int, keep_raw_video: bool):
+@click.option(
+    "--real-devices",
+    is_flag=True,
+    help=(
+        "Use the host's arduino-cli and serial ports instead of the scripted fake ports and "
+        "the simulated printer the doc server normally runs with"
+    ),
+)
+def generate(host: str, port: int, keep_raw_video: bool, real_devices: bool):
     """Run the doc-workflow E2E tests and render Markdown + GIFs from the results.
 
     Starts its own temporary server (STL generation skipped, for speed),
     runs only the tests marked 'docs', then assembles a GIF and a Markdown
     page per workflow into docs/generated/.
+
+    The doc server sees two scripted serial ports and a simulated printer
+    mid-print (see firmware.gcode.SimulatedPrinter), and keeps its firmware
+    state in a temp dir, so the screenshots are the same on every machine
+    and never depend on -- or touch -- a real board.
     """
     # A previous invocation's raw recordings (especially from a run that
     # failed before reaching cleanup, below) must not still be here --
@@ -88,7 +102,7 @@ def generate(host: str, port: int, keep_raw_video: bool):
         shutil.rmtree(raw_video_dir)
 
     click.echo(f"Starting temporary server at http://{host}:{port} for doc generation...")
-    server_proc, base_url = _start_server(host, port)
+    server_proc, base_url = _start_server(host, port, simulated_devices=not real_devices)
 
     try:
         click.echo("Running doc-workflow E2E tests...")
@@ -149,10 +163,31 @@ def clean():
         click.echo("Nothing to clean (docs/generated/ does not exist)")
 
 
-def _start_server(host: str, port: int):
+def _simulated_device_env(env: dict) -> dict:
+    """Point the doc server at scripted ports and the simulated printer.
+
+    The scripted ``arduino-cli`` is the unit tests' fake (tests/firmware_helpers.py):
+    a doc-generation command borrowing a test helper is the right layering
+    for something whose whole job is to run tests.
+    """
+    sys.path.insert(0, str(ROOT / "tests"))
+    from firmware_helpers import write_fake_arduino_cli  # noqa: E402
+
+    tmp = Path(tempfile.mkdtemp(prefix="apothecary-docs-"))
+    env["ARDUINO_CLI"] = str(write_fake_arduino_cli(tmp / "arduino-cli"))
+    env["APOTHECARY_TOOLS_DIR"] = str(tmp / "tools")
+    env["APOTHECARY_STATE_DIR"] = str(tmp / "state")
+    env["APOTHECARY_SERIAL_ENGINE"] = "simulated"
+    env["APOTHECARY_SIMULATED_PRINTER"] = "printing"
+    return env
+
+
+def _start_server(host: str, port: int, simulated_devices: bool = True):
     env = os.environ.copy()
     env["APOTHECARY_SKIP_STL_GENERATION"] = "1"
     env["APOTHECARY_VIEWER_PATH"] = ""
+    if simulated_devices:
+        env = _simulated_device_env(env)
 
     server_cmd = [
         sys.executable,
@@ -244,7 +279,9 @@ def _extract_workflow_videos() -> None:
             )
         video_path = videos[0]
 
-        workflows = [line.strip() for line in marker.read_text(encoding="utf-8").splitlines() if line.strip()]
+        workflows = [
+            line.strip() for line in marker.read_text(encoding="utf-8").splitlines() if line.strip()
+        ]
         for workflow in workflows:
             workflow_dir = GENERATED_DOCS_ROOT / workflow
             workflow_dir.mkdir(parents=True, exist_ok=True)
