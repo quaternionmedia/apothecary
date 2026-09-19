@@ -136,7 +136,7 @@ The picture it was all built from is served beside the arrangement while the arr
 Two meters, because a tool that is pleasant to demonstrate and expensive to use is neither. The first counts the controls the viewer puts on screen, and unifying means it reaches nothing rather than a smaller pile. The second counts what a person types to reach a named job, and every job carried by nothing but typing is an open item about where the interface stops.
 
 ```
-30 controls of the viewer's own
+33 controls of the viewer's own
 10 typed steps, 7 job(s) carried by nothing but typing
 ```
 

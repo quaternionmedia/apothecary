@@ -165,6 +165,10 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # The staged numbers of a piece: changed on the sliders, then kept or not.
     "apply-btn": (WIDGET, WHAT_IS_THERE, "a button that rebuilds a piece with its staged numbers"),
     "revert-btn": (WIDGET, WHAT_YOU_SEE, "a button that puts the staged numbers back"),
+    # How much of a subassembly to draw, and whether to outline its extent.
+    "detail-mode": (WIDGET, WHAT_YOU_SEE, "a drop-down for how much of each subassembly to draw"),
+    "overlay-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box that outlines each subassembly's extent"),
+    "detail-select": (WIDGET, WHAT_YOU_SEE, "the same drop-down, for the chosen piece only"),
     # A board's serial log, floated over the view.
     "serial-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box that floats a board's serial log"),
     "serial-port": (WIDGET, WHAT_YOU_SEE, "a drop-down of connected boards"),
@@ -247,6 +251,10 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "li:dblclick:zoomIn": (LIST, WHAT_YOU_SEE, "going into a piece from the list"),
     "rootCrumb:click:jumpTo": (LIST, WHAT_YOU_SEE, "the top of the trail"),
     "crumb:click:jumpTo": (LIST, WHAT_YOU_SEE, "a step on the trail"),
+    # how much to draw
+    "detailModeEl:change:clear": (WIDGET, WHAT_YOU_SEE, "choosing how much to draw"),
+    "overlayToggle:change:renderFocus": (WIDGET, WHAT_YOU_SEE, "the outlines tick-box"),
+    "select:change:delete": (WIDGET, WHAT_YOU_SEE, "choosing how much to draw of one piece"),
     # the serial log
     "toggle:change:show": (WIDGET, WHAT_YOU_SEE, "the serial log tick-box"),
     "portSel:change:renderMeta": (WIDGET, WHAT_YOU_SEE, "choosing a board"),
