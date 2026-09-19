@@ -33,12 +33,20 @@ def test_firmware_page_loads_and_reports_toolchain(page: Page, base_url: str):
 
 
 @pytest.mark.e2e
-def test_viewer_toolbar_links_to_firmware(page: Page, base_url: str):
+def test_viewer_toolbar_links_to_firmware_and_monitor(page: Page, base_url: str):
     page.goto(f"{base_url}/viewer/sites/garage")
-    link = page.locator(".toolbar a.toolbar-link")
-    expect(link).to_contain_text("Firmware")
-    link.click()
+    links = page.locator(".toolbar a.toolbar-link")
+    expect(links).to_have_count(2)
+    expect(links.nth(0)).to_contain_text("Firmware")
+    expect(links.nth(1)).to_contain_text("Monitor")
+    links.nth(1).click()
+    expect(page).to_have_title("Apothecary Printer Monitor")
+    expect(page.locator("#port option").first).to_contain_text("pick a port")
+    # And the two pages link back and forth.
+    page.locator(".top .links a", has_text="Firmware").click()
     expect(page).to_have_title("Apothecary Firmware")
+    page.locator(".toolbar a", has_text="Printer monitor").click()
+    expect(page).to_have_title("Apothecary Printer Monitor")
 
 
 @pytest.mark.e2e

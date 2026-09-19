@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apothecary Printer Monitor</title>
+    <style>
+        :root {
+            --bg: #141614; --panel: #1c1f1c; --line: #2a302a; --ink: #d8e0d8; --ink-2: #9aa89a; --ink-3: #66746a;
+            --ok: #6fdb75; --warn: #ffcc66; --bad: #ff8080; --tx: #9cd2ff;
+            --hotend: #e8b04a; --bed: #6fb3e8;  /* the two series; validated against --bg (dark) */
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: var(--bg); color: var(--ink); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; }
+        a { color: var(--tx); }
+        .top { display: flex; align-items: center; gap: 0.75rem; padding: 0.55rem 1rem; background: #1a1d1a; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+        .top h1 { font-size: 1.05rem; margin: 0; font-weight: 600; white-space: nowrap; }
+        .top .dot { width: 10px; height: 10px; border-radius: 50%; background: #555; flex: 0 0 auto; }
+        .top .dot.on { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+        .top .dot.bad { background: var(--bad); }
+        .top select, .top input, .top button, .card button, .log-head button, .log-head input, .log-head select {
+            font: inherit; font-size: 0.8rem; background: #232823; color: var(--ink); border: 1px solid #3a443a; border-radius: 4px; padding: 0.25rem 0.55rem;
+        }
+        .top button:hover, .card button:hover, .log-head button:hover { background: #2f382f; }
+        .top button.danger { border-color: #6a3a3a; color: #ffb0b0; }
+        .top button.danger:hover { background: #3a2626; }
+        .top .grow { flex: 1; }
+        .top .links a { font-size: 0.8rem; margin-left: 0.6rem; }
+        .top label.auto { display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; color: var(--ink-2); }
+        main { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(360px, 1.2fr); gap: 0.75rem; padding: 0.75rem 1rem; height: calc(100vh - 3.1rem); }
+        @media (max-width: 900px) { main { grid-template-columns: 1fr; height: auto; } }
+        .left { display: flex; flex-direction: column; gap: 0.75rem; overflow: auto; }
+        .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.6rem; }
+        .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 0.55rem 0.7rem; min-height: 4.4rem; }
+        .card .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-3); margin-bottom: 0.25rem; }
+        .card .v { font-size: 1.25rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+        .card .s { font-size: 0.75rem; color: var(--ink-2); margin-top: 0.15rem; }
+        .card .ok { color: var(--ok); } .card .warn { color: var(--warn); } .card .bad { color: var(--bad); }
+        .card.wide { grid-column: 1 / -1; }
+        .bar { height: 6px; background: #2a302a; border-radius: 3px; margin-top: 0.4rem; overflow: hidden; }
+        .bar > i { display: block; height: 100%; border-radius: 3px; background: var(--ink-2); }
+        .bar.hotend > i { background: var(--hotend); } .bar.bed > i { background: var(--bed); } .bar.sd > i { background: var(--ok); }
+        .chips { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-top: 0.2rem; }
+        .chip { font-size: 0.72rem; padding: 0.1rem 0.45rem; border-radius: 9px; border: 1px solid #3a443a; color: var(--ink-2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .chip.hit { border-color: #4a5a3a; color: var(--ok); }
+        .chip.bad { border-color: #6a3a3a; color: var(--bad); }
+        .kv { font-size: 0.78rem; color: var(--ink-2); line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-word; }
+        .kv b { color: var(--ink); font-weight: 600; }
+        /* Temperature history: one axis (°C), two series, legend + end labels, crosshair tooltip. */
+        .chart { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 0.5rem 0.7rem 0.4rem; }
+        .chart .head { display: flex; align-items: baseline; gap: 0.8rem; font-size: 0.78rem; color: var(--ink-2); }
+        .chart .head .title { color: var(--ink); font-weight: 600; }
+        .chart .legend { display: flex; gap: 0.8rem; margin-left: auto; }
+        .chart .legend span::before { content: ""; display: inline-block; width: 14px; height: 2px; vertical-align: middle; margin-right: 0.35rem; }
+        .chart .legend .hotend::before { background: var(--hotend); } .chart .legend .bed::before { background: var(--bed); }
+        .chart svg { width: 100%; height: 150px; display: block; }
+        .chart .tip { position: absolute; pointer-events: none; background: #0f120f; border: 1px solid #3a443a; border-radius: 4px; padding: 0.25rem 0.5rem; font-size: 0.72rem; color: var(--ink); white-space: nowrap; display: none; font-variant-numeric: tabular-nums; }
+        .chart .wrap { position: relative; }
+        /* Comms log */
+        .right { display: flex; flex-direction: column; min-height: 0; background: #0f120f; border: 1px solid var(--line); border-radius: 6px; }
+        .log-head { display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+        .log-head .title { font-size: 0.8rem; font-weight: 600; margin-right: 0.3rem; }
+        .log-head label { font-size: 0.75rem; color: var(--ink-2); display: flex; gap: 0.25rem; align-items: center; }
+        .log-head form { display: flex; gap: 0.3rem; flex: 1; min-width: 220px; }
+        .log-head form input { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+        #log { flex: 1; margin: 0; padding: 0.4rem 0.6rem; overflow: auto; font: 0.74rem/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; color: #b8e6b8; white-space: pre-wrap; word-break: break-all; min-height: 240px; }
+        #log .t { color: var(--ink-3); }
+        #log .tx { color: var(--tx); font-weight: 600; }
+        #log .tx.control { color: var(--warn); }
+        #log .boot { color: #d9b8ff; }
+        #log .sys { color: var(--ink-3); font-style: italic; }
+        #log .rx.temp { color: #c9b98a; }
+        #log .err { color: var(--bad); }
+        .empty { color: var(--ink-3); font-style: italic; }
+        /* Control: a latched overlay. Nothing in it exists in the DOM as enabled until the latch is armed. */
+        .top label.ctl { display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; color: var(--ink-2); padding: 0.15rem 0.5rem; border: 1px solid #3a443a; border-radius: 4px; }
+        .top label.ctl.armed { border-color: #7a5a1a; color: var(--warn); background: #2a2410; }
+        .top label.ctl .ttl { font-variant-numeric: tabular-nums; color: var(--ink-3); }
+        #estop { border-color: #8a2a2a; color: #ffb0b0; background: #3a1a1a; font-weight: 600; }
+        #estop:hover { background: #5a2020; }
+        #control { position: fixed; right: 1rem; bottom: 1rem; width: min(560px, calc(100vw - 2rem)); z-index: 20;
+            background: #1c1f1c; border: 1px solid #7a5a1a; border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.55); }
+        #control[hidden] { display: none; }
+        #control .head { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 0.7rem; border-bottom: 1px solid #3a3020; background: #2a2410; border-radius: 8px 8px 0 0; font-size: 0.8rem; color: var(--warn); }
+        #control .head .grow { flex: 1; }
+        #control .head button { font-size: 0.72rem; padding: 0.15rem 0.5rem; }
+        #control .body { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem 0.9rem; padding: 0.6rem 0.7rem; }
+        #control .grp { font-size: 0.75rem; color: var(--ink-2); }
+        #control .grp .k { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-3); margin-bottom: 0.3rem; }
+        #control .row { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; margin-bottom: 0.3rem; }
+        #control input[type="number"] { width: 4.6rem; font: inherit; font-size: 0.78rem; background: #121412; color: var(--ink); border: 1px solid #3a443a; border-radius: 3px; padding: 0.15rem 0.35rem; }
+        #control input[type="range"] { width: 120px; }
+        #control button { font: inherit; font-size: 0.75rem; background: #232823; color: var(--ink); border: 1px solid #3a443a; border-radius: 4px; padding: 0.2rem 0.5rem; cursor: pointer; }
+        #control button:hover { background: #2f382f; }
+        #control button.warm { border-color: #7a5a1a; }
+        #control .jog { display: grid; grid-template-columns: repeat(3, 2.1rem); grid-auto-rows: 2.1rem; gap: 0.2rem; }
+        #control .jog button { padding: 0; font-size: 0.9rem; }
+        #control .jogz { display: grid; grid-template-rows: repeat(2, 2.1rem); gap: 0.2rem; margin-left: 0.6rem; }
+        #control .jogz button { width: 2.1rem; padding: 0; }
+        #control .steps button.on { background: #3a3020; border-color: #7a5a1a; color: var(--warn); }
+        #control .sent { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.7rem; color: var(--tx); min-height: 1.1em; }
+        #control .sent.bad { color: var(--bad); }
+    </style>
+</head>
+<body>
+    <header class="top">
+        <span class="dot" id="dot"></span>
+        <h1>🖨 Printer monitor</h1>
+        <select id="port" aria-label="Printer port"><option value="">— pick a port —</option></select>
+        <span id="ident" class="kv">—</span>
+        <span class="grow"></span>
+        <label class="auto"><input type="checkbox" id="auto" checked> auto-poll
+            <select id="interval"><option value="1000">1 s</option><option value="2000" selected>2 s</option><option value="5000">5 s</option><option value="10000">10 s</option></select>
+        </label>
+        <button type="button" id="poll" title="One poll now (M105/M114/M27/M119)">⟳ Poll</button>
+        <button type="button" id="reconnect" title="Release and reopen the serial link (no reset); the remedy for a wedged port">⇄ Reconnect</button>
+        <button type="button" id="identify" title="Ask M115 again (no reset)">M115</button>
+        <button type="button" id="reset" class="danger" title="Reboot the board with a DTR pulse — never mid-print">⏻ Reset board</button>
+        <button type="button" id="release" title="Drop the held link so another program can open the port">Release</button>
+        <label class="ctl" id="ctl-label" title="Arm the control latch: heaters, fan, homing, bounded jogs and SD pause/resume/abort become available in an overlay for 5 minutes of activity. Disarmed, nothing on this page can heat or move the machine.">
+            <input type="checkbox" id="ctl"> ⚙ Control <span class="ttl" id="ctl-ttl"></span>
+        </label>
+        <button type="button" id="estop" title="M112: emergency stop. Always available, latch or not. Halts the board until it is reset.">⏹ E-STOP</button>
+        <span class="links"><a href="{{ base_url }}/firmware">⚡ Firmware</a><a href="{{ base_url }}/viewer">◱ Viewer</a></span>
+    </header>
+    <main>
+        <section class="left">
+            <div class="cards" id="cards">
+                <div class="card"><div class="k">State</div><div class="v" id="c-state">—</div><div class="s" id="c-state-s"></div></div>
+                <div class="card"><div class="k">Hotend</div><div class="v" id="c-hot">—</div><div class="s" id="c-hot-s"></div><div class="bar hotend"><i id="b-hot" style="width:0"></i></div></div>
+                <div class="card"><div class="k">Bed</div><div class="v" id="c-bed">—</div><div class="s" id="c-bed-s"></div><div class="bar bed"><i id="b-bed" style="width:0"></i></div></div>
+                <div class="card"><div class="k">Position</div><div class="v" id="c-pos">—</div><div class="s" id="c-pos-s"></div></div>
+                <div class="card"><div class="k">SD print</div><div class="v" id="c-sd">—</div><div class="s" id="c-sd-s"></div><div class="bar sd"><i id="b-sd" style="width:0"></i></div></div>
+                <div class="card"><div class="k">Endstops · filament</div><div class="chips" id="c-stops"><span class="empty">—</span></div></div>
+                <div class="card wide"><div class="k">Board · link</div><div class="kv" id="c-board">—</div></div>
+            </div>
+            <div class="chart">
+                <div class="head"><span class="title">Temperature</span><span id="chart-span">last 0 polls</span>
+                    <span class="legend"><span class="hotend">hotend</span><span class="bed">bed</span><span style="color:var(--ink-3)">dashed = target</span></span></div>
+                <div class="wrap"><svg id="chart" viewBox="0 0 600 150" preserveAspectRatio="none"></svg><div class="tip" id="tip"></div></div>
+            </div>
+        </section>
+        <section class="right">
+            <div class="log-head">
+                <span class="title">Comms log</span>
+                <form id="qform" autocomplete="off">
+                    <input id="q" list="qcodes" aria-label="Report-only G-code to send" placeholder="report code — M503, M119, M20, M420 V …" spellcheck="false">
+                    <datalist id="qcodes"></datalist>
+                    <button type="submit">send</button>
+                </form>
+                <label><input type="checkbox" id="show-polls"> poll traffic</label>
+                <label><input type="checkbox" id="follow" checked> follow</label>
+                <button type="button" id="clear">clear</button>
+                <button type="button" id="download" title="Download the comms log as text" aria-label="Download the comms log">⤓</button>
+            </div>
+            <pre id="log"><span class="empty">pick a port to see its comms</span></pre>
+        </section>
+    </main>
+    <div id="control" hidden>
+        <div class="head">🔓 Control armed <span class="ttl" id="ctl-ttl2"></span><span class="grow"></span>
+            <span class="sent" id="ctl-sent"></span>
+            <button type="button" id="ctl-disarm">🔒 Disarm</button>
+        </div>
+        <div class="body">
+            <div class="grp">
+                <div class="k">Heaters</div>
+                <div class="row">hotend <input type="number" id="h-hot" min="0" max="300" step="5" value="200"> °C
+                    <button type="button" class="warm" data-cmd="M104 S{h-hot}">Set</button>
+                    <button type="button" data-cmd="M104 S0">Off</button></div>
+                <div class="row">bed <input type="number" id="h-bed" min="0" max="130" step="5" value="60"> °C
+                    <button type="button" class="warm" data-cmd="M140 S{h-bed}">Set</button>
+                    <button type="button" data-cmd="M140 S0">Off</button></div>
+                <div class="row">fan <input type="range" id="h-fan" min="0" max="255" step="5" value="255"> <span id="h-fan-v">255</span>
+                    <button type="button" data-cmd="M106 S{h-fan}">Set</button>
+                    <button type="button" data-cmd="M107">Off</button></div>
+            </div>
+            <div class="grp">
+                <div class="k">Motion</div>
+                <div class="row" style="align-items:flex-start">
+                    <div class="jog">
+                        <span></span><button type="button" data-jog="Y+" title="Y+">▲</button><span></span>
+                        <button type="button" data-jog="X-" title="X−">◀</button><button type="button" data-cmd="G28" title="Home all">⌂</button><button type="button" data-jog="X+" title="X+">▶</button>
+                        <span></span><button type="button" data-jog="Y-" title="Y−">▼</button><span></span>
+                    </div>
+                    <div class="jogz"><button type="button" data-jog="Z+" title="Z+">Z▲</button><button type="button" data-jog="Z-" title="Z−">Z▼</button></div>
+                </div>
+                <div class="row steps">step <button type="button" data-step="0.1">0.1</button><button type="button" data-step="1">1</button><button type="button" data-step="10" class="on">10</button><button type="button" data-step="50">50</button> mm
+                    · F <input type="number" id="h-feed" min="60" max="12000" step="100" value="3000"></div>
+                <div class="row"><button type="button" data-cmd="G28 X Y">Home XY</button><button type="button" data-cmd="G28 Z">Home Z</button><button type="button" data-cmd="M84">Motors off</button><button type="button" data-cmd="M410">Quickstop</button></div>
+            </div>
+            <div class="grp">
+                <div class="k">SD print</div>
+                <div class="row"><button type="button" data-cmd="M24">▶ Start / resume</button><button type="button" data-cmd="M25">⏸ Pause</button><button type="button" data-cmd="M524" data-confirm="Abort the SD print?">⏏ Abort</button></div>
+            </div>
+            <div class="grp">
+                <div class="k">Leveling</div>
+                <div class="row"><button type="button" data-cmd="M420 S1">Mesh on</button><button type="button" data-cmd="M420 S0">Mesh off</button><button type="button" data-cmd="M108">Break wait</button></div>
+            </div>
+        </div>
+    </div>
+    <script>
+    (() => {
+        const BASE = "{{ base_url }}";
+        const $ = (id) => document.getElementById(id);
+        const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+        const state = { port: {{ port_json }}, info: null, status: null, history: [], logNext: 0, entries: [], timer: null, gen: 0, inFlight: false, codesLoaded: false };
+        const MAX_HISTORY = 300;
+
+        // --- header / port list ---------------------------------------------------------
+        async function api(path, opts = {}) {
+            const r = await fetch(BASE + path, { headers: { "Content-Type": "application/json" }, ...opts });
+            const body = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(typeof body.detail === "string" ? body.detail : (body.detail ? JSON.stringify(body.detail) : r.statusText));
+            return body;
+        }
+        const post = (path, body) => api(path, { method: "POST", body: JSON.stringify(body) });
+
+        async function loadPorts() {
+            try {
+                const data = await api("/firmware/devices");
+                const opts = data.devices.map((v) => {
+                    const d = v.device, tag = d.printer ? (d.printer.firmware_name || "").replace(/\s*\(.*$/, "") : (d.chip || d.board_name || "unidentified");
+                    return `<option value="${esc(d.port)}">${esc(d.port)} · ${esc(tag)}</option>`;
+                });
+                $("port").innerHTML = '<option value="">— pick a port —</option>' + opts.join("");
+                if (state.port) $("port").value = state.port;
+            } catch (e) { logLine("sys", "device list: " + e.message); }
+        }
+
+        async function loadCodes() {
+            if (state.codesLoaded) return;
+            try {
+                const codes = await api("/firmware/printers/queries");
+                $("qcodes").innerHTML = codes.map((q) => `<option value="${esc(q.command)}">${esc(q.reports)}</option>`).join("");
+                state.codesLoaded = true;
+            } catch (e) { /* suggestions are optional */ }
+        }
+
+        // --- status ------------------------------------------------------------------------
+        const heater = (h) => h ? `${h.actual.toFixed(1)}° <span class="s">/ ${h.target.toFixed(0)}°</span>` : "—";
+        function renderStatus() {
+            const st = state.status, info = state.info;
+            const d = info && info.device ? info.device.device : null;
+            const pr = d && d.printer;
+            $("ident").innerHTML = pr ? `<b>${esc(pr.firmware_name)}</b>${pr.machine_type ? " · " + esc(pr.machine_type) : ""}` : (d ? `${esc(d.port)} — not identified as a printer` : (state.port ? "not detected" : "—"));
+            if (!st) {
+                $("c-state").textContent = "—"; $("c-state-s").textContent = ""; return;
+            }
+            const offline = st.state === "offline";
+            $("dot").className = "dot " + (offline ? "bad" : "on");
+            $("c-state").innerHTML = offline ? '<span class="bad">offline</span>' : (st.state === "printing" ? '<span class="ok">printing</span>' : (st.heating ? '<span class="warn">heating</span>' : "idle"));
+            $("c-state-s").textContent = offline ? (st.raw[0] || "") : `polled ${new Date(st.polled_at).toLocaleTimeString()}`;
+            const hot = st.hotends[0];
+            $("c-hot").innerHTML = heater(hot); $("c-hot-s").textContent = hot && hot.power != null ? `power ${hot.power}/127` : "";
+            $("b-hot").style.width = hot && hot.target > 0 ? Math.min(100, hot.actual / hot.target * 100).toFixed(0) + "%" : "0";
+            $("c-bed").innerHTML = heater(st.bed); $("c-bed-s").textContent = st.bed && st.bed.power != null ? `power ${st.bed.power}/127` : "";
+            $("b-bed").style.width = st.bed && st.bed.target > 0 ? Math.min(100, st.bed.actual / st.bed.target * 100).toFixed(0) + "%" : "0";
+            const p = st.position;
+            $("c-pos").textContent = p ? `X${p.x.toFixed(1)} Y${p.y.toFixed(1)} Z${p.z.toFixed(2)}` : "—";
+            $("c-pos-s").textContent = p ? `E ${p.e.toFixed(1)}` : "";
+            if (st.sd_printing) {
+                const pct = st.sd_progress != null ? (st.sd_progress * 100).toFixed(1) + "%" : "…";
+                $("c-sd").textContent = pct; $("b-sd").style.width = st.sd_progress != null ? (st.sd_progress * 100).toFixed(1) + "%" : "0";
+                $("c-sd-s").textContent = st.print_time_s != null ? `elapsed ${fmtDur(st.print_time_s)}` : "";
+            } else { $("c-sd").textContent = "not printing"; $("c-sd-s").textContent = ""; $("b-sd").style.width = "0"; }
+            const chips = Object.entries(st.endstops).map(([k, v]) => `<span class="chip ${v === "TRIGGERED" ? "hit" : ""}">${esc(k)} ${v === "TRIGGERED" ? "▮" : "▯"}</span>`);
+            if (st.filament_present != null) chips.push(`<span class="chip ${st.filament_present ? "hit" : "bad"}">filament ${st.filament_present ? "present" : "OUT"}</span>`);
+            $("c-stops").innerHTML = chips.join("") || '<span class="empty">—</span>';
+            renderBoard();
+        }
+        function fmtDur(s) { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h ? `${h}h ${m}m` : `${m}m ${s % 60}s`; }
+
+        function renderBoard() {
+            const info = state.info; if (!info) { $("c-board").textContent = "—"; return; }
+            const d = info.device ? info.device.device : null, pr = d && d.printer, link = info.link;
+            const rows = [];
+            if (d) rows.push(`<b>${esc(d.port)}</b> vid:pid ${esc(d.vid || "?")}:${esc(d.pid || "?")}${d.serial_number ? " · S/N " + esc(d.serial_number) : ""}`);
+            if (pr) {
+                rows.push(`firmware <b>${esc(pr.firmware_name)}</b>${pr.machine_type ? " · machine " + esc(pr.machine_type) : ""} · protocol ${esc(pr.protocol_version || "?")} · extruders ${pr.extruder_count}`);
+                if (pr.uuid) rows.push(`uuid ${esc(pr.uuid)}`);
+                const caps = Object.entries(pr.capabilities || {}).filter(([, v]) => v).map(([k]) => k);
+                if (caps.length) rows.push(`caps ${esc(caps.join(", "))}`);
+                if (pr.boot_lines && pr.boot_lines.length) rows.push(`boot ${esc(pr.boot_lines.slice(0, 3).join(" | "))}`);
+            }
+            rows.push(link
+                ? `link <b class="ok">held</b> @ ${link.baud} baud via ${esc(link.engine)} since ${new Date(link.opened_at).toLocaleTimeString()} · engine ${esc(info.engine)}`
+                : `link <b>not held</b> · engine ${esc(info.engine)} — the next poll opens it`);
+            if (info.active_task) rows.push(`<span class="warn">task ${esc(info.active_task.title)} holds the toolchain — polls wait</span>`);
+            $("c-board").innerHTML = rows.join("<br>");
+        }
+
+        // --- chart: temperatures over the last N polls, one °C axis ------------------------
+        function renderChart() {
+            const svg = $("chart"), H = state.history;
+            $("chart-span").textContent = `last ${H.length} poll${H.length === 1 ? "" : "s"}`;
+            if (H.length < 2) { svg.innerHTML = ""; return; }
+            const W = 600, HT = 150, padL = 34, padR = 44, padT = 8, padB = 18;
+            const vals = H.flatMap((h) => [h.hot, h.hotT, h.bed, h.bedT]).filter((v) => v != null);
+            let lo = Math.min(...vals), hi = Math.max(...vals);
+            if (hi - lo < 10) { hi = lo + 10; }
+            lo = Math.floor(lo / 5) * 5; hi = Math.ceil(hi / 5) * 5;
+            const x = (i) => padL + (i / (H.length - 1)) * (W - padL - padR);
+            const y = (v) => padT + (1 - (v - lo) / (hi - lo)) * (HT - padT - padB);
+            const path = (key) => H.map((h, i) => h[key] == null ? null : `${i && H[i - 1][key] != null ? "L" : "M"}${x(i).toFixed(1)},${y(h[key]).toFixed(1)}`).filter(Boolean).join(" ");
+            const ticks = [lo, (lo + hi) / 2, hi];
+            const grid = ticks.map((t) => `<line x1="${padL}" x2="${W - padR}" y1="${y(t).toFixed(1)}" y2="${y(t).toFixed(1)}" stroke="#2a302a" stroke-width="1"/><text x="${padL - 6}" y="${(y(t) + 3).toFixed(1)}" font-size="9" fill="#66746a" text-anchor="end">${t.toFixed(0)}°</text>`).join("");
+            const last = H[H.length - 1];
+            const endLabel = (v, cls) => v == null ? "" : `<text x="${W - padR + 6}" y="${(y(v) + 3).toFixed(1)}" font-size="9" fill="${cls === "hotend" ? "#e8b04a" : "#6fb3e8"}">${v.toFixed(0)}°</text>`;
+            svg.innerHTML = grid
+                + `<path d="${path("hotT")}" fill="none" stroke="#e8b04a" stroke-width="1" stroke-dasharray="3 3" opacity="0.7"/>`
+                + `<path d="${path("bedT")}" fill="none" stroke="#6fb3e8" stroke-width="1" stroke-dasharray="3 3" opacity="0.7"/>`
+                + `<path d="${path("hot")}" fill="none" stroke="#e8b04a" stroke-width="2" stroke-linejoin="round"/>`
+                + `<path d="${path("bed")}" fill="none" stroke="#6fb3e8" stroke-width="2" stroke-linejoin="round"/>`
+                + endLabel(last.hot, "hotend") + endLabel(last.bed, "bed")
+                + `<line id="xh" x1="0" x2="0" y1="${padT}" y2="${HT - padB}" stroke="#66746a" stroke-width="1" style="display:none"/>`;
+            svg.onmousemove = (ev) => {
+                const rect = svg.getBoundingClientRect();
+                const fx = (ev.clientX - rect.left) / rect.width * W;
+                const i = Math.max(0, Math.min(H.length - 1, Math.round((fx - padL) / (W - padL - padR) * (H.length - 1))));
+                const h = H[i], xh = $("xh");
+                xh.setAttribute("x1", x(i)); xh.setAttribute("x2", x(i)); xh.style.display = "";
+                const tip = $("tip");
+                tip.style.display = "block";
+                tip.innerHTML = `${new Date(h.t).toLocaleTimeString()}<br>hotend ${h.hot != null ? h.hot.toFixed(1) : "—"}° / ${h.hotT != null ? h.hotT.toFixed(0) : "—"}°<br>bed ${h.bed != null ? h.bed.toFixed(1) : "—"}° / ${h.bedT != null ? h.bedT.toFixed(0) : "—"}°`;
+                const px = (x(i) / W) * rect.width;
+                tip.style.left = Math.min(rect.width - 150, px + 10) + "px"; tip.style.top = "8px";
+            };
+            svg.onmouseleave = () => { $("tip").style.display = "none"; const xh = $("xh"); if (xh) xh.style.display = "none"; };
+        }
+
+        // --- log ---------------------------------------------------------------------------
+        // Routine polls are tagged origin "poll" on the server; a person's
+        // queries and M115s are not, so hiding poll traffic keeps them.
+        function isPollTraffic(e, ctx) {
+            if (e.kind === "tx") { ctx.inPoll = e.origin === "poll"; return ctx.inPoll; }
+            if (e.kind === "rx") return e.origin === "poll";
+            return false;
+        }
+        function renderLog() {
+            const showPolls = $("show-polls").checked, log = $("log");
+            const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+            const ctx = { inPoll: false };
+            const rows = [];
+            for (const e of state.entries) {
+                const poll = isPollTraffic(e, ctx);
+                if (poll && !showPolls) continue;
+                const d = new Date(e.t);
+                const t = isNaN(d) ? e.t.slice(11, 23) : d.toLocaleTimeString([], { hour12: false }) + "." + String(d.getMilliseconds()).padStart(3, "0");
+                const cls = e.kind + (e.origin === "control" ? " control" : "") + (/^\s*(ok\s+)?T:\s*-?\d/.test(e.text) ? " temp" : "") + (/^(Error:|!!)/.test(e.text) ? " err" : "");
+                rows.push(`<span class="t">${t}</span> <span class="${cls}">${e.kind === "tx" ? "&gt; " : ""}${esc(e.text)}</span>`);
+            }
+            log.innerHTML = rows.length ? rows.join("\n") : '<span class="empty">nothing logged yet — poll or send a query</span>';
+            if (atBottom && $("follow").checked) log.scrollTop = log.scrollHeight;
+        }
+        function logLine(kind, text) {
+            state.entries.push({ i: -1, t: new Date().toISOString(), kind, text });
+            renderLog();
+        }
+        // One fetch at a time, and rows below the watermark are dropped, so the
+        // scheduled poll and a button's follow-up pull can never double up.
+        let logChain = Promise.resolve();
+        function pullLog() {
+            const port = state.port, gen = state.gen;
+            if (!port) return Promise.resolve();
+            logChain = logChain.then(async () => {
+                if (gen !== state.gen) return;
+                const data = await api(`/firmware/printers/log?port=${encodeURIComponent(port)}&since=${state.logNext}`);
+                if (gen !== state.gen) return;
+                const fresh = data.entries.filter((e) => e.i >= state.logNext);
+                if (fresh.length) {
+                    state.entries.push(...fresh);
+                    if (state.entries.length > 5000) state.entries.splice(0, state.entries.length - 5000);
+                    renderLog();
+                }
+                state.logNext = Math.max(state.logNext, data.next);
+            }).catch(() => {});
+            return logChain;
+        }
+
+        // --- polling: self-scheduled, never overlapping ------------------------------------
+        function pushHistory(st) {
+            if (st.state === "offline") return;
+            const hot = st.hotends[0];
+            state.history.push({ t: st.polled_at, hot: hot ? hot.actual : null, hotT: hot ? hot.target : null, bed: st.bed ? st.bed.actual : null, bedT: st.bed ? st.bed.target : null });
+            if (state.history.length > MAX_HISTORY) state.history.shift();
+        }
+        async function pollOnce() {
+            const port = state.port, gen = state.gen;
+            if (!port || state.inFlight === gen) return;
+            state.inFlight = gen;  // per generation: a new port's first poll is never skipped
+            try {
+                const st = await api(`/firmware/printers/status?port=${encodeURIComponent(port)}`);
+                if (gen !== state.gen) return;  // the user switched ports meanwhile
+                state.status = st; pushHistory(st); renderStatus(); renderChart();
+                if (st.control) applyControlState(st.control);
+                const hadLink = !!(state.info && state.info.link);
+                if (!state.info || hadLink !== !!st.held) {
+                    // The link came or went (a failed poll drops it): refresh the
+                    // board card; the port list only when we had no info at all.
+                    const first = !state.info;
+                    await loadInfo();
+                    if (first) loadPorts();
+                }
+            } catch (e) {
+                if (gen !== state.gen) return;
+                $("dot").className = "dot bad"; $("c-state").innerHTML = '<span class="bad">error</span>'; $("c-state-s").textContent = e.message;
+            } finally { if (state.inFlight === gen) state.inFlight = false; }
+            await pullLog();
+        }
+        function schedule() {
+            clearTimeout(state.timer); state.timer = null;
+            const gen = ++state.gen;
+            if (!$("auto").checked || !state.port || document.hidden) return;
+            state.timer = setTimeout(async () => { if (gen !== state.gen) return; await pollOnce(); if (gen === state.gen) schedule(); }, Number($("interval").value) || 2000);
+        }
+        async function loadInfo() {
+            const port = state.port, gen = state.gen;
+            if (!port) { state.info = null; renderBoard(); return; }
+            const info = await api(`/firmware/printers/info?port=${encodeURIComponent(port)}`);
+            if (gen !== state.gen) return;
+            state.info = info;
+            if (info.last_status && !state.status) { state.status = info.last_status; }
+            applyControlState(info.control);
+            renderStatus();
+        }
+
+        async function selectPort(port) {
+            state.gen++; clearTimeout(state.timer); state.inFlight = false;
+            state.port = port; state.status = null; state.info = null; state.history = []; state.entries = []; state.logNext = 0;
+            applyControlState(null);
+            const url = new URL(location.href); if (port) url.searchParams.set("port", port); else url.searchParams.delete("port"); history.replaceState(null, "", url);
+            renderStatus(); renderChart(); renderLog();
+            if (!port) return;
+            $("ident").textContent = "connecting…";
+            loadCodes();
+            try { await loadInfo(); } catch (e) { logLine("sys", e.message); }
+            await pollOnce();
+            schedule();
+        }
+
+        // --- controls ------------------------------------------------------------------------
+        $("port").addEventListener("change", () => selectPort($("port").value));
+        $("auto").addEventListener("change", schedule);
+        $("interval").addEventListener("change", schedule);
+        document.addEventListener("visibilitychange", schedule);
+        $("poll").onclick = () => pollOnce();
+        $("reconnect").onclick = async () => {
+            if (!state.port) return;
+            try { state.status = await post("/firmware/printers/reconnect", { port: state.port }); pushHistory(state.status); await loadInfo(); renderChart(); }
+            catch (e) { logLine("sys", "reconnect failed: " + e.message); }
+            await pullLog().catch(() => {});
+        };
+        $("identify").onclick = async () => {
+            if (!state.port) return;
+            try { await post("/firmware/devices/identify", { port: state.port }); await loadInfo(); await loadPorts(); }
+            catch (e) { logLine("sys", "M115: " + e.message); }
+            await pullLog().catch(() => {});
+        };
+        $("reset").onclick = async () => {
+            if (!state.port) return;
+            if (!confirm(`Reboot the board on ${state.port} (DTR pulse)?\nA running print would be lost.`)) return;
+            try { await post("/firmware/printers/reset", { port: state.port }); state.history = []; renderChart(); await loadInfo(); }
+            catch (e) { logLine("sys", "reset failed: " + e.message); }
+            await pullLog().catch(() => {});
+        };
+        $("release").onclick = async () => {
+            if (!state.port) return;
+            $("auto").checked = false; schedule();
+            try { const r = await post("/firmware/printers/release", { port: state.port }); logLine("sys", r.released ? "link released — auto-poll off" : "no link was held"); applyControlState(null); await loadInfo(); }
+            catch (e) { logLine("sys", "release failed: " + e.message); }
+        };
+        $("qform").addEventListener("submit", async (ev) => {
+            ev.preventDefault();
+            const command = $("q").value.trim(); if (!command || !state.port) return;
+            $("q").disabled = true;
+            try { await post("/firmware/printers/query", { port: state.port, command }); $("q").value = ""; }
+            catch (e) { logLine("sys", "query refused: " + e.message); }
+            $("q").disabled = false; $("q").focus();
+            await pullLog().catch(() => {});
+        });
+        $("show-polls").addEventListener("change", renderLog);
+        $("clear").onclick = () => { state.entries = []; renderLog(); };
+        $("download").onclick = () => {
+            const text = state.entries.map((e) => `${e.t} ${e.kind.padEnd(4)} ${e.text}`).join("\n");
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+            a.download = `apothecary-${(state.port || "printer").replace(/[^A-Za-z0-9]+/g, "_")}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.log`;
+            a.click(); URL.revokeObjectURL(a.href);
+        };
+        // --- control latch + overlay ---------------------------------------------------------
+        const ctl = { armed: false, until: 0, step: 10, timer: null };
+        function renderControl() {
+            const left = Math.max(0, Math.round((ctl.until - Date.now()) / 1000));
+            if (ctl.armed && left <= 0) { ctl.armed = false; }
+            $("ctl").checked = ctl.armed;
+            $("ctl-label").classList.toggle("armed", ctl.armed);
+            $("control").hidden = !ctl.armed;
+            const ttl = ctl.armed ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` : "";
+            $("ctl-ttl").textContent = ttl; $("ctl-ttl2").textContent = ttl;
+            clearInterval(ctl.timer); ctl.timer = null;
+            if (ctl.armed) ctl.timer = setInterval(renderControl, 1000);
+        }
+        function applyControlState(c) {
+            ctl.armed = !!(c && c.armed);
+            ctl.until = Date.now() + (c ? c.seconds_left * 1000 : 0);
+            renderControl();
+        }
+        async function arm(on) {
+            if (!state.port) { $("ctl").checked = false; return; }
+            try { applyControlState(await post("/firmware/printers/control", { port: state.port, armed: on })); }
+            catch (e) { logLine("sys", "control: " + e.message); applyControlState(null); }
+            await pullLog().catch(() => {});
+        }
+        function fillTemplate(cmd) {
+            return cmd.replace(/\{([a-z-]+)\}/g, (_, id) => $(id).value);
+        }
+        // Every control send goes through one chain, and the overlay is disabled
+        // while it runs: two jogs can never interleave their G91/G1/G90 lines,
+        // which would turn the second into an absolute move.
+        let ctlChain = Promise.resolve();
+        function setBusy(on) {
+            for (const b of $("control").querySelectorAll("button")) b.disabled = on;
+            $("estop").disabled = false;  // never
+        }
+        async function sendLines(lines) {
+            const sent = $("ctl-sent");
+            for (const command of lines) {
+                sent.textContent = "> " + command; sent.classList.remove("bad");
+                try {
+                    const r = await post("/firmware/printers/command", { port: state.port, command });
+                    applyControlState(r.control);
+                } catch (e) {
+                    sent.textContent = `${command}: ${e.message}`; sent.classList.add("bad");
+                    if (/not armed/.test(e.message)) applyControlState(null);
+                    return false;
+                }
+            }
+            return true;
+        }
+        function sendControl(command, confirmText) {
+            if (!state.port) return Promise.resolve();
+            if (confirmText && !confirm(confirmText)) return Promise.resolve();
+            return enqueue([command]);
+        }
+        function enqueue(lines) {
+            ctlChain = ctlChain.then(async () => {
+                setBusy(true);
+                try { await sendLines(lines); await pollOnce(); }  // the effect shows in the cards right away
+                finally { setBusy(false); }
+                await pullLog();
+            }).catch(() => setBusy(false));
+            return ctlChain;
+        }
+        function jog(axis, sign) {
+            const d = (sign === "-" ? -ctl.step : ctl.step).toFixed(1).replace(/\.0$/, "");
+            const f = Number($("h-feed").value) || 3000;
+            // Relative move as three lines, sent back to back, restoring absolute mode afterwards.
+            return enqueue(["G91", `G1 ${axis}${d} F${f}`, "G90"]);
+        }
+        $("ctl").addEventListener("change", () => arm($("ctl").checked));
+        $("ctl-disarm").onclick = () => arm(false);
+        $("estop").onclick = async () => {
+            if (!state.port || !confirm(`EMERGENCY STOP ${state.port}?\nHeaters and motors off; the board halts until it is reset.`)) return;
+            await sendLines(["M112"]);  // straight through, never queued behind a jog
+            await pollOnce(); await pullLog();
+        };
+        $("h-fan").addEventListener("input", () => { $("h-fan-v").textContent = $("h-fan").value; });
+        $("control").addEventListener("click", (ev) => {
+            const btn = ev.target.closest("button"); if (!btn) return;
+            if (btn.dataset.step) {
+                ctl.step = Number(btn.dataset.step);
+                for (const b of $("control").querySelectorAll(".steps button")) b.classList.toggle("on", b === btn);
+            } else if (btn.dataset.jog) {
+                jog(btn.dataset.jog[0], btn.dataset.jog[1]);
+            } else if (btn.dataset.cmd) {
+                sendControl(fillTemplate(btn.dataset.cmd), btn.dataset.confirm);
+            }
+        });
+
+        window.addEventListener("beforeunload", () => { state.gen++; clearTimeout(state.timer); });
+
+        loadPorts().then(() => { if (state.port) selectPort(state.port); });
+    })();
+    </script>
+</body>
+</html>

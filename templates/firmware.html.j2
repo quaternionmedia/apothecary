@@ -53,6 +53,7 @@
         button.danger { background: #6b2b2b; color: #fff; }
         button.danger:hover { background: #803535; }
         button.small { padding: 0.2rem 0.5rem; font-size: 0.75rem; }
+        a.small { padding: 0.2rem 0.5rem; font-size: 0.75rem; color: #9cd2ff; text-decoration: none; border: 1px solid #3a4a3a; border-radius: 4px; background: #263026; display: inline-block; }
         input, select {
             padding: 0.4rem 0.5rem; border-radius: 4px; border: 1px solid #444;
             background: #2a2a2a; color: #e0e0e0; font-size: 0.85rem; width: 100%;
@@ -99,6 +100,8 @@
         .device .meta { color: #888; font-size: 0.72rem; }
         .device-head .port { font-weight: 600; color: #fff; }
         .device .chip { font-size: 0.8rem; color: #ccc; }
+        .device .printer-status { font-size: 0.8rem; color: #e8c98a; margin-top: 0.15rem; }
+        .device .printer-status .ok { color: #6fdb75; } .device .printer-status .bad { color: #ff8080; }
         .device .kv { margin-top: 0.3rem; }
         .expected { margin-top: 0.5rem; padding: 0.45rem 0.6rem; border-radius: 4px; background: #262626; font-size: 0.8rem; }
         .expected .title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: #999; margin-bottom: 0.2rem; }
@@ -130,6 +133,7 @@
         <h1>🧪 Apothecary</h1>
         <span class="badge">FIRMWARE — prototype</span>
         <a href="{{ base_url }}/viewer">← Fractal viewer</a>
+        <a href="{{ base_url }}/firmware/monitor" title="One printer at a time: status, temperature history, full comms log, reconnect/reset">🖨 Printer monitor</a>
         <div class="spacer"></div>
         <span id="status-pill" class="status-pill bad">checking…</span>
         <button type="button" id="refresh-btn">Refresh</button>
@@ -141,7 +145,7 @@
             <div class="panel">
                 <div class="panel-header">Devices <div class="spacer"></div><button type="button" class="small" id="boards-btn">Rescan</button></div>
                 <div id="devices"><div class="empty">–</div></div>
-                <div class="note">Probe asks esptool for chip/MAC/flash (resets the board). Identify listens ~6 s for the sketch's <code>apothecary &lt;name&gt;: hello</code> banner. Live streams serial until you stop it or an upload needs the port.</div>
+                <div class="note">Probe asks esptool for chip/MAC/flash (resets the board). Identify listens ~6 s for the sketch's <code>apothecary &lt;name&gt;: hello</code> banner. Live streams serial until you stop it or an upload needs the port. <b>Printer?</b> asks <code>M115</code> (no reset): a board running Marlin or kin becomes a printer card with just <b>Poll</b> and <b>⤢ Monitor</b> — the monitor is its live view; Probe, Identify and Live would take the port from the held link.</div>
             </div>
             <div class="panel">
                 <div class="panel-header">Toolchain</div>
@@ -235,7 +239,7 @@
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
-    const state = { status: null, sketches: [], boards: [], devices: [], selected: null, task: null, next: 0, timer: null, live: {}, observed: {} };
+    const state = { status: null, sketches: [], boards: [], devices: [], selected: null, task: null, next: 0, timer: null, live: {}, observed: {}, printerStatus: {} };
 
     async function api(path, opts = {}) {
         const res = await fetch(BASE + path, { headers: { "Content-Type": "application/json" }, ...opts });
@@ -305,7 +309,16 @@
         $("devices").innerHTML = payload.devices.map((v) => {
             const d = v.device, rec = v.expected.record, obs = state.observed[d.port];
             const live = !!state.live[d.port];
-            const chip = d.chip
+            const pst = state.printerStatus[d.port];
+            const heater = (h) => h ? `${h.actual.toFixed(1)}/${h.target.toFixed(0)}°` : "—";
+            const pollLine = !d.printer ? "" : !pst
+                ? `<div class="printer-status meta">not polled yet — click Poll</div>`
+                : pst.state === "offline"
+                ? `<div class="printer-status"><span class="bad">offline</span> <span class="meta">${esc((pst.raw || [])[0] || "")}</span></div>`
+                : `<div class="printer-status"><b class="${pst.state === "printing" ? "ok" : ""}">${esc(pst.state)}</b>${pst.heating ? " (heating)" : ""} · T ${esc(heater(pst.hotends[0]))}${pst.bed ? " · B " + esc(heater(pst.bed)) : ""}${pst.position ? ` · X${pst.position.x.toFixed(0)} Y${pst.position.y.toFixed(0)} Z${pst.position.z.toFixed(1)}` : ""}${pst.sd_printing && pst.sd_progress != null ? ` · ${(pst.sd_progress * 100).toFixed(1)}%` : ""}${pst.filament_present === false ? ' · <span class="bad">filament out</span>' : ""}<span class="meta"> · ${new Date(pst.polled_at).toLocaleTimeString()}</span></div>`;
+            const chip = d.printer
+                ? `<div class="chip">🖨 ${esc(d.printer.firmware_name)}${d.printer.machine_type ? " · " + esc(d.printer.machine_type) : ""} · ${esc(String(d.printer.baud))} baud${d.serial_number ? " · S/N " + esc(d.serial_number) : ""}</div>${pollLine}`
+                : d.chip
                 ? `<div class="chip">${esc(d.chip)} rev ${esc(d.revision || "?")} · MAC ${esc(d.mac)} · flash ${esc(d.flash_size || "?")}${d.features?.length ? " · " + esc(d.features.slice(0, 3).join(", ")) : ""}</div>`
                 : `<div class="chip empty">not probed yet${d.board_name ? " (" + esc(d.board_name) + ")" : ""}</div>`;
             const drift = [];
@@ -313,7 +326,9 @@
             if (v.expected.build_changed) drift.push("a newer build exists that was never uploaded");
             if (v.expected.sketch_missing) drift.push("that sketch no longer exists under parts/");
             const cls = expectedClass(v, obs);
-            const expected = rec
+            const expected = d.printer
+                ? `<div class="expected unknown"><div class="title">Monitored, not programmed</div><span class="meta">a G-code printer keeps its own firmware; Apothecary polls it and never flashes it</span></div>`
+                : rec
                 ? `<div class="expected ${cls}"><div class="title">Should be running</div>
                      <span class="sketch">${esc(rec.sketch || "raw images: " + rec.images.join(", "))}</span>
                      <span class="meta"> ${esc(rec.fqbn || "esptool")} · flashed ${new Date(rec.flashed_at).toLocaleString()}${rec.build_sha256 ? " · build " + esc(rec.build_sha256.slice(0, 10)) : ""}</span>
@@ -330,9 +345,11 @@
                 <div class="device-head"><span class="port">${esc(d.port)}</span><span class="meta">${esc(d.vid || "?")}:${esc(d.pid || "?")}${d.board_name ? " · " + esc(d.board_name) : ""}</span></div>
                 ${chip}
                 <div class="device-actions">
-                    <button type="button" class="small dev-probe" data-port="${esc(d.port)}" title="esptool flash_id: chip, MAC, flash size (resets the board)">Probe</button>
-                    <button type="button" class="small dev-identify" data-port="${esc(d.port)}" title="Listen ~6 s for the sketch's hello banner">Identify</button>
-                    <button type="button" class="small dev-live ${live ? "primary" : ""}" data-port="${esc(d.port)}" title="Stream serial output live"><span class="live-dot ${live || streaming.has(d.port) ? "on" : ""}"></span>${live ? "Stop" : "Live"}</button>
+                    ${d.printer ? "" : `<button type="button" class="small dev-probe" data-port="${esc(d.port)}" title="esptool flash_id: chip, MAC, flash size (resets the board)">Probe</button>
+                    <button type="button" class="small dev-identify" data-port="${esc(d.port)}" title="Listen ~6 s for the sketch's hello banner">Identify</button>`}
+                    <button type="button" class="small dev-printer" data-port="${esc(d.port)}" title="${d.printer ? "One poll over the held link: temperatures, position, SD progress" : "Ask M115: is this a G-code printer? (no reset)"}">${d.printer ? "Poll" : "Printer?"}</button>
+                    ${d.printer ? `<a class="small dev-monitor" href="${BASE}/firmware/monitor?port=${encodeURIComponent(d.port)}" title="Focused monitor: status, temperature history, full comms log, reconnect/reset">⤢ Monitor</a>` : ""}
+                    ${d.printer ? "" : `<button type="button" class="small dev-live ${live ? "primary" : ""}" data-port="${esc(d.port)}" title="Stream serial output live"><span class="live-dot ${live || streaming.has(d.port) ? "on" : ""}"></span>${live ? "Stop" : "Live"}</button>`}
                 </div>
                 ${expected}
                 <pre class="term" id="term-${cssId(d.port)}" ${live ? "" : "hidden"}></pre>
@@ -519,7 +536,7 @@
     // ---- wiring -------------------------------------------------------------------
 
     $("refresh-btn").onclick = refreshAll;
-    $("boards-btn").onclick = () => api("/firmware/devices").then(renderDevices).catch((e) => alert(e.message));
+    $("boards-btn").onclick = () => api("/firmware/devices?fresh=1").then(renderDevices).catch((e) => alert(e.message));
     $("devices").addEventListener("click", async (ev) => {
         const btn = ev.target.closest("button[data-port]");
         if (!btn) return;
@@ -537,6 +554,13 @@
                 renderDevices(await api("/firmware/devices"));
                 const term = termFor(port);
                 if (term) { term.hidden = false; term.textContent = ""; appendTerm(port, state.observed[port].lines.slice(-30)); }
+            } else if (btn.classList.contains("dev-printer")) {
+                stopLive(port);  // one holder per port: the printer link would evict the monitor anyway
+                const known = state.devices.find((v) => v.device.port === port)?.device.printer;
+                btn.disabled = true; btn.textContent = known ? "Polling…" : "Asking M115…";
+                if (!known) await post("/firmware/devices/identify", { port });
+                state.printerStatus[port] = await api(`/firmware/printers/status?port=${encodeURIComponent(port)}`);
+                renderDevices(await api("/firmware/devices"));
             } else if (btn.classList.contains("dev-live")) {
                 if (state.live[port]) stopLive(port); else startLive(port);
             }

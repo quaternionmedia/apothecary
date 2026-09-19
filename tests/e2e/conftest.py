@@ -24,7 +24,10 @@ from pathlib import Path
 import httpx
 import pytest
 
-from doc_capture import GENERATED_DOCS_ROOT, DocRecorder
+# tests/ itself, for helpers shared with the unit tests (firmware_helpers).
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from doc_capture import GENERATED_DOCS_ROOT, DocRecorder  # noqa: E402
 
 
 def pytest_addoption(parser):
@@ -218,6 +221,4 @@ def doc_recorder(page, docs_enabled, request):
         video_dir = GENERATED_DOCS_ROOT / "_videos_raw" / _slugify_test_name(request.node.name)
         video_dir.mkdir(parents=True, exist_ok=True)
         marker = video_dir / "workflows.txt"
-        marker.write_text(
-            "\n".join(r.workflow for r in recorders) + "\n", encoding="utf-8"
-        )
+        marker.write_text("\n".join(r.workflow for r in recorders) + "\n", encoding="utf-8")
