@@ -150,6 +150,11 @@ browser — a link like `/viewer/parts/datum_core` redirects here.
 # System info
 apothecary system
 
+# Program a board (Arduino, ESP32, ...) from a sketch under parts/
+apothecary firmware install --avr      # one-time: arduino-cli + the AVR core
+apothecary firmware boards             # what's plugged in
+apothecary firmware upload footpedal   # compile + upload; or use the /firmware page
+
 # Initialize/update git submodules (Gridfinity, etc.)
 apothecary submodules
 apothecary submodules --status  # Check submodule status only

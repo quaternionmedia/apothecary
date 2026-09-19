@@ -147,6 +147,20 @@ def check():
 
     click.echo("")
 
+    # Firmware toolchain (optional: only needed to program boards)
+    click.secho("Firmware toolchain:", bold=True)
+    from ..firmware import service as firmware_service
+
+    fw = firmware_service.toolchain_status()
+    if fw.arduino_cli_ok:
+        cores = ", ".join(c.id for c in fw.cores if c.installed) or "no cores"
+        _safe_echo(f"  ✓ arduino-cli {fw.arduino_cli_version} ({cores})")
+    else:
+        _safe_echo(
+            "  • arduino-cli not installed (optional: apothecary firmware install)", fg="yellow"
+        )
+    click.echo("")
+
     # Check for parts
     click.secho("Parts:", bold=True)
     items = [p for p in scan_projects(ROOT) if p.kind == "part"]

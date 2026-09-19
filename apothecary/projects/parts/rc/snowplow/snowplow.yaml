@@ -1,0 +1,21 @@
+# Snowplow Part Interface Metadata
+interfaces:
+  - name: mount_left
+    type: bolt_hole
+    version: "1.0"
+    diameter: 3.0
+    position: { x: -12, y: 0, z: 0 }
+    normal: { x: 0, y: 1, z: 0 }
+  - name: mount_right
+    type: bolt_hole
+    version: "1.0"
+    diameter: 3.0
+    position: { x: 12, y: 0, z: 0 }
+    normal: { x: 0, y: 1, z: 0 }
+  - name: blade_edge
+    type: slot
+    version: "1.0"
+    width: 2.0
+    length: 100.0
+    position: { x: 0, y: 0, z: -22 }
+    normal: { x: 0, y: 0, z: -1 }

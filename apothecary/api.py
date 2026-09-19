@@ -41,6 +41,7 @@ from .example_hierarchy import (
     validate_garage_layout,
 )
 from .example_parts_library import create_parts_library_site, validate_parts_library
+from .firmware.api import router as firmware_router
 from .hierarchy import Assembly
 from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
@@ -48,7 +49,7 @@ from .primitives import Cube, Cylinder, Sphere
 from .projects.parts.skeleton import ROOT
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
 from .projects.parts.stl_renderer import write_params_sidecar
-from .projects.registry import scan_projects, stl_output_for
+from .projects.registry import resolve_wrapper_module, scan_projects, stl_output_for
 from .scene import Scene
 from .site_store import SiteStore, UnknownSiteError
 from .templates import TemplateRenderer
@@ -301,8 +302,7 @@ def _part_template() -> str:
 
 
 def _load_part_wrapper(name: str):
-    module_name = _sanitize_part_name(name)
-    full = f"apothecary.projects.parts.{module_name}"
+    full = resolve_wrapper_module(name, ROOT)
     try:
         module = import_module(full)
     except ModuleNotFoundError as exc:  # pragma: no cover - error path
@@ -415,6 +415,8 @@ def _part_payload(part, params_query: str | None) -> Dict[str, object]:
     )
     return metadata
 
+
+app.include_router(firmware_router)
 
 @app.get("/")
 async def root():

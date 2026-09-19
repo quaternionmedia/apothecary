@@ -37,6 +37,8 @@
         .toolbar button:hover { background: #505050; }
         .toolbar button:disabled { opacity: 0.4; cursor: not-allowed; }
         .toolbar .spacer { flex: 1; }
+        .toolbar .toolbar-link { color: #9cd2ff; font-size: 0.85rem; text-decoration: none; }
+        .toolbar .toolbar-link:hover { text-decoration: underline; }
         .validity-indicator {
             font-size: 0.85rem; padding: 0.35rem 0.75rem; border-radius: 4px;
             font-weight: 600;
@@ -64,6 +66,40 @@
         /* Minimap: a very abstract depth ladder, not a node-link graph --
            one tick per possible depth in the loaded tree, filled from the
            root to however deep the current focus is. */
+        /* Serial log overlay: a terminal floating over the 3D world (toggle in the toolbar) */
+        #serial-overlay {
+            position: absolute; right: 1rem; bottom: 3rem; width: min(46%, 560px); height: 40%;
+            display: flex; flex-direction: column; border-radius: 6px; overflow: hidden;
+            background: rgba(8, 10, 12, 0.82); border: 1px solid #2f3a2f;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.6); backdrop-filter: blur(2px); z-index: 20;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+        #serial-overlay[hidden] { display: none; }
+        #serial-head {
+            display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.6rem;
+            background: rgba(20, 24, 20, 0.9); border-bottom: 1px solid #2f3a2f; font-size: 0.72rem; color: #9fb89f;
+        }
+        #serial-head select {
+            min-width: 0; padding: 0.15rem 0.3rem; font-size: 0.72rem; font-family: inherit;
+            background: #1c221c; border: 1px solid #3a4a3a; color: #cfe3cf;
+        }
+        #serial-head .dot { width: 8px; height: 8px; border-radius: 50%; background: #555; flex: 0 0 auto; }
+        #serial-head .dot.on { background: #6fdb75; box-shadow: 0 0 6px #6fdb75; }
+        #serial-head .spacer { flex: 1; }
+        #serial-head button {
+            padding: 0.1rem 0.45rem; font-size: 0.7rem; background: #263026; color: #cfe3cf; border: 1px solid #3a4a3a;
+        }
+        #serial-head button:hover { background: #33403a; }
+        #serial-meta { padding: 0.25rem 0.6rem; font-size: 0.7rem; color: #8aa08a; border-bottom: 1px solid #23302a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #serial-meta b { color: #cfe3cf; }
+        #serial-meta .ok { color: #6fdb75; } #serial-meta .bad { color: #ff8080; } #serial-meta .warn { color: #ffcc66; }
+        #serial-body {
+            flex: 1; margin: 0; padding: 0.4rem 0.6rem; overflow: auto; font-size: 0.72rem; line-height: 1.4;
+            color: #b8e6b8; white-space: pre-wrap; word-break: break-all;
+        }
+        #serial-body .banner { color: #9cd2ff; font-weight: 600; }
+        #serial-body .marker { color: #ffcc66; }
+        #serial-body .sys { color: #6f7f6f; font-style: italic; }
         #minimap {
             position: absolute; top: 1rem; right: 1rem;
             display: flex; flex-direction: column; gap: 4px;
@@ -273,12 +309,31 @@
             <label class="toolbar-toggle" title="Snap dragged positions to a 50mm grid -- keeps hand-placed layouts exact instead of off by a few millimeters">
                 <input type="checkbox" id="snap-toggle" checked> Snap to grid
             </label>
+            <label class="toolbar-toggle" title="Float a live serial log from a connected board over the 3D view (streams via /firmware/devices/stream)">
+                <input type="checkbox" id="serial-toggle"> ⌨ Serial log
+            </label>
             <div class="spacer"></div>
+            <a href="{{ base_url }}/firmware" class="toolbar-link" title="Install the firmware toolchain and program boards from sketches under parts/">⚡ Firmware</a>
             <span id="validity-indicator" class="validity-indicator valid">Layout valid</span>
         </div>
         <div class="main-content">
             <div class="viewer-panel">
                 <canvas id="viewer-canvas"></canvas>
+                <div id="serial-overlay" hidden>
+                    <div id="serial-head">
+                        <span class="dot" id="serial-dot"></span>
+                        <select id="serial-port"><option value="">no devices</option></select>
+                        <select id="serial-baud">
+                            <option>9600</option><option>57600</option><option selected>115200</option><option>230400</option><option>460800</option><option>921600</option>
+                        </select>
+                        <span class="spacer"></span>
+                        <button type="button" id="serial-refresh" title="Rescan devices">⟳</button>
+                        <button type="button" id="serial-clear">clear</button>
+                        <button type="button" id="serial-close">✕</button>
+                    </div>
+                    <div id="serial-meta">—</div>
+                    <pre id="serial-body"></pre>
+                </div>
                 <div id="minimap"></div>
                 <div class="viewer-hint">Click to select • Double-click (or scroll past the edge) to zoom in • Drag arrows to move • Shift+drag to pan</div>
             </div>
@@ -2284,6 +2339,100 @@
         }
 
         new FractalViewer();
+    </script>
+
+    <script>
+    // Serial log overlay -- independent of the viewer module so it can load either way.
+    (() => {
+        const BASE = "{{ base_url }}";
+        const $ = (id) => document.getElementById(id);
+        const overlay = $("serial-overlay"), body = $("serial-body"), meta = $("serial-meta");
+        const portSel = $("serial-port"), baudSel = $("serial-baud"), toggle = $("serial-toggle"), dot = $("serial-dot");
+        let es = null, devices = [], observed = null, retryTimer = null;
+        const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+        function line(text, cls) {
+            const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 30;
+            const span = document.createElement("span");
+            span.textContent = text + "\n";
+            if (cls) span.className = cls;
+            else if (/apothecary\s+\S+:\s*hello/.test(text)) span.className = "banner";
+            else if (text.startsWith("[apothecary:")) span.className = "marker";
+            body.appendChild(span);
+            while (body.childNodes.length > 600) body.removeChild(body.firstChild);
+            if (atBottom) body.scrollTop = body.scrollHeight;
+        }
+
+        function renderMeta() {
+            const v = devices.find((d) => d.device.port === portSel.value);
+            if (!v) { meta.innerHTML = devices.length ? "select a port" : "no devices detected — <a href='" + BASE + "/firmware' style='color:#9cd2ff'>firmware page</a>"; return; }
+            const d = v.device, rec = v.expected.record;
+            const chip = d.chip ? `${esc(d.chip)} rev ${esc(d.revision || "?")} · ${esc(d.mac)}` : (d.board_name ? esc(d.board_name) : "unprobed board");
+            let should = rec ? `should run <b>${esc(rec.sketch || "raw image")}</b>` : "<span class='warn'>nothing flashed from apothecary</span>";
+            if (v.expected.source_changed) should += " <span class='warn'>(source edited since)</span>";
+            if (observed && rec) should += observed === rec.sketch ? ` · <span class='ok'>observed ✓</span>` : ` · <span class='bad'>observed ${esc(observed)} ✗</span>`;
+            else if (observed) should += ` · observed <b>${esc(observed)}</b>`;
+            meta.innerHTML = `${chip} — ${should}`;
+        }
+
+        async function loadDevices() {
+            try {
+                const r = await fetch(`${BASE}/firmware/devices`);
+                if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+                devices = (await r.json()).devices;
+            } catch (e) { devices = []; meta.textContent = "firmware API: " + e.message; }
+            const prev = portSel.value || localStorage.getItem("apothecary.serial.port") || "";
+            portSel.innerHTML = devices.length
+                ? devices.map((v) => `<option value="${esc(v.device.port)}">${esc(v.device.port)}${v.device.chip ? " · " + esc(v.device.chip) : ""}</option>`).join("")
+                : '<option value="">no devices</option>';
+            if (devices.some((v) => v.device.port === prev)) portSel.value = prev;
+            renderMeta();
+        }
+
+        function connect() {
+            disconnect();
+            const port = portSel.value;
+            if (!port) return;
+            localStorage.setItem("apothecary.serial.port", port);
+            es = new EventSource(`${BASE}/firmware/devices/stream?port=${encodeURIComponent(port)}&baud=${encodeURIComponent(baudSel.value)}`);
+            es.addEventListener("open", () => { dot.classList.add("on"); line(`— connected ${port} @ ${baudSel.value} —`, "sys"); });
+            es.onmessage = (ev) => {
+                line(ev.data);
+                const m = ev.data.match(/apothecary\s+([A-Za-z0-9_.\-]+):\s*hello/);
+                if (m && observed !== m[1]) { observed = m[1]; renderMeta(); }
+            };
+            es.addEventListener("close", () => { line("— monitor stopped (a task took the port?) — retrying in 5 s —", "sys"); scheduleRetry(); });
+            es.onerror = () => { dot.classList.remove("on"); if (es && es.readyState === EventSource.CLOSED) { line("— disconnected — retrying in 5 s —", "sys"); scheduleRetry(); } };
+        }
+
+        function scheduleRetry() {
+            disconnect(false);
+            clearTimeout(retryTimer);
+            if (!overlay.hidden) retryTimer = setTimeout(() => { loadDevices().then(connect); }, 5000);
+        }
+
+        function disconnect(clearTimer = true) {
+            if (es) { es.close(); es = null; }
+            dot.classList.remove("on");
+            if (clearTimer) clearTimeout(retryTimer);
+        }
+
+        function show(on) {
+            overlay.hidden = !on;
+            toggle.checked = on;
+            localStorage.setItem("apothecary.serial.open", on ? "1" : "0");
+            if (on) loadDevices().then(connect); else disconnect();
+        }
+
+        toggle.addEventListener("change", () => show(toggle.checked));
+        $("serial-close").onclick = () => show(false);
+        $("serial-clear").onclick = () => { body.textContent = ""; };
+        $("serial-refresh").onclick = () => loadDevices().then(connect);
+        portSel.addEventListener("change", () => { observed = null; renderMeta(); connect(); });
+        baudSel.addEventListener("change", connect);
+        window.addEventListener("beforeunload", () => disconnect());
+        if (localStorage.getItem("apothecary.serial.open") === "1") show(true);
+    })();
     </script>
 </body>
 </html>

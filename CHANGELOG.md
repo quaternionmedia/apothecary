@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Firmware toolchain seam** – `apothecary firmware` installs a checksum-verified `arduino-cli` into `~/.apothecary/tools`, validates it, installs cores (ESP32/ESP8266/RP2040 board-manager URLs added automatically) and libraries, discovers sketches under `parts/<name>/<name>.ino` (optional `firmware.json` sidecar for default FQBN/libraries), compiles and uploads, and esptool-flashes raw Espressif binaries. The `/firmware` page does the same from the GUI with polled task output; `/firmware/*` API routes return task ids. Both engines are invoked over a subprocess seam, never linked — see the *Firmware toolchain seam* decision record.
+- **Device identity and expected-vs-observed firmware** – `apothecary firmware devices|probe|listen` and the `/firmware` Devices panel: esptool probe (chip, revision, MAC, flash size), a persisted record of what apothecary last flashed to that MAC (with "source edited since" / "newer build never uploaded" drift flags), and the sketch observed announcing itself over serial (`apothecary <name>: hello`, printed at boot and periodically). Records live in `~/.apothecary/firmware-state.json`.
+- **Live serial log** – `GET /firmware/devices/stream` (SSE over `arduino-cli monitor`), shown inline on the firmware page and as a toggleable terminal overlay in the fractal viewer ("⌨ Serial log"). Monitors are stopped automatically before any upload needs the port. A baud-rate token bucket drops bytes a USB-UART bridge replays (seen on a CP2102) and reopens a wedged port.
+- **`parts/esp32_blink`** – smoke-test sketch for classic ESP32 devkits (verified on ESP32-D0WD-V3): blinks GPIO 2 and self-announces over serial.
 - **Git submodules command** – `apothecary submodules` to init/update external dependencies
 - **Gridfinity integration** – Parametric storage bin wrapper for gridfinity-rebuilt-openscad
 - **OpenSCAD Nightly detection** – Auto-detect development builds for parts requiring newer syntax

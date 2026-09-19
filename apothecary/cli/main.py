@@ -4,6 +4,7 @@ import click
 
 from .census import census
 from .docs import docs
+from .firmware import firmware
 from .inventory import inventory
 from .parts import parts
 from .photo import photo
@@ -45,6 +46,7 @@ cli.add_command(photo)
 cli.add_command(test)
 cli.add_command(docs)
 cli.add_command(census)
+cli.add_command(firmware)
 
 
 def main():  # pragma: no cover - entry point

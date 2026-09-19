@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apothecary Firmware</title>
+    <style>
+        * { box-sizing: border-box; }
+        html, body {
+            height: 100%; margin: 0;
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #1a1a1a; color: #e0e0e0;
+        }
+        .app-container { display: flex; flex-direction: column; height: 100vh; }
+        .toolbar {
+            display: flex; gap: 0.75rem; padding: 0.75rem 1rem;
+            background: #252525; border-bottom: 1px solid #333;
+            align-items: center; flex-wrap: wrap;
+        }
+        .toolbar h1 { margin: 0; font-size: 1.25rem; font-weight: 600; color: #fff; }
+        .toolbar .badge {
+            font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 3px;
+            background: #664400; color: #ffcc66; font-weight: 600;
+        }
+        .toolbar a { color: #9cd2ff; font-size: 0.9rem; text-decoration: none; }
+        .toolbar a:hover { text-decoration: underline; }
+        .toolbar .spacer { flex: 1; }
+        .status-pill {
+            font-size: 0.85rem; padding: 0.35rem 0.75rem; border-radius: 4px; font-weight: 600;
+        }
+        .status-pill.ok { background: #1e4620; color: #6fdb75; }
+        .status-pill.bad { background: #4a1e1e; color: #ff8080; }
+        .status-pill.busy { background: #4a3a1e; color: #ffcc66; }
+
+        .main-content { display: grid; grid-template-columns: 340px 1fr 1fr; gap: 0; flex: 1; overflow: hidden; }
+        .column { overflow-y: auto; overflow-x: hidden; min-width: 0; border-right: 1px solid #333; }
+        .column:last-child { border-right: none; }
+        .panel { padding: 0.75rem 1rem; border-bottom: 1px solid #2a2a2a; }
+        .panel-header {
+            font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em;
+            color: #999; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;
+        }
+        .panel-header .spacer { flex: 1; }
+
+        button {
+            padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer;
+            border: none; font-size: 0.85rem; background: #404040; color: #e0e0e0;
+        }
+        button:hover { background: #505050; }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        button.primary { background: #2d5a8a; color: #fff; }
+        button.primary:hover { background: #38699e; }
+        button.danger { background: #6b2b2b; color: #fff; }
+        button.danger:hover { background: #803535; }
+        button.small { padding: 0.2rem 0.5rem; font-size: 0.75rem; }
+        input, select {
+            padding: 0.4rem 0.5rem; border-radius: 4px; border: 1px solid #444;
+            background: #2a2a2a; color: #e0e0e0; font-size: 0.85rem; width: 100%;
+        }
+        label { font-size: 0.75rem; color: #999; display: block; margin: 0.5rem 0 0.2rem; }
+        .row { display: flex; gap: 0.5rem; align-items: center; }
+        .row > * { flex: 1; }
+        .row > button { flex: 0 0 auto; }
+        .actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap; }
+
+        .kv { font-size: 0.8rem; line-height: 1.5; }
+        .kv .k { color: #888; }
+        .kv .v { color: #ddd; word-break: break-all; }
+        .ok { color: #6fdb75; } .bad { color: #ff8080; } .warn { color: #ffcc66; }
+        .problem { font-size: 0.78rem; color: #ffcc66; margin-top: 0.25rem; }
+
+        .list { list-style: none; margin: 0; padding: 0; }
+        .list li {
+            padding: 0.4rem 0.5rem; border-radius: 4px; font-size: 0.85rem;
+            display: flex; gap: 0.5rem; align-items: center;
+        }
+        .list li.selectable { cursor: pointer; }
+        .list li.selectable:hover { background: #2a2a2a; }
+        .list li.selected { background: #1f3a55; }
+        .list .meta { color: #888; font-size: 0.75rem; }
+        .list .spacer { flex: 1; }
+        .empty { color: #777; font-size: 0.8rem; font-style: italic; }
+        .note { font-size: 0.75rem; color: #999; margin-top: 0.35rem; }
+
+        #log-pane { display: flex; flex-direction: column; height: 100%; }
+        #log-header { padding: 0.75rem 1rem; border-bottom: 1px solid #2a2a2a; }
+        #log-title { font-size: 0.9rem; color: #ddd; }
+        #log {
+            flex: 1; margin: 0; padding: 0.75rem 1rem; overflow: auto;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem;
+            line-height: 1.45; color: #ccc; background: #111; white-space: pre-wrap;
+        }
+        #log .err { color: #ff8080; }
+        #log .cmd { color: #9cd2ff; }
+        #history li { font-size: 0.78rem; }
+        .device { border: 1px solid #333; border-radius: 6px; padding: 0.6rem 0.75rem; margin-bottom: 0.6rem; background: #1f1f1f; }
+        .device-head { display: flex; align-items: baseline; gap: 0.5rem; margin-bottom: 0.2rem; flex-wrap: wrap; }
+        .device-actions { display: flex; gap: 0.4rem; margin: 0.35rem 0; flex-wrap: wrap; }
+        .device .meta { color: #888; font-size: 0.72rem; }
+        .device-head .port { font-weight: 600; color: #fff; }
+        .device .chip { font-size: 0.8rem; color: #ccc; }
+        .device .kv { margin-top: 0.3rem; }
+        .expected { margin-top: 0.5rem; padding: 0.45rem 0.6rem; border-radius: 4px; background: #262626; font-size: 0.8rem; }
+        .expected .title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: #999; margin-bottom: 0.2rem; }
+        .expected .sketch { font-weight: 600; color: #e0e0e0; }
+        .expected.match { border-left: 3px solid #6fdb75; }
+        .expected.mismatch { border-left: 3px solid #ff8080; }
+        .expected.unknown { border-left: 3px solid #555; }
+        .drift { color: #ffcc66; font-size: 0.75rem; margin-top: 0.15rem; }
+        .observed { margin-top: 0.4rem; font-size: 0.8rem; }
+        .term {
+            margin-top: 0.4rem; max-height: 160px; overflow: auto; padding: 0.4rem 0.5rem;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; line-height: 1.4;
+            background: #0d0d0d; color: #b8e6b8; border-radius: 4px; white-space: pre-wrap; border: 1px solid #2a2a2a;
+        }
+        .term .banner { color: #9cd2ff; font-weight: 600; }
+        .term .marker { color: #ffcc66; }
+        .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #555; margin-right: 0.3rem; }
+        .live-dot.on { background: #6fdb75; box-shadow: 0 0 6px #6fdb75; }
+        .image-row { display: grid; grid-template-columns: 90px 1fr auto; gap: 0.4rem; margin-top: 0.3rem; }
+        @media (max-width: 1100px) {
+            .main-content { grid-template-columns: 1fr 1fr; }
+            .column:last-child { grid-column: 1 / -1; border-top: 1px solid #333; min-height: 260px; }
+        }
+    </style>
+</head>
+<body>
+<div class="app-container">
+    <div class="toolbar">
+        <h1>🧪 Apothecary</h1>
+        <span class="badge">FIRMWARE — prototype</span>
+        <a href="{{ base_url }}/viewer">← Fractal viewer</a>
+        <div class="spacer"></div>
+        <span id="status-pill" class="status-pill bad">checking…</span>
+        <button type="button" id="refresh-btn">Refresh</button>
+    </div>
+
+    <div class="main-content">
+        <!-- Column 1: devices + toolchain -->
+        <div class="column">
+            <div class="panel">
+                <div class="panel-header">Devices <div class="spacer"></div><button type="button" class="small" id="boards-btn">Rescan</button></div>
+                <div id="devices"><div class="empty">–</div></div>
+                <div class="note">Probe asks esptool for chip/MAC/flash (resets the board). Identify listens ~6 s for the sketch's <code>apothecary &lt;name&gt;: hello</code> banner. Live streams serial until you stop it or an upload needs the port.</div>
+            </div>
+            <div class="panel">
+                <div class="panel-header">Toolchain</div>
+                <div id="toolchain" class="kv"><span class="empty">loading…</span></div>
+                <div class="actions">
+                    <button type="button" class="primary" id="install-btn" title="Download arduino-cli from Arduino's GitHub releases (SHA-256 verified) into the tools dir">Install / update arduino-cli</button>
+                    <label class="row" style="margin:0; flex:0 0 auto; color:#ccc; font-size:0.8rem;">
+                        <input type="checkbox" id="install-force" style="width:auto"> force
+                    </label>
+                </div>
+            </div>
+            <div class="panel">
+                <div class="panel-header">Cores</div>
+                <ul id="cores" class="list"><li class="empty">–</li></ul>
+                <div class="note">One-click installs add the vendor's board-manager index automatically.</div>
+            </div>
+            <div class="panel">
+                <div class="panel-header">Libraries</div>
+                <div class="row">
+                    <input id="lib-input" placeholder="e.g. FastLED, Control Surface@2.1.2">
+                    <button type="button" id="lib-btn">Install</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Column 2: sketches + esptool -->
+        <div class="column">
+            <div class="panel">
+                <div class="panel-header">Sketches under parts/</div>
+                <ul id="sketches" class="list"><li class="empty">–</li></ul>
+                <div class="note">A sketch is <code>parts/&lt;name&gt;/&lt;name&gt;.ino</code>; an optional <code>firmware.json</code> beside it sets the default FQBN and libraries.</div>
+            </div>
+            <div class="panel">
+                <div class="panel-header">Build &amp; upload</div>
+                <div id="sketch-note" class="note" hidden></div>
+                <label for="fqbn-input">Board (FQBN)</label>
+                <input id="fqbn-input" list="fqbn-list" placeholder="arduino:avr:uno">
+                <datalist id="fqbn-list"></datalist>
+                <label for="port-select">Port</label>
+                <select id="port-select"><option value="">(none detected)</option></select>
+                <div class="actions">
+                    <button type="button" id="compile-btn" disabled>Compile</button>
+                    <button type="button" class="primary" id="upload-btn" disabled>Compile &amp; upload</button>
+                </div>
+            </div>
+            <div class="panel">
+                <div class="panel-header">esptool — raw binary flash</div>
+                <div class="row">
+                    <div><label for="esp-chip">Chip</label><input id="esp-chip" value="auto"></div>
+                    <div><label for="esp-baud">Baud</label><input id="esp-baud" value="460800" type="number"></div>
+                </div>
+                <label>Images (offset, path relative to repo)</label>
+                <div id="esp-images">
+                    <div class="image-row"><input value="0x10000" class="esp-off"><input placeholder="build/firmware/app.bin" class="esp-path"><button type="button" class="small esp-rm">✕</button></div>
+                </div>
+                <div class="actions">
+                    <button type="button" class="small" id="esp-add">+ image</button>
+                    <label class="row" style="margin:0; flex:0 0 auto; color:#ccc; font-size:0.8rem;">
+                        <input type="checkbox" id="esp-erase" style="width:auto"> erase flash first
+                    </label>
+                    <div class="spacer"></div>
+                    <button type="button" class="danger" id="esp-flash-btn" disabled>Flash</button>
+                </div>
+                <div id="esp-note" class="note"></div>
+            </div>
+        </div>
+
+        <!-- Column 3: task log -->
+        <div class="column">
+            <div id="log-pane">
+                <div id="log-header">
+                    <div class="panel-header">Task output <div class="spacer"></div>
+                        <button type="button" class="small" id="cancel-btn" hidden>Cancel</button>
+                    </div>
+                    <div id="log-title" class="empty">No task running.</div>
+                </div>
+                <pre id="log"></pre>
+                <div class="panel">
+                    <div class="panel-header">Recent tasks</div>
+                    <ul id="history" class="list"><li class="empty">–</li></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(() => {
+    const BASE = "{{ base_url }}";
+    const SUGGESTED = {{ suggested_cores | tojson }};
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+    const state = { status: null, sketches: [], boards: [], devices: [], selected: null, task: null, next: 0, timer: null, live: {}, observed: {} };
+
+    async function api(path, opts = {}) {
+        const res = await fetch(BASE + path, { headers: { "Content-Type": "application/json" }, ...opts });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.detail ? (typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail)) : res.statusText);
+        return body;
+    }
+    const post = (path, data) => api(path, { method: "POST", body: JSON.stringify(data ?? {}) });
+
+    // ---- rendering -----------------------------------------------------------
+
+    function renderStatus(s) {
+        state.status = s;
+        const pill = $("status-pill");
+        if (s.active_task) { pill.className = "status-pill busy"; pill.textContent = "busy: " + s.active_task.title; }
+        else if (s.ok) { pill.className = "status-pill ok"; pill.textContent = "arduino-cli " + s.arduino_cli_version; }
+        else { pill.className = "status-pill bad"; pill.textContent = "toolchain missing"; }
+
+        const rows = [
+            ["tools dir", s.tools_dir],
+            ["arduino-cli", s.arduino_cli_ok ? `<span class="ok">✓ ${esc(s.arduino_cli_version)}</span> <span class="v">${esc(s.arduino_cli_path)}</span>` : '<span class="bad">✗ not installed</span>'],
+            ["config", s.config_file || "–"],
+            ["esptool", s.esptool_ok ? `<span class="ok">✓ ${esc(s.esptool_version)}</span> <span class="v">${esc(s.esptool_path)}</span>` : '<span class="warn">• not found (optional)</span>'],
+        ];
+        $("toolchain").innerHTML = rows.map(([k, v]) => `<div><span class="k">${k}:</span> <span class="v">${v.startsWith("<") ? v : esc(v)}</span></div>`).join("")
+            + (s.problems || []).map((p) => `<div class="problem">! ${esc(p)}</div>`).join("");
+        $("install-btn").textContent = s.arduino_cli_ok ? "Update arduino-cli" : "Install arduino-cli";
+
+        const installed = new Map((s.cores || []).map((c) => [c.id, c]));
+        const items = SUGGESTED.map(([id, label]) => {
+            const c = installed.get(id);
+            return `<li><span>${esc(label)}</span><span class="meta">${esc(id)}</span><span class="spacer"></span>` +
+                (c && c.installed ? `<span class="ok meta">✓ ${esc(c.installed)}</span>` : `<button type="button" class="small core-install" data-id="${esc(id)}" ${s.arduino_cli_ok ? "" : "disabled"}>Install</button>`) + `</li>`;
+        });
+        for (const c of installed.values()) {
+            if (!SUGGESTED.some(([id]) => id === c.id) && c.installed) items.push(`<li><span>${esc(c.name || c.id)}</span><span class="meta">${esc(c.id)}</span><span class="spacer"></span><span class="ok meta">✓ ${esc(c.installed)}</span></li>`);
+        }
+        $("cores").innerHTML = items.join("");
+        $("esp-flash-btn").disabled = !s.esptool_ok;
+        $("esp-note").textContent = s.esptool_ok ? "" : "esptool not found: pip install esptool, or install the esp32 core (it bundles one).";
+        updateButtons();
+    }
+
+    function renderBoards(boards) {
+        state.boards = boards;
+        const sel = $("port-select");
+        const prev = sel.value;
+        sel.innerHTML = boards.length
+            ? boards.map((b) => `<option value="${esc(b.port)}">${esc(b.port)} — ${esc(b.board_name || "unknown")}</option>`).join("")
+            : '<option value="">(none detected)</option>';
+        if (boards.some((b) => b.port === prev)) sel.value = prev;
+        updateButtons();
+    }
+
+    function expectedClass(view, observed) {
+        const rec = view.expected.record;
+        if (!rec) return "unknown";
+        if (!observed?.running_sketch) return "unknown";
+        return observed.running_sketch === rec.sketch ? "match" : "mismatch";
+    }
+
+    function renderDevices(payload) {
+        state.devices = payload.devices;
+        renderBoards(payload.devices.map((v) => v.device));
+        const streaming = new Set(payload.streaming || []);
+        if (!payload.devices.length) { $("devices").innerHTML = '<div class="empty">No devices detected. Plug one in and rescan.</div>'; return; }
+        $("devices").innerHTML = payload.devices.map((v) => {
+            const d = v.device, rec = v.expected.record, obs = state.observed[d.port];
+            const live = !!state.live[d.port];
+            const chip = d.chip
+                ? `<div class="chip">${esc(d.chip)} rev ${esc(d.revision || "?")} · MAC ${esc(d.mac)} · flash ${esc(d.flash_size || "?")}${d.features?.length ? " · " + esc(d.features.slice(0, 3).join(", ")) : ""}</div>`
+                : `<div class="chip empty">not probed yet${d.board_name ? " (" + esc(d.board_name) + ")" : ""}</div>`;
+            const drift = [];
+            if (v.expected.source_changed) drift.push("sketch source edited since this upload");
+            if (v.expected.build_changed) drift.push("a newer build exists that was never uploaded");
+            if (v.expected.sketch_missing) drift.push("that sketch no longer exists under parts/");
+            const cls = expectedClass(v, obs);
+            const expected = rec
+                ? `<div class="expected ${cls}"><div class="title">Should be running</div>
+                     <span class="sketch">${esc(rec.sketch || "raw images: " + rec.images.join(", "))}</span>
+                     <span class="meta"> ${esc(rec.fqbn || "esptool")} · flashed ${new Date(rec.flashed_at).toLocaleString()}${rec.build_sha256 ? " · build " + esc(rec.build_sha256.slice(0, 10)) : ""}</span>
+                     ${drift.map((t) => `<div class="drift">! ${esc(t)}</div>`).join("")}
+                     <div class="observed">${obs
+                        ? (obs.running_sketch
+                            ? `observed: <b class="${cls === "match" ? "ok" : "bad"}">${esc(obs.running_sketch)}</b>${cls === "match" ? " ✓ matches" : " ✗ differs"}${obs.chip_line ? ` <span class="meta">— ${esc(obs.chip_line)}</span>` : ""}`
+                            : `observed: <span class="warn">no banner in ${obs.seconds}s</span> <span class="meta">(${obs.lines.length} lines)</span>`)
+                        : `<span class="meta">observed: not checked — click Identify</span>`}</div>
+                   </div>`
+                : `<div class="expected unknown"><div class="title">Should be running</div><span class="empty">nothing flashed from apothecary yet</span>
+                     <div class="observed">${obs?.running_sketch ? `observed: <b>${esc(obs.running_sketch)}</b>` : `<span class="meta">observed: not checked — click Identify</span>`}</div></div>`;
+            return `<div class="device" data-port="${esc(d.port)}">
+                <div class="device-head"><span class="port">${esc(d.port)}</span><span class="meta">${esc(d.vid || "?")}:${esc(d.pid || "?")}${d.board_name ? " · " + esc(d.board_name) : ""}</span></div>
+                ${chip}
+                <div class="device-actions">
+                    <button type="button" class="small dev-probe" data-port="${esc(d.port)}" title="esptool flash_id: chip, MAC, flash size (resets the board)">Probe</button>
+                    <button type="button" class="small dev-identify" data-port="${esc(d.port)}" title="Listen ~6 s for the sketch's hello banner">Identify</button>
+                    <button type="button" class="small dev-live ${live ? "primary" : ""}" data-port="${esc(d.port)}" title="Stream serial output live"><span class="live-dot ${live || streaming.has(d.port) ? "on" : ""}"></span>${live ? "Stop" : "Live"}</button>
+                </div>
+                ${expected}
+                <pre class="term" id="term-${cssId(d.port)}" ${live ? "" : "hidden"}></pre>
+            </div>`;
+        }).join("");
+        // Re-attach open terminals to their (re-rendered) elements.
+        for (const port of Object.keys(state.live)) {
+            const term = termFor(port);
+            if (term) { term.hidden = false; term.textContent = ""; appendTerm(port, state.live[port].buffer); }
+        }
+        updateButtons();
+    }
+
+    const cssId = (port) => port.replace(/[^A-Za-z0-9]/g, "_");
+    const termFor = (port) => $("term-" + cssId(port));
+
+    function appendTerm(port, lines) {
+        const term = termFor(port);
+        if (!term) return;
+        const atBottom = term.scrollHeight - term.scrollTop - term.clientHeight < 30;
+        for (const line of lines) {
+            const span = document.createElement("span");
+            span.textContent = line + "\n";
+            if (/apothecary\s+\S+:\s*hello/.test(line)) span.className = "banner";
+            else if (line.startsWith("[apothecary:")) span.className = "marker";
+            term.appendChild(span);
+        }
+        while (term.childNodes.length > 400) term.removeChild(term.firstChild);
+        if (atBottom) term.scrollTop = term.scrollHeight;
+    }
+
+    function startLive(port) {
+        stopLive(port);
+        const es = new EventSource(`${BASE}/firmware/devices/stream?port=${encodeURIComponent(port)}`);
+        const entry = { es, buffer: [] };
+        state.live[port] = entry;
+        es.onmessage = (ev) => {
+            entry.buffer.push(ev.data); if (entry.buffer.length > 400) entry.buffer.shift();
+            appendTerm(port, [ev.data]);
+            const m = ev.data.match(/apothecary\s+([A-Za-z0-9_.\-]+):\s*hello/);
+            if (m) { state.observed[port] = { ...(state.observed[port] || { lines: [], seconds: 0 }), running_sketch: m[1] }; refreshDeviceCards(); }
+        };
+        es.addEventListener("close", () => stopLive(port, true));
+        es.onerror = () => { if (state.live[port] === entry) stopLive(port, true); };
+        const term = termFor(port); if (term) { term.hidden = false; }
+        refreshDeviceCards();
+    }
+
+    function stopLive(port, silent) {
+        const entry = state.live[port];
+        if (!entry) return;
+        entry.es.close();
+        delete state.live[port];
+        if (!silent) { const term = termFor(port); if (term) term.hidden = true; }
+        refreshDeviceCards();
+    }
+
+    function refreshDeviceCards() {
+        if (state.devices.length) renderDevices({ devices: state.devices, streaming: Object.keys(state.live) });
+    }
+
+    function renderSketches(sketches) {
+        state.sketches = sketches;
+        $("sketches").innerHTML = sketches.length
+            ? sketches.map((s) => `<li class="selectable ${state.selected === s.name ? "selected" : ""}" data-name="${esc(s.name)}"><span>${esc(s.name)}</span><span class="meta">${esc(s.fqbn || "no default FQBN")}</span></li>`).join("")
+            : '<li class="empty">No sketches found under parts/.</li>';
+        if (!state.selected && sketches.length) selectSketch(sketches[0].name);
+    }
+
+    function selectSketch(name) {
+        state.selected = name;
+        const s = state.sketches.find((x) => x.name === name);
+        document.querySelectorAll("#sketches li").forEach((li) => li.classList.toggle("selected", li.dataset.name === name));
+        if (s) {
+            if (s.fqbn) $("fqbn-input").value = s.fqbn;
+            const note = $("sketch-note");
+            const bits = [];
+            if (s.libraries?.length) bits.push("libraries: " + s.libraries.join(", "));
+            if (s.note) bits.push(s.note);
+            note.hidden = !bits.length;
+            note.textContent = bits.join(" — ");
+        }
+        updateButtons();
+    }
+
+    function updateButtons() {
+        const ok = !!state.status?.ok;
+        const busy = state.task && state.task.status === "running";
+        const haveSketch = !!state.selected;
+        const haveFqbn = /^[\w.\-]+:[\w.\-]+:[\w.\-]+(:[\w=,.\-]+)?$/.test($("fqbn-input").value.trim());
+        const havePort = !!$("port-select").value;
+        $("compile-btn").disabled = !(ok && haveSketch && haveFqbn) || busy;
+        $("upload-btn").disabled = !(ok && haveSketch && haveFqbn && havePort) || busy;
+        $("install-btn").disabled = !!busy;
+        $("lib-btn").disabled = !ok || busy;
+        $("esp-flash-btn").disabled = !state.status?.esptool_ok || !havePort || busy;
+        document.querySelectorAll(".core-install").forEach((b) => (b.disabled = !ok || busy));
+    }
+
+    function renderHistory(tasks) {
+        $("history").innerHTML = tasks.length
+            ? tasks.map((t) => `<li class="selectable" data-id="${esc(t.id)}"><span class="${t.status === "succeeded" ? "ok" : t.status === "running" ? "warn" : "bad"}">${t.status === "succeeded" ? "✓" : t.status === "running" ? "…" : "✗"}</span><span>${esc(t.title)}</span><span class="spacer"></span><span class="meta">${new Date(t.started).toLocaleTimeString()}</span></li>`).join("")
+            : '<li class="empty">–</li>';
+    }
+
+    // ---- task polling -------------------------------------------------------------
+
+    function appendLines(lines) {
+        const log = $("log");
+        const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+        for (const line of lines) {
+            const span = document.createElement("span");
+            span.textContent = line + "\n";
+            if (/^\$ /.test(line)) span.className = "cmd";
+            else if (/error|ERROR|exit [1-9]|failed/i.test(line)) span.className = "err";
+            log.appendChild(span);
+        }
+        if (atBottom) log.scrollTop = log.scrollHeight;
+    }
+
+    function showTask(task, fresh) {
+        if (fresh) {
+            $("log").textContent = ""; state.next = 0;
+            // The server stops serial monitors before any task; remember which to resume.
+            state.resumeLive = Object.keys(state.live);
+            for (const port of state.resumeLive) stopLive(port);
+        }
+        state.task = task;
+        $("log-title").className = "";
+        $("log-title").innerHTML = `<span class="${task.status === "succeeded" ? "ok" : task.status === "running" ? "warn" : "bad"}">${esc(task.status)}</span> — ${esc(task.title)}`;
+        $("cancel-btn").hidden = task.status !== "running";
+        appendLines(task.lines || []);
+        state.next = task.next;
+        updateButtons();
+        if (task.status === "running") {
+            clearTimeout(state.timer);
+            state.timer = setTimeout(pollTask, 500);
+        } else {
+            refreshAll().then(() => { for (const port of state.resumeLive || []) startLive(port); state.resumeLive = []; });
+        }
+    }
+
+    async function pollTask() {
+        if (!state.task) return;
+        try {
+            const t = await api(`/firmware/tasks/${state.task.id}?since=${state.next}`);
+            showTask(t, false);
+        } catch (e) {
+            appendLines(["poll error: " + e.message]);
+        }
+    }
+
+    async function startTask(fn) {
+        try {
+            const task = await fn();
+            showTask(task, true);
+            api("/firmware/tasks").then(renderHistory).catch(() => {});
+        } catch (e) {
+            alert(e.message);
+        }
+    }
+
+    // ---- loading ----------------------------------------------------------------
+
+    async function refreshAll() {
+        try { renderStatus(await api("/firmware/status")); } catch (e) { $("toolchain").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+        api("/firmware/sketches").then(renderSketches).catch(() => {});
+        api("/firmware/tasks").then(renderHistory).catch(() => {});
+        if (state.status?.ok) {
+            api("/firmware/devices").then(renderDevices).catch(() => renderDevices({ devices: [], streaming: [] }));
+            api("/firmware/boards/all").then((all) => {
+                $("fqbn-list").innerHTML = all.map((b) => `<option value="${esc(b.fqbn)}">${esc(b.name)}</option>`).join("");
+            }).catch(() => {});
+        } else {
+            renderDevices({ devices: [], streaming: [] });
+        }
+        if (state.status?.active_task && (!state.task || state.task.id !== state.status.active_task.id)) {
+            // Reattach to a task started elsewhere (CLI-free: another tab).
+            const t = await api(`/firmware/tasks/${state.status.active_task.id}`);
+            showTask(t, true);
+        }
+    }
+
+    // ---- wiring -------------------------------------------------------------------
+
+    $("refresh-btn").onclick = refreshAll;
+    $("boards-btn").onclick = () => api("/firmware/devices").then(renderDevices).catch((e) => alert(e.message));
+    $("devices").addEventListener("click", async (ev) => {
+        const btn = ev.target.closest("button[data-port]");
+        if (!btn) return;
+        const port = btn.dataset.port;
+        try {
+            if (btn.classList.contains("dev-probe")) {
+                stopLive(port);
+                btn.disabled = true; btn.textContent = "Probing…";
+                await post("/firmware/devices/probe", { port });
+                renderDevices(await api("/firmware/devices"));
+            } else if (btn.classList.contains("dev-identify")) {
+                stopLive(port);
+                btn.disabled = true; btn.textContent = "Listening…";
+                state.observed[port] = await post("/firmware/devices/listen", { port, seconds: 6 });
+                renderDevices(await api("/firmware/devices"));
+                const term = termFor(port);
+                if (term) { term.hidden = false; term.textContent = ""; appendTerm(port, state.observed[port].lines.slice(-30)); }
+            } else if (btn.classList.contains("dev-live")) {
+                if (state.live[port]) stopLive(port); else startLive(port);
+            }
+        } catch (e) {
+            alert(e.message);
+            renderDevices(await api("/firmware/devices").catch(() => ({ devices: state.devices, streaming: [] })));
+        }
+    });
+    $("install-btn").onclick = () => startTask(() => post("/firmware/install", { force: $("install-force").checked }));
+    $("cores").addEventListener("click", (ev) => {
+        const btn = ev.target.closest(".core-install");
+        if (btn) startTask(() => post("/firmware/cores/install", { id: btn.dataset.id }));
+    });
+    $("lib-btn").onclick = () => {
+        const names = $("lib-input").value.split(",").map((s) => s.trim()).filter(Boolean);
+        if (names.length) startTask(() => post("/firmware/libraries/install", { names }));
+    };
+    $("sketches").addEventListener("click", (ev) => {
+        const li = ev.target.closest("li[data-name]");
+        if (li) selectSketch(li.dataset.name);
+    });
+    $("fqbn-input").addEventListener("input", updateButtons);
+    $("port-select").addEventListener("change", updateButtons);
+    $("compile-btn").onclick = () => startTask(() => post(`/firmware/sketches/${encodeURIComponent(state.selected)}/compile`, { fqbn: $("fqbn-input").value.trim() }));
+    $("upload-btn").onclick = () => {
+        const port = $("port-select").value;
+        if (!confirm(`Compile and upload "${state.selected}" to ${port}?`)) return;
+        startTask(() => post(`/firmware/sketches/${encodeURIComponent(state.selected)}/upload`, { fqbn: $("fqbn-input").value.trim(), port }));
+    };
+    $("esp-add").onclick = () => {
+        const row = document.createElement("div");
+        row.className = "image-row";
+        row.innerHTML = '<input value="0x0" class="esp-off"><input placeholder="path/relative/to/repo.bin" class="esp-path"><button type="button" class="small esp-rm">✕</button>';
+        $("esp-images").appendChild(row);
+    };
+    $("esp-images").addEventListener("click", (ev) => {
+        if (ev.target.classList.contains("esp-rm") && $("esp-images").children.length > 1) ev.target.parentElement.remove();
+    });
+    $("esp-flash-btn").onclick = () => {
+        const port = $("port-select").value;
+        const images = [...document.querySelectorAll("#esp-images .image-row")].map((r) => ({
+            offset: r.querySelector(".esp-off").value.trim(), path: r.querySelector(".esp-path").value.trim(),
+        })).filter((i) => i.path);
+        if (!images.length) return alert("Add at least one image.");
+        if (!confirm(`Flash ${images.length} image(s) to ${port}${$("esp-erase").checked ? " after erasing" : ""}?`)) return;
+        startTask(() => post("/firmware/esptool/flash", {
+            port, chip: $("esp-chip").value.trim() || "auto", baud: Number($("esp-baud").value) || 460800,
+            erase: $("esp-erase").checked, images,
+        }));
+    };
+    $("cancel-btn").onclick = () => state.task && post(`/firmware/tasks/${state.task.id}/cancel`).then((t) => showTask(t, false)).catch((e) => alert(e.message));
+    $("history").addEventListener("click", (ev) => {
+        const li = ev.target.closest("li[data-id]");
+        if (li) api(`/firmware/tasks/${li.dataset.id}`).then((t) => showTask(t, true)).catch((e) => alert(e.message));
+    });
+
+    refreshAll();
+})();
+</script>
+</body>
+</html>

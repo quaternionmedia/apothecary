@@ -40,6 +40,7 @@ by `pytest walkthrough`. Start there.
 | [Fitting a Part](fitting-a-part.md) | The seam standard: which numbers belong to a consumer and which to this repository |
 | [Boundaries](boundaries.md) | Which repository owns what between datum and apothecary, and what happens at the crossing |
 | [Geometry Models](models.md) | Vectors, bounds, colors, shapes, and units |
+| [Firmware](firmware.md) | Program Arduinos/ESP32s from sketches kept with their parts; toolchain install, device identity, live serial |
 
 ## External Libraries
 
