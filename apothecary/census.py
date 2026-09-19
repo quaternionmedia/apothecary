@@ -162,6 +162,18 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "job-printer-select": (WIDGET, WHAT_IS_THERE, "a drop-down of machines to give a job to"),
     "job-assign-btn": (WIDGET, WHAT_IS_THERE, "a button that gives a job to a machine"),
     "job-complete-btn": (WIDGET, WHAT_IS_THERE, "a button that finishes a job"),
+    # The staged numbers of a piece: changed on the sliders, then kept or not.
+    "apply-btn": (WIDGET, WHAT_IS_THERE, "a button that rebuilds a piece with its staged numbers"),
+    "revert-btn": (WIDGET, WHAT_YOU_SEE, "a button that puts the staged numbers back"),
+    # A board's serial log, floated over the view.
+    "serial-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box that floats a board's serial log"),
+    "serial-port": (WIDGET, WHAT_YOU_SEE, "a drop-down of connected boards"),
+    "serial-baud": (WIDGET, WHAT_YOU_SEE, "a drop-down of speeds to listen at"),
+    "serial-refresh": (WIDGET, WHAT_YOU_SEE, "a button that looks for boards again"),
+    "serial-clear": (WIDGET, WHAT_YOU_SEE, "a button that empties the log"),
+    "serial-close": (WIDGET, WHAT_YOU_SEE, "a button that puts the log away"),
+    "firmware-link": (WIDGET, NOTHING, "a link to the firmware page"),
+    "firmware-page-link": (WIDGET, NOTHING, "the same link, offered when no board is found"),
     # Made by the page as it goes, rather than written into it. Found by the
     # listening scan below, and named here so both scans agree on what exists.
     "category-chip": (LIST, WHAT_YOU_SEE, "a row of buttons, one per word, that fold and unfold"),
@@ -235,8 +247,15 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "li:dblclick:zoomIn": (LIST, WHAT_YOU_SEE, "going into a piece from the list"),
     "rootCrumb:click:jumpTo": (LIST, WHAT_YOU_SEE, "the top of the trail"),
     "crumb:click:jumpTo": (LIST, WHAT_YOU_SEE, "a step on the trail"),
+    # the serial log
+    "toggle:change:show": (WIDGET, WHAT_YOU_SEE, "the serial log tick-box"),
+    "portSel:change:renderMeta": (WIDGET, WHAT_YOU_SEE, "choosing a board"),
+    "baudSel:change:(nothing)": (WIDGET, WHAT_YOU_SEE, "choosing a speed"),
     # the page reacting to itself
     "window:resize:onResize": (AUTOMATIC, NOTHING, "the window changed size on its own"),
+    "es:open:add": (AUTOMATIC, NOTHING, "the serial stream connected, and says so"),
+    "es:close:line": (AUTOMATIC, NOTHING, "the serial stream stopped, and says so"),
+    "window:beforeunload:disconnect": (AUTOMATIC, NOTHING, "leaving the page lets go of the port"),
 }
 
 LISTENS = re.compile(r"addEventListener\s*\(\s*['\"]([\w-]+)['\"]\s*,")

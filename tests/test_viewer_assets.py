@@ -91,13 +91,13 @@ class TestMissingLibraryIsAnnounced:
 
 
 class TestOnboardingInstallsWhatTheViewerNeeds:
-    """`apothecary install` is the onboarding step, and the viewer is dead
-    without the JS dependencies it fetches.
+    """`apothecary install` is the onboarding step for the JSCAD viewer. The
+    fractal viewer's library is checked in, so it needs no step at all.
     """
 
     def test_the_fabricated_package_json_matches_the_committed_one(self):
-        """`install` writes a package.json when none exists. One that omits
-        `three` produces a viewer that loads and renders nothing.
+        """`install` writes a package.json when none exists. It has to agree
+        with the committed one, or two clones install two different things.
         """
         import json
         import re
@@ -114,13 +114,17 @@ class TestOnboardingInstallsWhatTheViewerNeeds:
         )
         assert fabricated == committed
 
-    def test_three_is_a_declared_dependency(self):
+    def test_three_is_checked_in_and_not_installed(self):
+        """A fresh clone serves the viewer with no second package manager."""
         import json
 
+        from apothecary.api import THREE_DIR
         from apothecary.projects.parts.skeleton import ROOT
 
         deps = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["dependencies"]
-        assert "three" in deps
+        assert "three" not in deps
+        assert (THREE_DIR / "three.module.js").is_file()
+        assert (THREE_DIR / "LICENSE").is_file()
 
 
 class TestTheDocumentedCommandRunsTheWalkthrough:

@@ -42,15 +42,15 @@ uv run apothecary testrun -o example.scad
 # Explore parts
 uv run apothecary parts list
 
-# Start the viewer (one-time: install its JS dependencies first)
-uv run apothecary install
+# Start the viewer
 uv run apothecary serve
 # Open http://127.0.0.1:8000/viewer
 ```
 
 The viewer serves three.js from this origin rather than a CDN, so it works
-offline — and `apothecary install` is not optional: without it the page renders
-nothing and says so in a banner.
+offline. The library is checked in under `apothecary/static/vendor/three/`;
+nothing needs installing for it. (`apothecary install` fetches the separate
+JSCAD viewer, which is optional.)
 
 **[→ Full Quickstart Guide](QUICKSTART.md)**
 

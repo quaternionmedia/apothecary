@@ -96,9 +96,10 @@ uv run apothecary parts render parametric_star -o star.scad
 
 ## Start the Web Interface
 
-**The viewer needs its JavaScript dependencies installed first.** It serves
-three.js from this origin rather than a CDN, so without them the page loads,
-renders nothing, and shows a red banner saying so. This is a one-time step:
+The fractal viewer serves three.js from this origin rather than a CDN, and the
+library is checked in under `apothecary/static/vendor/three/`, so nothing needs
+installing for it. The separate JSCAD viewer is optional and is fetched once
+with:
 
 ```bash
 uv run apothecary install     # or: npm install --ignore-scripts

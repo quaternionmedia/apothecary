@@ -9,7 +9,7 @@ import zipfile
 from pathlib import Path
 
 import pytest
-from conftest import fake_cli_calls
+from firmware_fakes import fake_cli_calls
 
 from apothecary.firmware import installer, service
 from apothecary.firmware.models import (
@@ -300,7 +300,7 @@ def test_extract_binary_tar_and_zip(tmp_path):
 def test_installer_downloads_verifies_and_smoke_tests(tmp_path, monkeypatch):
     import sys
 
-    from conftest import FAKE_ARDUINO_CLI
+    from firmware_fakes import FAKE_ARDUINO_CLI
 
     archive = _targz(
         "arduino-cli",

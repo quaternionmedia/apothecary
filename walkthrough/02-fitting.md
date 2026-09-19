@@ -108,7 +108,6 @@ bare word is an identifier:
 The whole loop, from a cold checkout:
 
 ```bash
-uv run apothecary install                              # once; the viewer needs it
 uv run apothecary serve --port 8765                    # look at it
 # edit parts/datum_core/datum_core.scad
 uv run apothecary parts generate-stl datum_core        # render

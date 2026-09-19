@@ -77,8 +77,9 @@ its excuse stays behind, still describing a gate that no longer exists.
 `uses:` steps are environment, not logic, and are not reproduced. The runner
 image differs from this machine — which is the usual reason a locally green
 step fails on a runner, and this repository has been caught by it more than
-once: `npm ci` died in CI on a postinstall a local `npm install` had long since
-cached, and seven tests read STLs that only existed here.
+once: an `npm ci` step, since removed, died in CI on a postinstall a local
+`npm install` had long since cached, and seven tests read STLs that only
+existed here.
 
 The command can also refuse to run at all, and that refusal is worth reading
 rather than working around. The pinned governance runner invokes steps as bare

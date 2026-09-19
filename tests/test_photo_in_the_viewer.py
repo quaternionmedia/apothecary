@@ -8,6 +8,8 @@ last one a filter by word.
 
 from __future__ import annotations
 
+import os
+import sys
 from unittest.mock import patch
 
 import pytest
@@ -260,9 +262,9 @@ def test_a_picture_outside_the_one_folder_is_refused(picture, tmp_path):
     assert client.post("/photos", json={"picture": str(outside)}).status_code == 403
 
 
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="named pipes are a POSIX thing")
 def test_something_that_is_not_an_ordinary_file_is_refused(picture, tmp_path):
     """A pipe exists, and opening one waits for a writer that never comes."""
-    import os
 
     pipe = tmp_path / "pipe.png"
     os.mkfifo(pipe)
@@ -282,17 +284,18 @@ def test_the_type_is_chosen_from_a_list_not_built_from_the_file_name(picture, tm
     client.delete("/photos/oddtype")
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="an unprivileged Windows user cannot symlink")
 def test_a_picture_swapped_for_a_link_out_of_the_folder_is_refused_when_served(picture, tmp_path):
     """The front door refused this. The serving door has to refuse it too."""
-    import os
-
     client.post("/photos", json={"picture": str(picture), "name": "swaptest"})
-    picture.unlink()
-    os.symlink("/etc/hostname", picture)
     try:
+        picture.unlink()
+        os.symlink("/etc/hostname", picture)
         assert client.get("/photos/swaptest/picture").status_code == 403
     finally:
-        picture.unlink()
+        # Whatever happened above, the register must not keep this name: a
+        # leaked site is what every later test of /sites trips over.
+        picture.unlink(missing_ok=True)
         client.delete("/photos/swaptest")
 
 

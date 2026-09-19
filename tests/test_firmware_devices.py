@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
-from conftest import fake_cli_calls
+from firmware_fakes import fake_cli_calls
 from fastapi.testclient import TestClient
 
 from apothecary.api import app

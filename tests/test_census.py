@@ -14,17 +14,22 @@ from apothecary import census
 # --------------------------------------------------------------------------
 
 
-def test_the_page_has_twenty_controls_of_its_own():
+def test_the_page_has_thirty_controls_of_its_own():
     """The meter. Unifying means this number falls, and falls to nothing.
 
     Not the twelve an earlier version of this file asserted. Twelve was a hand
     tally reproduced by a counter built to reproduce it: it counted names rather
     than controls, so two buttons on a job were one and three boxes for typing a
     position were one, and it left out a drop-down that nothing listens to.
-    Counted properly, one control at a time, there are twenty.
+    Counted properly, one control at a time, there were twenty.
+
+    Thirty now, and the meter went up rather than down: two buttons that keep or
+    discard a piece's staged numbers, six controls and a link for a board's
+    serial log, and the same link again where no board is found. Each arrived
+    with a feature; none of them is unified with anything.
     """
     taken = census.take()
-    assert len(taken.controls_of_its_own()) == 20
+    assert len(taken.controls_of_its_own()) == 30
 
 
 def test_the_two_buttons_on_a_job_are_two():

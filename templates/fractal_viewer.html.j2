@@ -313,7 +313,7 @@
                 <input type="checkbox" id="serial-toggle"> ⌨ Serial log
             </label>
             <div class="spacer"></div>
-            <a href="{{ base_url }}/firmware" class="toolbar-link" title="Install the firmware toolchain and program boards from sketches under parts/">⚡ Firmware</a>
+            <a href="{{ base_url }}/firmware" id="firmware-link" class="toolbar-link" title="Install the firmware toolchain and program boards from sketches under parts/">⚡ Firmware</a>
             <span id="validity-indicator" class="validity-indicator valid">Layout valid</span>
         </div>
         <div class="main-content">
@@ -2365,7 +2365,7 @@
 
         function renderMeta() {
             const v = devices.find((d) => d.device.port === portSel.value);
-            if (!v) { meta.innerHTML = devices.length ? "select a port" : "no devices detected — <a href='" + BASE + "/firmware' style='color:#9cd2ff'>firmware page</a>"; return; }
+            if (!v) { meta.innerHTML = devices.length ? "select a port" : "no devices detected — <a href='" + BASE + "/firmware' id='firmware-page-link' style='color:#9cd2ff'>firmware page</a>"; return; }
             const d = v.device, rec = v.expected.record;
             const chip = d.chip ? `${esc(d.chip)} rev ${esc(d.revision || "?")} · ${esc(d.mac)}` : (d.board_name ? esc(d.board_name) : "unprobed board");
             let should = rec ? `should run <b>${esc(rec.sketch || "raw image")}</b>` : "<span class='warn'>nothing flashed from apothecary</span>";

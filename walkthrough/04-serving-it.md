@@ -31,14 +31,17 @@ markup still read "Layout valid".
     >>> page = client.get("/viewer/sites/datum_core").text
     >>> "jsdelivr" in page
     False
-    >>> '"three": "/vendor/three/build/three.module.js"' in page
+    >>> '"three": "/static/vendor/three/three.module.js"' in page
     True
+
+The library is checked in under `apothecary/static/vendor/three/`, so a fresh
+clone serves it with no install step; the README beside it says how to update it.
 
 ## Recipes
 
 | | |
 |---|---|
-| Install what it needs | `apothecary install` — once, or the page renders nothing |
+| Install what it needs | `apothecary install` — once, for the JSCAD viewer; the fractal viewer needs nothing |
 | Start it | `apothecary serve --port 8765` |
 | Check the install | `apothecary check` |
 | The assembly | `/viewer/sites/datum_core` |
