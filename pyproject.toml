@@ -11,6 +11,9 @@ dependencies = [
     "click>=8.1.7",
     "uvicorn>=0.30.0",
     "playwright>=1.57.0",
+    # Reading pixels for the plain shape finder. Runs entirely on this
+    # machine; see docs/plans/proposals/runs-and-stays-local.md.
+    "pillow>=10.0.0",
 ]
 
 [project.scripts]
@@ -60,6 +63,7 @@ markers = [
     "e2e: end-to-end tests using Playwright",
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "docs: e2e doc-workflow tests that generate docs/generated/ when run with --generate-docs",
+    "walkthrough: the one demonstration; it writes walkthrough/ and the ordinary test command runs it",
 ]
 
 [tool.ruff]

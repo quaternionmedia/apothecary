@@ -23,35 +23,7 @@ from pathlib import Path
 
 import httpx
 import pytest
-
-from doc_capture import GENERATED_DOCS_ROOT, DocRecorder
-
-
-def pytest_addoption(parser):
-    """Add custom pytest options for E2E tests."""
-    parser.addoption(
-        "--start-server",
-        action="store_true",
-        default=False,
-        help="Automatically start the test server before E2E tests",
-    )
-    parser.addoption(
-        "--server-port",
-        action="store",
-        default="8765",
-        help="Port for the test server (default: 8765)",
-    )
-    parser.addoption(
-        "--generate-docs",
-        action="store_true",
-        default=False,
-        help=(
-            "Enable doc-workflow screenshot/video capture (tests marked 'docs'). "
-            "Off by default so a normal test run never writes to docs/generated/. "
-            "Driven by `apothecary docs generate`, not meant to be passed by hand "
-            "to a full test run."
-        ),
-    )
+from doc_capture import GENERATED_DOCS_ROOT, DocRecorder, Walkthrough
 
 
 @pytest.fixture(scope="session")
@@ -61,7 +33,51 @@ def server_port(request):
 
 
 @pytest.fixture(scope="session")
-def test_server(request, server_port):
+def _picture_folder_if_known(request, tmp_path_factory):
+    """The picture folder, or None if nobody has said which one it is.
+
+    Kept separate from `picture_folder` on purpose. Starting the server must not
+    depend on a fixture that can skip: `test_server` is upstream of `base_url`,
+    which is upstream of every browser test, so a skip here would silently take
+    the whole browser suite with it — which is exactly what it did once.
+    """
+    already = os.environ.get("APOTHECARY_PICTURE_ROOT")
+    if already:
+        folder = Path(already)
+        folder.mkdir(parents=True, exist_ok=True)
+        return folder
+    if request.config.getoption("--start-server"):
+        return tmp_path_factory.mktemp("pictures")
+    return None
+
+
+@pytest.fixture(scope="session")
+def picture_folder(_picture_folder_if_known):
+    """The one folder the test server may read pictures from.
+
+    The server refuses any path outside a single folder, so a test that wants it
+    to look at a picture has to say where that folder is. Naming it here rather
+    than letting the server read anything is the point: the refusal is real, and
+    the first run of these tests hit it.
+
+    When something else started the server — `apothecary docs generate` does —
+    it has already chosen the folder and said so, and both sides have to agree.
+
+    Only tests that ask for this fixture are skipped when nobody said. Tests that
+    never show the server a picture run either way.
+    """
+    if _picture_folder_if_known is None:
+        pytest.skip(
+            "This test asks the server to look at a picture, and the server reads "
+            "pictures from one folder only. Nothing said which folder. Either run "
+            "with --start-server, or start the server yourself with "
+            "APOTHECARY_PICTURE_ROOT set to a folder and set the same value here."
+        )
+    return _picture_folder_if_known
+
+
+@pytest.fixture(scope="session")
+def test_server(request, server_port, _picture_folder_if_known):
     """Start a test server if --start-server is passed.
 
     This fixture manages the server lifecycle for the entire test session.
@@ -78,6 +94,8 @@ def test_server(request, server_port):
     # Set environment for faster startup
     env = os.environ.copy()
     env["APOTHECARY_VIEWER_PATH"] = ""
+    if _picture_folder_if_known is not None:
+        env["APOTHECARY_PICTURE_ROOT"] = str(_picture_folder_if_known)
 
     server_cmd = [
         sys.executable,
@@ -218,6 +236,34 @@ def doc_recorder(page, docs_enabled, request):
         video_dir = GENERATED_DOCS_ROOT / "_videos_raw" / _slugify_test_name(request.node.name)
         video_dir.mkdir(parents=True, exist_ok=True)
         marker = video_dir / "workflows.txt"
-        marker.write_text(
-            "\n".join(r.workflow for r in recorders) + "\n", encoding="utf-8"
+        marker.write_text("\n".join(r.workflow for r in recorders) + "\n", encoding="utf-8")
+
+
+@pytest.fixture
+def walkthrough(page):
+    """The one demonstration's recorder, written out however the run ends.
+
+    Deliberately not gated on --generate-docs, which is what the screenshot
+    machinery above still uses. The walkthrough is the page a newcomer meets;
+    producing it only when somebody remembers a flag is what made it a second
+    description of behaviour rather than a record of a run.
+    """
+    made: list[Walkthrough] = []
+
+    def _make(ordinal, slug, title, intro, runtime, does_not_show):
+        recorder = Walkthrough(
+            page=page,
+            ordinal=ordinal,
+            slug=slug,
+            title=title,
+            intro=intro,
+            runtime=runtime,
+            does_not_show=does_not_show,
         )
+        made.append(recorder)
+        return recorder
+
+    yield _make
+
+    for recorder in made:
+        recorder.write()

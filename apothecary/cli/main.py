@@ -2,9 +2,11 @@
 
 import click
 
+from .census import census
 from .docs import docs
 from .inventory import inventory
 from .parts import parts
+from .photo import photo
 from .preflight import preflight
 from .release import release
 from .render import render_scene, render_scene_jscad, template_generate, testrun, validate
@@ -39,8 +41,10 @@ cli.add_command(inventory)
 cli.add_command(parts)
 cli.add_command(preflight)
 cli.add_command(release)
+cli.add_command(photo)
 cli.add_command(test)
 cli.add_command(docs)
+cli.add_command(census)
 
 
 def main():  # pragma: no cover - entry point

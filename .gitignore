@@ -54,10 +54,8 @@ htmlcov/
 .dmypy.json
 dmypy.json
 
-# Node modules (for the JSCAD viewer and the fractal viewer's 3D library).
-# The tree is a build artifact; the lockfile is not -- it is what makes
-# `npm install` reproduce the same versions, and the house-stack record
-# requires it committed alongside the dependencies it pins.
+# Node modules (for the JSCAD viewer). The fractal viewer's 3D library is not
+# here: it is checked in under apothecary/static/vendor/three/.
 node_modules/
 
 # Build outputs

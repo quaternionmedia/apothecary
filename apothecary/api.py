@@ -13,7 +13,9 @@ On startup, missing STLs are automatically generated if OpenSCAD is available.
 import asyncio
 import hashlib
 import json
+import mimetypes
 import os
+import re
 from contextlib import asynccontextmanager, suppress
 from importlib import import_module
 from pathlib import Path
@@ -137,6 +139,60 @@ def _vec(data):
     return Vector3D(x=data.get("x", 0), y=data.get("y", 0), z=data.get("z", 0))
 
 
+def _rehydrate_stated(t, obj_dict):
+    """Build the shape the description says it is, or None if the name is unknown.
+
+    Returning None rather than raising leaves an unrecognised name to the
+    guessing below, which is what a hand-written document with a typo in it
+    used to get.
+    """
+    comment = obj_dict.get("comment")
+    size = obj_dict.get("size")
+
+    def kids():
+        # Built only for the shapes that hold other shapes. Building it for
+        # every shape made a bad child break a parent that never looks at one.
+        return [_rehydrate(k) if isinstance(k, dict) else k for k in obj_dict.get("children", [])]
+
+    if t == "cube":
+        return Cube(
+            size=_vec(size) if isinstance(size, dict) else (1.0 if size is None else size),
+            center=obj_dict.get("center", False),
+            comment=comment,
+        )
+    if t == "sphere":
+        return Sphere(r=obj_dict.get("r", 1.0), fn=obj_dict.get("fn"), comment=comment)
+    if t == "cylinder":
+        return Cylinder(
+            h=obj_dict.get("h", 1.0),
+            r=obj_dict.get("r"),
+            r1=obj_dict.get("r1"),
+            r2=obj_dict.get("r2"),
+            center=obj_dict.get("center", False),
+            fn=obj_dict.get("fn"),
+            comment=comment,
+        )
+    if t == "union":
+        return Union(children=kids(), comment=comment)
+    if t == "difference":
+        return Difference(children=kids(), comment=comment)
+    if t == "intersection":
+        return Intersection(children=kids(), comment=comment)
+    if t == "translate" and "v" in obj_dict:
+        return Translate(v=_vec(obj_dict["v"]), children=kids(), comment=comment)
+    if t == "rotate" and "a" in obj_dict:
+        a = obj_dict["a"]
+        return Rotate(
+            a=_vec(a) if isinstance(a, dict) else a,
+            v=_vec(obj_dict["v"]) if isinstance(obj_dict.get("v"), dict) else None,
+            children=kids(),
+            comment=comment,
+        )
+    if t == "scale" and "v" in obj_dict:
+        return Scale(v=_vec(obj_dict["v"]), children=kids(), comment=comment)
+    return None
+
+
 def _rehydrate(obj_dict):
     """Best-effort reconstruction of OpenSCAD objects from a plain dict.
 
@@ -144,6 +200,23 @@ def _rehydrate(obj_dict):
     otherwise infers by field set.
     """
     t = obj_dict.get("type")
+
+    # A stated type wins outright. The guesses below overlap — a tube and a ball
+    # both carry a radius — so mixing "what it says" with "what it looks like"
+    # let the first matching guess answer for a shape that had already said what
+    # it was. `docs/scene-json.md` promises the stated type is honoured.
+    if t is not None:
+        try:
+            stated = _rehydrate_stated(t, obj_dict)
+        except Exception:
+            # An unbuildable description falls through to the guessing below,
+            # which is what it got before the stated name was honoured at all.
+            # Turning "renders something odd" into an error is a separate
+            # decision; see docs/plans/features/scene-document-validation.md.
+            stated = None
+        if stated is not None:
+            return stated
+
     if t == "cube" or ("size" in obj_dict and isinstance(obj_dict.get("size"), dict)):
         size = obj_dict.get("size")
         size_val = _vec(size) if isinstance(size, dict) else size
@@ -193,6 +266,19 @@ app = FastAPI(
     description="Lean OpenSCAD generation toolkit exposed via FastAPI endpoints",
     lifespan=lifespan,
 )
+
+# The viewer's 3D library, kept here rather than fetched from a public website
+# while somebody is using it. See apothecary/static/vendor/three/README.md: with
+# the network switched off, fetching it meant the viewer never loaded at all.
+# A CDN copy is also exactly what an ad blocker or a corporate proxy drops --
+# and when it goes, the page's script never executes, so the canvas, the
+# contents list and the code panel come up empty together while the static
+# markup still reads "Layout valid". Frontend dependencies are vendored per
+# the house-stack record for the same reason.
+STATIC_ROOT = Path(__file__).resolve().parent / "static"
+app.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
+THREE_DIR = STATIC_ROOT / "vendor" / "three"
+THREE_IS_VENDORED = (THREE_DIR / "three.module.js").is_file()
 
 renderer = TemplateRenderer()
 
@@ -328,18 +414,6 @@ def _part_payload(part, params_query: str | None) -> Dict[str, object]:
         }
     )
     return metadata
-
-
-# The viewer's 3D library, served from this origin rather than a CDN. A CDN
-# copy is unreachable offline and is exactly what an ad blocker or a corporate
-# proxy drops -- and when it goes, the page's script never executes at all, so
-# the canvas, the contents list and the code panel come up empty together while
-# the static markup still reads "Layout valid". Frontend dependencies are
-# vendored per the house-stack record for the same reason.
-THREE_DIR = ROOT / "node_modules" / "three"
-THREE_IS_VENDORED = (THREE_DIR / "build" / "three.module.js").is_file()
-if THREE_IS_VENDORED:
-    app.mount("/vendor/three", StaticFiles(directory=THREE_DIR), name="three")
 
 
 @app.get("/")
@@ -865,6 +939,17 @@ _job_store = JobStore()
 DEFAULT_VIEWER_SITE = "garage"
 
 
+# The only types a picture is served as. Anything else is handed back as bytes
+# with no claim about what it is.
+PICTURE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp", "image/tiff"}
+
+
+def _photo_shelf():
+    from .vision.shelf import shelf
+
+    return shelf()
+
+
 def _get_site_or_404(name: str) -> Assembly:
     try:
         return _site_store.get(name)
@@ -962,8 +1047,14 @@ def _primitive_descriptor(obj: OpenSCADObject, offset: Vector3D) -> Dict[str, ob
         return _primitive_descriptor(obj.children[0], offset + obj.v)
 
     if isinstance(obj, Cube):
-        size = obj.size if isinstance(obj.size, Vector3D) else Vector3D(x=obj.size, y=obj.size, z=obj.size)
-        local_min = Vector3D(x=-size.x / 2, y=-size.y / 2, z=-size.z / 2) if obj.center else Vector3D()
+        size = (
+            obj.size
+            if isinstance(obj.size, Vector3D)
+            else Vector3D(x=obj.size, y=obj.size, z=obj.size)
+        )
+        local_min = (
+            Vector3D(x=-size.x / 2, y=-size.y / 2, z=-size.z / 2) if obj.center else Vector3D()
+        )
         bounds = BoundingBox3D(min_point=local_min + offset, max_point=local_min + size + offset)
         return {"type": "cube", "size": [size.x, size.y, size.z], "bounds": _bounds_dict(bounds)}
 
@@ -980,7 +1071,8 @@ def _primitive_descriptor(obj: OpenSCADObject, offset: Vector3D) -> Dict[str, ob
     if isinstance(obj, Sphere):
         r = obj.r
         bounds = BoundingBox3D(
-            min_point=Vector3D(x=-r, y=-r, z=-r) + offset, max_point=Vector3D(x=r, y=r, z=r) + offset
+            min_point=Vector3D(x=-r, y=-r, z=-r) + offset,
+            max_point=Vector3D(x=r, y=r, z=r) + offset,
         )
         return {"type": "sphere", "r": r, "bounds": _bounds_dict(bounds)}
 
@@ -1055,7 +1147,9 @@ def _assembly_tree(
             if node.build_volume
             else None
         ),
-        "primitive": _primitive_descriptor(node.base, world_position) if node.base is not None else None,
+        "primitive": (
+            _primitive_descriptor(node.base, world_position) if node.base is not None else None
+        ),
         "children": [
             {**_assembly_tree(child, world_position, category), "composition": composition}
             for child, composition in composed
@@ -1101,6 +1195,239 @@ class LayoutRequest(BaseModel):
 
 class StatusRequest(BaseModel):
     status: str
+
+
+SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+
+
+def _check_name(name: str) -> str:
+    """Refuse a name that is not simply a name.
+
+    A name becomes part of a web address and a key in a register. One
+    containing a slash can be stored and then never fetched or deleted again,
+    because the address for it cannot be typed; one containing dots walks up
+    directories in anything that later joins it to a path.
+    """
+    if not SAFE_NAME.match(name or ""):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{name!r} is not a usable name. Letters, numbers, dashes and "
+                "underscores, starting with a letter or number, up to 64 characters."
+            ),
+        )
+    return name
+
+
+class LookAtPicture(BaseModel):
+    """Ask the server to look at a picture already on this machine."""
+
+    picture: str
+    name: Optional[str] = None
+    width_mm: Optional[float] = Field(None, gt=0, allow_inf_nan=False)
+    finder: str = "plain"
+
+
+def _picture_root() -> Path:
+    """The one folder pictures may be read from.
+
+    A server that reads any path it is handed is a server that will read
+    ``/etc/shadow`` the day somebody points it at a network it did not expect.
+    Everything here is meant to run on one machine and listen only to it, and
+    that is still not a reason to leave the door open.
+
+    Set ``APOTHECARY_PICTURE_ROOT`` to say where pictures live. Without it, the
+    folder the server was started in.
+    """
+    named = os.environ.get("APOTHECARY_PICTURE_ROOT") or str(Path.cwd())
+    root = Path(named).resolve()
+    if not root.is_dir():
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"pictures are supposed to be read from {root}, and there is no "
+                "folder there. Set APOTHECARY_PICTURE_ROOT to one that exists."
+            ),
+        )
+    if root == Path(root.anchor):
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"pictures are supposed to be read from {root}, which is the whole "
+                "machine. That turns the restriction off rather than setting it."
+            ),
+        )
+    return root
+
+
+def _picture_within_root(where: Path) -> Path:
+    """Check a picture is inside the one folder, following any links first.
+
+    Checked every time it is used, not only when it arrives. A file that passed
+    on the way in can be swapped for a link pointing anywhere afterwards, and
+    then the door that refused it is serving it.
+    """
+    root = _picture_root()
+    try:
+        settled = Path(where).resolve()
+        settled.relative_to(root)
+    except (ValueError, OSError):
+        raise HTTPException(
+            status_code=403, detail=f"pictures are read from {root} and nowhere else"
+        ) from None
+    # `is_file` rather than `exists`: a pipe exists, and opening one waits for
+    # somebody to write to it, which is never. It also has to be guarded,
+    # because asking about an impossible path is itself an error rather than a
+    # no.
+    try:
+        real = settled.is_file()
+    except OSError as exc:
+        raise HTTPException(
+            status_code=400, detail=f"{settled} cannot be looked at: {exc}"
+        ) from None
+    if not real:
+        raise HTTPException(
+            status_code=404,
+            detail=f"there is no picture at {settled}, or it is not an ordinary file",
+        )
+    return settled
+
+
+@app.post("/photos")
+def look_at_picture(request: LookAtPicture):
+    """Look at a picture on this machine and shelve what was built from it.
+
+    The picture is read from disk each time and nothing is copied anywhere. The
+    arrangement is held in memory for as long as the server runs.
+    """
+    from .vision import ScaleReference
+    from .vision import build as build_arrangement
+    from .vision import get as get_finder
+    from .vision.shelf import shelf
+
+    root = _picture_root()
+    asked = Path(request.picture)
+    where = _picture_within_root(asked if asked.is_absolute() else root / asked)
+
+    name = _check_name(request.name or where.stem)
+    stock = shelf()
+    if name in _site_store.names() and name not in stock:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{name!r} is already the name of an arrangement that did not come "
+                "from a picture. Choose another name rather than covering it over."
+            ),
+        )
+
+    try:
+        finder = get_finder(request.finder)
+    except KeyError:
+        raise HTTPException(status_code=400, detail=f"no finder named {request.finder!r}") from None
+
+    try:
+        picture = finder.look(where)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"{where} could not be read: {exc}") from None
+
+    scale = ScaleReference(millimetres_across=request.width_mm) if request.width_mm else None
+    made = build_arrangement(picture, name=name, scale=scale, picture_path=where)
+
+    stock.put(made)
+    _site_store.add(made.site.name, stock.factory(made.site.name), stock.checker(made.site.name))
+    return get_photo_album(made.site.name)
+
+
+@app.get("/photos")
+def list_photo_sites():
+    """Every arrangement built from a picture in this session."""
+    return _photo_shelf().names()
+
+
+@app.get("/photos/{name}")
+def get_photo_album(name: str):
+    """What is known about each piece of one arrangement built from a picture.
+
+    Kept beside the arrangement rather than inside it, and joined to it by the
+    same dotted path the rest of the API uses to name a node.
+    """
+    stock = _photo_shelf()
+    if name not in stock:
+        raise HTTPException(status_code=404, detail=f"no picture-built arrangement named {name!r}")
+    album = stock.album(name)
+    return {
+        "name": name,
+        "picture": album.picture_name,
+        "pixel_width": album.pixel_width,
+        "pixel_height": album.pixel_height,
+        "finder": album.finder,
+        "millimetres_across": album.millimetres_across,
+        "sized": album.sized,
+        "groups": album.groups(),
+        "least_sure": album.unsure(),
+        "share_a_machine_guessed": album.guessed_share(),
+        "seen_in_several": album.seen_in_several(),
+        "pieces": {
+            path: {
+                **about.model_dump(),
+                "summary": about.summary(),
+                "sightings": about.sightings,
+            }
+            for path, about in album.provenance.items()
+        },
+    }
+
+
+@app.delete("/photos/{name}")
+def forget_photo_site(name: str):
+    """Forget an arrangement built from a picture.
+
+    Anything that can be added while the server runs has to be removable while
+    it runs, or whatever adds one has no way to tidy up after itself.
+    """
+    stock = _photo_shelf()
+    if name not in stock:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"no arrangement built from a picture is named {name!r}. Only those "
+                "can be forgotten here; the ones built into the program stay."
+            ),
+        )
+    stock.forget(name)
+    _site_store.remove(name)
+    return {"forgotten": name}
+
+
+@app.get("/photos/{name}/picture")
+def get_photo_picture(name: str):
+    """The picture this arrangement was built from, as it was on disk.
+
+    Read from where the person pointed, each time it is asked for. Nothing is
+    copied anywhere and nothing is cached.
+    """
+    stock = _photo_shelf()
+    if name not in stock:
+        raise HTTPException(status_code=404, detail=f"no picture-built arrangement named {name!r}")
+    where = stock.album(name).picture_path
+    if where is None or not Path(where).exists():
+        raise HTTPException(
+            status_code=404,
+            detail="the picture is no longer where it was when this was built",
+        )
+    settled = _picture_within_root(where)
+
+    # The type is chosen from a short list, not built out of the file name. A
+    # name can contain anything at all, including the characters that end a
+    # header, and a header built by pasting a file name into it is a header
+    # somebody else gets to write.
+    guessed, _ = mimetypes.guess_type(settled.name)
+    kind = guessed if guessed in PICTURE_TYPES else "application/octet-stream"
+    return Response(
+        content=settled.read_bytes(),
+        media_type=kind,
+        headers={"X-Content-Type-Options": "nosniff"},
+    )
 
 
 @app.get("/sites")
@@ -1464,3 +1791,11 @@ async def openscad_status():
         "version": renderer.get_version(),
         "path": str(renderer.openscad_path) if renderer.openscad_path else None,
     }
+
+
+# The project's first APIRouter, mounted last. Its handlers reach back into the
+# helpers above, so this module has to be finished before it is imported --
+# importing it at the top would close a circle.
+from .routes.menu import router as menu_router  # noqa: E402
+
+app.include_router(menu_router)

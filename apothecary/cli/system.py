@@ -123,12 +123,13 @@ def check():
     # renders nothing, and still shows its static "Layout valid" chip -- so
     # the absence has to be reported somewhere a person will look.
     click.secho("3D library (three.js):", bold=True)
-    three_build = ROOT / "node_modules" / "three" / "build" / "three.module.js"
+    three_build = ROOT / "apothecary" / "static" / "vendor" / "three" / "three.module.js"
     if three_build.is_file():
-        _safe_echo(f"  ✓ Vendored: {three_build.parent.parent}")
+        _safe_echo(f"  ✓ Vendored: {three_build.parent}")
     else:
-        _safe_echo("  ✗ three.js not installed", fg="yellow")
-        click.echo("     The fractal viewer will render nothing. Run: npm install")
+        _safe_echo("  ✗ three.js missing", fg="yellow")
+        click.echo("     The fractal viewer will render nothing. It is checked in under")
+        click.echo(f"     {three_build.parent}; restore it from the repository.")
 
     click.echo("")
 

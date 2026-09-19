@@ -8,7 +8,9 @@ the code panel came up empty *together*, while the status line still read
 are static markup. An inert page was indistinguishable from a working one.
 
 The house-stack record requires frontend dependencies to be vendored and never
-CDN-loaded, and this is the failure it exists to prevent.
+CDN-loaded, and this is the failure it exists to prevent. The copy is checked in
+under ``apothecary/static/vendor/three/`` so a fresh clone serves it with no
+install step; its README says how to update it.
 """
 
 from __future__ import annotations
@@ -47,7 +49,7 @@ class TestVendoredLibraryIsServed:
         if not THREE_IS_VENDORED:
             # The banner case is covered below; nothing to serve here.
             return
-        response = client.get("/vendor/three/build/three.module.js")
+        response = client.get("/static/vendor/three/three.module.js")
         assert response.status_code == 200
         assert len(response.content) > 100_000
 
@@ -59,14 +61,14 @@ class TestVendoredLibraryIsServed:
             "controls/TransformControls.js",
             "loaders/STLLoader.js",
         ):
-            response = client.get(f"/vendor/three/examples/jsm/{addon}")
+            response = client.get(f"/static/vendor/three/addons/{addon}")
             assert response.status_code == 200, addon
 
     def test_importmap_targets_what_is_actually_served(self):
         """The specifier and the route have to agree, or the page dies silently."""
         page = client.get(VIEWER_URL).text
-        assert '"three": "/vendor/three/build/three.module.js"' in page
-        assert '"three/addons/": "/vendor/three/examples/jsm/"' in page
+        assert '"three": "/static/vendor/three/three.module.js"' in page
+        assert '"three/addons/": "/static/vendor/three/addons/"' in page
 
 
 class TestMissingLibraryIsAnnounced:
@@ -77,7 +79,7 @@ class TestMissingLibraryIsAnnounced:
         page = render_fractal_viewer_page(
             ["parts_library"], "http://testserver", "parts_library", "", three_is_vendored=False
         )
-        assert "The 3D library is not installed" in page
+        assert "The 3D library is missing" in page
 
     def test_a_present_install_renders_no_banner(self):
         from apothecary.viewer import render_fractal_viewer_page

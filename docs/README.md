@@ -17,6 +17,9 @@ by `pytest walkthrough`. Start there.
 | [06 — Ready to build](../walkthrough/06-ready-to-build.md) | Whether a part can be printed and checked against a real one |
 | [07 — Status and progress](../walkthrough/07-status-and-progress.md) | One vocabulary for how the CLI reports state |
 | [08 — Problems and solutions](../walkthrough/08-problems-and-solutions.md) | What is unresolved, who can close it, and what exists to close it with |
+| [09 — Preflight](../walkthrough/09-preflight.md) | Everything a build needs, checked before anything is printed |
+| [10 — Being depended on](../walkthrough/10-being-depended-on.md) | What a consumer pinning this repository is entitled to |
+| [11 — Photographs into pieces](../walkthrough/11-photographs-into-pieces.md) | A photograph becomes named, placed pieces in the viewer — written by its own run |
 
 ## Getting Started
 
