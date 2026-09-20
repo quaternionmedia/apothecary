@@ -216,8 +216,10 @@ consequences for this plan:
 
 datum's governance pin is qm `project/datum`; nothing here touches it.
 
-**qm — no open pull requests.** The two records on `adr/firmware-toolchain-seam`
-(`ce4e15f`) become one, as a draft against `project/apothecary`, once pushed.
+**qm — no open pull requests.** The three records on `adr/firmware-toolchain-seam`
+(`ce4e15f`, `551b401`, `9e3b135`: the toolchain seam revised, the G-code
+printer seam with its bed reading and its one-print host, and the rad host
+integration) become one draft against `project/apothecary`, once pushed.
 
 **rad #2 — dependabot, playwright bump.** Irrelevant to apothecary, except
 that the conformance edit proposed in
@@ -234,7 +236,11 @@ vectors.
 > follows the board. A focused monitor page carries the port's comms log,
 > a temperature history and a latched control overlay; two allowlists keep
 > a person's own G-code to report-only queries and, once armed, bounded
-> operator controls. The ring appears: right-click, `m` or ⌗ Ring open the
+> operator controls. The monitor reads the bed (a probe as a job, the mesh
+> as a heatmap, the corners against the mean, every reading kept) and
+> prints without a card (a kept file streamed one line per `ok`, checked
+> whole first, paused, resumed and cancelled with a safe-off, every print
+> recorded). The ring appears: right-click, `m` or ⌗ Ring open the
 > node, canvas or device ring; every option has a keypad cell and every
 > intent an address, per rad's *The menu addresses nine cells*. The census
 > classifies the new controls and reads **N of its own, M of them also on
@@ -250,9 +256,11 @@ final tip.)
   `20e00bd`, which is origin's `project/apothecary` tip and contains
   `a6c7afb`. The merge takes the pointer to `20e00bd`; that is correct, and
   the submodule check passes because it is reachable on origin.
-- The two records (the firmware toolchain seam, revised; the G-code printer
-  seam, new) are one commit on the qm branch `adr/firmware-toolchain-seam`
-  (`ce4e15f`, on top of `20e00bd`). Its lint is clean:
+- The records (the firmware toolchain seam, revised; the G-code printer
+  seam, new, saying in its first decision that the seam reads the bed and in
+  its sixth that it hosts one print at a time; the rad host integration,
+  new) are three commits on the qm branch `adr/firmware-toolchain-seam`
+  (`ce4e15f`, `551b401`, `9e3b135`, on top of `20e00bd`). Its lint is clean:
   `python project-seed/ci/adr_lint.py --records-dir adr --index adr/README.md --base-ref origin/project/apothecary`.
   Push that branch and open a **draft** pull request with base
   `project/apothecary` — never `main`; the corpus's own `AGENTS.md` says why,
