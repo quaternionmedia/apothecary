@@ -510,6 +510,24 @@ def test_the_board_is_drawn_in_its_printer_and_the_nozzle_follows_a_jog(
     page.wait_for_function(
         "() => window.apothecaryBoardView && window.apothecaryBoardView.target()", timeout=5000
     )
+    # The bodies land where the site puts them: the printer's shape encloses
+    # its board and its build volume. (A node's STL arrives in its parent's
+    # frame; drawn untranslated, the printer sat a bench-width away.)
+    page.wait_for_function(
+        "() => Object.keys(window.apothecaryBoardView.bodies()).length === 2", timeout=15000
+    )
+    drawn = page.evaluate(
+        "() => ({ bodies: window.apothecaryBoardView.bodies(), "
+        "volume: window.apothecaryBoardView.volume() })"
+    )
+    printer_box = drawn["bodies"]["printer_1"]
+    board_box = drawn["bodies"][BOARD]
+    for inner in (board_box, drawn["volume"]):
+        for axis in "xyz":
+            assert printer_box["min"][axis] - 1 <= inner["min"][axis], (axis, drawn)
+            assert inner["max"][axis] <= printer_box["max"][axis] + 1, (axis, drawn)
+    assert printer_box["max"]["x"] - printer_box["min"]["x"] == pytest.approx(300, abs=1)
+    assert board_box["min"]["z"] == pytest.approx(5, abs=1)  # on the enclosure floor
     page.locator("#ctl").check()
     expect(page.locator("#control")).to_be_visible(timeout=5000)
     page.locator("#control button[data-cmd='M25']").click()  # pause the SD print so a jog is honest

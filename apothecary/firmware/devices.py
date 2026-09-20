@@ -377,6 +377,36 @@ def identify_printer(
     return device
 
 
+def known_device(port: str, state: Optional[FirmwareState] = None) -> Optional[DeviceInfo]:
+    """What is known about the board on ``port``: the remembered record (an
+    identified printer, a probed chip), else the current scan's entry.
+
+    The remembered record first, because a poll asks every couple of
+    seconds and a port scan is a process; the scan only for a port nothing
+    has talked to yet.
+    """
+    state = state or get_state()
+    cached = state.cached_device(port)
+    if cached is not None:
+        return cached
+    try:
+        return next((d for d in detected_devices(state=state) if d.port == port), None)
+    except ToolchainError:
+        return None
+
+
+def stable_identity(identity: str, state: Optional[FirmwareState] = None) -> str:
+    """The board's own identity for a port that is detected right now, else ``identity``.
+
+    A pin made by port would break the next time the kernel numbered the
+    port differently; the MAC or the USB bridge's serial number does not.
+    """
+    if not identity.startswith("/") and not identity.upper().startswith("COM"):
+        return identity  # already a MAC or a serial number
+    device = known_device(identity, state)
+    return device.identity if device is not None else identity
+
+
 # Who wants to know a printer's state after each poll: api.py registers the
 # site sync here, so this package never imports the site layer. A listener
 # returns the nodes it touched; they ride along on ``PrinterStatus.synced``.

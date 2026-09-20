@@ -6,6 +6,7 @@ parsers are tested against real output, not an idealised one.
 """
 
 import json
+import os
 import threading
 import time
 
@@ -237,6 +238,30 @@ def test_pyserial_engine_round_trip_on_loopback():
     t.close()
     with pytest.raises(ToolchainError, match="cannot open"):
         gcode.PySerialTransport("/dev/ttyDOES_NOT_EXIST", 115200)
+
+
+def test_pyserial_engine_leaves_dtr_up_on_close():
+    """A real tty (a pty here) is opened with HUPCL cleared, so closing it keeps DTR.
+
+    Seen on the bench: with HUPCL set the kernel drops DTR on close and the
+    Creality board reboots on the next program's open -- the very reset the
+    seam promises not to cause.
+    """
+    pytest.importorskip("serial")
+    termios = pytest.importorskip("termios")
+    master, slave = os.openpty()
+    try:
+        attr = termios.tcgetattr(slave)
+        attr[2] |= termios.HUPCL  # what a real USB serial port comes up with
+        termios.tcsetattr(slave, termios.TCSANOW, attr)
+        assert termios.tcgetattr(slave)[2] & termios.HUPCL
+        t = gcode.PySerialTransport(os.ttyname(slave), 115200)
+        assert not termios.tcgetattr(t._s.fd)[2] & termios.HUPCL
+        t.close()
+    finally:
+        os.close(master)
+        os.close(slave)
+    assert gcode.keep_dtr_on_close(None) is False
 
 
 def test_termios_engine_rejects_odd_rates_and_missing_ports():
@@ -1365,3 +1390,72 @@ def test_release_reconnect_reset_and_upload_are_refused_mid_print(
     devices.print_job(port).thread.join(5)
     assert c.get("/firmware/printers/print", params={"port": port}).json()["running"] is False
     assert c.post("/firmware/printers/release", json={"port": port}).status_code == 200
+
+
+# --- a pin follows the board, not the socket -------------------------------------------
+
+
+def test_a_pin_by_port_is_kept_as_the_board_and_survives_renumbering(
+    fake_arduino_cli, fresh_task_runner, scripted_links, garage, monkeypatch
+):
+    """Seen on the bench: the printer came back as /dev/ttyUSB0 after a night as
+    /dev/ttyUSB1, and the pin made by port name pointed at nothing. A pin is
+    kept as the bridge's serial number when it has one, and matches the board
+    wherever the kernel puts it; a by-id path or a udev name matches too."""
+    c = TestClient(app)
+    row = c.put(f"/sites/garage/nodes/{BOARD}/device", json={"identity": "/dev/ttyFAKE1"}).json()
+    assert row["identity"] == "FAKESERIAL1" and row["binding_source"] == "manual"
+    assert row["device"]["port"] == "/dev/ttyFAKE1"
+    # A port with no serial number stays a port.
+    row = c.put("/sites/garage/nodes/printer_2/device", json={"identity": "/dev/ttyFAKE0"}).json()
+    assert row["identity"] == "/dev/ttyFAKE0"
+    c.delete("/sites/garage/nodes/printer_2/device")
+    # The board view and the status sync find the pin by the port it is on now.
+    assert (
+        c.get("/firmware/printers/where", params={"port": "/dev/ttyFAKE1"}).json()["board"]["path"]
+        == BOARD
+    )
+    body = c.get("/firmware/printers/status", params={"port": "/dev/ttyFAKE1"}).json()
+    assert body["synced"] and body["synced"][0]["via"] == BOARD
+
+    # Overnight the kernel renumbers: the same bridge is now on /dev/ttyFAKE2.
+    from apothecary.firmware import devices
+
+    def renumbered(cli=None, state=None, fresh=False):
+        found = list(_real_detected(cli, state, fresh))
+        return [
+            d.model_copy(update={"port": "/dev/ttyFAKE2"}) if d.port == "/dev/ttyFAKE1" else d
+            for d in found
+        ]
+
+    _real_detected = devices.detected_devices
+    monkeypatch.setattr(devices, "detected_devices", renumbered)
+    monkeypatch.setattr(devices, "_SCAN", None)
+    rows = c.get("/sites/garage/devices").json()["bindings"]
+    row = next(r for r in rows if r["path"] == BOARD)
+    assert row["identity"] == "FAKESERIAL1" and row["device"]["port"] == "/dev/ttyFAKE2"
+    assert (
+        c.get("/firmware/printers/where", params={"port": "/dev/ttyFAKE2"}).json()["board"]["path"]
+        == BOARD
+    )
+    body = c.get("/firmware/printers/status", params={"port": "/dev/ttyFAKE2"}).json()
+    assert body["synced"] and body["synced"][0]["via"] == BOARD
+
+
+def test_a_pin_by_a_path_that_resolves_to_the_port_matches(tmp_path):
+    from apothecary.firmware.bindings import same_device
+    from apothecary.firmware.models import DeviceInfo, validate_identity
+
+    real = tmp_path / "ttyUSB0"
+    real.write_text("")
+    link = tmp_path / "ender"
+    link.symlink_to(real)
+    assert same_device(str(link), str(real))
+    assert same_device(str(real), str(real))
+    assert not same_device(str(tmp_path / "other"), str(real))
+    dev = DeviceInfo(port="/dev/ttyUSB0", serial_number="A106ZTEU")
+    assert same_device("a106zteu", "/dev/ttyUSB0", dev) and dev.identity == "A106ZTEU"
+    assert not same_device("A106ZTEU", "/dev/ttyUSB0", None)
+    assert validate_identity("A106ZTEU") == "A106ZTEU"
+    with pytest.raises(ValueError):
+        validate_identity("no spaces here")

@@ -152,7 +152,11 @@ Then, in this order, each with the suite green before the next:
    --start-server` on the merged tree. This is the first time the integration
    branch's firmware line runs on Linux at all: `139c513` was built on
    Windows, where the fake toolchain cannot exec. Expect surprises that have
-   nothing to do with the merge.
+   nothing to do with the merge. **Done, and then done with the board plugged
+   in** (2026-09-20, [`../validation/2026-09-20-ender-bench.md`](../validation/2026-09-20-ender-bench.md)):
+   three defects the simulator could not show -- DTR dropped on close by the
+   pyserial engine, pins by port name, the board view's frame -- fixed with
+   tests; the latch-side checks are a checklist for a person.
 2. `uv run apothecary docs generate` — both walkthroughs (`fractal-viewer`,
    `printer-monitor`) must pass under their own server.
 3. Push. The pull request to `main` already exists (#21, below); the push

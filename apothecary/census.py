@@ -221,7 +221,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "dev-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins the board from the piece"),
     "dev-via": (WIDGET, WHAT_YOU_SEE, "a link to the piece inside that holds the board"),
     "dev-rescan": (WIDGET, WHAT_YOU_SEE, "a button that looks for boards again"),
-    "dev-manual": (WIDGET, WHAT_IS_THERE, "a box for typing a port or address to pin"),
+    "dev-manual": (WIDGET, WHAT_IS_THERE, "a box for typing a port, S/N or address to pin"),
     "dev-pin-manual": (WIDGET, WHAT_IS_THERE, "the button that pins the typed board"),
     "dev-pick": (WIDGET, WHAT_YOU_SEE, "a drop-down of boards not yet pinned"),
     "dev-query": (WIDGET, WHAT_YOU_SEE, "a button that asks the chosen board what it is"),

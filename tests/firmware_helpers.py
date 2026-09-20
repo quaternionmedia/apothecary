@@ -29,7 +29,8 @@ FAKE_ARDUINO_CLI = textwrap.dedent(r"""
             {"port": {"address": "/dev/ttyFAKE0", "label": "/dev/ttyFAKE0", "protocol": "serial",
                       "properties": {"vid": "0x2341", "pid": "0x0043"}},
              "matching_boards": [{"name": "Arduino Uno", "fqbn": "arduino:avr:uno"}]},
-            {"port": {"address": "/dev/ttyFAKE1", "protocol": "serial"}}]}))
+            {"port": {"address": "/dev/ttyFAKE1", "protocol": "serial",
+                      "properties": {"serialNumber": "FAKESERIAL1"}}}]}))
     elif cmd == "board listall":
         print(json.dumps({"boards": [{"name": "Arduino Uno", "fqbn": "arduino:avr:uno"},
                                      {"name": "Arduino Nano", "fqbn": "arduino:avr:nano"}]}))

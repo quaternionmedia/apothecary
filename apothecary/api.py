@@ -45,7 +45,7 @@ from .firmware import devices as firmware_devices
 from .firmware import gcode as firmware_gcode
 from .firmware.api import _device_view as firmware_device_view
 from .firmware.api import router as firmware_router
-from .firmware.bindings import bindings_for_site
+from .firmware.bindings import bindings_for_site, same_device
 from .firmware.models import DeviceAttachRequest
 from .firmware.toolchains import ToolchainError
 from .hierarchy import Assembly
@@ -1664,10 +1664,11 @@ def printer_where(port: str):
     ``None`` when nothing is pinned.
     """
     state = firmware_devices.get_state()
+    known = firmware_devices.known_device(port, state)
     for site_name in _site_store.loaded():
         site = _site_store.get(site_name)
         for binding in state.bindings(site_name):
-            if binding.identity != port:
+            if not same_device(binding.identity, port, known):
                 continue
             node = _find_node_by_path(site, binding.path)
             if node is None:
@@ -1700,10 +1701,11 @@ def _sync_printer_status(status) -> List[Dict[str, object]]:
     if status.state not in PRINTER_STATUSES:
         return out
     state = firmware_devices.get_state()
+    known = firmware_devices.known_device(status.port, state)
     for site_name in _site_store.loaded():
         site = _site_store.get(site_name)
         for binding in state.bindings(site_name):
-            if binding.identity != status.port:
+            if not same_device(binding.identity, status.port, known):
                 continue
             target = status_bearer_for(site, binding.path)
             if target is None:
@@ -1769,11 +1771,17 @@ def site_devices(name: str, fresh: bool = False):
 
 @app.put("/sites/{name}/nodes/{path}/device")
 def attach_device(name: str, path: str, body: DeviceAttachRequest):
-    """Pin a device (MAC or port) to a node; overrides the by-sketch rule."""
+    """Pin a device to a node; overrides the by-sketch rule.
+
+    A port given for a device that is detected right now is stored as that
+    device's own identity (its MAC or USB serial number) when it has one:
+    the pin follows the board, not the socket it happens to be in today.
+    """
     site = _get_site_or_404(name)
     if _find_node_by_path(site, path) is None:
         raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
-    firmware_devices.get_state().set_binding(name, path, body.identity)
+    identity = firmware_devices.stable_identity(body.identity)
+    firmware_devices.get_state().set_binding(name, path, identity)
     return _binding_row_or_404(name, path)
 
 

@@ -2601,7 +2601,7 @@
                 } else {
                     const free = this.siteDevices.filter((d) => !Object.values(this.bindings).some((r) => r.device && r.device.port === d.port));
                     const manual = `<div class="device-actions">
-                            <input type="text" class="dev-manual" placeholder="or a port / MAC, e.g. /dev/ender" spellcheck="false">
+                            <input type="text" class="dev-manual" placeholder="or a port, S/N or MAC, e.g. /dev/ender" spellcheck="false">
                             <button type="button" class="dev-pin-manual" title="Pin by identity even if it is not detected right now">Pin</button>
                             <button type="button" class="dev-rescan" title="Fresh port scan">⟳ Rescan</button>
                         </div>`;

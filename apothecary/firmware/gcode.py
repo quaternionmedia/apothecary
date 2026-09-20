@@ -259,6 +259,30 @@ class TermiosTransport:
             pass
 
 
+def keep_dtr_on_close(fd: Optional[int]) -> bool:
+    """Clear HUPCL on an open tty so closing it leaves DTR asserted.
+
+    The kernel's default is to drop DTR on the last close ("hang up"), and
+    a Creality board resets on the next assertion -- so without this, every
+    program that closes the port hands the next one a reboot. True when the
+    flag was cleared; False on a port that is not a tty (``loop://``) or on
+    a platform without termios, where there is nothing to clear.
+    """
+    if fd is None:
+        return False
+    try:
+        import termios
+    except ImportError:  # Windows: pyserial's own close leaves DTR alone
+        return False
+    try:
+        attr = termios.tcgetattr(fd)
+        attr[2] &= ~termios.HUPCL
+        termios.tcsetattr(fd, termios.TCSANOW, attr)
+        return True
+    except (OSError, termios.error):
+        return False
+
+
 class PySerialTransport:
     """The pyserial engine: any baud (250000 included), Linux/macOS/Windows.
 
@@ -274,6 +298,7 @@ class PySerialTransport:
             self._s.reset_input_buffer()
         except (serial.SerialException, OSError, ValueError) as exc:
             raise ToolchainError(f"cannot open {port}: {exc}") from exc
+        keep_dtr_on_close(getattr(self._s, "fd", None))
 
     def write(self, data: bytes) -> None:
         import serial

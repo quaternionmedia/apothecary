@@ -127,16 +127,30 @@ export function mountBoardView(el, { base, where, onNote } = {}) {
     }
     place();
 
+    // A node's STL comes in its parent's frame (the route renders the node's
+    // own translate too: a printer on the bench arrives at x 100..400, its
+    // board at the printer-relative 20..122). The viewer centres each body
+    // and places it at the node's envelope, so this does the same: the
+    // envelope is the world position plus the footprint, relative to the
+    // printer's origin, and the geometry's own coordinates are not trusted.
+    const bodies = {};
+    function envelopeCentre(node) {
+        const fp = node.footprint;
+        const rel = { x: node.position.x - origin.x, y: node.position.y - origin.y, z: node.position.z - origin.z };
+        if (!fp) return rel;
+        return { x: rel.x + (fp.min[0] + fp.max[0]) / 2, y: rel.y + (fp.min[1] + fp.max[1]) / 2, z: rel.z + (fp.min[2] + fp.max[2]) / 2 };
+    }
     const loader = new STLLoader();
     let missing = 0;
-    function load(path, material, position, done) {
-        if (!where || !where.site || !path) { done && done(false); return; }
+    function load(node, material, done) {
+        if (!where || !where.site || !node || !node.path) { done && done(false); return; }
         loader.load(
-            `${base}/sites/${encodeURIComponent(where.site)}/nodes/${encodeURIComponent(path)}/stl`,
+            `${base}/sites/${encodeURIComponent(where.site)}/nodes/${encodeURIComponent(node.path)}/stl`,
             (geometry) => {
                 scadAxisSwap(geometry);
+                geometry.center();
                 const mesh = new THREE.Mesh(geometry, material);
-                mesh.position.copy(toScene({ x: position.x - origin.x, y: position.y - origin.y, z: position.z - origin.z }));
+                mesh.position.copy(toScene(envelopeCentre(node)));
                 world.add(mesh);
                 if (material.transparent) {
                     // A translucent body reads as nothing on a dark page; its edges say where it is.
@@ -144,6 +158,9 @@ export function mountBoardView(el, { base, where, onNote } = {}) {
                     edges.position.copy(mesh.position);
                     world.add(edges);
                 }
+                geometry.computeBoundingBox();
+                const box = geometry.boundingBox.clone().translate(mesh.position);
+                bodies[node.path] = { min: { x: box.min.x, y: box.min.z, z: box.min.y }, max: { x: box.max.x, y: box.max.z, z: box.max.y } };
                 done && done(true);
             },
             undefined,
@@ -155,11 +172,11 @@ export function mountBoardView(el, { base, where, onNote } = {}) {
         const finish = () => { left -= 1; if (left <= 0) resolve(missing === 0); };
         if (printer) {
             left += 1;
-            load(printer.path, new THREE.MeshStandardMaterial({ color: PRINTER_COLOR, transparent: true, opacity: 0.3, depthWrite: false }), printer.position, finish);
+            load(printer, new THREE.MeshStandardMaterial({ color: PRINTER_COLOR, transparent: true, opacity: 0.3, depthWrite: false }), finish);
         }
         if (board) {
             left += 1;
-            load(board.path, new THREE.MeshStandardMaterial({ color: BOARD_COLOR, metalness: 0.1, roughness: 0.6 }), board.position, finish);
+            load(board, new THREE.MeshStandardMaterial({ color: BOARD_COLOR, metalness: 0.1, roughness: 0.6 }), finish);
         }
         if (left === 0) resolve(false);
     });
@@ -203,6 +220,15 @@ export function mountBoardView(el, { base, where, onNote } = {}) {
         },
         position() { return { ...current }; },
         target() { return { ...target }; },
+        // Where each body was drawn, in apothecary's z-up frame relative to the
+        // printer's origin, and where the build volume sits -- for tests to
+        // check the printer encloses its board and its volume.
+        bodies() { return JSON.parse(JSON.stringify(bodies)); },
+        volume() {
+            if (!printer || !printer.build_volume) return null;
+            const [vx, vy, vz] = printer.build_volume;
+            return { min: { ...volumeOrigin }, max: { x: volumeOrigin.x + vx, y: volumeOrigin.y + vy, z: volumeOrigin.z + vz } };
+        },
         destroy() {
             alive = false;
             window.removeEventListener("resize", onResize);

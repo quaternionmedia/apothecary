@@ -82,10 +82,15 @@ def picture_folder(_picture_folder_if_known):
 
 
 @pytest.fixture(scope="session")
-def test_server(request, server_port, _picture_folder_if_known):
+def test_server(request, server_port, _picture_folder_if_known, tmp_path_factory):
     """Start a test server if --start-server is passed.
 
     This fixture manages the server lifecycle for the entire test session.
+    The server sees the machine's real ports and toolchain but keeps its
+    firmware state (pins, flash records, cached boards) in a folder of its
+    own, so a test run never edits what the person has pinned in
+    ``~/.apothecary``; the printer and ring suites go further and run their
+    own servers on scripted ports.
     """
     should_start = request.config.getoption("--start-server")
 
@@ -99,6 +104,7 @@ def test_server(request, server_port, _picture_folder_if_known):
     # Set environment for faster startup
     env = os.environ.copy()
     env["APOTHECARY_VIEWER_PATH"] = ""
+    env["APOTHECARY_STATE_DIR"] = str(tmp_path_factory.mktemp("state"))
     if _picture_folder_if_known is not None:
         env["APOTHECARY_PICTURE_ROOT"] = str(_picture_folder_if_known)
 

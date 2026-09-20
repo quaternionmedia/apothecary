@@ -14,6 +14,7 @@ router) and so tests can feed it fixtures.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Tuple
 
@@ -72,10 +73,29 @@ def sketch_for_node(
     return None, f"no sketch for '{ref}'"
 
 
-def device_for_identity(identity: str, found: List[DeviceInfo]) -> Optional[DeviceInfo]:
+def same_device(identity: str, port: str, device: Optional[DeviceInfo] = None) -> bool:
+    """Whether a pin's ``identity`` names the board on ``port``.
+
+    It does when it is that port, a path that resolves to the same device
+    node (``/dev/serial/by-id/...``, a udev name), or -- given what is known
+    about the device there -- its MAC or its USB bridge's serial number.
+    The last is what survives a replug that renumbers the port.
+    """
+    if identity == port:
+        return True
+    if identity.startswith("/") and os.path.realpath(identity) == os.path.realpath(port):
+        return True
+    if device is None:
+        return False
     wanted = identity.lower()
+    if device.mac and device.mac.lower() == wanted:
+        return True
+    return bool(device.serial_number and device.serial_number.lower() == wanted)
+
+
+def device_for_identity(identity: str, found: List[DeviceInfo]) -> Optional[DeviceInfo]:
     for d in found:
-        if (d.mac and d.mac.lower() == wanted) or d.port == identity:
+        if same_device(identity, d.port, d):
             return d
     return None
 

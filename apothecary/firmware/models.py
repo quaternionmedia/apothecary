@@ -260,8 +260,14 @@ class DeviceInfo(BaseModel):
 
     @property
     def identity(self) -> str:
-        """Stable key for flash records: the MAC when known, else the port."""
-        return self.mac or self.port
+        """Stable key for flash records and pins: the MAC, else the bridge's USB
+        serial number, else the port.
+
+        A port name is the socket, not the board: the same printer came back
+        as ``/dev/ttyUSB0`` after a night as ``/dev/ttyUSB1``. Its FTDI's
+        serial number did not change.
+        """
+        return self.mac or self.serial_number or self.port
 
 
 class FlashRecord(BaseModel):
@@ -455,16 +461,20 @@ class PrinterIdentifyRequest(ProbeRequest):
 # --- bindings: which board is which scene node -----------------------------------
 
 MAC_RE = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
+USB_SERIAL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.\-]{2,63}$")  # an FTDI's A106ZTEU, a CP210x's
 
 
 def validate_identity(value: str) -> str:
-    """A ``DeviceInfo.identity``: a MAC (normalised to lower case) or a serial port."""
+    """A ``DeviceInfo.identity``: a MAC (normalised to lower case), a serial port,
+    or a USB bridge's serial number."""
     v = value.strip()
     if MAC_RE.match(v.lower()):
         return v.lower()
     if PORT_RE.match(v):
         return v
-    raise ValueError(f"not a device identity (MAC or serial port): {value!r}")
+    if USB_SERIAL_RE.match(v):
+        return v
+    raise ValueError(f"not a device identity (MAC, serial port or USB serial number): {value!r}")
 
 
 class ManualBinding(BaseModel):

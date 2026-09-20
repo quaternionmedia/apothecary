@@ -178,7 +178,12 @@ print then dies by accident. Apothecary therefore:
 - opens a printer's port once and *holds* it (`firmware.gcode.PrinterLinks`);
   every later poll reuses that link at ~0.1 s;
 - leaves DTR asserted on close, so the next open (its own or another
-  program's) does not reboot the board;
+  program's) does not reboot the board. The kernel's default is the
+  opposite -- `HUPCL`, hang up on close -- so both engines clear it on
+  open (`gcode.keep_dtr_on_close`); on the bench, server → CLI → server
+  reopens the port three times without a boot banner. The one open that
+  does reboot the board is the first after it is plugged in, because the
+  bridge comes up with DTR dropped; the banner in the log says so;
 - reboots the board only when asked -- `apothecary firmware printer --reset`,
   or `{"reset": true}` on the identify route -- which is how the boot banner
   in `boot_lines` is captured. `M115` needs no banner, so identification
@@ -225,8 +230,15 @@ is pinned to it (port, firmware or chip, how it was bound) or offers a
 **Pin** picker of detected devices not already bound elsewhere, a **Query**
 button (asks the picked port `M115` without pinning it -- is this a
 printer, and which firmware?), and a text box to **pin by typed identity**
--- a port that is not detected right now, a udev name like `/dev/ender`, or
-an ESP32's MAC. For a printer the section shows the last poll -- state,
+-- a port that is not detected right now, a udev name like `/dev/ender`, a
+USB bridge's serial number, or an ESP32's MAC. **A pin follows the board,
+not the socket**: pinning a detected port stores the board's own identity
+(its MAC, else its bridge's serial number, `A106ZTEU` on the bench's Ender)
+when it has one, so the pin still holds when the kernel numbers the port
+differently after a replug -- the same printer came back as `/dev/ttyUSB0`
+after a night as `/dev/ttyUSB1`. A pin by a path that resolves to the same
+device (`/dev/serial/by-id/…`, a udev name) matches too. For a printer the
+section shows the last poll -- state,
 temperatures, position, SD progress, filament -- with **⟳ Poll now**
 (one poll, no overlay) and **Watch**, which opens the ⌨ Serial log overlay
 on that port. The overlay's **🖨 identify** asks `M115` (no reset); from
@@ -580,20 +592,25 @@ APOTHECARY_STATE_DIR=/tmp/apothecary-demo uv run apothecary serve
 ### Optional: a stable device name
 
 `/dev/ttyUSB0` and `/dev/ttyUSB1` can swap between boots when two bridges
-are plugged in. A udev rule names the printer by its bridge's USB serial
-number (`apothecary firmware devices` shows it as `S/N` on the firmware page;
-`udevadm info -q property /dev/ttyUSB1 | grep ID_SERIAL_SHORT` on Linux):
+are plugged in, and a port comes back with whatever number is free after a
+replug. Pins do not mind: they are kept as the bridge's USB serial number
+(above), and `/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A106ZTEU-if00-port0`
+is a name Linux gives every bridge with a serial, usable for a pin and for
+`apothecary firmware printer` with no setup. For a short name a udev rule
+names the printer by that serial number (`apothecary firmware devices` and
+the firmware page show it as `S/N`; `udevadm info -q property /dev/ttyUSB1
+| grep ID_SERIAL_SHORT` on Linux):
 
 ```
 # /etc/udev/rules.d/99-apothecary-printer.rules
 SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", ATTRS{serial}=="A106ZTEU", SYMLINK+="ender"
 ```
 
-Then `sudo udevadm control --reload && sudo udevadm trigger`, and pin
-`/dev/ender` instead of `/dev/ttyUSB1`. Note arduino-cli lists only the
-kernel names, so the device panel still shows `/dev/ttyUSBn`; the symlink
-is for pins and for `apothecary firmware printer /dev/ender`. Not required
--- pins to `/dev/ttyUSBn` work as long as the board keeps that name.
+Then `sudo udevadm control --reload && sudo udevadm trigger`, and
+`/dev/ender` names the board. Note arduino-cli lists only the kernel
+names, so the device panel and the monitor's port picker still show
+`/dev/ttyUSBn`; the symlink is for the CLI and for other programs. Not
+required.
 
 ## HTTP API
 
@@ -651,7 +668,15 @@ The browser tests (`tests/e2e/test_printer_ui.py`, run with
 `pytest tests/e2e --start-server`) drive the Device panel, the overlay and
 the focused monitor against the simulated printer under timing bounds, and
 `tests/e2e/test_docs_printer_monitor.py` is the walkthrough that
-`apothecary docs generate` turns into screenshots.
+`apothecary docs generate` turns into screenshots. The shared e2e server
+sees the machine's real ports but keeps its firmware state in a folder of
+its own, so a test run never edits what is pinned in `~/.apothecary`.
+
+What the simulator cannot say, the bench does:
+[`validation/2026-09-20-ender-bench.md`](validation/2026-09-20-ender-bench.md)
+is the seam against a real Ender mainboard -- what was verified without
+arming control, the three defects it found, and a checklist for the rest
+(heaters, motion, a probe, a print from the host, the stop).
 
 The decision record for all of this is *Firmware toolchain seam* in
 `governance/qm/adr/`.

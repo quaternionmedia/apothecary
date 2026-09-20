@@ -62,6 +62,12 @@ by `pytest walkthrough`. Start there.
 |----------|-------------|
 | [Consolidation, 2026-09-19](plans/consolidation-2026-09-19.md) | Landing the printer seam on the integration branch: where the lines are, the order of operations, the census gate, and what a person has to decide |
 
+## Validation
+
+| Document | Description |
+|----------|-------------|
+| [Ender bench, 2026-09-20](validation/2026-09-20-ender-bench.md) | The printer seam against a real Marlin board: what was verified without arming, what it found, and the checklist for the rest |
+
 ## Generated Documentation (screenshots, GIFs, walkthroughs)
 
 The fractal zoom viewer and the printer monitor are documented by their own

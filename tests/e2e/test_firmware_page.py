@@ -68,7 +68,9 @@ def test_viewer_serial_overlay_toggle(page: Page, base_url: str):
 
 @pytest.mark.e2e
 def test_firmware_page_devices_panel(page: Page, base_url: str):
+    """Runs against whatever is plugged in: nothing, a devkit (Probe), or a printer
+    (Poll and Monitor -- a printer is monitored, never probed or flashed)."""
     page.goto(f"{base_url}/firmware")
     expect(page.locator("#devices")).not_to_have_text("–", timeout=10000)
     text = page.locator("#devices").inner_text()
-    assert "No devices detected" in text or "Probe" in text
+    assert "No devices detected" in text or "Probe" in text or "Monitor" in text
