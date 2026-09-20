@@ -68,7 +68,7 @@ def test_the_monitor_page_is_counted_too():
     assert len(taken.ring_backed()) == 28
     assert taken.sentence().startswith("51 controls of its own, 28 of them also on the ring.")
     listening = [f for f in taken.found if f.how == "listening"]
-    assert len(listening) == 10
+    assert len(listening) == 11  # the eleventh: the board view following the port picker
     assert taken.of_surface(census.GESTURE) == ()
     assert taken.of_surface(census.LIST) == ()
 

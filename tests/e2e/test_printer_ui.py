@@ -479,3 +479,62 @@ def test_control_overlay_is_latched(page: Page, printer_url: str):
     expect(page.locator("#control")).to_be_visible(timeout=5000)
     page.locator("#ctl-disarm").click()
     expect(page.locator("#control")).to_be_hidden(timeout=3000)
+
+
+@pytest.mark.e2e
+def test_the_board_is_drawn_in_its_printer_and_the_nozzle_follows_a_jog(
+    page: Page, printer_url: str
+):
+    """The monitor shows the pinned board inside its printer; a jog moves the nozzle marker
+    ahead of the poll that confirms it; the firmware page draws the same board on its card."""
+    page.goto(f"{printer_url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    _expand_to(page, BOARD)
+    section = page.locator("#selected-body .device-section")
+    expect(section).not_to_contain_text("scanning devices", timeout=8000)
+    if section.locator(".dev-unpin").count() == 0:
+        expect(section.locator(".dev-manual")).to_be_visible(timeout=5000)
+        section.locator(".dev-manual").fill("/dev/ttyFAKE1")
+        section.locator(".dev-manual").press("Enter")
+        expect(section).to_contain_text("pinned", timeout=5000)
+    # Make sure printer_1 itself is not also pinned from an earlier test.
+    page.request.delete(f"{printer_url}/sites/garage/nodes/printer_1/device")
+
+    page.goto(f"{printer_url}/firmware/monitor?port=/dev/ttyFAKE1")
+    expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
+    t0 = time.monotonic()
+    expect(page.locator("#view-card")).to_be_visible(timeout=10000)
+    expect(page.locator("#board-view canvas")).to_have_count(1, timeout=10000)
+    assert time.monotonic() - t0 < 10.0
+    expect(page.locator("#view-note")).to_contain_text("printer_1")
+    page.wait_for_function(
+        "() => window.apothecaryBoardView && window.apothecaryBoardView.target()", timeout=5000
+    )
+    page.locator("#ctl").check()
+    expect(page.locator("#control")).to_be_visible(timeout=5000)
+    page.locator("#control button[data-cmd='M25']").click()  # pause the SD print so a jog is honest
+    expect(page.locator("#c-state")).to_contain_text("idle", timeout=POLL_S * 1000 + 3000)
+    page.wait_for_timeout(int(POLL_S * 1000) + 500)  # a poll after the pause: the real place
+    before = page.evaluate("() => window.apothecaryBoardView.target()")
+    page.locator("#control button[data-step='10']").click()
+    page.locator("#control button[data-jog='X+']").click()
+    # Ahead of the poll: the target moved the moment the jog was sent.
+    page.wait_for_function(
+        "(bx) => window.apothecaryBoardView.target().x === bx + 10", arg=before["x"], timeout=1500
+    )
+    # And it settles there: the drawn position catches up within a second.
+    page.wait_for_function(
+        "(bx) => Math.abs(window.apothecaryBoardView.position().x - (bx + 10)) < 0.5",
+        arg=before["x"],
+        timeout=2000,
+    )
+    page.locator("#control button[data-cmd='M24']").click()
+    page.locator("#ctl-disarm").click()
+
+    page.goto(f"{printer_url}/firmware")
+    card = page.locator(".device[data-port='/dev/ttyFAKE1']")
+    expect(card).to_be_visible(timeout=10000)
+    expect(card.locator(".board-view canvas")).to_have_count(1, timeout=10000)
+    expect(card.locator(".board-view-note")).to_contain_text("garage › printer_1")
+    # A port pinned nowhere draws nothing.
+    expect(page.locator(".device[data-port='/dev/ttyFAKE0'] .board-view")).to_be_hidden()

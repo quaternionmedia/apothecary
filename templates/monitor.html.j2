@@ -4,6 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Apothecary Printer Monitor</title>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "/static/vendor/three/three.module.js",
+            "three/addons/": "/static/vendor/three/addons/"
+        }
+    }
+    </script>
     <style>
         :root {
             --bg: #141614; --panel: #1c1f1c; --line: #2a302a; --ink: #d8e0d8; --ink-2: #9aa89a; --ink-3: #66746a;
@@ -134,6 +142,10 @@
                 <div class="card"><div class="k">SD print</div><div class="v" id="c-sd">—</div><div class="s" id="c-sd-s"></div><div class="bar sd"><i id="b-sd" style="width:0"></i></div></div>
                 <div class="card"><div class="k">Endstops · filament</div><div class="chips" id="c-stops"><span class="empty">—</span></div></div>
                 <div class="card wide"><div class="k">Board · link</div><div class="kv" id="c-board">—</div></div>
+                <div class="card wide" id="view-card" hidden>
+                    <div class="k">Board in its printer <span class="s" id="view-note"></span></div>
+                    <div id="board-view" style="height: 240px; border-radius: 4px; overflow: hidden;"></div>
+                </div>
             </div>
             <div class="chart">
                 <div class="head"><span class="title">Temperature</span><span id="chart-span">last 0 polls</span>
@@ -393,6 +405,7 @@
                 const st = await api(`/firmware/printers/status?port=${encodeURIComponent(port)}`);
                 if (gen !== state.gen) return;  // the user switched ports meanwhile
                 state.status = st; pushHistory(st); renderStatus(); renderChart();
+                if (st.position) window.dispatchEvent(new CustomEvent("apothecary:position", { detail: { position: st.position, source: "poll" } }));
                 if (st.control) applyControlState(st.control);
                 const hadLink = !!(state.info && state.info.link);
                 if (!state.info || hadLink !== !!st.held) {
@@ -556,6 +569,10 @@
             const d = (sign === "-" ? -ctl.step : ctl.step).toFixed(1).replace(/\.0$/, "");
             const f = Number($("h-feed").value) || 3000;
             // Relative move as three lines, sent back to back, restoring absolute mode afterwards.
+            // The board view moves ahead of the poll that confirms it.
+            const p = state.status && state.status.position ? { ...state.status.position } : { x: 0, y: 0, z: 0 };
+            p[axis.toLowerCase()] = (p[axis.toLowerCase()] || 0) + Number(d);
+            window.dispatchEvent(new CustomEvent("apothecary:position", { detail: { position: p, source: "jog" } }));
             return enqueue(["G91", `G1 ${axis}${d} F${f}`, "G90"]);
         }
         $("ctl").addEventListener("change", () => arm($("ctl").checked));
@@ -589,6 +606,40 @@
         };
 
         loadPorts().then(() => { if (state.port) selectPort(state.port); });
+    })();
+    </script>
+
+    <script type="module">
+    // The board in its printer, drawn from the same STL routes the viewer
+    // uses, with the nozzle where the board last said it was. Mounted when a
+    // port is chosen and that port is pinned to a node somewhere.
+    import { mountBoardView, whereIs } from '/static/board_view.js';
+    (() => {
+        const BASE = "{{ base_url }}";
+        const $ = (id) => document.getElementById(id);
+        let view = null, viewPort = null;
+        async function mountFor(port) {
+            if (view) { view.destroy(); view = null; }
+            viewPort = port;
+            const card = $("view-card");
+            if (!port) { card.hidden = true; return; }
+            const where = await whereIs(BASE, port).catch(() => null);
+            if (port !== viewPort) return;  // the user moved on while we asked
+            if (!where) { card.hidden = true; return; }
+            card.hidden = false;
+            $("view-note").textContent = ` · ${where.site} › ${(where.printer || where.board).path}`;
+            view = mountBoardView($("board-view"), { base: BASE, where, onNote: (t) => { $("view-note").textContent += ` · ${t}`; } });
+            const st = window.apothecaryMonitor.state.status;
+            if (st && st.position) view.setPosition(st.position, { immediate: true });
+            window.apothecaryBoardView = view;
+        }
+        window.addEventListener("apothecary:position", (ev) => { if (view) view.setPosition(ev.detail.position); });
+        // Follow the port picker; also (re)mount once a pin appears for it.
+        const portSel = $("port");
+        portSel.addEventListener("change", () => mountFor(portSel.value));
+        const m = window.apothecaryMonitor;
+        if (m.state.port) mountFor(m.state.port);
+        new MutationObserver(() => { if (m.state.port !== viewPort) mountFor(m.state.port); }).observe($("ident"), { childList: true });
     })();
     </script>
 

@@ -356,6 +356,21 @@ when the link is reopened. *Poll traffic* is hidden by default so the log
 reads as a story (open, `M115`, your queries, resets); tick it to see every
 `M105`. The log downloads as a text file.
 
+**The board in its printer.** When the port is pinned to a node, a card
+draws that board where it sits: the printer's own OpenSCAD geometry as a
+translucent outline, the board solid, the build volume as a wire box on the
+printer's base, and a nozzle marker at the position the last poll reported.
+The marker *moves* rather than jumps -- each poll tweens it, and a jog from
+the control overlay or the ring moves it the moment the jog is sent, ahead
+of the poll that confirms it -- so the control page shows the motion it
+commands. The firmware page's device cards draw the same view, small, for
+any port pinned somewhere (a devkit on the bench as much as a mainboard in
+a printer). `GET /firmware/printers/where?port=…` is what both ask: the
+site, the board's node and the printer above it, with world positions,
+footprint, build volume and base height. Without OpenSCAD on the server the
+shapes are unavailable and the card says so, keeping the volume and the
+marker.
+
 The header's controls act on the board's comms directly:
 
 | Control | Does |
@@ -493,6 +508,7 @@ at a time — a second request gets `409`.
 | `POST /printers/reconnect` | release + reopen (no reset), then poll |
 | `POST /printers/reset` | reboot the board (DTR pulse); returns the boot banner |
 | `GET /monitor?port=…` | the focused monitor page |
+| `GET /printers/where?port=…` | (site API) where a port is pinned, with the geometry the board view draws |
 | `GET /tasks`, `/tasks/{id}`, `POST /tasks/{id}/cancel` | task log and control |
 
 Inputs that become command-line arguments are validated by shape (FQBN,

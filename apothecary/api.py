@@ -580,9 +580,9 @@ async def get_part_jscad(name: str, params: str | None = Query(None, alias="para
     # Create a JSCAD module with documentation
     jscad_code = f"""/**
  * {part.name}
- * @category {part.category or 'Parts'}
- * @description {part.description or 'No description'}
- * @tags {', '.join(part.tags) if part.tags else 'apothecary'}
+ * @category {part.category or "Parts"}
+ * @description {part.description or "No description"}
+ * @tags {", ".join(part.tags) if part.tags else "apothecary"}
  */
 
 const jscad = require('@jscad/modeling')
@@ -1589,6 +1589,102 @@ def status_bearer_for(site: Assembly, path: str) -> Optional[str]:
         if node is not None and node.status is not None:
             return candidate
     return None
+
+
+def _world_position_of(site: Assembly, path: str) -> Vector3D:
+    """Sum of positions from the site root down to ``path``, each in its parent's frame."""
+    total = Vector3D()
+    node = site
+    for name in path.split("."):
+        node = next(
+            (c for c in [*node.children, *node.additions, *node.subtractions] if c.name == name),
+            None,
+        )
+        if node is None:
+            break
+        total = total + node.position
+    return total
+
+
+def _base_height(printer: Assembly) -> float:
+    """How tall the printer's base is: the enclosure its bed sits on.
+
+    The site's printers keep it in a ``frame_system`` substructure whose base
+    is a Cube; a printer built some other way answers zero, and the board
+    view draws the bed on the floor of the footprint.
+    """
+    for child in printer.children:
+        if child.name != "frame_system":
+            continue
+        if child.footprint:
+            return float(child.footprint.max_point.z)
+        size = getattr(child.base, "size", None)
+        if size is not None:
+            return float(size.z)
+    return 0.0
+
+
+def _describe_for_view(
+    site: Assembly, path: str, n: Assembly, *, is_printer: bool
+) -> Dict[str, object]:
+    """One node as the board view wants it: world position, footprint, build volume, base."""
+    pos = _world_position_of(site, path)
+    fp = n.footprint
+    return {
+        "path": path,
+        "name": n.name,
+        "position": {"x": pos.x, "y": pos.y, "z": pos.z},
+        "footprint": (
+            {
+                "min": [fp.min_point.x, fp.min_point.y, fp.min_point.z],
+                "max": [fp.max_point.x, fp.max_point.y, fp.max_point.z],
+            }
+            if fp
+            else None
+        ),
+        "build_volume": (
+            [n.build_volume.x, n.build_volume.y, n.build_volume.z]
+            if getattr(n, "build_volume", None)
+            else None
+        ),
+        # The bed sits on the base of a desktop printer.
+        "base_height": _base_height(n) if is_printer else 0.0,
+    }
+
+
+@app.get("/firmware/printers/where")
+def printer_where(port: str):
+    """Where a port is pinned, with the geometry a board view needs.
+
+    Searches the loaded sites for a manual pin to ``port``. Answers the
+    board (the pinned node) and the printer above it (the nearest
+    status-bearing ancestor, or the board itself) with world positions, the
+    footprint and build volume, and the base height the build volume sits
+    on -- what ``apothecary/static/board_view.js`` draws. ``board`` is
+    ``None`` when nothing is pinned.
+    """
+    state = firmware_devices.get_state()
+    for site_name in _site_store.loaded():
+        site = _site_store.get(site_name)
+        for binding in state.bindings(site_name):
+            if binding.identity != port:
+                continue
+            node = _find_node_by_path(site, binding.path)
+            if node is None:
+                continue
+            bearer_path = status_bearer_for(site, binding.path) or binding.path
+            bearer = _find_node_by_path(site, bearer_path) or node
+            return {
+                "port": port,
+                "site": site_name,
+                "board": _describe_for_view(site, binding.path, node, is_printer=False),
+                "printer": (
+                    _describe_for_view(site, bearer_path, bearer, is_printer=True)
+                    if bearer_path != binding.path
+                    else None
+                ),
+            }
+    return {"port": port, "site": None, "board": None, "printer": None}
 
 
 def _sync_printer_status(status) -> List[Dict[str, object]]:

@@ -4,6 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Apothecary Firmware</title>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "/static/vendor/three/three.module.js",
+            "three/addons/": "/static/vendor/three/addons/"
+        }
+    }
+    </script>
     <style>
         * { box-sizing: border-box; }
         html, body {
@@ -352,6 +360,8 @@
                     ${d.printer ? "" : `<button type="button" class="small dev-live ${live ? "primary" : ""}" data-port="${esc(d.port)}" title="Stream serial output live"><span class="live-dot ${live || streaming.has(d.port) ? "on" : ""}"></span>${live ? "Stop" : "Live"}</button>`}
                 </div>
                 ${expected}
+                <div class="board-view" data-port="${esc(d.port)}" hidden style="height: 160px; margin-top: 0.4rem; border-radius: 4px; overflow: hidden;"></div>
+                <div class="board-view-note meta" data-port="${esc(d.port)}"></div>
                 <pre class="term" id="term-${cssId(d.port)}" ${live ? "" : "hidden"}></pre>
             </div>`;
         }).join("");
@@ -361,6 +371,7 @@
             if (term) { term.hidden = false; term.textContent = ""; appendTerm(port, state.live[port].buffer); }
         }
         updateButtons();
+        window.dispatchEvent(new CustomEvent("apothecary:devices-rendered"));
     }
 
     const cssId = (port) => port.replace(/[^A-Za-z0-9]/g, "_");
@@ -618,6 +629,32 @@
     });
 
     refreshAll();
+})();
+</script>
+
+<script type="module">
+// Each device card shows the board where it is pinned in a site -- a
+// printer's mainboard inside its printer, a devkit on the bench -- drawn
+// from the same STL routes the viewer uses. A card whose port is pinned
+// nowhere shows nothing rather than a guess.
+import { mountBoardView, whereIs } from '/static/board_view.js';
+(() => {
+    const BASE = "{{ base_url }}";
+    const views = new Map();
+    async function refresh() {
+        for (const [port, view] of views) { view.destroy(); views.delete(port); }
+        for (const el of document.querySelectorAll(".board-view[data-port]")) {
+            const port = el.dataset.port;
+            const note = document.querySelector(`.board-view-note[data-port="${CSS.escape(port)}"]`);
+            const where = await whereIs(BASE, port).catch(() => null);
+            if (!where) { el.hidden = true; if (note) note.textContent = ""; continue; }
+            el.hidden = false;
+            if (note) note.textContent = `${where.site} › ${(where.printer || where.board).path}`;
+            views.set(port, mountBoardView(el, { base: BASE, where, onNote: (t) => { if (note) note.textContent += ` · ${t}`; } }));
+        }
+    }
+    window.addEventListener("apothecary:devices-rendered", refresh);
+    window.apothecaryBoardViews = views;
 })();
 </script>
 </body>

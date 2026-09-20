@@ -478,6 +478,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     # Most of the monitor's buttons are wired by assignment rather than by
     # listening, so the markup carries them; these are the ones that listen.
     "port:change:selectPort": (WIDGET, WHAT_YOU_SEE, "choosing a printer port"),
+    "portSel:change:mountFor": (AUTOMATIC, NOTHING, "the board view following the chosen port"),
     "auto:change:schedule": (WIDGET, WHAT_YOU_SEE, "the poll-on-a-schedule tick-box"),
     "interval:change:schedule": (WIDGET, WHAT_YOU_SEE, "choosing how often to poll"),
     "qform:submit:post": (WIDGET, WHAT_YOU_SEE, "asking the printer for a report"),

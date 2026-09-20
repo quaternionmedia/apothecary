@@ -1,0 +1,222 @@
+/* The board in its printer: a small three.js view for the monitor and
+ * firmware pages.
+ *
+ * Draws the printer's own OpenSCAD geometry translucent, the board's solid,
+ * the build volume as a wire box, and a nozzle marker at the position the
+ * board last reported. The marker moves rather than jumps: a poll tweens it
+ * to the new position, and a jog sent from the page moves it ahead of the
+ * poll that confirms it, so the control page shows the motion it commands.
+ * What it draws is what the viewer draws -- the same STL routes, the same
+ * z-up to y-up swap (the reflection, with the winding fixed) the fractal
+ * viewer documents beside applyScadAxisSwap -- so a board in the garage looks
+ * the same here as there.
+ *
+ * Needs the page's import map for `three` and `three/addons/`, as the viewer
+ * has. Without OpenSCAD on the server the STL routes answer 503; the view then
+ * shows the build volume and the marker alone and says so.
+ */
+
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { STLLoader } from "three/addons/loaders/STLLoader.js";
+
+const PRINTER_COLOR = 0x6f7f76;
+const BOARD_COLOR = 0xe8b04a;
+const VOLUME_COLOR = 0x6fb3e8;
+const NOZZLE_COLOR = 0xff8080;
+const BED_COLOR = 0x2a302a;
+
+function scadAxisSwap(geometry) {
+    const position = geometry.attributes.position;
+    for (let i = 0; i < position.count; i++) {
+        const y = position.getY(i);
+        const z = position.getZ(i);
+        position.setY(i, z);
+        position.setZ(i, y);
+    }
+    for (let i = 0; i + 2 < position.count; i += 3) {
+        for (const [get, set] of [["getX", "setX"], ["getY", "setY"], ["getZ", "setZ"]]) {
+            const b = position[get](i + 1);
+            const c = position[get](i + 2);
+            position[set](i + 1, c);
+            position[set](i + 2, b);
+        }
+    }
+    position.needsUpdate = true;
+    geometry.computeVertexNormals();
+    return geometry;
+}
+
+// apothecary (x, y, z) z-up -> three.js (x, z, y) y-up.
+const toScene = (p) => new THREE.Vector3(p.x, p.z, p.y);
+
+/* Mount the view into `el`. `where` is what GET /firmware/printers/where
+ * answers: the site, the board's path and world position, the printer's
+ * (the status-bearing ancestor's) path, position, footprint and build
+ * volume. Returns { setPosition, position, destroy, ready }. */
+export function mountBoardView(el, { base, where, onNote } = {}) {
+    const note = (text) => { if (onNote) onNote(text); };
+    const width = el.clientWidth || 320;
+    const height = el.clientHeight || 220;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x141614);
+    const camera = new THREE.PerspectiveCamera(40, width / height, 1, 10000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
+    renderer.setSize(width, height);
+    el.appendChild(renderer.domElement);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x223322, 1.1));
+    const key = new THREE.DirectionalLight(0xffffff, 0.8);
+    key.position.set(200, 400, 300);
+    scene.add(key);
+
+    const printer = where && where.printer ? where.printer : null;
+    const board = where && where.board ? where.board : null;
+    const origin = printer ? printer.position : (board ? board.position : { x: 0, y: 0, z: 0 });
+    const world = new THREE.Group(); // everything relative to the printer's origin
+    scene.add(world);
+
+    // The build volume, drawn on the printer's base and centred on its
+    // footprint -- the site's printers say how big it is, not where; this
+    // is where a bed sits on every desktop printer.
+    let volume = null;
+    let volumeOrigin = { x: 0, y: 0, z: 0 };
+    if (printer && printer.build_volume && printer.footprint) {
+        const [vx, vy, vz] = printer.build_volume;
+        const fp = printer.footprint;
+        const fw = fp.max[0] - fp.min[0], fd = fp.max[1] - fp.min[1];
+        volumeOrigin = { x: fp.min[0] + (fw - vx) / 2, y: fp.min[1] + (fd - vy) / 2, z: fp.min[2] + (printer.base_height || 0) };
+        const box = new THREE.Mesh(new THREE.BoxGeometry(vx, vz, vy), new THREE.MeshBasicMaterial({ visible: false }));
+        volume = new THREE.LineSegments(new THREE.EdgesGeometry(box.geometry), new THREE.LineBasicMaterial({ color: VOLUME_COLOR, transparent: true, opacity: 0.6 }));
+        volume.position.copy(toScene({ x: volumeOrigin.x + vx / 2, y: volumeOrigin.y + vy / 2, z: volumeOrigin.z + vz / 2 }));
+        world.add(volume);
+        const bed = new THREE.Mesh(new THREE.PlaneGeometry(vx, vy), new THREE.MeshBasicMaterial({ color: BED_COLOR, side: THREE.DoubleSide, transparent: true, opacity: 0.5 }));
+        bed.rotation.x = -Math.PI / 2;
+        bed.position.copy(toScene({ x: volumeOrigin.x + vx / 2, y: volumeOrigin.y + vy / 2, z: volumeOrigin.z + 0.2 }));
+        world.add(bed);
+    }
+
+    // The nozzle: a small cone pointing down, plus a crosshair on the bed.
+    const nozzle = new THREE.Group();
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(4, 14, 16), new THREE.MeshStandardMaterial({ color: NOZZLE_COLOR, emissive: 0x552222 }));
+    cone.rotation.x = Math.PI;
+    cone.position.y = 7;
+    nozzle.add(cone);
+    const cross = new THREE.LineSegments(
+        new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(-12, 0, 0), new THREE.Vector3(12, 0, 0),
+            new THREE.Vector3(0, 0, -12), new THREE.Vector3(0, 0, 12),
+        ]),
+        new THREE.LineBasicMaterial({ color: NOZZLE_COLOR, transparent: true, opacity: 0.8 }),
+    );
+    nozzle.add(cross);
+    world.add(nozzle);
+
+    // Position bookkeeping: `current` is what is drawn, `target` what was last
+    // asked for; each frame moves current a fraction of the way -- a tween
+    // that finishes in about a third of a second whatever the distance.
+    const current = { x: 0, y: 0, z: 0 };
+    const target = { x: 0, y: 0, z: 0 };
+    function place() {
+        nozzle.position.copy(toScene({ x: volumeOrigin.x + current.x, y: volumeOrigin.y + current.y, z: volumeOrigin.z + current.z }));
+        cross.position.y = -current.z; // the crosshair stays on the bed
+    }
+    place();
+
+    const loader = new STLLoader();
+    let missing = 0;
+    function load(path, material, position, done) {
+        if (!where || !where.site || !path) { done && done(false); return; }
+        loader.load(
+            `${base}/sites/${encodeURIComponent(where.site)}/nodes/${encodeURIComponent(path)}/stl`,
+            (geometry) => {
+                scadAxisSwap(geometry);
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.copy(toScene({ x: position.x - origin.x, y: position.y - origin.y, z: position.z - origin.z }));
+                world.add(mesh);
+                if (material.transparent) {
+                    // A translucent body reads as nothing on a dark page; its edges say where it is.
+                    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry, 30), new THREE.LineBasicMaterial({ color: PRINTER_COLOR, transparent: true, opacity: 0.55 }));
+                    edges.position.copy(mesh.position);
+                    world.add(edges);
+                }
+                done && done(true);
+            },
+            undefined,
+            () => { missing += 1; done && done(false); },
+        );
+    }
+    let ready = new Promise((resolve) => {
+        let left = 0;
+        const finish = () => { left -= 1; if (left <= 0) resolve(missing === 0); };
+        if (printer) {
+            left += 1;
+            load(printer.path, new THREE.MeshStandardMaterial({ color: PRINTER_COLOR, transparent: true, opacity: 0.3, depthWrite: false }), printer.position, finish);
+        }
+        if (board) {
+            left += 1;
+            load(board.path, new THREE.MeshStandardMaterial({ color: BOARD_COLOR, metalness: 0.1, roughness: 0.6 }), board.position, finish);
+        }
+        if (left === 0) resolve(false);
+    });
+    ready.then((all) => {
+        if (!all) note(missing ? "shape not available (OpenSCAD not on the server?) -- showing the build volume and the nozzle" : "no board bound");
+    });
+
+    // Frame the printer's footprint, or the board, or the volume.
+    const extent = printer && printer.footprint
+        ? Math.max(printer.footprint.max[0] - printer.footprint.min[0], printer.footprint.max[2] - printer.footprint.min[2])
+        : (board && board.footprint ? Math.max(board.footprint.max[0] - board.footprint.min[0], 60) : 250);
+    const centre = printer && printer.footprint
+        ? toScene({ x: (printer.footprint.min[0] + printer.footprint.max[0]) / 2, y: (printer.footprint.min[1] + printer.footprint.max[1]) / 2, z: (printer.footprint.min[2] + printer.footprint.max[2]) / 2 })
+        : toScene({ x: 0, y: 0, z: 0 });
+    camera.position.set(centre.x + extent * 1.1, centre.y + extent * 0.9, centre.z + extent * 1.4);
+    controls.target.copy(centre);
+
+    let alive = true;
+    function frame() {
+        if (!alive) return;
+        for (const k of ["x", "y", "z"]) current[k] += (target[k] - current[k]) * 0.18;
+        place();
+        controls.update();
+        renderer.render(scene, camera);
+        requestAnimationFrame(frame);
+    }
+    frame();
+
+    const onResize = () => {
+        const w = el.clientWidth || width, h = el.clientHeight || height;
+        camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h);
+    };
+    window.addEventListener("resize", onResize);
+
+    return {
+        ready,
+        setPosition(p, { immediate = false } = {}) {
+            if (!p) return;
+            for (const k of ["x", "y", "z"]) if (typeof p[k] === "number") target[k] = p[k];
+            if (immediate) Object.assign(current, target);
+        },
+        position() { return { ...current }; },
+        target() { return { ...target }; },
+        destroy() {
+            alive = false;
+            window.removeEventListener("resize", onResize);
+            renderer.dispose();
+            el.innerHTML = "";
+        },
+    };
+}
+
+/* Ask the server where a port is pinned, in the shape mountBoardView wants.
+ * null when it is pinned nowhere. */
+export async function whereIs(base, port) {
+    const r = await fetch(`${base}/firmware/printers/where?port=${encodeURIComponent(port)}`);
+    if (!r.ok) return null;
+    const data = await r.json();
+    return data.board ? data : null;
+}

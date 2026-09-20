@@ -810,3 +810,29 @@ def test_status_poll_reports_held_link_and_latch(
     assert (
         body["state"] == "offline" and body["held"] is False and body["control"]["armed"] is False
     )
+
+
+# --- where a port is pinned, for the board view -----------------------------------------
+
+
+def test_where_a_port_is_pinned_carries_the_geometry_a_view_needs(fake_arduino_cli, garage):
+    c = TestClient(app)
+    assert (
+        c.get("/firmware/printers/where", params={"port": "/dev/ttyFAKE1"}).json()["board"] is None
+    )
+    c.put(f"/sites/garage/nodes/{BOARD}/device", json={"identity": "/dev/ttyFAKE1"})
+    where = c.get("/firmware/printers/where", params={"port": "/dev/ttyFAKE1"}).json()
+    assert where["site"] == "garage" and where["board"]["path"] == BOARD
+    assert where["board"]["footprint"]["max"] == [102.0, 74.0, 15.0]
+    assert where["printer"]["path"] == "printer_1"
+    assert where["printer"]["build_volume"] == [220.0, 220.0, 250.0]
+    assert where["printer"]["base_height"] == 50.0  # the enclosure the bed sits on
+    # World positions: the board sits inside the printer, which sits on the bench.
+    p, b = where["printer"]["position"], where["board"]["position"]
+    assert (b["x"] - p["x"], b["y"] - p["y"], b["z"] - p["z"]) == (20.0, 20.0, 5.0)
+    c.delete(f"/sites/garage/nodes/{BOARD}/device")
+    # A pin on the printer itself: the board is the printer, and there is no separate printer.
+    c.put("/sites/garage/nodes/printer_1/device", json={"identity": "/dev/ttyFAKE1"})
+    where = c.get("/firmware/printers/where", params={"port": "/dev/ttyFAKE1"}).json()
+    assert where["board"]["path"] == "printer_1" and where["printer"] is None
+    c.delete("/sites/garage/nodes/printer_1/device")
