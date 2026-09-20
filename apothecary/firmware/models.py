@@ -364,6 +364,7 @@ class PrinterStatus(BaseModel):
     print_time_s: Optional[int] = None  # from M31
     raw: List[str] = Field(default_factory=list)  # every line the poll received, for the log
     synced: List[dict] = Field(default_factory=list)  # scene nodes this poll updated (api.py)
+    job: Optional[dict] = None  # a long exchange holding the port (a bed probe): kind, stage, since
 
     @property
     def heating(self) -> bool:
@@ -388,6 +389,30 @@ class PrinterQueryResult(BaseModel):
     command: str
     lines: List[str] = Field(default_factory=list)
     queried_at: datetime
+
+
+class LevelingRecord(BaseModel):
+    """One reading of a printer's bed: the mesh, what it means, and the conditions."""
+
+    id: str
+    port: str
+    at: datetime
+    method: str  # "probe" (G29 then read) or "read" (M420 V only)
+    mesh: List[List[float]] = Field(default_factory=list)
+    subdivided: Optional[List[List[float]]] = None
+    stats: dict = Field(default_factory=dict)
+    leveling_on: Optional[bool] = None
+    probe_offset: Optional[dict] = None
+    hotend_c: Optional[float] = None
+    bed_c: Optional[float] = None
+    firmware: Optional[str] = None
+    note: Optional[str] = None
+    lines: List[str] = Field(default_factory=list)  # everything the firmware said, for the log
+
+
+class LevelingRequest(ProbeRequest):
+    probe: bool = True  # False: read the stored mesh without probing
+    note: Optional[str] = Field(None, max_length=200)
 
 
 class PrinterIdentifyRequest(ProbeRequest):

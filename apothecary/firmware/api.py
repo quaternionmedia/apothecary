@@ -28,6 +28,7 @@ from .models import (
     CoreInstallRequest,
     EsptoolFlashRequest,
     InstallRequest,
+    LevelingRequest,
     LibraryInstallRequest,
     ListenRequest,
     PrinterControlArmRequest,
@@ -364,6 +365,56 @@ def firmware_printer_command(body: PrinterControlRequest):
     data = result.model_dump(mode="json")
     data["control"] = _control_state(body.port)
     return data
+
+
+# -- bed leveling ------------------------------------------------------------------
+
+
+@router.post("/printers/level", status_code=202)
+def firmware_printer_level(body: LevelingRequest):
+    """Start a bed reading: home, probe (``G29``, latch required) and read, or just read."""
+    _busy_guard()
+    try:
+        job = devices.start_leveling(body.port, probe=body.probe, note=body.note)
+    except gcode.ControlNotArmed as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ToolchainError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return job.snapshot()
+
+
+@router.get("/printers/level")
+async def firmware_printer_level_status(port: str):
+    """The current (or last) bed-reading job on ``port``, if any."""
+    try:
+        validate_port(port)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    job = devices.leveling_job(port)
+    return job.snapshot() if job else {"port": port, "running": False, "stage": None}
+
+
+@router.get("/printers/leveling")
+async def firmware_printer_leveling(port: str = ""):
+    """Saved bed readings, newest first (all ports when ``port`` is empty); no raw lines."""
+    if port:
+        try:
+            validate_port(port)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return [
+        r.model_dump(mode="json", exclude={"lines", "subdivided"})
+        for r in devices.leveling_records(port or None)
+    ]
+
+
+@router.get("/printers/leveling/{record_id}")
+async def firmware_printer_leveling_record(record_id: str):
+    """One saved reading in full: mesh, subdivided mesh, and every line the firmware said."""
+    record = devices.leveling_record(record_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="no such bed reading")
+    return record.model_dump(mode="json")
 
 
 @router.get("/printers/queries")

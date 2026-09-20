@@ -302,20 +302,24 @@ the monitor page the device ring is the top ring, titled by the port:
 ```
    Device ring                     Control ring (printers only)
  7:Control    8:Watch    9:Pin|Unpin    7:Arm|Disarm  8:Heat  9:SD
- 4:Query      5:back     6:Poll         4:Fan         5:back  6:Home
+ 4:Query      5:back     6:Poll         4:Level       5:back  6:Home
  1:Link       2:Monitor  3:Rescan       1:Stop        2:Jog   3:Motors
 ```
 
 Link opens `8:Reconnect  6:Reset  2:Release` (the same cell 1 on a devkit,
 which has no Control); Heat opens `8:Hotend on  6:Hotend off  2:Bed on
-4:Bed off`; Home opens `8:All  6:XY  2:Z`; Fan opens `8:On  6:Off`; SD opens
-`8:Resume  6:Pause  2:Abort`; Motors opens `8:Off  6:Quickstop`; and Jog is
-seated so **the keypad is the jog pad**:
+4:Bed off  9:Fan on  3:Fan off`; Home opens `8:All  6:XY  2:Z`; SD opens
+`8:Resume  6:Pause  2:Abort`; Motors opens `8:Off  6:Quickstop  2:Break
+wait`; and Jog is seated so **the keypad is the jog pad**, as Level is
+seated so **the keypad is the bed** (the corners are the bed's corners, seen
+from the front; Probe and Read are the cardinals, Mesh on and off the other
+two):
 
 ```
- 7:        8:Y+   9:Z+
- 4:X-      5:back 6:X+
- 1:        2:Y-   3:Z-
+      Jog                        Level
+ 7:        8:Y+   9:Z+      7:Back left  8:Probe    9:Back right
+ 4:X-      5:back 6:X+      4:Mesh off   5:back     6:Read
+ 1:        2:Y-   3:Z-      1:Front left 2:Mesh on  3:Front right
 ```
 
 Stop is E-STOP and is drawn as destructive. Pin or Unpin is one cell, and
@@ -398,7 +402,8 @@ reset the board, so the monitor is the live view for a printer.
 The monitor's **⚙ Control** toggle arms a per-port latch and opens a control
 overlay: hotend and bed targets, fan, home (all/XY/Z), a jog pad with a
 step size and feedrate, motors off, quickstop, SD start/resume, pause and
-abort, mesh on/off. Disarmed -- the default, and what a **Release** or a
+abort, mesh on/off, break wait, and the Bed level card's probe and corner
+moves. Disarmed -- the default, and what a **Release** or a
 dropped link returns to -- nothing on the page can heat or move the
 machine, and the API refuses control lines with `409`. The latch lapses
 after five minutes without a command (every accepted command renews it;
@@ -410,7 +415,8 @@ What can be sent is a bounded allowlist (`firmware.gcode.CONTROL_CODES`):
 `M104`/`M140` with temperature caps (300 / 130 °C), `M106`/`M107`, `G28`,
 `G90`/`G91`, `G0`/`G1` with axis moves capped at 300 mm and feed at
 12000, `M84`, `M23 <file>`/`M24`/`M25`/`M524`, `M420 S0|1`, `M108`,
-`M410`. A jog from the pad is three lines (`G91`, `G1 …`, `G90`) so the
+`M410`, `G29` (the plain probe) and `G30 X.. Y..` (one point, on the
+bed). A jog from the pad is three lines (`G91`, `G1 …`, `G90`) so the
 board is always left in absolute mode. Out-of-bounds values are refused
 before they reach the port; there is no job streaming, no EEPROM write, no
 firmware configuration -- those are a print host's business. Control
@@ -421,6 +427,55 @@ POST /firmware/printers/control  {"port": …, "armed": true, "ttl_s": 300}
 POST /firmware/printers/command  {"port": …, "command": "M140 S60"}   → 409 unless armed
 GET  /firmware/printers/controls                                     → the allowlist and bounds
 ```
+
+### Bed leveling
+
+The monitor's **Bed level** card reads the bed the way a person trams it:
+as a mesh, a tilt, and four corners. **Read mesh** asks the board for the
+mesh it has stored (`M420 V`), the probe offset (`M851`) and the current
+temperatures, and saves the three together as a *bed reading*; it moves
+nothing and needs no latch. **Probe bed** homes (`G28`), probes (`G29`) and
+then reads the same way -- it travels the whole bed, so it needs control
+armed and asks once before it starts. A probe takes minutes on a real bed,
+so it runs as a **job** that holds the port: while it runs the state card
+says `leveling: probing`, polls answer from the last poll without queueing
+behind the probe, queries and control lines are refused with `409`, and the
+emergency stop still goes through. When the job is done the card shows the
+reading and a poll follows.
+
+A reading is drawn as a **heatmap** the way the bed lies (the back row on
+top, blue below the mean and amber above, the same two hues as the
+temperature chart), with the range, the tilt across X and Y as a
+least-squares plane through the points, and each **corner against the
+mean** -- which is what a turn of a bed screw changes. Every reading is
+kept, with every line the firmware said, under `~/.apothecary/leveling/`
+(`APOTHECARY_STATE_DIR` moves it), and the card's history lists the port's
+readings newest first; pick one to see it, or download it as JSON. Comparing
+the range before and after a turn of the screws is the whole method.
+
+![Bed level: a probed mesh as a heatmap, with its range, tilt and corners](generated/printer-monitor/screenshots/10-bed-level-probe-bed-homes-and-probes-armed-and-ask.png)
+
+The four **corner buttons** move the nozzle to that corner of the bed at
+paper height (`Z0.2`, 30 mm in from the edges of the build volume, lifted
+to `Z5` on the way) for a tramming check with a sheet of paper; they are
+controls, so they need the latch, and they go out through the same chain
+as a jog. On the ring the Level cell is seated so the keypad is the bed:
+from the monitor `7` (Control) `4` (Level) `1` is the front-left corner and
+`⌗748` is Probe.
+
+```
+POST /firmware/printers/level     {"port": …, "probe": true, "note": "…"}   → 202, the job
+GET  /firmware/printers/level?port=…                                       → the job's stage
+GET  /firmware/printers/leveling?port=…                                    → readings, newest first
+GET  /firmware/printers/leveling/{id}                                      → one reading, with the mesh and every line
+```
+
+The mesh parser (`firmware.gcode.parse_meshes`) reads Marlin's printed grid
+-- the bilinear grid and, when the firmware prints it, the subdivided one
+-- and falls back to the `G29 W I.. J.. Z..` points an `M503` prints, so a
+board that stores its mesh in EEPROM reads too. The simulated printer
+answers `G29`, `M420 V`, `M851` and `G30` with a bed that is slightly
+tilted and a little bowed, so the card can be tried without a machine.
 
 ### Manual queries
 
@@ -501,6 +556,8 @@ at a time — a second request gets `409`.
 | `GET /printers/status?port=…` | one poll over the held link: temperatures, position, endstops, SD progress, and the scene nodes it updated (`synced`) |
 | `GET /printers/queries`, `POST /printers/query` | the report-only codes a user may send by hand, and sending one (`{"port": …, "command": "M503"}`) |
 | `GET/POST /printers/control`, `GET /printers/controls`, `POST /printers/command` | the control latch (arm/disarm, state), the bounded control allowlist, and sending one control line while armed (`M112` always) |
+| `POST /printers/level`, `GET /printers/level?port=…` | start a bed reading as a job (`{"port": …, "probe": true}`; a probe needs the latch and answers `409` without it, or while a job holds the port) and ask its stage |
+| `GET /printers/leveling?port=…`, `GET /printers/leveling/{id}` | saved bed readings (mesh, stats, probe offset, temperatures), newest first, and one in full with every line the firmware said |
 | `GET /sites/{name}/devices?fresh=1` | (site API) the bindings view; `fresh` forces a port rescan -- what the viewer's ↻ Devices and Rescan use |
 | `POST /printers/release` | drop the held link so another program can open the port |
 | `GET /printers/info?port=…` | device, held link (baud, engine, opened at), last poll, active task -- what the monitor page needs at once |

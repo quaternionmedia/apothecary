@@ -801,6 +801,8 @@ def control_options(device: Device) -> List[Option]:
                 Option(id="control:hotend-off", label="Hotend off", action="control:hotend-off"),
                 Option(id="control:bed-on", label="Bed on", action="control:bed-on"),
                 Option(id="control:bed-off", label="Bed off", action="control:bed-off"),
+                Option(id="control:fan-on", label="Fan on", action="control:fan-on"),
+                Option(id="control:fan-off", label="Fan off", action="control:fan-off"),
             ],
         ),
         Option(
@@ -820,12 +822,21 @@ def control_options(device: Device) -> List[Option]:
                 for axis in ("Y+", "X+", "Y-", "X-", "Z+", "Z-")
             ],
         ),
+        # The bed: read or probe it (a record is kept), switch the mesh, and
+        # the four corners for a paper test, seated as they lie on the bed --
+        # front left at 1, front right at 3, back left at 7, back right at 9.
         Option(
-            id="control:fan",
-            label="Fan",
+            id="control:level",
+            label="Level",
             children=[
-                Option(id="control:fan-on", label="On", action="control:fan-on"),
-                Option(id="control:fan-off", label="Off", action="control:fan-off"),
+                Option(id="level:probe", label="Probe", action="level:probe"),
+                Option(id="level:read", label="Read", action="level:read"),
+                Option(id="control:mesh-on", label="Mesh on", action="control:mesh-on"),
+                Option(id="control:mesh-off", label="Mesh off", action="control:mesh-off"),
+                Option(id="control:corner:BR", label="Back right", action="control:corner:BR"),
+                Option(id="control:corner:FR", label="Front right", action="control:corner:FR"),
+                Option(id="control:corner:FL", label="Front left", action="control:corner:FL"),
+                Option(id="control:corner:BL", label="Back left", action="control:corner:BL"),
             ],
         ),
         Option(
@@ -843,6 +854,7 @@ def control_options(device: Device) -> List[Option]:
             children=[
                 Option(id="control:motors-off", label="Off", action="control:motors-off"),
                 Option(id="control:quickstop", label="Quickstop", action="control:quickstop"),
+                Option(id="control:break-wait", label="Break wait", action="control:break-wait"),
             ],
         ),
         Option(id="control:estop", label="Stop", action="control:estop", destructive=True),
@@ -947,6 +959,8 @@ CARRIED_BY: Dict[str, Carries] = {
     # monitor page's control chain, which is where the latch is checked and
     # where a refusal is shown. The intent route never opens a port.
     "control": Carries.VIEWER,
+    # Reading or probing the bed: the page starts the job and shows the record.
+    "level": Carries.VIEWER,
 }
 
 

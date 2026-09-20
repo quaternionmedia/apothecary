@@ -687,6 +687,15 @@ def test_the_control_ring_offers_every_allowlisted_verb():
         "control:sd-abort",
         "control:motors-off",
         "control:quickstop",
+        "control:break-wait",
+        "control:mesh-on",
+        "control:mesh-off",
+        "control:corner:FL",
+        "control:corner:FR",
+        "control:corner:BL",
+        "control:corner:BR",
+        "level:probe",
+        "level:read",
         "control:estop",
         "control:arm",
     }
@@ -921,3 +930,14 @@ def test_more_than_sixty_four_pieces_is_a_refusal_not_a_bigger_menu():
     )
     pieces = resolve(Context(pointing=Pointing.CANVAS), fits).options[0]
     assert len(pieces.children) == 8 and all(len(g.children) == 8 for g in pieces.children)
+
+
+def test_the_level_ring_seats_the_corners_as_they_lie_on_the_bed():
+    """Front left at 1, front right at 3, back left at 7, back right at 9: the keypad is the bed."""
+    ring = _control_ring()
+    level = walk(ring, address_of(ring, "control:level"))
+    cells = {c.action: c.cell for c in level.children}
+    assert cells["control:corner:FL"] == 1 and cells["control:corner:FR"] == 3
+    assert cells["control:corner:BL"] == 7 and cells["control:corner:BR"] == 9
+    assert cells["level:probe"] == 8 and cells["level:read"] == 6
+    assert address_of(ring, "level:probe") == "48"

@@ -138,6 +138,20 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
         "to 65 °C; the card follows on the next poll and the line is in the log in amber. "
         "Disarmed, nothing on the page can heat or move the machine; E-STOP always can"
     )
+
+    page.once("dialog", lambda d: d.accept())
+    page.locator("#level-probe").click()
+    expect(page.locator("#mesh .cell")).to_have_count(25, timeout=20000)
+    expect(page.locator("#level-job")).to_have_text("", timeout=10000)
+    page.locator("#level-card").scroll_into_view_if_needed()
+    page.wait_for_timeout(300)
+    docs.step(
+        "Bed level: Probe bed homes and probes (armed, and asked once), then reads the mesh, "
+        "the probe offset and the temperatures and keeps them as a record. The heatmap is "
+        "drawn as the bed lies, with its range, tilt and each corner against the mean; the "
+        "history lists every reading on the port, and the corner buttons put the nozzle at "
+        "paper height for a tramming check. Read mesh does the same without moving"
+    )
     page.locator("#ctl-disarm").click()
 
     page.goto(f"{base_url}/firmware")

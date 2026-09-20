@@ -505,6 +505,8 @@
       "86": "control:hotend-off",
       "82": "control:bed-on",
       "84": "control:bed-off",
+      "89": "control:fan-on",
+      "83": "control:fan-off",
       "68": "control:home",
       "66": "control:home-xy",
       "62": "control:home-z",
@@ -514,13 +516,20 @@
       "24": "control:jog:X-",
       "29": "control:jog:Z+",
       "23": "control:jog:Z-",
-      "48": "control:fan-on",
-      "46": "control:fan-off",
+      "48": "level:probe",
+      "46": "level:read",
+      "42": "control:mesh-on",
+      "44": "control:mesh-off",
+      "49": "control:corner:BR",
+      "43": "control:corner:FR",
+      "41": "control:corner:FL",
+      "47": "control:corner:BL",
       "98": "control:sd-resume",
       "96": "control:sd-pause",
       "92": "control:sd-abort",
       "38": "control:motors-off",
       "36": "control:quickstop",
+      "32": "control:break-wait",
       "1": "control:estop",
       "7": "control:arm"
     },
@@ -538,6 +547,8 @@
       "786": "control:hotend-off",
       "782": "control:bed-on",
       "784": "control:bed-off",
+      "789": "control:fan-on",
+      "783": "control:fan-off",
       "768": "control:home",
       "766": "control:home-xy",
       "762": "control:home-z",
@@ -547,13 +558,20 @@
       "724": "control:jog:X-",
       "729": "control:jog:Z+",
       "723": "control:jog:Z-",
-      "748": "control:fan-on",
-      "746": "control:fan-off",
+      "748": "level:probe",
+      "746": "level:read",
+      "742": "control:mesh-on",
+      "744": "control:mesh-off",
+      "749": "control:corner:BR",
+      "743": "control:corner:FR",
+      "741": "control:corner:FL",
+      "747": "control:corner:BL",
       "798": "control:sd-resume",
       "796": "control:sd-pause",
       "792": "control:sd-abort",
       "738": "control:motors-off",
       "736": "control:quickstop",
+      "732": "control:break-wait",
       "71": "control:estop",
       "77": "control:arm"
     },
@@ -573,6 +591,8 @@
       "2786": "control:hotend-off",
       "2782": "control:bed-on",
       "2784": "control:bed-off",
+      "2789": "control:fan-on",
+      "2783": "control:fan-off",
       "2768": "control:home",
       "2766": "control:home-xy",
       "2762": "control:home-z",
@@ -582,13 +602,20 @@
       "2724": "control:jog:X-",
       "2729": "control:jog:Z+",
       "2723": "control:jog:Z-",
-      "2748": "control:fan-on",
-      "2746": "control:fan-off",
+      "2748": "level:probe",
+      "2746": "level:read",
+      "2742": "control:mesh-on",
+      "2744": "control:mesh-off",
+      "2749": "control:corner:BR",
+      "2743": "control:corner:FR",
+      "2741": "control:corner:FL",
+      "2747": "control:corner:BL",
       "2798": "control:sd-resume",
       "2796": "control:sd-pause",
       "2792": "control:sd-abort",
       "2738": "control:motors-off",
       "2736": "control:quickstop",
+      "2732": "control:break-wait",
       "271": "control:estop",
       "277": "control:arm",
       "4": "explain"
@@ -640,6 +667,24 @@
               "destructive": false,
               "children": null,
               "cell": 4
+            },
+            {
+              "id": "control:fan-on",
+              "label": "Fan on",
+              "action": "control:fan-on",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 9
+            },
+            {
+              "id": "control:fan-off",
+              "label": "Fan off",
+              "action": "control:fan-off",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 3
             }
           ],
           "cell": 8
@@ -746,29 +791,83 @@
           "cell": 2
         },
         {
-          "id": "control:fan",
-          "label": "Fan",
+          "id": "control:level",
+          "label": "Level",
           "action": null,
           "enabled": true,
           "destructive": false,
           "children": [
             {
-              "id": "control:fan-on",
-              "label": "On",
-              "action": "control:fan-on",
+              "id": "level:probe",
+              "label": "Probe",
+              "action": "level:probe",
               "enabled": true,
               "destructive": false,
               "children": null,
               "cell": 8
             },
             {
-              "id": "control:fan-off",
-              "label": "Off",
-              "action": "control:fan-off",
+              "id": "level:read",
+              "label": "Read",
+              "action": "level:read",
               "enabled": true,
               "destructive": false,
               "children": null,
               "cell": 6
+            },
+            {
+              "id": "control:mesh-on",
+              "label": "Mesh on",
+              "action": "control:mesh-on",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 2
+            },
+            {
+              "id": "control:mesh-off",
+              "label": "Mesh off",
+              "action": "control:mesh-off",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 4
+            },
+            {
+              "id": "control:corner:BR",
+              "label": "Back right",
+              "action": "control:corner:BR",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 9
+            },
+            {
+              "id": "control:corner:FR",
+              "label": "Front right",
+              "action": "control:corner:FR",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 3
+            },
+            {
+              "id": "control:corner:FL",
+              "label": "Front left",
+              "action": "control:corner:FL",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 1
+            },
+            {
+              "id": "control:corner:BL",
+              "label": "Back left",
+              "action": "control:corner:BL",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 7
             }
           ],
           "cell": 4
@@ -834,6 +933,15 @@
               "destructive": false,
               "children": null,
               "cell": 6
+            },
+            {
+              "id": "control:break-wait",
+              "label": "Break wait",
+              "action": "control:break-wait",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 2
             }
           ],
           "cell": 3
@@ -1001,6 +1109,24 @@
                   "destructive": false,
                   "children": null,
                   "cell": 4
+                },
+                {
+                  "id": "control:fan-on",
+                  "label": "Fan on",
+                  "action": "control:fan-on",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 9
+                },
+                {
+                  "id": "control:fan-off",
+                  "label": "Fan off",
+                  "action": "control:fan-off",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 3
                 }
               ],
               "cell": 8
@@ -1107,29 +1233,83 @@
               "cell": 2
             },
             {
-              "id": "control:fan",
-              "label": "Fan",
+              "id": "control:level",
+              "label": "Level",
               "action": null,
               "enabled": true,
               "destructive": false,
               "children": [
                 {
-                  "id": "control:fan-on",
-                  "label": "On",
-                  "action": "control:fan-on",
+                  "id": "level:probe",
+                  "label": "Probe",
+                  "action": "level:probe",
                   "enabled": true,
                   "destructive": false,
                   "children": null,
                   "cell": 8
                 },
                 {
-                  "id": "control:fan-off",
-                  "label": "Off",
-                  "action": "control:fan-off",
+                  "id": "level:read",
+                  "label": "Read",
+                  "action": "level:read",
                   "enabled": true,
                   "destructive": false,
                   "children": null,
                   "cell": 6
+                },
+                {
+                  "id": "control:mesh-on",
+                  "label": "Mesh on",
+                  "action": "control:mesh-on",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 2
+                },
+                {
+                  "id": "control:mesh-off",
+                  "label": "Mesh off",
+                  "action": "control:mesh-off",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 4
+                },
+                {
+                  "id": "control:corner:BR",
+                  "label": "Back right",
+                  "action": "control:corner:BR",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 9
+                },
+                {
+                  "id": "control:corner:FR",
+                  "label": "Front right",
+                  "action": "control:corner:FR",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 3
+                },
+                {
+                  "id": "control:corner:FL",
+                  "label": "Front left",
+                  "action": "control:corner:FL",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 1
+                },
+                {
+                  "id": "control:corner:BL",
+                  "label": "Back left",
+                  "action": "control:corner:BL",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 7
                 }
               ],
               "cell": 4
@@ -1195,6 +1375,15 @@
                   "destructive": false,
                   "children": null,
                   "cell": 6
+                },
+                {
+                  "id": "control:break-wait",
+                  "label": "Break wait",
+                  "action": "control:break-wait",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 2
                 }
               ],
               "cell": 3
@@ -1390,6 +1579,24 @@
                       "destructive": false,
                       "children": null,
                       "cell": 4
+                    },
+                    {
+                      "id": "control:fan-on",
+                      "label": "Fan on",
+                      "action": "control:fan-on",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 9
+                    },
+                    {
+                      "id": "control:fan-off",
+                      "label": "Fan off",
+                      "action": "control:fan-off",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 3
                     }
                   ],
                   "cell": 8
@@ -1496,29 +1703,83 @@
                   "cell": 2
                 },
                 {
-                  "id": "control:fan",
-                  "label": "Fan",
+                  "id": "control:level",
+                  "label": "Level",
                   "action": null,
                   "enabled": true,
                   "destructive": false,
                   "children": [
                     {
-                      "id": "control:fan-on",
-                      "label": "On",
-                      "action": "control:fan-on",
+                      "id": "level:probe",
+                      "label": "Probe",
+                      "action": "level:probe",
                       "enabled": true,
                       "destructive": false,
                       "children": null,
                       "cell": 8
                     },
                     {
-                      "id": "control:fan-off",
-                      "label": "Off",
-                      "action": "control:fan-off",
+                      "id": "level:read",
+                      "label": "Read",
+                      "action": "level:read",
                       "enabled": true,
                       "destructive": false,
                       "children": null,
                       "cell": 6
+                    },
+                    {
+                      "id": "control:mesh-on",
+                      "label": "Mesh on",
+                      "action": "control:mesh-on",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 2
+                    },
+                    {
+                      "id": "control:mesh-off",
+                      "label": "Mesh off",
+                      "action": "control:mesh-off",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 4
+                    },
+                    {
+                      "id": "control:corner:BR",
+                      "label": "Back right",
+                      "action": "control:corner:BR",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 9
+                    },
+                    {
+                      "id": "control:corner:FR",
+                      "label": "Front right",
+                      "action": "control:corner:FR",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 3
+                    },
+                    {
+                      "id": "control:corner:FL",
+                      "label": "Front left",
+                      "action": "control:corner:FL",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 1
+                    },
+                    {
+                      "id": "control:corner:BL",
+                      "label": "Back left",
+                      "action": "control:corner:BL",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 7
                     }
                   ],
                   "cell": 4
@@ -1584,6 +1845,15 @@
                       "destructive": false,
                       "children": null,
                       "cell": 6
+                    },
+                    {
+                      "id": "control:break-wait",
+                      "label": "Break wait",
+                      "action": "control:break-wait",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 2
                     }
                   ],
                   "cell": 3

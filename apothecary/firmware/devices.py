@@ -38,6 +38,7 @@ from .models import (
     DeviceInfo,
     ExpectedFirmware,
     FlashRecord,
+    LevelingRecord,
     ListenResult,
     ManualBinding,
     PrinterQueryResult,
@@ -419,6 +420,18 @@ def printer_status(
             get_streams().close(port)
             link = links.open(port, rate)
     assert link is not None
+    if link.job is not None:
+        # A probe holds the firmware for minutes; a poll now would only queue
+        # behind it. Say what is happening instead.
+        last = _LAST_STATUS.get(port)
+        status = (
+            last.model_copy(update={"polled_at": datetime.now(timezone.utc), "raw": []})
+            if last
+            else gcode.PrinterStatus(port=port, polled_at=datetime.now(timezone.utc))
+        )
+        status.job = dict(link.job)
+        status.synced = []
+        return status
     try:
         status = gcode.poll_printer(link)
     except ToolchainError as exc:
@@ -479,6 +492,9 @@ def printer_control(
     cmd = gcode.normalise_control(command)  # ValueError when not allowed / out of bounds
     if cmd != gcode.EMERGENCY_STOP and not links.control.armed(port):
         raise gcode.ControlNotArmed(f"{port}: control is not armed -- arm it first")
+    held = links.get(port)
+    if held is not None and held.job is not None and cmd != gcode.EMERGENCY_STOP:
+        raise ToolchainError(f"{port}: a bed reading holds the port ({held.job['stage']})")
     if links.get(port) is None:
         printer_status(port, state=state, links=links)
     link = links.get(port)
@@ -491,6 +507,166 @@ def printer_control(
     )
 
 
+# --- bed leveling: a job that holds the port for minutes, and its records ---------------
+
+LEVELING_PROBE_TIMEOUT_S = 900.0  # a five-by-five probe on a slow bed
+
+
+def leveling_dir() -> Path:
+    return state_dir() / "leveling"
+
+
+def leveling_records(port: Optional[str] = None) -> List[LevelingRecord]:
+    """Every saved reading, newest first; for one port when given."""
+    folder = leveling_dir()
+    if not folder.is_dir():
+        return []
+    records: List[LevelingRecord] = []
+    for path in folder.glob("*.json"):
+        try:
+            rec = LevelingRecord(**json.loads(path.read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            continue
+        if port is None or rec.port == port:
+            records.append(rec)
+    return sorted(records, key=lambda r: r.at, reverse=True)
+
+
+def leveling_record(record_id: str) -> Optional[LevelingRecord]:
+    return next((r for r in leveling_records() if r.id == record_id), None)
+
+
+def _save_leveling(record: LevelingRecord) -> Path:
+    folder = leveling_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"{record.id}.json"
+    path.write_text(record.model_dump_json(indent=2), encoding="utf-8")
+    return path
+
+
+def read_bed(link: gcode.GcodeLink, port: str, method: str, note: Optional[str]) -> LevelingRecord:
+    """The reading itself: mesh, state, probe offset and temperatures, from an open link."""
+    lines: List[str] = []
+    mesh_lines = link.command("M420 V", timeout=15.0, origin="query")
+    lines += mesh_lines
+    offset_lines = link.command("M851", timeout=10.0, origin="query")
+    lines += offset_lines
+    temp_lines = link.command("M105", timeout=10.0, origin="query")
+    lines += temp_lines
+    grids = gcode.parse_meshes(mesh_lines)
+    temps = gcode.parse_m105(next((ln for ln in temp_lines if gcode.is_temperature_line(ln)), ""))
+    cached = get_state().cached_device(port)
+    at = datetime.now(timezone.utc)
+    slug = re.sub(r"[^A-Za-z0-9]+", "_", port).strip("_")
+    record = LevelingRecord(
+        id=f"{at:%Y%m%dT%H%M%S}.{at.microsecond // 1000:03d}-{slug}",
+        port=port,
+        at=at,
+        method=method,
+        mesh=grids[0] if grids else [],
+        subdivided=grids[1] if len(grids) > 1 else None,
+        stats=gcode.mesh_stats(grids[0]) if grids else {},
+        leveling_on=gcode.parse_leveling_state(mesh_lines),
+        probe_offset=gcode.parse_probe_offset(offset_lines),
+        hotend_c=temps["hotends"][0].actual if temps["hotends"] else None,
+        bed_c=temps["bed"].actual if temps["bed"] else None,
+        firmware=cached.printer.firmware_name if cached and cached.printer else None,
+        note=note,
+        lines=lines[-400:],
+    )
+    return record
+
+
+class LevelingJob:
+    """Home, probe, read, save -- on a thread, announcing its stage on the link."""
+
+    def __init__(self, port: str, probe: bool, note: Optional[str], links: gcode.PrinterLinks):
+        self.port, self.probe, self.note, self.links = port, probe, note, links
+        self.stage = "starting"
+        self.started = datetime.now(timezone.utc)
+        self.finished: Optional[datetime] = None
+        self.error: Optional[str] = None
+        self.record: Optional[LevelingRecord] = None
+        self.thread = threading.Thread(target=self._run, daemon=True, name=f"leveling-{port}")
+
+    def snapshot(self) -> dict:
+        return {
+            "kind": "leveling",
+            "port": self.port,
+            "probe": self.probe,
+            "stage": self.stage,
+            "since": self.started.isoformat(),
+            "finished": self.finished.isoformat() if self.finished else None,
+            "error": self.error,
+            "record_id": self.record.id if self.record else None,
+            "running": self.finished is None,
+        }
+
+    def _run(self) -> None:
+        link = self.links.get(self.port)
+        if link is None:
+            self.error, self.finished = "no link", datetime.now(timezone.utc)
+            return
+        link.job = self.snapshot()
+        try:
+            if self.probe:
+                self.stage = "homing"
+                link.job = self.snapshot()
+                link.command("G28", timeout=120.0, origin="control")
+                self.stage = "probing"
+                link.job = self.snapshot()
+                link.command("G29", timeout=LEVELING_PROBE_TIMEOUT_S, origin="control")
+            self.stage = "reading"
+            link.job = self.snapshot()
+            self.record = read_bed(link, self.port, "probe" if self.probe else "read", self.note)
+            _save_leveling(self.record)
+            link.log.add("sys", f"bed reading saved: {self.record.id}", "control")
+            self.stage = "saved"
+        except (ToolchainError, ValueError) as exc:
+            self.error = str(exc)
+            self.stage = "failed"
+            link.log.add("sys", f"bed reading failed: {exc}", "control")
+        finally:
+            self.finished = datetime.now(timezone.utc)
+            link.job = None
+
+
+_LEVELING: Dict[str, LevelingJob] = {}
+
+
+def leveling_job(port: str) -> Optional[LevelingJob]:
+    return _LEVELING.get(port)
+
+
+def start_leveling(
+    port: str,
+    probe: bool = True,
+    note: Optional[str] = None,
+    state: Optional[FirmwareState] = None,
+    links: Optional[gcode.PrinterLinks] = None,
+) -> LevelingJob:
+    """Begin a bed reading on ``port``; a probe needs the control latch armed.
+
+    Raises ``ControlNotArmed`` for a probe with the latch down, ``ToolchainError``
+    when the port is not a printer or a job already holds it.
+    """
+    state = state or get_state()
+    links = links or gcode.get_printer_links()
+    running = _LEVELING.get(port)
+    if running and running.finished is None:
+        raise ToolchainError(f"{port}: a bed reading is already {running.stage}")
+    if probe and not links.control.armed(port):
+        raise gcode.ControlNotArmed(f"{port}: probing moves the machine -- arm control first")
+    if links.get(port) is None:
+        printer_status(port, state=state, links=links)
+    if links.get(port) is None:
+        raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
+    job = LevelingJob(port, probe, note, links)
+    _LEVELING[port] = job
+    job.thread.start()
+    return job
+
+
 def printer_query(
     port: str,
     command: str,
@@ -501,6 +677,9 @@ def printer_query(
     state = state or get_state()
     links = links or gcode.get_printer_links()
     cmd = gcode.normalise_query(command)  # ValueError for anything that is not a report
+    held = links.get(port)
+    if held is not None and held.job is not None:
+        raise ToolchainError(f"{port}: a bed reading holds the port ({held.job['stage']})")
     if links.get(port) is None:
         printer_status(port, state=state, links=links)  # identifies + opens; offline if it cannot
     link = links.get(port)

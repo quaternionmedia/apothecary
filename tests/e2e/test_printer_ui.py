@@ -538,3 +538,62 @@ def test_the_board_is_drawn_in_its_printer_and_the_nozzle_follows_a_jog(
     expect(card.locator(".board-view-note")).to_contain_text("garage › printer_1")
     # A port pinned nowhere draws nothing.
     expect(page.locator(".device[data-port='/dev/ttyFAKE0'] .board-view")).to_be_hidden()
+
+
+@pytest.mark.e2e
+def test_bed_level_probe_reads_and_records(page: Page, printer_url: str):
+    """Read mesh needs no latch and fills the heatmap; Probe bed needs it, shows its stage
+    while the port is held, saves a record the history lists; a corner button is four lines."""
+    page.goto(f"{printer_url}/firmware/monitor?port=/dev/ttyFAKE1")
+    expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
+    expect(page.locator("#level-stats")).to_contain_text("no reading yet")
+    before = page.locator("#level-history > div").count()
+
+    # A read: no latch, no movement, a 5x5 mesh from the simulator within a few seconds.
+    t0 = time.monotonic()
+    page.locator("#level-read").click()
+    expect(page.locator("#mesh .cell")).to_have_count(25, timeout=15000)
+    assert time.monotonic() - t0 < 15.0
+    expect(page.locator("#level-stats")).to_contain_text("read ·")
+    expect(page.locator("#level-stats")).to_contain_text("probe offset X-44 Y-10 Z-3.15")
+    expect(page.locator("#level-history > div")).to_have_count(before + 1)
+    expect(page.locator("#level-history .pick.on")).to_contain_text("read")
+    assert page.locator("#log .tx.control", has_text="G29").count() == 0
+
+    # A probe is refused while disarmed and never reaches the board.
+    page.locator("#level-probe").click()
+    expect(page.locator("#log .sys", has_text="arm control first")).to_be_visible(timeout=3000)
+    assert page.locator("#log .tx.control", has_text="G29").count() == 0
+
+    # Armed, the page asks, then homes and probes; the state card says the port is
+    # held for the duration, and the record appears when it is done.
+    page.locator("#ctl").check()
+    expect(page.locator("#control")).to_be_visible(timeout=5000)
+    page.once("dialog", lambda d: d.accept())
+    page.locator("#level-probe").click()
+    expect(page.locator("#level-job")).to_contain_text("…", timeout=5000)
+    expect(page.locator("#level-job")).to_have_text("", timeout=30000)
+    expect(page.locator("#level-history > div")).to_have_count(before + 2, timeout=5000)
+    expect(page.locator("#level-stats")).to_contain_text("probe ·")
+    expect(page.locator("#log .tx.control", has_text="G29")).to_have_count(1)
+    expect(page.locator("#log .sys", has_text="bed reading saved")).to_have_count(2)
+    record_id = page.evaluate("() => window.apothecaryMonitor.level.shown().id")
+    r = page.request.get(f"{printer_url}/firmware/printers/leveling/{record_id}")
+    assert r.ok and len(r.json()["mesh"]) == 5 and r.json()["method"] == "probe"
+    # The history still holds the read; picking it swaps the heatmap back.
+    page.locator("#level-history .pick", has_text="read").first.click()
+    expect(page.locator("#level-stats")).to_contain_text("read ·")
+
+    # A corner button: four absolute lines, the last one at paper height.
+    lines = page.evaluate("() => window.apothecaryMonitor.level.lines('BR')")
+    assert lines == ["G90", "G1 Z5 F3000", "G1 X190 Y190 F3000", "G1 Z0.2 F600"]
+    page.locator("#control button[data-cmd='M25']").click()  # the simulator is printing
+    expect(page.locator("#c-state")).to_contain_text("idle", timeout=POLL_S * 1000 + 3000)
+    page.locator("#level-card button[data-corner='FL']").click()
+    expect(page.locator("#log .tx.control", has_text="G1 X30 Y30 F3000")).to_be_visible(
+        timeout=8000
+    )
+    expect(page.locator("#c-pos")).to_contain_text("X30.0", timeout=POLL_S * 1000 + 3000)
+    page.locator("#control button[data-cmd='M24']").click()
+    page.locator("#ctl-disarm").click()
+    expect(page.locator("#control")).to_be_hidden(timeout=3000)

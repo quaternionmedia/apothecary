@@ -44,7 +44,7 @@ import select
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Callable, Dict, List, Optional, Protocol
+from typing import Callable, Dict, List, Optional, Protocol, Tuple
 
 from .models import Heater, PrinterInfo, PrinterStatus
 from .toolchains import ToolchainError
@@ -382,9 +382,32 @@ class SimulatedPrinter:
         elif code == "M112":
             self.halted = True
             return ["Error:Printer halted. kill() called!"]
+        elif code == "G29":
+            # A probe takes a while; the busy lines are what Marlin prints while it does.
+            return ["echo:busy: processing", "echo:busy: processing", *self._grid_lines(), "ok"]
+        elif code == "G30":
+            x = float(args.get("X", self.pos["X"]))
+            y = float(args.get("Y", self.pos["Y"]))
+            return [
+                f"Bed X: {x:.2f} Y: {y:.2f} Z: {self._bed_z(x / 220 * 4, y / 220 * 4):.2f}",
+                "ok",
+            ]
         else:
             return None
         return ["ok"]
+
+    def _bed_z(self, i: float, j: float) -> float:
+        """A bed that is slightly tilted and a little bowed, the same every run for a port."""
+        tilt = 0.12 * (i - 2) - 0.08 * (j - 2)
+        bow = -0.05 * ((i - 2) ** 2 + (j - 2) ** 2) / 4
+        return tilt + bow + self._rng.uniform(-0.01, 0.01)
+
+    def _grid_lines(self) -> List[str]:
+        lines = ["Bilinear Leveling Grid:", "      0      1      2      3      4"]
+        for j in range(5):
+            cells = " ".join(f"{self._bed_z(i, j):+.3f}" for i in range(5))
+            lines.append(f" {j} {cells}")
+        return lines
 
     def _reply(self, cmd: str) -> List[str]:
         code = cmd.split()[0].upper() if cmd.split() else ""
@@ -394,6 +417,14 @@ class SimulatedPrinter:
         controlled = self._apply_control(cmd)
         if controlled is not None:
             return controlled
+        if code == "M420" and cmd.upper().split()[-1] == "V":
+            return [
+                *self._grid_lines(),
+                f"echo:Bed Leveling {'ON' if self.printing else 'OFF'}",
+                "ok",
+            ]
+        if code == "M851":
+            return ["echo:  M851 X-44.00 Y-10.00 Z-3.15 ; (mm)", "ok"]
         if code == "M115":
             return [
                 f"FIRMWARE_NAME:{self.FIRMWARE} SOURCE_CODE_URL:apothecary "
@@ -661,6 +692,11 @@ class GcodeLink:
             self.log.add("sys", f"closed {self.port}")
             self._t.close()
 
+    # A long exchange (a bed probe takes minutes) is announced here, so a
+    # poll can say "busy: probing" instead of queueing behind the lock for
+    # as long as the firmware is blocked.
+    job: Optional[dict] = None
+
     def info(self) -> dict:
         return {
             "port": self.port,
@@ -802,6 +838,11 @@ CONTROL_CODES: List[tuple] = [
     (re.compile(r"^M25$"), "pause SD print"),
     (re.compile(r"^M524$"), "abort SD print"),
     (re.compile(r"^M420 S[01]$"), "bed leveling on/off"),
+    (re.compile(r"^G29$"), "probe the bed (auto bed leveling)"),
+    (
+        re.compile(r"^G30(?: X\d{1,3}(?:\.\d{1,2})?)?(?: Y\d{1,3}(?:\.\d{1,2})?)?$"),
+        "probe one point",
+    ),
     (re.compile(r"^M108$"), "break out of a heat-and-wait"),
     (re.compile(r"^M410$"), "quickstop: abort planned moves"),
 ]
@@ -832,6 +873,119 @@ def normalise_control(command: str) -> str:
                 raise ValueError(f"feedrate above {FEED_MAX}: {command!r}")
         return cmd
     raise ValueError(f"not an allowed control code: {command!r}")
+
+
+# --- bed leveling: reading Marlin's mesh -------------------------------------------------
+
+GRID_HEADER_RE = re.compile(r"^\s*(\d+(?:\s+\d+)+)\s*$")
+GRID_ROW_RE = re.compile(r"^\s*(\d+)((?:\s+[-+]?\d+\.\d+)+)\s*$")
+G29_POINT_RE = re.compile(r"G29 W I(\d+) J(\d+) Z([-+]?\d+\.\d+)")
+PROBE_OFFSET_RE = re.compile(r"M851 X([-+]?\d+\.?\d*) Y([-+]?\d+\.?\d*) Z([-+]?\d+\.?\d*)")
+G30_RE = re.compile(r"Bed X:\s*([-+]?\d+\.?\d*)\s*Y:\s*([-+]?\d+\.?\d*)\s*Z:\s*([-+]?\d+\.?\d*)")
+LEVELING_STATE_RE = re.compile(r"Bed Leveling (ON|OFF)")
+
+
+def parse_meshes(lines: List[str]) -> List[List[List[float]]]:
+    """Every grid in Marlin's ``M420 V`` / ``G29`` output, in order.
+
+    A grid is a header line of column indices followed by rows that begin
+    with a row index: the measured bilinear grid first, then the subdivided
+    one when the firmware prints it. Rows are returned top to bottom as
+    printed, each a list of floats. ``G29 W I.. J.. Z..`` points (the form
+    ``M503`` uses) are gathered into a grid too when no printed grid exists.
+    """
+    grids: List[List[List[float]]] = []
+    current: Optional[List[List[float]]] = None
+    for line in lines:
+        text = line.strip()
+        if GRID_HEADER_RE.match(text):
+            current = []
+            grids.append(current)
+            continue
+        m = GRID_ROW_RE.match(text)
+        if m and current is not None:
+            current.append([float(v) for v in m.group(2).split()])
+            continue
+        if current is not None and text and not m:
+            current = None  # the grid ended
+    grids = [g for g in grids if g]
+    if grids:
+        return grids
+    points: Dict[Tuple[int, int], float] = {}
+    for line in lines:
+        m = G29_POINT_RE.search(line)
+        if m:
+            points[(int(m.group(2)), int(m.group(1)))] = float(m.group(3))
+    if not points:
+        return []
+    rows = max(j for j, _ in points) + 1
+    cols = max(i for _, i in points) + 1
+    return [[[points.get((j, i), 0.0) for i in range(cols)] for j in range(rows)]]
+
+
+def mesh_stats(mesh: List[List[float]]) -> dict:
+    """What a person wants to know about a mesh: range, tilt and corners.
+
+    Tilt is a least-squares plane through the points, reported as mm of rise
+    across the whole grid in X and in Y; corners are the four corner values
+    minus the mean, which is what tramming a bed by its screws changes.
+    """
+    rows = len(mesh)
+    cols = len(mesh[0]) if rows else 0
+    flat = [v for row in mesh for v in row]
+    if not flat:
+        return {"rows": 0, "cols": 0}
+    mean = sum(flat) / len(flat)
+    lo, hi = min(flat), max(flat)
+    # Least squares z = a*x + b*y + c on unit-spaced indices.
+    xs = [i for _ in range(rows) for i in range(cols)]
+    ys = [j for j in range(rows) for _ in range(cols)]
+    n = len(flat)
+    mx, my = sum(xs) / n, sum(ys) / n
+    sxx = sum((x - mx) ** 2 for x in xs) or 1.0
+    syy = sum((y - my) ** 2 for y in ys) or 1.0
+    a = sum((x - mx) * (z - mean) for x, z in zip(xs, flat, strict=True)) / sxx
+    b = sum((y - my) * (z - mean) for y, z in zip(ys, flat, strict=True)) / syy
+    return {
+        "rows": rows,
+        "cols": cols,
+        "min": round(lo, 4),
+        "max": round(hi, 4),
+        "range": round(hi - lo, 4),
+        "mean": round(mean, 4),
+        "tilt_x": round(a * (cols - 1), 4) if cols > 1 else 0.0,
+        "tilt_y": round(b * (rows - 1), 4) if rows > 1 else 0.0,
+        "corners": {
+            "front_left": round(mesh[0][0] - mean, 4),
+            "front_right": round(mesh[0][-1] - mean, 4),
+            "back_left": round(mesh[-1][0] - mean, 4),
+            "back_right": round(mesh[-1][-1] - mean, 4),
+        },
+    }
+
+
+def parse_probe_offset(lines: List[str]) -> Optional[dict]:
+    for line in lines:
+        m = PROBE_OFFSET_RE.search(line)
+        if m:
+            return {"x": float(m.group(1)), "y": float(m.group(2)), "z": float(m.group(3))}
+    return None
+
+
+def parse_g30(lines: List[str]) -> Optional[dict]:
+    for line in lines:
+        m = G30_RE.search(line)
+        if m:
+            return {"x": float(m.group(1)), "y": float(m.group(2)), "z": float(m.group(3))}
+    return None
+
+
+def parse_leveling_state(lines: List[str]) -> Optional[bool]:
+    for line in lines:
+        m = LEVELING_STATE_RE.search(line)
+        if m:
+            return m.group(1) == "ON"
+    return None
 
 
 CONTROL_TTL_S = 300.0  # a latch that nobody touches for this long disarms itself

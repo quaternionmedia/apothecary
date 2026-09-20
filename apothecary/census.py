@@ -291,6 +291,25 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "cmd:M420 S1": (WIDGET, WHAT_IS_THERE, "a button that turns bed levelling on"),
     "cmd:M420 S0": (WIDGET, WHAT_IS_THERE, "a button that turns bed levelling off"),
     "cmd:M108": (WIDGET, WHAT_IS_THERE, "a button that breaks out of a heat-and-wait"),
+    # the bed
+    "level-probe": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that homes, probes the bed and keeps the reading",
+    ),
+    "level-read": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button that reads the stored mesh and keeps the reading",
+    ),
+    "corner:FL": (WIDGET, WHAT_IS_THERE, "a button that moves the nozzle to the front-left corner"),
+    "corner:FR": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that moves the nozzle to the front-right corner",
+    ),
+    "corner:BL": (WIDGET, WHAT_IS_THERE, "a button that moves the nozzle to the back-left corner"),
+    "corner:BR": (WIDGET, WHAT_IS_THERE, "a button that moves the nozzle to the back-right corner"),
 }
 
 # A control of its own that does the same thing as a cell of the ring, and the
@@ -346,6 +365,15 @@ RING_BACKED: Dict[str, str] = {
     "cmd:M524": "control:sd-abort",
     "cmd:M84": "control:motors-off",
     "cmd:M410": "control:quickstop",
+    "cmd:M108": "control:break-wait",
+    "cmd:M420 S1": "control:mesh-on",
+    "cmd:M420 S0": "control:mesh-off",
+    "level-probe": "level:probe",
+    "level-read": "level:read",
+    "corner:FL": "control:corner:FL",
+    "corner:FR": "control:corner:FR",
+    "corner:BL": "control:corner:BL",
+    "corner:BR": "control:corner:BR",
     # Navigation: the list rows, the step-out button and the go-in button are
     # what the canvas ring's Pieces and Up and the node ring's Zoom in do.
     "zoom-out-btn": "zoom-out",
@@ -376,6 +404,7 @@ BY_WHAT_IT_CARRIES: Sequence[Tuple[re.Pattern, str]] = (
     (re.compile(r"\bdata-jog=[\"']([^\"']+)[\"']"), "jog"),
     (re.compile(r"\bdata-cmd=[\"']([^\"']+)[\"']"), "cmd"),
     (re.compile(r"\bdata-step=[\"']([^\"']+)[\"']"), "step"),
+    (re.compile(r"\bdata-corner=[\"']([^\"']+)[\"']"), "corner"),
 )
 
 # A markup control with neither an id nor a class is named by where its link
@@ -479,6 +508,13 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     # listening, so the markup carries them; these are the ones that listen.
     "port:change:selectPort": (WIDGET, WHAT_YOU_SEE, "choosing a printer port"),
     "portSel:change:mountFor": (AUTOMATIC, NOTHING, "the board view following the chosen port"),
+    "port:change:loadLevel": (AUTOMATIC, NOTHING, "the bed readings following the chosen port"),
+    "level-history:click:closest": (
+        LIST,
+        WHAT_YOU_SEE,
+        "picking an earlier bed reading to look at",
+    ),
+    "level-card:click:closest": (WIDGET, WHAT_IS_THERE, "a corner button, moving the nozzle there"),
     "auto:change:schedule": (WIDGET, WHAT_YOU_SEE, "the poll-on-a-schedule tick-box"),
     "interval:change:schedule": (WIDGET, WHAT_YOU_SEE, "choosing how often to poll"),
     "qform:submit:post": (WIDGET, WHAT_YOU_SEE, "asking the printer for a report"),

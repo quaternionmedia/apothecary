@@ -6,6 +6,7 @@ parsers are tested against real output, not an idealised one.
 """
 
 import json
+import threading
 import time
 
 import pytest
@@ -666,6 +667,8 @@ def test_control_allowlist_and_bounds():
         "M420 S1",
         "M108",
         "M410",
+        "G29",
+        "G30 X110 Y110",
         "m112",
     ]
     for cmd in ok:
@@ -678,7 +681,8 @@ def test_control_allowlist_and_bounds():
         "G1 X301",
         "G1 X10 F20000",
         "G1 E50",
-        "G29",
+        "G29 P1",
+        "G30 X1000",
         "M500",
         "M502",
         "M503",
@@ -836,3 +840,216 @@ def test_where_a_port_is_pinned_carries_the_geometry_a_view_needs(fake_arduino_c
     where = c.get("/firmware/printers/where", params={"port": "/dev/ttyFAKE1"}).json()
     assert where["board"]["path"] == "printer_1" and where["printer"] is None
     c.delete("/sites/garage/nodes/printer_1/device")
+
+
+# --- bed leveling: Marlin's mesh read, a probe run as a job, and its records ------------
+
+MESH_REPORT = [
+    "Bilinear Leveling Grid:",
+    "      0      1      2",
+    " 0 -0.150 +0.000 +0.150",
+    " 1 -0.100 +0.050 +0.200",
+    " 2 -0.050 +0.100 +0.250",
+    "",
+    "Subdivided with CATMULL ROM LEVELING GRID:",
+    "       0       1       2       3       4",
+    " 0 -0.1500 -0.0750 +0.0000 +0.0750 +0.1500",
+    " 1 -0.1250 -0.0500 +0.0250 +0.1000 +0.1750",
+    " 2 -0.1000 -0.0250 +0.0500 +0.1250 +0.2000",
+    " 3 -0.0750 +0.0000 +0.0750 +0.1500 +0.2250",
+    " 4 -0.0500 +0.0250 +0.1000 +0.1750 +0.2500",
+    "echo:Bed Leveling ON",
+    "echo:Fade Height 10.00",
+    "ok",
+]
+
+LEVELING = {
+    **REPLIES,
+    "G28": ["ok"],
+    "G29": ["echo:busy: processing", "echo:busy: processing", *MESH_REPORT[:6], "ok"],
+    "M420 V": MESH_REPORT,
+    "M851": ["echo:  M851 X-44.00 Y-10.00 Z-3.15 ; (mm)", "ok"],
+}
+
+
+def test_parse_meshes_reads_the_grid_and_the_subdivided_one():
+    grids = gcode.parse_meshes(MESH_REPORT)
+    assert len(grids) == 2
+    assert grids[0] == [[-0.15, 0.0, 0.15], [-0.1, 0.05, 0.2], [-0.05, 0.1, 0.25]]
+    assert len(grids[1]) == 5 and all(len(row) == 5 for row in grids[1])
+    assert grids[1][4][4] == 0.25
+    # A board that stores its mesh answers M503 with one point per line; those gather too.
+    points = [
+        "echo:  G29 W I0 J0 Z-0.10000",
+        "echo:  G29 W I1 J0 Z0.10000",
+        "echo:  G29 W I0 J1 Z0.00000",
+        "echo:  G29 W I1 J1 Z0.20000",
+        "ok",
+    ]
+    assert gcode.parse_meshes(points) == [[[-0.1, 0.1], [0.0, 0.2]]]
+    assert gcode.parse_meshes(["echo:Bed Leveling OFF", "ok"]) == []
+
+
+def test_mesh_stats_reports_range_tilt_and_corners():
+    stats = gcode.mesh_stats([[-0.15, 0.0, 0.15], [-0.1, 0.05, 0.2], [-0.05, 0.1, 0.25]])
+    assert stats["rows"] == 3 and stats["cols"] == 3
+    assert stats["min"] == -0.15 and stats["max"] == 0.25 and stats["range"] == 0.4
+    assert stats["mean"] == 0.05
+    # The plane is z = 0.15*x + 0.05*y - 0.15: 0.3 mm of rise across X, 0.1 across Y.
+    assert stats["tilt_x"] == pytest.approx(0.3) and stats["tilt_y"] == pytest.approx(0.1)
+    assert stats["corners"] == {
+        "front_left": -0.2,
+        "front_right": 0.1,
+        "back_left": -0.1,
+        "back_right": 0.2,
+    }
+    assert gcode.mesh_stats([]) == {"rows": 0, "cols": 0}
+    assert gcode.mesh_stats([[0.3]])["tilt_x"] == 0.0
+
+
+def test_parse_probe_offset_single_probe_and_leveling_state():
+    assert gcode.parse_probe_offset(LEVELING["M851"]) == {"x": -44.0, "y": -10.0, "z": -3.15}
+    assert gcode.parse_probe_offset(["ok"]) is None
+    assert gcode.parse_g30(["Bed X: 110.00 Y: 110.00 Z: 0.12", "ok"]) == {
+        "x": 110.0,
+        "y": 110.0,
+        "z": 0.12,
+    }
+    assert gcode.parse_g30(["ok"]) is None
+    assert gcode.parse_leveling_state(MESH_REPORT) is True
+    assert gcode.parse_leveling_state(["echo:Bed Leveling OFF"]) is False
+    assert gcode.parse_leveling_state(["ok"]) is None
+
+
+def test_the_probe_codes_are_controls_within_bounds():
+    assert gcode.normalise_control("g29") == "G29"
+    assert gcode.normalise_control("G30 X110 Y110") == "G30 X110 Y110"
+    assert gcode.normalise_control("M420 S1") == "M420 S1"
+    with pytest.raises(ValueError):
+        gcode.normalise_control("G30 X1000 Y10")  # off the bed
+    with pytest.raises(ValueError):
+        gcode.normalise_control("G29 P1")  # only the plain probe
+
+
+def test_simulator_answers_the_leveling_codes(monkeypatch):
+    monkeypatch.setenv("APOTHECARY_SIMULATED_PRINTER", "idle")
+    link = gcode.GcodeLink("/dev/ttySIM", 115200, gcode.SimulatedPrinter("/dev/ttySIM", 115200))
+    probed = gcode.control_printer(link, "G29")
+    assert probed[0].startswith("echo:busy") and probed[-1] == "ok"
+    grids = gcode.parse_meshes(link.command("M420 V"))
+    assert len(grids) == 1 and len(grids[0]) == 5 and len(grids[0][0]) == 5
+    stats = gcode.mesh_stats(grids[0])
+    assert 0.3 < stats["range"] < 1.2 and stats["tilt_x"] > 0 > stats["tilt_y"]
+    assert gcode.parse_probe_offset(link.command("M851")) == {"x": -44.0, "y": -10.0, "z": -3.15}
+    hit = gcode.parse_g30(gcode.control_printer(link, "G30 X110 Y110"))
+    assert hit["x"] == 110.0 and hit["y"] == 110.0 and abs(hit["z"]) < 0.5
+
+
+def test_leveling_job_homes_probes_reads_and_saves(fake_arduino_cli, scripted_links):
+    port = "/dev/ttyFAKE1"
+    gate = threading.Event()
+
+    class SlowProbe(ScriptedTransport):
+        def write(self, data):
+            if data.decode().strip() == "G29":
+                gate.wait(5)  # a probe takes minutes; the test says when it is done
+            super().write(data)
+
+    scripted_links.factory = SlowProbe
+    for t in ScriptedTransport.instances:
+        t.replies = LEVELING
+    with pytest.raises(gcode.ControlNotArmed):
+        devices.start_leveling(port, probe=True, links=scripted_links)
+    scripted_links.control.arm(port)
+    job = devices.start_leveling(port, probe=True, note="after new springs", links=scripted_links)
+    ScriptedTransport.instances[0].replies = LEVELING
+    for _ in range(200):
+        if job.stage == "probing":
+            break
+        time.sleep(0.01)
+    assert job.stage == "probing" and job.snapshot()["running"] is True
+    # While the probe runs the port is spoken for: polls say so without touching
+    # it, queries and controls are refused, the emergency stop is not.
+    st = devices.printer_status(port, links=scripted_links)
+    assert st.job["kind"] == "leveling" and st.job["stage"] == "probing"
+    with pytest.raises(ToolchainError, match="bed reading holds the port"):
+        devices.printer_query(port, "M105", links=scripted_links)
+    with pytest.raises(ToolchainError, match="bed reading holds the port"):
+        devices.printer_control(port, "G28", links=scripted_links)
+    with pytest.raises(ToolchainError, match="already probing"):
+        devices.start_leveling(port, probe=False, links=scripted_links)
+    gate.set()
+    job.thread.join(5)
+    assert job.stage == "saved" and job.error is None and job.record is not None
+    sent = ScriptedTransport.instances[0].sent
+    assert sent.index("G28") < sent.index("G29") < sent.index("M420 V") < sent.index("M851")
+    rec = job.record
+    assert rec.method == "probe" and rec.note == "after new springs"
+    assert rec.mesh == [[-0.15, 0.0, 0.15], [-0.1, 0.05, 0.2], [-0.05, 0.1, 0.25]]
+    assert rec.subdivided is not None and len(rec.subdivided) == 5
+    assert rec.stats["range"] == 0.4 and rec.leveling_on is True
+    assert rec.probe_offset == {"x": -44.0, "y": -10.0, "z": -3.15}
+    assert rec.hotend_c == 22.3 and rec.bed_c == 23.59
+    assert rec.firmware == "Marlin TH3D UFW 2.94a (Jan 17 2025 11:35:34)"
+    assert "echo:Bed Leveling ON" in rec.lines
+    saved = devices.leveling_records(port)
+    assert [r.id for r in saved] == [rec.id] and devices.leveling_record(rec.id) == rec
+    assert devices.leveling_records("/dev/ttyOTHER") == []
+    assert (devices.leveling_dir() / f"{rec.id}.json").is_file()
+    # The port is free again, and the poll goes to the board.
+    assert devices.printer_status(port, links=scripted_links).job is None
+    # A read without a probe needs no latch and moves nothing.
+    scripted_links.control.disarm(port)
+    job = devices.start_leveling(port, probe=False, links=scripted_links)
+    job.thread.join(5)
+    assert job.stage == "saved" and job.record.method == "read"
+    assert sent.count("G29") == 1 and sent.count("G28") == 1
+    assert len(devices.leveling_records(port)) == 2
+
+
+def test_leveling_job_reports_a_board_that_will_not_probe(fake_arduino_cli, scripted_links):
+    port = "/dev/ttyFAKE1"
+    scripted_links.control.arm(port)
+    devices.printer_status(port, links=scripted_links)
+    ScriptedTransport.instances[0].replies = {**LEVELING, "G29": ["Error:Probing failed"]}
+    job = devices.start_leveling(port, probe=True, links=scripted_links)
+    job.thread.join(5)
+    assert job.stage == "failed" and "Probing failed" in job.error
+    assert job.record is None and devices.leveling_records(port) == []
+    log = scripted_links.log_for(port).since(0)["entries"]
+    assert any(e["kind"] == "sys" and "bed reading failed" in e["text"] for e in log)
+
+
+def test_leveling_routes(fake_arduino_cli, fresh_task_runner, scripted_links):
+    c = TestClient(app)
+    port = "/dev/ttyFAKE1"
+    assert c.get("/firmware/printers/level", params={"port": port}).json() == {
+        "port": port,
+        "running": False,
+        "stage": None,
+    }
+    assert c.get("/firmware/printers/leveling", params={"port": port}).json() == []
+    assert c.get("/firmware/printers/leveling/nope").status_code == 404
+    assert c.get("/firmware/printers/level", params={"port": "bad port"}).status_code == 422
+
+    r = c.post("/firmware/printers/level", json={"port": port, "probe": True})
+    assert r.status_code == 409 and "arm control" in r.json()["detail"]
+    c.post("/firmware/printers/control", json={"port": port, "armed": True})
+    c.get("/firmware/printers/status", params={"port": port})  # opens the link
+    ScriptedTransport.instances[0].replies = LEVELING
+    r = c.post("/firmware/printers/level", json={"port": port, "probe": True, "note": "first"})
+    assert r.status_code == 202 and r.json()["kind"] == "leveling"
+    for _ in range(500):
+        job = c.get("/firmware/printers/level", params={"port": port}).json()
+        if not job["running"]:
+            break
+        time.sleep(0.01)
+    assert job["stage"] == "saved" and job["record_id"]
+    records = c.get("/firmware/printers/leveling", params={"port": port}).json()
+    assert len(records) == 1 and records[0]["id"] == job["record_id"]
+    assert records[0]["note"] == "first" and records[0]["stats"]["rows"] == 3
+    assert "lines" not in records[0] and "subdivided" not in records[0]
+    full = c.get(f"/firmware/printers/leveling/{job['record_id']}").json()
+    assert full["mesh"][2][2] == 0.25 and len(full["subdivided"]) == 5
+    assert full["lines"][-1].startswith("ok T:")  # the temperatures, last of the reading
+    assert c.get("/firmware/printers/leveling").json()[0]["port"] == port

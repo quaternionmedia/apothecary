@@ -80,6 +80,20 @@
         #log .rx.temp { color: #c9b98a; }
         #log .err { color: var(--bad); }
         .empty { color: var(--ink-3); font-style: italic; }
+        /* Bed level: the mesh as a heatmap, its numbers, the history */
+        #level-card .row { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; margin: 0.3rem 0; font-size: 0.78rem; color: var(--ink-2); }
+        #level-card button { font: inherit; font-size: 0.75rem; background: #232823; color: var(--ink); border: 1px solid #3a443a; border-radius: 4px; padding: 0.2rem 0.5rem; cursor: pointer; }
+        #level-card button:hover { background: #2f382f; }
+        #level-card button.warm { border-color: #7a5a1a; }
+        #level-card .job { color: var(--warn); font-variant-numeric: tabular-nums; }
+        #mesh { display: grid; gap: 2px; margin: 0.4rem 0; max-width: 360px; }
+        #mesh .cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font: 0.62rem ui-monospace, SFMono-Regular, Menlo, monospace; color: #0f120f; border-radius: 2px; }
+        #level-card .stats { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; color: var(--ink-2); line-height: 1.6; }
+        #level-card .stats b { color: var(--ink); }
+        #level-history { font-size: 0.74rem; color: var(--ink-2); max-height: 7rem; overflow: auto; margin-top: 0.3rem; }
+        #level-history a { color: var(--tx); margin-left: 0.4rem; }
+        #level-history .pick { cursor: pointer; }
+        #level-history .pick:hover, #level-history .pick.on { color: var(--ink); }
         /* Control: a latched overlay. Nothing in it exists in the DOM as enabled until the latch is armed. */
         .top label.ctl { display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; color: var(--ink-2); padding: 0.15rem 0.5rem; border: 1px solid #3a443a; border-radius: 4px; }
         .top label.ctl.armed { border-color: #7a5a1a; color: var(--warn); background: #2a2410; }
@@ -142,6 +156,22 @@
                 <div class="card"><div class="k">SD print</div><div class="v" id="c-sd">—</div><div class="s" id="c-sd-s"></div><div class="bar sd"><i id="b-sd" style="width:0"></i></div></div>
                 <div class="card"><div class="k">Endstops · filament</div><div class="chips" id="c-stops"><span class="empty">—</span></div></div>
                 <div class="card wide"><div class="k">Board · link</div><div class="kv" id="c-board">—</div></div>
+                <div class="card wide" id="level-card">
+                    <div class="k">Bed level <span class="s" id="level-note"></span></div>
+                    <div class="row">
+                        <button type="button" id="level-probe" class="warm" title="G28, G29, then read the mesh, the probe offset and the temperatures; saved as a record. Moves the machine: control must be armed. ⌗ Control › Level › Probe">▤ Probe bed</button>
+                        <button type="button" id="level-read" title="Read the stored mesh (M420 V), the probe offset and the temperatures without moving; saved as a record">Read mesh</button>
+                        <span class="job" id="level-job"></span>
+                        <span class="grow"></span>
+                        <button type="button" data-corner="FL" title="Move the nozzle to the front-left corner at paper height, for a tramming check">◣ FL</button>
+                        <button type="button" data-corner="FR" title="Front right, paper height">◢ FR</button>
+                        <button type="button" data-corner="BL" title="Back left, paper height">◤ BL</button>
+                        <button type="button" data-corner="BR" title="Back right, paper height">◥ BR</button>
+                    </div>
+                    <div id="mesh"></div>
+                    <div class="stats" id="level-stats"><span class="empty">no reading yet — Read mesh, or arm control and Probe bed</span></div>
+                    <div id="level-history"></div>
+                </div>
                 <div class="card wide" id="view-card" hidden>
                     <div class="k">Board in its printer <span class="s" id="view-note"></span></div>
                     <div id="board-view" style="height: 240px; border-radius: 4px; overflow: hidden;"></div>
@@ -262,7 +292,7 @@
             const offline = st.state === "offline";
             $("dot").className = "dot " + (offline ? "bad" : "on");
             $("c-state").innerHTML = offline ? '<span class="bad">offline</span>' : (st.state === "printing" ? '<span class="ok">printing</span>' : (st.heating ? '<span class="warn">heating</span>' : "idle"));
-            $("c-state-s").textContent = offline ? (st.raw[0] || "") : `polled ${new Date(st.polled_at).toLocaleTimeString()}`;
+            $("c-state-s").textContent = st.job ? `${st.job.kind}: ${st.job.stage}` : (offline ? (st.raw[0] || "") : `polled ${new Date(st.polled_at).toLocaleTimeString()}`);
             const hot = st.hotends[0];
             $("c-hot").innerHTML = heater(hot); $("c-hot-s").textContent = hot && hot.power != null ? `power ${hot.power}/127` : "";
             $("b-hot").style.width = hot && hot.target > 0 ? Math.min(100, hot.actual / hot.target * 100).toFixed(0) + "%" : "0";
@@ -406,6 +436,7 @@
                 if (gen !== state.gen) return;  // the user switched ports meanwhile
                 state.status = st; pushHistory(st); renderStatus(); renderChart();
                 if (st.position) window.dispatchEvent(new CustomEvent("apothecary:position", { detail: { position: st.position, source: "poll" } }));
+                window.dispatchEvent(new CustomEvent("apothecary:status", { detail: st }));
                 if (st.control) applyControlState(st.control);
                 const hadLink = !!(state.info && state.info.link);
                 if (!state.info || hadLink !== !!st.held) {
@@ -447,6 +478,7 @@
             if (!port) return;
             $("ident").textContent = "connecting…";
             loadCodes();
+            loadLevel();
             try { await loadInfo(); } catch (e) { logLine("sys", e.message); }
             await pollOnce();
             schedule();
@@ -600,9 +632,97 @@
 
         // The ring (below) drives the same functions the buttons do, so a verb
         // chosen by its address goes through the same chain, latch and confirm.
+        // --- bed level: probe or read, show the mesh, keep the records -----------------------
+        const level = { records: [], shown: null, timer: null, volume: [220, 220, 250] };
+        window.addEventListener("apothecary:where", (ev) => { if (ev.detail && ev.detail.printer && ev.detail.printer.build_volume) level.volume = ev.detail.printer.build_volume; });
+        function cornerLines(which) {
+            // Paper height at the four corners, inset from the edges; lifted first so a
+            // nozzle never drags. Absolute moves; the allowlist bounds them.
+            const [vx, vy] = level.volume, inset = 30, z = 0.2, f = 3000;
+            const x = which[1] === "L" ? inset : Math.round(vx - inset);
+            const y = which[0] === "F" ? inset : Math.round(vy - inset);
+            return ["G90", `G1 Z5 F${f}`, `G1 X${x} Y${y} F${f}`, `G1 Z${z} F${Math.min(f, 600)}`];
+        }
+        function heat(v, lo, hi) {
+            // Blue below the mean, amber above: the same two hues as the chart, so a
+            // low corner reads as "bed" and a high one as "hotend" without a key.
+            const t = hi > lo ? (v - lo) / (hi - lo) : 0.5;
+            const a = [0x6f, 0xb3, 0xe8], b = [0xe8, 0xb0, 0x4a];
+            return `rgb(${a.map((c, i) => Math.round(c + (b[i] - c) * t)).join(",")})`;
+        }
+        function renderLevel() {
+            const rec = level.shown;
+            const meshEl = $("mesh"), statsEl = $("level-stats");
+            if (!rec || !rec.mesh || !rec.mesh.length) {
+                meshEl.innerHTML = ""; meshEl.style.gridTemplateColumns = "";
+                statsEl.innerHTML = '<span class="empty">no reading yet — Read mesh, or arm control and Probe bed</span>';
+            } else {
+                const st = rec.stats || {};
+                const rows = rec.mesh, cols = rows[0].length;
+                meshEl.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+                // Drawn as the bed lies: the last row printed is the back of the bed, so it goes on top.
+                meshEl.innerHTML = [...rows].reverse().map((row) => row.map((v) => `<div class="cell" style="background:${heat(v, st.min, st.max)}" title="${v.toFixed(3)} mm">${v.toFixed(2)}</div>`).join("")).join("");
+                const c = st.corners || {};
+                statsEl.innerHTML = `${esc(rec.method)} · ${new Date(rec.at).toLocaleString()} · range <b>${(st.range ?? 0).toFixed(3)}</b> mm · tilt X <b>${(st.tilt_x ?? 0).toFixed(3)}</b> Y <b>${(st.tilt_y ?? 0).toFixed(3)}</b> mm across the bed<br>`
+                    + `corners vs mean: FL <b>${(c.front_left ?? 0).toFixed(3)}</b> FR <b>${(c.front_right ?? 0).toFixed(3)}</b> BL <b>${(c.back_left ?? 0).toFixed(3)}</b> BR <b>${(c.back_right ?? 0).toFixed(3)}</b> · leveling ${rec.leveling_on == null ? "?" : (rec.leveling_on ? "on" : "off")}`
+                    + (rec.probe_offset ? ` · probe offset X${rec.probe_offset.x} Y${rec.probe_offset.y} Z${rec.probe_offset.z}` : "")
+                    + (rec.bed_c != null ? ` · bed ${rec.bed_c.toFixed(1)}°` : "") + (rec.hotend_c != null ? ` hotend ${rec.hotend_c.toFixed(1)}°` : "")
+                    + (rec.note ? `<br>note: ${esc(rec.note)}` : "");
+            }
+            $("level-history").innerHTML = level.records.length
+                ? level.records.map((r) => `<div><span class="pick ${level.shown && r.id === level.shown.id ? "on" : ""}" data-id="${esc(r.id)}">${new Date(r.at).toLocaleString()} · ${esc(r.method)} · range ${(r.stats && r.stats.range != null ? r.stats.range : 0).toFixed(3)} mm</span><a href="${BASE}/firmware/printers/leveling/${encodeURIComponent(r.id)}" download="${esc(r.id)}.json" title="The record as JSON, with every line the firmware said">⤓ log</a></div>`).join("")
+                : "";
+        }
+        async function loadLevel() {
+            if (!state.port) { level.records = []; level.shown = null; renderLevel(); return; }
+            try {
+                level.records = await api(`/firmware/printers/leveling?port=${encodeURIComponent(state.port)}`);
+                if (!level.shown || !level.records.some((r) => r.id === level.shown.id)) level.shown = level.records[0] || null;
+            } catch (e) { level.records = []; }
+            renderLevel();
+        }
+        async function watchLevelJob() {
+            clearTimeout(level.timer);
+            try {
+                const job = await api(`/firmware/printers/level?port=${encodeURIComponent(state.port)}`);
+                $("level-job").textContent = job.running ? `${job.stage}…` : (job.error ? `failed: ${job.error}` : "");
+                if (job.running) { level.timer = setTimeout(watchLevelJob, 1000); return; }
+                if (job.record_id) { await loadLevel(); level.shown = level.records.find((r) => r.id === job.record_id) || level.shown; renderLevel(); }
+                await pollOnce();
+            } catch (e) { $("level-job").textContent = e.message; }
+        }
+        async function startLevel(probe) {
+            if (!state.port) return;
+            if (probe && !ctl.armed) { logLine("sys", "probing moves the machine: arm control first"); return; }
+            if (probe && !confirm(`Home and probe the bed on ${state.port}?\nThe nozzle will travel the whole bed.`)) return;
+            try {
+                const job = await post("/firmware/printers/level", { port: state.port, probe });
+                $("level-job").textContent = `${job.stage}…`;
+                level.timer = setTimeout(watchLevelJob, 800);
+            } catch (e) { logLine("sys", "bed reading: " + e.message); $("level-job").textContent = e.message; }
+        }
+        $("level-probe").onclick = () => startLevel(true);
+        $("level-read").onclick = () => startLevel(false);
+        $("level-history").addEventListener("click", (ev) => {
+            const pick = ev.target.closest(".pick"); if (!pick) return;
+            level.shown = level.records.find((r) => r.id === pick.dataset.id) || level.shown; renderLevel();
+        });
+        $("level-card").addEventListener("click", (ev) => {
+            const b = ev.target.closest("button[data-corner]"); if (!b) return;
+            if (!ctl.armed) { logLine("sys", "a corner move needs control armed"); return; }
+            enqueue(cornerLines(b.dataset.corner));
+        });
+        // The state card says when a reading holds the port.
+        window.addEventListener("apothecary:status", (ev) => {
+            const st = ev.detail; const job = st && st.job;
+            if (job && job.kind === "leveling") { $("level-job").textContent = `${job.stage}…`; if (!level.timer) level.timer = setTimeout(watchLevelJob, 1000); }
+        });
+        $("port").addEventListener("change", loadLevel);
+
         window.apothecaryMonitor = {
             state, ctl, arm, jog, estop, enqueue, sendControl, fillTemplate, pollOnce, loadPorts, logLine, schedule,
             identify: () => $("identify").onclick(),
+            level: { start: startLevel, corner: (which) => enqueue(cornerLines(which)), lines: cornerLines, records: () => level.records, shown: () => level.shown, load: loadLevel },
         };
 
         loadPorts().then(() => { if (state.port) selectPort(state.port); });
@@ -627,6 +747,7 @@
             if (port !== viewPort) return;  // the user moved on while we asked
             if (!where) { card.hidden = true; return; }
             card.hidden = false;
+            window.dispatchEvent(new CustomEvent("apothecary:where", { detail: where }));  // the level card sizes its corners from it
             $("view-note").textContent = ` · ${where.site} › ${(where.printer || where.board).path}`;
             view = mountBoardView($("board-view"), { base: BASE, where, onNote: (t) => { $("view-note").textContent += ` · ${t}`; } });
             const st = window.apothecaryMonitor.state.status;
@@ -685,6 +806,9 @@
             "control:sd-pause": () => "M25",
             "control:sd-abort": () => "M524",
             "control:motors-off": () => "M84",
+            "control:break-wait": () => "M108",
+            "control:mesh-on": () => "M420 S1",
+            "control:mesh-off": () => "M420 S0",
             "control:quickstop": () => "M410",
         };
         const CONFIRM = { "control:sd-abort": "Abort the SD print?" };
@@ -696,6 +820,10 @@
             if (action === "control:estop") { await m.estop(); return; }
             if (action === "control:arm") { await m.arm(true); return; }
             if (action === "control:disarm") { await m.arm(false); return; }
+            const corner = /^control:corner:([FB][LR])$/.exec(action);
+            if (corner) { if (!m.ctl.armed) { m.logLine("sys", "a corner move needs control armed"); return; } m.level.corner(corner[1]); return; }
+            if (action === "level:probe") { await m.level.start(true); return; }
+            if (action === "level:read") { await m.level.start(false); return; }
             if (action in LINES) {
                 if (!m.ctl.armed) { m.logLine("sys", `${intent.label} (⌗${intent.address}): control is not armed`); return; }
                 await m.sendControl(LINES[action](), CONFIRM[action]);
@@ -724,7 +852,7 @@
             "M106 S{h-fan}": "control:fan-on", "M107": "control:fan-off",
             "G28": "control:home", "G28 X Y": "control:home-xy", "G28 Z": "control:home-z",
             "M24": "control:sd-resume", "M25": "control:sd-pause", "M524": "control:sd-abort", "M84": "control:motors-off",
-            "M410": "control:quickstop",
+            "M410": "control:quickstop", "M108": "control:break-wait", "M420 S1": "control:mesh-on", "M420 S0": "control:mesh-off",
         };
         function pairs() {
             const out = [];
@@ -739,6 +867,9 @@
             out.push([$("reconnect"), "device:reconnect"]);
             out.push([$("reset"), "device:reset"]);
             out.push([$("release"), "device:release"]);
+            out.push([$("level-probe"), "level:probe"]);
+            out.push([$("level-read"), "level:read"]);
+            for (const b of $("level-card").querySelectorAll("button[data-corner]")) out.push([b, `control:corner:${b.dataset.corner}`]);
             return out;
         }
 
