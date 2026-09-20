@@ -2469,6 +2469,19 @@
                 return node;
             }
 
+            // Select a piece by its dotted path from anywhere beneath the
+            // focus: open every Contents branch above it so its row is on
+            // screen, then select it. What a ring's `select:` intent does.
+            // Returns whether the path was one this level can reach.
+            selectPath(path) {
+                if (!this.renderNodeByKey[path]) return false;
+                const parts = path.split('.');
+                for (let i = 1; i < parts.length; i++) this.treeExpanded.add(parts.slice(0, i).join('.'));
+                this.renderContentsList(this.currentFocusNode());
+                this.selectChild(path);
+                return true;
+            }
+
             // Re-render only what shows device state: the tree badges and
             // the Selected panel. Cheaper than renderFocus() and keeps the
             // 3D view untouched. Used after a pin/unpin.
@@ -2622,12 +2635,7 @@
                 el.querySelector('.dev-poll')?.addEventListener('click', (e) => this.pollNow(e.currentTarget.dataset.port));
                 el.querySelector('.dev-via')?.addEventListener('click', (e) => {
                     e.preventDefault();
-                    const target = e.currentTarget.dataset.path;
-                    // Expand every ancestor row so the board's row is on screen, then select it.
-                    const parts = target.split('.');
-                    for (let i = 1; i < parts.length; i++) this.treeExpanded.add(parts.slice(0, i).join('.'));
-                    this.renderContentsList(this.currentFocusNode());
-                    if (this.renderNodeByKey[target]) this.selectChild(target);
+                    this.selectPath(e.currentTarget.dataset.path);
                 });
                 el.querySelector('.dev-rescan')?.addEventListener('click', () => this.rescanDevices());
                 const manualIn = el.querySelector('.dev-manual');
@@ -3307,10 +3315,16 @@
             context: { pointing: 'node', targets: [path], where: at || { x: 0, y: 0 } },
             site: viewer.siteName, device: deviceFor(path), at,
         });
-        const canvasSpec = (at) => ({
-            context: { pointing: 'canvas', targets: [], where: at || { x: 0, y: 0 } },
-            site: viewer.siteName, at,
-        });
+        // The canvas ring stands on the level you are looking at: its Pieces
+        // are that node's children and Up steps back out. At the root the
+        // target list is empty, and the resolver offers no Up.
+        const canvasSpec = (at) => {
+            const focus = viewer.focusPath.join('.');
+            return {
+                context: { pointing: 'canvas', targets: focus ? [focus] : [], where: at || { x: 0, y: 0 } },
+                site: viewer.siteName, at,
+            };
+        };
 
         // Right-click on a Contents row or on a piece in the 3D view opens the
         // node ring for that piece (and selects it, so the panel agrees); on
@@ -3348,7 +3362,14 @@
             const port = intent.device ? intent.device.port : null;
             const tail = ` (⌗${intent.address})`;
             try {
-                if (action === 'zoom-in') {
+                if (action.startsWith('select:')) {
+                    const target = action.slice('select:'.length);
+                    if (viewer.selectPath(target)) viewer.setStatus(`Selected ${target}${tail}`, 'success');
+                    else viewer.setStatus(`${target} is not at this level${tail}`, 'error');
+                } else if (action === 'zoom-out') {
+                    viewer.zoomOut();
+                    viewer.setStatus(`Up${tail}`, 'success');
+                } else if (action === 'zoom-in') {
                     const name = path.split('.').pop();
                     if (viewer.currentFocusNode().children.some((c) => c.name === name)) viewer.zoomIn(name);
                     else if (viewer.renderNodeByKey[path]) viewer.selectChild(path);
@@ -3410,6 +3431,13 @@
         // button it names. Re-applied whenever the panel is redrawn.
         const rings = new Map();
         let lastRing = null;
+        async function ringForCanvas() {
+            if (!viewer.siteName) return null;
+            const spec = canvasSpec(null);
+            const key = JSON.stringify({ canvas: spec.context.targets, s: spec.site });
+            if (!rings.has(key)) rings.set(key, resolveRing({ base: BASE, context: spec.context, site: spec.site }).catch(() => null));
+            return rings.get(key);
+        }
         async function ringForSelected() {
             if (!viewer.siteName || !viewer.selectedName) return null;
             const spec = nodeSpec(viewer.selectedName, null);
@@ -3424,6 +3452,16 @@
             for (const [selector, action] of DEVICE_VERBS) {
                 for (const el of document.querySelectorAll(selector)) pairs.push([el, action]);
             }
+            for (const el of document.querySelectorAll('.zoom-in-btn')) pairs.push([el, 'zoom-in']);
+            annotate(ring, pairs);
+        }
+        // The list, from the canvas ring: each row at this level is a piece the
+        // ring's Pieces cell reaches, and the step-out button is its Up.
+        function annotateList(ring) {
+            if (!ring) return;
+            const pairs = [];
+            for (const li of viewer.contentsEl.querySelectorAll('li[data-path]')) pairs.push([li, `select:${li.dataset.path}`]);
+            pairs.push([viewer.zoomOutBtn, 'zoom-out']);
             annotate(ring, pairs);
         }
         let pending = null;
@@ -3431,10 +3469,12 @@
             if (pending) return;
             pending = Promise.resolve().then(async () => {
                 pending = null;
-                const ring = await ringForSelected();
-                if (ring) annotateControls(ring);
+                const [forSelected, forCanvas] = await Promise.all([ringForSelected(), ringForCanvas()]);
+                if (forSelected) annotateControls(forSelected);
+                if (forCanvas) annotateList(forCanvas);
             });
         }
+        new MutationObserver(refreshAddresses).observe(viewer.contentsEl, { childList: true });
         new MutationObserver(refreshAddresses).observe(viewer.selectedBodyEl, { childList: true, subtree: true });
         // Only `hidden`: the annotation itself writes attributes in there, and
         // watching those would be a loop.

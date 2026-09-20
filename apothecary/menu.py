@@ -533,7 +533,7 @@ def resolve(
     board itself.
     """
     if context.pointing is Pointing.CANVAS:
-        return _canvas_ring(site, site_names, groups)
+        return _canvas_ring(context, site, site_names, groups)
     if context.pointing is Pointing.NODE:
         return _node_ring(context, site, words, device)
     if context.pointing is Pointing.SELECTION:
@@ -601,12 +601,64 @@ def _bucket(names: Sequence[str]) -> List[Tuple[str, List[str]]]:
     return list(zip(heads, chunks, strict=True))
 
 
+def _pieces(prefix: str, parent: str, nodes: Sequence[Assembly]) -> Optional[Option]:
+    """One option that opens the pieces beneath a node, each choosable by digit.
+
+    The same grouping rule as `_grouped`, but a piece is named by its dotted
+    path -- the identity everything else in this tool already uses -- so
+    choosing one is `select:<path>`, and the label is the name alone,
+    shortened, with no two reading the same. Nothing here is a verb: this is
+    the Contents list, reachable from the ring.
+    """
+    if not nodes:
+        return None
+    by_name = {node.name: node for node in nodes}
+    names = sorted(by_name)
+    path_of = {name: f"{parent}.{name}" if parent else name for name in names}
+
+    def leaves(members: Sequence[str]) -> List[Option]:
+        return [
+            Option(id=f"select:{path_of[name]}", label=label, action=f"select:{path_of[name]}")
+            for name, label in zip(members, distinct(members), strict=True)
+        ]
+
+    if len(names) <= MOST_OPTIONS:
+        return Option(id=prefix, label=shorten(prefix), children=leaves(names))
+    if len(names) > MOST_OPTIONS * MOST_OPTIONS:
+        raise RingTooFull(
+            f"{len(names)} pieces under {parent or 'the root'!r}, and two levels of "
+            f"grouping hold {MOST_OPTIONS * MOST_OPTIONS}. This needs searching, not "
+            "a bigger menu."
+        )
+    return Option(
+        id=prefix,
+        label=shorten(prefix),
+        children=[
+            Option(id=f"{prefix}:group{index}", label=head, children=leaves(members))
+            for index, (head, members) in enumerate(_bucket(names))
+        ],
+    )
+
+
 def _canvas_ring(
-    site: Optional[Assembly], site_names: Sequence[str], groups: Sequence[str]
+    context: Context,
+    site: Optional[Assembly],
+    site_names: Sequence[str],
+    groups: Sequence[str],
 ) -> Ring:
+    """The ring on empty canvas: the pieces at this level, the way back up, and the rest.
+
+    `context.targets[0]`, when given, is the path the viewer is zoomed into;
+    Pieces lists that node's children and Up steps back out. At the root
+    there is no Up, because there is nothing above.
+    """
+    focus_path = context.targets[0] if context.targets else ""
+    focus = _find(site, focus_path) if site and focus_path else site
     options = [
         option
         for option in (
+            _pieces("Pieces", focus_path, focus.children if focus else []),
+            Option(id="up", label="Up", action="zoom-out") if focus_path else None,
             _grouped("Site", "site", site_names),
             _grouped("Group", "group", groups),
             Option(id="fit", label="Fit", action="fit"),
@@ -614,7 +666,8 @@ def _canvas_ring(
         )
         if option is not None
     ]
-    return Ring(title=shorten(site.name) if site else None, options=options)
+    title = shorten(focus.name) if focus is not None else (shorten(site.name) if site else None)
+    return Ring(title=title, options=options)
 
 
 def _node_ring(
@@ -649,6 +702,16 @@ def _node_ring(
         options.append(Option(id="stl", label="Get shape", action="render-stl"))
 
     options.append(Option(id="why", label="Why this", action="explain"))
+
+    # Navigation: the pieces inside this one, and the one it is inside.
+    # Selecting, not zooming -- a chosen piece becomes the ring's next subject.
+    if node is not None:
+        into = _pieces("Into", path, node.children)
+        if into is not None:
+            options.append(into)
+    if "." in path:
+        parent = path.rsplit(".", 1)[0]
+        options.append(Option(id="up", label="Up", action=f"select:{parent}"))
     return Ring(title=shorten(path or (node.name if node else "")), options=options)
 
 
@@ -856,6 +919,9 @@ CARRIED_BY: Dict[str, Carries] = {
     "fit": Carries.VIEWER,
     "fit-selection": Carries.VIEWER,
     "zoom-in": Carries.VIEWER,
+    "zoom-out": Carries.VIEWER,
+    # Choosing a piece from the ring is what a click on the Contents list is.
+    "select": Carries.VIEWER,
     "explain": Carries.VIEWER,
     # Taking hold of a piece happens under a finger. The commit that follows it
     # is a change to the arrangement and is not on any ring yet -- when it

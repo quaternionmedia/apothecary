@@ -346,6 +346,13 @@ RING_BACKED: Dict[str, str] = {
     "cmd:M524": "control:sd-abort",
     "cmd:M84": "control:motors-off",
     "cmd:M410": "control:quickstop",
+    # Navigation: the list rows, the step-out button and the go-in button are
+    # what the canvas ring's Pieces and Up and the node ring's Zoom in do.
+    "zoom-out-btn": "zoom-out",
+    "zoom-in-btn": "zoom-in",
+    "li:click:selectChild": "select:printer_1",
+    "zoomOutBtn:click:zoomOut": "zoom-out",
+    "zoomInLink:click:zoomIn": "zoom-in",
     "reconnect": "device:reconnect",
     "reset": "device:reset",
     "release": "device:release",
@@ -449,7 +456,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "devPin:click:setNodeDevice": (WIDGET, WHAT_IS_THERE, "pinning the chosen board"),
     "devQuery:click:queryPort": (WIDGET, WHAT_YOU_SEE, "asking the chosen board what it is"),
     "devPoll:click:pollNow": (WIDGET, WHAT_YOU_SEE, "polling the pinned printer once"),
-    "devVia:click:split": (WIDGET, WHAT_YOU_SEE, "going to the piece inside that holds the board"),
+    "devVia:click:selectPath": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "going to the piece inside that holds the board",
+    ),
     "devRescan:click:rescanDevices": (WIDGET, WHAT_YOU_SEE, "looking for boards again"),
     "devPinManual:click:pinManual": (WIDGET, WHAT_IS_THERE, "pinning the typed board"),
     "manualIn:keydown:pinManual": (WIDGET, WHAT_IS_THERE, "pinning the typed board, by Enter"),

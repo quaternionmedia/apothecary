@@ -86,7 +86,7 @@ def test_every_option_comes_back_with_its_cell():
     )
     assert answer.status_code == 200, answer.text
     cells = [option["cell"] for option in answer.json()["options"]]
-    assert cells == [8, 6, 2, 4][: len(cells)]
+    assert cells == [8, 6, 2, 4, 9, 3, 1, 7][: len(cells)]
     assert 5 not in cells
 
 

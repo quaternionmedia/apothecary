@@ -840,3 +840,84 @@ if __name__ == "__main__":
         print(f"wrote {CONFORMANCE}")
     else:
         print(json.dumps(nine_cells(), indent=2))
+
+
+# --- navigating and choosing pieces from the ring ------------------------------------
+
+
+def _garage():
+    from apothecary.example_hierarchy import create_example_site
+
+    return create_example_site()
+
+
+def test_the_canvas_ring_lists_the_pieces_at_this_level_and_the_way_up():
+    """At the root, Pieces and no Up; zoomed in, Pieces of the focus and Up."""
+    from apothecary.menu import carried_by
+
+    root = resolve(Context(pointing=Pointing.CANVAS), _garage())
+    labels = [o.label for o in root.options]
+    assert labels[0] == "Pieces" and "Up" not in labels
+    pieces = root.options[0]
+    assert pieces.cell == 8 and pieces.children is not None
+    # Thirteen pieces in the garage: two lettered groups, nothing lost.
+    names = sorted(c.name for c in _garage().children)
+    leaves = [leaf for group in pieces.children for leaf in group.children]
+    assert [leaf.action for leaf in leaves] == [f"select:{n}" for n in names]
+    assert all(len(leaf.label) <= LONGEST_LABEL for leaf in leaves)
+    assert carried_by("select:printer_1").name == "VIEWER"
+
+    zoomed = resolve(Context(pointing=Pointing.CANVAS, targets=["printer_1"]), _garage())
+    labels = [o.label for o in zoomed.options]
+    assert labels[:2] == ["Pieces", "Up"]
+    assert zoomed.options[1].action == "zoom-out" and zoomed.options[1].cell == 6
+    inside = zoomed.options[0].children
+    assert [o.action for o in inside] == [
+        "select:printer_1.frame_system",
+        "select:printer_1.gantry_system",
+    ]
+    assert zoomed.title == shorten("printer_1")
+
+
+def test_the_node_ring_goes_into_a_piece_and_up_to_its_parent():
+    top = resolve(Context(pointing=Pointing.NODE, targets=["printer_1"]), _garage())
+    labels = [o.label for o in top.options]
+    assert "Into" in labels and "Up" not in labels  # a top-level piece has no parent
+    into = next(o for o in top.options if o.label == "Into")
+    assert [c.action for c in into.children] == [
+        "select:printer_1.frame_system",
+        "select:printer_1.gantry_system",
+    ]
+
+    board = resolve(
+        Context(pointing=Pointing.NODE, targets=["printer_1.frame_system.mainboard"]), _garage()
+    )
+    labels = [o.label for o in board.options]
+    assert "Into" not in labels  # a leaf holds nothing
+    up = next(o for o in board.options if o.label == "Up")
+    assert up.action == "select:printer_1.frame_system"
+
+    # Every piece is reachable by an address from the root ring, and walks back to itself.
+    root = resolve(Context(pointing=Pointing.CANVAS), _garage())
+    for address, action in every_address(root).items():
+        if action.startswith("select:"):
+            assert walk(root, address).action == action
+
+
+def test_more_than_sixty_four_pieces_is_a_refusal_not_a_bigger_menu():
+    from apothecary.hierarchy import Assembly
+
+    crowd = Assembly(
+        name="crowd",
+        role="site",
+        children=[Assembly(name=f"piece_{i:03d}", role="structure") for i in range(65)],
+    )
+    with pytest.raises(RingTooFull, match="65 pieces"):
+        resolve(Context(pointing=Pointing.CANVAS), crowd)
+    fits = Assembly(
+        name="fits",
+        role="site",
+        children=[Assembly(name=f"piece_{i:03d}", role="structure") for i in range(64)],
+    )
+    pieces = resolve(Context(pointing=Pointing.CANVAS), fits).options[0]
+    assert len(pieces.children) == 8 and all(len(g.children) == 8 for g in pieces.children)

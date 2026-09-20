@@ -7,7 +7,7 @@
 | **State** | the option builder, the two routes and the ring itself are built and tested; the ring addresses nine cells; the viewer's controls of its own: 54, 13 ring-backed; a ring. The monitor page: 51, 24 ring-backed; a ring |
 | **Depends on** | rad is a unification engine — the foundational principle; Photo → shapes → words → placed scenes → links |
 | **Graduates to** | rad host integration for apothecary (qm `project/apothecary`) |
-| **Verified** | Counted by `apothecary census`, which reads `templates/fractal_viewer.html.j2` (and, with `--page`, `templates/monitor.html.j2`) and refuses to give a number when it meets anything unclassified. On 2026-09-19: the viewer has 54 controls of its own, 13 of them also on the ring, four things done to the scene, six places in the lists, three ways of taking hold of a piece, and a ring; the monitor has 51 of its own, 28 of them also on the ring. Twenty was the number when this plan was written, thirty-three when the serial log and the staged numbers arrived, and the docstring of `tests/test_census.py::test_the_page_has_fifty_four_controls_of_its_own` accounts for every rise. |
+| **Verified** | Counted by `apothecary census`, which reads `templates/fractal_viewer.html.j2` (and, with `--page`, `templates/monitor.html.j2`) and refuses to give a number when it meets anything unclassified. On 2026-09-19: the viewer has 54 controls of its own, 15 of them also on the ring, four things done to the scene, six places in the lists, three ways of taking hold of a piece, and a ring; the monitor has 51 of its own, 28 of them also on the ring. Twenty was the number when this plan was written, thirty-three when the serial log and the staged numbers arrived, and the docstring of `tests/test_census.py::test_the_page_has_fifty_four_controls_of_its_own` accounts for every rise. |
 
 ## What
 The viewer today has **twenty controls of its own**: a drop-down of arrangements,
@@ -90,6 +90,19 @@ cell, `apothecary/static/ring.js` draws and keys them, and
 already backs. The governance record for this adoption is *rad host
 integration for apothecary*, and it pends on the rad record's own
 ratification.
+
+**The list, from the ring.** Navigation is the ring's business too, not
+only verbs. The canvas ring's first cell is **Pieces** — every piece at the
+level you are looking at, in groups of a keypad's worth when there are more
+than eight, each named for its first piece, sorted, nothing lost — and a
+digit selects one; below the root the ring's second cell is **Up**. The node
+ring has **Into** (the pieces inside this one) and **Up** (the piece it is
+inside). Choosing is selecting, not zooming: the piece becomes the ring's
+next subject. So `m 8 6 9` from the garage root selects `printer_1` the
+same way every time the garage has those pieces, the Contents rows wear
+their addresses from the canvas ring, and the step-out and go-in buttons
+are ring-backed. Sixty-four pieces at one level is the ceiling; above it the
+resolver refuses, because that needs a search and not a bigger menu.
 
 ## Why now
 Now, and before the photo verbs arrive, because new capability landing into an

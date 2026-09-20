@@ -202,8 +202,14 @@ def test_key_m_opens_the_node_ring_in_its_cells(page: Page, ring_url: str):
     ring = page.locator("#ring-overlay")
     expect(ring).to_be_visible(timeout=5000)
     assert page.locator("#ring-overlay .wedge").count() == 8
-    assert _wedges(page) == {"8": "Zoom in", "6": "Move", "2": "Device", "4": "Why this"}
-    assert page.locator("#ring-overlay .wedge.empty").count() == 4
+    assert _wedges(page) == {
+        "8": "Zoom in",
+        "6": "Move",
+        "2": "Device",
+        "4": "Why this",
+        "9": "Into",
+    }
+    assert page.locator("#ring-overlay .wedge.empty").count() == 3
     assert page.locator("#ring-overlay .hub-digit").text_content() == "5"
     assert _title(page) == "printer_1"
     # Every wedge shows its digit, occupied or not; a parented option shows a chevron.
@@ -227,7 +233,7 @@ def test_the_toolbar_button_and_right_click_open_it_too(page: Page, ring_url: st
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     assert _title(page) == "printer_2"
     # Nothing pinned: no Device option at all, not a greyed one, so Why this moves up a cell.
-    assert _wedges(page) == {"8": "Zoom in", "6": "Move", "2": "Why this"}
+    assert _wedges(page) == {"8": "Zoom in", "6": "Move", "2": "Why this", "4": "Into"}
     expect(page.locator("#contents-list .contents-item[data-path='printer_2']")).to_have_class(
         "contents-item selected"
     )
@@ -388,7 +394,7 @@ def test_the_pointer_uses_the_same_cells(page: Page, ring_url: str):
     expect(page.locator("#ring-overlay .wedge.hot")).to_have_attribute("data-cell", "8")
     page.mouse.move(cx + 72, cy)  # right: cell 6
     expect(page.locator("#ring-overlay .wedge.hot")).to_have_attribute("data-cell", "6")
-    page.mouse.move(cx + 51, cy - 51)  # up-right: cell 9, empty on this ring, so nothing
+    page.mouse.move(cx - 51, cy - 51)  # up-left: cell 7, empty on this ring, so nothing
     expect(page.locator("#ring-overlay .wedge.hot")).to_have_count(0)
     page.mouse.move(cx, cy + 72)
     page.mouse.click(cx, cy + 72)  # down: Device, a submenu
@@ -494,3 +500,79 @@ def test_jog_by_address_on_the_monitor_page(page: Page, ring_url: str):
     page.keyboard.press("7")
     page.keyboard.press("7")
     expect(page.locator("#control")).to_be_hidden(timeout=5000)
+
+
+@pytest.mark.e2e
+def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: str):
+    """The Contents list, from the ring: Pieces lists the level, a digit selects,
+    Into goes down a piece, Up goes back, and a zoomed level's Up steps out."""
+    page.add_init_script(CAPTURE)
+    page.goto(f"{ring_url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    # Nothing selected: m opens the canvas ring, standing on the root.
+    page.keyboard.press("Escape")
+    page.evaluate("() => document.activeElement && document.activeElement.blur()")
+    page.keyboard.press("m")
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    wedges = _wedges(page)
+    assert wedges["8"] == "Pieces" and "Up" not in wedges.values()
+    # Thirteen pieces: grouped in small lettered groups, each named for its
+    # first piece. The page knows the address; the test asks rather than guesses.
+    address = page.evaluate(
+        "() => window.apothecaryRing.addressOf("
+        "window.apothecaryRing.current().root, 'select:printer_1')"
+    )
+    assert address.startswith("8") and len(address) == 3 and "5" not in address
+    page.keyboard.press("8")
+    groups = _wedges(page)
+    assert len(groups) >= 2 and groups["8"].startswith("cnc")  # sorted, named for the first
+    for digit in address[1:]:
+        page.keyboard.press(digit)
+    expect(page.locator("#ring-overlay")).to_have_count(0)
+    intent = _intents(page)[-1]
+    assert intent["action"] == "select:printer_1" and intent["address"] == address
+    expect(page.locator("#selected-body .prop-row", has_text="Name")).to_contain_text("printer_1")
+    # The row it chose wears that address, from the canvas ring.
+    expect(page.locator("#contents-list .contents-item[data-path='printer_1']")).to_have_attribute(
+        "data-address", address, timeout=5000
+    )
+
+    # Into: the node ring lists what is inside; a digit selects it and opens the branch.
+    page.keyboard.press("m")
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    wedges = _wedges(page)
+    into_cell = next(c for c, label in wedges.items() if label == "Into")
+    assert "Up" not in wedges.values()  # a top-level piece has nothing above it
+    page.keyboard.press(into_cell)
+    assert _wedges(page)["8"] == "frame_system"
+    page.keyboard.press("8")
+    expect(page.locator("#selected-body .prop-row", has_text="Name")).to_contain_text(
+        "frame_system"
+    )
+    expect(
+        page.locator("#contents-list .contents-item[data-path='printer_1.frame_system']")
+    ).to_be_visible()
+    page.keyboard.press("m")
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    wedges = _wedges(page)
+    up_cell = next(c for c, label in wedges.items() if label == "Up")
+    page.keyboard.press(up_cell)
+    assert _intents(page)[-1]["action"] == "select:printer_1"
+    expect(page.locator("#selected-body .prop-row", has_text="Name")).to_contain_text("printer_1")
+
+    # Zoomed in, the canvas ring's Pieces are the level's two pieces and Up steps out.
+    page.locator("#contents-list .contents-item[data-path='printer_1']").dblclick()
+    expect(page.locator("#contents-list .contents-item", has_text="gantry_system")).to_be_visible(
+        timeout=10000
+    )
+    # Empty canvas, right-clicked, is the canvas ring whatever is selected.
+    page.locator("#viewer-canvas").click(button="right", position={"x": 8, "y": 8})
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    wedges = _wedges(page)
+    assert wedges["8"] == "Pieces" and wedges["6"] == "Up"
+    expect(page.locator("#zoom-out-btn")).to_have_attribute("data-address", "6", timeout=5000)
+    page.keyboard.press("6")
+    assert _intents(page)[-1]["action"] == "zoom-out"
+    expect(page.locator("#contents-list .contents-item", has_text="workbench")).to_be_visible(
+        timeout=10000
+    )

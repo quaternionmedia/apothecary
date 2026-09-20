@@ -115,7 +115,7 @@ to measure it against:
   `Census.ring_backed()` counts it, and the sentence reads *N controls of
   its own, M of them also on the ring*. The meter is still N; M is the part
   of N that can go.
-- **The viewer:** 54 controls of its own, 13 of them also on the ring
+- **The viewer:** 54 controls of its own, 15 of them also on the ring
   (`test_the_page_has_fifty_four_controls_of_its_own`, whose docstring
   accounts for the twenty-one added since thirty-three). The rise is larger
   than the thirty the refusal named because the census also stopped hiding
@@ -266,7 +266,7 @@ final tip.)
 - **Widgets against the ring -- decided, and now measured.** The ring absorbs
   device control: the Device and Control rings exist, the census reads the
   monitor page as well, and the census reports how many of each page's
-  controls the ring already backs (13 of 54 on the viewer, 28 of 51 on the
+  controls the ring already backs (15 of 54 on the viewer, 28 of 51 on the
   monitor). What remains for a person is the deletions -- each ring-backed
   button that goes takes the meter down by one -- and whether the page's
   plumbing (port, interval, the log's tick-boxes) belongs on a ring at all

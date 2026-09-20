@@ -37,15 +37,20 @@ def test_the_page_has_fifty_four_controls_of_its_own():
     controls on the serial log for identifying a board and asking it for a
     report, and thirteen in the chosen piece's Device section for pinning,
     polling, watching and querying its board. The ring arrived in the same
-    change, and thirteen of the fifty-four are ring-backed: the same verb is a
-    cell of the ring, with its address written on the button. Those thirteen are
-    the ones that can go, and the meter falls as they do. Twelve of the new
-    ones and every old one are not backed by anything yet.
+    change, and fifteen of the fifty-four are ring-backed: the same verb is a
+    cell of the ring, with its address written on the button -- thirteen in
+    the Device section and serial log, and the two navigation buttons (step
+    out, go in) once the ring learned to list pieces and step back up. Those
+    fifteen are the ones that can go, and the meter falls as they do. The
+    Contents rows are ring-backed too (the canvas ring's Pieces cell reaches
+    every row at the current level), but rows are a list, not the meter.
     """
     taken = census.take()
     assert len(taken.controls_of_its_own()) == 54
-    assert len(taken.ring_backed()) == 13
-    assert taken.sentence().startswith("54 controls of its own, 13 of them also on the ring.")
+    assert len(taken.ring_backed()) == 15
+    assert taken.sentence().startswith("54 controls of its own, 15 of them also on the ring.")
+    rows = [f for f in taken.found if f.key == "li:click:selectChild"]
+    assert rows and rows[0].ring_action.startswith("select:")
 
 
 def test_the_monitor_page_is_counted_too():
@@ -372,11 +377,16 @@ def test_every_ring_backed_action_is_one_a_ring_produces_and_somebody_carries():
     on_node = menu.Context(pointing=menu.Pointing.NODE, targets=["p"])
     on_port = menu.Context(pointing=menu.Pointing.DEVICE, targets=["/dev/ttyUSB0"])
     on_canvas = menu.Context(pointing=menu.Pointing.CANVAS)
+    from apothecary.example_hierarchy import create_example_site
+
+    garage = create_example_site()  # the canvas ring's Pieces are real pieces
+    zoomed = menu.Context(pointing=menu.Pointing.CANVAS, targets=["printer_1"])
     rings = [
         menu.resolve(on_node, device=printer),
         menu.resolve(on_port, device=armed),
         menu.resolve(on_port, device=unpinned),
-        menu.resolve(on_canvas, site_names=["garage"]),
+        menu.resolve(on_canvas, garage, site_names=["garage"]),
+        menu.resolve(zoomed, garage),  # Up (zoom-out) exists only below the root
     ]
     offered = menu.every_action(rings)
     for page in census.PAGES:
