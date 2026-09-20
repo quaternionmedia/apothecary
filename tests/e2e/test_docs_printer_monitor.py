@@ -97,6 +97,16 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
         "section says which board speaks for it"
     )
 
+    world_badge = page.locator(".world-badge[data-path='printer_1']")
+    expect(world_badge).to_contain_text("printing", timeout=10000)
+    page.wait_for_timeout(600)
+    docs.step(
+        "The world wears its machines: a badge stands above the printer in the 3D view -- "
+        "state, hotend and bed, progress, a job's stage -- fixed to the printer and following "
+        "it as the camera moves; a click selects it. Inside the printer the nozzle marker "
+        "sits where the board last said, and a bed reading lies over the bed"
+    )
+
     section.locator(".dev-watch").click()
     expect(page.locator("#serial-body .temp").first).to_be_visible(timeout=10000)
     page.wait_for_timeout(2500)

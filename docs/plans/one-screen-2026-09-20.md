@@ -121,10 +121,18 @@ the other two screens follows.
   (the projection layer), `panels.js` (the window manager), the monitor's
   and the bench's widgets as modules under `apothecary/static/widgets/`.
 
-### Phase 1 — Anchors: the world says what is in it
+### Phase 1 — Anchors: the world says what is in it  *(landed 2026-09-20, first slice)*
 
 The viewer gains an anchor layer over its canvas and the first anchored
-things. Nothing moves pages yet.
+things. Nothing moves pages yet. Landed: `anchors.js`, the machine badges
+(printers and devkits), the marks in the world (`machine_marks.js`, shared
+with the monitor's board view), the browser test and the walkthrough page.
+Still open in this phase: the devkit's *hello* on its badge (the listen
+result is the firmware page's own state until Phase 4 shares it); the
+`Machine` cell on a printer's node ring (Device › Monitor, `⌗22`, reaches
+the monitor page today; Phase 3 gives it the popup); a jog sent from the
+monitor page moving the world's nozzle ahead of the poll when both pages
+are open (a cross-page event; Phase 3 makes it one page).
 
 - `apothecary/static/anchors.js`: `mountAnchors(viewer)` keeps a layer of
   HTML elements over the canvas; `anchor(path, el, {offset})` binds one to
@@ -139,8 +147,9 @@ things. Nothing moves pages yet.
   polls the viewer already makes (`↻ Devices`, `siteDevices`, the Device
   section's poll). The Contents row's `🖨 210°/60° 43 %` badge stays; this
   is the same text where the printer is. Click: select the node.
-- **Devkit badges**: a board pinned to a node that announced itself wears
-  its sketch's name and its hello.
+- **Devkit badges**: a board pinned to a node wears what it is and the
+  sketch last flashed to it; its hello once the bench's listen result is
+  shared state (Phase 4).
 - **The board in the world**: `board_view.js`'s drawing -- the nozzle
   marker that tweens and moves ahead of a jog, the bed relief, the build
   volume -- becomes a *decoration* the world scene attaches at a printer

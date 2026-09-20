@@ -203,6 +203,20 @@
         .contents-item .dev-badge.off { background: #2a2424; color: #b08a8a; border-color: #3f2f2f; }
         .contents-item .dev-badge.printing { background: #2a2410; color: #ffcc66; border-color: #4a3f1a; }
         .contents-item .dev-badge.via { opacity: 0.75; }
+        /* Anchors: badges fixed to a point in the world (anchors.js) */
+        .world-badge {
+            font: 0.7rem/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; cursor: pointer;
+            padding: 0.2rem 0.5rem; border-radius: 6px; background: rgba(20, 28, 20, 0.92); color: #b8e6b8; border: 1px solid #3a4a3a;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5); user-select: none; transition: opacity 0.2s;
+        }
+        .world-badge::after { content: ""; position: absolute; left: 50%; bottom: -6px; margin-left: -5px; border: 5px solid transparent; border-bottom: 0; border-top-color: #3a4a3a; }
+        .world-badge .state { color: #8fc78f; }
+        .world-badge.printing { border-color: #7a5a1a; color: #ffcc66; background: rgba(42, 36, 16, 0.92); }
+        .world-badge.printing::after { border-top-color: #7a5a1a; }
+        .world-badge.offline { color: #b08a8a; border-color: #3f2f2f; }
+        .world-badge.job { border-color: #4a6fa8; }
+        .world-badge.behind { opacity: 0.45; }
+        .world-badge:hover { opacity: 1; filter: brightness(1.15); }
         .no-selection { color: #666; font-size: 0.85rem; font-style: italic; }
         .zoom-in-btn {
             margin-top: 0.6rem; padding: 0.4rem 0.6rem; border-radius: 4px; cursor: pointer;
@@ -465,6 +479,8 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { TransformControls } from 'three/addons/controls/TransformControls.js';
         import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+        import { mountAnchors } from '/static/anchors.js';
+        import { makeMachineMarks, toScene as marksToScene } from '/static/machine_marks.js';
 
         const BASE_URL = "{{ base_url }}";
         const DEFAULT_SITE = "{{ default_site }}";
@@ -798,6 +814,14 @@
                 this.axesHelper = new THREE.AxesHelper(150);
                 this.scene.add(this.axesHelper);
 
+                // What stands in front of the world (anchors.js) and what a
+                // machine wears in it (machine_marks.js): badges above every
+                // pinned machine, and its nozzle, bed and reading at its node.
+                // Both survive renderFocus(), which clears only the nodes' meshes.
+                this.anchors = mountAnchors({ container: this.canvas.parentElement, canvas: this.canvas, camera: this.camera, scene: this.scene });
+                this.marks = {};       // bearer path -> { marks, port, where }
+                this.whereByPort = {}; // port -> Promise of GET /firmware/printers/where
+
                 this.raycaster = new THREE.Raycaster();
                 this.pointer = new THREE.Vector2();
             }
@@ -882,7 +906,11 @@
                     for (const n of st.synced || []) {
                         if (n.changed && n.site === this.siteName) recoloured = this.applyNodeStatus(n.path, n.status) || recoloured;
                     }
-                    if (touched || recoloured) this.updateDeviceViews();
+                    if (touched || recoloured) { this.updateDeviceViews(); this.syncWorldMarks(); }
+                });
+                // A bed reading saved elsewhere (the monitor page) lands on the marks.
+                window.addEventListener('apothecary:mesh', (ev) => {
+                    for (const m of Object.values(this.marks)) if (m.marks && ev.detail && ev.detail.port === m.port) m.marks.setMesh(ev.detail);
                 });
                 // The overlay identified a board (M115) or rescanned: the
                 // binding rows' device info is stale until re-fetched.
@@ -902,6 +930,8 @@
             animate() {
                 requestAnimationFrame(() => this.animate());
                 this.orbitControls.update();
+                for (const m of Object.values(this.marks)) if (m.marks) m.marks.tick();
+                this.anchors.update();
                 this.renderer.render(this.scene, this.camera);
             }
 
@@ -2402,6 +2432,131 @@
                     if (node && node.status !== 'maintenance' && node.status !== st.state) this.applyNodeStatus(node._path || this.pathOf(node), st.state);
                 }
                 this.updateDeviceViews();
+                this.syncWorldMarks();
+            }
+
+            // The path of the node a poll on `path` drives (statusBearerFor, as a path).
+            bearerPathFor(path) {
+                const parts = path.split('.');
+                for (let depth = parts.length; depth > 0; depth--) {
+                    const candidate = parts.slice(0, depth).join('.');
+                    const node = this.nodeByPath(candidate);
+                    if (node && node.status !== null && node.status !== undefined) return candidate;
+                }
+                return path;
+            }
+
+            // Where a badge stands: the top centre of the node's envelope, in
+            // scene coordinates -- or nowhere while the node is outside the
+            // level being looked at (its badge would float over nothing).
+            anchorPointFor(path) {
+                const node = this.nodeByPath(path);
+                const bounds = node ? envelopeBounds(node) : null;
+                if (!bounds) return null;
+                const focus = this.focusPath.join('.');
+                if (focus && path !== focus && !path.startsWith(focus + '.') && !focus.startsWith(path + '.')) return null;
+                return new THREE.Vector3((bounds.min[0] + bounds.max[0]) / 2, bounds.max[2], (bounds.min[1] + bounds.max[1]) / 2);
+            }
+
+            // One badge above every pinned, connected board, and a printer's
+            // marks (nozzle, bed, reading) at its node -- made once, updated in
+            // place from the same rows the tree badges read, removed when the
+            // pin goes. Called after bindings load and after every poll.
+            syncWorldMarks() {
+                const wanted = new Set();
+                for (const [path, row] of Object.entries(this.bindings)) {
+                    if (!row.device) continue;
+                    const isPrinter = !!row.device.printer;
+                    const anchorPath = isPrinter ? this.bearerPathFor(path) : path;
+                    wanted.add(anchorPath);
+                    let badge = this.anchors.get(anchorPath);
+                    if (!badge) {
+                        badge = document.createElement('div');
+                        badge.className = 'world-badge';
+                        badge.dataset.path = anchorPath;
+                        badge.title = 'Select this piece';
+                        badge.addEventListener('click', () => this.selectPath(anchorPath));
+                        this.anchors.add(anchorPath, badge, () => this.anchorPointFor(anchorPath));
+                    }
+                    this.fillBadge(badge, row, isPrinter);
+                    if (isPrinter && row.device.port) this.ensureMarks(anchorPath, row);
+                }
+                for (const key of this.anchors.keys()) if (!wanted.has(key)) this.anchors.remove(key);
+                for (const [key, m] of Object.entries(this.marks)) if (!wanted.has(key)) { m.marks.destroy(); delete this.marks[key]; }
+            }
+
+            fillBadge(badge, row, isPrinter) {
+                const st = row.printer_status;
+                const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+                badge.classList.remove('printing', 'offline', 'job');
+                if (!isPrinter) {
+                    // What apothecary last flashed to it; what it says it runs is
+                    // the firmware page's to hear, until the bench stands here too.
+                    const rec = row.expected && row.expected.record;
+                    badge.innerHTML = `⚡ ${esc(this.deviceLabel(row.device))}${rec && rec.sketch ? ` · <span class="state">${esc(rec.sketch)}</span>` : ''}`;
+                    return;
+                }
+                if (!st) { badge.innerHTML = `🖨 ${esc(this.deviceLabel(row.device))} · <span class="state">not polled</span>`; return; }
+                const t = st.hotends && st.hotends[0] ? st.hotends[0].actual.toFixed(0) : '?';
+                const b = st.bed ? st.bed.actual.toFixed(0) : '?';
+                const parts = [`🖨 <span class="state">${esc(st.state)}</span>`, `${t}°/${b}°`];
+                if (st.sd_printing && st.sd_progress != null) parts.push(`${(st.sd_progress * 100).toFixed(0)}%`);
+                if (st.job) {
+                    parts.push(st.job.kind === 'print' ? `print ${(st.job.progress * 100).toFixed(0)}%` : `${esc(st.job.kind)}: ${esc(st.job.stage)}`);
+                    badge.classList.add('job');
+                }
+                badge.innerHTML = parts.join(' · ');
+                if (st.state === 'printing') badge.classList.add('printing');
+                if (st.state === 'offline') badge.classList.add('offline');
+            }
+
+            // A printer's marks at its node, from what GET /firmware/printers/where
+            // answers for its port (asked once per port), positioned by each
+            // poll and wearing the newest bed reading.
+            ensureMarks(path, row) {
+                const port = row.device.port;
+                const st = row.printer_status;
+                const have = this.marks[path];
+                if (have) {
+                    if (have.marks && st && st.position) have.marks.setPosition(st.position);
+                    if (have.marks) this.refreshReading(path);
+                    return;
+                }
+                if (this.whereByPort[port] === undefined) {
+                    this.whereByPort[port] = fetch(`${BASE_URL}/firmware/printers/where?port=${encodeURIComponent(port)}`)
+                        .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+                }
+                this.marks[path] = { marks: null, port, pending: true };
+                this.whereByPort[port].then(async (where) => {
+                    if (!this.marks[path] || !this.marks[path].pending) return;
+                    if (!where || !where.printer || !where.printer.build_volume) { delete this.marks[path]; return; }
+                    // The world already draws each printer's build volume (updateBuildVolumeIndicator).
+                    const marks = makeMachineMarks(where.printer, { drawVolume: false });
+                    marks.group.position.copy(marksToScene(where.printer.position));
+                    this.scene.add(marks.group);
+                    const first = this.bindings[row.path] && this.bindings[row.path].printer_status;
+                    if (first && first.position) marks.setPosition(first.position, { immediate: true });
+                    this.marks[path] = { marks, port, where, readingAt: 0, readingId: null };
+                    this.refreshReading(path);
+                });
+            }
+
+            // The newest bed reading for a printer's port, laid over its bed;
+            // asked again at most every few seconds, on the device refresh, so
+            // a reading taken on the monitor page shows up here without a reload.
+            refreshReading(path) {
+                const m = this.marks[path];
+                if (!m || !m.marks || Date.now() - m.readingAt < 5000) return;
+                m.readingAt = Date.now();
+                fetch(`${BASE_URL}/firmware/printers/leveling?port=${encodeURIComponent(m.port)}`)
+                    .then((r) => (r.ok ? r.json() : []))
+                    .then((records) => {
+                        const newest = records[0];
+                        if (this.marks[path] !== m || !newest || newest.id === m.readingId) return;
+                        m.readingId = newest.id;
+                        m.marks.setMesh(newest);
+                    })
+                    .catch(() => {});
             }
 
             // Set `status` on the node at `path` in this.tree and on its render

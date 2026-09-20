@@ -429,6 +429,7 @@ RING_BACKED: Dict[str, str] = {
     "zoom-out-btn": "zoom-out",
     "zoom-in-btn": "zoom-in",
     "li:click:selectChild": "select:printer_1",
+    "badge:click:selectPath": "select:printer_1",
     "zoomOutBtn:click:zoomOut": "zoom-out",
     "zoomInLink:click:zoomIn": "zoom-in",
     "reconnect": "device:reconnect",
@@ -518,6 +519,8 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "chip:click:delete": (LIST, WHAT_YOU_SEE, "a word button that folds and unfolds"),
     "caret:click:delete": (LIST, WHAT_YOU_SEE, "an arrow that opens a branch"),
     "li:click:selectChild": (LIST, WHAT_YOU_SEE, "picking a piece from the list"),
+    # An anchor: a machine's badge standing over it in the world (anchors.js).
+    "badge:click:selectPath": (LIST, WHAT_YOU_SEE, "picking the machine a badge stands over"),
     "li:dblclick:zoomIn": (LIST, WHAT_YOU_SEE, "going into a piece from the list"),
     "rootCrumb:click:jumpTo": (LIST, WHAT_YOU_SEE, "the top of the trail"),
     "crumb:click:jumpTo": (LIST, WHAT_YOU_SEE, "a step on the trail"),

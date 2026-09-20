@@ -751,3 +751,101 @@ def test_a_file_prints_from_here_without_a_card(page: Page, printer_url: str):
     page.locator("#control button[data-cmd='M24']").click()  # leave the card printing for the rest
     page.locator("#ctl-disarm").click()
     expect(page.locator("#control")).to_be_hidden(timeout=3000)
+
+
+@pytest.mark.e2e
+def test_the_world_wears_its_machines(page: Page, printer_url: str):
+    """A pinned printer stands under a badge in the 3D view that follows it as the camera
+    moves and updates within a poll; its nozzle and bed reading are drawn at its node."""
+    page.request.put(
+        f"{printer_url}/sites/garage/nodes/{BOARD}/device", data={"identity": "/dev/ttyFAKE1"}
+    )
+    page.request.delete(f"{printer_url}/sites/garage/nodes/printer_1/device")
+    # Until the board is identified it wears a devkit's badge on its own node; once
+    # it is known to be a printer the badge stands over the printer it drives.
+    page.request.post(
+        f"{printer_url}/firmware/devices/identify", data={"port": "/dev/ttyFAKE1"}
+    )
+    page.goto(f"{printer_url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    badge = page.locator(".world-badge[data-path='printer_1']")
+    expect(badge).to_be_visible(timeout=15000)
+    expect(badge).to_contain_text("🖨")
+    assert page.evaluate("() => window.fractalViewer.anchors.keys()") == ["printer_1"]
+
+    # Fixed to the printer: drawn where the top of its envelope projects, to the pixel.
+    def projected():
+        return page.evaluate(
+            """() => {
+                const v = window.fractalViewer;
+                const p = v.anchorPointFor('printer_1').project(v.camera);
+                const w = v.canvas.clientWidth, h = v.canvas.clientHeight;
+                const at = v.anchors.at('printer_1');
+                return { x: (p.x + 1) / 2 * w, y: (1 - p.y) / 2 * h, at };
+            }"""
+        )
+
+    got = projected()
+    assert abs(got["at"]["x"] - got["x"]) < 1 and abs(got["at"]["y"] - got["y"]) < 1
+    # The camera moves: the badge is where the printer now projects, within a frame.
+    page.evaluate(  # a pan: camera and target move together, the world slides across
+        "() => { const v = window.fractalViewer; v.camera.position.x += 1500;"
+        " v.orbitControls.target.x += 1500; v.orbitControls.update(); }"
+    )
+    page.wait_for_timeout(50)
+    moved = projected()
+    assert abs(moved["at"]["x"] - got["at"]["x"]) > 20
+    assert abs(moved["at"]["x"] - moved["x"]) < 1 and abs(moved["at"]["y"] - moved["y"]) < 1
+
+    # A poll lands in the badge within the poll interval, and moves the nozzle marker.
+    t0 = time.monotonic()
+    page.evaluate("() => window.fractalViewer.pollNow('/dev/ttyFAKE1')")
+    expect(badge).to_contain_text("printing", timeout=POLL_S * 1000 + 3000)
+    assert time.monotonic() - t0 < POLL_S + 3
+    expect(badge).to_contain_text("°/")
+    page.wait_for_function(
+        "() => { const m = window.fractalViewer.marks['printer_1']; return m && m.marks; }",
+        timeout=10000,
+    )
+    st = page.evaluate(
+        "() => window.fractalViewer.bindings['printer_1.frame_system.mainboard'].printer_status"
+    )
+    target = page.evaluate("() => window.fractalViewer.marks['printer_1'].marks.target()")
+    assert target["x"] == pytest.approx(st["position"]["x"], abs=0.01)
+    # A bed reading saved on the port lies on the bed.
+    r = page.request.post(
+        f"{printer_url}/firmware/printers/level", data={"port": "/dev/ttyFAKE1", "probe": False}
+    )
+    assert r.status == 202
+    page.wait_for_function(
+        "() => fetch('/firmware/printers/level?port=/dev/ttyFAKE1').then((r) => r.json())"
+        ".then((j) => !j.running)",
+        timeout=15000,
+    )
+    page.wait_for_timeout(5100)  # the world asks for the newest reading at most every 5 s
+    page.evaluate("() => window.fractalViewer.rescanDevices()")
+    page.wait_for_function(
+        "() => { const m = window.fractalViewer.marks['printer_1'];"
+        " return m && m.marks && m.marks.mesh(); }",
+        timeout=15000,
+    )
+    assert page.evaluate("() => window.fractalViewer.marks['printer_1'].marks.mesh().rows") == 5
+
+    # Zoomed into the printer the badge stays over it; a click on it selects the printer.
+    page.evaluate("() => window.fractalViewer.zoomIn('printer_1')")
+    page.wait_for_timeout(300)
+    expect(badge).to_be_visible()
+    page.evaluate("() => window.fractalViewer.jumpTo(0)")
+    page.wait_for_timeout(300)
+    badge.click()
+    expect(page.locator("#selected-body .prop-row", has_text="Name")).to_contain_text(
+        "printer_1", timeout=5000
+    )
+    # Unpinned, the badge and the marks go.
+    page.request.delete(f"{printer_url}/sites/garage/nodes/{BOARD}/device")
+    page.evaluate("() => window.fractalViewer.rescanDevices()")
+    expect(badge).to_have_count(0, timeout=10000)
+    assert page.evaluate("() => Object.keys(window.fractalViewer.marks)") == []
+    page.request.put(
+        f"{printer_url}/sites/garage/nodes/{BOARD}/device", data={"identity": "/dev/ttyFAKE1"}
+    )

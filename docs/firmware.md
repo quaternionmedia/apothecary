@@ -249,6 +249,22 @@ tree's badge (`🖨 210°/60° 43%`) in place -- a position edit in progress
 is never rebuilt under the cursor -- and a poll that moved the node's
 status re-fetches the tree so the mesh recolours.
 
+**The world wears its machines.** Every pinned, connected board stands
+under a **badge in the 3D view** -- for a printer, its state, hotend and
+bed, SD or host progress and a job's stage; for a devkit, what it is and
+the sketch last flashed to it -- fixed to the top of the machine's envelope
+and re-projected every frame, so it follows the machine as the camera
+orbits, hides when the machine is out of frame or outside the level being
+looked at, and dims when something stands in front of it. A click selects
+the machine. The badge reads the same rows the Contents badges do, so a
+poll from anywhere lands in both. A printer also wears its **marks** in
+the world: the nozzle marker at the position the board last reported
+(tweened, as on the monitor page), the bed plane, and the newest bed
+reading as a relief -- what the monitor's small board view draws, now at
+the printer's node in the one scene (`apothecary/static/machine_marks.js`
+is the drawing both use; `anchors.js` is the projection). This is the
+first phase of the [one-screen plan](plans/one-screen-2026-09-20.md).
+
 **Repolling.** The toolbar's **↻ Devices** toggle (on by default, 5/10/30 s)
 rescans the ports and re-polls every printer whose link is held, on a
 schedule that is paused while the tab is hidden and never overlaps itself
@@ -264,6 +280,7 @@ Playwright walkthrough: run `apothecary docs generate` and open
 | | |
 |---|---|
 | ![Pin it: the section shows the last poll](generated/printer-monitor/screenshots/03-pin-it-the-section-shows-the-last-poll-state-tempe.png) | ![The printer followed its board](generated/printer-monitor/screenshots/04-the-printer-followed-its-board-printer-1-s-status-.png) |
+| ![The world wears its machines: a badge above the printer](generated/printer-monitor/screenshots/05-the-world-wears-its-machines-a-badge-stands-above-.png) | |
 | *Pin a detected port to the mainboard; its Device section shows the last poll* | *The printer above it follows: status, badge, and "via" the board* |
 
 The walkthrough runs against the simulated printer mid-print, so it looks
@@ -410,7 +427,7 @@ Probe (esptool), Identify (the hello-banner listener) and Live all open the
 port through another process, which would evict the held link and may
 reset the board, so the monitor is the live view for a printer.
 
-![The focused monitor](generated/printer-monitor/screenshots/08-monitor-opens-the-focused-view-status-cards-temper.png)
+![The focused monitor](generated/printer-monitor/screenshots/09-monitor-opens-the-focused-view-status-cards-temper.png)
 
 ### Control, behind a latch
 
@@ -480,9 +497,9 @@ Marlin prints the grid without its positions, so where it lies is an
 estimate: the bed less what the probe's offset puts out of reach, inset by
 Marlin's default 10 mm. It follows whichever reading the card shows.
 
-![Bed level: a probed mesh as a heatmap, with its range, tilt and corners](generated/printer-monitor/screenshots/10-bed-level-probe-bed-homes-and-probes-armed-and-ask.png)
+![Bed level: a probed mesh as a heatmap, with its range, tilt and corners](generated/printer-monitor/screenshots/11-bed-level-probe-bed-homes-and-probes-armed-and-ask.png)
 
-![The reading laid over the bed in the board view](generated/printer-monitor/screenshots/11-the-reading-is-drawn-in-the-world-too-the-board-vi.png)
+![The reading laid over the bed in the board view](generated/printer-monitor/screenshots/12-the-reading-is-drawn-in-the-world-too-the-board-vi.png)
 
 The four **corner buttons** move the nozzle to that corner of the bed at
 paper height (`Z0.2`, 30 mm in from the edges of the build volume, lifted
@@ -546,7 +563,7 @@ Control ring's **Print** cell (`9`) carries Resume, Pause and Abort to
 whichever print is running -- the card's or the one from here -- and
 **Send file** (`⌗794`) starts the chosen file.
 
-![Print from here: a kept file streaming, with its progress](generated/printer-monitor/screenshots/12-print-from-here-a-sliced-g-code-file-is-kept-on-th.png)
+![Print from here: a kept file streaming, with its progress](generated/printer-monitor/screenshots/13-print-from-here-a-sliced-g-code-file-is-kept-on-th.png)
 
 ```
 GET/POST /firmware/printers/prints?name=…    the kept files; keep one (the body is the file)
