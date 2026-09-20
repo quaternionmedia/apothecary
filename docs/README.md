@@ -61,6 +61,7 @@ by `pytest walkthrough`. Start there.
 | Document | Description |
 |----------|-------------|
 | [Consolidation, 2026-09-19](plans/consolidation-2026-09-19.md) | Landing the printer seam on the integration branch: where the lines are, the order of operations, the census gate, and what a person has to decide |
+| [One screen, 2026-09-20](plans/one-screen-2026-09-20.md) | The world as the one screen, with anchors, popups and panels in front of it: the three screens today, the shape of the end, six phases, and the census as the meter |
 
 ## Validation
 

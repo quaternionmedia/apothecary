@@ -53,6 +53,39 @@ def test_the_page_has_fifty_four_controls_of_its_own():
     assert rows and rows[0].ring_action.startswith("select:")
 
 
+def test_the_firmware_page_is_counted_as_the_third_screen():
+    """The toolchain page, counted so the three screens have one meter between
+    them before they become one screen: 148 controls of their own in all,
+    60 of them on a ring. Thirty here -- install, cores, libraries, a sketch's
+    board and port, compile and upload, the esptool form, the task cancel, and
+    each device card's probe, identify, poll, live and monitor link -- and
+    four of them on the ring (poll, monitor, live as watch, rescan), since
+    this page has no ring yet. A class that only says how a control looks
+    (`small`, `primary`) does not name it; `class="small dev-probe"` is the
+    probe button."""
+    taken = census.take(census.FIRMWARE)
+    assert len(taken.controls_of_its_own()) == 30
+    assert len(taken.ring_backed()) == 4
+    assert taken.sentence().startswith("30 controls of its own, 4 of them also on the ring.")
+    assert "no ring yet" in taken.sentence()
+    names = {f.name for f in taken.found if f.how == "markup"}
+    assert {"dev-probe", "dev-identify", "dev-printer", "dev-monitor", "dev-live"} <= names
+    assert "small" not in names
+    listening = [f for f in taken.found if f.how == "listening"]
+    assert len(listening) == 8
+    assert taken.of_surface(census.LIST) == tuple(
+        f for f in taken.found if f.key in ("sketches:click:closest", "history:click:closest")
+    )
+
+
+def test_the_three_screens_have_one_meter():
+    """What the one-screen consolidation is measured against
+    (docs/plans/one-screen-2026-09-20.md)."""
+    own = sum(len(census.take(page).controls_of_its_own()) for page in census.PAGES)
+    backed = sum(len(census.take(page).ring_backed()) for page in census.PAGES)
+    assert (own, backed) == (148, 60)
+
+
 def test_the_monitor_page_is_counted_too():
     """The second page, counted the same way and never added to the first.
 
@@ -321,6 +354,11 @@ def test_there_is_a_ring_and_the_counter_says_so():
     for page in census.PAGES:
         taken = census.take(page)
         ring = taken.of_surface(census.RING)
+        if page is census.FIRMWARE:
+            # The third screen has no ring; the one-screen plan folds it into
+            # the world rather than giving it one of its own.
+            assert ring == () and "no ring yet" in taken.sentence()
+            continue
         assert [f.name for f in ring] == ["ring-open"]
         assert "a ring" in taken.sentence()
         assert "no ring yet" not in taken.sentence()
@@ -343,7 +381,8 @@ def test_the_ring_module_opens_three_ways_and_the_pages_import_it():
     assert sorted(set(on_page)) == [("document", "contextmenu"), ("window", "keydown")]
     assert 'button = "#ring-open"' in text
     for page in census.PAGES:
-        assert "/static/ring.js" in page.read_text(encoding="utf-8")
+        imports_it = "/static/ring.js" in page.read_text(encoding="utf-8")
+        assert imports_it == (page is not census.FIRMWARE)
 
 
 def test_a_ring_would_be_reported_if_there_were_one(tmp_path):

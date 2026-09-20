@@ -121,7 +121,8 @@ from typing import Dict, List, Optional, Sequence, Tuple
 TEMPLATES = Path(__file__).resolve().parents[1] / "templates"
 VIEWER = TEMPLATES / "fractal_viewer.html.j2"
 MONITOR = TEMPLATES / "monitor.html.j2"
-PAGES = (VIEWER, MONITOR)
+FIRMWARE = TEMPLATES / "firmware.html.j2"
+PAGES = (VIEWER, MONITOR, FIRMWARE)
 
 # --- what kind of surface -------------------------------------------------
 WIDGET = "widget"
@@ -310,6 +311,36 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     ),
     "corner:BL": (WIDGET, WHAT_IS_THERE, "a button that moves the nozzle to the back-left corner"),
     "corner:BR": (WIDGET, WHAT_IS_THERE, "a button that moves the nozzle to the back-right corner"),
+    # ---- the firmware page, templates/firmware.html.j2 -------------------
+    # The toolchain: install it, list what it knows, add to it.
+    "refresh-btn": (WIDGET, WHAT_YOU_SEE, "a button that asks the toolchain's state again"),
+    "boards-btn": (WIDGET, WHAT_YOU_SEE, "a button that rescans the ports"),
+    "install-btn": (WIDGET, WHAT_IS_THERE, "a button that installs or updates arduino-cli"),
+    "install-force": (WIDGET, WHAT_YOU_SEE, "a tick-box that makes the install start over"),
+    "lib-input": (WIDGET, WHAT_YOU_SEE, "a box for a library to install"),
+    "lib-btn": (WIDGET, WHAT_IS_THERE, "a button that installs that library"),
+    "core-install": (WIDGET, WHAT_IS_THERE, "a button that installs a board core"),
+    # Sketches: pick one, name the board and the port, build and send.
+    "fqbn-input": (WIDGET, WHAT_YOU_SEE, "a box for the board to build for"),
+    "port-select": (WIDGET, WHAT_YOU_SEE, "a drop-down of ports to upload to"),
+    "compile-btn": (WIDGET, WHAT_IS_THERE, "a button that compiles the chosen sketch"),
+    "upload-btn": (WIDGET, WHAT_IS_THERE, "a button that compiles and uploads it"),
+    # esptool: raw images onto an Espressif chip.
+    "esp-chip": (WIDGET, WHAT_YOU_SEE, "a box for the chip to flash"),
+    "esp-baud": (WIDGET, WHAT_YOU_SEE, "a box for the flashing baud rate"),
+    "esp-off": (WIDGET, WHAT_YOU_SEE, "a box for an image's flash offset"),
+    "esp-path": (WIDGET, WHAT_YOU_SEE, "a box for an image's path"),
+    "esp-rm": (WIDGET, WHAT_YOU_SEE, "a button that drops an image row"),
+    "esp-add": (WIDGET, WHAT_YOU_SEE, "a button that adds an image row"),
+    "esp-erase": (WIDGET, WHAT_YOU_SEE, "a tick-box that erases the flash first"),
+    "esp-flash-btn": (WIDGET, WHAT_IS_THERE, "a button that flashes the images"),
+    "cancel-btn": (WIDGET, WHAT_IS_THERE, "a button that cancels the running task"),
+    # Each device card: what a board is, and the ways of asking it. (Its
+    # monitor link shares `dev-monitor` with the viewer's Device section.)
+    "dev-probe": (WIDGET, WHAT_IS_THERE, "a button that probes the chip with esptool (resets it)"),
+    "dev-identify": (WIDGET, WHAT_YOU_SEE, "a button that listens for the sketch's hello"),
+    "dev-printer": (WIDGET, WHAT_YOU_SEE, "a button that asks M115, or polls a printer once"),
+    "dev-live": (WIDGET, WHAT_YOU_SEE, "a button that streams the board's serial output"),
     # printing from here: a kept file, streamed
     "print-file": (WIDGET, WHAT_YOU_SEE, "a file picker that keeps a G-code file on the host"),
     "print-pick": (WIDGET, WHAT_YOU_SEE, "a drop-down of the files kept on the host"),
@@ -382,6 +413,11 @@ RING_BACKED: Dict[str, str] = {
     "corner:FR": "control:corner:FR",
     "corner:BL": "control:corner:BL",
     "corner:BR": "control:corner:BR",
+    # The firmware page's device cards: a poll and the monitor link have cells;
+    # probe, identify and the live stream do not yet.
+    "dev-printer": "device:poll",
+    "dev-live": "device:watch",
+    "boards-btn": "device:rescan",
     # The Print cell's verbs go to whichever print is running, the card's or
     # the one from here; Send file is the one from here alone.
     "print-start": "print:start",
@@ -407,6 +443,9 @@ MARKUP = re.compile(
 )
 HAS_ID = re.compile(r"\bid=[\"']([\w-]+)[\"']")
 HAS_CLASS = re.compile(r"\bclass=[\"']([^\"']+)[\"']")
+# Classes that say how a control looks, not what it is: `class="small
+# dev-probe"` is the probe button, not a small one.
+LOOK_ONLY_CLASSES = frozenset({"small", "primary", "danger", "row", "meta"})
 IS_SUBMIT = re.compile(r"\btype=[\"']submit[\"']")
 A_FORM = re.compile(r"<form\b([^>]*)>", re.IGNORECASE)
 
@@ -428,6 +467,7 @@ BY_WHAT_IT_CARRIES: Sequence[Tuple[re.Pattern, str]] = (
 # section's links count as the recipe download.
 BY_SHAPE: Sequence[Tuple[re.Pattern, str]] = (
     (re.compile(r"\bhref=[\"'][^\"']*/scad[\"']"), "part-scad-download"),
+    (re.compile(r"\bhref=[\"'][^\"']*/firmware/monitor[\"']"), "monitor-link"),
     (re.compile(r"\bhref=[\"'][^\"']*/firmware[\"']"), "firmware-link"),
     (re.compile(r"\bhref=[\"'][^\"']*/viewer[\"']"), "viewer-link"),
 )
@@ -529,6 +569,27 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "picking an earlier bed reading to look at",
     ),
     "level-card:click:closest": (WIDGET, WHAT_IS_THERE, "a corner button, moving the nozzle there"),
+    # ---- the firmware page ------------------------------------------------
+    "es:close:stopLive": (AUTOMATIC, NOTHING, "the serial stream stopped, and the card says so"),
+    "devices:click:closest": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a device card's button: probe, identify, poll, live",
+    ),
+    "cores:click:closest": (WIDGET, WHAT_IS_THERE, "a core's Install button"),
+    "sketches:click:closest": (LIST, WHAT_YOU_SEE, "choosing a sketch from the list"),
+    "fqbn-input:input:updateButtons": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "typing a board, which enables the buttons",
+    ),
+    "port-select:change:updateButtons": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "choosing a port, which enables the buttons",
+    ),
+    "esp-images:click:contains": (WIDGET, WHAT_YOU_SEE, "an image row's drop button"),
+    "history:click:closest": (LIST, WHAT_YOU_SEE, "opening an earlier task's log"),
     "print-file:change:keepPrintFile": (
         WIDGET,
         WHAT_YOU_SEE,
@@ -768,7 +829,9 @@ def _name_in_markup(attributes: str, text: str = "", position: int = 0) -> Optio
             return f"{kind}:{carried.group(1)}"
     found = HAS_CLASS.search(attributes)
     if found:
-        return found.group(1).split()[0]
+        named = [c for c in found.group(1).split() if c not in LOOK_ONLY_CLASSES]
+        if named:
+            return named[0]
     if IS_SUBMIT.search(attributes):
         form = _form_before(text, position)
         return f"{form}:submit" if form else "submit"

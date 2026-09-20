@@ -220,10 +220,11 @@ consequences for this plan:
 
 datum's governance pin is qm `project/datum`; nothing here touches it.
 
-**qm — no open pull requests.** The three records on `adr/firmware-toolchain-seam`
-(`ce4e15f`, `551b401`, `9e3b135`: the toolchain seam revised, the G-code
-printer seam with its bed reading and its one-print host, and the rad host
-integration) become one draft against `project/apothecary`, once pushed.
+**qm — no open pull requests.** The four records on `adr/firmware-toolchain-seam`
+(`ce4e15f`, `551b401`, `9e3b135`, `60597f6`: the toolchain seam revised, the
+G-code printer seam with its bed reading and its one-print host, the rad
+host integration, and *One screen*) become one draft against
+`project/apothecary`, once pushed.
 
 **rad #2 — dependabot, playwright bump.** Irrelevant to apothecary, except
 that the conformance edit proposed in
@@ -263,8 +264,10 @@ final tip.)
 - The records (the firmware toolchain seam, revised; the G-code printer
   seam, new, saying in its first decision that the seam reads the bed and in
   its sixth that it hosts one print at a time; the rad host integration,
-  new) are three commits on the qm branch `adr/firmware-toolchain-seam`
-  (`ce4e15f`, `551b401`, `9e3b135`, on top of `20e00bd`). Its lint is clean:
+  new; *One screen*, new, for the plan in
+  [`one-screen-2026-09-20.md`](one-screen-2026-09-20.md)) are four commits
+  on the qm branch `adr/firmware-toolchain-seam` (`ce4e15f`, `551b401`,
+  `9e3b135`, `60597f6`, on top of `20e00bd`). Its lint is clean:
   `python project-seed/ci/adr_lint.py --records-dir adr --index adr/README.md --base-ref origin/project/apothecary`.
   Push that branch and open a **draft** pull request with base
   `project/apothecary` — never `main`; the corpus's own `AGENTS.md` says why,
