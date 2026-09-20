@@ -345,9 +345,10 @@ class SimulatedPrinter:
 
     Answers the query codes this module sends with plausible, slowly
     moving values. ``APOTHECARY_SIMULATED_PRINTER=printing`` starts it
-    mid-way through an SD print that advances about 1 %/s (so a viewer sees
-    ``printing`` and a progress figure straight away); the default is a
-    cold, idle machine. Any other command gets ``ok``.
+    mid-way through an SD print that advances about 1 %/s and starts over
+    at the end (so a viewer sees ``printing`` and a progress figure
+    straight away, however long it looks); the default is a cold, idle
+    machine. Any other command gets ``ok``.
     """
 
     FIRMWARE = "Marlin Apothecary Simulator 1.0 (simulated)"
@@ -371,7 +372,9 @@ class SimulatedPrinter:
         self._heat_t0 = time.monotonic()
 
     def _progress(self) -> float:
-        return min(1.0, (time.monotonic() - self._t0) / self.print_len) if self.printing else 0.0
+        # A print that goes round: a browser suite that runs longer than one
+        # print still finds the machine printing, at whatever percent it is.
+        return ((time.monotonic() - self._t0) / self.print_len) % 1.0 if self.printing else 0.0
 
     def _apply_control(self, cmd: str) -> Optional[List[str]]:
         """Honour the control set so the overlay's effects show up in the next poll."""
@@ -506,7 +509,7 @@ class SimulatedPrinter:
                 "ok",
             ]
         if code == "M27":
-            if self.printing and self._progress() < 1.0:
+            if self.printing:
                 return [f"SD printing byte {int(358856 * self._progress())}/358856", "ok"]
             return ["Not SD printing", "ok"]
         if code == "M31":

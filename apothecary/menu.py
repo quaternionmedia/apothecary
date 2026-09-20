@@ -649,6 +649,10 @@ PANELS: Sequence[Tuple[str, str]] = (
     ("jobs", "Jobs"),
     ("validation", "Validation"),
     ("scad", "OpenSCAD"),
+    # Registered when a machine is opened: the monitor's body in a popup
+    # tethered to the printer, and its comms log beside the rail.
+    ("machine", "Machine"),
+    ("log", "Comms log"),
 )
 
 

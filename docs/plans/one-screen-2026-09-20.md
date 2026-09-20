@@ -195,7 +195,21 @@ a left rail in use (the manager has one; nothing docks there yet).
   reload where it was left; nothing docked can shrink the canvas below
   half the window; the ring reaches every panel by address.
 
-### Phase 3 — The machine in front of the world
+### Phase 3 — The machine in front of the world  *(landed 2026-09-20, first slice)*
+
+Landed: `widgets/machine.js` and `machine.css` -- the monitor's whole body
+as one module with two hosts (the monitor page as its body; the world in
+a tethered popup opened from the badge or Device › Monitor), the comms
+log as its own panel on the left rail, the ring's verbs carried to the
+open machine, a jog from the popup moving the world's nozzle, the census
+following widget imports and the meter counting a widget once. Not done
+as planned: the module is one file with sections (status, chart, log,
+control, bed, print) rather than six widget files -- the cut that keeps
+the two hosts identical; split it when a host wants one part without the
+rest. `board_view.js` stays on the monitor page until Phase 5 (the page
+is not the world and still needs its own scene). The machine popup is
+`Panels › Machine` on the canvas ring; the URL deep link
+(`?machine=<port>`) is not done.
 
 The monitor's content becomes modules, mounted by panels; the monitor
 page keeps working on the same modules.

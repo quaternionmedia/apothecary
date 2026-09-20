@@ -57,7 +57,7 @@
         .device-section input[type="text"] { font-size: 0.72rem; padding: 0.15rem 0.4rem; background: #1e1e1e; color: #ddd; border: 1px solid #444; border-radius: 3px; width: 9.5rem; }
         .device-section .device-query { margin-top: 0.3rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #9cd2ff; white-space: pre-wrap; }
 
-        .viewer-panel { flex: 2; position: relative; background: #111; }
+        .viewer-panel { flex: 2; min-width: 0; position: relative; background: #111; }
         #viewer-canvas { width: 100%; height: 100%; display: block; }
         .viewer-hint {
             position: absolute; bottom: 1rem; left: 1rem;
@@ -160,6 +160,10 @@
             font: inherit; font-size: 0.78rem; cursor: pointer;
         }
         .panel-tab:hover { color: #fff; border-color: #666; }
+        /* The machine popup: the monitor's body in a tethered panel (widgets/machine.js). */
+        .panel[data-panel="machine"].free { width: min(500px, 90%); }
+        .panel[data-panel="machine"] .panel-body-slot, .panel[data-panel="log"] .panel-body-slot { padding: 0; }
+        .panel[data-panel="log"] .machine-log { height: 100%; }
 
         .contents-list { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; }
         .contents-item {
@@ -493,6 +497,7 @@
         repository, then reload.
     </div>
     {% endif %}
+    <link rel="stylesheet" href="{{ base_url }}/static/widgets/machine.css">
     <script type="importmap">
     {
         "imports": {
@@ -508,6 +513,7 @@
         import { STLLoader } from 'three/addons/loaders/STLLoader.js';
         import { mountAnchors } from '/static/anchors.js';
         import { mountPanels } from '/static/panels.js';
+        import { mountMachine } from '/static/widgets/machine.js';
         import { makeMachineMarks, toScene as marksToScene } from '/static/machine_marks.js';
 
         const BASE_URL = "{{ base_url }}";
@@ -810,7 +816,7 @@
                 this.camera.position.set(600, 500, 800);
 
                 this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
-                this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight);
+                this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight, false);
                 this.renderer.setPixelRatio(window.devicePixelRatio);
 
                 this.orbitControls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -861,7 +867,9 @@
                     if (section.style.display === 'none') el.style.display = 'none';
                 }
                 document.querySelector('.side-panel')?.remove();
+                this.machine = null;
                 window.apothecaryPanels = this.panels;
+                this.onResize();
                 this.marks = {};       // bearer path -> { marks, port, where }
                 this.whereByPort = {}; // port -> Promise of GET /firmware/printers/where
 
@@ -951,9 +959,14 @@
                     }
                     if (touched || recoloured) { this.updateDeviceViews(); this.syncWorldMarks(); }
                 });
-                // A bed reading saved elsewhere (the monitor page) lands on the marks.
+                // A bed reading shown in the machine popup lands on the marks, and a
+                // jog sent from it moves the nozzle ahead of the poll that confirms it.
                 window.addEventListener('apothecary:mesh', (ev) => {
                     for (const m of Object.values(this.marks)) if (m.marks && ev.detail && ev.detail.port === m.port) m.marks.setMesh(ev.detail);
+                });
+                window.addEventListener('apothecary:position', (ev) => {
+                    if (!ev.detail || ev.detail.source !== 'jog') return;
+                    for (const m of Object.values(this.marks)) if (m.marks && ev.detail.port === m.port) m.marks.setPosition(ev.detail.position);
                 });
                 // The overlay identified a board (M115) or rescanned: the
                 // binding rows' device info is stale until re-fetched.
@@ -967,7 +980,7 @@
                 const height = this.canvas.clientHeight;
                 this.camera.aspect = width / height;
                 this.camera.updateProjectionMatrix();
-                this.renderer.setSize(width, height);
+                this.renderer.setSize(width, height, false);
             }
 
             animate() {
@@ -2518,8 +2531,8 @@
                         badge = document.createElement('div');
                         badge.className = 'world-badge';
                         badge.dataset.path = anchorPath;
-                        badge.title = 'Select this piece';
-                        badge.addEventListener('click', () => this.selectPath(anchorPath));
+                        badge.title = isPrinter ? 'Select this machine and open it' : 'Select this piece';
+                        badge.addEventListener('click', () => { this.selectPath(anchorPath); if (isPrinter) this.openMachine(anchorPath); });
                         this.anchors.add(anchorPath, badge, () => this.anchorPointFor(anchorPath));
                     }
                     this.fillBadge(badge, row, isPrinter);
@@ -2552,6 +2565,39 @@
                 badge.innerHTML = parts.join(' · ');
                 if (st.state === 'printing') badge.classList.add('printing');
                 if (st.state === 'offline') badge.classList.add('offline');
+            }
+
+            // The machine in front of the world: the monitor's body (widgets/
+            // machine.js) in a panel tethered to the printer, its comms log in
+            // a panel of its own, for the port pinned at or under `path`. One
+            // at a time; opening another closes the first.
+            openMachine(path) {
+                const { row } = this.bindingFor(path);
+                const port = row && row.device && row.device.port;
+                if (!port) { this.setStatus(`${path}: no board pinned here`, 'error'); return false; }
+                const bearer = this.bearerPathFor(path);
+                if (this.machine && this.machine.port === port) { this.panels.open('machine'); this.panels.tether('machine', bearer); return true; }
+                this.closeMachine();
+                // The log takes the left rail, so the world keeps its middle; closed until asked for.
+                const logEl = this.panels.register('log', { title: `Comms log · ${port}`, where: 'left', open: false, body: (slot) => { slot.dataset.port = port; } });
+                const logSlot = logEl.querySelector('.panel-body-slot');
+                let handle = null;
+                this.panels.register('machine', {
+                    title: `${bearer} · ${port}`, where: 'free', open: true,
+                    body: (slot) => { handle = mountMachine(slot, { base: BASE_URL, port, host: 'popup', logRoot: logSlot }); },
+                });
+                this.panels.tether('machine', bearer);
+                this.machine = { port, path: bearer, handle };
+                window.apothecaryMachine = handle;
+                return true;
+            }
+            closeMachine() {
+                if (!this.machine) return;
+                this.machine.handle.destroy();
+                this.panels.unregister('machine');
+                this.panels.unregister('log');
+                this.machine = null;
+                window.apothecaryMachine = null;
             }
 
             // A printer's marks at its node, from what GET /firmware/printers/where
@@ -3561,6 +3607,18 @@
             const port = intent.device ? intent.device.port : null;
             const tail = ` (⌗${intent.address})`;
             try {
+                // A verb of the machine standing open in front of the world goes to it.
+                const open = viewer.machine && (!port || viewer.machine.port === port) ? viewer.machine.handle : null;
+                if (open && /^(control:|level:|print:|device:(poll|query|watch|reconnect|reset|release))/.test(action)) {
+                    if (await open.carry(intent)) { viewer.setStatus(`${intent.label}${tail}`, 'success'); return; }
+                }
+                if (action === 'panel:toggle:machine') {
+                    if (viewer.machine && viewer.panels.isOpen('machine')) { viewer.panels.close('machine'); viewer.setStatus(`Closed the machine${tail}`, 'success'); }
+                    else if (viewer.machine) { viewer.panels.open('machine'); viewer.setStatus(`Opened the machine${tail}`, 'success'); }
+                    else if (viewer.selectedName && viewer.openMachine(viewer.selectedName)) viewer.setStatus(`Opened ${viewer.selectedName}${tail}`, 'success');
+                    else viewer.setStatus(`Select a machine with a board pinned to it first${tail}`, 'error');
+                    return;
+                }
                 if (action.startsWith('select:')) {
                     const target = action.slice('select:'.length);
                     if (viewer.selectPath(target)) viewer.setStatus(`Selected ${target}${tail}`, 'success');
@@ -3603,7 +3661,9 @@
                 } else if (action === 'device:poll') {
                     if (port) await viewer.pollNow(port);
                 } else if (action === 'device:monitor') {
-                    if (port) window.open(`${BASE}/firmware/monitor?port=${encodeURIComponent(port)}`, '_blank');
+                    // The machine opens here, in front of the world; the monitor page is a click away in its title.
+                    if (viewer.openMachine(path)) viewer.setStatus(`Opened ${path}${tail}`, 'success');
+                    else if (port) window.open(`${BASE}/firmware/monitor?port=${encodeURIComponent(port)}`, '_blank');
                 } else if (action === 'device:query') {
                     const picked = viewer.selectedBodyEl.querySelector('.dev-pick')?.value || port;
                     if (picked) await viewer.queryPort(picked, path);

@@ -763,9 +763,7 @@ def test_the_world_wears_its_machines(page: Page, printer_url: str):
     page.request.delete(f"{printer_url}/sites/garage/nodes/printer_1/device")
     # Until the board is identified it wears a devkit's badge on its own node; once
     # it is known to be a printer the badge stands over the printer it drives.
-    page.request.post(
-        f"{printer_url}/firmware/devices/identify", data={"port": "/dev/ttyFAKE1"}
-    )
+    page.request.post(f"{printer_url}/firmware/devices/identify", data={"port": "/dev/ttyFAKE1"})
     page.goto(f"{printer_url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     badge = page.locator(".world-badge[data-path='printer_1']")
@@ -849,3 +847,90 @@ def test_the_world_wears_its_machines(page: Page, printer_url: str):
     page.request.put(
         f"{printer_url}/sites/garage/nodes/{BOARD}/device", data={"identity": "/dev/ttyFAKE1"}
     )
+
+
+@pytest.mark.e2e
+def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
+    """A badge click opens the monitor's body in a popup tethered to the printer: the
+    same cards and latch as the monitor page, on the same module; a jog from it moves
+    the world's nozzle ahead of the poll; its comms log is a panel of its own; the
+    ring's verbs go to it; closing it stops its polling."""
+    page.request.put(
+        f"{printer_url}/sites/garage/nodes/{BOARD}/device", data={"identity": "/dev/ttyFAKE1"}
+    )
+    page.request.delete(f"{printer_url}/sites/garage/nodes/printer_1/device")
+    page.request.post(f"{printer_url}/firmware/devices/identify", data={"port": "/dev/ttyFAKE1"})
+    page.goto(f"{printer_url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    page.evaluate("() => localStorage.removeItem('apothecary.panels')")
+    badge = page.locator(".world-badge[data-path='printer_1']")
+    expect(badge).to_be_visible(timeout=15000)
+    t0 = time.monotonic()
+    badge.click()
+    machine = page.locator(".panel[data-panel='machine']")
+    expect(machine).to_be_visible(timeout=3000)
+    assert time.monotonic() - t0 < 3
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == {
+        "tether": "printer_1"
+    }
+    expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
+    expect(machine.locator("#ident")).to_contain_text("Marlin")
+    # The same module as the monitor page: the same ids, the same latch.
+    expect(machine.locator("#control")).to_be_hidden()
+    assert page.evaluate("() => window.apothecaryMachine.host") == "popup"
+    # Its comms log is a panel of its own, on the left rail, closed until asked for.
+    expect(page.locator(".panel-tab[data-panel='log']")).to_be_visible()
+    page.locator(".panel-tab[data-panel='log']").click()
+    log = page.locator(".panel-rail-left .panel[data-panel='log']")
+    expect(log).to_be_visible(timeout=2000)
+    expect(log.locator("#log")).to_contain_text("M115", timeout=8000)  # polls are hidden by default
+    assert page.locator(".viewer-panel").bounding_box()["width"] >= 1280 / 3 - 2
+
+    # Armed, a jog from the popup moves the world's nozzle marker ahead of the poll.
+    machine.locator("#ctl").check()
+    expect(machine.locator("#control")).to_be_visible(timeout=5000)
+    machine.locator("#control button[data-cmd='M25']").click()
+    expect(machine.locator("#c-state")).to_contain_text("idle", timeout=POLL_S * 1000 + 3000)
+    page.wait_for_timeout(int(POLL_S * 1000) + 500)
+    before = page.evaluate("() => window.fractalViewer.marks['printer_1'].marks.target()")
+    machine.locator("#control button[data-step='10']").click()
+    machine.locator("#control button[data-jog='X+']").click()
+    page.wait_for_function(
+        "(bx) => window.fractalViewer.marks['printer_1'].marks.target().x === bx + 10",
+        arg=before["x"],
+        timeout=1500,
+    )
+    expect(log.locator("#log .tx.control", has_text="G1 X10 F3000").last).to_be_visible(
+        timeout=8000
+    )
+    # The ring's control verbs go to the machine in front of the world: Control > Jog > Y+.
+    page.locator("#viewer-canvas").click(button="right", position={"x": 30, "y": 30})
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    page.keyboard.press("Escape")
+    page.locator("#contents-list .contents-item[data-path='printer_1']").click(button="right")
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    page.keyboard.press("2")  # Device
+    page.keyboard.press("7")  # Control
+    page.keyboard.press("2")  # Jog
+    page.keyboard.press("8")  # Y+
+    expect(page.locator("#ring-overlay")).to_have_count(0)
+    expect(log.locator("#log .tx.control", has_text="G1 Y10 F3000").last).to_be_visible(
+        timeout=8000
+    )
+    machine.locator("#control button[data-cmd='M24']").click()
+    machine.locator("#ctl-disarm").click()
+    expect(machine.locator("#control")).to_be_hidden(timeout=3000)
+
+    # Dragging the popup lets go of the tether; closing it stops its polling and
+    # takes the log with it.
+    tb = machine.locator(".panel-title").bounding_box()
+    page.mouse.move(tb["x"] + 150, tb["y"] + tb["height"] / 2)
+    page.mouse.down()
+    page.mouse.move(tb["x"] + 150 - 120, tb["y"] + tb["height"] / 2 + 60, steps=6)
+    page.mouse.up()
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "free"
+    page.evaluate("() => window.fractalViewer.closeMachine()")
+    expect(machine).to_have_count(0)
+    expect(log).to_have_count(0)
+    assert page.evaluate("() => window.apothecaryMachine") is None
+    page.evaluate("() => localStorage.removeItem('apothecary.panels')")

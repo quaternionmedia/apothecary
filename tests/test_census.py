@@ -44,11 +44,21 @@ def test_the_page_has_fifty_four_controls_of_its_own():
     fifteen are the ones that can go, and the meter falls as they do. The
     Contents rows are ring-backed too (the canvas ring's Pieces cell reaches
     every row at the current level), but rows are a list, not the meter.
+
+    One hundred and sixteen now, and this rise is the one-screen plan's third
+    phase arriving: the world mounts the machine (widgets/machine.js, the
+    monitor's whole body -- sixty-two controls, forty-one of them on the
+    ring) in a popup tethered to the printer, and a widget's controls are the
+    page's on every page that mounts it. The page's own fifty-four are what
+    they were; the three-screen meter counts the machine once, by its source.
     """
     taken = census.take()
-    assert len(taken.controls_of_its_own()) == 54
-    assert len(taken.ring_backed()) == 15
-    assert taken.sentence().startswith("54 controls of its own, 15 of them also on the ring.")
+    own_here = [f for f in taken.controls_of_its_own() if not f.source]
+    from_machine = [f for f in taken.controls_of_its_own() if f.source == "machine.js"]
+    assert (len(own_here), len(from_machine)) == (54, 62)
+    assert len(taken.controls_of_its_own()) == 116
+    assert len(taken.ring_backed()) == 56  # 15 of the page's own, 41 of the machine's
+    assert taken.sentence().startswith("116 controls of its own, 56 of them also on the ring.")
     rows = [f for f in taken.found if f.key == "li:click:selectChild"]
     assert rows and rows[0].ring_action.startswith("select:")
 
@@ -80,9 +90,20 @@ def test_the_firmware_page_is_counted_as_the_third_screen():
 
 def test_the_three_screens_have_one_meter():
     """What the one-screen consolidation is measured against
-    (docs/plans/one-screen-2026-09-20.md)."""
-    own = sum(len(census.take(page).controls_of_its_own()) for page in census.PAGES)
-    backed = sum(len(census.take(page).ring_backed()) for page in census.PAGES)
+    (docs/plans/one-screen-2026-09-20.md): every control once, wherever it
+    is mounted. A widget module two pages mount (the machine, on the monitor
+    page and in the world's popup) is one thing, counted by its source."""
+    own = backed = 0
+    widgets_seen: set = set()
+    for page in census.PAGES:
+        taken = census.take(page)
+        for source in {f.source for f in taken.controls_of_its_own()}:
+            if source and source in widgets_seen:
+                continue  # the same module, mounted by another page: counted already
+            widgets_seen.add(source)
+            here = [f for f in taken.controls_of_its_own() if f.source == source]
+            own += len(here)
+            backed += sum(1 for f in here if f.ring_action)
     assert (own, backed) == (148, 60)
 
 
@@ -100,11 +121,17 @@ def test_the_monitor_page_is_counted_too():
     print card's file picker, its list and its forget button.
     """
     taken = census.take(census.MONITOR)
-    assert len(taken.controls_of_its_own()) == 64
+    assert (
+        len(taken.controls_of_its_own()) == 64
+    )  # 2 of the page's own (its links), 62 the machine's
+    assert {f.source for f in taken.controls_of_its_own()} == {"", "machine.js"}
     assert len(taken.ring_backed()) == 41
     assert taken.sentence().startswith("64 controls of its own, 41 of them also on the ring.")
     listening = [f for f in taken.found if f.how == "listening"]
-    assert len(listening) == 17  # the board view, the bed card and the print card follow the port
+    # Fourteen in the machine module, one on the page (the board view following
+    # the port picker): the bed card and the print card follow the port from
+    # selectPort itself now, and the two listeners they had are gone.
+    assert len(listening) == 15
     assert taken.of_surface(census.GESTURE) == ()
     assert taken.of_surface(census.LIST) == tuple(
         f for f in taken.found if f.key == "level-history:click:closest"
@@ -614,7 +641,7 @@ def test_the_panel_module_keeps_its_chrome_to_itself():
     text = PANELS_MODULE.read_text(encoding="utf-8")
     on_page = re.findall(r"(window|document)\.addEventListener\(\s*[\"'](\w+)[\"']", text)
     assert sorted(set(on_page)) == [("window", "pointermove"), ("window", "pointerup")]
-    assert "window.removeEventListener(\"pointermove\"" in text
-    assert "window.removeEventListener(\"pointerup\"" in text
+    assert 'window.removeEventListener("pointermove"' in text
+    assert 'window.removeEventListener("pointerup"' in text
     assert "/static/panels.js" in census.VIEWER.read_text(encoding="utf-8")
     assert "/static/panels.js" not in census.MONITOR.read_text(encoding="utf-8")

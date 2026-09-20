@@ -967,8 +967,15 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("panel:toggle:jobs", 2),
         ("panel:toggle:validation", 4),
         ("panel:toggle:scad", 9),
+        ("panel:toggle:machine", 3),
+        ("panel:toggle:log", 1),
     ]
     assert address_of(root, "panel:contents") == "98"  # by the option's id
     assert carried_by("panel:toggle:contents").name == "VIEWER"
-    marked = re.findall(r'data-panel="([\w-]+)"', census.VIEWER.read_text(encoding="utf-8"))
-    assert marked == [pid for pid, _ in PANELS]
+    # The page's sections are marked in its markup; the machine and its log are
+    # registered when a printer is opened. Both lists are the resolver's, in order.
+    page = census.VIEWER.read_text(encoding="utf-8")
+    marked = re.findall(r'class="panel-section"[^>]*data-panel="([\w-]+)"', page)
+    registered = re.findall(r"panels\.register\('([\w-]+)'", page)
+    assert marked == [pid for pid, _ in PANELS[: len(marked)]]
+    assert sorted(registered) == sorted(pid for pid, _ in PANELS[len(marked) :])

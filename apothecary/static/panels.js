@@ -56,6 +56,7 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
         else if (p.where === "free") { free.appendChild(p.el); p.el.classList.remove("tethered"); p.el.style.left = `${p.x}px`; p.el.style.top = `${p.y}px`; }
         else { rails[p.where === "left" ? "left" : "right"].appendChild(p.el); p.el.classList.remove("tethered"); p.el.style.left = ""; p.el.style.top = ""; }
         p.el.classList.toggle("free", p.where === "free" || (typeof p.where === "object"));
+        p.el.querySelector(".panel-title").title = p.tether ? "Drag to let go of the machine and float freely" : (p.where === "free" ? "Drag to move" : "");
         p.el.classList.toggle("collapsed", p.collapsed);
         p.el.querySelector(".panel-collapse").textContent = p.collapsed ? "▸" : "▾";
         p.el.querySelector(".panel-float").textContent = p.where === "free" ? "⇥" : "⧉";
@@ -82,6 +83,12 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
     }
 
     function startDrag(p, ev) {
+        if (p.tether) {
+            // Dragging a tethered panel lets go of the tether: it becomes a free panel where it was.
+            p.tether = null; p.where = "free";
+            if (p.leader) { p.leader.remove(); p.leader = null; }
+            place(p);
+        }
         if (p.where !== "free") return;
         ev.preventDefault();
         const startX = ev.clientX, startY = ev.clientY, fromX = p.x, fromY = p.y;
@@ -189,8 +196,11 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
                 p.el.hidden = false;
                 const w = overlay.clientWidth, h = overlay.clientHeight;
                 const pw = p.el.offsetWidth || 320, ph = p.el.offsetHeight || 200;
-                // Beside the anchor: to its right when there is room, else to its left; below its point.
-                const x = at.x + 24 + pw <= w ? at.x + 24 : Math.max(0, at.x - 24 - pw);
+                // Beside the anchor: to its right when there is room, else to its left; when
+                // neither fits, on the far side of the page from it, so as little of what it
+                // stands over is covered as can be. Below its point.
+                const fitsRight = at.x + 24 + pw <= w, fitsLeft = at.x - 24 - pw >= 0;
+                const x = fitsRight ? at.x + 24 : (fitsLeft ? at.x - 24 - pw : (at.x > w / 2 ? 0 : Math.max(0, w - pw)));
                 const y = Math.max(0, Math.min(h - ph, at.y - 40));
                 p.x = x; p.y = y;
                 p.el.style.left = `${x}px`; p.el.style.top = `${y}px`;

@@ -107,6 +107,18 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
         "sits where the board last said, and a bed reading lies over the bed"
     )
 
+    world_badge.click()
+    machine = page.locator(".panel[data-panel='machine']")
+    expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
+    page.wait_for_timeout(2500)
+    docs.step(
+        "Click the badge and the machine opens in front of the world: the monitor's own "
+        "body -- cards, chart, the latch and control pad, the bed reading, the print from "
+        "here -- in a panel tethered to the printer, its comms log a panel of its own on the "
+        "left rail. Drag it to let go of the tether; the ring's control verbs go to it"
+    )
+    page.evaluate("() => window.fractalViewer.closeMachine()")
+
     section.locator(".dev-watch").click()
     expect(page.locator("#serial-body .temp").first).to_be_visible(timeout=10000)
     page.wait_for_timeout(2500)

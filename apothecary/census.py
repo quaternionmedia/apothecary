@@ -114,7 +114,7 @@ Said plainly so nobody mistakes it for more than it is.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -565,7 +565,6 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     # listening, so the markup carries them; these are the ones that listen.
     "port:change:selectPort": (WIDGET, WHAT_YOU_SEE, "choosing a printer port"),
     "portSel:change:mountFor": (AUTOMATIC, NOTHING, "the board view following the chosen port"),
-    "port:change:loadLevel": (AUTOMATIC, NOTHING, "the bed readings following the chosen port"),
     "level-history:click:closest": (
         LIST,
         WHAT_YOU_SEE,
@@ -603,11 +602,6 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "choosing which kept file the buttons mean",
     ),
-    "port:change:loadPrintRecords": (
-        AUTOMATIC,
-        NOTHING,
-        "the prints from here following the chosen port",
-    ),
     "auto:change:schedule": (WIDGET, WHAT_YOU_SEE, "the poll-on-a-schedule tick-box"),
     "interval:change:schedule": (WIDGET, WHAT_YOU_SEE, "choosing how often to poll"),
     "qform:submit:post": (WIDGET, WHAT_YOU_SEE, "asking the printer for a report"),
@@ -619,12 +613,12 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_IS_THERE,
         "one listener for the whole control overlay, told which button by what it carries",
     ),
-    "document:visibilitychange:schedule": (
+    "document:visibilitychange:onVisibility": (
         AUTOMATIC,
         NOTHING,
         "the page was hidden or shown, and polls accordingly",
     ),
-    "window:beforeunload:clearTimeout": (AUTOMATIC, NOTHING, "leaving the page stops the polling"),
+    "window:beforeunload:onUnload": (AUTOMATIC, NOTHING, "leaving the page stops the polling"),
 }
 
 LISTENS = re.compile(r"addEventListener\s*\(\s*['\"]([\w-]+)['\"]\s*,")
@@ -699,6 +693,10 @@ class Found:
     # with one of these is a control the ring has already replaced in all but
     # deletion.
     ring_action: Optional[str] = None
+    # Where the control is written: the page itself, or a widget module the
+    # page mounts (apothecary/static/widgets/*.js). A widget's controls are
+    # the page's on every page that mounts it, and one thing across pages.
+    source: str = ""
 
 
 @dataclass(frozen=True)
@@ -903,16 +901,42 @@ def _from_listening(text: str) -> Tuple[List[Found], List[str]]:
     return found, unknown
 
 
+WIDGETS = TEMPLATES.parent / "apothecary" / "static" / "widgets"
+WIDGET_IMPORT = re.compile(r"from\s+[\"']/static/widgets/([\w-]+)\.js[\"']")
+
+
+def widgets_of(page: Path) -> List[Path]:
+    """The widget modules a page mounts, in the order it imports them."""
+    text = page.read_text(encoding="utf-8")
+    return [WIDGETS / f"{name}.js" for name in WIDGET_IMPORT.findall(text)]
+
+
 def take(page: Path | None = None) -> Census:
     """Count what a person can operate, from the page itself.
 
     The viewer unless told otherwise; ``take(MONITOR)`` counts the monitor
-    page. One page at a time, and the two numbers are never added.
+    page. One page at a time, and the numbers are never added -- except
+    that a widget module the page mounts (``/static/widgets/*.js``, its
+    markup written in the module) is counted as part of the page, each
+    entry saying which module it came from.
     """
-    text = (page or VIEWER).read_text(encoding="utf-8")
-    from_markup, unknown_markup = _from_markup(text)
-    from_listening, unknown_listening = _from_listening(text)
-    unknown = unknown_markup + unknown_listening
+    page = page or VIEWER
+    sources = [(page, "")] + [(w, w.name) for w in widgets_of(page) if w.is_file()]
+    from_markup: List[Found] = []
+    from_listening: List[Found] = []
+    unknown: List[str] = []
+    for path, label in sources:
+        text = path.read_text(encoding="utf-8")
+        markup, unknown_markup = _from_markup(text)
+        listening, unknown_listening = _from_listening(text)
+        if label:
+            markup = [replace(f, source=label) for f in markup]
+            listening = [replace(f, source=label) for f in listening]
+            unknown_markup = [f"{label}: {u}" for u in unknown_markup]
+            unknown_listening = [f"{label}: {u}" for u in unknown_listening]
+        from_markup += markup
+        from_listening += listening
+        unknown += unknown_markup + unknown_listening
     if unknown:
         raise Unclassified(
             f"The page has {len(unknown)} thing(s) nobody has classified:\n  "

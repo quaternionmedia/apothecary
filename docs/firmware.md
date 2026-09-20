@@ -256,8 +256,18 @@ the sketch last flashed to it -- fixed to the top of the machine's envelope
 and re-projected every frame, so it follows the machine as the camera
 orbits, hides when the machine is out of frame or outside the level being
 looked at, and dims when something stands in front of it. A click selects
-the machine. The badge reads the same rows the Contents badges do, so a
-poll from anywhere lands in both. A printer also wears its **marks** in
+the machine and, for a printer, **opens it in front of the world**: the
+monitor's whole body -- cards, chart, the latch and its control pad, the
+bed reading, the print from here -- in a panel tethered to the printer
+(a leader line to the badge; drag it to let go), with its comms log as a
+panel of its own on the left rail. It is the same module the monitor page
+is made of (`apothecary/static/widgets/machine.js`), so the two hosts
+have the same ids, the same chain and latch, the same confirms, and the
+ring's control verbs go to whichever is open; the node ring's Device ›
+Monitor opens it here rather than leaving the page. A jog from the popup
+moves the nozzle marker in the world ahead of the poll that confirms it.
+The badge reads the same rows the Contents badges do, so a poll from
+anywhere lands in both. A printer also wears its **marks** in
 the world: the nozzle marker at the position the board last reported
 (tweened, as on the monitor page), the bed plane, and the newest bed
 reading as a relief -- what the monitor's small board view draws, now at
@@ -280,7 +290,7 @@ Playwright walkthrough: run `apothecary docs generate` and open
 | | |
 |---|---|
 | ![Pin it: the section shows the last poll](generated/printer-monitor/screenshots/03-pin-it-the-section-shows-the-last-poll-state-tempe.png) | ![The printer followed its board](generated/printer-monitor/screenshots/04-the-printer-followed-its-board-printer-1-s-status-.png) |
-| ![The world wears its machines: a badge above the printer](generated/printer-monitor/screenshots/05-the-world-wears-its-machines-a-badge-stands-above-.png) | |
+| ![The world wears its machines: a badge above the printer](generated/printer-monitor/screenshots/05-the-world-wears-its-machines-a-badge-stands-above-.png) | ![The machine open in front of the world](generated/printer-monitor/screenshots/06-click-the-badge-and-the-machine-opens-in-front-of-.png) |
 | *Pin a detected port to the mainboard; its Device section shows the last poll* | *The printer above it follows: status, badge, and "via" the board* |
 
 The walkthrough runs against the simulated printer mid-print, so it looks
@@ -391,7 +401,9 @@ ring-backed buttons are deleted.
 
 ### The focused monitor
 
-`/firmware/monitor?port=/dev/ttyUSB2` is one printer, full width: status
+`/firmware/monitor?port=/dev/ttyUSB2` is one printer, full width -- the
+machine module (`apothecary/static/widgets/machine.js`) mounted as a page,
+the same one the world opens as a popup over the printer: status
 cards (state, hotend and bed with target bars, position, SD progress and
 elapsed time, endstops and filament, the board and its link), a temperature
 history chart over the last polls (hotend and bed on one °C axis, targets
@@ -438,7 +450,7 @@ Probe (esptool), Identify (the hello-banner listener) and Live all open the
 port through another process, which would evict the held link and may
 reset the board, so the monitor is the live view for a printer.
 
-![The focused monitor](generated/printer-monitor/screenshots/09-monitor-opens-the-focused-view-status-cards-temper.png)
+![The focused monitor](generated/printer-monitor/screenshots/10-monitor-opens-the-focused-view-status-cards-temper.png)
 
 ### Control, behind a latch
 
@@ -508,9 +520,9 @@ Marlin prints the grid without its positions, so where it lies is an
 estimate: the bed less what the probe's offset puts out of reach, inset by
 Marlin's default 10 mm. It follows whichever reading the card shows.
 
-![Bed level: a probed mesh as a heatmap, with its range, tilt and corners](generated/printer-monitor/screenshots/11-bed-level-probe-bed-homes-and-probes-armed-and-ask.png)
+![Bed level: a probed mesh as a heatmap, with its range, tilt and corners](generated/printer-monitor/screenshots/12-bed-level-probe-bed-homes-and-probes-armed-and-ask.png)
 
-![The reading laid over the bed in the board view](generated/printer-monitor/screenshots/12-the-reading-is-drawn-in-the-world-too-the-board-vi.png)
+![The reading laid over the bed in the board view](generated/printer-monitor/screenshots/13-the-reading-is-drawn-in-the-world-too-the-board-vi.png)
 
 The four **corner buttons** move the nozzle to that corner of the bed at
 paper height (`Z0.2`, 30 mm in from the edges of the build volume, lifted
@@ -574,7 +586,7 @@ Control ring's **Print** cell (`9`) carries Resume, Pause and Abort to
 whichever print is running -- the card's or the one from here -- and
 **Send file** (`⌗794`) starts the chosen file.
 
-![Print from here: a kept file streaming, with its progress](generated/printer-monitor/screenshots/13-print-from-here-a-sliced-g-code-file-is-kept-on-th.png)
+![Print from here: a kept file streaming, with its progress](generated/printer-monitor/screenshots/14-print-from-here-a-sliced-g-code-file-is-kept-on-th.png)
 
 ```
 GET/POST /firmware/printers/prints?name=…    the kept files; keep one (the body is the file)
