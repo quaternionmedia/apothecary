@@ -86,6 +86,12 @@ class Assembly(BaseModel):
     walking up to the nearest ancestor that set one (see api.py's
     ``_assembly_tree``), so tagging a handful of top-level Structures is
     enough for every Substructure/Feature beneath them to inherit it.
+
+    ``sketch_ref``, when set, names a sketch under ``parts/`` (see
+    ``firmware.sketches.discover_sketches``) that runs on this node's board,
+    for nodes that are not themselves registered parts -- a bare devkit
+    sitting on the bench. A ``part_ref`` node needs no ``sketch_ref``: its
+    part folder's sketch is found automatically (``firmware.bindings``).
     """
 
     name: str
@@ -102,6 +108,7 @@ class Assembly(BaseModel):
     comment: Optional[str] = None
     part_ref: Optional[str] = None
     category: Optional[str] = None
+    sketch_ref: Optional[str] = None
 
     def world_bounds(self) -> Optional[BoundingBox3D]:
         """This node's ``footprint``, offset by ``position`` into the parent's frame.

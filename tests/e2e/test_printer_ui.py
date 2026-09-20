@@ -1,0 +1,462 @@
+"""Printer UI end to end, with timing bounds: the viewer must stay snappy while it polls.
+
+Runs against its own server (port 8766) so nothing here depends on the
+host's toolchain or on a board being plugged in: ``ARDUINO_CLI`` is the
+scripted fake from the unit tests (two ports, ``/dev/ttyFAKE0`` an Uno and
+``/dev/ttyFAKE1`` unmatched), the serial engine is the in-process
+``SimulatedPrinter`` started mid-way through an SD print, and firmware state
+lives in a temp dir so pins never touch ``~/.apothecary``.
+
+The bounds are deliberately loose enough for CI and tight enough to catch
+the failure modes they name: a blocked event loop, stacked polls, a panel
+rebuilt under the user's cursor.
+"""
+
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+import httpx
+import pytest
+from firmware_helpers import write_fake_arduino_cli
+from playwright.sync_api import Page, expect
+
+PRINTER_PORT = "8768"  # 8766 is the docs-generation server
+POLL_S = 2.0  # the overlay's cadence (POLL_MS in fractal_viewer.html.j2)
+
+
+@pytest.fixture(scope="module")
+def printer_url(tmp_path_factory):
+    root = Path(__file__).resolve().parents[2]
+    tmp = tmp_path_factory.mktemp("printer-server")
+    env = os.environ.copy()
+    env.update(
+        {
+            "APOTHECARY_VIEWER_PATH": "",
+            "ARDUINO_CLI": str(write_fake_arduino_cli(tmp / "arduino-cli")),
+            "APOTHECARY_TOOLS_DIR": str(tmp / "tools"),
+            "APOTHECARY_STATE_DIR": str(tmp / "state"),
+            "APOTHECARY_SERIAL_ENGINE": "simulated",
+            "APOTHECARY_SIMULATED_PRINTER": "printing",
+        }
+    )
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "apothecary.api:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            PRINTER_PORT,
+        ],
+        cwd=root,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    url = f"http://127.0.0.1:{PRINTER_PORT}"
+    for _ in range(40):
+        try:
+            if httpx.get(f"{url}/health", timeout=1.0).status_code == 200:
+                break
+        except (httpx.ConnectError, httpx.TimeoutException):
+            time.sleep(0.5)
+    else:
+        proc.terminate()
+        pytest.exit("printer test server failed to start", returncode=1)
+    yield url
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+
+
+def _select(page: Page, name: str):
+    page.locator("#contents-list .contents-item", has_text=name).first.click()
+
+
+def _expand_to(page: Page, path: str):
+    """Open the Contents tree carets down to ``path`` and select its row."""
+    parts = path.split(".")
+    for depth in range(1, len(parts)):
+        row = page.locator(f"#contents-list .contents-item[data-path='{'.'.join(parts[:depth])}']")
+        caret = row.locator(".tree-caret")
+        if caret.text_content() == "▸":
+            caret.click()
+    page.locator(f"#contents-list .contents-item[data-path='{path}']").click()
+
+
+def _ensure_pinned(page: Page, name: str, port: str):
+    """Select ``name`` and make sure ``port`` is pinned to it (tests run in any order)."""
+    _select(page, name)
+    section = page.locator("#selected-body .device-section")
+    expect(section).not_to_contain_text("scanning devices", timeout=8000)
+    if "pinned" in section.inner_text() and port in section.inner_text():
+        return section
+    if section.locator(".dev-unpin").count():
+        section.locator(".dev-unpin").click()
+    expect(section.locator(".dev-manual")).to_be_visible(timeout=5000)
+    section.locator(".dev-manual").fill(port)
+    section.locator(".dev-manual").press("Enter")
+    expect(section).to_contain_text("pinned", timeout=5000)
+    return section
+
+
+@pytest.mark.e2e
+def test_panel_opens_before_devices_finish_loading(page: Page, printer_url: str):
+    """Selecting a node never waits for the device scan: the panel is up within 1 s."""
+    page.goto(f"{printer_url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    # dispatch_event, not click(): the bound must cover the viewer's own work,
+    # not Playwright's actionability wait on a page still streaming STLs
+    # through headless software GL.
+    t0 = time.monotonic()
+    page.locator("#contents-list .contents-item", has_text="printer_1").first.dispatch_event(
+        "click"
+    )
+    expect(page.locator("#selected-body .prop-row", has_text="Name")).to_be_visible(timeout=1000)
+    assert time.monotonic() - t0 < 1.0
+    # The Device section is part of the panel from the first render, and
+    # settles (scan done) within a bounded time rather than blocking it.
+    expect(page.locator("#selected-body .device-section")).to_be_visible(timeout=1000)
+    expect(page.locator("#selected-body .device-section .dev-pick")).to_be_visible(timeout=8000)
+    options = page.locator("#selected-body .dev-pick option").all_text_contents()
+    assert any("/dev/ttyFAKE1" in o for o in options)
+
+
+@pytest.mark.e2e
+def test_pin_identify_watch_poll_and_sync(page: Page, printer_url: str):
+    """Pin → identify → Watch: polls at the stated cadence, never stacked, and the node follows."""
+    page.goto(f"{printer_url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    _select(page, "printer_1")
+    pick = page.locator("#selected-body .dev-pick")
+    expect(pick).to_be_visible(timeout=8000)
+    pick.select_option("/dev/ttyFAKE1")
+
+    t0 = time.monotonic()
+    page.locator("#selected-body .dev-pin").click()
+    expect(page.locator("#selected-body .device-section")).to_contain_text("pinned", timeout=5000)
+    assert time.monotonic() - t0 < 5.0
+    expect(
+        page.locator("#contents-list .contents-item[data-path='printer_1'] .dev-badge")
+    ).to_be_visible()
+
+    # Watch opens the overlay on that port; identify tells it this is a printer.
+    page.locator("#selected-body .dev-watch").click()
+    expect(page.locator("#serial-overlay")).to_be_visible()
+    expect(page.locator("#serial-port")).to_have_value("/dev/ttyFAKE1", timeout=5000)
+    page.locator("#serial-identify").click()
+    expect(page.locator("#serial-meta")).to_contain_text(
+        "Marlin Apothecary Simulator", timeout=8000
+    )
+
+    # Cadence bound: after the first poll line, count polls over ~3 periods.
+    temps = page.locator("#serial-body .temp")
+    expect(temps.first).to_be_visible(timeout=5000)
+    n0 = temps.count()
+    window = 3.25 * POLL_S
+    time.sleep(window)
+    delta = temps.count() - n0
+    assert 2 <= delta <= 4, f"{delta} polls in {window}s at a {POLL_S}s cadence"
+
+    # What the polls said reached the panel, the badge and the node's status.
+    section = page.locator("#selected-body .device-section")
+    expect(section).to_contain_text("printing")
+    expect(section.locator(".temps")).to_contain_text("/210°")
+    badge = page.locator("#contents-list .contents-item[data-path='printer_1'] .dev-badge")
+    expect(badge).to_contain_text("🖨 210°/60°")
+    assert "printing" in badge.get_attribute("class")
+    expect(page.locator("#status-select")).to_have_value("printing", timeout=POLL_S * 1000 + 3000)
+
+    # The other printer is untouched, and the pinned port is no longer offered to it.
+    _select(page, "printer_2")
+    expect(page.locator("#status-select")).to_have_value("idle")
+    expect(page.locator("#selected-body .device-section")).not_to_contain_text("/dev/ttyFAKE1")
+
+
+@pytest.mark.e2e
+def test_editing_survives_polling(page: Page, printer_url: str):
+    """A position edit in progress is not wiped by the 2 s poll re-render."""
+    page.goto(f"{printer_url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    _select(page, "printer_1")
+    expect(page.locator("#selected-body .device-section")).to_contain_text("pinned", timeout=8000)
+    page.locator("#selected-body .dev-watch").click()
+    expect(page.locator("#serial-body .temp").first).to_be_visible(timeout=8000)
+
+    x = page.locator("#pos-x")
+    x.click()
+    x.fill("")
+    x.type("123")
+    time.sleep(2.25 * POLL_S)  # at least two polls land while the field is being edited
+    assert page.evaluate("document.activeElement && document.activeElement.id") == "pos-x"
+    expect(x).to_have_value("123")
+    # And the panel's device section did keep updating underneath.
+    expect(page.locator("#selected-body .device-section .temps")).to_contain_text("/210°")
+
+    # Unpin from the panel: immediate (no second scan), badge gone, node keeps its last status.
+    t0 = time.monotonic()
+    page.locator("#selected-body .dev-unpin").click()
+    expect(page.locator("#selected-body .dev-pick")).to_be_visible(timeout=3000)
+    assert time.monotonic() - t0 < 3.0
+    expect(
+        page.locator("#contents-list .contents-item[data-path='printer_1'] .dev-badge")
+    ).to_have_count(0)
+
+
+@pytest.mark.e2e
+def test_firmware_page_printer_poll(page: Page, printer_url: str):
+    """The firmware page's card polls the (already identified) printer within a bound."""
+    page.goto(f"{printer_url}/firmware")
+    card = page.locator(".device[data-port='/dev/ttyFAKE1']")
+    expect(card).to_be_visible(timeout=10000)
+    btn = card.locator(".dev-printer")
+    expect(btn).to_have_text("Poll")  # identified by the viewer test above and cached
+    t0 = time.monotonic()
+    btn.click()
+    status = page.locator(".device[data-port='/dev/ttyFAKE1'] .printer-status")
+    expect(status).to_contain_text("printing", timeout=5000)
+    assert time.monotonic() - t0 < 5.0
+    expect(status).to_contain_text("/210°")  # the simulator wobbles ±0.3° around its target
+
+
+@pytest.mark.e2e
+def test_query_from_panel_and_overlay(page: Page, printer_url: str):
+    """Query asks M115 without pinning; the overlay's query box runs allowlisted codes only."""
+    page.goto(f"{printer_url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    _select(page, "printer_3")
+    section = page.locator("#selected-body .device-section")
+    # printer_1 holds /dev/ttyFAKE1 from the earlier test; FAKE0 (the Uno) is free.
+    expect(section.locator(".dev-pick")).to_be_visible(timeout=8000)
+    section.locator(".dev-pick").select_option("/dev/ttyFAKE0")
+    t0 = time.monotonic()
+    section.locator(".dev-query").click()
+    expect(section.locator(".device-query")).to_contain_text("/dev/ttyFAKE0", timeout=8000)
+    assert time.monotonic() - t0 < 8.0
+    # The simulated engine answers M115 on any port, so FAKE0 identifies as a printer too --
+    # and querying did not pin it.
+    expect(section.locator(".device-query")).to_contain_text("Marlin Apothecary Simulator")
+    expect(section).not_to_contain_text("pinned")
+
+    # Overlay query box: visible only in printer mode; refuses non-report codes via the API.
+    _ensure_pinned(page, "printer_1", "/dev/ttyFAKE1")
+    page.locator("#selected-body .dev-watch").click()
+    expect(page.locator("#serial-query-row")).to_be_visible(timeout=8000)
+    page.locator("#serial-query").fill("M119")
+    page.locator("#serial-query-row button").click()
+    expect(page.locator("#serial-body")).to_contain_text("y_min: TRIGGERED", timeout=5000)
+    page.locator("#serial-query").fill("M104 S200")
+    page.locator("#serial-query-row button").click()
+    expect(page.locator("#serial-body")).to_contain_text("query refused", timeout=5000)
+    assert page.locator("#serial-query-codes option").count() >= 10
+
+
+@pytest.mark.e2e
+def test_manual_pin_poll_now_and_auto_refresh(page: Page, printer_url: str):
+    """Pin by typed identity, poll from the panel, and the auto-refresh keeps to its interval."""
+    page.goto(f"{printer_url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+
+    # A typed identity that nothing detects pins as "not connected" and offers Rescan.
+    _select(page, "printer_2")
+    section = page.locator("#selected-body .device-section")
+    expect(section.locator(".dev-manual")).to_be_visible(timeout=8000)
+    section.locator(".dev-manual").fill("/dev/ender")
+    section.locator(".dev-manual").press("Enter")
+    expect(section).to_contain_text("not connected", timeout=5000)
+    expect(section.locator(".dev-rescan")).to_be_visible()
+    section.locator(".dev-unpin").click()
+    expect(section.locator(".dev-pick")).to_be_visible(timeout=5000)
+
+    # Poll now on the bound printer updates the badge without opening the overlay.
+    _ensure_pinned(page, "printer_1", "/dev/ttyFAKE1")
+    expect(page.locator("#selected-body .dev-poll")).to_be_visible(timeout=8000)
+    expect(page.locator("#serial-overlay")).to_be_hidden()
+    page.locator("#selected-body .dev-poll").click()
+    badge = page.locator("#contents-list .contents-item[data-path='printer_1'] .dev-badge")
+    expect(badge).to_contain_text("/", timeout=5000)  # temps, not the bare 🖨
+    expect(page.locator("#serial-overlay")).to_be_hidden()
+
+    # Auto-refresh at 5 s: count fresh scans over ~2.5 intervals -- 2 or 3, never a pile-up.
+    scans = []
+    page.on(
+        "request", lambda r: scans.append(time.monotonic()) if "/devices?fresh=1" in r.url else None
+    )
+    page.locator("#devices-interval").select_option("5000")
+    if not page.locator("#devices-auto").is_checked():
+        page.locator("#devices-auto").check()
+    t0 = time.monotonic()
+    # Not time.sleep: sync-API event callbacks only fire during Playwright calls.
+    page.wait_for_timeout(12500)
+    n = sum(1 for t in scans if t >= t0)
+    assert 2 <= n <= 3, f"{n} auto-refresh scans in 12.5 s at a 5 s interval"
+    page.locator("#devices-auto").uncheck()
+    before = len(scans)
+    page.wait_for_timeout(6000)
+    assert len(scans) == before, "auto-refresh kept running after being switched off"
+
+
+@pytest.mark.e2e
+def test_focused_monitor_page(page: Page, printer_url: str):
+    """The focused monitor: status within a bound, cadence, log, query, reconnect, reset."""
+    page.goto(f"{printer_url}/firmware/monitor?port=/dev/ttyFAKE1")
+    t0 = time.monotonic()
+    expect(page.locator("#c-state")).to_contain_text("printing", timeout=8000)
+    assert time.monotonic() - t0 < 8.0
+    expect(page.locator("#ident")).to_contain_text("Marlin Apothecary Simulator")
+    expect(page.locator("#port")).to_have_value("/dev/ttyFAKE1")
+    expect(page.locator("#c-board")).to_contain_text("held", timeout=5000)
+    expect(page.locator("#c-hot")).to_contain_text("/ 210°")
+
+    # Cadence: with poll traffic shown, count M105 sends over ~3 periods.
+    page.locator("#show-polls").check()
+    sends = page.locator("#log .tx", has_text="M105")
+    expect(sends.first).to_be_visible(timeout=5000)
+    n0 = sends.count()
+    page.wait_for_timeout(int(3.25 * POLL_S * 1000))
+    delta = sends.count() - n0
+    assert 2 <= delta <= 4, f"{delta} polls in {3.25 * POLL_S}s at a {POLL_S}s cadence"
+    expect(page.locator("#chart path")).to_have_count(4)  # two series + two targets
+    expect(page.locator("#chart-span")).to_contain_text("polls")
+
+    # Hidden poll traffic leaves only the story: open, M115, queries, sys lines.
+    page.locator("#show-polls").uncheck()
+    assert page.locator("#log .tx", has_text="M105").count() == 0
+    page.locator("#q").fill("M119")
+    page.locator("#qform button").click()
+    expect(page.locator("#log")).to_contain_text("y_min: TRIGGERED", timeout=5000)
+    page.locator("#q").fill("G28")
+    page.locator("#qform button").click()
+    expect(page.locator("#log")).to_contain_text("query refused", timeout=5000)
+
+    # Reconnect keeps the log and comes back polling; reset shows the boot banner.
+    t0 = time.monotonic()
+    page.locator("#reconnect").click()
+    expect(page.locator("#log .sys", has_text="closed /dev/ttyFAKE1")).to_be_visible(timeout=6000)
+    expect(page.locator("#log .sys", has_text="opened /dev/ttyFAKE1").last).to_be_visible()
+    assert time.monotonic() - t0 < 6.0
+    expect(page.locator("#log")).to_contain_text("y_min: TRIGGERED")  # earlier entries survived
+    page.once("dialog", lambda d: d.accept())
+    page.locator("#reset").click()
+    expect(page.locator("#log .boot", has_text="start")).to_be_visible(timeout=8000)
+
+    # Release drops the link and stops auto-poll.
+    page.locator("#release").click()
+    expect(page.locator("#c-board")).to_contain_text("not held", timeout=5000)
+    assert not page.locator("#auto").is_checked()
+    n1 = page.locator("#log .sys").count()
+    page.wait_for_timeout(int(2.5 * POLL_S * 1000))
+    assert page.locator("#c-board").inner_text().count("held") >= 1  # still "not held": no reopen
+    assert page.locator("#log .sys").count() == n1
+
+
+BOARD = "printer_1.frame_system.mainboard"
+
+
+@pytest.mark.e2e
+def test_board_inside_the_printer_drives_it(page: Page, printer_url: str):
+    """Pin the port to the mainboard: the printer row and panel speak for it; its status follows."""
+    page.goto(f"{printer_url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    # Start clean: nothing pinned on the printer itself.
+    _select(page, "printer_1")
+    section = page.locator("#selected-body .device-section")
+    expect(section).not_to_contain_text("scanning devices", timeout=8000)
+    if section.locator(".dev-unpin").count():
+        section.locator(".dev-unpin").click()
+        expect(section.locator(".dev-manual")).to_be_visible(timeout=5000)
+
+    _expand_to(page, BOARD)
+    expect(page.locator("#selected-body .prop-row", has_text="Name")).to_contain_text("mainboard")
+    expect(section.locator(".dev-pick")).to_be_visible(timeout=8000)
+    section.locator(".dev-pick").select_option("/dev/ttyFAKE1")
+    section.locator(".dev-query").click()  # identifies the port (M115) without pinning
+    expect(section.locator(".device-query")).to_contain_text("Marlin", timeout=8000)
+    section.locator(".dev-pin").click()
+    expect(section).to_contain_text("pinned", timeout=5000)
+
+    # The printer's row carries the board's badge (dimmed, "via"), and its panel says so.
+    badge = page.locator("#contents-list .contents-item[data-path='printer_1'] .dev-badge")
+    expect(badge).to_be_visible()
+    assert "via" in badge.get_attribute("class")
+    assert badge.get_attribute("title").startswith("via frame_system.mainboard")
+    _select(page, "printer_1")
+    expect(section).to_contain_text("via frame_system.mainboard")
+    expect(section.locator(".dev-unpin")).to_have_count(
+        0
+    )  # unpin from the board, not through the printer
+    t0 = time.monotonic()
+    section.locator(".dev-poll").click()
+    expect(page.locator("#status-select")).to_have_value("printing", timeout=8000)
+    assert time.monotonic() - t0 < 8.0
+
+    # The via link jumps to the board's own row and panel.
+    section.locator(".dev-via").click()
+    expect(page.locator("#selected-body .prop-row", has_text="Name")).to_contain_text("mainboard")
+    expect(section.locator(".dev-unpin")).to_be_visible()
+    section.locator(".dev-unpin").click()
+    expect(section.locator(".dev-manual")).to_be_visible(timeout=5000)
+    expect(
+        page.locator("#contents-list .contents-item[data-path='printer_1'] .dev-badge")
+    ).to_have_count(0)
+
+
+@pytest.mark.e2e
+def test_control_overlay_is_latched(page: Page, printer_url: str):
+    """Nothing heats or moves until Control is armed; armed, the effect shows within a poll."""
+    page.goto(f"{printer_url}/firmware/monitor?port=/dev/ttyFAKE1")
+    expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
+    expect(page.locator("#control")).to_be_hidden()
+    assert not page.locator("#ctl").is_checked()
+    # The API refuses control while disarmed; only the emergency stop would go.
+    r = page.request.post(
+        f"{printer_url}/firmware/printers/command",
+        data={"port": "/dev/ttyFAKE1", "command": "M140 S60"},
+    )
+    assert r.status == 409
+
+    page.locator("#ctl").check()
+    expect(page.locator("#control")).to_be_visible(timeout=5000)
+    expect(page.locator("#ctl-ttl")).to_contain_text(":")
+    page.locator("#h-bed").fill("45")
+    t0 = time.monotonic()
+    page.locator("#control button[data-cmd='M140 S{h-bed}']").click()
+    expect(page.locator("#c-bed")).to_contain_text("/ 45°", timeout=POLL_S * 1000 + 3000)
+    assert time.monotonic() - t0 < POLL_S + 3
+    expect(page.locator("#log .tx.control", has_text="M140 S45")).to_be_visible()
+
+    # An out-of-bounds value never reaches the board.
+    page.locator("#h-hot").fill("900")
+    page.locator("#control button[data-cmd='M104 S{h-hot}']").click()
+    expect(page.locator("#ctl-sent")).to_contain_text("above 300", timeout=5000)
+    assert page.locator("#log .tx.control", has_text="M104 S900").count() == 0
+
+    # Pause the SD print, then a jog: three lines, relative mode restored, the
+    # position card follows; resume afterwards.
+    page.locator("#control button[data-cmd='M25']").click()
+    expect(page.locator("#c-state")).to_contain_text("idle", timeout=POLL_S * 1000 + 3000)
+    page.locator("#control button[data-step='10']").click()
+    page.locator("#control button[data-jog='Y+']").click()
+    expect(page.locator("#log .tx.control", has_text="G90").last).to_be_visible(timeout=8000)
+    expect(page.locator("#c-pos")).to_contain_text("Y10.0", timeout=POLL_S * 1000 + 3000)
+    page.locator("#control button[data-cmd='M24']").click()
+    expect(page.locator("#c-state")).to_contain_text("printing", timeout=POLL_S * 1000 + 3000)
+
+    # Disarm: overlay gone, commands refused again; the latch state survives a reload.
+    page.locator("#ctl-disarm").click()
+    expect(page.locator("#control")).to_be_hidden(timeout=3000)
+    assert not page.locator("#ctl").is_checked()
+    page.locator("#ctl").check()
+    expect(page.locator("#control")).to_be_visible(timeout=5000)
+    page.reload()
+    expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
+    expect(page.locator("#control")).to_be_visible(timeout=5000)
+    page.locator("#ctl-disarm").click()
+    expect(page.locator("#control")).to_be_hidden(timeout=3000)

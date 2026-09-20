@@ -6,10 +6,29 @@ import json
 from pathlib import Path
 from typing import List, Optional
 
+from pydantic import ValidationError
+
 from ..projects.parts.skeleton import ROOT
-from .models import SketchInfo
+from .models import DisplaySpec, SketchInfo
 
 SIDECAR = "firmware.json"
+DEFAULT_BAUD = 115200
+
+
+def _display(meta: dict) -> Optional[DisplaySpec]:
+    """A malformed ``display`` is dropped, like any other bad sidecar value."""
+    raw = meta.get("display")
+    if not isinstance(raw, dict):
+        return None
+    try:
+        return DisplaySpec(**raw)
+    except ValidationError:
+        return None
+
+
+def _baud(meta: dict) -> int:
+    raw = meta.get("baud")
+    return raw if isinstance(raw, int) and 300 <= raw <= 2_000_000 else DEFAULT_BAUD
 
 
 def _read_sidecar(folder: Path) -> dict:
@@ -40,6 +59,8 @@ def _visit(folder: Path, parts_dir: Path, out: List[SketchInfo]) -> None:
                 cores=[str(c) for c in meta.get("cores", [])],
                 libraries=[str(lib) for lib in meta.get("libraries", [])],
                 note=meta.get("note") or None,
+                baud=_baud(meta),
+                display=_display(meta),
             )
         )
     for child in sorted(p for p in folder.iterdir() if p.is_dir()):

@@ -62,7 +62,7 @@ JSCAD viewer, which is optional.)
 | [docs/](docs/README.md)                            | Full documentation index       |
 | [docs/scene-json.md](docs/scene-json.md)           | JSON format for scenes         |
 | [docs/parts-authoring.md](docs/parts-authoring.md) | Add your own parts             |
-| [docs/firmware.md](docs/firmware.md)               | Program boards from parts' sketches |
+| [docs/firmware.md](docs/firmware.md)               | Program boards from parts' sketches; monitor a G-code printer and let it drive its scene node |
 | [CONTRIBUTING.md](CONTRIBUTING.md)                 | Development setup & guidelines |
 | [CHANGELOG.md](CHANGELOG.md)                       | Version history                |
 
@@ -97,6 +97,9 @@ apothecary firmware sketches   # Sketches found under parts/<name>/<name>.ino
 apothecary firmware compile footpedal        # Build (FQBN from parts/footpedal/firmware.json)
 apothecary firmware upload footpedal -p /dev/ttyUSB0   # Compile + upload
 apothecary firmware flash-bin /dev/ttyUSB0 0x10000:app.bin --chip esp32   # esptool raw flash
+apothecary firmware printer /dev/ttyUSB1 --query M503    # a Marlin board: identify (M115), poll, report-only queries
+# GUI: /firmware (toolchain, devices), /firmware/monitor (one printer: status, temps, comms log), and the
+# viewer's Device panel, which pins a printer to a node so its status follows the machine
 apothecary firmware devices    # What's plugged in, chip identity, and what each should be running
 apothecary firmware probe /dev/ttyUSB0          # esptool chip/MAC/flash (resets the board)
 apothecary firmware listen /dev/ttyUSB0 --reset # Serial for a few seconds; names the running sketch

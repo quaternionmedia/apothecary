@@ -85,12 +85,16 @@ def serve(host: str, port: int, reload: bool, viewer_path: str | None, no_viewer
     if not viewer_available and not no_viewer:
         click.echo("(the JSCAD assets are unused by any route; the viewer is unaffected)")
 
+    # A live serial overlay (/firmware/devices/stream) is an SSE response that
+    # only ends when the browser leaves; without a graceful-shutdown timeout
+    # a reload or Ctrl-C waits on it forever.
+    graceful = {"timeout_graceful_shutdown": 3}
     if reload:
         # When reload is enabled, uvicorn needs an import string
-        uvicorn.run("apothecary.api:app", host=host, port=port, reload=reload)
+        uvicorn.run("apothecary.api:app", host=host, port=port, reload=reload, **graceful)
     else:
         # Without reload, we can pass the app directly
-        uvicorn.run(fastapi_app, host=host, port=port, reload=False)
+        uvicorn.run(fastapi_app, host=host, port=port, reload=False, **graceful)
 
 
 @click.command()

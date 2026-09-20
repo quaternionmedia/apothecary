@@ -90,8 +90,20 @@ Please start the server with: apothecary serve --port 8765
   - Zoom navigation and the minimap
   - The absorbed parts-library part view
 
-- `test_docs_fractal_viewer.py` - doc-workflow test (marked both `e2e` and
-  `docs`) — see below
+- `test_firmware_page.py` - the `/firmware` page and the viewer's serial overlay,
+  against whatever toolchain the host has
+
+- `test_printer_ui.py` - the printer monitor with **timing bounds** (panel up
+  within 1 s of a click, polls at their cadence and never stacked, an edit
+  surviving polls, auto-refresh keeping to its interval, the focused
+  `/firmware/monitor` page: status, log, query, reconnect, reset). Starts its own
+  server on port 8768 with the scripted fake `arduino-cli` and the
+  simulated printer (`APOTHECARY_SERIAL_ENGINE=simulated`), so it needs no
+  hardware and never touches `~/.apothecary`
+
+- `test_docs_fractal_viewer.py`, `test_docs_printer_monitor.py` - doc-workflow
+  tests (marked both `e2e` and `docs`) — see below. The printer one skips
+  unless the server has the scripted ports (the doc server always does)
 
 ## Doc-workflow tests
 

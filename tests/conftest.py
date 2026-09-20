@@ -44,24 +44,18 @@ def pytest_addoption(parser):
 # A stand-in `arduino-cli` executable that answers the JSON queries the seam
 # makes and records every long-running invocation, so firmware tests never
 # need (or touch) a real toolchain, ~/.arduino15, or a serial port. The script
-# and the helpers that read its log live in firmware_fakes.py; the fixtures
+# and the helpers that read its log live in firmware_helpers.py; the fixtures
 # that wire it in are here.
 
-import stat  # noqa: E402
 
 import pytest  # noqa: E402
-from firmware_fakes import FAKE_ARDUINO_CLI, _isolate_firmware_state  # noqa: E402
+from firmware_helpers import _isolate_firmware_state, write_fake_arduino_cli  # noqa: E402
 
 
 @pytest.fixture
 def fake_arduino_cli(tmp_path, monkeypatch):
     """Point the firmware seam at a scripted arduino-cli; yields the script path."""
-    script = tmp_path / "arduino-cli"
-    script.write_text(
-        FAKE_ARDUINO_CLI.replace("#!/usr/bin/env python3", f"#!{sys.executable}", 1),
-        encoding="utf-8",
-    )
-    script.chmod(script.stat().st_mode | stat.S_IXUSR)
+    script = write_fake_arduino_cli(tmp_path / "arduino-cli")
     monkeypatch.setenv("ARDUINO_CLI", str(script))
     monkeypatch.setenv("APOTHECARY_TOOLS_DIR", str(tmp_path / "tools"))
     monkeypatch.setenv("PATH", str(tmp_path / "empty-bin"))

@@ -4,8 +4,8 @@ import time
 from pathlib import Path
 
 from click.testing import CliRunner
-from firmware_fakes import fake_cli_calls
 from fastapi.testclient import TestClient
+from firmware_helpers import fake_cli_calls
 
 from apothecary.api import app
 from apothecary.cli import cli

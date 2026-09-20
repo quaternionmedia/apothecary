@@ -10,6 +10,10 @@ where they disagree:
   to that MAC (or port), compared against the sketch as it is *now*.
 * **Observed** -- serial output via ``arduino-cli monitor``; a sketch that
   prints ``apothecary <name>: hello`` at boot identifies itself.
+* **Identified** -- for a board running a G-code firmware (a printer
+  mainboard), ``M115`` over a held-open link (``gcode.py``): firmware name,
+  machine type, capabilities. Cached like a probe; polled for temperatures
+  and progress afterwards.
 
 Records live in ``~/.apothecary/firmware-state.json`` (``APOTHECARY_STATE_DIR``
 overrides): machine state, not repository state, so it is never committed.
@@ -26,16 +30,29 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional
+from typing import Callable, Dict, Iterator, List, Optional
 
 from ..projects.parts.skeleton import ROOT
-from .models import DeviceInfo, ExpectedFirmware, FlashRecord, ListenResult, SketchInfo
+from . import gcode
+from .models import (
+    DeviceInfo,
+    ExpectedFirmware,
+    FlashRecord,
+    ListenResult,
+    ManualBinding,
+    PrinterQueryResult,
+    SketchInfo,
+)
 from .sketches import find_sketch
 from .toolchains import ArduinoCli, Esptool, ToolchainError, get_arduino_cli, get_esptool
 
 BANNER_RE = re.compile(r"apothecary\s+([A-Za-z0-9_.\-]+):\s*hello")
 CHIP_LINE_RE = re.compile(r"^chip:\s+(.+)$")
-ESP_VENDOR = "esp32"
+ESP_VENDORS = ("esp32", "esp8266")  # arduino-cli vendor prefixes esptool can talk to
+
+
+def is_espressif_fqbn(fqbn: str) -> bool:
+    return fqbn.split(":", 1)[0] in ESP_VENDORS
 
 
 # --- persistent state -------------------------------------------------------------
@@ -51,7 +68,7 @@ def state_file() -> Path:
 
 
 class FirmwareState:
-    """Flash records and cached probes, one JSON file, read fresh on every use."""
+    """Flash records, cached probes and node bindings: one JSON file, read fresh on every use."""
 
     def __init__(self, path: Optional[Path] = None):
         self.path = path or state_file()
@@ -61,9 +78,10 @@ class FirmwareState:
         try:
             data = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
-            return {"flashes": [], "devices": {}}
+            return {"flashes": [], "devices": {}, "bindings": []}
         data.setdefault("flashes", [])
         data.setdefault("devices", {})
+        data.setdefault("bindings", [])
         return data
 
     def _save(self, data: dict) -> None:
@@ -100,6 +118,42 @@ class FirmwareState:
     def cached_device(self, port: str) -> Optional[DeviceInfo]:
         raw = self._load()["devices"].get(port)
         return DeviceInfo(**raw) if raw else None
+
+    # -- node bindings: a device the user pinned to a (site, node path) ----------
+
+    def set_binding(self, site: str, path: str, identity: str) -> ManualBinding:
+        """Pin ``identity`` to the node; replaces any earlier pin for that node."""
+        binding = ManualBinding(
+            site=site, path=path, identity=identity, bound_at=datetime.now(timezone.utc)
+        )
+        with self._lock:
+            data = self._load()
+            data["bindings"] = [
+                b for b in data["bindings"] if not (b["site"] == site and b["path"] == path)
+            ]
+            data["bindings"].append(binding.model_dump(mode="json"))
+            self._save(data)
+        return binding
+
+    def clear_binding(self, site: str, path: str) -> bool:
+        """Drop the pin for the node; ``False`` if there was none."""
+        with self._lock:
+            data = self._load()
+            before = len(data["bindings"])
+            data["bindings"] = [
+                b for b in data["bindings"] if not (b["site"] == site and b["path"] == path)
+            ]
+            if len(data["bindings"]) == before:
+                return False
+            self._save(data)
+            return True
+
+    def bindings(self, site: Optional[str] = None) -> List[ManualBinding]:
+        rows = [ManualBinding(**b) for b in self._load()["bindings"]]
+        return [b for b in rows if site is None or b.site == site]
+
+    def binding_for(self, site: str, path: str) -> Optional[ManualBinding]:
+        return next((b for b in self.bindings(site) if b.path == path), None)
 
 
 _STATE: Optional[FirmwareState] = None
@@ -190,16 +244,45 @@ def expected_firmware(
 # --- detected + probed -------------------------------------------------------------
 
 
+# ``arduino-cli board list`` takes ~2 s; the viewer's panel, its serial
+# overlay and the firmware page each ask for it, often within a second of
+# one another. A short-lived cache of the raw scan (cached probes are merged
+# afresh each call) turns those into one scan. Long enough to coalesce a
+# page's requests, short enough that a replug shows on the next click.
+SCAN_TTL = 2.0
+_SCAN: Optional[tuple] = None  # (monotonic time, cli, boards)
+
+
+def scan_ports(cli: Optional[ArduinoCli] = None, fresh: bool = False):
+    global _SCAN
+    cli = cli or get_arduino_cli()
+    now = time.monotonic()
+    if not fresh and _SCAN and _SCAN[1] is cli and now - _SCAN[0] < SCAN_TTL:
+        return _SCAN[2]
+    boards = cli.board_list()
+    _SCAN = (now, cli, boards)
+    return boards
+
+
 def detected_devices(
-    cli: Optional[ArduinoCli] = None, state: Optional[FirmwareState] = None
+    cli: Optional[ArduinoCli] = None, state: Optional[FirmwareState] = None, fresh: bool = False
 ) -> List[DeviceInfo]:
-    """Every serial port arduino-cli sees, merged with any cached probe for it."""
+    """Every serial port arduino-cli sees, merged with any cached probe for it.
+
+    ``fresh`` bypasses the short scan cache (an explicit rescan button).
+    """
     cli = cli or get_arduino_cli()
     state = state or get_state()
     devices: List[DeviceInfo] = []
-    for b in cli.board_list():
+    for b in scan_ports(cli, fresh):
         info = DeviceInfo(
-            port=b.port, label=b.label, vid=b.vid, pid=b.pid, board_name=b.board_name, fqbn=b.fqbn
+            port=b.port,
+            label=b.label,
+            vid=b.vid,
+            pid=b.pid,
+            board_name=b.board_name,
+            fqbn=b.fqbn,
+            serial_number=b.serial_number,
         )
         cached = state.cached_device(b.port)
         if cached and (cached.vid, cached.pid) == (b.vid, b.pid):
@@ -215,6 +298,7 @@ def detected_devices(
                         "flash_size",
                         "flash_manufacturer",
                         "probed_at",
+                        "printer",
                     )
                 }
             )
@@ -239,8 +323,10 @@ def probe_device(
     base = next((d for d in detected_devices(cli, state) if d.port == port), None)
     if base is None:
         raise ToolchainError(f"no board detected on {port}")
-    if base.fqbn and not base.fqbn.startswith(ESP_VENDOR + ":"):
+    if base.fqbn and not is_espressif_fqbn(base.fqbn):
         return base
+    if base.printer is not None:
+        return base  # a printer mainboard; esptool would only reset it
     if not esptool.is_available:
         raise ToolchainError(
             "esptool is not available; install the esp32 core to get its bundled copy"
@@ -250,6 +336,180 @@ def probe_device(
     device = base.model_copy(update={**fields, "probed_at": datetime.now(timezone.utc)})
     state.remember_device(device)
     return device
+
+
+# --- identified: a G-code firmware ----------------------------------------------------
+
+
+def identify_printer(
+    port: str,
+    baud: int = 115200,
+    cli: Optional[ArduinoCli] = None,
+    state: Optional[FirmwareState] = None,
+    links: Optional[gcode.PrinterLinks] = None,
+    reset: bool = False,
+) -> DeviceInfo:
+    """Ask ``M115`` on ``port`` and cache the answer on the device.
+
+    Opens (and keeps) the printer link; the serial overlay's monitor on that
+    port is closed first so only one process reads it. ``reset`` reboots the
+    board deliberately to capture its boot banner -- never do that mid-print.
+    Raises ``ToolchainError`` when nothing G-code answers.
+    """
+    cli = cli or get_arduino_cli()
+    state = state or get_state()
+    links = links or gcode.get_printer_links()
+    base = next((d for d in detected_devices(cli, state) if d.port == port), None)
+    if base is None:
+        raise ToolchainError(f"no board detected on {port}")
+    get_streams().close(port)
+    link = links.open(port, baud)
+    try:
+        info = gcode.identify_printer(link, reset=reset)
+    except ToolchainError:
+        links.close(port)
+        raise
+    device = base.model_copy(update={"printer": info})
+    state.remember_device(device)
+    return device
+
+
+# Who wants to know a printer's state after each poll: api.py registers the
+# site sync here, so this package never imports the site layer. A listener
+# returns the nodes it touched; they ride along on ``PrinterStatus.synced``.
+StatusListener = Callable[[gcode.PrinterStatus], List[dict]]
+STATUS_LISTENERS: List[StatusListener] = []
+_LAST_STATUS: Dict[str, gcode.PrinterStatus] = {}
+
+
+def last_statuses() -> Dict[str, gcode.PrinterStatus]:
+    """The newest poll per port, for views that must not touch the port themselves."""
+    return dict(_LAST_STATUS)
+
+
+def notify_status(status: gcode.PrinterStatus) -> gcode.PrinterStatus:
+    _LAST_STATUS[status.port] = status
+    for listener in STATUS_LISTENERS:
+        status.synced.extend(listener(status) or [])
+    return status
+
+
+def printer_status(
+    port: str,
+    baud: Optional[int] = None,
+    state: Optional[FirmwareState] = None,
+    links: Optional[gcode.PrinterLinks] = None,
+) -> gcode.PrinterStatus:
+    """One poll over the held link; opens it if it is not yet open.
+
+    ``baud`` defaults to what the cached identification used. A port never
+    identified is identified first, so a viewer can poll straight away.
+    Every poll is handed to ``STATUS_LISTENERS`` (the site sync).
+    """
+    state = state or get_state()
+    links = links or gcode.get_printer_links()
+    link = links.get(port)
+    if link is None:
+        cached = state.cached_device(port)
+        rate = baud or (cached.printer.baud if cached and cached.printer else 115200)
+        if not (cached and cached.printer):
+            identify_printer(port, rate, state=state, links=links)
+            link = links.get(port)
+        else:
+            get_streams().close(port)
+            link = links.open(port, rate)
+    assert link is not None
+    try:
+        status = gcode.poll_printer(link)
+    except ToolchainError as exc:
+        links.close(port)  # a wedged link is worse than a reopen on the next poll
+        status = gcode.offline_status(port, str(exc))
+    return notify_status(status)
+
+
+def printer_reconnect(
+    port: str,
+    baud: Optional[int] = None,
+    state: Optional[FirmwareState] = None,
+    links: Optional[gcode.PrinterLinks] = None,
+) -> gcode.PrinterStatus:
+    """Drop the held link and open a fresh one (no reset), then poll.
+
+    The remedy for a wedged port or a board that was replugged: the comms
+    log is kept across the reopen so the monitor shows the whole story.
+    """
+    state = state or get_state()
+    links = links or gcode.get_printer_links()
+    links.close(port)
+    return printer_status(port, baud, state=state, links=links)
+
+
+def printer_reset(
+    port: str,
+    state: Optional[FirmwareState] = None,
+    links: Optional[gcode.PrinterLinks] = None,
+) -> List[str]:
+    """Reboot the board on purpose (DTR pulse) and return its boot banner.
+
+    Never do this mid-print; the API and pages ask before calling it.
+    """
+    state = state or get_state()
+    links = links or gcode.get_printer_links()
+    if links.get(port) is None:
+        printer_status(port, state=state, links=links)
+    link = links.get(port)
+    if link is None:
+        raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
+    return link.reset()
+
+
+def printer_control(
+    port: str,
+    command: str,
+    state: Optional[FirmwareState] = None,
+    links: Optional[gcode.PrinterLinks] = None,
+) -> PrinterQueryResult:
+    """One allowlisted control line, only while the port's latch is armed (M112 always).
+
+    Renews the latch on success. The link is opened (and the port
+    identified) on first use like a poll would.
+    """
+    state = state or get_state()
+    links = links or gcode.get_printer_links()
+    cmd = gcode.normalise_control(command)  # ValueError when not allowed / out of bounds
+    if cmd != gcode.EMERGENCY_STOP and not links.control.armed(port):
+        raise gcode.ControlNotArmed(f"{port}: control is not armed -- arm it first")
+    if links.get(port) is None:
+        printer_status(port, state=state, links=links)
+    link = links.get(port)
+    if link is None:
+        raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
+    lines = gcode.control_printer(link, cmd)
+    links.control.renew(port)
+    return PrinterQueryResult(
+        port=port, command=cmd, lines=lines, queried_at=datetime.now(timezone.utc)
+    )
+
+
+def printer_query(
+    port: str,
+    command: str,
+    state: Optional[FirmwareState] = None,
+    links: Optional[gcode.PrinterLinks] = None,
+) -> PrinterQueryResult:
+    """One allowlisted report code over the held link (opened and identified on first use)."""
+    state = state or get_state()
+    links = links or gcode.get_printer_links()
+    cmd = gcode.normalise_query(command)  # ValueError for anything that is not a report
+    if links.get(port) is None:
+        printer_status(port, state=state, links=links)  # identifies + opens; offline if it cannot
+    link = links.get(port)
+    if link is None:
+        raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
+    lines = gcode.query_printer(link, cmd)
+    return PrinterQueryResult(
+        port=port, command=cmd, lines=lines, queried_at=datetime.now(timezone.utc)
+    )
 
 
 # --- observed: serial -------------------------------------------------------------
@@ -361,6 +621,31 @@ def listen(
 REPLAY_MARKER = "[apothecary: serial replay detected -- reopening port]"
 
 
+def _pump(fd: int, port: str):
+    """Read ``fd`` in 4 KB chunks on a thread and hand them over a queue.
+
+    ``select()`` only works on sockets on Windows, so the portable way to wait
+    on a pipe with a timeout is a blocking reader thread; it ends when the
+    monitor process closes its end (EOF or error puts ``b""`` on the queue).
+    """
+    import queue
+
+    q: "queue.Queue[bytes]" = queue.Queue()
+
+    def reader():
+        try:
+            while True:
+                raw = os.read(fd, 4096)
+                q.put(raw)
+                if not raw:
+                    return
+        except OSError:
+            q.put(b"")
+
+    threading.Thread(target=reader, daemon=True, name=f"serial-pump-{port}").start()
+    return q
+
+
 def stream_lines(
     port: str,
     baud: int = 115200,
@@ -385,7 +670,7 @@ def stream_lines(
     knows what happened. Real bursts fit comfortably -- the bucket holds the
     bridge's whole buffer several times over.
     """
-    import select
+    import queue
 
     streams = streams or get_streams()
     wire_rate = baud / 10.0  # bytes/s: 8 data bits + start + stop
@@ -396,7 +681,7 @@ def stream_lines(
     while True:
         proc = streams.open(port, baud, cli)
         assert proc.stdout is not None
-        fd = proc.stdout.fileno()
+        chunks = _pump(proc.stdout.fileno(), port)
         buf = ""
         quiet_since = time.time()
         tokens, refilled_at = bucket_cap, time.time()
@@ -405,13 +690,13 @@ def stream_lines(
         replay = False
         try:
             while proc.poll() is None and not (stop and stop.is_set()):
-                ready, _, _ = select.select([fd], [], [], 0.5)
-                if not ready:
+                try:
+                    raw = chunks.get(timeout=0.5)
+                except queue.Empty:
                     if time.time() - quiet_since >= keepalive:
                         quiet_since = time.time()
                         yield None
                     continue
-                raw = os.read(fd, 4096)
                 if not raw:
                     break
                 now = time.time()

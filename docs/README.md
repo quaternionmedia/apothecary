@@ -40,7 +40,7 @@ by `pytest walkthrough`. Start there.
 | [Fitting a Part](fitting-a-part.md) | The seam standard: which numbers belong to a consumer and which to this repository |
 | [Boundaries](boundaries.md) | Which repository owns what between datum and apothecary, and what happens at the crossing |
 | [Geometry Models](models.md) | Vectors, bounds, colors, shapes, and units |
-| [Firmware](firmware.md) | Program Arduinos/ESP32s from sketches kept with their parts; toolchain install, device identity, live serial |
+| [Firmware](firmware.md) | Program Arduinos/ESP32s from sketches kept with their parts; toolchain install, device identity, live serial; monitor a G-code printer and let it drive its scene node |
 
 ## External Libraries
 
@@ -56,12 +56,30 @@ by `pytest walkthrough`. Start there.
 | [Parts README](../parts/README.md) | Raw SCAD files and naming conventions |
 | [E2E Testing](../tests/e2e/README.md) | Running Playwright end-to-end tests |
 
+## Plans
+
+| Document | Description |
+|----------|-------------|
+| [Consolidation, 2026-09-19](plans/consolidation-2026-09-19.md) | Landing the printer seam on the integration branch: where the lines are, the order of operations, the census gate, and what a person has to decide |
+
 ## Generated Documentation (screenshots, GIFs, walkthroughs)
 
-The fractal zoom viewer is documented by its own Playwright E2E test, not by
-hand-maintained prose: each `docs.step("...")` call in
-`tests/e2e/test_docs_fractal_viewer.py` is both a checked assertion point and
-a sentence of documentation. Editing that test is how you edit these docs.
+The fractal zoom viewer and the printer monitor are documented by their own
+Playwright E2E tests, not by hand-maintained prose: each `docs.step("...")`
+call in `tests/e2e/test_docs_fractal_viewer.py` and
+`tests/e2e/test_docs_printer_monitor.py` is both a checked assertion point
+and a sentence of documentation. Editing those tests is how you edit these
+docs. Once generated:
+
+| Walkthrough | Page |
+|---|---|
+| Fractal zoom viewer | [`generated/fractal-viewer/fractal-viewer.md`](generated/fractal-viewer/fractal-viewer.md) |
+| Printer monitor (Device panel, polling overlay, G-code queries, firmware page) | [`generated/printer-monitor/printer-monitor.md`](generated/printer-monitor/printer-monitor.md) |
+
+The doc server runs with two scripted serial ports and a simulated printer
+mid-print (`apothecary docs generate --real-devices` to use the host's
+instead), so the screenshots are identical on every machine and never touch
+a real board.
 
 ```bash
 apothecary docs generate   # runs the doc-workflow tests, writes docs/generated/

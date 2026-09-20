@@ -9,7 +9,7 @@ from typing import Optional, Tuple
 
 import click
 
-from ..firmware import devices, service
+from ..firmware import devices, gcode, service
 from ..firmware.installer import InstallSpec, env_for_arduino
 from ..firmware.models import validate_core_id, validate_fqbn, validate_port
 from ..firmware.sketches import discover_sketches, find_sketch
@@ -291,6 +291,11 @@ def _print_device(d, expected=None) -> None:
         feats = ", ".join(d.features[:3])
         click.echo(f"    chip: {d.chip} rev {d.revision or '?'}  mac {d.mac}")
         click.echo(f"    flash: {d.flash_size or '?'}  {feats}")
+    if d.printer:
+        machine = f" · {d.printer.machine_type}" if d.printer.machine_type else ""
+        click.echo(f"    printer: {d.printer.firmware_name}{machine}  @ {d.printer.baud} baud")
+        if d.printer.boot_lines:
+            click.echo(f"    boot: {' | '.join(d.printer.boot_lines[:3])}")
     if expected is not None:
         rec = expected.record
         if rec is None:
@@ -368,3 +373,72 @@ def firmware_listen(port: str, seconds: float, baud: int, reset: bool):
         click.secho(f"running: {result.running_sketch}", fg="green")
     else:
         click.secho("no `apothecary <sketch>: hello` banner seen (try --reset)", fg="yellow")
+
+
+def _fmt_heater(h) -> str:
+    return f"{h.actual:.1f}/{h.target:.0f}°C"
+
+
+@firmware.command("printer")
+@click.argument("port")
+@click.option("--baud", default=None, type=int, help="Serial rate (default: cached, else 115200).")
+@click.option("--reset", is_flag=True, help="Reboot the board (DTR pulse) to capture its banner.")
+@click.option(
+    "--query",
+    "queries",
+    multiple=True,
+    help="Also send a report-only code (M503, M119, M20 ...; repeatable).",
+)
+@click.option("--json-out/--text", default=False)
+def firmware_printer(
+    port: str, baud: Optional[int], reset: bool, queries: Tuple[str, ...], json_out: bool
+):
+    """Identify a G-code printer on PORT (M115) and poll it once (M105/M114/M27/M119).
+
+    The port is released on exit with DTR left asserted, so the board is
+    not rebooted by this command unless --reset asks for it.
+    """
+    try:
+        validate_port(port)
+    except ValueError as exc:
+        _die(exc)
+    try:
+        for q in queries:
+            gcode.normalise_query(q)
+    except ValueError as exc:
+        _die(exc)
+    try:
+        d = devices.identify_printer(port, baud or 115200, reset=reset)
+        status = devices.printer_status(port)
+        answers = [devices.printer_query(port, q) for q in queries]
+    except ToolchainError as exc:
+        _die(exc)
+    finally:
+        gcode.get_printer_links().close(port)
+    if json_out:
+        out = {"device": d.model_dump(mode="json"), "status": status.model_dump(mode="json")}
+        out["status"]["heating"] = status.heating
+        out["queries"] = [a.model_dump(mode="json") for a in answers]
+        click.echo(json.dumps(out, indent=2))
+        return
+    _print_device(d)
+    click.echo(f"    state: {status.state}" + ("  (heating)" if status.heating else ""))
+    if status.hotends:
+        hot = "  ".join(f"T{i}: {_fmt_heater(h)}" for i, h in enumerate(status.hotends))
+        bed = f"  bed: {_fmt_heater(status.bed)}" if status.bed else ""
+        click.echo(f"    temps: {hot}{bed}")
+    if status.position:
+        p = status.position
+        click.echo(f"    position: X{p['x']:.2f} Y{p['y']:.2f} Z{p['z']:.2f} E{p['e']:.2f}")
+    if status.endstops:
+        stops = "  ".join(f"{k}={v}" for k, v in status.endstops.items())
+        click.echo(f"    endstops: {stops}")
+    if status.filament_present is not None:
+        click.echo(f"    filament: {'present' if status.filament_present else 'RUNOUT'}")
+    if status.sd_printing:
+        pct = f"{status.sd_progress * 100:.1f}%" if status.sd_progress is not None else "?"
+        click.echo(f"    SD print: {pct}  elapsed {status.print_time_s or 0}s")
+    for a in answers:
+        click.secho(f"    > {a.command}", bold=True)
+        for ln in a.lines:
+            click.echo(f"      {ln}")

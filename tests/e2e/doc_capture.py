@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List
@@ -57,6 +58,10 @@ class DocRecorder:
         index = len(self.steps) + 1
         filename = f"{index:02d}-{_slugify(description)}.png"
         screenshots_dir = GENERATED_DOCS_ROOT / self.workflow / "screenshots"
+        if index == 1 and screenshots_dir.exists():
+            # A run that lost or gained steps must not leave the previous
+            # run's numbered files beside this one's.
+            shutil.rmtree(screenshots_dir)
         screenshots_dir.mkdir(parents=True, exist_ok=True)
         self.page.screenshot(path=str(screenshots_dir / filename))
         self.steps.append(DocStep(index=index, description=description, screenshot=filename))

@@ -1,12 +1,13 @@
-"""A scripted arduino-cli for the firmware tests, and the helpers that read it.
+"""Helpers the firmware tests import directly.
 
-Kept out of conftest.py on purpose. Two conftest.py files (this directory's and
-e2e/) are both imported under the bare name ``conftest``, and which one
-``from conftest import ...`` reaches depends on collection order. A module with
-one name resolves the same way every time.
+Kept out of ``conftest.py`` on purpose: ``from conftest import ...`` resolves
+to whichever conftest pytest imported first (``tests/e2e/conftest.py`` in a
+full run), so it is not a stable module to import from.
 """
 
 import json
+import stat
+import sys
 import textwrap
 from pathlib import Path
 
@@ -64,7 +65,6 @@ FAKE_ARDUINO_CLI = textwrap.dedent(r"""
     """).lstrip()
 
 
-
 def _isolate_firmware_state(monkeypatch, tmp_path):
     """Flash records / cached probes go to a per-test file, never ~/.apothecary."""
     from apothecary.firmware import devices
@@ -72,10 +72,23 @@ def _isolate_firmware_state(monkeypatch, tmp_path):
     monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
     monkeypatch.setattr(devices, "_STATE", None)
     monkeypatch.setattr(devices, "_STREAMS", None)
+    monkeypatch.setattr(devices, "_SCAN", None)  # the 2 s port-scan cache must not span tests
+    monkeypatch.setattr(devices, "_LAST_STATUS", {})
 
+
+
+def write_fake_arduino_cli(path: Path) -> Path:
+    """Materialise the fake as an executable at ``path`` (using this interpreter)."""
+    path.write_text(
+        FAKE_ARDUINO_CLI.replace("#!/usr/bin/env python3", f"#!{sys.executable}", 1),
+        encoding="utf-8",
+    )
+    path.chmod(path.stat().st_mode | stat.S_IXUSR)
+    return path
 
 
 def fake_cli_calls(script) -> list[list[str]]:
+    """Every argv the fake arduino-cli script was invoked with, in order."""
     log = script.with_name(script.name + ".calls")
     if not log.exists():
         return []

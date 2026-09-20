@@ -14,6 +14,8 @@ dependencies = [
     # Reading pixels for the plain shape finder. Runs entirely on this
     # machine; see docs/plans/proposals/runs-and-stays-local.md.
     "pillow>=10.0.0",
+    # The byte transport under the G-code printer seam; see docs/firmware.md.
+    "pyserial>=3.5",
 ]
 
 [project.scripts]

@@ -175,6 +175,7 @@ class ArduinoCli:
                     fqbn=first.get("fqbn"),
                     vid=props.get("vid"),
                     pid=props.get("pid"),
+                    serial_number=props.get("serialNumber") or None,
                 )
             )
         return [b for b in boards if b.port]

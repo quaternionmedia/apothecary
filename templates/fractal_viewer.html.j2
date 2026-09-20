@@ -53,6 +53,9 @@
             display: flex; align-items: center; gap: 0.35rem;
             font-size: 0.85rem; color: #ccc; cursor: pointer; user-select: none;
         }
+        .toolbar .toolbar-toggle select { font-size: 0.75rem; background: #1e1e1e; color: #ccc; border: 1px solid #444; border-radius: 3px; padding: 0.05rem 0.2rem; min-width: 0; width: auto; }
+        .device-section input[type="text"] { font-size: 0.72rem; padding: 0.15rem 0.4rem; background: #1e1e1e; color: #ddd; border: 1px solid #444; border-radius: 3px; width: 9.5rem; }
+        .device-section .device-query { margin-top: 0.3rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #9cd2ff; white-space: pre-wrap; }
 
         .viewer-panel { flex: 2; position: relative; background: #111; }
         #viewer-canvas { width: 100%; height: 100%; display: block; }
@@ -87,11 +90,18 @@
         #serial-head .dot.on { background: #6fdb75; box-shadow: 0 0 6px #6fdb75; }
         #serial-head .spacer { flex: 1; }
         #serial-head button {
-            padding: 0.1rem 0.45rem; font-size: 0.7rem; background: #263026; color: #cfe3cf; border: 1px solid #3a4a3a;
+            padding: 0.1rem 0.45rem; font-size: 0.7rem; background: #263026; color: #cfe3cf; border: 1px solid #3a4a3a; white-space: nowrap;
         }
         #serial-head button:hover { background: #33403a; }
+        #serial-head a { font-size: 0.7rem; color: #9cd2ff; text-decoration: none; padding: 0.1rem 0.45rem; border: 1px solid #3a4a3a; background: #263026; white-space: nowrap; }
+        #serial-head a[hidden] { display: none; }
         #serial-meta { padding: 0.25rem 0.6rem; font-size: 0.7rem; color: #8aa08a; border-bottom: 1px solid #23302a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         #serial-meta b { color: #cfe3cf; }
+        #serial-query-row { display: flex; gap: 0.35rem; padding: 0.25rem 0.6rem; border-bottom: 1px solid #23302a; }
+        #serial-query-row[hidden] { display: none; }
+        #serial-query-row input { flex: 1; font: inherit; font-size: 0.72rem; background: #101510; color: #cfe3cf; border: 1px solid #2f3f2f; border-radius: 3px; padding: 0.15rem 0.45rem; }
+        #serial-query-row button { padding: 0.1rem 0.45rem; font-size: 0.7rem; background: #263026; color: #cfe3cf; border: 1px solid #3a4a3a; }
+        #serial-body .query { color: #9cd2ff; font-weight: 600; }
         #serial-meta .ok { color: #6fdb75; } #serial-meta .bad { color: #ff8080; } #serial-meta .warn { color: #ffcc66; }
         #serial-body {
             flex: 1; margin: 0; padding: 0.4rem 0.6rem; overflow: auto; font-size: 0.72rem; line-height: 1.4;
@@ -100,6 +110,7 @@
         #serial-body .banner { color: #9cd2ff; font-weight: 600; }
         #serial-body .marker { color: #ffcc66; }
         #serial-body .sys { color: #6f7f6f; font-style: italic; }
+        #serial-body .temp { color: #e8c98a; }
         #minimap {
             position: absolute; top: 1rem; right: 1rem;
             display: flex; flex-direction: column; gap: 4px;
@@ -170,6 +181,28 @@
             width: 90px;
         }
         .prop-readonly { font-size: 0.78rem; color: #888; margin-top: 0.4rem; line-height: 1.5; }
+        /* Device section of the Selected panel: which board is pinned to this node, and what it says */
+        .device-section { margin-top: 0.7rem; padding-top: 0.55rem; border-top: 1px solid #2a2a2a; font-size: 0.78rem; }
+        .device-section .device-title { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: #777; margin-bottom: 0.3rem; }
+        .device-section .device-line { color: #bbb; line-height: 1.5; }
+        .device-section .device-line b { color: #ddd; font-weight: 600; }
+        .device-section .device-line .ok { color: #6fdb75; } .device-section .device-line .warn { color: #ffcc66; } .device-section .device-line .bad { color: #ff8080; }
+        .device-section .temps { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #e8c98a; }
+        .device-section .device-actions { display: flex; gap: 0.35rem; margin-top: 0.4rem; flex-wrap: wrap; align-items: center; }
+        .device-section button, .device-section select {
+            font-size: 0.72rem; padding: 0.15rem 0.5rem; background: #263026; color: #cfe3cf; border: 1px solid #3a4a3a; border-radius: 3px; cursor: pointer;
+        }
+        .device-section button:hover { background: #33403a; }
+        .device-section a.dev-monitor { font-size: 0.72rem; color: #9cd2ff; text-decoration: none; padding: 0.15rem 0.5rem; border: 1px solid #3a4a3a; border-radius: 3px; background: #263026; }
+        .device-section select { background: #1e1e1e; color: #ddd; border-color: #444; max-width: 100%; }
+        .device-section .device-empty { color: #666; font-style: italic; }
+        .contents-item .dev-badge {
+            flex: 0 0 auto; font-size: 0.66rem; padding: 0 0.35rem; border-radius: 8px; background: #1f2a1f; color: #b8e6b8; border: 1px solid #2f3f2f;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap;
+        }
+        .contents-item .dev-badge.off { background: #2a2424; color: #b08a8a; border-color: #3f2f2f; }
+        .contents-item .dev-badge.printing { background: #2a2410; color: #ffcc66; border-color: #4a3f1a; }
+        .contents-item .dev-badge.via { opacity: 0.75; }
         .no-selection { color: #666; font-size: 0.85rem; font-style: italic; }
         .zoom-in-btn {
             margin-top: 0.6rem; padding: 0.4rem 0.6rem; border-radius: 4px; cursor: pointer;
@@ -320,11 +353,18 @@
             <label class="toolbar-toggle" title="Outline each compound node's full assembly extent, so a subassembly reads as one thing even when its parts are drawn separately">
                 <input type="checkbox" id="overlay-toggle" checked> Assembly outlines
             </label>
+            <label class="toolbar-toggle" title="Rescan devices and re-poll bound printers on a schedule, so a replugged or renamed board shows up without a reload">
+                <input type="checkbox" id="devices-auto"> ↻ Devices
+                <select id="devices-interval" title="Refresh interval">
+                    <option value="5000">5 s</option><option value="10000" selected>10 s</option><option value="30000">30 s</option>
+                </select>
+            </label>
             <label class="toolbar-toggle" title="Float a live serial log from a connected board over the 3D view (streams via /firmware/devices/stream)">
                 <input type="checkbox" id="serial-toggle"> ⌨ Serial log
             </label>
             <div class="spacer"></div>
             <a href="{{ base_url }}/firmware" id="firmware-link" class="toolbar-link" title="Install the firmware toolchain and program boards from sketches under parts/">⚡ Firmware</a>
+            <a href="{{ base_url }}/firmware/monitor" id="monitor-link" class="toolbar-link" title="Focused printer monitor: status, temperature history, full comms log, reconnect/reset">🖨 Monitor</a>
             <span id="validity-indicator" class="validity-indicator valid">Layout valid</span>
         </div>
         <div class="main-content">
@@ -339,10 +379,17 @@
                         </select>
                         <span class="spacer"></span>
                         <button type="button" id="serial-refresh" title="Rescan devices">⟳</button>
+                        <button type="button" id="serial-identify" title="Ask M115: is this a printer mainboard? (no reset; the server then holds the port and polls it instead of streaming)">🖨 identify</button>
+                        <a id="serial-monitor" href="{{ base_url }}/firmware/monitor" target="_blank" title="Open the focused monitor for this port: status, temperature history, full comms log, reconnect/reset" hidden>⤢ monitor</a>
                         <button type="button" id="serial-clear">clear</button>
                         <button type="button" id="serial-close">✕</button>
                     </div>
                     <div id="serial-meta">—</div>
+                    <form id="serial-query-row" hidden autocomplete="off">
+                        <input id="serial-query" list="serial-query-codes" placeholder="report code — M503, M119, M20, M420 V …" spellcheck="false">
+                        <datalist id="serial-query-codes"></datalist>
+                        <button type="submit">send</button>
+                    </form>
                     <pre id="serial-body"></pre>
                 </div>
                 <div id="minimap"></div>
@@ -788,6 +835,59 @@
                     this.createJob();
                 });
                 window.addEventListener('resize', () => this.onResize());
+                // Device bindings of the loaded site (path -> NodeBinding row
+                // from GET /sites/{name}/devices), the detected devices a node
+                // can be pinned to, and any toolchain problem to show instead.
+                this.bindings = {};
+                this.siteDevices = [];
+                this.devicesProblem = null;
+                this.bindingsLoaded = false;
+                this.bindingsInFlight = false;
+                this.queryResult = null;  // last "Query" answer shown in the Device section
+                // Auto-refresh: rescan + re-poll on a schedule (self-scheduled,
+                // never overlapping, paused while the tab is hidden).
+                this.autoEl = document.getElementById('devices-auto');
+                this.intervalEl = document.getElementById('devices-interval');
+                this.autoTimer = null;
+                try {
+                    this.autoEl.checked = localStorage.getItem('apothecary.devices.auto') !== '0';
+                    const iv = localStorage.getItem('apothecary.devices.interval');
+                    if (iv) this.intervalEl.value = iv;
+                } catch (e) { /* storage blocked: defaults */ }
+                this.autoEl.addEventListener('change', () => {
+                    try { localStorage.setItem('apothecary.devices.auto', this.autoEl.checked ? '1' : '0'); } catch (e) { /* ignore */ }
+                    this.scheduleAutoRefresh();
+                });
+                this.intervalEl.addEventListener('change', () => {
+                    try { localStorage.setItem('apothecary.devices.interval', this.intervalEl.value); } catch (e) { /* ignore */ }
+                    this.scheduleAutoRefresh();
+                });
+                document.addEventListener('visibilitychange', () => this.scheduleAutoRefresh());
+                // The serial overlay polls printers. Every poll updates the
+                // bound row in place (panel temps, tree badge); a poll that
+                // changed a node's status re-fetches the tree so the mesh
+                // recolours (STATUS_COLORS) without a manual reload.
+                window.addEventListener('apothecary:printer-status', (ev) => {
+                    const st = ev.detail;
+                    let touched = false;
+                    for (const row of Object.values(this.bindings)) {
+                        if (row.device && row.device.port === st.port) { row.printer_status = st; touched = true; }
+                    }
+                    // A changed status is patched onto the tree and the mesh
+                    // recoloured in place: a full refreshTree() would reset the
+                    // camera, wipe the panel and reload meshes every time a
+                    // flaky link flips idle/offline.
+                    let recoloured = false;
+                    for (const n of st.synced || []) {
+                        if (n.changed && n.site === this.siteName) recoloured = this.applyNodeStatus(n.path, n.status) || recoloured;
+                    }
+                    if (touched || recoloured) this.updateDeviceViews();
+                });
+                // The overlay identified a board (M115) or rescanned: the
+                // binding rows' device info is stale until re-fetched.
+                window.addEventListener('apothecary:devices-changed', () => {
+                    this.loadBindings().then(() => this.afterBindings());
+                });
             }
 
             onResize() {
@@ -837,6 +937,9 @@
                     // selected -- focusing alone left the panel unbuilt.
                     this.selectFocusedPart();
                     this.setStatus(`Loaded: ${data.name}`, 'success');
+                    // Bindings shell out to arduino-cli (a second or two):
+                    // fetched after the scene is on screen, never before.
+                    this.loadBindings().then(() => { this.afterBindings(); this.scheduleAutoRefresh(); });
                 } catch (err) {
                     this.setStatus(`Error: ${err.message}`, 'error');
                     console.error(err);
@@ -1457,6 +1560,7 @@
 
                 const li = document.createElement('li');
                 li.className = 'contents-item' + (this.selectedName === path ? ' selected' : '');
+                li.dataset.path = path;
                 li.style.paddingLeft = `${0.5 + depth * 0.9}rem`;
 
                 const caret = document.createElement('span');
@@ -1487,6 +1591,8 @@
                 const inside = hasChildren ? ` — ${node.children.length} inside` : '';
                 label.textContent = `${node.name} (${node.role})${inside}`;
                 li.appendChild(label);
+                const badge = this.deviceBadgeHtml(path);
+                if (badge) li.appendChild(badge);
 
                 // Click/double-click anywhere on the row (matching the old
                 // flat list's behavior, and what tests click on) -- only the
@@ -1556,6 +1662,8 @@
                 } else {
                     this.renderGenericPanel(selected);
                 }
+                this.selectedBodyEl.insertAdjacentHTML('beforeend', this.deviceSectionHtml(this.selectedName));
+                this.bindDeviceSection(this.selectedName);
             }
 
             zoomInAffordanceHtml(node) {
@@ -2201,6 +2309,357 @@
 
             // Re-fetches the whole tree (status/violations/positions may have
             // changed) without disturbing navigation state.
+            // ---------------------------------------------------------------
+            // Devices bound to nodes (firmware seam). Non-fatal: a site
+            // without the toolchain still loads; the panel says why.
+            // ---------------------------------------------------------------
+
+            async loadBindings(fresh = false) {
+                if (!this.siteName || this.bindingsInFlight) return;
+                this.bindingsInFlight = true;
+                try {
+                    const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/devices${fresh ? '?fresh=1' : ''}`);
+                    if (!response.ok) throw new Error(`devices (${response.status})`);
+                    const data = await response.json();
+                    this.bindings = Object.fromEntries(data.bindings.map((row) => [row.path, row]));
+                    this.siteDevices = data.devices.map((v) => v.device);
+                    this.devicesProblem = data.problem;
+                } catch (err) {
+                    this.bindings = {};
+                    this.siteDevices = [];
+                    this.devicesProblem = err.message;
+                } finally {
+                    this.bindingsLoaded = true;
+                    this.bindingsInFlight = false;
+                }
+            }
+
+            // Rescan (fresh port scan) + re-poll held printers, then again after
+            // the chosen interval -- scheduled only once the previous round
+            // returns, and not while the tab is hidden.
+            scheduleAutoRefresh() {
+                clearTimeout(this.autoTimer);
+                this.autoTimer = null;
+                if (!this.autoEl.checked || !this.siteName || document.hidden) return;
+                const ms = Number(this.intervalEl.value) || 10000;
+                this.autoTimer = setTimeout(async () => {
+                    await this.loadBindings(true);
+                    this.afterBindings();
+                    this.scheduleAutoRefresh();
+                }, ms);
+            }
+
+            async rescanDevices() {
+                this.setStatus('Rescanning devices...', 'loading');
+                await this.loadBindings(true);
+                this.afterBindings();
+                this.setStatus(this.devicesProblem ? `Devices: ${this.devicesProblem}` : `${this.siteDevices.length} device(s) detected`, this.devicesProblem ? 'error' : 'success');
+            }
+
+            // One poll of a bound printer from the panel, without the overlay.
+            async pollNow(port) {
+                try {
+                    const response = await fetch(`${BASE_URL}/firmware/printers/status?port=${encodeURIComponent(port)}`);
+                    if (!response.ok) throw new Error((await response.json()).detail || `status (${response.status})`);
+                    window.dispatchEvent(new CustomEvent('apothecary:printer-status', { detail: await response.json() }));
+                } catch (err) {
+                    this.setStatus(`Poll failed: ${err.message}`, 'error');
+                }
+            }
+
+            // Ask a detected port what it is (M115) without pinning it.
+            async queryPort(port, path) {
+                this.queryResult = { port, text: 'asking M115…' };
+                this.updateDeviceViews();
+                try {
+                    const response = await fetch(`${BASE_URL}/firmware/devices/identify`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ port }),
+                    });
+                    const body = await response.json();
+                    if (!response.ok) throw new Error(body.detail || `identify (${response.status})`);
+                    const pr = body.device.printer;
+                    this.queryResult = { port, text: `${port}: ${pr.firmware_name}${pr.machine_type ? ' · ' + pr.machine_type : ''}` };
+                    window.dispatchEvent(new CustomEvent('apothecary:devices-changed'));
+                } catch (err) {
+                    this.queryResult = { port, text: `${port}: not a G-code printer (${err.message})` };
+                    this.updateDeviceViews();
+                }
+            }
+
+            // After bindings arrive: the server polls held printer links while
+            // answering that request, and a poll may have moved a node's
+            // status. If a bound printer's state disagrees with the tree we
+            // hold, the tree is stale -- refresh it (which also redraws the
+            // device views); otherwise redraw just those.
+            afterBindings() {
+                // The server may have moved a node's status while answering the
+                // bindings request; patch those in place rather than re-render.
+                for (const [path, row] of Object.entries(this.bindings)) {
+                    const st = row.printer_status;
+                    if (!st || !PRINTER_STATUSES.includes(st.state)) continue;
+                    const node = this.statusBearerFor(path);
+                    if (node && node.status !== 'maintenance' && node.status !== st.state) this.applyNodeStatus(node._path || this.pathOf(node), st.state);
+                }
+                this.updateDeviceViews();
+            }
+
+            // Set `status` on the node at `path` in this.tree and on its render
+            // entry, and recolour its mesh if it is on screen. Returns whether
+            // anything changed.
+            applyNodeStatus(path, status) {
+                const node = this.nodeByPath(path);
+                if (!node || node.status === status) return false;
+                node.status = status;
+                const entry = this.renderNodeByKey[path];
+                if (entry) {
+                    entry.status = status;
+                    if (this.meshByName[path]) this.colorMesh(path, entry);
+                }
+                if (this.selectedName === path) {
+                    const sel = document.getElementById('status-select');
+                    if (sel && document.activeElement !== sel) sel.value = status;
+                }
+                return true;
+            }
+
+            pathOf(node) {
+                const walk = (n, prefix) => {
+                    for (const c of n.children || []) {
+                        const p = prefix ? `${prefix}.${c.name}` : c.name;
+                        if (c === node) return p;
+                        const found = walk(c, p);
+                        if (found) return found;
+                    }
+                    return null;
+                };
+                return walk(this.tree, '');
+            }
+
+            // The node a poll on `path` drives: itself if it carries a status,
+            // else the nearest ancestor that does (a board inside a printer
+            // drives the printer) -- mirrors api.py's status_bearer_for.
+            statusBearerFor(path) {
+                const parts = path.split('.');
+                for (let depth = parts.length; depth > 0; depth--) {
+                    const node = this.nodeByPath(parts.slice(0, depth).join('.'));
+                    if (node && node.status !== null && node.status !== undefined) return node;
+                }
+                return null;
+            }
+
+            // The binding that speaks for `path`: its own row, else a row on
+            // a descendant (the printer's mainboard), reported with `via`.
+            bindingFor(path) {
+                if (this.bindings[path]) return { row: this.bindings[path], via: null };
+                const prefix = path + '.';
+                const below = Object.entries(this.bindings).filter(([p]) => p.startsWith(prefix));
+                if (!below.length) return { row: null, via: null };
+                below.sort(([, a], [, b]) => (b.device ? 1 : 0) - (a.device ? 1 : 0));
+                const [viaPath, row] = below[0];
+                return { row, via: viaPath.slice(prefix.length) };
+            }
+
+            nodeByPath(path) {
+                let node = this.tree;
+                for (const name of path.split('.')) {
+                    node = (node?.children || []).find((c) => c.name === name);
+                    if (!node) return null;
+                }
+                return node;
+            }
+
+            // Re-render only what shows device state: the tree badges and
+            // the Selected panel. Cheaper than renderFocus() and keeps the
+            // 3D view untouched. Used after a pin/unpin.
+            renderDeviceViews() {
+                this.renderContentsList(this.currentFocusNode());
+                this.renderSelectedPanel();
+            }
+
+            // Every 2 s while the overlay polls: swap only the badge spans
+            // and the panel's Device section in place. Rebuilding the
+            // whole panel would blow away a position edit in progress.
+            updateDeviceViews() {
+                for (const li of this.contentsEl.querySelectorAll('li[data-path]')) {
+                    const fresh = this.deviceBadgeHtml(li.dataset.path);
+                    const old = li.querySelector('.dev-badge');
+                    if (old && fresh) old.replaceWith(fresh);
+                    else if (old) old.remove();
+                    else if (fresh) li.appendChild(fresh);
+                }
+                const section = this.selectedBodyEl.querySelector('.device-section');
+                if (section && this.selectedName) {
+                    // Leave it alone while the user is in it (typing an identity,
+                    // choosing a port): the next poll will catch up.
+                    const manual = section.querySelector('.dev-manual');
+                    const active = document.activeElement;
+                    const editing = active && section.contains(active) && active.matches('input, select');
+                    if (editing || (manual && manual.value)) return;
+                    const picked = section.querySelector('.dev-pick')?.value;
+                    section.outerHTML = this.deviceSectionHtml(this.selectedName);
+                    const pick = this.selectedBodyEl.querySelector('.device-section .dev-pick');
+                    if (pick && picked && [...pick.options].some((o) => o.value === picked)) pick.value = picked;
+                    this.bindDeviceSection(this.selectedName);
+                }
+            }
+
+            deviceLabel(d) {
+                if (!d) return '';
+                if (d.printer) return (d.printer.firmware_name || 'printer').replace(/\s*\(.*$/, '') + (d.printer.machine_type ? ` · ${d.printer.machine_type}` : '');
+                if (d.chip) return `${d.chip}${d.mac ? ' · ' + d.mac : ''}`;
+                return d.board_name || `${d.vid ?? '?'}:${d.pid ?? '?'}`;
+            }
+
+            heaterText(h) { return h ? `${h.actual.toFixed(1)}/${h.target.toFixed(0)}°` : '—'; }
+
+            deviceBadgeHtml(path) {
+                const { row, via } = this.bindingFor(path);
+                if (!row) return null;
+                const span = document.createElement('span');
+                span.className = 'dev-badge' + (via ? ' via' : '');
+                if (!row.device) {
+                    span.classList.add('off');
+                    span.textContent = '⌁ off';
+                    span.title = row.note || 'device not connected';
+                    return span;
+                }
+                const st = row.printer_status;
+                if (row.device.printer && st && st.state !== 'offline') {
+                    const t = st.hotends[0] ? st.hotends[0].actual.toFixed(0) : '?';
+                    const b = st.bed ? st.bed.actual.toFixed(0) : '?';
+                    span.textContent = `🖨 ${t}°/${b}°${st.sd_printing && st.sd_progress != null ? ' ' + (st.sd_progress * 100).toFixed(0) + '%' : ''}`;
+                    if (st.state === 'printing') span.classList.add('printing');
+                    span.title = `${this.deviceLabel(row.device)} — ${st.state} · hotend ${this.heaterText(st.hotends[0])} bed ${this.heaterText(st.bed)}`;
+                } else if (row.device.printer) {
+                    span.textContent = '🖨';
+                    span.title = `${this.deviceLabel(row.device)} on ${row.device.port} — open the ⌨ Serial log to poll it`;
+                } else {
+                    span.textContent = '⚡';
+                    span.title = `${this.deviceLabel(row.device)} on ${row.device.port}`;
+                }
+                if (via) span.title = `via ${via}: ` + span.title;
+                return span;
+            }
+
+            deviceSectionHtml(path) {
+                const { row, via } = this.bindingFor(path);
+                const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+                const viaLine = via
+                    ? `<div class="device-line" style="color:#777">via <a href="#" class="dev-via" data-path="${esc(path + '.' + via)}" style="color:#9cd2ff">${esc(via)}</a> — the board inside; its polls drive this node's status</div>`
+                    : '';
+                let body;
+                if (row && row.device) {
+                    const d = row.device, st = row.printer_status;
+                    const source = row.binding_source === 'manual' ? 'pinned' : `via sketch ${esc(row.sketch)}`;
+                    let live = '';
+                    if (d.printer) {
+                        if (!st) live = `<div class="device-line device-empty">not polled yet — Watch to poll it</div>`;
+                        else if (st.state === 'offline') live = `<div class="device-line"><span class="bad">offline</span> ${esc((st.raw || [])[0] || '')}</div>`;
+                        else {
+                            const state = st.state === 'printing' ? '<span class="ok">printing</span>' : (st.heating ? '<span class="warn">heating</span>' : 'idle');
+                            const temps = `T ${this.heaterText(st.hotends[0])}${st.bed ? ' · B ' + this.heaterText(st.bed) : ''}`;
+                            const pos = st.position ? ` · X${st.position.x.toFixed(0)} Y${st.position.y.toFixed(0)} Z${st.position.z.toFixed(1)}` : '';
+                            const sd = st.sd_printing && st.sd_progress != null ? ` · ${(st.sd_progress * 100).toFixed(1)}%` : '';
+                            const fil = st.filament_present === false ? ' · <span class="bad">filament out</span>' : '';
+                            live = `<div class="device-line">${state}${sd} <span class="temps">${esc(temps)}</span>${esc(pos)}${fil}</div>`;
+                        }
+                    } else if (row.expected && row.expected.record) {
+                        const rec = row.expected.record;
+                        live = `<div class="device-line">should run <b>${esc(rec.sketch || 'raw image')}</b>${row.expected.source_changed ? ' <span class="warn">(source edited since)</span>' : ''}</div>`;
+                    }
+                    body = `
+                        <div class="device-line"><b>${esc(d.port)}</b> · ${esc(this.deviceLabel(d))} <span style="color:#777">(${source})</span></div>
+                        ${live}
+                        ${viaLine}
+                        <div class="device-actions">
+                            <button type="button" class="dev-watch" data-port="${esc(d.port)}">⌨ Watch</button>
+                            ${d.printer ? `<button type="button" class="dev-poll" data-port="${esc(d.port)}" title="One poll now, without the overlay">⟳ Poll now</button>` : ''}
+                            ${d.printer ? `<a class="dev-monitor" href="${BASE_URL}/firmware/monitor?port=${encodeURIComponent(d.port)}" target="_blank" title="Focused monitor: status, temperature history, full comms log, reconnect/reset">⤢ Monitor</a>` : ''}
+                            ${row.binding_source === 'manual' && !via ? '<button type="button" class="dev-unpin">Unpin</button>' : ''}
+                        </div>`;
+                } else if (row) {
+                    body = `<div class="device-line"><span class="warn">${esc(row.note || 'not connected')}</span></div>
+                        ${viaLine}
+                        <div class="device-actions">
+                            <button type="button" class="dev-rescan" title="Fresh port scan">⟳ Rescan</button>
+                            ${row.binding_source === 'manual' && !via ? '<button type="button" class="dev-unpin">Unpin</button>' : ''}
+                        </div>`;
+                } else {
+                    const free = this.siteDevices.filter((d) => !Object.values(this.bindings).some((r) => r.device && r.device.port === d.port));
+                    const manual = `<div class="device-actions">
+                            <input type="text" class="dev-manual" placeholder="or a port / MAC, e.g. /dev/ender" spellcheck="false">
+                            <button type="button" class="dev-pin-manual" title="Pin by identity even if it is not detected right now">Pin</button>
+                            <button type="button" class="dev-rescan" title="Fresh port scan">⟳ Rescan</button>
+                        </div>`;
+                    const q = this.queryResult ? `<div class="device-query">${esc(this.queryResult.text)}</div>` : '';
+                    if (!this.bindingsLoaded) body = `<div class="device-line device-empty">scanning devices…</div>`;
+                    else if (this.devicesProblem) body = `<div class="device-line device-empty">${esc(this.devicesProblem)}</div>${manual}`;
+                    else if (!free.length) body = `<div class="device-line device-empty">${this.siteDevices.length ? 'every detected device is already pinned' : 'no devices detected'}</div>${manual}`;
+                    else body = `<div class="device-actions">
+                            <select class="dev-pick">${free.map((d) => `<option value="${esc(d.port)}"${this.queryResult && this.queryResult.port === d.port ? ' selected' : ''}>${esc(d.port)} · ${esc(this.deviceLabel(d))}</option>`).join('')}</select>
+                            <button type="button" class="dev-query" title="Ask M115 what this is, without pinning">Query</button>
+                            <button type="button" class="dev-pin">Pin</button>
+                        </div>${q}${manual}`;
+                }
+                return `<div class="device-section"><div class="device-title">Device</div>${body}</div>`;
+            }
+
+            bindDeviceSection(path) {
+                const el = this.selectedBodyEl;
+                el.querySelector('.dev-watch')?.addEventListener('click', (e) => {
+                    window.dispatchEvent(new CustomEvent('apothecary:watch-port', { detail: { port: e.currentTarget.dataset.port } }));
+                });
+                el.querySelector('.dev-unpin')?.addEventListener('click', () => this.setNodeDevice(path, null));
+                el.querySelector('.dev-pin')?.addEventListener('click', () => {
+                    const port = el.querySelector('.dev-pick')?.value;
+                    if (port) this.setNodeDevice(path, port);
+                });
+                el.querySelector('.dev-query')?.addEventListener('click', () => {
+                    const port = el.querySelector('.dev-pick')?.value;
+                    if (port) this.queryPort(port, path);
+                });
+                el.querySelector('.dev-poll')?.addEventListener('click', (e) => this.pollNow(e.currentTarget.dataset.port));
+                el.querySelector('.dev-via')?.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const target = e.currentTarget.dataset.path;
+                    // Expand every ancestor row so the board's row is on screen, then select it.
+                    const parts = target.split('.');
+                    for (let i = 1; i < parts.length; i++) this.treeExpanded.add(parts.slice(0, i).join('.'));
+                    this.renderContentsList(this.currentFocusNode());
+                    if (this.renderNodeByKey[target]) this.selectChild(target);
+                });
+                el.querySelector('.dev-rescan')?.addEventListener('click', () => this.rescanDevices());
+                const manualIn = el.querySelector('.dev-manual');
+                const pinManual = () => {
+                    const identity = (manualIn?.value || '').trim();
+                    if (identity) this.setNodeDevice(path, identity);
+                };
+                el.querySelector('.dev-pin-manual')?.addEventListener('click', pinManual);
+                manualIn?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); pinManual(); } });
+            }
+
+            async setNodeDevice(path, identity) {
+                const url = `${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/nodes/${encodeURIComponent(path)}/device`;
+                this.setStatus(identity ? `Pinning ${identity} to ${path}...` : `Unpinning ${path}...`, 'loading');
+                try {
+                    const response = await fetch(url, identity
+                        ? { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ identity }) }
+                        : { method: 'DELETE' });
+                    if (!response.ok) throw new Error((await response.json()).detail || `device (${response.status})`);
+                    // The reply is the node's new binding row (or a stub with
+                    // no binding_source once unpinned): apply it directly
+                    // rather than paying for another arduino-cli scan.
+                    const row = await response.json();
+                    if (row.binding_source) this.bindings[path] = row; else delete this.bindings[path];
+                    this.queryResult = null;
+                    this.renderDeviceViews();
+                    this.setStatus(identity ? `${path} ← ${identity}` : `${path}: device unpinned`, 'success');
+                } catch (err) {
+                    this.setStatus(`Error: ${err.message}`, 'error');
+                    console.error(err);
+                }
+            }
+
             async refreshTree() {
                 const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}`);
                 if (!response.ok) throw new Error(`Failed to refresh site (${response.status})`);
@@ -2594,8 +3053,24 @@
         const $ = (id) => document.getElementById(id);
         const overlay = $("serial-overlay"), body = $("serial-body"), meta = $("serial-meta");
         const portSel = $("serial-port"), baudSel = $("serial-baud"), toggle = $("serial-toggle"), dot = $("serial-dot");
-        let es = null, devices = [], observed = null, retryTimer = null;
+        let es = null, devices = [], observed = null, retryTimer = null, pollTimer = null, printerStatus = null, pollGen = 0;
+        const POLL_MS = 2000;
+        const queryRow = $("serial-query-row"), queryIn = $("serial-query");
+        let queryCodesLoaded = false;
+        async function loadQueryCodes() {
+            if (queryCodesLoaded) return;
+            try {
+                const r = await fetch(`${BASE}/firmware/printers/queries`);
+                if (!r.ok) return;
+                $("serial-query-codes").innerHTML = (await r.json()).map((q) => `<option value="${esc(q.command)}">${esc(q.reports)}</option>`).join("");
+                queryCodesLoaded = true;
+            } catch (e) { /* the box still works without suggestions */ }
+        }
         const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+        // Storage can be blocked (private window, sandboxed embed); the overlay
+        // must still open and connect, just without remembering.
+        const store = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* ignore */ } };
+        const load = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
 
         function line(text, cls) {
             const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 30;
@@ -2609,10 +3084,29 @@
             if (atBottom) body.scrollTop = body.scrollHeight;
         }
 
+        const fmtHeater = (h) => h ? `${h.actual.toFixed(1)}/${h.target.toFixed(0)}°` : "—";
+        const shortFirmware = (p) => (p.firmware_name || "").replace(/\s*\(.*$/, "");
+
+        function renderPrinterMeta(d) {
+            const p = d.printer, st = printerStatus;
+            let head = `<b>${esc(shortFirmware(p))}</b>${p.machine_type ? " · " + esc(p.machine_type) : ""}`;
+            if (!st) { meta.innerHTML = head + " — polling…"; return; }
+            if (st.state === "offline") { meta.innerHTML = head + ` — <span class='bad'>offline</span> ${esc(st.raw[0] || "")}`; return; }
+            const state = st.state === "printing" ? "<span class='ok'>printing</span>" : (st.heating ? "<span class='warn'>heating</span>" : "idle");
+            let temps = st.hotends.map((h, i) => `T${i} ${fmtHeater(h)}`).join(" ");
+            if (st.bed) temps += ` bed ${fmtHeater(st.bed)}`;
+            let extra = "";
+            if (st.sd_printing && st.sd_progress != null) extra += ` · ${(st.sd_progress * 100).toFixed(1)}%`;
+            if (st.position) extra += ` · X${st.position.x.toFixed(1)} Y${st.position.y.toFixed(1)} Z${st.position.z.toFixed(2)}`;
+            if (st.filament_present === false) extra += " · <span class='bad'>filament out</span>";
+            meta.innerHTML = `${head} — ${state} · ${temps}${extra}`;
+        }
+
         function renderMeta() {
             const v = devices.find((d) => d.device.port === portSel.value);
             if (!v) { meta.innerHTML = devices.length ? "select a port" : "no devices detected — <a href='" + BASE + "/firmware' id='firmware-page-link' style='color:#9cd2ff'>firmware page</a>"; return; }
             const d = v.device, rec = v.expected.record;
+            if (d.printer) { renderPrinterMeta(d); return; }
             const chip = d.chip ? `${esc(d.chip)} rev ${esc(d.revision || "?")} · ${esc(d.mac)}` : (d.board_name ? esc(d.board_name) : "unprobed board");
             let should = rec ? `should run <b>${esc(rec.sketch || "raw image")}</b>` : "<span class='warn'>nothing flashed from apothecary</span>";
             if (v.expected.source_changed) should += " <span class='warn'>(source edited since)</span>";
@@ -2621,25 +3115,74 @@
             meta.innerHTML = `${chip} — ${should}`;
         }
 
-        async function loadDevices() {
+        async function loadDevices(fresh = false) {
+            if (!devices.length) meta.textContent = "scanning devices…";
             try {
-                const r = await fetch(`${BASE}/firmware/devices`);
+                const r = await fetch(`${BASE}/firmware/devices${fresh ? "?fresh=1" : ""}`);
                 if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
                 devices = (await r.json()).devices;
             } catch (e) { devices = []; meta.textContent = "firmware API: " + e.message; }
-            const prev = portSel.value || localStorage.getItem("apothecary.serial.port") || "";
+            const prev = portSel.value || load("apothecary.serial.port") || "";
+            const tag = (d) => d.printer ? " · " + shortFirmware(d.printer) : (d.chip ? " · " + d.chip : "");
             portSel.innerHTML = devices.length
-                ? devices.map((v) => `<option value="${esc(v.device.port)}">${esc(v.device.port)}${v.device.chip ? " · " + esc(v.device.chip) : ""}</option>`).join("")
+                ? devices.map((v) => `<option value="${esc(v.device.port)}">${esc(v.device.port)}${esc(tag(v.device))}</option>`).join("")
                 : '<option value="">no devices</option>';
             if (devices.some((v) => v.device.port === prev)) portSel.value = prev;
             renderMeta();
+        }
+
+        // A printer is polled over the server's held-open link, never streamed:
+        // opening the port for a monitor would pulse DTR and reset the board.
+        // Each poll schedules the next only after it returns, so a slow one
+        // (a link being reopened, a firmware busy homing) never stacks
+        // requests behind it; `gen` lets a port change orphan an old chain.
+        async function pollPrinter(port, gen) {
+            if (gen !== pollGen) return;
+            try {
+                const r = await fetch(`${BASE}/firmware/printers/status?port=${encodeURIComponent(port)}`);
+                if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+                const fresh = await r.json();
+                if (gen !== pollGen) return;  // the user moved on while this was in flight
+                printerStatus = fresh;
+                dot.classList.toggle("on", printerStatus.state !== "offline");
+                const st = printerStatus;
+                let text = `${st.polled_at.slice(11, 19)} ${st.state}`;
+                if (st.hotends.length) text += `  T ${fmtHeater(st.hotends[0])}`;
+                if (st.bed) text += `  B ${fmtHeater(st.bed)}`;
+                if (st.sd_printing && st.sd_progress != null) text += `  ${(st.sd_progress * 100).toFixed(1)}%`;
+                line(text, st.state === "offline" ? "sys" : "temp");
+                for (const n of st.synced || []) {
+                    if (n.changed) line(`— ${n.site}/${n.path} is now ${n.status} —`, "banner");
+                }
+                window.dispatchEvent(new CustomEvent("apothecary:printer-status", { detail: st }));
+            } catch (e) {
+                if (gen !== pollGen) return;
+                dot.classList.remove("on");
+                line("— poll failed: " + e.message + " —", "sys");
+            }
+            if (gen !== pollGen) return;
+            renderMeta();
+            pollTimer = setTimeout(() => pollPrinter(port, gen), POLL_MS);
         }
 
         function connect() {
             disconnect();
             const port = portSel.value;
             if (!port) return;
-            localStorage.setItem("apothecary.serial.port", port);
+            store("apothecary.serial.port", port);
+            const v = devices.find((d) => d.device.port === port);
+            const monitorLink = $("serial-monitor");
+            monitorLink.hidden = !(v && v.device.printer);
+            monitorLink.href = `${BASE}/firmware/monitor?port=${encodeURIComponent(port)}`;
+            if (v && v.device.printer) {
+                printerStatus = null;
+                queryRow.hidden = false;
+                loadQueryCodes();
+                line(`— polling ${port} (${shortFirmware(v.device.printer)}) every ${POLL_MS / 1000} s —`, "sys");
+                pollPrinter(port, ++pollGen);
+                return;
+            }
+            queryRow.hidden = true;
             es = new EventSource(`${BASE}/firmware/devices/stream?port=${encodeURIComponent(port)}&baud=${encodeURIComponent(baudSel.value)}`);
             es.addEventListener("open", () => { dot.classList.add("on"); line(`— connected ${port} @ ${baudSel.value} —`, "sys"); });
             es.onmessage = (ev) => {
@@ -2659,6 +3202,10 @@
 
         function disconnect(clearTimer = true) {
             if (es) { es.close(); es = null; }
+            queryRow.hidden = true;
+            $("serial-monitor").hidden = true;
+            pollGen++;
+            if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
             dot.classList.remove("on");
             if (clearTimer) clearTimeout(retryTimer);
         }
@@ -2666,18 +3213,62 @@
         function show(on) {
             overlay.hidden = !on;
             toggle.checked = on;
-            localStorage.setItem("apothecary.serial.open", on ? "1" : "0");
+            store("apothecary.serial.open", on ? "1" : "0");
             if (on) loadDevices().then(connect); else disconnect();
         }
 
+        queryRow.addEventListener("submit", async (ev) => {
+            ev.preventDefault();
+            const command = queryIn.value.trim(), port = portSel.value;
+            if (!command || !port) return;
+            line(`> ${command}`, "query");
+            queryIn.disabled = true;
+            try {
+                const r = await fetch(`${BASE}/firmware/printers/query`, {
+                    method: "POST", headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({ port, command }),
+                });
+                const body = await r.json();
+                if (!r.ok) throw new Error(body.detail || r.statusText);
+                for (const ln of body.lines) line(ln);
+                queryIn.value = "";
+            } catch (e) { line("— query refused: " + e.message + " —", "sys"); }
+            queryIn.disabled = false; queryIn.focus();
+        });
         toggle.addEventListener("change", () => show(toggle.checked));
         $("serial-close").onclick = () => show(false);
         $("serial-clear").onclick = () => { body.textContent = ""; };
-        $("serial-refresh").onclick = () => loadDevices().then(connect);
+        $("serial-refresh").onclick = () => loadDevices(true).then(connect);
+        $("serial-identify").onclick = async () => {
+            const port = portSel.value;
+            if (!port) return;
+            disconnect();
+            line(`— identifying ${port} (M115, no reset) —`, "sys");
+            try {
+                const r = await fetch(`${BASE}/firmware/devices/identify`, {
+                    method: "POST", headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({port, baud: Number(baudSel.value)}),
+                });
+                if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+                const v = await r.json();
+                line(`— ${v.device.printer.firmware_name} · ${v.device.printer.machine_type || ""} —`, "banner");
+                window.dispatchEvent(new CustomEvent("apothecary:devices-changed"));
+            } catch (e) { line("— not a G-code printer: " + e.message + " —", "sys"); }
+            loadDevices().then(connect);
+        };
         portSel.addEventListener("change", () => { observed = null; renderMeta(); connect(); });
         baudSel.addEventListener("change", connect);
         window.addEventListener("beforeunload", () => disconnect());
-        if (localStorage.getItem("apothecary.serial.open") === "1") show(true);
+        // The Selected panel's "Watch" button: open the overlay on that port.
+        window.addEventListener("apothecary:watch-port", async (ev) => {
+            const port = ev.detail.port;
+            overlay.hidden = false; toggle.checked = true;
+            store("apothecary.serial.open", "1");
+            await loadDevices();
+            if (devices.some((v) => v.device.port === port)) portSel.value = port;
+            observed = null; renderMeta(); connect();
+        });
+        if (load("apothecary.serial.open") === "1") show(true);
     })();
     </script>
 </body>
