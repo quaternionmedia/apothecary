@@ -961,15 +961,31 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     )
     panels = next(o for o in root.options if o.label == "Panels")
     assert panels.cell == 9 and panels.children is not None  # after Pieces, Site, Group, Fit
+    camera = next(o for o in root.options if o.label == "Camera")
+    assert camera.cell == 3 and [c.action for c in camera.children] == [
+        "camera:capture",
+        "camera:look",
+        "camera:place",
+        "camera:gather",
+        "camera:open",
+        "camera:allow",
+        "camera:unplace",
+    ]
+    assert carried_by("camera:look").name == "VIEWER"
     assert [(c.action, c.cell) for c in panels.children] == [
         ("panel:toggle:contents", 8),
         ("panel:toggle:selected", 6),
         ("panel:toggle:jobs", 2),
         ("panel:toggle:validation", 4),
         ("panel:toggle:scad", 9),
-        ("panel:toggle:machine", 3),
-        ("panel:toggle:log", 1),
-        ("panel:rail:toggle", 7),  # the rail itself, hidden and shown as the tilde does
+        ("panel:toggle:camera", 3),
+        (None, 1),  # Machine: the machine and its comms log behind one cell
+        ("panel:rail:toggle", 7),
+    ]
+    machine = next(c for c in panels.children if c.label == "Machine")
+    assert [(c.action, c.cell) for c in machine.children] == [
+        ("panel:toggle:machine", 8),
+        ("panel:toggle:log", 6),
     ]
     assert address_of(root, "panel:contents") == "98"  # by the option's id
     assert carried_by("panel:toggle:contents").name == "VIEWER"

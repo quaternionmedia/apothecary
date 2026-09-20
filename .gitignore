@@ -100,3 +100,4 @@ licenses.json
 # `apothecary preflight` runs the workflows against an environment it owns,
 # so nothing CI does reaches the interpreter you work in.
 .preflight/
+captures/

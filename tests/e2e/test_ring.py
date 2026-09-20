@@ -590,7 +590,9 @@ def test_panels_stand_in_front_of_the_world(page: Page, ring_url: str):
     page.reload()
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     ids = page.evaluate("() => window.apothecaryPanels.list().map((p) => p.id)")
-    assert ids == ["contents", "selected", "jobs", "validation", "scad"]
+    assert ids == ["contents", "selected", "jobs", "validation", "scad", "camera"]
+    assert page.evaluate("() => window.apothecaryPanels.state('camera').open") is False
+    ids = ids[:5]  # the camera panel starts closed and stays out of what follows
     rail = page.locator(".panel-rail-right")
     expect(rail.locator(".panel[data-panel='contents']")).to_be_visible()
     world = page.locator(".viewer-panel")
@@ -604,7 +606,7 @@ def test_panels_stand_in_front_of_the_world(page: Page, ring_url: str):
     expect(rail.locator(".panel[data-panel='validation']")).to_have_count(0)
     page.locator(".panel-tab[data-panel='validation']").click()
     expect(rail.locator(".panel[data-panel='validation']")).to_be_visible(timeout=1000)
-    expect(page.locator(".panel-tab")).to_have_count(0)
+    expect(page.locator(".panel-tab")).to_have_count(1)  # the camera's, closed by default
 
     # Collapse: the body folds, the title stays.
     page.locator(".panel[data-panel='contents'] .panel-collapse").click()
@@ -657,11 +659,11 @@ def test_panels_stand_in_front_of_the_world(page: Page, ring_url: str):
     page.keyboard.press(scad_cell)
     expect(page.locator("#ring-overlay")).to_have_count(0)
     expect(rail.locator(".panel[data-panel='scad']")).to_be_visible(timeout=2000)
-    expect(page.locator(".panel-tab")).to_have_count(0)
+    expect(page.locator(".panel-tab")).to_have_count(1)  # the camera's, closed by default
     # Every panel closed: the world has the whole width, and five tabs wait.
     for pid in ids:
         page.evaluate("(id) => window.apothecaryPanels.close(id)", pid)
-    expect(page.locator(".panel-tab")).to_have_count(5, timeout=2000)
+    expect(page.locator(".panel-tab")).to_have_count(6, timeout=2000)  # five, and the camera's
     page.wait_for_timeout(200)
     assert world.bounding_box()["width"] == pytest.approx(page.viewport_size["width"], abs=2)
     for pid in ids:

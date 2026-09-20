@@ -51,14 +51,23 @@ def test_the_page_has_fifty_four_controls_of_its_own():
     ring) in a popup tethered to the printer, and a widget's controls are the
     page's on every page that mounts it. The page's own fifty-four are what
     they were; the three-screen meter counts the machine once, by its source.
+
+    One hundred and thirty-one with the camera panel (widgets/camera.js):
+    fifteen controls for the browser's cameras, a frame kept here, the
+    pictures on this machine and gathering them, seven of them on the canvas
+    ring's Camera cell -- the photo workflow from the browser, the first
+    feature to arrive with its ring cells in the same change.
     """
     taken = census.take()
     own_here = [f for f in taken.controls_of_its_own() if not f.source]
     from_machine = [f for f in taken.controls_of_its_own() if f.source == "machine.js"]
-    assert (len(own_here), len(from_machine)) == (54, 62)
-    assert len(taken.controls_of_its_own()) == 116
-    assert len(taken.ring_backed()) == 56  # 15 of the page's own, 41 of the machine's
-    assert taken.sentence().startswith("116 controls of its own, 56 of them also on the ring.")
+    from_camera = [f for f in taken.controls_of_its_own() if f.source == "camera.js"]
+    assert (len(own_here), len(from_machine), len(from_camera)) == (54, 62, 15)
+    assert len(taken.controls_of_its_own()) == 131
+    assert (
+        len(taken.ring_backed()) == 63
+    )  # 15 of the page's own, 41 of the machine's, 7 of the camera's
+    assert taken.sentence().startswith("131 controls of its own, 63 of them also on the ring.")
     rows = [f for f in taken.found if f.key == "li:click:selectChild"]
     assert rows and rows[0].ring_action.startswith("select:")
 
@@ -104,7 +113,7 @@ def test_the_three_screens_have_one_meter():
             here = [f for f in taken.controls_of_its_own() if f.source == source]
             own += len(here)
             backed += sum(1 for f in here if f.ring_action)
-    assert (own, backed) == (148, 60)
+    assert (own, backed) == (163, 67)  # 148 / 60, plus the camera panel's 15 / 7
 
 
 def test_the_monitor_page_is_counted_too():

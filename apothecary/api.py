@@ -57,6 +57,7 @@ from .projects.parts.skeleton import ROOT
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
 from .projects.parts.stl_renderer import write_params_sidecar
 from .projects.registry import resolve_wrapper_module, scan_projects, stl_output_for
+from .routes.pictures import router as pictures_router
 from .scene import Scene
 from .site_store import SiteStore, UnknownSiteError
 from .templates import TemplateRenderer
@@ -289,6 +290,10 @@ app = FastAPI(
 STATIC_ROOT = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
 app.include_router(docs_router)
+# Mounted before the photo routes below, so /photos/pictures and /photos/gather
+# are matched before /photos/{name} can take "pictures" for a name. The router
+# reaches back into this module only inside its handlers.
+app.include_router(pictures_router)
 THREE_DIR = STATIC_ROOT / "vendor" / "three"
 THREE_IS_VENDORED = (THREE_DIR / "three.module.js").is_file()
 

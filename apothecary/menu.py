@@ -649,23 +649,53 @@ PANELS: Sequence[Tuple[str, str]] = (
     ("jobs", "Jobs"),
     ("validation", "Validation"),
     ("scad", "OpenSCAD"),
-    # Registered when a machine is opened: the monitor's body in a popup
-    # tethered to the printer, and its comms log beside the rail.
+    # Registered by the page's script rather than marked in its markup: the
+    # camera panel at start; the machine and its comms log when a printer is
+    # opened. The last two share one cell, since a ring holds eight.
+    ("camera", "Camera"),
     ("machine", "Machine"),
     ("log", "Comms log"),
 )
+GROUPED_PANELS = ("machine", "log")
 
 
 def _panels() -> Option:
+    def toggle(pid: str, label: str) -> Option:
+        return Option(id=f"panel:{pid}", label=label, action=f"panel:toggle:{pid}")
+
+    plain = [toggle(pid, label) for pid, label in PANELS if pid not in GROUPED_PANELS]
+    grouped = [toggle(pid, label) for pid, label in PANELS if pid in GROUPED_PANELS]
     return Option(
         id="panels",
         label="Panels",
-        children=[
-            Option(id=f"panel:{pid}", label=label, action=f"panel:toggle:{pid}")
-            for pid, label in PANELS
-        ]
+        children=plain
+        + [Option(id="panel:machine-group", label="Machine", children=grouped)]
         # The rail itself: hidden and shown, as the tilde key does.
         + [Option(id="panel:rail", label="Rail", action="panel:rail:toggle")],
+    )
+
+
+# The camera's verbs, in the order the ring seats them (cardinals first):
+# what the camera panel's buttons do, each a cell away from empty canvas.
+CAMERA_VERBS: Sequence[Tuple[str, str]] = (
+    ("capture", "Capture"),
+    ("look", "Look"),
+    ("place", "Place"),
+    ("gather", "Gather"),
+    ("open", "Open as one"),
+    ("allow", "Allow"),
+    ("unplace", "Unplace"),
+)
+
+
+def _camera() -> Option:
+    return Option(
+        id="camera",
+        label="Camera",
+        children=[
+            Option(id=f"camera:{verb}", label=label, action=f"camera:{verb}")
+            for verb, label in CAMERA_VERBS
+        ],
     )
 
 
@@ -693,6 +723,7 @@ def _canvas_ring(
             _grouped("Group", "group", groups),
             Option(id="fit", label="Fit", action="fit"),
             _panels(),
+            _camera(),
             Option(id="reset", label="Reset", action="reset", destructive=True),
         )
         if option is not None
@@ -1000,6 +1031,9 @@ CARRIED_BY: Dict[str, Carries] = {
     "print": Carries.VIEWER,
     # Opening, closing, floating what stands in front of the world (panels.js).
     "panel": Carries.VIEWER,
+    # The camera panel's verbs: the browser's cameras, a frame kept here, the
+    # pictures gathered -- all of it the page's, none of it the server's alone.
+    "camera": Carries.VIEWER,
 }
 
 

@@ -70,6 +70,25 @@ unresolved — twenty items, six of which block further building.
     apothecary photo view  picture.png --width-mm 800
     apothecary photo words
 
+**Or from the browser.** `apothecary serve`, open the viewer, and the ring's
+Panels › Camera (or `Camera` on the canvas ring) opens the **Camera &
+pictures** panel: allow the browser's cameras, pick one and see it live,
+**Capture** a frame -- it is kept on this machine, under `captures/` in the
+picture folder (`APOTHECARY_PICTURE_ROOT`, else the folder the server was
+started in), and nowhere else -- and **Look** captures, looks and opens what
+the finder made of it in the world. That is a camera's first sanity check:
+record its own surroundings and see what comes back (a room is crude
+pieces: plates, wedges, discs, most of them overlapping; a drawn picture is
+not). **Place at selected** stands the camera at the chosen piece, and the
+world draws it there from then on -- a badge and a small frustum -- in
+every browser. Below, the pictures on this machine: tick some, **Gather**
+for the groups and the questions worth your word (answer with a button; the
+sentence goes into the answers box, and your word wins), **Open as one**
+for the whole gathering in the world. `GET/POST /photos/pictures`,
+`POST /photos/gather` and `/cameras` are the routes underneath
+(`apothecary/routes/pictures.py`); the CLI below does the same from a
+terminal.
+
 `view` opens the existing viewer on what was built, where the pieces can be
 walked into at any depth and filtered by the word each came from. Beside it sits
 what is known about every piece — which finder saw it, how sure it was, whether

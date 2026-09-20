@@ -180,6 +180,26 @@
         .panel[data-panel="machine"].free { width: min(500px, 90%); }
         .panel[data-panel="machine"] .panel-body-slot, .panel[data-panel="log"] .panel-body-slot { padding: 0; }
         .panel[data-panel="log"] .machine-log { height: 100%; }
+        /* The camera panel (widgets/camera.js) */
+        .camera { font-size: 0.8rem; color: #bbb; display: flex; flex-direction: column; gap: 0.4rem; }
+        .camera .row { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+        .camera .grow { flex: 1; }
+        .camera .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: #777; margin-top: 0.3rem; }
+        .camera .note { color: #8a9a8a; font-style: italic; } .camera .note.bad, .camera .bad { color: #ff8080; font-style: normal; }
+        .camera button, .camera select, .camera input:not([type=checkbox]), .camera textarea { font: inherit; font-size: 0.78rem; background: #232823; color: #ddd; border: 1px solid #3a443a; border-radius: 4px; padding: 0.2rem 0.45rem; }
+        .camera button:hover { background: #2f382f; } .camera button:disabled { opacity: 0.45; }
+        .camera button.warm { border-color: #7a5a1a; }
+        .camera video { width: 100%; max-height: 200px; background: #000; border-radius: 4px; }
+        .camera .pics { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 0.3rem; max-height: 220px; overflow: auto; }
+        .camera .pic { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.7rem; cursor: pointer; }
+        .camera .pic img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 3px; border: 1px solid #333; }
+        .camera .pic span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .camera textarea { width: 100%; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; }
+        .camera .group { padding: 0.15rem 0; } .camera .group.alone { color: #8a9a8a; }
+        .camera .aside { color: #b08a8a; }
+        .camera .question { border-top: 1px solid #2a332a; padding: 0.3rem 0; }
+        .camera pre { white-space: pre-wrap; font-size: 0.7rem; color: #aaa; max-height: 200px; overflow: auto; }
+        .world-badge.camera { border-color: #7a5a1a; color: #ffcc66; }
 
         .contents-list { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; }
         .contents-item {
@@ -530,6 +550,7 @@
         import { mountAnchors } from '/static/anchors.js';
         import { mountPanels } from '/static/panels.js';
         import { mountMachine } from '/static/widgets/machine.js';
+        import { mountCamera } from '/static/widgets/camera.js';
         import { makeMachineMarks, toScene as marksToScene } from '/static/machine_marks.js';
 
         const BASE_URL = "{{ base_url }}";
@@ -884,6 +905,29 @@
                 }
                 document.querySelector('.side-panel')?.remove();
                 this.machine = null;
+                // The camera and the pictures on this machine: the photo workflow,
+                // as a panel (closed until asked for). A placed camera is drawn in
+                // the world at its node, in every browser.
+                this.cameras = [];
+                this.cameraMarks = {};
+                this.cameraWidget = null;
+                this.panels.register('camera', {
+                    title: 'Camera & pictures', where: 'right', open: false,
+                    body: (slot) => {
+                        this.cameraWidget = mountCamera(slot, {
+                            base: BASE_URL,
+                            log: (t) => this.setStatus(t, 'success'),
+                            world: {
+                                siteName: () => this.siteName,
+                                selectedPath: () => this.selectedName,
+                                placed: () => this.cameras,
+                                refreshCameras: () => this.syncCameras(),
+                                openSite: (name) => this.openSite(name),
+                            },
+                        });
+                        window.apothecaryCamera = this.cameraWidget;
+                    },
+                });
                 window.apothecaryPanels = this.panels;
                 this.onResize();
                 this.marks = {};       // bearer path -> { marks, port, where }
@@ -1044,9 +1088,79 @@
                     // Bindings shell out to arduino-cli (a second or two):
                     // fetched after the scene is on screen, never before.
                     this.loadBindings().then(() => { this.afterBindings(); this.scheduleAutoRefresh(); });
+                    this.syncCameras();
                 } catch (err) {
                     this.setStatus(`Error: ${err.message}`, 'error');
                     console.error(err);
+                }
+            }
+
+            // A site built while the server runs (from a picture, from a gathering)
+            // is not in the picker yet: add it, then load it in place -- the world
+            // changes site without leaving the page or dropping the camera.
+            openSite(name) {
+                if (![...this.siteSelect.options].some((o) => o.value === name)) {
+                    const opt = document.createElement('option');
+                    opt.value = name; opt.textContent = name;
+                    this.siteSelect.appendChild(opt);
+                }
+                this.siteSelect.value = name;
+                const url = new URL(location.href);
+                url.pathname = url.pathname.replace(/\/viewer\/sites\/[^/]+/, `/viewer/sites/${encodeURIComponent(name)}`);
+                history.replaceState(null, '', url);
+                return this.loadSite(name);
+            }
+
+            // The cameras placed in this site: a badge above each and a small
+            // frustum at its node, from GET /cameras, kept for every browser.
+            async syncCameras() {
+                let placed = [];
+                try {
+                    const r = await fetch(`${BASE_URL}/cameras?site=${encodeURIComponent(this.siteName)}`);
+                    placed = r.ok ? await r.json() : [];
+                } catch (err) { placed = []; }
+                this.cameras = placed;
+                const wanted = new Set();
+                for (const cam of placed) {
+                    const key = `camera:${cam.id}`;
+                    wanted.add(key);
+                    let badge = this.anchors.get(key);
+                    if (!badge) {
+                        badge = document.createElement('div');
+                        badge.className = 'world-badge camera';
+                        badge.dataset.camera = cam.id;
+                        badge.dataset.path = cam.path;
+                        badge.title = 'Open the camera panel on this camera';
+                        badge.addEventListener('click', () => this.openCamera(cam.id));
+                        this.anchors.add(key, badge, () => this.anchorPointFor(cam.path), { offset: { x: 0, y: -30 } });
+                    }
+                    badge.textContent = `📷 ${cam.label || 'camera'}`;
+                    if (!this.cameraMarks[key]) {
+                        const node = this.nodeByPath(cam.path);
+                        const b = node ? envelopeBounds(node) : null;
+                        if (b) {
+                            const cx = (b.min[0] + b.max[0]) / 2, cy = (b.min[1] + b.max[1]) / 2, top = b.max[2];
+                            // A small frustum at the top of the node, looking along +Y.
+                            const apex = new THREE.Vector3(cx, top + 20, cy);
+                            const far = cy + 140;
+                            const corners = [[-50, 40], [50, 40], [50, -40], [-50, -40]].map(([dx, dz]) => new THREE.Vector3(cx + dx, top + 20 + dz, far));
+                            const pts = [];
+                            for (let i = 0; i < 4; i++) { pts.push(apex, corners[i]); pts.push(corners[i], corners[(i + 1) % 4]); }
+                            const lines = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xffcc66, transparent: true, opacity: 0.8 }));
+                            this.scene.add(lines);
+                            this.cameraMarks[key] = lines;
+                        }
+                    }
+                }
+                for (const key of this.anchors.keys()) if (key.startsWith('camera:') && !wanted.has(key)) this.anchors.remove(key);
+                for (const [key, lines] of Object.entries(this.cameraMarks)) if (!wanted.has(key)) { this.scene.remove(lines); lines.geometry.dispose(); lines.material.dispose(); delete this.cameraMarks[key]; }
+                if (this.cameraWidget) this.cameraWidget.renderPlacement();
+            }
+            openCamera(id) {
+                this.panels.open('camera');
+                if (this.cameraWidget && id) {
+                    const pick = this.cameraWidget.state.cameras.some((c) => c.deviceId === id);
+                    if (pick) this.cameraWidget.useCamera(id); else this.setStatus('That camera belongs to another browser; this one cannot show it', 'error');
                 }
             }
 
@@ -1753,6 +1867,7 @@
             // so anything deeper -- or any leaf shown via "show all levels"
             // that isn't itself a direct child -- gets a read-only panel.
             renderSelectedPanel() {
+                if (this.cameraWidget) this.cameraWidget.renderPlacement();  // "Place at selected" follows the selection
                 const focus = this.currentFocusNode();
                 const selected = this.renderNodeByKey[this.selectedName];
                 if (!selected) {
@@ -3627,6 +3742,13 @@
                 const open = viewer.machine && (!port || viewer.machine.port === port) ? viewer.machine.handle : null;
                 if (open && /^(control:|level:|print:|device:(poll|query|watch|reconnect|reset|release))/.test(action)) {
                     if (await open.carry(intent)) { viewer.setStatus(`${intent.label}${tail}`, 'success'); return; }
+                }
+                if (action.startsWith('camera:')) {
+                    viewer.panels.open('camera');
+                    const verb = action.slice('camera:'.length);
+                    if (viewer.cameraWidget && viewer.cameraWidget.act(verb)) viewer.setStatus(`Camera: ${intent.label}${tail}`, 'success');
+                    else viewer.setStatus(`${intent.label}: the camera panel cannot do that${tail}`, 'error');
+                    return;
                 }
                 if (action === 'panel:rail:toggle') {
                     const hidden = viewer.panels.hideRail('right', !viewer.panels.railHidden('right'));

@@ -341,6 +341,24 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "dev-identify": (WIDGET, WHAT_YOU_SEE, "a button that listens for the sketch's hello"),
     "dev-printer": (WIDGET, WHAT_YOU_SEE, "a button that asks M115, or polls a printer once"),
     "dev-live": (WIDGET, WHAT_YOU_SEE, "a button that streams the board's serial output"),
+    # ---- the camera panel, apothecary/static/widgets/camera.js ------------
+    # The photo workflow from the browser: a camera, its frame kept here, the
+    # pictures on this machine gathered, and what a person says about them.
+    "cam-pick": (WIDGET, WHAT_YOU_SEE, "a drop-down of the browser's cameras"),
+    "cam-allow": (WIDGET, WHAT_YOU_SEE, "a button that asks the browser for its cameras"),
+    "cam-refresh": (WIDGET, WHAT_YOU_SEE, "a button that lists the cameras again"),
+    "cam-name": (WIDGET, WHAT_YOU_SEE, "a box for what the next capture is called"),
+    "cam-width": (WIDGET, WHAT_YOU_SEE, "a box for how wide the picture is, in millimetres"),
+    "cam-capture": (WIDGET, WHAT_IS_THERE, "a button that keeps a frame as a picture here"),
+    "cam-look": (WIDGET, WHAT_IS_THERE, "a button that captures, looks, and opens the result"),
+    "cam-place": (WIDGET, WHAT_IS_THERE, "a button that stands the camera at the chosen piece"),
+    "cam-unplace": (WIDGET, WHAT_IS_THERE, "a button that takes the camera out of the world"),
+    "pic-all": (WIDGET, WHAT_YOU_SEE, "a tick-box that ticks every picture"),
+    "pic-refresh": (WIDGET, WHAT_YOU_SEE, "a button that lists the pictures again"),
+    "pic-gather": (WIDGET, WHAT_YOU_SEE, "a button that gathers the ticked pictures"),
+    "pic-open": (WIDGET, WHAT_IS_THERE, "a button that builds one arrangement and opens it"),
+    "gather-answers": (WIDGET, WHAT_YOU_SEE, "a box for what you know about the pictures"),
+    "answer": (WIDGET, WHAT_YOU_SEE, "a button that answers one of the machine's questions"),
     # printing from here: a kept file, streamed
     "print-file": (WIDGET, WHAT_YOU_SEE, "a file picker that keeps a G-code file on the host"),
     "print-pick": (WIDGET, WHAT_YOU_SEE, "a drop-down of the files kept on the host"),
@@ -418,6 +436,14 @@ RING_BACKED: Dict[str, str] = {
     "dev-printer": "device:poll",
     "dev-live": "device:watch",
     "boards-btn": "device:rescan",
+    # The camera panel's buttons, each a cell of the canvas ring's Camera.
+    "cam-allow": "camera:allow",
+    "cam-capture": "camera:capture",
+    "cam-look": "camera:look",
+    "cam-place": "camera:place",
+    "cam-unplace": "camera:unplace",
+    "pic-gather": "camera:gather",
+    "pic-open": "camera:open",
     # The Print cell's verbs go to whichever print is running, the card's or
     # the one from here; Send file is the one from here alone.
     "print-start": "print:start",
@@ -521,6 +547,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "li:click:selectChild": (LIST, WHAT_YOU_SEE, "picking a piece from the list"),
     # An anchor: a machine's badge standing over it in the world (anchors.js).
     "badge:click:selectPath": (LIST, WHAT_YOU_SEE, "picking the machine a badge stands over"),
+    "badge:click:openCamera": (LIST, WHAT_YOU_SEE, "picking the camera a badge stands over"),
+    # ---- the camera panel --------------------------------------------------
+    "cam-pick:change:useCamera": (WIDGET, WHAT_YOU_SEE, "choosing which camera is live"),
+    "pic-all:change:(nothing)": (WIDGET, WHAT_YOU_SEE, "ticking every picture at once"),
+    "gather-out:click:closest": (WIDGET, WHAT_YOU_SEE, "answering a question with a button"),
     "li:dblclick:zoomIn": (LIST, WHAT_YOU_SEE, "going into a piece from the list"),
     "rootCrumb:click:jumpTo": (LIST, WHAT_YOU_SEE, "the top of the trail"),
     "crumb:click:jumpTo": (LIST, WHAT_YOU_SEE, "a step on the trail"),
