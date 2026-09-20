@@ -272,6 +272,77 @@ The seam itself is the G-code line protocol every host speaks (OctoPrint,
 Pronterface, Cura), with Marlin, RepRapFirmware, Klipper and Prusa on the
 other end; the parsers are written to Marlin's documented replies.
 
+### The ring
+
+Everything the Device section and the monitor's buttons do is also on the
+**ring**: right-click a piece (in the 3D view or its Contents row), press
+`m` with a piece selected, or press the toolbar's **⌗ Ring** button. The
+ring is rad's radial menu, and it addresses **nine cells numbered as a
+numeric keypad** -- the same rule on every host, so a choice can be written
+down and repeated:
+
+```
+7 8 9        up-left     up    up-right
+4 5 6   =    left       BACK   right
+1 2 3        down-left  down   down-right
+```
+
+Eight cells hold options and cell 5 never does: it backs out one level and
+closes the ring at the top. Options are seated cardinals first, `8 6 2 4`
+and then the corners `9 3 1 7`, so a four-option ring sits at up, right,
+down and left. A digit chooses its cell from anywhere; an arrow moves the
+highlight to the nearest occupied cell in that direction; `5` or Backspace
+backs out; Escape closes; Enter commits. Cells with nothing in them are
+drawn faint and cannot be chosen.
+
+The node ring, on a piece with a board pinned to it, gains a **Device**
+option in cell 2 (after Zoom in and Move), which opens the device ring; on
+the monitor page the device ring is the top ring, titled by the port:
+
+```
+   Device ring                     Control ring (printers only)
+ 7:Control    8:Watch    9:Pin|Unpin    7:Arm|Disarm  8:Heat  9:SD
+ 4:Query      5:back     6:Poll         4:Fan         5:back  6:Home
+ 1:Link       2:Monitor  3:Rescan       1:Stop        2:Jog   3:Motors
+```
+
+Link opens `8:Reconnect  6:Reset  2:Release` (the same cell 1 on a devkit,
+which has no Control); Heat opens `8:Hotend on  6:Hotend off  2:Bed on
+4:Bed off`; Home opens `8:All  6:XY  2:Z`; Fan opens `8:On  6:Off`; SD opens
+`8:Resume  6:Pause  2:Abort`; Motors opens `8:Off  6:Quickstop`; and Jog is
+seated so **the keypad is the jog pad**:
+
+```
+ 7:        8:Y+   9:Z+
+ 4:X-      5:back 6:X+
+ 1:        2:Y-   3:Z-
+```
+
+Stop is E-STOP and is drawn as destructive. Pin or Unpin is one cell, and
+Arm or Disarm is one cell, since a board is either pinned or not and the
+latch is either armed or not. (The cells above are what
+`apothecary.menu.resolve` seats today; the placement rule, not this table,
+is the contract.)
+
+The digits pressed to reach an option are its **address**: from a printer's
+node, `2` (Device) `7` (Control) `2` (Jog) `8` (Y+) is `⌗2728`, and E-STOP is
+`⌗271`; given the same piece and the same board the same digits reach the
+same thing. Every
+intent the ring sends carries its address, and **every device button on the
+page shows its ⌗ address** in its tooltip (`data-address` on the element),
+so the button you already know teaches you the digits that replace it.
+Control verbs chosen from the ring go through the monitor's own control
+chain -- the latch, the allowlist, the confirm on Abort and E-STOP -- exactly
+as the buttons do; the ring never opens a port by itself.
+
+The options come from the server: `POST /menu/resolve` is told what the ring
+was opened on and what the page knows about the board under it (`{port,
+printer, armed, bound}`) and hands back the ring with every option's cell;
+`POST /menu/intent` is told the choice, with its address. `apothecary
+census` counts the page's own controls and says how many of them are also
+on the ring; that number is the migration's meter, and it falls as
+ring-backed buttons are deleted.
+
 ### The focused monitor
 
 `/firmware/monitor?port=/dev/ttyUSB2` is one printer, full width: status

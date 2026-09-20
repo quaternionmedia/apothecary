@@ -5,6 +5,8 @@ the counter. Each one names the attack it came from, so that removing a test
 means arguing with the attack rather than only with the test.
 """
 
+import re
+
 import pytest
 
 from apothecary import census
@@ -14,7 +16,7 @@ from apothecary import census
 # --------------------------------------------------------------------------
 
 
-def test_the_page_has_thirty_three_controls_of_its_own():
+def test_the_page_has_fifty_four_controls_of_its_own():
     """The meter. Unifying means this number falls, and falls to nothing.
 
     Not the twelve an earlier version of this file asserted. Twelve was a hand
@@ -23,14 +25,47 @@ def test_the_page_has_thirty_three_controls_of_its_own():
     position were one, and it left out a drop-down that nothing listens to.
     Counted properly, one control at a time, there were twenty.
 
-    Thirty-three now, and the meter went up rather than down: two buttons that
+    Thirty-three next, and the meter went up rather than down: two buttons that
     keep or discard a piece's staged numbers, six controls and a link for a
     board's serial log, the same link again where no board is found, and three
     for how much of a subassembly to draw. Each arrived with a feature; none of
-    them is unified with anything.
+    them was unified with anything.
+
+    Fifty-four now, up by twenty-one, and this is the first rise that came with
+    the thing that makes it fall. The printer seam brought a tick-box and a
+    drop-down for looking for boards on a schedule, a link to the monitor, five
+    controls on the serial log for identifying a board and asking it for a
+    report, and thirteen in the chosen piece's Device section for pinning,
+    polling, watching and querying its board. The ring arrived in the same
+    change, and thirteen of the fifty-four are ring-backed: the same verb is a
+    cell of the ring, with its address written on the button. Those thirteen are
+    the ones that can go, and the meter falls as they do. Twelve of the new
+    ones and every old one are not backed by anything yet.
     """
     taken = census.take()
-    assert len(taken.controls_of_its_own()) == 33
+    assert len(taken.controls_of_its_own()) == 54
+    assert len(taken.ring_backed()) == 13
+    assert taken.sentence().startswith("54 controls of its own, 13 of them also on the ring.")
+
+
+def test_the_monitor_page_is_counted_too():
+    """The second page, counted the same way and never added to the first.
+
+    Fifty-one controls of its own, and twenty-eight of them are on the ring: the
+    control overlay's heat, home, jog, fan, SD, motors and quickstop buttons,
+    the emergency stop, the latch's arm and disarm, and the header's poll,
+    identify, reconnect, reset and release -- the last three through the device
+    ring's Link cell. What is not backed is the plumbing of the page itself:
+    which port, how often, the log's tick-boxes, the download.
+    """
+    taken = census.take(census.MONITOR)
+    assert len(taken.controls_of_its_own()) == 51
+    assert len(taken.ring_backed()) == 28
+    assert taken.sentence().startswith("51 controls of its own, 28 of them also on the ring.")
+    listening = [f for f in taken.found if f.how == "listening"]
+    assert len(listening) == 10
+    assert taken.of_surface(census.GESTURE) == ()
+    assert taken.of_surface(census.LIST) == ()
 
 
 def test_the_two_buttons_on_a_job_are_two():
@@ -223,13 +258,17 @@ def test_the_tables_do_not_rot():
     A table that keeps entries for controls that no longer exist quietly becomes
     a record of what somebody once believed rather than of what is there.
     """
-    taken = census.take()
-    seen_markup = {f.name for f in taken.found if f.how == "markup"}
-    seen_listening = {f.key for f in taken.found if f.how == "listening"}
+    seen_markup = set()
+    seen_listening = set()
+    for page in census.PAGES:
+        taken = census.take(page)
+        seen_markup |= {f.name for f in taken.found if f.how == "markup"}
+        seen_listening |= {f.key for f in taken.found if f.how == "listening"}
     made_by_the_page = {"category-chip", "tree-caret", "contents-item", "breadcrumb"}
     stale = set(census.CONTROLS) - seen_markup - made_by_the_page
-    assert not stale, f"classified but not in the page: {sorted(stale)}"
+    assert not stale, f"classified but not in either page: {sorted(stale)}"
     assert not set(census.LISTENING) - seen_listening
+    assert not set(census.RING_BACKED) - seen_markup - seen_listening
 
 
 def test_the_two_questions_are_kept_apart():
@@ -263,10 +302,38 @@ def test_stepping_out_is_called_the_same_thing_wherever_it_is_done():
     assert {f.effect for f in stepping} == {census.WHAT_YOU_SEE}
 
 
-def test_there_is_no_ring_yet_and_the_counter_says_so():
-    taken = census.take()
-    assert taken.of_surface(census.RING) == ()
-    assert "no ring yet" in taken.sentence()
+def test_there_is_a_ring_and_the_counter_says_so():
+    """One control is filed under the ring on each page: the button that opens it.
+
+    The ring's own listeners live in the module the page imports and are the
+    ring's, not the page's; the next test holds the module to that.
+    """
+    for page in census.PAGES:
+        taken = census.take(page)
+        ring = taken.of_surface(census.RING)
+        assert [f.name for f in ring] == ["ring-open"]
+        assert "a ring" in taken.sentence()
+        assert "no ring yet" not in taken.sentence()
+
+
+RING_MODULE = census.TEMPLATES.parent / "apothecary" / "static" / "ring.js"
+
+
+def test_the_ring_module_opens_three_ways_and_the_pages_import_it():
+    """What the census counts once, behind `ring-open`, checked at the source.
+
+    The module installs the `m` key on the window, right-click on the document
+    and a click on the button, and nothing else on either. Everything else it
+    listens to is on the ring's own element while the ring is open. A fourth
+    way in added to the module would be a way in the census cannot see, so it
+    is refused here instead.
+    """
+    text = RING_MODULE.read_text(encoding="utf-8")
+    on_page = re.findall(r"(window|document)\.addEventListener\(\s*[\"'](\w+)[\"']", text)
+    assert sorted(set(on_page)) == [("document", "contextmenu"), ("window", "keydown")]
+    assert 'button = "#ring-open"' in text
+    for page in census.PAGES:
+        assert "/static/ring.js" in page.read_text(encoding="utf-8")
 
 
 def test_a_ring_would_be_reported_if_there_were_one(tmp_path):
@@ -281,6 +348,164 @@ def test_a_ring_would_be_reported_if_there_were_one(tmp_path):
         assert taken.controls_of_its_own() == ()
     finally:
         del census.CONTROLS["the-ring"]
+
+
+# --------------------------------------------------------------------------
+# Ring-backed — a control the ring has already replaced in all but deletion
+# --------------------------------------------------------------------------
+
+
+def test_every_ring_backed_action_is_one_a_ring_produces_and_somebody_carries():
+    """A control cannot claim a backing that does not exist.
+
+    Two checks, from the ring's own vocabulary in `apothecary.menu`: the action
+    is one `carried_by` knows, and one that some ring actually offers -- the
+    node ring standing on a piece with a printer pinned to it, the device ring
+    on a port, or the canvas ring. A typo in `RING_BACKED` would otherwise be a
+    control reported as on the ring with no cell that reaches it.
+    """
+    from apothecary import menu
+
+    printer = menu.Device(port="/dev/ttyUSB0", printer=True, armed=False, bound=True)
+    armed = menu.Device(port="/dev/ttyUSB0", printer=True, armed=True, bound=True)
+    unpinned = menu.Device(port="/dev/ttyUSB0", printer=True, armed=False, bound=False)
+    on_node = menu.Context(pointing=menu.Pointing.NODE, targets=["p"])
+    on_port = menu.Context(pointing=menu.Pointing.DEVICE, targets=["/dev/ttyUSB0"])
+    on_canvas = menu.Context(pointing=menu.Pointing.CANVAS)
+    rings = [
+        menu.resolve(on_node, device=printer),
+        menu.resolve(on_port, device=armed),
+        menu.resolve(on_port, device=unpinned),
+        menu.resolve(on_canvas, site_names=["garage"]),
+    ]
+    offered = menu.every_action(rings)
+    for page in census.PAGES:
+        for found in census.take(page).found:
+            if found.ring_action is None:
+                continue
+            assert menu.carried_by(found.ring_action) is not menu.Carries.UNBUILT, found
+            assert found.ring_action in offered, f"{found.key} claims {found.ring_action!r}"
+
+
+def test_a_ring_backed_control_is_still_on_the_meter():
+    """Backing is not deletion. The meter falls when the control goes, not before."""
+    taken = census.take()
+    backed = taken.ring_backed()
+    assert backed
+    assert set(backed) <= set(taken.controls_of_its_own())
+    assert all(f.surface == census.WIDGET for f in backed)
+
+
+def test_the_sentence_says_how_many_are_on_the_ring(tmp_path):
+    page = tmp_path / "page.html"
+    page.write_text(
+        '<button class="dev-watch">w</button><button id="serial-clear">c</button>\n',
+        encoding="utf-8",
+    )
+    taken = census.take(page)
+    assert taken.sentence().startswith("2 controls of its own, 1 of them also on the ring.")
+    assert taken.ring_backed()[0].ring_action == "device:watch"
+
+
+def test_the_report_writes_the_address_beside_a_backed_control(tmp_path):
+    page = tmp_path / "page.html"
+    page.write_text('<button class="dev-poll">p</button>\n', encoding="utf-8")
+    assert "⌗ device:poll" in census.report(page)
+
+
+# --------------------------------------------------------------------------
+# Reading the page — what the printer seam's pages made visible
+# --------------------------------------------------------------------------
+
+
+def test_two_forms_send_buttons_are_two(tmp_path):
+    """A submit button has no name of its own, so it is named by its form.
+
+    Named by its shape alone, the serial log's send button was counted as the
+    job form's, and a second form could never add a control.
+    """
+    page = tmp_path / "page.html"
+    page.write_text(
+        '<form id="job-form"><button type="submit">go</button></form>\n'
+        '<form id="qform"><button type="submit">send</button></form>\n',
+        encoding="utf-8",
+    )
+    taken = census.take(page)
+    assert [f.name for f in taken.found] == ["job-form", "job-form:submit", "qform", "qform:submit"]
+
+
+def test_a_button_that_carries_its_line_is_named_by_the_line(tmp_path):
+    """Two buttons of one class that send two different lines are two.
+
+    The monitor's control overlay names nothing: each button carries the G-code
+    it sends. Named by class, both temperature buttons were `warm`, and the
+    twenty with no class at all were not there.
+    """
+    page = tmp_path / "page.html"
+    page.write_text(
+        '<button class="warm" data-cmd="M104 S{h-hot}">Set</button>\n'
+        '<button class="warm" data-cmd="M140 S{h-bed}">Set</button>\n'
+        '<button data-jog="Y+">up</button><button data-step="10">10</button>\n',
+        encoding="utf-8",
+    )
+    taken = census.take(page)
+    assert [f.name for f in taken.found] == [
+        "cmd:M104 S{h-hot}",
+        "cmd:M140 S{h-bed}",
+        "jog:Y+",
+        "step:10",
+    ]
+    assert [f.ring_action for f in taken.found] == [
+        "control:hotend-on",
+        "control:bed-on",
+        "control:jog:Y+",
+        None,
+    ]
+
+
+def test_a_link_with_a_class_is_the_thing_its_class_says(tmp_path):
+    """Named by its link before its class, a Device-section link was the recipe download."""
+    page = tmp_path / "page.html"
+    page.write_text(
+        '<a class="dev-monitor" href="/firmware/monitor?port=x">m</a>\n'
+        '<a href="/parts/x/scad">d</a>\n'
+        '<a href="/viewer">v</a>\n',
+        encoding="utf-8",
+    )
+    taken = census.take(page)
+    assert [f.name for f in taken.found] == ["dev-monitor", "part-scad-download", "viewer-link"]
+
+
+def test_a_control_fetched_by_the_one_letter_helper_is_named(tmp_path):
+    page = tmp_path / "page.html"
+    page.write_text(
+        '$("port").addEventListener("change", () => selectPort($("port").value));\n', "utf-8"
+    )
+    taken = census.take(page)
+    assert [f.key for f in taken.found] == ["port:change:selectPort"]
+
+
+def test_a_bare_handler_is_the_thing_it_does(tmp_path):
+    """`addEventListener("change", schedule)` does one thing, and it is named."""
+    page = tmp_path / "page.html"
+    page.write_text('$("auto").addEventListener("change", schedule);\n', "utf-8")
+    taken = census.take(page)
+    assert [f.key for f in taken.found] == ["auto:change:schedule"]
+
+
+def test_pin_and_pin_by_typing_are_two_listeners(tmp_path):
+    """`.dev-pin-manual` begins with `.dev-pin`, and must not be read as it."""
+    page = tmp_path / "page.html"
+    page.write_text(
+        "el.querySelector('.dev-pin')?.addEventListener('click', () => this.setNodeDevice(p));\n"
+        "el.querySelector('.dev-pin-manual')?.addEventListener('click', pinManual);\n",
+        encoding="utf-8",
+    )
+    taken = census.take(page)
+    assert [f.key for f in taken.found] == [
+        "devPin:click:setNodeDevice",
+        "devPinManual:click:pinManual",
+    ]
 
 
 # --------------------------------------------------------------------------

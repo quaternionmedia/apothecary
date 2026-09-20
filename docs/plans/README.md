@@ -171,6 +171,7 @@ to, and what is still undecided.
 | [rad-android inherits the principle](edits/rad-android.md) | change | stub | rad is a unification engine — the foundational principle |
 | [rad-menu carries the principle at its foundation](edits/rad-menu.md) | change | stub | rad is a unification engine — the foundational principle |
 | [rad is a unification engine — the foundational principle](edits/rad-unification-principle.md) | change | drafted | nothing |
+| [rad's conformance learns the nine cells](edits/rad-nine-cells-conformance.md) | change | drafted | rad's *The menu addresses nine cells* |
 | [Many photographs at once, and which are of the same thing](features/gathering.md) | feature | built | Photo → shapes → words → placed scenes → links |
 | [What can and cannot be chorded](features/chord-vocabulary.md) | postponed | stub | Twenty controls of its own become none |
 | [Selecting a real detector](features/detector-selection.md) | postponed | stub | Photo → shapes → words → placed scenes → links |
