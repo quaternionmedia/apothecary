@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field, ValidationError
 from .booleans import Difference, Intersection, Union
 from .core import OpenSCADObject
 from .datum_core_site import create_datum_core_site, validate_datum_core
+from .docs_site import router as docs_router
 from .example_hierarchy import (
     PRINTER_STATUSES,
     Job,
@@ -272,6 +273,9 @@ app = FastAPI(
     version="0.1.0",
     description="Lean OpenSCAD generation toolkit exposed via FastAPI endpoints",
     lifespan=lifespan,
+    # /docs is the project's documentation (docs_site.py); the API's own lives under /api.
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
 )
 
 # The viewer's 3D library, kept here rather than fetched from a public website
@@ -284,6 +288,7 @@ app = FastAPI(
 # the house-stack record for the same reason.
 STATIC_ROOT = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
+app.include_router(docs_router)
 THREE_DIR = STATIC_ROOT / "vendor" / "three"
 THREE_IS_VENDORED = (THREE_DIR / "three.module.js").is_file()
 

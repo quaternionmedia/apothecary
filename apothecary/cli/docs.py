@@ -32,6 +32,7 @@ import sys
 import tempfile
 import time
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 import click
@@ -108,8 +109,16 @@ def generate(host: str, port: int, keep_raw_video: bool, real_devices: bool):
     if raw_video_dir.exists():
         shutil.rmtree(raw_video_dir)
 
+    from ..docs_site import note_refresh
+
+    started = datetime.now(timezone.utc).isoformat()
+    note_refresh(started=started, finished=None, ok=None, error=None)
     click.echo(f"Starting temporary server at http://{host}:{port} for doc generation...")
-    server_proc, base_url = _start_server(host, port, simulated_devices=not real_devices)
+    try:
+        server_proc, base_url = _start_server(host, port, simulated_devices=not real_devices)
+    except Exception as exc:
+        note_refresh(finished=datetime.now(timezone.utc).isoformat(), ok=False, error=str(exc))
+        raise
 
     try:
         click.echo("Running doc-workflow E2E tests...")
@@ -135,6 +144,11 @@ def generate(host: str, port: int, keep_raw_video: bool, real_devices: bool):
             server_proc.kill()
 
     if result.returncode != 0:
+        note_refresh(
+            finished=datetime.now(timezone.utc).isoformat(),
+            ok=False,
+            error=f"doc-workflow tests failed (exit {result.returncode})",
+        )
         raise SystemExit(
             f"Doc-workflow tests failed (exit {result.returncode}); docs were not regenerated."
         )
@@ -157,6 +171,7 @@ def generate(host: str, port: int, keep_raw_video: bool, real_devices: bool):
     if raw_video_dir.exists() and not keep_raw_video:
         shutil.rmtree(raw_video_dir)
 
+    note_refresh(finished=datetime.now(timezone.utc).isoformat(), ok=True, error=None)
     click.secho(f"Docs generated at {GENERATED_DOCS_ROOT}", fg="green")
 
 

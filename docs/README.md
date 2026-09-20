@@ -69,6 +69,16 @@ by `pytest walkthrough`. Start there.
 |----------|-------------|
 | [Ender bench, 2026-09-20](validation/2026-09-20-ender-bench.md) | The printer seam against a real Marlin board: what was verified without arming, what it found, and the checklist for the rest |
 
+## Read these in the browser
+
+`apothecary serve` serves this folder at **`/docs`** (and the walkthrough at
+`/walkthrough`): a Markdown page is rendered, a screenshot or recording is
+served as it is, and links between pages work because the URL is the path.
+The bar on every page says when the generated walkthroughs were last
+refreshed; the server regenerates them in the background each time it
+starts (`--no-refresh-docs` to skip; the run's output is in
+`docs/generated/refresh.log`). The HTTP API's own docs are at `/api/docs`.
+
 ## Generated Documentation (screenshots, GIFs, walkthroughs)
 
 The fractal zoom viewer and the printer monitor are documented by their own

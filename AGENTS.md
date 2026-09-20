@@ -59,7 +59,7 @@ this file's summary of the corpus instead of the corpus.
 uv sync                        # install dependencies
 uv run apothecary test all     # full test suite (unit + E2E)
 uv run pytest -q               # unit tests only
-uv run apothecary serve        # start the FastAPI viewer at :8000
+uv run apothecary serve        # start the FastAPI viewer at :8000 (docs at /docs, refreshed on start)
 uv run apothecary check        # verify install (incl. OpenSCAD availability)
 uv run apothecary firmware install --avr   # arduino-cli + a core, to program boards from parts/*/*.ino
 ```

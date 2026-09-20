@@ -24,7 +24,14 @@ from .utils import _get_stl_bounding_box, _safe_echo
     help="Serve the JSCAD web viewer from this directory (defaults to node_modules/@jscad/web if present)",
 )
 @click.option("--no-viewer", is_flag=True, help="Disable the JSCAD viewer even if assets exist")
-def serve(host: str, port: int, reload: bool, viewer_path: str | None, no_viewer: bool):
+@click.option(
+    "--refresh-docs/--no-refresh-docs",
+    default=True,
+    help="Regenerate docs/generated/ in the background as the server starts (served at /docs)",
+)
+def serve(
+    host: str, port: int, reload: bool, viewer_path: str | None, no_viewer: bool, refresh_docs: bool
+):
     """Run the FastAPI server."""
     # CRITICAL: Set environment variables BEFORE importing the app,
     # because the app module initializes the viewer mount at import time
@@ -78,6 +85,9 @@ def serve(host: str, port: int, reload: bool, viewer_path: str | None, no_viewer
     click.echo(f"Starting server on http://{host}:{port}")
     # One entry point. Everything else here is an API the viewer reads.
     click.echo(f"  Viewer: http://{host}:{port}/viewer")
+    click.echo(f"  Docs:   http://{host}:{port}/docs")
+    if refresh_docs:
+        refresh_docs_in_background()
     # The JSCAD assets above are mounted by no route -- the fractal viewer is
     # the only viewer, and it needs the vendored three.js, not these. The flags
     # are kept because they are published; the messages no longer claim the
@@ -279,6 +289,45 @@ def dev(host: str, port: int, install: bool, skip_stl: bool, elephant: bool):
     click.echo("")
     click.secho(f"Step 4: Starting dev server on http://{host}:{port}", fg="cyan")
     _safe_echo("  → Viewer: http://" + host + ":" + str(port) + "/viewer", fg="green")
+    _safe_echo("  → Docs:   http://" + host + ":" + str(port) + "/docs", fg="green")
     click.echo("")
+    refresh_docs_in_background()
 
     uvicorn.run("apothecary.api:app", host=host, port=port, reload=True)
+
+
+def refresh_docs_in_background() -> subprocess.Popen | None:
+    """Regenerate docs/generated/ while the server runs, so /docs is current after a restart.
+
+    `apothecary docs generate` runs the doc-workflow browser tests against a
+    scripted server of its own (port 8766) and takes a minute or two; the
+    pages it rewrites are served as they land, and the bar on every docs
+    page says whether the run is still going or how it ended. Its output goes
+    to docs/generated/refresh.log. A missing browser or a failing test is
+    reported there and in the bar, never here.
+    """
+    from ..docs_site import GENERATED_ROOT, note_refresh
+
+    GENERATED_ROOT.mkdir(parents=True, exist_ok=True)
+    log = GENERATED_ROOT / "refresh.log"
+    try:
+        handle = log.open("w", encoding="utf-8")
+        proc = subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                "from apothecary.cli.main import main; main()",
+                "docs",
+                "generate",
+            ],
+            cwd=ROOT,
+            stdout=handle,
+            stderr=subprocess.STDOUT,
+            env={**os.environ, "APOTHECARY_DOCS_REFRESH": "1"},
+        )
+    except OSError as exc:
+        note_refresh(finished=None, ok=False, error=f"could not start docs generate: {exc}")
+        _safe_echo(f"  (docs refresh not started: {exc})", fg="yellow")
+        return None
+    _safe_echo(f"  Docs refresh running in the background (log: {log.relative_to(ROOT)})")
+    return proc
