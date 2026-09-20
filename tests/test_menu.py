@@ -969,6 +969,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("panel:toggle:scad", 9),
         ("panel:toggle:machine", 3),
         ("panel:toggle:log", 1),
+        ("panel:rail:toggle", 7),  # the rail itself, hidden and shown as the tilde does
     ]
     assert address_of(root, "panel:contents") == "98"  # by the option's id
     assert carried_by("panel:toggle:contents").name == "VIEWER"

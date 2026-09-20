@@ -173,8 +173,11 @@ leader for Phase 3), the side column's five sections as docked panels,
 `Panels ▸` on the canvas ring with a cell per panel and the resolver's list
 held to the template's marks, the browser test, the walkthrough page. Not
 done: the toolbar's `▣ Panels` button (the ring's cell and the tabs are the
-ways back in; a button would be one more control of the page's own), and
-a left rail in use (the manager has one; nothing docks there yet).
+ways back in; a button would be one more control of the page's own).
+*Since:* the rail resizes from its edge, hides and shows on the tilde
+(and the ring's Panels › Rail), and moves to the other side by its grip
+or ⇄; a docked panel's body height drags; the left rail is in use (the
+machine's comms log docks there, and a moved rail lands there).
 
 - `apothecary/static/panels.js`: a panel registry and a window manager.
   `register(id, {title, mount(el), unmount, where: "dock-left" | "dock-right"

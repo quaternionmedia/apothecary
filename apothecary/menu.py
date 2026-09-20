@@ -663,7 +663,9 @@ def _panels() -> Option:
         children=[
             Option(id=f"panel:{pid}", label=label, action=f"panel:toggle:{pid}")
             for pid, label in PANELS
-        ],
+        ]
+        # The rail itself: hidden and shown, as the tilde key does.
+        + [Option(id="panel:rail", label="Rail", action="panel:rail:toggle")],
     )
 
 

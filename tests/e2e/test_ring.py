@@ -666,4 +666,57 @@ def test_panels_stand_in_front_of_the_world(page: Page, ring_url: str):
     assert world.bounding_box()["width"] == pytest.approx(page.viewport_size["width"], abs=2)
     for pid in ids:
         page.evaluate("(id) => window.apothecaryPanels.open(id)", pid)
+
+    # The rail itself: the tilde hides and shows it (a tab stands in meanwhile),
+    # its edge drags to a width between a fifth and half the page, and its grip
+    # drags it across to the other side -- all of it remembered.
+    full = page.viewport_size["width"]
+    page.locator("#job-name").focus()
+    page.keyboard.press("`")  # typing a tilde into a box is typing, not a toggle
+    page.wait_for_timeout(100)
+    expect(rail).to_be_visible()
+    page.locator("#viewer-canvas").click(position={"x": 200, "y": 200})
+    page.keyboard.press("`")
+    expect(rail).to_be_hidden(timeout=1000)
+    expect(page.locator(".panel-tab-rail[data-rail='right']")).to_be_visible()
+    assert world.bounding_box()["width"] == pytest.approx(full, abs=2)
+    page.keyboard.press("`")
+    expect(rail).to_be_visible(timeout=1000)
+    before = page.evaluate("() => window.apothecaryPanels.railWidth('right')")
+    edge = rail.locator(".panel-rail-resizer").bounding_box()
+    page.mouse.move(edge["x"] + 3, edge["y"] + 200)
+    page.mouse.down()
+    page.mouse.move(edge["x"] + 3 - 150, edge["y"] + 200, steps=6)
+    page.mouse.up()
+    wider = page.evaluate("() => window.apothecaryPanels.railWidth('right')")
+    assert wider == pytest.approx(before + 150, abs=3)
+    page.mouse.move(edge["x"] + 3 - 150, edge["y"] + 200)
+    page.mouse.down()
+    page.mouse.move(-2000, edge["y"] + 200, steps=6)  # far past the limit
+    page.mouse.up()
+    assert page.evaluate("() => window.apothecaryPanels.railWidth('right')") <= full / 2 + 1
+    assert world.bounding_box()["width"] >= full / 2 - 2
+    grip = rail.locator(".panel-rail-grip").bounding_box()
+    page.mouse.move(grip["x"] + 5, grip["y"] + 5)
+    page.mouse.down()
+    page.mouse.move(100, grip["y"] + 5, steps=8)
+    page.mouse.up()
+    left = page.locator(".panel-rail-left")
+    expect(left.locator(".panel[data-panel='contents']")).to_be_visible(timeout=1000)
+    expect(rail).to_be_hidden()
+    page.reload()
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    expect(page.locator(".panel-rail-left .panel[data-panel='contents']")).to_be_visible(
+        timeout=2000
+    )
+    page.locator(".panel-rail-left .panel-rail-swap").click()
+    expect(rail.locator(".panel[data-panel='contents']")).to_be_visible(timeout=1000)
+    # From the ring: Panels > Rail hides it too.
+    page.locator("#viewer-canvas").click(button="right", position={"x": 30, "y": 30})
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    page.keyboard.press(next(cell for cell, label in _wedges(page).items() if label == "Panels"))
+    page.keyboard.press(next(cell for cell, label in _wedges(page).items() if label == "Rail"))
+    expect(rail).to_be_hidden(timeout=2000)
+    page.keyboard.press("`")
+    expect(rail).to_be_visible(timeout=1000)
     page.evaluate("() => localStorage.removeItem('apothecary.panels')")

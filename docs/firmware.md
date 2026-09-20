@@ -383,11 +383,16 @@ as the buttons do; the ring never opens a port by itself.
 The canvas ring (right-click empty canvas, or `m` with nothing selected)
 also carries **Panels**: one cell per panel the page has -- Contents,
 Selected, Jobs, Validation, OpenSCAD -- each toggled by its address
-(`⌗98` is Contents at the root). The panels are the side column, now a
+(`⌗98` is Contents at the root), and **Rail**, which hides and shows the
+rail as the **tilde key** does. The panels are the side column, now a
 rail of windows standing in front of the world: each closes to a tab,
-collapses, floats free and drags, docks back, and is remembered per
-browser (`apothecary/static/panels.js`); nothing docked can take more
-than a third of the page, so the world is never pushed off the screen.
+collapses, floats free and drags (a free panel resizes from its corner),
+docks back, and has a body height you drag; the rail itself has a width
+you drag from its inner edge (never more than half the page, so the
+world is never pushed off the screen), hides on `~` and comes back on
+`~` or its tab, and moves to the other side of the page by its grip or
+its ⇄ button, every panel going with it. All of it is remembered per
+browser (`apothecary/static/panels.js`).
 This is the second phase of the [one-screen plan](plans/one-screen-2026-09-20.md);
 the machine's own windows follow.
 

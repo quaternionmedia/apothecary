@@ -637,10 +637,17 @@ def test_the_panel_module_keeps_its_chrome_to_itself():
     tabs of closed panels -- and on the window only for the pointer moves that
     finish a drag, put on when a drag starts and taken off when it ends. The
     page's census cannot see inside the module, so this holds the module to
-    that; a fourth way in would be added here first."""
+    that; another way in would be added here first."""
     text = PANELS_MODULE.read_text(encoding="utf-8")
     on_page = re.findall(r"(window|document)\.addEventListener\(\s*[\"'](\w+)[\"']", text)
-    assert sorted(set(on_page)) == [("window", "pointermove"), ("window", "pointerup")]
+    # Plus the tilde, on the window so it works wherever the pointer is, and
+    # never while a person is typing.
+    assert sorted(set(on_page)) == [
+        ("window", "keydown"),
+        ("window", "pointermove"),
+        ("window", "pointerup"),
+    ]
+    assert 'window.removeEventListener("keydown"' in text
     assert 'window.removeEventListener("pointermove"' in text
     assert 'window.removeEventListener("pointerup"' in text
     assert "/static/panels.js" in census.VIEWER.read_text(encoding="utf-8")
