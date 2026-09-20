@@ -22,6 +22,13 @@ not yet: the existing routes still change things directly, and rewiring them is
 the next step. What is true today is that nothing arrives here and quietly does
 nothing.
 
+**What the page knows about a board is carried beside the context, not inside
+it.** `device` on a resolve says whether the node has a board pinned, whether
+that board is a printer and whether its control latch is armed; the resolver
+offers the device and control rings from that and nothing else. The verbs on
+those rings are the viewer's: the pages already have a handler for each, and
+the intent route never opens a port.
+
 **Which arrangement an intent is about is carried beside the intent, not inside
 it.** `Intent` is the shared contract's shape and names what was pointed at; the
 arrangement is this project's own idea of where. Reading a site name out of
@@ -38,20 +45,27 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from ..menu import Carries, Context, Intent, Ring, RingTooFull, carried_by, resolve
+from ..menu import Carries, Context, Device, Intent, Ring, RingTooFull, carried_by, resolve
 
 router = APIRouter(prefix="/menu", tags=["menu"])
 
 
 class ResolveRequest(BaseModel):
-    """What the ring was opened on, and which arrangement it was opened over."""
+    """What the ring was opened on, which arrangement it was opened over, and
+    what the page knows about the board under it, if any."""
 
     context: Context
     site: Optional[str] = None
+    device: Optional[Device] = None
 
 
 class Chosen(BaseModel):
-    """A chosen option, and the arrangement it applies to."""
+    """A chosen option, and the arrangement it applies to.
+
+    The intent carries the address -- the cells pressed to reach the option --
+    when the ring was the way in. It is echoed back, so a log of answers can be
+    read as something a person could type again.
+    """
 
     intent: Intent
     site: Optional[str] = None
@@ -69,6 +83,7 @@ class Carried(BaseModel):
     carried_by: str
     did: str
     site: Optional[Dict[str, object]] = None
+    address: Optional[str] = None
 
 
 def _site(name: Optional[str]):
@@ -122,6 +137,7 @@ def resolve_ring(request: ResolveRequest) -> Ring:
             site_names=lists["site_names"],
             groups=lists["groups"],
             words=lists["words"],
+            device=request.device,
         )
     except RingTooFull as too_many:
         # A ring that cannot be built is a design problem, and the answer says so
@@ -173,6 +189,7 @@ def carry_out(chosen: Chosen) -> Carried:
             action=action,
             carried_by=who.value,
             did="nothing here; this one is about what is on screen",
+            address=chosen.intent.address,
         )
 
     if action == "reset":
@@ -185,6 +202,7 @@ def carry_out(chosen: Chosen) -> Carried:
             carried_by=who.value,
             did=f"rebuilt {name} from its factory and emptied its jobs",
             site=_site_payload(rebuilt, _site_store.validator(name)(rebuilt)),
+            address=chosen.intent.address,
         )
 
     if action == "render-stl":
@@ -202,6 +220,7 @@ def carry_out(chosen: Chosen) -> Carried:
             action=action,
             carried_by=who.value,
             did=f"found {path} in {name}; its shape is at /sites/{name}/nodes/{path}/stl",
+            address=chosen.intent.address,
         )
 
     # Reachable only by classifying an action as the server's and not writing the

@@ -22,13 +22,39 @@ Two rules from the shared contract are enforced below rather than described:
   is this function's job. A label that has run out of room has to be made
   shorter, not hidden behind an ellipsis nobody can read.
 
+## The ring addresses nine cells
+
+rad's nine-cells record (``DRAFT-the-menu-addresses-nine-cells``) adds a third
+rule, and it is the one that makes the ring repeatable: **a ring is nine cells
+numbered as a numeric keypad**, and geometry is a rendering of the cells rather
+than the other way round.
+
+    7 8 9        up-left     up    up-right
+    4 5 6   =    left       BACK   right
+    1 2 3        down-left  down   down-right
+
+Eight cells hold options; cell 5 never does. It backs out one level, and closes
+at the top. Options are seated cardinals first — ``8, 6, 2, 4`` and only then
+the corners ``9, 3, 1, 7`` — so a four-option ring sits at up, right, down and
+left, where a ring would put it anyway. Every cell has one number and one
+direction and they are the same thing, so a digit chooses a cell from anywhere,
+an arrow moves to the nearest occupied cell in that direction, and the digits
+pressed to reach an option through nested rings are its **address**: ``"86"``
+is cell 8 (a submenu) and then cell 6. Given the same context the same address
+reaches the same option, which is what the numbering buys.
+
+The browser draws the eight cells as fixed compass wedges, up being cell 8 and
+clockwise from there ``8 9 6 3 2 1 4 7``; ``COMPASS`` is that mapping, so the
+polar arithmetic rad already has still names the same option this file does.
+
 PROTOTYPE — not ratified. See ``docs/plans/edits/apothecary-surface.md``.
 """
 
 from __future__ import annotations
 
+import re
 from enum import Enum
-from typing import Dict, List, Optional, Sequence, Set, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -37,9 +63,43 @@ from .hierarchy import Assembly
 MOST_OPTIONS = 8
 LONGEST_LABEL = 12
 
+# The order options are seated in: cardinals first, then corners. The i-th
+# option of a ring sits in cell PLACEMENT[i]. Eight entries, so eight is the
+# ceiling structurally and not just by a check.
+PLACEMENT: Tuple[int, ...] = (8, 6, 2, 4, 9, 3, 1, 7)
+
+# The centre. Holds nothing, ever; backs out one level and closes at the top.
+BACK = 5
+
+# The browser's eight wedges, up first and clockwise: compass slot -> cell.
+# angleToIndex with rad's geometry (start at -90 degrees, clockwise) gives the
+# slot, and this names the cell that slot draws.
+COMPASS: Tuple[int, ...] = (8, 9, 6, 3, 2, 1, 4, 7)
+
+# Where each cell sits on the keypad, as (column, row) with 7 at the top left.
+CELLS: Dict[int, Tuple[int, int]] = {
+    7: (0, 0), 8: (1, 0), 9: (2, 0),
+    4: (0, 1), 5: (1, 1), 6: (2, 1),
+    1: (0, 2), 2: (1, 2), 3: (2, 2),
+}  # fmt: skip
+
+# An arrow, as the step it means on the keypad.
+DIRECTIONS: Dict[str, Tuple[int, int]] = {
+    "up": (0, -1),
+    "down": (0, 1),
+    "left": (-1, 0),
+    "right": (1, 0),
+}
+
+ADDRESS = re.compile(r"^[1-46-9]+$")
+
 
 class RingTooFull(ValueError):
     """More options than a ring holds. Group them instead of scrolling them."""
+
+
+class NoSuchCell(LookupError):
+    """An address that reaches nothing, or an option no address reaches."""
 
 
 class Pointing(str, Enum):
@@ -49,6 +109,7 @@ class Pointing(str, Enum):
     EDGE = "edge"
     CANVAS = "canvas"
     SELECTION = "selection"
+    DEVICE = "device"
 
 
 class Where(BaseModel):
@@ -64,6 +125,7 @@ class Context(BaseModel):
     ``targets`` are the same dotted paths everything else in this tool already
     uses to name a node — ``printer_1.gantry_system`` and so on. No new way of
     naming things was needed, which is worth knowing before anyone invents one.
+    A ring opened on a device names its port instead.
     """
 
     pointing: Pointing
@@ -71,8 +133,30 @@ class Context(BaseModel):
     where: Where = Field(default_factory=Where)
 
 
+class Device(BaseModel):
+    """What the resolver is told about a board, so it can offer the right verbs.
+
+    Told rather than looked up: the resolver stays a plain function over data,
+    and the page already knows all four of these about the port it is standing
+    on. ``bound`` says the port is pinned to the node the ring was opened on;
+    ``printer`` says it speaks G-code, so control is on offer; ``armed`` is the
+    control latch, which decides whether the ring says Arm or Disarm.
+    """
+
+    port: str
+    printer: bool = False
+    armed: bool = False
+    bound: bool = False
+
+
 class Option(BaseModel):
-    """One wedge of the ring."""
+    """One cell of the ring.
+
+    ``cell`` is where it sits, and it is given by the ring that holds the option
+    rather than by whoever builds it. An option built by hand has no cell until
+    a ring seats it, and a cell passed in is refused: a number chosen by hand
+    is exactly the kind that drifts from the position the browser draws.
+    """
 
     id: str
     label: str
@@ -80,6 +164,7 @@ class Option(BaseModel):
     enabled: bool = True
     destructive: bool = False
     children: Optional[List["Option"]] = None
+    cell: Optional[int] = None
 
     model_config = ConfigDict(validate_assignment=True)
 
@@ -105,10 +190,20 @@ class Option(BaseModel):
     @classmethod
     def _a_submenu_is_a_ring(cls, children):
         # Only the outermost ring was ever counted, so a submenu could hold any
-        # number at all.
+        # number at all. Seating the children here also gives each its cell.
         if children is not None:
-            check_ring(children)
+            place(children)
         return children
+
+    @field_validator("cell")
+    @classmethod
+    def _a_cell_is_given_by_the_ring(cls, cell):
+        if cell is not None:
+            raise ValueError(
+                f"cell {cell!r} was given by hand. A cell is where the ring seats "
+                "an option, in placement order; put the option in a ring instead."
+            )
+        return cell
 
     def model_post_init(self, _context) -> None:
         if (self.action is None) == (self.children is None):
@@ -122,15 +217,39 @@ Option.model_rebuild()
 
 
 class Ring(BaseModel):
-    """One ring of options."""
+    """One ring of options, each seated in its cell."""
 
     model_config = ConfigDict(validate_assignment=True)
 
     title: Optional[str] = None
     options: List[Option]
 
-    def model_post_init(self, _context) -> None:
-        check_ring(self.options)
+    @field_validator("options")
+    @classmethod
+    def _seat_the_options(cls, options):
+        # On the field rather than after building, so a ring whose options are
+        # swapped later is checked and seated again.
+        place(options)
+        return options
+
+    def cells(self) -> Dict[int, Option]:
+        """Which option sits in which cell. Cell 5 is never a key."""
+        return {option.cell: option for option in self.options if option.cell is not None}
+
+    def at(self, cell: int) -> Option:
+        """The option in a cell, or a refusal that says what is there instead."""
+        if cell == BACK:
+            raise NoSuchCell(f"cell {BACK} holds nothing; it backs out one level")
+        if cell not in CELLS:
+            raise NoSuchCell(f"{cell!r} is not a cell; the cells are 1 to 9")
+        seated = self.cells()
+        if cell not in seated:
+            held = sorted(seated)
+            raise NoSuchCell(
+                f"cell {cell} is empty on {self.title or 'this ring'}; "
+                f"the occupied cells are {held}"
+            )
+        return seated[cell]
 
 
 class Intent(BaseModel):
@@ -139,11 +258,26 @@ class Intent(BaseModel):
     Everything that changes anything arrives as one of these, from the ring or
     from anywhere else. One way in is what makes it possible to say that
     everything you can do is reachable from the ring.
+
+    ``address`` is the digits pressed to reach the option, when the ring was
+    the way in. It is carried so a choice can be repeated and so a log of
+    choices reads as something a person could type back.
     """
 
     action: str
     context: Context
     option_id: str
+    address: Optional[str] = None
+
+    @field_validator("address")
+    @classmethod
+    def _an_address_is_cells(cls, address):
+        if address is not None and not ADDRESS.match(address):
+            raise ValueError(
+                f"address {address!r} is not a run of cells: digits 1 to 9, never "
+                f"{BACK}, since {BACK} backs out and is never recorded"
+            )
+        return address
 
 
 def check_ring(options: Sequence[Option]) -> None:
@@ -165,6 +299,128 @@ def check_ring(options: Sequence[Option]) -> None:
     actions = [o.action for o in options if o.action]
     if len(set(actions)) != len(actions):
         raise ValueError(f"two wedges in one ring do the same thing: {sorted(actions)}")
+
+
+def place(options: Sequence[Option]) -> None:
+    """Check a ring, then seat each option in its cell, cardinals first.
+
+    The one place a cell is ever written. It goes round the field's own
+    refusal on purpose: that refusal exists so nobody else writes one.
+    """
+    check_ring(options)
+    for option, cell in zip(options, PLACEMENT, strict=False):
+        object.__setattr__(option, "cell", cell)
+
+
+def walk(ring: Ring, address: str) -> Option:
+    """Follow an address down through nested rings to the option it names.
+
+    Every digit but the last must open a further ring. An address that runs
+    into an option that does something, or into an empty cell, is refused
+    with the cell that stopped it rather than answered with the nearest thing.
+    """
+    if not address:
+        raise NoSuchCell("an empty address reaches nothing; press at least one cell")
+    if not ADDRESS.match(address):
+        raise NoSuchCell(f"address {address!r} is not a run of cells: digits 1 to 9, never {BACK}")
+    here = ring
+    option: Optional[Option] = None
+    for depth, digit in enumerate(address):
+        if option is not None:
+            if not option.children:
+                raise NoSuchCell(
+                    f"cell {option.cell} ({option.label}) does something rather than "
+                    f"opening a ring, so {address[depth:]!r} after it goes nowhere"
+                )
+            here = Ring(title=option.label, options=option.children)
+        option = here.at(int(digit))
+    assert option is not None
+    return option
+
+
+def address_of(ring: Ring, option_id: str) -> str:
+    """The digits that reach an option, searching in placement order."""
+
+    def search(options: Sequence[Option], so_far: str) -> Optional[str]:
+        for option in options:
+            path = f"{so_far}{option.cell}"
+            if option.id == option_id:
+                return path
+            if option.children:
+                found = search(option.children, path)
+                if found is not None:
+                    return found
+        return None
+
+    found = search(ring.options, "")
+    if found is None:
+        raise NoSuchCell(
+            f"no option called {option_id!r} on {ring.title or 'this ring'} or under it"
+        )
+    return found
+
+
+def every_address(ring: Ring) -> Dict[str, str]:
+    """Every address that does something, and the action it does.
+
+    Submenus are not listed; they are the way to a leaf, not a thing to do.
+    """
+    found: Dict[str, str] = {}
+
+    def search(options: Sequence[Option], so_far: str) -> None:
+        for option in options:
+            path = f"{so_far}{option.cell}"
+            if option.children:
+                search(option.children, path)
+            elif option.action:
+                found[path] = option.action
+
+    search(ring.options, "")
+    return found
+
+
+def nearest(occupied: Iterable[int], from_cell: Optional[int], direction: str) -> Optional[int]:
+    """The occupied cell an arrow reaches, or where it was if the arrow reaches nothing.
+
+    Not a walk along a row or column: in a four-option ring the corners are
+    empty, and walking left from the top cell would hit the edge without ever
+    turning down, leaving one cardinal unreachable by arrows. So every occupied
+    cell that lies ahead of the arrow is a candidate, and the best is the one
+    that sits most squarely in the arrow's line — least off to the side, then
+    least far along, then the lower number to settle a tie. The browser runs
+    the same rule, and ``tests/conformance/nine_cells.json`` holds both to it.
+
+    With nothing highlighted yet the arrow starts from the centre, so the first
+    press lands on the cell nearest the middle in that direction.
+    """
+    if direction not in DIRECTIONS:
+        raise ValueError(f"{direction!r} is not a direction; the arrows are {sorted(DIRECTIONS)}")
+    cells = set(occupied)
+    if BACK in cells:
+        raise ValueError(f"cell {BACK} cannot be occupied; it backs out")
+    unknown = cells - set(CELLS)
+    if unknown:
+        raise ValueError(f"{sorted(unknown)} are not cells; the cells are 1 to 9")
+
+    start = BACK if from_cell is None else from_cell
+    if start not in CELLS:
+        raise ValueError(f"{from_cell!r} is not a cell to move from")
+    col, row = CELLS[start]
+    dx, dy = DIRECTIONS[direction]
+
+    best: Optional[Tuple[int, int, int]] = None
+    for cell in cells:
+        if cell == start:
+            continue
+        c, r = CELLS[cell]
+        along = (c - col) * dx + (r - row) * dy
+        if along <= 0:
+            continue
+        aside = abs((c - col) * dy) + abs((r - row) * dx)
+        score = (aside, along, cell)
+        if best is None or score < best:
+            best = score
+    return best[2] if best is not None else from_cell
 
 
 def shorten(text: str) -> str:
@@ -265,18 +521,25 @@ def resolve(
     site_names: Sequence[str] = (),
     groups: Sequence[str] = (),
     words: Sequence[str] = (),
+    device: Optional[Device] = None,
 ) -> Ring:
     """Work out which options belong on the ring, and hand them back.
 
     Nothing here changes anything. A chosen option becomes an intent, and the
     intent is what the rest of the program acts on.
+
+    ``device`` is what the page knows about the board under the ring: for a
+    node ring, the board pinned to that node, if any; for a device ring, the
+    board itself.
     """
     if context.pointing is Pointing.CANVAS:
         return _canvas_ring(site, site_names, groups)
     if context.pointing is Pointing.NODE:
-        return _node_ring(context, site, words)
+        return _node_ring(context, site, words, device)
     if context.pointing is Pointing.SELECTION:
         return _selection_ring(context)
+    if context.pointing is Pointing.DEVICE:
+        return _device_ring_on_top(context, device)
     return _edge_ring(context)
 
 
@@ -354,7 +617,12 @@ def _canvas_ring(
     return Ring(title=shorten(site.name) if site else None, options=options)
 
 
-def _node_ring(context: Context, site: Optional[Assembly], words: Sequence[str]) -> Ring:
+def _node_ring(
+    context: Context,
+    site: Optional[Assembly],
+    words: Sequence[str],
+    device: Optional[Device],
+) -> Ring:
     path = context.targets[0] if context.targets else ""
     node = _find(site, path) if site and path else None
 
@@ -362,6 +630,12 @@ def _node_ring(context: Context, site: Optional[Assembly], words: Sequence[str])
         Option(id="zoom", label="Zoom in", action="zoom-in"),
         Option(id="move", label="Move", action="move"),
     ]
+
+    # A node with a board pinned to it can be watched, polled and, when the
+    # board is a printer, driven. A node with none gets no Device option at
+    # all rather than one greyed out.
+    if device is not None and device.bound:
+        options.append(Option(id="device", label="Device", children=_device_options(device)))
 
     # A piece built from a picture can be swapped for a different word. Every
     # other node cannot, so the option is simply not there rather than there
@@ -398,6 +672,125 @@ def _edge_ring(context: Context) -> Ring:
     )
 
 
+def _device_ring_on_top(context: Context, device: Optional[Device]) -> Ring:
+    """The device ring as the top ring, opened on a port rather than a node."""
+    if device is None:
+        port = context.targets[0] if context.targets else ""
+        if not port:
+            raise ValueError("a device ring stands on a port, and none was given")
+        device = Device(port=port)
+    # The port's last path segment: /dev/ttyUSB0 is ttyUSB0 on the ring.
+    leaf = device.port.rstrip("/").rsplit("/", 1)[-1] or device.port
+    return Ring(title=shorten(leaf), options=_device_options(device))
+
+
+def _device_options(device: Device) -> List[Option]:
+    """What can be done with a board. The pages' existing handlers do each one.
+
+    Pin and Unpin are one cell, since a port is either pinned to this node or
+    not. Control appears only for a printer: a board running a sketch has no
+    G-code to be driven with.
+    """
+    options = [
+        Option(id="device:watch", label="Watch", action="device:watch"),
+        Option(id="device:poll", label="Poll", action="device:poll"),
+        Option(id="device:monitor", label="Monitor", action="device:monitor"),
+        Option(id="device:query", label="Query", action="device:query"),
+        (
+            Option(id="device:unpin", label="Unpin", action="device:unpin")
+            if device.bound
+            else Option(id="device:pin", label="Pin", action="device:pin")
+        ),
+        Option(id="device:rescan", label="Rescan", action="device:rescan"),
+        # The link itself: reopen it, reboot the board on purpose, or hand the
+        # port to another program. Before Control on purpose, so its cell is
+        # the same on a devkit (no Control) and on a printer.
+        Option(
+            id="device:link",
+            label="Link",
+            children=[
+                Option(id="device:reconnect", label="Reconnect", action="device:reconnect"),
+                Option(id="device:reset", label="Reset", action="device:reset", destructive=True),
+                Option(id="device:release", label="Release", action="device:release"),
+            ],
+        ),
+    ]
+    if device.printer:
+        options.append(Option(id="control", label="Control", children=control_options(device)))
+    return options
+
+
+def control_options(device: Device) -> List[Option]:
+    """The control ring: every allowlisted thing a printer can be told to do.
+
+    Each leaf is one line from ``firmware.gcode.CONTROL_CODES``, sent by the
+    monitor page's control chain, which is where the latch is checked. Jog is
+    seated so the keypad is the jog pad: Y+ up, X+ right, Y- down, X- left,
+    and Z+ and Z- in the right-hand corners. Stop is E-STOP and is marked
+    destructive, since the board halts until it is reset.
+    """
+    return [
+        Option(
+            id="control:heat",
+            label="Heat",
+            children=[
+                Option(id="control:hotend-on", label="Hotend on", action="control:hotend-on"),
+                Option(id="control:hotend-off", label="Hotend off", action="control:hotend-off"),
+                Option(id="control:bed-on", label="Bed on", action="control:bed-on"),
+                Option(id="control:bed-off", label="Bed off", action="control:bed-off"),
+            ],
+        ),
+        Option(
+            id="control:home",
+            label="Home",
+            children=[
+                Option(id="control:home:all", label="All", action="control:home"),
+                Option(id="control:home-xy", label="XY", action="control:home-xy"),
+                Option(id="control:home-z", label="Z", action="control:home-z"),
+            ],
+        ),
+        Option(
+            id="control:jog",
+            label="Jog",
+            children=[
+                Option(id=f"control:jog:{axis}", label=axis, action=f"control:jog:{axis}")
+                for axis in ("Y+", "X+", "Y-", "X-", "Z+", "Z-")
+            ],
+        ),
+        Option(
+            id="control:fan",
+            label="Fan",
+            children=[
+                Option(id="control:fan-on", label="On", action="control:fan-on"),
+                Option(id="control:fan-off", label="Off", action="control:fan-off"),
+            ],
+        ),
+        Option(
+            id="control:sd",
+            label="SD",
+            children=[
+                Option(id="control:sd-resume", label="Resume", action="control:sd-resume"),
+                Option(id="control:sd-pause", label="Pause", action="control:sd-pause"),
+                Option(id="control:sd-abort", label="Abort", action="control:sd-abort"),
+            ],
+        ),
+        Option(
+            id="control:motors",
+            label="Motors",
+            children=[
+                Option(id="control:motors-off", label="Off", action="control:motors-off"),
+                Option(id="control:quickstop", label="Quickstop", action="control:quickstop"),
+            ],
+        ),
+        Option(id="control:estop", label="Stop", action="control:estop", destructive=True),
+        (
+            Option(id="control:disarm", label="Disarm", action="control:disarm")
+            if device.armed
+            else Option(id="control:arm", label="Arm", action="control:arm")
+        ),
+    ]
+
+
 def every_action(rings: Sequence[Ring]) -> Dict[str, str]:
     """Every action any of these rings can produce, and the label it wore.
 
@@ -408,7 +801,7 @@ def every_action(rings: Sequence[Ring]) -> Dict[str, str]:
     found: Dict[str, str] = {}
     seen: Set[int] = set()
 
-    def walk(options: Sequence[Option]) -> None:
+    def walk_options(options: Sequence[Option]) -> None:
         for option in options:
             # Options can hold each other, and a ring built by hand can be made
             # to hold itself. Walking that without remembering where you have
@@ -419,10 +812,10 @@ def every_action(rings: Sequence[Ring]) -> Dict[str, str]:
             if option.action and option.action not in found:
                 found[option.action] = option.label
             if option.children:
-                walk(option.children)
+                walk_options(option.children)
 
     for ring in rings:
-        walk(ring.options)
+        walk_options(ring.options)
     return found
 
 
@@ -479,6 +872,15 @@ CARRIED_BY: Dict[str, Carries] = {
     # A piece built from a picture can be swapped for a different word. The ring
     # offers it because the vocabulary is real; nothing acts on the choice.
     "word": Carries.UNBUILT,
+    # A board's verbs. The pages already have a handler for each -- the Device
+    # section, the serial overlay and the monitor -- and the ring hands the
+    # choice to that handler. The server is reached through the firmware
+    # routes those handlers already call, never through the intent route.
+    "device": Carries.VIEWER,
+    # Driving a printer. Each leaf is one allowlisted G-code line, sent by the
+    # monitor page's control chain, which is where the latch is checked and
+    # where a refusal is shown. The intent route never opens a port.
+    "control": Carries.VIEWER,
 }
 
 
@@ -501,21 +903,34 @@ def carried_by(action: str) -> Carries:
 
 
 __all__ = [
+    "BACK",
     "CARRIED_BY",
+    "CELLS",
+    "COMPASS",
     "Carries",
     "Context",
+    "DIRECTIONS",
+    "Device",
     "Intent",
     "LONGEST_LABEL",
     "MOST_OPTIONS",
+    "NoSuchCell",
     "Option",
+    "PLACEMENT",
     "Pointing",
     "Ring",
     "RingTooFull",
     "UnknownAction",
     "Where",
+    "address_of",
     "carried_by",
     "check_ring",
+    "control_options",
     "every_action",
+    "every_address",
+    "nearest",
+    "place",
     "resolve",
     "shorten",
+    "walk",
 ]
