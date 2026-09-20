@@ -381,7 +381,8 @@ printer's base, and a nozzle marker at the position the last poll reported.
 The marker *moves* rather than jumps -- each poll tweens it, and a jog from
 the control overlay or the ring moves it the moment the jog is sent, ahead
 of the poll that confirms it -- so the control page shows the motion it
-commands. The firmware page's device cards draw the same view, small, for
+commands. A bed reading, when the page has one, is laid over the bed as a
+relief (see [Bed leveling](#bed-leveling)). The firmware page's device cards draw the same view, small, for
 any port pinned somewhere (a devkit on the bench as much as a mainboard in
 a printer). `GET /firmware/printers/where?port=…` is what both ask: the
 site, the board's node and the printer above it, with world positions,
@@ -469,7 +470,19 @@ kept, with every line the firmware said, under `~/.apothecary/leveling/`
 readings newest first; pick one to see it, or download it as JSON. Comparing
 the range before and after a turn of the screws is the whole method.
 
+The reading is also drawn **in the world**: the *Board in its printer*
+card (and the firmware page's card) lays the mesh over the bed as a relief
+-- a surface through the probed points, its lowest point resting on the
+bed and the rest lifted by their height above it, stretched ×10–×50 so a
+couple of millimetres can be seen at all (the note says by how much), in
+the heatmap's own two hues, with a post at each corner down to the bed.
+Marlin prints the grid without its positions, so where it lies is an
+estimate: the bed less what the probe's offset puts out of reach, inset by
+Marlin's default 10 mm. It follows whichever reading the card shows.
+
 ![Bed level: a probed mesh as a heatmap, with its range, tilt and corners](generated/printer-monitor/screenshots/10-bed-level-probe-bed-homes-and-probes-armed-and-ask.png)
+
+![The reading laid over the bed in the board view](generated/printer-monitor/screenshots/11-the-reading-is-drawn-in-the-world-too-the-board-vi.png)
 
 The four **corner buttons** move the nozzle to that corner of the bed at
 paper height (`Z0.2`, 30 mm in from the edges of the build volume, lifted
@@ -533,7 +546,7 @@ Control ring's **Print** cell (`9`) carries Resume, Pause and Abort to
 whichever print is running -- the card's or the one from here -- and
 **Send file** (`⌗794`) starts the chosen file.
 
-![Print from here: a kept file streaming, with its progress](generated/printer-monitor/screenshots/11-print-from-here-a-sliced-g-code-file-is-kept-on-th.png)
+![Print from here: a kept file streaming, with its progress](generated/printer-monitor/screenshots/12-print-from-here-a-sliced-g-code-file-is-kept-on-th.png)
 
 ```
 GET/POST /firmware/printers/prints?name=…    the kept files; keep one (the body is the file)

@@ -561,7 +561,12 @@ def test_the_board_is_drawn_in_its_printer_and_the_nozzle_follows_a_jog(
 @pytest.mark.e2e
 def test_bed_level_probe_reads_and_records(page: Page, printer_url: str):
     """Read mesh needs no latch and fills the heatmap; Probe bed needs it, shows its stage
-    while the port is held, saves a record the history lists; a corner button is four lines."""
+    while the port is held, saves a record the history lists; a corner button is four lines;
+    the reading is drawn over the bed in the board view, on this page and the firmware page."""
+    page.request.put(
+        f"{printer_url}/sites/garage/nodes/{BOARD}/device", data={"identity": "/dev/ttyFAKE1"}
+    )
+    page.request.delete(f"{printer_url}/sites/garage/nodes/printer_1/device")
     page.goto(f"{printer_url}/firmware/monitor?port=/dev/ttyFAKE1")
     expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
     expect(page.locator("#level-stats")).to_contain_text("no reading yet")
@@ -598,9 +603,34 @@ def test_bed_level_probe_reads_and_records(page: Page, printer_url: str):
     record_id = page.evaluate("() => window.apothecaryMonitor.level.shown().id")
     r = page.request.get(f"{printer_url}/firmware/printers/leveling/{record_id}")
     assert r.ok and len(r.json()["mesh"]) == 5 and r.json()["method"] == "probe"
-    # The history still holds the read; picking it swaps the heatmap back.
+    # The reading is drawn in the world too: a 5x5 surface over the probed area of
+    # the bed, stretched so its shape reads, following whichever reading is shown.
+    expect(page.locator("#board-view canvas")).to_have_count(1, timeout=10000)
+    page.wait_for_function(
+        "(id) => window.apothecaryBoardView && window.apothecaryBoardView.mesh()"
+        " && window.apothecaryBoardView.mesh().record_id === id",
+        arg=record_id,
+        timeout=5000,
+    )
+    drawn = page.evaluate("() => window.apothecaryBoardView.mesh()")
+    volume = page.evaluate("() => window.apothecaryBoardView.volume()")
+    assert drawn["rows"] == 5 and drawn["cols"] == 5 and drawn["exaggeration"] >= 10
+    assert drawn["bounds"]["min"]["x"] >= 0 and drawn["bounds"]["max"]["x"] <= 220
+    assert drawn["bounds"]["max"]["x"] == 166  # the probe's -44 offset keeps it off the right edge
+    assert drawn["z"]["min"] == pytest.approx(
+        volume["min"]["z"] + 0.4
+    )  # a relief resting on the bed
+    assert drawn["z"]["max"] <= volume["max"]["z"]
+    assert drawn["z"]["max"] - drawn["z"]["min"] == pytest.approx(
+        drawn["range"] * drawn["exaggeration"], abs=0.01
+    )
+    expect(page.locator("#view-note")).to_contain_text("drawn ×")
+    # The history still holds the read; picking it swaps the heatmap back, and the surface.
     page.locator("#level-history .pick", has_text="read").first.click()
     expect(page.locator("#level-stats")).to_contain_text("read ·")
+    page.wait_for_function(
+        "(id) => window.apothecaryBoardView.mesh().record_id !== id", arg=record_id, timeout=5000
+    )
 
     # A corner button: four absolute lines, the last one at paper height.
     lines = page.evaluate("() => window.apothecaryMonitor.level.lines('BR')")
@@ -615,6 +645,17 @@ def test_bed_level_probe_reads_and_records(page: Page, printer_url: str):
     page.locator("#control button[data-cmd='M24']").click()
     page.locator("#ctl-disarm").click()
     expect(page.locator("#control")).to_be_hidden(timeout=3000)
+
+    # The firmware page's card draws the newest reading over the bed as well.
+    page.goto(f"{printer_url}/firmware")
+    card = page.locator(".device[data-port='/dev/ttyFAKE1']")
+    expect(card.locator(".board-view canvas")).to_have_count(1, timeout=10000)
+    page.wait_for_function(
+        "() => { const v = window.apothecaryBoardViews.get('/dev/ttyFAKE1');"
+        " return v && v.mesh(); }",
+        timeout=10000,
+    )
+    expect(card.locator(".board-view-note")).to_contain_text("drawn ×")
 
 
 @pytest.mark.e2e

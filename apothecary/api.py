@@ -1665,26 +1665,29 @@ def printer_where(port: str):
     """
     state = firmware_devices.get_state()
     known = firmware_devices.known_device(port, state)
-    for site_name in _site_store.loaded():
-        site = _site_store.get(site_name)
-        for binding in state.bindings(site_name):
-            if not same_device(binding.identity, port, known):
-                continue
-            node = _find_node_by_path(site, binding.path)
-            if node is None:
-                continue
-            bearer_path = status_bearer_for(site, binding.path) or binding.path
-            bearer = _find_node_by_path(site, bearer_path) or node
-            return {
-                "port": port,
-                "site": site_name,
-                "board": _describe_for_view(site, binding.path, node, is_printer=False),
-                "printer": (
-                    _describe_for_view(site, bearer_path, bearer, is_printer=True)
-                    if bearer_path != binding.path
-                    else None
-                ),
-            }
+    # Every pin, not just the loaded sites': the monitor is often the first
+    # page opened after the server starts, and a pin names its site.
+    for binding in state.bindings():
+        if not same_device(binding.identity, port, known):
+            continue
+        if binding.site not in _site_store.names():
+            continue
+        site = _site_store.get(binding.site)
+        node = _find_node_by_path(site, binding.path)
+        if node is None:
+            continue
+        bearer_path = status_bearer_for(site, binding.path) or binding.path
+        bearer = _find_node_by_path(site, bearer_path) or node
+        return {
+            "port": port,
+            "site": binding.site,
+            "board": _describe_for_view(site, binding.path, node, is_printer=False),
+            "printer": (
+                _describe_for_view(site, bearer_path, bearer, is_printer=True)
+                if bearer_path != binding.path
+                else None
+            ),
+        }
     return {"port": port, "site": None, "board": None, "printer": None}
 
 

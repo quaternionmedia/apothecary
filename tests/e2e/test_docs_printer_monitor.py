@@ -152,6 +152,17 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
         "history lists every reading on the port, and the corner buttons put the nozzle at "
         "paper height for a tramming check. Read mesh does the same without moving"
     )
+    page.wait_for_function(
+        "() => window.apothecaryBoardView && window.apothecaryBoardView.mesh()", timeout=10000
+    )
+    page.locator("#view-card").scroll_into_view_if_needed()
+    page.wait_for_timeout(600)
+    docs.step(
+        "The reading is drawn in the world too: the board view lays the mesh over the bed as "
+        "a relief, its lowest point resting on the bed and the rest stretched so the tilt can "
+        "be seen (the note says by how much), coloured as the heatmap is, on the area the "
+        "probe can reach. It follows whichever reading the card shows"
+    )
 
     page.locator("#control button[data-cmd='M25']").click()  # the card's print gives way
     expect(page.locator("#c-state")).to_contain_text("idle", timeout=8000)

@@ -650,7 +650,13 @@ import { mountBoardView, whereIs } from '/static/board_view.js';
             if (!where) { el.hidden = true; if (note) note.textContent = ""; continue; }
             el.hidden = false;
             if (note) note.textContent = `${where.site} › ${(where.printer || where.board).path}`;
-            views.set(port, mountBoardView(el, { base: BASE, where, onNote: (t) => { if (note) note.textContent += ` · ${t}`; } }));
+            const view = mountBoardView(el, { base: BASE, where, onNote: (t) => { if (note) note.textContent += ` · ${t}`; } });
+            views.set(port, view);
+            // The newest bed reading for the port, drawn over the bed; none is fine.
+            fetch(`${BASE}/firmware/printers/leveling?port=${encodeURIComponent(port)}`)
+                .then((r) => (r.ok ? r.json() : []))
+                .then((records) => { if (views.get(port) === view && records.length) view.setMesh(records[0]); })
+                .catch(() => {});
         }
     }
     window.addEventListener("apothecary:devices-rendered", refresh);

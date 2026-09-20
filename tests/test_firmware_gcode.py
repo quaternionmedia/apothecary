@@ -1459,3 +1459,18 @@ def test_a_pin_by_a_path_that_resolves_to_the_port_matches(tmp_path):
     assert validate_identity("A106ZTEU") == "A106ZTEU"
     with pytest.raises(ValueError):
         validate_identity("no spaces here")
+
+
+def test_where_answers_before_anyone_has_opened_the_viewer(fake_arduino_cli, garage):
+    """Seen on the bench: a fresh server, the monitor opened first, and `where`
+    said nothing was pinned because the garage had not been loaded yet. A pin
+    names its site; the route loads it."""
+    from apothecary import api as api_module
+
+    c = TestClient(app)
+    c.put(f"/sites/garage/nodes/{BOARD}/device", json={"identity": "/dev/ttyFAKE1"})
+    api_module._site_store._sites.pop("garage", None)  # as a server that just started
+    assert "garage" not in api_module._site_store.loaded()
+    where = c.get("/firmware/printers/where", params={"port": "/dev/ttyFAKE1"}).json()
+    assert where["site"] == "garage" and where["board"]["path"] == BOARD
+    assert "garage" in api_module._site_store.loaded()

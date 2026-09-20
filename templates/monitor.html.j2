@@ -203,7 +203,7 @@
                     <div id="print-history"></div>
                 </div>
                 <div class="card wide" id="view-card" hidden>
-                    <div class="k">Board in its printer <span class="s" id="view-note"></span></div>
+                    <div class="k">Board in its printer <span class="s" id="view-note" style="text-transform: none; letter-spacing: 0;"></span></div>
                     <div id="board-view" style="height: 240px; border-radius: 4px; overflow: hidden;"></div>
                 </div>
             </div>
@@ -699,6 +699,7 @@
                     + (rec.bed_c != null ? ` · bed ${rec.bed_c.toFixed(1)}°` : "") + (rec.hotend_c != null ? ` hotend ${rec.hotend_c.toFixed(1)}°` : "")
                     + (rec.note ? `<br>note: ${esc(rec.note)}` : "");
             }
+            window.dispatchEvent(new CustomEvent("apothecary:mesh", { detail: rec || null }));  // the board view draws it over the bed
             $("level-history").innerHTML = level.records.length
                 ? level.records.map((r) => `<div><span class="pick ${level.shown && r.id === level.shown.id ? "on" : ""}" data-id="${esc(r.id)}">${new Date(r.at).toLocaleString()} · ${esc(r.method)} · range ${(r.stats && r.stats.range != null ? r.stats.range : 0).toFixed(3)} mm</span><a href="${BASE}/firmware/printers/leveling/${encodeURIComponent(r.id)}" download="${esc(r.id)}.json" title="The record as JSON, with every line the firmware said">⤓ log</a></div>`).join("")
                 : "";
@@ -873,13 +874,17 @@
             if (!where) { card.hidden = true; return; }
             card.hidden = false;
             window.dispatchEvent(new CustomEvent("apothecary:where", { detail: where }));  // the level card sizes its corners from it
-            $("view-note").textContent = ` · ${where.site} › ${(where.printer || where.board).path}`;
-            view = mountBoardView($("board-view"), { base: BASE, where, onNote: (t) => { $("view-note").textContent += ` · ${t}`; } });
+            const base = ` · ${where.site} › ${(where.printer || where.board).path}`;
+            const notes = new Map();  // by key, so the mesh note is replaced, not repeated
+            $("view-note").textContent = base;
+            view = mountBoardView($("board-view"), { base: BASE, where, onNote: (t, key) => { notes.set(key || t, t); $("view-note").textContent = base + [...notes.values()].map((x) => ` · ${x}`).join(""); } });
             const st = window.apothecaryMonitor.state.status;
             if (st && st.position) view.setPosition(st.position, { immediate: true });
+            view.setMesh(window.apothecaryMonitor.level.shown());
             window.apothecaryBoardView = view;
         }
         window.addEventListener("apothecary:position", (ev) => { if (view) view.setPosition(ev.detail.position); });
+        window.addEventListener("apothecary:mesh", (ev) => { if (view) view.setMesh(ev.detail); });
         // Follow the port picker; also (re)mount once a pin appears for it.
         const portSel = $("port");
         portSel.addEventListener("change", () => mountFor(portSel.value));
