@@ -165,7 +165,16 @@ are open (a cross-page event; Phase 3 makes it one page).
   poll interval; a jog on the monitor page moves the world's nozzle (both
   pages open) within a frame; the walkthrough gains a page.
 
-### Phase 2 — Panels: windows in front of the world
+### Phase 2 — Panels: windows in front of the world  *(landed 2026-09-20)*
+
+Landed: `panels.js` (register, open/close/collapse/float/dock, drag with
+clamping, tabs for closed panels, per-browser memory, tethering with a
+leader for Phase 3), the side column's five sections as docked panels,
+`Panels ▸` on the canvas ring with a cell per panel and the resolver's list
+held to the template's marks, the browser test, the walkthrough page. Not
+done: the toolbar's `▣ Panels` button (the ring's cell and the tabs are the
+ways back in; a button would be one more control of the page's own), and
+a left rail in use (the manager has one; nothing docks there yet).
 
 - `apothecary/static/panels.js`: a panel registry and a window manager.
   `register(id, {title, mount(el), unmount, where: "dock-left" | "dock-right"

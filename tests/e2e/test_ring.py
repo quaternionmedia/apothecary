@@ -576,3 +576,94 @@ def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: s
     expect(page.locator("#contents-list .contents-item", has_text="workbench")).to_be_visible(
         timeout=10000
     )
+
+
+@pytest.mark.e2e
+def test_panels_stand_in_front_of_the_world(page: Page, ring_url: str):
+    """The side column is a rail of panels: each closes to a tab, collapses,
+    floats and drags within the page, docks back, and is reached from the
+    ring's Panels cell by address; what a person did survives a reload; and
+    the world keeps at least half the window however the rail is arranged."""
+    page.goto(f"{ring_url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    page.evaluate("() => localStorage.removeItem('apothecary.panels')")
+    page.reload()
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    ids = page.evaluate("() => window.apothecaryPanels.list().map((p) => p.id)")
+    assert ids == ["contents", "selected", "jobs", "validation", "scad"]
+    rail = page.locator(".panel-rail-right")
+    expect(rail.locator(".panel[data-panel='contents']")).to_be_visible()
+    world = page.locator(".viewer-panel")
+    assert world.bounding_box()["width"] >= page.viewport_size["width"] / 2
+
+    # Close: gone from the rail, a tab remains; the tab brings it back.
+    t0 = time.monotonic()
+    page.locator(".panel[data-panel='validation'] .panel-close").click()
+    expect(page.locator(".panel-tab[data-panel='validation']")).to_be_visible(timeout=1000)
+    assert time.monotonic() - t0 < 0.3 + 1
+    expect(rail.locator(".panel[data-panel='validation']")).to_have_count(0)
+    page.locator(".panel-tab[data-panel='validation']").click()
+    expect(rail.locator(".panel[data-panel='validation']")).to_be_visible(timeout=1000)
+    expect(page.locator(".panel-tab")).to_have_count(0)
+
+    # Collapse: the body folds, the title stays.
+    page.locator(".panel[data-panel='contents'] .panel-collapse").click()
+    expect(page.locator("#contents-list")).to_be_hidden(timeout=1000)
+    page.locator(".panel[data-panel='contents'] .panel-collapse").click()
+    expect(page.locator("#contents-list")).to_be_visible(timeout=1000)
+
+    # Float and drag: the panel leaves the rail, follows the pointer, stays on the page.
+    page.locator(".panel[data-panel='selected'] .panel-float").click()
+    free = page.locator(".panel-free-layer .panel[data-panel='selected']")
+    expect(free).to_be_visible(timeout=1000)
+    before = free.bounding_box()
+    title = free.locator(".panel-title")
+    tb = title.bounding_box()
+    page.mouse.move(tb["x"] + 120, tb["y"] + tb["height"] / 2)
+    page.mouse.down()
+    page.mouse.move(tb["x"] + 120 - 200, tb["y"] + tb["height"] / 2 + 150, steps=8)
+    page.mouse.up()
+    after = free.bounding_box()
+    assert after["x"] == pytest.approx(before["x"] - 200, abs=3)
+    assert after["y"] == pytest.approx(before["y"] + 150, abs=3)
+    # Dragged past the edge, it is clamped to the page.
+    tb = title.bounding_box()
+    page.mouse.move(tb["x"] + 120, tb["y"] + tb["height"] / 2)
+    page.mouse.down()
+    page.mouse.move(-500, tb["y"] + tb["height"] / 2, steps=6)
+    page.mouse.up()
+    wb = world.bounding_box()
+    assert free.bounding_box()["x"] >= wb["x"] - 1
+    # Dock it back.
+    free.locator(".panel-float").click()
+    expect(rail.locator(".panel[data-panel='selected']")).to_be_visible(timeout=1000)
+
+    # What was done is remembered: close OpenSCAD, reload, still closed.
+    page.locator(".panel[data-panel='scad'] .panel-close").click()
+    page.reload()
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    expect(page.locator(".panel-tab[data-panel='scad']")).to_be_visible(timeout=2000)
+    assert page.evaluate("() => window.apothecaryPanels.state('scad').open") is False
+
+    # From the ring: Panels › OpenSCAD reopens it by address, and closes it again.
+    page.locator("#viewer-canvas").click(button="right", position={"x": 30, "y": 30})
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    wedges = _wedges(page)
+    panels_cell = next(cell for cell, label in wedges.items() if label == "Panels")
+    page.keyboard.press(panels_cell)
+    assert _title(page) == "Panels"
+    inner = _wedges(page)
+    scad_cell = next(cell for cell, label in inner.items() if label == "OpenSCAD")
+    page.keyboard.press(scad_cell)
+    expect(page.locator("#ring-overlay")).to_have_count(0)
+    expect(rail.locator(".panel[data-panel='scad']")).to_be_visible(timeout=2000)
+    expect(page.locator(".panel-tab")).to_have_count(0)
+    # Every panel closed: the world has the whole width, and five tabs wait.
+    for pid in ids:
+        page.evaluate("(id) => window.apothecaryPanels.close(id)", pid)
+    expect(page.locator(".panel-tab")).to_have_count(5, timeout=2000)
+    page.wait_for_timeout(200)
+    assert world.bounding_box()["width"] == pytest.approx(page.viewport_size["width"], abs=2)
+    for pid in ids:
+        page.evaluate("(id) => window.apothecaryPanels.open(id)", pid)
+    page.evaluate("() => localStorage.removeItem('apothecary.panels')")

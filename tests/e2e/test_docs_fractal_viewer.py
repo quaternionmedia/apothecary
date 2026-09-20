@@ -110,6 +110,19 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     page.wait_for_timeout(500)
     docs.step("Assign it to a compatible, idle printer")
 
+    page.locator(".panel[data-panel='jobs'] .panel-float").click()
+    page.locator(".panel[data-panel='validation'] .panel-close").click()
+    page.wait_for_timeout(400)
+    docs.step(
+        "The side column is a rail of panels standing in front of the world: each closes "
+        "to a tab, collapses, floats free and drags, and docks back; the ring's Panels cell "
+        "reaches every one by address. Nothing docked can push the world off the screen, "
+        "and what you did to them is remembered"
+    )
+    page.locator(".panel-free-layer .panel[data-panel='jobs'] .panel-float").click()
+    page.locator(".panel-tab[data-panel='validation']").click()
+    page.wait_for_timeout(200)
+
     page.goto(f"{base_url}/viewer/sites/parts_library")
     page.wait_for_timeout(600)
     docs.step("Switch to the parts_library site")

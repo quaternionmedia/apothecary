@@ -942,3 +942,33 @@ def test_the_level_ring_seats_the_corners_as_they_lie_on_the_bed():
     assert cells["control:corner:BL"] == 7 and cells["control:corner:BR"] == 9
     assert cells["level:probe"] == 8 and cells["level:read"] == 6
     assert address_of(ring, "level:probe") == "48"
+
+
+def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
+    """Panels on the canvas ring: one cell per panel the world's page registers,
+    cardinals first, and the two lists -- the resolver's and the template's
+    data-panel marks -- are the same, so a panel cannot appear on one side only."""
+    import re
+
+    from apothecary import census
+    from apothecary.menu import PANELS, address_of, carried_by
+
+    root = resolve(
+        Context(pointing=Pointing.CANVAS),
+        _garage(),
+        site_names=["garage", "parts_library"],
+        groups=["wall", "furniture"],
+    )
+    panels = next(o for o in root.options if o.label == "Panels")
+    assert panels.cell == 9 and panels.children is not None  # after Pieces, Site, Group, Fit
+    assert [(c.action, c.cell) for c in panels.children] == [
+        ("panel:toggle:contents", 8),
+        ("panel:toggle:selected", 6),
+        ("panel:toggle:jobs", 2),
+        ("panel:toggle:validation", 4),
+        ("panel:toggle:scad", 9),
+    ]
+    assert address_of(root, "panel:contents") == "98"  # by the option's id
+    assert carried_by("panel:toggle:contents").name == "VIEWER"
+    marked = re.findall(r'data-panel="([\w-]+)"', census.VIEWER.read_text(encoding="utf-8"))
+    assert marked == [pid for pid, _ in PANELS]

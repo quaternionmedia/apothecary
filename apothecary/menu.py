@@ -640,6 +640,29 @@ def _pieces(prefix: str, parent: str, nodes: Sequence[Assembly]) -> Optional[Opt
     )
 
 
+# The panels the world's page registers, in the order the ring seats them
+# (cardinals first): what stands in front of the world, each a cell away.
+# The page registers exactly these; a test holds the two lists to each other.
+PANELS: Sequence[Tuple[str, str]] = (
+    ("contents", "Contents"),
+    ("selected", "Selected"),
+    ("jobs", "Jobs"),
+    ("validation", "Validation"),
+    ("scad", "OpenSCAD"),
+)
+
+
+def _panels() -> Option:
+    return Option(
+        id="panels",
+        label="Panels",
+        children=[
+            Option(id=f"panel:{pid}", label=label, action=f"panel:toggle:{pid}")
+            for pid, label in PANELS
+        ],
+    )
+
+
 def _canvas_ring(
     context: Context,
     site: Optional[Assembly],
@@ -650,7 +673,8 @@ def _canvas_ring(
 
     `context.targets[0]`, when given, is the path the viewer is zoomed into;
     Pieces lists that node's children and Up steps back out. At the root
-    there is no Up, because there is nothing above.
+    there is no Up, because there is nothing above. Panels opens and closes
+    what stands in front of the world.
     """
     focus_path = context.targets[0] if context.targets else ""
     focus = _find(site, focus_path) if site and focus_path else site
@@ -662,6 +686,7 @@ def _canvas_ring(
             _grouped("Site", "site", site_names),
             _grouped("Group", "group", groups),
             Option(id="fit", label="Fit", action="fit"),
+            _panels(),
             Option(id="reset", label="Reset", action="reset", destructive=True),
         )
         if option is not None
@@ -967,6 +992,8 @@ CARRIED_BY: Dict[str, Carries] = {
     "level": Carries.VIEWER,
     # Streaming a file: the page starts the job with the file it has chosen.
     "print": Carries.VIEWER,
+    # Opening, closing, floating what stands in front of the world (panels.js).
+    "panel": Carries.VIEWER,
 }
 
 

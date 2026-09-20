@@ -370,6 +370,17 @@ Control verbs chosen from the ring go through the monitor's own control
 chain -- the latch, the allowlist, the confirm on Abort and E-STOP -- exactly
 as the buttons do; the ring never opens a port by itself.
 
+The canvas ring (right-click empty canvas, or `m` with nothing selected)
+also carries **Panels**: one cell per panel the page has -- Contents,
+Selected, Jobs, Validation, OpenSCAD -- each toggled by its address
+(`⌗98` is Contents at the root). The panels are the side column, now a
+rail of windows standing in front of the world: each closes to a tab,
+collapses, floats free and drags, docks back, and is remembered per
+browser (`apothecary/static/panels.js`); nothing docked can take more
+than a third of the page, so the world is never pushed off the screen.
+This is the second phase of the [one-screen plan](plans/one-screen-2026-09-20.md);
+the machine's own windows follow.
+
 The options come from the server: `POST /menu/resolve` is told what the ring
 was opened on and what the page knows about the board under it (`{port,
 printer, armed, bound}`) and hands back the ring with every option's cell;

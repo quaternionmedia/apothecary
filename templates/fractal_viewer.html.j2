@@ -122,17 +122,44 @@
         }
         .minimap-tick.filled { background: #0d6efd; border-color: #9cd2ff; }
 
-        .side-panel {
-            flex: 1; min-width: 320px; max-width: 420px;
-            background: #1e1e1e; border-left: 1px solid #333;
+        /* Panels (panels.js): the side column is a rail of them; any can float. */
+        .side-panel { display: none; }
+        .panel-rail {
+            flex: 0 0 auto; width: min(400px, 33vw); background: #1e1e1e;
             display: flex; flex-direction: column; overflow-y: auto;
         }
-        .panel-section { border-bottom: 1px solid #333; }
-        .panel-header {
-            padding: 0.6rem 1rem; background: #252525;
-            font-weight: 600; font-size: 0.85rem; color: #ccc;
+        .panel-rail:empty { display: none; }
+        .panel-rail-right { border-left: 1px solid #333; }
+        .panel-rail-left { border-right: 1px solid #333; }
+        .panel { border-bottom: 1px solid #333; background: #1e1e1e; display: flex; flex-direction: column; min-height: 0; }
+        .panel.free {
+            position: absolute; width: min(380px, 80%); max-height: 75%; border: 1px solid #3a3a3a;
+            border-radius: 6px; box-shadow: 0 8px 28px rgba(0,0,0,0.55); overflow: hidden; pointer-events: auto;
         }
-        .panel-body { padding: 0.75rem 1rem; }
+        .panel-title {
+            display: flex; align-items: center; gap: 0.35rem; padding: 0.45rem 0.6rem 0.45rem 0.75rem; background: #252525;
+            font-weight: 600; font-size: 0.85rem; color: #ccc; user-select: none;
+        }
+        .panel.free .panel-title { cursor: grab; }
+        .panel-title .panel-spacer { flex: 1; }
+        .panel-title button {
+            background: none; border: 0; color: #888; font: inherit; font-size: 0.8rem; cursor: pointer; padding: 0 0.3rem; line-height: 1;
+        }
+        .panel-title button:hover { color: #eee; }
+        .panel-body-slot { padding: 0.75rem 1rem; overflow: auto; }
+        .panel.free .panel-body-slot { max-height: calc(75vh - 40px); }
+        .panel.collapsed .panel-body-slot { display: none; }
+        .panel-free-layer { position: absolute; inset: 0; pointer-events: none; }
+        .panel-free-layer .panel { pointer-events: auto; }
+        .panel-leaders { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+        .panel-leader { stroke: #6fb3e8; stroke-width: 1.5; stroke-dasharray: 4 3; opacity: 0.8; }
+        .panel-tabs { position: absolute; right: 0.5rem; bottom: 2.6rem; display: flex; gap: 0.3rem; pointer-events: auto; }
+        .panel-tabs[hidden] { display: none; }
+        .panel-tab {
+            background: #252525; color: #bbb; border: 1px solid #3a3a3a; border-radius: 4px; padding: 0.2rem 0.55rem;
+            font: inherit; font-size: 0.78rem; cursor: pointer;
+        }
+        .panel-tab:hover { color: #fff; border-color: #666; }
 
         .contents-list { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; }
         .contents-item {
@@ -338,7 +365,7 @@
 
         @media (max-width: 768px) {
             .main-content { flex-direction: column; }
-            .side-panel { max-width: none; max-height: 50%; }
+            .panel-rail { width: 100%; max-height: 50%; }
         }
     </style>
 </head>
@@ -411,7 +438,7 @@
                 <div class="viewer-hint">Click to select • Double-click (or scroll past the edge) to zoom in • Drag arrows to move • Shift+drag to pan</div>
             </div>
             <div class="side-panel">
-                <div class="panel-section">
+                <div class="panel-section" data-panel="contents">
                     <div class="panel-header">Contents</div>
                     <div class="panel-body">
                         <div id="category-filters" class="category-filters"
@@ -419,13 +446,13 @@
                         <ul id="contents-list" class="contents-list contents-tree"></ul>
                     </div>
                 </div>
-                <div class="panel-section">
+                <div class="panel-section" data-panel="selected">
                     <div class="panel-header">Selected</div>
                     <div class="panel-body" id="selected-body">
                         <div class="no-selection">Click a node to select it</div>
                     </div>
                 </div>
-                <div class="panel-section" id="jobs-section" style="display: none;">
+                <div class="panel-section" id="jobs-section" data-panel="jobs" style="display: none;">
                     <div class="panel-header">Jobs</div>
                     <div class="panel-body">
                         <form id="job-form" class="job-form">
@@ -440,14 +467,14 @@
                         <ul id="job-list" class="job-list"></ul>
                     </div>
                 </div>
-                <div class="panel-section">
+                <div class="panel-section" data-panel="validation">
                     <div class="panel-header">Layout Validation</div>
                     <div class="panel-body">
                         <ul id="violations-list" class="violations-list"></ul>
                         <div id="violations-clean" class="violations-clean">Layout valid</div>
                     </div>
                 </div>
-                <div class="panel-section">
+                <div class="panel-section" data-panel="scad">
                     <div class="panel-header">Generated OpenSCAD</div>
                     <div class="panel-body">
                         <div id="code-content" class="code-content">Load a site to see generated OpenSCAD</div>
@@ -480,6 +507,7 @@
         import { TransformControls } from 'three/addons/controls/TransformControls.js';
         import { STLLoader } from 'three/addons/loaders/STLLoader.js';
         import { mountAnchors } from '/static/anchors.js';
+        import { mountPanels } from '/static/panels.js';
         import { makeMachineMarks, toScene as marksToScene } from '/static/machine_marks.js';
 
         const BASE_URL = "{{ base_url }}";
@@ -819,6 +847,21 @@
                 // pinned machine, and its nozzle, bed and reading at its node.
                 // Both survive renderFocus(), which clears only the nodes' meshes.
                 this.anchors = mountAnchors({ container: this.canvas.parentElement, canvas: this.canvas, camera: this.camera, scene: this.scene });
+                // The side column's sections become panels: docked in the right
+                // rail, each one closable, collapsible and draggable free; what a
+                // person did to them is remembered per browser (panels.js).
+                this.panels = mountPanels({ container: document.querySelector('.main-content'), overlay: this.canvas.parentElement });
+                for (const section of document.querySelectorAll('.side-panel [data-panel]')) {
+                    const id = section.dataset.panel;
+                    const el = this.panels.register(id, {
+                        title: section.querySelector('.panel-header').textContent.trim(),
+                        body: section.querySelector('.panel-body'),
+                    });
+                    if (section.id === 'jobs-section') { this.jobsSectionEl = el; }  // shown when a site has build volumes
+                    if (section.style.display === 'none') el.style.display = 'none';
+                }
+                document.querySelector('.side-panel')?.remove();
+                window.apothecaryPanels = this.panels;
                 this.marks = {};       // bearer path -> { marks, port, where }
                 this.whereByPort = {}; // port -> Promise of GET /firmware/printers/where
 
@@ -932,6 +975,7 @@
                 this.orbitControls.update();
                 for (const m of Object.values(this.marks)) if (m.marks) m.marks.tick();
                 this.anchors.update();
+                this.panels.update((key) => this.anchors.at(key));
                 this.renderer.render(this.scene, this.camera);
             }
 
@@ -3532,6 +3576,10 @@
                 } else if (action === 'move') {
                     if (viewer.renderNodeByKey[path]) viewer.selectChild(path);
                     viewer.setStatus(viewer.transformControls.object ? `Drag the handle to move ${path}${tail}` : `${path} cannot be moved from here: only a direct child of the site can${tail}`, 'success');
+                } else if (action.startsWith('panel:toggle:')) {
+                    const id = action.slice('panel:toggle:'.length);
+                    const open = viewer.panels.toggle(id) && viewer.panels.isOpen(id);
+                    viewer.setStatus(`${open ? 'Opened' : 'Closed'} the ${id} panel${tail}`, 'success');
                 } else if (action === 'fit' || action === 'fit-selection') {
                     const focus = viewer.currentFocusNode();
                     const nodes = viewer.currentRenderNodes(focus);

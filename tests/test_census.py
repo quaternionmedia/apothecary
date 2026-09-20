@@ -599,3 +599,22 @@ def test_the_command_refuses_a_page_it_could_not_read(tmp_path):
     result = CliRunner().invoke(command, ["--page", str(page)])
     assert result.exit_code == 1
     assert "no number is given" in result.output
+
+
+PANELS_MODULE = census.TEMPLATES.parent / "apothecary" / "static" / "panels.js"
+
+
+def test_the_panel_module_keeps_its_chrome_to_itself():
+    """What stands in front of the world (panels.js) listens on the elements it
+    makes -- a panel's collapse, float and close buttons, its title bar, the
+    tabs of closed panels -- and on the window only for the pointer moves that
+    finish a drag, put on when a drag starts and taken off when it ends. The
+    page's census cannot see inside the module, so this holds the module to
+    that; a fourth way in would be added here first."""
+    text = PANELS_MODULE.read_text(encoding="utf-8")
+    on_page = re.findall(r"(window|document)\.addEventListener\(\s*[\"'](\w+)[\"']", text)
+    assert sorted(set(on_page)) == [("window", "pointermove"), ("window", "pointerup")]
+    assert "window.removeEventListener(\"pointermove\"" in text
+    assert "window.removeEventListener(\"pointerup\"" in text
+    assert "/static/panels.js" in census.VIEWER.read_text(encoding="utf-8")
+    assert "/static/panels.js" not in census.MONITOR.read_text(encoding="utf-8")
