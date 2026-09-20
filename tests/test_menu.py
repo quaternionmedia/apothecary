@@ -685,6 +685,7 @@ def test_the_control_ring_offers_every_allowlisted_verb():
         "control:sd-resume",
         "control:sd-pause",
         "control:sd-abort",
+        "print:start",
         "control:motors-off",
         "control:quickstop",
         "control:break-wait",

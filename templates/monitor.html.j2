@@ -94,6 +94,20 @@
         #level-history a { color: var(--tx); margin-left: 0.4rem; }
         #level-history .pick { cursor: pointer; }
         #level-history .pick:hover, #level-history .pick.on { color: var(--ink); }
+        /* Print from here: a kept file, streamed line by line */
+        #print-card .row { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; margin: 0.3rem 0; font-size: 0.78rem; color: var(--ink-2); }
+        #print-card button { font: inherit; font-size: 0.75rem; background: #232823; color: var(--ink); border: 1px solid #3a443a; border-radius: 4px; padding: 0.2rem 0.5rem; cursor: pointer; }
+        #print-card button:hover { background: #2f382f; }
+        #print-card button.warm { border-color: #7a5a1a; }
+        #print-card button:disabled { opacity: 0.45; cursor: default; }
+        #print-card select { font: inherit; font-size: 0.75rem; background: #1a1e1a; color: var(--ink); border: 1px solid #3a443a; border-radius: 4px; padding: 0.15rem 0.3rem; max-width: 16rem; }
+        #print-card input[type=file] { font-size: 0.72rem; color: var(--ink-2); max-width: 14rem; }
+        #print-card .job { color: var(--warn); font-variant-numeric: tabular-nums; }
+        #print-card .bar { margin-top: 0.3rem; }
+        #print-card .bar.print i { background: var(--tx); }
+        #print-history { font-size: 0.74rem; color: var(--ink-2); max-height: 6rem; overflow: auto; margin-top: 0.3rem; }
+        #print-history a { color: var(--tx); margin-left: 0.4rem; }
+        #print-history .cancelled, #print-history .failed { color: var(--warn); }
         /* Control: a latched overlay. Nothing in it exists in the DOM as enabled until the latch is armed. */
         .top label.ctl { display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; color: var(--ink-2); padding: 0.15rem 0.5rem; border: 1px solid #3a443a; border-radius: 4px; }
         .top label.ctl.armed { border-color: #7a5a1a; color: var(--warn); background: #2a2410; }
@@ -171,6 +185,22 @@
                     <div id="mesh"></div>
                     <div class="stats" id="level-stats"><span class="empty">no reading yet — Read mesh, or arm control and Probe bed</span></div>
                     <div id="level-history"></div>
+                </div>
+                <div class="card wide" id="print-card">
+                    <div class="k">Print from here <span class="s" id="print-note" style="text-transform: none; letter-spacing: 0;">· no SD card needed: the file streams over the link, one line per ok</span></div>
+                    <div class="row">
+                        <input type="file" id="print-file" accept=".gcode,.gco,.g,.txt,text/plain" title="A sliced G-code file to keep on the host. It is checked (no EEPROM writes, no temperatures over the caps) and listed here; nothing is sent until Print">
+                        <select id="print-pick" title="The files kept on the host, newest first"><option value="">— no files kept —</option></select>
+                        <button type="button" id="print-delete" title="Forget the chosen file">✕</button>
+                        <span class="grow"></span>
+                        <button type="button" id="print-start" class="warm" title="Stream the chosen file to the printer. Heats and moves: control must be armed. ⌗ Control › Print › Send file">▶ Print</button>
+                        <button type="button" id="print-pause" title="Stop feeding lines; the printer finishes what it has queued">⏸ Pause</button>
+                        <button type="button" id="print-resume" title="Feed lines again (control must be armed)">▶ Resume</button>
+                        <button type="button" id="print-cancel" title="Stop feeding, then heaters off, fan off, motors free">■ Cancel</button>
+                    </div>
+                    <div class="row"><span id="print-progress" class="empty">nothing printing from here</span><span class="grow"></span><span class="job" id="print-job"></span></div>
+                    <div class="bar print"><i id="b-print" style="width:0"></i></div>
+                    <div id="print-history"></div>
                 </div>
                 <div class="card wide" id="view-card" hidden>
                     <div class="k">Board in its printer <span class="s" id="view-note"></span></div>
@@ -292,7 +322,7 @@
             const offline = st.state === "offline";
             $("dot").className = "dot " + (offline ? "bad" : "on");
             $("c-state").innerHTML = offline ? '<span class="bad">offline</span>' : (st.state === "printing" ? '<span class="ok">printing</span>' : (st.heating ? '<span class="warn">heating</span>' : "idle"));
-            $("c-state-s").textContent = st.job ? `${st.job.kind}: ${st.job.stage}` : (offline ? (st.raw[0] || "") : `polled ${new Date(st.polled_at).toLocaleTimeString()}`);
+            $("c-state-s").textContent = st.job ? (st.job.kind === "print" ? `print from here: ${st.job.stage} ${(st.job.progress * 100).toFixed(0)}%` : `${st.job.kind}: ${st.job.stage}`) : (offline ? (st.raw[0] || "") : `polled ${new Date(st.polled_at).toLocaleTimeString()}`);
             const hot = st.hotends[0];
             $("c-hot").innerHTML = heater(hot); $("c-hot-s").textContent = hot && hot.power != null ? `power ${hot.power}/127` : "";
             $("b-hot").style.width = hot && hot.target > 0 ? Math.min(100, hot.actual / hot.target * 100).toFixed(0) + "%" : "0";
@@ -389,7 +419,7 @@
                 if (poll && !showPolls) continue;
                 const d = new Date(e.t);
                 const t = isNaN(d) ? e.t.slice(11, 23) : d.toLocaleTimeString([], { hour12: false }) + "." + String(d.getMilliseconds()).padStart(3, "0");
-                const cls = e.kind + (e.origin === "control" ? " control" : "") + (/^\s*(ok\s+)?T:\s*-?\d/.test(e.text) ? " temp" : "") + (/^(Error:|!!)/.test(e.text) ? " err" : "");
+                const cls = e.kind + (e.origin === "control" || e.origin === "print" ? " control" : "") + (/^\s*(ok\s+)?T:\s*-?\d/.test(e.text) ? " temp" : "") + (/^(Error:|!!)/.test(e.text) ? " err" : "");
                 rows.push(`<span class="t">${t}</span> <span class="${cls}">${e.kind === "tx" ? "&gt; " : ""}${esc(e.text)}</span>`);
             }
             log.innerHTML = rows.length ? rows.join("\n") : '<span class="empty">nothing logged yet — poll or send a query</span>';
@@ -719,10 +749,105 @@
         });
         $("port").addEventListener("change", loadLevel);
 
+        // --- print from here: a kept file streamed over the link -------------------------
+        const prt = { files: [], records: [], job: null, timer: null };
+        function fmtDurS(s) { s = Math.round(s); return s >= 3600 ? `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m` : `${Math.floor(s / 60)}m ${s % 60}s`; }
+        function renderPrint() {
+            const job = prt.job, running = !!(job && job.running);
+            const paused = running && job.stage === "paused";
+            $("print-start").disabled = running || !$("print-pick").value;
+            $("print-pause").disabled = !running || paused || job.stage !== "printing";
+            $("print-resume").disabled = !paused;
+            $("print-cancel").disabled = !running;
+            $("print-delete").disabled = !$("print-pick").value || (running && job.file_id === $("print-pick").value);
+            if (job && (running || job.stage)) {
+                const pct = (job.progress * 100).toFixed(1);
+                $("print-progress").className = "";
+                $("print-progress").textContent = `${job.name} · ${job.stage} · ${job.sent}/${job.total} lines (${pct}%) · ${fmtDurS(job.elapsed_s)}` + (job.current && running ? ` · ${job.current}` : "") + (job.error ? ` · ${job.error}` : "");
+                $("b-print").style.width = pct + "%";
+            } else {
+                $("print-progress").className = "empty"; $("print-progress").textContent = "nothing printing from here"; $("b-print").style.width = "0";
+            }
+            $("print-job").textContent = running ? `${job.stage}…` : "";
+            $("print-history").innerHTML = prt.records.map((r) => `<div><span class="${esc(r.outcome)}">${new Date(r.at).toLocaleString()} · ${esc(r.name)} · ${esc(r.outcome)} · ${r.sent}/${r.total} lines</span><a href="${BASE}/firmware/printers/print/records/${encodeURIComponent(r.id)}" download="${esc(r.id)}.json" title="The record as JSON, with the tail of what the firmware said">⤓ log</a></div>`).join("");
+        }
+        async function loadPrintFiles(pick) {
+            try { prt.files = await api("/firmware/printers/prints"); } catch (e) { prt.files = []; }
+            const sel = $("print-pick"), had = pick || sel.value;
+            sel.innerHTML = prt.files.length
+                ? prt.files.map((f) => `<option value="${esc(f.id)}" ${f.problems.length ? 'class="bad"' : ""}>${esc(f.name)} · ${f.lines} lines${f.problems.length ? " · refused: " + esc(f.problems[0]) : ""}</option>`).join("")
+                : '<option value="">— no files kept —</option>';
+            if (had && prt.files.some((f) => f.id === had)) sel.value = had;
+            renderPrint();
+        }
+        async function loadPrintRecords() {
+            if (!state.port) { prt.records = []; renderPrint(); return; }
+            try { prt.records = await api(`/firmware/printers/print/records?port=${encodeURIComponent(state.port)}`); } catch (e) { prt.records = []; }
+            renderPrint();
+        }
+        async function watchPrint() {
+            clearTimeout(prt.timer); prt.timer = null;
+            if (!state.port) return;
+            try {
+                prt.job = await api(`/firmware/printers/print?port=${encodeURIComponent(state.port)}`);
+                renderPrint();
+                if (prt.job.running) { prt.timer = setTimeout(watchPrint, 1000); return; }
+                await loadPrintRecords();
+                await pollOnce();
+            } catch (e) { $("print-job").textContent = e.message; }
+        }
+        async function keepPrintFile(file) {
+            if (!file) return;
+            try {
+                const r = await fetch(`${BASE}/firmware/printers/prints?name=${encodeURIComponent(file.name)}`, { method: "POST", body: file, headers: { "Content-Type": "text/plain" } });
+                const body = await r.json().catch(() => ({}));
+                if (!r.ok) throw new Error(body.detail || r.statusText);
+                logLine("sys", `kept ${body.name}: ${body.lines} lines` + (body.problems.length ? ` -- refused: ${body.problems.join("; ")}` : ""));
+                await loadPrintFiles(body.id);
+            } catch (e) { logLine("sys", "keep file: " + e.message); }
+            $("print-file").value = "";
+        }
+        async function startPrint() {
+            const fileId = $("print-pick").value;
+            if (!state.port || !fileId) { logLine("sys", "print: pick a port and a file first"); return; }
+            if (!ctl.armed) { logLine("sys", "a print heats and moves the machine: arm control first"); return; }
+            const f = prt.files.find((x) => x.id === fileId);
+            if (!confirm(`Print ${f ? f.name : fileId} on ${state.port}?\n${f ? f.lines + " lines" : ""} will stream from here; the printer will heat and move.`)) return;
+            try {
+                prt.job = await post("/firmware/printers/print", { port: state.port, file_id: fileId });
+                renderPrint();
+                prt.timer = setTimeout(watchPrint, 800);
+            } catch (e) { logLine("sys", "print: " + e.message); $("print-job").textContent = e.message; }
+        }
+        async function printVerb(verb) {
+            if (!state.port) return;
+            if (verb === "cancel" && !confirm("Cancel the print from here? Heaters and fan go off, motors free.")) return;
+            try { prt.job = await post(`/firmware/printers/print/${verb}`, { port: state.port }); renderPrint(); if (!prt.timer) prt.timer = setTimeout(watchPrint, 500); }
+            catch (e) { logLine("sys", `print ${verb}: ` + e.message); }
+        }
+        $("print-file").addEventListener("change", (ev) => keepPrintFile(ev.target.files[0]));
+        $("print-pick").addEventListener("change", renderPrint);
+        $("print-delete").onclick = async () => {
+            const id = $("print-pick").value; if (!id) return;
+            try { await api(`/firmware/printers/prints/${encodeURIComponent(id)}`, { method: "DELETE" }); await loadPrintFiles(); }
+            catch (e) { logLine("sys", "forget file: " + e.message); }
+        };
+        $("print-start").onclick = startPrint;
+        $("print-pause").onclick = () => printVerb("pause");
+        $("print-resume").onclick = () => printVerb("resume");
+        $("print-cancel").onclick = () => printVerb("cancel");
+        window.addEventListener("apothecary:status", (ev) => {
+            const st = ev.detail; const job = st && st.job;
+            if (job && job.kind === "print") { prt.job = job; renderPrint(); if (!prt.timer) prt.timer = setTimeout(watchPrint, 1000); }
+        });
+        $("port").addEventListener("change", loadPrintRecords);
+        loadPrintFiles(); loadPrintRecords(); watchPrint();
+
         window.apothecaryMonitor = {
             state, ctl, arm, jog, estop, enqueue, sendControl, fillTemplate, pollOnce, loadPorts, logLine, schedule,
             identify: () => $("identify").onclick(),
             level: { start: startLevel, corner: (which) => enqueue(cornerLines(which)), lines: cornerLines, records: () => level.records, shown: () => level.shown, load: loadLevel },
+            print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, records: () => prt.records, load: loadPrintFiles },
         };
 
         loadPorts().then(() => { if (state.port) selectPort(state.port); });
@@ -812,6 +937,8 @@
             "control:quickstop": () => "M410",
         };
         const CONFIRM = { "control:sd-abort": "Abort the SD print?" };
+        // The same three verbs, carried to the print from here when one is running.
+        const HOST_VERBS = { "control:sd-resume": "resume", "control:sd-pause": "pause", "control:sd-abort": "cancel" };
 
         async function carry(intent) {
             const action = intent.action;
@@ -824,6 +951,9 @@
             if (corner) { if (!m.ctl.armed) { m.logLine("sys", "a corner move needs control armed"); return; } m.level.corner(corner[1]); return; }
             if (action === "level:probe") { await m.level.start(true); return; }
             if (action === "level:read") { await m.level.start(false); return; }
+            if (action === "print:start") { await m.print.start(); return; }
+            const hostJob = m.print.job();
+            if (hostJob && hostJob.running && action in HOST_VERBS) { await m.print.verb(HOST_VERBS[action]); return; }
             if (action in LINES) {
                 if (!m.ctl.armed) { m.logLine("sys", `${intent.label} (⌗${intent.address}): control is not armed`); return; }
                 await m.sendControl(LINES[action](), CONFIRM[action]);
@@ -870,6 +1000,10 @@
             out.push([$("level-probe"), "level:probe"]);
             out.push([$("level-read"), "level:read"]);
             for (const b of $("level-card").querySelectorAll("button[data-corner]")) out.push([b, `control:corner:${b.dataset.corner}`]);
+            out.push([$("print-start"), "print:start"]);
+            out.push([$("print-pause"), "control:sd-pause"]);
+            out.push([$("print-resume"), "control:sd-resume"]);
+            out.push([$("print-cancel"), "control:sd-abort"]);
             return out;
         }
 

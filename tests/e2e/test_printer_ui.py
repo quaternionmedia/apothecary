@@ -597,3 +597,98 @@ def test_bed_level_probe_reads_and_records(page: Page, printer_url: str):
     page.locator("#control button[data-cmd='M24']").click()
     page.locator("#ctl-disarm").click()
     expect(page.locator("#control")).to_be_hidden(timeout=3000)
+
+
+@pytest.mark.e2e
+def test_a_file_prints_from_here_without_a_card(page: Page, printer_url: str):
+    """Keep a file from the page, print it armed, pause and resume from the ring's Print
+    cell, cancel, and see the record; a second file runs to the end and the state comes back."""
+    page.goto(f"{printer_url}/firmware/monitor?port=/dev/ttyFAKE1")
+    expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
+    expect(page.locator("#print-start")).to_be_disabled()
+    slow = "\n".join(f"G1 X{i} Y{i} E{i / 10:.1f}\nG4 P150" for i in range(1, 41)) + "\n"
+    page.locator("#print-file").set_input_files(
+        {"name": "slow cube.gcode", "mimeType": "text/plain", "buffer": slow.encode()}
+    )
+    expect(page.locator("#print-pick")).to_contain_text("slow cube.gcode · 80 lines", timeout=8000)
+    expect(page.locator("#log .sys", has_text="kept slow cube.gcode: 80 lines")).to_be_visible()
+    expect(page.locator("#print-start")).to_be_enabled()
+    # A file the seam refuses is kept, said so, and never sent.
+    page.locator("#print-file").set_input_files(
+        {"name": "eeprom.gcode", "mimeType": "text/plain", "buffer": b"G28\nM500\n"}
+    )
+    expect(page.locator("#print-pick")).to_contain_text("refused: line 2: M500", timeout=8000)
+    page.locator("#print-pick").select_option(
+        label=page.locator("#print-pick option", has_text="slow cube").text_content()
+    )
+
+    # Disarmed: nothing leaves the page.
+    page.locator("#print-start").click()
+    expect(page.locator("#log .sys", has_text="arm control first")).to_be_visible(timeout=3000)
+    assert not page.evaluate("() => window.apothecaryMonitor.print.job().running")
+    page.locator("#ctl").check()
+    expect(page.locator("#control")).to_be_visible(timeout=5000)
+    page.locator("#control button[data-cmd='M25']").click()  # the card's print is in the way
+    expect(page.locator("#c-state")).to_contain_text("idle", timeout=POLL_S * 1000 + 3000)
+    page.wait_for_timeout(int(POLL_S * 1000) + 300)  # a poll that sees the card idle
+
+    page.once("dialog", lambda d: d.accept())
+    t0 = time.monotonic()
+    page.locator("#print-start").click()
+    expect(page.locator("#print-progress")).to_contain_text(
+        "slow cube.gcode · printing", timeout=5000
+    )
+    assert time.monotonic() - t0 < 5
+    expect(page.locator("#c-state")).to_contain_text("printing", timeout=POLL_S * 1000 + 3000)
+    expect(page.locator("#c-state-s")).to_contain_text("print from here: printing")
+    expect(
+        page.locator("#log .sys", has_text="print started: slow cube.gcode (80 lines)")
+    ).to_be_visible()
+    # The stream stays out of the log; the progress bar moves.
+    page.wait_for_function("() => window.apothecaryMonitor.print.job().sent >= 6", timeout=8000)
+    assert page.locator("#log .tx", has_text="G4 P150").count() == 0
+
+    # Pause from the ring: Control > Print > Pause goes to the print from here, not the card.
+    m25_before = page.locator("#log .tx.control", has_text="M25").count()
+    page.keyboard.press("m")
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    page.keyboard.press("7")
+    page.keyboard.press("9")
+    expect(page.locator("#ring-overlay .title")).to_have_text("Print")
+    page.keyboard.press("6")
+    expect(page.locator("#ring-overlay")).to_have_count(0)
+    expect(page.locator("#print-progress")).to_contain_text("· paused ·", timeout=5000)
+    assert page.locator("#log .tx.control", has_text="M25").count() == m25_before
+    sent = page.evaluate("() => window.apothecaryMonitor.print.job().sent")
+    page.wait_for_timeout(1200)
+    assert page.evaluate("() => window.apothecaryMonitor.print.job().sent") <= sent + 1
+    expect(page.locator("#print-resume")).to_be_enabled()
+    page.locator("#print-resume").click()
+    expect(page.locator("#print-progress")).to_contain_text("· printing ·", timeout=5000)
+    page.wait_for_function(
+        "(n) => window.apothecaryMonitor.print.job().sent > n + 2", arg=sent, timeout=8000
+    )
+    page.once("dialog", lambda d: d.accept())
+    page.locator("#print-cancel").click()
+    expect(page.locator("#print-progress")).to_contain_text("· cancelled ·", timeout=8000)
+    expect(page.locator("#print-history")).to_contain_text(
+        "slow cube.gcode · cancelled", timeout=5000
+    )
+    expect(page.locator("#log .tx.control", has_text="M104 S0").last).to_be_visible()
+    expect(page.locator("#print-start")).to_be_enabled(timeout=5000)
+
+    # A short file runs to the end: done, recorded, and the state card is the board's again.
+    page.locator("#print-file").set_input_files(
+        {"name": "dot.gcode", "mimeType": "text/plain", "buffer": b"G28\nG1 X5 Y5 E0.1\nM84\n"}
+    )
+    expect(page.locator("#print-pick")).to_contain_text("dot.gcode · 3 lines", timeout=8000)
+    page.once("dialog", lambda d: d.accept())
+    page.locator("#print-start").click()
+    expect(page.locator("#print-progress")).to_contain_text("dot.gcode · done · 3/3", timeout=10000)
+    expect(page.locator("#print-history")).to_contain_text("dot.gcode · done · 3/3")
+    expect(page.locator("#c-state")).to_contain_text("idle", timeout=POLL_S * 1000 + 3000)
+    r = page.request.get(f"{printer_url}/firmware/printers/print/records?port=/dev/ttyFAKE1")
+    assert [x["outcome"] for x in r.json()] == ["done", "cancelled"]
+    page.locator("#control button[data-cmd='M24']").click()  # leave the card printing for the rest
+    page.locator("#ctl-disarm").click()
+    expect(page.locator("#control")).to_be_hidden(timeout=3000)

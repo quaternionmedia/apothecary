@@ -301,16 +301,18 @@ the monitor page the device ring is the top ring, titled by the port:
 
 ```
    Device ring                     Control ring (printers only)
- 7:Control    8:Watch    9:Pin|Unpin    7:Arm|Disarm  8:Heat  9:SD
+ 7:Control    8:Watch    9:Pin|Unpin    7:Arm|Disarm  8:Heat  9:Print
  4:Query      5:back     6:Poll         4:Level       5:back  6:Home
  1:Link       2:Monitor  3:Rescan       1:Stop        2:Jog   3:Motors
 ```
 
 Link opens `8:Reconnect  6:Reset  2:Release` (the same cell 1 on a devkit,
 which has no Control); Heat opens `8:Hotend on  6:Hotend off  2:Bed on
-4:Bed off  9:Fan on  3:Fan off`; Home opens `8:All  6:XY  2:Z`; SD opens
-`8:Resume  6:Pause  2:Abort`; Motors opens `8:Off  6:Quickstop  2:Break
-wait`; and Jog is seated so **the keypad is the jog pad**, as Level is
+4:Bed off  9:Fan on  3:Fan off`; Home opens `8:All  6:XY  2:Z`; Print opens
+`8:Resume  6:Pause  2:Abort  4:Send file` (the three verbs go to whichever
+print is running, the card's or the one streamed from the host); Motors
+opens `8:Off  6:Quickstop  2:Break wait`; and Jog is seated so **the keypad
+is the jog pad**, as Level is
 seated so **the keypad is the bed** (the corners are the bed's corners, seen
 from the front; Probe and Read are the cardinals, Mesh on and off the other
 two):
@@ -419,8 +421,10 @@ What can be sent is a bounded allowlist (`firmware.gcode.CONTROL_CODES`):
 bed). A jog from the pad is three lines (`G91`, `G1 …`, `G90`) so the
 board is always left in absolute mode. Out-of-bounds values are refused
 before they reach the port; there is no job streaming, no EEPROM write, no
-firmware configuration -- those are a print host's business. Control
-traffic is amber in the comms log, tagged `control`.
+firmware configuration. Control traffic is amber in the comms log, tagged
+`control`; a file streamed from the host goes past this list as a whole,
+checked once before the first line (see [Printing without an SD
+card](#printing-without-an-sd-card)).
 
 ```
 POST /firmware/printers/control  {"port": …, "armed": true, "ttl_s": 300}
@@ -476,6 +480,61 @@ The mesh parser (`firmware.gcode.parse_meshes`) reads Marlin's printed grid
 board that stores its mesh in EEPROM reads too. The simulated printer
 answers `G29`, `M420 V`, `M851` and `G30` with a bed that is slightly
 tilted and a little bowed, so the card can be tried without a machine.
+
+### Printing without an SD card
+
+The monitor's **Print from here** card streams a sliced G-code file to the
+printer over the held link, so a machine with no card reader, or a card
+nobody wants to walk across the room, still prints. Pick a file and it is
+**kept** on the host (`~/.apothecary/prints/`) and **checked** before
+anything is sent: a file that saves settings (`M500`), factory-resets
+(`M502`), updates firmware (`M997`), kills or restarts the board, or asks a
+heater for more than the seam's caps (300 °C hotend, 130 °C bed) is listed
+with the reason and refused; the rest are listed with their line count.
+**Print** needs control armed, asks once, and starts a **job** that feeds
+the file one line at a time, each after the firmware's `ok` -- the same
+flow control every host uses, so the planner stays fed and the host never
+runs ahead of the machine. A heat-and-wait or a home is given the minutes it
+needs; any other line that goes unanswered for thirty seconds, or that the
+board answers with an error or a resend, ends the print.
+
+While it prints, the state card reads *printing* with the progress, the
+card shows the line count, the elapsed time and the line in flight, and
+polls keep coming between lines -- a poll that would have to queue behind a
+slow line answers from the last one instead. Heaters, fan and break-wait are
+still yours from the overlay (a hotend a few degrees off is fixed
+mid-print); motion, SD, homing and the bed are the job's, and a release,
+reconnect, reset or firmware upload on that port is refused until the print
+ends. **Pause** stops the feed (the printer finishes what it has queued),
+**Resume** needs the latch, **Cancel** stops the feed and sends the
+safe-off -- `M104 S0`, `M140 S0`, `M107`, `M84`: heaters and fan off,
+motors free, no blind park. A failed line does the same. **E-STOP** halts
+the board and the job ends with nothing more sent.
+
+The stream stays out of the comms log (a print is thousands of lines and
+the log is for reading); the log says when a print starts, every 500 lines,
+what the board objected to, and how it ended. Every print is a **record**
+(`~/.apothecary/prints/records/`) with its outcome -- done, cancelled or
+failed -- the lines sent, and the tail of what the firmware said; the
+card's history lists the port's prints newest first. On the ring, the
+Control ring's **Print** cell (`9`) carries Resume, Pause and Abort to
+whichever print is running -- the card's or the one from here -- and
+**Send file** (`⌗794`) starts the chosen file.
+
+![Print from here: a kept file streaming, with its progress](generated/printer-monitor/screenshots/11-print-from-here-a-sliced-g-code-file-is-kept-on-th.png)
+
+```
+GET/POST /firmware/printers/prints?name=…    the kept files; keep one (the body is the file)
+DELETE   /firmware/printers/prints/{id}
+POST     /firmware/printers/print            {"port": …, "file_id": …}  → 202, the job (latch required)
+GET      /firmware/printers/print?port=…     the job's stage and progress
+POST     /firmware/printers/print/pause|resume|cancel   {"port": …}
+GET      /firmware/printers/print/records?port=…        prints from here, newest first; /{id} in full
+```
+
+What this is not: a queue, a slicer, a webcam or a timelapse. One print at
+a time, from a file already sliced, watched from this page; see the
+*G-code printer seam* record's sixth decision for where the line is drawn.
 
 ### Manual queries
 
@@ -558,6 +617,9 @@ at a time — a second request gets `409`.
 | `GET/POST /printers/control`, `GET /printers/controls`, `POST /printers/command` | the control latch (arm/disarm, state), the bounded control allowlist, and sending one control line while armed (`M112` always) |
 | `POST /printers/level`, `GET /printers/level?port=…` | start a bed reading as a job (`{"port": …, "probe": true}`; a probe needs the latch and answers `409` without it, or while a job holds the port) and ask its stage |
 | `GET /printers/leveling?port=…`, `GET /printers/leveling/{id}` | saved bed readings (mesh, stats, probe offset, temperatures), newest first, and one in full with every line the firmware said |
+| `GET/POST /printers/prints`, `DELETE /printers/prints/{id}` | the G-code files kept on the host (`POST ?name=…` with the file as the body; checked, listed with problems), and forgetting one |
+| `POST /printers/print`, `GET /printers/print?port=…`, `POST /printers/print/pause|resume|cancel` | stream a kept file to the printer (`{"port": …, "file_id": …}`; latch required, `409` while a job holds the port), the job's progress, and the three verbs (pause and cancel need no latch) |
+| `GET /printers/print/records?port=…`, `GET /printers/print/records/{id}` | prints streamed from here, newest first, and one in full |
 | `GET /sites/{name}/devices?fresh=1` | (site API) the bindings view; `fresh` forces a port rescan -- what the viewer's ↻ Devices and Rescan use |
 | `POST /printers/release` | drop the held link so another program can open the port |
 | `GET /printers/info?port=…` | device, held link (baud, engine, opened at), last poll, active task -- what the monitor page needs at once |

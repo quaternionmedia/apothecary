@@ -35,6 +35,7 @@ from .models import (
     PrinterControlRequest,
     PrinterIdentifyRequest,
     PrinterQueryRequest,
+    PrintRequest,
     ProbeRequest,
     UploadRequest,
     validate_port,
@@ -60,7 +61,7 @@ def _start(kind: str, title: str, steps: List[List[str]], on_done=None, port=Non
     if port:
         # Only the port being written to: releasing every printer link would
         # reset every printer (DTR) the next time it is polled.
-        gcode.get_printer_links().close(port)
+        _release_or_409(port)
     try:
         task = get_task_runner().run(kind, title, steps, env=env_for_arduino(), on_done=on_done)
     except TaskBusy as exc:
@@ -224,6 +225,21 @@ async def firmware_esptool_flash(body: EsptoolFlashRequest):
 
 
 # -- devices: detected / probed / expected / observed -----------------------------
+
+
+def _release_or_409(port: str) -> bool:
+    try:
+        return gcode.get_printer_links().close(port)
+    except ToolchainError as exc:  # a print streams over it
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+def _no_print_or_409(port: str) -> None:
+    job = devices.print_job(port)
+    if job is not None and job.finished is None:
+        raise HTTPException(
+            status_code=409, detail=f"{port}: a print holds the port -- cancel it first"
+        )
 
 
 def _busy_guard():
@@ -417,6 +433,118 @@ async def firmware_printer_leveling_record(record_id: str):
     return record.model_dump(mode="json")
 
 
+# -- host printing ------------------------------------------------------------------
+
+PRINT_FILE_MAX = 64 * 1024 * 1024
+
+
+@router.get("/printers/prints")
+async def firmware_print_files():
+    """The G-code files kept on the host, newest first, each with its line count and problems."""
+    return [f.model_dump(mode="json") for f in devices.print_files()]
+
+
+@router.post("/printers/prints", status_code=201)
+async def firmware_print_upload(
+    request: Request, name: str = Query(..., min_length=1, max_length=200)
+):
+    """Keep a G-code file (the request body, as text) under ``name``; it is checked, not sent."""
+    data = await request.body()
+    if not data:
+        raise HTTPException(status_code=422, detail="an empty file")
+    if len(data) > PRINT_FILE_MAX:
+        raise HTTPException(
+            status_code=413, detail=f"larger than {PRINT_FILE_MAX // (1024 * 1024)} MB"
+        )
+    return devices.save_print_file(name, data).model_dump(mode="json")
+
+
+@router.delete("/printers/prints/{file_id}")
+async def firmware_print_delete(file_id: str):
+    try:
+        found = devices.delete_print_file(file_id)
+    except ToolchainError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not found:
+        raise HTTPException(status_code=404, detail="no such print file")
+    return {"id": file_id, "deleted": True}
+
+
+@router.post("/printers/print", status_code=202)
+def firmware_print_start(body: PrintRequest):
+    """Stream a kept file to the printer (latch required); the job's first snapshot."""
+    _busy_guard()
+    try:
+        job = devices.start_print(body.port, body.file_id)
+    except (gcode.ControlNotArmed, ToolchainError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return job.snapshot()
+
+
+@router.get("/printers/print")
+async def firmware_print_status(port: str):
+    """The current (or last) host print on ``port``, if any."""
+    try:
+        validate_port(port)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    job = devices.print_job(port)
+    return job.snapshot() if job else {"port": port, "running": False, "stage": None}
+
+
+def _print_verb(port: str, verb: str) -> dict:
+    job = devices.print_job(port)
+    if job is None or job.finished is not None:
+        raise HTTPException(status_code=409, detail=f"{port}: no print is running")
+    if verb == "resume" and not gcode.get_printer_links().control.armed(port):
+        raise HTTPException(
+            status_code=409, detail=f"{port}: resuming moves the machine -- arm control first"
+        )
+    getattr(job, verb)()
+    if verb != "cancel":
+        gcode.get_printer_links().control.renew(port)
+    return job.snapshot()
+
+
+@router.post("/printers/print/pause")
+def firmware_print_pause(body: ProbeRequest):
+    """Stop feeding lines; the firmware finishes what it has queued. No latch needed."""
+    return _print_verb(body.port, "pause")
+
+
+@router.post("/printers/print/resume")
+def firmware_print_resume(body: ProbeRequest):
+    """Feed lines again (latch required: it moves the machine)."""
+    return _print_verb(body.port, "resume")
+
+
+@router.post("/printers/print/cancel")
+def firmware_print_cancel(body: ProbeRequest):
+    """Stop feeding and send the safe-off (heaters and fan off, motors free). No latch needed."""
+    return _print_verb(body.port, "cancel")
+
+
+@router.get("/printers/print/records")
+async def firmware_print_records(port: str = ""):
+    """Prints streamed from here, newest first (all ports when ``port`` is empty)."""
+    if port:
+        try:
+            validate_port(port)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return [
+        r.model_dump(mode="json", exclude={"lines"}) for r in devices.print_records(port or None)
+    ]
+
+
+@router.get("/printers/print/records/{record_id}")
+async def firmware_print_record(record_id: str):
+    record = devices.print_record(record_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="no such print")
+    return record.model_dump(mode="json")
+
+
 @router.get("/printers/queries")
 async def firmware_printer_queries():
     """The report-only G-code the query route accepts, with what each reports."""
@@ -476,6 +604,7 @@ async def firmware_printer_log(port: str, since: int = Query(0, ge=0)):
 def firmware_printer_reconnect(body: PrinterIdentifyRequest):
     """Release and reopen the link (no reset), then poll."""
     _busy_guard()
+    _no_print_or_409(body.port)
     status = _engine(lambda: devices.printer_reconnect(body.port, body.baud))
     data = status.model_dump(mode="json")
     data["heating"] = status.heating
@@ -486,13 +615,14 @@ def firmware_printer_reconnect(body: PrinterIdentifyRequest):
 def firmware_printer_reset(body: ProbeRequest):
     """Reboot the board deliberately (DTR pulse); returns its boot banner."""
     _busy_guard()
+    _no_print_or_409(body.port)
     return {"port": body.port, "boot_lines": _engine(lambda: devices.printer_reset(body.port))}
 
 
 @router.post("/printers/release")
 def firmware_printer_release(body: ProbeRequest):
     """Drop the held link so another tool (a slicer, OctoPrint) can open the port."""
-    return {"port": body.port, "released": gcode.get_printer_links().close(body.port)}
+    return {"port": body.port, "released": _release_or_409(body.port)}
 
 
 @router.get("/devices/stream")
@@ -508,7 +638,7 @@ async def firmware_stream(
     cli = get_arduino_cli()
     if not cli.is_available:
         raise HTTPException(status_code=503, detail="arduino-cli is not installed")
-    gcode.get_printer_links().close(port)  # one holder per port (the monitor resets it anyway)
+    _release_or_409(port)  # one holder per port (the monitor resets it anyway)
 
     q: queue.Queue = queue.Queue()
     stop = threading.Event()

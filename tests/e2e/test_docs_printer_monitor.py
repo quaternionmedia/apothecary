@@ -152,6 +152,34 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
         "history lists every reading on the port, and the corner buttons put the nozzle at "
         "paper height for a tramming check. Read mesh does the same without moving"
     )
+
+    page.locator("#control button[data-cmd='M25']").click()  # the card's print gives way
+    expect(page.locator("#c-state")).to_contain_text("idle", timeout=8000)
+    page.wait_for_timeout(2300)
+    slow = "\n".join(f"G1 X{i} Y{i} E{i / 10:.1f}\nG4 P250" for i in range(1, 61)) + "\n"
+    page.locator("#print-file").set_input_files(
+        {"name": "bracket.gcode", "mimeType": "text/plain", "buffer": slow.encode()}
+    )
+    expect(page.locator("#print-pick")).to_contain_text("bracket.gcode · 120 lines", timeout=8000)
+    page.once("dialog", lambda d: d.accept())
+    page.locator("#print-start").click()
+    page.wait_for_function(
+        "() => { const j = window.apothecaryMonitor.print.job(); return j && j.sent >= 30; }",
+        timeout=15000,
+    )
+    page.locator("#print-card").scroll_into_view_if_needed()
+    page.wait_for_timeout(300)
+    docs.step(
+        "Print from here: a sliced G-code file is kept on the host, checked (no EEPROM "
+        "writes, no temperatures over the caps) and streamed to the printer one line per "
+        "ok, no SD card needed. Pause stops the feed, Resume needs the latch, Cancel turns "
+        "the heaters and fan off and frees the motors; the state card says how far it is, "
+        "polls keep coming between lines, and every print is recorded with how it ended"
+    )
+    page.once("dialog", lambda d: d.accept())
+    page.locator("#print-cancel").click()
+    expect(page.locator("#print-progress")).to_contain_text("cancelled", timeout=10000)
+    page.locator("#control button[data-cmd='M24']").click()
     page.locator("#ctl-disarm").click()
 
     page.goto(f"{base_url}/firmware")

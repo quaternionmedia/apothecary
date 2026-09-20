@@ -415,6 +415,38 @@ class LevelingRequest(ProbeRequest):
     note: Optional[str] = Field(None, max_length=200)
 
 
+class PrintFile(BaseModel):
+    """A G-code file kept on the host, ready to stream to a printer."""
+
+    id: str
+    name: str
+    size: int
+    lines: int  # the lines that would be sent: comments and blanks dropped
+    uploaded_at: datetime
+    problems: List[str] = Field(default_factory=list)  # why it may not be sent, if it may not
+
+
+class PrintRecord(BaseModel):
+    """One print streamed from the host: what was sent, to where, and how it ended."""
+
+    id: str
+    port: str
+    file_id: str
+    name: str
+    at: datetime
+    finished: Optional[datetime] = None
+    outcome: str  # done | cancelled | failed
+    sent: int = 0
+    total: int = 0
+    error: Optional[str] = None
+    firmware: Optional[str] = None
+    lines: List[str] = Field(default_factory=list)  # the tail of what the firmware said
+
+
+class PrintRequest(ProbeRequest):
+    file_id: str = Field(..., pattern=r"^[A-Za-z0-9_.\-]{1,120}$")
+
+
 class PrinterIdentifyRequest(ProbeRequest):
     baud: int = Field(115200, ge=300, le=2000000)
     reset: bool = False  # reboot the board to capture its banner -- never mid-print

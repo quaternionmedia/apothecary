@@ -839,13 +839,17 @@ def control_options(device: Device) -> List[Option]:
                 Option(id="control:corner:BL", label="Back left", action="control:corner:BL"),
             ],
         ),
+        # The print, whichever is running: the card's (M24/M25/M524) or one
+        # the host streams. The page knows which and carries the verb to it;
+        # Send file starts a host print of the file the page has chosen.
         Option(
             id="control:sd",
-            label="SD",
+            label="Print",
             children=[
                 Option(id="control:sd-resume", label="Resume", action="control:sd-resume"),
                 Option(id="control:sd-pause", label="Pause", action="control:sd-pause"),
                 Option(id="control:sd-abort", label="Abort", action="control:sd-abort"),
+                Option(id="print:start", label="Send file", action="print:start"),
             ],
         ),
         Option(
@@ -961,6 +965,8 @@ CARRIED_BY: Dict[str, Carries] = {
     "control": Carries.VIEWER,
     # Reading or probing the bed: the page starts the job and shows the record.
     "level": Carries.VIEWER,
+    # Streaming a file: the page starts the job with the file it has chosen.
+    "print": Carries.VIEWER,
 }
 
 

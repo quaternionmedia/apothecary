@@ -527,6 +527,7 @@
       "98": "control:sd-resume",
       "96": "control:sd-pause",
       "92": "control:sd-abort",
+      "94": "print:start",
       "38": "control:motors-off",
       "36": "control:quickstop",
       "32": "control:break-wait",
@@ -569,6 +570,7 @@
       "798": "control:sd-resume",
       "796": "control:sd-pause",
       "792": "control:sd-abort",
+      "794": "print:start",
       "738": "control:motors-off",
       "736": "control:quickstop",
       "732": "control:break-wait",
@@ -613,6 +615,7 @@
       "2798": "control:sd-resume",
       "2796": "control:sd-pause",
       "2792": "control:sd-abort",
+      "2794": "print:start",
       "2738": "control:motors-off",
       "2736": "control:quickstop",
       "2732": "control:break-wait",
@@ -874,7 +877,7 @@
         },
         {
           "id": "control:sd",
-          "label": "SD",
+          "label": "Print",
           "action": null,
           "enabled": true,
           "destructive": false,
@@ -905,6 +908,15 @@
               "destructive": false,
               "children": null,
               "cell": 2
+            },
+            {
+              "id": "print:start",
+              "label": "Send file",
+              "action": "print:start",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 4
             }
           ],
           "cell": 9
@@ -1316,7 +1328,7 @@
             },
             {
               "id": "control:sd",
-              "label": "SD",
+              "label": "Print",
               "action": null,
               "enabled": true,
               "destructive": false,
@@ -1347,6 +1359,15 @@
                   "destructive": false,
                   "children": null,
                   "cell": 2
+                },
+                {
+                  "id": "print:start",
+                  "label": "Send file",
+                  "action": "print:start",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 4
                 }
               ],
               "cell": 9
@@ -1786,7 +1807,7 @@
                 },
                 {
                   "id": "control:sd",
-                  "label": "SD",
+                  "label": "Print",
                   "action": null,
                   "enabled": true,
                   "destructive": false,
@@ -1817,6 +1838,15 @@
                       "destructive": false,
                       "children": null,
                       "cell": 2
+                    },
+                    {
+                      "id": "print:start",
+                      "label": "Send file",
+                      "action": "print:start",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 4
                     }
                   ],
                   "cell": 9

@@ -56,21 +56,22 @@ def test_the_page_has_fifty_four_controls_of_its_own():
 def test_the_monitor_page_is_counted_too():
     """The second page, counted the same way and never added to the first.
 
-    Fifty-seven controls of its own, and thirty-seven of them are on the ring:
+    Sixty-four controls of its own, and forty-one of them are on the ring:
     the control overlay's heat, fan, home, jog, SD, motors, quickstop,
     break-wait and mesh buttons, the emergency stop, the latch's arm and
-    disarm, the header's poll, identify, reconnect, reset and release, and the
-    bed card's probe, read and four corners (six controls the bed card added,
-    every one with a cell on the Level ring). What is not backed is the
-    plumbing of the page itself: which port, how often, the log's tick-boxes,
-    the download.
+    disarm, the header's poll, identify, reconnect, reset and release, the
+    bed card's probe, read and four corners, and the print card's print,
+    pause, resume and cancel (the Print cell's verbs go to whichever print
+    is running). What is not backed is the plumbing of the page itself:
+    which port, how often, the log's tick-boxes, the download, and the
+    print card's file picker, its list and its forget button.
     """
     taken = census.take(census.MONITOR)
-    assert len(taken.controls_of_its_own()) == 57
-    assert len(taken.ring_backed()) == 37
-    assert taken.sentence().startswith("57 controls of its own, 37 of them also on the ring.")
+    assert len(taken.controls_of_its_own()) == 64
+    assert len(taken.ring_backed()) == 41
+    assert taken.sentence().startswith("64 controls of its own, 41 of them also on the ring.")
     listening = [f for f in taken.found if f.how == "listening"]
-    assert len(listening) == 14  # the board view and the bed card each follow the port picker
+    assert len(listening) == 17  # the board view, the bed card and the print card follow the port
     assert taken.of_surface(census.GESTURE) == ()
     assert taken.of_surface(census.LIST) == tuple(
         f for f in taken.found if f.key == "level-history:click:closest"

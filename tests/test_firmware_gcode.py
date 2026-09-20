@@ -1053,3 +1053,315 @@ def test_leveling_routes(fake_arduino_cli, fresh_task_runner, scripted_links):
     assert full["mesh"][2][2] == 0.25 and len(full["subdivided"]) == 5
     assert full["lines"][-1].startswith("ok T:")  # the temperatures, last of the reading
     assert c.get("/firmware/printers/leveling").json()[0]["port"] == port
+
+
+# --- host printing: a file streamed one line per ok, with the polls between ------------
+
+SMALL_PRINT = """; a sliced file, as a slicer writes one
+M140 S60 ; bed
+M104 S200
+G28
+G90
+G1 Z0.2 F600
+G1 X10 Y10 E0.5 F1200 ; first line
+G1 X20 Y10 E1.0
+(a bracket comment) G1 X20 Y20 E1.5
+M107
+M104 S0
+M140 S0
+M84
+"""
+
+
+def test_check_gcode_counts_lines_and_refuses_what_it_must():
+    total, problems = gcode.check_gcode(SMALL_PRINT)
+    assert total == 12 and problems == []
+    total, problems = gcode.check_gcode("G28\nM500\nM104 S310\nM190 R140\nM997\n")
+    assert total == 5
+    assert problems == [
+        "line 2: M500 saves settings to EEPROM",
+        "line 3: M104 asks for 310 degC, above 300",
+        "line 4: M190 asks for 140 degC, above 130",
+        "line 5: M997 starts a firmware update",
+    ]
+    assert gcode.strip_gcode("  g1  x10 ; move") == "G1 X10"
+    assert gcode.line_timeout("M109 S200") == gcode.PRINT_SLOW_TIMEOUT_S
+    assert gcode.line_timeout("G1 X1") == gcode.PRINT_LINE_TIMEOUT_S
+
+
+def test_print_files_are_kept_checked_and_forgotten(fake_arduino_cli):
+    kept = devices.save_print_file("Bracket v2.gcode", SMALL_PRINT.encode())
+    assert kept.name == "Bracket v2.gcode" and kept.lines == 12 and kept.problems == []
+    assert kept.id.endswith("-Bracket_v2") and kept.size == len(SMALL_PRINT)
+    bad = devices.save_print_file("../../evil.gcode", b"M500\n")
+    assert bad.problems == ["line 1: M500 saves settings to EEPROM"]
+    assert "/" not in bad.id and (devices.prints_dir() / f"{bad.id}.gcode").is_file()
+    assert [f.id for f in devices.print_files()] == [bad.id, kept.id]
+    assert devices.print_file(kept.id) == kept and devices.print_file("nope") is None
+    assert devices.delete_print_file(bad.id) is True
+    assert devices.delete_print_file(bad.id) is False
+    assert [f.id for f in devices.print_files()] == [kept.id]
+
+
+def test_print_job_streams_pauses_resumes_and_polls_between_lines(fake_arduino_cli, scripted_links):
+    port = "/dev/ttyFAKE1"
+    kept = devices.save_print_file("small.gcode", SMALL_PRINT.encode())
+    gate = threading.Event()
+    gate.set()
+
+    class GatedTransport(ScriptedTransport):
+        def write(self, data):
+            cmd = data.decode().strip()
+            if cmd.startswith("G1 X20 Y10"):
+                gate.wait(5)  # the test holds the stream here
+            super().write(data)
+
+    scripted_links.factory = GatedTransport
+    with pytest.raises(gcode.ControlNotArmed):
+        devices.start_print(port, kept.id, links=scripted_links)
+    scripted_links.control.arm(port)
+    with pytest.raises(ToolchainError, match="no such print file"):
+        devices.start_print(port, "nope", links=scripted_links)
+    gate.clear()
+    job = devices.start_print(port, kept.id, links=scripted_links)
+    transport = ScriptedTransport.instances[0]
+    for _ in range(300):
+        if "G1 X10 Y10 E0.5 F1200" in transport.sent:
+            break
+        time.sleep(0.01)
+    assert job.stage == "printing" and job.snapshot()["running"] is True
+    # The board is held mid-line: a poll declines to queue and says what holds it.
+    st = devices.printer_status(port, links=scripted_links)
+    assert st.job["kind"] == "print" and st.job["name"] == "small.gcode"
+    assert st.state == "printing" and 0 < st.job["progress"] < 1
+    # A second print, a bed reading, a release, a reset: all refused; a query and a
+    # heater change wait their turn; motion is the job's.
+    with pytest.raises(ToolchainError, match="already holds the port"):
+        devices.start_print(port, kept.id, links=scripted_links)
+    with pytest.raises(ToolchainError, match="a print holds the port"):
+        devices.start_leveling(port, probe=False, links=scripted_links)
+    with pytest.raises(ToolchainError, match="cancel it first"):
+        scripted_links.close(port)
+    with pytest.raises(ToolchainError, match="not resetting"):
+        devices.printer_reset(port, links=scripted_links)
+    with pytest.raises(ToolchainError, match="a print holds the port"):
+        devices.printer_control(port, "G28", links=scripted_links)
+    job.pause()
+    assert job.stage == "paused"
+    gate.set()  # the held line answers; the feed is paused so nothing follows it
+    time.sleep(0.3)
+    sent_while_paused = len(transport.sent)
+    assert "G1 X20 Y20 E1.5" not in transport.sent
+    # Paused, the link is free: a poll goes to the board and still says "paused".
+    st = devices.printer_status(port, links=scripted_links)
+    assert st.job["stage"] == "paused" and st.state == "printing" and "M105" in transport.sent
+    assert devices.printer_control(port, "M104 S205", links=scripted_links).lines[-1] == "ok"
+    assert devices.printer_query(port, "M119", links=scripted_links).lines[-1] == "ok"
+    job.resume()
+    job.thread.join(5)
+    assert job.stage == "done" and job.error is None
+    streamed = [
+        c
+        for c in transport.sent
+        if c not in ("M105", "M114", "M27", "M119", "M31", "M115", "M104 S205")
+    ]
+    assert streamed == [
+        "M140 S60",
+        "M104 S200",
+        "G28",
+        "G90",
+        "G1 Z0.2 F600",
+        "G1 X10 Y10 E0.5 F1200",
+        "G1 X20 Y10 E1.0",
+        "G1 X20 Y20 E1.5",
+        "M107",
+        "M104 S0",
+        "M140 S0",
+        "M84",
+    ]
+    assert len(transport.sent) > sent_while_paused
+    rec = job.record
+    assert rec is not None and rec.outcome == "done" and rec.sent == 12 == rec.total
+    assert rec.firmware == "Marlin TH3D UFW 2.94a (Jan 17 2025 11:35:34)"
+    assert [r.id for r in devices.print_records(port)] == [rec.id]
+    assert devices.print_record(rec.id) == rec
+    # The stream stays out of the comms log (a print is thousands of lines); the
+    # record keeps the tail, and the log says how it started and how it ended.
+    log = scripted_links.log_for(port).since(0)["entries"]
+    assert not any(e["origin"] == "print" and e["kind"] == "tx" for e in log)
+    assert any(
+        e["kind"] == "sys" and "print started: small.gcode (12 lines)" in e["text"] for e in log
+    )
+    assert any(e["kind"] == "sys" and "print done: small.gcode, 12/12" in e["text"] for e in log)
+    assert rec.lines[-3:] == ["> M140 S0", "ok", "> M84"] or rec.lines[-1] == "ok"
+    # The port is free again: the poll goes to the board and the state is the card's.
+    st = devices.printer_status(port, links=scripted_links)
+    assert st.job is None and st.state == "idle"
+    assert scripted_links.close(port) is True
+
+
+def test_print_job_cancel_sends_the_safe_off_and_a_stop_does_not(fake_arduino_cli, scripted_links):
+    port = "/dev/ttyFAKE1"
+    kept = devices.save_print_file("long.gcode", ("G1 X1\n" * 400).encode())
+    gate = threading.Event()
+
+    class SlowTransport(ScriptedTransport):
+        def write(self, data):
+            if data.decode().strip() == "G1 X1":
+                gate.wait(0.02)  # a slow board: the stream is still going when we cancel
+            super().write(data)
+
+    scripted_links.factory = SlowTransport
+    scripted_links.control.arm(port)
+    job = devices.start_print(port, kept.id, links=scripted_links)
+    time.sleep(0.2)
+    job.cancel()
+    job.thread.join(5)
+    transport = ScriptedTransport.instances[0]
+    assert job.stage == "cancelled" and 0 < job.sent < 400
+    assert transport.sent[-4:] == ["M104 S0", "M140 S0", "M107", "M84"]
+    assert job.record.outcome == "cancelled" and job.record.sent == job.sent
+    # The stop: the board halts, the job is cancelled quietly, nothing more is sent.
+    job = devices.start_print(port, kept.id, links=scripted_links)
+    time.sleep(0.1)
+    transport.replies = {**REPLIES, "M112": ["Error:Printer halted. kill() called!"]}
+    with pytest.raises(ToolchainError, match="halted"):
+        devices.printer_control(port, "M112", links=scripted_links)
+    job.thread.join(5)
+    assert job.stage == "cancelled" and job.record.outcome == "cancelled"
+    assert "M112" in transport.sent and transport.sent[-1] != "M84"
+    assert transport.sent.index("M112") >= len(transport.sent) - 2  # at most one line after
+
+
+def test_print_job_fails_on_a_board_error_and_still_turns_the_heat_off(
+    fake_arduino_cli, scripted_links
+):
+    port = "/dev/ttyFAKE1"
+    kept = devices.save_print_file("bad.gcode", b"G28\nG1 X5\nG1 X6\n")
+    scripted_links.control.arm(port)
+    devices.printer_status(port, links=scripted_links)
+    ScriptedTransport.instances[0].replies = {
+        **REPLIES,
+        "G1 X5": ["Error:Failed to enable Bed Leveling"],
+    }
+    job = devices.start_print(port, kept.id, links=scripted_links)
+    job.thread.join(5)
+    assert job.stage == "failed" and "Failed to enable" in job.error
+    log = scripted_links.log_for(port).since(0)["entries"]
+    objected = [e for e in log if e["origin"] == "print" and e["kind"] in ("tx", "rx")]
+    assert [e["text"] for e in objected][:2] == ["G1 X5", "Error:Failed to enable Bed Leveling"]
+    # The safe-off is said out loud.
+    assert [e["text"] for e in objected[2:] if e["kind"] == "tx"] == list(devices.PRINT_SAFE_OFF)
+    sent = ScriptedTransport.instances[0].sent
+    assert sent[-4:] == ["M104 S0", "M140 S0", "M107", "M84"] and "G1 X6" not in sent
+    assert job.record.outcome == "failed" and job.record.sent == 1
+
+
+def test_print_refuses_a_file_with_problems_and_a_card_that_is_printing(
+    fake_arduino_cli, scripted_links
+):
+    port = "/dev/ttyFAKE1"
+    bad = devices.save_print_file("bad.gcode", b"M500\n")
+    empty = devices.save_print_file("empty.gcode", b"; nothing\n")
+    good = devices.save_print_file("ok.gcode", b"G28\n")
+    scripted_links.control.arm(port)
+    with pytest.raises(ToolchainError, match="may not be sent"):
+        devices.start_print(port, bad.id, links=scripted_links)
+    with pytest.raises(ToolchainError, match="nothing to send"):
+        devices.start_print(port, empty.id, links=scripted_links)
+    devices.printer_status(port, links=scripted_links)
+    ScriptedTransport.instances[0].replies = PRINTING
+    devices.printer_status(port, links=scripted_links)
+    with pytest.raises(ToolchainError, match="the card is printing"):
+        devices.start_print(port, good.id, links=scripted_links)
+
+
+def test_print_routes(fake_arduino_cli, fresh_task_runner, scripted_links):
+    c = TestClient(app)
+    port = "/dev/ttyFAKE1"
+    assert c.get("/firmware/printers/prints").json() == []
+    assert (
+        c.post("/firmware/printers/prints", params={"name": "x.gcode"}, content=b"").status_code
+        == 422
+    )
+    r = c.post(
+        "/firmware/printers/prints", params={"name": "small.gcode"}, content=SMALL_PRINT.encode()
+    )
+    assert r.status_code == 201 and r.json()["lines"] == 12 and r.json()["problems"] == []
+    file_id = r.json()["id"]
+    assert c.get("/firmware/printers/prints").json()[0]["id"] == file_id
+    assert c.get("/firmware/printers/print", params={"port": port}).json()["running"] is False
+    assert c.post("/firmware/printers/print/pause", json={"port": port}).status_code == 409
+
+    r = c.post("/firmware/printers/print", json={"port": port, "file_id": file_id})
+    assert r.status_code == 409 and "arm control" in r.json()["detail"]
+    c.post("/firmware/printers/control", json={"port": port, "armed": True})
+    assert (
+        c.post("/firmware/printers/print", json={"port": port, "file_id": "nope"}).status_code
+        == 409
+    )
+    r = c.post("/firmware/printers/print", json={"port": port, "file_id": file_id})
+    assert r.status_code == 202 and r.json()["kind"] == "print" and r.json()["total"] == 12
+    # While it streams, the file cannot be forgotten and the link cannot be dropped.
+    assert c.delete(f"/firmware/printers/prints/{file_id}").status_code in (409, 200)
+    for _ in range(500):
+        job = c.get("/firmware/printers/print", params={"port": port}).json()
+        if not job["running"]:
+            break
+        time.sleep(0.01)
+    assert job["stage"] == "done" and job["sent"] == 12 and job["record_id"]
+    records = c.get("/firmware/printers/print/records", params={"port": port}).json()
+    assert len(records) == 1 and records[0]["outcome"] == "done" and "lines" not in records[0]
+    full = c.get(f"/firmware/printers/print/records/{job['record_id']}").json()
+    assert full["lines"][-1] == "ok"
+    assert c.get("/firmware/printers/print/records/nope").status_code == 404
+    assert c.post("/firmware/printers/release", json={"port": port}).json()["released"] is True
+    assert c.delete(f"/firmware/printers/prints/{file_id}").json()["deleted"] is True
+    assert c.delete(f"/firmware/printers/prints/{file_id}").status_code == 404
+
+
+def test_release_reconnect_reset_and_upload_are_refused_mid_print(
+    fake_arduino_cli, fresh_task_runner, scripted_links
+):
+    c = TestClient(app)
+    port = "/dev/ttyFAKE1"
+    gate = threading.Event()
+
+    class HeldTransport(ScriptedTransport):
+        def write(self, data):
+            if data.decode().strip() == "G1 X2":
+                gate.wait(5)
+            super().write(data)
+
+    scripted_links.factory = HeldTransport
+    kept = devices.save_print_file("held.gcode", b"G1 X1\nG1 X2\nG1 X3\n")
+    c.post("/firmware/printers/control", json={"port": port, "armed": True})
+    assert (
+        c.post("/firmware/printers/print", json={"port": port, "file_id": kept.id}).status_code
+        == 202
+    )
+    time.sleep(0.2)
+    assert c.post("/firmware/printers/release", json={"port": port}).status_code == 409
+    assert c.post("/firmware/printers/reconnect", json={"port": port}).status_code == 409
+    assert c.post("/firmware/printers/reset", json={"port": port}).status_code == 409
+    r = c.post(
+        "/firmware/sketches/footpedal/upload", json={"fqbn": "arduino:avr:uno", "port": port}
+    )
+    assert r.status_code == 409 and "print holds the port" in r.json()["detail"]
+    # Pause needs no latch; resume does; cancel ends it and frees the port.
+    c.post("/firmware/printers/control", json={"port": port, "armed": False})
+    assert c.post("/firmware/printers/print/pause", json={"port": port}).json()["stage"] == "paused"
+    assert c.post("/firmware/printers/print/resume", json={"port": port}).status_code == 409
+    c.post("/firmware/printers/control", json={"port": port, "armed": True})
+    assert (
+        c.post("/firmware/printers/print/resume", json={"port": port}).json()["stage"] == "printing"
+    )
+    gate.set()
+    assert c.post("/firmware/printers/print/cancel", json={"port": port}).json()["stage"] in (
+        "cancelling",
+        "cancelled",
+        "done",
+    )
+    devices.print_job(port).thread.join(5)
+    assert c.get("/firmware/printers/print", params={"port": port}).json()["running"] is False
+    assert c.post("/firmware/printers/release", json={"port": port}).status_code == 200

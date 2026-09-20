@@ -124,10 +124,12 @@ to measure it against:
   rather than the recipe download, which surfaced the Device section's two
   links and the serial log's send button.
 - **The monitor page**, `census.MONITOR`, counted the same way and never
-  added to the viewer's: 57 controls of its own, 37 of them also on the
-  ring (51 and 28 before the Bed level card; its six -- probe, read and
-  the four corners -- all have a cell under Control › Level, and the
-  overlay's break-wait and mesh on/off found theirs at the same time). The control overlay's buttons carry their G-code line rather than a
+  added to the viewer's: 64 controls of its own, 41 of them also on the
+  ring (51 and 28 before the Bed level and Print cards; the bed card's six
+  -- probe, read and the four corners -- all have a cell under Control ›
+  Level, the print card's four verbs under Control › Print, and the
+  overlay's break-wait and mesh on/off found theirs at the same time; the
+  print card's file picker, list and forget button are plumbing). The control overlay's buttons carry their G-code line rather than a
   name, so the census names them by that (`cmd:G28`, `jog:Y+`); the "24
   controls" the refusal named were the ones it could see. Every button that
   acts on the machine or its link has a cell (the link verbs under a Link

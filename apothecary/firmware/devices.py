@@ -42,6 +42,8 @@ from .models import (
     ListenResult,
     ManualBinding,
     PrinterQueryResult,
+    PrintFile,
+    PrintRecord,
     SketchInfo,
 )
 from .sketches import find_sketch
@@ -420,24 +422,49 @@ def printer_status(
             get_streams().close(port)
             link = links.open(port, rate)
     assert link is not None
-    if link.job is not None:
+    job = _live_job(port, link.job)
+    if job is not None and job.get("kind") != "print":
         # A probe holds the firmware for minutes; a poll now would only queue
         # behind it. Say what is happening instead.
-        last = _LAST_STATUS.get(port)
-        status = (
-            last.model_copy(update={"polled_at": datetime.now(timezone.utc), "raw": []})
-            if last
-            else gcode.PrinterStatus(port=port, polled_at=datetime.now(timezone.utc))
-        )
-        status.job = dict(link.job)
-        status.synced = []
-        return status
+        return _last_status_with(port, job)
     try:
-        status = gcode.poll_printer(link)
+        # Between two streamed lines is where a host polls; a line the
+        # firmware is slow to answer (heating) is not worth queueing behind.
+        status = gcode.poll_printer(link, wait=0.5 if job else None)
+    except gcode.LinkBusy:
+        return _last_status_with(port, _live_job(port, link.job) or job)
     except ToolchainError as exc:
-        links.close(port)  # a wedged link is worse than a reopen on the next poll
+        links.close(port, force=True)  # a wedged link is worse than a reopen on the next poll
         status = gcode.offline_status(port, str(exc))
+    job = _live_job(port, link.job)
+    if job is not None and job.get("kind") == "print":
+        status.job = job
+        if status.state == "idle":
+            status.state = "printing"  # the card is idle; the host is not
     return notify_status(status)
+
+
+def _live_job(port: str, job: Optional[dict]) -> Optional[dict]:
+    """The link's announced job, fresh from the print when one is streaming."""
+    if job is not None and job.get("kind") == "print":
+        running = _PRINTS.get(port)
+        if running is not None and running.finished is None:
+            return running.snapshot()
+    return job
+
+
+def _last_status_with(port: str, job: dict) -> gcode.PrinterStatus:
+    last = _LAST_STATUS.get(port)
+    status = (
+        last.model_copy(update={"polled_at": datetime.now(timezone.utc), "raw": []})
+        if last
+        else gcode.PrinterStatus(port=port, polled_at=datetime.now(timezone.utc))
+    )
+    status.job = dict(job)
+    status.synced = []
+    if job.get("kind") == "print" and status.state == "idle":
+        status.state = "printing"
+    return status
 
 
 def printer_reconnect(
@@ -473,6 +500,8 @@ def printer_reset(
     link = links.get(port)
     if link is None:
         raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
+    if link.job is not None:
+        raise ToolchainError(f"{port}: a {link.job.get('kind')} holds the port -- not resetting")
     return link.reset()
 
 
@@ -493,18 +522,42 @@ def printer_control(
     if cmd != gcode.EMERGENCY_STOP and not links.control.armed(port):
         raise gcode.ControlNotArmed(f"{port}: control is not armed -- arm it first")
     held = links.get(port)
-    if held is not None and held.job is not None and cmd != gcode.EMERGENCY_STOP:
-        raise ToolchainError(f"{port}: a bed reading holds the port ({held.job['stage']})")
+    if held is not None and held.job is not None:
+        _job_allows(held.job, cmd)
     if links.get(port) is None:
         printer_status(port, state=state, links=links)
     link = links.get(port)
     if link is None:
         raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
+    if cmd == gcode.EMERGENCY_STOP:
+        running = _PRINTS.get(port)
+        if running and running.finished is None:
+            running.cancel(quiet=True)  # the board halts; nothing more is sent
     lines = gcode.control_printer(link, cmd)
     links.control.renew(port)
     return PrinterQueryResult(
         port=port, command=cmd, lines=lines, queried_at=datetime.now(timezone.utc)
     )
+
+
+# What a person may still send while a job holds the port. A print keeps the
+# heaters, the fan and the break-wait in reach (a hotend a few degrees off is
+# fixed mid-print); motion and the SD card are the job's. A probe keeps only
+# the stop.
+PRINT_ALLOWS = re.compile(r"^(M104|M140|M106|M107|M108)\b")
+
+
+def _job_allows(job: dict, cmd: str) -> None:
+    if cmd == gcode.EMERGENCY_STOP:
+        return
+    if job.get("kind") == "print" and PRINT_ALLOWS.match(cmd):
+        return
+    what = "a print" if job.get("kind") == "print" else "a bed reading"
+    raise ToolchainError(f"{port_of(job)}: {what} holds the port ({job.get('stage')})")
+
+
+def port_of(job: dict) -> str:
+    return str(job.get("port", "?"))
 
 
 # --- bed leveling: a job that holds the port for minutes, and its records ---------------
@@ -655,6 +708,9 @@ def start_leveling(
     running = _LEVELING.get(port)
     if running and running.finished is None:
         raise ToolchainError(f"{port}: a bed reading is already {running.stage}")
+    printing = _PRINTS.get(port)
+    if printing and printing.finished is None:
+        raise ToolchainError(f"{port}: a print holds the port ({printing.stage})")
     if probe and not links.control.armed(port):
         raise gcode.ControlNotArmed(f"{port}: probing moves the machine -- arm control first")
     if links.get(port) is None:
@@ -663,6 +719,322 @@ def start_leveling(
         raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
     job = LevelingJob(port, probe, note, links)
     _LEVELING[port] = job
+    job.thread.start()
+    return job
+
+
+# --- host printing: a file streamed over the held link, one line per ok --------------
+
+
+def prints_dir() -> Path:
+    return state_dir() / "prints"
+
+
+def _print_meta_path(file_id: str) -> Path:
+    return prints_dir() / f"{file_id}.json"
+
+
+def _print_file_path(file_id: str) -> Path:
+    return prints_dir() / f"{file_id}.gcode"
+
+
+def save_print_file(name: str, data: bytes) -> PrintFile:
+    """Keep an uploaded file and say what it holds; ``problems`` says why it may not be sent."""
+    text = data.decode("utf-8", "replace")
+    total, problems = gcode.check_gcode(text)
+    at = datetime.now(timezone.utc)
+    stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", Path(name).name).strip("_.") or "print"
+    stem = re.sub(r"\.(gcode|gco|g|txt)$", "", stem, flags=re.IGNORECASE)[:60]
+    file_id = f"{at:%Y%m%dT%H%M%S}.{at.microsecond // 1000:03d}-{stem}"
+    folder = prints_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    _print_file_path(file_id).write_text(text, encoding="utf-8")
+    meta = PrintFile(
+        id=file_id,
+        name=Path(name).name[:120] or file_id,
+        size=len(data),
+        lines=total,
+        uploaded_at=at,
+        problems=problems,
+    )
+    _print_meta_path(file_id).write_text(meta.model_dump_json(indent=2), encoding="utf-8")
+    return meta
+
+
+def print_files() -> List[PrintFile]:
+    """Every kept file, newest first."""
+    folder = prints_dir()
+    if not folder.is_dir():
+        return []
+    files: List[PrintFile] = []
+    for path in folder.glob("*.json"):
+        try:
+            meta = PrintFile(**json.loads(path.read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            continue
+        if _print_file_path(meta.id).is_file():
+            files.append(meta)
+    return sorted(files, key=lambda f: f.uploaded_at, reverse=True)
+
+
+def print_file(file_id: str) -> Optional[PrintFile]:
+    path = _print_meta_path(file_id)
+    if not path.is_file() or not _print_file_path(file_id).is_file():
+        return None
+    try:
+        return PrintFile(**json.loads(path.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        return None
+
+
+def delete_print_file(file_id: str) -> bool:
+    """Forget a kept file; refused while a print streams it."""
+    for job in _PRINTS.values():
+        if job.file.id == file_id and job.finished is None:
+            raise ToolchainError(f"{file_id}: a print is streaming it")
+    found = False
+    for path in (_print_meta_path(file_id), _print_file_path(file_id)):
+        if path.is_file():
+            path.unlink()
+            found = True
+    return found
+
+
+def print_records_dir() -> Path:
+    return prints_dir() / "records"
+
+
+def print_records(port: Optional[str] = None) -> List[PrintRecord]:
+    """Every print streamed from here, newest first; for one port when given."""
+    folder = print_records_dir()
+    if not folder.is_dir():
+        return []
+    records: List[PrintRecord] = []
+    for path in folder.glob("*.json"):
+        try:
+            rec = PrintRecord(**json.loads(path.read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            continue
+        if port is None or rec.port == port:
+            records.append(rec)
+    return sorted(records, key=lambda r: r.at, reverse=True)
+
+
+def print_record(record_id: str) -> Optional[PrintRecord]:
+    return next((r for r in print_records() if r.id == record_id), None)
+
+
+def _save_print_record(record: PrintRecord) -> Path:
+    folder = print_records_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"{record.id}.json"
+    path.write_text(record.model_dump_json(indent=2), encoding="utf-8")
+    return path
+
+
+# What is sent when a print stops short, in this order, each on its own and
+# none of them fatal: the heaters off, the fan off, the motors free. No move
+# -- a nozzle parked blind is worse than one left where it stopped.
+PRINT_SAFE_OFF = ("M104 S0", "M140 S0", "M107", "M84")
+PRINT_PROGRESS_EVERY = 20  # lines between announcements on the link
+PRINT_LOG_EVERY = 500  # lines between progress notes in the comms log
+
+
+class PrintJob:
+    """Stream a kept file over the link, one line per ``ok``, on a thread.
+
+    ``ok`` is the flow control: the firmware answers it when it has queued
+    the line, so its planner stays fed and the host never runs ahead of it.
+    Pausing stops the feed (the firmware finishes what it has queued);
+    cancelling stops it and sends ``PRINT_SAFE_OFF``. Between two lines
+    the link is free, which is where polls and a temperature change go.
+    """
+
+    def __init__(self, port: str, file: PrintFile, links: gcode.PrinterLinks):
+        self.port, self.file, self.links = port, file, links
+        self.stage = "starting"
+        self.sent = 0
+        self.total = file.lines
+        self.current: Optional[str] = None
+        self.started = datetime.now(timezone.utc)
+        self.finished: Optional[datetime] = None
+        self.error: Optional[str] = None
+        self.record: Optional[PrintRecord] = None
+        self._go = threading.Event()
+        self._go.set()
+        self._stop = threading.Event()
+        self._quiet = False
+        self.thread = threading.Thread(target=self._run, daemon=True, name=f"print-{port}")
+
+    def snapshot(self) -> dict:
+        elapsed = ((self.finished or datetime.now(timezone.utc)) - self.started).total_seconds()
+        return {
+            "kind": "print",
+            "port": self.port,
+            "file_id": self.file.id,
+            "name": self.file.name,
+            "stage": self.stage,
+            "sent": self.sent,
+            "total": self.total,
+            "progress": (self.sent / self.total) if self.total else 0.0,
+            "current": self.current,
+            "since": self.started.isoformat(),
+            "finished": self.finished.isoformat() if self.finished else None,
+            "elapsed_s": round(elapsed, 1),
+            "error": self.error,
+            "record_id": self.record.id if self.record else None,
+            "running": self.finished is None,
+        }
+
+    def pause(self) -> None:
+        if self.finished is None and self.stage == "printing":
+            self._go.clear()
+            self.stage = "paused"
+            self._announce()
+
+    def resume(self) -> None:
+        if self.finished is None and self.stage == "paused":
+            self.stage = "printing"
+            self._go.set()
+            self._announce()
+
+    def cancel(self, quiet: bool = False) -> None:
+        """Stop feeding; ``quiet`` skips the safe-off (the board is already halted)."""
+        if self.finished is None:
+            self._quiet = quiet
+            self.stage = "cancelling"
+            self._stop.set()
+            self._go.set()  # a paused print must wake to notice
+            self._announce()
+
+    def _announce(self) -> None:
+        link = self.links.get(self.port)
+        if link is not None and (self.finished is None):
+            link.job = self.snapshot()
+
+    def _run(self) -> None:
+        link = self.links.get(self.port)
+        if link is None:
+            self.error, self.finished = "no link", datetime.now(timezone.utc)
+            return
+        tail: List[str] = []
+        outcome = "done"
+        try:
+            text = _print_file_path(self.file.id).read_text(encoding="utf-8")
+            link.log.add("sys", f"print started: {self.file.name} ({self.total} lines)", "print")
+            self.stage = "printing"
+            self._announce()
+            for raw in text.splitlines():
+                cmd = gcode.strip_gcode(raw)
+                if not cmd:
+                    continue
+                while not self._go.wait(0.2):
+                    if self._stop.is_set():
+                        break
+                if self._stop.is_set():
+                    outcome = "cancelled"
+                    break
+                self.current = cmd
+                lines = link.command(
+                    cmd, timeout=gcode.line_timeout(cmd), origin="print", quiet=True
+                )
+                tail = (tail + [f"> {cmd}", *lines])[-200:]
+                self.sent += 1
+                if self.sent % PRINT_PROGRESS_EVERY == 0 or self.sent == self.total:
+                    self._announce()
+                if self.sent % PRINT_LOG_EVERY == 0:
+                    link.log.add("sys", f"print: {self.sent}/{self.total} lines sent", "print")
+                time.sleep(0.001)  # let a poll take the lock between lines
+            else:
+                self.stage = "done"
+            if outcome == "cancelled":
+                self.stage = "cancelled"
+        except (ToolchainError, ValueError, OSError) as exc:
+            outcome = "failed"
+            self.error = str(exc)
+            self.stage = "failed"
+        if outcome != "done" and not self._quiet:
+            for cmd in PRINT_SAFE_OFF:
+                try:
+                    tail = (tail + link.command(cmd, timeout=10.0, origin="print"))[-200:]
+                except ToolchainError as exc:  # a halted or vanished board: nothing more to do
+                    tail.append(f"({cmd} not answered: {exc})")
+                    break
+        ended = datetime.now(timezone.utc)
+        cached = get_state().cached_device(self.port)
+        self.record = PrintRecord(
+            id=f"{self.started:%Y%m%dT%H%M%S}.{self.started.microsecond // 1000:03d}-"
+            + re.sub(r"[^A-Za-z0-9]+", "_", self.port).strip("_"),
+            port=self.port,
+            file_id=self.file.id,
+            name=self.file.name,
+            at=self.started,
+            finished=ended,
+            outcome=outcome,
+            sent=self.sent,
+            total=self.total,
+            error=self.error,
+            firmware=cached.printer.firmware_name if cached and cached.printer else None,
+            lines=tail,
+        )
+        _save_print_record(self.record)
+        link.log.add(
+            "sys",
+            f"print {outcome}: {self.file.name}, {self.sent}/{self.total} lines"
+            + (f" -- {self.error}" if self.error else ""),
+            "print",
+        )
+        link.job = None
+        self.finished = ended  # last: a snapshot that says "not running" names the record
+
+
+_PRINTS: Dict[str, PrintJob] = {}
+
+
+def print_job(port: str) -> Optional[PrintJob]:
+    return _PRINTS.get(port)
+
+
+def start_print(
+    port: str,
+    file_id: str,
+    state: Optional[FirmwareState] = None,
+    links: Optional[gcode.PrinterLinks] = None,
+) -> PrintJob:
+    """Begin streaming a kept file to ``port``; needs the control latch armed.
+
+    Raises ``ControlNotArmed`` with the latch down, ``ToolchainError`` when
+    the file is unknown or refused, the port is not a printer, or a job
+    (a print, a bed reading) already holds it.
+    """
+    state = state or get_state()
+    links = links or gcode.get_printer_links()
+    file = print_file(file_id)
+    if file is None:
+        raise ToolchainError(f"no such print file: {file_id}")
+    if file.problems:
+        raise ToolchainError(f"{file.name} may not be sent: " + "; ".join(file.problems[:3]))
+    if file.lines == 0:
+        raise ToolchainError(f"{file.name} has nothing to send")
+    if not links.control.armed(port):
+        raise gcode.ControlNotArmed(
+            f"{port}: a print heats and moves the machine -- arm control first"
+        )
+    for running in (_PRINTS.get(port), _LEVELING.get(port)):
+        if running and running.finished is None:
+            what = "print" if isinstance(running, PrintJob) else "bed reading"
+            raise ToolchainError(f"{port}: a {what} already holds the port ({running.stage})")
+    if links.get(port) is None:
+        printer_status(port, state=state, links=links)
+    link = links.get(port)
+    if link is None:
+        raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
+    last = _LAST_STATUS.get(port)
+    if last is not None and last.sd_printing:
+        raise ToolchainError(f"{port}: the card is printing -- pause or abort that first")
+    job = PrintJob(port, file, links)
+    _PRINTS[port] = job
+    link.job = job.snapshot()
     job.thread.start()
     return job
 
@@ -678,7 +1050,7 @@ def printer_query(
     links = links or gcode.get_printer_links()
     cmd = gcode.normalise_query(command)  # ValueError for anything that is not a report
     held = links.get(port)
-    if held is not None and held.job is not None:
+    if held is not None and held.job is not None and held.job.get("kind") != "print":
         raise ToolchainError(f"{port}: a bed reading holds the port ({held.job['stage']})")
     if links.get(port) is None:
         printer_status(port, state=state, links=links)  # identifies + opens; offline if it cannot

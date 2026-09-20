@@ -382,6 +382,23 @@ class SimulatedPrinter:
         elif code == "M112":
             self.halted = True
             return ["Error:Printer halted. kill() called!"]
+        elif code in ("M109", "M190"):
+            # Heat and wait: a real board says busy until it is there; here it is there.
+            target = float(args.get("S", args.get("R", 0)))
+            if code == "M109":
+                self.hot_target = target
+            else:
+                self.bed_target = target
+            return ["echo:busy: processing", "ok"]
+        elif code == "G92":
+            for axis in "XYZ":
+                if axis in args:
+                    self.pos[axis] = float(args[axis])
+        elif code == "G4":
+            # A dwell takes the time it says (capped), so a streamed file takes
+            # time to stream and a pause has something to interrupt.
+            ms = float(args.get("P", 0)) or 1000 * float(args.get("S", 0))
+            time.sleep(min(2.0, ms / 1000))
         elif code == "G29":
             # A probe takes a while; the busy lines are what Marlin prints while it does.
             return ["echo:busy: processing", "echo:busy: processing", *self._grid_lines(), "ok"]
@@ -653,17 +670,33 @@ class GcodeLink:
             self._t.pulse_reset()
             return self.settle(first=3.0, quiet=0.6, limit=limit)
 
-    def command(self, cmd: str, timeout: float = 5.0, origin: str = "poll") -> List[str]:
+    def command(
+        self,
+        cmd: str,
+        timeout: float = 5.0,
+        origin: str = "poll",
+        wait: Optional[float] = None,
+        quiet: bool = False,
+    ) -> List[str]:
         """Send one line, return every reply line up to and including ``ok``.
 
         ``origin`` tags the exchange in the comms log so a reader can hide
-        the routine polls and keep what a person asked for.
+        the routine polls and keep what a person asked for. ``wait`` bounds
+        how long to queue for the link behind another exchange (a print
+        streams one line after another); ``LinkBusy`` when it runs out.
+        ``quiet`` keeps the exchange out of the log unless the board
+        objects: a print is thousands of lines, and the log is for reading.
         """
         cmd = cmd.strip()
         if not cmd or "\n" in cmd:
             raise ValueError("one G-code command per call")
-        with self._lock:
-            self.log.add("tx", cmd, origin)
+        if not self._lock.acquire(timeout=-1 if wait is None else wait):
+            raise LinkBusy(
+                f"{self.port}: the link is busy ({self.job['kind'] if self.job else 'an exchange'})"
+            )
+        try:
+            if not quiet:
+                self.log.add("tx", cmd, origin)
             self._t.write((cmd + "\n").encode())
             lines: List[str] = []
             end = time.monotonic() + timeout
@@ -679,13 +712,19 @@ class GcodeLink:
                 if line is None:
                     continue
                 lines.append(line)
-                self.log.add("rx", line, origin)
+                objected = ERROR_RE.match(line) or RESEND_RE.match(line)
+                if not quiet or objected:
+                    if quiet:
+                        self.log.add("tx", cmd, origin)  # the line it objected to, for the record
+                    self.log.add("rx", line, origin)
                 if BUSY_RE.match(line):
                     end = time.monotonic() + timeout  # heating/homing: keep waiting
                 elif OK_RE.match(line):
                     return lines
-                elif ERROR_RE.match(line) or RESEND_RE.match(line):
+                elif objected:
                     raise ToolchainError(f"{self.port}: {cmd} -> {line}")
+        finally:
+            self._lock.release()
 
     def close(self) -> None:
         with self._lock:
@@ -740,10 +779,14 @@ class PrinterLinks:
         link.settle()
         return link
 
-    def close(self, port: str) -> bool:
-        self.control.disarm(port)  # a dropped link never stays armed
+    def close(self, port: str, force: bool = False) -> bool:
+        """Drop the link; refused while a print streams over it unless ``force``."""
         with self._lock:
-            link = self._links.pop(port, None)
+            link = self._links.get(port)
+            if link is not None and not force and link.job and link.job.get("kind") == "print":
+                raise ToolchainError(f"{port}: a print holds the port -- cancel it first")
+            self.control.disarm(port)  # a dropped link never stays armed
+            self._links.pop(port, None)
         if link is None:
             return False
         link.close()
@@ -816,8 +859,10 @@ def normalise_query(command: str) -> str:
 
 # Each entry: a regex for the whole normalised line and what it does. Values
 # are bounded here (a hotend cannot be asked for 400 degC) and the set is
-# operator controls only -- no job streaming, no EEPROM writes, no
-# firmware configuration. Extend deliberately.
+# operator controls only -- no EEPROM writes, no firmware configuration.
+# A print streams a whole file past this list (a sliced file is not typed by
+# hand); what it may not carry is checked once, before the first line, by
+# check_gcode below. Extend deliberately.
 HOTEND_MAX_C = 300
 BED_MAX_C = 130
 JOG_MAX_MM = 300
@@ -988,6 +1033,67 @@ def parse_leveling_state(lines: List[str]) -> Optional[bool]:
     return None
 
 
+# --- host printing: what a file may carry, and how long a line may take ----------------
+
+# Codes a print file is refused for, whatever else it says: they write the
+# board's settings or take it down, and a slicer never needs them.
+PRINT_REFUSED: Dict[str, str] = {
+    "M500": "saves settings to EEPROM",
+    "M502": "resets settings to the firmware's defaults",
+    "M997": "starts a firmware update",
+    "M999": "restarts the board after a stop",
+    "M112": "kills the board",
+    "M0": "stops and waits for a button on the printer",
+    "M1": "stops and waits for a button on the printer",
+}
+TEMP_CODES = {"M104": HOTEND_MAX_C, "M109": HOTEND_MAX_C, "M140": BED_MAX_C, "M190": BED_MAX_C}
+COMMENT_RE = re.compile(r";.*$|\([^)]*\)")
+TEMP_ARG_RE = re.compile(r"[SR](\d+(?:\.\d+)?)")
+# Lines the firmware answers only when it is done: heating, homing, probing, a dwell.
+SLOW_CODES = {"M109", "M190", "M191", "G28", "G29", "G4", "M400", "G30"}
+PRINT_LINE_TIMEOUT_S = 30.0
+PRINT_SLOW_TIMEOUT_S = 900.0
+
+
+def strip_gcode(line: str) -> str:
+    """The command on a line of a file: comments dropped, whitespace squeezed, upper-cased."""
+    return " ".join(COMMENT_RE.sub("", line).split()).upper()
+
+
+def line_timeout(cmd: str) -> float:
+    code = cmd.split(" ", 1)[0] if cmd else ""
+    return PRINT_SLOW_TIMEOUT_S if code in SLOW_CODES else PRINT_LINE_TIMEOUT_S
+
+
+def check_gcode(text: str) -> Tuple[int, List[str]]:
+    """How many lines a file would send, and every reason it may not be sent.
+
+    A reason names its line. Refused codes and temperatures over the seam's
+    caps are the two: the same bounds as a typed control, applied once to
+    the whole file rather than line by line as it streams.
+    """
+    total = 0
+    problems: List[str] = []
+    for n, raw in enumerate(text.splitlines(), 1):
+        cmd = strip_gcode(raw)
+        if not cmd:
+            continue
+        total += 1
+        code = cmd.split(" ", 1)[0]
+        if code in PRINT_REFUSED:
+            problems.append(f"line {n}: {code} {PRINT_REFUSED[code]}")
+        elif code in TEMP_CODES:
+            m = TEMP_ARG_RE.search(cmd[len(code) :])
+            if m and float(m.group(1)) > TEMP_CODES[code]:
+                problems.append(
+                    f"line {n}: {code} asks for {m.group(1)} degC, above {TEMP_CODES[code]}"
+                )
+        if len(problems) >= 20:
+            problems.append("... and the check stopped here")
+            break
+    return total, problems
+
+
 CONTROL_TTL_S = 300.0  # a latch that nobody touches for this long disarms itself
 
 
@@ -1032,6 +1138,10 @@ class ControlLatch:
             self.arm(port, ttl)
 
 
+class LinkBusy(ToolchainError):
+    """The link is held by a long exchange and the caller would not wait."""
+
+
 class ControlNotArmed(ToolchainError):
     """A control command arrived while the port's latch was not armed."""
 
@@ -1058,26 +1168,33 @@ def identify_printer(link: GcodeLink, reset: bool = False) -> PrinterInfo:
         return printer_info_from(lines, link.baud, boot)
 
 
-def poll_printer(link: GcodeLink, endstops: bool = True) -> PrinterStatus:
-    """Temperatures, position, SD progress and (optionally) endstops in one exchange each."""
+def poll_printer(
+    link: GcodeLink, endstops: bool = True, wait: Optional[float] = None
+) -> PrinterStatus:
+    """Temperatures, position, SD progress and (optionally) endstops in one exchange each.
+
+    ``wait`` bounds each exchange's queueing behind a print's stream (see
+    ``GcodeLink.command``); a poll between two streamed lines is how a host
+    keeps its temperatures fresh mid-print.
+    """
     raw: List[str] = []
-    temps = link.command("M105")
+    temps = link.command("M105", wait=wait)
     raw += temps
     temp_line = next((ln for ln in temps if is_temperature_line(ln)), "")
     parsed = parse_m105(temp_line)
-    pos_lines = link.command("M114")
+    pos_lines = link.command("M114", wait=wait)
     raw += pos_lines
-    sd_lines = link.command("M27")
+    sd_lines = link.command("M27", wait=wait)
     raw += sd_lines
     sd = parse_m27(sd_lines)
     stops: dict = {}
     if endstops:
-        stop_lines = link.command("M119")
+        stop_lines = link.command("M119", wait=wait)
         raw += stop_lines
         stops = parse_m119(stop_lines)
     print_time = None
     if sd["sd_printing"]:
-        time_lines = link.command("M31")
+        time_lines = link.command("M31", wait=wait)
         raw += time_lines
         print_time = parse_m31(time_lines)
     filament = stops.get("filament")

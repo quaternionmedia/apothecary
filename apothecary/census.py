@@ -310,6 +310,14 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     ),
     "corner:BL": (WIDGET, WHAT_IS_THERE, "a button that moves the nozzle to the back-left corner"),
     "corner:BR": (WIDGET, WHAT_IS_THERE, "a button that moves the nozzle to the back-right corner"),
+    # printing from here: a kept file, streamed
+    "print-file": (WIDGET, WHAT_YOU_SEE, "a file picker that keeps a G-code file on the host"),
+    "print-pick": (WIDGET, WHAT_YOU_SEE, "a drop-down of the files kept on the host"),
+    "print-delete": (WIDGET, WHAT_YOU_SEE, "a button that forgets the chosen file"),
+    "print-start": (WIDGET, WHAT_IS_THERE, "a button that streams the chosen file to the printer"),
+    "print-pause": (WIDGET, WHAT_IS_THERE, "a button that stops feeding the print from here"),
+    "print-resume": (WIDGET, WHAT_IS_THERE, "a button that feeds the print from here again"),
+    "print-cancel": (WIDGET, WHAT_IS_THERE, "a button that ends the print from here, heaters off"),
 }
 
 # A control of its own that does the same thing as a cell of the ring, and the
@@ -374,6 +382,12 @@ RING_BACKED: Dict[str, str] = {
     "corner:FR": "control:corner:FR",
     "corner:BL": "control:corner:BL",
     "corner:BR": "control:corner:BR",
+    # The Print cell's verbs go to whichever print is running, the card's or
+    # the one from here; Send file is the one from here alone.
+    "print-start": "print:start",
+    "print-pause": "control:sd-pause",
+    "print-resume": "control:sd-resume",
+    "print-cancel": "control:sd-abort",
     # Navigation: the list rows, the step-out button and the go-in button are
     # what the canvas ring's Pieces and Up and the node ring's Zoom in do.
     "zoom-out-btn": "zoom-out",
@@ -515,6 +529,21 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "picking an earlier bed reading to look at",
     ),
     "level-card:click:closest": (WIDGET, WHAT_IS_THERE, "a corner button, moving the nozzle there"),
+    "print-file:change:keepPrintFile": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "choosing a file to keep on the host",
+    ),
+    "print-pick:change:renderPrint": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "choosing which kept file the buttons mean",
+    ),
+    "port:change:loadPrintRecords": (
+        AUTOMATIC,
+        NOTHING,
+        "the prints from here following the chosen port",
+    ),
     "auto:change:schedule": (WIDGET, WHAT_YOU_SEE, "the poll-on-a-schedule tick-box"),
     "interval:change:schedule": (WIDGET, WHAT_YOU_SEE, "choosing how often to poll"),
     "qform:submit:post": (WIDGET, WHAT_YOU_SEE, "asking the printer for a report"),
