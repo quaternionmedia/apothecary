@@ -42,6 +42,9 @@ def printer_url(tmp_path_factory):
             "APOTHECARY_SIMULATED_PRINTER": "printing",
         }
     )
+    from ports import refuse_a_held_port
+
+    refuse_a_held_port(PRINTER_PORT)
     proc = subprocess.Popen(
         [
             sys.executable,
@@ -52,6 +55,11 @@ def printer_url(tmp_path_factory):
             "127.0.0.1",
             "--port",
             PRINTER_PORT,
+            # Let go of idle keep-alive connections quickly on SIGTERM: the browser
+            # that held them outlives this fixture, and a server that lingers on
+            # the port is the one the next run's health check would find.
+            "--timeout-graceful-shutdown",
+            "1",
         ],
         cwd=root,
         env=env,
@@ -59,13 +67,24 @@ def printer_url(tmp_path_factory):
         stderr=subprocess.DEVNULL,
     )
     url = f"http://127.0.0.1:{PRINTER_PORT}"
+    healthy = False
     for _ in range(40):
         try:
             if httpx.get(f"{url}/health", timeout=1.0).status_code == 200:
+                healthy = True
                 break
         except (httpx.ConnectError, httpx.TimeoutException):
             time.sleep(0.5)
-    else:
+        if proc.poll() is not None:
+            break
+    if proc.poll() is not None:
+        # Our server exited -- usually because something else holds the port (a
+        # previous run still shutting down). Whatever answers there now is not
+        # the server these tests describe, so stop rather than test a stranger.
+        pytest.exit(
+            f"printer test server exited at start; is {url} held by another process?", returncode=1
+        )
+    if not healthy:
         proc.terminate()
         pytest.exit("printer test server failed to start", returncode=1)
     yield url

@@ -365,6 +365,7 @@
             <div class="spacer"></div>
             <a href="{{ base_url }}/firmware" id="firmware-link" class="toolbar-link" title="Install the firmware toolchain and program boards from sketches under parts/">⚡ Firmware</a>
             <a href="{{ base_url }}/firmware/monitor" id="monitor-link" class="toolbar-link" title="Focused printer monitor: status, temperature history, full comms log, reconnect/reset">🖨 Monitor</a>
+            <button type="button" id="ring-open" title="Open the ring for the chosen piece (m, or right-click a piece). Digits choose cells as on a numeric keypad; 5 backs out.">⌗ Ring</button>
             <span id="validity-indicator" class="validity-indicator valid">Layout valid</span>
         </div>
         <div class="main-content">
@@ -3269,6 +3270,187 @@
             observed = null; renderMeta(); connect();
         });
         if (load("apothecary.serial.open") === "1") show(true);
+    })();
+    </script>
+
+    <script type="module">
+    // The ring. Drawing and keys live in /static/ring.js; this is only the
+    // wiring: what the ring opens on, what each chosen verb calls, and the
+    // addresses written onto the controls the page already has. No
+    // addEventListener here on purpose -- the census reads this file, and the
+    // ring's own listeners are the ring's, counted once behind `ring-open`.
+    import { installRing, annotate, resolveRing } from '/static/ring.js';
+
+    (() => {
+        const BASE = "{{ base_url }}";
+        const viewer = window.fractalViewer;
+        if (!viewer) return;
+
+        // The Device section's buttons, by the verb each one is.
+        const DEVICE_VERBS = [
+            ['.dev-watch', 'device:watch'], ['.dev-poll', 'device:poll'], ['.dev-monitor', 'device:monitor'],
+            ['.dev-query', 'device:query'], ['.dev-pin', 'device:pin'], ['.dev-pin-manual', 'device:pin'],
+            ['.dev-unpin', 'device:unpin'], ['.dev-rescan', 'device:rescan'],
+            ['#serial-identify', 'device:query'], ['#serial-monitor', 'device:monitor'],
+            ['#serial-refresh', 'device:rescan'], ['#serial-query-row', null],
+        ];
+
+        // What the page knows about the board under a node, in the shape the
+        // resolver is told it. A node with nothing pinned gets no `device`,
+        // and so no Device option -- absent, not greyed.
+        function deviceFor(path) {
+            const { row } = viewer.bindingFor(path);
+            if (!row || !row.device) return undefined;
+            return { port: row.device.port, printer: !!row.device.printer, armed: false, bound: true };
+        }
+        const nodeSpec = (path, at) => ({
+            context: { pointing: 'node', targets: [path], where: at || { x: 0, y: 0 } },
+            site: viewer.siteName, device: deviceFor(path), at,
+        });
+        const canvasSpec = (at) => ({
+            context: { pointing: 'canvas', targets: [], where: at || { x: 0, y: 0 } },
+            site: viewer.siteName, at,
+        });
+
+        // Right-click on a Contents row or on a piece in the 3D view opens the
+        // node ring for that piece (and selects it, so the panel agrees); on
+        // empty canvas the canvas ring. The key and the button open the ring
+        // for whatever is selected, at the centre of the screen.
+        function whatFor(event) {
+            if (!viewer.siteName) return null;
+            if (!event) return viewer.selectedName ? nodeSpec(viewer.selectedName, null) : canvasSpec(null);
+            const at = { x: event.clientX, y: event.clientY };
+            const row = event.target.closest('#contents-list .contents-item');
+            if (row) {
+                if (viewer.renderNodeByKey[row.dataset.path]) viewer.selectChild(row.dataset.path);
+                return nodeSpec(row.dataset.path, at);
+            }
+            if (event.target === viewer.canvas) {
+                const key = viewer.raycastChild(event);
+                if (key) { viewer.selectChild(key); return nodeSpec(key, at); }
+                return canvasSpec(at);
+            }
+            return null;
+        }
+
+        async function post(path, body) {
+            const r = await fetch(BASE + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(typeof data.detail === 'string' ? data.detail : r.statusText);
+            return data;
+        }
+
+        // Each verb calls the function its button already calls. Anything not
+        // named here is the server's: posted as the intent, and its answer
+        // shown in the status line -- including a refusal, which is the point.
+        async function carry(intent) {
+            const action = intent.action, path = intent.context.targets[0] || '';
+            const port = intent.device ? intent.device.port : null;
+            const tail = ` (⌗${intent.address})`;
+            try {
+                if (action === 'zoom-in') {
+                    const name = path.split('.').pop();
+                    if (viewer.currentFocusNode().children.some((c) => c.name === name)) viewer.zoomIn(name);
+                    else if (viewer.renderNodeByKey[path]) viewer.selectChild(path);
+                    viewer.setStatus(`Zoomed into ${name}${tail}`, 'success');
+                } else if (action === 'move') {
+                    if (viewer.renderNodeByKey[path]) viewer.selectChild(path);
+                    viewer.setStatus(viewer.transformControls.object ? `Drag the handle to move ${path}${tail}` : `${path} cannot be moved from here: only a direct child of the site can${tail}`, 'success');
+                } else if (action === 'fit' || action === 'fit-selection') {
+                    const focus = viewer.currentFocusNode();
+                    const nodes = viewer.currentRenderNodes(focus);
+                    const chosen = action === 'fit-selection' ? nodes.filter((n) => intent.context.targets.includes(n._path)) : nodes;
+                    viewer.frameCameraForChildren(chosen.length ? chosen : nodes);
+                    viewer.setStatus(`Framed ${chosen.length || nodes.length} piece(s)${tail}`, 'success');
+                } else if (action === 'explain') {
+                    const node = viewer.renderNodeByKey[path] || viewer.nodeByPath(path);
+                    viewer.setStatus(node ? `${path}: a ${node.role}${node.category ? ' in ' + node.category : ''}${node.part_ref ? ', from part ' + node.part_ref : ''}, ${node.children.length} inside${tail}` : `${path}: not on screen${tail}`, 'success');
+                } else if (action.startsWith('site:')) {
+                    const name = action.slice(5);
+                    viewer.siteSelect.value = name;
+                    viewer.loadSite(name);
+                } else if (action.startsWith('group:')) {
+                    const group = action.slice(6);
+                    if (viewer.expandedCategories.has(group)) viewer.expandedCategories.delete(group); else viewer.expandedCategories.add(group);
+                    viewer.renderFocus();
+                    viewer.setStatus(`${viewer.expandedCategories.has(group) ? 'Expanded' : 'Collapsed'} ${group}${tail}`, 'success');
+                } else if (action === 'device:watch') {
+                    if (port) window.dispatchEvent(new CustomEvent('apothecary:watch-port', { detail: { port } }));
+                } else if (action === 'device:poll') {
+                    if (port) await viewer.pollNow(port);
+                } else if (action === 'device:monitor') {
+                    if (port) window.open(`${BASE}/firmware/monitor?port=${encodeURIComponent(port)}`, '_blank');
+                } else if (action === 'device:query') {
+                    const picked = viewer.selectedBodyEl.querySelector('.dev-pick')?.value || port;
+                    if (picked) await viewer.queryPort(picked, path);
+                } else if (action === 'device:pin') {
+                    const picked = viewer.selectedBodyEl.querySelector('.dev-pick')?.value
+                        || viewer.selectedBodyEl.querySelector('.dev-manual')?.value.trim() || port;
+                    if (picked) await viewer.setNodeDevice(path, picked);
+                } else if (action === 'device:unpin') {
+                    await viewer.setNodeDevice(path, null);
+                } else if (action === 'device:rescan') {
+                    await viewer.rescanDevices();
+                } else {
+                    const answer = await post('/menu/intent', {
+                        intent: { action, context: intent.context, option_id: intent.option_id, address: intent.address },
+                        site: intent.site || viewer.siteName,
+                    });
+                    viewer.setStatus(`${intent.label}: ${answer.did}${tail}`, 'success');
+                    if (action === 'reset') viewer.loadSite(viewer.siteName);
+                }
+            } catch (err) {
+                viewer.setStatus(`${intent.label}: ${err.message}${tail}`, 'error');
+            }
+        }
+
+        // "Appear as generated": the ring for the selected node is resolved
+        // (once per distinct context) and its addresses written onto the
+        // Device section and the serial overlay, so ⌗2728 is visible on the
+        // button it names. Re-applied whenever the panel is redrawn.
+        const rings = new Map();
+        let lastRing = null;
+        async function ringForSelected() {
+            if (!viewer.siteName || !viewer.selectedName) return null;
+            const spec = nodeSpec(viewer.selectedName, null);
+            const key = JSON.stringify({ c: spec.context.targets, s: spec.site, d: spec.device || null });
+            if (!rings.has(key)) rings.set(key, resolveRing({ base: BASE, context: spec.context, site: spec.site, device: spec.device }).catch(() => null));
+            return rings.get(key);
+        }
+        function annotateControls(ring) {
+            if (!ring) return;
+            lastRing = ring;
+            const pairs = [];
+            for (const [selector, action] of DEVICE_VERBS) {
+                for (const el of document.querySelectorAll(selector)) pairs.push([el, action]);
+            }
+            annotate(ring, pairs);
+        }
+        let pending = null;
+        function refreshAddresses() {
+            if (pending) return;
+            pending = Promise.resolve().then(async () => {
+                pending = null;
+                const ring = await ringForSelected();
+                if (ring) annotateControls(ring);
+            });
+        }
+        new MutationObserver(refreshAddresses).observe(viewer.selectedBodyEl, { childList: true, subtree: true });
+        // Only `hidden`: the annotation itself writes attributes in there, and
+        // watching those would be a loop.
+        new MutationObserver(refreshAddresses).observe(document.getElementById('serial-overlay'), { attributes: true, attributeFilter: ['hidden'] });
+
+        installRing({
+            base: BASE,
+            whatFor,
+            onIntent: carry,
+            onResolved: (ring, spec) => {
+                if (spec.context.pointing === 'node') { rings.set(JSON.stringify({ c: spec.context.targets, s: spec.site, d: spec.device || null }), Promise.resolve(ring)); annotateControls(ring); }
+            },
+            onError: (err) => viewer.setStatus(`Ring: ${err.message}`, 'error'),
+        });
+        window.apothecaryRing.lastRing = () => lastRing;
+        window.apothecaryRing.refreshAddresses = refreshAddresses;
     })();
     </script>
 </body>

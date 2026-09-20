@@ -28,6 +28,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from doc_capture import GENERATED_DOCS_ROOT, DocRecorder, Walkthrough  # noqa: E402
+from ports import refuse_a_held_port  # noqa: E402
 
 
 @pytest.fixture(scope="session")
@@ -110,12 +111,18 @@ def test_server(request, server_port, _picture_folder_if_known):
         "127.0.0.1",
         "--port",
         server_port,
+        # Let go of idle keep-alive connections quickly on SIGTERM. The browser
+        # that held them is torn down in the same breath, and a server that
+        # lingers on the port is what refuse_a_held_port() refuses next run.
+        "--timeout-graceful-shutdown",
+        "1",
     ]
 
     # DEVNULL, not PIPE: nothing here ever reads server_proc.stdout/stderr,
     # and an unread PIPE deadlocks once its OS buffer fills (confirmed by
     # direct reproduction against this same server-launch pattern in
     # apothecary/cli/testing.py -- see the comment there).
+    refuse_a_held_port(server_port)
     server_proc = subprocess.Popen(
         server_cmd,
         cwd=root,

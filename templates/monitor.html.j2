@@ -121,6 +121,7 @@
             <input type="checkbox" id="ctl"> ⚙ Control <span class="ttl" id="ctl-ttl"></span>
         </label>
         <button type="button" id="estop" title="M112: emergency stop. Always available, latch or not. Halts the board until it is reset.">⏹ E-STOP</button>
+        <button type="button" id="ring-open" title="Open the device ring (m, or right-click). Digits choose cells as on a numeric keypad; 5 backs out.">⌗ Ring</button>
         <span class="links"><a href="{{ base_url }}/firmware">⚡ Firmware</a><a href="{{ base_url }}/viewer">◱ Viewer</a></span>
     </header>
     <main>
@@ -559,11 +560,12 @@
         }
         $("ctl").addEventListener("change", () => arm($("ctl").checked));
         $("ctl-disarm").onclick = () => arm(false);
-        $("estop").onclick = async () => {
+        async function estop() {
             if (!state.port || !confirm(`EMERGENCY STOP ${state.port}?\nHeaters and motors off; the board halts until it is reset.`)) return;
             await sendLines(["M112"]);  // straight through, never queued behind a jog
             await pollOnce(); await pullLog();
-        };
+        }
+        $("estop").onclick = estop;
         $("h-fan").addEventListener("input", () => { $("h-fan-v").textContent = $("h-fan").value; });
         $("control").addEventListener("click", (ev) => {
             const btn = ev.target.closest("button"); if (!btn) return;
@@ -579,7 +581,140 @@
 
         window.addEventListener("beforeunload", () => { state.gen++; clearTimeout(state.timer); });
 
+        // The ring (below) drives the same functions the buttons do, so a verb
+        // chosen by its address goes through the same chain, latch and confirm.
+        window.apothecaryMonitor = {
+            state, ctl, arm, jog, estop, enqueue, sendControl, fillTemplate, pollOnce, loadPorts, logLine, schedule,
+            identify: () => $("identify").onclick(),
+        };
+
         loadPorts().then(() => { if (state.port) selectPort(state.port); });
+    })();
+    </script>
+
+    <script type="module">
+    // The device ring on this page: opened by m, right-click or ⌗ Ring, for
+    // the port being watched. Each control verb is one allowlisted G-code
+    // line, sent exactly as its button sends it; the addresses are written
+    // onto those buttons so the numpad index shows where the control is.
+    import { installRing, annotate, resolveRing } from '/static/ring.js';
+
+    (() => {
+        const BASE = "{{ base_url }}";
+        const m = window.apothecaryMonitor;
+        const $ = (id) => document.getElementById(id);
+
+        // What the page knows about the board, in the resolver's shape.
+        function device() {
+            const st = m.state;
+            const printer = !!(st.info && st.info.device && st.info.device.device && st.info.device.device.printer);
+            return { port: st.port, printer, armed: m.ctl.armed, bound: true };
+        }
+        function spec(at) {
+            if (!m.state.port) { m.logLine("sys", "ring: pick a port first"); return null; }
+            return {
+                context: { pointing: "device", targets: [m.state.port], where: at || { x: 0, y: 0 } },
+                device: device(), at,
+            };
+        }
+
+        // Verb -> the one G-code line its button sends. Values are read at the
+        // moment of choosing, from the same boxes the buttons read.
+        const LINES = {
+            "control:hotend-on": () => m.fillTemplate("M104 S{h-hot}"),
+            "control:hotend-off": () => "M104 S0",
+            "control:bed-on": () => m.fillTemplate("M140 S{h-bed}"),
+            "control:bed-off": () => "M140 S0",
+            "control:fan-on": () => m.fillTemplate("M106 S{h-fan}"),
+            "control:fan-off": () => "M107",
+            "control:home": () => "G28",
+            "control:home-xy": () => "G28 X Y",
+            "control:home-z": () => "G28 Z",
+            "control:sd-resume": () => "M24",
+            "control:sd-pause": () => "M25",
+            "control:sd-abort": () => "M524",
+            "control:motors-off": () => "M84",
+            "control:quickstop": () => "M410",
+        };
+        const CONFIRM = { "control:sd-abort": "Abort the SD print?" };
+
+        async function carry(intent) {
+            const action = intent.action;
+            const jog = /^control:jog:([XYZ])([+-])$/.exec(action);
+            if (jog) { m.jog(jog[1], jog[2]); return; }
+            if (action === "control:estop") { await m.estop(); return; }
+            if (action === "control:arm") { await m.arm(true); return; }
+            if (action === "control:disarm") { await m.arm(false); return; }
+            if (action in LINES) {
+                if (!m.ctl.armed) { m.logLine("sys", `${intent.label} (⌗${intent.address}): control is not armed`); return; }
+                await m.sendControl(LINES[action](), CONFIRM[action]);
+                return;
+            }
+            if (action === "device:poll") { await m.pollOnce(); return; }
+            if (action === "device:query") { await m.identify(); return; }
+            if (action === "device:rescan") { await m.loadPorts(); m.logLine("sys", "ports rescanned"); return; }
+            if (action === "device:watch") { $("auto").checked = true; m.schedule(); m.logLine("sys", "auto-poll on"); return; }
+            if (action === "device:monitor") { m.logLine("sys", "this is the monitor"); return; }
+            // The link verbs are the header buttons; their handlers already confirm what needs confirming.
+            if (action === "device:reconnect") { $("reconnect").click(); return; }
+            if (action === "device:reset") { $("reset").click(); return; }
+            if (action === "device:release") { $("release").click(); return; }
+            if (action === "device:pin" || action === "device:unpin") {
+                m.logLine("sys", `${intent.label}: pin and unpin from the viewer's Device section`);
+                return;
+            }
+            m.logLine("sys", `${intent.label} (⌗${intent.address}): nothing on this page carries it out`);
+        }
+
+        // The buttons this page already has, each by the verb it is.
+        const BY_CMD = {
+            "M104 S{h-hot}": "control:hotend-on", "M104 S0": "control:hotend-off",
+            "M140 S{h-bed}": "control:bed-on", "M140 S0": "control:bed-off",
+            "M106 S{h-fan}": "control:fan-on", "M107": "control:fan-off",
+            "G28": "control:home", "G28 X Y": "control:home-xy", "G28 Z": "control:home-z",
+            "M24": "control:sd-resume", "M25": "control:sd-pause", "M524": "control:sd-abort", "M84": "control:motors-off",
+            "M410": "control:quickstop",
+        };
+        function pairs() {
+            const out = [];
+            for (const b of $("control").querySelectorAll("button[data-cmd]")) out.push([b, BY_CMD[b.dataset.cmd] || null]);
+            for (const b of $("control").querySelectorAll("button[data-jog]")) out.push([b, `control:jog:${b.dataset.jog}`]);
+            out.push([$("ctl"), m.ctl.armed ? "control:disarm" : "control:arm"]);
+            out.push([$("ctl-label"), m.ctl.armed ? "control:disarm" : "control:arm"]);
+            out.push([$("ctl-disarm"), "control:disarm"]);
+            out.push([$("estop"), "control:estop"]);
+            out.push([$("poll"), "device:poll"]);
+            out.push([$("identify"), "device:query"]);
+            out.push([$("reconnect"), "device:reconnect"]);
+            out.push([$("reset"), "device:reset"]);
+            out.push([$("release"), "device:release"]);
+            return out;
+        }
+
+        const rings = new Map();
+        async function refreshAddresses() {
+            if (!m.state.port) return;
+            const d = device();
+            const key = JSON.stringify(d);
+            if (!rings.has(key)) {
+                rings.set(key, resolveRing({ base: BASE, context: { pointing: "device", targets: [d.port] }, device: d }).catch(() => null));
+            }
+            const ring = await rings.get(key);
+            if (ring) annotate(ring, pairs());
+        }
+        // The latch and the identification both change which ring this is.
+        new MutationObserver(refreshAddresses).observe($("ctl-label"), { attributes: true, attributeFilter: ["class"] });
+        new MutationObserver(refreshAddresses).observe($("ident"), { childList: true });
+
+        installRing({
+            base: BASE,
+            whatFor: (event) => spec(event ? { x: event.clientX, y: event.clientY } : null),
+            onIntent: carry,
+            onResolved: (ring, s) => { rings.set(JSON.stringify(s.device), Promise.resolve(ring)); annotate(ring, pairs()); },
+            onError: (err) => m.logLine("sys", "ring: " + err.message),
+        });
+        window.apothecaryRing.refreshAddresses = refreshAddresses;
+        refreshAddresses();
     })();
     </script>
 </body>
