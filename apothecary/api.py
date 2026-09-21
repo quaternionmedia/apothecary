@@ -1034,6 +1034,32 @@ def _node_stl_cache_paths(scad_text: str) -> tuple[Path, Path]:
     return ROOT / f".node-stl-{key}.scad", _NODE_STL_CACHE_DIR / f"{key}.stl"
 
 
+async def _build_parts_referred_to(node: Assembly) -> None:
+    """Generate the STL of every registered part the subtree refers to and lacks."""
+    wanted = set()
+
+    def visit(n: Assembly) -> None:
+        if n.part_ref and n.base is None:
+            wanted.add(n.part_ref)
+        for child in (*n.children, *n.additions, *n.subtractions):
+            visit(child)
+
+    visit(node)
+    if not wanted:
+        return
+    renderer = get_stl_renderer()
+    if not renderer.is_available:
+        return
+    by_name = {p.name: p for p in scan_projects(ROOT) if p.kind == "part"}
+    for ref in sorted(wanted):
+        item = by_name.get(ref)
+        if item is None:
+            continue
+        stl_path = stl_output_for(item)
+        if not stl_path.exists():
+            await renderer.render_stl_async(item.path, stl_path, timeout=120)
+
+
 def _bounds_dict(bounds: BoundingBox3D | None) -> Dict[str, List[float]] | None:
     if bounds is None:
         return None
@@ -1600,6 +1626,12 @@ async def get_node_stl(name: str, path: str):
     node = _find_node_by_path(site, path)
     if node is None:
         raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
+
+    # A part the subtree refers to is imported by its STL, which is a build
+    # artifact a fresh clone has not made yet. Build what is missing first,
+    # as the viewer does for a part_ref leaf, so the node renders on the
+    # first request rather than answering that nobody has run generate-stl.
+    await _build_parts_referred_to(node)
 
     try:
         scad_text = node.to_scad_object(strict=True).render()

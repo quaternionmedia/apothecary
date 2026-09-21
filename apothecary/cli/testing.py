@@ -343,9 +343,11 @@ def test_all(port: int, coverage: bool, headed: bool, fail_fast: bool):
         unit_result = subprocess.run(unit_cmd, cwd=ROOT, capture_output=True, text=True)
         results["unit"]["time"] = time.time() - unit_start
 
-        # Parse pytest output for counts
+        # Parse pytest output for counts. The lines that name a failing test
+        # ("FAILED tests/...", "ERROR tests/...") are echoed too: a CI log that
+        # says "3 failed" and nothing else cannot be acted on.
         for line in unit_result.stdout.split("\n"):
-            if "passed" in line or "failed" in line or "error" in line:
+            if any(mark in line for mark in ("passed", "failed", "error", "FAILED ", "ERROR ")):
                 click.echo(line)
             # Parse summary line like "55 passed in 0.97s"
             if " passed" in line:
@@ -365,6 +367,8 @@ def test_all(port: int, coverage: bool, headed: bool, fail_fast: bool):
             _safe_echo(f"\n✓ Unit tests PASSED ({results['unit']['time']:.1f}s)")
         else:
             _safe_echo(f"\n✗ Unit tests FAILED ({results['unit']['time']:.1f}s)", fg="red")
+            # The tail of the run: the tracebacks, so the log says why.
+            click.echo("\n".join(unit_result.stdout.split("\n")[-80:]))
             if fail_fast:
                 click.echo("\nStopping due to --fail-fast")
                 raise SystemExit(1)
@@ -462,6 +466,8 @@ def test_all(port: int, coverage: bool, headed: bool, fail_fast: bool):
         for line in e2e_result.stdout.split("\n"):
             if "passed" in line or "failed" in line or "PASSED" in line or "FAILED" in line:
                 click.echo(line)
+            elif line.startswith(("E ", "tests/e2e/")):
+                click.echo(line)  # the assertion and where it is, not only that it failed
             if " passed" in line:
                 match = re.search(r"(\d+) passed", line)
                 if match:
@@ -500,14 +506,14 @@ def test_all(port: int, coverage: bool, headed: bool, fail_fast: bool):
     click.secho("=" * 60, fg="cyan", bold=True)
     click.echo("")
     click.echo(f"  {'Test Suite':<15} {'Passed':>10} {'Failed':>10} {'Time':>10}")
-    click.echo(f"  {'-'*15} {'-'*10} {'-'*10} {'-'*10}")
+    click.echo(f"  {'-' * 15} {'-' * 10} {'-' * 10} {'-' * 10}")
     click.echo(
         f"  {'Unit':<15} {results['unit']['passed']:>10} {results['unit']['failed']:>10} {results['unit']['time']:>9.1f}s"
     )
     click.echo(
         f"  {'E2E':<15} {results['e2e']['passed']:>10} {results['e2e']['failed']:>10} {results['e2e']['time']:>9.1f}s"
     )
-    click.echo(f"  {'-'*15} {'-'*10} {'-'*10} {'-'*10}")
+    click.echo(f"  {'-' * 15} {'-' * 10} {'-' * 10} {'-' * 10}")
     click.echo(f"  {'TOTAL':<15} {total_passed:>10} {total_failed:>10} {total_time:>9.1f}s")
     click.echo("")
 

@@ -49,7 +49,9 @@ uv run apothecary check             # OpenSCAD on PATH, playwright browsers, the
       complete*; a background `docs generate` starts (its log is
       `docs/generated/refresh.log`); STLs for parts that lack one are
       generated in the background -- expect `ender3.stl` and the five
-      boards' STLs to appear under `parts/` within a minute.
+      boards' STLs to appear under `parts/` within a minute. (A node asked
+      for before its parts are built builds them first: a fresh clone
+      answers `/sites/garage/nodes/printer_1/stl` on the first request.)
 - [ ] Browser: `http://127.0.0.1:8000/viewer/sites/garage` → the garage, the
       workbench, three printers that look like Ender 3s (spools over the top
       bar, power supplies on the right), boards at the right end of the bench.

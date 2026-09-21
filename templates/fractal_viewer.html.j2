@@ -2700,7 +2700,9 @@
                     this.fillBadge(badge, row, isPrinter);
                     if (isPrinter && row.device.port) this.ensureMarks(anchorPath, row);
                 }
-                for (const key of this.anchors.keys()) if (!wanted.has(key)) this.anchors.remove(key);
+                // The machines' badges are this method's; a camera's badge is
+                // syncCameras', and stays whichever of the two runs last.
+                for (const key of this.anchors.keys()) if (!wanted.has(key) && !key.startsWith('camera:')) this.anchors.remove(key);
                 for (const [key, m] of Object.entries(this.marks)) if (!wanted.has(key)) { m.marks.destroy(); delete this.marks[key]; }
             }
 

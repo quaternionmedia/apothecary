@@ -88,7 +88,12 @@ def test_import_renders_its_transforms_and_measures_the_file(tmp_path):
         ],
     )
     rendered = site.render()
-    assert 'import("parts/calibration_cube/calibration_cube.stl"' in rendered
+    # The part's STL is a build artifact: on a fresh clone it is not there yet,
+    # and the render says so instead of failing -- the child still renders.
+    if (ROOT / "parts" / "calibration_cube" / "calibration_cube.stl").exists():
+        assert 'import("parts/calibration_cube/calibration_cube.stl"' in rendered
+    else:
+        assert "apothecary parts generate-stl calibration_cube" in rendered
     assert f'import("{stl.as_posix()}"' in rendered
     # JSCAD, which cannot import a mesh, stands it in as the box it fits.
     from apothecary.jscad import _render_node
@@ -229,8 +234,16 @@ def test_the_garage_printers_are_ender_3s_drawn_as_they_are():
         assert by_name[name].part_ref == part
     assert validate_garage_layout(site).is_valid
     rendered = site.render()
-    assert rendered.count('import("parts/ender3/ender3.stl"') == 3
-    assert rendered.count('import("parts/boards/creality_v422/creality_v422.stl"') == 3
+    # STLs are build artifacts; a fresh clone has none yet and the render names
+    # what to generate, three times over, instead of importing it.
+    for part, path in (
+        ("ender3", "parts/ender3/ender3.stl"),
+        ("creality_v422", "parts/boards/creality_v422/creality_v422.stl"),
+    ):
+        if (ROOT / path).exists():
+            assert rendered.count(f'import("{path}"') == 3, part
+        else:
+            assert rendered.count(f"apothecary parts generate-stl {part}") == 3, part
     # The API carries the build origin to the viewers, and the printer is not a board.
     client = TestClient(app)
     tree = client.get("/sites/garage").json()["tree"]
