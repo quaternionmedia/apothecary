@@ -31,13 +31,21 @@ from pathlib import Path
 from apothecary.cli import testing
 from apothecary.projects.parts.skeleton import ROOT
 
-DEMONSTRATION_MODULE = Path(__file__).resolve().parent / "e2e" / "test_docs_photo_walkthrough.py"
+# The runs that write pages, and the test in each that does the writing.
+DEMONSTRATION_MODULES = {
+    Path(__file__).resolve().parent / "e2e" / "test_docs_photo_walkthrough.py": (
+        "test_photographs_into_pieces"
+    ),
+    Path(__file__).resolve().parent / "e2e" / "test_docs_bench_walkthrough.py": (
+        "test_the_bench_as_it_is"
+    ),
+}
 
 # The pages a run writes, as opposed to the executable pages a person writes and
 # pytest runs as doctests. The guards about being output apply to the first kind
 # only: a hand-written page that claimed to be generated would be the lie the
 # guard exists to catch, pointed the other way.
-GENERATED_PAGES = ("11-photographs-into-pieces.md",)
+GENERATED_PAGES = ("11-photographs-into-pieces.md", "12-the-bench-as-it-is.md")
 
 
 def test_the_command_collects_the_run_that_writes_the_page():
@@ -51,11 +59,12 @@ def test_the_command_collects_the_run_that_writes_the_page():
     argv = testing.run_command() + ["--collect-only", "-q"]
     collected = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True)
     assert collected.returncode == 0, collected.stderr[-2000:]
-    assert "test_photographs_into_pieces" in collected.stdout, (
-        "the ordinary test command does not collect the run that writes the "
-        "walkthrough, so the committed page is whatever the last run that did "
-        "happen left behind — and nothing else would have told you"
-    )
+    for module, run in DEMONSTRATION_MODULES.items():
+        assert run in collected.stdout, (
+            f"the ordinary test command does not collect {module.name}::{run}, the run "
+            "that writes its walkthrough page, so the committed page is whatever the "
+            "last run that did happen left behind — and nothing else would have told you"
+        )
 
 
 def test_the_command_supplies_what_the_demonstration_needs():
@@ -73,9 +82,9 @@ def test_there_is_exactly_one_walkthrough_and_it_has_pages():
     pages = sorted(here.glob("*.md"))
     assert pages, "a walkthrough with no pages is a directory"
     for page in pages:
-        assert page.name[
-            :2
-        ].isdigit(), f"{page.name} is not ordinal-first, so the pages have no order"
+        assert page.name[:2].isdigit(), (
+            f"{page.name} is not ordinal-first, so the pages have no order"
+        )
 
 
 def test_every_page_says_whether_it_needs_anything_of_the_machine():
@@ -124,13 +133,14 @@ def test_the_path_has_one_demonstration_and_not_two():
     viewer a second page about the same path, produced by a command somebody had
     to remember.
     """
-    source = DEMONSTRATION_MODULE.read_text(encoding="utf-8")
-    assert "pytest.mark.walkthrough" in source, (
-        "the demonstration is not marked as the walkthrough, so the ordinary test "
-        "command's marker expression does not select it"
-    )
-    assert "pytest.mark.docs" not in source, (
-        "the demonstration is marked as a doc workflow as well, so "
-        "`apothecary docs generate` renders a second page about the same path into "
-        "docs/generated/ — which is the split this replaced"
-    )
+    for module in DEMONSTRATION_MODULES:
+        source = module.read_text(encoding="utf-8")
+        assert "pytest.mark.walkthrough" in source, (
+            f"{module.name} is not marked as the walkthrough, so the ordinary test "
+            "command's marker expression does not select it"
+        )
+        assert "pytest.mark.docs" not in source, (
+            f"{module.name} is marked as a doc workflow as well, so "
+            "`apothecary docs generate` renders a second page about the same path into "
+            "docs/generated/ — which is the split this replaced"
+        )

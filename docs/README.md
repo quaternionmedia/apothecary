@@ -20,6 +20,7 @@ by `pytest walkthrough`. Start there.
 | [09 — Preflight](../walkthrough/09-preflight.md) | Everything a build needs, checked before anything is printed |
 | [10 — Being depended on](../walkthrough/10-being-depended-on.md) | What a consumer pinning this repository is entitled to |
 | [11 — Photographs into pieces](../walkthrough/11-photographs-into-pieces.md) | A photograph becomes named, placed pieces in the viewer — written by its own run |
+| [12 — The bench as it is](../walkthrough/12-the-bench-as-it-is.md) | Geometry from elsewhere, the Ender 3s and the boards drawn as they are, a camera placed at a piece, and what stays on the device — written by its own run |
 
 ## Getting Started
 

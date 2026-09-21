@@ -140,8 +140,15 @@ are open (a cross-page event; Phase 3 makes it one page).
   node's world point through the camera and sets a transform; an anchor
   behind the camera or out of frame is hidden; an occluded one is dimmed
   (a ray from the camera, tested against the scene's meshes, once per
-  frame per anchor -- at most a dozen anchors, cheap). The viewer's
-  `animate()` calls it; nothing reads layout.
+  frame per anchor -- at most a dozen anchors, cheap; the transform
+  gizmo's picking plane, a mesh the size of the scene, is not in the way).
+  The viewer's `animate()` calls it; nothing reads layout. An anchor is
+  drawn only while its piece is at the level being looked at (`anchorPointFor`
+  answers nothing otherwise), and anything the viewer draws beside an
+  anchor -- a camera's frustum -- follows that same answer on every focus
+  change; a badge's `hidden` wins over any class it wears (2026-09-21: a
+  camera's badge shared the Camera panel's class name and its `display`,
+  and stood at the canvas corner at every level).
 - **Machine badges**: every pinned printer wears a badge above it --
   state, hotend/bed, SD or host progress, the job's stage -- fed by the
   polls the viewer already makes (`↻ Devices`, `siteDevices`, the Device

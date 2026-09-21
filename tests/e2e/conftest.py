@@ -258,6 +258,25 @@ def doc_recorder(page, docs_enabled, request):
         marker.write_text("\n".join(r.workflow for r in recorders) + "\n", encoding="utf-8")
 
 
+# Chromium's fake camera: a synthetic picture with colour bars and a moving
+# mark, so there is a camera to allow, see live, capture from and place in the
+# world on every machine, and no real camera is ever opened by a test.
+FAKE_CAMERA = ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"]
+
+
+@pytest.fixture
+def camera_page(browser_type, base_url):
+    """A page in a browser of its own, launched with the fake camera and the
+    permission to use it already granted."""
+    browser = browser_type.launch(args=FAKE_CAMERA)
+    context = browser.new_context(viewport={"width": 1280, "height": 800}, base_url=base_url)
+    context.grant_permissions(["camera"], origin=base_url)
+    page = context.new_page()
+    yield page
+    context.close()
+    browser.close()
+
+
 @pytest.fixture
 def walkthrough(page):
     """The one demonstration's recorder, written out however the run ends.
@@ -269,7 +288,10 @@ def walkthrough(page):
     """
     made: list[Walkthrough] = []
 
-    def _make(ordinal, slug, title, intro, runtime, does_not_show):
+    def _make(ordinal, slug, title, intro, runtime, does_not_show, page=page):
+        # `page` may be another browser's -- the one launched with a fake
+        # camera, for the page that places one -- and its screenshots are then
+        # of that browser.
         recorder = Walkthrough(
             page=page,
             ordinal=ordinal,

@@ -30,6 +30,17 @@ export function mountAnchors({ container, canvas, camera, scene }) {
     const dir = new THREE.Vector3();
     let frame = 0;
 
+    // The transform gizmo's handles and its (unrendered) picking plane are
+    // meshes too, and the plane spans the whole scene: a badge would be
+    // dimmed by it whenever the plane lay between the camera and the point,
+    // which is most of the time. Nothing of the gizmo is in the way.
+    function isGizmo(object) {
+        for (let o = object; o; o = o.parent) {
+            if (o.isTransformControls || o.isTransformControlsGizmo || o.isTransformControlsPlane) return true;
+        }
+        return false;
+    }
+
     function occluded(point) {
         // A ray from the camera to the point: anything it hits first is in the way.
         dir.copy(point).sub(camera.position);
@@ -38,7 +49,7 @@ export function mountAnchors({ container, canvas, camera, scene }) {
         raycaster.set(camera.position, dir.normalize());
         raycaster.far = distance - 1;
         const hits = raycaster.intersectObjects(scene.children, true);
-        return hits.some((h) => h.object.isMesh && h.object.visible);
+        return hits.some((h) => h.object.isMesh && h.object.visible && !isGizmo(h.object));
     }
 
     function update() {

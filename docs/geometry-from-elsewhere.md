@@ -130,6 +130,11 @@ floor, which is right for a block.
 No mesh of anyone else's went into any of these; they are our own OpenSCAD
 from public dimensions, MIT like the rest of the repository.
 
+The walkthrough's page 12 ([`walkthrough/12-the-bench-as-it-is.md`](../walkthrough/12-the-bench-as-it-is.md))
+is a run of all of this -- a file measured, the sidecar part, the printers
+and the mainboard, the DevKitC -- written by its own test with the pictures
+it took.
+
 ## Licences and what gets committed
 
 STL files are build artifacts and `.gitignore` ignores them, imported ones

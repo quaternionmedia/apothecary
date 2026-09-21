@@ -92,7 +92,7 @@ line 2 says 'a and b are the same thing' and line 3 says 'b and a are not relate
 
 This is the picture the rest of the page is about: 800 by 600 pixels, 4 shapes found by the 'plain' finder. Everything above ran in this process. Everything below runs through the server and a browser.
 
-![The same path, now against a real server](screenshots/10-the-same-path-now-against-a-real-server.png)
+![The same path, now against a real server](screenshots/11-10-the-same-path-now-against-a-real-server.png)
 
 ## 11. Told how wide it is, the pieces get real sizes
 
@@ -107,25 +107,25 @@ sized: True
 
 No drawing code was written for any of this. An arrangement built from a photograph is an ordinary arrangement, so the viewer already knew how to show it.
 
-![The arrangement opens in the viewer the tool already had](screenshots/12-the-arrangement-opens-in-the-viewer-the-tool-alrea.png)
+![The arrangement opens in the viewer the tool already had](screenshots/11-12-the-arrangement-opens-in-the-viewer-the-tool-alrea.png)
 
 ## 13. Every piece is listed, named for the word it was matched to
 
 The names in this list are the words from the top of this page. One vocabulary runs the whole length of the path.
 
-![Every piece is listed, named for the word it was matched to](screenshots/13-every-piece-is-listed-named-for-the-word-it-was-ma.png)
+![Every piece is listed, named for the word it was matched to](screenshots/11-13-every-piece-is-listed-named-for-the-word-it-was-ma.png)
 
 ## 14. Filtering to 'disc' keeps that word and sets the rest aside
 
 The filters the viewer already had are filters by word now, because the pieces simply carry their word.
 
-![Filtering to 'disc' keeps that word and sets the rest aside](screenshots/14-filtering-to-disc-keeps-that-word-and-sets-the-res.png)
+![Filtering to 'disc' keeps that word and sets the rest aside](screenshots/11-14-filtering-to-disc-keeps-that-word-and-sets-the-res.png)
 
 ## 15. Choosing a piece shows where it came from
 
 Which finder saw it, how sure it was, and that its thickness is a guess: the same provenance the model half printed, in front of a person.
 
-![Choosing a piece shows where it came from](screenshots/15-choosing-a-piece-shows-where-it-came-from.png)
+![Choosing a piece shows where it came from](screenshots/11-15-choosing-a-piece-shows-where-it-came-from.png)
 
 ## 16. And it forgets on request
 

@@ -205,7 +205,11 @@
         .camera .aside { color: #b08a8a; }
         .camera .question { border-top: 1px solid #2a332a; padding: 0.3rem 0; }
         .camera pre { white-space: pre-wrap; font-size: 0.7rem; color: #aaa; max-height: 200px; overflow: auto; }
-        .world-badge.camera { border-color: #7a5a1a; color: #ffcc66; }
+        /* The camera's mark in the world. Not `.camera`: that is the panel's own
+           class above, and its `display: flex` would override the `hidden` the
+           anchor layer sets when the mark's piece is out of view. */
+        .world-badge.camera-mark { border-color: #7a5a1a; color: #ffcc66; }
+        .world-badge.camera-mark::after { border-top-color: #7a5a1a; }
 
         .contents-list { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; }
         .contents-item {
@@ -289,6 +293,7 @@
         .world-badge.offline { color: #b08a8a; border-color: #3f2f2f; }
         .world-badge.job { border-color: #4a6fa8; }
         .world-badge.behind { opacity: 0.45; }
+        .world-badge[hidden] { display: none; }
         .world-badge:hover { opacity: 1; filter: brightness(1.15); }
         .no-selection { color: #666; font-size: 0.85rem; font-style: italic; }
         .zoom-in-btn {
@@ -1133,7 +1138,7 @@
                     let badge = this.anchors.get(key);
                     if (!badge) {
                         badge = document.createElement('div');
-                        badge.className = 'world-badge camera';
+                        badge.className = 'world-badge camera-mark';
                         badge.dataset.camera = cam.id;
                         badge.dataset.path = cam.path;
                         badge.title = 'Open the camera panel on this camera';
@@ -1153,6 +1158,7 @@
                             const pts = [];
                             for (let i = 0; i < 4; i++) { pts.push(apex, corners[i]); pts.push(corners[i], corners[(i + 1) % 4]); }
                             const lines = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xffcc66, transparent: true, opacity: 0.8 }));
+                            lines.userData.path = cam.path;
                             this.scene.add(lines);
                             this.cameraMarks[key] = lines;
                         }
@@ -1160,7 +1166,15 @@
                 }
                 for (const key of this.anchors.keys()) if (key.startsWith('camera:') && !wanted.has(key)) this.anchors.remove(key);
                 for (const [key, lines] of Object.entries(this.cameraMarks)) if (!wanted.has(key)) { this.scene.remove(lines); lines.geometry.dispose(); lines.material.dispose(); delete this.cameraMarks[key]; }
+                this.refreshCameraMarks();
                 if (this.cameraWidget) this.cameraWidget.renderPlacement();
+            }
+            // A camera's frustum is drawn only while its piece is at the level
+            // being looked at -- the same rule its badge follows through
+            // anchorPointFor -- so zooming into something else leaves neither
+            // behind. Called from renderFocus, and after the cameras sync.
+            refreshCameraMarks() {
+                for (const lines of Object.values(this.cameraMarks)) lines.visible = this.anchorPointFor(lines.userData.path) !== null;
             }
             openCamera(id) {
                 this.panels.open('camera');
@@ -1342,6 +1356,7 @@
                 this.renderJobsSection();
                 this.frameCameraForChildren(renderNodes);
                 this.scheduleWaveLoad(renderNodes);
+                this.refreshCameraMarks();
             }
 
             // ---------------------------------------------------------------

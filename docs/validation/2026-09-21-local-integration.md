@@ -244,6 +244,12 @@ Open `http://127.0.0.1:8001/viewer/sites/garage`; ring → Panels → Camera.
       `drwx------`.
 - [ ] Back to `garage` (site select) → the camera still stands where it was
       placed.
+- [ ] The mark follows the focus: double-click `printer_1` → the badge and
+      the frustum are gone (not at the top-left corner of the canvas, not
+      anywhere); **Zoom Out** → both are back, above the bench, and the badge
+      is not dimmed when nothing stands between you and the bench top.
+      Double-click `workbench` → the badge stands above the bench and its
+      tools.
 - [ ] **📷 Capture** twice more with different names → the picture list grows;
       tick **all**, **Gather** → a report with *Groups*, the questions the
       machine thinks are worth your word (answered with buttons), and a
@@ -311,8 +317,16 @@ release), unchanged, plus these two that the bench did not have:
 - [ ] `/walkthrough/11-photographs-into-pieces.md` → the page says *131
       controls of the viewer's own* and shows the rail and the camera panel
       in its screenshots.
-- [ ] `uv run apothecary docs generate` → both walkthroughs regenerate under
+- [ ] `/walkthrough/12-the-bench-as-it-is.md` → twelve steps: a file from
+      elsewhere measured, the sidecar part, the Ender 3s, the mainboard, the
+      DevKitC, the camera placed at the bench and *not* following you into a
+      printer, the guard's refusal and the server's 403 -- each with the
+      output or the picture of the run that wrote it.
+- [ ] `uv run apothecary docs generate` → both doc workflows regenerate under
       a temporary server on 8766; the bar on every docs page then says when.
+      The two walkthrough pages (11 and 12) are rewritten by the ordinary
+      test command instead (`uv run apothecary test run`), screenshots
+      included.
 
 ## 8. The suites and the gates
 
@@ -342,8 +356,8 @@ or an issue; a door found open goes to the record's risk register.
 | 2. Stays on the device | / 12 | |
 | 3. Geometry | / 12 | |
 | 4. One screen | / 7 | |
-| 5. Camera | / 7 | |
+| 5. Camera | / 8 | |
 | 6. Printer (simulated) | / 7 | |
 | 6. Printer (hardware) | / 2 + the bench record | |
-| 7. Docs | / 3 | |
+| 7. Docs | / 4 | |
 | 8. Suites | / 2 | |

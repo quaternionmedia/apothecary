@@ -135,7 +135,9 @@ class Walkthrough:
 
     def shows(self, heading: str, sentence: str, shown: str | None = None) -> None:
         index = len(self.steps) + 1
-        filename = f"{index:02d}-{_slugify(heading)}.png"
+        # The pages share one folder of screenshots, so each picture carries
+        # its page's ordinal ahead of its step's.
+        filename = f"{self.ordinal}-{index:02d}-{_slugify(heading)}.png"
         shots = WALKTHROUGH_ROOT / "screenshots"
         shots.mkdir(parents=True, exist_ok=True)
         self.page.screenshot(path=str(shots / filename))

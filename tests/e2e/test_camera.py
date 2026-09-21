@@ -3,9 +3,9 @@ is to record its own surroundings.
 
 Runs against the shared test server (its picture folder is a temp folder the
 fixture names) in a browser of its own, launched with Chromium's fake camera
--- a synthetic picture with colour bars and a moving mark -- so there is a
-camera to allow, to see live, to capture from and to place in the world on
-every machine, and no real camera is ever opened by a test.
+(the `camera_page` fixture in conftest) so there is a camera to allow, to see
+live, to capture from and to place in the world on every machine, and no real
+camera is ever opened by a test.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ import pytest
 from PIL import Image, ImageDraw
 from playwright.sync_api import expect
 
-FAKE_CAMERA = ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"]
 WEDGES = (
     "() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]"
     ".filter((w) => !w.classList.contains('empty'))"
@@ -27,17 +26,6 @@ WEDGES = (
 def _cell(page, label: str) -> str:
     """The keypad cell of the wedge with this label on the open ring."""
     return next(cell for cell, got in page.evaluate(WEDGES).items() if got == label)
-
-
-@pytest.fixture
-def camera_page(browser_type, base_url):
-    browser = browser_type.launch(args=FAKE_CAMERA)
-    context = browser.new_context(viewport={"width": 1280, "height": 800}, base_url=base_url)
-    context.grant_permissions(["camera"], origin=base_url)
-    page = context.new_page()
-    yield page
-    context.close()
-    browser.close()
 
 
 @pytest.mark.e2e
@@ -85,10 +73,23 @@ def test_a_camera_records_its_own_surroundings(camera_page, base_url: str, pictu
     expect(panel.locator("#cam-place")).to_be_enabled(timeout=3000)
     panel.locator("#cam-place").click()
     expect(panel.locator("#cam-place-note")).to_contain_text("placed at workbench", timeout=5000)
-    expect(page.locator(".world-badge.camera")).to_be_visible(timeout=5000)
+    expect(page.locator(".world-badge.camera-mark")).to_be_visible(timeout=5000)
     assert page.evaluate("() => Object.keys(window.fractalViewer.cameraMarks).length") == 1
     cameras = page.request.get(f"{base_url}/cameras?site=garage").json()
     assert len(cameras) == 1 and cameras[0]["path"] == "workbench"
+
+    # The mark follows the focus: looking into another piece, neither the badge
+    # nor the frustum stays behind; zooming back out brings both back.
+    page.evaluate("() => window.fractalViewer.zoomIn('printer_1')")
+    expect(page.locator(".world-badge.camera-mark")).to_be_hidden(timeout=5000)
+    assert page.evaluate(
+        "() => Object.values(window.fractalViewer.cameraMarks).map((l) => l.visible)"
+    ) == [False]
+    page.evaluate("() => window.fractalViewer.zoomOut()")
+    expect(page.locator(".world-badge.camera-mark")).to_be_visible(timeout=5000)
+    assert page.evaluate(
+        "() => Object.values(window.fractalViewer.cameraMarks).map((l) => l.visible)"
+    ) == [True]
 
     # Its own surroundings: a frame kept on this machine, looked at, opened in the world.
     panel.locator("#cam-name").fill("surroundings")
@@ -110,7 +111,7 @@ def test_a_camera_records_its_own_surroundings(camera_page, base_url: str, pictu
     # Back in the garage the camera still stands where it was placed.
     page.evaluate("() => window.fractalViewer.openSite('garage')")
     page.wait_for_function("() => window.fractalViewer.siteName === 'garage'", timeout=15000)
-    expect(page.locator(".world-badge.camera")).to_be_visible(timeout=5000)
+    expect(page.locator(".world-badge.camera-mark")).to_be_visible(timeout=5000)
 
     # Two captures gathered: the report, and the two opened as one arrangement.
     panel.locator("#cam-name").fill("again")
@@ -142,8 +143,8 @@ def test_a_camera_records_its_own_surroundings(camera_page, base_url: str, pictu
     # Unplaced, the camera leaves the world.
     page.evaluate("() => window.fractalViewer.openSite('garage')")
     page.wait_for_function("() => window.fractalViewer.siteName === 'garage'", timeout=15000)
-    expect(page.locator(".world-badge.camera")).to_be_visible(timeout=5000)
+    expect(page.locator(".world-badge.camera-mark")).to_be_visible(timeout=5000)
     panel.locator("#cam-unplace").click()
-    expect(page.locator(".world-badge.camera")).to_have_count(0, timeout=5000)
+    expect(page.locator(".world-badge.camera-mark")).to_have_count(0, timeout=5000)
     assert page.request.get(f"{base_url}/cameras?site=garage").json() == []
     assert errors == []
