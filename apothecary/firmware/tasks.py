@@ -19,6 +19,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional
 
+from ..stays_local import subprocess_env
 from .models import FirmwareTask, TaskStatus
 
 MAX_TASKS = 50
@@ -35,7 +36,7 @@ def _spawn(argv, env, cwd) -> subprocess.Popen:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
-        env=env,
+        env=subprocess_env(env),
         cwd=cwd,
         bufsize=1,
         start_new_session=_POSIX,
@@ -74,7 +75,7 @@ def stream(
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            env=env,
+            env=subprocess_env(env),
             cwd=cwd,
             bufsize=1,
         )

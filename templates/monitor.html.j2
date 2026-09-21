@@ -56,7 +56,7 @@
     // port is chosen and that port is pinned to a node somewhere.
     import { mountBoardView, whereIs } from '/static/board_view.js';
     (() => {
-        const BASE = "{{ base_url }}";
+        const BASE = {{ base_url | tojson }};
         const $ = (id) => document.getElementById(id);
         let view = null, viewPort = null;
         async function mountFor(port) {
@@ -97,7 +97,7 @@
     import { installRing, annotate, resolveRing } from '/static/ring.js';
 
     (() => {
-        const BASE = "{{ base_url }}";
+        const BASE = {{ base_url | tojson }};
         const m = window.apothecaryMonitor;
         const $ = (id) => document.getElementById(id);
 

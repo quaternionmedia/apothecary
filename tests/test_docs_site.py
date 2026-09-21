@@ -27,6 +27,18 @@ def test_the_renderer_covers_what_the_docs_use():
     assert "<em>emphasis</em>" in body and "<strong>strong</strong>" in body
     assert '<a href="other.md#control-behind-a-latch">link</a>' in body
     assert '<img src="pic.png" alt="alt">' in body
+    away, _ = docs_site.render_markdown("![a face](https://elsewhere.example/face.png)")
+    assert "<img" not in away and "[picture elsewhere: a face]" in away
+    # A link is a link when a person may click it: relative, http(s), mailto.
+    # Any other scheme is shown as the text it was, never as something that runs.
+    links, _ = docs_site.render_markdown(
+        "[go](javascript:alert(1)) [d](data:text/html,x) [v](vbscript:x) "
+        "[ok](https://example.org/) [mail](mailto:a@b.c) [rel](../x.md)"
+    )
+    assert "javascript:" not in links.replace("go (javascript:alert(1))", "")
+    assert "go (javascript:alert(1))" in links and "d (data:text/html,x)" in links
+    assert '<a href="https://example.org/">ok</a>' in links
+    assert '<a href="mailto:a@b.c">mail</a>' in links and '<a href="../x.md">rel</a>' in links
     assert "&lt;b&gt;raw html&lt;/b&gt;" in body  # shown, not run
     assert "<ul><li>one</li><li>two<ul><li>nested</li></ul></li>" in body
     assert '<input type="checkbox" disabled> a task' in body
@@ -68,7 +80,7 @@ def test_docs_routes_serve_pages_and_files_and_refuse_the_rest(tmp_path, monkeyp
     c = TestClient(app)
     assert c.get("/docs", follow_redirects=False).status_code in (302, 307)
     r = c.get("/docs/README.md")
-    assert r.status_code == 200 and "Apothecary" in r.text and 'href="/api/docs"' in r.text
+    assert r.status_code == 200 and "Apothecary" in r.text and 'href="/openapi.json"' in r.text
     r = c.get("/docs/firmware.md")
     assert 'id="control-behind-a-latch"' in r.text
     r = c.get("/docs/validation/dry-run-square.gcode")
@@ -76,9 +88,13 @@ def test_docs_routes_serve_pages_and_files_and_refuse_the_rest(tmp_path, monkeyp
     assert c.get("/docs/../pyproject.toml").status_code in (404, 422)
     assert c.get("/docs/no-such-page.md").status_code == 404
     assert c.get("/walkthrough/01-a-part.md").status_code == 200
-    # The API's own docs moved to make room.
-    assert c.get("/api/docs").status_code == 200
+    # The API is described by /openapi.json; FastAPI's Swagger and ReDoc pages are off,
+    # since each would load its script from a public CDN.
     assert c.get("/openapi.json").status_code == 200
+    assert c.get("/api/docs").status_code == 404 and c.get("/docs/../api/docs").status_code in (
+        404,
+        422,
+    )
 
 
 def test_the_bar_says_what_the_last_refresh_did(tmp_path, monkeypatch):

@@ -553,9 +553,9 @@
         import { mountCamera } from '/static/widgets/camera.js';
         import { makeMachineMarks, toScene as marksToScene } from '/static/machine_marks.js';
 
-        const BASE_URL = "{{ base_url }}";
-        const DEFAULT_SITE = "{{ default_site }}";
-        const INITIAL_FOCUS = "{{ focus_path }}";
+        const BASE_URL = {{ base_url | tojson }};
+        const DEFAULT_SITE = {{ default_site | tojson }};
+        const INITIAL_FOCUS = {{ focus_path | tojson }};
 
         // Subsystem colors -- a node's own ``category`` if set, else
         // whatever the nearest ancestor's was (already resolved server-side,
@@ -3073,6 +3073,8 @@
 
             renderJobs() {
                 this.jobListEl.innerHTML = '';
+                // A job's name is whatever was posted; everything from the server is escaped here.
+                const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
                 for (const job of this.jobs) {
                     const li = document.createElement('li');
                     li.className = 'job-item';
@@ -3082,21 +3084,21 @@
                     if (job.status === 'queued') {
                         actionsHtml = job.compatible_printers.length
                             ? `<select class="job-printer-select">
-                                 ${job.compatible_printers.map((p) => `<option value="${p}">${p}</option>`).join('')}
+                                 ${job.compatible_printers.map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join('')}
                                </select>
                                <button type="button" class="job-assign-btn">Assign</button>`
                             : '<span class="job-no-printers">No idle printer fits this job</span>';
                     } else if (job.status === 'assigned' || job.status === 'printing') {
-                        actionsHtml = `<span class="job-assigned-to">on ${job.assigned_printer}</span>
+                        actionsHtml = `<span class="job-assigned-to">on ${esc(job.assigned_printer)}</span>
                                        <button type="button" class="job-complete-btn">Mark Done</button>`;
                     } else {
-                        actionsHtml = `<span class="job-done">done${job.assigned_printer ? ' on ' + job.assigned_printer : ''}</span>`;
+                        actionsHtml = `<span class="job-done">done${job.assigned_printer ? ' on ' + esc(job.assigned_printer) : ''}</span>`;
                     }
 
                     li.innerHTML = `
                         <div class="job-item-header">
-                            <strong>${job.name}</strong>
-                            <span class="job-status job-status-${job.status}">${job.status}</span>
+                            <strong>${esc(job.name)}</strong>
+                            <span class="job-status job-status-${esc(job.status)}">${esc(job.status)}</span>
                         </div>
                         <div class="job-item-dims">${dims} mm</div>
                         <div class="job-item-actions">${actionsHtml}</div>
@@ -3434,7 +3436,7 @@
     <script>
     // Serial log overlay -- independent of the viewer module so it can load either way.
     (() => {
-        const BASE = "{{ base_url }}";
+        const BASE = {{ base_url | tojson }};
         const $ = (id) => document.getElementById(id);
         const overlay = $("serial-overlay"), body = $("serial-body"), meta = $("serial-meta");
         const portSel = $("serial-port"), baudSel = $("serial-baud"), toggle = $("serial-toggle"), dot = $("serial-dot");
@@ -3666,7 +3668,7 @@
     import { installRing, annotate, resolveRing } from '/static/ring.js';
 
     (() => {
-        const BASE = "{{ base_url }}";
+        const BASE = {{ base_url | tojson }};
         const viewer = window.fractalViewer;
         if (!viewer) return;
 

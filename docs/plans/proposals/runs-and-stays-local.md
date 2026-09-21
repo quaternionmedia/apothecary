@@ -44,8 +44,9 @@ it.
 - Anything that checks a licence, a version, or an update over the network while
   running.
 - Loading part of the interface from a public website while someone is using it.
-  The current viewer does exactly this for its drawing library. Under this rule
-  that stops being a known untidiness and becomes a break of the rule.
+  The viewer once did this for its drawing library; it is vendored now, and
+  under this rule loading it from elsewhere again would be a break of the rule,
+  which the page policy below stops before the request leaves.
 
 ## How it gets checked
 
@@ -64,6 +65,37 @@ green run of nothing.
 
 It does not catch everything. It catches the common case, which is a library
 quietly fetching something at the moment it is first used.
+
+## How it is enforced now, in the program rather than the tests
+
+Since 2026-09-20 the rule is the program's shape, not a check beside it
+(`apothecary/stays_local.py`, and the draft record *Personal data stays on
+the device* in `governance/qm/adr/`):
+
+- Importing the `apothecary` package puts a guard on the process: sockets
+  reach this machine and nothing else, whichever way they are asked, and the
+  resolver looks up no name but this machine's. Every apothecary process is
+  under it before any of its code runs. There is no flag, variable or
+  setting that turns it off.
+- The one allowance is a *tool fetch* -- the firmware installer downloading
+  arduino-cli from its fixed release hosts -- admitted for that one call on
+  that one thread, to those hosts alone, with no proxy and one caller a test
+  holds it to.
+- Every `--host` goes through `require_loopback`; the app itself answers a
+  request with 403 unless the client, the address it arrived on and the
+  `Host` it asked for are all this machine; and every page it sends carries
+  a policy that lets the browser load from and send to this origin only.
+- arduino-cli, the one subprocess that fetches, is given a config file the
+  program writes (its cloud board lookup and update check off, its package
+  indexes named) and an environment with no proxy and no `ARDUINO_*`
+  override, so what it fetches is fixed by the program and not by a file or
+  a variable a person or an agent could set.
+- The picture root is never the whole machine, the person's home folder or
+  anything above it.
+- `tests/test_stays_local.py` holds all of that, so loosening it is an edit
+  to that file and to the record, which is the review.
+- The named eventual exception is *secured user accounts*: a future record,
+  not a setting; until it is Accepted there is no code path.
 
 ## The gap this fills
 

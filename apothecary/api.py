@@ -60,6 +60,7 @@ from .projects.registry import resolve_wrapper_module, scan_projects, stl_output
 from .routes.pictures import router as pictures_router
 from .scene import Scene
 from .site_store import SiteStore, UnknownSiteError
+from .stays_local import LocalOnly
 from .templates import TemplateRenderer
 from .transforms import Rotate, Scale, Translate
 from .viewer import render_fractal_viewer_page
@@ -274,9 +275,12 @@ app = FastAPI(
     version="0.1.0",
     description="Lean OpenSCAD generation toolkit exposed via FastAPI endpoints",
     lifespan=lifespan,
-    # /docs is the project's documentation (docs_site.py); the API's own lives under /api.
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
+    # /docs is the project's documentation (docs_site.py). FastAPI's own Swagger
+    # and ReDoc pages are off: each loads its script from a public CDN, which a
+    # page here may not do (apothecary/stays_local.py). The API is described by
+    # /openapi.json, which is served from here.
+    docs_url=None,
+    redoc_url=None,
 )
 
 # The viewer's 3D library, kept here rather than fetched from a public website
@@ -288,6 +292,10 @@ app = FastAPI(
 # markup still reads "Layout valid". Frontend dependencies are vendored per
 # the house-stack record for the same reason.
 STATIC_ROOT = Path(__file__).resolve().parent / "static"
+# Personal data stays on this machine by the shape of the program: the app
+# answers a client on loopback only and fences every page it sends
+# (apothecary/stays_local.py). Outermost, so static files are under it too.
+app.add_middleware(LocalOnly)
 app.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
 app.include_router(docs_router)
 # Mounted before the photo routes below, so /photos/pictures and /photos/gather
@@ -1257,7 +1265,9 @@ def _picture_root() -> Path:
     that is still not a reason to leave the door open.
 
     Set ``APOTHECARY_PICTURE_ROOT`` to say where pictures live. Without it, the
-    folder the server was started in.
+    folder the server was started in. Never the whole machine, and never the
+    person's home folder or anything above it: a picture root is a folder of
+    pictures, and those hold everything else of theirs.
     """
     named = os.environ.get("APOTHECARY_PICTURE_ROOT") or str(Path.cwd())
     root = Path(named).resolve()
@@ -1277,7 +1287,39 @@ def _picture_root() -> Path:
                 "machine. That turns the restriction off rather than setting it."
             ),
         )
+    homes = _home_folders()
+    state = _state_folder()
+    if any(root == home or root in home.parents for home in homes) or (
+        root == state or state in root.parents
+    ):
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"pictures are supposed to be read from {root}, which holds everything "
+                "of yours, not a folder of pictures. Start the server in a folder of "
+                "pictures, or set APOTHECARY_PICTURE_ROOT to one."
+            ),
+        )
     return root
+
+
+def _home_folders() -> List[Path]:
+    """The person's home: by HOME, and by the account, which a variable cannot move."""
+    folders = [Path.home()]
+    try:
+        import pwd
+
+        folders.append(Path(pwd.getpwuid(os.getuid()).pw_dir))
+    except (ImportError, KeyError, AttributeError):
+        pass
+    return [f.expanduser().resolve() for f in folders]
+
+
+def _state_folder() -> Path:
+    """Where the serial numbers, camera labels and readings live: never pictures."""
+    from .firmware.devices import state_dir
+
+    return state_dir().expanduser().resolve()
 
 
 def _picture_within_root(where: Path) -> Path:
@@ -1823,7 +1865,8 @@ class Dimensions(BaseModel):
 
 
 class CreateJobRequest(BaseModel):
-    name: str
+    # A name is letters, digits and a little punctuation: what a page shows, never markup.
+    name: str = Field(..., min_length=1, max_length=80, pattern=r"^[\w][\w .+\-/]*$")
     required_volume: Dimensions
 
 

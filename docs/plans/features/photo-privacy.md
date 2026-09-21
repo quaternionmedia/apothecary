@@ -7,7 +7,7 @@
 | **State** | stub |
 | **Depends on** | the proposed local-only rule (`../proposals/runs-and-stays-local.md`) |
 | **Graduates to** | photographs stay on the machine that took them (project) and a personal-data record (org) |
-| **Verified** | Searched the whole qm corpus by filename and content: no privacy, PII, personal-data or biometric record exists. `DRAFT-open-license-exclusion-and-upstream-remediation.md` §6 read in full — it governs provider replaceability and says nothing about data. |
+| **Verified** | Searched the whole qm corpus by filename and content: no org-level privacy, PII, personal-data or biometric record exists. `DRAFT-open-license-exclusion-and-upstream-remediation.md` §6 read in full — it governs provider replaceability and says nothing about data. Since 2026-09-20 this project has its own: the draft *Personal data stays on the device, by construction* in `governance/qm/adr/`, enforced by `apothecary/stays_local.py`; the org-level record is still the gap. |
 
 ## What
 Photographs of a workshop, a garage or a home contain people, addresses, licence

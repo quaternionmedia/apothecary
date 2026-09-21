@@ -7,7 +7,7 @@ from typing import Callable, List, Optional
 
 from ..projects.parts.skeleton import ROOT
 from .devices import get_state, make_flash_record
-from .installer import ArduinoCliInstaller, InstallSpec, default_config_exists, env_for_arduino
+from .installer import ArduinoCliInstaller, InstallSpec, env_for_arduino
 from .models import FlashRecord, SketchInfo, ToolchainStatus
 from .tasks import stream
 from .toolchains import (
@@ -41,10 +41,6 @@ def toolchain_status(
         if status.arduino_cli_ok:
             cfg = cli.config_path()
             status.config_file = str(cfg) if cfg else None
-            if cfg and not cfg.is_file():
-                status.problems.append(
-                    "arduino-cli has no config file yet (install runs `config init`)"
-                )
             try:
                 status.cores = cli.core_list()
             except ToolchainError as exc:
@@ -77,9 +73,6 @@ def install(spec: InstallSpec, log: Log) -> ToolchainStatus:
     reset_toolchains()
     cli = get_arduino_cli()
     env = env_for_arduino()
-
-    if not default_config_exists() and not cli.config_file:
-        _check(stream(cli.config_init_argv(), log, env), "config init")
 
     if spec.cores:
         _check(stream(cli.core_update_index_argv(spec.cores), log, env), "core update-index")
@@ -127,7 +120,7 @@ def resolve_fqbn(sketch: SketchInfo, fqbn: Optional[str]) -> str:
     if not chosen:
         raise ToolchainError(
             f"no FQBN for sketch '{sketch.name}': pass --fqbn, "
-            f"or set \"fqbn\" in {sketch.path / 'firmware.json'}"
+            f'or set "fqbn" in {sketch.path / "firmware.json"}'
         )
     return chosen
 

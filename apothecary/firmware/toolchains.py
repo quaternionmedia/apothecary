@@ -18,16 +18,14 @@ import subprocess
 from pathlib import Path
 from typing import Iterable, List, Optional
 
+from ..stays_local import ARDUINO_CLI_CONFIG, PACKAGE_INDEXES, subprocess_env
 from .models import BoardInfo, CoreInfo, KnownBoard
 
 # Board-manager indexes for the popular third-party cores. arduino-cli only
 # knows the official arduino:* cores out of the box; installing one of these
-# needs its index URL passed alongside.
-ADDITIONAL_URLS = {
-    "esp32": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
-    "esp8266": "https://arduino.esp8266.com/stable/package_esp8266com_index.json",
-    "rp2040": "https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json",
-}
+# needs its index URL passed alongside. The list is the stays-local record's:
+# these are the hosts an arduino-cli under apothecary may fetch from.
+ADDITIONAL_URLS = PACKAGE_INDEXES
 
 # Cores the GUI offers one-click installs for: (core id, human label).
 SUGGESTED_CORES = [
@@ -61,9 +59,40 @@ def _exe(name: str) -> str:
     return f"{name}.exe" if platform.system() == "Windows" else name
 
 
+def arduino_data_dir() -> Path:
+    """Where arduino-cli keeps its cores and tools (``directories.data``, at its default)."""
+    home = Path.home()
+    if platform.system() == "Windows":
+        return Path(os.environ.get("LOCALAPPDATA", home / "AppData" / "Local")) / "Arduino15"
+    if platform.system() == "Darwin":
+        return home / "Library" / "Arduino15"
+    return home / ".arduino15"
+
+
+def managed_config_file() -> Path:
+    """The config file every arduino-cli the seam starts is given.
+
+    Written from ``ARDUINO_CLI_CONFIG`` (apothecary/stays_local.py) whenever
+    it differs, so what arduino-cli fetches on its own -- nothing -- is the
+    program's shape and not the state of ``~/.arduino15/arduino-cli.yaml``,
+    which is never read under apothecary.
+    """
+    path = tools_dir() / "arduino-cli.yaml"
+    text = json.dumps(ARDUINO_CLI_CONFIG, indent=2, sort_keys=True) + "\n"
+    try:
+        if path.read_text(encoding="utf-8") == text:
+            return path
+    except OSError:
+        pass
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
 def _run(
     argv: List[str], timeout: int = 60, env: Optional[dict] = None
 ) -> subprocess.CompletedProcess:
+    env = subprocess_env(env)
     try:
         return subprocess.run(
             argv, capture_output=True, text=True, timeout=timeout, env=env, check=False
@@ -88,11 +117,14 @@ def _json_or_error(result: subprocess.CompletedProcess, what: str):
 
 
 class ArduinoCli:
-    """The ``arduino-cli`` engine, found on PATH or in Apothecary's tools dir."""
+    """The ``arduino-cli`` engine, found on PATH or in Apothecary's tools dir.
 
-    def __init__(self, path: Optional[Path] = None, config_file: Optional[Path] = None):
+    Every invocation carries ``--config-file`` naming the managed config
+    (``managed_config_file()``); there is no way to hand it another.
+    """
+
+    def __init__(self, path: Optional[Path] = None):
         self._path = Path(path) if path else None
-        self.config_file = config_file
 
     # -- location -----------------------------------------------------------
 
@@ -118,13 +150,14 @@ class ArduinoCli:
     def is_available(self) -> bool:
         return self.path is not None and self.path.is_file()
 
+    @property
+    def config_file(self) -> Path:
+        return managed_config_file()
+
     def argv(self, *args: str) -> List[str]:
         if not self.is_available:
             raise ToolchainError("arduino-cli is not installed. Run `apothecary firmware install`.")
-        argv = [str(self.path)]
-        if self.config_file:
-            argv += ["--config-file", str(self.config_file)]
-        return argv + list(args)
+        return [str(self.path), "--config-file", str(self.config_file), *args]
 
     # -- queries --------------------------------------------------------------
 
@@ -136,25 +169,13 @@ class ArduinoCli:
         return (data or {}).get("VersionString") or (data or {}).get("version")
 
     def config_path(self) -> Optional[Path]:
-        """The config file arduino-cli is actually using (``config dump``)."""
+        """The config file arduino-cli is using: the managed one, if it runs at all."""
         if not self.is_available:
             return None
         result = _run(self.argv("config", "dump", "--json"), timeout=20)
         if result.returncode != 0:
             return None
-        # `config dump --json` has no path field; ask where the default lives.
-        return self.config_file or self._default_config_file()
-
-    @staticmethod
-    def _default_config_file() -> Path:
-        home = Path.home()
-        if platform.system() == "Windows":
-            base = Path(os.environ.get("LOCALAPPDATA", home / "AppData" / "Local")) / "Arduino15"
-        elif platform.system() == "Darwin":
-            base = home / "Library" / "Arduino15"
-        else:
-            base = home / ".arduino15"
-        return base / "arduino-cli.yaml"
+        return self.config_file
 
     def board_list(self) -> List[BoardInfo]:
         data = _json_or_error(_run(self.argv("board", "list", "--json"), timeout=30), "board list")
@@ -225,9 +246,6 @@ class ArduinoCli:
         urls = self.additional_urls_for(core_ids)
         return argv + (["--additional-urls", ",".join(urls)] if urls else [])
 
-    def config_init_argv(self) -> List[str]:
-        return self.argv("config", "init", "--overwrite")
-
     def core_update_index_argv(self, core_ids: Iterable[str] = ()) -> List[str]:
         return self._with_urls(self.argv("core", "update-index"), core_ids)
 
@@ -241,9 +259,24 @@ class ArduinoCli:
         """Quiet serial monitor; the caller bounds it with a timeout."""
         return self.argv("monitor", "--port", port, "--config", f"baudrate={baud}", "--quiet")
 
+    @staticmethod
+    def _plain_sketch(sketch_dir: Path) -> Path:
+        # A sketch profile (sketch.yaml / sketch.json) names where arduino-cli
+        # fetches a platform from, and arduino-cli honours it whatever the
+        # command line says; where it fetches from is the managed config's to
+        # say, so a sketch that carries one is not built.
+        for name in ("sketch.yaml", "sketch.yml", "sketch.json"):
+            if (Path(sketch_dir) / name).exists():
+                raise ToolchainError(
+                    f"{sketch_dir}/{name}: a sketch profile names where to fetch from, "
+                    "which the managed arduino-cli config alone decides; remove it"
+                )
+        return Path(sketch_dir)
+
     def compile_argv(
         self, sketch_dir: Path, fqbn: str, build_path: Optional[Path] = None
     ) -> List[str]:
+        sketch_dir = self._plain_sketch(sketch_dir)
         argv = self.argv("compile", "--fqbn", fqbn, "--warnings", "default")
         if build_path:
             argv += ["--build-path", str(build_path)]
@@ -252,6 +285,7 @@ class ArduinoCli:
     def upload_argv(
         self, sketch_dir: Path, fqbn: str, port: str, build_path: Optional[Path] = None
     ) -> List[str]:
+        sketch_dir = self._plain_sketch(sketch_dir)
         argv = self.argv("upload", "--fqbn", fqbn, "--port", port)
         if build_path:
             argv += ["--input-dir", str(build_path)]
@@ -281,13 +315,7 @@ class Esptool:
             if found:
                 return [found]
         bundled = sorted(
-            (
-                ArduinoCli._default_config_file().parent
-                / "packages"
-                / "esp32"
-                / "tools"
-                / "esptool_py"
-            ).glob("*/esptool*")
+            (arduino_data_dir() / "packages" / "esp32" / "tools" / "esptool_py").glob("*/esptool*")
         )
         for candidate in bundled:
             if candidate.is_file() and os.access(candidate, os.X_OK):

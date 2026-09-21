@@ -166,12 +166,11 @@ def test_busy_runner_returns_409(fake_arduino_cli, fresh_task_runner, tmp_path):
 
 
 def test_install_task_runs_installer(fake_arduino_cli, fresh_task_runner, monkeypatch):
-    from apothecary.firmware import installer, service
+    from apothecary.firmware import installer
 
     monkeypatch.setattr(
         installer.ArduinoCliInstaller, "install_binary", lambda self: fake_arduino_cli
     )
-    monkeypatch.setattr(service, "default_config_exists", lambda: True)
     c = TestClient(app)
     r = c.post("/firmware/install", json={"cores": ["arduino:avr"]})
     assert r.status_code == 202

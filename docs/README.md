@@ -78,7 +78,15 @@ served as it is, and links between pages work because the URL is the path.
 The bar on every page says when the generated walkthroughs were last
 refreshed; the server regenerates them in the background each time it
 starts (`--no-refresh-docs` to skip; the run's output is in
-`docs/generated/refresh.log`). The HTTP API's own docs are at `/api/docs`.
+`docs/generated/refresh.log`). The HTTP API is described at `/openapi.json`;
+nothing on these pages is loaded from anywhere but this server.
+
+The server answers this machine only -- a request from another address, a
+listener bound elsewhere or a foreign `Host` gets 403 -- and the process it
+runs in cannot connect, or look up a name, past this machine; that is the
+shape of the program (`apothecary/stays_local.py`), not a setting, and the
+record *Personal data stays on the device, by construction* in
+`governance/qm/adr/` says why and names the one eventual exception.
 
 ## Generated Documentation (screenshots, GIFs, walkthroughs)
 

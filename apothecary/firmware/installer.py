@@ -11,8 +11,8 @@ from __future__ import annotations
 import hashlib
 import io
 import json
-import os
 import platform
+import re
 import stat
 import tarfile
 import urllib.request
@@ -68,20 +68,39 @@ def asset_name(version: str, system: Optional[str] = None, machine: Optional[str
 
 
 def _fetch(url: str, timeout: int = 120) -> bytes:
+    """A tool fetch: the one kind of connection past this machine, to fixed hosts only.
+
+    ``tool_fetch`` (apothecary/stays_local.py) refuses a URL whose host is not
+    a tool source before anything is opened, and admits the sockets under
+    this call to those hosts alone -- a redirect elsewhere is refused.
+    """
+    from ..stays_local import tool_fetch
+
     req = urllib.request.Request(url, headers={"User-Agent": "apothecary-firmware-installer"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - fixed https host
+    # No proxy from the environment: a proxy is a place the fetch would go instead.
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    with tool_fetch(url), opener.open(req, timeout=timeout) as resp:  # noqa: S310
         return resp.read()
 
 
+VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
+
+
 def resolve_version(version: str = "latest", fetch: Callable[[str], bytes] = _fetch) -> str:
-    """Turn ``latest`` into a concrete ``X.Y.Z`` via the releases API."""
-    if version != "latest":
-        return version.lstrip("v")
-    data = json.loads(fetch(f"{RELEASES_API}/latest").decode("utf-8"))
-    tag = data.get("tag_name", "")
-    if not tag:
-        raise ToolchainError("could not resolve latest arduino-cli release")
-    return tag.lstrip("v")
+    """Turn ``latest`` into a concrete ``X.Y.Z`` via the releases API.
+
+    A version is three numbers and nothing else: it is spliced into the
+    release URL, and anything else in it would name another path.
+    """
+    if version == "latest":
+        data = json.loads(fetch(f"{RELEASES_API}/latest").decode("utf-8"))
+        version = data.get("tag_name", "")
+        if not version:
+            raise ToolchainError("could not resolve latest arduino-cli release")
+    version = version.strip().lstrip("v")
+    if not VERSION_RE.match(version):
+        raise ToolchainError(f"not an arduino-cli version: {version!r} (want X.Y.Z or latest)")
+    return version
 
 
 def expected_checksum(version: str, name: str, fetch: Callable[[str], bytes] = _fetch) -> str:
@@ -165,16 +184,17 @@ class ArduinoCliInstaller:
         return path
 
 
-def default_config_exists() -> bool:
-    return ArduinoCli._default_config_file().is_file()
-
-
 def env_for_arduino() -> dict:
     """Environment for arduino-cli subprocesses.
 
-    Keeps ``HOME`` authoritative so arduino-cli's data dir (``~/.arduino15``)
-    does not land in a sandboxed editor's per-revision XDG tree.
+    ``subprocess_env()`` (apothecary/stays_local.py): no proxy variable and no
+    ``ARDUINO_*`` override reaches it, so the managed config file is the whole
+    of what it fetches. Keeps ``HOME`` authoritative so arduino-cli's data dir
+    (``~/.arduino15``) does not land in a sandboxed editor's per-revision XDG
+    tree.
     """
-    env = os.environ.copy()
+    from ..stays_local import subprocess_env
+
+    env = subprocess_env()
     env.setdefault("HOME", str(Path.home()))
     return env

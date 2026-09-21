@@ -10,8 +10,10 @@ a command, exit the same way.
 import os
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime
+from pathlib import Path
 
 import click
 
@@ -377,9 +379,16 @@ def test_all(port: int, coverage: bool, headed: bool, fail_fast: bool):
         click.secho("─" * 60, fg="blue")
         click.echo("")
 
-        # Set environment for viewer
+        # Set environment for viewer. The suite's server runs on state and
+        # pictures of its own, never the person's (`test run` and `docs
+        # generate` do the same): a test never reads a real serial number
+        # or writes a frame where the person keeps theirs.
         env = os.environ.copy()
         env["APOTHECARY_VIEWER_PATH"] = ""  # Disable viewer for faster startup
+        fenced = Path(tempfile.mkdtemp(prefix="apothecary-test-all-"))
+        env["APOTHECARY_STATE_DIR"] = str(fenced / "state")
+        env["APOTHECARY_PICTURE_ROOT"] = str(fenced / "pictures")
+        (fenced / "pictures").mkdir()
 
         server_cmd = [
             sys.executable,
@@ -443,7 +452,10 @@ def test_all(port: int, coverage: bool, headed: bool, fail_fast: bool):
         if headed:
             e2e_cmd.append("--headed")
 
-        e2e_result = subprocess.run(e2e_cmd, cwd=ROOT, capture_output=True, text=True)
+        # The browser tests are told the server's picture folder, as `docs
+        # generate` tells its own, so the photo and camera tests run rather
+        # than skip -- against that folder, never the person's.
+        e2e_result = subprocess.run(e2e_cmd, cwd=ROOT, capture_output=True, text=True, env=env)
         results["e2e"]["time"] = time.time() - e2e_start
 
         # Parse E2E results

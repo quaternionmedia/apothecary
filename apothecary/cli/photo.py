@@ -22,6 +22,16 @@ def photo():
     """Look at a picture and turn what is in it into shapes you can build."""
 
 
+def _loopback_or_explain(host: str) -> str:
+    """A server started from here listens on this machine only (apothecary/stays_local.py)."""
+    from ..stays_local import require_loopback
+
+    try:
+        return require_loopback(host)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from None
+
+
 def _look_or_explain(finder: str, image: Path):
     """Run a finder, turning every foreseeable failure into a plain sentence.
 
@@ -296,7 +306,12 @@ def check(finder: str, count: int):
     help="How wide the whole picture is in the real world, in millimetres.",
 )
 @click.option("--port", default=8000, show_default=True, help="Which port to listen on.")
-@click.option("--host", default="127.0.0.1", show_default=True, help="Which address to listen on.")
+@click.option(
+    "--host",
+    default="127.0.0.1",
+    show_default=True,
+    help="Which address to listen on: this machine only.",
+)
 def view(
     image: Path,
     finder: str,
@@ -319,6 +334,7 @@ def view(
     from ..vision import ScaleReference
     from ..vision.shelf import shelf
 
+    host = _loopback_or_explain(host)
     picture = _look_or_explain(finder, image)
     if width_mm is not None and not (width_mm > 0 and width_mm < float("inf")):
         raise click.ClickException(
@@ -407,7 +423,12 @@ def _pictures_in(where: tuple[Path, ...], pattern: str) -> list[Path]:
     help="Build one arrangement out of the lot and open the viewer on it.",
 )
 @click.option("--port", default=8000, show_default=True, help="Which port to listen on.")
-@click.option("--host", default="127.0.0.1", show_default=True, help="Which address to listen on.")
+@click.option(
+    "--host",
+    default="127.0.0.1",
+    show_default=True,
+    help="Which address to listen on: this machine only.",
+)
 def gather_pictures(
     where: tuple[Path, ...],
     finder: str,
@@ -534,6 +555,8 @@ def gather_pictures(
     from ..api import _site_store, app
     from ..gathering import whole_gathering
     from ..vision.shelf import shelf
+
+    host = _loopback_or_explain(host)
 
     by_name = {picture.name: (picture, path) for picture, path in zip(pictures, paths, strict=True)}
     built = {

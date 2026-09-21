@@ -27,6 +27,7 @@ command line. These routes give the world's page the same, and no more:
 from __future__ import annotations
 
 import json
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -99,6 +100,10 @@ async def keep_picture(
     root = _root()
     folder = root / CAPTURES
     folder.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(folder, 0o700)  # a camera's frames are the person's alone
+    except OSError:
+        pass
     stem = re.sub(r"[^A-Za-z0-9_-]+", "_", Path(name).stem).strip("_") or "capture"
     at = datetime.now(timezone.utc)
     path = folder / f"{at:%Y%m%dT%H%M%S}.{at.microsecond // 1000:03d}-{stem[:60]}{suffix}"
@@ -119,8 +124,26 @@ def picture_file(path: str = Query(..., min_length=1, max_length=400)):
     asked = Path(path)
     settled = _picture_within_root(asked if asked.is_absolute() else root / asked)
     guessed, _ = mimetypes.guess_type(settled.name)
-    kind = guessed if guessed in PICTURE_TYPES else "application/octet-stream"
+    kind = guessed if guessed in PICTURE_TYPES else None
+    if kind is None or not _is_a_picture(settled):
+        # A file that is not a picture is not served, whatever folder it is in.
+        raise HTTPException(status_code=415, detail=f"{settled.name} is not a picture")
     return FileResponse(settled, media_type=kind)
+
+
+def _is_a_picture(path: Path) -> bool:
+    """Judged by its first bytes, not its name."""
+    try:
+        with path.open("rb") as f:
+            head = f.read(16)
+    except OSError:
+        return False
+    return (
+        head.startswith(PNG_MAGIC)
+        or head.startswith(JPEG_MAGIC)
+        or head.startswith((b"GIF87a", b"GIF89a", b"BM", b"II*\x00", b"MM\x00*"))
+        or (head[:4] == b"RIFF" and head[8:12] == b"WEBP")
+    )
 
 
 @router.delete("/photos/pictures/{name}")
@@ -283,8 +306,10 @@ def _load_cameras() -> Dict[str, dict]:
 
 
 def _save_cameras(cameras: Dict[str, dict]) -> None:
+    from ..firmware.devices import private_folder
+
     path = _cameras_file()
-    path.parent.mkdir(parents=True, exist_ok=True)
+    private_folder(path.parent)
     path.write_text(json.dumps(cameras, indent=2), encoding="utf-8")
 
 

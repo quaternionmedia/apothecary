@@ -7,7 +7,7 @@
 | **State** | stub |
 | **Depends on** | The records this work eventually owes |
 | **Graduates to** | one perspective, then possibly two org records |
-| **Verified** | `records/` and `PRINCIPLES.md` read in full at tip of `main`. No privacy, PII, personal-data or biometric record exists anywhere in the corpus — searched by filename and by content. |
+| **Verified** | `records/` and `PRINCIPLES.md` read in full at tip of `main`. No privacy, PII, personal-data or biometric record exists anywhere in the org corpus — searched by filename and by content. This project's own draft, *Personal data stays on the device, by construction* (`governance/qm/adr/`, 2026-09-20), is the project-level answer and the worked example an org record would generalise. |
 
 ## What
 Three gaps, none of which a project record can close:

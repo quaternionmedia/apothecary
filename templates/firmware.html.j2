@@ -242,7 +242,7 @@
 
 <script>
 (() => {
-    const BASE = "{{ base_url }}";
+    const BASE = {{ base_url | tojson }};
     const SUGGESTED = {{ suggested_cores | tojson }};
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -266,13 +266,15 @@
         else if (s.ok) { pill.className = "status-pill ok"; pill.textContent = "arduino-cli " + s.arduino_cli_version; }
         else { pill.className = "status-pill bad"; pill.textContent = "toolchain missing"; }
 
+        // Every value from the server is escaped here; only the markup this
+        // code builds around an escaped value is markup.
         const rows = [
-            ["tools dir", s.tools_dir],
+            ["tools dir", esc(s.tools_dir)],
             ["arduino-cli", s.arduino_cli_ok ? `<span class="ok">✓ ${esc(s.arduino_cli_version)}</span> <span class="v">${esc(s.arduino_cli_path)}</span>` : '<span class="bad">✗ not installed</span>'],
-            ["config", s.config_file || "–"],
+            ["config", esc(s.config_file || "–")],
             ["esptool", s.esptool_ok ? `<span class="ok">✓ ${esc(s.esptool_version)}</span> <span class="v">${esc(s.esptool_path)}</span>` : '<span class="warn">• not found (optional)</span>'],
         ];
-        $("toolchain").innerHTML = rows.map(([k, v]) => `<div><span class="k">${k}:</span> <span class="v">${v.startsWith("<") ? v : esc(v)}</span></div>`).join("")
+        $("toolchain").innerHTML = rows.map(([k, v]) => `<div><span class="k">${k}:</span> <span class="v">${v}</span></div>`).join("")
             + (s.problems || []).map((p) => `<div class="problem">! ${esc(p)}</div>`).join("");
         $("install-btn").textContent = s.arduino_cli_ok ? "Update arduino-cli" : "Install arduino-cli";
 
@@ -639,7 +641,7 @@
 // nowhere shows nothing rather than a guess.
 import { mountBoardView, whereIs } from '/static/board_view.js';
 (() => {
-    const BASE = "{{ base_url }}";
+    const BASE = {{ base_url | tojson }};
     const views = new Map();
     async function refresh() {
         for (const [port, view] of views) { view.destroy(); views.delete(port); }

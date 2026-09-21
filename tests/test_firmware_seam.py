@@ -172,7 +172,12 @@ def test_arduino_cli_queries_parse_json(fake_arduino_cli):
 def test_arduino_cli_argv_builders(fake_arduino_cli, tmp_path):
     cli = get_arduino_cli()
     sketch = tmp_path / "s"
-    assert cli.compile_argv(sketch, "arduino:avr:uno")[1:] == [
+    # Every argv is the binary, then the managed config file, then the command.
+    assert cli.compile_argv(sketch, "arduino:avr:uno")[1:3] == [
+        "--config-file",
+        str(cli.config_file),
+    ]
+    assert cli.compile_argv(sketch, "arduino:avr:uno")[3:] == [
         "compile",
         "--fqbn",
         "arduino:avr:uno",
@@ -181,7 +186,7 @@ def test_arduino_cli_argv_builders(fake_arduino_cli, tmp_path):
         str(sketch),
     ]
     up = cli.upload_argv(sketch, "arduino:avr:uno", "/dev/ttyUSB0", tmp_path / "b")
-    assert up[1:] == [
+    assert up[3:] == [
         "upload",
         "--fqbn",
         "arduino:avr:uno",
@@ -192,7 +197,7 @@ def test_arduino_cli_argv_builders(fake_arduino_cli, tmp_path):
         str(sketch),
     ]
     esp = cli.core_install_argv("esp32:esp32")
-    assert esp[1:] == [
+    assert esp[3:] == [
         "core",
         "install",
         "esp32:esp32",
@@ -204,7 +209,7 @@ def test_arduino_cli_argv_builders(fake_arduino_cli, tmp_path):
         cli.core_update_index_argv(["esp32:esp32", "esp8266:esp8266"])[-1]
         == f"{ADDITIONAL_URLS['esp32']},{ADDITIONAL_URLS['esp8266']}"
     )
-    assert cli.lib_install_argv(["FastLED", "Control Surface"])[1:] == [
+    assert cli.lib_install_argv(["FastLED", "Control Surface"])[3:] == [
         "lib",
         "install",
         "FastLED",
@@ -484,7 +489,7 @@ def test_service_resolve_fqbn_and_port(fake_arduino_cli, tmp_path):
 def test_service_upload_compiles_first(fake_arduino_cli):
     sketch = find_sketch("footpedal", ROOT)
     steps = service.upload_steps(sketch, "arduino:avr:uno", "/dev/ttyUSB0")
-    assert steps[0][1] == "compile" and steps[1][1] == "upload"
+    assert steps[0][3] == "compile" and steps[1][3] == "upload"  # after --config-file
     assert (
         steps[0][steps[0].index("--build-path") + 1] == steps[1][steps[1].index("--input-dir") + 1]
     )
@@ -494,7 +499,6 @@ def test_service_install_runs_cores_and_libraries(fake_arduino_cli, tmp_path, mo
     monkeypatch.setattr(
         installer.ArduinoCliInstaller, "install_binary", lambda self: fake_arduino_cli
     )
-    monkeypatch.setattr(service, "default_config_exists", lambda: True)
     spec = installer.InstallSpec(cores=["esp32:esp32"], libraries=["FastLED"])
     status = service.install(spec, lambda _line: None)
     assert status.ok

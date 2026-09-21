@@ -11,11 +11,24 @@ import uvicorn
 
 from ..projects.parts.skeleton import ROOT
 from ..projects.registry import scan_projects, stl_output_for
+from ..stays_local import require_loopback
 from .utils import _get_stl_bounding_box, _safe_echo
 
 
+def _loopback_or_die(host: str) -> str:
+    """Every server this CLI starts listens on this machine only; not a choice."""
+    try:
+        return require_loopback(host)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from None
+
+
 @click.command()
-@click.option("--host", default="127.0.0.1", help="Host to bind to")
+@click.option(
+    "--host",
+    default="127.0.0.1",
+    help="Address to listen on: this machine only (127.0.0.1, localhost, ::1)",
+)
 @click.option("--port", default=8000, type=int, help="Port to bind to")
 @click.option("--reload/--no-reload", default=False, help="Enable auto-reload on code changes")
 @click.option(
@@ -32,7 +45,8 @@ from .utils import _get_stl_bounding_box, _safe_echo
 def serve(
     host: str, port: int, reload: bool, viewer_path: str | None, no_viewer: bool, refresh_docs: bool
 ):
-    """Run the FastAPI server."""
+    """Run the FastAPI server. It listens on this machine only (see apothecary/stays_local.py)."""
+    host = _loopback_or_die(host)
     # CRITICAL: Set environment variables BEFORE importing the app,
     # because the app module initializes the viewer mount at import time
 
@@ -108,7 +122,11 @@ def serve(
 
 
 @click.command()
-@click.option("--host", default="127.0.0.1", help="Host to bind to")
+@click.option(
+    "--host",
+    default="127.0.0.1",
+    help="Address to listen on: this machine only (127.0.0.1, localhost, ::1)",
+)
 @click.option("--port", default=8000, type=int, help="Port to bind to")
 @click.option(
     "--install", is_flag=True, help="Run uv sync before starting (usually not needed with uv run)"
@@ -128,6 +146,7 @@ def dev(host: str, port: int, install: bool, skip_stl: bool, elephant: bool):
         apothecary dev
         apothecary dev --install --port 3000
     """
+    host = _loopback_or_die(host)
     _safe_echo("🧪 Apothecary Dev Mode", bold=True)
     click.echo("")
 

@@ -99,15 +99,34 @@ def inline(text: str) -> str:
     return "".join(out)
 
 
+def _local(url: str) -> bool:
+    """A URL a page here may load: relative, or this server's own."""
+    return not re.match(r"^(?:[a-z][a-z0-9+.-]*:)?//", url, re.I)
+
+
+def _link(text: str, url: str) -> str:
+    """A link a person may click: relative, this server's, http(s) or mailto. A
+    `javascript:` or other scheme is not a link; it is shown as the text it was."""
+    scheme = re.match(r"^([a-z][a-z0-9+.-]*):", url, re.I)
+    if scheme and scheme.group(1).lower() not in ("http", "https", "mailto"):
+        return f"{text} ({html.escape(url, quote=False)})"
+    return f'<a href="{html.escape(url, quote=True)}">{text}</a>'
+
+
+def _image(alt: str, url: str) -> str:
+    # A picture from elsewhere is not fetched (the page's policy would refuse
+    # it anyway); it is named, so a reader knows what the page meant.
+    if not _local(url):
+        return f"[picture elsewhere: {html.escape(alt or url, quote=False)}]"
+    return '<img src="{}" alt="{}">'.format(
+        html.escape(url, quote=True), html.escape(alt, quote=True)
+    )
+
+
 def _inline_no_code(text: str) -> str:
     s = html.escape(text, quote=False)
-    s = IMAGE.sub(
-        lambda m: '<img src="{}" alt="{}">'.format(
-            html.escape(m.group(2), quote=True), html.escape(m.group(1), quote=True)
-        ),
-        s,
-    )
-    s = LINK.sub(lambda m: f'<a href="{html.escape(m.group(2), quote=True)}">{m.group(1)}</a>', s)
+    s = IMAGE.sub(lambda m: _image(m.group(1), m.group(2)), s)
+    s = LINK.sub(lambda m: _link(m.group(1), m.group(2)), s)
     s = AUTOLINK.sub(lambda m: f'<a href="{m.group(1)}">{m.group(1)}</a>', s)
     s = BOLD.sub(r"<strong>\1</strong>", s)
     s = STRIKE.sub(r"<del>\1</del>", s)
@@ -320,7 +339,7 @@ PAGE = """<!DOCTYPE html>
 <div class="bar"><a href="/viewer">🧪 Apothecary</a> <a href="/docs/README.md">docs</a>
 <span class="crumb">{crumb}</span><span class="spacer"></span>
 <span class="refresh {refresh_class}" title="{refresh_title}">{refresh_text}</span>
-<a href="/api/docs" title="The HTTP API, as OpenAPI">API</a></div>
+<a href="/openapi.json" title="The HTTP API, as OpenAPI">API</a></div>
 <main>{body}</main>
 </body></html>"""
 

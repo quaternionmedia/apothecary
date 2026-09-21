@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Callable, Dict, Iterator, List, Optional
 
 from ..projects.parts.skeleton import ROOT
+from ..stays_local import subprocess_env
 from . import gcode
 from .models import (
     DeviceInfo,
@@ -66,6 +67,22 @@ def state_dir() -> Path:
     return Path(override).expanduser() if override else Path.home() / ".apothecary"
 
 
+def private_folder(folder: Path) -> Path:
+    """Make ``folder`` (and what is above it, up to the state folder) readable by
+    this account alone: serial numbers, camera labels and readings are the
+    person's, whatever the umask says about the rest of their files."""
+    folder.mkdir(parents=True, exist_ok=True)
+    root = state_dir()
+    for here in [folder, *folder.parents]:
+        try:
+            os.chmod(here, 0o700)
+        except OSError:
+            pass
+        if here == root or root not in here.parents:
+            break
+    return folder
+
+
 def state_file() -> Path:
     return state_dir() / "firmware-state.json"
 
@@ -88,7 +105,7 @@ class FirmwareState:
         return data
 
     def _save(self, data: dict) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        private_folder(self.path.parent)
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
         tmp.replace(self.path)
@@ -621,7 +638,7 @@ def leveling_record(record_id: str) -> Optional[LevelingRecord]:
 
 def _save_leveling(record: LevelingRecord) -> Path:
     folder = leveling_dir()
-    folder.mkdir(parents=True, exist_ok=True)
+    private_folder(folder)
     path = folder / f"{record.id}.json"
     path.write_text(record.model_dump_json(indent=2), encoding="utf-8")
     return path
@@ -777,7 +794,7 @@ def save_print_file(name: str, data: bytes) -> PrintFile:
     stem = re.sub(r"\.(gcode|gco|g|txt)$", "", stem, flags=re.IGNORECASE)[:60]
     file_id = f"{at:%Y%m%dT%H%M%S}.{at.microsecond // 1000:03d}-{stem}"
     folder = prints_dir()
-    folder.mkdir(parents=True, exist_ok=True)
+    private_folder(folder)
     _print_file_path(file_id).write_text(text, encoding="utf-8")
     meta = PrintFile(
         id=file_id,
@@ -856,7 +873,7 @@ def print_record(record_id: str) -> Optional[PrintRecord]:
 
 def _save_print_record(record: PrintRecord) -> Path:
     folder = print_records_dir()
-    folder.mkdir(parents=True, exist_ok=True)
+    private_folder(folder)
     path = folder / f"{record.id}.json"
     path.write_text(record.model_dump_json(indent=2), encoding="utf-8")
     return path
@@ -1120,6 +1137,7 @@ class SerialStreams:
                 text=True,
                 errors="replace",  # ROM bootloaders chatter at other baud rates: garbage, not fatal
                 bufsize=1,
+                env=subprocess_env(),
             )
             self._procs[port] = proc
             return proc

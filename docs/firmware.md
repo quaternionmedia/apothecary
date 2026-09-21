@@ -45,6 +45,19 @@ The tools dir is under `$HOME` on purpose rather than an XDG data dir: sandboxed
 editors (the VS Code snap, for one) point `XDG_DATA_HOME` at a per-revision tree
 that disappears on the next editor update.
 
+Every arduino-cli the seam starts is given `--config-file
+~/.apothecary/tools/arduino-cli.yaml`, a file Apothecary writes from
+`stays_local.ARDUINO_CLI_CONFIG` whenever it differs: the cloud board lookup
+arduino-cli would otherwise make for every unrecognised USB device is off, so
+is its update check, and the package indexes it may fetch from are named.
+Its environment carries no proxy variable and no `ARDUINO_*` override, since
+arduino-cli lets either outrank the file. Your own `~/.arduino15/arduino-cli.yaml`
+is not read under Apothecary; `apothecary firmware status` and the firmware
+page say which file is in use. The reason is the record *Personal data stays
+on the device, by construction* (`governance/qm/adr/`): what a subprocess
+fetches is fixed by the program, not by a file or a variable a person or an
+agent could set.
+
 On Linux the serial port must be writable by your user — usually
 `sudo usermod -aG dialout $USER` and a new login.
 
@@ -77,6 +90,12 @@ retypes them per build:
 | `cores` | cores the sketch needs (informational; install with `firmware install --core`) |
 | `libraries` | libraries to install, `Name` or `Name@Version` |
 | `note` | shown in the GUI's build panel |
+
+`firmware.json` is Apothecary's sidecar, not arduino-cli's. A sketch that
+carries an arduino-cli *profile* (`sketch.yaml`, `sketch.json`) is not
+built: a profile names where arduino-cli fetches a platform from, arduino-cli
+honours it over the command line, and where to fetch from is the managed
+config's alone to say (see *Setup*).
 
 Build output goes to `build/firmware/<sketch>/` (git-ignored), never into `parts/`.
 

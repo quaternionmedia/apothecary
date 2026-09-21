@@ -39,6 +39,8 @@ def pytest_addoption(parser):
             "to a full test run."
         ),
     )
+
+
 # --- firmware toolchain fakes ---------------------------------------------------
 #
 # A stand-in `arduino-cli` executable that answers the JSON queries the seam
@@ -49,7 +51,24 @@ def pytest_addoption(parser):
 
 
 import pytest  # noqa: E402
+import starlette.testclient as _st  # noqa: E402
 from firmware_helpers import _isolate_firmware_state, write_fake_arduino_cli  # noqa: E402
+
+import apothecary  # noqa: E402,F401  -- the guard, before any test connects anywhere
+
+# The app answers this machine only (apothecary/stays_local.py). Starlette's
+# TestClient presents itself as "testclient" at "testserver", which is
+# nowhere; these tests run here, so what it presents is this machine.
+_test_client_init = _st.TestClient.__init__
+
+
+def _from_this_machine(
+    self, app, base_url="http://127.0.0.1", *args, client=("127.0.0.1", 50000), **kwargs
+):
+    _test_client_init(self, app, base_url, *args, client=client, **kwargs)
+
+
+_st.TestClient.__init__ = _from_this_machine
 
 
 @pytest.fixture
