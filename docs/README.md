@@ -71,6 +71,7 @@ by `pytest walkthrough`. Start there.
 
 | Document | Description |
 |----------|-------------|
+| [Local integration run-through, 2026-09-21](validation/2026-09-21-local-integration.md) | A checklist to walk at the bench, by topic: the guard, geometry from elsewhere, the bench drawn as it is, the rail and the machine popup, the camera, the printer with and without hardware, the docs, the suites -- two servers, tick as you go, results at the end |
 | [Ender bench, 2026-09-20](validation/2026-09-20-ender-bench.md) | The printer seam against a real Marlin board: what was verified without arming, what it found, and the checklist for the rest |
 
 ## Read these in the browser

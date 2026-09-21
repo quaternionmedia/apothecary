@@ -1,9 +1,13 @@
 # The pull requests, ready to open
 
-*Written 2026-09-21 at the tip of `consolidate/2026-09-19`. This machine has
-no credential for GitHub, so nothing below has been pushed or opened; every
-gate the two repositories run was run here first, and the descriptions are
-written to be pasted. The consolidation plan
+*Written 2026-09-21 at the tip of `consolidate/2026-09-19`, before this
+machine had a credential; every gate the two repositories run was run here
+first, and the descriptions were written to be pasted. Later that day, with
+`gh` signed in: both branches pushed, apothecary #21's title and description
+replaced with the text below (through the REST API; `gh pr edit` trips on
+the repository's classic-projects field), and qm **#121** opened as a draft
+against `project/apothecary`, assigned, no review requested; its base check
+is pasted in. The commands stay here for the next time. The consolidation plan
 ([consolidation-2026-09-19.md](consolidation-2026-09-19.md)) says why the
 branches are shaped as they are; the queue
 ([queue-2026-09-20.md](queue-2026-09-20.md)) says what is left.*
