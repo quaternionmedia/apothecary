@@ -63,6 +63,7 @@ by `pytest walkthrough`. Start there.
 |----------|-------------|
 | [Consolidation, 2026-09-19](plans/consolidation-2026-09-19.md) | Landing the printer seam on the integration branch: where the lines are, the order of operations, the census gate, and what a person has to decide |
 | [One screen, 2026-09-20](plans/one-screen-2026-09-20.md) | The world as the one screen, with anchors, popups and panels in front of it: the three screens today, the shape of the end, six phases, and the census as the meter |
+| [The shape finder, with a model behind it, 2026-09-21](plans/photo-finders-local-models-2026-09-21.md) | A plan for optional local models behind the photo finder: the seam as it stands, what a model adds and where it lands, the plugin shape, what is lawful under the stays-on-the-device rule, candidates with licences checked, phases, and what it pends on |
 | [What is queued, 2026-09-20](plans/queue-2026-09-20.md) | The photo effort, the open branches and pull requests, what the plans state and have not done, and a bed probed hot and cold as time series -- each with where it stands and its next step |
 
 ## Validation
