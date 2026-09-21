@@ -148,10 +148,13 @@ def parts_import(
     }
     (folder / SIDECAR).write_text(json.dumps(sidecar, indent=2) + "\n", encoding="utf-8")
     # REUSE reads a .license file beside a file that cannot carry a header.
+    # (The tag names are spelled in halves so that REUSE, which reads a tag
+    # anywhere in a file as that file's own declaration, does not read this
+    # module as licensed under whatever the person typed.)
     if license_id or author:
         (folder / f"{kept.name}.license").write_text(
-            (f"SPDX-FileCopyrightText: {author}\n" if author else "")
-            + (f"SPDX-License-Identifier: {license_id}\n" if license_id else ""),
+            (f"SPDX-FileCopyright{'Text'}: {author}\n" if author else "")
+            + (f"SPDX-License-{'Identifier'}: {license_id}\n" if license_id else ""),
             encoding="utf-8",
         )
     size = [round(hi[i] - lo[i], 1) for i in range(3)]

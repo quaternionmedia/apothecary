@@ -184,10 +184,8 @@ def test_parts_import_brings_a_file_in_as_a_part(tmp_path):
             -0.0,
             25.4,
         ]
-        assert (
-            "SPDX-License-Identifier: CC-BY-4.0"
-            in (folder / "zz_imported_brick.mesh.stl.license").read_text()
-        )
+        tag = "SPDX-License-" + "Identifier"  # in halves: REUSE reads a tag anywhere in a file
+        assert f"{tag}: CC-BY-4.0" in (folder / "zz_imported_brick.mesh.stl.license").read_text()
         part = import_module(resolve_wrapper_module("zz_imported_brick", ROOT)).DEFAULT
         assert part.source.author == "Someone" and part.category == "imported"
         assert round(part.get_bounds().size.y, 1) == 76.2
