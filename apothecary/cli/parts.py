@@ -1,15 +1,18 @@
 """Parts-related CLI commands: parts group and subcommands."""
 
 import json
+import shutil
 import tempfile
+from datetime import date
 from pathlib import Path
 
 import click
 from pydantic import ValidationError
 
+from ..meshes import UNIT_SCALES, bounds, transform, write_stl
 from ..projects.parts.skeleton import ROOT
 from ..projects.parts.stl_renderer import read_params_sidecar, write_params_sidecar
-from ..projects.registry import scan_projects, stl_output_for
+from ..projects.registry import _sanitize_module_name, scan_projects, stl_output_for
 from ..templates import TemplateRenderer
 from . import status
 from .utils import (
@@ -34,6 +37,137 @@ def parts_list(json_out: bool):
         return
     for p in items:
         click.echo(f"{p.name} (wrapper={p.wrapper})")
+
+
+FIELD_OF_USE = ("-NC", "-ND", "NonCommercial", "NoDerivatives", "personal")
+
+
+@parts.command("import")
+@click.argument("file", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--name", "name", default=None, help="The part's name (default: the file's stem)")
+@click.option(
+    "--units",
+    type=click.Choice(sorted(UNIT_SCALES)),
+    default="mm",
+    show_default=True,
+    help="The units the file is in; it is stored in millimetres.",
+)
+@click.option(
+    "--up",
+    type=click.Choice(["z", "y"]),
+    default="z",
+    show_default=True,
+    help="Which axis is up in the file; it is stored Z-up.",
+)
+@click.option("--title", default=None, help="What the thing is called where it came from")
+@click.option("--author", default=None, help="Who made it")
+@click.option("--url", default=None, help="Where it came from (recorded, never fetched)")
+@click.option("--license", "license_id", default=None, help="Its licence, as an SPDX id")
+@click.option("--note", default=None, help="Anything else worth recording")
+@click.option("--category", default="imported", show_default=True)
+@click.option("--tag", "tags", multiple=True, help="A tag (repeatable)")
+@click.option("--force", is_flag=True, help="Replace a part of the same name")
+def parts_import(
+    file: Path,
+    name: str | None,
+    units: str,
+    up: str,
+    title: str | None,
+    author: str | None,
+    url: str | None,
+    license_id: str | None,
+    note: str | None,
+    category: str,
+    tags: tuple[str, ...],
+    force: bool,
+):
+    """Bring a mesh made elsewhere (STL or OBJ) into parts/ as a part.
+
+    The file is read, turned into millimetres and Z-up, and written beside a
+    one-line SCAD that imports it and a part.json that records where it came
+    from -- so the part lists, renders, sits in a site by its measured
+    bounds, and is drawn in the world like any other. Nothing is fetched:
+    the file is one the person already has.
+    """
+    from ..meshes import MeshError, read_mesh
+    from ..projects.parts.described import SIDECAR
+
+    part_name = _sanitize_module_name(name or file.stem)
+    folder = ROOT / "parts" / part_name
+    if folder.exists() and not force:
+        raise click.ClickException(f"{folder} exists; --force replaces it")
+    if license_id and any(mark.lower() in license_id.lower() for mark in FIELD_OF_USE):
+        # The open-license record takes no field-of-use restriction. The file
+        # stays on this machine either way (STLs are ignored by git); it is
+        # the repository it cannot join.
+        _safe_echo(
+            f"! {license_id}: a licence with a field-of-use restriction cannot be committed "
+            "to this repository (the open-license record, §1). Kept here for your own use.",
+            fg="yellow",
+        )
+    try:
+        triangles = read_mesh(file)
+    except MeshError as exc:
+        raise click.ClickException(str(exc)) from None
+    placed = transform(triangles, scale=UNIT_SCALES[units], up=up)
+    lo, hi = bounds(placed)
+    folder.mkdir(parents=True, exist_ok=True)
+    kept = folder / f"{part_name}.mesh.stl"
+    write_stl(placed, kept, name=part_name)
+    # The STL a part serves is its render; for a mesh in millimetres and Z-up
+    # that is the file itself, so the viewer needs no OpenSCAD to draw it.
+    shutil.copyfile(kept, folder / f"{part_name}.stl")
+    (folder / f"{part_name}.scad").write_text(
+        f"// {part_name}: a mesh made elsewhere, brought in with `apothecary parts import`.\n"
+        f"// Source: {title or file.name}"
+        + (f" by {author}" if author else "")
+        + (f" ({license_id})" if license_id else "")
+        + "\n"
+        + (f"// {url}\n" if url else "")
+        + f"// The mesh is stored in millimetres, Z-up (it was {units}, {up}-up).\n"
+        f'import("{kept.name}", convexity=10);\n',
+        encoding="utf-8",
+    )
+    sidecar = {
+        "name": part_name,
+        "description": title or f"{file.name}, brought in from elsewhere",
+        "category": category,
+        "tags": list(tags) or ["imported", "mesh"],
+        "bounds": {"min": [round(v, 3) for v in lo], "max": [round(v, 3) for v in hi]},
+        "source": {
+            "title": title,
+            "author": author,
+            "url": url,
+            "license": license_id,
+            "obtained": date.today().isoformat(),
+            "note": note,
+            "file": file.name,
+            "units": units,
+            "up": up,
+        },
+    }
+    (folder / SIDECAR).write_text(json.dumps(sidecar, indent=2) + "\n", encoding="utf-8")
+    # REUSE reads a .license file beside a file that cannot carry a header.
+    if license_id or author:
+        (folder / f"{kept.name}.license").write_text(
+            (f"SPDX-FileCopyrightText: {author}\n" if author else "")
+            + (f"SPDX-License-Identifier: {license_id}\n" if license_id else ""),
+            encoding="utf-8",
+        )
+    size = [round(hi[i] - lo[i], 1) for i in range(3)]
+    _safe_echo(
+        f"✓ {part_name}: {len(placed)} triangles, {size[0]} x {size[1]} x {size[2]} mm", fg="green"
+    )
+    click.echo(f"  {folder.relative_to(ROOT)}/: {kept.name}, {part_name}.scad, {SIDECAR}")
+    click.echo(
+        "  STL files are ignored by git (.gitignore: *.stl); to share this one, un-ignore it"
+    )
+    click.echo("  and give it a licence the open-license record accepts.")
+    click.echo(
+        f"  Place it: Assembly(name=..., part_ref={part_name!r}, "
+        f"footprint=BoundingBox3D(min_point=Vector3D(x={lo[0]:.1f}, y={lo[1]:.1f}, z={lo[2]:.1f}), "
+        f"max_point=Vector3D(x={hi[0]:.1f}, y={hi[1]:.1f}, z={hi[2]:.1f})))"
+    )
 
 
 @parts.command("info")
@@ -520,6 +654,8 @@ def parts_generate_stl(
                 f"Generated {stl_path.name} in {result.render_time_seconds:.1f}s",
                 indent=0,
             )
+            for line in result.dropped:
+                status.line("warn", f"OpenSCAD dropped part of it: {line}", indent=1)
         else:
             raise click.ClickException(f"Generation failed: {result.error_message}")
 

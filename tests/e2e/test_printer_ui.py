@@ -526,8 +526,10 @@ def test_the_board_is_drawn_in_its_printer_and_the_nozzle_follows_a_jog(
         for axis in "xyz":
             assert printer_box["min"][axis] - 1 <= inner["min"][axis], (axis, drawn)
             assert inner["max"][axis] <= printer_box["max"][axis] + 1, (axis, drawn)
-    assert printer_box["max"]["x"] - printer_box["min"]["x"] == pytest.approx(300, abs=1)
-    assert board_box["min"]["z"] == pytest.approx(5, abs=1)  # on the enclosure floor
+    # An Ender 3, drawn as it is: 472 wide with the PSU and the spool tube, and
+    # its board on the floor of the electronics box (21 up, the board 5 in it).
+    assert printer_box["max"]["x"] - printer_box["min"]["x"] == pytest.approx(472, abs=1)
+    assert board_box["min"]["z"] == pytest.approx(26, abs=1)
     page.locator("#ctl").check()
     expect(page.locator("#control")).to_be_visible(timeout=5000)
     page.locator("#control button[data-cmd='M25']").click()  # pause the SD print so a jog is honest

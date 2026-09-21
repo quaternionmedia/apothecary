@@ -1016,9 +1016,22 @@ def _node_stl_cache_paths(scad_text: str) -> tuple[Path, Path]:
     file's* own directory rather than the process working directory. So the
     source has to sit at the repository root to render at all, while the STL
     it produces belongs in the cache. It is scratch: written, rendered, removed.
+
+    A mesh the text imports is part of the identity too: the same
+    ``import("parts/ender3/ender3.stl")`` after the file was regenerated is a
+    different render, so each imported file's size and mtime go into the key.
     """
-    digest = hashlib.sha256(scad_text.encode("utf-8")).hexdigest()[:20]
-    return ROOT / f".node-stl-{digest}.scad", _NODE_STL_CACHE_DIR / f"{digest}.stl"
+    digest = hashlib.sha256(scad_text.encode("utf-8"))
+    for match in re.finditer(r'import\("([^"]+)"', scad_text):
+        imported = Path(match.group(1))
+        imported = imported if imported.is_absolute() else ROOT / imported
+        try:
+            stat = imported.stat()
+            digest.update(f"{match.group(1)}:{stat.st_size}:{stat.st_mtime_ns}".encode())
+        except OSError:
+            digest.update(f"{match.group(1)}:missing".encode())
+    key = digest.hexdigest()[:20]
+    return ROOT / f".node-stl-{key}.scad", _NODE_STL_CACHE_DIR / f"{key}.stl"
 
 
 def _bounds_dict(bounds: BoundingBox3D | None) -> Dict[str, List[float]] | None:
@@ -1173,6 +1186,11 @@ def _assembly_tree(
         "build_volume": (
             [node.build_volume.x, node.build_volume.y, node.build_volume.z]
             if node.build_volume
+            else None
+        ),
+        "build_origin": (
+            [node.build_origin.x, node.build_origin.y, node.build_origin.z]
+            if node.build_origin
             else None
         ),
         "primitive": (
@@ -1607,6 +1625,15 @@ async def get_node_stl(name: str, path: str):
             raise HTTPException(
                 status_code=500, detail=f"STL generation failed: {result.error_message}"
             )
+        if result.dropped:
+            # A node is the whole of what it holds; a mesh OpenSCAD could not
+            # read back is missing from what it wrote, and that is not served.
+            stl_path.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=500,
+                detail="OpenSCAD dropped part of this node's geometry: "
+                + "; ".join(result.dropped)[:400],
+            )
 
     try:
         stl_data = stl_path.read_bytes()
@@ -1699,8 +1726,18 @@ def _describe_for_view(
             if getattr(n, "build_volume", None)
             else None
         ),
-        # The bed sits on the base of a desktop printer.
-        "base_height": _base_height(n) if is_printer else 0.0,
+        # Where the build volume starts, in the node's frame, when the node
+        # says; else the bed sits on the base of a desktop printer, centred.
+        "build_origin": (
+            [n.build_origin.x, n.build_origin.y, n.build_origin.z]
+            if getattr(n, "build_origin", None)
+            else None
+        ),
+        "base_height": (
+            n.build_origin.z
+            if getattr(n, "build_origin", None)
+            else (_base_height(n) if is_printer else 0.0)
+        ),
     }
 
 

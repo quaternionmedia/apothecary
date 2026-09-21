@@ -760,7 +760,9 @@ def _node_ring(
         if swap is not None:
             options.append(swap)
 
-    if node is not None and node.part_ref:
+    # A part leaf's shape is a thing to get; a machine that is a part with
+    # things inside it (a printer holding its board) keeps the ring it had.
+    if node is not None and node.part_ref and not node.children:
         options.append(Option(id="stl", label="Get shape", action="render-stl"))
 
     options.append(Option(id="why", label="Why this", action="explain"))

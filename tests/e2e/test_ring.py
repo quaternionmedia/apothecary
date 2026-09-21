@@ -516,8 +516,9 @@ def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: s
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     wedges = _wedges(page)
     assert wedges["8"] == "Pieces" and "Up" not in wedges.values()
-    # Thirteen pieces: grouped in small lettered groups, each named for its
-    # first piece. The page knows the address; the test asks rather than guesses.
+    # Sixteen pieces: grouped in small lettered groups, each named for its
+    # first piece in name order. The page knows the address; the test asks
+    # rather than guesses.
     address = page.evaluate(
         "() => window.apothecaryRing.addressOf("
         "window.apothecaryRing.current().root, 'select:printer_1')"
@@ -525,7 +526,7 @@ def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: s
     assert address.startswith("8") and len(address) == 3 and "5" not in address
     page.keyboard.press("8")
     groups = _wedges(page)
-    assert len(groups) >= 2 and groups["8"].startswith("cnc")  # sorted, named for the first
+    assert len(groups) >= 2 and groups["8"].startswith("arduino")  # sorted, named for the first
     for digit in address[1:]:
         page.keyboard.press(digit)
     expect(page.locator("#ring-overlay")).to_have_count(0)

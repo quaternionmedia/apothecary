@@ -162,7 +162,13 @@
             background: none; border: 0; color: #888; font: inherit; font-size: 0.8rem; cursor: pointer; padding: 0 0.3rem; line-height: 1;
         }
         .panel-title button:hover { color: #eee; }
-        .panel-body-slot { padding: 0.75rem 1rem; overflow: auto; }
+        /* A docked panel keeps its height when the panel below it grows on a
+           selection -- a list a person is scrolling does not shrink under the
+           pointer, and a form's button does not slide under the next title.
+           Each body scrolls inside itself past 40% of the page; the rail
+           scrolls as a whole when the panels outgrow it. */
+        .panel-rail-body > .panel { flex: 0 0 auto; }
+        .panel-body-slot { padding: 0.75rem 1rem; overflow: auto; max-height: 40vh; }
         .panel.free .panel-body-slot { max-height: none; flex: 1; }
         .panel.collapsed .panel-body-slot { display: none; }
         .panel-free-layer { position: absolute; inset: 0; pointer-events: none; }
@@ -1556,9 +1562,13 @@
                 }
 
                 const [bvApX, bvApY, bvApZ] = node.build_volume;
-                const centerApX = (bounds.min[0] + bounds.max[0]) / 2;
-                const centerApY = (bounds.min[1] + bounds.max[1]) / 2;
-                const baseApZ = bounds.min[2];
+                // A machine that says where its volume starts (build_origin,
+                // in its own frame) is drawn there; a block is centred on its
+                // footprint with the volume on the floor.
+                const origin = node.build_origin;
+                const centerApX = origin ? node.position.x + origin[0] + bvApX / 2 : (bounds.min[0] + bounds.max[0]) / 2;
+                const centerApY = origin ? node.position.y + origin[1] + bvApY / 2 : (bounds.min[1] + bounds.max[1]) / 2;
+                const baseApZ = origin ? node.position.z + origin[2] : bounds.min[2];
                 const size = [bvApX, bvApZ, bvApY];
                 const center = [centerApX, baseApZ + bvApZ / 2, centerApY];
 
@@ -1760,6 +1770,12 @@
             // (render-dot, driven by meshByName -- see currentRenderNodes/
             // expandedCategories for what controls that).
             renderContentsList(focus) {
+                // Rebuilt in place, so a list long enough to scroll (a catalog of
+                // twenty parts) stays where the person had scrolled it: a click
+                // re-renders, and the row under the pointer must still be there
+                // for the second click of a double-click.
+                const scroller = this.contentsEl.closest('.panel-body-slot') || this.contentsEl;
+                const scrolled = scroller.scrollTop;
                 this.contentsEl.innerHTML = '';
                 const focusPrefix = this.focusPath.join('.');
                 // A focused leaf lists itself, for the same reason it renders
@@ -1769,6 +1785,7 @@
                     const path = child === focus ? focusPrefix : pathForChild(focusPrefix, child.name);
                     this.contentsEl.appendChild(this.buildTreeRows(child, path, 0));
                 });
+                scroller.scrollTop = scrolled;
             }
 
             buildTreeRows(node, path, depth) {
@@ -1849,7 +1866,10 @@
                 const node = this.renderNodeByKey[key];
                 const mesh = this.meshByName[key];
 
-                if (mesh && node && this.isEditableSelection(focus, node) && !node.part_ref) {
+                // A catalog leaf is not moved by hand (the library lays itself
+                // out); a machine that is a part with things inside it moves
+                // like any other structure.
+                if (mesh && node && this.isEditableSelection(focus, node) && !(node.part_ref && node.children.length === 0)) {
                     this.transformControls.attach(mesh);
                 } else {
                     this.transformControls.detach();
@@ -1874,13 +1894,18 @@
                     this.selectedBodyEl.innerHTML = '<div class="no-selection">Click a node to select it</div>';
                     return;
                 }
-                if (selected.part_ref) {
-                    this.renderPartPanel(selected);
-                } else if (this.isEditableSelection(focus, selected)) {
+                // A node is a node first (its name, its place, its status); a
+                // node that is a registered part -- a machine drawn as itself, a
+                // catalog leaf -- carries the part's own section after that.
+                if (this.isEditableSelection(focus, selected)) {
                     this.renderEditablePanel(selected);
                 } else {
                     this.renderGenericPanel(selected);
                 }
+                // A leaf that is a part gets the part's whole section; a machine
+                // that is a part with things inside it gets the one row that
+                // says so, and keeps its panel the height a machine's panel is.
+                if (selected.part_ref) this.appendPartPanel(selected, selected.children.length === 0);
                 this.selectedBodyEl.insertAdjacentHTML('beforeend', this.deviceSectionHtml(this.selectedName));
                 this.bindDeviceSection(this.selectedName);
             }
@@ -2012,9 +2037,15 @@
                 this.bindZoomInAffordance(node);
             }
 
-            renderPartPanel(node) {
-                this.selectedBodyEl.innerHTML = `
-                    <div class="prop-row"><label>Part</label><span>${node.part_ref}</span></div>
+            appendPartPanel(node, full = true) {
+                const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+                if (!full) {
+                    this.selectedBodyEl.insertAdjacentHTML('beforeend', `
+                        <div class="prop-row"><label>Part</label><span title="The part this machine is drawn as">${esc(node.part_ref)}</span></div>`);
+                    return;
+                }
+                this.selectedBodyEl.insertAdjacentHTML('beforeend', `
+                    <div class="prop-row"><label>Part</label><span>${esc(node.part_ref)}</span></div>
                     <div class="envelope" id="part-envelope"></div>
                     <div class="part-actions">
                         <button type="button" id="part-regenerate-btn">⚙️ Regenerate STL</button>
@@ -2033,7 +2064,7 @@
                     <div id="part-params">Loading…</div>
                     <div class="code-header">SCAD Source (the absorbed part view)</div>
                     <div id="part-scad-content" class="code-content">Loading…</div>
-                `;
+                `);
                 this.loadPartScad(node.part_ref);
                 this.loadPartChecklist(node.part_ref);
                 this.loadPartParams(node.part_ref);

@@ -84,6 +84,7 @@ apothecary parts generate-stl --all  # Generate all STLs
 apothecary parts generate-stl NAME -p wall=3   # Override a parameter
 apothecary parts verify NAME         # Declared bounds vs real geometry
 apothecary parts elephant-walk # Generate all-parts preview
+apothecary parts import FILE --name NAME --units in --up y   # An STL/OBJ made elsewhere, as a part (docs/geometry-from-elsewhere.md)
 
 # Submodules (external libraries like Gridfinity)
 apothecary submodules          # Init & update all submodules

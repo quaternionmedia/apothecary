@@ -69,14 +69,14 @@ def test_viewer_dark_theme(page: Page, base_url: str):
 def test_viewer_shows_contents_for_the_loaded_site(page: Page, base_url: str):
     """Test that the garage site's top-level structures appear in Contents:
     the workbench and its printer fleet, plus the building shell, utility
-    fixture stubs, storage, the CNC router stub, and the two boards the
-    firmware seam binds to.
+    fixture stubs, storage, the CNC router stub, and the boards on the bench
+    the firmware seam binds to (a devkit, the footpedal, an Uno, a Pi, a Teensy).
     """
     page.goto(f"{base_url}/viewer/sites/garage")
     page.wait_for_timeout(600)
 
     items = page.locator("#contents-list .contents-item")
-    assert items.count() == 13
+    assert items.count() == 16
     contents = page.locator("#contents-list")
     for name in (
         "workbench",
@@ -92,6 +92,9 @@ def test_viewer_shows_contents_for_the_loaded_site(page: Page, base_url: str):
         "cnc_router",
         "esp32_blink",
         "footpedal",
+        "arduino_uno",
+        "raspberry_pi_4",
+        "teensy_40",
     ):
         expect(contents).to_contain_text(name)
 

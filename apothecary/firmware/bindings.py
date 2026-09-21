@@ -137,7 +137,13 @@ def bindings_for_site(
     for path, node in walk_paths(site):
         pin = manual.get(path)
         sketch, note = sketch_for_node(node, sketches)
-        if pin is None and not (node.sketch_ref or node.part_ref):
+        # A row is a node that names firmware -- a sketch of its own, or a
+        # part whose folder holds one -- or one a device is pinned to. A part
+        # that is only a shape (a printer drawn as the machine it is, a board
+        # model lying on the bench) is not a row until a device is pinned to
+        # it; its Device section offers the pin.
+        names_firmware = node.sketch_ref or (node.part_ref is not None and sketch is not None)
+        if pin is None and not names_firmware:
             continue
         row = NodeBinding(
             path=path,

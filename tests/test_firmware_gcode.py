@@ -855,10 +855,14 @@ def test_where_a_port_is_pinned_carries_the_geometry_a_view_needs(fake_arduino_c
     assert where["board"]["footprint"]["max"] == [102.0, 74.0, 15.0]
     assert where["printer"]["path"] == "printer_1"
     assert where["printer"]["build_volume"] == [220.0, 220.0, 250.0]
-    assert where["printer"]["base_height"] == 50.0  # the enclosure the bed sits on
-    # World positions: the board sits inside the printer, which sits on the bench.
+    # The printer is an Ender 3 drawn as it is: its bed is 95 mm up and its
+    # build volume starts where the model says, not centred on the footprint.
+    assert where["printer"]["build_origin"] == [90.0, 100.0, 95.0]
+    assert where["printer"]["base_height"] == 95.0
+    # World positions: the board sits in the electronics box under the bed at
+    # the printer's front left (the box at 66, 40, 21; the board 14, 50, 5 in it).
     p, b = where["printer"]["position"], where["board"]["position"]
-    assert (b["x"] - p["x"], b["y"] - p["y"], b["z"] - p["z"]) == (20.0, 20.0, 5.0)
+    assert (b["x"] - p["x"], b["y"] - p["y"], b["z"] - p["z"]) == (80.0, 90.0, 26.0)
     c.delete(f"/sites/garage/nodes/{BOARD}/device")
     # A pin on the printer itself: the board is the printer, and there is no separate printer.
     c.put("/sites/garage/nodes/printer_1/device", json={"identity": "/dev/ttyFAKE1"})

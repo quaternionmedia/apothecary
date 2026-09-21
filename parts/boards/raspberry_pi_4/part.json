@@ -1,0 +1,33 @@
+{
+  "name": "raspberry_pi_4",
+  "description": "Raspberry Pi 4 Model B: an 85 x 56 mm board from the published mechanical drawing -- GPIO header, USB stacks, Ethernet, USB-C, micro-HDMI.",
+  "category": "electrical",
+  "tags": [
+    "board",
+    "raspberry-pi",
+    "sbc"
+  ],
+  "preview_color": [
+    0.0,
+    0.4,
+    0.1
+  ],
+  "source": {
+    "title": "raspberry_pi_4 from published dimensions",
+    "author": "Quaternion Media",
+    "license": "MIT",
+    "note": "Built in OpenSCAD from the maker's published board drawing; no mesh of anyone's was used."
+  },
+  "bounds": {
+    "min": [
+      0.0,
+      -2.0,
+      -1.5
+    ],
+    "max": [
+      87.0,
+      56.0,
+      17.6
+    ]
+  }
+}

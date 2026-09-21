@@ -40,6 +40,7 @@ by `pytest walkthrough`. Start there.
 | [Fitting a Part](fitting-a-part.md) | The seam standard: which numbers belong to a consumer and which to this repository |
 | [Boundaries](boundaries.md) | Which repository owns what between datum and apothecary, and what happens at the crossing |
 | [Geometry Models](models.md) | Vectors, bounds, colors, shapes, and units |
+| [Geometry made elsewhere](geometry-from-elsewhere.md) | Bring an STL or OBJ in as a part (`apothecary parts import`), describe a part with a sidecar instead of a wrapper, and the Ender 3s and boards the garage bench now draws as they are |
 | [Firmware](firmware.md) | Program Arduinos/ESP32s from sketches kept with their parts; toolchain install, device identity, live serial; monitor a G-code printer and let it drive its scene node |
 
 ## External Libraries

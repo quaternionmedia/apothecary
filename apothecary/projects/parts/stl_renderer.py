@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import shutil
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -60,6 +60,11 @@ class RenderResult:
     render_time_seconds: float = 0.0
     stdout: str = ""
     stderr: str = ""
+    # What OpenSCAD dropped on the way ("ERROR:" lines with exit code 0): a
+    # mesh it could not read back into a boolean. The file is written and
+    # the render succeeded as far as OpenSCAD is concerned; a caller that
+    # needs the whole thing (a machine with its body) treats this as failure.
+    dropped: List[str] = field(default_factory=list)
 
 
 class OpenSCADRenderer:
@@ -282,12 +287,22 @@ class OpenSCADRenderer:
                     stderr=result.stderr,
                 )
 
+            # OpenSCAD 2021.01 exits 0 after dropping an unreadable import
+            # ("The given mesh is not closed", a CGAL assertion) from a
+            # boolean, and writes what is left. It is reported, so a caller
+            # who needs the whole thing can refuse it.
+            dropped = [
+                line.strip()
+                for line in (result.stderr or "").splitlines()
+                if line.startswith("ERROR:")
+            ]
             return RenderResult(
                 success=True,
                 stl_path=stl_path,
                 render_time_seconds=elapsed,
                 stdout=result.stdout,
                 stderr=result.stderr,
+                dropped=dropped,
             )
 
         except subprocess.TimeoutExpired:

@@ -45,20 +45,27 @@ export function meshExaggeration(range) {
 }
 
 /* `printer` is what GET /firmware/printers/where answers for the printer:
- * footprint, build_volume, base_height (position is the caller's to apply).
- * `drawVolume: false` leaves the wire box to a scene that already has one. */
+ * footprint, build_volume, build_origin or base_height (position is the
+ * caller's to apply). `drawVolume: false` leaves the wire box to a scene
+ * that already has one. */
 export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
     const note = (text, key) => { if (onNote) onNote(text, key); };
     const group = new THREE.Group();
-    const hasVolume = !!(printer && printer.build_volume && printer.footprint);
+    const hasVolume = !!(printer && printer.build_volume && (printer.footprint || printer.build_origin));
     let volumeOrigin = { x: 0, y: 0, z: 0 };
     if (hasVolume) {
-        // The build volume sits on the printer's base and centred on its
-        // footprint -- the site's printers say how big it is, not where.
         const [vx, vy, vz] = printer.build_volume;
-        const fp = printer.footprint;
-        const fw = fp.max[0] - fp.min[0], fd = fp.max[1] - fp.min[1];
-        volumeOrigin = { x: fp.min[0] + (fw - vx) / 2, y: fp.min[1] + (fd - vy) / 2, z: fp.min[2] + (printer.base_height || 0) };
+        if (printer.build_origin) {
+            // A machine drawn as it is says where its volume starts.
+            const [ox, oy, oz] = printer.build_origin;
+            volumeOrigin = { x: ox, y: oy, z: oz };
+        } else {
+            // A block: the build volume sits on the printer's base and centred
+            // on its footprint -- the site's printers say how big it is, not where.
+            const fp = printer.footprint;
+            const fw = fp.max[0] - fp.min[0], fd = fp.max[1] - fp.min[1];
+            volumeOrigin = { x: fp.min[0] + (fw - vx) / 2, y: fp.min[1] + (fd - vy) / 2, z: fp.min[2] + (printer.base_height || 0) };
+        }
         if (drawVolume) {
             const box = new THREE.BoxGeometry(vx, vz, vy);
             const volume = new THREE.LineSegments(new THREE.EdgesGeometry(box), new THREE.LineBasicMaterial({ color: VOLUME_COLOR, transparent: true, opacity: 0.6 }));
