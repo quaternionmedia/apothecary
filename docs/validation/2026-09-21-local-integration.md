@@ -256,6 +256,22 @@ Open `http://127.0.0.1:8001/viewer/sites/garage`; ring → Panels → Camera.
       `details` block; **Open as one** → a site `gathered_…` opens with the
       pieces of every ticked picture.
 - [ ] **Unplace** → the badge leaves; `/cameras?site=garage` → `[]`.
+- [ ] **add** (the file picker) → choose two pictures of your own → the
+      note says *added 2 picture(s)*; they appear in the list *· added*,
+      each with a ✕; `ls /tmp/apothecary-pictures/uploads/` → the two, named
+      as you named them, the folder `drwx------`. Click one ✕ → gone from
+      the list and from the folder; the tick-box did not toggle.
+- [ ] *Cameras in the world* lists every placed camera (place one first);
+      its row's **Unplace** takes it back, badge included. *Boards pinned
+      to pieces* lists every pin: pin something from a piece's Device
+      section (or by typed identity, `aa:bb:cc:dd:ee:ff`) → its row appears
+      (⟳ if not); a pin whose site is gone -- pin a node of an arrangement,
+      then forget the arrangement -- shows *site gone*; each row's
+      **Unpin** takes it back, and the piece's Device section offers the
+      ports again at once.
+- [ ] **Purge kept** → asks once → every capture and upload is gone, the
+      pictures you put in the folder by hand are still there
+      (`ls /tmp/apothecary-pictures/`).
 - [ ] Nothing left the machine: the only requests the page made are to
       `127.0.0.1:8001` (the browser's network panel; the CSP would have
       refused anything else).
@@ -314,13 +330,14 @@ release), unchanged, plus these two that the bench did not have:
       `/docs/plans/pull-requests-2026-09-21.md` → rendered, links between
       pages work, every image is local (a picture from elsewhere would be
       named, not fetched).
-- [ ] `/walkthrough/11-photographs-into-pieces.md` → the page says *131
+- [ ] `/walkthrough/11-photographs-into-pieces.md` → the page says *137
       controls of the viewer's own* and shows the rail and the camera panel
       in its screenshots.
-- [ ] `/walkthrough/12-the-bench-as-it-is.md` → twelve steps: a file from
+- [ ] `/walkthrough/12-the-bench-as-it-is.md` → fourteen steps: a file from
       elsewhere measured, the sidecar part, the Ender 3s, the mainboard, the
       DevKitC, the camera placed at the bench and *not* following you into a
-      printer, the guard's refusal and the server's 403 -- each with the
+      printer, what the browser put here taken back (added pictures, a pin,
+      a purge), the guard's refusal and the server's 403 -- each with the
       output or the picture of the run that wrote it.
 - [ ] `uv run apothecary docs generate` → both doc workflows regenerate under
       a temporary server on 8766; the bar on every docs page then says when.
@@ -332,7 +349,7 @@ release), unchanged, plus these two that the bench did not have:
 
 ```bash
 uv run pytest walkthrough -q                 # 10 pages, as doctests
-uv run apothecary test all                   # 1159 unit + 71 browser, on fenced state and pictures
+uv run apothecary test all                   # 1166 unit + 73 browser, on fenced state and pictures
 uv run --with "reuse[charset-normalizer]" python -m reuse lint
 git -C governance/qm log --oneline origin/project/apothecary..adr/firmware-toolchain-seam   # six records
 ```
@@ -356,7 +373,7 @@ or an issue; a door found open goes to the record's risk register.
 | 2. Stays on the device | / 12 | |
 | 3. Geometry | / 12 | |
 | 4. One screen | / 7 | |
-| 5. Camera | / 8 | |
+| 5. Camera | / 11 | |
 | 6. Printer (simulated) | / 7 | |
 | 6. Printer (hardware) | / 2 + the bench record | |
 | 7. Docs | / 4 | |

@@ -84,10 +84,17 @@ world draws it there from then on -- a badge and a small frustum -- in
 every browser. Below, the pictures on this machine: tick some, **Gather**
 for the groups and the questions worth your word (answer with a button; the
 sentence goes into the answers box, and your word wins), **Open as one**
-for the whole gathering in the world. `GET/POST /photos/pictures`,
-`POST /photos/gather` and `/cameras` are the routes underneath
-(`apothecary/routes/pictures.py`); the CLI below does the same from a
-terminal.
+for the whole gathering in the world. What the browser put on this machine
+it takes back from the same panel: **add** is a file picker whose pictures
+are kept under `uploads/` as they were named, each kept picture (captured
+or added) has a ✕ that forgets it, **Purge kept** forgets them all after
+asking (never the folder's own pictures), and the cameras placed in the
+world and the boards pinned to pieces are listed -- every site's, a pin
+whose site or piece is gone marked as such -- each with the button that
+takes it back. `GET/POST/DELETE /photos/pictures`, `POST /photos/gather`,
+`/cameras` and `GET/DELETE /firmware/pins` are the routes underneath
+(`apothecary/routes/pictures.py`, `apothecary/api.py`); the CLI below does
+the same from a terminal.
 
 `view` opens the existing viewer on what was built, where the pieces can be
 walked into at any depth and filtered by the word each came from. Beside it sits

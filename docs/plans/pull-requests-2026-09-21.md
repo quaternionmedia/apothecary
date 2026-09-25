@@ -71,11 +71,11 @@ boards it holds. 31 commits past what `#21` last saw; each one's message
 says what it did and why. The two lint commits (`fee2b11`, `062ab0c`) are
 kept out, as this description decided: lint is not a gate here.
 
-**The census, on this tip.** The viewer: **131 controls of its own, 63 of
+**The census, on this tip.** The viewer: **137 controls of its own, 65 of
 them on the ring** (`apothecary census`). The monitor: 64 / 41. The firmware
-page: 30 / 4, no ring yet. One meter for the three screens: **163 / 67**
+page: 30 / 4, no ring yet. One meter for the three screens: **169 / 69**
 (`tests/test_census.py`). Page 11 of the walkthrough was written by its own
-run on this tip and says 131.
+run on this tip and says 137.
 
 **What is in it, by capability**
 
@@ -136,12 +136,13 @@ run on this tip and says 131.
    model adds, the plugin shape, what is lawful under the rules, candidates
    with licences checked, phases, and what it pends on. Nothing of it built.
 
-**Tests and docs.** 1159 unit tests, 71 browser tests, 10 walkthrough pages
+**Tests and docs.** 1166 unit tests, 73 browser tests, 10 walkthrough pages
 run as doctests -- all green on this tip with `apothecary test all` and
 `pytest walkthrough`. Every capability has its page under `docs/`
 (`firmware.md`, `geometry-from-elsewhere.md`, the plans, the validation
-record) and its walkthrough page written by a test run. `CHANGELOG.md`
-carries one entry per capability.
+record) and its walkthrough page written by a test run; the walkthrough's
+pages 11 and 12 are runs, not descriptions. `CHANGELOG.md` carries one
+entry per capability.
 
 **Governance.** Six records are drafted on qm's `adr/firmware-toolchain-seam`
 (a draft pull request against `project/apothecary`): the firmware toolchain

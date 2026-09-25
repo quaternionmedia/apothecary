@@ -46,7 +46,7 @@ from .firmware import devices as firmware_devices
 from .firmware import gcode as firmware_gcode
 from .firmware.api import _device_view as firmware_device_view
 from .firmware.api import router as firmware_router
-from .firmware.bindings import bindings_for_site, same_device
+from .firmware.bindings import bindings_for_site, device_for_identity, same_device
 from .firmware.models import DeviceAttachRequest
 from .firmware.toolchains import ToolchainError
 from .hierarchy import Assembly
@@ -1270,6 +1270,11 @@ class StatusRequest(BaseModel):
 
 
 SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+# Words that are routes of their own under /photos/ (apothecary/routes/pictures.py):
+# an arrangement so named could be built and then never fetched or forgotten,
+# because its address is theirs -- and forgetting it would forget the kept
+# pictures instead.
+RESERVED_NAMES = frozenset({"pictures", "gather"})
 
 
 def _check_name(name: str) -> str:
@@ -1278,7 +1283,8 @@ def _check_name(name: str) -> str:
     A name becomes part of a web address and a key in a register. One
     containing a slash can be stored and then never fetched or deleted again,
     because the address for it cannot be typed; one containing dots walks up
-    directories in anything that later joins it to a path.
+    directories in anything that later joins it to a path; one that is a
+    route's own word is answered by the route, never by the arrangement.
     """
     if not SAFE_NAME.match(name or ""):
         raise HTTPException(
@@ -1286,6 +1292,14 @@ def _check_name(name: str) -> str:
             detail=(
                 f"{name!r} is not a usable name. Letters, numbers, dashes and "
                 "underscores, starting with a letter or number, up to 64 characters."
+            ),
+        )
+    if name in RESERVED_NAMES:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{name!r} is the address of a route under /photos/; "
+                "name the arrangement something else."
             ),
         )
     return name
@@ -1810,6 +1824,54 @@ def printer_where(port: str):
             ),
         }
     return {"port": port, "site": None, "board": None, "printer": None}
+
+
+@app.get("/firmware/pins")
+def every_pin(fresh: bool = False):
+    """Every pin on this machine, whatever site it names -- the management view.
+
+    ``GET /sites/{name}/devices`` shows a site's pins where its nodes are; a
+    pin whose site was forgotten (a photo arrangement) or whose node is gone
+    appears nowhere else, and this is where it is seen and taken back. Each
+    row says whether its site and node still exist and which detected board,
+    if any, is the pinned identity today. Plain ``def``: the device scan
+    shells out to arduino-cli (cached a couple of seconds).
+    """
+    state = firmware_devices.get_state()
+    problem = None
+    try:
+        found = firmware_devices.detected_devices(fresh=fresh)
+    except ToolchainError as exc:
+        found, problem = [], str(exc)
+    names = _site_store.names()
+    rows = []
+    for binding in sorted(state.bindings(), key=lambda b: (b.site, b.path)):
+        site_known = binding.site in names
+        node_found = False
+        if site_known:
+            try:
+                node = _find_node_by_path(_site_store.get(binding.site), binding.path)
+            except Exception:  # a site that will not build is a site with no nodes
+                node = None
+            node_found = node is not None
+        device = device_for_identity(binding.identity, found)
+        rows.append(
+            {
+                **binding.model_dump(mode="json"),
+                "site_known": site_known,
+                "node_found": node_found,
+                "device": device.model_dump(mode="json") if device is not None else None,
+            }
+        )
+    return {"pins": rows, "problem": problem}
+
+
+@app.delete("/firmware/pins/{site}/{path:path}")
+def unpin_anywhere(site: str, path: str):
+    """Take a pin back by what it names, whether or not its site or node still exists."""
+    if not firmware_devices.get_state().clear_binding(site, path):
+        raise HTTPException(status_code=404, detail=f"nothing is pinned at {site} › {path}")
+    return {"unpinned": {"site": site, "path": path}}
 
 
 def _sync_printer_status(status) -> List[Dict[str, object]]:

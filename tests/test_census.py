@@ -57,17 +57,26 @@ def test_the_page_has_fifty_four_controls_of_its_own():
     pictures on this machine and gathering them, seven of them on the canvas
     ring's Camera cell -- the photo workflow from the browser, the first
     feature to arrive with its ring cells in the same change.
+
+    One hundred and thirty-seven with the same panel taking back what the
+    browser put on this machine: a file picker that adds pictures, a button
+    that forgets one kept picture and one that forgets them all, and the
+    cameras placed in the world and the boards pinned to pieces listed with
+    the button that takes each back (and one that lists the pins again). Six
+    controls; the picker and the purge are the two cells behind the Camera
+    cell's Kept, so sixty-five are ring-backed. The per-row buttons are not:
+    a ring verb carries no row.
     """
     taken = census.take()
     own_here = [f for f in taken.controls_of_its_own() if not f.source]
     from_machine = [f for f in taken.controls_of_its_own() if f.source == "machine.js"]
     from_camera = [f for f in taken.controls_of_its_own() if f.source == "camera.js"]
-    assert (len(own_here), len(from_machine), len(from_camera)) == (54, 62, 15)
-    assert len(taken.controls_of_its_own()) == 131
+    assert (len(own_here), len(from_machine), len(from_camera)) == (54, 62, 21)
+    assert len(taken.controls_of_its_own()) == 137
     assert (
-        len(taken.ring_backed()) == 63
-    )  # 15 of the page's own, 41 of the machine's, 7 of the camera's
-    assert taken.sentence().startswith("131 controls of its own, 63 of them also on the ring.")
+        len(taken.ring_backed()) == 65
+    )  # 15 of the page's own, 41 of the machine's, 9 of the camera's
+    assert taken.sentence().startswith("137 controls of its own, 65 of them also on the ring.")
     rows = [f for f in taken.found if f.key == "li:click:selectChild"]
     assert rows and rows[0].ring_action.startswith("select:")
 
@@ -113,7 +122,7 @@ def test_the_three_screens_have_one_meter():
             here = [f for f in taken.controls_of_its_own() if f.source == source]
             own += len(here)
             backed += sum(1 for f in here if f.ring_action)
-    assert (own, backed) == (163, 67)  # 148 / 60, plus the camera panel's 15 / 7
+    assert (own, backed) == (169, 69)  # 148 / 60, plus the camera panel's 21 / 9
 
 
 def test_the_monitor_page_is_counted_too():

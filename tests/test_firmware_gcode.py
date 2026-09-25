@@ -476,6 +476,49 @@ def test_sync_skips_nodes_without_status(fake_arduino_cli, scripted_links, garag
     c.delete("/sites/garage/nodes/footpedal/device")
 
 
+def test_every_pin_is_listed_and_a_stale_one_can_be_taken_back(fake_arduino_cli, garage):
+    """The management view: every pin on this machine, whatever site it names,
+    saying whether its site and node still exist; and a pin whose site or node is
+    gone -- invisible to the site's own device list, refused by its unpin route --
+    is taken back here."""
+    from apothecary.firmware import devices as firmware_devices
+
+    c = TestClient(app)
+    c.put("/sites/garage/nodes/footpedal/device", json={"identity": "/dev/ttyFAKE1"})
+    state = firmware_devices.get_state()
+    state.set_binding("gathered_202609210000", "plate_1", "aa:bb:cc:dd:ee:01")
+    state.set_binding("garage", "workbench.vanished", "aa:bb:cc:dd:ee:02")
+
+    pins = c.get("/firmware/pins").json()["pins"]
+    by = {(p["site"], p["path"]): p for p in pins}
+    assert set(by) == {
+        ("garage", "footpedal"),
+        ("garage", "workbench.vanished"),
+        ("gathered_202609210000", "plate_1"),
+    }
+    live = by[("garage", "footpedal")]
+    assert live["site_known"] and live["node_found"]
+    assert live["device"] is not None and live["device"]["port"] == "/dev/ttyFAKE1"
+    assert by[("garage", "workbench.vanished")]["node_found"] is False
+    assert by[("garage", "workbench.vanished")]["site_known"] is True
+    stale = by[("gathered_202609210000", "plate_1")]
+    assert stale["site_known"] is False and stale["node_found"] is False
+    assert stale["device"] is None and stale["identity"] == "aa:bb:cc:dd:ee:01"
+    # The site's own list never shows the vanished node, and its unpin route refuses it.
+    rows = c.get("/sites/garage/devices").json()["bindings"]
+    assert "workbench.vanished" not in {r["path"] for r in rows}
+    assert c.delete("/sites/garage/nodes/workbench.vanished/device").status_code == 404
+    assert c.delete("/sites/gathered_202609210000/nodes/plate_1/device").status_code == 404
+    # Taken back by what they name, dotted paths included.
+    assert c.delete("/firmware/pins/gathered_202609210000/plate_1").status_code == 200
+    r = c.delete("/firmware/pins/garage/workbench.vanished")
+    assert r.json() == {"unpinned": {"site": "garage", "path": "workbench.vanished"}}
+    assert c.delete("/firmware/pins/garage/workbench.vanished").status_code == 404
+    assert c.delete("/firmware/pins/garage/footpedal").status_code == 200
+    assert c.get("/firmware/pins").json()["pins"] == []
+    assert state.bindings() == []
+
+
 # --- manual queries: allowlisted report codes only -------------------------------------
 
 

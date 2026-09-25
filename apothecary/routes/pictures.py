@@ -7,12 +7,18 @@ command line. These routes give the world's page the same, and no more:
 
 - ``GET /photos/pictures`` lists the pictures in the one folder pictures are
   read from (`APOTHECARY_PICTURE_ROOT`, see `_picture_root` in api.py) and
-  its ``captures/`` sub-folder, where the routes below keep what a camera
-  took. Nothing outside that folder is ever listed or read.
-- ``POST /photos/pictures?name=…`` keeps a picture the browser sends -- a
-  frame from a camera, or a file a person chose -- under ``captures/``,
-  after checking it is a PNG or a JPEG by its first bytes and not by its
-  name. It stays on this machine; nothing is sent anywhere.
+  its two sub-folders the browser fills: ``captures/``, where a camera's
+  frames are kept, and ``uploads/``, where the pictures a person added from
+  the browser are kept. Nothing outside that folder is ever listed or read.
+- ``POST /photos/pictures?name=…`` keeps a picture the browser sends, after
+  checking it is a picture by its first bytes and not by its name: a frame
+  from a camera under ``captures/`` (named by the moment), or, with
+  ``kept=upload``, a file a person chose under ``uploads/`` (named as the
+  person named it). It stays on this machine; nothing is sent anywhere.
+- ``DELETE /photos/pictures/{path}`` forgets one kept picture and
+  ``DELETE /photos/pictures`` forgets every kept picture: what the browser
+  put under ``captures/`` and ``uploads/``, and only that. The folder's own
+  pictures -- the ones a person named -- are never deleted from a page.
 - ``POST /photos/gather`` takes in several of those pictures at once, with
   what a person has already said in the same five sentences the answers
   file uses, and answers with the report, the groups, the questions worth
@@ -34,12 +40,15 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 router = APIRouter(tags=["photos"])
 
 PICTURE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff"}
 CAPTURES = "captures"
+UPLOADS = "uploads"
+# The folders the browser fills, and the only ones a page may empty.
+KEPT = {"capture": CAPTURES, "upload": UPLOADS}
 CAPTURE_MAX = 16 * 1024 * 1024
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 JPEG_MAGIC = b"\xff\xd8\xff"
@@ -51,62 +60,150 @@ def _root() -> Path:
     return _picture_root()
 
 
+def _kept_as(path: Path, root: Path) -> Optional[str]:
+    """``"capture"`` or ``"upload"`` for a picture the browser put here, else None."""
+    if path.parent.parent != root:
+        return None
+    return next((kind for kind, folder in KEPT.items() if path.parent.name == folder), None)
+
+
 def _entry(path: Path, root: Path) -> dict:
     stat = path.stat()
+    kept = _kept_as(path, root)
     return {
         "name": path.name,
         "path": path.relative_to(root).as_posix(),
         "size": stat.st_size,
         "taken_at": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
-        "captured": path.parent.name == CAPTURES and path.parent.parent == root,
+        "captured": kept == "capture",
+        "kept": kept,
     }
+
+
+def _pictures_in(folder: Path) -> List[Path]:
+    """The picture files directly in a folder: regular files, never a link elsewhere --
+    and nothing at all from a folder that is itself a link elsewhere."""
+    if folder.is_symlink() or not folder.is_dir():
+        return []
+    return [
+        path
+        for path in folder.iterdir()
+        if path.is_file() and not path.is_symlink() and path.suffix.lower() in PICTURE_SUFFIXES
+    ]
 
 
 @router.get("/photos/pictures")
 def list_pictures() -> List[dict]:
-    """The pictures in the one folder, newest first: the folder's own and its captures."""
+    """The pictures in the one folder, newest first: its own, its captures, its uploads."""
     root = _root()
     found: List[Path] = []
-    for folder in (root, root / CAPTURES):
-        if not folder.is_dir():
-            continue
-        for path in folder.iterdir():
-            if path.is_file() and path.suffix.lower() in PICTURE_SUFFIXES:
-                found.append(path)
+    for folder in (root, root / CAPTURES, root / UPLOADS):
+        found.extend(_pictures_in(folder))
     found.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return [_entry(p, root) for p in found]
 
 
-@router.post("/photos/pictures", status_code=201)
-async def keep_picture(
-    request: Request, name: str = Query("capture", min_length=1, max_length=120)
-):
-    """Keep a picture the browser sends under captures/; a PNG or a JPEG by its bytes."""
-    data = await request.body()
-    if not data:
-        raise HTTPException(status_code=422, detail="an empty picture")
-    if len(data) > CAPTURE_MAX:
+def _suffix_by_bytes(data: bytes) -> Optional[str]:
+    """The suffix a picture's first bytes say it should have; None for anything else."""
+    head = data[:16]
+    if head.startswith(PNG_MAGIC):
+        return ".png"
+    if head.startswith(JPEG_MAGIC):
+        return ".jpg"
+    if head.startswith((b"GIF87a", b"GIF89a")):
+        return ".gif"
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return ".webp"
+    if head.startswith(b"BM"):
+        return ".bmp"
+    if head.startswith((b"II*\x00", b"MM\x00*")):
+        return ".tif"
+    return None
+
+
+def _private(folder: Path) -> Path:
+    """The folder, made, and the person's alone: what the browser sends is theirs.
+
+    A folder that is a link elsewhere is not written into: what the browser
+    keeps here is forgotten from here, and that must never reach past it."""
+    if folder.is_symlink():
         raise HTTPException(
-            status_code=413, detail=f"larger than {CAPTURE_MAX // (1024 * 1024)} MB"
+            status_code=409, detail=f"{folder.name}/ is a link elsewhere; nothing is kept there"
         )
-    if data.startswith(PNG_MAGIC):
-        suffix = ".png"
-    elif data.startswith(JPEG_MAGIC):
-        suffix = ".jpg"
-    else:
-        raise HTTPException(
-            status_code=415, detail="not a PNG or a JPEG (judged by its first bytes)"
-        )
-    root = _root()
-    folder = root / CAPTURES
-    folder.mkdir(parents=True, exist_ok=True)
     try:
-        os.chmod(folder, 0o700)  # a camera's frames are the person's alone
+        folder.mkdir(parents=True, exist_ok=True)
+    except (FileExistsError, NotADirectoryError):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{folder.name} is a file in the picture folder, not a folder; "
+                "nothing is kept there"
+            ),
+        ) from None
+    try:
+        os.chmod(folder, 0o700)
     except OSError:
         pass
-    stem = re.sub(r"[^A-Za-z0-9_-]+", "_", Path(name).stem).strip("_") or "capture"
-    at = datetime.now(timezone.utc)
-    path = folder / f"{at:%Y%m%dT%H%M%S}.{at.microsecond // 1000:03d}-{stem[:60]}{suffix}"
+    return folder
+
+
+def _unused(folder: Path, stem: str, suffix: str) -> Path:
+    """``stem.suffix`` in the folder, or ``stem-2.suffix``, ``stem-3.suffix``… if taken."""
+    path = folder / f"{stem}{suffix}"
+    n = 2
+    while path.exists():
+        path = folder / f"{stem}-{n}{suffix}"
+        n += 1
+    return path
+
+
+async def _picture_body(request: Request) -> bytes:
+    """The picture the request carries, read no further than the limit: a body
+    that says it is too large is refused before a byte of it is read, and one
+    that grows past the limit is refused as it streams."""
+    too_large = HTTPException(
+        status_code=413, detail=f"larger than {CAPTURE_MAX // (1024 * 1024)} MB"
+    )
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > CAPTURE_MAX:
+        raise too_large
+    chunks: List[bytes] = []
+    size = 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > CAPTURE_MAX:
+            raise too_large
+        chunks.append(chunk)
+    data = b"".join(chunks)
+    if not data:
+        raise HTTPException(status_code=422, detail="an empty picture")
+    return data
+
+
+@router.post("/photos/pictures", status_code=201)
+async def keep_picture(
+    request: Request,
+    name: str = Query("capture", min_length=1, max_length=120),
+    kept: str = Query("capture", pattern="^(capture|upload)$"),
+):
+    """Keep a picture the browser sends: a camera's frame under captures/, named by the
+    moment, or (``kept=upload``) a file a person chose under uploads/, named as they
+    named it. A picture by its first bytes, whatever its name says."""
+    data = await _picture_body(request)
+    suffix = _suffix_by_bytes(data)
+    if suffix is None:
+        raise HTTPException(
+            status_code=415,
+            detail="not a picture (PNG, JPEG, GIF, WebP, BMP or TIFF, judged by its first bytes)",
+        )
+    root = _root()
+    stem = re.sub(r"[^A-Za-z0-9_-]+", "_", Path(name).stem).strip("_")[:60]
+    if kept == "upload":
+        path = _unused(_private(root / UPLOADS), stem or "picture", suffix)
+    else:
+        at = datetime.now(timezone.utc)
+        stamp = f"{at:%Y%m%dT%H%M%S}.{at.microsecond // 1000:03d}"
+        path = _private(root / CAPTURES) / f"{stamp}-{stem or 'capture'}{suffix}"
     path.write_bytes(data)
     return _entry(path, root)
 
@@ -146,17 +243,61 @@ def _is_a_picture(path: Path) -> bool:
     )
 
 
-@router.delete("/photos/pictures/{name}")
-def forget_picture(name: str):
-    """Forget a capture (only captures: the folder's own pictures are a person's)."""
+def _kept_picture(root: Path, given: str) -> Path:
+    """The kept picture ``given`` names -- ``captures/x.png``, ``uploads/y.jpg``, or a
+    bare name under captures/ -- or 404. Only a regular file directly in one of the
+    two folders the browser fills; the folder's own pictures are a person's."""
+    parts = given.replace("\\", "/").split("/")
+    if len(parts) == 1:
+        parts = [CAPTURES, parts[0]]
+    if (
+        len(parts) != 2
+        or parts[0] not in KEPT.values()
+        or not parts[1]
+        or parts[1].startswith(".")
+        or parts[1] in ("..",)
+    ):
+        raise HTTPException(status_code=404, detail="no such kept picture")
+    path = root / parts[0] / parts[1]
+    if (
+        path.parent.is_symlink()
+        or path.is_symlink()
+        or not path.is_file()
+        or path.suffix.lower() not in PICTURE_SUFFIXES
+    ):
+        raise HTTPException(status_code=404, detail="no such kept picture")
+    return path
+
+
+@router.delete("/photos/pictures")
+def forget_kept_pictures(kept: str = Query("all", pattern="^(all|capture|upload)$")):
+    """Forget every picture the browser put here -- the captures, the uploads, or both.
+
+    Never the folder's own pictures: those a person named, and only a person
+    removes. A link inside the folders is left alone too; only regular files
+    directly in them go."""
     root = _root()
-    if "/" in name or "\\" in name or name.startswith("."):
-        raise HTTPException(status_code=404, detail="no such capture")
-    path = root / CAPTURES / name
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="no such capture")
-    path.unlink()
-    return {"forgotten": name}
+    folders = [KEPT[kept]] if kept != "all" else list(KEPT.values())
+    forgotten: List[str] = []
+    for folder in folders:
+        for path in _pictures_in(root / folder):
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                continue  # gone since it was listed: another purge, or the person
+            forgotten.append(f"{folder}/{path.name}")
+    return {"forgotten": forgotten, "left": len(_pictures_in(root))}
+
+
+@router.delete("/photos/pictures/{path:path}")
+def forget_picture(path: str):
+    """Forget one kept picture (``captures/…`` or ``uploads/…``; a bare name is a capture).
+
+    Only what the browser put here: the folder's own pictures are a person's."""
+    root = _root()
+    kept = _kept_picture(root, path)
+    kept.unlink()
+    return {"forgotten": kept.relative_to(root).as_posix()}
 
 
 class GatherRequest(BaseModel):
@@ -166,6 +307,15 @@ class GatherRequest(BaseModel):
     most: int = Field(8, ge=1, le=40)
     build: bool = False  # also build the whole gathering as one arrangement
     name: str = Field("gathering", pattern=r"^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$")
+
+    @field_validator("name")
+    @classmethod
+    def _not_a_route(cls, value: str) -> str:
+        from ..api import RESERVED_NAMES
+
+        if value in RESERVED_NAMES:
+            raise ValueError(f"{value!r} is the address of a route under /photos/")
+        return value
 
 
 @router.post("/photos/gather")

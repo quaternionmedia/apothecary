@@ -686,6 +686,13 @@ CAMERA_VERBS: Sequence[Tuple[str, str]] = (
     ("allow", "Allow"),
     ("unplace", "Unplace"),
 )
+# What the browser put on this machine, taken back: behind the eighth cell,
+# since a ring holds eight. Add opens the file picker; Purge forgets every
+# kept picture (captures and uploads, never the folder's own).
+KEPT_VERBS: Sequence[Tuple[str, str, bool]] = (
+    ("add", "Add", False),
+    ("purge", "Purge", True),
+)
 
 
 def _camera() -> Option:
@@ -695,6 +702,21 @@ def _camera() -> Option:
         children=[
             Option(id=f"camera:{verb}", label=label, action=f"camera:{verb}")
             for verb, label in CAMERA_VERBS
+        ]
+        + [
+            Option(
+                id="camera:kept",
+                label="Kept",
+                children=[
+                    Option(
+                        id=f"camera:{verb}",
+                        label=label,
+                        action=f"camera:{verb}",
+                        destructive=destructive,
+                    )
+                    for verb, label, destructive in KEPT_VERBS
+                ],
+            )
         ],
     )
 

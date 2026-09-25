@@ -16,8 +16,17 @@
  * a person's word winning outright -- and the whole gathering built as one
  * arrangement the world opens.
  *
+ * What the browser put on this machine, it can take back from here: a
+ * picture chosen from a file picker is kept under uploads/ (a camera's frame
+ * under captures/), each kept picture has a forget button, a purge forgets
+ * every kept one -- never the pictures a person named -- and the cameras
+ * placed in the world and the boards pinned to pieces are listed, every site's,
+ * each with the button that takes it back (a pin whose site or piece is gone
+ * is shown as such: this is the one place it can be seen).
+ *
  * mountCamera(root, { base, world }) renders into root; `world` is what the
- * page offers: siteName(), selectedPath(), openSite(name), placed().
+ * page offers: siteName(), selectedPath(), openSite(name), placed(),
+ * refreshCameras(), unpinned(path).
  */
 
 const MARKUP = `
@@ -50,8 +59,16 @@ const MARKUP = `
         <button type="button" id="pic-gather" title="Which of the ticked pictures are of the same thing, and what the machine would ask you">Gather</button>
         <button type="button" id="pic-open" class="warm" title="Build one arrangement out of the ticked pictures and open it in the world">Open as one</button>
     </div>
+    <div class="row">
+        <label class="grow">add <input type="file" id="pic-file" accept="image/png,image/jpeg,image/gif,image/webp,image/bmp,image/tiff" multiple title="Add pictures from this browser: kept under uploads/ in the picture folder, on this machine, as you named them"></label>
+        <button type="button" id="pic-purge" title="Forget every picture the browser put here -- captures and uploads. The folder's own pictures stay">Purge kept</button>
+    </div>
     <div id="gather-out"></div>
     <textarea id="gather-answers" rows="3" placeholder="What you know, one sentence a line: 'a and b are the same thing', 'a and b are parts of one thing', 'a and b are not related', 'a is not worth using', 'a is worth using anyway'" title="Your word wins outright, and it carries"></textarea>
+    <div class="k">Cameras in the world</div>
+    <div id="cam-placed" class="kept"><span class="empty">none placed</span></div>
+    <div class="k">Boards pinned to pieces <button type="button" id="pin-refresh" title="List the pins again">⟳</button></div>
+    <div id="pin-list" class="kept"><span class="empty">none pinned</span></div>
 </div>`;
 
 export function mountCamera(root, { base = "", world = null, log = null } = {}) {
@@ -59,7 +76,7 @@ export function mountCamera(root, { base = "", world = null, log = null } = {}) 
     const $ = (id) => root.querySelector(`#${CSS.escape(id)}`);
     const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     const say = (text, kind = "") => { const n = $("cam-note"); n.textContent = text; n.className = "note " + kind; if (log) log(text); };
-    const state = { cameras: [], stream: null, chosen: "", pictures: [], gathered: null, answers: "" };
+    const state = { cameras: [], stream: null, chosen: "", pictures: [], gathered: null, answers: "", placed: [], pins: [] };
 
     async function api(path, opts = {}) {
         const r = await fetch(base + path, { headers: { "Content-Type": "application/json" }, ...opts });
@@ -149,7 +166,28 @@ export function mountCamera(root, { base = "", world = null, log = null } = {}) 
         $("cam-place-note").textContent = !state.chosen ? "no camera chosen" : (mine ? `placed at ${mine.path} in ${mine.site}` : "not placed in the world");
         $("cam-place").disabled = !state.chosen || !(world && world.selectedPath && world.selectedPath());
         $("cam-unplace").disabled = !mine;
+        loadPlaced();
     }
+    // Every camera placed in the world, whatever site it stands in and whichever
+    // browser placed it -- each one taken back from here.
+    async function loadPlaced() {
+        try { state.placed = await api("/cameras"); } catch (e) { state.placed = []; }
+        renderPlaced();
+    }
+    function renderPlaced() {
+        const list = $("cam-placed");
+        if (!state.placed.length) { list.innerHTML = '<span class="empty">none placed</span>'; return; }
+        const here = world && world.siteName ? world.siteName() : "";
+        list.innerHTML = state.placed.map((c) => `<div class="kept-row${c.site === here ? " here" : ""}${c.id === state.chosen ? " mine" : ""}"><span title="${esc(c.id)}">📷 ${esc(c.label || "camera")} · ${esc(c.site)} › ${esc(c.path)}${c.id === state.chosen ? " · this browser's" : ""}</span><button type="button" class="cam-unplace-one" data-id="${esc(c.id)}" title="Take this camera out of the world">Unplace</button></div>`).join("");
+    }
+    async function unplace(id) {
+        await api(`/cameras/${encodeURIComponent(id)}`, { method: "DELETE" });
+        if (world && world.refreshCameras) await world.refreshCameras(); else await loadPlaced();
+    }
+    $("cam-placed").addEventListener("click", async (ev) => {
+        const b = ev.target.closest("button.cam-unplace-one"); if (!b) return;
+        try { await unplace(b.dataset.id); say("camera taken out of the world"); } catch (e) { say(e.message, "bad"); }
+    });
     $("cam-place").onclick = async () => {
         const path = world && world.selectedPath ? world.selectedPath() : null;
         if (!state.chosen || !path) { say("choose a camera and select a piece to stand it at", "bad"); return; }
@@ -163,25 +201,67 @@ export function mountCamera(root, { base = "", world = null, log = null } = {}) 
     };
     $("cam-unplace").onclick = async () => {
         try {
-            await api(`/cameras/${encodeURIComponent(state.chosen)}`, { method: "DELETE" });
+            await unplace(state.chosen);
             say("camera taken out of the world");
-            if (world && world.refreshCameras) await world.refreshCameras();
             renderPlacement();
         } catch (e) { say(e.message, "bad"); }
     };
 
     // --- the pictures on this machine, and gathering them -------------------------------
     function ticked() { return [...root.querySelectorAll("#pic-list input[type=checkbox]:checked")].map((i) => i.value); }
+    const HOW_KEPT = { capture: " · captured", upload: " · added" };
     function renderPictures() {
         const list = $("pic-list");
-        if (!state.pictures.length) { list.innerHTML = '<span class="empty">no pictures in the folder yet — capture one, or put some there</span>'; return; }
-        list.innerHTML = state.pictures.map((p) => `<label class="pic" title="${esc(p.path)} · ${Math.round(p.size / 1024)} kB"><input type="checkbox" value="${esc(p.path)}"><img src="${base}/photos/pictures/file?path=${encodeURIComponent(p.path)}" alt="${esc(p.name)}" loading="lazy"><span>${esc(p.name)}${p.captured ? " · captured" : ""}</span></label>`).join("");
+        if (!state.pictures.length) { list.innerHTML = '<span class="empty">no pictures in the folder yet — capture one, add some, or put some there</span>'; return; }
+        // A kept picture -- one the browser put here -- has a forget button; the
+        // folder's own pictures are a person's, and only a person removes them.
+        list.innerHTML = state.pictures.map((p) => `<label class="pic" title="${esc(p.path)} · ${Math.round(p.size / 1024)} kB"><input type="checkbox" value="${esc(p.path)}"><img src="${base}/photos/pictures/file?path=${encodeURIComponent(p.path)}" alt="${esc(p.name)}" loading="lazy"><span>${esc(p.name)}${HOW_KEPT[p.kept] || ""}</span>${p.kept ? `<button type="button" class="pic-forget" data-path="${esc(p.path)}" title="Forget this picture (${esc(p.path)})">✕</button>` : ""}</label>`).join("");
     }
     async function loadPictures() {
         try { state.pictures = await api("/photos/pictures"); } catch (e) { state.pictures = []; say(e.message, "bad"); }
         renderPictures();
     }
     $("pic-refresh").onclick = loadPictures;
+    async function forget(path) {
+        await api(`/photos/pictures/${path.split("/").map(encodeURIComponent).join("/")}`, { method: "DELETE" });
+        await loadPictures();
+    }
+    $("pic-list").addEventListener("click", async (ev) => {
+        const b = ev.target.closest("button.pic-forget"); if (!b) return;
+        ev.preventDefault();  // the button sits in the picture's label: not a tick
+        try { await forget(b.dataset.path); say(`forgot ${b.dataset.path}`); } catch (e) { say(e.message, "bad"); }
+    });
+    // Files a person chose, kept under uploads/ as they named them: one request
+    // per file, the bytes as the body, judged a picture on arrival by its bytes.
+    async function addFiles(files) {
+        const chosen = [...(files || [])];
+        if (!chosen.length) return [];
+        const kept = [], refused = [];
+        for (const file of chosen) {
+            if (file.size > 16 * 1024 * 1024) { refused.push(`${file.name}: larger than 16 MB`); continue; }
+            try {
+                const r = await fetch(`${base}/photos/pictures?name=${encodeURIComponent(file.name)}&kept=upload`, { method: "POST", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } });
+                const body = await r.json().catch(() => ({}));
+                if (!r.ok) throw new Error(body.detail || r.statusText);
+                kept.push(body);
+            } catch (e) { refused.push(`${file.name}: ${e.message}`); }
+        }
+        say(`added ${kept.length} picture(s) on this machine` + (refused.length ? ` — refused: ${refused.join("; ")}` : ""), refused.length ? "bad" : "");
+        await loadPictures();
+        return kept;
+    }
+    $("pic-file").addEventListener("change", async (ev) => { await addFiles(ev.target.files); ev.target.value = ""; });
+    async function purge() {
+        const kept = state.pictures.filter((p) => p.kept);
+        if (!kept.length) { say("nothing kept from the browser to forget", "bad"); return null; }
+        const own = state.pictures.length - kept.length;
+        if (!confirm(`Forget every picture the browser put here? ${kept.length} kept picture(s) go; the folder's own (${own}) stay.`)) return null;
+        const gone = await api("/photos/pictures", { method: "DELETE" });
+        say(`forgot ${gone.forgotten.length} kept picture(s); ${gone.left} of the folder's own stay`);
+        await loadPictures();
+        return gone;
+    }
+    $("pic-purge").onclick = () => purge().catch((e) => say(e.message, "bad"));
     $("pic-all").addEventListener("change", () => { for (const i of root.querySelectorAll("#pic-list input[type=checkbox]")) i.checked = $("pic-all").checked; });
     async function gather(build) {
         const pictures = ticked();
@@ -214,12 +294,43 @@ export function mountCamera(root, { base = "", world = null, log = null } = {}) 
     $("pic-gather").onclick = () => gather(false);
     $("pic-open").onclick = () => gather(true);
 
+    // --- the boards pinned to pieces, every site's ---------------------------------------
+    async function loadPins() {
+        try { const got = await api("/firmware/pins"); state.pins = got.pins; state.pinsProblem = got.problem || null; }
+        catch (e) { state.pins = []; state.pinsProblem = e.message; }
+        renderPins();
+    }
+    function pinNote(p) {
+        if (!p.site_known) return "site gone";
+        if (!p.node_found) return "piece gone";
+        if (p.device) return `${p.device.port}`;
+        // No scan at all is not the same as a board that is unplugged.
+        return state.pinsProblem ? `cannot look: ${state.pinsProblem}` : "not connected";
+    }
+    function renderPins() {
+        const list = $("pin-list");
+        if (!state.pins.length) { list.innerHTML = '<span class="empty">none pinned</span>'; return; }
+        const here = world && world.siteName ? world.siteName() : "";
+        list.innerHTML = state.pins.map((p) => `<div class="kept-row${p.site === here ? " here" : ""}${p.site_known && p.node_found ? "" : " stale"}"><span title="pinned ${esc(p.bound_at)}">📌 ${esc(p.site)} › ${esc(p.path)} ← ${esc(p.identity)} · ${esc(pinNote(p))}</span><button type="button" class="pin-unpin" data-site="${esc(p.site)}" data-path="${esc(p.path)}" title="Take this pin back">Unpin</button></div>`).join("");
+    }
+    async function unpin(site, path) {
+        await api(`/firmware/pins/${encodeURIComponent(site)}/${path.split(".").map(encodeURIComponent).join(".")}`, { method: "DELETE" });
+        if (world && world.unpinned && world.siteName && world.siteName() === site) world.unpinned(path);
+        await loadPins();
+    }
+    $("pin-list").addEventListener("click", async (ev) => {
+        const b = ev.target.closest("button.pin-unpin"); if (!b) return;
+        try { await unpin(b.dataset.site, b.dataset.path); say(`${b.dataset.path}: pin taken back`); } catch (e) { say(e.message, "bad"); }
+    });
+    $("pin-refresh").onclick = loadPins;
+
     listCameras().catch(() => {});
     loadPictures();
     renderPlacement();
+    loadPins();
 
     // A verb chosen on the ring goes through the same button a click would.
-    const BUTTON_FOR = { allow: "cam-allow", capture: "cam-capture", look: "cam-look", place: "cam-place", unplace: "cam-unplace", gather: "pic-gather", open: "pic-open" };
+    const BUTTON_FOR = { allow: "cam-allow", capture: "cam-capture", look: "cam-look", place: "cam-place", unplace: "cam-unplace", gather: "pic-gather", open: "pic-open", add: "pic-file", purge: "pic-purge" };
     function act(verb) {
         const btn = $(BUTTON_FOR[verb]);
         if (!btn) return false;
@@ -230,6 +341,7 @@ export function mountCamera(root, { base = "", world = null, log = null } = {}) 
 
     const handle = {
         state, listCameras, useCamera, capture, loadPictures, gather, renderPlacement, act,
+        addFiles, forget, purge, unplace, loadPlaced, loadPins, unpin,
         chosen: () => state.chosen,
         live: () => !!state.stream,
         destroy() { stopStream(); root.innerHTML = ""; },

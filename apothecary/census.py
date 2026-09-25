@@ -359,6 +359,16 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "pic-open": (WIDGET, WHAT_IS_THERE, "a button that builds one arrangement and opens it"),
     "gather-answers": (WIDGET, WHAT_YOU_SEE, "a box for what you know about the pictures"),
     "answer": (WIDGET, WHAT_YOU_SEE, "a button that answers one of the machine's questions"),
+    # What the browser put on this machine, taken back from the same panel:
+    # pictures added from a file picker, kept pictures forgotten one at a
+    # time or all at once, the cameras placed in the world and the boards
+    # pinned to pieces listed (every site's) with the button that takes each back.
+    "pic-file": (WIDGET, WHAT_YOU_SEE, "a file picker that keeps chosen pictures on this machine"),
+    "pic-purge": (WIDGET, WHAT_YOU_SEE, "a button that forgets every picture the browser put here"),
+    "pic-forget": (WIDGET, WHAT_YOU_SEE, "a button that forgets one kept picture"),
+    "cam-unplace-one": (WIDGET, WHAT_IS_THERE, "a button that takes one placed camera away"),
+    "pin-refresh": (WIDGET, WHAT_YOU_SEE, "a button that lists the pins again"),
+    "pin-unpin": (WIDGET, WHAT_IS_THERE, "a button that takes one pin back, wherever it points"),
     # printing from here: a kept file, streamed
     "print-file": (WIDGET, WHAT_YOU_SEE, "a file picker that keeps a G-code file on the host"),
     "print-pick": (WIDGET, WHAT_YOU_SEE, "a drop-down of the files kept on the host"),
@@ -444,6 +454,9 @@ RING_BACKED: Dict[str, str] = {
     "cam-unplace": "camera:unplace",
     "pic-gather": "camera:gather",
     "pic-open": "camera:open",
+    # Behind the Camera cell's Kept: the file picker opens, the purge asks first.
+    "pic-file": "camera:add",
+    "pic-purge": "camera:purge",
     # The Print cell's verbs go to whichever print is running, the card's or
     # the one from here; Send file is the one from here alone.
     "print-start": "print:start",
@@ -552,6 +565,10 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "cam-pick:change:useCamera": (WIDGET, WHAT_YOU_SEE, "choosing which camera is live"),
     "pic-all:change:(nothing)": (WIDGET, WHAT_YOU_SEE, "ticking every picture at once"),
     "gather-out:click:closest": (WIDGET, WHAT_YOU_SEE, "answering a question with a button"),
+    "pic-list:click:closest": (WIDGET, WHAT_YOU_SEE, "forgetting a kept picture, from its own"),
+    "pic-file:change:addFiles": (WIDGET, WHAT_YOU_SEE, "adding the chosen pictures"),
+    "cam-placed:click:closest": (WIDGET, WHAT_IS_THERE, "taking a placed camera out of the world"),
+    "pin-list:click:closest": (WIDGET, WHAT_IS_THERE, "taking one pin back from the list"),
     "li:dblclick:zoomIn": (LIST, WHAT_YOU_SEE, "going into a piece from the list"),
     "rootCrumb:click:jumpTo": (LIST, WHAT_YOU_SEE, "the top of the trail"),
     "crumb:click:jumpTo": (LIST, WHAT_YOU_SEE, "a step on the trail"),

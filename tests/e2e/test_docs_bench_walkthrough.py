@@ -287,6 +287,73 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path):
         shown="GET /cameras?site=garage -> []",
     )
 
+    # ------------------------------------------------------ kept, taken back
+    # Two pictures drawn to order, added from the file picker; a board pinned to
+    # the DevKitC by a typed identity; both listed on the panel with the button
+    # that takes each back.
+    from PIL import Image, ImageDraw
+
+    for name in ("shelf.png", "shelf_again.png"):
+        drawn = Image.new("L", (320, 240), 245)
+        ImageDraw.Draw(drawn).rectangle((30, 30, 200, 120), fill=30)
+        drawn.save(tmp_path / name)
+    pictures_before = len(page.request.get(f"{base_url}/photos/pictures").json())
+    panel.locator("#pic-file").set_input_files(
+        [str(tmp_path / "shelf.png"), str(tmp_path / "shelf_again.png")]
+    )
+    expect(panel.locator("#pic-list .pic")).to_have_count(pictures_before + 2, timeout=8000)
+    added = [
+        p["path"] for p in page.request.get(f"{base_url}/photos/pictures").json() if p["kept"]
+    ]
+    assert "uploads/shelf.png" in added and "uploads/shelf_again.png" in added
+    pinned = page.request.put(
+        f"{base_url}/sites/garage/nodes/esp32_blink/device",
+        data={"identity": "aa:bb:cc:dd:ee:ff"},
+    )
+    assert pinned.ok, pinned.text()
+    panel.locator("#pin-refresh").click()
+    expect(panel.locator("#pin-list .kept-row")).to_have_count(1, timeout=5000)
+    expect(panel.locator("#pin-list .kept-row")).to_contain_text("garage › esp32_blink")
+    # Floated free of the rail for the picture, so the whole panel is in view.
+    page.evaluate(
+        """() => {
+            window.apothecaryPanels.float('camera');
+            const el = document.querySelector(".panel-free-layer .panel[data-panel='camera']");
+            el.style.left = '16px'; el.style.top = '16px';
+            el.querySelector('#pic-list').scrollIntoView({ block: 'start' });
+        }"""
+    )
+    page.wait_for_timeout(400)
+    story.shows(
+        "What the browser put here, it can take back",
+        "Pictures added from the file picker are kept as they were named, under "
+        "the picture folder's uploads/, each with a button that forgets it; the "
+        "cameras placed in the world and the boards pinned to pieces are listed, "
+        "every site's, each with the button that takes it back -- a pin whose "
+        "site or piece is gone is shown as such, and this is the one place it "
+        "can be seen.",
+    )
+
+    page.evaluate("() => window.apothecaryPanels.dock('camera', 'right')")
+    panel.locator("#pin-list .pin-unpin").click()
+    expect(panel.locator("#pin-list")).to_contain_text("none pinned", timeout=5000)
+    page.once("dialog", lambda d: d.accept())
+    panel.locator("#pic-purge").click()
+    expect(panel.locator("#cam-note")).to_contain_text("of the folder's own stay", timeout=8000)
+    left = page.request.get(f"{base_url}/photos/pictures").json()
+    assert all(not p["kept"] for p in left)
+    assert page.request.get(f"{base_url}/firmware/pins").json()["pins"] == []
+    story.says(
+        "And a purge forgets only what the browser put here",
+        "The pictures a person put in the folder by hand are theirs; the tool "
+        "never deletes one from a page. What it kept -- a camera's frames, the "
+        "pictures added here -- it forgets on request, after asking once.",
+        shown=(
+            f"{len(added)} added, {len(added)} forgotten; {len(left)} of the folder's own left\n"
+            "GET /firmware/pins -> []"
+        ),
+    )
+
     # ------------------------------------------------------------ stays local
     with pytest.raises(LeftTheMachine) as refused:
         socket.create_connection(("example.com", 80), timeout=2)

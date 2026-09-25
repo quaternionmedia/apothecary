@@ -970,8 +970,15 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         "camera:open",
         "camera:allow",
         "camera:unplace",
+        None,  # Kept: what the browser put on this machine, taken back
+    ]
+    kept = next(c for c in camera.children if c.label == "Kept")
+    assert kept.cell == 7 and [(c.action, c.cell, c.destructive) for c in kept.children] == [
+        ("camera:add", 8, False),
+        ("camera:purge", 6, True),
     ]
     assert carried_by("camera:look").name == "VIEWER"
+    assert carried_by("camera:purge").name == "VIEWER"
     assert [(c.action, c.cell) for c in panels.children] == [
         ("panel:toggle:contents", 8),
         ("panel:toggle:selected", 6),

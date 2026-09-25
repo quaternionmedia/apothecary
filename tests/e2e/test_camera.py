@@ -10,6 +10,7 @@ camera is ever opened by a test.
 
 from __future__ import annotations
 
+import re
 import time
 
 import pytest
@@ -147,4 +148,115 @@ def test_a_camera_records_its_own_surroundings(camera_page, base_url: str, pictu
     panel.locator("#cam-unplace").click()
     expect(page.locator(".world-badge.camera-mark")).to_have_count(0, timeout=5000)
     assert page.request.get(f"{base_url}/cameras?site=garage").json() == []
+    assert errors == []
+
+
+@pytest.mark.e2e
+def test_what_the_browser_put_here_it_can_take_back(camera_page, base_url: str, picture_folder):
+    """The management controls on the same panel: pictures added from a file
+    picker and kept as they were named, one forgotten from its thumbnail, every
+    placed camera and every pin listed -- whatever site, even one that is gone --
+    each taken back with its own button, and a purge that forgets everything the
+    browser put here and nothing a person put in the folder by hand."""
+    page = camera_page
+    errors: list[str] = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    for name in ("shelf.png", "shelf_again.png"):
+        drawn = Image.new("L", (320, 240), 245)
+        ImageDraw.Draw(drawn).rectangle((30, 30, 200, 120), fill=30)
+        drawn.save(picture_folder / name)
+    page.goto(f"{base_url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
+    page.evaluate("() => window.apothecaryPanels.open('camera')")
+    panel = page.locator(".panel[data-panel='camera']")
+    expect(panel.locator("#pic-file")).to_be_visible(timeout=3000)
+    page.wait_for_function("() => window.apothecaryCamera.state.pictures.length > 0")
+    before = page.evaluate("() => window.apothecaryCamera.state.pictures.length")
+    own_before = page.evaluate(
+        "() => window.apothecaryCamera.state.pictures.filter((p) => !p.kept).length"
+    )
+
+    # Added from the file picker, kept under uploads/ as they were named; the
+    # folder's own pictures have no forget button, the added ones do.
+    panel.locator("#pic-file").set_input_files(
+        [str(picture_folder / "shelf.png"), str(picture_folder / "shelf_again.png")]
+    )
+    expect(panel.locator("#pic-list .pic")).to_have_count(before + 2, timeout=8000)
+    expect(panel.locator("#cam-note")).to_contain_text("added 2 picture(s)")
+    added = [
+        p for p in page.request.get(f"{base_url}/photos/pictures").json() if p["kept"] == "upload"
+    ]
+    assert sorted(p["path"] for p in added) == ["uploads/shelf.png", "uploads/shelf_again.png"]
+    assert (picture_folder / "uploads" / "shelf.png").is_file()
+    assert panel.locator("#pic-list .pic .pic-forget").count() == before - own_before + 2
+    # Forgotten from its thumbnail, without ticking it.
+    row = panel.locator("#pic-list .pic", has_text="shelf_again.png")
+    row.locator(".pic-forget").click()
+    expect(panel.locator("#pic-list .pic")).to_have_count(before + 1, timeout=5000)
+    assert not (picture_folder / "uploads" / "shelf_again.png").exists()
+    assert (
+        page.evaluate("() => [...document.querySelectorAll('#pic-list input:checked')].length") == 0
+    )
+
+    # Every placed camera is listed, and taken back from its row.
+    panel.locator("#cam-allow").click()
+    page.wait_for_function(
+        "() => window.apothecaryCamera && window.apothecaryCamera.live()", timeout=8000
+    )
+    page.locator("#contents-list .contents-item[data-path='workbench']").click()
+    expect(panel.locator("#cam-place")).to_be_enabled(timeout=3000)
+    panel.locator("#cam-place").click()
+    expect(panel.locator("#cam-placed .kept-row")).to_have_count(1, timeout=5000)
+    expect(panel.locator("#cam-placed .kept-row")).to_contain_text("garage › workbench")
+    expect(page.locator(".world-badge.camera-mark")).to_be_visible(timeout=5000)
+    panel.locator("#cam-placed .cam-unplace-one").click()
+    expect(page.locator(".world-badge.camera-mark")).to_have_count(0, timeout=5000)
+    expect(panel.locator("#cam-placed")).to_contain_text("none placed")
+    assert page.request.get(f"{base_url}/cameras").json() == []
+
+    # Every pin is listed -- this site's, and one whose site is gone -- and each
+    # taken back from its row; the piece's Device section follows at once.
+    r = page.request.put(
+        f"{base_url}/sites/garage/nodes/esp32_blink/device", data={"identity": "aa:bb:cc:dd:ee:ff"}
+    )
+    assert r.ok, r.text()
+    drawn = Image.new("L", (400, 300), 245)
+    ImageDraw.Draw(drawn).rectangle((40, 40, 200, 160), fill=30)
+    drawn.save(picture_folder / "pins_check.png")
+    built = page.request.post(
+        f"{base_url}/photos",
+        data={"picture": "pins_check.png", "name": "pins_check", "width_mm": 400},
+    )
+    assert built.ok, built.text()
+    piece = next(iter(built.json()["pieces"]))
+    r = page.request.put(
+        f"{base_url}/sites/pins_check/nodes/{piece}/device", data={"identity": "/dev/ttyNOWHERE"}
+    )
+    assert r.ok, r.text()
+    assert page.request.delete(f"{base_url}/photos/pins_check").ok
+    panel.locator("#pin-refresh").click()
+    rows = panel.locator("#pin-list .kept-row")
+    expect(rows).to_have_count(2, timeout=5000)
+    expect(rows.filter(has_text="pins_check")).to_have_class(re.compile(r"\bstale\b"))
+    expect(rows.filter(has_text="pins_check")).to_contain_text("site gone")
+    expect(rows.filter(has_text="esp32_blink")).to_contain_text("not connected")
+    rows.filter(has_text="pins_check").locator(".pin-unpin").click()
+    expect(rows).to_have_count(1, timeout=5000)
+    page.locator("#contents-list .contents-item[data-path='esp32_blink']").click()
+    expect(page.locator("#selected-body .device-section .dev-unpin")).to_be_visible(timeout=8000)
+    rows.first.locator(".pin-unpin").click()
+    expect(rows).to_have_count(0, timeout=5000)
+    expect(panel.locator("#pin-list")).to_contain_text("none pinned")
+    expect(page.locator("#selected-body .dev-pick")).to_be_visible(timeout=3000)
+    assert page.request.get(f"{base_url}/firmware/pins").json()["pins"] == []
+
+    # Purge: everything the browser put here goes, the folder's own stay.
+    page.once("dialog", lambda d: d.accept())
+    panel.locator("#pic-purge").click()
+    expect(panel.locator("#cam-note")).to_contain_text("of the folder's own stay", timeout=8000)
+    left = page.request.get(f"{base_url}/photos/pictures").json()
+    assert all(not p["kept"] for p in left)
+    assert {p["name"] for p in left} >= {"shelf.png", "shelf_again.png"}
+    assert not any((picture_folder / "uploads").glob("*.png"))
+    assert not any((picture_folder / "captures").glob("*.png"))
     assert errors == []

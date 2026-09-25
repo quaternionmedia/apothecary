@@ -91,7 +91,22 @@ The placement is a record on this machine and nothing more; taking it back remov
 GET /cameras?site=garage -> []
 ```
 
-## 12. And none of it leaves the machine
+## 12. What the browser put here, it can take back
+
+Pictures added from the file picker are kept as they were named, under the picture folder's uploads/, each with a button that forgets it; the cameras placed in the world and the boards pinned to pieces are listed, every site's, each with the button that takes it back -- a pin whose site or piece is gone is shown as such, and this is the one place it can be seen.
+
+![What the browser put here, it can take back](screenshots/12-12-what-the-browser-put-here-it-can-take-back.png)
+
+## 13. And a purge forgets only what the browser put here
+
+The pictures a person put in the folder by hand are theirs; the tool never deletes one from a page. What it kept -- a camera's frames, the pictures added here -- it forgets on request, after asking once.
+
+```
+2 added, 2 forgotten; 5 of the folder's own left
+GET /firmware/pins -> []
+```
+
+## 14. And none of it leaves the machine
 
 The guard is on the process, installed when the package is imported: a connection past this machine is refused before any name is looked up. The server answers this machine alone; a page from anywhere else asking it for the cameras gets a refusal, not the list. Neither is a setting.
 
