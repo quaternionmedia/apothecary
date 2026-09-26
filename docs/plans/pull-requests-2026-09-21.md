@@ -17,7 +17,7 @@ branches are shaped as they are; the queue
 ```bash
 # 1. apothecary: the integration branch updates #21 (consolidate/2026-09-19 → main)
 cd ~/Documents/apothecary
-git log --oneline origin/consolidate/2026-09-19..HEAD | wc -l   # 31
+git log --oneline origin/consolidate/2026-09-19..HEAD | wc -l   # 36
 git push origin consolidate/2026-09-19
 # then replace #21's description with the text under "apothecary #21" below
 
@@ -36,7 +36,7 @@ The parent's submodule pin stays at `20e00bd` on purpose: bumping it carries
 unrelated governance changes and reopens the adoption record; it is bumped
 in a commit of its own once the qm pull request merges.
 
-Commits on `#21` so far are GPG-signed; the 31 here are not (no key on this
+Commits on `#21` so far are GPG-signed; the 36 here are not (no key on this
 machine). Either sign them on the way out --
 `git rebase --exec 'git commit --amend --no-edit -S' 3837828` -- or say in
 the description that the tail is unsigned, as the text below does.
