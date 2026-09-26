@@ -1051,13 +1051,13 @@
                     for (const row of Object.values(this.bindings)) {
                         if (row.device && row.device.port === st.port) { row.printer_status = st; touched = true; }
                     }
-                    // A changed status is patched onto the tree and the mesh
-                    // recoloured in place: a full refreshTree() would reset the
-                    // camera, wipe the panel and reload meshes every time a
-                    // flaky link flips idle/offline.
+                    // Each synced node's status is patched onto the tree and the mesh
+                    // recoloured in place (a no-op when the tree already agrees). Not
+                    // only `changed` ones: the server's node may have moved in an
+                    // earlier request this page never saw.
                     let recoloured = false;
                     for (const n of st.synced || []) {
-                        if (n.changed && n.site === this.siteName) recoloured = this.applyNodeStatus(n.path, n.status) || recoloured;
+                        if (n.site === this.siteName) recoloured = this.applyNodeStatus(n.path, n.status) || recoloured;
                     }
                     if (touched || recoloured) { this.updateDeviceViews(); this.syncWorldMarks(); }
                 });
@@ -3798,7 +3798,7 @@
             return { port: row.device.port, printer: !!row.device.printer, armed: false, bound: true };
         }
         const nodeSpec = (path, at) => ({
-            context: { pointing: 'node', targets: [path], where: at || { x: 0, y: 0 } },
+            context: { pointing: 'node', targets: [path] },
             site: viewer.siteName, device: deviceFor(path), at,
         });
         // The canvas ring stands on the level you are looking at: its Pieces
@@ -3807,7 +3807,7 @@
         const canvasSpec = (at) => {
             const focus = viewer.focusPath.join('.');
             return {
-                context: { pointing: 'canvas', targets: focus ? [focus] : [], where: at || { x: 0, y: 0 } },
+                context: { pointing: 'canvas', targets: focus ? [focus] : [] },
                 site: viewer.siteName, at,
             };
         };
@@ -3867,7 +3867,6 @@
                 }
                 if (action === 'panel:toggle:machine') {
                     if (viewer.machine && viewer.panels.isOpen('machine')) { viewer.panels.close('machine'); viewer.setStatus(`Closed the machine${tail}`, 'success'); }
-                    else if (viewer.machine) { viewer.panels.open('machine'); viewer.setStatus(`Opened the machine${tail}`, 'success'); }
                     else if (viewer.selectedName && viewer.openMachine(viewer.selectedName)) viewer.setStatus(`Opened ${viewer.selectedName}${tail}`, 'success');
                     else viewer.setStatus(`Select a machine with a board pinned to it first${tail}`, 'error');
                     return;
