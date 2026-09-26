@@ -4,7 +4,6 @@ import os
 import shutil
 import subprocess
 import sys
-from pathlib import Path
 
 import click
 import uvicorn
@@ -31,69 +30,19 @@ def _loopback_or_die(host: str) -> str:
 )
 @click.option("--port", default=8000, type=int, help="Port to bind to")
 @click.option("--reload/--no-reload", default=False, help="Enable auto-reload on code changes")
-@click.option(
-    "--viewer-path",
-    type=click.Path(file_okay=False, dir_okay=True, resolve_path=True, exists=True),
-    help="Serve the JSCAD web viewer from this directory (defaults to node_modules/@jscad/web if present)",
-)
-@click.option("--no-viewer", is_flag=True, help="Disable the JSCAD viewer even if assets exist")
+# The JSCAD viewer these named is served by no route; the flags do nothing
+# and stay, hidden, for one release so scripts that pass them keep working.
+@click.option("--viewer-path", hidden=True, expose_value=False)
+@click.option("--no-viewer", is_flag=True, hidden=True, expose_value=False)
 @click.option(
     "--refresh-docs/--no-refresh-docs",
     default=False,
     help="Also regenerate docs/generated/ in the background (a headless browser run, "
     "a minute or two). Off by default: starting a server is not a test run.",
 )
-def serve(
-    host: str, port: int, reload: bool, viewer_path: str | None, no_viewer: bool, refresh_docs: bool
-):
+def serve(host: str, port: int, reload: bool, refresh_docs: bool):
     """Run the FastAPI server. It listens on this machine only (see apothecary/stays_local.py)."""
     host = _loopback_or_die(host)
-    # CRITICAL: Set environment variables BEFORE importing the app,
-    # because the app module initializes the viewer mount at import time
-
-    # Check for viewer assets and warn if missing
-    viewer_available = False
-    if no_viewer:
-        os.environ["APOTHECARY_VIEWER_PATH"] = ""
-        _safe_echo("⚠️  JSCAD viewer disabled via --no-viewer")
-    elif viewer_path:
-        os.environ["APOTHECARY_VIEWER_PATH"] = viewer_path
-        viewer_available = True
-        _safe_echo(f"✓ Using JSCAD viewer from: {viewer_path}")
-    else:
-        # Check default location
-        default_viewer = ROOT / "node_modules" / "@jscad" / "web"
-        env_viewer = os.getenv("APOTHECARY_VIEWER_PATH")
-
-        if env_viewer and env_viewer.strip():
-            viewer_check = Path(env_viewer.strip())
-            if viewer_check.exists():
-                viewer_available = True
-                _safe_echo(f"✓ Using JSCAD viewer from environment: {viewer_check}")
-            else:
-                _safe_echo(
-                    "⚠️  Warning: APOTHECARY_VIEWER_PATH set but path doesn't exist", fg="yellow"
-                )
-        elif default_viewer.exists():
-            viewer_available = True
-            # Set the environment variable so the app mount will work
-            os.environ["APOTHECARY_VIEWER_PATH"] = str(default_viewer)
-            _safe_echo(f"✓ JSCAD viewer found at: {default_viewer}")
-        else:
-            # Even if assets not found, still try to set it to the expected path
-            # in case they get installed later
-            os.environ["APOTHECARY_VIEWER_PATH"] = str(default_viewer)
-            _safe_echo("⚠️  Warning: JSCAD viewer assets not found", fg="yellow", bold=True)
-            click.echo("   Nothing serves these assets today -- see below.")
-            click.echo("")
-            click.secho("   To enable the viewer:", fg="yellow")
-            _safe_echo("   • Run: apothecary install")
-            _safe_echo("   • Or manually: npm install @jscad/web")
-            _safe_echo("   • Or pass: --viewer-path /path/to/viewer/dist")
-            _safe_echo("   • Or use: --no-viewer to suppress this warning")
-            click.echo("")
-
-    # NOW import the app after environment variables are set
     from ..api import app as fastapi_app
 
     # Start the server
@@ -103,12 +52,6 @@ def serve(
     click.echo(f"  Docs:   http://{host}:{port}/docs")
     if refresh_docs:
         refresh_docs_in_background()
-    # The JSCAD assets above are mounted by no route -- the fractal viewer is
-    # the only viewer, and it needs the vendored three.js, not these. The flags
-    # are kept because they are published; the messages no longer claim the
-    # viewer breaks without them.
-    if not viewer_available and not no_viewer:
-        click.echo("(the JSCAD assets are unused by any route; the viewer is unaffected)")
 
     # A live serial overlay (/firmware/devices/stream) is an SSE response that
     # only ends when the browser leaves; without a graceful-shutdown timeout

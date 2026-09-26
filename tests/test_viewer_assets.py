@@ -90,39 +90,10 @@ class TestMissingLibraryIsAnnounced:
         assert "The 3D library is not installed" not in page
 
 
-class TestOnboardingInstallsWhatTheViewerNeeds:
-    """`apothecary install` is the onboarding step for the JSCAD viewer. The
-    fractal viewer's library is checked in, so it needs no step at all.
-    """
-
-    def test_the_fabricated_package_json_matches_the_committed_one(self):
-        """`install` writes a package.json when none exists. It has to agree
-        with the committed one, or two clones install two different things.
-        """
-        import json
-        import re
-
-        from apothecary.projects.parts.skeleton import ROOT
-
-        source = (ROOT / "apothecary" / "cli" / "system.py").read_text(encoding="utf-8")
-        block = re.search(r"package_data = \{(.*?)\n                \}", source, re.S)
-        assert block, "install no longer fabricates a package.json; drop this test"
-
-        fabricated = set(re.findall(r'"(@?[\w/.-]+)":\s*"\^', block.group(0)))
-        committed = set(
-            json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["dependencies"]
-        )
-        assert fabricated == committed
-
-    def test_three_is_checked_in_and_not_installed(self):
-        """A fresh clone serves the viewer with no second package manager."""
-        import json
-
+class TestTheLibraryIsCheckedIn:
+    def test_a_fresh_clone_has_three_with_no_install(self):
         from apothecary.api import THREE_DIR
-        from apothecary.projects.parts.skeleton import ROOT
 
-        deps = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["dependencies"]
-        assert "three" not in deps
         assert (THREE_DIR / "three.module.js").is_file()
         assert (THREE_DIR / "LICENSE").is_file()
 

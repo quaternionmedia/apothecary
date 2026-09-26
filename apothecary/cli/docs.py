@@ -213,7 +213,6 @@ def _simulated_device_env(env: dict) -> dict:
 def _start_server(host: str, port: int, simulated_devices: bool = True):
     env = os.environ.copy()
     env["APOTHECARY_SKIP_STL_GENERATION"] = "1"
-    env["APOTHECARY_VIEWER_PATH"] = ""
     # The picture walkthrough asks the server to look at a picture, and the
     # server reads pictures from one folder and refuses everywhere else. Both
     # sides have to agree which folder that is, so it is decided here and

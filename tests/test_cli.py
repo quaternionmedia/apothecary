@@ -57,9 +57,7 @@ def test_cli_check_runs_on_a_legacy_code_page(monkeypatch):
     """The whole command, not just the helper, survives the narrow encoding."""
     from apothecary.cli import utils
 
-    monkeypatch.setattr(
-        utils.click, "secho", lambda message, **style: message.encode("cp1252")
-    )
+    monkeypatch.setattr(utils.click, "secho", lambda message, **style: message.encode("cp1252"))
     runner = CliRunner()
     result = runner.invoke(cli, ["check"], catch_exceptions=False)
     assert result.exit_code == 0
@@ -74,3 +72,24 @@ def test_cli_parts_info_reports_bounds():
     data = json.loads(result.output)
     assert data["bounds"] is not None
     assert data["bounds"]["size"] == pytest.approx({"x": 46.8, "y": 46.8, "z": 15.6})
+
+
+RETIRED = {
+    "install": (["install", "--no-viewer"], "nothing to install: three.js is vendored"),
+}
+
+
+@pytest.mark.parametrize("name", sorted(RETIRED))
+def test_a_retired_command_names_its_replacement_and_fails(name):
+    """Old options are swallowed, so a script reaches the pointer, not a usage error."""
+    argv, instead = RETIRED[name]
+    result = CliRunner().invoke(cli, argv)
+    assert result.exit_code == 1
+    assert instead in result.output
+
+
+def test_retired_commands_are_not_listed():
+    listing = CliRunner().invoke(cli, ["--help"]).output.split("Commands:")[1]
+    listed = {line.split()[0] for line in listing.splitlines() if line.strip()}
+    assert "check" in listed
+    assert not set(RETIRED) & listed

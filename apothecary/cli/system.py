@@ -1,8 +1,6 @@
 """System-related CLI commands: system, check, install, submodules."""
 
 import importlib.metadata
-import json
-import os
 import shutil
 import subprocess
 import sys
@@ -13,6 +11,7 @@ import click
 from ..projects.parts.skeleton import ROOT
 from ..projects.parts.stl_renderer import OpenSCADRenderer
 from ..projects.registry import scan_projects
+from .retired import retired
 from .utils import _safe_echo
 
 
@@ -88,37 +87,6 @@ def check():
             _safe_echo(f"  ✗ {pkg}: NOT FOUND", fg="red")
     click.echo("")
 
-    # Check JSCAD viewer assets
-    click.secho("JSCAD viewer assets (unused by any route):", bold=True)
-    default_viewer = ROOT / "node_modules" / "@jscad" / "web" / "dist"
-    env_viewer = os.getenv("APOTHECARY_VIEWER_PATH", "").strip()
-
-    viewer_found = False
-    if env_viewer:
-        env_path = Path(env_viewer)
-        if env_path.exists():
-            _safe_echo(f"  ✓ Found via APOTHECARY_VIEWER_PATH: {env_path}")
-            viewer_found = True
-        else:
-            _safe_echo(f"  ✗ APOTHECARY_VIEWER_PATH set but not found: {env_path}", fg="red")
-
-    if default_viewer.exists():
-        _safe_echo(f"  ✓ Found at default location: {default_viewer}")
-        viewer_found = True
-    elif not viewer_found:
-        _safe_echo("  ✗ Not found at default location", fg="yellow")
-        click.echo(f"     Expected: {default_viewer}")
-
-    if not viewer_found:
-        click.echo("")
-        click.secho("  To install viewer assets:", fg="yellow")
-        click.echo("    apothecary install")
-        click.echo("    (or manually: npm install @jscad/web)")
-        click.echo("  Or run server without viewer:")
-        click.echo("    apothecary serve --no-viewer")
-
-    click.echo("")
-
     # The fractal viewer's 3D library. Without it the viewer page loads,
     # renders nothing, and still shows its static "Layout valid" chip -- so
     # the absence has to be reported somewhere a person will look.
@@ -173,128 +141,7 @@ def check():
             click.echo(f"    ... and {len(items) - 5} more")
 
 
-@click.command()
-@click.option("--viewer/--no-viewer", default=True, help="Install JSCAD viewer assets")
-@click.option("--force", is_flag=True, help="Force reinstall even if already present")
-@click.option("--npm-cmd", default="npm", help="npm command to use (e.g., 'pnpm', 'yarn')")
-def install(viewer: bool, force: bool, npm_cmd: str):
-    """Install and setup dependencies for Apothecary."""
-    click.secho("Apothecary Installation", bold=True)
-    click.echo("")
-
-    issues_found = False
-    fixes_applied = False
-
-    # Check for npm/package manager
-    if viewer:
-        npm_available = shutil.which(npm_cmd)
-        if not npm_available:
-            _safe_echo(f"✗ {npm_cmd} not found in PATH")
-            click.echo(f"  Please install Node.js and {npm_cmd} to enable JSCAD viewer")
-            click.echo("  Download from: https://nodejs.org/")
-            issues_found = True
-            viewer = False  # Skip viewer installation
-        else:
-            _safe_echo(f"✓ {npm_cmd} found: {npm_available}")
-
-    # Check and install JSCAD viewer
-    if viewer:
-        click.echo("")
-        click.secho("JSCAD Viewer Installation:", bold=True)
-
-        default_viewer = ROOT / "node_modules" / "@jscad" / "web" / "dist"
-        package_json = ROOT / "package.json"
-
-        if default_viewer.exists() and not force:
-            _safe_echo(f"  ✓ Already installed at: {default_viewer}")
-            click.echo("    Use --force to reinstall")
-        else:
-            if not package_json.exists():
-                _safe_echo("  ✗ package.json not found")
-                click.echo(f"    Expected at: {package_json}")
-                click.echo("    Creating minimal package.json...")
-                # Must match the committed package.json. The fractal viewer's
-                # three.js is not here: it is checked in under
-                # apothecary/static/vendor/three/ and needs no install.
-                package_data = {
-                    "name": "apothecary-viewer",
-                    "version": "0.0.0",
-                    "private": True,
-                    "description": "Local JSCAD web viewer assets for Apothecary",
-                    "dependencies": {"@jscad/web": "^2.6.0"},
-                }
-                package_json.write_text(json.dumps(package_data, indent=2), encoding="utf-8")
-                _safe_echo("  ✓ Created package.json")
-                fixes_applied = True
-
-            click.echo(f"  Installing the viewer's JS dependencies with {npm_cmd}...")
-            try:
-                result = subprocess.run(
-                    [npm_cmd, "install", "--ignore-scripts"],
-                    cwd=str(ROOT),
-                    capture_output=True,
-                    text=True,
-                    timeout=120,
-                    shell=True,  # Required on Windows for .CMD files
-                )
-
-                if result.returncode == 0:
-                    if default_viewer.exists():
-                        click.secho("  Successfully installed JSCAD viewer", fg="green", bold=True)
-                        click.echo(f"    Location: {default_viewer}")
-                        fixes_applied = True
-                    else:
-                        _safe_echo(f"  ⚠️  {npm_cmd} install completed but viewer not found")
-                        click.echo(f"    Expected at: {default_viewer}")
-                        issues_found = True
-                else:
-                    _safe_echo(f"  ✗ {npm_cmd} install failed")
-                    if result.stderr:
-                        click.echo(f"    Error: {result.stderr[:200]}")
-                    issues_found = True
-
-            except subprocess.TimeoutExpired:
-                _safe_echo(f"  ✗ {npm_cmd} install timed out after 120 seconds")
-                issues_found = True
-            except Exception as e:
-                _safe_echo(f"  ✗ Error running {npm_cmd}: {e}")
-                issues_found = True
-
-    # Check repository structure
-    click.echo("")
-    click.secho("Repository Structure:", bold=True)
-
-    essential_dirs = [
-        (ROOT / "apothecary", "Python package directory"),
-        (ROOT / "parts", "OpenSCAD parts directory"),
-        (ROOT / "templates", "Jinja2 templates directory"),
-        (ROOT / "tests", "Test suite directory"),
-    ]
-
-    for dir_path, description in essential_dirs:
-        if dir_path.exists():
-            _safe_echo(f"  ✓ {dir_path.name}/ - {description}")
-        else:
-            _safe_echo(f"  ✗ {dir_path.name}/ missing - {description}")
-            issues_found = True
-
-    # Summary
-    click.echo("")
-    click.secho("Installation Summary:", bold=True)
-    if fixes_applied:
-        click.secho("  Applied fixes and installed dependencies", fg="green")
-    if issues_found:
-        _safe_echo("  ⚠️  Some issues found - check output above")
-        click.echo("")
-        click.echo("  Run 'apothecary check' for detailed status")
-    else:
-        click.secho("  Everything looks good!", fg="green", bold=True)
-
-    click.echo("")
-    click.echo("Next steps:")
-    _safe_echo("  • Run 'apothecary check' to verify installation")
-    _safe_echo("  • Run 'apothecary serve' to start the API server")
-    _safe_echo("  • Visit http://127.0.0.1:8000/viewer to use JSCAD viewer")
+install = retired("install", "nothing to install: three.js is vendored")
 
 
 @click.command()
