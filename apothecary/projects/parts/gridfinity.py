@@ -193,11 +193,11 @@ class GridfinityBinPart(BasePart):
         """parts/gridfinity/gridfinity.stl, outside the submodule's working tree."""
         return ROOT / "parts" / "gridfinity" / "gridfinity.stl"
 
-    def can_generate_stl(self) -> Tuple[bool, str]:
+    def can_generate_stl(self, openscad: Optional[Path] = None) -> Tuple[bool, str]:
         """The submodule's SCAD is present, and an OpenSCAD new enough for it."""
         if not self.submodule_initialized:
             return False, "Submodule not initialized. Run: git submodule update --init"
-        return super().can_generate_stl()
+        return super().can_generate_stl(openscad)
 
 
 def create(metadata_root: Path) -> GridfinityBinPart:

@@ -122,6 +122,8 @@ class Size(BaseModel):
 class FakeRenderer:
     """Writes a stand-in STL and counts the renders."""
 
+    openscad_path = None
+
     def __init__(self):
         self.calls = []
 
@@ -173,7 +175,7 @@ class TestBuildStl:
 
     def test_a_part_that_cannot_be_built_here_is_refused(self, tmp_path):
         class Unbuildable(BasePart):
-            def can_generate_stl(self):
+            def can_generate_stl(self, openscad=None):
                 return False, "needs a newer OpenSCAD"
 
         scad = tmp_path / "block.scad"

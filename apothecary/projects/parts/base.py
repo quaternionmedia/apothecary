@@ -15,7 +15,7 @@ from apothecary.models import (
     Vector3D,
 )
 
-from .stl_renderer import find_openscad, parse_openscad_version
+from .stl_renderer import find_openscad, openscad_meets, parse_openscad_version
 
 
 class ContestedValue(BaseModel):
@@ -105,10 +105,15 @@ class BasePart(BaseModel):
         jscad_path = self.source_file.with_suffix(".jscad")
         return jscad_path if jscad_path.exists() else None
 
-    def can_generate_stl(self) -> Tuple[bool, str]:
-        """Whether this part's STL can be built on this machine, and if not, why."""
+    def can_generate_stl(self, openscad: Optional[Path] = None) -> Tuple[bool, str]:
+        """Whether this part's STL can be built on this machine, and if not,
+        why: with ``openscad`` when the caller names one, else with the first
+        install that meets ``openscad_min_version``. A part with checks of its
+        own overrides this and ends with ``super().can_generate_stl(openscad)``."""
         if self.openscad_min_version is None:
             return True, ""
+        if openscad is not None:
+            return openscad_meets(openscad, self.openscad_min_version)
         found, reason = find_openscad(self.openscad_min_version)
         return found is not None, reason
 

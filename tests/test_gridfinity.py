@@ -195,10 +195,14 @@ class TestGridfinityBinPart:
     def test_build_stl_hands_openscad_the_customizer_names(self, tmp_path, monkeypatch):
         stl = tmp_path / "gridfinity.stl"
         monkeypatch.setattr(GridfinityBinPart, "get_stl_output_path", lambda self: stl)
-        monkeypatch.setattr(GridfinityBinPart, "can_generate_stl", lambda self: (True, ""))
+        monkeypatch.setattr(
+            GridfinityBinPart, "can_generate_stl", lambda self, openscad=None: (True, "")
+        )
         handed = []
 
         class Renderer:
+            openscad_path = None
+
             def render_stl(self, scad_path, stl_path=None, timeout=120.0, params=None):
                 handed.append(params)
                 stl_path.write_text("solid fake\nendsolid fake\n")

@@ -408,24 +408,45 @@ def _openscad_candidates() -> List[Path]:
     return list(unique.values())
 
 
-def find_openscad(min_version: str) -> Tuple[Optional[Path], str]:
-    """The first OpenSCAD that is ``min_version`` or newer, the default install
-    before any development snapshot: ``(path, "")``, or ``(None, why not)``."""
+def _wanted(min_version: str) -> Tuple[int, ...]:
     wanted = parse_openscad_version(min_version)
     if wanted is None:
         raise ValueError(f"{min_version!r} is not an OpenSCAD version")
-    candidates = _openscad_candidates()
-    for path in candidates:
-        have = parse_openscad_version(openscad_version(path))
-        if have is not None and have >= wanted:
-            return path, ""
+    return wanted
+
+
+def _new_enough(executable: Path, wanted: Tuple[int, ...]) -> bool:
+    have = parse_openscad_version(openscad_version(executable))
+    return have is not None and have >= wanted
+
+
+def _too_old(min_version: str, executables: List[Path]) -> str:
     found = "; ".join(
-        f"{path} is {openscad_version(path) or 'of unknown version'}" for path in candidates
+        f"{path} is {openscad_version(path) or 'of unknown version'}" for path in executables
     )
-    return None, (
+    return (
         f"needs OpenSCAD {min_version} or newer ({found or 'none is installed'}); "
         f"development snapshots: {SNAPSHOTS_URL}"
     )
+
+
+def openscad_meets(executable: Path, min_version: str) -> Tuple[bool, str]:
+    """Whether ``executable`` is OpenSCAD ``min_version`` or newer:
+    ``(True, "")``, or ``(False, why not)``."""
+    if _new_enough(executable, _wanted(min_version)):
+        return True, ""
+    return False, _too_old(min_version, [executable])
+
+
+def find_openscad(min_version: str) -> Tuple[Optional[Path], str]:
+    """The first OpenSCAD that is ``min_version`` or newer, the default install
+    before any development snapshot: ``(path, "")``, or ``(None, why not)``."""
+    wanted = _wanted(min_version)
+    candidates = _openscad_candidates()
+    for path in candidates:
+        if _new_enough(path, wanted):
+            return path, ""
+    return None, _too_old(min_version, candidates)
 
 
 def geometry_scad(part: BasePart, params: dict) -> Optional[str]:
@@ -555,14 +576,15 @@ def build_stl(
     turned by ``display_rotation``; non-default parameters are
     recorded in the params sidecar as validated, not as ``scad_overrides``
     translates them, and a default build removes it. ``renderer`` overrides
-    the OpenSCAD the part would choose for itself.
+    the OpenSCAD the part would choose for itself, and is the one checked
+    against the part's ``openscad_min_version``.
     """
     params = part.validate_overrides(params)
     stl_path = part.get_stl_output_path()
     if not force and _is_fresh(part, stl_path, params):
         return RenderResult(success=True, stl_path=stl_path, skipped="fresh")
 
-    can_build, reason = part.can_generate_stl()
+    can_build, reason = part.can_generate_stl(renderer.openscad_path if renderer else None)
     if not can_build:
         return RenderResult(success=False, error_message=reason, skipped="refused")
 

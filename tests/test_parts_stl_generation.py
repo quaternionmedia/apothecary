@@ -13,7 +13,7 @@ from rendered_parts import built_stl_fixture, registered_parts  # noqa: F401
 
 from apothecary.projects.parts.base import BasePart
 from apothecary.projects.parts.gridfinity import DEFAULT as GRIDFINITY
-from apothecary.projects.parts.stl_renderer import get_renderer
+from apothecary.projects.parts.stl_renderer import OpenSCADRenderer, build_stl, get_renderer
 
 ALL_PARTS = registered_parts()
 
@@ -205,6 +205,28 @@ class TestOpenSCADRequirement:
         assert _calls(stable) == ["--version"]
         assert _calls(snapshot) == ["--version"]
 
+    def test_an_openscad_the_caller_names_is_the_one_checked(self, installed, tmp_path):
+        """`generate-stl --openscad-path` reaches an AppImage no search finds."""
+        installed(default="2021.01")
+        chosen = _fake_openscad(tmp_path / "appimage" / "openscad", "2025.03.15")
+        part = _needs(tmp_path)
+        part.source_file.write_text("cube(1);")
+        result = build_stl(part, renderer=OpenSCADRenderer(str(chosen)))
+        assert result.success, result.error_message
+        assert [call.split()[0] for call in _calls(chosen)] == ["--version", "-o"]
+
+    def test_an_openscad_the_caller_names_that_is_too_old_is_refused_by_name(
+        self, installed, tmp_path
+    ):
+        installed(default="2025.03.15")
+        chosen = _fake_openscad(tmp_path / "old" / "openscad", "2021.01")
+        part = _needs(tmp_path)
+        part.source_file.write_text("cube(1);")
+        result = build_stl(part, renderer=OpenSCADRenderer(str(chosen)))
+        assert result.skipped == "refused"
+        assert f"({chosen} is OpenSCAD version 2021.01)" in result.error_message
+        assert _calls(chosen) == ["--version"]
+
     def test_a_minimum_that_is_not_a_version_is_refused(self, tmp_path):
         with pytest.raises(ValueError, match="not an OpenSCAD version"):
             _needs(tmp_path, "latest")
@@ -240,6 +262,23 @@ class TestGridfinityOpenSCAD:
         r = client.post("/parts/gridfinity/stl/generate")
         assert r.status_code == 200, r.text
         assert [call.split()[0] for call in _calls(snapshot)] == ["--version", "-o"]
+        assert stl.exists()
+
+    def test_generate_stl_builds_it_with_the_openscad_it_is_given(
+        self, installed, monkeypatch, tmp_path
+    ):
+        from click.testing import CliRunner
+
+        from apothecary.cli import cli
+
+        installed(default="2021.01")
+        chosen = _fake_openscad(tmp_path / "appimage" / "openscad", "2025.03.15")
+        stl = tmp_path / "gridfinity.stl"
+        monkeypatch.setattr(type(GRIDFINITY), "get_stl_output_path", lambda self: stl)
+        result = CliRunner().invoke(
+            cli, ["parts", "generate-stl", "gridfinity", "--openscad-path", str(chosen)]
+        )
+        assert result.exit_code == 0, result.output
         assert stl.exists()
 
     def test_it_is_refused_on_2021_01_naming_what_it_needs(self, installed):
