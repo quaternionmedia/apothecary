@@ -3,6 +3,7 @@
 import json
 import re
 
+import pytest
 from fastapi.testclient import TestClient
 
 from apothecary import docs_site
@@ -118,6 +119,24 @@ def test_the_root_docs_name_only_files_that_exist():
             if not (ROOT / span).exists():
                 missing.append(f"{name} -> `{span}`")
     assert not missing, "\n".join(missing)
+
+
+def test_the_parts_authoring_wrapper_builds_a_part():
+    """The wrapper docs/parts-authoring.md gives, run as a module of the parts
+    package, builds a part whose bounds follow its parameters."""
+    text = (ROOT / "docs" / "parts-authoring.md").read_text(encoding="utf-8")
+    source = re.search(r"^## A wrapper$.*?^```python\n(.*?)^```", text, re.M | re.S).group(1)
+    module = {
+        "__name__": "apothecary.projects.parts.my_part",
+        "__package__": "apothecary.projects.parts",
+    }
+    exec(compile(source, "docs/parts-authoring.md", "exec"), module)
+    part = module["DEFAULT"]
+    assert part.name == "my_part"
+    assert part.source_file == ROOT / "parts" / "my_part" / "my_part.scad"
+    assert part.get_bounds({"size": 30}).size.x == 30
+    with pytest.raises(ValueError, match="unknown parameter"):
+        part.validate_overrides({"sizee": 30})
 
 
 def test_docs_routes_serve_pages_and_files_and_refuse_the_rest(tmp_path, monkeypatch):

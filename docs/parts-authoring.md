@@ -1,135 +1,146 @@
-# Parts authoring guide
+# Parts authoring
 
-This document explains how to add new printable parts to the Apothecary toolkit using thin Python wrappers.
+A part is a folder under `parts/` holding a SCAD file of the same name, plus
+either a Python wrapper under `apothecary/projects/parts/` or a `part.json`
+sidecar beside the SCAD. The registry finds both; `apothecary parts list`
+shows each part with the module that describes it.
 
-## Overview
+## Layout
 
-Each source `.scad` under the top-level `parts/` directory can have a corresponding wrapper module under `apothecary/projects/parts/` that exposes:
+```
+parts/
+├── my_part/
+│   ├── my_part.scad      the source
+│   ├── README.md         optional; the wrapper's readme_path
+│   ├── my_part.stl       built by generate-stl, git-ignored
+│   └── my_part.params.json   the overrides it was built with, git-ignored
+└── boards/               a category: its subfolders are parts
+    ├── board_common.scad a library its parts include, not a part
+    └── arduino_uno/
+        ├── arduino_uno.scad
+        └── part.json     a described part: no Python
+```
 
-- metadata (name, category, tags, description)
-- an optional `Params` Pydantic model describing configurable parameters
-- a `BasePart` instance with paths wired up
-- a module-level `DEFAULT` instance used by the CLI
+Names use underscores throughout: the folder, the SCAD file, the wrapper
+module and the part's `name` are all `my_part`. A wrapper for a part in a
+category folder may be a package mirroring the folder
+(`parts/rc/snowplow/` is served by `apothecary/projects/parts/rc/snowplow/`).
 
-Wrappers are discovered by `scan_projects` and surfaced via CLI commands:
+## A wrapper
 
-- `apothecary parts list`
-- `apothecary parts info NAME`
-- `apothecary parts render NAME` (writes an include stub or a custom template)
-
-## Naming conventions
-
-- File names in `parts/` are typically hyphenated (e.g. `my-part.scad`).
-- Wrapper module names live under `apothecary/projects/parts/` and are imported as Python modules.
-- The CLI maps a part *name* to a module name by:
-  - lowercasing
-  - replacing `-`, spaces, and `.` with `_`
-
-Example: `"My Part.v1"` → module `apothecary.projects.parts.my_part_v1`.
-
-If no wrapper is found, `apothecary parts info`/`render` will error with a message like:
-
-> No wrapper module found for part 'NAME'. Tried module 'apothecary.projects.parts.name'. Run 'apothecary parts list' to see available parts.
-
-## Wrapper template
-
-A minimal wrapper looks like this:
+`apothecary/projects/parts/my_part.py`:
 
 ```python
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Dict, Optional
 
 from pydantic import BaseModel, Field
 
+from apothecary.models import BoundingBox3D, Color
+
 from .base import BasePart
 from .skeleton import ROOT
-from apothecary.models import BoundingBox3D, Vector3D, Color
 
 
 class Params(BaseModel):
-    width: float = Field(10.0, gt=0)
-    height: float = Field(5.0, gt=0)
+    """The SCAD file's top-level variables a caller may set, with its defaults."""
+
+    size: float = Field(20.0, gt=0, description="Edge length in mm")
+    wall: float = Field(2.0, gt=0, description="Wall thickness in mm")
 
 
 class MyPart(BasePart):
-    """Custom part with calculated bounds."""
-    
     def get_bounds(self, params: Optional[Dict] = None) -> BoundingBox3D:
-        if params:
-            w = params.get("width", 10)
-            h = params.get("height", 5)
-        elif self.params_model:
-            defaults = self.params_model()
-            w, h = defaults.width, defaults.height
-        else:
-            w, h = 10, 5
-        
-        return BoundingBox3D(
-            min_point=Vector3D(x=0, y=0, z=0),
-            max_point=Vector3D(x=w, y=w, z=h)
-        )
+        p = Params(**(params or {}))
+        return BoundingBox3D.for_cube(p.size, center=False)
 
 
 def create(root: Path) -> MyPart:
     return MyPart(
         name="my_part",
-        source_file=root / "parts" / "my-part" / "my-part.scad",
+        source_file=root / "parts" / "my_part" / "my_part.scad",
+        description="A hollow cube",
         params_model=Params,
         category="misc",
         tags=["demo"],
-        readme_path=root / "parts" / "README.md",
-        preview_color=Color.from_hex("#3366CC"),  # Blue
+        readme_path=root / "parts" / "my_part" / "README.md",
+        preview_color=Color.from_hex("#3366CC"),
     )
 
 
 DEFAULT = create(ROOT)
 ```
 
-Key points:
+`tests/test_docs_site.py` runs this block, so it builds a part as written.
+`DEFAULT` is what the CLI, the API and the viewer import. A part with no
+parameters passes no `params_model` and states its envelope as
+`default_bounds=BoundingBox3D(...)` instead of overriding `get_bounds`.
+`display_rotation`, `print_settings` and `contested` are further `BasePart`
+fields; [Geometry models](models.md) describes the types.
 
-- `ROOT` is the repository root as detected by the skeleton module.
-- `name` should match the part's logical name; it is what appears in `parts list`.
-- `source_file` should point to the actual `.scad` file (in `parts/<name>/<name>.scad`).
-- `params_model` is optional; pass `None` if the part is not parameterized.
-- `readme_path` is optional but recommended; it is used in structure/inventory reporting.
-- `preview_color` sets the color used in the 3D viewer.
-- Override `get_bounds()` to calculate accurate bounding boxes from parameters.
+## A sidecar instead of a wrapper
 
-## Geometry models
+A folder whose SCAD has a `part.json` beside it and no Python module is a
+*described* part: the sidecar says what the wrapper would (description,
+category, tags, colour, rotation, bounds, provenance). See
+[Described parts](geometry-from-elsewhere.md#described-parts);
+`apothecary parts import` writes one for a mesh made elsewhere. A described
+part has no `Params` model, so its overrides are checked against the SCAD
+file's own top-level variables.
 
-Parts can use the geometry models from `apothecary.models` for:
+## Overrides
 
-| Model | Purpose |
-|-------|--------|
-| `Vector3D` | 3D positions and directions |
-| `BoundingBox3D` | Spatial extents, center, size |
-| `Color` | Preview colors (hex, RGB, named) |
-| `PrintSettings` | FDM tolerances, layer heights |
-
-Example bounds calculation:
-
-```python
-# For a cylinder
-from apothecary.models import BoundingBox3D
-bounds = BoundingBox3D.for_cylinder(h=20, r=5, center=False)
-
-# For a cube
-bounds = BoundingBox3D.for_cube(size=10, center=True)
-
-# Custom bounds
-bounds = BoundingBox3D(
-    min_point=Vector3D(x=-5, y=-5, z=0),
-    max_point=Vector3D(x=5, y=5, z=10)
-)
+```bash
+uv run apothecary parts generate-stl datum_core -p headroom=12
+uv run apothecary parts generate-stl datum_core -p board_x=60 -p headroom=20
 ```
 
-The API exposes geometry metadata at `/parts/{name}` including bounds and color.
+`-p` is repeatable and is checked against the part's `Params` model before
+anything renders. OpenSCAD accepts any `-D` name whether the file defines it
+or not, so a misspelling would otherwise render the defaults and exit 0:
 
-## Testing your part
+```
+$ uv run apothecary parts generate-stl datum_core -p headrooom=10
+Error: unknown parameter(s): headrooom. datum_core declares: ...
+```
 
-1. Run `apothecary inventory projects` and confirm your part appears.
-2. Run `apothecary parts list` and check that the wrapper name and module are shown.
-3. Run `apothecary parts info my_part` and verify metadata.
-4. Run `apothecary parts render my_part -o include.scad` and inspect the generated SCAD.
+Overrides imply `--force`. The STL lands at the part's own path, which is
+what the viewer serves, so a build with overrides records them in
+`<name>.params.json` beside it, and a default build removes that file:
+`apothecary parts info NAME --json-out` shows the record as `stl_params`,
+and `null` means a default render.
 
-You can add regression tests under `tests/test_parts_wrappers.py` to assert that your wrapper's metadata and paths are correct.
+Over HTTP, `POST /parts/{name}/stl/generate` with `{"params": {...}}` does
+the same build; an unknown or invalid parameter is a `422` with the reason,
+and the response carries the bounds the part declares for those parameters.
+
+### Adding a parameter
+
+Two places, kept in step: a top-level variable in the SCAD file (what `-p`
+reaches as `-D`) and a field on the wrapper's `Params` (what validates and
+documents it). `tests/test_parameter_coverage.py` fails on a field with no
+SCAD variable behind it; `apothecary parts verify` fails when the two
+disagree about size.
+
+## Checking a part
+
+```bash
+uv run apothecary parts list                 # found, and by which module
+uv run apothecary parts info my_part         # metadata, bounds, readme, stl_params
+uv run apothecary parts generate-stl my_part # build the STL the viewer serves
+uv run apothecary parts verify my_part       # declared bounds against the rendered geometry
+uv run apothecary parts checklist my_part    # ready to print and check against a real one?
+uv run apothecary parts render my_part -o include.scad   # an include stub to use it from SCAD
+```
+
+`verify` renders to a temporary file, measures the real bounding box and
+compares it per axis with what `get_bounds` declares; it exits non-zero on
+drift beyond `--tolerance`. `--all` sweeps every part that declares bounds
+and reports the ones that declare none as skipped, not passed. `checklist`
+adds the print settings, contested dimensions and black boxes, and exits
+non-zero when anything blocks a print.
+
+`tests/test_parts_wrappers.py` fails when a part under `parts/` has neither a
+wrapper nor a sidecar.
