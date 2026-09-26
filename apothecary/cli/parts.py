@@ -49,7 +49,7 @@ def parts():
 @parts.command("list")
 @click.option("--json-out/--text", default=False)
 def parts_list(json_out: bool):
-    items = [p for p in scan_projects(Path(".").resolve()) if p.kind == "part"]
+    items = [p for p in scan_projects(ROOT) if p.kind == "part"]
     if json_out:
         click.echo(json.dumps([p.to_json() for p in items], indent=2))
         return
@@ -461,7 +461,7 @@ def parts_render(name: str, params_json: str | None, template: str | None, outpu
     if template:
         tpl_str = Path(template).read_text(encoding="utf-8")
     else:
-        default_tpl = Path("templates/part.include.scad.j2")
+        default_tpl = ROOT / "templates" / "part.include.scad.j2"
         tpl_str = (
             default_tpl.read_text(encoding="utf-8")
             if default_tpl.exists()
