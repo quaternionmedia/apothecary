@@ -5,6 +5,7 @@ The scripted transport replays what a Creality mainboard running Marlin
 parsers are tested against real output, not an idealised one.
 """
 
+import errno
 import json
 import os
 import threading
@@ -259,6 +260,48 @@ def test_pyserial_engine_leaves_dtr_up_on_close():
         os.close(master)
         os.close(slave)
     assert gcode.keep_dtr_on_close(None) is False
+
+
+@pytest.mark.skipif(os.name != "posix" or os.geteuid() == 0, reason="TIOCEXCL; root ignores it")
+def test_pyserial_engine_holds_the_port_against_other_programs():
+    """While the seam holds a port, no other program can open it: a plain open()
+    meets TIOCEXCL, and a pyserial user meets the lock. Closing lets go of both."""
+    master, slave = os.openpty()
+    path = os.ttyname(slave)
+
+    def plain_open():
+        os.close(os.open(path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK))
+
+    try:
+        held = gcode.PySerialTransport(path, 115200)
+        with pytest.raises(OSError) as refused:
+            plain_open()
+        assert refused.value.errno == errno.EBUSY
+        with pytest.raises(PortHeld, match="held by another program"):
+            gcode.PySerialTransport(path, 115200)  # EBUSY, from TIOCEXCL
+        assert gcode.hold_exclusively(held._s.fd, hold=False)
+        with pytest.raises(PortHeld, match="held by another program"):
+            gcode.PySerialTransport(path, 115200)  # EAGAIN, from the lock
+        held.close()
+        plain_open()
+        gcode.PySerialTransport(path, 115200).close()
+    finally:
+        os.close(master)
+        os.close(slave)
+    assert gcode.hold_exclusively(None) is False
+
+
+def test_a_port_another_program_holds_is_a_conflict(fake_arduino_cli, scripted_links):
+    def held_elsewhere(port, baud):
+        raise PortHeld(f"{port} is held by another program")
+
+    scripted_links.factory = held_elsewhere
+    c = TestClient(app)
+    for r in (
+        c.post("/firmware/devices/identify", json={"port": "/dev/ttyFAKE1"}),
+        c.get("/firmware/printers/status", params={"port": "/dev/ttyFAKE1"}),
+    ):
+        assert r.status_code == 409 and "another program" in r.json()["detail"]
 
 
 # --- identify / poll ----------------------------------------------------------------

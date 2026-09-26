@@ -22,7 +22,9 @@ Two things distinguish this from ``devices.SerialStreams``:
   left asserted on close, and the board is only ever rebooted on purpose
   (``Transport.pulse_reset``, behind ``reset=True``). Anything else that
   opens the port (``arduino-cli monitor``, an upload) may reset it, so one
-  holder per port is the rule and the API enforces it.
+  holder per port is the rule: the API enforces it inside the server, and
+  the port is opened exclusively, so another program's open fails while
+  the link holds it.
 * **It is request/response.** A poll sends ``M105``/``M114``/``M27`` and
   reads until ``ok``; nothing streams unless the firmware autoreports
   (``M155``), and those lines are simply carried in the same reads.
@@ -36,6 +38,7 @@ engine-agnostic.
 
 from __future__ import annotations
 
+import errno
 import os
 import re
 import threading
@@ -210,22 +213,52 @@ def keep_dtr_on_close(fd: Optional[int]) -> bool:
         return False
 
 
+def hold_exclusively(fd: Optional[int], hold: bool = True) -> bool:
+    """Set (or clear) TIOCEXCL: while set, any other open() of the tty fails with EBUSY.
+
+    pyserial's ``exclusive=True`` is an advisory lock that only programs
+    taking the same lock respect; a plain open() -- arduino-cli's monitor, a
+    terminal -- does not. False on a port that is not a tty (``loop://``) or
+    a platform without the ioctl. Root is not stopped by it.
+    """
+    if fd is None:
+        return False
+    try:
+        import fcntl
+        import termios
+
+        fcntl.ioctl(fd, termios.TIOCEXCL if hold else termios.TIOCNXCL)
+        return True
+    except (ImportError, AttributeError, OSError):
+        return False
+
+
 class PySerialTransport:
     """The pyserial engine: any baud (250000 included), Linux/macOS/Windows.
 
     ``serial_for_url`` so tests can hand it ``loop://``; a device path is
-    passed through unchanged.
+    passed through unchanged. The port is held exclusively until ``close``.
     """
 
     def __init__(self, port: str, baud: int):
         import serial
 
         try:
-            self._s = serial.serial_for_url(port, baudrate=baud, timeout=0.5, write_timeout=2.0)
+            self._s = serial.serial_for_url(
+                port, baudrate=baud, timeout=0.5, write_timeout=2.0, exclusive=True
+            )
             self._s.reset_input_buffer()
         except (serial.SerialException, OSError, ValueError) as exc:
+            # EBUSY: another program set TIOCEXCL; EAGAIN: it holds pyserial's lock.
+            if getattr(exc, "errno", None) in (errno.EBUSY, errno.EAGAIN):
+                raise PortHeld(
+                    f"{port} is held by another program (a serial monitor, a slicer, "
+                    "another server): close it there first"
+                ) from exc
             raise ToolchainError(f"cannot open {port}: {exc}") from exc
-        keep_dtr_on_close(getattr(self._s, "fd", None))
+        fd = getattr(self._s, "fd", None)
+        hold_exclusively(fd)
+        keep_dtr_on_close(fd)
 
     def write(self, data: bytes) -> None:
         import serial
@@ -261,6 +294,7 @@ class PySerialTransport:
             raise ToolchainError(f"{self._s.port}: {exc}") from exc
 
     def close(self) -> None:
+        hold_exclusively(getattr(self._s, "fd", None), hold=False)
         try:
             self._s.close()
         except Exception:  # noqa: BLE001 -- a vanished USB device raises whatever the OS likes
