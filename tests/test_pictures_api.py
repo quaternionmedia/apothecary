@@ -317,3 +317,13 @@ def test_cameras_are_placed_in_the_world_and_kept(pictures):
     assert (pictures / "state" / "cameras.json").is_file()
     assert c.delete("/cameras/abc123").json()["unplaced"] == "abc123"
     assert c.delete("/cameras/abc123").status_code == 404
+
+
+def test_a_gathering_never_covers_over_a_built_in_site(pictures):
+    """POST /photos/gather with build=true and name=garage replaced the viewer's
+    default site, and a DELETE then removed it."""
+    c = TestClient(app)
+    pair = ["bench.png", "bench_again.png"]
+    r = c.post("/photos/gather", json={"pictures": pair, "build": True, "name": "garage"})
+    assert r.status_code == 409
+    assert c.get("/sites/garage").json()["name"] == "Garage"

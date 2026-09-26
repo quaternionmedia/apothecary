@@ -419,8 +419,16 @@ def gather_pictures(body: GatherRequest):
             raise HTTPException(
                 status_code=422, detail="nothing could be read from any of these pictures"
             )
-        together = whole_gathering(result, built, name=body.name)
         stock = shelf()
+        if body.name in _site_store.names() and body.name not in stock:
+            # The same rule as POST /photos: a gathering never covers over a
+            # site that did not come from pictures (the garage, the library).
+            raise HTTPException(
+                status_code=409,
+                detail=f"{body.name!r} is already the name of an arrangement that did not "
+                "come from a picture. Choose another name rather than covering it over.",
+            )
+        together = whole_gathering(result, built, name=body.name)
         stock.put(together)
         _site_store.add(
             together.site.name, stock.factory(together.site.name), stock.checker(together.site.name)
