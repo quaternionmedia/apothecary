@@ -1,24 +1,14 @@
-"""Render-related CLI commands: testrun, render, render-jscad, templategenerate, validate."""
+"""Render-related CLI commands: render, render-jscad, templategenerate, validate."""
 
 from pathlib import Path
 
 import click
 
-from ..example import create_example_scene
 from ..scene import SceneLoadError, load_scene_from_json
 from ..templates import TemplateRenderer
+from .retired import retired
 
-
-@click.command()
-@click.option(
-    "--output", "-o", type=click.Path(dir_okay=False, writable=True), default="example.scad"
-)
-def testrun(output: str):
-    """Render the built-in example scene to a file."""
-    scene = create_example_scene()
-    code = scene.render()
-    Path(output).write_text(code, encoding="utf-8")
-    click.echo(f"Wrote {output} ({len(code.splitlines())} lines)")
+testrun = retired("testrun", "use `apothecary render`, which renders the example scene")
 
 
 @click.command("render")
