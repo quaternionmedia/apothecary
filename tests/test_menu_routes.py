@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from ring_helpers import every_action
 
-from apothecary.api import _site_store, app
+from apothecary.api import _job_store, _site_store, app
 from apothecary.menu import CARRIED_BY, Carries, Context, Device, Pointing, resolve
 
 client = TestClient(app)
@@ -20,8 +20,8 @@ SITE = "garage"
 @pytest.fixture(autouse=True)
 def reset_garage_site():
     """The site store keeps edits between requests, so start every test level."""
-    client.post(f"/sites/{SITE}/reset")
-    yield
+    _site_store.reset(SITE)
+    _job_store.reset(SITE)
 
 
 PRINTER = {"port": "/dev/ttyUSB0", "printer": True, "armed": False, "bound": True}
