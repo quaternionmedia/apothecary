@@ -326,8 +326,8 @@ release), unchanged, plus these two that the bench did not have:
 ## 7. The docs, and the walkthrough
 
 - [ ] `http://127.0.0.1:8000/docs/geometry-from-elsewhere.md`,
-      `/docs/firmware.md`, `/docs/plans/photo-finders-local-models-2026-09-21.md`,
-      `/docs/plans/pull-requests-2026-09-21.md` → rendered, links between
+      `/docs/firmware.md`, `/docs/plans/photo-finders-local-models-2026-09-21.md`
+      → rendered, links between
       pages work, every image is local (a picture from elsewhere would be
       named, not fetched).
 - [ ] `/walkthrough/11-photographs-into-pieces.md` → the page says *137
@@ -364,8 +364,7 @@ git -C governance/qm log --oneline origin/project/apothecary..adr/firmware-toolc
 
 Fill this in as you go; anything refused or slow gets its time, port and
 command. Outcomes that change a number in a doc go to that doc; a defect
-goes to the queue page ([`../plans/queue-2026-09-20.md`](../plans/queue-2026-09-20.md))
-or an issue; a door found open goes to the record's risk register.
+goes to `todo.md` or an issue; a door found open goes to the record's risk register.
 
 | Section | Ticked | Notes (what, when, port, command) |
 |---|---|---|
