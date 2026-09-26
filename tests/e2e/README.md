@@ -22,7 +22,7 @@ Without a server, `pytest` skips the browser tests with a note saying so.
 | `--start-server` | Starts one server for the session, on `--server-port` if given, else on a free port. It runs the scripted `arduino-cli` from `tests/firmware_helpers.py` and the simulated printer, and keeps its firmware state in a temp folder, and its pictures too unless `APOTHECARY_PICTURE_ROOT` names a folder. No test opens a real serial port, reads `~/.apothecary`, or sees a real board. |
 | `--base-url URL` | Uses a server you started yourself instead. Tests that show the server a picture skip unless `APOTHECARY_PICTURE_ROOT` names the folder that server reads. The firmware-page tests expect the scripted toolchain, so they fail against a real one. |
 | `--slow` | Also runs tests marked `slow`: full renders and accuracy benches. |
-| `--generate-docs` | Turns on the `doc_recorder` screenshots (below). Pass it through `apothecary docs generate`, not by hand. |
+| `--generate-docs` | Runs the tests marked `docs`, which skip without it, and turns on their `doc_recorder` screenshots (below). Pass it through `apothecary docs generate`, not by hand. |
 | `--headed`, `--slowmo 500`, `--tracing on` | pytest-playwright's own flags, for debugging. Open a trace with `uv run playwright show-trace test-results/<test>/trace.zip`. |
 
 Every server comes from one factory, the `start_server` fixture in
@@ -41,9 +41,9 @@ Both are fixtures in `conftest.py`; the recorders themselves are in `doc_capture
   or `test_docs_bench_walkthrough.py`. Each sentence is emitted after the
   assertion behind it. A screenshot is rewritten only when its pixels change;
   commit the page and pictures when they do.
-- `doc_recorder` takes screenshots for `docs/generated/` and does nothing
-  unless `--generate-docs` is given. `apothecary docs generate` runs the tests
-  marked `docs` that way, on a scripted server of its own.
+- `doc_recorder` takes screenshots for `docs/generated/`. The tests that use it
+  are marked `docs` and skip unless `--generate-docs` is given;
+  `apothecary docs generate` runs them that way, on a scripted server of its own.
 
 Before a screenshot of the viewer, `viewer_ready.settled(page)` waits until the
 level's geometry has loaded and the canvas has drawn it. Install

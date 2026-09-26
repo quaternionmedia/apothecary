@@ -28,6 +28,16 @@ ROOT = Path(__file__).resolve().parents[2]
 EXTERNAL_PORT = 8765  # a server you started, when neither --start-server nor --base-url is given
 
 
+def pytest_collection_modifyitems(config, items):
+    """Tests marked docs run only with --generate-docs; without it they capture nothing."""
+    if config.getoption("--generate-docs"):
+        return
+    skip = pytest.mark.skip(reason="doc capture: runs with --generate-docs (`apothecary docs`)")
+    for item in items:
+        if item.get_closest_marker("docs"):
+            item.add_marker(skip)
+
+
 def _free_port() -> int:
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
