@@ -5,11 +5,7 @@ from typing import List, Optional
 from pydantic import BaseModel, Field, ValidationError
 
 from .objects import SceneObject
-
-try:  # optional version module for legacy compatibility
-    from .version import __version__  # type: ignore
-except ImportError:  # pragma: no cover
-    __version__ = "0.1.0"
+from .version import __version__
 
 
 class Scene(BaseModel):

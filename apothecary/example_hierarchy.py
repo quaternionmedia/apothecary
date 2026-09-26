@@ -751,9 +751,6 @@ def validate_garage_layout(site: Assembly) -> LayoutReport:
     return LayoutReport(violations=violations)
 
 
-JOB_STATUSES = ["queued", "assigned", "printing", "done"]
-
-
 class Job(BaseModel):
     """A print job: a required volume, waiting for (or assigned to) a printer.
 
