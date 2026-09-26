@@ -28,7 +28,7 @@ def render_scene(scene_file: str | None, scene_json: str | None, output: str):
             allow_example_fallback=True,
         )
     except SceneLoadError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
     code = scene.render()
     Path(output).write_text(code, encoding="utf-8")
     click.echo(f"Rendered scene '{scene.name}' -> {output}")
@@ -51,7 +51,7 @@ def render_scene_jscad(scene_file: str | None, scene_json: str | None, output: s
             allow_example_fallback=True,
         )
     except SceneLoadError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
 
     code = scene.render_jscad()
     Path(output).write_text(code, encoding="utf-8")
@@ -78,7 +78,7 @@ def template_generate(template: str, scene_file: str | None, scene_json: str | N
             allow_example_fallback=True,
         )
     except SceneLoadError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
 
     renderer = TemplateRenderer()
     code = renderer.render_scene_template(scene, template_content)
@@ -98,5 +98,5 @@ def validate(scene_file: str | None, scene_json: str | None):
             allow_example_fallback=False,
         )
     except SceneLoadError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
     click.echo(f"Valid scene '{scene.name}' with {len(scene.objects)} top-level objects")
