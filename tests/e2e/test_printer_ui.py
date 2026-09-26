@@ -1,98 +1,26 @@
 """Printer UI end to end, with timing bounds: the viewer must stay snappy while it polls.
 
-Runs against its own server (port 8766) so nothing here depends on the
-host's toolchain or on a board being plugged in: ``ARDUINO_CLI`` is the
-scripted fake from the unit tests (two ports, ``/dev/ttyFAKE0`` an Uno and
-``/dev/ttyFAKE1`` unmatched), the serial engine is the in-process
-``SimulatedPrinter`` started mid-way through an SD print, and firmware state
-lives in a temp dir so pins never touch ``~/.apothecary``.
+Runs against a server of its own from the conftest's ``start_server``: the
+scripted ``arduino-cli`` (``/dev/ttyFAKE0`` an Uno, ``/dev/ttyFAKE1``
+unmatched), the in-process ``SimulatedPrinter`` mid-way through an SD print,
+and firmware state in a temp dir, so pins never touch ``~/.apothecary``.
 
 The bounds are deliberately loose enough for CI and tight enough to catch
 the failure modes they name: a blocked event loop, stacked polls, a panel
 rebuilt under the user's cursor.
 """
 
-import os
-import subprocess
-import sys
 import time
-from pathlib import Path
 
-import httpx
 import pytest
-from firmware_helpers import write_fake_arduino_cli
 from playwright.sync_api import Page, expect
 
-PRINTER_PORT = "8768"  # 8766 is the docs-generation server
 POLL_S = 2.0  # the overlay's cadence (POLL_MS in fractal_viewer.html.j2)
 
 
 @pytest.fixture(scope="module")
-def printer_url(tmp_path_factory):
-    root = Path(__file__).resolve().parents[2]
-    tmp = tmp_path_factory.mktemp("printer-server")
-    env = os.environ.copy()
-    env.update(
-        {
-            "APOTHECARY_VIEWER_PATH": "",
-            "ARDUINO_CLI": str(write_fake_arduino_cli(tmp / "arduino-cli")),
-            "APOTHECARY_TOOLS_DIR": str(tmp / "tools"),
-            "APOTHECARY_STATE_DIR": str(tmp / "state"),
-            "APOTHECARY_SERIAL_ENGINE": "simulated",
-            "APOTHECARY_SIMULATED_PRINTER": "printing",
-        }
-    )
-    from ports import refuse_a_held_port
-
-    refuse_a_held_port(PRINTER_PORT)
-    proc = subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "uvicorn",
-            "apothecary.api:app",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            PRINTER_PORT,
-            # Let go of idle keep-alive connections quickly on SIGTERM: the browser
-            # that held them outlives this fixture, and a server that lingers on
-            # the port is the one the next run's health check would find.
-            "--timeout-graceful-shutdown",
-            "1",
-        ],
-        cwd=root,
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    url = f"http://127.0.0.1:{PRINTER_PORT}"
-    healthy = False
-    for _ in range(40):
-        try:
-            if httpx.get(f"{url}/health", timeout=1.0).status_code == 200:
-                healthy = True
-                break
-        except (httpx.ConnectError, httpx.TimeoutException):
-            time.sleep(0.5)
-        if proc.poll() is not None:
-            break
-    if proc.poll() is not None:
-        # Our server exited -- usually because something else holds the port (a
-        # previous run still shutting down). Whatever answers there now is not
-        # the server these tests describe, so stop rather than test a stranger.
-        pytest.exit(
-            f"printer test server exited at start; is {url} held by another process?", returncode=1
-        )
-    if not healthy:
-        proc.terminate()
-        pytest.exit("printer test server failed to start", returncode=1)
-    yield url
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+def printer_url(start_server):
+    return start_server()
 
 
 def _select(page: Page, name: str):

@@ -19,16 +19,18 @@ Without a server, `pytest` skips the browser tests with a note saying so.
 
 | Flag | What it does |
 |---|---|
-| `--start-server` | Starts one server for the session, on `--server-port` (8765 unless given). It runs the scripted `arduino-cli` from `tests/firmware_helpers.py` and the simulated printer, and keeps its firmware state in a temp folder, and its pictures too unless `APOTHECARY_PICTURE_ROOT` names a folder. No test opens a real serial port, reads `~/.apothecary`, or sees a real board. |
+| `--start-server` | Starts one server for the session, on `--server-port` if given, else on a free port. It runs the scripted `arduino-cli` from `tests/firmware_helpers.py` and the simulated printer, and keeps its firmware state in a temp folder, and its pictures too unless `APOTHECARY_PICTURE_ROOT` names a folder. No test opens a real serial port, reads `~/.apothecary`, or sees a real board. |
 | `--base-url URL` | Uses a server you started yourself instead. Tests that show the server a picture skip unless `APOTHECARY_PICTURE_ROOT` names the folder that server reads. The firmware-page tests expect the scripted toolchain, so they fail against a real one. |
 | `--slow` | Also runs tests marked `slow`: full renders and accuracy benches. |
 | `--generate-docs` | Turns on the `doc_recorder` screenshots (below). Pass it through `apothecary docs generate`, not by hand. |
 | `--headed`, `--slowmo 500`, `--tracing on` | pytest-playwright's own flags, for debugging. Open a trace with `uv run playwright show-trace test-results/<test>/trace.zip`. |
 
-`test_printer_ui.py` and `test_ring.py` start servers of their own with the
-same scripted machine; they need no flag. Every other module uses the
-session's server, which lives for the whole run: take back what a test pins,
-places or adds, or the tests after it see it.
+Every server comes from one factory, the `start_server` fixture in
+`conftest.py`, on a free port with state of its own. `test_printer_ui.py` and
+`test_ring.py` ask it for servers of their own, so what they pin, arm and print
+stays off the session's server. Every other module uses that one, which lives
+for the whole run: take back what a test pins, places or adds, or the tests
+after it see it.
 
 ## The two recorders
 

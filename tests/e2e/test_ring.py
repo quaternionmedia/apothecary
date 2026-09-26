@@ -1,9 +1,9 @@
 """The ring in a browser: nine cells, addresses, and the buttons that carry them.
 
-Runs against its own server (port 8769), like ``test_printer_ui.py``: the
-scripted ``arduino-cli`` fake, the in-process simulated printer mid-way
-through an SD print, and firmware state in a temp dir. Nothing here opens a
-real port.
+Runs against a server of its own from the conftest's ``start_server``, like
+``test_printer_ui.py``: the scripted ``arduino-cli``, the in-process simulated
+printer mid-way through an SD print, and firmware state in a temp dir. Nothing
+here opens a real port.
 
 What is held to is rad's *the menu addresses nine cells*: options sit in
 cells numbered as a numeric keypad, cardinals first (``8 6 2 4 9 3 1 7``);
@@ -16,18 +16,13 @@ which the intent carries and the page's own buttons wear.
 from __future__ import annotations
 
 import json
-import os
-import subprocess
-import sys
 import time
 from pathlib import Path
 
 import httpx
 import pytest
-from firmware_helpers import write_fake_arduino_cli
 from playwright.sync_api import Page, expect
 
-RING_PORT = "8769"  # 8766 docs, 8768 printer UI
 PRINTER = "/dev/ttyFAKE1"
 VECTORS = Path(__file__).resolve().parents[1] / "conformance" / "nine_cells.json"
 
@@ -86,65 +81,8 @@ def _nearest_vectors():
 
 
 @pytest.fixture(scope="module")
-def ring_url(tmp_path_factory):
-    root = Path(__file__).resolve().parents[2]
-    tmp = tmp_path_factory.mktemp("ring-server")
-    env = os.environ.copy()
-    env.update(
-        {
-            "APOTHECARY_VIEWER_PATH": "",
-            "ARDUINO_CLI": str(write_fake_arduino_cli(tmp / "arduino-cli")),
-            "APOTHECARY_TOOLS_DIR": str(tmp / "tools"),
-            "APOTHECARY_STATE_DIR": str(tmp / "state"),
-            "APOTHECARY_SERIAL_ENGINE": "simulated",
-            "APOTHECARY_SIMULATED_PRINTER": "printing",
-        }
-    )
-    from ports import refuse_a_held_port
-
-    refuse_a_held_port(RING_PORT)
-    proc = subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "uvicorn",
-            "apothecary.api:app",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            RING_PORT,
-            # Let go of idle keep-alive connections quickly on SIGTERM: the browser
-            # that held them outlives this fixture, and a server that lingers on
-            # the port is the one the next run's health check would find.
-            "--timeout-graceful-shutdown",
-            "1",
-        ],
-        cwd=root,
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    url = f"http://127.0.0.1:{RING_PORT}"
-    healthy = False
-    for _ in range(40):
-        try:
-            if httpx.get(f"{url}/health", timeout=1.0).status_code == 200:
-                healthy = True
-                break
-        except (httpx.ConnectError, httpx.TimeoutException):
-            time.sleep(0.5)
-        if proc.poll() is not None:
-            break
-    if proc.poll() is not None:
-        # Our server exited -- usually because something else holds the port (a
-        # previous run still shutting down). Whatever answers there now is not
-        # the server these tests describe, so stop rather than test a stranger.
-        pytest.exit(
-            f"ring test server exited at start; is {url} held by another process?", returncode=1
-        )
-    if not healthy:
-        proc.terminate()
-        pytest.exit("ring test server failed to start", returncode=1)
+def ring_url(start_server):
+    url = start_server()
     # The printer is identified (M115) and pinned to printer_1 up front, so the
     # node ring carries Device > Control from the first test on.
     httpx.post(f"{url}/firmware/devices/identify", json={"port": PRINTER}, timeout=15.0)
@@ -152,12 +90,7 @@ def ring_url(tmp_path_factory):
         f"{url}/sites/garage/nodes/printer_1/device", json={"identity": PRINTER}, timeout=15.0
     )
     assert r.status_code == 200, r.text
-    yield url
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+    return url
 
 
 CAPTURE = (

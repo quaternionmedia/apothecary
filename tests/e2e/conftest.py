@@ -1,21 +1,12 @@
-"""
-Playwright test configuration and fixtures.
+"""Playwright fixtures: the servers the browser tests run against, and the doc recorders.
 
-The server can either be:
-1. Started automatically by pytest (--start-server flag)
-2. Running separately before tests (default behavior)
-
-Usage:
-    # Auto-start server:
-    pytest tests/e2e/ --start-server
-
-    # With external server:
-    apothecary serve --port 8765
-    pytest tests/e2e/
+pytest tests/e2e --start-server          # a scripted server for the session
+pytest tests/e2e --base-url URL          # a server you started yourself
 """
 
 import os
 import re
+import socket
 import subprocess
 import sys
 import time
@@ -30,13 +21,85 @@ import apothecary  # noqa: F401  -- the guard, before base_url connects anywhere
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from doc_capture import GENERATED_DOCS_ROOT, DocRecorder, Walkthrough  # noqa: E402
+from firmware_helpers import write_fake_arduino_cli  # noqa: E402
 from ports import refuse_a_held_port  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[2]
+EXTERNAL_PORT = 8765  # a server you started, when neither --start-server nor --base-url is given
+
+
+def _free_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
 
 
 @pytest.fixture(scope="session")
-def server_port(request):
-    """Get the server port from command line or default."""
-    return request.config.getoption("--server-port")
+def start_server(tmp_path_factory):
+    """Factory: ``start_server(env_overrides=None, port=None) -> url``.
+
+    Each server runs the scripted arduino-cli (the Uno on /dev/ttyFAKE0, /dev/ttyFAKE1
+    unmatched) and the simulated printer mid-print, keeps its firmware state and pictures
+    in temp folders of its own, and listens on a free port unless one is named. So no
+    test opens a real serial port, reads ``~/.apothecary``, or sees a real board. All of
+    them stop when the session ends.
+    """
+    started: list[subprocess.Popen] = []
+
+    def _start(env_overrides: dict | None = None, port: int | str | None = None) -> str:
+        tmp = tmp_path_factory.mktemp("server")
+        (tmp / "pictures").mkdir()
+        env = os.environ.copy()
+        env.update(
+            {
+                "ARDUINO_CLI": str(write_fake_arduino_cli(tmp / "arduino-cli")),
+                "APOTHECARY_TOOLS_DIR": str(tmp / "tools"),
+                "APOTHECARY_STATE_DIR": str(tmp / "state"),
+                "APOTHECARY_PICTURE_ROOT": str(tmp / "pictures"),
+                "APOTHECARY_SERIAL_ENGINE": "simulated",
+                "APOTHECARY_SIMULATED_PRINTER": "printing",
+                **(env_overrides or {}),
+            }
+        )
+        if port is None:
+            port = _free_port()
+        else:
+            refuse_a_held_port(port)
+        url = f"http://127.0.0.1:{port}"
+        proc = subprocess.Popen(
+            [
+                *(sys.executable, "-m", "uvicorn", "apothecary.api:app"),
+                *("--host", "127.0.0.1", "--port", str(port)),
+                # Let go of idle keep-alive connections quickly on SIGTERM.
+                *("--timeout-graceful-shutdown", "1"),
+            ],
+            cwd=ROOT,
+            env=env,
+            # DEVNULL: an unread PIPE fills and blocks the server mid-run.
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        started.append(proc)
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline:
+            if proc.poll() is not None:
+                pytest.exit(f"the test server for {url} exited at start: is the port held?", 1)
+            try:
+                if httpx.get(f"{url}/health", timeout=1.0).status_code == 200:
+                    return url
+            except httpx.TransportError:
+                pass
+            time.sleep(0.2)
+        pytest.exit(f"the test server for {url} did not answer within 20 s", 1)
+
+    yield _start
+    for proc in started:
+        proc.terminate()
+    for proc in started:
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
 
 
 @pytest.fixture(scope="session")
@@ -84,123 +147,32 @@ def picture_folder(_picture_folder_if_known):
 
 
 @pytest.fixture(scope="session")
-def test_server(request, server_port, _picture_folder_if_known, tmp_path_factory):
-    """Start a test server if --start-server is passed.
-
-    This fixture manages the server lifecycle for the entire test session.
-    The server sees the machine's real ports and toolchain but keeps its
-    firmware state (pins, flash records, cached boards) in a folder of its
-    own, so a test run never edits what the person has pinned in
-    ``~/.apothecary``; the printer and ring suites go further and run their
-    own servers on scripted ports.
-    """
-    should_start = request.config.getoption("--start-server")
-
-    if not should_start:
-        yield None
-        return
-
-    # Get project root
-    root = Path(__file__).resolve().parents[2]
-
-    # Set environment for faster startup
-    env = os.environ.copy()
-    env["APOTHECARY_VIEWER_PATH"] = ""
-    env["APOTHECARY_STATE_DIR"] = str(tmp_path_factory.mktemp("state"))
-    if _picture_folder_if_known is not None:
-        env["APOTHECARY_PICTURE_ROOT"] = str(_picture_folder_if_known)
-    # The scripted arduino-cli the unit tests use: the browser tests see the
-    # same two fake boards on every machine, never scan the real serial ports
-    # (a printer may be printing on one), and never put a real device into a
-    # committed screenshot.
-    from firmware_helpers import write_fake_arduino_cli
-
-    tools = tmp_path_factory.mktemp("tools")
-    env["ARDUINO_CLI"] = str(write_fake_arduino_cli(tools / "arduino-cli"))
-    env["APOTHECARY_TOOLS_DIR"] = str(tools)
-    # ...and a printer on one of them is the simulated one, mid-print: the same
-    # scripted machine `apothecary docs generate` shows.
-    env["APOTHECARY_SERIAL_ENGINE"] = "simulated"
-    env["APOTHECARY_SIMULATED_PRINTER"] = "printing"
-
-    server_cmd = [
-        sys.executable,
-        "-m",
-        "uvicorn",
-        "apothecary.api:app",
-        "--host",
-        "127.0.0.1",
-        "--port",
-        server_port,
-        # Let go of idle keep-alive connections quickly on SIGTERM. The browser
-        # that held them is torn down in the same breath, and a server that
-        # lingers on the port is what refuse_a_held_port() refuses next run.
-        "--timeout-graceful-shutdown",
-        "1",
-    ]
-
-    # DEVNULL, not PIPE: nothing here ever reads server_proc.stdout/stderr,
-    # and an unread PIPE deadlocks once its OS buffer fills (confirmed by
-    # direct reproduction against this same server-launch pattern in
-    # apothecary/cli/testing.py -- see the comment there).
-    refuse_a_held_port(server_port)
-    server_proc = subprocess.Popen(
-        server_cmd,
-        cwd=root,
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+def test_server(request, start_server, _picture_folder_if_known):
+    """The session's scripted server under --start-server (its url), else None."""
+    if not request.config.getoption("--start-server"):
+        return None
+    return start_server(
+        {"APOTHECARY_PICTURE_ROOT": str(_picture_folder_if_known)},
+        port=request.config.getoption("--server-port"),
     )
-
-    base_url = f"http://127.0.0.1:{server_port}"
-
-    # Wait for server to be ready
-    for _attempt in range(30):
-        try:
-            response = httpx.get(f"{base_url}/health", timeout=1.0)
-            if response.status_code == 200:
-                break
-        except (httpx.ConnectError, httpx.TimeoutException):
-            time.sleep(0.5)
-    else:
-        server_proc.terminate()
-        pytest.exit("Server failed to start within 15 seconds", returncode=1)
-
-    yield server_proc
-
-    # Cleanup
-    server_proc.terminate()
-    try:
-        server_proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        server_proc.kill()
 
 
 @pytest.fixture(scope="session")
-def base_url(request, test_server, server_port):
+def base_url(request, test_server):
     """Base URL for the test server."""
     # pytest-playwright provides --base-url option automatically
     url = request.config.getoption("--base-url", default=None)
+    if not url and test_server:
+        return test_server
     if not url:
-        url = f"http://127.0.0.1:{server_port}"
-
-    # Check if server is accessible
+        url = f"http://127.0.0.1:{request.config.getoption('--server-port') or EXTERNAL_PORT}"
     try:
         response = httpx.get(f"{url}/health", timeout=2.0)
-        if response.status_code != 200:
-            pytest.exit(
-                f"Server at {url} returned status {response.status_code}. "
-                f"Please start the server with: apothecary serve --port {url.split(':')[-1]}",
-                returncode=1,
-            )
     except (httpx.ConnectError, httpx.TimeoutException):
-        if request.config.getoption("--start-server"):
-            pytest.exit(f"The test server at {url} did not answer.", returncode=1)
-        # No server was asked for and none is running: a plain `pytest` is the
-        # unit run, and the browser tests say why they did not run. Exiting here
-        # used to stop the whole session after the first ten tests.
+        # A plain `pytest` is the unit run: the browser tests say why they did not run.
         pytest.skip(f"browser tests need a server: pass --start-server (or serve on {url})")
-
+    if response.status_code != 200:
+        pytest.exit(f"Server at {url} returned status {response.status_code}.", returncode=1)
     return url
 
 
