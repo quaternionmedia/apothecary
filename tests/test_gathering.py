@@ -61,12 +61,8 @@ def mark(kind, x, y, proportion=1.0, area=0.02, cut_off=False):
     )
 
 
-def signature(name, marks, tone=None):
-    return Signature(name and name, marks=marks, tone=tone or [], wideness=4 / 3)
-
-
 def sig(name, marks, tone=None):
-    return Signature(picture=name, marks=marks, tone=tone or [], wideness=4 / 3)
+    return Signature(picture=name, marks=marks, tone=tone or [])
 
 
 FLAT = [1.0 / 16] * 16
@@ -436,7 +432,7 @@ def test_light_that_was_never_measured_is_not_a_match_and_not_a_mismatch():
 
 def test_a_light_profile_that_is_not_a_share_is_refused():
     with pytest.raises(ValueError, match="adds up to"):
-        Signature(picture="p", marks=[], tone=[0.5, 0.9], wideness=1.0)
+        Signature(picture="p", marks=[], tone=[0.5, 0.9])
 
 
 # --------------------------------------------------------------------------

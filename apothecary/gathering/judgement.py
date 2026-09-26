@@ -96,7 +96,6 @@ ABOUT_A_PAIR = (SAME_THING, PARTS_OF_ONE, UNRELATED)
 ABOUT_ONE = (NOT_WORTH_USING, WORTH_USING)
 
 BY_A_PERSON = "you"
-BY_THE_MACHINE = "the machine"
 
 _PAIR = re.compile(
     r"^\s*(?P<left>\S+)\s+and\s+(?P<right>\S+)\s+are\s+(?P<verdict>.+?)\s*$",
@@ -319,7 +318,6 @@ __all__ = [
     "ABOUT_A_PAIR",
     "ABOUT_ONE",
     "BY_A_PERSON",
-    "BY_THE_MACHINE",
     "CannotRead",
     "Judgement",
     "NOT_WORTH_USING",
