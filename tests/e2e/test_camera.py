@@ -11,7 +11,6 @@ camera is ever opened by a test.
 from __future__ import annotations
 
 import re
-import time
 
 import pytest
 from PIL import Image, ImageDraw
@@ -65,12 +64,10 @@ def test_a_camera_records_its_own_surroundings(camera_page, base_url: str, pictu
     panel = page.locator(".panel[data-panel='camera']")
     expect(panel).to_be_visible(timeout=3000)
     expect(panel.locator("#cam-capture")).to_be_visible()
-    t0 = time.monotonic()
     panel.locator("#cam-allow").click()
     page.wait_for_function(
         "() => window.apothecaryCamera && window.apothecaryCamera.live()", timeout=8000
     )
-    assert time.monotonic() - t0 < 8
     expect(panel.locator("#cam-preview")).to_be_visible()
     assert page.evaluate("() => window.apothecaryCamera.state.cameras.length") >= 1
     expect(panel.locator("#cam-note")).to_contain_text("is live")
@@ -101,10 +98,8 @@ def test_a_camera_records_its_own_surroundings(camera_page, base_url: str, pictu
     # Its own surroundings: a frame kept on this machine, looked at, opened in the world.
     panel.locator("#cam-name").fill("surroundings")
     panel.locator("#cam-width").fill("800")
-    t0 = time.monotonic()
     panel.locator("#cam-look").click()
     page.wait_for_function("() => window.fractalViewer.siteName === 'surroundings'", timeout=15000)
-    assert time.monotonic() - t0 < 15
     kept = [p for p in page.request.get(f"{base_url}/photos/pictures").json() if p["captured"]]
     assert len(kept) == 1 and kept[0]["name"].endswith("-surroundings.png")
     assert (picture_folder / kept[0]["path"]).is_file()
