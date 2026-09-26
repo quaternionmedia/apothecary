@@ -659,7 +659,7 @@ def test_a_subprocess_that_fetches_is_told_where_and_nothing_else_tells_it(monke
     text = (PACKAGE / "firmware" / "toolchains.py").read_text(encoding="utf-8")
     assert "env = subprocess_env(env)" in text
     text = (PACKAGE / "firmware" / "tasks.py").read_text(encoding="utf-8")
-    assert text.count("env=subprocess_env(env)") == 2
+    assert text.count("subprocess.Popen(") == text.count("env=subprocess_env(env)") == 1
     text = (PACKAGE / "firmware" / "devices.py").read_text(encoding="utf-8")
     assert text.count("subprocess.Popen(") == 1 and "env=subprocess_env()" in text
     for path in (PACKAGE / "firmware").glob("*.py"):
