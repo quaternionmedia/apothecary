@@ -19,6 +19,8 @@ the failure modes they name: a blocked event loop, stacked polls, a panel
 rebuilt under the user's cursor.
 """
 
+import time
+
 import httpx
 import pytest
 from playwright.sync_api import Page, expect
@@ -66,6 +68,31 @@ def _identify(url: str, port: str = PRINTER):
 def _pin(url: str, path: str, port: str = PRINTER):
     r = httpx.put(f"{url}/sites/garage/nodes/{path}/device", json={"identity": port}, timeout=15.0)
     r.raise_for_status()
+
+
+def _read_the_bed(url: str, probe: bool = False) -> str:
+    """A bed reading on the printer, read or (armed) probed; returns its record's id."""
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        if probe:
+            http.post("/firmware/printers/control", json={"port": PRINTER, "armed": True})
+        http.post("/firmware/printers/level", json={"port": PRINTER, "probe": probe})
+        deadline = time.monotonic() + 30
+        while (job := http.get("/firmware/printers/level", params={"port": PRINTER}).json())[
+            "running"
+        ]:
+            assert time.monotonic() < deadline, job
+            time.sleep(0.05)
+    assert job["record_id"], job
+    return job["record_id"]
+
+
+def _keep(url: str, name: str, gcode: str) -> str:
+    """Keep a G-code file on the host, as the page's file picker does; returns its id."""
+    r = httpx.post(
+        f"{url}/firmware/printers/prints", params={"name": name}, content=gcode, timeout=15.0
+    )
+    r.raise_for_status()
+    return r.json()["id"]
 
 
 def _hold_clock(page: Page):
@@ -509,23 +536,21 @@ def test_the_board_is_drawn_in_its_printer_and_the_nozzle_follows_a_jog(
 
 
 @pytest.mark.e2e
-def test_bed_level_probe_reads_and_records(page: Page, fresh_url: str):
+def test_a_bed_reading_needs_no_latch_and_a_probe_does(page: Page, fresh_url: str):
     """Read mesh needs no latch and fills the heatmap; Probe bed needs it, shows its stage
-    while the port is held, saves a record the history lists; a corner button is four lines;
-    the reading is drawn over the bed in the board view, on this page and the firmware page.
-    A server of its own: no reading yet, and a log that holds only this test's."""
-    _pin(fresh_url, BOARD)
+    while the port is held, and saves a record the history lists. A server of its own:
+    no reading yet, and a log that holds only this test's lines."""
     page.goto(f"{fresh_url}/firmware/monitor?port=/dev/ttyFAKE1")
     expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
     expect(page.locator("#level-stats")).to_contain_text("no reading yet")
-    before = page.locator("#level-history > div").count()
+    expect(page.locator("#level-history > div")).to_have_count(0)
 
     # A read: no latch, no movement, a 5x5 mesh from the simulator within a few seconds.
     page.locator("#level-read").click()
     expect(page.locator("#mesh .cell")).to_have_count(25, timeout=15000)
     expect(page.locator("#level-stats")).to_contain_text("read ·")
     expect(page.locator("#level-stats")).to_contain_text("probe offset X-44 Y-10 Z-3.15")
-    expect(page.locator("#level-history > div")).to_have_count(before + 1)
+    expect(page.locator("#level-history > div")).to_have_count(1)
     expect(page.locator("#level-history .pick.on")).to_contain_text("read")
     assert page.locator("#log .tx.control", has_text="G29").count() == 0
 
@@ -542,30 +567,33 @@ def test_bed_level_probe_reads_and_records(page: Page, fresh_url: str):
     page.locator("#level-probe").click()
     expect(page.locator("#level-job")).to_contain_text("…", timeout=5000)
     expect(page.locator("#level-job")).to_have_text("", timeout=30000)
-    expect(page.locator("#level-history > div")).to_have_count(before + 2, timeout=5000)
+    expect(page.locator("#level-history > div")).to_have_count(2, timeout=5000)
     expect(page.locator("#level-stats")).to_contain_text("probe ·")
     expect(page.locator("#log .tx.control", has_text="G29")).to_have_count(1)
     expect(page.locator("#log .sys", has_text="bed reading saved")).to_have_count(2)
     record_id = page.evaluate("() => window.apothecaryMonitor.level.shown().id")
     r = page.request.get(f"{fresh_url}/firmware/printers/leveling/{record_id}")
     assert r.ok and len(r.json()["mesh"]) == 5 and r.json()["method"] == "probe"
-    # The reading is drawn in the world too: a 5x5 surface over the probed area of
-    # the bed, stretched so its shape reads, following whichever reading is shown.
+
+
+@pytest.mark.e2e
+def test_the_reading_shown_is_drawn_over_the_bed(page: Page, printer_url: str):
+    """The board view draws the reading shown as a 5x5 surface over the probed area of
+    the bed, stretched so its shape reads; picking another from the history swaps it."""
+    _pin(printer_url, BOARD)
+    read_id = _read_the_bed(printer_url)
+    probe_id = _read_the_bed(printer_url, probe=True)
+    page.goto(f"{printer_url}/firmware/monitor?port=/dev/ttyFAKE1")
+    expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
     expect(page.locator("#board-view canvas")).to_have_count(1, timeout=10000)
-    page.wait_for_function(
-        "(id) => window.apothecaryBoardView && window.apothecaryBoardView.mesh()"
-        " && window.apothecaryBoardView.mesh().record_id === id",
-        arg=record_id,
-        timeout=5000,
-    )
-    drawn = page.evaluate("() => window.apothecaryBoardView.mesh()")
+    shown = "() => window.apothecaryBoardView && window.apothecaryBoardView.mesh()"
+    page.wait_for_function(f"(id) => ({shown})() && ({shown})().record_id === id", arg=probe_id)
+    drawn = page.evaluate(shown)
     volume = page.evaluate("() => window.apothecaryBoardView.volume()")
     assert drawn["rows"] == 5 and drawn["cols"] == 5 and drawn["exaggeration"] >= 10
     assert drawn["bounds"]["min"]["x"] >= 0 and drawn["bounds"]["max"]["x"] <= 220
     assert drawn["bounds"]["max"]["x"] == 166  # the probe's -44 offset keeps it off the right edge
-    assert drawn["z"]["min"] == pytest.approx(
-        volume["min"]["z"] + 0.4
-    )  # a relief resting on the bed
+    assert drawn["z"]["min"] == pytest.approx(volume["min"]["z"] + 0.4)  # resting on the bed
     assert drawn["z"]["max"] <= volume["max"]["z"]
     assert drawn["z"]["max"] - drawn["z"]["min"] == pytest.approx(
         drawn["range"] * drawn["exaggeration"], abs=0.01
@@ -574,13 +602,19 @@ def test_bed_level_probe_reads_and_records(page: Page, fresh_url: str):
     # The history still holds the read; picking it swaps the heatmap back, and the surface.
     page.locator("#level-history .pick", has_text="read").first.click()
     expect(page.locator("#level-stats")).to_contain_text("read ·")
-    page.wait_for_function(
-        "(id) => window.apothecaryBoardView.mesh().record_id !== id", arg=record_id, timeout=5000
-    )
+    page.wait_for_function(f"(id) => ({shown})().record_id === id", arg=read_id)
 
-    # A corner button: four absolute lines, the last one at paper height.
+
+@pytest.mark.e2e
+def test_a_corner_button_is_four_lines_to_paper_height(page: Page, printer_url: str):
+    """A corner button: four absolute lines, the last one at paper height, sent armed."""
+    _pin(printer_url, BOARD)
+    page.goto(f"{printer_url}/firmware/monitor?port=/dev/ttyFAKE1")
+    expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
     lines = page.evaluate("() => window.apothecaryMonitor.level.lines('BR')")
     assert lines == ["G90", "G1 Z5 F3000", "G1 X190 Y190 F3000", "G1 Z0.2 F600"]
+    page.locator("#ctl").check()
+    expect(page.locator("#control")).to_be_visible(timeout=5000)
     page.locator("#control button[data-cmd='M25']").click()  # the simulator is printing
     expect(page.locator("#c-state")).to_contain_text("idle", timeout=WITHIN_A_POLL)
     page.locator("#level-card button[data-corner='FL']").click()
@@ -588,12 +622,14 @@ def test_bed_level_probe_reads_and_records(page: Page, fresh_url: str):
         timeout=8000
     )
     expect(page.locator("#c-pos")).to_contain_text("X30.0", timeout=WITHIN_A_POLL)
-    page.locator("#control button[data-cmd='M24']").click()
-    page.locator("#ctl-disarm").click()
-    expect(page.locator("#control")).to_be_hidden(timeout=3000)
 
-    # The firmware page's card draws the newest reading over the bed as well.
-    page.goto(f"{fresh_url}/firmware")
+
+@pytest.mark.e2e
+def test_the_firmware_page_draws_the_newest_reading(page: Page, printer_url: str):
+    """The firmware page's card draws the newest reading over the bed, as the monitor does."""
+    _pin(printer_url, BOARD)
+    _read_the_bed(printer_url)
+    page.goto(f"{printer_url}/firmware")
     card = page.locator(".device[data-port='/dev/ttyFAKE1']")
     expect(card.locator(".board-view canvas")).to_have_count(1, timeout=10000)
     page.wait_for_function(
@@ -604,19 +640,25 @@ def test_bed_level_probe_reads_and_records(page: Page, fresh_url: str):
     expect(card.locator(".board-view-note")).to_contain_text("drawn ×")
 
 
+# Seconds to stream, dwell or no dwell: each line is a round trip to the simulator, a
+# millisecond at least, so a pause and a cancel land mid-file.
+SLOW = "".join(f"G1 X{i % 200} Y{i % 200}\n" for i in range(6000))
+
+
 @pytest.mark.e2e
-def test_a_file_prints_from_here_without_a_card(page: Page, printer_url: str):
-    """Keep a file from the page, print it armed, pause and resume from the ring's Print
-    cell, cancel, and see the record; a second file runs to the end and the state comes back."""
+def test_a_file_is_kept_or_refused_and_nothing_leaves_disarmed(page: Page, printer_url: str):
+    """Keep a file from the page; one the seam refuses is kept and said so; disarmed,
+    Print sends nothing."""
     page.goto(f"{printer_url}/firmware/monitor?port=/dev/ttyFAKE1")
     expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
     expect(page.locator("#print-start")).to_be_disabled()
-    slow = "\n".join(f"G1 X{i} Y{i} E{i / 10:.1f}\nG4 P150" for i in range(1, 41)) + "\n"
     page.locator("#print-file").set_input_files(
-        {"name": "slow cube.gcode", "mimeType": "text/plain", "buffer": slow.encode()}
+        {"name": "slow cube.gcode", "mimeType": "text/plain", "buffer": SLOW.encode()}
     )
-    expect(page.locator("#print-pick")).to_contain_text("slow cube.gcode · 80 lines", timeout=8000)
-    expect(page.locator("#log .sys", has_text="kept slow cube.gcode: 80 lines")).to_be_visible()
+    expect(page.locator("#print-pick")).to_contain_text(
+        "slow cube.gcode · 6000 lines", timeout=8000
+    )
+    expect(page.locator("#log .sys", has_text="kept slow cube.gcode: 6000 lines")).to_be_visible()
     expect(page.locator("#print-start")).to_be_enabled()
     # A file the seam refuses is kept, said so, and never sent.
     page.locator("#print-file").set_input_files(
@@ -631,11 +673,26 @@ def test_a_file_prints_from_here_without_a_card(page: Page, printer_url: str):
     page.locator("#print-start").click()
     expect(page.locator("#log .sys", has_text="arm control first")).to_be_visible(timeout=3000)
     assert not page.evaluate("() => window.apothecaryMonitor.print.job().running")
+
+
+def _armed_with_the_card_paused(page: Page, url: str, file_id: str):
+    """The monitor with a kept file picked, control armed and the card's own print
+    paused, which a print from here needs."""
+    page.goto(f"{url}/firmware/monitor?port=/dev/ttyFAKE1")
+    expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
+    expect(page.locator(f"#print-pick option[value='{file_id}']")).to_be_attached()
+    page.locator("#print-pick").select_option(file_id)
     page.locator("#ctl").check()
     expect(page.locator("#control")).to_be_visible(timeout=5000)
-    page.locator("#control button[data-cmd='M25']").click()  # the card's print is in the way
+    page.locator("#control button[data-cmd='M25']").click()
     expect(page.locator("#c-state")).to_contain_text("idle", timeout=WITHIN_A_POLL)
 
+
+@pytest.mark.e2e
+def test_a_print_from_here_pauses_from_the_ring_and_cancels(page: Page, printer_url: str):
+    """Print a kept file armed; the ring's Print cell pauses it, Resume resumes, Cancel
+    cancels, and the record says so."""
+    _armed_with_the_card_paused(page, printer_url, _keep(printer_url, "slow cube.gcode", SLOW))
     page.once("dialog", lambda d: d.accept())
     page.locator("#print-start").click()
     expect(page.locator("#print-progress")).to_contain_text(
@@ -644,11 +701,11 @@ def test_a_file_prints_from_here_without_a_card(page: Page, printer_url: str):
     expect(page.locator("#c-state")).to_contain_text("printing", timeout=WITHIN_A_POLL)
     expect(page.locator("#c-state-s")).to_contain_text("print from here: printing")
     expect(
-        page.locator("#log .sys", has_text="print started: slow cube.gcode (80 lines)")
+        page.locator("#log .sys", has_text="print started: slow cube.gcode (6000 lines)")
     ).to_be_visible()
     # The stream stays out of the log; the progress bar moves.
     page.wait_for_function("() => window.apothecaryMonitor.print.job().sent >= 6", timeout=8000)
-    assert page.locator("#log .tx", has_text="G4 P150").count() == 0
+    assert page.locator("#log .tx", has_text="G1 X3 Y3").count() == 0
 
     # Pause from the ring: Control > Print > Pause goes to the print from here, not the card.
     m25_before = page.locator("#log .tx.control", has_text="M25").count()
@@ -680,35 +737,42 @@ def test_a_file_prints_from_here_without_a_card(page: Page, printer_url: str):
     expect(page.locator("#log .tx.control", has_text="M104 S0").last).to_be_visible()
     expect(page.locator("#print-start")).to_be_enabled(timeout=5000)
 
-    # A short file runs to the end: done, recorded, and the state card is the board's again.
-    page.locator("#print-file").set_input_files(
-        {"name": "dot.gcode", "mimeType": "text/plain", "buffer": b"G28\nG1 X5 Y5 E0.1\nM84\n"}
-    )
-    expect(page.locator("#print-pick")).to_contain_text("dot.gcode · 3 lines", timeout=8000)
+
+@pytest.mark.e2e
+def test_a_short_file_prints_to_the_end(page: Page, printer_url: str):
+    """A short file runs to the end: done, recorded, and the state card is the board's again."""
+    dot = _keep(printer_url, "dot.gcode", "G28\nG1 X5 Y5 E0.1\nM84\n")
+    _armed_with_the_card_paused(page, printer_url, dot)
+    expect(page.locator("#print-pick")).to_contain_text("dot.gcode · 3 lines")
     page.once("dialog", lambda d: d.accept())
     page.locator("#print-start").click()
     expect(page.locator("#print-progress")).to_contain_text("dot.gcode · done · 3/3", timeout=10000)
     expect(page.locator("#print-history")).to_contain_text("dot.gcode · done · 3/3")
     expect(page.locator("#c-state")).to_contain_text("idle", timeout=WITHIN_A_POLL)
     r = page.request.get(f"{printer_url}/firmware/printers/print/records?port=/dev/ttyFAKE1")
-    assert [x["outcome"] for x in r.json()][:2] == ["done", "cancelled"]  # newest first
-    page.locator("#ctl-disarm").click()
-    expect(page.locator("#control")).to_be_hidden(timeout=3000)
+    newest = r.json()[0]
+    assert (newest["name"], newest["outcome"]) == ("dot.gcode", "done")
+
+
+def _wearing_its_badge(page: Page, url: str):
+    """The garage with the printer's board pinned and identified: the badge over printer_1."""
+    _pin(url, BOARD)
+    # Until the board is identified it wears a devkit's badge on its own node; once
+    # it is known to be a printer the badge stands over the printer it drives.
+    _identify(url)
+    page.clock.install()
+    page.goto(f"{url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    badge = page.locator(".world-badge[data-path='printer_1']")
+    expect(badge).to_be_visible(timeout=15000)
+    return badge
 
 
 @pytest.mark.e2e
 def test_the_world_wears_its_machines(page: Page, printer_url: str):
     """A pinned printer stands under a badge in the 3D view that follows it as the camera
-    moves and updates within a poll; its nozzle and bed reading are drawn at its node."""
-    _pin(printer_url, BOARD)
-    # Until the board is identified it wears a devkit's badge on its own node; once
-    # it is known to be a printer the badge stands over the printer it drives.
-    _identify(printer_url)
-    page.clock.install()
-    page.goto(f"{printer_url}/viewer/sites/garage")
-    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
-    badge = page.locator(".world-badge[data-path='printer_1']")
-    expect(badge).to_be_visible(timeout=15000)
+    moves and updates within a poll; its nozzle is drawn at its node."""
+    badge = _wearing_its_badge(page, printer_url)
     expect(badge).to_contain_text("🖨")
     assert page.evaluate("() => window.fractalViewer.anchors.keys()") == ["printer_1"]
 
@@ -749,24 +813,24 @@ def test_the_world_wears_its_machines(page: Page, printer_url: str):
     )
     target = page.evaluate("() => window.fractalViewer.marks['printer_1'].marks.target()")
     assert target["x"] == pytest.approx(st["position"]["x"], abs=0.01)
-    # A bed reading saved on the port lies on the bed.
-    r = page.request.post(
-        f"{printer_url}/firmware/printers/level", data={"port": "/dev/ttyFAKE1", "probe": False}
-    )
-    assert r.status == 202
-    page.wait_for_function(
-        "() => fetch('/firmware/printers/level?port=/dev/ttyFAKE1').then((r) => r.json())"
-        ".then((j) => !j.running)",
-        timeout=15000,
-    )
+
+
+@pytest.mark.e2e
+def test_a_reading_lies_on_the_bed_and_the_badge_selects_its_printer(page: Page, printer_url: str):
+    """A bed reading saved on the port is drawn on the printer's bed; zoomed in, the badge
+    stays over the printer, a click on it selects the printer, and unpinned it goes."""
+    badge = _wearing_its_badge(page, printer_url)
+    marks = "window.fractalViewer.marks['printer_1']"
+    page.wait_for_function(f"() => {marks} && {marks}.marks", timeout=10000)
+    record_id = _read_the_bed(printer_url)
     page.clock.fast_forward(5000)  # the world asks for the newest reading at most every 5 s
     page.evaluate("() => window.fractalViewer.rescanDevices()")
     page.wait_for_function(
-        "() => { const m = window.fractalViewer.marks['printer_1'];"
-        " return m && m.marks && m.marks.mesh(); }",
+        f"(id) => {marks}.marks.mesh() && {marks}.marks.mesh().record_id === id",
+        arg=record_id,
         timeout=15000,
     )
-    assert page.evaluate("() => window.fractalViewer.marks['printer_1'].marks.mesh().rows") == 5
+    assert page.evaluate(f"() => {marks}.marks.mesh().rows") == 5
 
     # Zoomed into the printer the badge stays over it; a click on it selects the printer.
     contents = page.locator("#contents-list .contents-item")
