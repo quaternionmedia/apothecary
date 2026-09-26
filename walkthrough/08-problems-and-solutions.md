@@ -47,7 +47,7 @@ has a hole:
     >>> all(p.owner and p.closes_with for p in problems())
     True
 
-`docs/boundaries.md` is the prose; this is the part a machine can check.
+[`docs/fitting-a-part.md`](../docs/fitting-a-part.md) is the prose; this is the part a machine can check.
 
 ## The owner comes from one table
 

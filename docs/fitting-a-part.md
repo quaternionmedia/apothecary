@@ -1,147 +1,138 @@
 # Fitting a part to something it does not own
 
-A standard for the seam between a project that owns facts about a physical
-thing and this repository, which owns geometry. Written against `datum_core`,
-but the shape is meant to hold from a single unfitted part up to a multi-
-structure build.
+The seam between a project that owns facts about a physical thing and this
+repository, which owns geometry. `datum` is the consumer it was written
+against; [walkthrough 02](../walkthrough/02-fitting.md) drives it,
+[08](../walkthrough/08-problems-and-solutions.md) checks who owns each open
+problem, and [10](../walkthrough/10-being-depended-on.md) is the release side.
 
-Status: proposed. A record candidate for `governance/qm`, not yet drafted there.
+Status: proposed; a record candidate for `governance/qm`, not yet drafted there.
 
 ## The line
-
-One sentence decides every argument about where a number lives:
 
 > **The consumer owns requirements and interfaces. Apothecary owns realization
 > and manufacturability.**
 
-| Fact | Owner | Example |
+| | consumer | apothecary |
 |---|---|---|
-| What must fit, and where | consumer | board 40 × 40 mm; connector 3.6 mm above the board; contacts on an 18 mm pitch |
-| How geometry realizes that | apothecary | corner radius, floor thickness, lip height, facet count |
-| How it prints | apothecary | `PrintSettings` — nozzle, layer height, wall, tolerance |
-| Whether the result is valid | apothecary | `LayoutReport` — overlaps, build volume |
+| The event envelope, topics, firmware | ✓ | |
+| What must fit, and where: board outline, connector position, contact pitch | ✓ | |
+| Which enclosure it uses, pinned to which version | ✓ | |
+| How geometry realizes a requirement: corner radius, floor, lip, facets | | ✓ |
+| How it prints: `PrintSettings`, wall, tolerance | | ✓ |
+| Whether the result is valid: `LayoutReport`, bounds against the mesh | | ✓ |
+| What parts exist, and what is still open | | ✓ |
 
-`datum` does not get an opinion on wall thickness, and apothecary does not get
-an opinion on where the connector is. Each of those was previously held by the
-wrong repository: every dimension of `datum_core` lived in apothecary's SCAD,
-including the ones the PCB determines.
+The test for a single number: **would it change if you printed the same
+object on a different machine?** Then it is manufacturing, and apothecary's.
+Would it change if the board changed? Then it is interface, and the
+consumer's.
 
-The test for which side a number belongs to: **would it change if you printed
-the same object on a different machine?** If yes it is manufacturing and it is
-apothecary's. Would it change if the board changed? Then it is interface and it
-is the consumer's.
+A part renders something coherent with no knowledge of its consumer
+(clause 2 of `datum`'s enclosure record): `datum_core` is a sensible tray for
+someone who has never heard of `datum`. A part that only makes sense as one
+project's accessory belongs in that project.
 
-## The three objects, at every level of complexity
-
-Nothing new appears as an assembly grows. The same three objects recur; only
-the tree gets deeper.
+## Three objects, at every level of complexity
 
 | | Owner | What it is |
 |---|---|---|
-| **Fit profile** | consumer | A versioned, machine-readable statement of the interfaces the consumer owns |
+| **Black box** | consumer | What a part is fitted around: envelope, mounts, keepouts |
 | **`Params` model** | part | What the part accepts, with house defaults for everything manufacturing |
-| **Validator** | apothecary | Whether the realized geometry is coherent (`LayoutReport`) |
+| **Validator** | apothecary | Whether the realized geometry is coherent (`LayoutReport`, `parts verify`) |
 
-### The complexity ladder
+Nothing new appears as an assembly grows; only the tree gets deeper.
 
-| Rung | Example | Fit profile | Notes |
+| Rung | Example | Black boxes | Notes |
 |---|---|---|---|
-| 1. Unfitted part | `calibration_cube` | none | Nothing external to fit. `PrintSettings` alone |
-| 2. Fitted part | `datum_core` tray | one | The profile drives parameter overrides |
-| 3. Sub-assembly | tray + lid | one | Several nodes consume different subsets. Interfaces *between* the pieces — the lip clearance — stay apothecary's |
+| 1. Unfitted part | `calibration_cube` | none | `PrintSettings` alone |
+| 2. Fitted part | `datum_core` | one | The box becomes parameter overrides |
+| 3. Sub-assembly | `datum_core` + `datum_cap` | one | Interfaces *between* the pieces, the lip clearance, stay apothecary's |
 | 4. Site | `garage` | one per structure | Plus layout constraints; the validator is still apothecary's |
-| 5. Third-party interfaces | a DIN rail, a VESA pattern | profile references named external interfaces | The external standard is a third owner, cited not copied |
+| 5. Third-party interfaces | a DIN rail, a VESA pattern | named external interfaces | The standard is a third owner, cited not copied |
 
-The thing that scales is that rung 5 needs no new concept. A VESA pattern is
-just an interface block whose owner happens to be a standards body rather than
-a sibling repository.
+## The seam as built
+
+`apothecary/models/blackbox.py`: a `BlackBox` describes an artifact apothecary
+places but does not author, and `BlackBoxProvider` is a Protocol, so where the
+description comes from is a separate, replaceable question. `StubProvider`
+returns hand-entered datasheet numbers; `KiCadProvider`
+(`apothecary/shims/kicad.py`) reads a real board outline through the same
+interface, and swapping one for the other changes no geometry code. `source`
+on each box tells a measured envelope from a guessed one.
+
+`datum_core.params_for(board)` is the whole adapter from a box to tray
+parameters. `apothecary/projects/assemblies/datum_bench.py` places the tray
+and reports which envelopes are still guesses, so a review starts from what
+nobody has measured.
 
 ## Rules
 
-These are the envelope discipline `datum` already applies to its event schema,
-pointed at geometry instead. They are what stop the profile becoming a second
-copy of the SCAD file.
-
-1. **A profile is versioned and additive.** Fields are added, never removed and
-   never repurposed.
-2. **A part ignores profile fields it does not recognise.** An older part keeps
-   working against a richer profile. This is the whole reason for a profile
-   rather than a shared constants file.
-3. **A part must render coherently from its own defaults, with no profile at
-   all.** Already a `datum` non-negotiable; it is what keeps the part useful to
-   apothecary's other users.
-4. **A profile names interfaces, never geometry.**
-   `connector_height_above_board`, not `cutout_z`. The moment a profile names a
+1. **What a consumer states is versioned and additive.** Fields are added,
+   never removed and never repurposed.
+2. **A part ignores fields it does not recognise**, so an older part keeps
+   working against a richer description.
+3. **A part renders coherently from its own defaults**, with nothing from the
+   consumer. The board dimensions stay in the SCAD file as defaults for this
+   reason.
+4. **A consumer names interfaces, never geometry:**
+   `connector_height_above_board`, not `cutout_z`. The moment it names a
    cutout, the consumer has started designing the part.
-5. **Manufacturing facts never appear in a profile.** They are parameters with
-   house defaults, overridable by a consumer with a different printer, owned by
-   neither.
+5. **Manufacturing facts are never the consumer's.** They are parameters with
+   house defaults, overridable by a consumer with a different printer.
 6. **One gate per pair of descriptions.** Two descriptions of one object drift
    the moment nothing compares them:
 
-   | Pair | Gate | State |
-   |---|---|---|
-   | SCAD defaults ↔ assembly model | `tests/test_datum_core_site.py` | wired |
-   | Declared bounds ↔ rendered geometry | `apothecary parts verify` | wired |
-   | Black box ↔ part params | `projects/assemblies/datum_bench.py` | built |
-   | Black box ↔ the schematic | `shims/kicad.py`, via `KiCadProvider` | built, unfed — no schematic exists |
+   | Pair | Gate |
+   |---|---|
+   | SCAD defaults ↔ assembly model | `tests/test_datum_core_site.py` |
+   | SCAD variables ↔ `Params` | `tests/test_parameter_coverage.py` |
+   | Declared bounds ↔ rendered geometry | `apothecary parts verify` |
+   | Black box ↔ part params | `datum_core.params_for`, driven by `datum_bench.py` |
+   | Black box ↔ the schematic | `KiCadProvider`; built, unfed until a schematic exists |
 
-## This seam is already built, and this page nearly missed it
+## A pin, not a path
 
-`apothecary/models/blackbox.py` implements it. A `BlackBox` describes an
-artifact apothecary places but does not author — its envelope, its fastening
-points, its keepouts — and `BlackBoxProvider` is a Protocol, so where that
-description *comes from* is a separate, replaceable question. `StubProvider`
-returns hand-entered datasheet numbers; `KiCadProvider` in
-`apothecary/shims/kicad.py` reads a real board outline through the same
-interface, and swapping one for the other changes no geometry code.
+`datum.apothecary` names what `datum` depends on here, and `datum`'s CI checks
+that reference and renders every part through this repository's CLI.
+Geometry changes land here and arrive there by a reviewed bump.
 
-`apothecary/projects/assemblies/datum_bench.py` drives `parts/datum` through
-it and reports which envelopes are still guesses, so a review starts from what
-nobody has measured.
+Clause 5 of `datum`'s enclosure record asks for a *released* apothecary
+version, consumed through the CLI or API rather than by path. Nothing has
+been released, so the consumer pins a commit by necessity, and the gap is
+owned here. Both sides check it: `datum apothecary --check` reports the
+deviation while nothing is published and fails once something is, and
+`apothecary release` says what stands between this commit and something a
+consumer may pin.
 
-That is this page's standard, implemented, and better factored than the JSON
-document sketched below: the seam is a protocol with more than one
-implementation rather than a file format. **An earlier version of this page
-said the profile was not built. It was, and the page had not looked.** What is
-described below is kept only as an illustration of the shape.
+## Where a problem is owned
 
-## What a profile document would look like
+`apothecary/spaces.py` gives every open problem an owner, derived from its
+kind rather than typed:
 
-Illustrative, and superseded by the provider protocol above.
+| Owner | Means | Example |
+|---|---|---|
+| `apothecary` | a commit here closes it | a wrapper whose declared bounds its geometry does not have |
+| `datum` | only the consumer can close it | a board envelope that is still a stub |
+| `human` | a decision between defensible alternatives | a dimension its sources disagree about |
+| `measurement` | waits on a physical artifact | a mounting surface nobody has measured |
 
-```json
-{
-  "profile_version": "1.0.0",
-  "src": "datum/t1-core",
-  "board": {"x": 40.0, "y": 40.0, "thickness": 1.6},
-  "mount_pattern": {"holes": 4, "inset": 3.5, "screw": "M2"},
-  "connector": {"width": 9.4, "height": 3.6, "above_board": 0.0, "edge": "+y"},
-  "indicator": {"diameter": 4.0, "at": [0.0, 14.0]},
-  "contacts": {"count": 4, "pitch": [18.0, 18.0], "opening": 12.0},
-  "tallest_component": 8.0
-}
-```
+    apothecary problems --owner datum
+    apothecary solutions
 
-Every one of those is a fact the PCB determines and `datum` is entitled to
-assert. None of them is a wall thickness, a corner radius or a facet count.
+A problem with no owner would mean the line has a hole.
 
-## What this changes about datum_core today
+## Where the line is blurred
 
-`walls` and `tolerence` are now parameters carrying the house constants from
-`parts/footpedal/button.scad`, print-validated on QM hardware, rather than the
-`2.4` and `0.25` invented for this part. The tray envelope is 46.8 mm square as
-a result, not 45.6.
+- `apothecary/datum_core_site.py` lives here and models `datum`'s enclosure.
+  It is apothecary geometry by the test above, but it exists for one
+  consumer; if a second never appears, it is a candidate for moving.
+- `PrintSettings` defaults to `wall_thickness=1.2, tolerance=0.2`;
+  `parts/footpedal/button.scad` declares `walls = 3, tolerence = .4`, called
+  print-validated, and `datum_core` carries those as its `Params` defaults.
+  Two house constants disagree, and no part reads `PrintSettings` for its
+  wall. That belongs with whoever owns the print profile.
 
-The board dimensions still live in the SCAD file as its defaults, which rule 3
-requires — they are what makes the part render for someone who has never heard
-of `datum`. What changes when the profile exists is that `datum` will assert its
-own numbers rather than inheriting whatever the part happens to default to.
-
-## Known inconsistency
-
-`PrintSettings` defaults to `wall_thickness=1.2, tolerance=0.2`; `button.scad`
-declares `walls = 3, tolerence = .4` and the packet calls those print-validated.
-Two house constants disagree, and no part reads `PrintSettings` for its wall.
-Reconciling them is out of scope here and belongs with whoever owns the print
-profile.
+The line is not a division of labour between people. It is about which
+repository can *answer* for a fact afterwards: apothecary cannot answer for
+where the connector is; `datum` cannot answer for whether 3 mm of PETG prints.
