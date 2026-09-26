@@ -57,16 +57,6 @@ scad_params = DEFAULT.get_scad_customizer_params(params.model_dump())
 | `scoop` | 1.0 | Scoop percentage (0-1) |
 | `style_tab` | AUTO | Tab style for compartments |
 
-### Pre-configured Variants
-
-The wrapper includes common bin configurations:
-
-- `1x1x3` - Single unit bin, 3 height units
-- `2x1x3` - 2-wide bin, 3 height units
-- `2x2x3` - 2x2 bin, 3 height units
-- `3x2x6` - Large bin, 6 height units
-- `1x1x2_divided` - Small bin with 2x2 compartments
-
 ## Submodules
 
 ### gridfinity-rebuilt-openscad

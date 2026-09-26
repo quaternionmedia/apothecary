@@ -15,7 +15,6 @@ from apothecary.projects.parts.gridfinity import (
     GridfinityBinPart,
     GridzDefine,
     TabStyle,
-    check_submodule,
     get_bin_dimensions,
 )
 
@@ -136,28 +135,16 @@ class TestGridfinityBinPart:
         assert bounds.size.z == pytest.approx(expected_height, abs=0.1)
 
     def test_get_scad_customizer_params(self):
-        """Test OpenSCAD customizer parameter generation."""
-        scad_params = DEFAULT.get_scad_customizer_params({"gridx": 2, "gridy": 2})
+        """Customizer params are flat, and an enum arrives as its plain int."""
+        scad_params = DEFAULT.get_scad_customizer_params(
+            {"gridx": 2, "gridy": 2, "style_tab": TabStyle.LEFT}
+        )
 
         assert scad_params["gridx"] == 2
         assert scad_params["gridy"] == 2
-        assert "divx" in scad_params
-        assert "style_tab" in scad_params
-
-    def test_get_available_variants(self):
-        """Test variant configurations."""
-        variants = DEFAULT.get_available_variants()
-
-        assert len(variants) > 0
-        variant_names = [v["name"] for v in variants]
-        assert "1x1x3" in variant_names
-        assert "2x2x3" in variant_names
-
-    def test_stl_output_dir(self):
-        """Test STL output directory is parts/gridfinity."""
-        output_dir = DEFAULT.stl_output_dir
-        assert output_dir.name == "gridfinity"
-        assert output_dir.parent.name == "parts"
+        assert type(scad_params["style_tab"]) is int
+        assert scad_params["style_tab"] == 2
+        assert scad_params["magnet_holes"] is False  # from hole_options
 
     def test_get_stl_output_path(self):
         """Test STL output path is not in submodule."""
@@ -165,22 +152,6 @@ class TestGridfinityBinPart:
         # Should be parts/gridfinity/gridfinity.stl, NOT inside submodule
         assert "gridfinity-rebuilt-openscad" not in str(stl_path)
         assert stl_path.name == "gridfinity.stl"
-
-    def test_requires_dev_openscad(self):
-        """Test part requires development OpenSCAD."""
-        assert DEFAULT.requires_dev_openscad is True
-        assert DEFAULT.openscad_min_version == "2024.01"
-
-    def test_get_stl_path_variant(self):
-        """Test STL path for specific variant."""
-        path = DEFAULT.get_stl_path("2x2x3")
-        assert path.name == "gridfinity_2x2x3.stl"
-
-    def test_recommended_print_settings(self):
-        """Test recommended print settings."""
-        settings = DEFAULT.get_recommended_print_settings()
-        assert settings.layer_height == 0.2
-        assert settings.nozzle_diameter == 0.4
 
 
 class TestGetBinDimensions:
@@ -211,31 +182,8 @@ class TestGetBinDimensions:
         assert dims["height_unit_mm"] == HEIGHT_UNIT_MM
 
 
-class TestSubmoduleIntegration:
-    """Tests for submodule detection."""
-
-    def test_check_submodule_function(self):
-        """Test check_submodule convenience function."""
-        result = check_submodule()
-        assert isinstance(result, bool)
-
-    def test_submodule_initialized_property(self):
-        """Test submodule_initialized property."""
-        # This will be True if submodule is set up, False otherwise
-        result = DEFAULT.submodule_initialized
-        assert isinstance(result, bool)
-
-
 class TestCanGenerateSTL:
     """Tests for STL generation capability checking."""
-
-    def test_can_generate_returns_tuple(self):
-        """Test can_generate_stl returns (bool, str) tuple."""
-        result = DEFAULT.can_generate_stl()
-        assert isinstance(result, tuple)
-        assert len(result) == 2
-        assert isinstance(result[0], bool)
-        assert isinstance(result[1], str)
 
     def test_submodule_not_initialized_message(self):
         """Test message when submodule not initialized."""

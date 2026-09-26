@@ -19,9 +19,9 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 from apothecary.models import (
     BoundingBox3D,
@@ -108,29 +108,6 @@ class BinParams(BaseModel):
     only_corners: bool = Field(False, description="Holes only at corners")
     hole_options: HoleOptions = Field(default_factory=HoleOptions)
 
-    @field_validator("gridz")
-    @classmethod
-    def validate_gridz(cls, v: float) -> float:
-        """Ensure gridz is a reasonable value."""
-        if v < 1:
-            raise ValueError("gridz must be at least 1")
-        return v
-
-
-class BaseplateParams(BaseModel):
-    """Parameters for Gridfinity baseplates."""
-
-    gridx: int = Field(4, ge=1, le=20, description="Grid units in X")
-    gridy: int = Field(4, ge=1, le=20, description="Grid units in Y")
-
-    # Style options
-    style_plate: int = Field(0, ge=0, le=2, description="0=refined, 1=magnet, 2=weighted")
-    enable_magnet: bool = Field(True, description="Include magnet holes")
-
-    # Dimensions
-    distancex: float = Field(0, ge=0, description="Extra X distance between grids")
-    distancey: float = Field(0, ge=0, description="Extra Y distance between grids")
-
 
 class GridfinityBinPart(BasePart):
     """
@@ -205,15 +182,6 @@ class GridfinityBinPart(BasePart):
             max_point=Vector3D(x=width_x, y=width_y, z=height),
         )
 
-    def get_recommended_print_settings(self) -> PrintSettings:
-        """Return recommended print settings for Gridfinity bins."""
-        return PrintSettings(
-            nozzle_diameter=0.4,
-            layer_height=0.2,
-            wall_thickness=1.2,  # 3 perimeters for strength
-            tolerance=0.2,  # Standard FDM tolerance for good fit
-        )
-
     def get_scad_customizer_params(self, params: Optional[Dict] = None) -> Dict:
         """
         Convert Python params to OpenSCAD customizer format.
@@ -245,36 +213,6 @@ class GridfinityBinPart(BasePart):
             "printable_hole_top": bin_params.hole_options.printable_hole_top,
         }
 
-    def get_available_variants(self) -> List[Dict]:
-        """Return common bin configurations as named variants."""
-        return [
-            {
-                "name": "1x1x3",
-                "description": "Single unit bin, 3 height units",
-                "params": {"gridx": 1, "gridy": 1, "gridz": 3},
-            },
-            {
-                "name": "2x1x3",
-                "description": "2-wide bin, 3 height units",
-                "params": {"gridx": 2, "gridy": 1, "gridz": 3},
-            },
-            {
-                "name": "2x2x3",
-                "description": "2x2 bin, 3 height units",
-                "params": {"gridx": 2, "gridy": 2, "gridz": 3},
-            },
-            {
-                "name": "3x2x6",
-                "description": "Large bin, 6 height units",
-                "params": {"gridx": 3, "gridy": 2, "gridz": 6},
-            },
-            {
-                "name": "1x1x2_divided",
-                "description": "Small bin with 2x2 compartments",
-                "params": {"gridx": 1, "gridy": 1, "gridz": 2, "divx": 2, "divy": 2},
-            },
-        ]
-
     @property
     def submodule_initialized(self) -> bool:
         """Check if the gridfinity submodule is initialized."""
@@ -285,21 +223,9 @@ class GridfinityBinPart(BasePart):
         contents = [c for c in submodule_path.iterdir() if c.name != ".git"]
         return len(contents) > 0
 
-    @property
-    def stl_output_dir(self) -> Path:
-        """
-        Get the directory where STL files should be stored.
-
-        For gridfinity, we store STLs in parts/gridfinity/ instead of
-        inside the submodule directory.
-        """
-        return ROOT / "parts" / "gridfinity"
-
     def get_stl_output_path(self) -> Path:
-        """
-        Override base class to put STL in parts/gridfinity/ not in submodule.
-        """
-        return self.stl_output_dir / "gridfinity.stl"
+        """parts/gridfinity/gridfinity.stl, outside the submodule's working tree."""
+        return ROOT / "parts" / "gridfinity" / "gridfinity.stl"
 
     @property
     def requires_dev_openscad(self) -> bool:
@@ -315,20 +241,6 @@ class GridfinityBinPart(BasePart):
     def openscad_min_version(self) -> str:
         """Minimum OpenSCAD version required for this part."""
         return "2024.01"
-
-    def get_stl_path(self, variant: Optional[str] = None) -> Path:
-        """
-        Get the STL output path for this part.
-
-        Args:
-            variant: Optional variant name (e.g., "1x1x3", "2x2x3")
-                    If None, uses "default"
-
-        Returns:
-            Path where the STL should be stored
-        """
-        suffix = variant or "default"
-        return self.stl_output_dir / f"gridfinity_{suffix}.stl"
 
     def can_generate_stl(self) -> tuple[bool, str]:
         """
@@ -443,28 +355,3 @@ def get_bin_dimensions(gridx: int = 1, gridy: int = 1, gridz: float = 3) -> Dict
         "grid_unit_mm": GRID_SIZE_MM,
         "height_unit_mm": HEIGHT_UNIT_MM,
     }
-
-
-def check_submodule() -> bool:
-    """Check if the gridfinity submodule is properly initialized."""
-    return DEFAULT.submodule_initialized
-
-
-if __name__ == "__main__":
-    # Demo usage
-    print(f"Gridfinity Part: {DEFAULT.name}")
-    print(f"Description: {DEFAULT.description}")
-    print(f"Submodule initialized: {DEFAULT.submodule_initialized}")
-    print()
-
-    # Show available variants
-    print("Available variants:")
-    for variant in DEFAULT.get_available_variants():
-        print(f"  {variant['name']}: {variant['description']}")
-    print()
-
-    # Calculate bounds for default bin
-    bounds = DEFAULT.get_bounds()
-    print("Default bin (1x1x3) dimensions:")
-    print(f"  Size: {bounds.size.x:.1f} x {bounds.size.y:.1f} x {bounds.size.z:.1f} mm")
-    print(f"  Volume: {bounds.volume:.0f} mm³")
