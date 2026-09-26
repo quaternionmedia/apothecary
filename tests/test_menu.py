@@ -48,6 +48,7 @@ from apothecary.menu import (
 from apothecary.primitives import Cube
 
 CONFORMANCE = Path(__file__).parent / "conformance" / "nine_cells.json"
+VIEWER = Path(__file__).parents[1] / "templates" / "fractal_viewer.html.j2"
 
 
 def _photo_site() -> Assembly:
@@ -950,7 +951,6 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     data-panel marks -- are the same, so a panel cannot appear on one side only."""
     import re
 
-    from apothecary import census
     from apothecary.menu import PANELS, address_of, carried_by
 
     root = resolve(
@@ -998,7 +998,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert carried_by("panel:toggle:contents").name == "VIEWER"
     # The page's sections are marked in its markup; the machine and its log are
     # registered when a printer is opened. Both lists are the resolver's, in order.
-    page = census.VIEWER.read_text(encoding="utf-8")
+    page = VIEWER.read_text(encoding="utf-8")
     marked = re.findall(r'class="panel-section"[^>]*data-panel="([\w-]+)"', page)
     registered = re.findall(r"panels\.register\('([\w-]+)'", page)
     assert marked == [pid for pid, _ in PANELS[: len(marked)]]
