@@ -24,34 +24,13 @@ from pathlib import Path
 import httpx
 import pytest
 
-from doc_capture import GENERATED_DOCS_ROOT, DocRecorder
+import apothecary  # noqa: F401  -- the guard, before base_url connects anywhere
 
+# tests/ itself, for helpers shared with the unit tests (firmware_helpers).
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-def pytest_addoption(parser):
-    """Add custom pytest options for E2E tests."""
-    parser.addoption(
-        "--start-server",
-        action="store_true",
-        default=False,
-        help="Automatically start the test server before E2E tests",
-    )
-    parser.addoption(
-        "--server-port",
-        action="store",
-        default="8765",
-        help="Port for the test server (default: 8765)",
-    )
-    parser.addoption(
-        "--generate-docs",
-        action="store_true",
-        default=False,
-        help=(
-            "Enable doc-workflow screenshot/video capture (tests marked 'docs'). "
-            "Off by default so a normal test run never writes to docs/generated/. "
-            "Driven by `apothecary docs generate`, not meant to be passed by hand "
-            "to a full test run."
-        ),
-    )
+from doc_capture import GENERATED_DOCS_ROOT, DocRecorder, Walkthrough  # noqa: E402
+from ports import refuse_a_held_port  # noqa: E402
 
 
 @pytest.fixture(scope="session")
@@ -61,10 +40,59 @@ def server_port(request):
 
 
 @pytest.fixture(scope="session")
-def test_server(request, server_port):
+def _picture_folder_if_known(request, tmp_path_factory):
+    """The picture folder, or None if nobody has said which one it is.
+
+    Kept separate from `picture_folder` on purpose. Starting the server must not
+    depend on a fixture that can skip: `test_server` is upstream of `base_url`,
+    which is upstream of every browser test, so a skip here would silently take
+    the whole browser suite with it — which is exactly what it did once.
+    """
+    already = os.environ.get("APOTHECARY_PICTURE_ROOT")
+    if already:
+        folder = Path(already)
+        folder.mkdir(parents=True, exist_ok=True)
+        return folder
+    if request.config.getoption("--start-server"):
+        return tmp_path_factory.mktemp("pictures")
+    return None
+
+
+@pytest.fixture(scope="session")
+def picture_folder(_picture_folder_if_known):
+    """The one folder the test server may read pictures from.
+
+    The server refuses any path outside a single folder, so a test that wants it
+    to look at a picture has to say where that folder is. Naming it here rather
+    than letting the server read anything is the point: the refusal is real, and
+    the first run of these tests hit it.
+
+    When something else started the server — `apothecary docs generate` does —
+    it has already chosen the folder and said so, and both sides have to agree.
+
+    Only tests that ask for this fixture are skipped when nobody said. Tests that
+    never show the server a picture run either way.
+    """
+    if _picture_folder_if_known is None:
+        pytest.skip(
+            "This test asks the server to look at a picture, and the server reads "
+            "pictures from one folder only. Nothing said which folder. Either run "
+            "with --start-server, or start the server yourself with "
+            "APOTHECARY_PICTURE_ROOT set to a folder and set the same value here."
+        )
+    return _picture_folder_if_known
+
+
+@pytest.fixture(scope="session")
+def test_server(request, server_port, _picture_folder_if_known, tmp_path_factory):
     """Start a test server if --start-server is passed.
 
     This fixture manages the server lifecycle for the entire test session.
+    The server sees the machine's real ports and toolchain but keeps its
+    firmware state (pins, flash records, cached boards) in a folder of its
+    own, so a test run never edits what the person has pinned in
+    ``~/.apothecary``; the printer and ring suites go further and run their
+    own servers on scripted ports.
     """
     should_start = request.config.getoption("--start-server")
 
@@ -78,6 +106,9 @@ def test_server(request, server_port):
     # Set environment for faster startup
     env = os.environ.copy()
     env["APOTHECARY_VIEWER_PATH"] = ""
+    env["APOTHECARY_STATE_DIR"] = str(tmp_path_factory.mktemp("state"))
+    if _picture_folder_if_known is not None:
+        env["APOTHECARY_PICTURE_ROOT"] = str(_picture_folder_if_known)
 
     server_cmd = [
         sys.executable,
@@ -88,12 +119,18 @@ def test_server(request, server_port):
         "127.0.0.1",
         "--port",
         server_port,
+        # Let go of idle keep-alive connections quickly on SIGTERM. The browser
+        # that held them is torn down in the same breath, and a server that
+        # lingers on the port is what refuse_a_held_port() refuses next run.
+        "--timeout-graceful-shutdown",
+        "1",
     ]
 
     # DEVNULL, not PIPE: nothing here ever reads server_proc.stdout/stderr,
     # and an unread PIPE deadlocks once its OS buffer fills (confirmed by
     # direct reproduction against this same server-launch pattern in
     # apothecary/cli/testing.py -- see the comment there).
+    refuse_a_held_port(server_port)
     server_proc = subprocess.Popen(
         server_cmd,
         cwd=root,
@@ -218,6 +255,56 @@ def doc_recorder(page, docs_enabled, request):
         video_dir = GENERATED_DOCS_ROOT / "_videos_raw" / _slugify_test_name(request.node.name)
         video_dir.mkdir(parents=True, exist_ok=True)
         marker = video_dir / "workflows.txt"
-        marker.write_text(
-            "\n".join(r.workflow for r in recorders) + "\n", encoding="utf-8"
+        marker.write_text("\n".join(r.workflow for r in recorders) + "\n", encoding="utf-8")
+
+
+# Chromium's fake camera: a synthetic picture with colour bars and a moving
+# mark, so there is a camera to allow, see live, capture from and place in the
+# world on every machine, and no real camera is ever opened by a test.
+FAKE_CAMERA = ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"]
+
+
+@pytest.fixture
+def camera_page(browser_type, base_url):
+    """A page in a browser of its own, launched with the fake camera and the
+    permission to use it already granted."""
+    browser = browser_type.launch(args=FAKE_CAMERA)
+    context = browser.new_context(viewport={"width": 1280, "height": 800}, base_url=base_url)
+    context.grant_permissions(["camera"], origin=base_url)
+    page = context.new_page()
+    yield page
+    context.close()
+    browser.close()
+
+
+@pytest.fixture
+def walkthrough(page):
+    """The one demonstration's recorder, written out however the run ends.
+
+    Deliberately not gated on --generate-docs, which is what the screenshot
+    machinery above still uses. The walkthrough is the page a newcomer meets;
+    producing it only when somebody remembers a flag is what made it a second
+    description of behaviour rather than a record of a run.
+    """
+    made: list[Walkthrough] = []
+
+    def _make(ordinal, slug, title, intro, runtime, does_not_show, page=page):
+        # `page` may be another browser's -- the one launched with a fake
+        # camera, for the page that places one -- and its screenshots are then
+        # of that browser.
+        recorder = Walkthrough(
+            page=page,
+            ordinal=ordinal,
+            slug=slug,
+            title=title,
+            intro=intro,
+            runtime=runtime,
+            does_not_show=does_not_show,
         )
+        made.append(recorder)
+        return recorder
+
+    yield _make
+
+    for recorder in made:
+        recorder.write()

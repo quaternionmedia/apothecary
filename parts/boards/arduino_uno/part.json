@@ -1,0 +1,34 @@
+{
+  "name": "arduino_uno",
+  "description": "Arduino Uno R3: a 68.6 x 53.3 mm board from the published drawing -- holes, headers, USB-B and barrel jack where every shield and case expects them.",
+  "category": "electrical",
+  "tags": [
+    "board",
+    "arduino",
+    "avr",
+    "devkit"
+  ],
+  "preview_color": [
+    0.0,
+    0.5,
+    0.5
+  ],
+  "source": {
+    "title": "arduino_uno from published dimensions",
+    "author": "Quaternion Media",
+    "license": "MIT",
+    "note": "Built in OpenSCAD from the maker's published board drawing; no mesh of anyone's was used."
+  },
+  "bounds": {
+    "min": [
+      -6.5,
+      0.0,
+      -1.5
+    ],
+    "max": [
+      68.58,
+      53.34,
+      13.0
+    ]
+  }
+}

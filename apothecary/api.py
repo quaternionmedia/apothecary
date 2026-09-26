@@ -13,19 +13,26 @@ On startup, missing STLs are automatically generated if OpenSCAD is available.
 import asyncio
 import hashlib
 import json
+import mimetypes
 import os
+import re
 from contextlib import asynccontextmanager, suppress
 from importlib import import_module
 from pathlib import Path
 from random import choice
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
 from fastapi import Body, FastAPI, HTTPException, Query, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError
 
 from .booleans import Difference, Intersection, Union
 from .core import OpenSCADObject
+from .datum_core_site import create_datum_core_site, validate_datum_core
+from .docs_site import router as docs_router
 from .example_hierarchy import (
     PRINTER_STATUSES,
     Job,
@@ -35,15 +42,25 @@ from .example_hierarchy import (
     validate_garage_layout,
 )
 from .example_parts_library import create_parts_library_site, validate_parts_library
+from .firmware import devices as firmware_devices
+from .firmware import gcode as firmware_gcode
+from .firmware.api import _device_view as firmware_device_view
+from .firmware.api import router as firmware_router
+from .firmware.bindings import bindings_for_site, device_for_identity, same_device
+from .firmware.models import DeviceAttachRequest
+from .firmware.toolchains import ToolchainError
 from .hierarchy import Assembly
 from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
 from .primitives import Cube, Cylinder, Sphere
 from .projects.parts.skeleton import ROOT
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
-from .projects.registry import scan_projects
+from .projects.parts.stl_renderer import write_params_sidecar
+from .projects.registry import resolve_wrapper_module, scan_projects, stl_output_for
+from .routes.pictures import router as pictures_router
 from .scene import Scene
 from .site_store import SiteStore, UnknownSiteError
+from .stays_local import LocalOnly
 from .templates import TemplateRenderer
 from .transforms import Rotate, Scale, Translate
 from .viewer import render_fractal_viewer_page
@@ -71,7 +88,7 @@ async def _generate_missing_stls():
     missing = []
 
     for part in parts:
-        stl_path = part.path.with_suffix(".stl")
+        stl_path = stl_output_for(part)
         if not stl_path.exists():
             missing.append(part)
 
@@ -81,7 +98,7 @@ async def _generate_missing_stls():
     print(f"Generating {len(missing)} missing STL file(s)...")
 
     for part in missing:
-        stl_path = part.path.with_suffix(".stl")
+        stl_path = stl_output_for(part)
         print(f"  Generating {part.name}...", end=" ", flush=True)
 
         result = await renderer.render_stl_async(part.path, stl_path, timeout=120)
@@ -132,6 +149,60 @@ def _vec(data):
     return Vector3D(x=data.get("x", 0), y=data.get("y", 0), z=data.get("z", 0))
 
 
+def _rehydrate_stated(t, obj_dict):
+    """Build the shape the description says it is, or None if the name is unknown.
+
+    Returning None rather than raising leaves an unrecognised name to the
+    guessing below, which is what a hand-written document with a typo in it
+    used to get.
+    """
+    comment = obj_dict.get("comment")
+    size = obj_dict.get("size")
+
+    def kids():
+        # Built only for the shapes that hold other shapes. Building it for
+        # every shape made a bad child break a parent that never looks at one.
+        return [_rehydrate(k) if isinstance(k, dict) else k for k in obj_dict.get("children", [])]
+
+    if t == "cube":
+        return Cube(
+            size=_vec(size) if isinstance(size, dict) else (1.0 if size is None else size),
+            center=obj_dict.get("center", False),
+            comment=comment,
+        )
+    if t == "sphere":
+        return Sphere(r=obj_dict.get("r", 1.0), fn=obj_dict.get("fn"), comment=comment)
+    if t == "cylinder":
+        return Cylinder(
+            h=obj_dict.get("h", 1.0),
+            r=obj_dict.get("r"),
+            r1=obj_dict.get("r1"),
+            r2=obj_dict.get("r2"),
+            center=obj_dict.get("center", False),
+            fn=obj_dict.get("fn"),
+            comment=comment,
+        )
+    if t == "union":
+        return Union(children=kids(), comment=comment)
+    if t == "difference":
+        return Difference(children=kids(), comment=comment)
+    if t == "intersection":
+        return Intersection(children=kids(), comment=comment)
+    if t == "translate" and "v" in obj_dict:
+        return Translate(v=_vec(obj_dict["v"]), children=kids(), comment=comment)
+    if t == "rotate" and "a" in obj_dict:
+        a = obj_dict["a"]
+        return Rotate(
+            a=_vec(a) if isinstance(a, dict) else a,
+            v=_vec(obj_dict["v"]) if isinstance(obj_dict.get("v"), dict) else None,
+            children=kids(),
+            comment=comment,
+        )
+    if t == "scale" and "v" in obj_dict:
+        return Scale(v=_vec(obj_dict["v"]), children=kids(), comment=comment)
+    return None
+
+
 def _rehydrate(obj_dict):
     """Best-effort reconstruction of OpenSCAD objects from a plain dict.
 
@@ -139,6 +210,23 @@ def _rehydrate(obj_dict):
     otherwise infers by field set.
     """
     t = obj_dict.get("type")
+
+    # A stated type wins outright. The guesses below overlap — a tube and a ball
+    # both carry a radius — so mixing "what it says" with "what it looks like"
+    # let the first matching guess answer for a shape that had already said what
+    # it was. `docs/scene-json.md` promises the stated type is honoured.
+    if t is not None:
+        try:
+            stated = _rehydrate_stated(t, obj_dict)
+        except Exception:
+            # An unbuildable description falls through to the guessing below,
+            # which is what it got before the stated name was honoured at all.
+            # Turning "renders something odd" into an error is a separate
+            # decision; see docs/plans/features/scene-document-validation.md.
+            stated = None
+        if stated is not None:
+            return stated
+
     if t == "cube" or ("size" in obj_dict and isinstance(obj_dict.get("size"), dict)):
         size = obj_dict.get("size")
         size_val = _vec(size) if isinstance(size, dict) else size
@@ -187,7 +275,35 @@ app = FastAPI(
     version="0.1.0",
     description="Lean OpenSCAD generation toolkit exposed via FastAPI endpoints",
     lifespan=lifespan,
+    # /docs is the project's documentation (docs_site.py). FastAPI's own Swagger
+    # and ReDoc pages are off: each loads its script from a public CDN, which a
+    # page here may not do (apothecary/stays_local.py). The API is described by
+    # /openapi.json, which is served from here.
+    docs_url=None,
+    redoc_url=None,
 )
+
+# The viewer's 3D library, kept here rather than fetched from a public website
+# while somebody is using it. See apothecary/static/vendor/three/README.md: with
+# the network switched off, fetching it meant the viewer never loaded at all.
+# A CDN copy is also exactly what an ad blocker or a corporate proxy drops --
+# and when it goes, the page's script never executes, so the canvas, the
+# contents list and the code panel come up empty together while the static
+# markup still reads "Layout valid". Frontend dependencies are vendored per
+# the house-stack record for the same reason.
+STATIC_ROOT = Path(__file__).resolve().parent / "static"
+# Personal data stays on this machine by the shape of the program: the app
+# answers a client on loopback only and fences every page it sends
+# (apothecary/stays_local.py). Outermost, so static files are under it too.
+app.add_middleware(LocalOnly)
+app.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
+app.include_router(docs_router)
+# Mounted before the photo routes below, so /photos/pictures and /photos/gather
+# are matched before /photos/{name} can take "pictures" for a name. The router
+# reaches back into this module only inside its handlers.
+app.include_router(pictures_router)
+THREE_DIR = STATIC_ROOT / "vendor" / "three"
+THREE_IS_VENDORED = (THREE_DIR / "three.module.js").is_file()
 
 renderer = TemplateRenderer()
 
@@ -210,8 +326,7 @@ def _part_template() -> str:
 
 
 def _load_part_wrapper(name: str):
-    module_name = _sanitize_part_name(name)
-    full = f"apothecary.projects.parts.{module_name}"
+    full = resolve_wrapper_module(name, ROOT)
     try:
         module = import_module(full)
     except ModuleNotFoundError as exc:  # pragma: no cover - error path
@@ -226,6 +341,17 @@ def _load_part_wrapper(name: str):
 
 def _available_part_names() -> List[str]:
     return sorted({p.name for p in scan_projects(ROOT) if p.kind == "part" and p.wrapper})
+
+
+def _repo_relative_path(path: Path) -> str:
+    """Return a repository-relative POSIX path when possible.
+
+    API responses should avoid exposing absolute local filesystem paths.
+    """
+    try:
+        return path.relative_to(ROOT).as_posix()
+    except ValueError:
+        return path.name
 
 
 def _normalize_params(part, params_query: str | None) -> tuple[Dict[str, object], str]:
@@ -256,7 +382,7 @@ def _render_part_include(part, params_json: str) -> str:
     ctx = {
         "part": part,
         "params_json": params_json,
-        "source_posix": part.source_file.as_posix(),
+        "source_posix": _repo_relative_path(part.source_file),
     }
     return renderer.render_template(template_str, ctx)
 
@@ -267,8 +393,12 @@ def _part_metadata(part) -> Dict[str, object]:
         "description": part.description,
         "category": part.category,
         "tags": part.tags,
-        "readme": str(part.readme_path) if part.readme_path and part.readme_path.exists() else None,
-        "source_file": part.source_file.as_posix(),
+        "readme": (
+            _repo_relative_path(part.readme_path)
+            if part.readme_path and part.readme_path.exists()
+            else None
+        ),
+        "source_file": _repo_relative_path(part.source_file),
         "has_params": bool(part.params_model),
     }
 
@@ -308,6 +438,9 @@ def _part_payload(part, params_query: str | None) -> Dict[str, object]:
         }
     )
     return metadata
+
+
+app.include_router(firmware_router)
 
 
 @app.get("/")
@@ -465,9 +598,9 @@ async def get_part_jscad(name: str, params: str | None = Query(None, alias="para
     # Create a JSCAD module with documentation
     jscad_code = f"""/**
  * {part.name}
- * @category {part.category or 'Parts'}
- * @description {part.description or 'No description'}
- * @tags {', '.join(part.tags) if part.tags else 'apothecary'}
+ * @category {part.category or "Parts"}
+ * @description {part.description or "No description"}
+ * @tags {", ".join(part.tags) if part.tags else "apothecary"}
  */
 
 const jscad = require('@jscad/modeling')
@@ -526,8 +659,21 @@ async def get_part_stl(name: str):
         raise HTTPException(status_code=500, detail=f"Failed to read STL: {exc}") from exc
 
 
+class StlGenerateRequest(BaseModel):
+    """Body for a parameterised STL generation."""
+
+    params: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Parameter overrides, validated against the part's own model.",
+    )
+
+
 @app.post("/parts/{name}/stl/generate")
-async def generate_part_stl(name: str, force: bool = Query(False)):
+async def generate_part_stl(
+    name: str,
+    force: bool = Query(False),
+    body: Optional[StlGenerateRequest] = None,
+):
     """
     Generate an STL file from the part's SCAD source.
 
@@ -536,6 +682,9 @@ async def generate_part_stl(name: str, force: bool = Query(False)):
     Args:
         name: Part name
         force: If True, regenerate even if STL already exists
+        params: Parameter overrides, validated against the part's own model
+            before rendering. Supplying any implies a regeneration, since the
+            STL on disk was rendered from something else.
 
     Returns:
         Generation status with download URL on success
@@ -548,6 +697,27 @@ async def generate_part_stl(name: str, force: bool = Query(False)):
             status_code=503, detail="OpenSCAD not installed. Cannot generate STL files."
         )
 
+    # OpenSCAD accepts any -D name, defined or not, so an unrecognised
+    # parameter would render the defaults and report success. Reject it here.
+    params = body.params if body else {}
+    overrides = {}
+    if params:
+        model_cls = getattr(part, "params_model", None)
+        if model_cls is not None:
+            unknown = sorted(set(params) - set(model_cls.model_fields))
+            if unknown:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"unknown parameter(s): {', '.join(unknown)}",
+                )
+            try:
+                validated = model_cls(**params)
+            except ValidationError as exc:
+                raise HTTPException(status_code=422, detail=exc.errors()) from exc
+            overrides = {key: getattr(validated, key) for key in params}
+        else:
+            overrides = dict(params)
+
     # Check if this part has special requirements
     if hasattr(part, "can_generate_stl"):
         can_gen, reason = part.can_generate_stl()
@@ -557,7 +727,7 @@ async def generate_part_stl(name: str, force: bool = Query(False)):
             )
 
     # Check if we already have an up-to-date STL
-    if not force and part.stl_file and part.stl_file.exists():
+    if not force and not overrides and part.stl_file and part.stl_file.exists():
         return {
             "success": True,
             "message": "STL already exists (use force=true to regenerate)",
@@ -574,14 +744,19 @@ async def generate_part_stl(name: str, force: bool = Query(False)):
 
             part_renderer = OpenSCADRenderer(openscad_path=str(custom_path))
 
-    # Generate STL - use part's custom output path if defined
+    # Generate STL - the part's own output path, and whatever overrides were
+    # validated above; a part naming its own renderer must still honour them.
     stl_path = part.get_stl_output_path()
-    result = await part_renderer.render_stl_async(part.source_file, stl_path)
+    result = await part_renderer.render_stl_async(
+        part.source_file, stl_path, params=overrides or None
+    )
 
     if not result.success:
         raise HTTPException(
             status_code=500, detail=f"STL generation failed: {result.error_message}"
         )
+
+    write_params_sidecar(stl_path, overrides)
 
     return {
         "success": True,
@@ -589,6 +764,168 @@ async def generate_part_stl(name: str, force: bool = Query(False)):
         "stl_url": f"/parts/{name}/stl",
         "regenerated": True,
         "render_time_seconds": result.render_time_seconds,
+        "params": jsonable_encoder(overrides),
+        "bounds": jsonable_encoder(part.get_bounds(overrides or None)),
+    }
+
+
+@app.get("/parts/{name}/params")
+async def get_part_params(name: str):
+    """What a part accepts, in a form a control surface can build itself from.
+
+    Types, defaults and bounds come from the part's own Pydantic model, so the
+    dashboard cannot drift from what the renderer will actually accept.
+    ``contested`` carries the parameters whose value this project's sources
+    disagree about, with the provenance of each candidate -- an ambiguity a
+    reader can turn is worth more than one they have to argue about.
+    """
+    part = _load_part_wrapper(name)
+    model_cls = getattr(part, "params_model", None)
+    if model_cls is None:
+        raise HTTPException(status_code=404, detail=f"Part '{name}' declares no parameters")
+
+    schema = model_cls.model_json_schema()
+    defaults = model_cls()
+
+    fields = []
+    for field_name, spec in schema.get("properties", {}).items():
+        default = getattr(defaults, field_name)
+        candidates = [c.model_dump() for c in part.contested.get(field_name, [])]
+        # A slider needs a range. Pydantic states one only where the field
+        # constrains it, so the rest get a span around the default wide enough
+        # to be worth dragging -- and wide enough to reach every candidate.
+        interesting = [default, *(c["value"] for c in candidates)]
+        low = spec.get("minimum")
+        # gt=0 arrives as exclusiveMinimum, and a slider stopping exactly there
+        # offers a value the model then refuses -- which is the one thing this
+        # endpoint exists to prevent.
+        exclusive_low = spec.get("exclusiveMinimum")
+        high = spec.get("maximum")
+        if not isinstance(default, (int, float)):
+            low = high = None
+        else:
+            if low is None:
+                low = float(exclusive_low) if exclusive_low is not None else None
+            else:
+                low = float(low)
+            if low is None:
+                low = max(0.0, min(interesting) * 0.25)
+            high = max(interesting) * 2.5 if high is None else float(high)
+            if exclusive_low is not None and low <= float(exclusive_low):
+                # One slider step above the bound it may not touch.
+                low = float(exclusive_low) + (high - float(exclusive_low)) / 200
+
+        fields.append(
+            {
+                "name": field_name,
+                "type": "enum" if spec.get("pattern") else ("number" if high else "text"),
+                "default": default,
+                "min": low,
+                "max": high,
+                "pattern": spec.get("pattern"),
+                "description": spec.get("description"),
+                "contested": candidates,
+            }
+        )
+
+    return {
+        "part": part.name,
+        "description": part.description,
+        "fields": fields,
+        "bounds": jsonable_encoder(part.get_bounds()),
+    }
+
+
+def _parse_build_volume(raw: Optional[str]):
+    """`X,Y,Z` as a tuple, or None. Refuses anything else rather than guessing."""
+    if not raw:
+        return None
+    try:
+        parsed = tuple(float(v) for v in raw.split(","))
+    except ValueError:
+        raise HTTPException(status_code=422, detail="build_volume wants X,Y,Z") from None
+    if len(parsed) != 3:
+        raise HTTPException(status_code=422, detail="build_volume wants three numbers")
+    return parsed
+
+
+@app.get("/parts/{name}/checklist")
+async def get_part_checklist(name: str, build_volume: Optional[str] = Query(None)):
+    """Whether this part is ready to print and check against a real one.
+
+    The same assessment `apothecary parts checklist` prints, so the viewer and
+    the command line cannot disagree about whether something is buildable.
+    A question that could not be asked is reported as `unknown`, never as a
+    pass.
+    """
+    from .projects.parts.readiness import assess
+
+    part = _load_part_wrapper(name)
+
+    report = assess(part, build_volume=_parse_build_volume(build_volume))
+    return {
+        "part": report.part,
+        "ready": report.ready,
+        "blocked": len(report.blocked),
+        "unknown": len(report.unknown),
+        "checks": [
+            {"name": c.name, "state": c.state, "detail": c.detail, "fix": c.fix}
+            for c in report.checks
+        ],
+    }
+
+
+@app.post("/parts/{name}/validate")
+async def validate_part_params(name: str, body: Optional[StlGenerateRequest] = None):
+    """Check a staged parameter set without rendering anything.
+
+    The step between moving a slider and spending thirty seconds of OpenSCAD on
+    it: the values go through the part's own model, and the envelope they would
+    produce comes back. A set that cannot be rendered is rejected here, where it
+    costs nothing.
+    """
+    part = _load_part_wrapper(name)
+    params = body.params if body else {}
+
+    model_cls = getattr(part, "params_model", None)
+    if model_cls is None:
+        return {"valid": True, "params": {}, "errors": [], "bounds": None}
+
+    unknown = sorted(set(params) - set(model_cls.model_fields))
+    if unknown:
+        return {
+            "valid": False,
+            "params": {},
+            "errors": [{"field": u, "message": "no such parameter"} for u in unknown],
+            "bounds": None,
+        }
+
+    try:
+        validated = model_cls(**params)
+    except ValidationError as exc:
+        return {
+            "valid": False,
+            "params": {},
+            "errors": [
+                {"field": ".".join(str(p) for p in e["loc"]), "message": e["msg"]}
+                for e in exc.errors()
+            ],
+            "bounds": None,
+        }
+
+    staged = {key: getattr(validated, key) for key in params}
+    # The envelope the staged set would produce, so a reader sees the
+    # consequence before paying for the render.
+    try:
+        bounds = part.get_bounds(staged or None)
+    except Exception:  # pragma: no cover - a wrapper that cannot size itself
+        bounds = None
+
+    return {
+        "valid": True,
+        "params": jsonable_encoder(staged),
+        "errors": [],
+        "bounds": jsonable_encoder(bounds),
     }
 
 
@@ -619,9 +956,25 @@ _site_store = SiteStore(
     {
         "garage": (create_example_site, validate_garage_layout),
         "parts_library": (create_parts_library_site, validate_parts_library),
+        "datum_core": (create_datum_core_site, validate_datum_core),
     }
 )
 _job_store = JobStore()
+
+# The site /viewer opens on. Named rather than "whichever sorts first", so that
+# registering a new site cannot silently move the front door.
+DEFAULT_VIEWER_SITE = "garage"
+
+
+# The only types a picture is served as. Anything else is handed back as bytes
+# with no claim about what it is.
+PICTURE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp", "image/tiff"}
+
+
+def _photo_shelf():
+    from .vision.shelf import shelf
+
+    return shelf()
 
 
 def _get_site_or_404(name: str) -> Assembly:
@@ -657,9 +1010,54 @@ def _node_stl_cache_paths(scad_text: str) -> tuple[Path, Path]:
     render. Unlike a registered part (which has a fixed source file to key
     off of), an arbitrary Assembly subtree has no path of its own on disk --
     the rendered SCAD text itself is the only stable identity available.
+
+    A scene referring to registered parts imports them by repository-relative
+    path, and OpenSCAD resolves a relative ``import()`` against the *source
+    file's* own directory rather than the process working directory. So the
+    source has to sit at the repository root to render at all, while the STL
+    it produces belongs in the cache. It is scratch: written, rendered, removed.
+
+    A mesh the text imports is part of the identity too: the same
+    ``import("parts/ender3/ender3.stl")`` after the file was regenerated is a
+    different render, so each imported file's size and mtime go into the key.
     """
-    digest = hashlib.sha256(scad_text.encode("utf-8")).hexdigest()[:20]
-    return _NODE_STL_CACHE_DIR / f"{digest}.scad", _NODE_STL_CACHE_DIR / f"{digest}.stl"
+    digest = hashlib.sha256(scad_text.encode("utf-8"))
+    for match in re.finditer(r'import\("([^"]+)"', scad_text):
+        imported = Path(match.group(1))
+        imported = imported if imported.is_absolute() else ROOT / imported
+        try:
+            stat = imported.stat()
+            digest.update(f"{match.group(1)}:{stat.st_size}:{stat.st_mtime_ns}".encode())
+        except OSError:
+            digest.update(f"{match.group(1)}:missing".encode())
+    key = digest.hexdigest()[:20]
+    return ROOT / f".node-stl-{key}.scad", _NODE_STL_CACHE_DIR / f"{key}.stl"
+
+
+async def _build_parts_referred_to(node: Assembly) -> None:
+    """Generate the STL of every registered part the subtree refers to and lacks."""
+    wanted = set()
+
+    def visit(n: Assembly) -> None:
+        if n.part_ref and n.base is None:
+            wanted.add(n.part_ref)
+        for child in (*n.children, *n.additions, *n.subtractions):
+            visit(child)
+
+    visit(node)
+    if not wanted:
+        return
+    renderer = get_stl_renderer()
+    if not renderer.is_available:
+        return
+    by_name = {p.name: p for p in scan_projects(ROOT) if p.kind == "part"}
+    for ref in sorted(wanted):
+        item = by_name.get(ref)
+        if item is None:
+            continue
+        stl_path = stl_output_for(item)
+        if not stl_path.exists():
+            await renderer.render_stl_async(item.path, stl_path, timeout=120)
 
 
 def _bounds_dict(bounds: BoundingBox3D | None) -> Dict[str, List[float]] | None:
@@ -715,8 +1113,14 @@ def _primitive_descriptor(obj: OpenSCADObject, offset: Vector3D) -> Dict[str, ob
         return _primitive_descriptor(obj.children[0], offset + obj.v)
 
     if isinstance(obj, Cube):
-        size = obj.size if isinstance(obj.size, Vector3D) else Vector3D(x=obj.size, y=obj.size, z=obj.size)
-        local_min = Vector3D(x=-size.x / 2, y=-size.y / 2, z=-size.z / 2) if obj.center else Vector3D()
+        size = (
+            obj.size
+            if isinstance(obj.size, Vector3D)
+            else Vector3D(x=obj.size, y=obj.size, z=obj.size)
+        )
+        local_min = (
+            Vector3D(x=-size.x / 2, y=-size.y / 2, z=-size.z / 2) if obj.center else Vector3D()
+        )
         bounds = BoundingBox3D(min_point=local_min + offset, max_point=local_min + size + offset)
         return {"type": "cube", "size": [size.x, size.y, size.z], "bounds": _bounds_dict(bounds)}
 
@@ -733,7 +1137,8 @@ def _primitive_descriptor(obj: OpenSCADObject, offset: Vector3D) -> Dict[str, ob
     if isinstance(obj, Sphere):
         r = obj.r
         bounds = BoundingBox3D(
-            min_point=Vector3D(x=-r, y=-r, z=-r) + offset, max_point=Vector3D(x=r, y=r, z=r) + offset
+            min_point=Vector3D(x=-r, y=-r, z=-r) + offset,
+            max_point=Vector3D(x=r, y=r, z=r) + offset,
         )
         return {"type": "sphere", "r": r, "bounds": _bounds_dict(bounds)}
 
@@ -799,6 +1204,7 @@ def _assembly_tree(
         "status": node.status,
         "comment": node.comment,
         "part_ref": node.part_ref,
+        "sketch_ref": node.sketch_ref,
         "category": category,
         "position": {"x": world_position.x, "y": world_position.y, "z": world_position.z},
         "footprint": _bounds_dict(node.footprint),
@@ -808,7 +1214,14 @@ def _assembly_tree(
             if node.build_volume
             else None
         ),
-        "primitive": _primitive_descriptor(node.base, world_position) if node.base is not None else None,
+        "build_origin": (
+            [node.build_origin.x, node.build_origin.y, node.build_origin.z]
+            if node.build_origin
+            else None
+        ),
+        "primitive": (
+            _primitive_descriptor(node.base, world_position) if node.base is not None else None
+        ),
         "children": [
             {**_assembly_tree(child, world_position, category), "composition": composition}
             for child, composition in composed
@@ -817,12 +1230,28 @@ def _assembly_tree(
 
 
 def _site_payload(site, report) -> Dict[str, object]:
+    """The site as the viewer consumes it, including its generated OpenSCAD.
+
+    ``scad`` used to be attached only by the layout route, so a site that had
+    merely been loaded -- never dragged -- left the viewer's code panel showing
+    its "Load a site..." placeholder indefinitely. It is string generation over
+    a tree already in memory, not an OpenSCAD process, so every read carries it.
+
+    A node that cannot compile is reported as a comment rather than a 500: the
+    panel is one of several surfaces on the page, and the rest of them work.
+    """
+    try:
+        scad = site.render()
+    except ValueError as exc:
+        scad = f"// This site has no generated OpenSCAD: {exc}"
+
     return {
         "name": site.name,
         "structures": [_structure_summary(s) for s in site.children],
         "tree": _assembly_tree(site),
         "violations": [v.model_dump() for v in report.violations],
         "is_valid": report.is_valid,
+        "scad": scad,
     }
 
 
@@ -838,6 +1267,287 @@ class LayoutRequest(BaseModel):
 
 class StatusRequest(BaseModel):
     status: str
+
+
+SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+# Words that are routes of their own under /photos/ (apothecary/routes/pictures.py):
+# an arrangement so named could be built and then never fetched or forgotten,
+# because its address is theirs -- and forgetting it would forget the kept
+# pictures instead.
+RESERVED_NAMES = frozenset({"pictures", "gather"})
+
+
+def _check_name(name: str) -> str:
+    """Refuse a name that is not simply a name.
+
+    A name becomes part of a web address and a key in a register. One
+    containing a slash can be stored and then never fetched or deleted again,
+    because the address for it cannot be typed; one containing dots walks up
+    directories in anything that later joins it to a path; one that is a
+    route's own word is answered by the route, never by the arrangement.
+    """
+    if not SAFE_NAME.match(name or ""):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{name!r} is not a usable name. Letters, numbers, dashes and "
+                "underscores, starting with a letter or number, up to 64 characters."
+            ),
+        )
+    if name in RESERVED_NAMES:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{name!r} is the address of a route under /photos/; "
+                "name the arrangement something else."
+            ),
+        )
+    return name
+
+
+class LookAtPicture(BaseModel):
+    """Ask the server to look at a picture already on this machine."""
+
+    picture: str
+    name: Optional[str] = None
+    width_mm: Optional[float] = Field(None, gt=0, allow_inf_nan=False)
+    finder: str = "plain"
+
+
+def _picture_root() -> Path:
+    """The one folder pictures may be read from.
+
+    A server that reads any path it is handed is a server that will read
+    ``/etc/shadow`` the day somebody points it at a network it did not expect.
+    Everything here is meant to run on one machine and listen only to it, and
+    that is still not a reason to leave the door open.
+
+    Set ``APOTHECARY_PICTURE_ROOT`` to say where pictures live. Without it, the
+    folder the server was started in. Never the whole machine, and never the
+    person's home folder or anything above it: a picture root is a folder of
+    pictures, and those hold everything else of theirs.
+    """
+    named = os.environ.get("APOTHECARY_PICTURE_ROOT") or str(Path.cwd())
+    root = Path(named).resolve()
+    if not root.is_dir():
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"pictures are supposed to be read from {root}, and there is no "
+                "folder there. Set APOTHECARY_PICTURE_ROOT to one that exists."
+            ),
+        )
+    if root == Path(root.anchor):
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"pictures are supposed to be read from {root}, which is the whole "
+                "machine. That turns the restriction off rather than setting it."
+            ),
+        )
+    homes = _home_folders()
+    state = _state_folder()
+    if any(root == home or root in home.parents for home in homes) or (
+        root == state or state in root.parents
+    ):
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"pictures are supposed to be read from {root}, which holds everything "
+                "of yours, not a folder of pictures. Start the server in a folder of "
+                "pictures, or set APOTHECARY_PICTURE_ROOT to one."
+            ),
+        )
+    return root
+
+
+def _home_folders() -> List[Path]:
+    """The person's home: by HOME, and by the account, which a variable cannot move."""
+    folders = [Path.home()]
+    try:
+        import pwd
+
+        folders.append(Path(pwd.getpwuid(os.getuid()).pw_dir))
+    except (ImportError, KeyError, AttributeError):
+        pass
+    return [f.expanduser().resolve() for f in folders]
+
+
+def _state_folder() -> Path:
+    """Where the serial numbers, camera labels and readings live: never pictures."""
+    from .firmware.devices import state_dir
+
+    return state_dir().expanduser().resolve()
+
+
+def _picture_within_root(where: Path) -> Path:
+    """Check a picture is inside the one folder, following any links first.
+
+    Checked every time it is used, not only when it arrives. A file that passed
+    on the way in can be swapped for a link pointing anywhere afterwards, and
+    then the door that refused it is serving it.
+    """
+    root = _picture_root()
+    try:
+        settled = Path(where).resolve()
+        settled.relative_to(root)
+    except (ValueError, OSError):
+        raise HTTPException(
+            status_code=403, detail=f"pictures are read from {root} and nowhere else"
+        ) from None
+    # `is_file` rather than `exists`: a pipe exists, and opening one waits for
+    # somebody to write to it, which is never. It also has to be guarded,
+    # because asking about an impossible path is itself an error rather than a
+    # no.
+    try:
+        real = settled.is_file()
+    except OSError as exc:
+        raise HTTPException(
+            status_code=400, detail=f"{settled} cannot be looked at: {exc}"
+        ) from None
+    if not real:
+        raise HTTPException(
+            status_code=404,
+            detail=f"there is no picture at {settled}, or it is not an ordinary file",
+        )
+    return settled
+
+
+@app.post("/photos")
+def look_at_picture(request: LookAtPicture):
+    """Look at a picture on this machine and shelve what was built from it.
+
+    The picture is read from disk each time and nothing is copied anywhere. The
+    arrangement is held in memory for as long as the server runs.
+    """
+    from .vision import ScaleReference
+    from .vision import build as build_arrangement
+    from .vision import get as get_finder
+    from .vision.shelf import shelf
+
+    root = _picture_root()
+    asked = Path(request.picture)
+    where = _picture_within_root(asked if asked.is_absolute() else root / asked)
+
+    name = _check_name(request.name or where.stem)
+    stock = shelf()
+    if name in _site_store.names() and name not in stock:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{name!r} is already the name of an arrangement that did not come "
+                "from a picture. Choose another name rather than covering it over."
+            ),
+        )
+
+    try:
+        finder = get_finder(request.finder)
+    except KeyError:
+        raise HTTPException(status_code=400, detail=f"no finder named {request.finder!r}") from None
+
+    try:
+        picture = finder.look(where)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"{where} could not be read: {exc}") from None
+
+    scale = ScaleReference(millimetres_across=request.width_mm) if request.width_mm else None
+    made = build_arrangement(picture, name=name, scale=scale, picture_path=where)
+
+    stock.put(made)
+    _site_store.add(made.site.name, stock.factory(made.site.name), stock.checker(made.site.name))
+    return get_photo_album(made.site.name)
+
+
+@app.get("/photos")
+def list_photo_sites():
+    """Every arrangement built from a picture in this session."""
+    return _photo_shelf().names()
+
+
+@app.get("/photos/{name}")
+def get_photo_album(name: str):
+    """What is known about each piece of one arrangement built from a picture.
+
+    Kept beside the arrangement rather than inside it, and joined to it by the
+    same dotted path the rest of the API uses to name a node.
+    """
+    stock = _photo_shelf()
+    if name not in stock:
+        raise HTTPException(status_code=404, detail=f"no picture-built arrangement named {name!r}")
+    album = stock.album(name)
+    return {
+        "name": name,
+        "picture": album.picture_name,
+        "pixel_width": album.pixel_width,
+        "pixel_height": album.pixel_height,
+        "finder": album.finder,
+        "millimetres_across": album.millimetres_across,
+        "sized": album.sized,
+        "groups": album.groups(),
+        "least_sure": album.unsure(),
+        "share_a_machine_guessed": album.guessed_share(),
+        "seen_in_several": album.seen_in_several(),
+        "pieces": {
+            path: {
+                **about.model_dump(),
+                "summary": about.summary(),
+                "sightings": about.sightings,
+            }
+            for path, about in album.provenance.items()
+        },
+    }
+
+
+@app.delete("/photos/{name}")
+def forget_photo_site(name: str):
+    """Forget an arrangement built from a picture.
+
+    Anything that can be added while the server runs has to be removable while
+    it runs, or whatever adds one has no way to tidy up after itself.
+    """
+    stock = _photo_shelf()
+    if name not in stock:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"no arrangement built from a picture is named {name!r}. Only those "
+                "can be forgotten here; the ones built into the program stay."
+            ),
+        )
+    stock.forget(name)
+    _site_store.remove(name)
+    return {"forgotten": name}
+
+
+@app.get("/photos/{name}/picture")
+def get_photo_picture(name: str):
+    """The picture this arrangement was built from, as it was on disk.
+
+    Read from where the person pointed, each time it is asked for. Nothing is
+    copied anywhere and nothing is cached.
+    """
+    stock = _photo_shelf()
+    if name not in stock:
+        raise HTTPException(status_code=404, detail=f"no picture-built arrangement named {name!r}")
+    where = stock.album(name).picture_path
+    if where is None or not Path(where).exists():
+        raise HTTPException(
+            status_code=404,
+            detail="the picture is no longer where it was when this was built",
+        )
+    settled = _picture_within_root(where)
+
+    # The type is chosen from a short list, not built out of the file name. A
+    # name can contain anything at all, including the characters that end a
+    # header, and a header built by pasting a file name into it is a header
+    # somebody else gets to write.
+    guessed, _ = mimetypes.guess_type(settled.name)
+    kind = guessed if guessed in PICTURE_TYPES else "application/octet-stream"
+    return Response(
+        content=settled.read_bytes(),
+        media_type=kind,
+        headers={"X-Content-Type-Options": "nosniff"},
+    )
 
 
 @app.get("/sites")
@@ -866,9 +1576,7 @@ async def update_site_layout(name: str, body: LayoutRequest):
             structure.position = Vector3D(x=override.x, y=override.y, z=override.z)
 
     validator = _site_store.validator(name)
-    payload = _site_payload(site, validator(site))
-    payload["scad"] = site.render()
-    return payload
+    return _site_payload(site, validator(site))
 
 
 @app.post("/sites/{name}/structures/{structure_name}/status")
@@ -933,8 +1641,14 @@ async def get_node_stl(name: str, path: str):
     if node is None:
         raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
 
+    # A part the subtree refers to is imported by its STL, which is a build
+    # artifact a fresh clone has not made yet. Build what is missing first,
+    # as the viewer does for a part_ref leaf, so the node renders on the
+    # first request rather than answering that nobody has run generate-stl.
+    await _build_parts_referred_to(node)
+
     try:
-        scad_text = node.to_scad_object().render()
+        scad_text = node.to_scad_object(strict=True).render()
     except ValueError as exc:
         raise HTTPException(
             status_code=422, detail=f"Node '{path}' has no renderable geometry: {exc}"
@@ -947,12 +1661,24 @@ async def get_node_stl(name: str, path: str):
             raise HTTPException(
                 status_code=503, detail="OpenSCAD not installed. Cannot generate STL files."
             )
-        scad_path.parent.mkdir(parents=True, exist_ok=True)
+        stl_path.parent.mkdir(parents=True, exist_ok=True)
         scad_path.write_text(scad_text, encoding="utf-8")
-        result = await renderer.render_stl_async(scad_path, stl_path, timeout=60)
+        try:
+            result = await renderer.render_stl_async(scad_path, stl_path, timeout=60)
+        finally:
+            scad_path.unlink(missing_ok=True)
         if not result.success:
             raise HTTPException(
                 status_code=500, detail=f"STL generation failed: {result.error_message}"
+            )
+        if result.dropped:
+            # A node is the whole of what it holds; a mesh OpenSCAD could not
+            # read back is missing from what it wrote, and that is not served.
+            stl_path.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=500,
+                detail="OpenSCAD dropped part of this node's geometry: "
+                + "; ".join(result.dropped)[:400],
             )
 
     try:
@@ -964,6 +1690,297 @@ async def get_node_stl(name: str, path: str):
         )
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"Failed to read STL: {exc}") from exc
+
+
+# -----------------------------------------------------------------------
+# Devices of a site: which board sits at which node (see firmware/bindings.py).
+# These live here, not on the firmware router, because they need the site
+# store; the firmware package stays importable on its own.
+# -----------------------------------------------------------------------
+
+
+def status_bearer_for(site: Assembly, path: str) -> Optional[str]:
+    """The path of ``path`` itself if it carries a status, else its nearest ancestor that does.
+
+    A printer's port is pinned to its *board* (``printer_1.frame_system.mainboard``),
+    which has no status of its own; the printer Structure above it is what
+    the polls drive. ``None`` when nothing up the path carries a status (a
+    footpedal, say).
+    """
+    parts = path.split(".")
+    for depth in range(len(parts), 0, -1):
+        candidate = ".".join(parts[:depth])
+        node = _find_node_by_path(site, candidate)
+        if node is not None and node.status is not None:
+            return candidate
+    return None
+
+
+def _world_position_of(site: Assembly, path: str) -> Vector3D:
+    """Sum of positions from the site root down to ``path``, each in its parent's frame."""
+    total = Vector3D()
+    node = site
+    for name in path.split("."):
+        node = next(
+            (c for c in [*node.children, *node.additions, *node.subtractions] if c.name == name),
+            None,
+        )
+        if node is None:
+            break
+        total = total + node.position
+    return total
+
+
+def _base_height(printer: Assembly) -> float:
+    """How tall the printer's base is: the enclosure its bed sits on.
+
+    The site's printers keep it in a ``frame_system`` substructure whose base
+    is a Cube; a printer built some other way answers zero, and the board
+    view draws the bed on the floor of the footprint.
+    """
+    for child in printer.children:
+        if child.name != "frame_system":
+            continue
+        if child.footprint:
+            return float(child.footprint.max_point.z)
+        size = getattr(child.base, "size", None)
+        if size is not None:
+            return float(size.z)
+    return 0.0
+
+
+def _describe_for_view(
+    site: Assembly, path: str, n: Assembly, *, is_printer: bool
+) -> Dict[str, object]:
+    """One node as the board view wants it: world position, footprint, build volume, base."""
+    pos = _world_position_of(site, path)
+    fp = n.footprint
+    return {
+        "path": path,
+        "name": n.name,
+        "position": {"x": pos.x, "y": pos.y, "z": pos.z},
+        "footprint": (
+            {
+                "min": [fp.min_point.x, fp.min_point.y, fp.min_point.z],
+                "max": [fp.max_point.x, fp.max_point.y, fp.max_point.z],
+            }
+            if fp
+            else None
+        ),
+        "build_volume": (
+            [n.build_volume.x, n.build_volume.y, n.build_volume.z]
+            if getattr(n, "build_volume", None)
+            else None
+        ),
+        # Where the build volume starts, in the node's frame, when the node
+        # says; else the bed sits on the base of a desktop printer, centred.
+        "build_origin": (
+            [n.build_origin.x, n.build_origin.y, n.build_origin.z]
+            if getattr(n, "build_origin", None)
+            else None
+        ),
+        "base_height": (
+            n.build_origin.z
+            if getattr(n, "build_origin", None)
+            else (_base_height(n) if is_printer else 0.0)
+        ),
+    }
+
+
+@app.get("/firmware/printers/where")
+def printer_where(port: str):
+    """Where a port is pinned, with the geometry a board view needs.
+
+    Searches the loaded sites for a manual pin to ``port``. Answers the
+    board (the pinned node) and the printer above it (the nearest
+    status-bearing ancestor, or the board itself) with world positions, the
+    footprint and build volume, and the base height the build volume sits
+    on -- what ``apothecary/static/board_view.js`` draws. ``board`` is
+    ``None`` when nothing is pinned.
+    """
+    state = firmware_devices.get_state()
+    known = firmware_devices.known_device(port, state)
+    # Every pin, not just the loaded sites': the monitor is often the first
+    # page opened after the server starts, and a pin names its site.
+    for binding in state.bindings():
+        if not same_device(binding.identity, port, known):
+            continue
+        if binding.site not in _site_store.names():
+            continue
+        site = _site_store.get(binding.site)
+        node = _find_node_by_path(site, binding.path)
+        if node is None:
+            continue
+        bearer_path = status_bearer_for(site, binding.path) or binding.path
+        bearer = _find_node_by_path(site, bearer_path) or node
+        return {
+            "port": port,
+            "site": binding.site,
+            "board": _describe_for_view(site, binding.path, node, is_printer=False),
+            "printer": (
+                _describe_for_view(site, bearer_path, bearer, is_printer=True)
+                if bearer_path != binding.path
+                else None
+            ),
+        }
+    return {"port": port, "site": None, "board": None, "printer": None}
+
+
+@app.get("/firmware/pins")
+def every_pin(fresh: bool = False):
+    """Every pin on this machine, whatever site it names -- the management view.
+
+    ``GET /sites/{name}/devices`` shows a site's pins where its nodes are; a
+    pin whose site was forgotten (a photo arrangement) or whose node is gone
+    appears nowhere else, and this is where it is seen and taken back. Each
+    row says whether its site and node still exist and which detected board,
+    if any, is the pinned identity today. Plain ``def``: the device scan
+    shells out to arduino-cli (cached a couple of seconds).
+    """
+    state = firmware_devices.get_state()
+    problem = None
+    try:
+        found = firmware_devices.detected_devices(fresh=fresh)
+    except ToolchainError as exc:
+        found, problem = [], str(exc)
+    names = _site_store.names()
+    rows = []
+    for binding in sorted(state.bindings(), key=lambda b: (b.site, b.path)):
+        site_known = binding.site in names
+        node_found = False
+        if site_known:
+            try:
+                node = _find_node_by_path(_site_store.get(binding.site), binding.path)
+            except Exception:  # a site that will not build is a site with no nodes
+                node = None
+            node_found = node is not None
+        device = device_for_identity(binding.identity, found)
+        rows.append(
+            {
+                **binding.model_dump(mode="json"),
+                "site_known": site_known,
+                "node_found": node_found,
+                "device": device.model_dump(mode="json") if device is not None else None,
+            }
+        )
+    return {"pins": rows, "problem": problem}
+
+
+@app.delete("/firmware/pins/{site}/{path:path}")
+def unpin_anywhere(site: str, path: str):
+    """Take a pin back by what it names, whether or not its site or node still exists."""
+    if not firmware_devices.get_state().clear_binding(site, path):
+        raise HTTPException(status_code=404, detail=f"nothing is pinned at {site} › {path}")
+    return {"unpinned": {"site": site, "path": path}}
+
+
+def _sync_printer_status(status) -> List[Dict[str, object]]:
+    """A printer poll drives the status of the node its port is pinned to -- or the
+    nearest ancestor that carries a status, when the pin is on a board inside it.
+
+    Registered on ``firmware.devices.STATUS_LISTENERS`` at import. Nodes
+    with no status anywhere up the path are left alone (a footpedal), and a
+    hand-set ``maintenance`` is never overridden by a poll -- the printer
+    may well be idle *because* someone is working on it.
+    """
+    out: List[Dict[str, object]] = []
+    if status.state not in PRINTER_STATUSES:
+        return out
+    state = firmware_devices.get_state()
+    known = firmware_devices.known_device(status.port, state)
+    for site_name in _site_store.loaded():
+        site = _site_store.get(site_name)
+        for binding in state.bindings(site_name):
+            if not same_device(binding.identity, status.port, known):
+                continue
+            target = status_bearer_for(site, binding.path)
+            if target is None:
+                continue
+            node = _find_node_by_path(site, target)
+            row: Dict[str, object] = {"site": site_name, "path": target}
+            if target != binding.path:
+                row["via"] = binding.path
+            if node.status == "maintenance":
+                out.append({**row, "status": node.status, "changed": False, "held": True})
+                continue
+            changed = node.status != status.state
+            node.status = status.state
+            out.append({**row, "status": node.status, "changed": changed})
+    return out
+
+
+firmware_devices.STATUS_LISTENERS.append(_sync_printer_status)
+
+
+def _site_devices_payload(name: str, site: Assembly, fresh: bool = False) -> Dict[str, object]:
+    problem = None
+    try:
+        found = firmware_devices.detected_devices(fresh=fresh)
+    except ToolchainError as exc:
+        found, problem = [], str(exc)
+    # Refresh printers whose link is already held (0.1 s, no reset); a
+    # never-opened port is left alone so this view never reboots a board.
+    links = firmware_gcode.get_printer_links()
+    for d in found:
+        if d.printer is not None and links.get(d.port) is not None:
+            firmware_devices.printer_status(d.port)
+    rows = bindings_for_site(name, site, devices=found)
+    return {
+        "site": name,
+        "bindings": [r.model_dump(mode="json") for r in rows],
+        "devices": [firmware_device_view(d) for d in found],
+        "streaming": firmware_devices.get_streams().open_ports,
+        "problem": problem,
+    }
+
+
+def _binding_row_or_404(name: str, path: str) -> Dict[str, object]:
+    site = _get_site_or_404(name)
+    rows = _site_devices_payload(name, site)["bindings"]
+    row = next((r for r in rows if r["path"] == path), None)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
+    return row
+
+
+@app.get("/sites/{name}/devices")
+def site_devices(name: str, fresh: bool = False):
+    """Every node of the site that names firmware, with the board bound to it.
+
+    Plain ``def``: ``detected_devices`` shells out to arduino-cli, so this
+    runs in the threadpool rather than blocking the event loop. ``fresh``
+    bypasses the short port-scan cache (a rescan button, the auto-refresh).
+    """
+    site = _get_site_or_404(name)
+    return _site_devices_payload(name, site, fresh=fresh)
+
+
+@app.put("/sites/{name}/nodes/{path}/device")
+def attach_device(name: str, path: str, body: DeviceAttachRequest):
+    """Pin a device to a node; overrides the by-sketch rule.
+
+    A port given for a device that is detected right now is stored as that
+    device's own identity (its MAC or USB serial number) when it has one:
+    the pin follows the board, not the socket it happens to be in today.
+    """
+    site = _get_site_or_404(name)
+    if _find_node_by_path(site, path) is None:
+        raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
+    identity = firmware_devices.stable_identity(body.identity)
+    firmware_devices.get_state().set_binding(name, path, identity)
+    return _binding_row_or_404(name, path)
+
+
+@app.delete("/sites/{name}/nodes/{path}/device")
+def detach_device(name: str, path: str):
+    """Drop a pin; the node goes back to the by-sketch rule (or to nothing)."""
+    site = _get_site_or_404(name)
+    if _find_node_by_path(site, path) is None:
+        raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
+    firmware_devices.get_state().clear_binding(name, path)
+    rows = _site_devices_payload(name, site)["bindings"]
+    row = next((r for r in rows if r["path"] == path), None)
+    return row or {"path": path, "name": path.rsplit(".", 1)[-1], "binding_source": None}
 
 
 # -----------------------------------------------------------------------
@@ -979,7 +1996,8 @@ class Dimensions(BaseModel):
 
 
 class CreateJobRequest(BaseModel):
-    name: str
+    # A name is letters, digits and a little punctuation: what a page shows, never markup.
+    name: str = Field(..., min_length=1, max_length=80, pattern=r"^[\w][\w .+\-/]*$")
     required_volume: Dimensions
 
 
@@ -1092,7 +2110,8 @@ async def viewer_home():
     both are absorbed into one viewer (see ``site_viewer`` below); this is
     just its default entry point.
     """
-    default_site = _site_store.names()[0]
+    names = _site_store.names()
+    default_site = DEFAULT_VIEWER_SITE if DEFAULT_VIEWER_SITE in names else names[0]
     return RedirectResponse(f"/viewer/sites/{default_site}", status_code=307)
 
 
@@ -1113,9 +2132,76 @@ async def site_viewer(name: str, request: Request, focus: str = Query(default=""
     base_url = str(request.base_url).rstrip("/")
     return HTMLResponse(
         render_fractal_viewer_page(
-            _site_store.names(), base_url, default_site=name, focus_path=focus
+            _site_store.names(),
+            base_url,
+            default_site=name,
+            focus_path=focus,
+            three_is_vendored=THREE_IS_VENDORED,
         )
     )
+
+
+@app.get("/viewer/parts/{name}")
+async def part_view(name: str):
+    """A part is reached by navigating to it, not by a second viewer.
+
+    This deep-link survives because links to it were handed out, but it now
+    lands in the one viewer, focused on the part, where the parameter controls
+    and the contested values live. Two pages onto one object is how a codebase
+    ends up with two answers about it.
+    """
+    part = _load_part_wrapper(name)  # 404 here rather than after a redirect
+    # Focus on the part's own name, not on whatever spelling was typed. The
+    # library was consolidated to underscore case and links to `datum-core`
+    # were handed out before that; the wrapper lookup already tolerates the
+    # old spelling, and this makes the viewer land on the part rather than on
+    # a focus string matching nothing.
+    canonical = part.name or name
+    return RedirectResponse(
+        f"/viewer/sites/parts_library?focus={quote(canonical, safe='')}", status_code=307
+    )
+
+
+@app.get("/problems")
+async def get_problems(
+    owner: Optional[str] = Query(None, description="apothecary | datum | human | measurement"),
+    kind: Optional[str] = Query(None),
+    build_volume: Optional[str] = Query(None),
+):
+    """Every open question this repository can state, and who can close it.
+
+    Derived from models that already exist -- contested values, the build
+    checklist, layout validators, the black-box seam -- so it cannot drift from
+    the repository the way a hand-maintained list does.
+    """
+    from .spaces import problems as open_problems
+
+    volume = _parse_build_volume(build_volume)
+    found = open_problems(build_volume=volume)
+    if owner:
+        found = [p for p in found if p.owner == owner]
+    if kind:
+        found = [p for p in found if p.kind == kind]
+    return {"count": len(found), "problems": [p.to_dict() for p in found]}
+
+
+@app.get("/solutions")
+async def get_solutions(kind: Optional[str] = Query(None)):
+    """What this repository offers against those problems."""
+    from .spaces import capabilities
+
+    found = capabilities()
+    if kind:
+        found = [c for c in found if c.kind == kind]
+    return {"count": len(found), "capabilities": [c.to_dict() for c in found]}
+
+
+@app.get("/spaces")
+async def get_spaces(build_volume: Optional[str] = Query(None)):
+    """Both spaces at a glance, and any problem kind nothing here addresses."""
+    from .spaces import summary
+
+    return summary(build_volume=_parse_build_volume(build_volume))
 
 
 @app.get("/openscad/status")
@@ -1132,3 +2218,11 @@ async def openscad_status():
         "version": renderer.get_version(),
         "path": str(renderer.openscad_path) if renderer.openscad_path else None,
     }
+
+
+# The project's first APIRouter, mounted last. Its handlers reach back into the
+# helpers above, so this module has to be finished before it is imported --
+# importing it at the top would close a circle.
+from .routes.menu import router as menu_router  # noqa: E402
+
+app.include_router(menu_router)

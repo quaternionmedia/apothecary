@@ -10,12 +10,25 @@ import click
 import uvicorn
 
 from ..projects.parts.skeleton import ROOT
-from ..projects.registry import scan_projects
-from .utils import _get_stl_bounding_box
+from ..projects.registry import scan_projects, stl_output_for
+from ..stays_local import require_loopback
+from .utils import _get_stl_bounding_box, _safe_echo
+
+
+def _loopback_or_die(host: str) -> str:
+    """Every server this CLI starts listens on this machine only; not a choice."""
+    try:
+        return require_loopback(host)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from None
 
 
 @click.command()
-@click.option("--host", default="127.0.0.1", help="Host to bind to")
+@click.option(
+    "--host",
+    default="127.0.0.1",
+    help="Address to listen on: this machine only (127.0.0.1, localhost, ::1)",
+)
 @click.option("--port", default=8000, type=int, help="Port to bind to")
 @click.option("--reload/--no-reload", default=False, help="Enable auto-reload on code changes")
 @click.option(
@@ -24,8 +37,16 @@ from .utils import _get_stl_bounding_box
     help="Serve the JSCAD web viewer from this directory (defaults to node_modules/@jscad/web if present)",
 )
 @click.option("--no-viewer", is_flag=True, help="Disable the JSCAD viewer even if assets exist")
-def serve(host: str, port: int, reload: bool, viewer_path: str | None, no_viewer: bool):
-    """Run the FastAPI server."""
+@click.option(
+    "--refresh-docs/--no-refresh-docs",
+    default=True,
+    help="Regenerate docs/generated/ in the background as the server starts (served at /docs)",
+)
+def serve(
+    host: str, port: int, reload: bool, viewer_path: str | None, no_viewer: bool, refresh_docs: bool
+):
+    """Run the FastAPI server. It listens on this machine only (see apothecary/stays_local.py)."""
+    host = _loopback_or_die(host)
     # CRITICAL: Set environment variables BEFORE importing the app,
     # because the app module initializes the viewer mount at import time
 
@@ -33,11 +54,11 @@ def serve(host: str, port: int, reload: bool, viewer_path: str | None, no_viewer
     viewer_available = False
     if no_viewer:
         os.environ["APOTHECARY_VIEWER_PATH"] = ""
-        click.echo("⚠️  JSCAD viewer disabled via --no-viewer")
+        _safe_echo("⚠️  JSCAD viewer disabled via --no-viewer")
     elif viewer_path:
         os.environ["APOTHECARY_VIEWER_PATH"] = viewer_path
         viewer_available = True
-        click.echo(f"✓ Using JSCAD viewer from: {viewer_path}")
+        _safe_echo(f"✓ Using JSCAD viewer from: {viewer_path}")
     else:
         # Check default location
         default_viewer = ROOT / "node_modules" / "@jscad" / "web"
@@ -47,28 +68,28 @@ def serve(host: str, port: int, reload: bool, viewer_path: str | None, no_viewer
             viewer_check = Path(env_viewer.strip())
             if viewer_check.exists():
                 viewer_available = True
-                click.echo(f"✓ Using JSCAD viewer from environment: {viewer_check}")
+                _safe_echo(f"✓ Using JSCAD viewer from environment: {viewer_check}")
             else:
-                click.secho(
+                _safe_echo(
                     "⚠️  Warning: APOTHECARY_VIEWER_PATH set but path doesn't exist", fg="yellow"
                 )
         elif default_viewer.exists():
             viewer_available = True
             # Set the environment variable so the app mount will work
             os.environ["APOTHECARY_VIEWER_PATH"] = str(default_viewer)
-            click.echo(f"✓ JSCAD viewer found at: {default_viewer}")
+            _safe_echo(f"✓ JSCAD viewer found at: {default_viewer}")
         else:
             # Even if assets not found, still try to set it to the expected path
             # in case they get installed later
             os.environ["APOTHECARY_VIEWER_PATH"] = str(default_viewer)
-            click.secho("⚠️  Warning: JSCAD viewer assets not found", fg="yellow", bold=True)
-            click.echo("   The /viewer endpoints will return 503 errors.")
+            _safe_echo("⚠️  Warning: JSCAD viewer assets not found", fg="yellow", bold=True)
+            click.echo("   Nothing serves these assets today -- see below.")
             click.echo("")
             click.secho("   To enable the viewer:", fg="yellow")
-            click.echo("   • Run: apothecary install")
-            click.echo("   • Or manually: npm install @jscad/web")
-            click.echo("   • Or pass: --viewer-path /path/to/viewer/dist")
-            click.echo("   • Or use: --no-viewer to suppress this warning")
+            _safe_echo("   • Run: apothecary install")
+            _safe_echo("   • Or manually: npm install @jscad/web")
+            _safe_echo("   • Or pass: --viewer-path /path/to/viewer/dist")
+            _safe_echo("   • Or use: --no-viewer to suppress this warning")
             click.echo("")
 
     # NOW import the app after environment variables are set
@@ -76,19 +97,36 @@ def serve(host: str, port: int, reload: bool, viewer_path: str | None, no_viewer
 
     # Start the server
     click.echo(f"Starting server on http://{host}:{port}")
+    # One entry point. Everything else here is an API the viewer reads.
+    click.echo(f"  Viewer: http://{host}:{port}/viewer")
+    click.echo(f"  Docs:   http://{host}:{port}/docs")
+    if refresh_docs:
+        refresh_docs_in_background()
+    # The JSCAD assets above are mounted by no route -- the fractal viewer is
+    # the only viewer, and it needs the vendored three.js, not these. The flags
+    # are kept because they are published; the messages no longer claim the
+    # viewer breaks without them.
     if not viewer_available and not no_viewer:
-        click.echo("(API endpoints will work, but viewer endpoints are unavailable)")
+        click.echo("(the JSCAD assets are unused by any route; the viewer is unaffected)")
 
+    # A live serial overlay (/firmware/devices/stream) is an SSE response that
+    # only ends when the browser leaves; without a graceful-shutdown timeout
+    # a reload or Ctrl-C waits on it forever.
+    graceful = {"timeout_graceful_shutdown": 3}
     if reload:
         # When reload is enabled, uvicorn needs an import string
-        uvicorn.run("apothecary.api:app", host=host, port=port, reload=reload)
+        uvicorn.run("apothecary.api:app", host=host, port=port, reload=reload, **graceful)
     else:
         # Without reload, we can pass the app directly
-        uvicorn.run(fastapi_app, host=host, port=port, reload=False)
+        uvicorn.run(fastapi_app, host=host, port=port, reload=False, **graceful)
 
 
 @click.command()
-@click.option("--host", default="127.0.0.1", help="Host to bind to")
+@click.option(
+    "--host",
+    default="127.0.0.1",
+    help="Address to listen on: this machine only (127.0.0.1, localhost, ::1)",
+)
 @click.option("--port", default=8000, type=int, help="Port to bind to")
 @click.option(
     "--install", is_flag=True, help="Run uv sync before starting (usually not needed with uv run)"
@@ -108,7 +146,8 @@ def dev(host: str, port: int, install: bool, skip_stl: bool, elephant: bool):
         apothecary dev
         apothecary dev --install --port 3000
     """
-    click.secho("🧪 Apothecary Dev Mode", bold=True)
+    host = _loopback_or_die(host)
+    _safe_echo("🧪 Apothecary Dev Mode", bold=True)
     click.echo("")
 
     # Step 1: Sync dependencies (optional)
@@ -132,9 +171,9 @@ def dev(host: str, port: int, install: bool, skip_stl: bool, elephant: bool):
             )
 
         if result.returncode == 0:
-            click.secho("  ✓ Dependencies synced", fg="green")
+            _safe_echo("  ✓ Dependencies synced", fg="green")
         else:
-            click.secho(f"  ✗ Sync failed: {result.stderr}", fg="red")
+            _safe_echo(f"  ✗ Sync failed: {result.stderr}", fg="red")
             raise SystemExit(1)
     else:
         click.echo("Step 1: Skipped (use --install to sync)")
@@ -154,21 +193,21 @@ def dev(host: str, port: int, install: bool, skip_stl: bool, elephant: bool):
             for item in items:
                 if "elephant" in item.name.lower():
                     continue  # Skip elephant_walk, regenerated separately
-                stl_path = item.path.with_suffix(".stl")
+                stl_path = stl_output_for(item)
                 if stl_path.exists():
                     skipped += 1
                     continue
                 click.echo(f"  Generating {item.name}...", nl=False)
                 result = renderer.render_stl(item.path, stl_path, timeout=120)
                 if result.success:
-                    click.secho(" ✓", fg="green")
+                    _safe_echo(" ✓", fg="green")
                     generated += 1
                 else:
-                    click.secho(" ✗", fg="red")
+                    _safe_echo(" ✗", fg="red")
 
-            click.secho(f"  ✓ {generated} generated, {skipped} already exist", fg="green")
+            _safe_echo(f"  ✓ {generated} generated, {skipped} already exist", fg="green")
         else:
-            click.secho("  ⚠ OpenSCAD not found, skipping STL generation", fg="yellow")
+            _safe_echo("  ⚠ OpenSCAD not found, skipping STL generation", fg="yellow")
     else:
         click.echo("Step 2: Skipped (--skip-stl)")
 
@@ -190,7 +229,7 @@ def dev(host: str, port: int, install: bool, skip_stl: bool, elephant: bool):
             # Calculate bounding boxes
             part_data = []
             for item in items:
-                stl_path = item.path.with_suffix(".stl")
+                stl_path = stl_output_for(item)
                 bbox = _get_stl_bounding_box(stl_path)
                 if bbox:
                     min_x, max_x, min_y, max_y, min_z, max_z = bbox
@@ -242,7 +281,7 @@ def dev(host: str, port: int, install: bool, skip_stl: bool, elephant: bool):
 
             for _i, (data, x_pos) in enumerate(zip(part_data, x_positions, strict=False)):
                 item = data["item"]
-                rel_path = item.path.relative_to(ROOT / "parts").with_suffix(".stl")
+                rel_path = stl_output_for(item).relative_to(ROOT / "parts")
                 translate_x = x_pos - data["center_x"]
                 translate_y = -data["center_y"]
                 lines.append(f"// {item.name}")
@@ -257,18 +296,57 @@ def dev(host: str, port: int, install: bool, skip_stl: bool, elephant: bool):
             click.echo("  Rendering elephant_walk.stl...", nl=False)
             result = renderer.render_stl(elephant_path, stl_path, timeout=180)
             if result.success:
-                click.secho(f" ✓ ({result.render_time_seconds:.1f}s)", fg="green")
+                _safe_echo(f" ✓ ({result.render_time_seconds:.1f}s)", fg="green")
             else:
-                click.secho(f" ✗ {result.error_message}", fg="red")
+                _safe_echo(f" ✗ {result.error_message}", fg="red")
         else:
-            click.secho("  ⚠ Skipped (no parts or OpenSCAD not found)", fg="yellow")
+            _safe_echo("  ⚠ Skipped (no parts or OpenSCAD not found)", fg="yellow")
     else:
         click.echo("Step 3: Skipped (--skip-elephant)")
 
     # Step 4: Start dev server
     click.echo("")
     click.secho(f"Step 4: Starting dev server on http://{host}:{port}", fg="cyan")
-    click.secho("  → Viewer: http://" + host + ":" + str(port) + "/viewer", fg="green")
+    _safe_echo("  → Viewer: http://" + host + ":" + str(port) + "/viewer", fg="green")
+    _safe_echo("  → Docs:   http://" + host + ":" + str(port) + "/docs", fg="green")
     click.echo("")
+    refresh_docs_in_background()
 
     uvicorn.run("apothecary.api:app", host=host, port=port, reload=True)
+
+
+def refresh_docs_in_background() -> subprocess.Popen | None:
+    """Regenerate docs/generated/ while the server runs, so /docs is current after a restart.
+
+    `apothecary docs generate` runs the doc-workflow browser tests against a
+    scripted server of its own (port 8766) and takes a minute or two; the
+    pages it rewrites are served as they land, and the bar on every docs
+    page says whether the run is still going or how it ended. Its output goes
+    to docs/generated/refresh.log. A missing browser or a failing test is
+    reported there and in the bar, never here.
+    """
+    from ..docs_site import GENERATED_ROOT, note_refresh
+
+    GENERATED_ROOT.mkdir(parents=True, exist_ok=True)
+    log = GENERATED_ROOT / "refresh.log"
+    try:
+        handle = log.open("w", encoding="utf-8")
+        proc = subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                "from apothecary.cli.main import main; main()",
+                "docs",
+                "generate",
+            ],
+            cwd=ROOT,
+            stdout=handle,
+            stderr=subprocess.STDOUT,
+            env={**os.environ, "APOTHECARY_DOCS_REFRESH": "1"},
+        )
+    except OSError as exc:
+        note_refresh(finished=None, ok=False, error=f"could not start docs generate: {exc}")
+        _safe_echo(f"  (docs refresh not started: {exc})", fg="yellow")
+        return None
+    _safe_echo(f"  Docs refresh running in the background (log: {log.relative_to(ROOT)})")
+    return proc

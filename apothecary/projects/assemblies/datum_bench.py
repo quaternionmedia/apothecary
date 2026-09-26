@@ -27,7 +27,8 @@ from apothecary.core import OpenSCADObject
 from apothecary.models import BoundingBox3D, Vector3D
 from apothecary.models.blackbox import BlackBox, BlackBoxProvider, Keepout, StubProvider
 from apothecary.primitives import Cube
-from apothecary.projects.parts.datum import DatumParams, params_for
+from apothecary.projects.parts.datum_core import Params as DatumParams
+from apothecary.projects.parts.datum_core import params_for
 from apothecary.scene import Scene
 from apothecary.shims.kicad import KiCadProvider
 from apothecary.transforms import Translate
@@ -54,9 +55,9 @@ class Assembly(BaseModel):
         stubs = [p for p in self.placements if p.stub]
         lines = [
             f"datum iteration for board {self.board_name!r}",
-            f"  enclosure  {self.params.outer_w:.1f} x {self.params.outer_d:.1f} "
-            f"x {self.params.outer_h:.1f} mm",
-            f"  fits board {self.params.board_w:.1f} x {self.params.board_d:.1f} mm, "
+            f"  enclosure  {self.params.outer_x:.1f} x {self.params.outer_y:.1f} "
+            f"x {self.params.outer_z:.1f} mm",
+            f"  fits board {self.params.board_x:.1f} x {self.params.board_y:.1f} mm, "
             f"{len(self.placements)} placed artifact(s)",
         ]
         if stubs:
@@ -133,21 +134,22 @@ def build(
 
     surface_pos = Vector3D(x=origin.x - 40, y=origin.y - 40, z=origin.z - 3)
     objects: List[OpenSCADObject] = [
-        # The enclosure's envelope. The printable geometry is parts/datum/datum.scad;
-        # this is the block a scene needs for placement and collision.
+        # The enclosure's envelope. The printable geometry is the compound:
+        # parts/datum_core/datum_core.scad plus its cap. This is the block a
+        # scene needs for placement and collision.
         at(
             origin,
-            Vector3D(x=params.outer_w, y=params.outer_d, z=params.outer_h),
+            Vector3D(x=params.outer_x, y=params.outer_y, z=params.outer_z),
             "datum enclosure envelope",
         ),
         # The board, seated on its standoffs inside the enclosure.
         at(
             Vector3D(
-                x=origin.x + params.wall + params.tol,
-                y=origin.y + params.wall + params.tol,
-                z=origin.z + params.wall + params.standoff,
+                x=origin.x + params.walls + params.board_clearance,
+                y=origin.y + params.walls + params.board_clearance,
+                z=origin.z + params.floor_t + params.standoff_h,
             ),
-            Vector3D(x=params.board_w, y=params.board_d, z=params.board_h),
+            Vector3D(x=params.board_x, y=params.board_y, z=params.board_t),
             f"board: {board.name} ({board.source})",
         ),
         # What it mounts to.
@@ -171,7 +173,7 @@ def build(
                 name="datum-enclosure",
                 position=origin,
                 stub=False,
-                note="generated from parts/datum/datum.scad",
+                note="generated from parts/datum_core/datum_core.scad",
             ),
             Placement(
                 name=f"board:{board.name}",

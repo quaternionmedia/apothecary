@@ -1,6 +1,7 @@
-from pathlib import Path
-from click.testing import CliRunner
 import json
+from pathlib import Path
+
+from click.testing import CliRunner
 
 from apothecary.cli import cli
 
@@ -10,9 +11,7 @@ def test_cli_validate_with_example_scene(tmp_path):
     # Build a small scene JSON manually to avoid validation issues
     scene_json = {
         "name": "vtest",
-        "objects": [
-            {"type": "cube", "size": {"x": 1, "y": 2, "z": 3}, "center": False}
-        ],
+        "objects": [{"type": "cube", "size": {"x": 1, "y": 2, "z": 3}, "center": False}],
     }
     f = tmp_path / "scene.json"
     f.write_text(json.dumps(scene_json), encoding="utf-8")
@@ -103,3 +102,45 @@ def test_cli_inventory_templates_lists_templates():
     r = CliRunner().invoke(cli, ["inventory", "templates"])  # uses repo templates/
     assert r.exit_code == 0
     assert "template:" in r.output or "No templates found." in r.output
+
+
+def test_cli_parts_render_refuses_to_overwrite_source(tmp_path):
+    from apothecary.cli.utils import _load_part_wrapper
+
+    src = _load_part_wrapper("parametric_star").DEFAULT.source_file
+    before = src.read_bytes()
+    r = CliRunner().invoke(cli, ["parts", "render", "parametric_star", "-o", str(src)])
+    assert r.exit_code != 0
+    assert "Refusing to overwrite" in r.output
+    assert src.read_bytes() == before
+
+
+def test_cli_parts_render_snowplow_uses_validated_params(tmp_path):
+    out = tmp_path / "snowplow.scad"
+    r = CliRunner().invoke(
+        cli,
+        [
+            "parts",
+            "render",
+            "rc.snowplow",
+            "--params-json",
+            '{"blade_width": "200"}',
+            "-o",
+            str(out),
+        ],
+    )
+    assert r.exit_code == 0, r.output
+    text = out.read_text(encoding="utf-8")
+    assert "200" in text and "cube" in text.lower()
+
+
+def test_cli_parts_render_snowplow_rejects_bad_params(tmp_path):
+    out = tmp_path / "snowplow.scad"
+    r = CliRunner().invoke(
+        cli,
+        ["parts", "render", "rc.snowplow", "--params-json", '{"blade_width": -1}', "-o", str(out)],
+    )
+    assert r.exit_code != 0
+    assert isinstance(r.exception, SystemExit)  # ClickException, not a pydantic traceback
+    assert "Invalid parameters" in r.output
+    assert not out.exists()

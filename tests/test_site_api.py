@@ -23,7 +23,7 @@ def reset_garage_site():
 def test_list_sites():
     response = client.get("/sites")
     assert response.status_code == 200
-    assert response.json() == ["garage", "parts_library"]
+    assert response.json() == ["datum_core", "garage", "parts_library"]
 
 
 def test_get_unknown_site_is_404():
@@ -223,15 +223,18 @@ def test_layout_endpoint_detects_wrong_height():
 
 
 def test_layout_endpoint_valid_move_updates_world_bounds_and_scad():
+    # A 470 mm Ender 3 nudged 20 mm right still clears printer_2; its world
+    # bounds start where its LCD hangs off the front (y -41) and its frame
+    # begins (x -2), which is what the footprint says.
     response = client.post(
         "/sites/garage/layout",
-        json={"positions": {"printer_1": {"x": 300, "y": 150, "z": 780}}},
+        json={"positions": {"printer_1": {"x": 120, "y": 150, "z": 780}}},
     )
     data = response.json()
-    assert data["is_valid"] is True
+    assert data["is_valid"] is True, data.get("violations")
     printer_1 = next(s for s in data["structures"] if s["name"] == "printer_1")
-    assert printer_1["world_bounds"]["min"] == [300.0, 150.0, 780.0]
-    assert "translate([300.0, 150.0, 780.0])" in data["scad"]
+    assert printer_1["world_bounds"]["min"] == [118.0, 109.0, 780.0]
+    assert "translate([120.0, 150.0, 780.0])" in data["scad"]
 
 
 def test_layout_endpoint_unknown_site_is_404():

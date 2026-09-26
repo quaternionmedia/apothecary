@@ -2,11 +2,17 @@
 
 import click
 
+from .census import census
 from .docs import docs
+from .firmware import firmware
 from .inventory import inventory
 from .parts import parts
+from .photo import photo
+from .preflight import preflight
+from .release import release
 from .render import render_scene, render_scene_jscad, template_generate, testrun, validate
 from .server import dev, serve
+from .spaces import problems, solutions
 from .system import check, install, submodules, system
 from .testing import test
 
@@ -17,6 +23,8 @@ def cli():
 
 
 # Register individual commands
+cli.add_command(problems)
+cli.add_command(solutions)
 cli.add_command(system)
 cli.add_command(check)
 cli.add_command(install)
@@ -32,8 +40,13 @@ cli.add_command(dev)
 # Register command groups
 cli.add_command(inventory)
 cli.add_command(parts)
+cli.add_command(preflight)
+cli.add_command(release)
+cli.add_command(photo)
 cli.add_command(test)
 cli.add_command(docs)
+cli.add_command(census)
+cli.add_command(firmware)
 
 
 def main():  # pragma: no cover - entry point

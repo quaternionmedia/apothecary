@@ -14,7 +14,7 @@ class Params(BaseModel):
 
 
 def create(metadata_root: Path) -> BasePart:
-    scad = metadata_root / "parts" / "matboard cutter mount" / "matboard cutter mount.scad"
+    scad = metadata_root / "parts" / "matboard_cutter_mount" / "matboard_cutter_mount.scad"
     return BasePart(
         name="matboard_cutter_mount",
         source_file=scad,

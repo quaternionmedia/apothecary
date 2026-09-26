@@ -59,6 +59,31 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     expect(page.locator("#contents-list")).to_contain_text("workbench")
     docs.step("Zoom back out to the root -- same control at every level")
 
+    # The same navigation from the ring: a right-click on empty canvas opens
+    # the canvas ring; Pieces (cell 8) lists this level in groups; digits choose.
+    page.locator("#viewer-canvas").click(button="right", position={"x": 8, "y": 8})
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    page.keyboard.press("8")
+    page.wait_for_timeout(300)
+    docs.step(
+        "Right-click empty canvas for the ring (or press m), then 8 for Pieces: every "
+        "piece at this level, in groups of a keypad's worth, each reachable by its digits"
+    )
+    address = page.evaluate(
+        "() => window.apothecaryRing.addressOf("
+        "window.apothecaryRing.current().root, 'select:printer_1')"
+    )
+    for digit in address[1:]:
+        page.keyboard.press(digit)
+    expect(page.locator("#selected-body .prop-row", has_text="Name")).to_contain_text(
+        "printer_1", timeout=5000
+    )
+    page.wait_for_timeout(300)
+    docs.step(
+        f"The digits {' '.join(address)} select printer_1 -- the same address every time "
+        "for the same level; the Contents row shows it as ⌗" + address
+    )
+
     printer_1 = page.locator("#contents-list .contents-item", has_text="printer_1")
     printer_1.click()
     x_input = page.locator("#pos-x")
@@ -84,6 +109,19 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     page.locator(".job-assign-btn").first.click()
     page.wait_for_timeout(500)
     docs.step("Assign it to a compatible, idle printer")
+
+    page.locator(".panel[data-panel='jobs'] .panel-float").click()
+    page.locator(".panel[data-panel='validation'] .panel-close").click()
+    page.wait_for_timeout(400)
+    docs.step(
+        "The side column is a rail of panels standing in front of the world: each closes "
+        "to a tab, collapses, floats free and drags, and docks back; the ring's Panels cell "
+        "reaches every one by address. Nothing docked can push the world off the screen, "
+        "and what you did to them is remembered"
+    )
+    page.locator(".panel-free-layer .panel[data-panel='jobs'] .panel-float").click()
+    page.locator(".panel-tab[data-panel='validation']").click()
+    page.wait_for_timeout(200)
 
     page.goto(f"{base_url}/viewer/sites/parts_library")
     page.wait_for_timeout(600)

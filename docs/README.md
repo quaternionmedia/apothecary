@@ -2,6 +2,26 @@
 
 Welcome to the Apothecary documentation. This index links to all available guides.
 
+## The walkthrough
+
+`walkthrough/` is the executable path through this repository: four pages, run
+by `pytest walkthrough`. Start there.
+
+| Page | |
+|---|---|
+| [01 — The parts registry](../walkthrough/01-a-part.md) | What a part is, and how its envelope is checked |
+| [02 — Which numbers are whose](../walkthrough/02-fitting.md) | The seam, and driving it with overrides |
+| [03 — Navigating a sub-assembly](../walkthrough/03-an-assembly.md) | datum_core as an addressable tree |
+| [04 — Serving it](../walkthrough/04-serving-it.md) | The API and the viewer |
+| [05 — Contested numbers](../walkthrough/05-contested-numbers.md) | Numbers the sources disagree about, and the dashboard for turning them |
+| [06 — Ready to build](../walkthrough/06-ready-to-build.md) | Whether a part can be printed and checked against a real one |
+| [07 — Status and progress](../walkthrough/07-status-and-progress.md) | One vocabulary for how the CLI reports state |
+| [08 — Problems and solutions](../walkthrough/08-problems-and-solutions.md) | What is unresolved, who can close it, and what exists to close it with |
+| [09 — Preflight](../walkthrough/09-preflight.md) | Everything a build needs, checked before anything is printed |
+| [10 — Being depended on](../walkthrough/10-being-depended-on.md) | What a consumer pinning this repository is entitled to |
+| [11 — Photographs into pieces](../walkthrough/11-photographs-into-pieces.md) | A photograph becomes named, placed pieces in the viewer — written by its own run |
+| [12 — The bench as it is](../walkthrough/12-the-bench-as-it-is.md) | Geometry from elsewhere, the Ender 3s and the boards drawn as they are, a camera placed at a piece, and what stays on the device — written by its own run |
+
 ## Getting Started
 
 | Document | Description |
@@ -17,7 +37,12 @@ Welcome to the Apothecary documentation. This index links to all available guide
 |----------|-------------|
 | [Scene JSON Format](scene-json.md) | JSON schema for scenes, primitives, booleans, and transforms |
 | [Parts Authoring](parts-authoring.md) | How to create and register new parts |
+| [Iterating a Part](iterating-a-part.md) | Parameter overrides, the render loop, and checking bounds against geometry |
+| [Fitting a Part](fitting-a-part.md) | The seam standard: which numbers belong to a consumer and which to this repository |
+| [Boundaries](boundaries.md) | Which repository owns what between datum and apothecary, and what happens at the crossing |
 | [Geometry Models](models.md) | Vectors, bounds, colors, shapes, and units |
+| [Geometry made elsewhere](geometry-from-elsewhere.md) | Bring an STL or OBJ in as a part (`apothecary parts import`), describe a part with a sidecar instead of a wrapper, and the Ender 3s and boards the garage bench now draws as they are |
+| [Firmware](firmware.md) | Program Arduinos/ESP32s from sketches kept with their parts; toolchain install, device identity, live serial; monitor a G-code printer and let it drive its scene node |
 
 ## External Libraries
 
@@ -33,12 +58,59 @@ Welcome to the Apothecary documentation. This index links to all available guide
 | [Parts README](../parts/README.md) | Raw SCAD files and naming conventions |
 | [E2E Testing](../tests/e2e/README.md) | Running Playwright end-to-end tests |
 
+## Plans
+
+| Document | Description |
+|----------|-------------|
+| [Consolidation, 2026-09-19](plans/consolidation-2026-09-19.md) | Landing the printer seam on the integration branch: where the lines are, the order of operations, the census gate, and what a person has to decide |
+| [One screen, 2026-09-20](plans/one-screen-2026-09-20.md) | The world as the one screen, with anchors, popups and panels in front of it: the three screens today, the shape of the end, six phases, and the census as the meter |
+| [The shape finder, with a model behind it, 2026-09-21](plans/photo-finders-local-models-2026-09-21.md) | A plan for optional local models behind the photo finder: the seam as it stands, what a model adds and where it lands, the plugin shape, what is lawful under the stays-on-the-device rule, candidates with licences checked, phases, and what it pends on |
+| [The pull requests, ready to open, 2026-09-21](plans/pull-requests-2026-09-21.md) | The push commands, every gate run locally on the tip, and the two descriptions to paste: apothecary #21 and the qm draft against `project/apothecary` |
+| [What is queued, 2026-09-20](plans/queue-2026-09-20.md) | The photo effort, the open branches and pull requests, what the plans state and have not done, and a bed probed hot and cold as time series -- each with where it stands and its next step |
+
+## Validation
+
+| Document | Description |
+|----------|-------------|
+| [Local integration run-through, 2026-09-21](validation/2026-09-21-local-integration.md) | A checklist to walk at the bench, by topic: the guard, geometry from elsewhere, the bench drawn as it is, the rail and the machine popup, the camera, the printer with and without hardware, the docs, the suites -- two servers, tick as you go, results at the end |
+| [Ender bench, 2026-09-20](validation/2026-09-20-ender-bench.md) | The printer seam against a real Marlin board: what was verified without arming, what it found, and the checklist for the rest |
+
+## Read these in the browser
+
+`apothecary serve` serves this folder at **`/docs`** (and the walkthrough at
+`/walkthrough`): a Markdown page is rendered, a screenshot or recording is
+served as it is, and links between pages work because the URL is the path.
+The bar on every page says when the generated walkthroughs were last
+refreshed; the server regenerates them in the background each time it
+starts (`--no-refresh-docs` to skip; the run's output is in
+`docs/generated/refresh.log`). The HTTP API is described at `/openapi.json`;
+nothing on these pages is loaded from anywhere but this server.
+
+The server answers this machine only -- a request from another address, a
+listener bound elsewhere or a foreign `Host` gets 403 -- and the process it
+runs in cannot connect, or look up a name, past this machine; that is the
+shape of the program (`apothecary/stays_local.py`), not a setting, and the
+record *Personal data stays on the device, by construction* in
+`governance/qm/adr/` says why and names the one eventual exception.
+
 ## Generated Documentation (screenshots, GIFs, walkthroughs)
 
-The fractal zoom viewer is documented by its own Playwright E2E test, not by
-hand-maintained prose: each `docs.step("...")` call in
-`tests/e2e/test_docs_fractal_viewer.py` is both a checked assertion point and
-a sentence of documentation. Editing that test is how you edit these docs.
+The fractal zoom viewer and the printer monitor are documented by their own
+Playwright E2E tests, not by hand-maintained prose: each `docs.step("...")`
+call in `tests/e2e/test_docs_fractal_viewer.py` and
+`tests/e2e/test_docs_printer_monitor.py` is both a checked assertion point
+and a sentence of documentation. Editing those tests is how you edit these
+docs. Once generated:
+
+| Walkthrough | Page |
+|---|---|
+| Fractal zoom viewer | [`generated/fractal-viewer/fractal-viewer.md`](generated/fractal-viewer/fractal-viewer.md) |
+| Printer monitor (Device panel, polling overlay, G-code queries, firmware page) | [`generated/printer-monitor/printer-monitor.md`](generated/printer-monitor/printer-monitor.md) |
+
+The doc server runs with two scripted serial ports and a simulated printer
+mid-print (`apothecary docs generate --real-devices` to use the host's
+instead), so the screenshots are identical on every machine and never touch
+a real board.
 
 ```bash
 apothecary docs generate   # runs the doc-workflow tests, writes docs/generated/

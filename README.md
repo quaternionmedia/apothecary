@@ -42,10 +42,15 @@ uv run apothecary testrun -o example.scad
 # Explore parts
 uv run apothecary parts list
 
-# Start web viewer
+# Start the viewer
 uv run apothecary serve
 # Open http://127.0.0.1:8000/viewer
 ```
+
+The viewer serves three.js from this origin rather than a CDN, so it works
+offline. The library is checked in under `apothecary/static/vendor/three/`;
+nothing needs installing for it. (`apothecary install` fetches the separate
+JSCAD viewer, which is optional.)
 
 **[→ Full Quickstart Guide](QUICKSTART.md)**
 
@@ -57,6 +62,7 @@ uv run apothecary serve
 | [docs/](docs/README.md)                            | Full documentation index       |
 | [docs/scene-json.md](docs/scene-json.md)           | JSON format for scenes         |
 | [docs/parts-authoring.md](docs/parts-authoring.md) | Add your own parts             |
+| [docs/firmware.md](docs/firmware.md)               | Program boards from parts' sketches; monitor a G-code printer and let it drive its scene node |
 | [CONTRIBUTING.md](CONTRIBUTING.md)                 | Development setup & guidelines |
 | [CHANGELOG.md](CHANGELOG.md)                       | Version history                |
 
@@ -75,11 +81,29 @@ apothecary parts list          # List available parts
 apothecary parts info NAME     # Show part details
 apothecary parts render NAME   # Generate include stub
 apothecary parts generate-stl --all  # Generate all STLs
+apothecary parts generate-stl NAME -p wall=3   # Override a parameter
+apothecary parts verify NAME         # Declared bounds vs real geometry
 apothecary parts elephant-walk # Generate all-parts preview
+apothecary parts import FILE --name NAME --units in --up y   # An STL/OBJ made elsewhere, as a part (docs/geometry-from-elsewhere.md)
 
 # Submodules (external libraries like Gridfinity)
 apothecary submodules          # Init & update all submodules
 apothecary submodules --status # Check submodule status
+
+# Firmware (Arduino / ESP32 / RP2040 ...)
+apothecary firmware install --avr --esp32   # Install arduino-cli (checksum-verified) + cores
+apothecary firmware validate   # Check the toolchain; exit 1 if unusable
+apothecary firmware boards     # Connected boards (--all: every known FQBN)
+apothecary firmware sketches   # Sketches found under parts/<name>/<name>.ino
+apothecary firmware compile footpedal        # Build (FQBN from parts/footpedal/firmware.json)
+apothecary firmware upload footpedal -p /dev/ttyUSB0   # Compile + upload
+apothecary firmware flash-bin /dev/ttyUSB0 0x10000:app.bin --chip esp32   # esptool raw flash
+apothecary firmware printer /dev/ttyUSB1 --query M503    # a Marlin board: identify (M115), poll, report-only queries
+# GUI: /firmware (toolchain, devices), /firmware/monitor (one printer: status, temps, comms log), and the
+# viewer's Device panel, which pins a printer to a node so its status follows the machine
+apothecary firmware devices    # What's plugged in, chip identity, and what each should be running
+apothecary firmware probe /dev/ttyUSB0          # esptool chip/MAC/flash (resets the board)
+apothecary firmware listen /dev/ttyUSB0 --reset # Serial for a few seconds; names the running sketch
 
 # Server
 apothecary serve               # Start FastAPI server
@@ -104,6 +128,8 @@ Start the server and visit http://127.0.0.1:8000:
 | Endpoint                     | Description                             |
 | ---------------------------- | --------------------------------------- |
 | `/viewer`                    | Fractal zoom viewer (Three.js): navigates any registered site's Assembly tree at any depth, including the parts library |
+| `/firmware`                  | Firmware workbench: install the toolchain, install cores/libraries, pick a sketch, compile and upload to a connected board, or esptool-flash raw binaries — with live task output. Devices panel shows each port's chip identity (esptool probe), the sketch it *should* be running (last apothecary upload, with drift flags), and what it *is* running (serial banner) — plus a live serial terminal |
+| `/firmware/devices/stream`   | Server-sent events of a board's serial output; the fractal viewer's "⌨ Serial log" toggle floats it over the 3D view |
 | `/docs`                      | OpenAPI documentation (Swagger)         |
 | `/parts`                     | List all parts (JSON)                   |
 | `/parts/{name}/scad`         | Download OpenSCAD source                |

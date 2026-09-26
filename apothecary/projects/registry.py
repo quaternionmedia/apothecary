@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from importlib import import_module
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
@@ -26,6 +27,26 @@ def _gather(dirpath: Path, patterns: Iterable[str]) -> List[Path]:
     for pat in patterns:
         files.extend(sorted(dirpath.glob(pat)))
     return files
+
+
+def stl_output_for(item: ProjectInfo) -> Path:
+    """Where this part's STL belongs. The part decides, not the caller.
+
+    `item.path.with_suffix(".stl")` is the obvious guess and it is wrong for
+    any part whose SCAD is not in the folder the render belongs in. gridfinity
+    is the live example: its source sits inside a third-party submodule and its
+    wrapper overrides this precisely so a render does not land in somebody
+    else's checkout. Every caller that guessed wrote a stray file in there.
+    """
+    if item.wrapper:
+        try:
+            part = getattr(import_module(item.wrapper), "DEFAULT", None)
+            getter = getattr(part, "get_stl_output_path", None)
+            if callable(getter):
+                return Path(getter())
+        except Exception:  # a wrapper that will not import is not a path answer
+            pass
+    return item.path.with_suffix(".stl")
 
 
 def scan_projects(root: Path) -> List[ProjectInfo]:
@@ -83,37 +104,9 @@ def scan_projects(root: Path) -> List[ProjectInfo]:
             )
         )
 
-        # Add each part as a separate item
-        # Support both flat structure (parts/*.scad) and folder structure (parts/<name>/<name>.scad)
-        scad_files = set()
-
-        # Flat structure
-        for scad in parts_dir.glob("*.scad"):
-            scad_files.add(scad)
-
-        # Folder structure: parts/<part_name>/<part_name>.scad
-        for subdir in parts_dir.iterdir():
-            if subdir.is_dir():
-                # Look for a SCAD file with the same name as the folder
-                folder_name = subdir.name
-                scad_candidates = [
-                    subdir / f"{folder_name}.scad",
-                    # Also handle underscored names
-                    subdir / f"{folder_name.replace('-', '_')}.scad",
-                    subdir / f"{folder_name.replace('_', '-')}.scad",
-                ]
-                for candidate in scad_candidates:
-                    if candidate.exists():
-                        scad_files.add(candidate)
-                        break
-                else:
-                    # Fallback: any SCAD file in the folder
-                    for scad in subdir.glob("*.scad"):
-                        scad_files.add(scad)
-                        break
-
-        for scad in sorted(scad_files):
-            wrapper = _locate_wrapper_for_part(scad)
+        # Add each part as a separate item. Supports flat parts/<name>.scad,
+        # folder parts/<name>/<name>.scad, and nested parts/<a>/<b>/<b>.scad.
+        for scad in sorted(_discover_part_scads(parts_dir)):
             items.append(
                 ProjectInfo(
                     name=scad.stem,
@@ -121,7 +114,7 @@ def scan_projects(root: Path) -> List[ProjectInfo]:
                     kind="part",
                     files=[scad],
                     readme=False,
-                    wrapper=wrapper,
+                    wrapper=_locate_wrapper_for_part(scad),
                 )
             )
 
@@ -156,20 +149,108 @@ def summarize_structure(root: Path) -> Dict[str, Any]:
     return summary
 
 
+def resolve_wrapper_module(name: str, root: Path) -> str:
+    """Dotted wrapper module for a part *name* as listed by ``scan_projects``.
+
+    Prefers the wrapper the registry discovered (which is what lets nested
+    packages such as ``parts.rc.snowplow`` serve ``parts/rc/snowplow/``), and
+    falls back to the flat ``apothecary.projects.parts.<sanitized name>``
+    convention so callers can still address a wrapper that has no SCAD yet.
+    """
+    for p in scan_projects(root):
+        if p.kind == "part" and p.name == name and p.wrapper:
+            return p.wrapper
+    return f"apothecary.projects.parts.{_sanitize_module_name(name)}"
+
+
 def _sanitize_module_name(filename: str) -> str:
     base = filename.lower().replace(" ", "_").replace("-", "_")
     base = base.replace(".", "_")
     return base
 
 
+def _discover_part_scads(parts_dir: Path) -> set[Path]:
+    """Find the one SCAD file that represents each part under ``parts/``.
+
+    Flat files (``parts/<name>.scad``) are parts. A folder is a part if it
+    holds ``<folder>.scad`` (dash/underscore variants tolerated). A folder
+    whose subfolders hold SCAD files is a category (``parts/rc/``,
+    ``parts/boards/``) and is searched recursively; a SCAD file of its own
+    there is a library its parts include, not a part. A folder with SCAD
+    files and no such subfolders is a part by its first SCAD file. Git
+    submodule roots are skipped: their contents are library internals,
+    registered instead by ``_scan_submodule_parts`` via an explicit wrapper.
+    """
+    scads: set[Path] = set(parts_dir.glob("*.scad"))
+
+    def visit(subdir: Path) -> None:
+        if (subdir / ".git").exists():
+            return
+        folder_name = subdir.name
+        for candidate in (
+            subdir / f"{folder_name}.scad",
+            subdir / f"{folder_name.replace('-', '_')}.scad",
+            subdir / f"{folder_name.replace('_', '-')}.scad",
+        ):
+            if candidate.exists():
+                scads.add(candidate)
+                return
+        children = [child for child in sorted(subdir.iterdir()) if child.is_dir()]
+        if any(any(child.rglob("*.scad")) for child in children if not (child / ".git").exists()):
+            for child in children:
+                visit(child)
+            return
+        found = sorted(subdir.glob("*.scad"))
+        if found:
+            scads.add(found[0])
+
+    for subdir in sorted(parts_dir.iterdir()):
+        if subdir.is_dir():
+            visit(subdir)
+    return scads
+
+
 def _locate_wrapper_for_part(scad_path: Path) -> str | None:
-    """Return dotted module path for a wrapper if it exists, else None."""
+    """Return dotted module path for a wrapper if it exists, else None.
+
+    Flat wrappers live at ``apothecary/projects/parts/<name>.py``. Nested parts
+    (``parts/rc/snowplow/snowplow.scad``) may instead use a package mirroring
+    the folder: ``parts/rc/snowplow/<name>.py`` or ``parts/rc/snowplow/__init__.py``.
+    A part with no module of its own but a ``part.json`` beside its SCAD is
+    described by that sidecar, and its wrapper is the described-part importer
+    (``apothecary/projects/parts/described.py``).
+    """
     module_name = _sanitize_module_name(scad_path.stem)
     parts_pkg_dir = Path(__file__).resolve().parent / "parts"
-    candidate = parts_pkg_dir / f"{module_name}.py"
-    if candidate.exists():
+
+    flat_candidate = parts_pkg_dir / f"{module_name}.py"
+    if flat_candidate.exists():
         return f"apothecary.projects.parts.{module_name}"
-    return None
+
+    repo_parts_dir = parts_pkg_dir.parents[2] / "parts"
+    try:
+        rel_dir = scad_path.resolve().relative_to(repo_parts_dir).parent
+    except ValueError:
+        return _described_wrapper(scad_path)
+    if rel_dir == Path("."):
+        return _described_wrapper(scad_path)
+    sub_pkg = ".".join(_sanitize_module_name(part) for part in rel_dir.parts)
+    pkg_dir = parts_pkg_dir.joinpath(*(_sanitize_module_name(part) for part in rel_dir.parts))
+    if (pkg_dir / f"{module_name}.py").exists():
+        return f"apothecary.projects.parts.{sub_pkg}.{module_name}"
+    if (pkg_dir / "__init__.py").exists():
+        return f"apothecary.projects.parts.{sub_pkg}"
+    return _described_wrapper(scad_path)
+
+
+def _described_wrapper(scad_path: Path) -> str | None:
+    """The importer's module name for a part with a ``part.json`` beside it."""
+    from .parts import described
+
+    if described.sidecar_for(scad_path) is None:
+        return None
+    described.install_finder()
+    return described.module_name_for(scad_path.stem)
 
 
 def _scan_submodule_parts(root: Path, already_discovered: set) -> List[ProjectInfo]:
