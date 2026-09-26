@@ -42,12 +42,14 @@ def test_the_tracked_scad_is_the_code_at_its_defaults():
 
 
 def test_the_stl_goes_stale_when_the_code_that_builds_it_changes():
-    sources = set(stl_renderer._sources(DEFAULT))
+    sources = stl_renderer._sources(DEFAULT)
     code = {
         Path(rc_snowplow.__file__),
         *(PACKAGE / f for f in ("__init__.py", "blade.py", "mount.py")),
     }
-    assert code | {DEFAULT.source_file} <= sources
+    assert code | {DEFAULT.source_file} <= set(sources)
+    # Each once: the checklist names the ones newer than the render.
+    assert len(sources) == len(set(sources)), sources
 
 
 # --- the mount's bolt holes, against snowplow.yaml --------------------------------

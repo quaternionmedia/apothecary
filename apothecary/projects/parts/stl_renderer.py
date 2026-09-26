@@ -486,7 +486,8 @@ def _sources(part: BasePart) -> List[Path]:
             sources.extend(sorted(path.parent.glob("*.py")))
         else:
             sources.append(path)
-    return sources
+    # A part's class may live in the module that is also its wrapper.
+    return list(dict.fromkeys(sources))
 
 
 def _is_fresh(part: BasePart, stl_path: Path, params: dict) -> bool:
