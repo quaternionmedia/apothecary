@@ -46,5 +46,5 @@ Both are fixtures in `conftest.py`; the recorders themselves are in `doc_capture
   `apothecary docs generate` runs them that way, on a scripted server of its own.
 
 Before a screenshot of the viewer, `viewer_ready.settled(page)` waits until the
-level's geometry has loaded and the canvas has drawn it. Install
-`viewer_ready.WAVE_DONE` with `page.add_init_script` before the page loads.
+level's geometry has loaded (`window.fractalViewer.waveDone`) and the canvas has
+drawn it.

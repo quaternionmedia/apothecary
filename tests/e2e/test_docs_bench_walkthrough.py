@@ -17,7 +17,7 @@ import socket
 
 import pytest
 from playwright.sync_api import expect
-from viewer_ready import OCCLUSION_TESTED, WAVE_DONE, settled
+from viewer_ready import OCCLUSION_TESTED, settled
 
 # A lid, one inch by two by half an inch, drawn Y-up as a game or web tool
 # would: the kind of file that arrives from elsewhere.
@@ -171,7 +171,6 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     )
 
     # ----------------------------------------------------------------- viewer
-    page.add_init_script(WAVE_DONE)
     page.goto(f"{base_url}/viewer/sites/garage")
     expect(page.locator(".toolbar h1")).to_contain_text("Apothecary")
     contents = page.locator("#contents-list .contents-item")

@@ -651,6 +651,7 @@
 
         const PLACEHOLDER_SIZE = 40;   // mm -- box size for a child with no footprint
         const PLACEHOLDER_PITCH = 60;  // mm -- spacing between footprint-less siblings
+        const WAVE_CONCURRENCY = 3;    // real-geometry loads in flight at once
         const WHEEL_RESISTANCE_THRESHOLD = 500;
         const SNAP_INCREMENT = 50;    // mm -- matches WALL_THICKNESS; fine enough for by-hand placement
 
@@ -870,6 +871,8 @@
                 this.loadGeneration = 0;  // guards against a slow real-geometry
                                           // fetch upgrading a mesh after the
                                           // user has already navigated away
+                this.nodeLoads = new Map();  // nodeKey() -> token of its newest load
+                this.waveDone = Promise.resolve();  // settles when the level's geometry has loaded
 
                 this.initThreeJS();
                 this.bindEvents();
@@ -2011,9 +2014,9 @@
                 const index = this.currentRenderNodes(this.currentFocusNode())
                     .findIndex((n) => nodeKey(n) === key);
                 this.buildChildMeshes([node], Math.max(0, index));
-                if (this.effectiveDetailFor(node, key) === DETAIL_FULL) {
-                    this.scheduleWaveLoad([node]);
-                }
+                // This node alone: the rest of the level's wave keeps loading.
+                if (this.effectiveDetailFor(node, key) === DETAIL_FULL) this.addToWave(this.loadAndUpgrade(node, this.loadGeneration));
+                else this.nextLoadToken(key);  // a load already under way for it is stale
                 this.renderSelectedPanel();
             }
 
@@ -3469,28 +3472,53 @@
                 if (this.selectedName === key) this.transformControls.attach(realMesh);
             }
 
-            // The wave is exactly the set of nodes with a mesh on screen
-            // right now (renderFocus's renderNodes -- direct children
-            // normally, every leaf when "show all levels" is on). Upgrading
-            // anything not currently rendered has nowhere to land until a
-            // geometry cache exists to carry a prefetch across a zoom, which
-            // is real future work, not this increment. Within that set,
-            // "wave" is the sequential await order below: each mesh upgrades
-            // as its own load resolves, not all-or-nothing.
-            async scheduleWaveLoad(renderNodes) {
-                // A generation counter: if the user navigates again before a
-                // slow STL fetch resolves, that stale result must not
-                // upgrade a mesh belonging to the level they've since left.
+            // Every load of a node takes a token; only the newest may land.
+            nextLoadToken(key) {
+                const token = (this.nodeLoads.get(key) ?? 0) + 1;
+                this.nodeLoads.set(key, token);
+                return token;
+            }
+
+            // One node's geometry, loaded and swapped in -- unless the level
+            // has been left, or a newer load of the node started, by the time
+            // it arrives.
+            async loadAndUpgrade(node, generation, load = () => this.loadNodeGeometry(node)) {
+                const key = nodeKey(node);
+                const token = this.nextLoadToken(key);
+                const mesh = await load().catch((err) => { console.warn(`No geometry for ${key}:`, err); return null; });
+                if (!mesh) return;
+                if (generation === this.loadGeneration && this.nodeLoads.get(key) === token) this.upgradeMesh(node, mesh);
+                else disposeDeep(mesh);
+            }
+
+            // A load outside the level's wave (one node's detail, a
+            // regenerated part) is waited for by waveDone too.
+            addToWave(load) {
+                this.waveDone = Promise.all([this.waveDone, load]).then(() => {});
+                return load;
+            }
+
+            // The wave: real geometry for every node on screen at this level,
+            // WAVE_CONCURRENCY at a time (a composite node is an OpenSCAD render
+            // on the server). Leaving the level stops it before its next fetch.
+            // waveDone settles once it, and any load added since, have finished.
+            scheduleWaveLoad(renderNodes) {
                 const generation = ++this.loadGeneration;
-                for (const node of renderNodes) {
-                    // A node the user asked to see as a black box or a dot is
-                    // the one case where not fetching is the point: skipping
-                    // here is what makes the control save the render, rather
-                    // than just draw something else over it.
-                    if (this.effectiveDetailFor(node, nodeKey(node)) !== DETAIL_FULL) continue;
-                    const mesh = await this.loadNodeGeometry(node);
-                    if (mesh && generation === this.loadGeneration) this.upgradeMesh(node, mesh);
-                }
+                this.nodeLoads.clear();
+                const queue = [...renderNodes];
+                const worker = async () => {
+                    while (queue.length) {
+                        if (generation !== this.loadGeneration) return;
+                        const node = queue.shift();
+                        const key = nodeKey(node);
+                        // Black box and dot are the point of not fetching; a node
+                        // loaded (or set aside) since the wave began is handled.
+                        if (this.effectiveDetailFor(node, key) !== DETAIL_FULL || this.nodeLoads.has(key)) continue;
+                        await this.loadAndUpgrade(node, generation);
+                    }
+                };
+                this.waveDone = Promise.all(Array.from({ length: WAVE_CONCURRENCY }, worker)).then(() => {});
+                return this.waveDone;
             }
         }
 
