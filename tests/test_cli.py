@@ -74,6 +74,31 @@ def test_cli_parts_info_reports_bounds():
     assert data["bounds"]["size"] == pytest.approx({"x": 46.8, "y": 46.8, "z": 15.6})
 
 
+@pytest.fixture
+def uvicorn_runs(monkeypatch):
+    from apothecary.cli import server
+
+    calls = []
+    monkeypatch.setattr(server.uvicorn, "run", lambda target, **kw: calls.append((target, kw)))
+    return calls
+
+
+def test_serve_listens_on_loopback_and_does_not_wait_on_open_streams(uvicorn_runs):
+    result = CliRunner().invoke(cli, ["serve", "--no-viewer", "--port", "8123"])
+    assert result.exit_code == 0, result.output
+    [(target, kw)] = uvicorn_runs
+    assert target == "apothecary.api:app"
+    assert (kw["host"], kw["port"], kw["reload"]) == ("127.0.0.1", 8123, False)
+    assert kw["timeout_graceful_shutdown"] == 3
+
+
+def test_serve_refuses_an_address_off_this_machine(uvicorn_runs):
+    result = CliRunner().invoke(cli, ["serve", "--host", "0.0.0.0"])
+    assert result.exit_code == 1
+    assert "this machine only" in result.output
+    assert uvicorn_runs == []
+
+
 RETIRED = {
     "install": (["install", "--no-viewer"], "nothing to install: three.js is vendored"),
 }

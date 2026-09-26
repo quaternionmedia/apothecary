@@ -38,6 +38,7 @@ from pathlib import Path
 import click
 
 from ..projects.parts.skeleton import ROOT
+from .server import _loopback_or_die
 
 GENERATED_DOCS_ROOT = ROOT / "docs" / "generated"
 
@@ -100,12 +101,7 @@ def generate(host: str, port: int, keep_raw_video: bool, real_devices: bool):
     state in a temp dir, so the screenshots are the same on every machine
     and never depend on -- or touch -- a real board.
     """
-    from ..stays_local import require_loopback
-
-    try:
-        host = require_loopback(host)
-    except ValueError as exc:
-        raise click.ClickException(str(exc)) from None
+    host = _loopback_or_die(host)
     # A previous invocation's raw recordings (especially from a run that
     # failed before reaching cleanup, below) must not still be here --
     # _extract_workflow_videos picks "the" video for a given test out of

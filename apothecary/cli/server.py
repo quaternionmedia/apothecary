@@ -1,6 +1,5 @@
 """Server-related CLI commands: serve, dev."""
 
-import os
 import shutil
 import subprocess
 import sys
@@ -20,6 +19,24 @@ def _loopback_or_die(host: str) -> str:
         return require_loopback(host)
     except ValueError as exc:
         raise click.ClickException(str(exc)) from None
+
+
+def run_server(
+    target: object, host: str, port: int, reload: bool = False, log_level: str = "info"
+) -> None:
+    """Run uvicorn on this machine only. `target` is an app, or an import string for reload.
+
+    An SSE response such as /firmware/devices/stream ends only when the browser
+    leaves; without the shutdown timeout, Ctrl-C or a reload waits on it forever.
+    """
+    uvicorn.run(
+        target,
+        host=_loopback_or_die(host),
+        port=port,
+        reload=reload,
+        log_level=log_level,
+        timeout_graceful_shutdown=3,
+    )
 
 
 @click.command()
@@ -43,26 +60,12 @@ def _loopback_or_die(host: str) -> str:
 def serve(host: str, port: int, reload: bool, refresh_docs: bool):
     """Run the FastAPI server. It listens on this machine only (see apothecary/stays_local.py)."""
     host = _loopback_or_die(host)
-    from ..api import app as fastapi_app
-
-    # Start the server
     click.echo(f"Starting server on http://{host}:{port}")
-    # One entry point. Everything else here is an API the viewer reads.
     click.echo(f"  Viewer: http://{host}:{port}/viewer")
     click.echo(f"  Docs:   http://{host}:{port}/docs")
     if refresh_docs:
         refresh_docs_in_background()
-
-    # A live serial overlay (/firmware/devices/stream) is an SSE response that
-    # only ends when the browser leaves; without a graceful-shutdown timeout
-    # a reload or Ctrl-C waits on it forever.
-    graceful = {"timeout_graceful_shutdown": 3}
-    if reload:
-        # When reload is enabled, uvicorn needs an import string
-        uvicorn.run("apothecary.api:app", host=host, port=port, reload=reload, **graceful)
-    else:
-        # Without reload, we can pass the app directly
-        uvicorn.run(fastapi_app, host=host, port=port, reload=False, **graceful)
+    run_server("apothecary.api:app", host, port, reload=reload)
 
 
 @click.command()
@@ -290,7 +293,6 @@ def refresh_docs_in_background() -> subprocess.Popen | None:
             cwd=ROOT,
             stdout=handle,
             stderr=subprocess.STDOUT,
-            env={**os.environ, "APOTHECARY_DOCS_REFRESH": "1"},
         )
     except OSError as exc:
         note_refresh(finished=None, ok=False, error=f"could not start docs generate: {exc}")
