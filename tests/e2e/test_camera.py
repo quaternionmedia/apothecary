@@ -104,6 +104,22 @@ def test_a_camera_records_its_own_surroundings(
     cameras = page.request.get(f"{base_url}/cameras?site=garage").json()
     assert len(cameras) == 1 and cameras[0]["path"] == "workbench"
 
+    # Choosing pieces redraws the placement from what the page knows, asking nothing.
+    asked = []
+
+    def camera_request(request):
+        if "/cameras" in request.url:
+            asked.append(request.url)
+
+    page.on("request", camera_request)
+    for path in ("printer_1", "workbench"):
+        page.locator(f"#contents-list .contents-item[data-path='{path}']").click()
+    expect(panel.locator("#cam-place-note")).to_contain_text("placed at workbench")
+    with page.expect_request("**/health"):
+        page.evaluate("() => fetch('/health')")
+    page.remove_listener("request", camera_request)
+    assert asked == []
+
     # The mark follows the focus: looking into another piece, neither the badge
     # nor the frustum stays behind; zooming back out brings both back.
     page.evaluate("() => window.fractalViewer.zoomIn('printer_1')")
