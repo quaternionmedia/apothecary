@@ -392,3 +392,48 @@ def test_cli_devices_probe_listen(fake_arduino_cli, monkeypatch):
     r = runner.invoke(cli, ["firmware", "devices", "--json-out"])
     assert json.loads(r.output)[0]["expected"]["record"]["sketch"] == "footpedal"
     assert runner.invoke(cli, ["firmware", "probe", "nope"]).exit_code != 0
+
+
+def test_two_writers_of_the_state_file_keep_each_others_records(tmp_path, monkeypatch):
+    """The server and a CLI command both write the state file. Two read-modify-
+    writes interleaved used to keep 12 of 200 pins and crash on a shared temp name."""
+    import threading
+
+    from apothecary.firmware.devices import FirmwareState
+    from apothecary.firmware.models import DeviceInfo
+
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path))
+    server, cli = FirmwareState(), FirmwareState()  # two processes: two in-process locks
+    errors = []
+
+    def pins():
+        for i in range(60):
+            try:
+                server.set_binding("garage", f"node{i}", f"aa:bb:cc:dd:ee:{i:02x}")
+            except Exception as exc:  # noqa: BLE001 - counted, not raised in a thread
+                errors.append(exc)
+
+    def probes():
+        for i in range(60):
+            try:
+                cli.remember_device(DeviceInfo(port=f"/dev/ttyUSB{i}"))
+            except Exception as exc:  # noqa: BLE001
+                errors.append(exc)
+
+    threads = [threading.Thread(target=pins), threading.Thread(target=probes)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert errors == []
+    assert len(server.bindings()) == 60 and len(server._load()["devices"]) == 60
+
+
+def test_an_unreadable_state_file_is_kept_aside_not_erased(tmp_path, monkeypatch):
+    from apothecary.firmware.devices import FirmwareState
+
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path))
+    state = FirmwareState()
+    state.path.write_text('{"bindings": [ half a file')
+    state.set_binding("garage", "footpedal", "aa:bb:cc:dd:ee:ff")
+    aside = list(tmp_path.glob("firmware-state.json.unreadable-*"))
+    assert len(aside) == 1 and "half a file" in aside[0].read_text()
+    assert [b.path for b in state.bindings()] == ["footpedal"]

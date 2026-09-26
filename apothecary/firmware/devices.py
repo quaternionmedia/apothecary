@@ -26,11 +26,21 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, Iterator, List, Optional
+
+try:  # the state file's cross-process lock
+    import fcntl
+except ImportError:  # pragma: no cover - Windows
+    fcntl = None
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None
 
 from ..projects.parts.skeleton import ROOT
 from ..stays_local import subprocess_env
@@ -87,18 +97,64 @@ def state_file() -> Path:
     return state_dir() / "firmware-state.json"
 
 
+class _StateLock:
+    """One writer at a time across threads *and* processes: the server and a CLI
+    command (`firmware printer`, `upload`) both write the state file, and two
+    read-modify-writes interleaved used to drop each other's pins."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        self._thread = threading.Lock()
+        self._fd: Optional[int] = None
+
+    def __enter__(self):
+        self._thread.acquire()
+        try:
+            private_folder(self.path.parent)
+            self._fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o600)
+            if fcntl is not None:
+                fcntl.flock(self._fd, fcntl.LOCK_EX)
+            elif msvcrt is not None:  # pragma: no cover - Windows
+                msvcrt.locking(self._fd, msvcrt.LK_LOCK, 1)
+        except BaseException:
+            self._thread.release()
+            raise
+        return self
+
+    def __exit__(self, *exc):
+        try:
+            if self._fd is not None:
+                if fcntl is not None:
+                    fcntl.flock(self._fd, fcntl.LOCK_UN)
+                elif msvcrt is not None:  # pragma: no cover - Windows
+                    msvcrt.locking(self._fd, msvcrt.LK_UNLCK, 1)
+                os.close(self._fd)
+                self._fd = None
+        finally:
+            self._thread.release()
+
+
 class FirmwareState:
     """Flash records, cached probes and node bindings: one JSON file, read fresh on every use."""
 
     def __init__(self, path: Optional[Path] = None):
         self.path = path or state_file()
-        self._lock = threading.Lock()
+        self._lock = _StateLock(self.path.with_suffix(".lock"))
 
     def _load(self) -> dict:
         try:
             data = json.loads(self.path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            data = {}
         except (OSError, json.JSONDecodeError):
-            return {"flashes": [], "devices": {}, "bindings": []}
+            # Never written over: the next save would have erased every pin and
+            # flash record in it. Kept beside the new file for the person.
+            aside = self.path.with_name(f"{self.path.name}.unreadable-{int(time.time())}")
+            try:
+                self.path.replace(aside)
+            except OSError:
+                pass
+            data = {}
         data.setdefault("flashes", [])
         data.setdefault("devices", {})
         data.setdefault("bindings", [])
@@ -106,9 +162,10 @@ class FirmwareState:
 
     def _save(self, data: dict) -> None:
         private_folder(self.path.parent)
-        tmp = self.path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
-        tmp.replace(self.path)
+        fd, tmp = tempfile.mkstemp(dir=self.path.parent, prefix=".firmware-state.", suffix=".tmp")
+        with os.fdopen(fd, "w", encoding="utf-8") as out:
+            out.write(json.dumps(data, indent=2, default=str))
+        os.replace(tmp, self.path)
 
     def record_flash(self, record: FlashRecord) -> None:
         with self._lock:
