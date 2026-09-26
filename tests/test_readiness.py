@@ -315,3 +315,20 @@ class TestThePartDecidesWhereItsStlLives:
 
         submodule = ROOT / "parts" / "gridfinity" / "gridfinity-rebuilt-openscad"
         assert not list(submodule.glob("*.stl")), "a render landed in a third-party checkout"
+
+
+def test_a_described_part_counts_its_part_json_as_a_source(tmp_path):
+    """A described part's wrapper is its part.json; an edit there makes its render stale."""
+    import importlib
+    import os
+
+    from apothecary.projects.parts.readiness import _sources_newer_than
+    from apothecary.projects.parts.skeleton import ROOT
+    from apothecary.projects.registry import scan_projects
+
+    item = next(p for p in scan_projects(ROOT) if p.kind == "part" and p.name == "esp32_devkitc")
+    part = importlib.import_module(item.wrapper).DEFAULT
+    old_render = tmp_path / "old.stl"
+    old_render.write_text("solid x\nendsolid x\n")
+    os.utime(old_render, (0, 0))
+    assert "part.json" in _sources_newer_than(part, old_render)

@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
 from apothecary.meshes import MeshError, bounds, read_mesh
-from apothecary.projects.parts.stl_renderer import get_renderer, read_params_sidecar
+from apothecary.projects.parts.stl_renderer import _sources, get_renderer, read_params_sidecar
 
 PASS = "pass"
 BLOCKED = "blocked"
@@ -73,22 +73,11 @@ class Readiness:
 
 
 def _sources_newer_than(part, stl_path: Path) -> List[str]:
-    """Inputs that changed after the render, if any.
-
-    The wrapper counts, not just the SCAD. datum_core's geometry was reported
-    as drifted by 1.2 mm for exactly this reason: the SCAD was untouched and
-    the wrapper's `walls` default had moved to the house constant, so the STL
-    on disk answered a question nobody was asking any more. A re-render put
-    declared and measured at 46.8 to the millimetre.
-    """
-    import inspect
-
+    """Inputs that changed after the render, if any: the SCAD and the wrapper
+    (a Python module, or a described part's part.json) -- the same inputs
+    build_stl rebuilds from."""
     rendered = stl_path.stat().st_mtime
-    inputs = [part.source_file]
-    try:
-        inputs.append(Path(inspect.getfile(type(part))))
-    except (TypeError, OSError):  # a part defined somewhere unreadable
-        pass
+    inputs = _sources(part)
     return [f.name for f in inputs if f.exists() and f.stat().st_mtime > rendered]
 
 
