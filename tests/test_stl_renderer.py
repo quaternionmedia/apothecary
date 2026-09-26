@@ -254,7 +254,6 @@ class TestBuildStl:
         assert build_stl(part, renderer=Reading()).success
         assert f'import("{(tmp_path / "mesh.stl").as_posix()}"' in seen[0]
 
-    @pytest.mark.slow
     @needs_openscad
     def test_python_geometry_is_turned_by_display_rotation(self, tmp_path):
         part = _Built(
