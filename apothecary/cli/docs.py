@@ -234,8 +234,10 @@ def _start_server(host: str, port: int, simulated_devices: bool = True):
         "--port",
         str(port),
     ]
+    # DEVNULL, not PIPE: nothing reads these, and an unread pipe fills and
+    # blocks the server mid-run.
     server_proc = subprocess.Popen(
-        server_cmd, cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        server_cmd, cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
 
     base_url = f"http://{host}:{port}"

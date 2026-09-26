@@ -39,8 +39,9 @@ def _loopback_or_die(host: str) -> str:
 @click.option("--no-viewer", is_flag=True, help="Disable the JSCAD viewer even if assets exist")
 @click.option(
     "--refresh-docs/--no-refresh-docs",
-    default=True,
-    help="Regenerate docs/generated/ in the background as the server starts (served at /docs)",
+    default=False,
+    help="Also regenerate docs/generated/ in the background (a headless browser run, "
+    "a minute or two). Off by default: starting a server is not a test run.",
 )
 def serve(
     host: str, port: int, reload: bool, viewer_path: str | None, no_viewer: bool, refresh_docs: bool
@@ -133,7 +134,10 @@ def serve(
 )
 @click.option("--skip-stl", is_flag=True, help="Skip STL generation")
 @click.option("--elephant", is_flag=True, help="Force regeneration of elephant walk file")
-def dev(host: str, port: int, install: bool, skip_stl: bool, elephant: bool):
+@click.option(
+    "--refresh-docs", is_flag=True, help="Also regenerate docs/generated/ in the background"
+)
+def dev(host: str, port: int, install: bool, skip_stl: bool, elephant: bool, refresh_docs: bool):
     """Development workflow: regenerate files and start server.
 
     This convenience command runs the full dev setup:
@@ -310,7 +314,8 @@ def dev(host: str, port: int, install: bool, skip_stl: bool, elephant: bool):
     _safe_echo("  → Viewer: http://" + host + ":" + str(port) + "/viewer", fg="green")
     _safe_echo("  → Docs:   http://" + host + ":" + str(port) + "/docs", fg="green")
     click.echo("")
-    refresh_docs_in_background()
+    if refresh_docs:
+        refresh_docs_in_background()
 
     uvicorn.run("apothecary.api:app", host=host, port=port, reload=True)
 
