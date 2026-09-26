@@ -1,8 +1,11 @@
 import pytest
 from fastapi.testclient import TestClient
 
+import apothecary.api as api
+from apothecary import meshes
 from apothecary.api import app
 from apothecary.example import create_example_scene
+from apothecary.projects.parts.calibration_cube import DEFAULT as CUBE
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.projects.registry import scan_projects
 
@@ -145,3 +148,48 @@ def test_a_nested_part_is_found_by_the_name_the_listing_gives_it():
     listed = {part["name"] for part in client.get("/parts").json()}
     assert "rc.snowplow" in listed
     assert client.get("/parts/rc.snowplow/scad").status_code == 200
+
+
+# POST /parts/{name}/stl/generate goes through build_stl. calibration_cube's STL
+# is pointed at a temp file, so nothing here writes into parts/.
+
+UNIT_CUBE = (
+    "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nv 0 0 1\nv 1 0 1\nv 1 1 1\nv 0 1 1\n"
+    "f 1 2 3 4\nf 5 6 7 8\nf 1 2 6 5\nf 2 3 7 6\nf 3 4 8 7\nf 4 1 5 8\n"
+)
+
+
+class _OpenSCADIsHere:
+    is_available = True
+
+
+@pytest.fixture
+def cube_stl(tmp_path, monkeypatch):
+    """Where calibration_cube builds to in these tests; OpenSCAD reported present."""
+    stl = tmp_path / "calibration_cube.stl"
+    monkeypatch.setattr(type(CUBE), "get_stl_output_path", lambda self: stl)
+    monkeypatch.setattr(api, "get_stl_renderer", lambda: _OpenSCADIsHere())
+    return stl
+
+
+@pytest.mark.parametrize("params", [{"sise": 12}, {"size": 1}], ids=["unknown", "out of range"])
+def test_generate_refuses_parameters_the_part_does_not_take(params):
+    r = TestClient(app).post("/parts/calibration_cube/stl/generate", json={"params": params})
+    assert r.status_code == 422
+    assert next(iter(params)) in r.json()["detail"]
+
+
+def test_generate_keeps_a_fresh_stl(cube_stl):
+    meshes.write_stl(meshes.read_obj(UNIT_CUBE), cube_stl)
+    r = TestClient(app).post("/parts/calibration_cube/stl/generate")
+    assert r.status_code == 200, r.text
+    assert r.json()["regenerated"] is False
+    assert r.json()["bounds"] is not None
+
+
+def test_generate_is_503_for_a_part_that_cannot_be_built_here(cube_stl, monkeypatch):
+    monkeypatch.setattr(type(CUBE), "can_generate_stl", lambda self: (False, "needs 2024.x"))
+    r = TestClient(app).post("/parts/calibration_cube/stl/generate?force=true")
+    assert r.status_code == 503
+    assert "needs 2024.x" in r.json()["detail"]
+    assert not cube_stl.exists()

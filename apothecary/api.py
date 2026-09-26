@@ -51,10 +51,11 @@ from .hierarchy import Assembly
 from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
 from .primitives import Cube, Cylinder, Sphere
+from .projects.parts.base import BasePart
 from .projects.parts.skeleton import ROOT
+from .projects.parts.stl_renderer import build_stl
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
-from .projects.parts.stl_renderer import write_params_sidecar
-from .projects.registry import _sanitize_module_name, scan_projects, stl_output_for
+from .projects.registry import ProjectInfo, _sanitize_module_name, scan_projects
 from .routes.pictures import router as pictures_router
 from .scene import Scene
 from .site_store import SiteStore, UnknownSiteError
@@ -64,44 +65,41 @@ from .transforms import Translate
 from .viewer import render_fractal_viewer_page
 
 
-async def _generate_missing_stls():
-    """Generate STL files for all parts that don't have one.
+def _registered_part(item: ProjectInfo) -> BasePart:
+    """A registry entry's part: its wrapper's DEFAULT, or a bare part for a SCAD with none."""
+    if item.wrapper:
+        return import_module(item.wrapper).DEFAULT
+    return BasePart(name=item.name, source_file=item.path)
 
-    This runs at startup to ensure all parts have viewable STL files.
-    STL files are not committed to git, so they need to be generated locally.
+
+async def _generate_missing_stls():
+    """Build the STL of every registered part that has none.
+
+    STLs are build products a fresh checkout does not have. Each goes through
+    build_stl on a worker thread, one part at a time; a part that cannot be
+    built on this machine is skipped with its reason.
     """
-    # Check if auto-generation is disabled
     if os.environ.get("APOTHECARY_SKIP_STL_GENERATION", "").lower() in ("1", "true", "yes"):
         print("STL generation skipped (APOTHECARY_SKIP_STL_GENERATION=1)")
         return
 
-    renderer = get_stl_renderer()
-
-    if not renderer.is_available:
+    if not get_stl_renderer().is_available:
         print("OpenSCAD not found - STL generation skipped")
         print("Install OpenSCAD to enable automatic STL generation")
         return
 
-    parts = [p for p in scan_projects(ROOT) if p.kind == "part"]
-    missing = []
-
-    for part in parts:
-        stl_path = stl_output_for(part)
-        if not stl_path.exists():
-            missing.append(part)
-
+    parts = [_registered_part(p) for p in scan_projects(ROOT) if p.kind == "part"]
+    missing = [part for part in parts if not part.get_stl_output_path().exists()]
     if not missing:
         return
 
     print(f"Generating {len(missing)} missing STL file(s)...")
-
     for part in missing:
-        stl_path = stl_output_for(part)
         print(f"  Generating {part.name}...", end=" ", flush=True)
-
-        result = await renderer.render_stl_async(part.path, stl_path, timeout=120)
-
-        if result.success:
+        result = await asyncio.to_thread(build_stl, part, timeout=120)
+        if result.skipped == "refused":
+            print(f"skipped: {result.error_message}")
+        elif result.success:
             print(f"OK ({result.render_time_seconds:.1f}s)")
         else:
             print(f"FAILED: {result.error_message}")
@@ -117,20 +115,12 @@ async def _generate_missing_stls_in_background():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan handler - runs on startup and shutdown.
+    """Start building missing part STLs in the background; cancel it on shutdown.
 
-    STL generation for missing parts runs as a background task, not
-    awaited here. Real OpenSCAD renders can take tens of seconds per part
-    (CGAL boolean ops -- one part in this repo's own library takes ~39s),
-    and _generate_missing_stls() renders every missing part sequentially;
-    awaiting it here meant /health -- and every other route -- was
-    unreachable until all of them finished, which starved every client
-    that polls /health with a short timeout (apothecary test all,
-    tests/e2e's --start-server fixture, and a plain first-run
-    `apothecary serve` alike). Parts already handle "not generated yet"
-    gracefully (placeholder geometry in the viewer, on-demand
-    /parts/{name}/stl/generate), so backgrounding this is a strict
-    improvement, not a behavior change callers need to adapt to.
+    Not awaited: a render can take tens of seconds per part, and /health has to
+    answer meanwhile for whatever polls it with a short timeout (`apothecary
+    docs`, tests/e2e's --start-server fixture). The viewer draws a placeholder
+    for a part with no STL yet and asks /parts/{name}/stl/generate for it.
     """
     # Startup
     stl_task = asyncio.create_task(_generate_missing_stls_in_background())
@@ -287,13 +277,7 @@ def _part_metadata(part) -> Dict[str, object]:
         "has_params": bool(part.params_model),
     }
 
-    # Check if this part has special STL generation requirements
-    stl_can_generate = True
-    stl_note = None
-    if hasattr(part, "can_generate_stl"):
-        stl_can_generate, stl_note = part.can_generate_stl()
-
-    # Add file availability info
+    stl_can_generate, stl_note = part.can_generate_stl()
     metadata["files"] = {
         "scad": {"exists": part.source_file.exists(), "url": f"/parts/{part.name}/scad"},
         "stl": {
@@ -301,7 +285,7 @@ def _part_metadata(part) -> Dict[str, object]:
             "url": f"/parts/{part.name}/stl" if part.stl_file else None,
             "generate_url": f"/parts/{part.name}/stl/generate",
             "can_generate": stl_can_generate,
-            "note": stl_note,
+            "note": stl_note or None,
         },
     }
 
@@ -413,100 +397,48 @@ class StlGenerateRequest(BaseModel):
 
 
 @app.post("/parts/{name}/stl/generate")
-async def generate_part_stl(
+def generate_part_stl(
     name: str,
     force: bool = Query(False),
     body: Optional[StlGenerateRequest] = None,
 ):
-    """
-    Generate an STL file from the part's SCAD source.
+    """Build a part's STL through build_stl, as `apothecary parts generate-stl` does.
 
-    Requires OpenSCAD to be installed on the server.
-
-    Args:
-        name: Part name
-        force: If True, regenerate even if STL already exists
-        params: Parameter overrides, validated against the part's own model
-            before rendering. Supplying any implies a regeneration, since the
-            STL on disk was rendered from something else.
-
-    Returns:
-        Generation status with download URL on success
+    ``params`` are checked against what the part declares (422 on an unknown
+    name or a bad value). An STL newer than its sources and rendered from the
+    same parameters is kept unless ``force`` (``regenerated: false``). No
+    OpenSCAD, or a part that cannot be built on this machine, is a 503.
     """
     part = _load_part_wrapper(name)
-    renderer = get_stl_renderer()
-
-    if not renderer.is_available:
+    try:
+        overrides = part.validate_overrides(body.params if body else None)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    if not get_stl_renderer().is_available:
         raise HTTPException(
             status_code=503, detail="OpenSCAD not installed. Cannot generate STL files."
         )
 
-    # OpenSCAD accepts any -D name, defined or not, so an unrecognised
-    # parameter would render the defaults and report success. Reject it here.
-    params = body.params if body else {}
-    overrides = {}
-    if params:
-        model_cls = getattr(part, "params_model", None)
-        if model_cls is not None:
-            unknown = sorted(set(params) - set(model_cls.model_fields))
-            if unknown:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"unknown parameter(s): {', '.join(unknown)}",
-                )
-            try:
-                validated = model_cls(**params)
-            except ValidationError as exc:
-                raise HTTPException(status_code=422, detail=exc.errors()) from exc
-            overrides = {key: getattr(validated, key) for key in params}
-        else:
-            overrides = dict(params)
-
-    # Check if this part has special requirements
-    if hasattr(part, "can_generate_stl"):
-        can_gen, reason = part.can_generate_stl()
-        if not can_gen:
-            raise HTTPException(
-                status_code=503, detail=f"Cannot generate STL for '{name}': {reason}"
-            )
-
-    # Check if we already have an up-to-date STL
-    if not force and not overrides and part.stl_file and part.stl_file.exists():
-        return {
-            "success": True,
-            "message": "STL already exists (use force=true to regenerate)",
-            "stl_url": f"/parts/{name}/stl",
-            "regenerated": False,
-        }
-
-    # Use part-specific OpenSCAD path if available (e.g., nightly build)
-    part_renderer = renderer
-    if hasattr(part, "get_openscad_path"):
-        custom_path = part.get_openscad_path()
-        if custom_path and custom_path != renderer.openscad_path:
-            from apothecary.projects.parts.stl_renderer import OpenSCADRenderer
-
-            part_renderer = OpenSCADRenderer(openscad_path=str(custom_path))
-
-    # Generate STL - the part's own output path, and whatever overrides were
-    # validated above; a part naming its own renderer must still honour them.
-    stl_path = part.get_stl_output_path()
-    result = await part_renderer.render_stl_async(
-        part.source_file, stl_path, params=overrides or None
-    )
-
+    result = build_stl(part, overrides, force=force)
+    if result.skipped == "refused":
+        raise HTTPException(
+            status_code=503, detail=f"Cannot generate STL for '{name}': {result.error_message}"
+        )
     if not result.success:
         raise HTTPException(
             status_code=500, detail=f"STL generation failed: {result.error_message}"
         )
 
-    write_params_sidecar(stl_path, overrides)
-
+    regenerated = result.skipped != "fresh"
     return {
         "success": True,
-        "message": f"STL generated successfully in {result.render_time_seconds:.1f}s",
+        "message": (
+            f"STL generated in {result.render_time_seconds:.1f}s"
+            if regenerated
+            else "STL is up to date (force=true rebuilds it)"
+        ),
         "stl_url": f"/parts/{name}/stl",
-        "regenerated": True,
+        "regenerated": regenerated,
         "render_time_seconds": result.render_time_seconds,
         "params": jsonable_encoder(overrides),
         "bounds": jsonable_encoder(part.get_bounds(overrides or None)),
@@ -764,8 +696,8 @@ def _node_stl_cache_paths(scad_text: str) -> tuple[Path, Path]:
     return ROOT / f".node-stl-{key}.scad", _NODE_STL_CACHE_DIR / f"{key}.stl"
 
 
-async def _build_parts_referred_to(node: Assembly) -> None:
-    """Generate the STL of every registered part the subtree refers to and lacks."""
+def _build_parts_referred_to(node: Assembly) -> None:
+    """Build the STL of every registered part the subtree refers to and lacks."""
     wanted = set()
 
     def visit(n: Assembly) -> None:
@@ -775,19 +707,15 @@ async def _build_parts_referred_to(node: Assembly) -> None:
             visit(child)
 
     visit(node)
-    if not wanted:
-        return
-    renderer = get_stl_renderer()
-    if not renderer.is_available:
+    if not wanted or not get_stl_renderer().is_available:
         return
     by_name = {p.name: p for p in scan_projects(ROOT) if p.kind == "part"}
     for ref in sorted(wanted):
-        item = by_name.get(ref)
-        if item is None:
+        if ref not in by_name:
             continue
-        stl_path = stl_output_for(item)
-        if not stl_path.exists():
-            await renderer.render_stl_async(item.path, stl_path, timeout=120)
+        part = _registered_part(by_name[ref])
+        if not part.get_stl_output_path().exists():
+            build_stl(part, timeout=120)
 
 
 def _bounds_dict(bounds: BoundingBox3D | None) -> Dict[str, List[float]] | None:
@@ -1374,7 +1302,7 @@ async def get_node_stl(name: str, path: str):
     # artifact a fresh clone has not made yet. Build what is missing first,
     # as the viewer does for a part_ref leaf, so the node renders on the
     # first request rather than answering that nobody has run generate-stl.
-    await _build_parts_referred_to(node)
+    await asyncio.to_thread(_build_parts_referred_to, node)
 
     try:
         scad_text = node.to_scad_object(strict=True).render()
