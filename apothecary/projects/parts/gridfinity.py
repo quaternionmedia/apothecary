@@ -38,6 +38,14 @@ GRID_SIZE_MM = 42.0  # Standard gridfinity grid unit in mm
 HEIGHT_UNIT_MM = 7.0  # Height unit in mm
 STACKING_LIP_MM = 3.55  # Stacking lip height (with fillet)
 
+# `openscad --version` years that predate the syntax the library needs (2024.x+).
+_PRE_2024_YEARS = ("2019", "2020", "2021", "2022", "2023")
+
+
+def _too_old(version: Optional[str]) -> bool:
+    """Whether an ``openscad --version`` string is older than the library supports."""
+    return bool(version) and any(year in version for year in _PRE_2024_YEARS)
+
 
 class GridzDefine(int, Enum):
     """How gridz is used to calculate bin height."""
@@ -259,20 +267,14 @@ class GridfinityBinPart(BasePart):
             return False, "OpenSCAD not installed"
 
         version = renderer.get_version()
-        # Check if installed version is too old
-        is_old_version = version and any(
-            v in version for v in ["2019", "2020", "2021", "2022", "2023"]
-        )
-
-        if is_old_version:
-            # Check if nightly build is available
+        if _too_old(version):
             nightly = renderer.find_nightly()
             if nightly:
                 nightly_version = renderer.get_nightly_version()
                 return True, f"Will use nightly build: {nightly} ({nightly_version})"
             else:
                 return False, (
-                    f"OpenSCAD {version} is too old. gridfinity requires 2024.x+ "
+                    f"{version} is too old. gridfinity requires 2024.x+ "
                     f"(development build). Install OpenSCAD Nightly from "
                     f"https://openscad.org/downloads.html#snapshots"
                 )
@@ -291,12 +293,7 @@ class GridfinityBinPart(BasePart):
         if not renderer.is_available:
             return None
 
-        version = renderer.get_version()
-        is_old_version = version and any(
-            v in version for v in ["2019", "2020", "2021", "2022", "2023"]
-        )
-
-        if is_old_version:
+        if _too_old(renderer.get_version()):
             nightly = renderer.find_nightly()
             if nightly:
                 return nightly
