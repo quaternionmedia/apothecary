@@ -1,114 +1,45 @@
 # TODO
 
-## Completed (v0.2.0)
-- [x] Reorganized parts into per-part folders (`parts/<name>/<name>.scad`)
-- [x] Added `PartFiles` data model linking SCAD/JSCAD/STL files
-- [x] Created STL renderer service using OpenSCAD CLI
-- [x] Added API endpoints: `/parts/{name}/stl`, `/stl/generate`, `/files`
-- [x] Updated viewer to load actual STL geometry via Three.js STLLoader
-- [x] Added `apothecary test all` for combined test suite with aggregate output
-- [x] Removed orphaned code: `render_context.py`, `openscad_framework.py`, legacy JSCAD viewer endpoints
+Part readiness, bounds drift and contested values are computed, not listed
+here: run `apothecary problems`.
 
-## Known Issues
-1. **JSCAD imports** – Generated modules emit `import ... from '@jscad/modeling/src/primitives'` which may not work in all environments (see `apothecary/jscad.py` lines 8-10, 117-119).
+## Open in this repository
 
-2. **Packaging** – The wheel only ships the Python package; `parts/` and `templates/` aren't included, so PyPI installs can't render parts. Needs `include_package_data=True` or MANIFEST.in.
+- JSCAD: generated modules import `@jscad/modeling/src/*` deep paths.
+  `node --check` passes, but no test loads a module against the package.
+- Packaging: the wheel ships `apothecary/` only. `parts/` and `templates/` are
+  not in it, so an installed wheel cannot render a part.
+- The one-screen move, phases 4-5: [docs/plans/one-screen-2026-09-20.md](docs/plans/one-screen-2026-09-20.md).
+- Optional local models behind the shape finder: [docs/plans/photo-finders-local-models-2026-09-21.md](docs/plans/photo-finders-local-models-2026-09-21.md).
 
-3. **Path leakage** – `/parts` endpoints expose absolute filesystem paths in include stubs. Should use relative/virtual URLs.
+## For a person to decide
 
-4. **Declared bounds disagree with geometry** – `apothecary parts verify --all`
-   finds four wrappers whose `get_bounds` does not match what OpenSCAD emits.
-   Only `calibration_cube` and `datum_core` agree.
+- What counts as "this machine": a home cluster, or the one machine? The draft
+  record *Personal data stays on the device* says the one machine; storage,
+  asking the video editor (alfred) for a frame, and any cluster deployment
+  wait on its ratification.
+- Is a person's one-time download of an openly licensed model the same class
+  as the install-time fetches that record allows?
+- When local-only makes something impossible: build it badly and say so, or
+  do not build it?
+- Should photo gathering guess before it is asked, or propose and wait? It
+  guesses now; a person's word already wins.
+- Where a person's answers about their photographs are kept, and when one
+  expires: today they live in the file handed to `--answers`.
+- Are the questions `photo gather --ask` ranks first the ones worth a minute?
+  Only a person with a real folder of photographs can check.
+- Backups are the person's, not the program's; say so where the stays-local
+  rule is stated.
 
-   | Part | Declared | Measured |
-   |---|---|---|
-   | v_slot | 20 x 20 x 100 | 20 x 20 x 20 |
-   | couch_block | 40 x 40 x 20 | 152.4 x 101.6 x 50.8 |
-   | dryerknob | 30 x 30 x 15 | 33 x 33 x 20 |
-   | parametric_star | 40 x 40 x 2 | 27.14 x 28.53 x 3 |
+## For governance/qm (file there)
 
-   Not fixed here: the right value depends on which side is authoritative, and
-   for `couch_block` the `Params` model is not wired to the SCAD at all. Anything
-   laying out around these parts is wrong by the difference.
-
-5. **Parameter names are not cross-checked.** `verify` catches a wrapper and its
-   SCAD disagreeing about *size*, but a parameter declared in the `Params` model
-   and absent from the SCAD file (or the reverse) is still undetected.
-
-6. **Fixed: catalog leaves had no geometry path.** `to_scad_object()` built
-   geometry only from `base`/`additions`/`children`, so every `part_ref` leaf
-   raised and the whole `parts_library` site was unrenderable. One missing case
-   emptied three viewer surfaces at once — canvas (422), contents, and the
-   generated-OpenSCAD panel (500 on the layout route, so its placeholder never
-   left). Catalog leaves now compile to `import()`.
-
-## Gates that exist on paper but run nowhere
-
-Found by asking what the checks do *not* cover, 2026-08-20. An unwired gate is
-indistinguishable from a passing one.
-
-7. **`.pre-commit-config.yaml` configures black, ruff, ruff-format,
-   end-of-file-fixer and trailing-whitespace, and no workflow runs
-   pre-commit.** Style is enforced only for contributors who installed the
-   hooks. `ruff check apothecary/ tests/` currently reports 46 violations —
-   25 E501, 9 B904, 8 I001, 2 F401, 2 B011 — which is the proof they are not
-   running. Ten of those are auto-fixable. Wiring the gate means either fixing
-   all 46 first or scoping it to changed files; both are a decision, which is
-   why this is written down rather than done.
-
-8. **`apothecary parts verify --all` gates nothing.** Five of the twelve parts
-   that declare bounds report an envelope their geometry does not have:
-   `v_slot`, `couch_block`, `dryerknob`, `gridfinity`, `parametric_star`.
-   Anything laying out around them is wrong by the difference. datum's CI
-   verifies `datum_core` only, because that is the part it depends on. Wiring
-   `--all` here fails until those five are reconciled — see item 4.
-
-## Build-readiness triage, 2026-08-20
-
-`apothecary parts checklist --all --build-volume 220,220,250`, every part
-rendered first. Nothing was ready. Grouped by what it would take to clear:
-
-The part named `datum` is gone from these tables: the single-piece tray was
-replaced by the compound (`datum_core` plus `datum_cap`), which inherited its
-black-box seam. Run the command for today's answer rather than trusting the
-counts below — they were true when written.
-
-**Fixable here, no decision needed**
-
-| Blocker | Parts | What to do |
-|---|---|---|
-| Declares no bounds | 6 — contranot, fifel, footpedal, matboard_cutter_mount, solderfan, star_cookiecutter | give each wrapper a `get_bounds`; until then nothing can lay out around them |
-| Bounds drift from geometry | 4 — v_slot, couch_block, dryerknob, parametric_star | reconcile wrapper and SCAD (item 8) |
-| No print settings | 11 | set `print_settings`; `datum_core` and `datum_cap` now carry the house constants |
-
-Note the checklist blocks on "declares no bounds" where `parts verify` skips
-it. Both are right for their question: a drift check has nothing to compare,
-but a part that cannot say how big it is is not ready to build.
-
-**Needs a decision, not a commit**
-
-| Blocker | Parts | Waiting on |
-|---|---|---|
-| Disputed dimensions | 2 — datum_core, datum_cap | which of `walls`/`tolerence`/`board_y` is authoritative |
-
-**Needs measurement, not code**
-
-| Blocker | Parts | Waiting on |
-|---|---|---|
-| Fitted to guessed envelopes | 16, all of them | the board outline and the mounting surface are `StubProvider` values. A `KiCadProvider` fed a real schematic clears it |
-
-Two parts still cannot render (`elephant_walk` depends on sibling STLs;
-`gridfinity` needs its submodule and a long render), which is why they show
-extra unanswered checks rather than blocks.
-
-## Next Steps
-- [ ] Fix JSCAD import syntax and add regression test (e.g., `node --check`)
-- [ ] Update packaging to include `parts/` and `templates/` in wheel
-- [ ] Sanitize `/parts` payload to emit relative paths only
-- [ ] Add OpenSCAD availability check to `apothecary check` command
-- [ ] Reconcile the five drifted wrappers against their geometry, then wire
-      `apothecary parts verify --all` into CI
-- [ ] Decide how pre-commit gets enforced, and wire it
-- [ ] Cross-check parameter *names* between each Params model and its SCAD file
-- [ ] Wire `apothecary parts verify --all` into CI
-- [ ] Consider WASM OpenSCAD for browser-side STL generation
+- A run that goes green because tests were skipped reports success; nothing
+  records what did not run.
+- A green suite is not evidence until faults are injected and caught; no rule
+  asks for it where a decision rests on a number.
+- The plain-language proposal (`docs/plans/proposals/light-language.md`, in
+  git history) belongs there; its read-aloud check needs a second person.
+- A check that asks for credit to an address no human reads recurs on every
+  change until the check changes or an exception is written.
+- No rule says what information may leave for a project that sends data.
+- Proposing a decision to a project has no category in the rulebook's list.
