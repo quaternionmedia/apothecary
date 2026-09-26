@@ -28,11 +28,9 @@ Two things distinguish this from ``devices.SerialStreams``:
   (``M155``), and those lines are simply carried in the same reads.
 
 The byte transport is an engine slot (``Transport``), chosen by
-``serial_engine()``: **pyserial** when importable (any baud, every platform)
-else the stdlib's **termios** (POSIX, standard baud table only -- enough
-for a 115200 board with nothing installed). ``APOTHECARY_SERIAL_ENGINE``
-pins one, and ``simulated`` selects an in-process pretend Marlin for demos
-and browser tests with no hardware. Everything above the slot is
+``serial_engine()``: **pyserial** (any baud, every platform) unless
+``APOTHECARY_SERIAL_ENGINE=simulated`` selects an in-process pretend Marlin
+for demos and browser tests with no hardware. Everything above the slot is
 engine-agnostic.
 """
 
@@ -40,7 +38,6 @@ from __future__ import annotations
 
 import os
 import re
-import select
 import threading
 import time
 from datetime import datetime, timezone
@@ -187,76 +184,6 @@ class Transport(Protocol):
 
 
 RESET_PULSE_S = 0.05
-
-
-class TermiosTransport:
-    """A raw 8N1 serial port via the stdlib; POSIX only."""
-
-    def __init__(self, port: str, baud: int):
-        import termios
-
-        flag = getattr(termios, f"B{baud}", None)
-        if flag is None:
-            raise ToolchainError(
-                f"{baud} baud is not in the standard termios table; "
-                "115200 is Marlin's usual rate (250000 needs pyserial)"
-            )
-        try:
-            self.fd = os.open(port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
-        except OSError as exc:
-            raise ToolchainError(f"cannot open {port}: {exc.strerror}") from exc
-        try:
-            attr = termios.tcgetattr(self.fd)
-            attr[0] = 0  # iflag: no CR/NL mangling, no flow control
-            attr[1] = 0  # oflag: raw
-            attr[2] = (
-                termios.CS8 | termios.CREAD | termios.CLOCAL
-            )  # no HUPCL: DTR stays up on close
-            attr[3] = 0  # lflag: no echo, no canonical mode
-            attr[4] = attr[5] = flag
-            termios.tcsetattr(self.fd, termios.TCSANOW, attr)
-            termios.tcflush(self.fd, termios.TCIOFLUSH)
-        except termios.error as exc:
-            os.close(self.fd)
-            raise ToolchainError(f"{port} is not a serial port: {exc}") from exc
-
-    def write(self, data: bytes) -> None:
-        while data:
-            _, w, _ = select.select([], [self.fd], [], 2.0)
-            if not w:
-                raise ToolchainError("serial write timed out")
-            try:
-                n = os.write(self.fd, data)
-            except OSError as exc:
-                raise ToolchainError(f"serial write failed: {exc}") from exc
-            data = data[n:]
-
-    def read(self, timeout: float) -> bytes:
-        try:
-            r, _, _ = select.select([self.fd], [], [], timeout)
-            if not r:
-                return b""
-            return os.read(self.fd, 4096)
-        except BlockingIOError:
-            return b""
-        except OSError as exc:
-            raise ToolchainError(f"serial read failed: {exc}") from exc
-
-    def pulse_reset(self) -> None:
-        import fcntl
-        import struct
-        import termios
-
-        dtr = struct.pack("I", termios.TIOCM_DTR)
-        fcntl.ioctl(self.fd, termios.TIOCMBIC, dtr)
-        time.sleep(RESET_PULSE_S)
-        fcntl.ioctl(self.fd, termios.TIOCMBIS, dtr)
-
-    def close(self) -> None:
-        try:
-            os.close(self.fd)
-        except OSError:
-            pass
 
 
 def keep_dtr_on_close(fd: Optional[int]) -> bool:
@@ -541,29 +468,18 @@ class SimulatedPrinter:
 TransportFactory = Callable[[str, int], Transport]
 ENGINES: Dict[str, TransportFactory] = {
     "pyserial": PySerialTransport,
-    "termios": TermiosTransport,
     "simulated": SimulatedPrinter,
 }
 
 
-def pyserial_available() -> bool:
-    try:
-        import serial  # noqa: F401
-    except ImportError:
-        return False
-    return True
-
-
 def serial_engine() -> str:
-    """``APOTHECARY_SERIAL_ENGINE`` if set; else pyserial when importable, else termios."""
-    wanted = os.environ.get("APOTHECARY_SERIAL_ENGINE", "").strip().lower()
-    if wanted:
-        if wanted not in ENGINES:
-            raise ToolchainError(
-                f"APOTHECARY_SERIAL_ENGINE={wanted!r}; known engines: {', '.join(ENGINES)}"
-            )
-        return wanted
-    return "pyserial" if pyserial_available() else "termios"
+    """``APOTHECARY_SERIAL_ENGINE`` if set, else pyserial."""
+    wanted = os.environ.get("APOTHECARY_SERIAL_ENGINE", "").strip().lower() or "pyserial"
+    if wanted not in ENGINES:
+        raise ToolchainError(
+            f"APOTHECARY_SERIAL_ENGINE={wanted!r}; known engines: {', '.join(ENGINES)}"
+        )
+    return wanted
 
 
 def open_transport(port: str, baud: int) -> Transport:

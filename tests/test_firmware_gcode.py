@@ -203,16 +203,15 @@ def test_links_registry_reuses_and_releases(scripted_links):
 
 def test_engine_selection(monkeypatch):
     monkeypatch.delenv("APOTHECARY_SERIAL_ENGINE", raising=False)
-    monkeypatch.setattr(gcode, "pyserial_available", lambda: True)
     assert gcode.serial_engine() == "pyserial"
-    monkeypatch.setattr(gcode, "pyserial_available", lambda: False)
-    assert gcode.serial_engine() == "termios"
     monkeypatch.setenv("APOTHECARY_SERIAL_ENGINE", "PySerial")
     assert gcode.serial_engine() == "pyserial"
     monkeypatch.setenv("APOTHECARY_SERIAL_ENGINE", "usbmuxd")
     with pytest.raises(ToolchainError, match="known engines"):
         gcode.serial_engine()
-    assert set(gcode.ENGINES) == {"pyserial", "termios", "simulated"}
+    monkeypatch.setenv("APOTHECARY_SERIAL_ENGINE", "termios")
+    with pytest.raises(ToolchainError, match="known engines: pyserial, simulated"):
+        gcode.serial_engine()
 
 
 def test_simulated_engine_is_a_plausible_marlin(monkeypatch):
@@ -230,7 +229,6 @@ def test_simulated_engine_is_a_plausible_marlin(monkeypatch):
 
 
 def test_pyserial_engine_round_trip_on_loopback():
-    pytest.importorskip("serial")
     t = gcode.PySerialTransport("loop://", 115200)
     t.write(b"M105\n")
     assert t.read(0.5) == b"M105\n" and t.read(0.1) == b""
@@ -247,7 +245,6 @@ def test_pyserial_engine_leaves_dtr_up_on_close():
     Creality board reboots on the next program's open -- the very reset the
     seam promises not to cause.
     """
-    pytest.importorskip("serial")
     termios = pytest.importorskip("termios")
     master, slave = os.openpty()
     try:
@@ -262,16 +259,6 @@ def test_pyserial_engine_leaves_dtr_up_on_close():
         os.close(master)
         os.close(slave)
     assert gcode.keep_dtr_on_close(None) is False
-
-
-def test_termios_engine_rejects_odd_rates_and_missing_ports():
-    pytest.importorskip("termios")
-    with pytest.raises(ToolchainError, match="standard termios table"):
-        gcode.TermiosTransport("/dev/null", 250000)
-    with pytest.raises(ToolchainError, match="cannot open"):
-        gcode.TermiosTransport("/dev/ttyDOES_NOT_EXIST", 115200)
-    with pytest.raises(ToolchainError, match="not a serial port"):
-        gcode.TermiosTransport("/dev/null", 115200)
 
 
 # --- identify / poll ----------------------------------------------------------------
@@ -647,7 +634,7 @@ def test_monitor_routes(fake_arduino_cli, fresh_task_runner, scripted_links):
 
     info = c.get("/firmware/printers/info", params={"port": "/dev/ttyFAKE1"}).json()
     assert info["detected"] and info["link"] is None and info["last_status"] is None
-    assert info["engine"] in ("pyserial", "termios", "simulated")
+    assert info["engine"] in ("pyserial", "simulated")
     c.get("/firmware/printers/status", params={"port": "/dev/ttyFAKE1"})
     info = c.get("/firmware/printers/info", params={"port": "/dev/ttyFAKE1"}).json()
     assert info["link"]["baud"] == 115200 and info["link"]["engine"] == "ScriptedTransport"
