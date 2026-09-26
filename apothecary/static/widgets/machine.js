@@ -5,8 +5,7 @@
  * with its query box, the latched control pad, the bed reading, the
  * print from here -- as one module the monitor page mounts as its whole
  * body and the world mounts in a popup tethered to the printer. The same
- * markup, the same ids, the same chain, latch and confirms on both hosts;
- * the census reads this file as part of the pages that import it.
+ * markup, the same ids, the same chain, latch and confirms on both hosts.
  *
  * mountMachine(root, { base, port, host, logRoot }) renders into `root`
  * and returns the handle the ring drives (carry, pairs, device) and the

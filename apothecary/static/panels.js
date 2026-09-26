@@ -18,7 +18,7 @@
  * elements it makes, except the pointer moves that finish a drag, which
  * go on the window while a drag is in progress and come off after, and
  * the tilde key, which is on the window so it works wherever the pointer
- * is. The census's test on this module holds it to that.
+ * is.
  */
 
 const RAIL_MAX_FRACTION = 1 / 2;
@@ -323,13 +323,10 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
             layoutRails(); remember();
             return true;
         },
-        resizeRail(side, width) { railState[side].width = Math.max(RAIL_MIN_PX, Math.min(railMax(), width)); layoutRails(); remember(); return railState[side].width; },
         railWidth(side) { return rails[side].offsetWidth; },
         isOpen(id) { const p = panels.get(id); return !!(p && p.open); },
         state(id) { const p = panels.get(id); return p ? { id, title: p.title, open: p.open, collapsed: p.collapsed, where: p.where, x: p.x, y: p.y, height: p.height } : null; },
         list() { return [...panels.keys()].map((id) => this.state(id)); },
-        element(id) { const p = panels.get(id); return p ? p.el : null; },
-        railWidthLimit: railMax,
         destroy() {
             for (const id of [...panels.keys()]) this.unregister(id);
             window.removeEventListener("keydown", onKey);
