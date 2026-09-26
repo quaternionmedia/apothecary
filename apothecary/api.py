@@ -339,19 +339,19 @@ def render_scene(scene: Scene):
 
 
 @app.get("/parts")
-async def list_parts():
+def list_parts():
     names = _available_part_names()
     return [_part_metadata(_load_part_wrapper(name)) for name in names]
 
 
 @app.get("/parts/{name}")
-async def get_part(name: str, params: str | None = Query(None, alias="params")):
+def get_part(name: str, params: str | None = Query(None, alias="params")):
     part = _load_part_wrapper(name)
     return _part_payload(part, params)
 
 
 @app.get("/parts/{name}/scad", response_class=PlainTextResponse)
-async def get_part_scad(name: str):
+def get_part_scad(name: str):
     part = _load_part_wrapper(name)
     try:
         return PlainTextResponse(part.source_file.read_text(encoding="utf-8"))
@@ -360,7 +360,7 @@ async def get_part_scad(name: str):
 
 
 @app.get("/parts/{name}/stl")
-async def get_part_stl(name: str):
+def get_part_stl(name: str):
     """
     Download the STL file for a part.
 
@@ -449,7 +449,7 @@ def generate_part_stl(
 
 
 @app.get("/parts/{name}/params")
-async def get_part_params(name: str):
+def get_part_params(name: str):
     """What a part accepts, in a form a control surface can build itself from.
 
     Types, defaults and bounds come from the part's own Pydantic model, so the
@@ -529,7 +529,7 @@ def _parse_build_volume(raw: Optional[str]):
 
 
 @app.get("/parts/{name}/checklist")
-async def get_part_checklist(name: str, build_volume: Optional[str] = Query(None)):
+def get_part_checklist(name: str, build_volume: Optional[str] = Query(None)):
     """Whether this part is ready to print and check against a real one.
 
     The same assessment `apothecary parts checklist` prints, so the viewer and
@@ -555,7 +555,7 @@ async def get_part_checklist(name: str, build_volume: Optional[str] = Query(None
 
 
 @app.post("/parts/{name}/validate")
-async def validate_part_params(name: str, body: Optional[StlGenerateRequest] = None):
+def validate_part_params(name: str, body: Optional[StlGenerateRequest] = None):
     """Check a staged parameter set without rendering anything.
 
     The step between moving a slider and spending thirty seconds of OpenSCAD on
@@ -615,6 +615,11 @@ async def validate_part_params(name: str, body: Optional[StlGenerateRequest] = N
 # across requests, unlike /render's stateless Scene handling. Known
 # limitation: in-memory only, lost on restart, not shared across worker
 # processes -- fine for a single-process dev server.
+#
+# Routes that change a site or a job stay `async def`: they run one at a time
+# on the event loop, which is all that serializes the stores' plain dicts
+# until they have a lock. Routes that only read, and do filesystem, parse or
+# render work, are plain `def` and run on the threadpool.
 # =============================================================================
 
 _site_store = SiteStore(
@@ -1284,7 +1289,7 @@ async def list_sites():
 
 
 @app.get("/sites/{name}")
-async def get_site(name: str):
+def get_site(name: str):
     site = _get_site_or_404(name)
     validator = _site_store.validator(name)
     return _site_payload(site, validator(site))
@@ -1722,7 +1727,7 @@ def _job_summary(job: Job, site: Assembly) -> Dict[str, object]:
 
 
 @app.get("/sites/{name}/jobs")
-async def list_jobs(name: str):
+def list_jobs(name: str):
     site = _get_site_or_404(name)
     return [_job_summary(job, site) for job in _job_store.list_for_site(name)]
 
@@ -1826,7 +1831,7 @@ async def viewer_home():
 
 
 @app.get("/viewer/sites/{name}", response_class=HTMLResponse)
-async def site_viewer(name: str, request: Request, focus: str = Query(default="")):
+def site_viewer(name: str, request: Request, focus: str = Query(default="")):
     """Fractal zoom viewer: navigates any registered site's Assembly tree at
     any depth with standardized controls (prototype).
 
@@ -1852,7 +1857,7 @@ async def site_viewer(name: str, request: Request, focus: str = Query(default=""
 
 
 @app.get("/viewer/parts/{name}")
-async def part_view(name: str):
+def part_view(name: str):
     """A part is reached by navigating to it, not by a second viewer.
 
     This deep-link survives because links to it were handed out, but it now
