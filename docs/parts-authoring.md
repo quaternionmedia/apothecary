@@ -135,9 +135,13 @@ through them.
 `openscad --version` numbers it (`"2021.08.24"`). The default install is
 used when it is new enough, else a development snapshot: `openscad-nightly`
 on `PATH` or one of the usual install locations. With neither,
-`can_generate_stl()` names the version needed and where snapshots are, and
-the build commands skip the part with that reason. Gridfinity sets it:
-`gridfinity-rebuilt-openscad` does not evaluate on OpenSCAD 2021.01.
+`can_generate_stl()` names the version needed and where snapshots are.
+`generate-stl --all`, `verify` and server startup skip the part with that
+reason, `checklist` gives it, and a build of that part alone is refused
+with it: `generate-stl NAME` fails, and `POST /parts/{name}/stl/generate`
+answers `503`. `generate-stl --openscad-path` checks the OpenSCAD it names
+instead. Gridfinity sets it: `gridfinity-rebuilt-openscad` does not
+evaluate on OpenSCAD 2021.01.
 
 `scad_overrides(params)` is what `-D` receives for validated parameters,
 for a part whose model does not name things as its SCAD does. Gridfinity's
