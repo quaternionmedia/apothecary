@@ -38,7 +38,7 @@ and what it cannot.
 | `pytest.yml` | The walkthrough; the unit tests with `--slow`; the browser tests; a walkthrough page the browser run rewrote; the wheel failing to install and render a scene |
 | `reuse-lint.yml` | A file with no copyright or licence information (`reuse lint`) |
 | `license-check.yml` | A third-party dependency whose licence is not on the OSI/FSF allowlist |
-| `adr-lint.yml` | A draft record in `governance/qm/adr/` that narrates its own revisions |
+| `adr-lint.yml` | A record in `governance/qm/adr/`: a draft that narrates its own revisions, a numbered one not ratified, a ratified body edited outside its Amendments, or an index that disagrees with the directory |
 | `submodule-check.yml` | A submodule pin its own remote does not have |
 
 Nothing else is a gate. Ruff and formatting are not checked in CI.
