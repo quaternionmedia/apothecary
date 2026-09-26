@@ -1,7 +1,7 @@
 """Commands for turning a picture into something you could build.
 
 Everything here runs on your own machine with the network switched off, and
-writes only where you point it. See ``docs/plans/proposals/runs-and-stays-local.md``.
+writes only where you point it.
 """
 
 from __future__ import annotations
@@ -11,10 +11,12 @@ from pathlib import Path
 from typing import Optional
 
 import click
+from pydantic import ValidationError
 
 from ..vision import ScaleReference, get, names
 from ..vision import build as build_arrangement
 from ..vocabulary import starter_words, word_for
+from .server import _loopback_or_die, run_server
 
 
 @click.group()
@@ -22,28 +24,16 @@ def photo():
     """Look at a picture and turn what is in it into shapes you can build."""
 
 
-def _loopback_or_explain(host: str) -> str:
-    """A server started from here listens on this machine only (apothecary/stays_local.py)."""
-    from ..stays_local import require_loopback
-
+def _finder_or_explain(finder: str):
     try:
-        return require_loopback(host)
-    except ValueError as exc:
-        raise click.ClickException(str(exc)) from None
-
-
-def _look_or_explain(finder: str, image: Path):
-    """Run a finder, turning every foreseeable failure into a plain sentence.
-
-    Without this a mistyped file name, a half-downloaded picture or a
-    hand-written description with a typo all came back as a wall of internal
-    detail, which tells the person nothing they can act on.
-    """
-    try:
-        chosen = get(finder)
+        return get(finder)
     except KeyError:
         raise click.ClickException(f"no finder named {finder!r}; try one of {names()}") from None
 
+
+def _look_or_explain(finder: str, image: Path):
+    """Run a finder, turning every foreseeable failure into a plain sentence."""
+    chosen = _finder_or_explain(finder)
     try:
         return chosen.look(image)
     except FileNotFoundError as exc:
@@ -54,6 +44,22 @@ def _look_or_explain(finder: str, image: Path):
         raise click.ClickException(
             f"{image} could not be read as a picture ({exc}). "
             "If it is not an image, or the download stopped part way, that would explain it."
+        ) from None
+
+
+# The options each ScaleReference field comes from, to name the one that is wrong.
+_SCALE_OPTIONS = {"millimetres_across": "--width-mm", "known_width_mm": "--known-width-mm"}
+
+
+def _scale_or_explain(**given) -> ScaleReference:
+    """A ScaleReference, or the option that made one impossible, said plainly."""
+    try:
+        return ScaleReference(**given)
+    except ValidationError as exc:
+        wrong = exc.errors()[0]
+        option = _SCALE_OPTIONS.get(str(wrong["loc"][0]), str(wrong["loc"][0]))
+        raise click.ClickException(
+            f"{option} was {wrong['input']}; {wrong['msg'].lower()}"
         ) from None
 
 
@@ -136,10 +142,6 @@ def build(
     """
     picture = _look_or_explain(finder, image)
 
-    if width_mm is not None and not (width_mm > 0 and width_mm < float("inf")):
-        raise click.ClickException(
-            f"--width-mm was {width_mm}; a real width is a number greater than zero"
-        )
     if bool(known_shape) != bool(known_width_mm):
         raise click.ClickException(
             "--known-shape and --known-width-mm go together; give both or neither"
@@ -158,7 +160,7 @@ def build(
 
     scale = None
     if width_mm is not None or (known_shape and known_width_mm):
-        scale = ScaleReference(
+        scale = _scale_or_explain(
             millimetres_across=width_mm,
             known_shape=known_shape,
             known_width_mm=known_width_mm,
@@ -260,10 +262,7 @@ def check(finder: str, count: int):
             "--count is how many pictures to draw, so it needs to be at least 1"
         )
 
-    try:
-        chosen = get(finder)
-    except KeyError:
-        raise click.ClickException(f"no finder named {finder!r}; try one of {names()}") from None
+    chosen = _finder_or_explain(finder)
 
     conditions = [
         ("clear shapes", {}),
@@ -326,22 +325,14 @@ def view(
     program. An arrangement built from a picture is held in memory, so building
     it in one place and serving it from another would lose it in between.
 
-    Listens on this machine only unless you say otherwise.
+    Listens on this machine only.
     """
-    import uvicorn
-
     from ..api import _site_store, app
-    from ..vision import ScaleReference
     from ..vision.shelf import shelf
 
-    host = _loopback_or_explain(host)
+    host = _loopback_or_die(host)
     picture = _look_or_explain(finder, image)
-    if width_mm is not None and not (width_mm > 0 and width_mm < float("inf")):
-        raise click.ClickException(
-            f"--width-mm was {width_mm}; a real width is a number greater than zero"
-        )
-
-    scale = ScaleReference(millimetres_across=width_mm) if width_mm is not None else None
+    scale = _scale_or_explain(millimetres_across=width_mm) if width_mm is not None else None
     made = build_arrangement(picture, name=name, scale=scale, picture_path=image)
 
     stock = shelf()
@@ -359,8 +350,7 @@ def view(
     click.echo(f"  the picture       http://{host}:{port}/photos/{made.site.name}/picture")
     click.echo("")
     click.echo("Stop with Ctrl-C.")
-
-    uvicorn.run(app, host=host, port=port, log_level="warning")
+    run_server(app, host, port, log_level="warning")
 
 
 def _pictures_in(where: tuple[Path, ...], pattern: str) -> list[Path]:
@@ -463,6 +453,8 @@ def gather_pictures(
     from ..gathering.picture_map import as_html
     from ..gathering.questions import as_sheet, how_many_worth_asking, theirs, worth_asking
 
+    if open_viewer:
+        host = _loopback_or_die(host)  # before the work, not after it
     paths = _pictures_in(where, pattern)
     if not paths:
         raise click.ClickException(
@@ -550,13 +542,9 @@ def gather_pictures(
     if not open_viewer:
         return
 
-    import uvicorn
-
     from ..api import _site_store, app
     from ..gathering import whole_gathering
     from ..vision.shelf import shelf
-
-    host = _loopback_or_explain(host)
 
     by_name = {picture.name: (picture, path) for picture, path in zip(pictures, paths, strict=True)}
     built = {
@@ -586,7 +574,7 @@ def gather_pictures(
     click.echo(f"  what is known        http://{host}:{port}/photos/{together.site.name}")
     click.echo("")
     click.echo("Stop with Ctrl-C.")
-    uvicorn.run(app, host=host, port=port, log_level="warning")
+    run_server(app, host, port, log_level="warning")
 
 
 @photo.command("gather-check")
@@ -597,12 +585,7 @@ def gather_check(finder: str, each: int, seed: int):
     """Measure how well the sorting does on pictures whose answers are known."""
     from ..gathering import bench
 
-    try:
-        chosen = get(finder)
-    except KeyError:
-        raise click.ClickException(f"no finder named {finder!r}; try one of {names()}") from None
-
-    result = bench.run(chosen, each=each, seed=seed)
+    result = bench.run(_finder_or_explain(finder), each=each, seed=seed)
     click.echo(result.summary())
     if result.joined_wrongly:
         click.echo("")
