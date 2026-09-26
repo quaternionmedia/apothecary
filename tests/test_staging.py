@@ -77,7 +77,7 @@ class TestStagingReachesTheViewer:
         assert "/validate" in stage
         assert "stl/generate" not in stage
 
-    def test_apply_commits_what_rendered(self):
+    def test_a_render_commits_what_it_sent(self):
         """Otherwise the next diff is measured against the wrong baseline and
         the panel shows changes that are already in the geometry.
         """
@@ -85,4 +85,7 @@ class TestStagingReachesTheViewer:
         bind = page[page.index("bindStageActions(name)") :]
         bind = bind[: bind.index("// The part's parameters")]
         assert "regeneratePart" in bind
-        assert "this.committedParams = { ...this.partParams }" in bind
+        render = page[page.index("async regeneratePart(name)") :]
+        render = render[: render.index("recomputeWorldBounds")]
+        # What was sent, once the render succeeded: not what the sliders say by then.
+        assert "Object.assign(stage.committed, params)" in render

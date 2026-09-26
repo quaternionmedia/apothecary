@@ -871,6 +871,8 @@
                 this.loadGeneration = 0;  // guards against a slow real-geometry
                                           // fetch upgrading a mesh after the
                                           // user has already navigated away
+                this.partStages = {};      // part name -> { staged, committed } parameter values
+                this.partSection = null;   // the Selected panel's section for the part being edited
                 this.nodeLoads = new Map();  // nodeKey() -> token of its newest load
                 this.waveDone = Promise.resolve();  // settles when the level's geometry has loaded
 
@@ -2082,7 +2084,17 @@
                         <div class="prop-row"><label>Part</label><span title="The part this machine is drawn as">${esc(node.part_ref)}</span></div>`);
                     return;
                 }
-                this.selectedBodyEl.insertAdjacentHTML('beforeend', `
+                // The part being edited keeps its section across a redraw of the
+                // panel (re-selecting it, a right-click, a pin): nothing is
+                // fetched again and the sliders stay where they were.
+                if (this.partSection && this.partSection.dataset.part === node.part_ref) {
+                    this.selectedBodyEl.appendChild(this.partSection);
+                    return;
+                }
+                this.partSection = document.createElement('div');
+                this.partSection.dataset.part = node.part_ref;
+                this.selectedBodyEl.appendChild(this.partSection);
+                this.partSection.innerHTML = `
                     <div class="prop-row"><label>Part</label><span>${esc(node.part_ref)}</span></div>
                     <div class="envelope" id="part-envelope"></div>
                     <div class="part-actions">
@@ -2102,7 +2114,7 @@
                     <div id="part-params">Loading…</div>
                     <div class="code-header">SCAD Source (the absorbed part view)</div>
                     <div id="part-scad-content" class="code-content">Loading…</div>
-                `);
+                `;
                 this.loadPartScad(node.part_ref);
                 this.loadPartChecklist(node.part_ref);
                 this.loadPartParams(node.part_ref);
@@ -2255,23 +2267,14 @@
             }
 
             bindStageActions(name) {
-                const apply = document.getElementById('apply-btn');
-                const revert = document.getElementById('revert-btn');
-                if (apply) {
-                    apply.onclick = async () => {
-                        if (!this.stagedValid) return;
-                        await this.regeneratePart(name);
-                        // What rendered is now what is committed.
-                        this.committedParams = { ...this.partParams };
-                        this.refreshStage();
-                    };
-                }
-                if (revert) {
-                    revert.onclick = () => {
-                        this.partParams = { ...this.committedParams };
-                        this.loadPartParams(name);
-                    };
-                }
+                const stage = this.partStages[name];
+                document.getElementById('apply-btn').onclick = () => {
+                    if (this.stagedValid) this.regeneratePart(name);
+                };
+                document.getElementById('revert-btn').onclick = () => {
+                    Object.assign(stage.staged, stage.committed);
+                    this.loadPartParams(name);
+                };
             }
 
             // The part's parameters, as controls, in the one panel that already
@@ -2279,16 +2282,19 @@
             // entry point onto the same object, and this viewer is the only one.
             async loadPartParams(name) {
                 const host = document.getElementById('part-params');
-                // `committed` is what the STL on disk was rendered from;
-                // `staged` is what the sliders currently say. Nothing renders
-                // until the difference has been validated and applied.
-                this.partParams = {};
-                this.committedParams = {};
+                // Kept per part, so a part left and come back to has what was
+                // staged on it. `committed` is what the STL on disk was rendered
+                // from; `staged` is what the sliders say. Nothing renders until
+                // the difference has been validated and applied.
+                const stage = (this.partStages[name] ??= { staged: {}, committed: {} });
+                this.partParams = stage.staged;
+                this.committedParams = stage.committed;
                 this.partParamsFor = name;
                 this.stagedValid = true;
                 try {
                     const response = await fetch(
                         `${BASE_URL}/parts/${encodeURIComponent(name)}/params`);
+                    if (this.partParamsFor !== name) return;  // another part was chosen meanwhile
                     if (!response.ok) { host.textContent = 'No parameters declared.'; return; }
                     const spec = await response.json();
                     this.showEnvelope(spec.bounds);
@@ -2298,9 +2304,9 @@
                     const ordered = [...spec.fields].sort(
                         (a, b) => b.contested.length - a.contested.length);
                     for (const field of ordered) {
-                        this.partParams[field.name] = field.default;
-                        this.committedParams[field.name] = field.default;
-                        host.appendChild(this.buildParamControl(field));
+                        stage.committed[field.name] ??= field.default;
+                        stage.staged[field.name] ??= stage.committed[field.name];
+                        host.appendChild(this.buildParamControl(field, stage.staged[field.name]));
                     }
                     this.bindStageActions(name);
                     this.refreshStage();
@@ -2318,7 +2324,7 @@
                     : '';
             }
 
-            buildParamControl(field) {
+            buildParamControl(field, value) {
                 const wrap = document.createElement('div');
                 wrap.className = 'param' + (field.contested.length ? ' is-contested' : '');
                 const head = document.createElement('div');
@@ -2342,10 +2348,10 @@
                     for (const option of (field.pattern.match(/\w+/g) || [])) {
                         const el = document.createElement('option');
                         el.value = el.textContent = option;
-                        if (option === field.default) el.selected = true;
+                        if (option === value) el.selected = true;
                         select.appendChild(el);
                     }
-                    val.textContent = field.default;
+                    val.textContent = value;
                     select.onchange = () => {
                         this.partParams[field.name] = select.value;
                         val.textContent = select.value;
@@ -2357,8 +2363,8 @@
                     input.type = 'range';
                     input.min = field.min; input.max = field.max;
                     input.step = (field.max - field.min) / 200;
-                    input.value = field.default;
-                    val.textContent = Number(field.default).toFixed(2);
+                    input.value = value;
+                    val.textContent = Number(value).toFixed(2);
                     input.oninput = () => {
                         this.partParams[field.name] = Number(input.value);
                         val.textContent = Number(input.value).toFixed(2);
@@ -2414,7 +2420,8 @@
                 try {
                     // Whatever the controls are set to, so turning a contested
                     // number and pressing regenerate shows what it does.
-                    const params = this.partParamsFor === name ? (this.partParams ?? {}) : {};
+                    const stage = this.partStages[name];
+                    const params = { ...(stage?.staged ?? {}) };
                     const response = await fetch(
                         `${BASE_URL}/parts/${encodeURIComponent(name)}/stl/generate?force=true`,
                         {
@@ -2429,10 +2436,16 @@
                     }
                     const body = await response.json();
                     this.showEnvelope(body.bounds);
-                    // The mesh on screen is the old geometry until it reloads.
-                    const target = Object.values(this.renderNodeByKey ?? {})
-                        .find((n) => n.part_ref === name);
-                    if (target) this.rebuildSingleMesh(target);
+                    // What rendered is now what is committed.
+                    if (stage) Object.assign(stage.committed, params);
+                    if (this.partParamsFor === name) this.refreshStage();
+                    // Every piece on screen drawn from this part loads the new STL.
+                    const url = `${BASE_URL}/parts/${encodeURIComponent(name)}/stl?t=${Date.now()}`;
+                    const reloads = Object.values(this.renderNodeByKey)
+                        .filter((n) => n.part_ref === name && this.meshByName[nodeKey(n)]
+                            && this.effectiveDetailFor(n, nodeKey(n)) === DETAIL_FULL)
+                        .map((n) => this.loadAndUpgrade(n, this.loadGeneration, () => this.loadSTLMesh(n, url)));
+                    await this.addToWave(Promise.all(reloads));
                     this.setStatus(`${name} regenerated`, 'success');
                 } catch (err) {
                     this.setStatus(`Error: ${err.message}`, 'error');
@@ -2531,7 +2544,11 @@
                     z: worldMinApZ - node.footprint.min[2],
                 };
                 this.recomputeWorldBounds(node);
-                this.renderSelectedPanel();
+                // Every frame of a drag: only the numbers move, not the panel.
+                for (const axis of ['x', 'y', 'z']) {
+                    const input = document.getElementById(`pos-${axis}`);
+                    if (input) input.value = node.position[axis];
+                }
             }
 
             commitCurrentDrag() {
