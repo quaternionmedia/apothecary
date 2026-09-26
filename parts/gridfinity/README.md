@@ -6,7 +6,7 @@ This directory contains 3D printable parts designed for the [Gridfinity](https:/
 
 ```bash
 # Initialize the submodule
-uv run apothecary submodules
+git submodule update --init
 
 # List gridfinity part
 uv run apothecary parts list | grep gridfinity
@@ -63,14 +63,10 @@ scad_params = DEFAULT.get_scad_customizer_params(params.model_dump())
 
 This repository includes a Git submodule that contains the OpenSCAD designs for Gridfinity parts. The submodule is located at `parts/gridfinity/gridfinity-rebuilt-openscad`.
 
-To initialize and update the submodule, run the following commands in the root directory of the main repository:
+To initialize the submodule, run this in the root directory of the main repository:
 
 ```bash
-# Using Apothecary CLI (recommended)
-uv run apothecary submodules
-
-# Or manually with git
-git submodule init --recursive
+git submodule update --init
 ```
 
 Update the submodule to ensure you have the latest designs:

@@ -198,4 +198,4 @@ class TestCanGenerateSTL:
             )
             can_gen, reason = part.can_generate_stl()
             assert can_gen is False
-            assert "submodule" in reason.lower()
+            assert "git submodule update --init" in reason
