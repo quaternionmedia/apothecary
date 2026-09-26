@@ -1477,13 +1477,13 @@ def test_release_reconnect_reset_and_upload_are_refused_mid_print(
     assert (
         c.post("/firmware/printers/print/resume", json={"port": port}).json()["stage"] == "printing"
     )
+    # Cancel while G1 X2 is still unanswered: once the gate opens, the last two
+    # lines can finish the print before a cancel arrives, and that is a 409.
+    r = c.post("/firmware/printers/print/cancel", json={"port": port})
+    assert r.json()["stage"] == "cancelling"
     gate.set()
-    assert c.post("/firmware/printers/print/cancel", json={"port": port}).json()["stage"] in (
-        "cancelling",
-        "cancelled",
-        "done",
-    )
     devices.print_job(port).thread.join(5)
+    assert devices.print_job(port).stage == "cancelled"
     assert c.get("/firmware/printers/print", params={"port": port}).json()["running"] is False
     assert c.post("/firmware/printers/release", json={"port": port}).status_code == 200
 
