@@ -1,11 +1,19 @@
 """API tests for the Site/Structure hierarchy endpoints (prototype, unratified)."""
 
+import os
+import time
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
 from fastapi.testclient import TestClient
 
-from apothecary.api import _find_node_by_path, app
+import apothecary.api as api
+from apothecary.api import _find_node_by_path, _site_store, app
 from apothecary.example_hierarchy import create_example_site
-from apothecary.projects.parts.stl_renderer import get_renderer
+from apothecary.hierarchy import Assembly, Site
+from apothecary.primitives import Import
+from apothecary.projects.parts.skeleton import ROOT
+from apothecary.projects.parts.stl_renderer import RenderResult, get_renderer
 
 client = TestClient(app)
 
@@ -355,3 +363,59 @@ def test_node_stl_endpoint_caches_by_content_hash():
     second = client.get("/sites/garage/nodes/printer_1.frame_system/stl")
     assert first.status_code == second.status_code == 200
     assert first.content == second.content
+
+
+class _SlowOpenSCAD:
+    """Keeps each SCAD it is handed and where it sat, and writes a stub STL after a pause."""
+
+    is_available = True
+
+    def __init__(self):
+        self.scad, self.folders = [], []
+
+    def render_stl(self, scad_path, stl_path, timeout=120.0, params=None):
+        self.scad.append(scad_path.read_text(encoding="utf-8"))
+        self.folders.append(scad_path.parent)
+        time.sleep(0.2)
+        stl_path.write_bytes(b"solid stub\nendsolid stub\n")
+        return RenderResult(success=True, stl_path=stl_path)
+
+
+@pytest.fixture
+def slow_openscad(tmp_path, monkeypatch):
+    monkeypatch.setenv("APOTHECARY_CACHE_DIR", str(tmp_path))
+    fake = _SlowOpenSCAD()
+    monkeypatch.setattr(api, "get_stl_renderer", lambda: fake)
+    return fake
+
+
+def test_node_stl_scratch_sits_in_the_cache_and_imports_by_absolute_path(slow_openscad, tmp_path):
+    mesh = Assembly(name="mesh", role="part", base=Import(file="parts/somewhere/thing.stl"))
+    _site_store.add(
+        "import_probe", lambda: Site("import_probe", structures=[mesh]), Assembly.validate
+    )
+    try:
+        response = client.get("/sites/import_probe/nodes/mesh/stl")
+    finally:
+        _site_store.remove("import_probe")
+    assert response.status_code == 200, response.text
+    assert f'import("{ROOT.as_posix()}/parts/somewhere/thing.stl"' in slow_openscad.scad[0]
+    assert slow_openscad.folders == [tmp_path / "node_stl"]
+    assert [p.suffix for p in (tmp_path / "node_stl").iterdir()] == [".stl"]
+
+
+def test_one_render_per_node_however_many_ask_at_once(slow_openscad):
+    with ThreadPoolExecutor(4) as pool:
+        answers = list(pool.map(lambda _: api.get_node_stl("garage", "garage_building"), range(4)))
+    assert len(slow_openscad.scad) == 1
+    assert {a.body for a in answers} == {b"solid stub\nendsolid stub\n"}
+
+
+def test_the_node_cache_keeps_the_most_recently_served(tmp_path):
+    for i in range(5):
+        (tmp_path / f"{i}.stl").write_bytes(b"x")
+        os.utime(tmp_path / f"{i}.stl", ns=(i * 10**9, 0))
+    (tmp_path / ".0.inflight.stl").write_bytes(b"x")  # a render being written
+    api._trim_node_stl_cache(tmp_path, keep=3)
+    kept = sorted(p.name for p in tmp_path.iterdir())
+    assert kept == [".0.inflight.stl", "2.stl", "3.stl", "4.stl"]

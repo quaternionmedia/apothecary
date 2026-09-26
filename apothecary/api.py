@@ -16,6 +16,9 @@ import json
 import mimetypes
 import os
 import re
+import threading
+import time
+import weakref
 from contextlib import asynccontextmanager, suppress
 from importlib import import_module
 from pathlib import Path
@@ -50,7 +53,7 @@ from .firmware.toolchains import ToolchainError
 from .hierarchy import Assembly
 from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
-from .primitives import Cube, Cylinder, Sphere
+from .primitives import Cube, Cylinder, Sphere, absolute_imports
 from .projects.parts.base import BasePart
 from .projects.parts.skeleton import ROOT
 from .projects.parts.stl_renderer import build_stl
@@ -664,24 +667,26 @@ def _find_node_by_path(site: Assembly, path: str) -> Optional[Assembly]:
     return node
 
 
-_NODE_STL_CACHE_DIR = ROOT / ".cache" / "node_stl"
+# Node renders kept in the cache. A key includes the node's position, so every
+# layout drag of a structure adds one; the least recently served go first.
+NODE_STL_KEEP = 500
+
+# One lock per render key, gone once nobody holds it.
+_NODE_STL_LOCKS: "weakref.WeakValueDictionary[str, threading.Lock]" = weakref.WeakValueDictionary()
+_NODE_STL_LOCKS_GUARD = threading.Lock()
+
+
+def _node_stl_cache_dir() -> Path:
+    """``$APOTHECARY_CACHE_DIR/node_stl``, by default under the checkout's ignored ``.cache``."""
+    return Path(os.environ.get("APOTHECARY_CACHE_DIR") or ROOT / ".cache") / "node_stl"
 
 
 def _node_stl_cache_paths(scad_text: str) -> tuple[Path, Path]:
-    """Content-hash-keyed cache location for a dynamically-addressed node's
-    render. Unlike a registered part (which has a fixed source file to key
-    off of), an arbitrary Assembly subtree has no path of its own on disk --
-    the rendered SCAD text itself is the only stable identity available.
+    """(scratch SCAD, STL) for a node's render, both in the cache, keyed by content.
 
-    A scene referring to registered parts imports them by repository-relative
-    path, and OpenSCAD resolves a relative ``import()`` against the *source
-    file's* own directory rather than the process working directory. So the
-    source has to sit at the repository root to render at all, while the STL
-    it produces belongs in the cache. It is scratch: written, rendered, removed.
-
-    A mesh the text imports is part of the identity too: the same
-    ``import("parts/ender3/ender3.stl")`` after the file was regenerated is a
-    different render, so each imported file's size and mtime go into the key.
+    A node has no source file of its own, so the SCAD text is its identity.
+    Each imported mesh's size and mtime go into the key too: the same
+    ``import()`` over a regenerated file is a different render.
     """
     digest = hashlib.sha256(scad_text.encode("utf-8"))
     for match in re.finditer(r'import\("([^"]+)"', scad_text):
@@ -693,7 +698,73 @@ def _node_stl_cache_paths(scad_text: str) -> tuple[Path, Path]:
         except OSError:
             digest.update(f"{match.group(1)}:missing".encode())
     key = digest.hexdigest()[:20]
-    return ROOT / f".node-stl-{key}.scad", _NODE_STL_CACHE_DIR / f"{key}.stl"
+    cache = _node_stl_cache_dir()
+    return cache / f"{key}.scad", cache / f"{key}.stl"
+
+
+def _node_stl_lock(key: str) -> threading.Lock:
+    with _NODE_STL_LOCKS_GUARD:
+        lock = _NODE_STL_LOCKS.get(key)
+        if lock is None:
+            lock = _NODE_STL_LOCKS[key] = threading.Lock()
+        return lock
+
+
+def _served_node_stl(stl_path: Path) -> Optional[bytes]:
+    """A cached render's bytes, its atime set to now; None when there is none."""
+    try:
+        mtime_ns = stl_path.stat().st_mtime_ns
+        os.utime(stl_path, ns=(time.time_ns(), mtime_ns))
+        return stl_path.read_bytes()
+    except FileNotFoundError:
+        return None
+
+
+def _render_node_stl(scad_text: str, scad_path: Path, stl_path: Path) -> None:
+    """Render ``scad_text`` to ``stl_path``; the scratch SCAD is removed either way."""
+    renderer = get_stl_renderer()
+    if not renderer.is_available:
+        raise HTTPException(
+            status_code=503, detail="OpenSCAD not installed. Cannot generate STL files."
+        )
+    scad_path.parent.mkdir(parents=True, exist_ok=True)
+    scad_path.write_text(scad_text, encoding="utf-8")
+    try:
+        result = renderer.render_stl(scad_path, stl_path, timeout=60)
+    finally:
+        scad_path.unlink(missing_ok=True)
+    if not result.success:
+        raise HTTPException(
+            status_code=500, detail=f"STL generation failed: {result.error_message}"
+        )
+    if result.dropped:
+        # A node is the whole of what it holds; a mesh OpenSCAD could not
+        # read back is missing from what it wrote, and that is not served.
+        stl_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=500,
+            detail="OpenSCAD dropped part of this node's geometry: "
+            + "; ".join(result.dropped)[:400],
+        )
+
+
+def _trim_node_stl_cache(cache: Path, keep: int = NODE_STL_KEEP) -> None:
+    """Remove all but the ``keep`` most recently served renders.
+
+    A render still being written is a dot-file (OpenSCADRenderer.render_stl)
+    and is left alone.
+    """
+    served = []
+    for stl in cache.glob("*.stl"):
+        if stl.name.startswith("."):
+            continue
+        try:
+            served.append((stl.stat().st_atime_ns, stl))
+        except FileNotFoundError:
+            continue
+    served.sort(reverse=True)
+    for _, stl in served[keep:]:
+        stl.unlink(missing_ok=True)
 
 
 def _build_parts_referred_to(node: Assembly) -> None:
@@ -1278,75 +1349,46 @@ async def reset_site_layout(name: str):
 
 
 @app.get("/sites/{name}/nodes/{path}/stl")
-async def get_node_stl(name: str, path: str):
-    """Render any addressable Assembly node's own subtree to STL, on demand.
+def get_node_stl(name: str, path: str):
+    """Render one node's subtree to STL through OpenSCAD, cached by content.
 
-    This is the real-geometry upgrade path for *composite* nodes in the
-    fractal viewer (a wall with a window cutout, a whole Structure) --
-    leaves already get exact primitives from ``_primitive_descriptor`` or,
-    for parts-library leaves, ``/parts/{part_ref}/stl``; anything with
-    nested booleans needs an actual CSG evaluation. Rather than a second,
-    bespoke geometry engine, this reuses the same OpenSCAD CLI pipeline
-    already serving ``/parts/{name}/stl`` -- the node's ``to_scad_object()``
-    is exactly the OpenSCAD subtree the site's own render already produces
-    for it, just rendered in isolation. Cached by content hash, since a
-    dynamically-addressed node (unlike a registered part) has no fixed file
-    path of its own to key a cache off of.
+    For composite nodes (a wall with a cutout, a whole Structure): leaves are
+    drawn from ``_primitive_descriptor`` or their part's STL. The SCAD is the
+    node's ``to_scad_object()``, what the site's own render produces for it,
+    written into the cache with absolute import paths and rendered there. One
+    render per key at a time; the cache keeps the NODE_STL_KEEP most
+    recently served.
     """
     site = _get_site_or_404(name)
     node = _find_node_by_path(site, path)
     if node is None:
         raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
 
-    # A part the subtree refers to is imported by its STL, which is a build
-    # artifact a fresh clone has not made yet. Build what is missing first,
-    # as the viewer does for a part_ref leaf, so the node renders on the
-    # first request rather than answering that nobody has run generate-stl.
-    await asyncio.to_thread(_build_parts_referred_to, node)
+    # A part the subtree imports is a build product a fresh clone lacks.
+    _build_parts_referred_to(node)
 
     try:
-        scad_text = node.to_scad_object(strict=True).render()
+        with absolute_imports(ROOT):
+            scad_text = node.to_scad_object(strict=True).render()
     except ValueError as exc:
         raise HTTPException(
             status_code=422, detail=f"Node '{path}' has no renderable geometry: {exc}"
         ) from None
 
     scad_path, stl_path = _node_stl_cache_paths(scad_text)
-    if not stl_path.exists():
-        renderer = get_stl_renderer()
-        if not renderer.is_available:
-            raise HTTPException(
-                status_code=503, detail="OpenSCAD not installed. Cannot generate STL files."
-            )
-        stl_path.parent.mkdir(parents=True, exist_ok=True)
-        scad_path.write_text(scad_text, encoding="utf-8")
-        try:
-            result = await renderer.render_stl_async(scad_path, stl_path, timeout=60)
-        finally:
-            scad_path.unlink(missing_ok=True)
-        if not result.success:
-            raise HTTPException(
-                status_code=500, detail=f"STL generation failed: {result.error_message}"
-            )
-        if result.dropped:
-            # A node is the whole of what it holds; a mesh OpenSCAD could not
-            # read back is missing from what it wrote, and that is not served.
-            stl_path.unlink(missing_ok=True)
-            raise HTTPException(
-                status_code=500,
-                detail="OpenSCAD dropped part of this node's geometry: "
-                + "; ".join(result.dropped)[:400],
-            )
-
-    try:
-        stl_data = stl_path.read_bytes()
-        return Response(
-            content=stl_data,
-            media_type="application/sla",
-            headers={"Content-Disposition": f'attachment; filename="{node.name}.stl"'},
-        )
-    except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to read STL: {exc}") from exc
+    with _node_stl_lock(stl_path.stem):
+        stl_data = _served_node_stl(stl_path)
+        if stl_data is None:
+            _render_node_stl(scad_text, scad_path, stl_path)
+            stl_data = _served_node_stl(stl_path)
+            _trim_node_stl_cache(stl_path.parent)
+    if stl_data is None:
+        raise HTTPException(status_code=500, detail="OpenSCAD wrote no STL for this node")
+    return Response(
+        content=stl_data,
+        media_type="application/sla",
+        headers={"Content-Disposition": f'attachment; filename="{node.name}.stl"'},
+    )
 
 
 # -----------------------------------------------------------------------
