@@ -550,9 +550,7 @@ def test_the_picture_root_is_a_folder_of_pictures_never_everything(monkeypatch, 
 
 
 def test_what_is_kept_is_the_persons_alone(monkeypatch, tmp_path):
-    """The state folder and a camera's captures are made readable by this account
-    only, whatever the umask says; and `apothecary test all` runs its server on
-    state and pictures of its own, like `test run` and `docs generate`."""
+    """The state folder and a camera's captures are this account's alone, whatever the umask."""
     import stat
 
     from apothecary.firmware import devices
@@ -579,9 +577,6 @@ def test_what_is_kept_is_the_persons_alone(monkeypatch, tmp_path):
     for folder in (tmp_path / "state", tmp_path / "pics" / "captures"):
         assert folder.is_dir(), folder
         assert stat.S_IMODE(folder.stat().st_mode) == 0o700, folder
-    testing = (PACKAGE / "cli" / "testing.py").read_text(encoding="utf-8")
-    assert 'env["APOTHECARY_STATE_DIR"]' in testing and 'env["APOTHECARY_PICTURE_ROOT"]' in testing
-    assert "capture_output=True, text=True, env=env" in testing
 
 
 def test_a_job_is_named_and_the_name_is_shown_as_text():

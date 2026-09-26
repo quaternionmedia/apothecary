@@ -1,122 +1,51 @@
-"""Tests for CLI testing commands."""
+"""`apothecary test` exits with the code pytest exits with."""
 
-import importlib.util
-from pathlib import Path
+import subprocess
 
 import pytest
 from click.testing import CliRunner
 
-from apothecary.cli import cli
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Fixtures
-# ─────────────────────────────────────────────────────────────────────────────
+from apothecary.cli import cli, testing
 
 
 @pytest.fixture
-def runner():
-    """Provide a Click CLI test runner."""
-    return CliRunner()
+def pytest_exits(monkeypatch):
+    """Stand in for pytest: each run returns the next code given, and its argv is kept."""
+
+    def exits_with(*codes: int) -> list[list[str]]:
+        ran, remaining = [], list(codes)
+
+        def run(argv, **kwargs):
+            ran.append(argv)
+            return subprocess.CompletedProcess(argv, remaining.pop(0))
+
+        monkeypatch.setattr(testing.subprocess, "run", run)
+        return ran
+
+    return exits_with
 
 
-@pytest.fixture
-def root_path():
-    """Get the project root path."""
-    from apothecary.projects.parts.skeleton import ROOT
-
-    return ROOT
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# CLI Command Tests (parametrized)
-# ─────────────────────────────────────────────────────────────────────────────
+@pytest.mark.parametrize("code", [0, 1, 2, 5])
+def test_run_exits_with_pytests_code(pytest_exits, code):
+    ran = pytest_exits(code)
+    result = CliRunner().invoke(cli, ["test", "run", "-x"])
+    assert result.exit_code == code
+    assert ran == [testing.run_command() + ["-x"]]
 
 
-@pytest.mark.parametrize(
-    "command,expected_text",
-    [
-        (["test", "--help"], "Commands for testing"),
-        (["test", "setup-e2e", "--help"], "Playwright"),
-        (["test", "validate-e2e", "--help"], "Validate"),
-        (["test", "run-e2e", "--help"], "--headed"),
-        (["test", "run", "--help"], "--coverage"),
-        (["test", "all", "--help"], "--port"),
-    ],
-)
-def test_cli_command_exists(runner, command, expected_text):
-    """Test that CLI commands exist and show expected help text."""
-    result = runner.invoke(cli, command)
-    assert result.exit_code == 0
-    assert expected_text in result.output
+@pytest.mark.parametrize(("unit", "browser", "code"), [(0, 0, 0), (1, 0, 1), (0, 5, 5), (2, 1, 2)])
+def test_all_runs_both_phases_and_exits_with_the_first_failure(pytest_exits, unit, browser, code):
+    ran = pytest_exits(unit, browser)
+    result = CliRunner().invoke(cli, ["test", "all"])
+    assert result.exit_code == code
+    assert [argv[3:] for argv in ran] == [
+        ["walkthrough", "tests", "--ignore=tests/e2e"],
+        ["tests/e2e", "--start-server"],
+    ]
 
 
-@pytest.mark.parametrize(
-    "command,options",
-    [
-        (["test", "run-e2e", "--help"], ["--headed", "--slowmo", "--browser", "--base-url"]),
-        (["test", "run", "--help"], ["--e2e", "--coverage"]),
-        (["test", "all", "--help"], ["--port", "--coverage", "--headed", "--fail-fast"]),
-    ],
-)
-def test_cli_command_options(runner, command, options):
-    """Test that CLI commands have expected options."""
-    result = runner.invoke(cli, command)
-    assert result.exit_code == 0
-    for opt in options:
-        assert opt in result.output, f"Missing option: {opt}"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# E2E File Structure Tests (parametrized)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-@pytest.mark.parametrize(
-    "relative_path",
-    [
-        "tests/e2e/conftest.py",
-        "tests/e2e/test_viewer.py",
-        "tests/e2e/test_api_e2e.py",
-    ],
-)
-def test_e2e_required_file_exists(root_path, relative_path):
-    """Test that required E2E test files exist."""
-    file_path = root_path / relative_path
-    assert file_path.exists(), f"Missing required file: {relative_path}"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Playwright Setup Tests
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def test_playwright_installed():
-    """Test that playwright package is installed."""
-    spec = importlib.util.find_spec("playwright")
-    assert spec is not None, "Playwright package not installed. Run: uv sync"
-
-
-@pytest.mark.slow
-def test_chromium_browser_available():
-    """Test that Chromium browser is installed for Playwright."""
-    try:
-        from playwright.sync_api import sync_playwright
-
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            browser.close()
-    except Exception as e:
-        pytest.skip(f"Chromium not available: {e}. Run: apothecary test setup-e2e")
-
-
-def test_a_phase_that_errored_is_not_green_even_with_nothing_counted_failed():
-    """pytest reports "1 error" (collection, a fixture) without any "N failed";
-    the gate used to parse the count and exit 0."""
-    from apothecary.cli.testing import verdict
-
-    assert verdict(0, {"unit": True, "e2e": True}) == 0
-    assert verdict(0, {"unit": False, "e2e": True}) == 1
-    assert verdict(0, {"unit": True, "e2e": False}) == 1
-    assert verdict(2, {"unit": True, "e2e": True}) == 1
-    assert verdict(0, {}) == 1
+@pytest.mark.parametrize("name", ["setup-e2e", "validate-e2e", "run-e2e"])
+def test_a_retired_subcommand_names_its_replacement_and_fails(name):
+    result = CliRunner().invoke(cli, ["test", name, "--headed"])
+    assert result.exit_code == 1
+    assert "is retired; use `" in result.output
