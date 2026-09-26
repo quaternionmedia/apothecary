@@ -40,7 +40,7 @@ def _camera_marks_visible(page):
 
 @pytest.mark.e2e
 @pytest.mark.walkthrough
-def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path):
+def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, picture_folder):
     """Geometry from elsewhere, the bench drawn as the machines it holds, a camera
     placed at a piece and drawn there, and the doors the program keeps shut."""
     from apothecary import meshes
@@ -297,7 +297,13 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path):
         drawn = Image.new("L", (320, 240), 245)
         ImageDraw.Draw(drawn).rectangle((30, 30, 200, 120), fill=30)
         drawn.save(tmp_path / name)
+    # One in the picture folder itself, as a person would put it there: what a
+    # purge must leave alone.
+    theirs = Image.new("L", (320, 240), 245)
+    ImageDraw.Draw(theirs).ellipse((40, 40, 220, 200), fill=20)
+    theirs.save(picture_folder / "a_person_put_this_here.png")
     pictures_before = len(page.request.get(f"{base_url}/photos/pictures").json())
+    page.evaluate("() => window.apothecaryCamera.loadPictures()")
     panel.locator("#pic-file").set_input_files(
         [str(tmp_path / "shelf.png"), str(tmp_path / "shelf_again.png")]
     )
@@ -306,6 +312,10 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path):
         p["path"] for p in page.request.get(f"{base_url}/photos/pictures").json() if p["kept"]
     ]
     assert "uploads/shelf.png" in added and "uploads/shelf_again.png" in added
+    # The server outlives every test in the run: start from no pins, so the
+    # picture below shows this run's pin and nothing an earlier test left.
+    for pin in page.request.get(f"{base_url}/firmware/pins").json()["pins"]:
+        page.request.delete(f"{base_url}/firmware/pins/{pin['site']}/{pin['path']}")
     pinned = page.request.put(
         f"{base_url}/sites/garage/nodes/esp32_blink/device",
         data={"identity": "aa:bb:cc:dd:ee:ff"},
@@ -342,6 +352,8 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path):
     expect(panel.locator("#cam-note")).to_contain_text("of the folder's own stay", timeout=8000)
     left = page.request.get(f"{base_url}/photos/pictures").json()
     assert all(not p["kept"] for p in left)
+    assert "a_person_put_this_here.png" in {p["name"] for p in left}
+    assert (picture_folder / "a_person_put_this_here.png").is_file()
     assert page.request.get(f"{base_url}/firmware/pins").json()["pins"] == []
     story.says(
         "And a purge forgets only what the browser put here",
@@ -349,7 +361,8 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path):
         "never deletes one from a page. What it kept -- a camera's frames, the "
         "pictures added here -- it forgets on request, after asking once.",
         shown=(
-            f"{len(added)} added, {len(added)} forgotten; {len(left)} of the folder's own left\n"
+            f"forgotten: {', '.join(sorted(added))}\n"
+            "left where it was: a_person_put_this_here.png\n"
             "GET /firmware/pins -> []"
         ),
     )

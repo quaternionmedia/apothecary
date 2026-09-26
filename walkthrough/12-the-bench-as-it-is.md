@@ -102,7 +102,8 @@ Pictures added from the file picker are kept as they were named, under the pictu
 The pictures a person put in the folder by hand are theirs; the tool never deletes one from a page. What it kept -- a camera's frames, the pictures added here -- it forgets on request, after asking once.
 
 ```
-2 added, 2 forgotten; 5 of the folder's own left
+forgotten: uploads/shelf.png, uploads/shelf_again.png
+left where it was: a_person_put_this_here.png
 GET /firmware/pins -> []
 ```
 

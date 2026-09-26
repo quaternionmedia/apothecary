@@ -24,6 +24,12 @@ WEDGES = (
 )
 
 
+def _take_back_every_pin(page, base_url: str) -> None:
+    """No pins at all, whatever an earlier test in this session left behind."""
+    for pin in page.request.get(f"{base_url}/firmware/pins").json()["pins"]:
+        page.request.delete(f"{base_url}/firmware/pins/{pin['site']}/{pin['path']}")
+
+
 def _cell(page, label: str) -> str:
     """The keypad cell of the wedge with this label on the open ring."""
     return next(cell for cell, got in page.evaluate(WEDGES).items() if got == label)
@@ -215,7 +221,10 @@ def test_what_the_browser_put_here_it_can_take_back(camera_page, base_url: str, 
     assert page.request.get(f"{base_url}/cameras").json() == []
 
     # Every pin is listed -- this site's, and one whose site is gone -- and each
-    # taken back from its row; the piece's Device section follows at once.
+    # taken back from its row; the piece's Device section follows at once. The
+    # server outlives every test in the run, so this starts from no pins rather
+    # than from whatever an earlier test left pinned.
+    _take_back_every_pin(page, base_url)
     r = page.request.put(
         f"{base_url}/sites/garage/nodes/esp32_blink/device", data={"identity": "aa:bb:cc:dd:ee:ff"}
     )
@@ -239,7 +248,11 @@ def test_what_the_browser_put_here_it_can_take_back(camera_page, base_url: str, 
     expect(rows).to_have_count(2, timeout=5000)
     expect(rows.filter(has_text="pins_check")).to_have_class(re.compile(r"\bstale\b"))
     expect(rows.filter(has_text="pins_check")).to_contain_text("site gone")
-    expect(rows.filter(has_text="esp32_blink")).to_contain_text("not connected")
+    # "not connected" on a machine with arduino-cli; "cannot look: ..." on one
+    # without it, which is not the same thing and does not say it is.
+    expect(rows.filter(has_text="esp32_blink")).to_contain_text(
+        re.compile(r"not connected|cannot look:")
+    )
     rows.filter(has_text="pins_check").locator(".pin-unpin").click()
     expect(rows).to_have_count(1, timeout=5000)
     page.locator("#contents-list .contents-item[data-path='esp32_blink']").click()
@@ -247,7 +260,10 @@ def test_what_the_browser_put_here_it_can_take_back(camera_page, base_url: str, 
     rows.first.locator(".pin-unpin").click()
     expect(rows).to_have_count(0, timeout=5000)
     expect(panel.locator("#pin-list")).to_contain_text("none pinned")
-    expect(page.locator("#selected-body .dev-pick")).to_be_visible(timeout=3000)
+    # The piece offers pinning again: the typed identity is there whether or not
+    # this machine has a toolchain to list ports with.
+    expect(page.locator("#selected-body .dev-pin-manual")).to_be_visible(timeout=3000)
+    expect(page.locator("#selected-body .dev-unpin")).to_have_count(0)
     assert page.request.get(f"{base_url}/firmware/pins").json()["pins"] == []
 
     # Purge: everything the browser put here goes, the folder's own stay.
