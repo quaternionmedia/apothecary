@@ -168,15 +168,6 @@ class ArduinoCli:
         data = _json_or_error(result, "version")
         return (data or {}).get("VersionString") or (data or {}).get("version")
 
-    def config_path(self) -> Optional[Path]:
-        """The config file arduino-cli is using: the managed one, if it runs at all."""
-        if not self.is_available:
-            return None
-        result = _run(self.argv("config", "dump", "--json"), timeout=20)
-        if result.returncode != 0:
-            return None
-        return self.config_file
-
     def board_list(self) -> List[BoardInfo]:
         data = _json_or_error(_run(self.argv("board", "list", "--json"), timeout=30), "board list")
         # v1.x wraps under detected_ports; 0.x returned a bare list.

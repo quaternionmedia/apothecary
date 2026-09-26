@@ -22,8 +22,6 @@ FAKE_ARDUINO_CLI = textwrap.dedent(r"""
     cmd = " ".join(args[:2])
     if cmd == "version --json":
         print(json.dumps({"Application": "arduino-cli", "VersionString": "9.9.9"}))
-    elif cmd == "config dump":
-        print("{}")
     elif cmd == "board list":
         print(json.dumps({"detected_ports": [
             {"port": {"address": "/dev/ttyFAKE0", "label": "/dev/ttyFAKE0", "protocol": "serial",
@@ -57,7 +55,7 @@ FAKE_ARDUINO_CLI = textwrap.dedent(r"""
         while True:  # runs until the caller terminates us, like the real monitor
             time.sleep(0.1); n += 1
             print(f"blink {n}", flush=True)
-    elif args[0] in ("compile", "upload", "lib", "core", "config"):
+    elif args[0] in ("compile", "upload", "lib", "core"):
         print("fake " + " ".join(args))
         if "FAIL" in " ".join(args):
             print("Error during build", file=sys.stderr); sys.exit(1)

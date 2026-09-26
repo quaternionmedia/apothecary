@@ -39,8 +39,7 @@ def toolchain_status(
         except ToolchainError as exc:
             status.problems.append(f"arduino-cli does not run: {exc}")
         if status.arduino_cli_ok:
-            cfg = cli.config_path()
-            status.config_file = str(cfg) if cfg else None
+            status.config_file = str(cli.config_file)
             try:
                 status.cores = cli.core_list()
             except ToolchainError as exc:
