@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Optional, Type
+from typing import Dict, List, Optional, Type
 
 from pydantic import BaseModel, Field, computed_field
 
@@ -12,9 +12,6 @@ from apothecary.models import (
     PrintSettings,
     Vector3D,
 )
-
-if TYPE_CHECKING:
-    from .part_files import PartFiles
 
 
 class ContestedValue(BaseModel):
@@ -42,7 +39,6 @@ class BasePart(BaseModel):
     tags: List[str] = Field(default_factory=list)
     readme_path: Optional[Path] = None
     module_name: Optional[str] = None
-    param_map: Dict[str, str] = Field(default_factory=dict)
 
     # Geometry metadata
     default_bounds: Optional[BoundingBox3D] = None
@@ -89,12 +85,6 @@ class BasePart(BaseModel):
         jscad_path = self.source_file.with_suffix(".jscad")
         return jscad_path if jscad_path.exists() else None
 
-    def get_files(self) -> "PartFiles":
-        """Get a PartFiles instance for this part."""
-        from .part_files import PartFiles
-
-        return PartFiles.from_scad_file(self.source_file)
-
     def get_bounds(self, params: Optional[Dict] = None) -> Optional[BoundingBox3D]:
         """
         Calculate bounding box for the part with given parameters.
@@ -103,20 +93,6 @@ class BasePart(BaseModel):
         Falls back to default_bounds if not overridden.
         """
         return self.default_bounds
-
-    def get_center(self, params: Optional[Dict] = None) -> Vector3D:
-        """Get the center point of the part."""
-        bounds = self.get_bounds(params)
-        if bounds:
-            return bounds.center
-        return Vector3D()
-
-    def get_size(self, params: Optional[Dict] = None) -> Vector3D:
-        """Get the size of the part as a vector."""
-        bounds = self.get_bounds(params)
-        if bounds:
-            return bounds.size
-        return Vector3D()
 
     def to_geometry_dict(self, params: Optional[Dict] = None) -> Dict:
         """Export geometry metadata for API/viewer."""

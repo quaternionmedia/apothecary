@@ -13,9 +13,7 @@ import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Tuple
-
-from .part_files import PartFile, PartFiles
+from typing import List, Optional
 
 
 def scad_literal(value: object) -> str:
@@ -412,50 +410,6 @@ rotate([{rotation[0]}, {rotation[1]}, {rotation[2]}])
             None, lambda: self.render_stl(scad_path, stl_path, timeout, extra_args, params)
         )
 
-    def render_part_files(
-        self,
-        part_files: PartFiles,
-        force: bool = False,
-        timeout: float = 120.0,
-        params: Optional[dict] = None,
-    ) -> Tuple[PartFiles, RenderResult]:
-        """
-        Render STL for a PartFiles instance.
-
-        Args:
-            part_files: The part files to render
-            force: If True, regenerate even if STL exists and is fresh
-            timeout: Maximum render time
-
-        Returns:
-            Tuple of (updated PartFiles, RenderResult)
-        """
-        from .part_files import FileStatus
-
-        status = part_files.get_stl_status()
-
-        # Skip if already up-to-date (unless forced)
-        if status == FileStatus.PRESENT and not force:
-            return part_files, RenderResult(
-                success=True,
-                stl_path=part_files.stl_file.path if part_files.stl_file else None,
-                error_message="STL already up-to-date (use force=True to regenerate)",
-            )
-
-        # Render
-        stl_path = part_files.ensure_stl_path()
-        result = self.render_stl(part_files.scad_file.path, stl_path, timeout, params=params)
-
-        # Update part_files with new STL reference
-        if result.success and result.stl_path:
-            part_files.stl_file = PartFile(path=result.stl_path, format="stl")
-            part_files.last_stl_generation = datetime.now()
-            part_files.stl_generation_error = None
-        else:
-            part_files.stl_generation_error = result.error_message
-
-        return part_files, result
-
 
 def write_params_sidecar(stl_path: Path, params: dict) -> Path:
     """Record what produced an STL, next to the STL.
@@ -502,13 +456,3 @@ def get_renderer() -> OpenSCADRenderer:
     if _renderer is None:
         _renderer = OpenSCADRenderer()
     return _renderer
-
-
-def render_stl(scad_path: Path, stl_path: Optional[Path] = None) -> RenderResult:
-    """Convenience function to render a SCAD file to STL."""
-    return get_renderer().render_stl(scad_path, stl_path)
-
-
-async def render_stl_async(scad_path: Path, stl_path: Optional[Path] = None) -> RenderResult:
-    """Convenience async function to render a SCAD file to STL."""
-    return await get_renderer().render_stl_async(scad_path, stl_path)
