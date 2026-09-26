@@ -744,6 +744,12 @@
             position.needsUpdate = true;
         }
 
+        // Frees an object's GPU buffers and those of everything under it: a
+        // mesh's 'edges' outline is a child with a geometry of its own.
+        function disposeDeep(object) {
+            object.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); });
+        }
+
         // A node's own bounds if it has any (a real footprint, or a leaf
         // primitive); otherwise, for a composite node with no footprint of
         // its own (e.g. a building shell around everything it contains, which
@@ -1388,20 +1394,13 @@
 
             clearScene() {
                 this.transformControls.detach();
-                for (const mesh of Object.values(this.meshByName)) {
-                    this.scene.remove(mesh);
-                    mesh.geometry.dispose();
-                    mesh.material.dispose();
-                }
-                for (const mesh of Object.values(this.buildVolumeMeshByName)) {
-                    this.scene.remove(mesh);
-                    mesh.geometry.dispose();
-                    mesh.material.dispose();
-                }
-                for (const overlay of Object.values(this.compoundOverlayByKey)) {
-                    this.scene.remove(overlay);
-                    overlay.geometry.dispose();
-                    overlay.material.dispose();
+                for (const object of [
+                    ...Object.values(this.meshByName),
+                    ...Object.values(this.buildVolumeMeshByName),
+                    ...Object.values(this.compoundOverlayByKey),
+                ]) {
+                    this.scene.remove(object);
+                    disposeDeep(object);
                 }
                 this.meshByName = {};
                 this.buildVolumeMeshByName = {};
@@ -1701,10 +1700,12 @@
                 const gridDivisions = Math.min(200, Math.max(10, rawDivisions));
 
                 this.scene.remove(this.gridHelper);
+                disposeDeep(this.gridHelper);
                 this.gridHelper = new THREE.GridHelper(gridSize, gridDivisions, 0x444444, 0x2a2a2a);
                 this.scene.add(this.gridHelper);
 
                 this.scene.remove(this.axesHelper);
+                disposeDeep(this.axesHelper);
                 this.axesHelper = new THREE.AxesHelper(Math.max(20, span * 0.4));
                 this.scene.add(this.axesHelper);
             }
@@ -1998,15 +1999,13 @@
                 if (existing) {
                     this.transformControls.detach();
                     this.scene.remove(existing);
-                    existing.geometry.dispose();
-                    existing.material.dispose();
+                    disposeDeep(existing);
                     delete this.meshByName[key];
                 }
                 const overlay = this.compoundOverlayByKey[key];
                 if (overlay) {
                     this.scene.remove(overlay);
-                    overlay.geometry.dispose();
-                    overlay.material.dispose();
+                    disposeDeep(overlay);
                     delete this.compoundOverlayByKey[key];
                 }
                 const index = this.currentRenderNodes(this.currentFocusNode())
@@ -3453,17 +3452,16 @@
                 });
             }
 
-            // Swaps a placeholder box for real geometry in place -- disposes
-            // the old mesh, re-tags the new one so raycasting/selection keep
-            // working, and re-applies the same status/violation/selection
-            // coloring every mesh gets.
+            // Swaps what is drawn for a node (its placeholder box, or older
+            // geometry) for real geometry in place -- disposes the old mesh and
+            // its edges, re-tags the new one so raycasting/selection keep
+            // working, and re-applies the coloring every mesh gets.
             upgradeMesh(node, realMesh) {
                 const key = nodeKey(node);
                 const existing = this.meshByName[key];
-                if (!existing) return; // navigated away since the wave started
+                if (!existing) { disposeDeep(realMesh); return; }  // no longer on screen
                 this.scene.remove(existing);
-                existing.geometry.dispose();
-                existing.material.dispose();
+                disposeDeep(existing);
                 realMesh.userData.key = key;
                 this.scene.add(realMesh);
                 this.meshByName[key] = realMesh;
