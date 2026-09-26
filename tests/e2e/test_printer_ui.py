@@ -383,6 +383,7 @@ def test_focused_monitor_page(page: Page, fresh_url: str):
 @pytest.mark.e2e
 def test_board_inside_the_printer_drives_it(page: Page, printer_url: str):
     """Pin the port to the mainboard: the printer row and panel speak for it; its status follows."""
+    page.clock.install()
     page.goto(f"{printer_url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     section = page.locator("#selected-body .device-section")
@@ -406,7 +407,11 @@ def test_board_inside_the_printer_drives_it(page: Page, printer_url: str):
         0
     )  # unpin from the board, not through the printer
     section.locator(".dev-poll").click()
-    expect(page.locator("#status-select")).to_have_value("printing", timeout=8000)
+    # The page applies a poll's sync only if that poll changed the server's node; an
+    # earlier request already had, so printer_1 turns "printing" at the next device
+    # refresh (10 s at most).
+    page.clock.fast_forward(10_000)
+    expect(page.locator("#status-select")).to_have_value("printing", timeout=5000)
 
     # The via link jumps to the board's own row and panel.
     section.locator(".dev-via").click()
