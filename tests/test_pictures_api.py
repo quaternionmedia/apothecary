@@ -319,6 +319,8 @@ def test_cameras_are_placed_in_the_world_and_kept(pictures):
     assert (pictures / "state" / "cameras.json").is_file()
     assert c.delete("/cameras/abc123").json()["unplaced"] == "abc123"
     assert c.delete("/cameras/abc123").status_code == 404
+    # Written whole through a temporary file, and none is left behind.
+    assert [p.name for p in (pictures / "state").iterdir()] == ["cameras.json"]
 
 
 def test_a_gathering_never_covers_over_a_built_in_site(pictures):

@@ -35,11 +35,13 @@ from __future__ import annotations
 import json
 import os
 import re
+import tempfile
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, field_validator
 
 router = APIRouter(tags=["photos"])
@@ -181,15 +183,16 @@ async def _picture_body(request: Request) -> bytes:
 
 
 @router.post("/photos/pictures", status_code=201)
-async def keep_picture(
-    request: Request,
+def keep_picture(
+    data: bytes = Depends(_picture_body),
     name: str = Query("capture", min_length=1, max_length=120),
     kept: str = Query("capture", pattern="^(capture|upload)$"),
 ):
     """Keep a picture the browser sends: a camera's frame under captures/, named by the
     moment, or (``kept=upload``) a file a person chose under uploads/, named as they
-    named it. A picture by its first bytes, whatever its name says."""
-    data = await _picture_body(request)
+    named it. A picture by its first bytes, whatever its name says.
+
+    The body is read on the event loop; the write of up to 16 MB runs in the threadpool."""
     suffix = _suffix_by_bytes(data)
     if suffix is None:
         raise HTTPException(
@@ -232,15 +235,9 @@ def _is_a_picture(path: Path) -> bool:
     """Judged by its first bytes, not its name."""
     try:
         with path.open("rb") as f:
-            head = f.read(16)
+            return _suffix_by_bytes(f.read(16)) is not None
     except OSError:
         return False
-    return (
-        head.startswith(PNG_MAGIC)
-        or head.startswith(JPEG_MAGIC)
-        or head.startswith((b"GIF87a", b"GIF89a", b"BM", b"II*\x00", b"MM\x00*"))
-        or (head[:4] == b"RIFF" and head[8:12] == b"WEBP")
-    )
 
 
 def _kept_picture(root: Path, given: str) -> Path:
@@ -250,13 +247,7 @@ def _kept_picture(root: Path, given: str) -> Path:
     parts = given.replace("\\", "/").split("/")
     if len(parts) == 1:
         parts = [CAPTURES, parts[0]]
-    if (
-        len(parts) != 2
-        or parts[0] not in KEPT.values()
-        or not parts[1]
-        or parts[1].startswith(".")
-        or parts[1] in ("..",)
-    ):
+    if len(parts) != 2 or parts[0] not in KEPT.values() or not parts[1] or parts[1].startswith("."):
         raise HTTPException(status_code=404, detail="no such kept picture")
     path = root / parts[0] / parts[1]
     if (
@@ -461,12 +452,24 @@ def _load_cameras() -> Dict[str, dict]:
         return {}
 
 
+# PUT and DELETE run in the threadpool: each read-modify-write holds this, and a
+# write lands whole, so no placement is lost and a reader never sees half a file.
+_CAMERAS_LOCK = threading.Lock()
+
+
 def _save_cameras(cameras: Dict[str, dict]) -> None:
     from ..firmware.devices import private_folder
 
     path = _cameras_file()
     private_folder(path.parent)
-    path.write_text(json.dumps(cameras, indent=2), encoding="utf-8")
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".cameras.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as out:
+            out.write(json.dumps(cameras, indent=2))
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 @router.get("/cameras")
@@ -487,23 +490,26 @@ def place_camera(camera_id: str, body: CameraPlacement):
         raise HTTPException(
             status_code=404, detail=f"Node '{body.path}' not found in site '{body.site}'"
         )
-    cams = _load_cameras()
-    cams[camera_id] = {
+    placed = {
         "id": camera_id,
         "label": body.label,
         "site": body.site,
         "path": body.path,
         "placed_at": datetime.now(timezone.utc).isoformat(),
     }
-    _save_cameras(cams)
-    return cams[camera_id]
+    with _CAMERAS_LOCK:
+        cams = _load_cameras()
+        cams[camera_id] = placed
+        _save_cameras(cams)
+    return placed
 
 
 @router.delete("/cameras/{camera_id}")
 def unplace_camera(camera_id: str):
-    cams = _load_cameras()
-    if camera_id not in cams:
-        raise HTTPException(status_code=404, detail="no such camera")
-    del cams[camera_id]
-    _save_cameras(cams)
+    with _CAMERAS_LOCK:
+        cams = _load_cameras()
+        if camera_id not in cams:
+            raise HTTPException(status_code=404, detail="no such camera")
+        del cams[camera_id]
+        _save_cameras(cams)
     return {"unplaced": camera_id}
