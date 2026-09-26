@@ -9,7 +9,7 @@ A word sits alongside a part from the parts folder rather than underneath it. A
 part is one drawing file plus printing notes; a word is a small tree with no
 file at all.
 
-PROTOTYPE — not ratified. See ``docs/plans/edits/apothecary-model.md``.
+PROTOTYPE — not ratified.
 """
 
 from __future__ import annotations

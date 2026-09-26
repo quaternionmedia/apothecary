@@ -9,10 +9,9 @@ So this is a small shelf of arrangements built from pictures, joined into the
 same register the viewer already reads. What is known about each piece lives
 beside it, joined by the same dotted path everything else uses.
 
-Held in memory only, like everything else that register holds. Nothing is
-written anywhere. See ``docs/plans/features/persistence.md`` for when that stops
-being good enough, and ``docs/plans/proposals/runs-and-stays-local.md`` for why
-it will not become somebody else's disk when it does.
+Held in memory only, like everything else that register holds: nothing is
+written anywhere, and a restart loses it. Where it would be kept waits on what
+the draft record *Personal data stays on the device* counts as this machine.
 
 PROTOTYPE — not ratified.
 """
