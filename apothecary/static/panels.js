@@ -219,10 +219,11 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
         /* Register a panel. `body` is an element the panel adopts (moved into
          * it) or a function given the slot to fill. `where` is "right",
          * "left" or "free"; `open` and `collapsed` are the defaults a browser
-         * that has not seen the panel starts from. */
-        register(id, { title, body, where = "right", open = true, collapsed = false, x = 40, y = 40 } = {}) {
+         * that has not seen the panel starts from. `onClose` is called when an
+         * open panel is closed or unregistered. */
+        register(id, { title, body, where = "right", open = true, collapsed = false, x = 40, y = 40, onClose = null } = {}) {
             if (panels.has(id)) this.unregister(id);
-            const p = { id, title: title || id, where, home: where === "free" ? "right" : where, open, collapsed, x, y, height: null, el: null, slot: null, leader: null, tether: null };
+            const p = { id, title: title || id, where, home: where === "free" ? "right" : where, open, collapsed, x, y, height: null, el: null, slot: null, leader: null, tether: null, onClose };
             const had = remembered[id];
             if (had) {
                 if (typeof had.open === "boolean") p.open = had.open;
@@ -246,9 +247,17 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
             if (p.leader) p.leader.remove();
             panels.delete(id);
             renderTabs();
+            if (p.open && p.onClose) p.onClose();
         },
         open(id) { const p = panels.get(id); if (!p) return false; p.open = true; place(p); remember(); return true; },
-        close(id) { const p = panels.get(id); if (!p) return false; p.open = false; place(p); remember(); return true; },
+        close(id) {
+            const p = panels.get(id);
+            if (!p) return false;
+            const was = p.open;
+            p.open = false; place(p); remember();
+            if (was && p.onClose) p.onClose();
+            return true;
+        },
         toggle(id) { const p = panels.get(id); if (!p) return false; return p.open ? this.close(id) : this.open(id); },
         collapse(id, collapsed = true) { const p = panels.get(id); if (!p) return false; p.collapsed = collapsed; place(p); remember(); return true; },
         float(id) {

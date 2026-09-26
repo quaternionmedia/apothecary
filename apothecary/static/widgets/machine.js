@@ -381,8 +381,8 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
             if (gen !== state.gen) return;  // the user switched ports meanwhile
             state.status = st; pushHistory(st); renderStatus(); renderChart();
             if (st.position) emit("apothecary:position", { position: st.position, source: "poll", port });
-            emit("apothecary:status", st);
             emit("apothecary:printer-status", st);  // the world's rows, badges and marks read this
+            followJob(st);
             if (st.control) applyControlState(st.control);
             const hadLink = !!(state.info && state.info.link);
             if (!state.info || hadLink !== !!st.held) {
@@ -401,7 +401,8 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
     function schedule() {
         clearTimeout(state.timer); state.timer = null;
         const gen = ++state.gen;
-        if (!$("auto").checked || !state.port || document.hidden) return;
+        // A root taken off the page (its panel closed) polls no more.
+        if (!$("auto").checked || !state.port || document.hidden || !root.isConnected) return;
         state.timer = setTimeout(async () => { if (gen !== state.gen) return; await pollOnce(); if (gen === state.gen) schedule(); }, Number($("interval").value) || 2000);
     }
     async function loadInfo() {
@@ -665,15 +666,12 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
         if (!ctl.armed) { logLine("sys", "a corner move needs control armed"); return; }
         enqueue(cornerLines(b.dataset.corner));
     });
-    // The state card says when a reading or a print holds the port.
-    const onStatus = (ev) => {
-        const st = ev.detail; const job = st && st.job;
-        if (!st || st.port !== state.port) return;
+    // A reading or a print that holds the port, as a poll reports it, is followed.
+    function followJob(st) {
+        const job = st.job;
         if (job && job.kind === "leveling") { $("level-job").textContent = `${job.stage}…`; if (!level.timer) level.timer = setTimeout(watchLevelJob, 1000); }
         if (job && job.kind === "print") { prt.job = job; renderPrint(); if (!prt.timer) prt.timer = setTimeout(watchPrint, 1000); }
-    };
-    window.addEventListener("apothecary:status", onStatus);
-    onWindow.push(["apothecary:status", onStatus]);
+    }
 
     // --- print from here: a kept file streamed over the link -------------------------
     const prt = { files: [], records: [], job: null, timer: null };

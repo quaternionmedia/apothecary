@@ -152,14 +152,7 @@ def _close(page: Page, url: str) -> None:
 @pytest.mark.e2e
 @pytest.mark.parametrize(
     "leave",
-    [
-        _leave_the_site,
-        _unpin,
-        pytest.param(
-            _close,
-            marks=pytest.mark.xfail(reason="panels.register does not call onClose yet"),
-        ),
-    ],
+    [_leave_the_site, _unpin, _close],
     ids=["site-left", "unpinned", "closed"],
 )
 def test_the_machine_popup_stops_polling_when_it_goes(page: Page, pinned: str, leave):
