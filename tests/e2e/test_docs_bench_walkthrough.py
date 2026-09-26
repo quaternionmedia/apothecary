@@ -245,6 +245,9 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     expect(panel.locator("#cam-place")).to_be_enabled(timeout=3000)
     panel.locator("#cam-place").click()
     expect(panel.locator("#cam-place-note")).to_contain_text("placed at workbench", timeout=5000)
+    placed = panel.locator("#cam-placed .kept-row")
+    expect(placed).to_have_count(1)
+    expect(placed).to_contain_text("garage › workbench")
     page.evaluate("() => window.fractalViewer.zoomIn('workbench')")
     badge = page.locator(".world-badge.camera-mark")
     expect(badge).to_be_visible(timeout=5000)
@@ -277,8 +280,10 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     page.evaluate("() => window.fractalViewer.zoomOut()")
     expect(badge).to_be_visible(timeout=5000)
     assert _camera_marks_visible(page) == [True]
-    panel.locator("#cam-unplace").click()
+    # Taken back from its row in the list of placed cameras.
+    placed.locator(".cam-unplace-one").click()
     expect(badge).to_have_count(0, timeout=5000)
+    expect(panel.locator("#cam-placed")).to_contain_text("none placed")
     assert page.request.get(f"{base_url}/cameras?site=garage").json() == []
     story.says(
         "Unplaced, it leaves the world",
@@ -308,10 +313,10 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
         [str(tmp_path / "shelf.png"), str(tmp_path / "shelf_again.png")]
     )
     expect(panel.locator("#pic-list .pic")).to_have_count(pictures_before + 2, timeout=8000)
-    added = [
+    added = sorted(
         p["path"] for p in page.request.get(f"{base_url}/photos/pictures").json() if p["kept"]
-    ]
-    assert "uploads/shelf.png" in added and "uploads/shelf_again.png" in added
+    )
+    assert added == ["uploads/shelf.png", "uploads/shelf_again.png"]
     # The server outlives every test in the run: start from no pins, so the
     # picture below shows this run's pin and nothing an earlier test left.
     for pin in page.request.get(f"{base_url}/firmware/pins").json()["pins"]:
@@ -355,8 +360,42 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     )
 
     page.evaluate("() => window.apothecaryPanels.dock('camera', 'right')")
-    panel.locator("#pin-list .pin-unpin").click()
+    # Forgotten from its thumbnail, without ticking it.
+    panel.locator("#pic-list .pic", has_text="shelf_again.png").locator(".pic-forget").click()
+    expect(panel.locator("#pic-list .pic")).to_have_count(pictures_before + 1, timeout=5000)
+    assert not (picture_folder / "uploads" / "shelf_again.png").exists()
+    assert page.evaluate("() => document.querySelectorAll('#pic-list input:checked').length") == 0
+    # A pin whose site is gone is listed as such, and taken back from its row.
+    drawn = Image.new("L", (400, 300), 245)
+    ImageDraw.Draw(drawn).rectangle((40, 40, 200, 160), fill=30)
+    drawn.save(picture_folder / "pins_check.png")
+    built = page.request.post(
+        f"{base_url}/photos",
+        data={"picture": "pins_check.png", "name": "pins_check", "width_mm": 400},
+    )
+    assert built.ok, built.text()
+    piece = next(iter(built.json()["pieces"]))
+    pinned = page.request.put(
+        f"{base_url}/sites/pins_check/nodes/{piece}/device", data={"identity": "/dev/ttyNOWHERE"}
+    )
+    assert pinned.ok, pinned.text()
+    assert page.request.delete(f"{base_url}/photos/pins_check").ok
+    (picture_folder / "pins_check.png").unlink()
+    panel.locator("#pin-refresh").click()
+    rows = panel.locator("#pin-list .kept-row")
+    expect(rows).to_have_count(2, timeout=5000)
+    gone = rows.filter(has_text="pins_check")
+    expect(gone).to_have_class(re.compile(r"\bstale\b"))
+    expect(gone).to_contain_text("site gone")
+    gone.locator(".pin-unpin").click()
+    expect(rows).to_have_count(1, timeout=5000)
+    # Unpinned from the panel, the piece's Device section follows at once.
+    page.locator("#contents-list .contents-item[data-path='esp32_blink']").click()
+    expect(page.locator("#selected-body .device-section .dev-unpin")).to_be_visible(timeout=8000)
+    rows.locator(".pin-unpin").click()
     expect(panel.locator("#pin-list")).to_contain_text("none pinned", timeout=5000)
+    expect(page.locator("#selected-body .dev-pin-manual")).to_be_visible(timeout=3000)
+    expect(page.locator("#selected-body .dev-unpin")).to_have_count(0)
     page.once("dialog", lambda d: d.accept())
     panel.locator("#pic-purge").click()
     expect(panel.locator("#cam-note")).to_contain_text("of the folder's own stay", timeout=8000)
