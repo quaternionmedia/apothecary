@@ -7,10 +7,6 @@ waits on another that was never told.
 
 from __future__ import annotations
 
-import pytest
-from fastapi.testclient import TestClient
-
-from apothecary.api import app
 from apothecary.spaces import (
     APOTHECARY,
     DATUM,
@@ -20,8 +16,6 @@ from apothecary.spaces import (
     problems,
     summary,
 )
-
-client = TestClient(app)
 
 
 class TestOwnershipComesFromOneTable:
@@ -137,38 +131,3 @@ class TestAnUnmeasuredPartHasNotDrifted:
         )
         assert [p.kind for p in _readiness_problems(CORE, report)] == ["unbounded"]
 
-
-class TestServedFromTheApi:
-    def test_the_route_matches_the_function(self):
-        body = client.get("/problems").json()
-        assert body["count"] == len(problems())
-
-    @pytest.mark.parametrize("owner", [HUMAN, APOTHECARY, DATUM])
-    def test_filtering_by_owner(self, owner):
-        body = client.get(f"/problems?owner={owner}").json()
-        assert all(p["owner"] == owner for p in body["problems"])
-
-    def test_filtering_by_kind(self):
-        body = client.get("/problems?kind=contested").json()
-        assert body["count"] > 0
-        assert all(p["kind"] == "contested" for p in body["problems"])
-
-    def test_solutions_route(self):
-        body = client.get("/solutions").json()
-        assert body["count"] == len(capabilities())
-
-    def test_spaces_summary_route(self):
-        body = client.get("/spaces").json()
-        assert body["problems"] == len(problems())
-        assert set(body["by_owner"]) <= {APOTHECARY, DATUM, HUMAN, "measurement"}
-
-    def test_a_bad_build_volume_is_refused_everywhere(self):
-        for route in ("/problems", "/spaces"):
-            assert client.get(f"{route}?build_volume=nope").status_code == 422
-            assert client.get(f"{route}?build_volume=1,2").status_code == 422
-
-    def test_a_build_volume_changes_what_is_open(self):
-        """Without one, "fits the printer" cannot be answered, so it is open."""
-        without = client.get("/spaces").json()["problems"]
-        with_volume = client.get("/spaces?build_volume=220,220,250").json()["problems"]
-        assert with_volume < without

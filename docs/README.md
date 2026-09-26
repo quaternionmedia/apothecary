@@ -150,7 +150,7 @@ When running the server (`apothecary serve`):
                           │
 ┌─────────────────────────▼───────────────────────────────────┐
 │                     FastAPI Server                          │
-│   /render | /parts | /viewer | /openscad/status | /health   │
+│   /render | /parts | /sites | /viewer | /health             │
 └─────────────────────────┬───────────────────────────────────┘
                           │
 ┌─────────────────────────▼───────────────────────────────────┐

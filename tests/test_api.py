@@ -111,22 +111,14 @@ def test_parts_include_uses_repo_relative_include_path():
     assert "\\\\" not in include
 
 
-def test_parts_random_endpoint_returns_metadata():
+def test_every_listed_part_serves_its_scad():
     client = TestClient(app)
-    r = client.get("/parts/random")
-    assert r.status_code == 200
-    data = r.json()
-    assert data.get("random_source") in _expected_part_names()
-    assert "include" in data and "download_url" in data
-
-
-def test_parts_random_scad_endpoint():
-    client = TestClient(app)
-    r = client.get("/parts/random/scad")
-    assert r.status_code == 200
-    header_name = r.headers.get("x-part-name")
-    assert header_name is not None and header_name.strip()
-    assert len(r.text) > 10
+    listed = [part["name"] for part in client.get("/parts").json()]
+    assert listed
+    for name in listed:
+        r = client.get(f"/parts/{name}/scad")
+        assert r.status_code == 200, name
+        assert r.text.strip(), name
 
 
 def test_viewer_home_redirects_to_the_named_default_site():

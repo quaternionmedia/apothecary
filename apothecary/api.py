@@ -19,7 +19,6 @@ import re
 from contextlib import asynccontextmanager, suppress
 from importlib import import_module
 from pathlib import Path
-from random import choice
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
@@ -187,11 +186,6 @@ renderer = TemplateRenderer()
 # =============================================================================
 
 
-def _sanitize_part_name(name: str) -> str:
-    """Convert part name to valid Python module name."""
-    return name.lower().replace("-", "_").replace(" ", "_").replace(".", "_")
-
-
 def _part_template() -> str:
     template_path = ROOT / "templates" / "part.include.scad.j2"
     if template_path.exists():
@@ -302,7 +296,6 @@ def _part_metadata(part) -> Dict[str, object]:
     # Add file availability info
     metadata["files"] = {
         "scad": {"exists": part.source_file.exists(), "url": f"/parts/{part.name}/scad"},
-        "jscad": {"exists": False, "url": f"/parts/{part.name}/jscad"},  # Generated on demand
         "stl": {
             "exists": part.stl_file is not None,
             "url": f"/parts/{part.name}/stl" if part.stl_file else None,
@@ -364,32 +357,6 @@ async def list_parts():
     return [_part_metadata(_load_part_wrapper(name)) for name in names]
 
 
-@app.get("/parts/random")
-async def random_part(params: str | None = Query(None, alias="params")):
-    names = _available_part_names()
-    if not names:
-        raise HTTPException(status_code=404, detail="No parts available")
-    picked = choice(names)
-    payload = _part_payload(_load_part_wrapper(picked), params)
-    payload["random_source"] = picked
-    return payload
-
-
-@app.get("/parts/random/scad", response_class=PlainTextResponse)
-async def random_part_scad():
-    names = _available_part_names()
-    if not names:
-        raise HTTPException(status_code=404, detail="No parts available")
-    picked = choice(names)
-    part = _load_part_wrapper(picked)
-    try:
-        return PlainTextResponse(
-            part.source_file.read_text(encoding="utf-8"), headers={"x-part-name": part.name}
-        )
-    except OSError as exc:  # pragma: no cover - IO failure is rare
-        raise HTTPException(status_code=500, detail=f"Failed to read SCAD: {exc}") from exc
-
-
 @app.get("/parts/{name}")
 async def get_part(name: str, params: str | None = Query(None, alias="params")):
     part = _load_part_wrapper(name)
@@ -403,54 +370,6 @@ async def get_part_scad(name: str):
         return PlainTextResponse(part.source_file.read_text(encoding="utf-8"))
     except OSError as exc:  # pragma: no cover - IO failure is rare
         raise HTTPException(status_code=500, detail=f"Failed to read SCAD: {exc}") from exc
-
-
-@app.get("/parts/{name}/jscad", response_class=PlainTextResponse)
-async def get_part_jscad(name: str, params: str | None = Query(None, alias="params")):
-    """Generate a JSCAD JavaScript module from a part's SCAD file.
-
-    Since raw SCAD files can't be directly converted to JSCAD, this creates
-    a simple JSCAD module with a placeholder shape and the SCAD code as documentation.
-    """
-    part = _load_part_wrapper(name)
-    _, params_json = _normalize_params(part, params)
-
-    try:
-        scad_code = part.source_file.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to read SCAD: {exc}") from exc
-
-    # Create a JSCAD module with documentation
-    jscad_code = f"""/**
- * {part.name}
- * @category {part.category or "Parts"}
- * @description {part.description or "No description"}
- * @tags {", ".join(part.tags) if part.tags else "apothecary"}
- */
-
-const jscad = require('@jscad/modeling')
-const {{ cube, sphere }} = jscad.primitives
-const {{ translate }} = jscad.transforms
-
-// OpenSCAD source:
-/*
-{scad_code}
-*/
-
-const main = () => {{
-    // Placeholder: display info about the part
-    // The actual geometry would require OpenSCAD -> JSCAD conversion
-
-    const info = cube({{ size: [50, 30, 2] }})
-    const marker = translate([0, 0, 5], sphere({{ radius: 3 }}))
-
-    return [info, marker]
-}}
-
-module.exports = {{ main }}
-"""
-
-    return PlainTextResponse(jscad_code, media_type="application/javascript")
 
 
 @app.get("/parts/{name}/stl")
@@ -752,20 +671,6 @@ async def validate_part_params(name: str, body: Optional[StlGenerateRequest] = N
         "errors": [],
         "bounds": jsonable_encoder(bounds),
     }
-
-
-@app.get("/parts/{name}/files")
-async def get_part_files(name: str, request: Request):
-    """
-    Get detailed file information for a part.
-
-    Returns status and URLs for all file formats (SCAD, JSCAD, STL).
-    """
-    part = _load_part_wrapper(name)
-    part_files = part.get_files()
-    base_url = str(request.base_url).rstrip("/")
-
-    return part_files.to_api_dict(base_url)
 
 
 # =============================================================================
@@ -1995,64 +1900,6 @@ async def part_view(name: str):
     return RedirectResponse(
         f"/viewer/sites/parts_library?focus={quote(canonical, safe='')}", status_code=307
     )
-
-
-@app.get("/problems")
-async def get_problems(
-    owner: Optional[str] = Query(None, description="apothecary | datum | human | measurement"),
-    kind: Optional[str] = Query(None),
-    build_volume: Optional[str] = Query(None),
-):
-    """Every open question this repository can state, and who can close it.
-
-    Derived from models that already exist -- contested values, the build
-    checklist, layout validators, the black-box seam -- so it cannot drift from
-    the repository the way a hand-maintained list does.
-    """
-    from .spaces import problems as open_problems
-
-    volume = _parse_build_volume(build_volume)
-    found = open_problems(build_volume=volume)
-    if owner:
-        found = [p for p in found if p.owner == owner]
-    if kind:
-        found = [p for p in found if p.kind == kind]
-    return {"count": len(found), "problems": [p.to_dict() for p in found]}
-
-
-@app.get("/solutions")
-async def get_solutions(kind: Optional[str] = Query(None)):
-    """What this repository offers against those problems."""
-    from .spaces import capabilities
-
-    found = capabilities()
-    if kind:
-        found = [c for c in found if c.kind == kind]
-    return {"count": len(found), "capabilities": [c.to_dict() for c in found]}
-
-
-@app.get("/spaces")
-async def get_spaces(build_volume: Optional[str] = Query(None)):
-    """Both spaces at a glance, and any problem kind nothing here addresses."""
-    from .spaces import summary
-
-    return summary(build_volume=_parse_build_volume(build_volume))
-
-
-@app.get("/openscad/status")
-async def openscad_status():
-    """
-    Check OpenSCAD availability and version.
-
-    Returns information about the OpenSCAD installation used for STL generation.
-    """
-    renderer = get_stl_renderer()
-
-    return {
-        "available": renderer.is_available,
-        "version": renderer.get_version(),
-        "path": str(renderer.openscad_path) if renderer.openscad_path else None,
-    }
 
 
 # The project's first APIRouter, mounted last. Its handlers reach back into the
