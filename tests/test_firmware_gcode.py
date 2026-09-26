@@ -373,10 +373,18 @@ def test_upload_releases_only_its_own_printer_link(
         and time.time() < deadline
     ):
         time.sleep(0.02)
-    # And while a task holds the toolchain, polls are refused rather than racing it.
-    fresh_task_runner.run("x", "hold", [["/bin/sleep", "2"]])
+    # A task writing to a port holds that port and no other: its polls and
+    # identify are refused, the other printer's are not, and a compile (no port)
+    # holds nothing. The emergency stop goes through whatever holds the port.
+    fresh_task_runner.run("upload", "hold", [["/bin/sleep", "2"]], port="/dev/ttyFAKE1")
     assert c.get("/firmware/printers/status", params={"port": "/dev/ttyFAKE1"}).status_code == 409
     assert c.post("/firmware/devices/identify", json={"port": "/dev/ttyFAKE1"}).status_code == 409
+    assert c.get("/firmware/printers/status", params={"port": "/dev/ttyFAKE0"}).status_code != 409
+    stop = c.post("/firmware/printers/command", json={"port": "/dev/ttyFAKE1", "command": "M112"})
+    assert stop.status_code != 409, stop.text
+    fresh_task_runner.cancel(fresh_task_runner.active.id)
+    fresh_task_runner.run("compile", "a compile", [["/bin/sleep", "2"]])
+    assert c.get("/firmware/printers/status", params={"port": "/dev/ttyFAKE1"}).status_code == 200
     fresh_task_runner.cancel(fresh_task_runner.active.id)
 
 
@@ -1521,3 +1529,98 @@ def test_where_answers_before_anyone_has_opened_the_viewer(fake_arduino_cli, gar
     where = c.get("/firmware/printers/where", params={"port": "/dev/ttyFAKE1"}).json()
     assert where["site"] == "garage" and where["board"]["path"] == BOARD
     assert "garage" in api_module._site_store.loaded()
+
+
+# --- a job's link is the job's: nothing drops, reopens or resets it under a print ---
+
+
+class _LossyBoard:
+    """Answers every line; ``lose_next_m105`` swallows one poll reply, as a
+    garbled USB line would."""
+
+    def __init__(self, port, baud):
+        self.pending, self.sent, self.closed, self.lose_next_m105 = b"", [], False, False
+
+    def write(self, data):
+        if self.closed:
+            raise ToolchainError("port closed")
+        cmd = data.decode().strip()
+        self.sent.append(cmd)
+        if cmd == "M105" and self.lose_next_m105:
+            self.lose_next_m105 = False
+            return
+        self.pending += b"ok T:200.0 /200.0 B:60.0 /60.0\n" if cmd == "M105" else b"ok\n"
+
+    def read(self, timeout):
+        if not self.pending:
+            time.sleep(min(timeout, 0.002))
+            return b""
+        out, self.pending = self.pending, b""
+        return out
+
+    def pulse_reset(self):
+        self.sent.append("<DTR>")
+
+    def close(self):
+        self.closed = True
+
+
+def _printing(tmp_path, monkeypatch, lines=400):
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
+    boards = []
+    links = gcode.PrinterLinks(factory=lambda p, b: boards.append(_LossyBoard(p, b)) or boards[-1])
+    monkeypatch.setattr(gcode, "line_timeout", lambda cmd: 1.0)
+    links.open("/dev/ttyJOB", 115200)
+    kept = devices.save_print_file("p.gcode", ("M104 S200\n" + "G1 X1\n" * lines).encode())
+    links.control.arm("/dev/ttyJOB")
+    job = devices.start_print("/dev/ttyJOB", kept.id, links=links)
+    return links, boards[0], job
+
+
+def test_a_lost_poll_reply_mid_print_keeps_the_link_and_the_print(tmp_path, monkeypatch):
+    """One lost reply used to force-close the link under the print thread: the
+    print died, the safe-off was never sent, and the heaters stayed on."""
+    links, board, job = _printing(tmp_path, monkeypatch)
+    board.lose_next_m105 = True
+    for _ in range(40):  # until a poll reaches the board between two streamed lines
+        status = devices.printer_status("/dev/ttyJOB", links=links)
+        if not board.lose_next_m105:
+            break
+    assert not board.lose_next_m105, "no poll reached the board"
+    assert links.get("/dev/ttyJOB") is not None and status.state == "printing"
+    job.thread.join(20)
+    assert job.stage == "done" and job.sent == job.total
+
+
+def test_nothing_resets_reopens_or_closes_a_link_a_print_holds(tmp_path, monkeypatch):
+    links, board, job = _printing(tmp_path, monkeypatch, lines=3000)
+    link = links.get("/dev/ttyJOB")
+    for attempt in (
+        link.reset,
+        lambda: links.open("/dev/ttyJOB", 250000),
+        lambda: links.close("/dev/ttyJOB"),
+    ):
+        with pytest.raises(ToolchainError, match="holds the port"):
+            attempt()
+    assert "<DTR>" not in board.sent and links.get("/dev/ttyJOB") is link
+    job.cancel()
+    job.thread.join(20)
+
+
+def test_every_safe_off_line_is_tried_when_one_is_not_answered(tmp_path, monkeypatch):
+    """The safe-off used to stop at its first unanswered line, leaving the rest --
+    the heaters among them -- unsent."""
+    links, board, job = _printing(tmp_path, monkeypatch, lines=3000)
+    first = devices.PRINT_SAFE_OFF[0]
+    real_write = board.write
+
+    def mute_first_safe_off(data):
+        if data.decode().strip() == first:
+            board.sent.append(first)  # sent, never answered
+            return
+        real_write(data)
+
+    board.write = mute_first_safe_off
+    job.cancel()
+    job.thread.join(30)
+    assert [c for c in board.sent if c in devices.PRINT_SAFE_OFF] == list(devices.PRINT_SAFE_OFF)

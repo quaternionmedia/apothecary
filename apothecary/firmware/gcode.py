@@ -691,7 +691,13 @@ class GcodeLink:
         return lines
 
     def reset(self, limit: float = 6.0) -> List[str]:
-        """Reboot the board on purpose and return its boot banner."""
+        """Reboot the board on purpose and return its boot banner. Refused while a
+        job (a print, a bed reading) holds the link: rebooting under it leaves the
+        host streaming moves to a cold, unhomed board."""
+        if self.job is not None:
+            raise ToolchainError(
+                f"{self.port}: a {self.job.get('kind')} holds the port -- not resetting"
+            )
         with self._lock:
             self._buf = b""
             self.log.add("sys", "reset: DTR pulse")
@@ -795,24 +801,34 @@ class PrinterLinks:
             return self._links.get(port)
 
     def open(self, port: str, baud: int) -> GcodeLink:
-        """The existing link for ``port`` at that baud, else a fresh one (resets the board)."""
+        """The existing link for ``port`` at that baud, else a fresh one (resets the board).
+
+        A link a job holds is never replaced: reopening at another baud would
+        drop the print under its own thread."""
         with self._lock:
             link = self._links.get(port)
             if link is not None and link.baud == baud:
                 return link
             if link is not None:
+                if link.job is not None:
+                    raise ToolchainError(
+                        f"{port}: a {link.job.get('kind')} holds the port -- not reopening it"
+                    )
                 link.close()
             link = GcodeLink(port, baud, self.factory(port, baud), log=self.log_for(port))
             self._links[port] = link
         link.settle()
         return link
 
-    def close(self, port: str, force: bool = False) -> bool:
-        """Drop the link; refused while a print streams over it unless ``force``."""
+    def close(self, port: str) -> bool:
+        """Drop the link. Refused while a job holds it, with no way around: only the
+        job lets go of its link, after its own safe-off."""
         with self._lock:
             link = self._links.get(port)
-            if link is not None and not force and link.job and link.job.get("kind") == "print":
-                raise ToolchainError(f"{port}: a print holds the port -- cancel it first")
+            if link is not None and link.job is not None:
+                raise ToolchainError(
+                    f"{port}: a {link.job.get('kind')} holds the port -- cancel it first"
+                )
             self.control.disarm(port)  # a dropped link never stays armed
             self._links.pop(port, None)
         if link is None:

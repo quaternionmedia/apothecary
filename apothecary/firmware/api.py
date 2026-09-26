@@ -63,7 +63,9 @@ def _start(kind: str, title: str, steps: List[List[str]], on_done=None, port=Non
         # reset every printer (DTR) the next time it is polled.
         _release_or_409(port)
     try:
-        task = get_task_runner().run(kind, title, steps, env=env_for_arduino(), on_done=on_done)
+        task = get_task_runner().run(
+            kind, title, steps, env=env_for_arduino(), on_done=on_done, port=port
+        )
     except TaskBusy as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return task.snapshot()
@@ -242,11 +244,14 @@ def _no_print_or_409(port: str) -> None:
         )
 
 
-def _busy_guard():
+def _busy_guard(port: str):
+    """409 while a running task writes to ``port`` (an upload, a flash). A compile
+    or an install holds no port, and refusing a printer's poll or its emergency
+    stop because a sketch is compiling was a safety hole, not a guard."""
     active = get_task_runner().active
-    if active is not None:
+    if active is not None and active.port == port:
         raise HTTPException(
-            status_code=409, detail=f"task {active.id} ({active.title}) holds the port"
+            status_code=409, detail=f"task {active.id} ({active.title}) holds {port}"
         )
 
 
@@ -272,7 +277,7 @@ def firmware_devices(fresh: bool = False):
 @router.post("/devices/probe")
 def firmware_probe(body: ProbeRequest):
     """Identify the chip with esptool (resets the board); cached for later views."""
-    _busy_guard()
+    _busy_guard(body.port)
     devices.get_streams().close(body.port)
     return _device_view(_engine(lambda: devices.probe_device(body.port)))
 
@@ -280,7 +285,7 @@ def firmware_probe(body: ProbeRequest):
 @router.post("/devices/listen")
 def firmware_listen(body: ListenRequest):
     """Capture a few seconds of serial output; with ``reset`` the boot banner is included."""
-    _busy_guard()
+    _busy_guard(body.port)
     if body.reset:
         _engine(lambda: devices.probe_device(body.port))
     result = _engine(lambda: devices.listen(body.port, body.seconds, body.baud))
@@ -290,7 +295,7 @@ def firmware_listen(body: ListenRequest):
 @router.post("/devices/identify")
 def firmware_identify(body: PrinterIdentifyRequest):
     """Ask ``M115``: is this a printer mainboard, and which firmware? ``reset`` reboots it first."""
-    _busy_guard()
+    _busy_guard(body.port)
     return _device_view(
         _engine(lambda: devices.identify_printer(body.port, body.baud, reset=body.reset))
     )
@@ -303,7 +308,7 @@ def firmware_printer_status(port: str, baud: int = Query(None, ge=300, le=200000
         validate_port(port)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    _busy_guard()
+    _busy_guard(port)
     status = _engine(lambda: devices.printer_status(port, baud))
     data = status.model_dump(mode="json")
     data["heating"] = status.heating
@@ -371,7 +376,8 @@ def firmware_printer_command(body: PrinterControlRequest):
         gcode.normalise_control(body.command)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    _busy_guard()
+    if gcode.normalise_control(body.command) != gcode.EMERGENCY_STOP:
+        _busy_guard(body.port)
     try:
         result = devices.printer_control(body.port, body.command)
     except gcode.ControlNotArmed as exc:
@@ -389,7 +395,7 @@ def firmware_printer_command(body: PrinterControlRequest):
 @router.post("/printers/level", status_code=202)
 def firmware_printer_level(body: LevelingRequest):
     """Start a bed reading: home, probe (``G29``, latch required) and read, or just read."""
-    _busy_guard()
+    _busy_guard(body.port)
     try:
         job = devices.start_leveling(body.port, probe=body.probe, note=body.note)
     except gcode.ControlNotArmed as exc:
@@ -473,7 +479,7 @@ async def firmware_print_delete(file_id: str):
 @router.post("/printers/print", status_code=202)
 def firmware_print_start(body: PrintRequest):
     """Stream a kept file to the printer (latch required); the job's first snapshot."""
-    _busy_guard()
+    _busy_guard(body.port)
     try:
         job = devices.start_print(body.port, body.file_id)
     except (gcode.ControlNotArmed, ToolchainError) as exc:
@@ -558,7 +564,7 @@ def firmware_printer_query(body: PrinterQueryRequest):
         gcode.normalise_query(body.command)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    _busy_guard()
+    _busy_guard(body.port)
     result = _engine(lambda: devices.printer_query(body.port, body.command))
     return result.model_dump(mode="json")
 
@@ -603,7 +609,7 @@ async def firmware_printer_log(port: str, since: int = Query(0, ge=0)):
 @router.post("/printers/reconnect")
 def firmware_printer_reconnect(body: PrinterIdentifyRequest):
     """Release and reopen the link (no reset), then poll."""
-    _busy_guard()
+    _busy_guard(body.port)
     _no_print_or_409(body.port)
     status = _engine(lambda: devices.printer_reconnect(body.port, body.baud))
     data = status.model_dump(mode="json")
@@ -614,7 +620,7 @@ def firmware_printer_reconnect(body: PrinterIdentifyRequest):
 @router.post("/printers/reset")
 def firmware_printer_reset(body: ProbeRequest):
     """Reboot the board deliberately (DTR pulse); returns its boot banner."""
-    _busy_guard()
+    _busy_guard(body.port)
     _no_print_or_409(body.port)
     return {"port": body.port, "boot_lines": _engine(lambda: devices.printer_reset(body.port))}
 
@@ -634,7 +640,7 @@ async def firmware_stream(
         validate_port(port)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    _busy_guard()
+    _busy_guard(port)
     cli = get_arduino_cli()
     if not cli.is_available:
         raise HTTPException(status_code=503, detail="arduino-cli is not installed")

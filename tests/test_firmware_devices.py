@@ -363,7 +363,7 @@ def test_busy_task_blocks_probe_and_listen(fake_arduino_cli, fresh_task_runner, 
     slow = tmp_path / "slow.sh"
     slow.write_text("#!/bin/sh\n/bin/sleep 2\n")
     slow.chmod(0o755)
-    fresh_task_runner.run("x", "slow", [[str(slow)]])
+    fresh_task_runner.run("upload", "slow", [[str(slow)]], port="/dev/ttyFAKE0")
     c = TestClient(app)
     assert c.post("/firmware/devices/probe", json={"port": "/dev/ttyFAKE0"}).status_code == 409
     assert c.post("/firmware/devices/listen", json={"port": "/dev/ttyFAKE0"}).status_code == 409

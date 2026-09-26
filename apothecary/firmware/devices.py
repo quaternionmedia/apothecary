@@ -387,7 +387,8 @@ def identify_printer(
     try:
         info = gcode.identify_printer(link, reset=reset)
     except ToolchainError:
-        links.close(port)
+        if link.job is None:  # a job's link is the job's to let go of
+            links.close(port)
         raise
     device = base.model_copy(update={"printer": info})
     state.remember_device(device)
@@ -481,7 +482,12 @@ def printer_status(
     except gcode.LinkBusy:
         return _last_status_with(port, _live_job(port, link.job) or job)
     except ToolchainError as exc:
-        links.close(port, force=True)  # a wedged link is worse than a reopen on the next poll
+        if link.job is not None:
+            # One lost reply mid-print is not a dead board. Closing the link
+            # here killed the print under its thread and left the heaters on;
+            # a board that really went away fails the job's own next write.
+            return _last_status_with(port, _live_job(port, link.job))
+        links.close(port)  # a wedged idle link is worse than a reopen on the next poll
         status = gcode.offline_status(port, str(exc))
     job = _live_job(port, link.job)
     if job is not None and job.get("kind") == "print":
@@ -547,9 +553,7 @@ def printer_reset(
     link = links.get(port)
     if link is None:
         raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
-    if link.job is not None:
-        raise ToolchainError(f"{port}: a {link.job.get('kind')} holds the port -- not resetting")
-    return link.reset()
+    return link.reset()  # refused by the link itself while a job holds it
 
 
 def printer_control(
@@ -1001,12 +1005,13 @@ class PrintJob:
             self.error = str(exc)
             self.stage = "failed"
         if outcome != "done" and not self._quiet:
+            # Every line of the safe-off is tried: a hotend left on because the
+            # fan line before it timed out is the failure this exists to prevent.
             for cmd in PRINT_SAFE_OFF:
                 try:
                     tail = (tail + link.command(cmd, timeout=10.0, origin="print"))[-200:]
-                except ToolchainError as exc:  # a halted or vanished board: nothing more to do
+                except ToolchainError as exc:
                     tail.append(f"({cmd} not answered: {exc})")
-                    break
         ended = datetime.now(timezone.utc)
         cached = get_state().cached_device(self.port)
         self.record = PrintRecord(

@@ -142,6 +142,7 @@ class FirmwareTask(BaseModel):
     kind: str
     title: str
     command: List[str]
+    port: Optional[str] = None  # the serial port it writes to (upload, flash); None holds none
     status: TaskStatus = TaskStatus.running
     returncode: Optional[int] = None
     started: datetime

@@ -124,8 +124,10 @@ class TaskRunner:
         env: Optional[dict] = None,
         cwd: Optional[str] = None,
         on_done: Optional[Callable[[FirmwareTask, TaskStatus], None]] = None,
+        port: Optional[str] = None,
     ) -> FirmwareTask:
-        """Start ``steps`` (argv lists) in sequence; stop at the first failure."""
+        """Start ``steps`` (argv lists) in sequence; stop at the first failure.
+        ``port`` is the serial port the steps write to, if any."""
         if not steps:
             raise ValueError("no steps to run")
         with self._lock:
@@ -138,6 +140,7 @@ class TaskRunner:
                 kind=kind,
                 title=title,
                 command=steps[0],
+                port=port,
                 started=datetime.now(timezone.utc),
             )
             self._tasks[task.id] = task
