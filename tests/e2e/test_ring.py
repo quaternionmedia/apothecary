@@ -24,60 +24,9 @@ import pytest
 from playwright.sync_api import Page, expect
 
 PRINTER = "/dev/ttyFAKE1"
+# The arrow rule as vectors, generated from menu.py's resolver; tests/test_menu.py
+# fails when the file is missing or stale.
 VECTORS = Path(__file__).resolve().parents[1] / "conformance" / "nine_cells.json"
-
-# The arrow rule, as vectors: (occupied cells, from, direction) -> cell. Used
-# when the resolver's generated file is not there yet; the file wins when it is.
-# Scored as menu.py's nearest(): least offset across the arrow's line, then
-# least far along it, then the lower number; nothing ahead means stay put.
-EMBEDDED_NEAREST = [
-    # a four-item ring: corners empty, every cardinal reachable
-    ([8, 6, 2, 4], 8, "left", 4),
-    ([8, 6, 2, 4], 8, "right", 6),
-    ([8, 6, 2, 4], 8, "down", 2),
-    ([8, 6, 2, 4], 4, "up", 8),
-    ([8, 6, 2, 4], 4, "right", 6),
-    ([8, 6, 2, 4], 2, "up", 8),
-    ([8, 6, 2, 4], 6, "left", 4),
-    ([8, 6, 2, 4], None, "up", 8),
-    ([8, 6, 2, 4], None, "left", 4),
-    # a full ring
-    ([1, 2, 3, 4, 6, 7, 8, 9], 8, "down", 2),
-    ([1, 2, 3, 4, 6, 7, 8, 9], 8, "left", 7),
-    ([1, 2, 3, 4, 6, 7, 8, 9], 7, "right", 8),
-    ([1, 2, 3, 4, 6, 7, 8, 9], 7, "down", 4),
-    ([1, 2, 3, 4, 6, 7, 8, 9], 9, "left", 8),
-    ([1, 2, 3, 4, 6, 7, 8, 9], 1, "up", 4),
-    ([1, 2, 3, 4, 6, 7, 8, 9], 3, "up", 6),
-    ([1, 2, 3, 4, 6, 7, 8, 9], 4, "up", 7),
-    ([1, 2, 3, 4, 6, 7, 8, 9], 2, "right", 3),
-    ([1, 2, 3, 4, 6, 7, 8, 9], None, "right", 6),
-    # nothing that way: stay
-    ([8, 6, 2], 8, "left", 8),
-    ([8, 6, 2], 2, "left", 2),
-    ([8, 6, 2], None, "left", None),
-    ([8], None, "down", None),
-    ([8], 8, "up", 8),
-    # five items: the corner beats the cardinal when it sits squarely ahead
-    ([8, 6, 2, 4, 9], 8, "right", 9),
-    ([8, 6, 2, 4, 9], 6, "up", 9),
-]
-
-
-def _nearest_vectors():
-    """The resolver's vectors when written, else the embedded ones."""
-    if not VECTORS.exists():
-        return EMBEDDED_NEAREST
-    data = json.loads(VECTORS.read_text(encoding="utf-8"))
-    rows = data.get("nearest", data) if isinstance(data, dict) else data
-    out = []
-    for row in rows:
-        occupied = row.get("occupied") or row.get("cells")
-        start = row.get("from", row.get("from_cell", row.get("start")))
-        direction = row.get("direction") or row.get("dir")
-        want = row.get("expect", row.get("to", row.get("cell", row.get("result"))))
-        out.append((occupied, start, direction, want))
-    return out
 
 
 @pytest.fixture(scope="module")
@@ -245,18 +194,18 @@ def test_digits_walk_device_control_jog_and_the_intent_carries_the_address(
 
 @pytest.mark.e2e
 def test_arrows_reach_the_nearest_occupied_cell(page: Page, ring_url: str):
-    """The browser's rule, vector by vector, against the resolver's (or the embedded) table."""
+    """The browser's rule, vector by vector, against the resolver's table."""
     _open_viewer(page, ring_url)
-    vectors = _nearest_vectors()
+    vectors = json.loads(VECTORS.read_text(encoding="utf-8"))["nearest"]
     assert len(vectors) >= 20
     wrong = []
-    for occupied, start, direction, want in vectors:
+    for v in vectors:
         got = page.evaluate(
             "([occ, from, dir]) => window.apothecaryRing.nearest(from, dir, occ)",
-            [occupied, start, direction],
+            [v["occupied"], v["from"], v["direction"]],
         )
-        if got != want:
-            wrong.append((occupied, start, direction, want, got))
+        if got != v["expect"]:
+            wrong.append({**v, "got": got})
     assert not wrong, f"nearest disagrees on {len(wrong)} vector(s): {wrong}"
 
     # On the page: arrows highlight, a chord is the corner, walking gets there too.
