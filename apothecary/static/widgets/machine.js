@@ -19,6 +19,11 @@
 
 const MAX_HISTORY = 300;
 
+function fmtDur(seconds) {
+    const s = Math.round(seconds), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    return h ? `${h}h ${m}m` : `${m}m ${s % 60}s`;
+}
+
 const HEAD = `
 <div class="machine-head">
     <span class="dot" id="dot"></span>
@@ -256,7 +261,6 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
         $("c-stops").innerHTML = chips.join("") || '<span class="empty">—</span>';
         renderBoard();
     }
-    function fmtDur(s) { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h ? `${h}h ${m}m` : `${m}m ${s % 60}s`; }
 
     function renderBoard() {
         const info = state.info; if (!info) { $("c-board").textContent = "—"; return; }
@@ -318,31 +322,41 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
 
     // --- log ---------------------------------------------------------------------------
     // Routine polls are tagged origin "poll" on the server; a person's
-    // queries and M115s are not, so hiding poll traffic keeps them.
-    function isPollTraffic(e, ctx) {
-        if (e.kind === "tx") { ctx.inPoll = e.origin === "poll"; return ctx.inPoll; }
-        if (e.kind === "rx") return e.origin === "poll";
-        return false;
+    // queries and M115s are not, so hiding poll traffic keeps them. Each
+    // entry drawn is one element of the log, so new entries are appended and
+    // the ones dropped off the front go with their elements; the whole log is
+    // redrawn only when the poll-traffic box changes, or it is cleared.
+    const LOG_MAX = 5000;
+    const LOG_EMPTY = '<span class="empty">nothing logged yet — poll or send a query</span>';
+    function logRow(e) {
+        e.drawn = $("show-polls").checked || !((e.kind === "tx" || e.kind === "rx") && e.origin === "poll");
+        if (!e.drawn) return "";
+        const d = new Date(e.t);
+        const t = isNaN(d) ? e.t.slice(11, 23) : d.toLocaleTimeString([], { hour12: false }) + "." + String(d.getMilliseconds()).padStart(3, "0");
+        const cls = e.kind + (e.origin === "control" || e.origin === "print" ? " control" : "") + (/^\s*(ok\s+)?T:\s*-?\d/.test(e.text) ? " temp" : "") + (/^(Error:|!!)/.test(e.text) ? " err" : "");
+        return `<span><span class="t">${t}</span> <span class="${cls}">${e.kind === "tx" ? "&gt; " : ""}${esc(e.text)}</span>\n</span>`;
     }
-    function renderLog() {
-        const showPolls = $("show-polls").checked, log = $("log");
+    function drawLog(draw) {
+        const log = $("log");
         const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
-        const ctx = { inPoll: false };
-        const rows = [];
-        for (const e of state.entries) {
-            const poll = isPollTraffic(e, ctx);
-            if (poll && !showPolls) continue;
-            const d = new Date(e.t);
-            const t = isNaN(d) ? e.t.slice(11, 23) : d.toLocaleTimeString([], { hour12: false }) + "." + String(d.getMilliseconds()).padStart(3, "0");
-            const cls = e.kind + (e.origin === "control" || e.origin === "print" ? " control" : "") + (/^\s*(ok\s+)?T:\s*-?\d/.test(e.text) ? " temp" : "") + (/^(Error:|!!)/.test(e.text) ? " err" : "");
-            rows.push(`<span class="t">${t}</span> <span class="${cls}">${e.kind === "tx" ? "&gt; " : ""}${esc(e.text)}</span>`);
-        }
-        log.innerHTML = rows.length ? rows.join("\n") : '<span class="empty">nothing logged yet — poll or send a query</span>';
+        draw(log);
+        if (!log.firstElementChild) log.innerHTML = LOG_EMPTY;
         if (atBottom && $("follow").checked) log.scrollTop = log.scrollHeight;
     }
+    function renderLog() {
+        drawLog((log) => { log.innerHTML = state.entries.map(logRow).join(""); });
+    }
+    function appendLog(entries) {
+        state.entries.push(...entries);
+        const dropped = state.entries.splice(0, Math.max(0, state.entries.length - LOG_MAX));
+        drawLog((log) => {
+            if (log.querySelector(":scope > .empty")) log.innerHTML = "";
+            for (const e of dropped) if (e.drawn) log.firstElementChild?.remove();
+            log.insertAdjacentHTML("beforeend", entries.slice(-LOG_MAX).map(logRow).join(""));
+        });
+    }
     function logLine(kind, text) {
-        state.entries.push({ i: -1, t: new Date().toISOString(), kind, text });
-        renderLog();
+        appendLog([{ i: -1, t: new Date().toISOString(), kind, text }]);
     }
     // One fetch at a time, and rows below the watermark are dropped, so the
     // scheduled poll and a button's follow-up pull can never double up.
@@ -355,11 +369,7 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
             const data = await api(`/firmware/printers/log?port=${encodeURIComponent(port)}&since=${state.logNext}`);
             if (gen !== state.gen) return;
             const fresh = data.entries.filter((e) => e.i >= state.logNext);
-            if (fresh.length) {
-                state.entries.push(...fresh);
-                if (state.entries.length > 5000) state.entries.splice(0, state.entries.length - 5000);
-                renderLog();
-            }
+            if (fresh.length) appendLog(fresh);
             state.logNext = Math.max(state.logNext, data.next);
         }).catch(() => {});
         return logChain;
@@ -675,7 +685,6 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
 
     // --- print from here: a kept file streamed over the link -------------------------
     const prt = { files: [], records: [], job: null, timer: null };
-    function fmtDurS(s) { s = Math.round(s); return s >= 3600 ? `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m` : `${Math.floor(s / 60)}m ${s % 60}s`; }
     function renderPrint() {
         const job = prt.job, running = !!(job && job.running);
         const paused = running && job.stage === "paused";
@@ -687,7 +696,7 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
         if (job && (running || job.stage)) {
             const pct = (job.progress * 100).toFixed(1);
             $("print-progress").className = "";
-            $("print-progress").textContent = `${job.name} · ${job.stage} · ${job.sent}/${job.total} lines (${pct}%) · ${fmtDurS(job.elapsed_s)}` + (job.current && running ? ` · ${job.current}` : "") + (job.error ? ` · ${job.error}` : "");
+            $("print-progress").textContent = `${job.name} · ${job.stage} · ${job.sent}/${job.total} lines (${pct}%) · ${fmtDur(job.elapsed_s)}` + (job.current && running ? ` · ${job.current}` : "") + (job.error ? ` · ${job.error}` : "");
             $("b-print").style.width = pct + "%";
         } else {
             $("print-progress").className = "empty"; $("print-progress").textContent = "nothing printing from here"; $("b-print").style.width = "0";
