@@ -1,4 +1,11 @@
 # Snowplow Part Interface Metadata
+#
+# Each position and normal is in the frame of the component that carries the
+# interface, at the default parameters: mount_left and mount_right in the
+# mount plate's (SnowplowMount, centred on its origin), blade_edge in the
+# blade's before blade_angle tilts it (SnowplowBlade, centred on its origin).
+# snowplow_assembly puts the plate's origin at
+# (0, -blade_thickness, mount_height / 2) of the part.
 interfaces:
   - name: mount_left
     type: bolt_hole

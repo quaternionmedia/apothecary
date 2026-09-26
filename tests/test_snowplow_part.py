@@ -120,19 +120,33 @@ def _cylinders(obj, turn=None, at=(0.0, 0.0, 0.0)):
     return [c for child in getattr(obj, "children", []) for c in _cylinders(child, turn, at)]
 
 
-def test_the_bolt_holes_are_the_interfaces_snowplow_yaml_declares():
-    """Each hole is bolt_diameter across and runs through the plate along the
-    interface's normal, at its position in the mount's own frame."""
-    mount = SnowplowMount()
-    holes, cylinders = _bolt_holes(), _cylinders(mount.geometry())
+def _assert_holes(cylinders, origin, thickness):
+    """Each bolt_hole of snowplow.yaml, its position taken from ``origin``, is
+    one cylinder: bolt_diameter across, through the plate along the normal."""
+    holes = _bolt_holes()
     assert len(holes) == 2 and len(cylinders) == len(holes)
     for diameter, position, normal in holes:
-        at = [c for c in cylinders if math.dist(c[0], position) < 1e-6]
-        assert len(at) == 1, f"no hole centred at {position}: {cylinders}"
+        centre = tuple(o + p for o, p in zip(origin, position, strict=True))
+        at = [c for c in cylinders if math.dist(c[0], centre) < 1e-6]
+        assert len(at) == 1, f"no hole centred at {centre}: {cylinders}"
         _, axis, radius, length = at[0]
         assert radius == pytest.approx(diameter / 2)
         assert abs(sum(a * n for a, n in zip(axis, normal, strict=True))) == pytest.approx(1), axis
-        assert length > mount.thickness
+        assert length > thickness
+
+
+def test_the_bolt_holes_are_the_interfaces_snowplow_yaml_declares():
+    """snowplow.yaml gives the holes in the mount plate's own frame."""
+    mount = SnowplowMount()
+    _assert_holes(_cylinders(mount.geometry()), (0.0, 0.0, 0.0), mount.thickness)
+
+
+def test_the_parts_stl_has_the_holes_where_the_assembly_puts_the_mount():
+    """What build_stl, the viewer and `parts verify` render: the plate's
+    origin at (0, -blade_thickness, mount_height / 2), as snowplow.yaml says."""
+    p = rc_snowplow.Params()
+    origin = (0.0, -p.blade_thickness, p.mount_height / 2)
+    _assert_holes(_cylinders(DEFAULT.geometry({})), origin, p.mount_thickness)
 
 
 def test_the_holes_follow_bolt_diameter_and_mount_thickness():
