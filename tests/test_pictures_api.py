@@ -294,6 +294,34 @@ def test_gathering_from_the_browser_reports_asks_and_takes_the_answers(pictures)
     assert c.get("/sites/from_pictures").status_code == 200
 
 
+def test_a_file_that_cannot_be_read_is_set_aside_and_the_rest_are_gathered(pictures):
+    c = TestClient(app)
+    (pictures / "cut_short.png").write_bytes(_drawn("ret")[:40])
+    asked = ["bench.png", "notes.txt", "bench_again.png", "cut_short.png"]
+    r = c.post(
+        "/photos/gather",
+        json={"pictures": asked, "answers": "notes is worth using anyway\n", "build": True},
+    )
+    assert r.status_code == 200, r.text
+    got = r.json()
+    assert [x["picture"] for x in got["readings"]] == ["bench", "notes", "bench_again", "cut_short"]
+    unread = {x["picture"]: x for x in got["readings"] if not x["readable"]}
+    assert set(unread) == {"notes", "cut_short"} == set(got["set_aside"])
+    assert all("could not read it" in x["because"] for x in unread.values())
+    assert not {"notes", "cut_short"} & {n for cl in got["clusters"] for n in cl["pictures"]}
+    assert "Could not be read at all" in got["report"]
+    # Saying it is worth using cannot make a file readable, and the report says so.
+    assert "notes is worth using anyway" in got["report"]
+    assert got["site"] == "gathering"
+
+
+def test_a_gathering_is_at_most_forty_pictures(pictures):
+    """Every pair is compared, so two hundred pictures was minutes of one request."""
+    c = TestClient(app)
+    r = c.post("/photos/gather", json={"pictures": [f"p{n}.png" for n in range(41)]})
+    assert r.status_code == 422 and "40 is the most" in r.json()["detail"]
+
+
 def test_cameras_are_placed_in_the_world_and_kept(pictures):
     c = TestClient(app)
     assert c.get("/cameras").json() == []

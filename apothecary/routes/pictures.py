@@ -19,11 +19,12 @@ command line. These routes give the world's page the same, and no more:
   ``DELETE /photos/pictures`` forgets every kept picture: what the browser
   put under ``captures/`` and ``uploads/``, and only that. The folder's own
   pictures -- the ones a person named -- are never deleted from a page.
-- ``POST /photos/gather`` takes in several of those pictures at once, with
-  what a person has already said in the same five sentences the answers
-  file uses, and answers with the report, the groups, the questions worth
-  asking, and -- when asked to -- the whole gathering built as one
-  arrangement the world can open.
+- ``POST /photos/gather`` takes in up to forty of those pictures at once,
+  with what a person has already said in the same five sentences the
+  answers file uses, and answers with the report, the groups, the questions
+  worth asking, and -- when asked to -- the whole gathering built as one
+  arrangement the world can open. A file that cannot be read is set aside
+  with the reason, not a refusal of the rest.
 - ``GET/PUT/DELETE /cameras`` are the cameras a person placed in the world:
   a browser's camera (its id and label, which only the browser knows) at a
   node of a site, kept in the firmware state folder beside the pins, so
@@ -44,9 +45,10 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, field_validator
 
+from ..gathering.looking import PICTURE_SUFFIXES
+
 router = APIRouter(tags=["photos"])
 
-PICTURE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff"}
 CAPTURES = "captures"
 UPLOADS = "uploads"
 # The folders the browser fills, and the only ones a page may empty.
@@ -291,8 +293,12 @@ def forget_picture(path: str):
     return {"forgotten": kept.relative_to(root).as_posix()}
 
 
+# Every pair is compared, so the work grows as the square: forty pictures is 780 pairs.
+GATHER_MOST = 40
+
+
 class GatherRequest(BaseModel):
-    pictures: List[str] = Field(..., min_length=2, max_length=200)
+    pictures: List[str] = Field(..., min_length=2)
     finder: str = "plain"
     answers: str = ""  # the five sentences, as the answers file has them
     most: int = Field(8, ge=1, le=40)
@@ -320,11 +326,18 @@ def gather_pictures(body: GatherRequest):
         read_answers,
         unknown_names,
     )
+    from ..gathering.looking import look_at_each, set_aside_unopened
     from ..gathering.questions import worth_asking
     from ..vision import build as build_arrangement
     from ..vision import get as get_finder
     from ..vision.shelf import shelf
 
+    if len(body.pictures) > GATHER_MOST:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{len(body.pictures)} pictures at once is too many: every pair is "
+            f"compared, so {GATHER_MOST} is the most. Gather them in smaller piles.",
+        )
     root = _root()
     paths = []
     for rel in body.pictures:
@@ -334,20 +347,10 @@ def gather_pictures(body: GatherRequest):
         finder = get_finder(body.finder)
     except KeyError:
         raise HTTPException(status_code=400, detail=f"no finder named {body.finder!r}") from None
-    pictures = []
-    for path in paths:
-        try:
-            pictures.append(finder.look(path))
-        except (OSError, ValueError) as exc:
-            raise HTTPException(
-                status_code=400, detail=f"{path.name} could not be read: {exc}"
-            ) from None
-    names_seen: Dict[str, List[Path]] = {}
-    for path, picture in zip(paths, pictures, strict=True):
-        names_seen.setdefault(picture.name, []).append(path)
-    clashing = {n: f for n, f in names_seen.items() if len(f) > 1}
-    if clashing:
-        name, found = next(iter(sorted(clashing.items())))
+    looked = look_at_each(finder, paths)
+    clash = looked.clash()
+    if clash:
+        name, found = clash
         where = ", ".join(f.name for f in found)
         raise HTTPException(
             status_code=409, detail=f"two pictures are called {name!r} ({where}); rename one"
@@ -358,16 +361,17 @@ def gather_pictures(body: GatherRequest):
             said = read_answers(body.answers, where="the answers")
         except (CannotRead, PeopleDisagree) as trouble:
             raise HTTPException(status_code=422, detail=str(trouble)) from None
-    strangers = unknown_names(said, [p.name for p in pictures])
+    strangers = unknown_names(said, looked.names())
     if strangers:
         raise HTTPException(
             status_code=422,
             detail=f"you named picture(s) that are not here: {', '.join(strangers)}",
         )
     try:
-        result = gather(pictures, paths=paths, answers=said)
+        result = gather(looked.pictures, paths=looked.paths, answers=said)
     except PeopleDisagree as trouble:
         raise HTTPException(status_code=422, detail=str(trouble)) from None
+    result = set_aside_unopened(result, looked, said)
 
     # Ranked once: the report, the questions and the count held back all read it.
     ranked = worth_asking(result, most=len(result.kinships) or 1)
@@ -398,7 +402,7 @@ def gather_pictures(body: GatherRequest):
         "site": None,
     }
     if body.build:
-        by_name = {p.name: (p, path) for p, path in zip(pictures, paths, strict=True)}
+        by_name = {p.name: (p, path) for p, path in zip(looked.pictures, looked.paths, strict=True)}
         built = {
             r.picture: build_arrangement(by_name[r.picture][0], picture_path=by_name[r.picture][1])
             for r in result.readings
