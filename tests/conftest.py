@@ -69,6 +69,20 @@ import pytest  # noqa: E402
 from firmware_helpers import _isolate_firmware_state, write_fake_arduino_cli  # noqa: E402
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _cache_outside_the_checkout(tmp_path_factory):
+    """Node renders go to a cache of the run's own, never the checkout's."""
+    import os
+
+    previous = os.environ.get("APOTHECARY_CACHE_DIR")
+    os.environ["APOTHECARY_CACHE_DIR"] = str(tmp_path_factory.mktemp("cache"))
+    yield
+    if previous is None:
+        os.environ.pop("APOTHECARY_CACHE_DIR", None)
+    else:
+        os.environ["APOTHECARY_CACHE_DIR"] = previous
+
+
 @pytest.fixture(autouse=True)
 def _scripted_boards_answer_at_once(monkeypatch):
     """Every board in the unit suite is scripted and answers at once; waiting out
