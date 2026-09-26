@@ -1555,7 +1555,7 @@ def every_pin(fresh: bool = False):
         if site_known:
             try:
                 node = _find_node_by_path(_site_store.get(binding.site), binding.path)
-            except Exception:  # a site that will not build is a site with no nodes
+            except KeyError:  # forgotten, or its picture left the shelf, since names()
                 node = None
             node_found = node is not None
         device = device_for_identity(binding.identity, found)
@@ -1638,13 +1638,21 @@ def _site_devices_payload(name: str, site: Assembly, fresh: bool = False) -> Dic
     }
 
 
-def _binding_row_or_404(name: str, path: str) -> Dict[str, object]:
-    site = _get_site_or_404(name)
-    rows = _site_devices_payload(name, site)["bindings"]
-    row = next((r for r in rows if r["path"] == path), None)
+def _binding_row(name: str, site: Assembly, path: str) -> Dict[str, object]:
+    """The one row a pin change touches, from the cached port scan.
+
+    No printer is polled: a pin is a state write. GET /sites/{name}/devices
+    refreshes the held printer links.
+    """
+    try:
+        found = firmware_devices.detected_devices()
+    except ToolchainError:
+        found = []
+    rows = bindings_for_site(name, site, devices=found)
+    row = next((r for r in rows if r.path == path), None)
     if row is None:
-        raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
-    return row
+        return {"path": path, "name": path.rsplit(".", 1)[-1], "binding_source": None}
+    return row.model_dump(mode="json")
 
 
 @app.get("/sites/{name}/devices")
@@ -1672,7 +1680,7 @@ def attach_device(name: str, path: str, body: DeviceAttachRequest):
         raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
     identity = firmware_devices.stable_identity(body.identity)
     firmware_devices.get_state().set_binding(name, path, identity)
-    return _binding_row_or_404(name, path)
+    return _binding_row(name, site, path)
 
 
 @app.delete("/sites/{name}/nodes/{path}/device")
@@ -1682,9 +1690,7 @@ def detach_device(name: str, path: str):
     if _find_node_by_path(site, path) is None:
         raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
     firmware_devices.get_state().clear_binding(name, path)
-    rows = _site_devices_payload(name, site)["bindings"]
-    row = next((r for r in rows if r["path"] == path), None)
-    return row or {"path": path, "name": path.rsplit(".", 1)[-1], "binding_source": None}
+    return _binding_row(name, site, path)
 
 
 # -----------------------------------------------------------------------

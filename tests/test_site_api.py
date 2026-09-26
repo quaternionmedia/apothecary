@@ -10,6 +10,9 @@ from fastapi.testclient import TestClient
 import apothecary.api as api
 from apothecary.api import _find_node_by_path, _site_store, app
 from apothecary.example_hierarchy import create_example_site
+from apothecary.firmware import devices as firmware_devices
+from apothecary.firmware import gcode as firmware_gcode
+from apothecary.firmware.models import DeviceInfo, PrinterInfo
 from apothecary.hierarchy import Assembly, Site
 from apothecary.primitives import Import
 from apothecary.projects.parts.skeleton import ROOT
@@ -409,6 +412,36 @@ def test_one_render_per_node_however_many_ask_at_once(slow_openscad):
         answers = list(pool.map(lambda _: api.get_node_stl("garage", "garage_building"), range(4)))
     assert len(slow_openscad.scad) == 1
     assert {a.body for a in answers} == {b"solid stub\nendsolid stub\n"}
+
+
+@pytest.fixture
+def a_held_printer(fake_arduino_cli, monkeypatch):
+    """A printer on /dev/ttyFAKE1 with its link open; polling it fails the test."""
+    board = DeviceInfo(
+        port="/dev/ttyFAKE1",
+        serial_number="FAKESERIAL1",
+        printer=PrinterInfo(firmware_name="Marlin"),
+    )
+
+    def polled(port, *_, **__):
+        raise AssertionError(f"polled the printer on {port}")
+
+    monkeypatch.setattr(firmware_devices, "detected_devices", lambda *_, **__: [board])
+    monkeypatch.setattr(firmware_gcode, "get_printer_links", lambda: {board.port: object()})
+    monkeypatch.setattr(firmware_devices, "printer_status", polled)
+    return board
+
+
+def test_a_pin_change_polls_no_printer(a_held_printer):
+    pinned = client.put("/sites/garage/nodes/printer_1/device", json={"identity": "/dev/ttyFAKE1"})
+    assert pinned.status_code == 200, pinned.text
+    assert pinned.json()["binding_source"] == "manual"
+    assert pinned.json()["device"]["port"] == "/dev/ttyFAKE1"
+
+    unpinned = client.delete("/sites/garage/nodes/printer_1/device")
+    assert unpinned.status_code == 200, unpinned.text
+    assert unpinned.json()["path"] == "printer_1"
+    assert unpinned.json()["binding_source"] is None
 
 
 def test_the_node_cache_keeps_the_most_recently_served(tmp_path):
