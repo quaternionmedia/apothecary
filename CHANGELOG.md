@@ -61,6 +61,7 @@ One line per change, each with a link to where it is described. The format follo
 - The printer seam has one serial engine, pyserial, beside the simulator. ([doc](docs/firmware.md))
 - Playwright is a dev dependency, and ruff is the one lint configuration. ([doc](CONTRIBUTING.md))
 - README.md is the entry doc; QUICKSTART.md points at it; CONTRIBUTING.md names the CI gates. ([readme](README.md))
+- CI lints with ruff and runs the unit and browser tests as parallel jobs on Python 3.11. ([doc](CONTRIBUTING.md))
 
 ### Removed
 

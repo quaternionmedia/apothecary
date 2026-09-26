@@ -35,13 +35,13 @@ and what it cannot.
 
 | Workflow | Fails on |
 |---|---|
-| `pytest.yml` | The walkthrough; the unit tests with `--slow`; the browser tests; a walkthrough page the browser run rewrote; the wheel failing to install and render a scene |
+| `pytest.yml` | On Python 3.11: a finding from `ruff check apothecary tests`; the walkthrough; the unit tests with `--slow`; the wheel failing to install and render a scene. In a second job, in parallel: the browser tests, and a walkthrough page they rewrote |
 | `reuse-lint.yml` | A file with no copyright or licence information (`reuse lint`) |
 | `license-check.yml` | A third-party dependency whose licence is not on the OSI/FSF allowlist, or that has a known vulnerability (`pip-audit`) |
 | `adr-lint.yml` | A record in `governance/qm/adr/`: a draft that narrates its own revisions, a numbered one not ratified, a ratified body edited outside its Amendments, or an index that disagrees with the directory |
 | `submodule-check.yml` | A submodule pin its own remote does not have |
 
-Nothing else is a gate. Ruff and formatting are not checked in CI.
+Nothing else is a gate. Formatting is not checked in CI.
 
 ## Commits and pull requests
 
