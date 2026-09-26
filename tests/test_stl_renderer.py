@@ -1,10 +1,14 @@
 """Tests for STL rendering."""
 
 import stat
+from enum import IntEnum
 from pathlib import Path
 from unittest.mock import patch
 
-from apothecary.projects.parts.stl_renderer import OpenSCADRenderer, RenderResult
+import pytest
+from pydantic import BaseModel
+
+from apothecary.projects.parts.stl_renderer import OpenSCADRenderer, RenderResult, scad_literal
 
 
 class TestOpenSCADRenderer:
@@ -74,6 +78,21 @@ class TestOpenSCADRenderer:
         stl.write_text("solid previous\nendsolid previous\n")
         OpenSCADRenderer(str(hangs)).render_stl(scad, stl, timeout=0.3)
         assert stl.read_text() == "solid previous\nendsolid previous\n"
+
+
+class TestScadLiteralTypes:
+    def test_an_enum_is_its_value(self):
+        class Tab(IntEnum):
+            LEFT = 2
+
+        assert scad_literal(Tab.LEFT) == "2"
+
+    def test_a_nested_model_is_refused_by_name(self):
+        class Holes(BaseModel):
+            magnets: bool = True
+
+        with pytest.raises(TypeError, match="Holes is a nested parameter model"):
+            scad_literal(Holes())
 
 
 class TestBasePart:

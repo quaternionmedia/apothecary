@@ -14,8 +14,11 @@ import subprocess
 import time
 import uuid
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import List, Optional
+
+from pydantic import BaseModel
 
 
 def scad_literal(value: object) -> str:
@@ -25,6 +28,9 @@ def scad_literal(value: object) -> str:
     as source, so an unquoted word is an identifier and almost always an
     unhelpful error rather than the string that was meant.
     """
+    # An Enum's repr (<TabStyle.LEFT: 2>) is not source; its value is.
+    if isinstance(value, Enum):
+        return scad_literal(value.value)
     # bool before int -- bool is a subclass of it, and true/false are not 1/0.
     if isinstance(value, bool):
         return "true" if value else "false"
@@ -37,6 +43,11 @@ def scad_literal(value: object) -> str:
         return f'"{escaped}"'
     if isinstance(value, (list, tuple)):
         return "[" + ", ".join(scad_literal(v) for v in value) + "]"
+    if isinstance(value, BaseModel):
+        raise TypeError(
+            f"{type(value).__name__} is a nested parameter model; -D takes numbers, strings, "
+            "booleans and lists, so pass its fields as parameters of their own"
+        )
     raise TypeError(f"no OpenSCAD literal for {type(value).__name__}: {value!r}")
 
 
