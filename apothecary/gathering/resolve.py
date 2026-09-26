@@ -713,12 +713,10 @@ def gather(
     for kinship in kinships:
         if kinship.verdict != PARTS_OF_ONE:
             continue
-        # Deliberately *not* skipped for a picture caught up in some other
-        # quarrel. A group falling apart somewhere else says nothing about
-        # whether these two overlap at an edge, and dropping the answer on those
-        # grounds threw away a person's own words with a reason that was simply
-        # untrue. If this seam is itself part of a contradiction, the check below
-        # catches it.
+        # A set-aside picture is reported as merged with nothing, so it joins no
+        # larger thing either; its reason says what answer would bring it back.
+        if kinship.left in contested or kinship.right in contested:
+            continue
         left_key = next(k for k, g in by_key.items() if kinship.left in g)
         right_key = next(k for k, g in by_key.items() if kinship.right in g)
         if left_key == right_key:
@@ -764,12 +762,9 @@ def gather(
                         )
                     )
                     continue
-                # This group of pictures is still perfectly good on its own —
-                # only the larger thing they were chained into is refused. An
-                # earlier version wrote every one of them into the set-aside list
-                # while also reporting them as a group held together at 100%, so
-                # the report said "held together at 100%" and "nothing was built"
-                # about the same pictures in the same run.
+                # This group of pictures is still good on its own; only the
+                # larger thing is refused, so none of them is set aside. A picture
+                # in set_aside is never in a cluster of several.
                 holding = [
                     k
                     for k in kinships

@@ -22,7 +22,8 @@ from apothecary.gathering import (
 )
 from apothecary.gathering.arrangement import DRIFT_ALLOWED, arrangement_agrees
 from apothecary.gathering.combine import agreed_confidence, combine, tidy, whole_gathering
-from apothecary.gathering.models import Gathering, ShapeMark, Signature
+from apothecary.gathering.judgement import read_answers_file
+from apothecary.gathering.models import ShapeMark, Signature
 from apothecary.gathering.picture_map import as_html
 from apothecary.gathering.resolve import read_one
 from apothecary.gathering.signature import signature_of, tone_alike
@@ -252,25 +253,6 @@ def test_pictures_of_one_thing_end_up_in_one_group():
     assert group is not None
     assert group.kind == SAME_THING
     assert sorted(group.pictures) == ["a", "b"]
-
-
-def test_a_group_that_disagrees_with_itself_is_not_built():
-    """The refusal that matters most.
-
-    If A goes with B and B goes with C, but A and C were judged to have nothing
-    to do with each other, then one of those three judgements is wrong and there
-    is no way to know which. Merging anyway would build an object out of pieces
-    that were never together.
-    """
-    result = Gathering(
-        readings=[],
-        kinships=[],
-        clusters=[
-            Cluster(name="x", kind=ALONE, pictures=["x"], contested=True, because=["quarrel"])
-        ],
-        set_aside={"x": "a group that disagrees with itself is not a group"},
-    )
-    assert result.cluster_holding("x").contested
 
 
 def test_two_pictures_may_not_share_a_name():
@@ -552,56 +534,42 @@ def test_one_matching_shape_never_makes_two_pictures_the_same_thing():
     assert said.strength < 0.9
 
 
-def test_a_group_that_disagrees_with_itself_is_really_refused_by_gather():
-    """Now driven through gather(), not hand-built.
+QUARREL = """
+a and b are the same thing
+b and c are the same thing
+a and c are not related
+a and d are parts of one thing
+"""
 
-    The test that used to stand for this refusal never called gather() at all —
-    it constructed a Gathering with contested=True and asserted that back, so
-    deleting the whole check left it green.
+
+def _quarrel(tmp_path):
+    """a, b and c joined by a person who also said a and c are unrelated; a and d overlap."""
+    answers = tmp_path / "answers.txt"
+    answers.write_text(QUARREL)
+    pictures = [_three_alike(name, 0.01 * index) for index, name in enumerate("abc")]
+    pictures.append(_far_apart("d", 4))
+    return gather(pictures, answers=read_answers_file(answers))
+
+
+def test_a_group_that_disagrees_with_itself_is_really_refused_by_gather(tmp_path):
+    """If A goes with B and B with C, but A and C are unrelated, one answer is wrong.
+
+    There is no way to know which, so none of the three is merged.
     """
-    quarrel = Gathering(
-        readings=[],
-        kinships=[],
-        clusters=[],
-        set_aside={},
-    )
-    assert quarrel.clusters == []
-
-    pictures = [_three_alike("a", 0.0), _three_alike("b", 0.02), _far_apart("c", 2)]
-    result = gather(pictures)
-    for cluster in result.clusters:
-        if cluster.kind == ALONE:
-            continue
-        for one in cluster.pictures:
-            for other in cluster.pictures:
-                if one >= other:
-                    continue
-                said = result.between(one, other)
-                assert said is None or said.verdict != UNRELATED, (
-                    f"{cluster.name} holds {one} and {other}, which were judged "
-                    "to have nothing to do with each other"
-                )
-
-
-def test_a_picture_set_aside_is_not_also_in_a_group_of_several():
-    """The report used to say both about the same pictures, in the same run.
-
-    "held together at 100%" and "nothing was built" — for the same names.
-    """
-    pictures = [
-        _three_alike("a", 0.0),
-        _three_alike("b", 0.02),
-        _far_apart("c", 3),
-        _far_apart("d", 4),
-    ]
-    result = gather(pictures)
-    for name in result.set_aside:
+    result = _quarrel(tmp_path)
+    assert {"a", "b", "c"} <= set(result.set_aside)
+    assert "nothing was merged" in result.set_aside["a"]
+    for name in "abc":
         holding = result.cluster_holding(name)
-        if holding is None:
-            continue
-        assert (
-            len(holding.pictures) == 1
-        ), f"{name} was set aside but is also in a group of {len(holding.pictures)}"
+        assert holding is not None and holding.kind == ALONE and holding.contested
+
+
+def test_a_picture_set_aside_is_not_also_in_a_group_of_several(tmp_path):
+    """The report must not call a picture unmerged and part of a larger thing at once."""
+    result = _quarrel(tmp_path)
+    assert result.set_aside
+    in_several = {p for c in result.clusters if len(c.pictures) > 1 for p in c.pictures}
+    assert not set(result.set_aside) & in_several
 
 
 def test_a_group_of_several_never_carries_the_default_strength_unexamined():
