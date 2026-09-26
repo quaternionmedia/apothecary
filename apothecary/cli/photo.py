@@ -353,17 +353,25 @@ def view(
     run_server(app, host, port, log_level="warning")
 
 
-def _pictures_in(where: tuple[Path, ...], pattern: str) -> list[Path]:
+def _pictures_in(where: tuple[Path, ...], pattern: Optional[str]) -> list[Path]:
     """Every picture named, and every picture inside every folder named.
 
+    From a folder: the files matching ``pattern``, or with no pattern every file
+    with a picture's suffix in any case (``.jpg``, ``.JPG``, ``.png``...).
     Sorted, so two runs over one folder hand the pictures in in the same order
-    and give the same answer. An unordered listing would make the whole result
-    depend on how the machine happened to feel.
+    and give the same answer.
     """
+    from ..gathering.looking import PICTURE_SUFFIXES
+
     found: list[Path] = []
     for place in where:
         if place.is_dir():
-            found.extend(sorted(p for p in place.glob(pattern) if p.is_file()))
+            inside = (
+                place.glob(pattern)
+                if pattern
+                else (p for p in place.iterdir() if p.suffix.lower() in PICTURE_SUFFIXES)
+            )
+            found.extend(sorted(p for p in inside if p.is_file()))
         else:
             found.append(place)
     seen: set = set()
@@ -382,9 +390,9 @@ def _pictures_in(where: tuple[Path, ...], pattern: str) -> list[Path]:
 @click.option("--finder", default="plain", show_default=True, help="Which shape finder to use.")
 @click.option(
     "--pattern",
-    default="*.png",
-    show_default=True,
-    help="Which files to take from a folder.",
+    default=None,
+    help="Which files to take from a folder, as a glob. By default every picture file, "
+    "whatever the case of its suffix (.jpg, .JPG, .png...).",
 )
 @click.option(
     "--map-to",
@@ -422,7 +430,7 @@ def _pictures_in(where: tuple[Path, ...], pattern: str) -> list[Path]:
 def gather_pictures(
     where: tuple[Path, ...],
     finder: str,
-    pattern: str,
+    pattern: Optional[str],
     map_to: Optional[Path],
     answers: Optional[Path],
     ask: Optional[Path],
@@ -450,16 +458,18 @@ def gather_pictures(
         read_answers_file,
         unknown_names,
     )
+    from ..gathering.looking import look_at_each, set_aside_unopened
     from ..gathering.picture_map import as_html
-    from ..gathering.questions import as_sheet, how_many_worth_asking, theirs, worth_asking
+    from ..gathering.questions import as_sheet, theirs, worth_asking
 
     if open_viewer:
         host = _loopback_or_die(host)  # before the work, not after it
     paths = _pictures_in(where, pattern)
     if not paths:
+        wanted = f"files matching {pattern!r}" if pattern else "pictures"
         raise click.ClickException(
-            "no pictures found. Point at some files, or at a folder holding "
-            f"files matching {pattern!r}, or pass a different --pattern."
+            f"no pictures found. Point at some files, or at a folder holding {wanted}, "
+            "or pass a different --pattern."
         )
     if len(paths) < 2:
         raise click.ClickException(
@@ -468,13 +478,10 @@ def gather_pictures(
             "`apothecary photo build`."
         )
 
-    pictures = [_look_or_explain(finder, path) for path in paths]
-    names_seen: dict = {}
-    for path, picture in zip(paths, pictures, strict=True):
-        names_seen.setdefault(picture.name, []).append(path)
-    clashing = {name: found for name, found in names_seen.items() if len(found) > 1}
-    if clashing:
-        name, found = next(iter(sorted(clashing.items())))
+    looked = look_at_each(_finder_or_explain(finder), paths)
+    clash = looked.clash()
+    if clash:
+        name, found = clash
         raise click.ClickException(
             f"more than one picture is called {name!r} ({', '.join(str(f) for f in found)}). "
             "Every answer here refers to a picture by name, so two pictures "
@@ -490,25 +497,27 @@ def gather_pictures(
     elif answers is not None:
         click.echo(f"{answers} does not exist yet — nothing of yours was used.")
 
-    strangers = unknown_names(said, [p.name for p in pictures])
+    here = looked.names()
+    strangers = unknown_names(said, here)
     if strangers:
         raise click.ClickException(
             f"you named picture(s) that are not here: {', '.join(strangers)}. "
             "Almost always a typo or a renamed file — and silently ignoring it "
             "would mean your answer looked as though it had been taken and had "
             "not. The names in use are: "
-            + ", ".join(sorted(p.name for p in pictures)[:12])
-            + ("…" if len(pictures) > 12 else "")
+            + ", ".join(sorted(here)[:12])
+            + ("…" if len(here) > 12 else "")
         )
 
     try:
-        result = gather(pictures, paths=paths, answers=said)
+        result = gather(looked.pictures, paths=looked.paths, answers=said)
     except PeopleDisagree as trouble:
-        # Raised inside gather(), not while reading the file, so catching it only
-        # around the reading left this project's flagship refusal coming out as
-        # thirty lines of internal detail.
+        # Raised inside gather(), not while reading the answers file.
         raise click.ClickException(str(trouble)) from None
-    click.echo(as_text(result, everything=everything))
+    result = set_aside_unopened(result, looked, said)
+    # Ranked once: the report, the questions and the count held back all read it.
+    ranked = worth_asking(result, most=len(result.kinships) or 1)
+    click.echo(as_text(result, everything=everything, questions=ranked))
 
     if ask is not None:
         if most < 1:
@@ -525,8 +534,8 @@ def gather_pictures(
             keep = (
                 theirs(answers.read_text(encoding="utf-8-sig")).rstrip() + "\n\n" + theirs(keep)
             ).strip()
-        asked = worth_asking(result, most=most)
-        withheld = max(0, how_many_worth_asking(result) - len(asked))
+        asked = ranked[:most]
+        withheld = len(ranked) - len(asked)
         ask.write_text(as_sheet(result, asked, already=keep, withheld=withheld), encoding="utf-8")
         click.echo(
             f"{len(asked)} question(s) worth your time, written to {ask}"
@@ -546,7 +555,10 @@ def gather_pictures(
     from ..gathering import whole_gathering
     from ..vision.shelf import shelf
 
-    by_name = {picture.name: (picture, path) for picture, path in zip(pictures, paths, strict=True)}
+    by_name = {
+        picture.name: (picture, path)
+        for picture, path in zip(looked.pictures, looked.paths, strict=True)
+    }
     built = {
         reading.picture: build_arrangement(
             by_name[reading.picture][0], picture_path=by_name[reading.picture][1]
