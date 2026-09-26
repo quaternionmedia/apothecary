@@ -328,22 +328,6 @@ def _control_state(port: str) -> dict:
     }
 
 
-@router.get("/printers/controls")
-async def firmware_printer_controls():
-    """The control lines the command route accepts (regex + purpose) and their bounds."""
-    return {
-        "codes": [{"pattern": p.pattern, "does": what} for p, what in gcode.CONTROL_CODES],
-        "emergency_stop": gcode.EMERGENCY_STOP,
-        "bounds": {
-            "hotend_max_c": gcode.HOTEND_MAX_C,
-            "bed_max_c": gcode.BED_MAX_C,
-            "jog_max_mm": gcode.JOG_MAX_MM,
-            "feed_max": gcode.FEED_MAX,
-            "latch_ttl_s": gcode.CONTROL_TTL_S,
-        },
-    }
-
-
 @router.post("/printers/control")
 async def firmware_printer_control_arm(body: PrinterControlArmRequest):
     """Arm (or disarm) the port's control latch; armed lapses after ``ttl_s`` of silence."""

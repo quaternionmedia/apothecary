@@ -777,7 +777,6 @@ def test_control_latch_arms_renews_and_lapses(monkeypatch):
 def test_control_route_requires_the_latch(fake_arduino_cli, fresh_task_runner, scripted_links):
     c = TestClient(app)
     port = "/dev/ttyFAKE1"
-    assert c.get("/firmware/printers/controls").json()["bounds"]["hotend_max_c"] == 300
     assert c.get("/firmware/printers/control", params={"port": port}).json()["armed"] is False
 
     r = c.post("/firmware/printers/command", json={"port": port, "command": "M104 S200"})
