@@ -329,8 +329,7 @@ def gather_pictures(body: GatherRequest):
         read_answers,
         unknown_names,
     )
-    from ..gathering.picture_map import as_html
-    from ..gathering.questions import how_many_worth_asking, worth_asking
+    from ..gathering.questions import worth_asking
     from ..vision import build as build_arrangement
     from ..vision import get as get_finder
     from ..vision.shelf import shelf
@@ -379,19 +378,18 @@ def gather_pictures(body: GatherRequest):
     except PeopleDisagree as trouble:
         raise HTTPException(status_code=422, detail=str(trouble)) from None
 
-    asked = worth_asking(result, most=body.most)
+    # Ranked once: the report, the questions and the count held back all read it.
+    ranked = worth_asking(result, most=len(result.kinships) or 1)
+    asked = ranked[: body.most]
     answer: dict = {
-        "report": as_text(result),
-        "map_html": as_html(result),
+        "report": as_text(result, questions=ranked),
         "clusters": [c.model_dump() for c in result.clusters],
         "readings": [
             {k: (str(v) if isinstance(v, Path) else v) for k, v in r.model_dump().items()}
             for r in result.readings
         ],
         "set_aside": result.set_aside,
-        "ignored": result.ignored,
         "overruled": result.overruled,
-        "resolved_share": result.resolved_share(),
         "questions": [
             {
                 "left": q.left,
@@ -405,7 +403,7 @@ def gather_pictures(body: GatherRequest):
             }
             for q in asked
         ],
-        "withheld": max(0, how_many_worth_asking(result) - len(asked)),
+        "withheld": len(ranked) - len(asked),
         "site": None,
     }
     if body.build:

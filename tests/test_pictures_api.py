@@ -246,7 +246,7 @@ def test_gathering_from_the_browser_reports_asks_and_takes_the_answers(pictures)
     r = c.post("/photos/gather", json={"pictures": ["bench.png", "bench_again.png", "lamp.png"]})
     assert r.status_code == 200, r.text
     got = r.json()
-    assert "bench" in got["report"] and got["map_html"].startswith("<")
+    assert "bench" in got["report"]
     assert len(got["readings"]) == 3 and all(r["readable"] for r in got["readings"])
     names = {n for cl in got["clusters"] for n in cl["pictures"]}
     assert names == {"bench", "bench_again", "lamp"}
@@ -257,6 +257,8 @@ def test_gathering_from_the_browser_reports_asks_and_takes_the_answers(pictures)
     assert together is not None and together["kind"] != "alone"
     for q in got["questions"]:
         assert q["sentence"].startswith("Are ") and len(q["answers"]) == 3
+    # The report asks the first of the same questions the page is given.
+    assert all(q["sentence"] in got["report"] for q in got["questions"][:5])
     # A person's word, in the answers' own sentences, wins and is carried.
     r = c.post(
         "/photos/gather",
