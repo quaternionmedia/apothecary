@@ -1274,16 +1274,12 @@
                 return node;
             }
 
-            // The standardized "+1" control: zooming in only makes sense for
-            // a node that itself has something inside it -- a true leaf (no
-            // children) has nowhere to go.
+            // The standardized "+1" control, onto a direct child of the focus.
             zoomIn(name) {
                 const focus = this.currentFocusNode();
                 const child = findChild(focus, name);
-                // A leaf is a legitimate destination: it renders as itself, and
-                // reaching one is how the parts library gives back the old
-                // part-viewer experience. Refusing childless nodes made every
-                // entry in a catalog of leaves un-navigable.
+                // A leaf is a destination too: it renders as itself, which is
+                // how a part in the parts library is reached.
                 if (!child) return;
                 this.focusPath = [...this.focusPath, name];
                 this.selectedName = null;
@@ -3274,15 +3270,12 @@
                 if (key) this.selectChild(key);
             }
 
+            // A mesh is keyed by its full path and zoomIn takes a bare name:
+            // only a direct child of the focus is one step in.
             onDoubleClick(event) {
-                // zoomIn expects a direct child's bare name; a "show all
-                // levels" key can be a deeper dotted path instead, but
-                // zoomIn only ever acts on a node with children to zoom
-                // into, and every node this renders is a leaf (zero
-                // children) in that mode -- so this is always a safe no-op
-                // there, not a crash.
                 const key = this.raycastChild(event);
-                if (key) this.zoomIn(key);
+                const node = key && this.renderNodeByKey[key];
+                if (node && key === pathForChild(this.focusPath.join('.'), node.name)) this.zoomIn(node.name);
             }
 
             // Scroll dollies the camera as usual; once OrbitControls clamps
