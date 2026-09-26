@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field, ValidationError
 
-from .core import OpenSCADObject
+from .objects import SceneObject
 
 try:  # optional version module for legacy compatibility
     from .version import __version__  # type: ignore
@@ -15,7 +15,7 @@ except ImportError:  # pragma: no cover
 class Scene(BaseModel):
     """Top-level scene container"""
 
-    objects: List[OpenSCADObject] = Field(default_factory=list)
+    objects: List[SceneObject] = Field(default_factory=list)
     name: str = "untitled"
     version: str = __version__
 

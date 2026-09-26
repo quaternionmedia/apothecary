@@ -28,7 +28,7 @@ Example:
 
 ## Primitive objects
 
-Objects are encoded with a loose `type` discriminator plus fields appropriate to that type. The FastAPI API and CLI both accept either explicit `type` or inferred shapes (for compatibility).
+Every object says what it is with `type` -- one of `cube`, `sphere`, `cylinder`, `import`, `union`, `difference`, `intersection`, `hull`, `translate`, `rotate`, `scale` -- plus the fields of that type. An object with no `type`, an unknown one, or a field of the wrong kind is refused (`/render` answers 422, the CLI exits with the validation error); nothing is guessed. A scene dumped from Python (`Scene.model_dump_json()`) carries every `type` and loads back as itself.
 
 ### Cube
 

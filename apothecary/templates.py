@@ -1,15 +1,19 @@
 from typing import Optional
 
-from jinja2 import BaseLoader, Environment
+from jinja2 import BaseLoader
+from jinja2.sandbox import SandboxedEnvironment
 
 from .scene import Scene
 
 
 class TemplateRenderer:
-    """Jinja2-based template renderer for OpenSCAD code"""
+    """Jinja2-based template renderer for OpenSCAD code.
+
+    Sandboxed: a template is text someone handed over, and an unsandboxed one
+    reaches the interpreter through any object in its context."""
 
     def __init__(self):
-        self.env = Environment(loader=BaseLoader())
+        self.env = SandboxedEnvironment(loader=BaseLoader())
 
     def render_template(self, template_str: str, context: dict) -> str:
         """Render a Jinja2 template with the given context"""

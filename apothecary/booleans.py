@@ -1,19 +1,23 @@
-from typing import List
+from typing import TYPE_CHECKING, List, Literal
 
 from pydantic import Field
 
 from .core import OpenSCADObject
 
+if TYPE_CHECKING:
+    from .objects import SceneObject
+
 
 class BooleanOperation(OpenSCADObject):
     """Base class for boolean operations"""
 
-    # Simplicity over enforcement; validation happens logically by usage
-    children: List[OpenSCADObject] = Field(default_factory=list)
+    children: List["SceneObject"] = Field(default_factory=list)
 
 
 class Union(BooleanOperation):
     """OpenSCAD union operation"""
+
+    type: Literal["union"] = "union"
 
     def render(self, *_, **__) -> str:
         comment_str = f"// {self.comment}\n" if self.comment else ""
@@ -24,6 +28,8 @@ class Union(BooleanOperation):
 class Difference(BooleanOperation):
     """OpenSCAD difference operation"""
 
+    type: Literal["difference"] = "difference"
+
     def render(self, *_, **__) -> str:
         comment_str = f"// {self.comment}\n" if self.comment else ""
         children_str = "\n".join(f"  {child.render()}" for child in self.children)
@@ -32,6 +38,8 @@ class Difference(BooleanOperation):
 
 class Intersection(BooleanOperation):
     """OpenSCAD intersection operation"""
+
+    type: Literal["intersection"] = "intersection"
 
     def render(self, *_, **__) -> str:
         comment_str = f"// {self.comment}\n" if self.comment else ""
@@ -47,6 +55,8 @@ class Hull(BooleanOperation):
     enclosure shell actually is -- a plain cube would misreport the corner
     radius everything else is fitted around.
     """
+
+    type: Literal["hull"] = "hull"
 
     def render(self, *_, **__) -> str:
         comment_str = f"// {self.comment}\n" if self.comment else ""

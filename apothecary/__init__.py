@@ -10,6 +10,7 @@ from .stays_local import install_guard as _install_guard
 
 _install_guard()
 
+from . import objects as _objects  # noqa: E402,F401  -- tags every shape before anything builds one
 from .booleans import Difference, Hull, Intersection, Union  # noqa: E402
 from .core import OpenSCADObject  # noqa: E402
 from .models.vectors import Vector3D  # noqa: E402

@@ -43,6 +43,7 @@ from .core import OpenSCADObject
 from .models.bounds import BoundingBox3D
 from .models.units import PrintSettings
 from .models.vectors import Vector3D
+from .objects import SceneObject
 from .primitives import Cylinder, Import
 from .scene import Scene
 from .transforms import Translate
@@ -109,7 +110,7 @@ class Assembly(BaseModel):
     build_volume: Optional[Vector3D] = None
     build_origin: Optional[Vector3D] = None
     status: Optional[str] = None
-    base: Optional[OpenSCADObject] = None
+    base: Optional[SceneObject] = None
     additions: List["Assembly"] = Field(default_factory=list)
     subtractions: List["Assembly"] = Field(default_factory=list)
     children: List["Assembly"] = Field(default_factory=list)

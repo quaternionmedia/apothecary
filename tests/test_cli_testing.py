@@ -108,3 +108,15 @@ def test_chromium_browser_available():
             browser.close()
     except Exception as e:
         pytest.skip(f"Chromium not available: {e}. Run: apothecary test setup-e2e")
+
+
+def test_a_phase_that_errored_is_not_green_even_with_nothing_counted_failed():
+    """pytest reports "1 error" (collection, a fixture) without any "N failed";
+    the gate used to parse the count and exit 0."""
+    from apothecary.cli.testing import verdict
+
+    assert verdict(0, {"unit": True, "e2e": True}) == 0
+    assert verdict(0, {"unit": False, "e2e": True}) == 1
+    assert verdict(0, {"unit": True, "e2e": False}) == 1
+    assert verdict(2, {"unit": True, "e2e": True}) == 1
+    assert verdict(0, {}) == 1

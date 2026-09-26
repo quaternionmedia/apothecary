@@ -1,19 +1,24 @@
-from typing import List, Optional, Union
+from typing import TYPE_CHECKING, List, Literal, Optional, Union
 
 from pydantic import Field
 
 from .core import OpenSCADObject
 from .models.vectors import Vector3D
 
+if TYPE_CHECKING:
+    from .objects import SceneObject
+
 
 class Transform(OpenSCADObject):
     """Base class for transformations"""
 
-    children: List[OpenSCADObject] = Field(default_factory=list)
+    children: List["SceneObject"] = Field(default_factory=list)
 
 
 class Translate(Transform):
     """OpenSCAD translate transformation"""
+
+    type: Literal["translate"] = "translate"
 
     v: Vector3D
 
@@ -27,6 +32,8 @@ class Translate(Transform):
 
 class Rotate(Transform):
     """OpenSCAD rotate transformation"""
+
+    type: Literal["rotate"] = "rotate"
 
     a: Union[float, Vector3D]
     v: Optional[Vector3D] = None
@@ -47,6 +54,8 @@ class Rotate(Transform):
 
 class Scale(Transform):
     """OpenSCAD scale transformation"""
+
+    type: Literal["scale"] = "scale"
 
     v: Vector3D
 

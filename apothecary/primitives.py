@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 from pydantic import Field
 
@@ -9,6 +9,8 @@ from .models.vectors import Vector3D
 
 class Cube(OpenSCADObject):
     """Cube primitive"""
+
+    type: Literal["cube"] = "cube"
 
     size: Union[float, Vector3D] = 1.0
     center: bool = False
@@ -26,6 +28,8 @@ class Cube(OpenSCADObject):
 class Sphere(OpenSCADObject):
     """Sphere primitive"""
 
+    type: Literal["sphere"] = "sphere"
+
     r: float = Field(1.0, gt=0)
     fn: Optional[int] = Field(None, gt=2)
 
@@ -37,6 +41,8 @@ class Sphere(OpenSCADObject):
 
 class Cylinder(OpenSCADObject):
     """Cylinder primitive"""
+
+    type: Literal["cylinder"] = "cylinder"
 
     h: float = Field(1.0, gt=0)
     r: Optional[float] = Field(None, ge=0)
@@ -57,7 +63,8 @@ class Cylinder(OpenSCADObject):
             )
         )
         fn_str = f", $fn={self.fn}" if self.fn else ""
-        return f"{comment_str}cylinder(h={self.h}, {radius_str}, center={str(self.center).lower()}{fn_str});"
+        center = str(self.center).lower()
+        return f"{comment_str}cylinder(h={self.h}, {radius_str}, center={center}{fn_str});"
 
 
 class Import(OpenSCADObject):
@@ -76,6 +83,8 @@ class Import(OpenSCADObject):
     the file to say where the transformed mesh ends up -- the footprint a
     site node needs for placement and overlap checks.
     """
+
+    type: Literal["import"] = "import"
 
     file: str
     convexity: int = Field(10, gt=0)

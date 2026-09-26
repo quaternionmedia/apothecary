@@ -141,6 +141,4 @@ def test_render_scene_endpoint(page: Page, base_url: str):
     
     assert data["success"] is True
     assert "code" in data
-    # Code should contain some OpenSCAD content (either the cube or a fallback)
-    assert len(data["code"]) > 0
-    assert "openscad" in data["code"].lower()
+    assert "cube([10.0, 10.0, 10.0], center=false);" in data["code"]

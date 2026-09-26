@@ -282,6 +282,12 @@ def test_run(e2e: bool, coverage: bool):
         raise SystemExit(1)
 
 
+def verdict(failed: int, phase_ok: dict) -> int:
+    """The exit code of a full run: green only when nothing failed and every
+    phase's own pytest exited 0 (an error is not a failure pytest counts)."""
+    return 0 if failed == 0 and phase_ok and all(phase_ok.values()) else 1
+
+
 @test.command("all")
 @click.option("--port", default=8765, type=int, help="Port for test server")
 @click.option("--coverage", is_flag=True, help="Run with coverage report")
@@ -307,6 +313,10 @@ def test_all(port: int, coverage: bool, headed: bool, fail_fast: bool):
         "unit": {"passed": 0, "failed": 0, "skipped": 0, "time": 0},
         "e2e": {"passed": 0, "failed": 0, "skipped": 0, "time": 0},
     }
+    # What decides the exit code: each phase's own return code. The counts
+    # parsed from pytest's output are for the summary only -- an error in
+    # collection or a fixture is not "N failed" and used to read as green.
+    phase_ok = {"unit": False, "e2e": False}
     server_proc = None
     overall_start = time.time()
 
@@ -361,7 +371,7 @@ def test_all(port: int, coverage: bool, headed: bool, fail_fast: bool):
                 if match:
                     results["unit"]["skipped"] = int(match.group(1))
 
-        unit_ok = unit_result.returncode == 0
+        unit_ok = phase_ok["unit"] = unit_result.returncode == 0
 
         if unit_ok:
             _safe_echo(f"\n✓ Unit tests PASSED ({results['unit']['time']:.1f}s)")
@@ -476,7 +486,7 @@ def test_all(port: int, coverage: bool, headed: bool, fail_fast: bool):
                 if match:
                     results["e2e"]["failed"] = int(match.group(1))
 
-        e2e_ok = e2e_result.returncode == 0
+        e2e_ok = phase_ok["e2e"] = e2e_result.returncode == 0
 
         if e2e_ok:
             _safe_echo(f"\n✓ E2E tests PASSED ({results['e2e']['time']:.1f}s)")
@@ -517,11 +527,15 @@ def test_all(port: int, coverage: bool, headed: bool, fail_fast: bool):
     click.echo(f"  {'TOTAL':<15} {total_passed:>10} {total_failed:>10} {total_time:>9.1f}s")
     click.echo("")
 
-    if total_failed == 0:
+    if verdict(total_failed, phase_ok) == 0:
         _safe_echo(f"  ✓ ALL {total_passed} TESTS PASSED", fg="green", bold=True)
         click.echo("")
         raise SystemExit(0)
-    else:
-        _safe_echo(f"  ✗ {total_failed} TEST(S) FAILED", fg="red", bold=True)
-        click.echo("")
-        raise SystemExit(1)
+    failed_phases = [name for name, ok in phase_ok.items() if not ok]
+    _safe_echo(
+        f"  ✗ {total_failed} TEST(S) FAILED; not green: {', '.join(failed_phases) or '-'}",
+        fg="red",
+        bold=True,
+    )
+    click.echo("")
+    raise SystemExit(1)

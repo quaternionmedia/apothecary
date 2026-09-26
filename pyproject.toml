@@ -52,8 +52,12 @@ preflight = [
 [tool.uv]
 package = true
 
-[tool.setuptools]
-packages = ["apothecary"]
+[tool.setuptools.packages.find]
+include = ["apothecary*"]
+
+[tool.setuptools.package-data]
+# The viewer's scripts, styles and vendored three.js are served from the package.
+apothecary = ["static/**/*"]
 
 [tool.pytest.ini_options]
 # The walkthrough pages are executable. Named on the command line, not left to
