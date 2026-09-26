@@ -54,7 +54,7 @@ from __future__ import annotations
 
 import re
 from enum import Enum
-from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -310,73 +310,6 @@ def place(options: Sequence[Option]) -> None:
     check_ring(options)
     for option, cell in zip(options, PLACEMENT, strict=False):
         object.__setattr__(option, "cell", cell)
-
-
-def walk(ring: Ring, address: str) -> Option:
-    """Follow an address down through nested rings to the option it names.
-
-    Every digit but the last must open a further ring. An address that runs
-    into an option that does something, or into an empty cell, is refused
-    with the cell that stopped it rather than answered with the nearest thing.
-    """
-    if not address:
-        raise NoSuchCell("an empty address reaches nothing; press at least one cell")
-    if not ADDRESS.match(address):
-        raise NoSuchCell(f"address {address!r} is not a run of cells: digits 1 to 9, never {BACK}")
-    here = ring
-    option: Optional[Option] = None
-    for depth, digit in enumerate(address):
-        if option is not None:
-            if not option.children:
-                raise NoSuchCell(
-                    f"cell {option.cell} ({option.label}) does something rather than "
-                    f"opening a ring, so {address[depth:]!r} after it goes nowhere"
-                )
-            here = Ring(title=option.label, options=option.children)
-        option = here.at(int(digit))
-    assert option is not None
-    return option
-
-
-def address_of(ring: Ring, option_id: str) -> str:
-    """The digits that reach an option, searching in placement order."""
-
-    def search(options: Sequence[Option], so_far: str) -> Optional[str]:
-        for option in options:
-            path = f"{so_far}{option.cell}"
-            if option.id == option_id:
-                return path
-            if option.children:
-                found = search(option.children, path)
-                if found is not None:
-                    return found
-        return None
-
-    found = search(ring.options, "")
-    if found is None:
-        raise NoSuchCell(
-            f"no option called {option_id!r} on {ring.title or 'this ring'} or under it"
-        )
-    return found
-
-
-def every_address(ring: Ring) -> Dict[str, str]:
-    """Every address that does something, and the action it does.
-
-    Submenus are not listed; they are the way to a leaf, not a thing to do.
-    """
-    found: Dict[str, str] = {}
-
-    def search(options: Sequence[Option], so_far: str) -> None:
-        for option in options:
-            path = f"{so_far}{option.cell}"
-            if option.children:
-                search(option.children, path)
-            elif option.action:
-                found[path] = option.action
-
-    search(ring.options, "")
-    return found
 
 
 def nearest(occupied: Iterable[int], from_cell: Optional[int], direction: str) -> Optional[int]:
@@ -956,34 +889,6 @@ def control_options(device: Device) -> List[Option]:
     ]
 
 
-def every_action(rings: Sequence[Ring]) -> Dict[str, str]:
-    """Every action any of these rings can produce, and the label it wore.
-
-    Used to check the promise that everything the program can be told to do is
-    reachable from the ring. A button that can do something the ring cannot is
-    the thing that promise forbids.
-    """
-    found: Dict[str, str] = {}
-    seen: Set[int] = set()
-
-    def walk_options(options: Sequence[Option]) -> None:
-        for option in options:
-            # Options can hold each other, and a ring built by hand can be made
-            # to hold itself. Walking that without remembering where you have
-            # been runs out of stack rather than reporting anything.
-            if id(option) in seen:
-                continue
-            seen.add(id(option))
-            if option.action and option.action not in found:
-                found[option.action] = option.label
-            if option.children:
-                walk_options(option.children)
-
-    for ring in rings:
-        walk_options(ring.options)
-    return found
-
-
 class Carries(str, Enum):
     """Who does the thing an option names.
 
@@ -1099,15 +1004,11 @@ __all__ = [
     "RingTooFull",
     "UnknownAction",
     "Where",
-    "address_of",
     "carried_by",
     "check_ring",
     "control_options",
-    "every_action",
-    "every_address",
     "nearest",
     "place",
     "resolve",
     "shorten",
-    "walk",
 ]

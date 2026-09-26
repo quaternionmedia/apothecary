@@ -14,9 +14,10 @@ with the fault in place before this note was written.
 
 import pytest
 from fastapi.testclient import TestClient
+from ring_helpers import every_action
 
 from apothecary.api import app
-from apothecary.menu import CARRIED_BY, Carries, Context, Device, Pointing, every_action, resolve
+from apothecary.menu import CARRIED_BY, Carries, Context, Device, Pointing, resolve
 
 client = TestClient(app)
 

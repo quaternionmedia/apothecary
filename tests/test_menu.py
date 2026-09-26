@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from ring_helpers import address_of, every_action, every_address, walk
 
 from apothecary.hierarchy import Assembly, Site
 from apothecary.menu import (
@@ -35,15 +36,11 @@ from apothecary.menu import (
     Pointing,
     Ring,
     RingTooFull,
-    address_of,
     check_ring,
     control_options,
-    every_action,
-    every_address,
     nearest,
     resolve,
     shorten,
-    walk,
 )
 from apothecary.primitives import Cube
 
@@ -951,7 +948,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     data-panel marks -- are the same, so a panel cannot appear on one side only."""
     import re
 
-    from apothecary.menu import PANELS, address_of, carried_by
+    from apothecary.menu import PANELS, carried_by
 
     root = resolve(
         Context(pointing=Pointing.CANVAS),
