@@ -9,13 +9,29 @@ looked at.
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
+from apothecary import meshes
 from apothecary.api import app
+from apothecary.models import BoundingBox3D, Vector3D
+from apothecary.projects.parts.base import BasePart
 from apothecary.projects.parts.datum_cap import DEFAULT as CAP
 from apothecary.projects.parts.datum_core import DEFAULT as CORE
-from apothecary.projects.parts.readiness import BLOCKED, PASS, UNKNOWN, Check, Readiness, assess
+from apothecary.projects.parts.readiness import (
+    BLOCKED,
+    PASS,
+    UNKNOWN,
+    Check,
+    Readiness,
+    _bounds_check,
+    assess,
+    compare_bounds,
+)
+from apothecary.projects.parts.stl_renderer import write_params_sidecar
 
 client = TestClient(app)
 
@@ -136,6 +152,12 @@ class TestServedFromTheOneEntryPoint:
         assert "part-checklist" in page
 
 
+def _box_stl(path: Path, x: float, y: float, z: float) -> Path:
+    """An STL whose extents are x by y by z: one triangle spans them."""
+    meshes.write_stl([((0, 0, 0), (x, 0, 0), (0, y, z))], path)
+    return path
+
+
 class TestAStaleRenderIsNotDrift:
     """datum_core was reported as drifted by 1.2 mm. Nothing had drifted: the
     SCAD was untouched, the wrapper's `walls` default had moved to the house
@@ -203,6 +225,90 @@ class TestAStaleRenderIsNotDrift:
         assert renders.state == PASS
 
 
+class TestBoundsAreMeasuredFromTheMesh:
+    """Declared bounds are for the default parameters, upright; the STL on disk
+    may be neither, and a check that cannot compare says so."""
+
+    @staticmethod
+    def _part(tmp_path, rotation=(0, 0, 0)) -> BasePart:
+        x, y, z = rotation
+        return BasePart(
+            name="box",
+            source_file=tmp_path / "box.scad",
+            default_bounds=BoundingBox3D(max_point=Vector3D(x=10, y=20, z=30)),
+            display_rotation=Vector3D(x=x, y=y, z=z),
+        )
+
+    def _check(self, part) -> Check:
+        return _bounds_check(part, part.get_stl_output_path(), tolerance=0.5)
+
+    def test_a_render_the_declared_size_passes(self, tmp_path):
+        part = self._part(tmp_path)
+        _box_stl(part.get_stl_output_path(), 10, 20, 30.4)
+        assert self._check(part).state == PASS
+
+    def test_a_render_off_by_more_than_the_tolerance_is_blocked(self, tmp_path):
+        part = self._part(tmp_path)
+        _box_stl(part.get_stl_output_path(), 10, 20, 31)
+        check = self._check(part)
+        assert check.state == BLOCKED
+        assert "off by 1.00 mm" in check.detail
+
+    def test_a_render_with_overridden_parameters_is_not_compared(self, tmp_path):
+        part = self._part(tmp_path)
+        stl = _box_stl(part.get_stl_output_path(), 10, 20, 45)
+        write_params_sidecar(stl, {"height": 45})
+        check = self._check(part)
+        assert check.state == UNKNOWN
+        assert "height" in check.detail
+        assert check.fix == "apothecary parts generate-stl box"
+
+    def test_a_sidecar_recording_no_overrides_is_a_default_render(self, tmp_path):
+        part = self._part(tmp_path)
+        stl = _box_stl(part.get_stl_output_path(), 10, 20, 30)
+        write_params_sidecar(stl, {})
+        assert self._check(part).state == PASS
+
+    def test_a_quarter_turned_render_is_held_to_the_turned_box(self, tmp_path):
+        part = self._part(tmp_path, rotation=(90, 0, 0))
+        _box_stl(part.get_stl_output_path(), 10, 30, 20)
+        assert self._check(part).state == PASS
+
+    def test_any_other_turn_is_not_compared(self, tmp_path):
+        part = self._part(tmp_path, rotation=(45, 0, 0))
+        _box_stl(part.get_stl_output_path(), 10, 20, 30)
+        check = self._check(part)
+        assert check.state == UNKNOWN
+        assert check.fix == "apothecary parts verify box"
+
+    def test_an_unreadable_stl_is_unknown_and_says_why(self, tmp_path):
+        part = self._part(tmp_path)
+        part.get_stl_output_path().write_text("solid box\n vertex 1 2 nope\nendsolid box\n")
+        check = self._check(part)
+        assert check.state == UNKNOWN
+        assert "not a vertex" in check.detail
+
+    def test_a_new_render_is_measured_again(self, tmp_path):
+        part = self._part(tmp_path)
+        stl = _box_stl(part.get_stl_output_path(), 10, 20, 30)
+        os.utime(stl, ns=(0, 1_000_000_000))
+        assert self._check(part).state == PASS
+        _box_stl(stl, 10, 20, 31)
+        os.utime(stl, ns=(0, 2_000_000_000))
+        assert self._check(part).state == BLOCKED
+
+
+class TestCompareBounds:
+    def test_each_axis_is_held_to_the_tolerance(self):
+        result = compare_bounds((10, 20, 30), (10.2, 19.5, 30), tol=0.5)
+        assert result.deltas == pytest.approx((0.2, 0.5, 0))
+        assert result.worst == pytest.approx(0.5)
+        assert result.ok
+
+    def test_one_axis_past_it_fails(self):
+        assert not compare_bounds((10, 20, 30), (10, 20, 30.6), tol=0.5).ok
+
+
 class TestThePartDecidesWhereItsStlLives:
     """`gridfinity`'s SCAD is inside a third-party submodule, and its wrapper
     overrides `get_stl_output_path` precisely so the render does not land in
@@ -228,6 +334,4 @@ class TestThePartDecidesWhereItsStlLives:
         from apothecary.projects.parts.skeleton import ROOT
 
         submodule = ROOT / "parts" / "gridfinity" / "gridfinity-rebuilt-openscad"
-        assert not list(submodule.glob("*.stl")), (
-            "a render landed in a third-party checkout"
-        )
+        assert not list(submodule.glob("*.stl")), "a render landed in a third-party checkout"
