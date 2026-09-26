@@ -122,6 +122,11 @@ class TestOpenSCADRequirement:
             ("OpenSCAD version 2021.01", (2021, 1)),
             ("OpenSCAD version 2025.03.15", (2025, 3, 15)),
             ("OpenSCAD version 2024.12.06.ai21474", (2024, 12, 6)),
+            ("2021.08.24", (2021, 8, 24)),
+            (
+                "QStandardPaths: runtime dir 1000.5 mode 0755\nOpenSCAD version 2025.03.15",
+                (2025, 3, 15),
+            ),
             ("no version here", None),
         ],
     )
@@ -129,6 +134,23 @@ class TestOpenSCADRequirement:
         from apothecary.projects.parts.stl_renderer import parse_openscad_version
 
         assert parse_openscad_version(text) == version
+
+    @pytest.mark.parametrize(
+        "stderr",
+        [
+            "QStandardPaths: runtime dir 1000.5 mode 0755\\nOpenSCAD version 2021.01\\n",
+            "OpenSCAD version 2021.01 \\377\\n",
+        ],
+        ids=["a warning first", "not utf-8"],
+    )
+    def test_the_reason_quotes_the_version_line_alone(self, installed, tmp_path, stderr):
+        stable, _ = installed()
+        stable.parent.mkdir(parents=True)
+        stable.write_text(f"#!/bin/sh\nprintf '{stderr}' >&2\n")
+        stable.chmod(0o755)
+        can_build, reason = _needs(tmp_path).can_generate_stl()
+        assert not can_build
+        assert f"({stable} is OpenSCAD version 2021.01" in reason and "\n" not in reason
 
     def test_a_snapshot_alone_is_the_default(self, installed):
         _, snapshot = installed(nightly="2025.03.15")

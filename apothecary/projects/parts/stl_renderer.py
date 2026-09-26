@@ -342,23 +342,48 @@ SNAPSHOTS_URL = "https://openscad.org/downloads.html#snapshots"
 _VERSIONS: Dict[str, Optional[str]] = {}
 
 
+# "OpenSCAD version 2021.01"; failing that, a line that is only a version
+# (a part's "2021.08.24"). Whatever else an executable prints first, such as
+# a Qt warning with numbers in it, is not read as its version.
+_NAMED_VERSION = re.compile(r"version\s+(\d{4})\.(\d{1,2})(?:\.(\d{1,2}))?", re.I)
+_BARE_VERSION = re.compile(r"^\s*(\d{4})\.(\d{1,2})(?:\.(\d{1,2}))?(?:\.\S*)?\s*$", re.M)
+
+
 def parse_openscad_version(text: Optional[str]) -> Optional[Tuple[int, ...]]:
     """An OpenSCAD version as a comparable tuple: ``OpenSCAD version 2021.01`` is
     (2021, 1), a snapshot's ``2024.12.06.ai21474`` is (2024, 12, 6). None when
     the text names no version."""
-    match = re.search(r"(\d{4})\.(\d{1,2})(?:\.(\d{1,2}))?", text or "")
+    match = _NAMED_VERSION.search(text or "") or _BARE_VERSION.search(text or "")
     if match is None:
         return None
     return tuple(int(group) for group in match.groups() if group is not None)
 
 
+def _version_line(text: str) -> Optional[str]:
+    """The line of ``--version`` output that names the version, else its first line."""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    for pattern in (_NAMED_VERSION, _BARE_VERSION):
+        for line in lines:
+            if pattern.search(line):
+                return line
+    return lines[0] if lines else None
+
+
 def openscad_version(executable: Path) -> Optional[str]:
-    """What ``executable --version`` prints; OpenSCAD writes it to stderr."""
+    """The line of ``executable --version`` that names its version (OpenSCAD
+    writes it to stderr), or None when it does not run."""
     key = str(executable)
     if key not in _VERSIONS:
         try:
-            done = subprocess.run([key, "--version"], capture_output=True, text=True, timeout=10)
-            _VERSIONS[key] = done.stderr.strip() or done.stdout.strip() or None
+            done = subprocess.run(
+                [key, "--version"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=10,
+            )
+            _VERSIONS[key] = _version_line(f"{done.stderr}\n{done.stdout}")
         except (OSError, subprocess.SubprocessError):
             _VERSIONS[key] = None
     return _VERSIONS[key]
