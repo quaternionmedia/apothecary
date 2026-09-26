@@ -1,5 +1,6 @@
 """Tests for STL rendering."""
 
+import stat
 from pathlib import Path
 from unittest.mock import patch
 
@@ -9,25 +10,14 @@ from apothecary.projects.parts.stl_renderer import OpenSCADRenderer, RenderResul
 class TestOpenSCADRenderer:
     """Tests for OpenSCAD renderer."""
 
-    def test_detect_openscad_not_found(self):
-        """Test detection when OpenSCAD is not installed."""
-        renderer = OpenSCADRenderer()
-        # Clear any cached detection
-        renderer._detected_path = None
-        renderer._openscad_path = None
+    def test_detect_openscad_on_path(self, monkeypatch):
+        monkeypatch.setattr("shutil.which", lambda name: "/opt/bin/openscad")
+        assert OpenSCADRenderer()._detect_openscad() == Path("/opt/bin/openscad")
 
-        # Mock subprocess to simulate no OpenSCAD
-        with patch("subprocess.run") as mock_run:
-            mock_run.side_effect = FileNotFoundError()
-
-            # Mock Path.exists to return False for all common paths
-            with patch.object(Path, "exists", return_value=False):
-                # Force re-detection
-                renderer._detected_path = None
-                path = renderer._detect_openscad()
-                # Path might still be found if installed locally
-                # Just check it doesn't crash
-                assert path is None or isinstance(path, Path)
+    def test_detect_openscad_not_found(self, monkeypatch):
+        monkeypatch.setattr("shutil.which", lambda name: None)
+        monkeypatch.setattr(OpenSCADRenderer, "OPENSCAD_PATHS", [])
+        assert OpenSCADRenderer()._detect_openscad() is None
 
     def test_render_stl_missing_source(self, tmp_path):
         """Test rendering with missing source file."""
@@ -43,10 +33,6 @@ class TestOpenSCADRenderer:
         """Test rendering when OpenSCAD is not installed."""
         scad_file = tmp_path / "test.scad"
         scad_file.write_text("cube([10,10,10]);")
-
-        renderer = OpenSCADRenderer()
-        renderer._openscad_path = None
-        renderer._detected_path = None
 
         # Force is_available to return False
         with patch.object(
@@ -69,6 +55,25 @@ class TestOpenSCADRenderer:
         assert result.success is True
         assert result.render_time_seconds == 1.5
         assert result.error_message is None
+
+    def test_a_killed_render_leaves_no_stl(self, tmp_path):
+        """OpenSCAD writes a temporary file that replaces the STL only on success."""
+        hangs = tmp_path / "openscad"
+        # Writes half a file where it was told to, then never finishes.
+        hangs.write_text('#!/bin/sh\nprintf "solid partial\\n" > "$2"\nexec sleep 30\n')
+        hangs.chmod(hangs.stat().st_mode | stat.S_IEXEC)
+        scad = tmp_path / "part.scad"
+        scad.write_text("cube(1);")
+        stl = tmp_path / "part.stl"
+
+        result = OpenSCADRenderer(str(hangs)).render_stl(scad, stl, timeout=0.3)
+        assert not result.success and "timed out" in result.error_message
+        assert not stl.exists()
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["openscad", "part.scad"]
+
+        stl.write_text("solid previous\nendsolid previous\n")
+        OpenSCADRenderer(str(hangs)).render_stl(scad, stl, timeout=0.3)
+        assert stl.read_text() == "solid previous\nendsolid previous\n"
 
 
 class TestBasePart:

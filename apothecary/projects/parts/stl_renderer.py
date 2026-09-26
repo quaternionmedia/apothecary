@@ -8,10 +8,12 @@ files using the OpenSCAD command-line interface.
 from __future__ import annotations
 
 import asyncio
+import os
 import shutil
 import subprocess
+import time
+import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
@@ -120,27 +122,14 @@ class OpenSCADRenderer:
         return self._detected_path
 
     def _detect_openscad(self) -> Optional[Path]:
-        """Auto-detect OpenSCAD installation."""
-        # First try 'which' / 'where' command
-        which_cmd = "where" if shutil.which("where") else "which"
-        try:
-            result = subprocess.run(
-                [which_cmd, "openscad"], capture_output=True, text=True, timeout=5
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                path = Path(result.stdout.strip().split("\n")[0])
-                if path.exists():
-                    return path
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            # Continue to next search method if command fails
-            pass
-
-        # Check common paths
+        """OpenSCAD on PATH, else at one of the usual install locations."""
+        found = shutil.which("openscad")
+        if found:
+            return Path(found)
         for path_str in self.OPENSCAD_PATHS:
             path = Path(path_str)
             if path.exists():
                 return path
-
         return None
 
     @property
@@ -201,21 +190,13 @@ class OpenSCADRenderer:
         scad_path: Path,
         stl_path: Optional[Path] = None,
         timeout: float = 120.0,
-        extra_args: Optional[list] = None,
         params: Optional[dict] = None,
     ) -> RenderResult:
-        """
-        Render a SCAD file to STL.
+        """Render a SCAD file to STL, with ``params`` passed as ``-D name=value``.
 
-        Args:
-            scad_path: Path to the source SCAD file
-            stl_path: Output STL path. If None, uses same directory as SCAD
-            timeout: Maximum render time in seconds
-            extra_args: Additional arguments to pass to OpenSCAD
-            params: Parameter overrides, passed as ``-D name=value``
-
-        Returns:
-            RenderResult with success status and file path
+        ``stl_path`` defaults to the SCAD's own name. OpenSCAD writes a temporary
+        file beside it that replaces it only on success, so a failed or killed
+        render leaves the previous STL, or none, never a partial one.
         """
         if not self.is_available:
             return RenderResult(
@@ -225,7 +206,6 @@ class OpenSCADRenderer:
         if not scad_path.exists():
             return RenderResult(success=False, error_message=f"Source file not found: {scad_path}")
 
-        # Determine output path
         if stl_path is None:
             stl_path = scad_path.with_suffix(".stl")
 
@@ -234,26 +214,22 @@ class OpenSCADRenderer:
         # it and then report the file as missing.
         scad_path = scad_path.resolve()
         stl_path = stl_path.resolve()
-
-        # Ensure output directory exists
         stl_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Build command. Definitions precede the source file, which is where
-        # OpenSCAD documents them and the only order that is safe to assume.
         try:
             definitions = scad_definitions(params)
         except (TypeError, ValueError) as exc:
             return RenderResult(success=False, error_message=str(exc))
 
-        cmd = [str(self.openscad_path), "-o", str(stl_path)]
-        cmd.extend(definitions)
-        cmd.append(str(scad_path))
+        # The .stl suffix picks OpenSCAD's export format; the leading dot and
+        # the suffix keep a file orphaned by a killed process hidden and out of git.
+        partial = stl_path.with_name(f".{stl_path.stem}.{uuid.uuid4().hex[:12]}.stl")
 
-        if extra_args:
-            cmd.extend(extra_args)
+        # Definitions precede the source file, which is where OpenSCAD
+        # documents them and the only order that is safe to assume.
+        cmd = [str(self.openscad_path), "-o", str(partial), *definitions, str(scad_path)]
 
-        # Execute render
-        start_time = datetime.now()
+        start = time.monotonic()
         try:
             result = subprocess.run(
                 cmd,
@@ -264,8 +240,7 @@ class OpenSCADRenderer:
                 # file's own directory, so this is for the process, not paths.
                 cwd=str(scad_path.parent),
             )
-
-            elapsed = (datetime.now() - start_time).total_seconds()
+            elapsed = time.monotonic() - start
 
             if result.returncode != 0:
                 return RenderResult(
@@ -276,7 +251,7 @@ class OpenSCADRenderer:
                     stderr=result.stderr,
                 )
 
-            if not stl_path.exists():
+            if not partial.exists():
                 return RenderResult(
                     success=False,
                     error_message="OpenSCAD completed but STL file was not created",
@@ -284,6 +259,8 @@ class OpenSCADRenderer:
                     stdout=result.stdout,
                     stderr=result.stderr,
                 )
+
+            os.replace(partial, stl_path)
 
             # OpenSCAD 2021.01 exits 0 after dropping an unreadable import
             # ("The given mesh is not closed", a CGAL assertion) from a
@@ -309,6 +286,8 @@ class OpenSCADRenderer:
             )
         except Exception as e:
             return RenderResult(success=False, error_message=f"Render failed: {str(e)}")
+        finally:
+            partial.unlink(missing_ok=True)
 
     def render_stl_with_rotation(
         self,
@@ -397,17 +376,12 @@ rotate([{rotation[0]}, {rotation[1]}, {rotation[2]}])
         scad_path: Path,
         stl_path: Optional[Path] = None,
         timeout: float = 120.0,
-        extra_args: Optional[list] = None,
         params: Optional[dict] = None,
     ) -> RenderResult:
-        """
-        Async version of render_stl.
-
-        Runs the OpenSCAD process in a thread pool to avoid blocking.
-        """
-        loop = asyncio.get_event_loop()
+        """render_stl on a worker thread, so the event loop keeps serving."""
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
-            None, lambda: self.render_stl(scad_path, stl_path, timeout, extra_args, params)
+            None, lambda: self.render_stl(scad_path, stl_path, timeout, params)
         )
 
 
