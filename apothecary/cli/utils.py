@@ -72,7 +72,12 @@ def _parse_param_overrides(part, pairs) -> dict:
 
     model_cls = getattr(part, "params_model", None)
     if model_cls is None:
-        return {name: _coerce_scalar(value) for name, value in raw.items()}
+        # No Python model: the part checks the names against its SCAD's variables.
+        overrides = {name: _coerce_scalar(value) for name, value in raw.items()}
+        try:
+            return part.validate_overrides(overrides)
+        except ValueError as exc:
+            raise click.ClickException(str(exc)) from None
 
     known = set(model_cls.model_fields)
     unknown = sorted(set(raw) - known)
