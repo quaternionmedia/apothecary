@@ -131,3 +131,40 @@ class TestAnUnmeasuredPartHasNotDrifted:
         )
         assert [p.kind for p in _readiness_problems(CORE, report)] == ["unbounded"]
 
+
+class TestWhatCannotBeReadIsReported:
+    """A site or a wrapper that raises is an entry in the index, not a gap in it."""
+
+    def test_a_site_that_will_not_build(self):
+        from apothecary.api import _site_store
+
+        def fall_over():
+            raise RuntimeError("the factory fell over")
+
+        _site_store.add("exploding", fall_over, lambda site: site.validate())
+        try:
+            found = [p for p in problems() if p.subject == "exploding"]
+        finally:
+            _site_store.remove("exploding")
+        assert [(p.kind, p.owner, p.detail) for p in found] == [
+            ("broken", APOTHECARY, "the factory fell over")
+        ]
+
+    def test_a_wrapper_that_will_not_import(self, monkeypatch):
+        from apothecary.projects import registry
+        from apothecary.projects.parts.skeleton import ROOT
+
+        ghost = registry.ProjectInfo(
+            name="ghost",
+            path=ROOT / "parts" / "ghost" / "ghost.scad",
+            kind="part",
+            files=[],
+            readme=False,
+            wrapper="apothecary.projects.parts.no_such_wrapper",
+        )
+        real = registry.scan_projects
+        monkeypatch.setattr(registry, "scan_projects", lambda root: [*real(root), ghost])
+        found = [p for p in problems() if p.subject == "ghost"]
+        assert [p.kind for p in found] == ["broken"]
+        assert "no_such_wrapper" in found[0].detail
+        assert "ghost" not in {c.name for c in capabilities()}
