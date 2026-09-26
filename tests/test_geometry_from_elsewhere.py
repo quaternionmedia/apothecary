@@ -15,7 +15,7 @@ import pytest
 from click.testing import CliRunner
 from fastapi.testclient import TestClient
 
-from apothecary import meshes
+from apothecary import hierarchy, meshes
 from apothecary.api import app
 from apothecary.cli.main import cli
 from apothecary.example_hierarchy import BENCH_BOARDS, create_example_site, validate_garage_layout
@@ -58,7 +58,7 @@ def test_meshes_read_obj_and_stl_measure_and_write(tmp_path):
         meshes.read_stl(b"not a mesh at all")
 
 
-def test_import_renders_its_transforms_and_measures_the_file(tmp_path):
+def test_import_renders_its_transforms_and_measures_the_file(tmp_path, monkeypatch):
     """`Import` carries scale, rotate and translate as OpenSCAD's own nesting,
     and `bounds()` says where the transformed mesh ends up."""
     stl = tmp_path / "brick.stl"
@@ -76,6 +76,7 @@ def test_import_renders_its_transforms_and_measures_the_file(tmp_path):
         round(v, 6) for v in (box.min_point.x, box.min_point.y, box.max_point.x, box.max_point.y)
     ] == [-5.0, 0.0, 5.0, 20.0]
     # A node whose part is its body and holds a child renders the import and the child.
+    monkeypatch.setattr(hierarchy, "part_stl_path", lambda ref: f"parts/{ref}.stl")
     site = Assembly(
         name="s",
         children=[
@@ -88,12 +89,7 @@ def test_import_renders_its_transforms_and_measures_the_file(tmp_path):
         ],
     )
     rendered = site.render()
-    # The part's STL is a build artifact: on a fresh clone it is not there yet,
-    # and the render says so instead of failing -- the child still renders.
-    if (ROOT / "parts" / "calibration_cube" / "calibration_cube.stl").exists():
-        assert 'import("parts/calibration_cube/calibration_cube.stl"' in rendered
-    else:
-        assert "apothecary parts generate-stl calibration_cube" in rendered
+    assert 'import("parts/calibration_cube.stl"' in rendered
     assert f'import("{stl.as_posix()}"' in rendered
     # JSCAD, which cannot import a mesh, stands it in as the box it fits.
     from apothecary.jscad import _render_node
@@ -210,7 +206,7 @@ def test_parts_import_brings_a_file_in_as_a_part(tmp_path):
     assert refused.exit_code != 0
 
 
-def test_the_garage_printers_are_ender_3s_drawn_as_they_are():
+def test_the_garage_printers_are_ender_3s_drawn_as_they_are(monkeypatch):
     """Each printer is the Ender 3 part with its board in the electronics box, its
     build volume where the machine's bed is, its footprint the machine's; the
     boards on the bench are the board models; the layout is still valid."""
@@ -233,17 +229,10 @@ def test_the_garage_printers_are_ender_3s_drawn_as_they_are():
     for name, part, _position, _size in BENCH_BOARDS:
         assert by_name[name].part_ref == part
     assert validate_garage_layout(site).is_valid
+    monkeypatch.setattr(hierarchy, "part_stl_path", lambda ref: f"parts/{ref}.stl")
     rendered = site.render()
-    # STLs are build artifacts; a fresh clone has none yet and the render names
-    # what to generate, three times over, instead of importing it.
-    for part, path in (
-        ("ender3", "parts/ender3/ender3.stl"),
-        ("creality_v422", "parts/boards/creality_v422/creality_v422.stl"),
-    ):
-        if (ROOT / path).exists():
-            assert rendered.count(f'import("{path}"') == 3, part
-        else:
-            assert rendered.count(f"apothecary parts generate-stl {part}") == 3, part
+    for part in ("ender3", "creality_v422"):
+        assert rendered.count(f'import("parts/{part}.stl"') == 3, part
     # The API carries the build origin to the viewers, and the printer is not a board.
     client = TestClient(app)
     tree = client.get("/sites/garage").json()["tree"]
@@ -272,10 +261,9 @@ def test_the_board_models_are_the_boards_they_say(tmp_path):
         text = part.source_file.read_text(encoding="utf-8")
         assert f"size = [{w}, {d}];" in text or f"size = [{int(w)}, {int(d)}];" in text, name
         assert "published" in text.lower()
-        stl = part.get_stl_output_path()
-        if stl.exists():  # an STL is a build artifact; when it is there, it is the board
-            lo, hi = meshes.bounds(meshes.read_mesh(stl))
-            assert lo[2] >= -2.0 and hi[0] - lo[0] < w + 20 and hi[1] - lo[1] < d + 10, name
+        # The declared box; test_parts_parameters holds it to the render.
+        box = part.get_bounds()
+        assert box.min_point.z >= -2.0 and box.size.x < w + 20 and box.size.y < d + 10, name
     assert (ROOT / "parts" / "ender3" / "ender3.scad").read_text().count("published") >= 2
 
 
