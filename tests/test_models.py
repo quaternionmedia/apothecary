@@ -1,5 +1,8 @@
 """Tests for geometry models."""
 
+import doctest
+from pathlib import Path
+
 from apothecary.models import (
     BoundingBox3D,
     Color,
@@ -100,3 +103,11 @@ class TestHardwareSizes:
     def test_metric_screws(self):
         assert HardwareSizes.M3 == 3.0
         assert HardwareSizes.M3_CLEARANCE == 3.2
+
+
+def test_the_models_page_runs():
+    """docs/models.md is outside testpaths; its examples are held true here."""
+    page = Path(__file__).parents[1] / "docs" / "models.md"
+    result = doctest.testfile(str(page), module_relative=False)
+    assert result.attempted > 0
+    assert result.failed == 0
