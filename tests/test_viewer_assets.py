@@ -60,6 +60,24 @@ class TestMissingLibraryIsAnnounced:
         assert "The 3D library is missing" not in page
 
 
+class TestThePageEscapesWhatItIsGiven:
+    def test_a_name_is_text_in_the_markup_and_a_string_in_the_script(self):
+        from apothecary.viewer import render_fractal_viewer_page
+
+        name = 'a"<b>&</script>'
+        page = render_fractal_viewer_page([name], "http://testserver", name, name)
+        assert name not in page
+        assert '<option value="a&#34;&lt;b&gt;&amp;&lt;/script&gt;" selected>' in page
+        assert r'const DEFAULT_SITE = "a\"\u003cb\u003e\u0026\u003c/script\u003e";' in page
+
+    def test_no_sites_leaves_the_select_disabled(self):
+        from apothecary.viewer import render_fractal_viewer_page
+
+        page = render_fractal_viewer_page([], "http://testserver")
+        assert '<select id="site-select" disabled>' in page
+        assert "No sites found" in page
+
+
 class TestTheLibraryIsCheckedIn:
     def test_a_fresh_clone_has_three_with_no_install(self):
         from apothecary.api import THREE_DIR

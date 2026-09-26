@@ -437,8 +437,12 @@
         <div class="toolbar">
             <h1>🧪 Apothecary</h1>
             <span class="badge">FRACTAL VIEWER — unratified prototype</span>
-            <select id="site-select"{{ select_disabled }}>
-                {{ site_options | safe }}
+            <select id="site-select"{% if not site_names %} disabled{% endif %}>
+                {% for name in site_names %}
+                <option value="{{ name }}"{% if name == default_site %} selected{% endif %}>{{ name }}</option>
+                {% else %}
+                <option value="" disabled>No sites found</option>
+                {% endfor %}
             </select>
             <button type="button" id="load-btn">Load</button>
             <button type="button" id="zoom-out-btn" title="Zoom out one level (Backspace)" disabled>⤴ Zoom Out</button>
@@ -579,6 +583,9 @@
         const BASE_URL = {{ base_url | tojson }};
         const DEFAULT_SITE = {{ default_site | tojson }};
         const INITIAL_FOCUS = {{ focus_path | tojson }};
+
+        // Anything from the server that is written into markup goes through this.
+        const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
         // Subsystem colors -- a node's own ``category`` if set, else
         // whatever the nearest ancestor's was (already resolved server-side,
@@ -1943,7 +1950,7 @@
 
             zoomInAffordanceHtml(node) {
                 if (!node.children.length) return '';
-                return `<button type="button" class="zoom-in-btn">⤵ Zoom into ${node.name} (${node.children.length})</button>`;
+                return `<button type="button" class="zoom-in-btn">⤵ Zoom into ${esc(node.name)} (${node.children.length})</button>`;
             }
 
             bindZoomInAffordance(node) {
@@ -2013,11 +2020,11 @@
 
             renderGenericPanel(node) {
                 this.selectedBodyEl.innerHTML = `
-                    <div class="prop-row"><label>Name</label><span>${node.name}</span></div>
-                    <div class="prop-row"><label>Role</label><span>${node.role}</span></div>
+                    <div class="prop-row"><label>Name</label><span>${esc(node.name)}</span></div>
+                    <div class="prop-row"><label>Role</label><span>${esc(node.role)}</span></div>
                     <div class="prop-readonly">
-                        Material: ${node.material ?? '—'}<br>
-                        Comment: ${node.comment ?? '—'}<br>
+                        Material: ${esc(node.material ?? '—')}<br>
+                        Comment: ${esc(node.comment ?? '—')}<br>
                         Footprint: ${node.footprint ? node.footprint.max.map((v, i) => (v - node.footprint.min[i]).toFixed(0)).join(' × ') + ' mm' : '—'}
                     </div>
                     ${this.detailAffordanceHtml(node)}
@@ -2036,13 +2043,13 @@
                        </div>`
                     : '';
                 this.selectedBodyEl.innerHTML = `
-                    <div class="prop-row"><label>Name</label><span>${node.name}</span></div>
+                    <div class="prop-row"><label>Name</label><span>${esc(node.name)}</span></div>
                     ${statusRow}
                     <div class="prop-row"><label>X (mm)</label><input type="number" id="pos-x" step="10" value="${node.position.x}"></div>
                     <div class="prop-row"><label>Y (mm)</label><input type="number" id="pos-y" step="10" value="${node.position.y}"></div>
                     <div class="prop-row"><label>Z (mm)</label><input type="number" id="pos-z" step="10" value="${node.position.z}"></div>
                     <div class="prop-readonly">
-                        Material: ${node.material ?? '—'}<br>
+                        Material: ${esc(node.material ?? '—')}<br>
                         Footprint: ${node.footprint ? node.footprint.max.map((v, i) => (v - node.footprint.min[i]).toFixed(0)).join(' × ') + ' mm' : '—'}<br>
                         Build volume: ${node.build_volume
                             ? node.build_volume.map((v) => v.toFixed(0)).join(' × ') + ' mm '
@@ -2069,7 +2076,6 @@
             }
 
             appendPartPanel(node, full = true) {
-                const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
                 if (!full) {
                     this.selectedBodyEl.insertAdjacentHTML('beforeend', `
                         <div class="prop-row"><label>Part</label><span title="The part this machine is drawn as">${esc(node.part_ref)}</span></div>`);
@@ -2368,8 +2374,8 @@
                     button.className = 'cand';
                     button.dataset.value = candidate.value;
                     button.innerHTML =
-                        `<b>${candidate.value}</b><span class="src">${candidate.source}</span>`
-                        + (candidate.note ? `<span class="note">${candidate.note}</span>` : '');
+                        `<b>${esc(candidate.value)}</b><span class="src">${esc(candidate.source)}</span>`
+                        + (candidate.note ? `<span class="note">${esc(candidate.note)}</span>` : '');
                     button.onclick = () => {
                         this.partParams[field.name] = candidate.value;
                         if (wrap._input) wrap._input.value = candidate.value;
@@ -2739,7 +2745,6 @@
 
             fillBadge(badge, row, isPrinter) {
                 const st = row.printer_status;
-                const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
                 badge.classList.remove('printing', 'offline', 'job');
                 if (!isPrinter) {
                     // What apothecary last flashed to it; what it says it runs is
@@ -2999,7 +3004,6 @@
 
             deviceSectionHtml(path) {
                 const { row, via } = this.bindingFor(path);
-                const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
                 const viaLine = via
                     ? `<div class="device-line" style="color:#777">via <a href="#" class="dev-via" data-path="${esc(path + '.' + via)}" style="color:#9cd2ff">${esc(via)}</a> — the board inside; its polls drive this node's status</div>`
                     : '';
@@ -3140,7 +3144,6 @@
             renderJobs() {
                 this.jobListEl.innerHTML = '';
                 // A job's name is whatever was posted; everything from the server is escaped here.
-                const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
                 for (const job of this.jobs) {
                     const li = document.createElement('li');
                     li.className = 'job-item';
