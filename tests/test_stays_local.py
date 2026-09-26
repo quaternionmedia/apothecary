@@ -704,3 +704,15 @@ def test_the_record_names_the_rule_and_its_one_exception():
     text = record.read_text(encoding="utf-8")
     assert "secured user accounts" in text
     assert "stays_local" in text
+
+
+def test_the_pictures_the_browser_keeps_are_never_committed():
+    """The picture root defaults to the folder the server starts in -- often this
+    repository -- and captures/ and uploads/ hold a person's pictures."""
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    for kept in ("captures/frame.png", "uploads/holiday.jpg"):
+        ignored = subprocess.run(["git", "check-ignore", "-q", kept], cwd=root)
+        assert ignored.returncode == 0, f"{kept} would be committed"

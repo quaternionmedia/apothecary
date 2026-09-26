@@ -101,3 +101,5 @@ licenses.json
 # so nothing CI does reaches the interpreter you work in.
 .preflight/
 captures/
+# Pictures a person added from the browser (routes/pictures.py): theirs, never the repo's.
+uploads/
