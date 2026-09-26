@@ -1,22 +1,15 @@
 """The two routes the ring speaks through, and the two lists that must not drift.
 
-The tests at the bottom are the ones worth reading. The ring's options and the
-answers to a chosen option are two lists maintained by hand in two places, and
-the failure they invite is silent in both directions: an option nobody carries
-out is a wedge that does nothing, and an answer for an option no ring offers is
-dead code that reads like a feature.
-
-**Watched failing.** Deleting `"reset"` from `apothecary/menu.py`'s `CARRIED_BY`
-turns the first guard red; adding an entry to `CARRIED_BY` that is written down
-as the server's and has no arm in the route turns the second red. Both were run
-with the fault in place before this note was written.
+The guards at the bottom hold the ring's options and `CARRIED_BY` to each
+other: every option a ring offers says who carries it out, and everything
+written down as the server's has an arm in the route.
 """
 
 import pytest
 from fastapi.testclient import TestClient
 from ring_helpers import every_action
 
-from apothecary.api import app
+from apothecary.api import _site_store, app
 from apothecary.menu import CARRIED_BY, Carries, Context, Device, Pointing, resolve
 
 client = TestClient(app)
@@ -226,20 +219,6 @@ def test_reset_actually_rebuilds_the_arrangement():
     assert workbench["position"]["x"] != 1234.0, "reset did not undo the move"
 
 
-def test_an_option_nothing_carries_out_is_refused_rather_than_swallowed():
-    """The failure this whole route exists to make impossible.
-
-    A wedge that can be pressed with no effect and no complaint is
-    indistinguishable, from the outside, from one that worked.
-    """
-    answer = client.post(
-        "/menu/intent",
-        json=chosen("word:disc", targets=["printer_1"], pointing=Pointing.NODE),
-    )
-    assert answer.status_code == 501, answer.text
-    assert "word:disc" in answer.json()["detail"]
-
-
 def test_an_action_no_ring_produces_is_refused():
     answer = client.post("/menu/intent", json=chosen("delete-everything"))
     assert answer.status_code == 400, answer.text
@@ -252,35 +231,14 @@ def test_an_action_about_one_arrangement_says_when_it_was_not_told_which():
     assert "site" in answer.json()["detail"]
 
 
-def test_a_shape_asked_for_on_a_node_that_is_not_there_is_refused():
-    answer = client.post(
-        "/menu/intent",
-        json=chosen("render-stl", targets=["printer_1.no_such_thing"], pointing=Pointing.NODE),
-    )
-    assert answer.status_code == 404, answer.text
-
-
-def test_a_shape_asked_for_on_a_real_node_says_where_it_is():
-    answer = client.post(
-        "/menu/intent",
-        json=chosen("render-stl", targets=["printer_1.frame_system"], pointing=Pointing.NODE),
-    )
-    assert answer.status_code == 200, answer.text
-    assert f"/sites/{SITE}/nodes/printer_1.frame_system/stl" in answer.json()["did"]
-
-
 # ------------------------------------------------------------------- guards
 
 
 def _every_ring():
     """One ring of each kind the resolver can build, over a real arrangement."""
-    from apothecary.api import _site_store
-    from apothecary.vocabulary.starter import starter_words
-
     site = _site_store.get(SITE)
     names = sorted(_site_store.names())
     groups = sorted({child.category for child in site.children if child.category})
-    words = starter_words().names()
     printer = Device(port="/dev/ttyUSB0", printer=True, armed=False, bound=True)
     armed = Device(port="/dev/ttyUSB0", printer=True, armed=True, bound=True)
     board = Device(port="/dev/ttyACM0", printer=False, bound=False)
@@ -290,7 +248,6 @@ def _every_ring():
             site,
             site_names=names,
             groups=groups,
-            words=words,
             device=device,
         )
         for pointing, targets, device in (
@@ -299,8 +256,6 @@ def _every_ring():
             (Pointing.NODE, ["printer_1.frame_system"], None),
             (Pointing.NODE, ["printer_1.frame_system.mainboard"], printer),
             (Pointing.NODE, ["printer_1.frame_system.mainboard"], armed),
-            (Pointing.SELECTION, ["printer_1", "printer_2"], None),
-            (Pointing.EDGE, ["printer_1"], None),
             (Pointing.DEVICE, ["/dev/ttyUSB0"], printer),
             (Pointing.DEVICE, ["/dev/ttyACM0"], board),
         )
