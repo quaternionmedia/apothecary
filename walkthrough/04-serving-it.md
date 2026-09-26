@@ -41,7 +41,6 @@ clone serves it with no install step; the README beside it says how to update it
 
 | | |
 |---|---|
-| Install what it needs | `apothecary install` — once, for the JSCAD viewer; the fractal viewer needs nothing |
 | Start it | `apothecary serve --port 8765` |
 | Check the install | `apothecary check` |
 | The assembly | `/viewer/sites/datum_core` |
