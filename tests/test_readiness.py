@@ -1,28 +1,29 @@
 """Whether a part is ready to print, answered from what the repo already knows.
 
 The rule the module turns on: an unanswered question is not a pass. A checklist
-that ticks a box it could not check is worse than no checklist, and this module
-shipped exactly that defect once -- it read `build()` as one object when it
-returns two, so it reported "no stubs remain" for an assembly it had never
-looked at.
+that ticks a box it could not check is worse than no checklist.
 """
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
+from rendered_parts import built_stl_fixture  # noqa: F401
 
 from apothecary import meshes
 from apothecary.api import app
 from apothecary.models import BoundingBox3D, Vector3D
+from apothecary.projects.parts import readiness
 from apothecary.projects.parts.base import BasePart
 from apothecary.projects.parts.datum_cap import DEFAULT as CAP
 from apothecary.projects.parts.datum_core import DEFAULT as CORE
 from apothecary.projects.parts.readiness import (
     BLOCKED,
+    BOUNDS,
     PASS,
     UNKNOWN,
     Check,
@@ -158,71 +159,50 @@ def _box_stl(path: Path, x: float, y: float, z: float) -> Path:
     return path
 
 
+@pytest.fixture
+def core_stl_at(monkeypatch):
+    """Point datum_core at an STL the test owns, never the one in parts/."""
+
+    def point(stl: Path) -> Path:
+        monkeypatch.setattr(type(CORE), "get_stl_output_path", lambda self: stl)
+        return stl
+
+    return point
+
+
 class TestAStaleRenderIsNotDrift:
-    """datum_core was reported as drifted by 1.2 mm. Nothing had drifted: the
-    SCAD was untouched, the wrapper's `walls` default had moved to the house
-    constant, and the STL on disk still answered the old question. A forced
-    re-render put declared and measured at 46.8 exactly.
+    """The wrapper counts as an input, not just the SCAD, and an out-of-date
+    render is a render to redo, never a disagreement to investigate."""
 
-    So the wrapper counts as an input, not just the SCAD -- and an out-of-date
-    render is a render to redo, never a disagreement to investigate.
-    """
+    @pytest.fixture
+    def stale(self, tmp_path, core_stl_at, monkeypatch):
+        monkeypatch.setattr(readiness, "get_renderer", lambda: SimpleNamespace(is_available=True))
+        stl = core_stl_at(_box_stl(tmp_path / "datum_core.stl", 1, 1, 1))
+        os.utime(stl, (0, 0))  # older than anything in the repo
+        return stl
 
-    def test_a_render_older_than_its_wrapper_is_flagged_for_regeneration(self):
-        import os
+    def test_a_render_older_than_its_wrapper_is_flagged_for_regeneration(self, stale):
+        report = assess(CORE)
+        renders = next(c for c in report.checks if c.name == "Geometry renders")
+        assert renders.state == UNKNOWN
+        assert "older than" in renders.detail
+        assert "--force" in renders.fix
 
-        stl = CORE.get_stl_output_path()
-        if not stl.exists():
-            pytest.skip("datum_core is not built here")
-        was = (stl.stat().st_atime, stl.stat().st_mtime)
-        try:
-            os.utime(stl, (was[0], 0))  # older than anything in the repo
-            report = assess(CORE)
-            renders = next(c for c in report.checks if c.name == "Geometry renders")
-            assert renders.state == UNKNOWN
-            assert "older than" in renders.detail
-            assert "--force" in renders.fix
-        finally:
-            os.utime(stl, was)
+    def test_a_stale_render_never_reports_bounds_it_did_not_measure(self, stale):
+        report = assess(CORE)
+        bounds = [c for c in report.checks if c.name == BOUNDS]
+        assert len(bounds) == 1, "the bounds check was added twice"
+        assert bounds[0].state == UNKNOWN
 
-    def test_a_stale_render_never_reports_bounds_it_did_not_measure(self):
-        import os
-
-        stl = CORE.get_stl_output_path()
-        if not stl.exists():
-            pytest.skip("datum_core is not built here")
-        was = (stl.stat().st_atime, stl.stat().st_mtime)
-        try:
-            os.utime(stl, (was[0], 0))
-            report = assess(CORE)
-            bounds = [c for c in report.checks if c.name == "Declared bounds match geometry"]
-            assert len(bounds) == 1, "the bounds check was added twice"
-            assert bounds[0].state == UNKNOWN
-        finally:
-            os.utime(stl, was)
-
-    def test_a_current_render_still_passes(self):
-        """The other half of the claim: the check must not cry stale at a
-        render that is up to date, or the signal is worthless.
-
-        This builds its own precondition rather than reading whatever the
-        working tree happens to hold. Editing the wrapper makes the STL stale
-        by design, so a test that merely assumed a fresh one would fail for a
-        reason that is not a defect -- which it did, twice, while this branch
-        was being written.
-        """
-        from apothecary.projects.parts.stl_renderer import get_renderer
-
-        renderer = get_renderer()
-        if renderer is None or not renderer.is_available:
-            pytest.skip("OpenSCAD not installed; cannot make a current render")
-        stl = CORE.get_stl_output_path()
-        result = renderer.render_stl(CORE.source_file, stl, timeout=300)
-        assert result.success, result.error_message
-
+    @pytest.mark.slow
+    def test_a_current_render_still_passes(self, built_stl, core_stl_at):
+        """The check must not cry stale at a render that is up to date."""
+        core_stl_at(built_stl(CORE))
         report = assess(CORE)
         renders = next(c for c in report.checks if c.name == "Geometry renders")
         assert renders.state == PASS
+        bounds = next(c for c in report.checks if c.name == BOUNDS)
+        assert bounds.state == PASS, bounds.detail
 
 
 class TestBoundsAreMeasuredFromTheMesh:
