@@ -441,3 +441,31 @@ def test_a_shape_whose_sides_were_never_measured_falls_back_to_its_box():
 def test_both_finders_accept_a_plain_string(three_shapes, stated_picture):
     assert PlainFinder().look(str(three_shapes)).shapes
     assert StatedFinder().look(str(stated_picture)).shapes
+
+
+def _axis_offset(node):
+    """Sum of every translate between a piece's base and its first primitive."""
+    from apothecary.transforms import Rotate, Translate
+
+    x = y = 0.0
+    while isinstance(node, (Translate, Rotate)):
+        if isinstance(node, Translate):
+            x, y = x + node.v.x, y + node.v.y
+        node = node.children[0]
+    return x, y, node
+
+
+def test_a_round_piece_is_drawn_where_it_was_seen():
+    """A disc seen at 60-90 % of the picture was drawn half its size off: the
+    words' corner shift moved a cylinder that was already centred."""
+    from apothecary.primitives import Cube, Cylinder
+
+    site = picture_to_site(_two_shape_picture(), scale=ScaleReference(millimetres_across=1000))
+    by_kind = {}
+    for piece in site.children:
+        dx, dy, primitive = _axis_offset(piece.base)
+        by_kind[type(primitive)] = (dx, dy, primitive)
+    dx, dy, disc = by_kind[Cylinder]
+    assert (dx, dy) == pytest.approx((0.0, 0.0))  # the axis is on the piece's middle
+    dx, dy, plate = by_kind[Cube]
+    assert (dx, dy) == pytest.approx((-plate.size.x / 2, -plate.size.y / 2))  # corner shifted
