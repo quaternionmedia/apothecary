@@ -12,7 +12,12 @@ from apothecary import Cylinder, Rotate, Scene, Translate, Vector3D
 from apothecary.api import app
 from apothecary.meshes import bounds, read_mesh
 from apothecary.projects.parts import rc_snowplow, stl_renderer
-from apothecary.projects.parts.rc.snowplow import DEFAULT, SnowplowPart, snowplow_assembly
+from apothecary.projects.parts.rc.snowplow import (
+    DEFAULT,
+    SnowplowPart,
+    mount_front_y,
+    snowplow_assembly,
+)
 from apothecary.projects.parts.rc.snowplow.mount import SnowplowMount
 from apothecary.projects.parts.stl_renderer import (
     RenderResult,
@@ -143,9 +148,11 @@ def test_the_bolt_holes_are_the_interfaces_snowplow_yaml_declares():
 
 def test_the_parts_stl_has_the_holes_where_the_assembly_puts_the_mount():
     """What build_stl, the viewer and `parts verify` render: the plate's
-    origin at (0, -blade_thickness, mount_height / 2), as snowplow.yaml says."""
+    origin mount_thickness / 2 behind its front face, mount_height / 2 up,
+    as snowplow.yaml says."""
     p = rc_snowplow.Params()
-    origin = (0.0, -p.blade_thickness, p.mount_height / 2)
+    front = mount_front_y(p.blade_height, p.blade_thickness, p.blade_angle, p.mount_height)
+    origin = (0.0, front - p.mount_thickness / 2, p.mount_height / 2)
     _assert_holes(_cylinders(DEFAULT.geometry({})), origin, p.mount_thickness)
 
 
@@ -204,3 +211,66 @@ def test_a_slider_changes_the_stl(snowplow_stl):
     assert size[0] == pytest.approx(80, abs=0.01)
     declared = DEFAULT.get_bounds({"blade_width": 80}).size
     assert size == pytest.approx([declared.x, declared.y, declared.z], abs=0.5)
+
+
+# --- one solid: the mount plate is joined to the blade -----------------------------
+
+# The blade raked back over the plate, upright, and leaning forward; thin and
+# thick; and raked so far that its base is off the bed.
+SHAPES = [
+    pytest.param({}, id="defaults"),
+    pytest.param({"blade_angle": 25}, id="raked-back"),
+    pytest.param({"blade_angle": 60}, id="raked-off-the-bed"),
+    pytest.param({"blade_angle": 0}, id="upright"),
+    pytest.param({"blade_angle": -15}, id="leaning-forward"),
+    pytest.param({"blade_thickness": 1.5}, id="thin"),
+    pytest.param({"blade_thickness": 8, "blade_angle": 0}, id="thick-upright"),
+    pytest.param({"blade_thickness": 6, "blade_angle": -20}, id="thick-leaning-forward"),
+]
+
+
+def _bodies(triangles) -> int:
+    """How many separate pieces a mesh is: triangles sharing a corner are one."""
+    parent: dict = {}
+
+    def root(corner):
+        while parent.setdefault(corner, corner) != corner:
+            corner = parent[corner]
+        return corner
+
+    for first, *others in triangles:
+        for corner in others:
+            parent[root(corner)] = root(first)
+    return len({root(corner) for corner in list(parent)})
+
+
+@pytest.fixture
+def rendered(tmp_path):
+    """The snowplow's STL for ``params``, rendered by OpenSCAD."""
+
+    def render(params):
+        stl = tmp_path / "snowplow.stl"
+        result = stl_renderer.render_part(DEFAULT, stl, DEFAULT.validate_overrides(params))
+        assert result.success, result.error_message
+        return read_mesh(stl)
+
+    return render
+
+
+@pytest.mark.slow
+@needs_openscad
+@pytest.mark.parametrize("params", SHAPES)
+def test_the_plate_and_the_blade_are_one_body(rendered, params):
+    """A part other parts are built onto is one solid: the plate the bolt
+    holes are in holds the blade."""
+    assert _bodies(rendered(params)) == 1
+
+
+@pytest.mark.slow
+@needs_openscad
+@pytest.mark.parametrize("params", SHAPES)
+def test_it_renders_to_the_bounds_it_declares(rendered, params):
+    lo, hi = bounds(rendered(params))
+    declared = DEFAULT.get_bounds(params)
+    assert list(lo) == pytest.approx(declared.min_point.to_list(), abs=0.01)
+    assert list(hi) == pytest.approx(declared.max_point.to_list(), abs=0.01)

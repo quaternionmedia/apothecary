@@ -51,13 +51,13 @@ class SnowplowPart(BasePart):
         )
         blade_min = Vector3D(x=-p.blade_width / 2, y=-half_y, z=p.blade_height / 2 - half_z)
         blade_max = Vector3D(x=p.blade_width / 2, y=half_y, z=p.blade_height / 2 + half_z)
-        # Mount: centered cube (mw, mt, mh) at y=-blade_thickness, lifted by mh/2.
-        mount_min = Vector3D(
-            x=-p.mount_width / 2, y=-p.blade_thickness - p.mount_thickness / 2, z=0
-        )
-        mount_max = Vector3D(
-            x=p.mount_width / 2, y=-p.blade_thickness + p.mount_thickness / 2, z=p.mount_height
-        )
+        # Mount: cube (mw, mt, mh) on the bed, its front face where
+        # snowplow_assembly puts it, against the blade's back face.
+        from .rc.snowplow import mount_front_y
+
+        front = mount_front_y(p.blade_height, p.blade_thickness, p.blade_angle, p.mount_height)
+        mount_min = Vector3D(x=-p.mount_width / 2, y=front - p.mount_thickness, z=0)
+        mount_max = Vector3D(x=p.mount_width / 2, y=front, z=p.mount_height)
         return BoundingBox3D(
             min_point=Vector3D(
                 x=min(blade_min.x, mount_min.x),

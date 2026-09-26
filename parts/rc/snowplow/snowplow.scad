@@ -5,7 +5,7 @@ union() {
 cube([120.0, 3.0, 45.0], center=true);
 }
 }
-  translate([0.0, -3.0, 6.0]) {
+  translate([0.0, 0.7298723679876211, 6.0]) {
   difference() {
   // Chassis mount plate
 cube([40.0, 4.0, 12.0], center=true);

@@ -5,7 +5,8 @@
 # mount plate's (SnowplowMount, centred on its origin), blade_edge in the
 # blade's before blade_angle tilts it (SnowplowBlade, centred on its origin).
 # snowplow_assembly puts the plate's origin at
-# (0, -blade_thickness, mount_height / 2) of the part.
+# (0, mount_front_y(...) - mount_thickness / 2, mount_height / 2) of the part:
+# on the bed, its front face against the blade's back face at the base.
 interfaces:
   - name: mount_left
     type: bolt_hole
