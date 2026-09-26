@@ -184,6 +184,18 @@ class TestOpenSCADRequirement:
         stable, _ = installed(default="2021.10.01", nightly="2025.03.15")
         assert _needs(tmp_path).get_openscad_path() == stable
 
+    def test_a_default_at_exactly_the_minimum_is_new_enough(self, installed, tmp_path):
+        stable, _ = installed(default="2021.08.24", nightly="2025.03.15")
+        assert _needs(tmp_path).get_openscad_path() == stable
+
+    def test_the_openscad_it_resolves_is_the_one_that_renders(self, installed, tmp_path):
+        stable, snapshot = installed(default="2021.01", nightly="2025.03.15")
+        part = _needs(tmp_path)
+        part.source_file.write_text("cube(1);")
+        assert build_stl(part).success
+        assert _calls(stable) == ["--version"]
+        assert [call.split()[0] for call in _calls(snapshot)] == ["--version", "-o"]
+
     def test_nothing_new_enough_is_refused_naming_the_version(self, installed, tmp_path):
         stable, _ = installed(default="2021.01")
         can_build, reason = _needs(tmp_path).can_generate_stl()
@@ -308,6 +320,16 @@ class TestGridfinityOpenSCAD:
         result = CliRunner().invoke(cli, ["parts", "generate-stl", "--all", "--force"])
         assert result.exit_code == 0, result.output
         assert "gridfinity: cannot build here (needs OpenSCAD" in result.output
+        assert _calls(stable) == ["--version"]
+
+    def test_verify_skips_it_without_rendering(self, installed):
+        from click.testing import CliRunner
+
+        from apothecary.cli import cli
+
+        stable, _ = installed(default="2021.01")
+        result = CliRunner().invoke(cli, ["parts", "verify", "gridfinity"])
+        assert "gridfinity: cannot build here: needs OpenSCAD" in result.output, result.output
         assert _calls(stable) == ["--version"]
 
     def test_the_server_does_not_render_it_at_startup(

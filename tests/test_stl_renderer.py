@@ -10,7 +10,7 @@ import pytest
 from click.testing import CliRunner
 from pydantic import BaseModel
 
-from apothecary import Cube
+from apothecary import Cube, Import
 from apothecary.meshes import bounds, read_mesh
 from apothecary.models import Vector3D
 from apothecary.projects.parts.base import BasePart
@@ -236,6 +236,25 @@ class TestBuildStl:
             "block.stl",
         ]
 
+    def test_an_import_in_python_geometry_names_its_file_absolutely(self, tmp_path):
+        """The SCAD renders from a scratch directory, not from the part's folder."""
+
+        class Imports(BasePart):
+            def geometry(self, params):
+                return Import(file="mesh.stl")
+
+        part = Imports(name="block", source_file=_part(tmp_path).source_file)
+        seen = []
+
+        class Reading(FakeRenderer):
+            def render_stl(self, scad_path, stl_path=None, timeout=120.0, params=None):
+                seen.append(Path(scad_path).read_text())
+                return super().render_stl(scad_path, stl_path, timeout, params)
+
+        assert build_stl(part, renderer=Reading()).success
+        assert f'import("{(tmp_path / "mesh.stl").as_posix()}"' in seen[0]
+
+    @pytest.mark.slow
     @needs_openscad
     def test_python_geometry_is_turned_by_display_rotation(self, tmp_path):
         part = _Built(
