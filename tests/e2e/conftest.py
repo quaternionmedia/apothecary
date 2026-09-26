@@ -27,6 +27,17 @@ from ports import refuse_a_held_port  # noqa: E402
 ROOT = Path(__file__).resolve().parents[2]
 EXTERNAL_PORT = 8765  # a server you started, when neither --start-server nor --base-url is given
 
+# The app under uvicorn, with the simulated boards answering at once, as the unit
+# suite's do (tests/conftest.py): a real board's silences -- 1.5 s after every link
+# opens, 0.6 s after a reset -- would otherwise cost each browser test that opens one.
+SERVE = """
+import sys, uvicorn
+from apothecary.firmware.gcode import GcodeLink
+GcodeLink.time_scale = 0.02
+uvicorn.run("apothecary.api:app", host="127.0.0.1", port=int(sys.argv[1]),
+            timeout_graceful_shutdown=1)  # let go of idle keep-alive connections quickly
+"""
+
 
 def pytest_collection_modifyitems(config, items):
     """Tests marked docs run only with --generate-docs; without it they capture nothing."""
@@ -77,12 +88,7 @@ def start_server(tmp_path_factory):
             refuse_a_held_port(port)
         url = f"http://127.0.0.1:{port}"
         proc = subprocess.Popen(
-            [
-                *(sys.executable, "-m", "uvicorn", "apothecary.api:app"),
-                *("--host", "127.0.0.1", "--port", str(port)),
-                # Let go of idle keep-alive connections quickly on SIGTERM.
-                *("--timeout-graceful-shutdown", "1"),
-            ],
+            [sys.executable, "-c", SERVE, str(port)],
             cwd=ROOT,
             env=env,
             # DEVNULL: an unread PIPE fills and blocks the server mid-run.
