@@ -74,14 +74,18 @@ def _read_the_bed(url: str, probe: bool = False) -> str:
     """A bed reading on the printer, read or (armed) probed; returns its record's id."""
     with httpx.Client(base_url=url, timeout=15.0) as http:
         if probe:
-            http.post("/firmware/printers/control", json={"port": PRINTER, "armed": True})
-        http.post("/firmware/printers/level", json={"port": PRINTER, "probe": probe})
-        deadline = time.monotonic() + 30
-        while (job := http.get("/firmware/printers/level", params={"port": PRINTER}).json())[
-            "running"
-        ]:
-            assert time.monotonic() < deadline, job
+            arm = http.post("/firmware/printers/control", json={"port": PRINTER, "armed": True})
+            arm.raise_for_status()
+        http.post(
+            "/firmware/printers/level", json={"port": PRINTER, "probe": probe}
+        ).raise_for_status()
+        for _ in range(600):  # 30 s
+            job = http.get("/firmware/printers/level", params={"port": PRINTER}).json()
+            if not job["running"]:
+                break
             time.sleep(0.05)
+        else:
+            raise AssertionError(f"the bed reading did not finish: {job}")
     assert job["record_id"], job
     return job["record_id"]
 
