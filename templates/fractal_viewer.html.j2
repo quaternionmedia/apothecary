@@ -232,10 +232,8 @@
         .contents-item.selected { background: #0d3a66; color: #9cd2ff; }
         .contents-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
 
-        /* Category filter chips: bulk "expand this whole subsystem, at any
-           depth beneath the current level" toggles -- the finer-grained,
-           per-subsystem replacement for the old all-or-nothing "show all
-           levels" checkbox. */
+        /* Category filter chips: each expands one whole subsystem, at any
+           depth beneath the current level. */
         .category-filters { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.6rem; }
         .category-chip {
             display: flex; align-items: center; gap: 0.3rem;
@@ -509,7 +507,7 @@
                     <div class="panel-header">Contents</div>
                     <div class="panel-body">
                         <div id="category-filters" class="category-filters"
-                             title="Expand every node of a subsystem at once, at any depth beneath the current level -- at the cost of render time, same tradeoff 'show all levels' used to offer, now scoped per subsystem instead of all-or-nothing"></div>
+                             title="Expand every node of a subsystem at once, at any depth beneath the current level, at the cost of render time"></div>
                         <ul id="contents-list" class="contents-list contents-tree"></ul>
                     </div>
                 </div>
@@ -785,10 +783,10 @@
             return fullPathToParent ? `${fullPathToParent}.${childName}` : childName;
         }
 
-        // Every leaf beneath a node, recursively -- what "show all levels"
-        // renders instead of just the current focus's direct children.
-        // ``fullPathToNode`` is the caller-supplied full address of ``node``
-        // itself (see pathForChild); each collected leaf carries its own
+        // Every leaf beneath a node, recursively -- what an expanded category
+        // renders instead of the node itself. ``fullPathToNode`` is the
+        // caller-supplied full address of ``node`` itself (see
+        // pathForChild); each collected leaf carries its own
         // full ``_path`` because bare names collide across siblings in this
         // exact example: all three printers have their own
         // "belt_tensioner_boss". A plain name-keyed mesh registry would
@@ -852,9 +850,7 @@
                 this.renderNodeByKey = {};    // nodeKey() -> node data for every node in the
                                               // hierarchy tree (not just what's rendered),
                                               // rebuilt each renderFocus()
-                this.expandedCategories = new Set();  // categories rendered at full depth --
-                                                       // the per-subsystem replacement for the
-                                                       // old single "show all levels" toggle
+                this.expandedCategories = new Set();  // categories rendered at full depth
                 this.treeExpanded = new Set();  // paths expanded for *browsing* in the
                                                  // hierarchy tree -- independent of whether
                                                  // that subtree is actually rendered
@@ -1313,15 +1309,11 @@
                 this.renderFocus();
             }
 
-            // Category expansion (see expandedCategories, toggled from the
-            // Contents panel's category chips) replaces the old all-or-
-            // nothing "show all levels" checkbox: each direct child of focus
-            // renders collapsed (its own single box/mesh) unless its
-            // (inherited) category is expanded, in which case its whole
-            // subtree renders instead, every leaf at its true global
-            // position -- same "at the cost of render time" tradeoff as
-            // before, now scoped per subsystem instead of applying to
-            // everything at once. Every node handed back here carries a
+            // Each direct child of focus renders collapsed (its own single
+            // box/mesh) unless its (inherited) category is expanded from the
+            // Contents panel's chips, in which case its whole subtree renders
+            // instead, every leaf at its true global position, at the cost of
+            // render time. Every node handed back here carries a
             // full, site-rooted _path (see pathForChild/collectLeaves),
             // since that path is also each node's address for a
             // real-geometry fetch (both the STL and the node-render routes
@@ -1564,9 +1556,9 @@
                 });
             }
 
-            // ``key`` indexes meshByName/selectedName (nodeKey() -- a dotted
-            // path in "show all levels" mode, since bare names collide
-            // across siblings there); violation membership is checked
+            // ``key`` indexes meshByName/selectedName (nodeKey(), a dotted
+            // path, since bare names collide across siblings of an expanded
+            // category); violation membership is checked
             // against ``node.name`` instead, since that's what the server
             // reports and, in this example, violations only ever occur
             // between uniquely-named root-level Structures anyway.
@@ -1761,8 +1753,7 @@
             // present anywhere beneath the current focus (not a fixed list --
             // a site that never uses "fluid" shouldn't show a dead chip for
             // it), each toggling expandedCategories and triggering a full
-            // renderFocus() (the rendered set genuinely changes, same as the
-            // old "show all levels" checkbox did).
+            // renderFocus() (the rendered set genuinely changes).
             renderCategoryFilters() {
                 this.categoryFiltersEl.innerHTML = '';
                 // renderNodeByKey (rebuilt just before this is called --
@@ -1896,7 +1887,7 @@
             // Position/status editing only works when the selected node is a
             // *direct* child of the root: /layout and /status only ever
             // address a site's direct children. Normally that's the same
-            // thing as focusPath being empty, but "show all levels" can
+            // thing as focusPath being empty, but an expanded category can
             // render (and let you select) a leaf many levels deeper while
             // still focused at the root, so both conditions are checked.
             isEditableSelection(focus, node) {
@@ -1927,8 +1918,8 @@
             // a parts-library leaf always gets the absorbed part view
             // (regardless of depth); otherwise, position/status editing only
             // works for a direct child of the root (see isEditableSelection),
-            // so anything deeper -- or any leaf shown via "show all levels"
-            // that isn't itself a direct child -- gets a read-only panel.
+            // so anything deeper -- or any leaf of an expanded category that
+            // isn't itself a direct child -- gets a read-only panel.
             renderSelectedPanel() {
                 if (this.cameraWidget) this.cameraWidget.renderPlacement();  // "Place at selected" follows the selection
                 const focus = this.currentFocusNode();
@@ -3781,9 +3772,7 @@
     <script type="module">
     // The ring. Drawing and keys live in /static/ring.js; this is only the
     // wiring: what the ring opens on, what each chosen verb calls, and the
-    // addresses written onto the controls the page already has. No
-    // addEventListener here on purpose -- the census reads this file, and the
-    // ring's own listeners are the ring's, counted once behind `ring-open`.
+    // addresses written onto the controls the page already has.
     import { installRing, annotate, resolveRing } from '/static/ring.js';
 
     (() => {
@@ -3902,12 +3891,10 @@
                     const id = action.slice('panel:toggle:'.length);
                     const open = viewer.panels.toggle(id) && viewer.panels.isOpen(id);
                     viewer.setStatus(`${open ? 'Opened' : 'Closed'} the ${id} panel${tail}`, 'success');
-                } else if (action === 'fit' || action === 'fit-selection') {
-                    const focus = viewer.currentFocusNode();
-                    const nodes = viewer.currentRenderNodes(focus);
-                    const chosen = action === 'fit-selection' ? nodes.filter((n) => intent.context.targets.includes(n._path)) : nodes;
-                    viewer.frameCameraForChildren(chosen.length ? chosen : nodes);
-                    viewer.setStatus(`Framed ${chosen.length || nodes.length} piece(s)${tail}`, 'success');
+                } else if (action === 'fit') {
+                    const nodes = viewer.currentRenderNodes(viewer.currentFocusNode());
+                    viewer.frameCameraForChildren(nodes);
+                    viewer.setStatus(`Framed ${nodes.length} piece(s)${tail}`, 'success');
                 } else if (action === 'explain') {
                     const node = viewer.renderNodeByKey[path] || viewer.nodeByPath(path);
                     viewer.setStatus(node ? `${path}: a ${node.role}${node.category ? ' in ' + node.category : ''}${node.part_ref ? ', from part ' + node.part_ref : ''}, ${node.children.length} inside${tail}` : `${path}: not on screen${tail}`, 'success');
