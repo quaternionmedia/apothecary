@@ -16,7 +16,7 @@ from apothecary.projects.parts.base import scad_variables
 from apothecary.projects.parts.datum_cap import DEFAULT as CAP
 from apothecary.projects.parts.datum_core import DEFAULT as CORE
 from apothecary.projects.parts.skeleton import ROOT
-from apothecary.projects.parts.stl_renderer import geometry_scad
+from apothecary.projects.parts.stl_renderer import geometry_scad, scad_definitions
 from apothecary.projects.registry import scan_projects
 
 PARTS = [pytest.param(CORE, id="datum_core"), pytest.param(CAP, id="datum_cap")]
@@ -73,24 +73,36 @@ def test_no_parameter_is_dead(part):
     else:
         variables = scad_variables(part.source_file)
         emitted = {
-            f: set(part.scad_overrides(part.validate_overrides({f: getattr(defaults, f)})))
+            f: part.scad_overrides(part.validate_overrides({f: getattr(defaults, f)}))
             for f in fields
         }
-        dead = [f for f, names in emitted.items() if not names or not names <= variables]
+        dead = [f for f, names in emitted.items() if not names or not set(names) <= variables]
+        for names in emitted.values():
+            scad_definitions(names)  # each value has a -D literal, or this raises
     assert not dead, f"{part.name}: {dead} reach nothing"
 
 
-@pytest.mark.parametrize("part", PARTS)
+def _parts_built_from_their_scad():
+    return [p for p in _parts_with_params() if p.values[0].geometry({}) is None]
+
+
+@pytest.mark.parametrize("part", _parts_built_from_their_scad())
 def test_every_default_matches_the_scad_default(part):
-    """A control that starts somewhere the file does not is lying at rest."""
+    """A control that starts somewhere the file does not is lying at rest: a
+    build with no overrides passes no -D, so the model has to start where the
+    file does or its bounds describe another part. Compared as `-D` would
+    name them, through scad_overrides."""
     text = part.source_file.read_text(encoding="utf-8")
-    values = {
-        m.group(1): float(m.group(2))
-        for m in re.finditer(r"^(\w+)\s*=\s*(-?[\d.]+)\s*;", text, re.M)
-    }
-    defaults = part.params_model()
-    for name, value in values.items():
-        assert getattr(defaults, name) == pytest.approx(value), name
+    literals = dict(re.findall(r"^(\w+)\s*=\s*([^;]+?)\s*;", text, re.M))
+    emitted = part.scad_overrides(part.validate_overrides(part.params_model().model_dump()))
+    for name, value in emitted.items():
+        literal = literals.get(name, "")
+        if literal in ("true", "false"):
+            assert value == (literal == "true"), f"{name}: model {value!r}, SCAD {literal}"
+        elif re.fullmatch(r"-?[\d.]+", literal):
+            assert value == pytest.approx(float(literal)), (
+                f"{name}: model {value!r}, SCAD {literal}"
+            )
 
 
 def test_a_part_without_a_model_refuses_a_name_its_scad_does_not_declare():

@@ -1,13 +1,11 @@
 """Tests for Gridfinity part wrapper and submodule integration."""
 
-import re
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from apothecary.models import BoundingBox3D
-from apothecary.projects.parts.base import scad_variables
 from apothecary.projects.parts.gridfinity import (
     DEFAULT,
     GRID_SIZE_MM,
@@ -23,11 +21,6 @@ from apothecary.projects.parts.stl_renderer import (
     RenderResult,
     build_stl,
     read_params_sidecar,
-    scad_definitions,
-)
-
-needs_submodule = pytest.mark.skipif(
-    not DEFAULT.submodule_initialized, reason="gridfinity submodule not initialized"
 )
 
 
@@ -171,26 +164,8 @@ class TestGridfinityBinPart:
         assert type(scad["style_tab"]) is int
         assert DEFAULT.scad_overrides({}) == {}
 
-    @needs_submodule
-    def test_every_name_it_emits_is_a_variable_of_the_scad(self):
-        """OpenSCAD ignores a -D name the file does not assign, so a rename
-        upstream would render the defaults; here it fails instead."""
-        emitted = DEFAULT.scad_overrides(DEFAULT.validate_overrides(BinParams().model_dump()))
-        missing = sorted(set(emitted) - scad_variables(DEFAULT.source_file))
-        assert not missing, f"not top-level variables of {DEFAULT.source_file.name}: {missing}"
-        assert scad_definitions(emitted)  # every value is a -D literal
-
-    @needs_submodule
-    def test_every_default_is_the_scads_own(self):
-        """A build with no overrides passes no -D, so the model has to start
-        where the file does or its bounds describe another bin."""
-        text = DEFAULT.source_file.read_text(encoding="utf-8")
-        literals = dict(re.findall(r"^(\w+)\s*=\s*([^;]+?)\s*;", text, re.M))
-        emitted = DEFAULT.scad_overrides(DEFAULT.validate_overrides(BinParams().model_dump()))
-        for name, value in emitted.items():
-            literal = literals[name]
-            scad_value = literal == "true" if literal in ("true", "false") else float(literal)
-            assert scad_value == value, f"{name}: model {value!r}, SCAD {literal}"
+    # That each name it emits is a variable of the SCAD, and each default the
+    # SCAD's own, is tests/test_parameter_coverage.py's, for every part.
 
     def test_build_stl_hands_openscad_the_customizer_names(self, tmp_path, monkeypatch):
         stl = tmp_path / "gridfinity.stl"

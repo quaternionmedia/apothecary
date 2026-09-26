@@ -145,8 +145,9 @@ for a part whose model does not name things as its SCAD does. Gridfinity's
 `gridfinity-rebuilt-bins.scad`, so it translates, and only the overrides
 given: a default build passes no `-D`, which is why its model's defaults
 are the file's own. The params sidecar records the parameters, not the
-translation. `tests/test_gridfinity.py` fails when a name it emits is not a
-top-level variable of the file.
+translation. `tests/test_parameter_coverage.py` fails, for every part, when
+a name it emits is not a top-level variable of the file or a default is not
+the file's own.
 
 `geometry(params)` is the part built in Python, for a part whose source is
 code. When it returns an object, every build renders that object's SCAD
