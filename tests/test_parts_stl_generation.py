@@ -12,6 +12,7 @@ import pytest
 from rendered_parts import built_stl_fixture, registered_parts  # noqa: F401
 
 from apothecary.projects.parts.base import BasePart
+from apothecary.projects.parts.gridfinity import DEFAULT as GRIDFINITY
 from apothecary.projects.parts.stl_renderer import get_renderer
 
 ALL_PARTS = registered_parts()
@@ -60,53 +61,186 @@ def test_cases_include_described_and_nested_parts():
     assert {"datum_core", "esp32_devkitc", "snowplow"} <= names
 
 
-class TestCustomOpenSCADPaths:
-    """Test parts that require specific OpenSCAD versions."""
+def _fake_openscad(path: Path, version: str) -> Path:
+    """An `openscad` that reports ``version`` and logs its arguments to ``<path>.calls``."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        f'#!/bin/sh\necho "$@" >> "{path}.calls"\necho "OpenSCAD version {version}" >&2\n'
+    )
+    path.chmod(0o755)
+    return path
 
-    def test_gridfinity_uses_nightly_when_stable_too_old(self):
-        """Verify gridfinity part selects nightly build when stable version is too old."""
-        from apothecary.projects.parts.gridfinity import DEFAULT as gridfinity
 
-        renderer = get_renderer()
-        if not renderer.is_available:
-            pytest.skip("OpenSCAD not installed")
+def _calls(executable: Path) -> list[str]:
+    log = Path(f"{executable}.calls")
+    return log.read_text().splitlines() if log.exists() else []
 
-        # Check if stable version is old (pre-2024)
-        stable_version = renderer.get_version() or ""
-        is_old_stable = any(
-            year in stable_version for year in ["2019", "2020", "2021", "2022", "2023"]
+
+@pytest.fixture
+def installed(tmp_path, monkeypatch):
+    """``installed(default=, nightly=, on_path=)``: the OpenSCADs the resolver can
+    find are these fakes and nothing else. Returns (default, nightly) paths."""
+
+    def install(default=None, nightly=None, on_path=None):
+        from apothecary.projects.parts import stl_renderer
+        from apothecary.projects.parts.stl_renderer import OpenSCADRenderer
+
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir(exist_ok=True)
+        monkeypatch.setenv("PATH", str(bin_dir))
+        if on_path:
+            _fake_openscad(bin_dir / "openscad-nightly", on_path)
+        stable = tmp_path / "stable" / "openscad"
+        if default:
+            _fake_openscad(stable, default)
+        monkeypatch.setattr(stl_renderer, "_renderer", OpenSCADRenderer(str(stable)))
+        snapshot = _fake_openscad(tmp_path / "nightly" / "openscad", nightly) if nightly else None
+        paths = [str(snapshot)] if snapshot else []
+        monkeypatch.setattr(OpenSCADRenderer, "OPENSCAD_NIGHTLY_PATHS", paths)
+        monkeypatch.setattr(stl_renderer, "_VERSIONS", {}, raising=False)
+        return stable, snapshot
+
+    return install
+
+
+def _needs(tmp_path, version="2021.08.24") -> BasePart:
+    return BasePart(name="p", source_file=tmp_path / "p.scad", openscad_min_version=version)
+
+
+class TestOpenSCADRequirement:
+    """A part that names an OpenSCAD minimum gets the first install that meets it."""
+
+    @pytest.mark.parametrize(
+        "text,version",
+        [
+            ("OpenSCAD version 2021.01", (2021, 1)),
+            ("OpenSCAD version 2025.03.15", (2025, 3, 15)),
+            ("OpenSCAD version 2024.12.06.ai21474", (2024, 12, 6)),
+            ("no version here", None),
+        ],
+    )
+    def test_versions_parse_to_comparable_tuples(self, text, version):
+        from apothecary.projects.parts.stl_renderer import parse_openscad_version
+
+        assert parse_openscad_version(text) == version
+
+    def test_a_snapshot_stands_in_for_a_default_that_is_too_old(self, installed, tmp_path):
+        _, snapshot = installed(default="2021.01", nightly="2025.03.15")
+        part = _needs(tmp_path)
+        assert part.can_generate_stl() == (True, "")
+        assert part.get_openscad_path() == snapshot
+
+    def test_openscad_nightly_on_path_is_a_snapshot(self, installed, tmp_path):
+        installed(default="2021.01", on_path="2024.12.06.ai21474")
+        assert _needs(tmp_path).get_openscad_path() == tmp_path / "bin" / "openscad-nightly"
+
+    def test_a_default_that_is_new_enough_comes_first(self, installed, tmp_path):
+        stable, _ = installed(default="2021.10.01", nightly="2025.03.15")
+        assert _needs(tmp_path).get_openscad_path() == stable
+
+    def test_nothing_new_enough_is_refused_naming_the_version(self, installed, tmp_path):
+        stable, _ = installed(default="2021.01")
+        can_build, reason = _needs(tmp_path).can_generate_stl()
+        assert not can_build
+        assert "2021.08.24 or newer" in reason and f"{stable} is OpenSCAD version 2021.01" in reason
+        assert "https://openscad.org/downloads.html#snapshots" in reason
+
+    def test_no_openscad_at_all_is_refused(self, installed, tmp_path):
+        installed()
+        can_build, reason = _needs(tmp_path).can_generate_stl()
+        assert not can_build and "none is installed" in reason
+
+    def test_each_executable_is_asked_its_version_once(self, installed, tmp_path):
+        stable, snapshot = installed(default="2021.01", nightly="2025.03.15")
+        part = _needs(tmp_path)
+        for _ in range(3):
+            part.can_generate_stl()
+            part.get_openscad_path()
+        assert _calls(stable) == ["--version"]
+        assert _calls(snapshot) == ["--version"]
+
+    def test_a_minimum_that_is_not_a_version_is_refused(self, tmp_path):
+        with pytest.raises(ValueError, match="not an OpenSCAD version"):
+            _needs(tmp_path, "latest")
+
+
+@pytest.mark.skipif(
+    not GRIDFINITY.submodule_initialized, reason="gridfinity submodule not initialized"
+)
+class TestGridfinityOpenSCAD:
+    """gridfinity-rebuilt-openscad 2.0.0 needs a build newer than OpenSCAD 2021.01."""
+
+    def test_it_takes_a_snapshot_when_the_default_is_too_old(self, installed):
+        _, snapshot = installed(default="2021.01", nightly="2025.03.15")
+        assert GRIDFINITY.can_generate_stl() == (True, "")
+        assert GRIDFINITY.get_openscad_path() == snapshot
+
+    def test_a_late_2021_snapshot_is_new_enough(self, installed):
+        stable, _ = installed(default="2021.10.01")
+        assert GRIDFINITY.can_generate_stl() == (True, "")
+        assert GRIDFINITY.get_openscad_path() == stable
+
+    def test_it_is_refused_on_2021_01_naming_what_it_needs(self, installed):
+        from apothecary.projects.parts.gridfinity import OPENSCAD_MIN_VERSION
+
+        installed(default="2021.01")
+        can_build, reason = GRIDFINITY.can_generate_stl()
+        assert not can_build
+        assert f"needs OpenSCAD {OPENSCAD_MIN_VERSION} or newer" in reason
+
+    def test_generate_stl_all_skips_it_without_rendering(self, installed, monkeypatch):
+        from click.testing import CliRunner
+
+        from apothecary.cli import cli
+        from apothecary.projects.registry import ProjectInfo
+
+        stable, _ = installed(default="2021.01")
+        entry = ProjectInfo(
+            name="gridfinity",
+            path=GRIDFINITY.source_file,
+            kind="part",
+            files=[],
+            readme=False,
+            wrapper="apothecary.projects.parts.gridfinity",
         )
+        monkeypatch.setattr("apothecary.cli.parts.scan_projects", lambda root: [entry])
+        result = CliRunner().invoke(cli, ["parts", "generate-stl", "--all", "--force"])
+        assert result.exit_code == 0, result.output
+        assert "gridfinity: cannot build here (needs OpenSCAD" in result.output
+        assert _calls(stable) == ["--version"]
 
-        if is_old_stable:
-            # Part should detect this and use nightly if available
-            nightly = renderer.find_nightly()
-            if nightly:
-                custom_path = gridfinity.get_openscad_path()
-                assert custom_path == nightly, (
-                    f"Expected gridfinity to use nightly ({nightly}), got {custom_path}"
-                )
+    def test_the_server_does_not_render_it_at_startup(
+        self, installed, monkeypatch, tmp_path, capsys
+    ):
+        import asyncio
 
-                can_gen, reason = gridfinity.can_generate_stl()
-                assert can_gen is True, f"Should be able to generate with nightly: {reason}"
-                assert "nightly" in reason.lower(), f"Reason should mention nightly: {reason}"
-            else:
-                # No nightly available - should report can't generate
-                can_gen, reason = gridfinity.can_generate_stl()
-                assert can_gen is False, "Should not be able to generate without nightly"
-                assert "2024" in reason or "nightly" in reason.lower(), (
-                    f"Reason should explain version requirement: {reason}"
-                )
-        else:
-            # Stable version is new enough - should just work
-            can_gen, reason = gridfinity.can_generate_stl()
-            if gridfinity.submodule_initialized:
-                assert can_gen is True, f"Modern OpenSCAD should work: {reason}"
+        from apothecary import api
+        from apothecary.projects.registry import ProjectInfo
 
+        stable, _ = installed(default="2021.01")
+        entry = ProjectInfo(
+            name="gridfinity",
+            path=GRIDFINITY.source_file,
+            kind="part",
+            files=[],
+            readme=False,
+            wrapper="apothecary.projects.parts.gridfinity",
+        )
+        monkeypatch.setattr(api, "scan_projects", lambda root: [entry])
+        monkeypatch.setattr(
+            type(GRIDFINITY), "get_stl_output_path", lambda self: tmp_path / "gridfinity.stl"
+        )
+        monkeypatch.delenv("APOTHECARY_SKIP_STL_GENERATION", raising=False)
+        asyncio.run(api._generate_missing_stls())
+        assert "skipped: needs OpenSCAD" in capsys.readouterr().out
+        assert _calls(stable) == ["--version"]
+        assert not (tmp_path / "gridfinity.stl").exists()
+
+
+class TestGridfinityOutput:
     def test_gridfinity_stl_output_not_in_submodule(self):
         """Verify gridfinity STL is stored in parts/gridfinity, not inside submodule."""
-        from apothecary.projects.parts.gridfinity import DEFAULT as gridfinity
-
-        stl_path = gridfinity.get_stl_output_path()
+        stl_path = GRIDFINITY.get_stl_output_path()
 
         # Should NOT be inside the submodule directory
         assert "gridfinity-rebuilt-openscad" not in str(stl_path), (

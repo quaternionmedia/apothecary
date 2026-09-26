@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Type
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field, computed_field, field_validator
 
 from apothecary.models import (
     GRAY,
@@ -13,6 +13,8 @@ from apothecary.models import (
     PrintSettings,
     Vector3D,
 )
+
+from .stl_renderer import find_openscad, parse_openscad_version
 
 
 class ContestedValue(BaseModel):
@@ -29,10 +31,10 @@ class ContestedValue(BaseModel):
     note: str = ""
 
 
-
 def scad_variables(path: Path) -> Set[str]:
     """Every top-level assignment in a SCAD file: the names `-D` can override."""
     return set(re.findall(r"^(\w+)\s*=", Path(path).read_text(encoding="utf-8"), re.M))
+
 
 class BasePart(BaseModel):
     """Base metadata wrapper for a single SCAD part."""
@@ -58,6 +60,17 @@ class BasePart(BaseModel):
     # Parameters whose value is genuinely in dispute, keyed by parameter name.
     # Empty for a part nobody disagrees about, which is most of them.
     contested: Dict[str, List[ContestedValue]] = Field(default_factory=dict)
+
+    # The oldest OpenSCAD that renders the part, as `openscad --version` numbers
+    # it (2021.01, or a snapshot's 2025.03.15); None when any will do.
+    openscad_min_version: Optional[str] = None
+
+    @field_validator("openscad_min_version")
+    @classmethod
+    def _names_a_version(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and parse_openscad_version(value) is None:
+            raise ValueError(f"{value!r} is not an OpenSCAD version such as 2021.01")
+        return value
 
     @property
     def exists(self) -> bool:
@@ -93,11 +106,16 @@ class BasePart(BaseModel):
 
     def can_generate_stl(self) -> Tuple[bool, str]:
         """Whether this part's STL can be built on this machine, and if not, why."""
-        return True, ""
+        if self.openscad_min_version is None:
+            return True, ""
+        found, reason = find_openscad(self.openscad_min_version)
+        return found is not None, reason
 
     def get_openscad_path(self) -> Optional[Path]:
         """The OpenSCAD this part needs, or None for whichever is installed."""
-        return None
+        if self.openscad_min_version is None:
+            return None
+        return find_openscad(self.openscad_min_version)[0]
 
     def validate_overrides(self, params: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
         """Parameter overrides checked against ``params_model``, as it coerced them.

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -38,13 +38,10 @@ GRID_SIZE_MM = 42.0  # Standard gridfinity grid unit in mm
 HEIGHT_UNIT_MM = 7.0  # Height unit in mm
 STACKING_LIP_MM = 3.55  # Stacking lip height (with fillet)
 
-# `openscad --version` years that predate the syntax the library needs (2024.x+).
-_PRE_2024_YEARS = ("2019", "2020", "2021", "2022", "2023")
-
-
-def _too_old(version: Optional[str]) -> bool:
-    """Whether an ``openscad --version`` string is older than the library supports."""
-    return bool(version) and any(year in version for year in _PRE_2024_YEARS)
+# The library's 2.0.0 source ends a call's arguments with a comma, which
+# OpenSCAD accepts from openscad/openscad#3814 (merged 2021-08-24), and relies
+# on `$` variable scoping that 2021.01 does not have.
+OPENSCAD_MIN_VERSION = "2021.08.24"
 
 
 class GridzDefine(int, Enum):
@@ -235,70 +232,11 @@ class GridfinityBinPart(BasePart):
         """parts/gridfinity/gridfinity.stl, outside the submodule's working tree."""
         return ROOT / "parts" / "gridfinity" / "gridfinity.stl"
 
-    @property
-    def requires_dev_openscad(self) -> bool:
-        """
-        Whether this part requires a development build of OpenSCAD.
-
-        gridfinity-rebuilt-openscad uses newer OpenSCAD syntax features
-        that require version 2024.x+ (development snapshots).
-        """
-        return True
-
-    @property
-    def openscad_min_version(self) -> str:
-        """Minimum OpenSCAD version required for this part."""
-        return "2024.01"
-
-    def can_generate_stl(self) -> tuple[bool, str]:
-        """
-        Check if STL generation is possible.
-
-        Returns:
-            Tuple of (can_generate, reason_if_not)
-        """
-        from .stl_renderer import get_renderer
-
+    def can_generate_stl(self) -> Tuple[bool, str]:
+        """The submodule's SCAD is present, and an OpenSCAD new enough for it."""
         if not self.submodule_initialized:
             return False, "Submodule not initialized. Run: git submodule update --init"
-
-        renderer = get_renderer()
-        if not renderer.is_available:
-            return False, "OpenSCAD not installed"
-
-        version = renderer.get_version()
-        if _too_old(version):
-            nightly = renderer.find_nightly()
-            if nightly:
-                nightly_version = renderer.get_nightly_version()
-                return True, f"Will use nightly build: {nightly} ({nightly_version})"
-            else:
-                return False, (
-                    f"{version} is too old. gridfinity requires 2024.x+ "
-                    f"(development build). Install OpenSCAD Nightly from "
-                    f"https://openscad.org/downloads.html#snapshots"
-                )
-
-        return True, "Ready"
-
-    def get_openscad_path(self) -> Optional[Path]:
-        """
-        Get the appropriate OpenSCAD path for this part.
-
-        Returns nightly build if stable version is too old.
-        """
-        from .stl_renderer import get_renderer
-
-        renderer = get_renderer()
-        if not renderer.is_available:
-            return None
-
-        if _too_old(renderer.get_version()):
-            nightly = renderer.find_nightly()
-            if nightly:
-                return nightly
-
-        return renderer.openscad_path
+        return super().can_generate_stl()
 
 
 def create(metadata_root: Path) -> GridfinityBinPart:
@@ -321,6 +259,7 @@ def create(metadata_root: Path) -> GridfinityBinPart:
         readme_path=metadata_root / "parts" / "gridfinity" / "README.md",
         preview_color=Color.from_hex("#4A90D9"),  # Gridfinity blue
         module_name="gridfinity-rebuilt-bins",
+        openscad_min_version=OPENSCAD_MIN_VERSION,
         print_settings=PrintSettings(
             nozzle_diameter=0.4,
             layer_height=0.2,

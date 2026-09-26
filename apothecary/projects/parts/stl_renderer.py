@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -16,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel
 
@@ -104,7 +105,7 @@ class OpenSCADRenderer:
         "/snap/bin/openscad",
     ]
 
-    # Nightly/development build paths (newer features)
+    # Where development snapshots install; ``openscad-nightly`` on PATH is one too.
     OPENSCAD_NIGHTLY_PATHS = [
         # Windows
         r"C:\Program Files\OpenSCAD (Nightly)\openscad.exe",
@@ -154,53 +155,9 @@ class OpenSCADRenderer:
         """Check if OpenSCAD is available."""
         return self.openscad_path is not None and self.openscad_path.exists()
 
-    def find_nightly(self) -> Optional[Path]:
-        """
-        Find OpenSCAD Nightly/development build.
-
-        Returns:
-            Path to nightly OpenSCAD executable if found, None otherwise.
-        """
-        for path_str in self.OPENSCAD_NIGHTLY_PATHS:
-            path = Path(path_str)
-            if path.exists():
-                return path
-        return None
-
-    def get_nightly_version(self) -> Optional[str]:
-        """
-        Get version string of the nightly build if available.
-
-        Returns:
-            Version string or None if nightly not found.
-        """
-        nightly = self.find_nightly()
-        if not nightly:
-            return None
-
-        try:
-            result = subprocess.run(
-                [str(nightly), "--version"], capture_output=True, text=True, timeout=10
-            )
-            version = result.stderr.strip() or result.stdout.strip()
-            return version if version else None
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return None
-
     def get_version(self) -> Optional[str]:
-        """Get OpenSCAD version string."""
-        if not self.is_available:
-            return None
-
-        try:
-            result = subprocess.run(
-                [str(self.openscad_path), "--version"], capture_output=True, text=True, timeout=10
-            )
-            # Version is usually in stderr for OpenSCAD
-            version = result.stderr.strip() or result.stdout.strip()
-            return version if version else None
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return None
+        """What ``openscad --version`` prints, or None when OpenSCAD is missing."""
+        return openscad_version(self.openscad_path) if self.is_available else None
 
     def render_stl(
         self,
@@ -372,6 +329,71 @@ def get_renderer() -> OpenSCADRenderer:
     if _renderer is None:
         _renderer = OpenSCADRenderer()
     return _renderer
+
+
+SNAPSHOTS_URL = "https://openscad.org/downloads.html#snapshots"
+
+# ``--version`` output by executable path, each asked once per process: the API
+# asks every part whether it can be built here on each metadata request.
+_VERSIONS: Dict[str, Optional[str]] = {}
+
+
+def parse_openscad_version(text: Optional[str]) -> Optional[Tuple[int, ...]]:
+    """An OpenSCAD version as a comparable tuple: ``OpenSCAD version 2021.01`` is
+    (2021, 1), a snapshot's ``2024.12.06.ai21474`` is (2024, 12, 6). None when
+    the text names no version."""
+    match = re.search(r"(\d{4})\.(\d{1,2})(?:\.(\d{1,2}))?", text or "")
+    if match is None:
+        return None
+    return tuple(int(group) for group in match.groups() if group is not None)
+
+
+def openscad_version(executable: Path) -> Optional[str]:
+    """What ``executable --version`` prints; OpenSCAD writes it to stderr."""
+    key = str(executable)
+    if key not in _VERSIONS:
+        try:
+            done = subprocess.run([key, "--version"], capture_output=True, text=True, timeout=10)
+            _VERSIONS[key] = done.stderr.strip() or done.stdout.strip() or None
+        except (OSError, subprocess.SubprocessError):
+            _VERSIONS[key] = None
+    return _VERSIONS[key]
+
+
+def _openscad_candidates() -> List[Path]:
+    """The default OpenSCAD, then development snapshots, each executable once."""
+    found: List[Path] = []
+    default = get_renderer()
+    if default.is_available:
+        found.append(default.openscad_path)
+    nightly = shutil.which("openscad-nightly")
+    if nightly:
+        found.append(Path(nightly))
+    found.extend(Path(p) for p in OpenSCADRenderer.OPENSCAD_NIGHTLY_PATHS if Path(p).exists())
+    unique: Dict[Path, Path] = {}
+    for path in found:
+        unique.setdefault(path.resolve(), path)
+    return list(unique.values())
+
+
+def find_openscad(min_version: str) -> Tuple[Optional[Path], str]:
+    """The first OpenSCAD that is ``min_version`` or newer, the default install
+    before any development snapshot: ``(path, "")``, or ``(None, why not)``."""
+    wanted = parse_openscad_version(min_version)
+    if wanted is None:
+        raise ValueError(f"{min_version!r} is not an OpenSCAD version")
+    candidates = _openscad_candidates()
+    for path in candidates:
+        have = parse_openscad_version(openscad_version(path))
+        if have is not None and have >= wanted:
+            return path, ""
+    found = "; ".join(
+        f"{path} is {openscad_version(path) or 'of unknown version'}" for path in candidates
+    )
+    return None, (
+        f"needs OpenSCAD {min_version} or newer ({found or 'none is installed'}); "
+        f"development snapshots: {SNAPSHOTS_URL}"
+    )
 
 
 def _sources(part: BasePart) -> List[Path]:
