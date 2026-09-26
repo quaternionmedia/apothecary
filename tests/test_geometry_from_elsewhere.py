@@ -98,7 +98,7 @@ def test_import_renders_its_transforms_and_measures_the_file(tmp_path):
     # JSCAD, which cannot import a mesh, stands it in as the box it fits.
     from apothecary.jscad import _render_node
 
-    assert _render_node(plain).startswith("cuboid({size: [2.0, 1.0, 3.0]")
+    assert _render_node(plain).startswith("cuboid({ size: [2.0, 1.0, 3.0], center: [1.0, 0.5, 1.5]")
 
 
 def test_a_part_described_by_a_sidecar_is_a_part(tmp_path):
