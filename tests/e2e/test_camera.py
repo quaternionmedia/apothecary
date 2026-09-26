@@ -192,3 +192,36 @@ def test_a_camera_records_its_own_surroundings(
     expect(page.locator(".world-badge.camera-mark")).to_have_count(0, timeout=5000)
     assert page.request.get(f"{base_url}/cameras?site=garage").json() == []
     assert errors == []
+
+
+@pytest.mark.e2e
+def test_gather_says_what_it_refused_and_what_it_set_aside(
+    camera_page, base_url: str, picture_folder, leaves_no_trace
+):
+    """Forty-one ticked pictures are refused with the server's sentence; a file that
+    will not open is listed as set aside, with its reason, beside what was gathered."""
+    page = camera_page
+    for i in range(41):
+        Image.new("L", (64, 48), 200 + i).save(picture_folder / f"pile_{i:02}.png")
+    (picture_folder / "broken.png").write_bytes(b"not a picture at all")
+    page.goto(f"{base_url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
+    page.evaluate("() => window.apothecaryPanels.open('camera')")
+    panel = page.locator(".panel[data-panel='camera']")
+    expect(panel.locator("#pic-list .pic")).to_have_count(len(leaves_no_trace) + 42, timeout=5000)
+
+    panel.locator("#pic-all").check()
+    panel.locator("#pic-gather").click()
+    expect(panel.locator("#gather-out .bad")).to_contain_text(
+        "is too many: every pair is compared, so 40 is the most", timeout=10000
+    )
+
+    panel.locator("#pic-all").uncheck()
+    for name in ("pile_00.png", "pile_01.png", "broken.png"):
+        panel.locator(f"#pic-list input[value='{name}']").check()
+    panel.locator("#pic-gather").click()
+    # Blank, the two piles are set aside too: for too few shapes, and still opened.
+    unopened = panel.locator("#gather-out .aside", has_text="broken")
+    expect(unopened).to_contain_text("broken: the finder could not read it", timeout=20000)
+    expect(panel.locator("#gather-out .aside")).to_have_count(3)
+    expect(panel.locator("#gather-out")).to_contain_text("Groups")
