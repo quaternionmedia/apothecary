@@ -253,10 +253,9 @@ def parts_verify(
 
     Renders to a temporary file, so the STL you are iterating on is untouched.
     """
-    from ..projects.parts.stl_renderer import get_renderer
+    from ..projects.parts.stl_renderer import get_renderer, render_part
 
-    renderer = get_renderer()
-    if not renderer.is_available:
+    if not get_renderer().is_available:
         raise click.ClickException("OpenSCAD not found; cannot measure geometry.")
 
     if verify_all:
@@ -285,11 +284,14 @@ def parts_verify(
             skipped.append((part_name, "declares no bounds"))
             continue
 
+        can_build, reason = part.can_generate_stl()
+        if not can_build:
+            skipped.append((part_name, f"cannot build here: {reason}"))
+            continue
+
         with tempfile.TemporaryDirectory() as tmp:
             measured_stl = Path(tmp) / f"{part_name}.stl"
-            result = renderer.render_stl(
-                part.source_file, measured_stl, timeout=timeout, params=params or None
-            )
+            result = render_part(part, measured_stl, params, timeout=timeout)
             if not result.success:
                 skipped.append((part_name, f"render failed: {result.error_message}"))
                 continue

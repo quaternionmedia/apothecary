@@ -146,6 +146,12 @@ class BasePart(BaseModel):
         validated = self.params_model(**params)
         return {name: getattr(validated, name) for name in params}
 
+    def scad_overrides(self, params: Mapping[str, Any]) -> Dict[str, Any]:
+        """What ``-D`` receives for already-validated ``params``: by default the
+        params themselves. A part whose model names things differently from its
+        SCAD translates here; the params sidecar still records ``params``."""
+        return dict(params)
+
     def get_bounds(self, params: Optional[Dict] = None) -> Optional[BoundingBox3D]:
         """
         Calculate bounding box for the part with given parameters.

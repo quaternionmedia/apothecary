@@ -285,6 +285,8 @@ def params_sidecar_path(stl_path: Path) -> Path:
 def _recordable(value: object) -> object:
     if isinstance(value, Enum):
         return value.value
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json")
     raise TypeError(f"{type(value).__name__} cannot be recorded in a params sidecar")
 
 
@@ -453,6 +455,27 @@ def _render_rotated(
     return second
 
 
+def render_part(
+    part: BasePart,
+    stl_path: Path,
+    params: Optional[dict] = None,
+    timeout: float = 120.0,
+    renderer: Optional[OpenSCADRenderer] = None,
+    rotation: Optional[List[float]] = None,
+) -> RenderResult:
+    """Render a part with already-validated ``params`` to ``stl_path``, and
+    nothing more: no freshness check, no sidecar. The params reach its SCAD
+    through ``part.scad_overrides``; ``rotation`` turns the result;
+    ``renderer`` defaults to the OpenSCAD the part asks for."""
+    if renderer is None:
+        own = part.get_openscad_path()
+        renderer = OpenSCADRenderer(str(own)) if own else get_renderer()
+    definitions = part.scad_overrides(params or {})
+    if rotation and any(rotation):
+        return _render_rotated(renderer, part.source_file, stl_path, rotation, timeout, definitions)
+    return renderer.render_stl(part.source_file, stl_path, timeout, params=definitions or None)
+
+
 def build_stl(
     part: BasePart,
     params: Optional[dict] = None,
@@ -467,8 +490,9 @@ def build_stl(
     newer SCAD or wrapper, or different recorded parameters say otherwise. A
     part that cannot be built here is refused (``skipped="refused"``). The
     render is turned by ``display_rotation``; non-default parameters are
-    recorded in the params sidecar, and a default build removes it.
-    ``renderer`` overrides the OpenSCAD the part would choose for itself.
+    recorded in the params sidecar as validated, not as ``scad_overrides``
+    translates them, and a default build removes it. ``renderer`` overrides
+    the OpenSCAD the part would choose for itself.
     """
     params = part.validate_overrides(params)
     stl_path = part.get_stl_output_path()
@@ -479,15 +503,8 @@ def build_stl(
     if not can_build:
         return RenderResult(success=False, error_message=reason, skipped="refused")
 
-    if renderer is None:
-        own = part.get_openscad_path()
-        renderer = OpenSCADRenderer(str(own)) if own else get_renderer()
-
     rotation = part.display_rotation.to_list()
-    if any(rotation):
-        result = _render_rotated(renderer, part.source_file, stl_path, rotation, timeout, params)
-    else:
-        result = renderer.render_stl(part.source_file, stl_path, timeout, params=params or None)
+    result = render_part(part, stl_path, params, timeout, renderer, rotation)
 
     if result.success:
         if params:

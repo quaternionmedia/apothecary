@@ -175,6 +175,25 @@ class TestBuildStl:
         assert result.error_message == "needs a newer OpenSCAD"
         assert fake.calls == [] and not (tmp_path / "block.stl").exists()
 
+    @pytest.mark.parametrize(
+        "rotation", [Vector3D(), Vector3D(x=90, y=0, z=0)], ids=["upright", "rotated"]
+    )
+    def test_the_scad_gets_the_parts_translation_and_the_sidecar_the_params(
+        self, tmp_path, rotation
+    ):
+        class Renamed(BasePart):
+            def scad_overrides(self, params):
+                return {f"size_{name}": value for name, value in params.items()}
+
+        scad = tmp_path / "block.scad"
+        scad.write_text("size_x = 10;\ncube([size_x, 20, 30]);\n")
+        part = Renamed(name="block", source_file=scad, params_model=Size, display_rotation=rotation)
+        fake = FakeRenderer()
+        assert build_stl(part, {"x": 12}, renderer=fake).success
+        assert fake.calls[0] == (scad, {"size_x": 12})
+        assert read_params_sidecar(part.get_stl_output_path())["params"] == {"x": 12}
+        assert build_stl(part, {"x": 12}, renderer=fake).skipped == "fresh"
+
     def test_a_default_build_clears_a_variants_sidecar(self, tmp_path):
         part, fake = _part(tmp_path), FakeRenderer()
         build_stl(part, {"x": 12}, renderer=fake)
