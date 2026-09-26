@@ -76,6 +76,38 @@ class TestPartSTLGeneration:
         assert part.source_file.exists(), f"Source file missing: {part.source_file}"
 
     @pytest.mark.skipif(not get_renderer().is_available, reason="OpenSCAD not installed")
+    def test_scad_evaluates(
+        self, part_name: str, part: Optional[BasePart], renderer: OpenSCADRenderer, tmp_path: Path
+    ):
+        """The SCAD parses and evaluates: a CSG export runs everything but CGAL's
+        booleans, so a syntax error, a missing include or an undefined module
+        fails here in a hundredth of a second. The full render is the slow test."""
+        import subprocess
+
+        if part is None or not part.source_file.exists():
+            pytest.skip("Part not loaded")
+        can_gen, reason = (
+            part.can_generate_stl() if hasattr(part, "can_generate_stl") else (True, "")
+        )
+        if not can_gen:
+            pytest.skip(f"Part cannot generate STL: {reason}")
+        openscad = (
+            str(part.get_openscad_path() or renderer.openscad_path)
+            if hasattr(part, "get_openscad_path")
+            else str(renderer.openscad_path)
+        )
+        done = subprocess.run(
+            [openscad, "-o", str(tmp_path / f"{part_name}.csg"), str(part.source_file)],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert done.returncode == 0, f"{part_name}: {done.stderr[-2000:]}"
+        errors = [line for line in done.stderr.splitlines() if line.startswith("ERROR")]
+        assert not errors, f"{part_name}: {errors}"
+
+    @pytest.mark.slow
+    @pytest.mark.skipif(not get_renderer().is_available, reason="OpenSCAD not installed")
     def test_stl_generation(
         self, part_name: str, part: Optional[BasePart], renderer: OpenSCADRenderer, tmp_path: Path
     ):
@@ -178,7 +210,7 @@ class TestCustomOpenSCADPaths:
             if nightly:
                 custom_path = gridfinity.get_openscad_path()
                 assert custom_path == nightly, (
-                    f"Expected gridfinity to use nightly ({nightly}), " f"got {custom_path}"
+                    f"Expected gridfinity to use nightly ({nightly}), got {custom_path}"
                 )
 
                 can_gen, reason = gridfinity.can_generate_stl()
@@ -188,9 +220,9 @@ class TestCustomOpenSCADPaths:
                 # No nightly available - should report can't generate
                 can_gen, reason = gridfinity.can_generate_stl()
                 assert can_gen is False, "Should not be able to generate without nightly"
-                assert (
-                    "2024" in reason or "nightly" in reason.lower()
-                ), f"Reason should explain version requirement: {reason}"
+                assert "2024" in reason or "nightly" in reason.lower(), (
+                    f"Reason should explain version requirement: {reason}"
+                )
         else:
             # Stable version is new enough - should just work
             can_gen, reason = gridfinity.can_generate_stl()
@@ -204,14 +236,14 @@ class TestCustomOpenSCADPaths:
         stl_path = gridfinity.get_stl_output_path()
 
         # Should NOT be inside the submodule directory
-        assert "gridfinity-rebuilt-openscad" not in str(
-            stl_path
-        ), f"STL should not be in submodule: {stl_path}"
+        assert "gridfinity-rebuilt-openscad" not in str(stl_path), (
+            f"STL should not be in submodule: {stl_path}"
+        )
 
         # Should be in parts/gridfinity/
-        assert (
-            stl_path.parent.name == "gridfinity"
-        ), f"STL should be in parts/gridfinity/: {stl_path}"
+        assert stl_path.parent.name == "gridfinity", (
+            f"STL should be in parts/gridfinity/: {stl_path}"
+        )
         assert stl_path.name == "gridfinity.stl", f"STL should be named gridfinity.stl: {stl_path}"
 
     def test_part_can_generate_stl_returns_tuple(self):

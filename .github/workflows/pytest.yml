@@ -61,7 +61,7 @@ jobs:
       run: uv run pytest walkthrough -q
 
     - name: 🔬 Unit tests
-      run: uv run pytest tests -m "not e2e" -q
+      run: uv run pytest tests -m "not e2e" -q --slow
 
     - name: 🎭 Browser tests
       # --start-server runs the app on state and pictures of its own (tests/e2e/conftest.py).

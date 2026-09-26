@@ -645,6 +645,11 @@ class GcodeLink:
         self.engine = type(transport).__name__
         self.log.add("sys", f"opened {port} @ {baud} via {self.engine}")
 
+    # Every wait on the board -- a reply, a quiet line, a boot banner -- is
+    # multiplied by this. 1 against hardware; the tests' scripted boards answer
+    # at once, and waiting out real silences cost the unit suite a minute.
+    time_scale: float = 1.0
+
     def _read_line(self, timeout: float) -> Optional[str]:
         end = time.monotonic() + timeout
         while b"\n" not in self._buf:
@@ -661,10 +666,10 @@ class GcodeLink:
     def drain(self, quiet: float = 0.3, limit: float = 5.0) -> List[str]:
         """Read until the board has been silent for ``quiet`` seconds (or ``limit``)."""
         out: List[str] = []
-        end = time.monotonic() + limit
+        end = time.monotonic() + limit * self.time_scale
         with self._lock:
             while time.monotonic() < end:
-                line = self._read_line(quiet)
+                line = self._read_line(quiet * self.time_scale)
                 if line is None:
                     break
                 out.append(line)
@@ -679,10 +684,10 @@ class GcodeLink:
         carry on -- ``M115`` does not need a banner.
         """
         lines: List[str] = []
-        end = time.monotonic() + limit
+        end = time.monotonic() + limit * self.time_scale
         with self._lock:
             while time.monotonic() < end:
-                line = self._read_line(first if not lines else quiet)
+                line = self._read_line((first if not lines else quiet) * self.time_scale)
                 if line is None:
                     break
                 lines.append(line)
@@ -733,7 +738,7 @@ class GcodeLink:
                 self.log.add("tx", cmd, origin)
             self._t.write((cmd + "\n").encode())
             lines: List[str] = []
-            end = time.monotonic() + timeout
+            end = time.monotonic() + timeout * self.time_scale
             while True:
                 left = end - time.monotonic()
                 if left <= 0:
@@ -752,7 +757,7 @@ class GcodeLink:
                         self.log.add("tx", cmd, origin)  # the line it objected to, for the record
                     self.log.add("rx", line, origin)
                 if BUSY_RE.match(line):
-                    end = time.monotonic() + timeout  # heating/homing: keep waiting
+                    end = time.monotonic() + timeout * self.time_scale  # heating/homing
                 elif OK_RE.match(line):
                     return lines
                 elif objected:
