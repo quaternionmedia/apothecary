@@ -1,101 +1,43 @@
-"""
-Parameterized tests for STL generation across all parts.
+"""Every registered part loads, evaluates in OpenSCAD, and renders to an STL.
 
-This test discovers all registered parts and attempts STL generation,
-reporting any OpenSCAD errors.
+Cases come from the registry, so a part described by a part.json or living in
+a nested package is checked like any other.
 """
 
+import subprocess
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Optional
 
 import pytest
+from rendered_parts import built_stl_fixture, registered_parts  # noqa: F401
 
 from apothecary.projects.parts.base import BasePart
-from apothecary.projects.parts.stl_renderer import OpenSCADRenderer, get_renderer
+from apothecary.projects.parts.stl_renderer import get_renderer
 
-
-def discover_all_parts() -> List[Tuple[str, Optional[BasePart]]]:
-    """Discover all registered parts by importing the parts package."""
-    parts = []
-
-    # Import the parts package and iterate over modules
-    import importlib
-    import pkgutil
-
-    from apothecary.projects import parts as parts_pkg
-
-    for _importer, modname, ispkg in pkgutil.iter_modules(parts_pkg.__path__):
-        if ispkg or modname.startswith("_"):
-            continue
-        # Skip non-part modules
-        if modname in ("base", "skeleton", "part_files", "stl_renderer"):
-            continue
-
-        try:
-            module = importlib.import_module(f"apothecary.projects.parts.{modname}")
-            if hasattr(module, "DEFAULT"):
-                part = module.DEFAULT
-                if isinstance(part, BasePart):
-                    parts.append((part.name, part))
-        except Exception:
-            # Still add for test discovery - will fail with import error
-            parts.append((modname, None))
-
-    return parts
-
-
-# Discover parts at collection time
-ALL_PARTS = discover_all_parts()
-
-
-@pytest.fixture(scope="module")
-def renderer() -> OpenSCADRenderer:
-    """Get OpenSCAD renderer instance."""
-    return get_renderer()
-
-
-# Parts whose render genuinely takes longer than the default budget.
-PART_RENDER_BUDGET = {
-    "gridfinity": 240.0,
-}
+ALL_PARTS = registered_parts()
 
 
 @pytest.mark.parametrize("part_name,part", ALL_PARTS, ids=[p[0] for p in ALL_PARTS])
 class TestPartSTLGeneration:
-    """Test STL generation for each registered part."""
-
     def test_part_exists(self, part_name: str, part: Optional[BasePart]):
-        """Verify part wrapper loaded successfully."""
         assert part is not None, f"Failed to import part wrapper for '{part_name}'"
 
     def test_source_file_exists(self, part_name: str, part: Optional[BasePart]):
-        """Verify source SCAD file exists."""
         if part is None:
             pytest.skip("Part not loaded")
-
         assert part.source_file.exists(), f"Source file missing: {part.source_file}"
 
     @pytest.mark.skipif(not get_renderer().is_available, reason="OpenSCAD not installed")
-    def test_scad_evaluates(
-        self, part_name: str, part: Optional[BasePart], renderer: OpenSCADRenderer, tmp_path: Path
-    ):
+    def test_scad_evaluates(self, part_name: str, part: Optional[BasePart], tmp_path: Path):
         """The SCAD parses and evaluates: a CSG export runs everything but CGAL's
         booleans, so a syntax error, a missing include or an undefined module
         fails here in a hundredth of a second. The full render is the slow test."""
-        import subprocess
-
         if part is None or not part.source_file.exists():
             pytest.skip("Part not loaded")
-        can_gen, reason = (
-            part.can_generate_stl() if hasattr(part, "can_generate_stl") else (True, "")
-        )
+        can_gen, reason = part.can_generate_stl()
         if not can_gen:
             pytest.skip(f"Part cannot generate STL: {reason}")
-        openscad = (
-            str(part.get_openscad_path() or renderer.openscad_path)
-            if hasattr(part, "get_openscad_path")
-            else str(renderer.openscad_path)
-        )
+        openscad = str(part.get_openscad_path() or get_renderer().openscad_path)
         done = subprocess.run(
             [openscad, "-o", str(tmp_path / f"{part_name}.csg"), str(part.source_file)],
             capture_output=True,
@@ -107,84 +49,15 @@ class TestPartSTLGeneration:
         assert not errors, f"{part_name}: {errors}"
 
     @pytest.mark.slow
-    @pytest.mark.skipif(not get_renderer().is_available, reason="OpenSCAD not installed")
-    def test_stl_generation(
-        self, part_name: str, part: Optional[BasePart], renderer: OpenSCADRenderer, tmp_path: Path
-    ):
-        """Attempt STL generation and report any errors."""
+    def test_stl_generation(self, part_name: str, part: Optional[BasePart], built_stl):
         if part is None:
             pytest.skip("Part not loaded")
-
-        if not part.source_file.exists():
-            pytest.skip("Source file missing")
-
-        # Check if part has special STL generation requirements
-        if hasattr(part, "can_generate_stl"):
-            can_gen, reason = part.can_generate_stl()
-            if not can_gen:
-                pytest.skip(f"Part cannot generate STL: {reason}")
-
-        # Use part-specific OpenSCAD path if available (e.g., nightly build)
-        part_renderer = renderer
-        if hasattr(part, "get_openscad_path"):
-            custom_path = part.get_openscad_path()
-            if custom_path and custom_path != renderer.openscad_path:
-                part_renderer = OpenSCADRenderer(openscad_path=str(custom_path))
-
-        # Generate to temp directory to avoid polluting parts folder
-        stl_output = tmp_path / f"{part_name}.stl"
-
-        result = part_renderer.render_stl(
-            scad_path=part.source_file,
-            stl_path=stl_output,
-            # gridfinity renders in ~52s on an idle machine, against a 60s
-            # budget -- seven seconds of margin, so this test failed whenever
-            # anything else was running. The budget is per part rather than a
-            # flat minute: a slow part is a slow part, not a broken one.
-            timeout=PART_RENDER_BUDGET.get(part.name, 60.0),
-        )
-
-        if not result.success:
-            # Build detailed error message
-            error_details = [f"STL generation failed for '{part_name}'"]
-            error_details.append(f"Source: {part.source_file}")
-
-            if result.error_message:
-                error_details.append(f"Error: {result.error_message}")
-
-            if result.stderr:
-                error_details.append(f"OpenSCAD stderr:\n{result.stderr}")
-
-            if result.stdout:
-                error_details.append(f"OpenSCAD stdout:\n{result.stdout}")
-
-            pytest.fail("\n".join(error_details))
-
-        # Verify STL was actually created and has content
-        assert stl_output.exists(), "STL file not created"
-        assert stl_output.stat().st_size > 0, "STL file is empty"
+        assert built_stl(part).stat().st_size > 0, "STL file is empty"
 
 
-# Additional convenience test to show summary
-class TestPartsSummary:
-    """Summary test for part discovery."""
-
-    def test_parts_discovered(self):
-        """Verify that parts were discovered."""
-        assert len(ALL_PARTS) > 0, "No parts discovered"
-        print(f"\nDiscovered {len(ALL_PARTS)} parts:")
-        for name, part in ALL_PARTS:
-            status = "✓" if part and part.source_file.exists() else "✗"
-            print(f"  {status} {name}")
-
-    @pytest.mark.skipif(not get_renderer().is_available, reason="OpenSCAD not installed")
-    def test_openscad_available(self):
-        """Verify OpenSCAD is available."""
-        renderer = get_renderer()
-        print(f"\nOpenSCAD path: {renderer.openscad_path}")
-        version = renderer.get_version()
-        if version:
-            print(f"OpenSCAD version: {version}")
+def test_cases_include_described_and_nested_parts():
+    names = {name for name, _ in ALL_PARTS}
+    assert {"datum_core", "esp32_devkitc", "snowplow"} <= names
 
 
 class TestCustomOpenSCADPaths:
@@ -245,14 +118,3 @@ class TestCustomOpenSCADPaths:
             f"STL should be in parts/gridfinity/: {stl_path}"
         )
         assert stl_path.name == "gridfinity.stl", f"STL should be named gridfinity.stl: {stl_path}"
-
-    def test_part_can_generate_stl_returns_tuple(self):
-        """Verify can_generate_stl returns proper (bool, str) tuple."""
-        from apothecary.projects.parts.gridfinity import DEFAULT as gridfinity
-
-        result = gridfinity.can_generate_stl()
-
-        assert isinstance(result, tuple), f"Expected tuple, got {type(result)}"
-        assert len(result) == 2, f"Expected 2-tuple, got {len(result)} elements"
-        assert isinstance(result[0], bool), f"First element should be bool, got {type(result[0])}"
-        assert isinstance(result[1], str), f"Second element should be str, got {type(result[1])}"
