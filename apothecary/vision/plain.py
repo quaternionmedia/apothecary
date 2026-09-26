@@ -7,8 +7,7 @@ family from how much of its box it fills.
 It will be beaten by anything trained on real pictures. That is fine and it is
 the point: this runs on your own machine with the network switched off, using
 one picture library that was already installed, and nothing about it can stop
-working because somebody else changed their mind. Slow and yours can be made
-fast later. See ``docs/plans/proposals/runs-and-stays-local.md``.
+working because somebody else changed their mind.
 
 Every shape it reports is marked ``plain`` and carries a confidence well under
 1.0, so nothing downstream mistakes a guess for a measurement.
@@ -18,9 +17,9 @@ PROTOTYPE — not ratified.
 
 from __future__ import annotations
 
-from collections import deque
+import re
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from ..models.vectors import Vector2D
 from .geometry import edge_points, smallest_box
@@ -33,13 +32,9 @@ from .models import FoundShape, Picture, ShapeKind
 # content is found in one and lost in the other.
 WORKING_EDGE = 512
 
-# A blob smaller than this many pixels is treated as speckle.
-#
-# A count, not a fraction of the picture. As a fraction it scaled with the
-# picture, so a small shape in a large picture was thrown away for being small
-# relative to a frame it had nothing to do with — measured at 33% of shapes
-# found when they were drawn at 3-6% of the picture's short side. Speckle is
-# speckle at any picture size, so an absolute floor is the honest test.
+# A blob smaller than this many pixels is treated as speckle. A count, not a
+# fraction of the picture: speckle is speckle at any picture size, and a
+# fraction throws away small shapes in large pictures.
 MIN_BLOB_PIXELS = 25
 
 # How full of its *tightest* box each family is, and how far off we still
@@ -111,11 +106,11 @@ class PlainFinder:
             grey = grey.resize(
                 (max(1, round(grey.width * scale)), max(1, round(grey.height * scale)))
             )
-            pixels = list(grey.getdata())
             width, height = grey.size
+            cut = _split_point(grey.histogram())
+            dark = grey.point([1 if value <= cut else 0 for value in range(256)]).tobytes()
 
-        cut = _split_point(pixels)
-        mask = _foreground(pixels, cut, width, height)
+        mask = _foreground(dark, width, height)
         blobs = _blobs(mask, width, height, MIN_BLOB_PIXELS)
 
         shapes = [shape for blob in blobs if (shape := _describe(blob, width, height)) is not None]
@@ -128,17 +123,15 @@ class PlainFinder:
         )
 
 
-def _split_point(pixels: List[int]) -> int:
+def _split_point(counts: List[int]) -> int:
     """Otsu's method: the brightness that best separates the picture in two.
 
-    Tries every cut and keeps the one where the two sides are furthest apart
-    relative to how spread out each side is.
+    ``counts`` is how many pixels have each brightness. Tries every cut and keeps
+    the one where the two sides are furthest apart relative to how spread out
+    each side is.
     """
-    counts = [0] * 256
-    for value in pixels:
-        counts[value] += 1
-    total = len(pixels)
-    sum_all = sum(i * counts[i] for i in range(256))
+    total = sum(counts)
+    sum_all = sum(i * count for i, count in enumerate(counts))
 
     best_cut, best_spread = 0, -1.0
     seen, sum_seen = 0, 0
@@ -158,57 +151,74 @@ def _split_point(pixels: List[int]) -> int:
     return best_cut
 
 
-def _foreground(pixels: List[int], cut: int, width: int, height: int) -> List[bool]:
-    """Mark the shapes rather than the background.
+# Swaps the 0 and 1 of a mask in one pass.
+_FLIP = bytes([1, 0]) + bytes(254)
 
-    The background is whatever runs round the outside of the picture. Counting
-    which side of the cut is rarer instead looks right until somebody
-    photographs one object filling the frame — then the object is the majority,
-    the background gets called the shape, and a single confident answer comes
-    back describing the whole picture. Photographing a thing so it fills the
-    frame is the normal way to photograph a thing.
+
+def _foreground(dark: bytes, width: int, height: int) -> bytes:
+    """Mark the shapes rather than the background: 1 for a shape pixel, else 0.
+
+    ``dark`` holds 1 for every pixel at or below the cut. The background is
+    whatever runs round the outside of the picture, not whichever side is rarer:
+    a photograph of one object filling the frame has the object as the majority.
     """
-    dark = [value <= cut for value in pixels]
-
-    border: List[bool] = []
     last_row = (height - 1) * width
-    for x in range(width):
-        border.append(dark[x])
-        border.append(dark[last_row + x])
-    for y in range(height):
-        border.append(dark[y * width])
-        border.append(dark[y * width + width - 1])
+    on_border = (
+        dark.count(1, 0, width)
+        + dark.count(1, last_row, last_row + width)
+        + dark[::width].count(1)
+        + dark[width - 1 :: width].count(1)
+    )
+    background_is_dark = on_border * 2 > 2 * (width + height)
+    return dark.translate(_FLIP) if background_is_dark else dark
 
-    background_is_dark = sum(border) * 2 > len(border)
-    return [not value for value in dark] if background_is_dark else dark
+
+_RUN = re.compile(b"\x01+")
 
 
-def _blobs(mask: List[bool], width: int, height: int, min_area: int) -> List[List[int]]:
+def _blobs(mask: bytes, width: int, height: int, min_area: int) -> List[List[int]]:
     """Gather touching marked pixels into groups, biggest first.
 
-    Walks outward from each unvisited pixel using a queue rather than recursion,
-    because a large blob would otherwise run out of stack.
+    Finds each row's runs of marked pixels and joins every run to the runs it
+    overlaps in the row above. Groups of equal size keep the order a scan from
+    the top left first meets them.
     """
-    seen = bytearray(len(mask))
-    found: List[List[int]] = []
-    for start in range(len(mask)):
-        if seen[start] or not mask[start]:
-            continue
-        queue = deque([start])
-        seen[start] = 1
-        blob: List[int] = []
-        while queue:
-            here = queue.popleft()
-            blob.append(here)
-            x, y = here % width, here // width
-            for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
-                if 0 <= nx < width and 0 <= ny < height:
-                    step = ny * width + nx
-                    if not seen[step] and mask[step]:
-                        seen[step] = 1
-                        queue.append(step)
-        if len(blob) >= max(1, min_area):
-            found.append(blob)
+    parent: List[int] = []
+    spans: List[Tuple[int, int]] = []
+
+    def root(run: int) -> int:
+        while parent[run] != run:
+            parent[run] = parent[parent[run]]
+            run = parent[run]
+        return run
+
+    above: List[Tuple[int, int, int]] = []
+    for y in range(height):
+        offset = y * width
+        here: List[Tuple[int, int, int]] = []
+        first = 0
+        for match in _RUN.finditer(mask, offset, offset + width):
+            start, end = match.start() - offset, match.end() - offset
+            run = len(spans)
+            spans.append((match.start(), match.end()))
+            parent.append(run)
+            while first < len(above) and above[first][1] <= start:
+                first += 1
+            touching = first
+            while touching < len(above) and above[touching][0] < end:
+                # The lower run id is the one met first, so it stays the root.
+                a, b = root(above[touching][2]), root(run)
+                if a != b:
+                    parent[max(a, b)] = min(a, b)
+                touching += 1
+            here.append((start, end, run))
+        above = here
+
+    members: Dict[int, List[int]] = {}
+    for run, (start, end) in enumerate(spans):
+        members.setdefault(root(run), []).extend(range(start, end))
+    least = max(1, min_area)
+    found = [blob for blob in members.values() if len(blob) >= least]
     found.sort(key=len, reverse=True)
     return found
 
