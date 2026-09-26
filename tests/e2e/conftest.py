@@ -109,6 +109,19 @@ def test_server(request, server_port, _picture_folder_if_known, tmp_path_factory
     env["APOTHECARY_STATE_DIR"] = str(tmp_path_factory.mktemp("state"))
     if _picture_folder_if_known is not None:
         env["APOTHECARY_PICTURE_ROOT"] = str(_picture_folder_if_known)
+    # The scripted arduino-cli the unit tests use: the browser tests see the
+    # same two fake boards on every machine, never scan the real serial ports
+    # (a printer may be printing on one), and never put a real device into a
+    # committed screenshot.
+    from firmware_helpers import write_fake_arduino_cli
+
+    tools = tmp_path_factory.mktemp("tools")
+    env["ARDUINO_CLI"] = str(write_fake_arduino_cli(tools / "arduino-cli"))
+    env["APOTHECARY_TOOLS_DIR"] = str(tools)
+    # ...and a printer on one of them is the simulated one, mid-print: the same
+    # scripted machine `apothecary docs generate` shows.
+    env["APOTHECARY_SERIAL_ENGINE"] = "simulated"
+    env["APOTHECARY_SIMULATED_PRINTER"] = "printing"
 
     server_cmd = [
         sys.executable,
