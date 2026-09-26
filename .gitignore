@@ -103,3 +103,7 @@ licenses.json
 captures/
 # Pictures a person added from the browser (routes/pictures.py): theirs, never the repo's.
 uploads/
+
+# Local build and scratch output: caches, temporary folders.
+.cache/
+tmp*/
