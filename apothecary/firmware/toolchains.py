@@ -41,6 +41,11 @@ class ToolchainError(RuntimeError):
     """The engine is missing, or returned an error we could not act on."""
 
 
+class PortHeld(ToolchainError):
+    """Something else has the port, or the file on it: a print, a bed reading,
+    a task, or another program. Waiting or letting go of it resolves this."""
+
+
 def tools_dir() -> Path:
     """Where Apothecary keeps toolchains it installed itself.
 

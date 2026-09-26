@@ -44,7 +44,7 @@ from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional, Protocol, Tuple
 
 from .models import Heater, PrinterInfo, PrinterStatus
-from .toolchains import ToolchainError
+from .toolchains import PortHeld, ToolchainError
 
 # --- parsers: Marlin's documented replies -------------------------------------
 
@@ -612,9 +612,7 @@ class GcodeLink:
         job (a print, a bed reading) holds the link: rebooting under it leaves the
         host streaming moves to a cold, unhomed board."""
         if self.job is not None:
-            raise ToolchainError(
-                f"{self.port}: a {self.job.get('kind')} holds the port -- not resetting"
-            )
+            raise PortHeld(f"{self.port}: a {self.job.get('kind')} holds the port -- not resetting")
         with self._lock:
             self._buf = b""
             self.log.add("sys", "reset: DTR pulse")
@@ -728,7 +726,7 @@ class PrinterLinks:
                 return link
             if link is not None:
                 if link.job is not None:
-                    raise ToolchainError(
+                    raise PortHeld(
                         f"{port}: a {link.job.get('kind')} holds the port -- not reopening it"
                     )
                 link.close()
@@ -743,7 +741,7 @@ class PrinterLinks:
         with self._lock:
             link = self._links.get(port)
             if link is not None and link.job is not None:
-                raise ToolchainError(
+                raise PortHeld(
                     f"{port}: a {link.job.get('kind')} holds the port -- cancel it first"
                 )
             self.control.disarm(port)  # a dropped link never stays armed
@@ -1090,7 +1088,7 @@ class ControlLatch:
             self.arm(port, ttl)
 
 
-class LinkBusy(ToolchainError):
+class LinkBusy(PortHeld):
     """The link is held by a long exchange and the caller would not wait."""
 
 

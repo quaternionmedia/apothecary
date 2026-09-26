@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 from apothecary.api import app
 from apothecary.cli import cli
 from apothecary.firmware import devices, gcode
-from apothecary.firmware.toolchains import ToolchainError
+from apothecary.firmware.toolchains import PortHeld, ToolchainError
 
 BOOT = [
     "start",
@@ -1043,11 +1043,11 @@ def test_leveling_job_homes_probes_reads_and_saves(fake_arduino_cli, scripted_li
     # it, queries and controls are refused, the emergency stop is not.
     st = devices.printer_status(port, links=scripted_links)
     assert st.job["kind"] == "leveling" and st.job["stage"] == "probing"
-    with pytest.raises(ToolchainError, match="bed reading holds the port"):
+    with pytest.raises(PortHeld, match="bed reading holds the port"):
         devices.printer_query(port, "M105", links=scripted_links)
-    with pytest.raises(ToolchainError, match="bed reading holds the port"):
+    with pytest.raises(PortHeld, match="bed reading holds the port"):
         devices.printer_control(port, "G28", links=scripted_links)
-    with pytest.raises(ToolchainError, match="already probing"):
+    with pytest.raises(PortHeld, match="already probing"):
         devices.start_leveling(port, probe=False, links=scripted_links)
     gate.set()
     job.thread.join(5)
@@ -1102,6 +1102,10 @@ def test_leveling_routes(fake_arduino_cli, fresh_task_runner, scripted_links):
     assert c.get("/firmware/printers/leveling", params={"port": port}).json() == []
     assert c.get("/firmware/printers/leveling/nope").status_code == 404
     assert c.get("/firmware/printers/level", params={"port": "bad port"}).status_code == 422
+    # The listing filters take one port or "" for every port, and nothing else.
+    assert c.get("/firmware/printers/leveling", params={"port": ""}).json() == []
+    assert c.get("/firmware/printers/leveling", params={"port": "bad"}).status_code == 422
+    assert c.get("/firmware/printers/print/records", params={"port": "bad"}).status_code == 422
 
     r = c.post("/firmware/printers/level", json={"port": port, "probe": True})
     assert r.status_code == 409 and "arm control" in r.json()["detail"]
@@ -1191,7 +1195,7 @@ def test_print_job_streams_pauses_resumes_and_polls_between_lines(fake_arduino_c
     with pytest.raises(gcode.ControlNotArmed):
         devices.start_print(port, kept.id, links=scripted_links)
     scripted_links.control.arm(port)
-    with pytest.raises(ToolchainError, match="no such print file"):
+    with pytest.raises(ValueError, match="no such print file"):
         devices.start_print(port, "nope", links=scripted_links)
     gate.clear()
     job = devices.start_print(port, kept.id, links=scripted_links)
@@ -1207,15 +1211,15 @@ def test_print_job_streams_pauses_resumes_and_polls_between_lines(fake_arduino_c
     assert st.state == "printing" and 0 < st.job["progress"] < 1
     # A second print, a bed reading, a release, a reset: all refused; a query and a
     # heater change wait their turn; motion is the job's.
-    with pytest.raises(ToolchainError, match="already holds the port"):
+    with pytest.raises(PortHeld, match="already holds the port"):
         devices.start_print(port, kept.id, links=scripted_links)
-    with pytest.raises(ToolchainError, match="a print holds the port"):
+    with pytest.raises(PortHeld, match="a print holds the port"):
         devices.start_leveling(port, probe=False, links=scripted_links)
-    with pytest.raises(ToolchainError, match="cancel it first"):
+    with pytest.raises(PortHeld, match="cancel it first"):
         scripted_links.close(port)
-    with pytest.raises(ToolchainError, match="not resetting"):
+    with pytest.raises(PortHeld, match="not resetting"):
         devices.printer_reset(port, links=scripted_links)
-    with pytest.raises(ToolchainError, match="a print holds the port"):
+    with pytest.raises(PortHeld, match="a print holds the port"):
         devices.printer_control(port, "G28", links=scripted_links)
     job.pause()
     assert job.stage == "paused"
@@ -1336,14 +1340,14 @@ def test_print_refuses_a_file_with_problems_and_a_card_that_is_printing(
     empty = devices.save_print_file("empty.gcode", b"; nothing\n")
     good = devices.save_print_file("ok.gcode", b"G28\n")
     scripted_links.control.arm(port)
-    with pytest.raises(ToolchainError, match="may not be sent"):
+    with pytest.raises(ValueError, match="may not be sent"):
         devices.start_print(port, bad.id, links=scripted_links)
-    with pytest.raises(ToolchainError, match="nothing to send"):
+    with pytest.raises(ValueError, match="nothing to send"):
         devices.start_print(port, empty.id, links=scripted_links)
     devices.printer_status(port, links=scripted_links)
     ScriptedTransport.instances[0].replies = PRINTING
     devices.printer_status(port, links=scripted_links)
-    with pytest.raises(ToolchainError, match="the card is printing"):
+    with pytest.raises(PortHeld, match="the card is printing"):
         devices.start_print(port, good.id, links=scripted_links)
 
 
@@ -1369,7 +1373,7 @@ def test_print_routes(fake_arduino_cli, fresh_task_runner, scripted_links):
     c.post("/firmware/printers/control", json={"port": port, "armed": True})
     assert (
         c.post("/firmware/printers/print", json={"port": port, "file_id": "nope"}).status_code
-        == 409
+        == 422
     )
     r = c.post("/firmware/printers/print", json={"port": port, "file_id": file_id})
     assert r.status_code == 202 and r.json()["kind"] == "print" and r.json()["total"] == 12
@@ -1415,6 +1419,9 @@ def test_release_reconnect_reset_and_upload_are_refused_mid_print(
     assert c.post("/firmware/printers/release", json={"port": port}).status_code == 409
     assert c.post("/firmware/printers/reconnect", json={"port": port}).status_code == 409
     assert c.post("/firmware/printers/reset", json={"port": port}).status_code == 409
+    # Moving the machine under a print is a conflict (409), not a failed engine (503).
+    r = c.post("/firmware/printers/command", json={"port": port, "command": "G28"})
+    assert r.status_code == 409 and "print holds the port" in r.json()["detail"]
     r = c.post(
         "/firmware/sketches/footpedal/upload", json={"fqbn": "arduino:avr:uno", "port": port}
     )
@@ -1591,7 +1598,7 @@ def test_nothing_resets_reopens_or_closes_a_link_a_print_holds(tmp_path, monkeyp
         lambda: links.open("/dev/ttyJOB", 250000),
         lambda: links.close("/dev/ttyJOB"),
     ):
-        with pytest.raises(ToolchainError, match="holds the port"):
+        with pytest.raises(PortHeld, match="holds the port"):
             attempt()
     assert "<DTR>" not in board.sent and links.get("/dev/ttyJOB") is link
     job.cancel()

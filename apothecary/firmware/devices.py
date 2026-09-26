@@ -58,7 +58,14 @@ from .models import (
     SketchInfo,
 )
 from .sketches import find_sketch
-from .toolchains import ArduinoCli, Esptool, ToolchainError, get_arduino_cli, get_esptool
+from .toolchains import (
+    ArduinoCli,
+    Esptool,
+    PortHeld,
+    ToolchainError,
+    get_arduino_cli,
+    get_esptool,
+)
 
 BANNER_RE = re.compile(r"apothecary\s+([A-Za-z0-9_.\-]+):\s*hello")
 CHIP_LINE_RE = re.compile(r"^chip:\s+(.+)$")
@@ -658,7 +665,7 @@ def _job_allows(job: dict, cmd: str) -> None:
     if job.get("kind") == "print" and PRINT_ALLOWS.match(cmd):
         return
     what = "a print" if job.get("kind") == "print" else "a bed reading"
-    raise ToolchainError(f"{port_of(job)}: {what} holds the port ({job.get('stage')})")
+    raise PortHeld(f"{port_of(job)}: {what} holds the port ({job.get('stage')})")
 
 
 def port_of(job: dict) -> str:
@@ -805,17 +812,17 @@ def start_leveling(
 ) -> LevelingJob:
     """Begin a bed reading on ``port``; a probe needs the control latch armed.
 
-    Raises ``ControlNotArmed`` for a probe with the latch down, ``ToolchainError``
-    when the port is not a printer or a job already holds it.
+    Raises ``ControlNotArmed`` for a probe with the latch down, ``PortHeld`` when
+    a job already holds the port, ``ToolchainError`` when it is not a printer.
     """
     state = state or get_state()
     links = links or gcode.get_printer_links()
     running = _LEVELING.get(port)
     if running and running.finished is None:
-        raise ToolchainError(f"{port}: a bed reading is already {running.stage}")
+        raise PortHeld(f"{port}: a bed reading is already {running.stage}")
     printing = _PRINTS.get(port)
     if printing and printing.finished is None:
-        raise ToolchainError(f"{port}: a print holds the port ({printing.stage})")
+        raise PortHeld(f"{port}: a print holds the port ({printing.stage})")
     if probe and not links.control.armed(port):
         raise gcode.ControlNotArmed(f"{port}: probing moves the machine -- arm control first")
     if links.get(port) is None:
@@ -896,7 +903,7 @@ def delete_print_file(file_id: str) -> bool:
     """Forget a kept file; refused while a print streams it."""
     for job in _PRINTS.values():
         if job.file.id == file_id and job.finished is None:
-            raise ToolchainError(f"{file_id}: a print is streaming it")
+            raise PortHeld(f"{file_id}: a print is streaming it")
     found = False
     for path in (_print_meta_path(file_id), _print_file_path(file_id)):
         if path.is_file():
@@ -1109,19 +1116,20 @@ def start_print(
 ) -> PrintJob:
     """Begin streaming a kept file to ``port``; needs the control latch armed.
 
-    Raises ``ControlNotArmed`` with the latch down, ``ToolchainError`` when
-    the file is unknown or refused, the port is not a printer, or a job
-    (a print, a bed reading) already holds it.
+    Raises ``ValueError`` when the file is unknown or refused,
+    ``ControlNotArmed`` with the latch down, ``PortHeld`` when a job (a print,
+    a bed reading, the card) already has the machine, and ``ToolchainError``
+    when the port is not a printer.
     """
     state = state or get_state()
     links = links or gcode.get_printer_links()
     file = print_file(file_id)
     if file is None:
-        raise ToolchainError(f"no such print file: {file_id}")
+        raise ValueError(f"no such print file: {file_id}")
     if file.problems:
-        raise ToolchainError(f"{file.name} may not be sent: " + "; ".join(file.problems[:3]))
+        raise ValueError(f"{file.name} may not be sent: " + "; ".join(file.problems[:3]))
     if file.lines == 0:
-        raise ToolchainError(f"{file.name} has nothing to send")
+        raise ValueError(f"{file.name} has nothing to send")
     if not links.control.armed(port):
         raise gcode.ControlNotArmed(
             f"{port}: a print heats and moves the machine -- arm control first"
@@ -1129,7 +1137,7 @@ def start_print(
     for running in (_PRINTS.get(port), _LEVELING.get(port)):
         if running and running.finished is None:
             what = "print" if isinstance(running, PrintJob) else "bed reading"
-            raise ToolchainError(f"{port}: a {what} already holds the port ({running.stage})")
+            raise PortHeld(f"{port}: a {what} already holds the port ({running.stage})")
     if links.get(port) is None:
         printer_status(port, state=state, links=links)
     link = links.get(port)
@@ -1137,7 +1145,7 @@ def start_print(
         raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
     last = _LAST_STATUS.get(port)
     if last is not None and last.sd_printing:
-        raise ToolchainError(f"{port}: the card is printing -- pause or abort that first")
+        raise PortHeld(f"{port}: the card is printing -- pause or abort that first")
     job = PrintJob(port, file, links)
     _PRINTS[port] = job
     link.job = job.snapshot()
@@ -1157,7 +1165,7 @@ def printer_query(
     cmd = gcode.normalise_query(command)  # ValueError for anything that is not a report
     held = links.get(port)
     if held is not None and held.job is not None and held.job.get("kind") != "print":
-        raise ToolchainError(f"{port}: a bed reading holds the port ({held.job['stage']})")
+        raise PortHeld(f"{port}: a bed reading holds the port ({held.job['stage']})")
     if links.get(port) is None:
         printer_status(port, state=state, links=links)  # identifies + opens; offline if it cannot
     link = links.get(port)
