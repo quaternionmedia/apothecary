@@ -651,6 +651,29 @@ def test_the_firmware_page_draws_the_newest_reading(page: Page, printer_url: str
     expect(card.locator(".board-view-note")).to_contain_text("drawn ×")
 
 
+@pytest.mark.e2e
+def test_a_card_keeps_its_view_however_often_the_cards_are_redrawn(page: Page, printer_url: str):
+    """The firmware page redraws its cards on every banner and button. A pinned port
+    keeps the one view it has, moved into its new card, and overlapping redraws make no
+    second one."""
+    _pin(printer_url, BOARD)
+    page.goto(f"{printer_url}/firmware")
+    card = page.locator(".device[data-port='/dev/ttyFAKE1']")
+    expect(card.locator(".board-view canvas")).to_have_count(1, timeout=10000)
+    page.evaluate(
+        """() => {
+            window.__view = window.apothecaryBoardViews.get('/dev/ttyFAKE1');
+            document.querySelector(".device[data-port='/dev/ttyFAKE1']").dataset.before = "1";
+            for (let i = 0; i < 3; i++) window.dispatchEvent(new CustomEvent("apothecary:devices-rendered"));
+        }"""
+    )
+    page.locator("#refresh-btn").click()
+    redrawn = page.locator(".device[data-port='/dev/ttyFAKE1']:not([data-before])")
+    expect(redrawn.locator(".board-view canvas")).to_have_count(1, timeout=10000)
+    expect(redrawn.locator(".board-view-note")).to_contain_text("garage › printer_1")
+    assert page.evaluate("() => window.apothecaryBoardViews.get('/dev/ttyFAKE1') === window.__view")
+
+
 # Seconds to stream, dwell or no dwell: each line is a round trip to the simulator, a
 # millisecond at least, so a pause and a cancel land mid-file.
 SLOW = "".join(f"G1 X{i % 200} Y{i % 200}\n" for i in range(6000))

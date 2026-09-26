@@ -53,7 +53,8 @@ function scadAxisSwap(geometry) {
 /* Mount the view into `el`. `where` is what GET /firmware/printers/where
  * answers: the site, the board's path and world position, the printer's
  * (the status-bearing ancestor's) path, position, footprint and build
- * volume. Returns { setPosition, position, destroy, ready }. */
+ * volume. Returns { setPosition, position, attach, destroy, ready }:
+ * attach(el) moves the drawing into another element, as it is. */
 export function mountBoardView(el, { base, where, onNote } = {}) {
     // `key` lets a page replace a note rather than add one (the mesh note changes with each reading).
     const note = (text, key) => { if (onNote) onNote(text, key); };
@@ -101,11 +102,13 @@ export function mountBoardView(el, { base, where, onNote } = {}) {
     }
     const loader = new STLLoader();
     let missing = 0;
+    let alive = true;
     function load(node, material, done) {
         if (!where || !where.site || !node || !node.path) { done && done(false); return; }
         loader.load(
             `${base}/sites/${encodeURIComponent(where.site)}/nodes/${encodeURIComponent(node.path)}/stl`,
             (geometry) => {
+                if (!alive) { geometry.dispose(); material.dispose(); return; }  // the view went while it loaded
                 scadAxisSwap(geometry);
                 geometry.center();
                 const mesh = new THREE.Mesh(geometry, material);
@@ -140,7 +143,7 @@ export function mountBoardView(el, { base, where, onNote } = {}) {
         if (left === 0) resolve(false);
     });
     ready.then((all) => {
-        if (!all) note(missing ? "shape not available (OpenSCAD not on the server?) -- showing the build volume and the nozzle" : "no board bound");
+        if (!all && alive) note(missing ? "shape not available (OpenSCAD not on the server?) -- showing the build volume and the nozzle" : "no board bound");
     });
 
     // Frame the printer's footprint, or the board, or the volume.
@@ -153,7 +156,6 @@ export function mountBoardView(el, { base, where, onNote } = {}) {
     camera.position.set(centre.x + extent * 1.1, centre.y + extent * 0.9, centre.z + extent * 1.4);
     controls.target.copy(centre);
 
-    let alive = true;
     function frame() {
         if (!alive) return;
         marks.tick();
@@ -180,11 +182,23 @@ export function mountBoardView(el, { base, where, onNote } = {}) {
         mesh: () => marks.mesh(),
         bodies() { return JSON.parse(JSON.stringify(bodies)); },
         volume: () => marks.volume(),
+        attach(to) {
+            if (to === el) return;
+            el = to;
+            el.appendChild(renderer.domElement);
+            onResize();
+        },
         destroy() {
             alive = false;
             marks.destroy();
             window.removeEventListener("resize", onResize);
+            controls.dispose();
+            scene.traverse((o) => {
+                if (o.geometry) o.geometry.dispose();
+                for (const m of [].concat(o.material || [])) m.dispose();
+            });
             renderer.dispose();
+            renderer.forceContextLoss();  // the browser keeps only so many; this one is let go now
             el.innerHTML = "";
         },
     };

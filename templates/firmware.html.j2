@@ -315,8 +315,7 @@
         state.devices = payload.devices;
         renderBoards(payload.devices.map((v) => v.device));
         const streaming = new Set(payload.streaming || []);
-        if (!payload.devices.length) { $("devices").innerHTML = '<div class="empty">No devices detected. Plug one in and rescan.</div>'; return; }
-        $("devices").innerHTML = payload.devices.map((v) => {
+        $("devices").innerHTML = !payload.devices.length ? '<div class="empty">No devices detected. Plug one in and rescan.</div>' : payload.devices.map((v) => {
             const d = v.device, rec = v.expected.record, obs = state.observed[d.port];
             const live = !!state.live[d.port];
             const pst = state.printerStatus[d.port];
@@ -639,27 +638,57 @@
 // printer's mainboard inside its printer, a devkit on the bench -- drawn
 // from the same STL routes the viewer uses. A card whose port is pinned
 // nowhere shows nothing rather than a guess.
+//
+// The cards are redrawn on every banner and button, so a port's view is
+// kept while it stays pinned where it was and moved into the card's new
+// element; only the newest redraw's answers are acted on.
 import { mountBoardView, whereIs } from '/static/board_view.js';
 (() => {
     const BASE = {{ base_url | tojson }};
-    const views = new Map();
+    const views = new Map();  // port -> the view
+    const kept = new Map();   // port -> { where, notes } the view was drawn for
+    const noteFor = (port) => document.querySelector(`.board-view-note[data-port="${CSS.escape(port)}"]`);
+    function writeNote(port) {
+        const note = noteFor(port), k = kept.get(port);
+        if (note) note.textContent = k ? [`${k.where.site} › ${(k.where.printer || k.where.board).path}`, ...k.notes.values()].join(" · ") : "";
+    }
+    function drop(port) {
+        views.get(port).destroy();
+        views.delete(port); kept.delete(port);
+    }
+    let generation = 0;
     async function refresh() {
-        for (const [port, view] of views) { view.destroy(); views.delete(port); }
-        for (const el of document.querySelectorAll(".board-view[data-port]")) {
-            const port = el.dataset.port;
-            const note = document.querySelector(`.board-view-note[data-port="${CSS.escape(port)}"]`);
-            const where = await whereIs(BASE, port).catch(() => null);
-            if (!where) { el.hidden = true; if (note) note.textContent = ""; continue; }
-            el.hidden = false;
-            if (note) note.textContent = `${where.site} › ${(where.printer || where.board).path}`;
-            const view = mountBoardView(el, { base: BASE, where, onNote: (t) => { if (note) note.textContent += ` · ${t}`; } });
-            views.set(port, view);
-            // The newest bed reading for the port, drawn over the bed; none is fine.
-            fetch(`${BASE}/firmware/printers/leveling?port=${encodeURIComponent(port)}`)
-                .then((r) => (r.ok ? r.json() : []))
-                .then((records) => { if (views.get(port) === view && records.length) view.setMesh(records[0]); })
-                .catch(() => {});
-        }
+        const gen = ++generation;
+        const cards = [...document.querySelectorAll(".board-view[data-port]")];
+        const answers = await Promise.all(cards.map((el) => whereIs(BASE, el.dataset.port).catch(() => null)));
+        if (gen !== generation) return;  // the cards were redrawn meanwhile
+        const shown = new Set();
+        cards.forEach((el, i) => {
+            const port = el.dataset.port, where = answers[i];
+            if (views.has(port) && JSON.stringify(kept.get(port).where) !== JSON.stringify(where)) drop(port);
+            el.hidden = !where;
+            if (!where) { writeNote(port); return; }
+            shown.add(port);
+            const view = views.get(port);
+            if (view) { view.attach(el); writeNote(port); readTheBed(port, view); return; }
+            const k = { where, notes: new Map() };  // by key, so the mesh note is replaced, not repeated
+            kept.set(port, k);
+            writeNote(port);
+            const made = mountBoardView(el, { base: BASE, where, onNote: (t, key) => { if (kept.get(port) === k) { k.notes.set(key || t, t); writeNote(port); } } });
+            views.set(port, made);
+            readTheBed(port, made);
+        });
+        for (const port of [...views.keys()]) if (!shown.has(port)) drop(port);
+    }
+    // The newest bed reading for the port, drawn over the bed when it is not already; none is fine.
+    function readTheBed(port, view) {
+        fetch(`${BASE}/firmware/printers/leveling?port=${encodeURIComponent(port)}`)
+            .then((r) => (r.ok ? r.json() : []))
+            .then((records) => {
+                const drawn = view.mesh();
+                if (views.get(port) === view && records.length && (!drawn || drawn.record_id !== records[0].id)) view.setMesh(records[0]);
+            })
+            .catch(() => {});
     }
     window.addEventListener("apothecary:devices-rendered", refresh);
     window.apothecaryBoardViews = views;
