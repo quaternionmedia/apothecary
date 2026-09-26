@@ -12,25 +12,14 @@ from .skeleton import ROOT
 
 
 class Params(BaseModel):
-    length: float = Field(100.0, gt=0)
-    slot_width: float = Field(6.0, gt=0)
-    slot_depth: float = Field(4.0, gt=0)
+    length: float = Field(20.0, gt=0)
 
 
 class VSlotPart(BasePart):
-    """V-Slot rail with calculated bounds."""
+    """V-Slot rail: a 20 x 20 mm profile extruded ``length`` along Z."""
 
     def get_bounds(self, params: Optional[Dict] = None) -> BoundingBox3D:
-        """Calculate bounds from parameters (20x20mm extrusion profile)."""
-        if params:
-            length = params.get("length", 100)
-        elif self.params_model:
-            defaults = self.params_model()
-            length = defaults.length
-        else:
-            length = 100
-
-        # 20x20mm profile extruded along Z
+        length = Params(**(params or {})).length
         return BoundingBox3D(
             min_point=Vector3D(x=-10, y=-10, z=0), max_point=Vector3D(x=10, y=10, z=length)
         )
