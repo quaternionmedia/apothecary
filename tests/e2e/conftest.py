@@ -181,12 +181,12 @@ def base_url(request, test_server, server_port):
                 returncode=1,
             )
     except (httpx.ConnectError, httpx.TimeoutException):
-        pytest.exit(
-            f"Could not connect to server at {url}. "
-            f"Please start the server with: apothecary serve --port {url.split(':')[-1]}\n"
-            f"Or run with --start-server to auto-start the server.",
-            returncode=1,
-        )
+        if request.config.getoption("--start-server"):
+            pytest.exit(f"The test server at {url} did not answer.", returncode=1)
+        # No server was asked for and none is running: a plain `pytest` is the
+        # unit run, and the browser tests say why they did not run. Exiting here
+        # used to stop the whole session after the first ten tests.
+        pytest.skip(f"browser tests need a server: pass --start-server (or serve on {url})")
 
     return url
 
