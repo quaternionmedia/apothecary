@@ -303,13 +303,16 @@ class GatherRequest(BaseModel):
     answers: str = ""  # the five sentences, as the answers file has them
     most: int = Field(8, ge=1, le=40)
     build: bool = False  # also build the whole gathering as one arrangement
-    name: str = Field("gathering", pattern=r"^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$")
+    name: str = "gathering"
 
     @field_validator("name")
     @classmethod
-    def _not_a_route(cls, value: str) -> str:
-        from ..api import RESERVED_NAMES
+    def _a_name(cls, value: str) -> str:
+        """The rule POST /photos names an arrangement by: one rule, whichever route builds it."""
+        from ..api import RESERVED_NAMES, SAFE_NAME
 
+        if not SAFE_NAME.match(value):
+            raise ValueError("a name is letters, digits, - and _, up to 64, starting alphanumeric")
         if value in RESERVED_NAMES:
             raise ValueError(f"{value!r} is the address of a route under /photos/")
         return value

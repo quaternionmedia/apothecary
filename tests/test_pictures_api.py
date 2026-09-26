@@ -176,6 +176,8 @@ def test_an_arrangement_is_never_named_after_a_route_under_photos(pictures):
     # And the gathering route refuses it too, before anything is built.
     pair = ["bench.png", "bench_again.png"]
     assert c.post("/photos/gather", json={"pictures": pair, "name": "pictures"}).status_code == 422
+    # Nor a name POST /photos would refuse: one rule, whichever route names it.
+    assert c.post("/photos/gather", json={"pictures": pair, "name": "_x"}).status_code == 422
 
 
 def test_a_picture_larger_than_the_limit_is_refused_before_it_is_read(pictures):
