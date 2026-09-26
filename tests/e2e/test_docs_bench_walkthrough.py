@@ -17,6 +17,7 @@ import socket
 
 import pytest
 from playwright.sync_api import expect
+from viewer_ready import OCCLUSION_TESTED, WAVE_DONE, settled
 
 # A lid, one inch by two by half an inch, drawn Y-up as a game or web tool
 # would: the kind of file that arrives from elsewhere.
@@ -170,6 +171,7 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     )
 
     # ----------------------------------------------------------------- viewer
+    page.add_init_script(WAVE_DONE)
     page.goto(f"{base_url}/viewer/sites/garage")
     expect(page.locator(".toolbar h1")).to_contain_text("Apothecary")
     contents = page.locator("#contents-list .contents-item")
@@ -177,7 +179,6 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     for name in ("workbench", "printer_1", "printer_3", "esp32_blink", "raspberry_pi_4"):
         expect(page.locator("#contents-list")).to_contain_text(name)
     page.evaluate("() => localStorage.removeItem('apothecary.panels')")
-    page.wait_for_timeout(1500)
     # The root frames the whole building; the bench is what this page is
     # about, so frame the view on it and what stands on it.
     page.evaluate(
@@ -189,7 +190,7 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
             v.frameCameraForChildren(level.filter((n) => on.has(n.name)));
         }"""
     )
-    page.wait_for_timeout(600)
+    settled(page)
     story.shows(
         "The bench at the garage's root: three Ender 3s on it, the boards at its right end",
         "The root shows the whole building; here the view is framed on the bench. "
@@ -199,7 +200,7 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
 
     page.locator("#contents-list .contents-item[data-path='printer_1']").click()
     expect(_part_row(page)).to_contain_text("ender3", timeout=5000)
-    page.wait_for_timeout(300)
+    settled(page)
     story.shows(
         "A printer is the part it names",
         "Selecting printer_1 shows its rows and, below them, the part its body is. "
@@ -212,7 +213,7 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     mainboard_row = "#contents-list .contents-item[data-path='printer_1.frame_system.mainboard']"
     page.locator(mainboard_row).click()
     expect(_part_row(page)).to_contain_text("creality_v422", timeout=5000)
-    page.wait_for_timeout(1200)
+    settled(page)
     story.shows(
         "Inside it, the mainboard is the Creality V4.2.2",
         "Zoomed into the printer's frame, its children are drawn and the printer's "
@@ -224,7 +225,7 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     page.evaluate("() => window.fractalViewer.zoomIn('esp32_blink')")
     page.locator("#contents-list .contents-item[data-path='esp32_blink']").click()
     expect(_part_row(page)).to_contain_text("esp32_devkitc", timeout=5000)
-    page.wait_for_timeout(1200)
+    settled(page)
     story.shows(
         "The DevKitC standing on its pins",
         "esp32_blink is a sketch and the board it runs on, drawn as the board: the "
@@ -251,11 +252,10 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     # Nothing stands between the camera and the top of the bench, so the badge
     # is not dimmed: the transform gizmo's picking plane, a mesh the size of the
     # scene, is not something in the way.
-    page.wait_for_timeout(300)
+    settled(page, frames=OCCLUSION_TESTED)
     expect(badge).not_to_have_class(re.compile(r"\bbehind\b"))
     cameras = page.request.get(f"{base_url}/cameras?site=garage").json()
     assert [c["path"] for c in cameras] == ["workbench"]
-    page.wait_for_timeout(600)
     story.shows(
         "A camera placed at the bench is drawn there",
         "Allowed in the Camera panel and placed at the selected piece, the camera "
@@ -266,7 +266,7 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     page.evaluate("() => { const v = window.fractalViewer; v.zoomOut(); v.zoomIn('printer_1'); }")
     expect(badge).to_be_hidden(timeout=5000)
     assert _camera_marks_visible(page) == [False]
-    page.wait_for_timeout(600)
+    settled(page)
     story.shows(
         "Looking into a printer, the camera's mark stays at the bench",
         "A mark is drawn at the level where its piece is. Zoomed into something "
@@ -333,7 +333,17 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
             el.querySelector('#pic-list').scrollIntoView({ block: 'start' });
         }"""
     )
-    page.wait_for_timeout(400)
+    # The thumbnails load lazily: every one in the list's visible box has arrived.
+    page.wait_for_function(
+        """() => {
+            const box = document.querySelector('#pic-list').getBoundingClientRect();
+            return [...document.querySelectorAll('#pic-list img')].every((i) => {
+                const r = i.getBoundingClientRect();
+                return i.complete || r.top >= box.bottom || r.bottom <= box.top;
+            });
+        }"""
+    )
+    settled(page)
     story.shows(
         "What the browser put here, it can take back",
         "Pictures added from the file picker are kept as they were named, under "
