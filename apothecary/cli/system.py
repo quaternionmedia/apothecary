@@ -65,7 +65,7 @@ def system():
 
 @click.command()
 def check():
-    """Check installation and dependencies."""
+    """Check installation and dependencies; exit 1 if a required package is missing."""
     click.secho("Apothecary Installation Check", bold=True)
     click.echo("")
 
@@ -77,14 +77,15 @@ def check():
 
     # Check required packages
     click.secho("Required packages:", bold=True)
-    required = ["fastapi", "jinja2", "pydantic", "click", "uvicorn"]
-    for pkg in required:
+    missing = []
+    for pkg in ("fastapi", "jinja2", "pydantic", "click", "uvicorn"):
         try:
             __import__(pkg)
             version = importlib.metadata.version(pkg)
             _safe_echo(f"  ✓ {pkg}: {version}")
         except ImportError:
             _safe_echo(f"  ✗ {pkg}: NOT FOUND", fg="red")
+            missing.append(pkg)
     click.echo("")
 
     # The fractal viewer's 3D library. Without it the viewer page loads,
@@ -139,6 +140,11 @@ def check():
             _safe_echo(f"    {status} {item.name}")
         if len(items) > 5:
             click.echo(f"    ... and {len(items) - 5} more")
+
+    if missing:
+        raise click.ClickException(
+            f"required packages missing: {', '.join(missing)}; run `uv sync`"
+        )
 
 
 install = retired("install", "nothing to install: three.js is vendored")

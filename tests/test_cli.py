@@ -1,4 +1,5 @@
 import json
+import sys
 
 import pytest
 from click.testing import CliRunner
@@ -18,6 +19,24 @@ def test_cli_check_includes_openscad_section():
     result = runner.invoke(cli, ["check"])
     assert result.exit_code == 0
     assert "OpenSCAD:" in result.output
+
+
+def test_cli_check_fails_when_a_required_package_is_missing(monkeypatch):
+    monkeypatch.setitem(sys.modules, "uvicorn", None)  # the next import of it raises
+    result = CliRunner().invoke(cli, ["check"])
+    assert result.exit_code == 1
+    assert "uvicorn: NOT FOUND" in result.output
+    assert "required packages missing: uvicorn" in result.output
+    assert "Parts:" in result.output  # the rest of the report still printed
+
+
+def test_cli_check_only_warns_without_openscad(monkeypatch):
+    from apothecary.cli import system
+
+    monkeypatch.setattr(system.OpenSCADRenderer, "is_available", False)
+    result = CliRunner().invoke(cli, ["check"])
+    assert result.exit_code == 0
+    assert "OpenSCAD not found" in result.output
 
 
 def test_cli_testrun(tmp_path):
