@@ -5,9 +5,8 @@ on:
     branches:
     - main
     - 'release/**'
+  # Every pull request, whatever its base: a stacked one is still a proposal.
   pull_request:
-    branches:
-    - main
 
 # A newer push to a pull request cancels the run it replaces. On main and a
 # release branch every run is kept: it is the record of what that commit reported.
