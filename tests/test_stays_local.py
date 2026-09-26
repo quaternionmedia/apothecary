@@ -397,7 +397,7 @@ def test_every_server_the_cli_starts_listens_on_this_machine_only():
                     assert "require_loopback" in body or "_loopback_or_" in body, (
                         f"{path.name}:{node.name} binds without require_loopback"
                     )
-    assert binders == 4  # serve, dev, photo view, photo gather
+    assert binders == 3  # run_server, photo view, photo gather
 
 
 def test_the_app_answers_this_machine_only_and_fences_every_page():

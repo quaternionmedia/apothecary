@@ -101,6 +101,10 @@ def test_serve_refuses_an_address_off_this_machine(uvicorn_runs):
 
 RETIRED = {
     "install": (["install", "--no-viewer"], "nothing to install: three.js is vendored"),
+    "dev": (
+        ["dev", "--skip-stl"],
+        "use `apothecary parts generate-stl --all && apothecary serve --reload`",
+    ),
 }
 
 
