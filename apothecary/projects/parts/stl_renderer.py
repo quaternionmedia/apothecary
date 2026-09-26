@@ -372,12 +372,14 @@ def _snapshots() -> List[Path]:
 
 
 def _openscad_candidates() -> List[Path]:
-    """The default OpenSCAD, then development snapshots, each executable once."""
+    """The default OpenSCAD, then development snapshots, each path once. Two
+    links to one executable stay two: a snap links every app in /snap/bin to
+    /usr/bin/snap, which runs the one its name says."""
     default = get_renderer()
     found = [default.openscad_path] if default.is_available else []
-    unique: Dict[Path, Path] = {}
+    unique: Dict[str, Path] = {}
     for path in found + _snapshots():
-        unique.setdefault(path.resolve(), path)
+        unique.setdefault(os.path.abspath(path), path)
     return list(unique.values())
 
 

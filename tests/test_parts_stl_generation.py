@@ -134,6 +134,20 @@ class TestOpenSCADRequirement:
         _, snapshot = installed(nightly="2025.03.15")
         assert get_renderer().openscad_path == snapshot
 
+    def test_two_links_to_one_executable_are_two_openscads(self, installed, tmp_path):
+        """A snap links every app in /snap/bin to /usr/bin/snap, which runs the
+        one its name says: openscad and openscad-nightly are two programs."""
+        installed()
+        multiplexer = tmp_path / "snap"
+        multiplexer.write_text(
+            '#!/bin/sh\ncase "$0" in *nightly) v=2025.03.15;; *) v=2021.01;; esac\n'
+            'echo "OpenSCAD version $v" >&2\n'
+        )
+        multiplexer.chmod(0o755)
+        for name in ("openscad", "openscad-nightly"):
+            (tmp_path / "bin" / name).symlink_to(multiplexer)
+        assert _needs(tmp_path).get_openscad_path() == tmp_path / "bin" / "openscad-nightly"
+
     def test_a_snapshot_stands_in_for_a_default_that_is_too_old(self, installed, tmp_path):
         _, snapshot = installed(default="2021.01", nightly="2025.03.15")
         part = _needs(tmp_path)
