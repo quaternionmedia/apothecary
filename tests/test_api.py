@@ -146,3 +146,10 @@ def test_viewer_home_redirects_to_the_named_default_site():
 def test_a_part_name_from_a_url_is_never_an_import_path(name):
     """GET /parts/stl_renderer imported that module and answered 500."""
     assert TestClient(app).get(f"/parts/{name}").status_code == 404
+
+
+def test_a_nested_part_is_found_by_the_name_the_listing_gives_it():
+    client = TestClient(app)
+    listed = {part["name"] for part in client.get("/parts").json()}
+    assert "rc.snowplow" in listed
+    assert client.get("/parts/rc.snowplow/scad").status_code == 200

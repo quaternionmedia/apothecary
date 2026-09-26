@@ -55,7 +55,7 @@ from .primitives import Cube, Cylinder, Sphere
 from .projects.parts.skeleton import ROOT
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
 from .projects.parts.stl_renderer import write_params_sidecar
-from .projects.registry import scan_projects, stl_output_for
+from .projects.registry import _sanitize_module_name, scan_projects, stl_output_for
 from .routes.pictures import router as pictures_router
 from .scene import Scene
 from .site_store import SiteStore, UnknownSiteError
@@ -202,8 +202,21 @@ def _part_template() -> str:
 def _load_part_wrapper(name: str):
     # Only a registered part: a name from a URL is never turned into an import
     # path (GET /parts/stl_renderer used to import that module and answer 500).
+    # Spellings a link may carry: the registry's name in any case of - and _
+    # (datum-core), or a nested part's package path (rc.snowplow). Each resolves
+    # to a registered wrapper, never to a module constructed from the URL.
+    wanted = _sanitize_module_name(name)
     full = next(
-        (p.wrapper for p in scan_projects(ROOT) if p.kind == "part" and p.name == name),
+        (
+            p.wrapper
+            for p in scan_projects(ROOT)
+            if p.kind == "part"
+            and p.wrapper
+            and (
+                _sanitize_module_name(p.name) == wanted
+                or p.wrapper == f"apothecary.projects.parts.{name}"
+            )
+        ),
         None,
     )
     if full is None:
