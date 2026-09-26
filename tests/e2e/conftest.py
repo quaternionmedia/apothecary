@@ -114,12 +114,10 @@ def start_server(tmp_path_factory):
 
 @pytest.fixture(scope="session")
 def _picture_folder_if_known(request, tmp_path_factory):
-    """The picture folder, or None if nobody has said which one it is.
+    """The picture folder, or None if nobody said which one.
 
-    Kept separate from `picture_folder` on purpose. Starting the server must not
-    depend on a fixture that can skip: `test_server` is upstream of `base_url`,
-    which is upstream of every browser test, so a skip here would silently take
-    the whole browser suite with it — which is exactly what it did once.
+    Separate from `picture_folder` because the server must not depend on a fixture
+    that can skip: every browser test is downstream of it.
     """
     already = os.environ.get("APOTHECARY_PICTURE_ROOT")
     if already:
@@ -133,19 +131,7 @@ def _picture_folder_if_known(request, tmp_path_factory):
 
 @pytest.fixture(scope="session")
 def picture_folder(_picture_folder_if_known):
-    """The one folder the test server may read pictures from.
-
-    The server refuses any path outside a single folder, so a test that wants it
-    to look at a picture has to say where that folder is. Naming it here rather
-    than letting the server read anything is the point: the refusal is real, and
-    the first run of these tests hit it.
-
-    When something else started the server — `apothecary docs generate` does —
-    it has already chosen the folder and said so, and both sides have to agree.
-
-    Only tests that ask for this fixture are skipped when nobody said. Tests that
-    never show the server a picture run either way.
-    """
+    """The one folder the test server reads pictures from; skips if nobody said which."""
     if _picture_folder_if_known is None:
         pytest.skip(
             "This test asks the server to look at a picture, and the server reads "
@@ -193,18 +179,7 @@ def docs_enabled(request) -> bool:
 
 @pytest.fixture
 def browser_context_args(browser_context_args, docs_enabled, request):
-    """Record video for doc-workflow tests only, one subdirectory per test.
-
-    Overrides pytest-playwright's own fixture of the same name -- a
-    documented extension point. Playwright only assigns the actual .webm
-    its final filename once the context closes, well after this test's own
-    body (and doc_recorder's finalizer, below) has already run -- so rather
-    than guess which file belongs to which workflow afterward, each test
-    gets its own directory (named for the test itself, which pytest
-    guarantees is unique within a run) with exactly one video in it.
-    `apothecary docs generate` matches that video back to a workflow via
-    the marker file doc_recorder's finalizer writes alongside it.
-    """
+    """With --generate-docs, record each test's video into a directory named for the test."""
     if not docs_enabled:
         return browser_context_args
     video_dir = GENERATED_DOCS_ROOT / "_videos_raw" / _slugify_test_name(request.node.name)
@@ -225,12 +200,10 @@ def doc_recorder(page, docs_enabled, request):
     """Factory: doc_recorder(workflow, title, intro) -> DocRecorder.
 
     Every DocRecorder created through this fixture is finalized (manifest
-    written) automatically at teardown. Also drops a marker file naming
-    every workflow this test recorded into that test's own video directory
-    (see browser_context_args) -- the video itself isn't written until the
-    context closes, after this fixture's teardown runs, so the marker is
-    how `apothecary docs generate` later finds which workflow(s) a given
-    .webm belongs to.
+    written) at teardown. With --generate-docs it also writes a marker naming
+    the test's workflows into its video directory: the video is only written
+    when the context closes, after this teardown, and `apothecary docs generate`
+    matches each .webm to its workflows by that marker.
     """
     recorders = []
 
@@ -279,12 +252,9 @@ def camera_page(_camera_browser, base_url):
 
 @pytest.fixture
 def walkthrough(page):
-    """The one demonstration's recorder, written out however the run ends.
+    """The walkthrough's recorder, written out however the test ends.
 
-    Deliberately not gated on --generate-docs, which is what the screenshot
-    machinery above still uses. The walkthrough is the page a newcomer meets;
-    producing it only when somebody remembers a flag is what made it a second
-    description of behaviour rather than a record of a run.
+    Not gated on --generate-docs: every run of a walkthrough test writes its page.
     """
     made: list[Walkthrough] = []
 
