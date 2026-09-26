@@ -226,6 +226,8 @@ class TestBuildStl:
         text, definitions, where = seen[0]
         assert text == "cube([12.0, 40.0, 30.0], center=false);\n"
         assert definitions is None and where != tmp_path
+        # Scratch files sit beside the STL: a snap's OpenSCAD has its own /tmp.
+        assert [scratch.parent for _, _, scratch in seen] == [tmp_path] * len(seen)
         assert read_params_sidecar(part.get_stl_output_path())["params"] == {"x": 12}
         assert build_stl(part, {"x": 12}, renderer=Reading()).skipped == "fresh"
         assert sorted(p.name for p in tmp_path.iterdir()) == [

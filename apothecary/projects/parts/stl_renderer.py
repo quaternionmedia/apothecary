@@ -502,6 +502,17 @@ def _is_fresh(part: BasePart, stl_path: Path, params: dict) -> bool:
     return all(src.stat().st_mtime <= built for src in _sources(part) if src.exists())
 
 
+def _scratch_beside(stl_path: Path) -> tempfile.TemporaryDirectory:
+    """A scratch directory of one render's own, beside ``stl_path``: where
+    OpenSCAD writes its output, it can read. A snap's OpenSCAD has a /tmp of
+    its own. The name is hidden, and ``*.tmp`` in .gitignore should a killed
+    process leave it behind."""
+    stl_path.parent.mkdir(parents=True, exist_ok=True)
+    return tempfile.TemporaryDirectory(
+        prefix=f".{stl_path.stem}.", suffix=".tmp", dir=stl_path.parent
+    )
+
+
 def _render_rotated(
     renderer: OpenSCADRenderer,
     scad_path: Path,
@@ -512,9 +523,10 @@ def _render_rotated(
 ) -> RenderResult:
     """Render upright into a scratch directory, then turn it with a one-line wrapper.
 
-    Nothing is written beside the source, so two renders of one part cannot collide.
+    Nothing is written beside the source, and each render has a scratch
+    directory of its own, so two renders of one part cannot collide.
     """
-    with tempfile.TemporaryDirectory(prefix="apothecary-rotate-") as tmp:
+    with _scratch_beside(stl_path) as tmp:
         upright = Path(tmp) / "upright.stl"
         first = renderer.render_stl(scad_path, upright, timeout, params=params or None)
         if not first.success:
@@ -539,15 +551,15 @@ def render_part(
 ) -> RenderResult:
     """Render a part with already-validated ``params`` to ``stl_path``, and
     nothing more: no freshness check, no sidecar. A part with Python geometry
-    is rendered from that geometry's SCAD, written to a scratch file; any
-    other from its SCAD file, the params reaching it through
+    is rendered from that geometry's SCAD, written to a scratch file beside
+    ``stl_path``; any other from its SCAD file, the params reaching it through
     ``part.scad_overrides``. ``rotation`` turns the result; ``renderer``
     defaults to the OpenSCAD the part asks for."""
     if renderer is None:
         own = part.get_openscad_path()
         renderer = OpenSCADRenderer(str(own)) if own else get_renderer()
     params = params or {}
-    with tempfile.TemporaryDirectory(prefix="apothecary-part-") as tmp:
+    with _scratch_beside(stl_path) as tmp:
         text = geometry_scad(part, params)
         if text is None:
             scad, definitions = part.source_file, part.scad_overrides(params)
