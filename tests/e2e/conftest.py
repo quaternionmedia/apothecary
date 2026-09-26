@@ -259,17 +259,22 @@ def doc_recorder(page, docs_enabled, request):
 FAKE_CAMERA = ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"]
 
 
-@pytest.fixture
-def camera_page(browser_type, base_url):
-    """A page in a browser of its own, launched with the fake camera and the
-    permission to use it already granted."""
+@pytest.fixture(scope="session")
+def _camera_browser(browser_type):
     browser = browser_type.launch(args=FAKE_CAMERA)
-    context = browser.new_context(viewport={"width": 1280, "height": 800}, base_url=base_url)
-    context.grant_permissions(["camera"], origin=base_url)
-    page = context.new_page()
-    yield page
-    context.close()
+    yield browser
     browser.close()
+
+
+@pytest.fixture
+def camera_page(_camera_browser, base_url):
+    """A page in the fake-camera browser, in a context of its own with the camera allowed."""
+    context = _camera_browser.new_context(
+        viewport={"width": 1280, "height": 800}, base_url=base_url
+    )
+    context.grant_permissions(["camera"], origin=base_url)
+    yield context.new_page()
+    context.close()
 
 
 @pytest.fixture
