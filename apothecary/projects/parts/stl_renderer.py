@@ -398,20 +398,43 @@ def find_openscad(min_version: str) -> Tuple[Optional[Path], str]:
     )
 
 
-def _sources(part: BasePart) -> List[Path]:
-    """What a part's STL is built from: its SCAD, and the module (a described
-    part's part.json) that sets its rotation and output path.
+def geometry_scad(part: BasePart, params: dict) -> Optional[str]:
+    """The SCAD a part's Python geometry renders to for already-validated
+    ``params``, or None when its SCAD file is the source. An ``Import`` in it
+    is written absolute, so the text renders from wherever it is saved."""
+    from apothecary.primitives import absolute_imports
 
-    The module is found as the loaded wrapper whose DEFAULT is this part.
-    """
+    built = part.geometry(params)
+    if built is None:
+        return None
+    with absolute_imports(part.part_dir):
+        return built.render() + "\n"
+
+
+def _sources(part: BasePart) -> List[Path]:
+    """What a part's STL is built from: its SCAD, and each loaded wrapper
+    module whose DEFAULT is this part (a described part's part.json), which
+    sets its rotation and output path. A part built by Python geometry is
+    also built from its code: the module that defines its class, and every
+    module of a wrapper that is a package."""
+    python = part.geometry({}) is not None
     sources = [part.source_file]
-    for name, module in list(sys.modules.items()):
-        if name.startswith("apothecary.projects.parts.") and (
-            getattr(module, "DEFAULT", None) is part
-        ):
-            if getattr(module, "__file__", None):
-                sources.append(Path(module.__file__))
-            break
+    modules = [
+        module
+        for name, module in list(sys.modules.items())
+        if name.startswith("apothecary.projects.parts.")
+        and getattr(module, "DEFAULT", None) is part
+    ]
+    if python:
+        modules.append(sys.modules.get(type(part).__module__))
+    for module in modules:
+        path = Path(module.__file__) if getattr(module, "__file__", None) else None
+        if path is None:
+            continue
+        if python and path.name == "__init__.py":
+            sources.extend(sorted(path.parent.glob("*.py")))
+        else:
+            sources.append(path)
     return sources
 
 
@@ -464,16 +487,25 @@ def render_part(
     rotation: Optional[List[float]] = None,
 ) -> RenderResult:
     """Render a part with already-validated ``params`` to ``stl_path``, and
-    nothing more: no freshness check, no sidecar. The params reach its SCAD
-    through ``part.scad_overrides``; ``rotation`` turns the result;
-    ``renderer`` defaults to the OpenSCAD the part asks for."""
+    nothing more: no freshness check, no sidecar. A part with Python geometry
+    is rendered from that geometry's SCAD, written to a scratch file; any
+    other from its SCAD file, the params reaching it through
+    ``part.scad_overrides``. ``rotation`` turns the result; ``renderer``
+    defaults to the OpenSCAD the part asks for."""
     if renderer is None:
         own = part.get_openscad_path()
         renderer = OpenSCADRenderer(str(own)) if own else get_renderer()
-    definitions = part.scad_overrides(params or {})
-    if rotation and any(rotation):
-        return _render_rotated(renderer, part.source_file, stl_path, rotation, timeout, definitions)
-    return renderer.render_stl(part.source_file, stl_path, timeout, params=definitions or None)
+    params = params or {}
+    with tempfile.TemporaryDirectory(prefix="apothecary-part-") as tmp:
+        text = geometry_scad(part, params)
+        if text is None:
+            scad, definitions = part.source_file, part.scad_overrides(params)
+        else:
+            scad, definitions = Path(tmp) / part.source_file.name, {}
+            scad.write_text(text, encoding="utf-8")
+        if rotation and any(rotation):
+            return _render_rotated(renderer, scad, stl_path, rotation, timeout, definitions)
+        return renderer.render_stl(scad, stl_path, timeout, params=definitions or None)
 
 
 def build_stl(
@@ -487,9 +519,10 @@ def build_stl(
 
     Overrides are checked against the part's ``params_model`` (ValueError on a
     bad one). The STL on disk is kept (``skipped="fresh"``) unless ``force``, a
-    newer SCAD or wrapper, or different recorded parameters say otherwise. A
-    part that cannot be built here is refused (``skipped="refused"``). The
-    render is turned by ``display_rotation``; non-default parameters are
+    newer SCAD, wrapper or geometry code, or different recorded parameters say
+    otherwise. A part that cannot be built here is refused
+    (``skipped="refused"``). It is rendered as ``render_part`` renders it,
+    turned by ``display_rotation``; non-default parameters are
     recorded in the params sidecar as validated, not as ``scad_overrides``
     translates them, and a default build removes it. ``renderer`` overrides
     the OpenSCAD the part would choose for itself.

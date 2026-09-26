@@ -444,11 +444,11 @@ def parts_render(name: str, params_json: str | None, template: str | None, outpu
     params_json_out = params.model_dump_json() if params else "{}"
     output_path = Path(output)
 
-    # Special case: rc.snowplow is a Python parametric part, generate SCAD from Python
-    if part.name == "rc.snowplow":
-        from ..projects.parts.rc.snowplow import snowplow_assembly
+    # A part built by Python geometry is written out as that geometry's SCAD.
+    from ..projects.parts.stl_renderer import geometry_scad
 
-        code = snowplow_assembly(**(params.model_dump() if params else {})).render()
+    code = geometry_scad(part, params.model_dump() if params else {})
+    if code is not None:
         output_path.write_text(code, encoding="utf-8")
         click.echo(f"Rendered parametric part '{part.name}' -> {output_path}")
         return

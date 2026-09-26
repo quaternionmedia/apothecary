@@ -10,6 +10,7 @@ import pytest
 from click.testing import CliRunner
 from pydantic import BaseModel
 
+from apothecary import Cube
 from apothecary.meshes import bounds, read_mesh
 from apothecary.models import Vector3D
 from apothecary.projects.parts.base import BasePart
@@ -129,6 +130,13 @@ class FakeRenderer:
         return RenderResult(success=True, stl_path=stl_path)
 
 
+class _Built(BasePart):
+    """A part built in Python: an x by 40 by 30 block, where its SCAD says x by 20 by 30."""
+
+    def geometry(self, params):
+        return Cube(size=Vector3D(x=params.get("x", 10), y=40, z=30))
+
+
 def _part(tmp_path, **kw) -> BasePart:
     scad = tmp_path / "block.scad"
     if not scad.exists():
@@ -193,6 +201,48 @@ class TestBuildStl:
         assert fake.calls[0] == (scad, {"size_x": 12})
         assert read_params_sidecar(part.get_stl_output_path())["params"] == {"x": 12}
         assert build_stl(part, {"x": 12}, renderer=fake).skipped == "fresh"
+
+    @pytest.mark.parametrize(
+        "rotation", [Vector3D(), Vector3D(x=90, y=0, z=0)], ids=["upright", "rotated"]
+    )
+    def test_python_geometry_is_what_renders(self, tmp_path, rotation):
+        part = _Built(
+            name="block",
+            source_file=_part(tmp_path).source_file,
+            params_model=Size,
+            display_rotation=rotation,
+        )
+        seen = []
+
+        class Reading(FakeRenderer):
+            def render_stl(self, scad_path, stl_path=None, timeout=120.0, params=None):
+                seen.append((Path(scad_path).read_text(), params, Path(scad_path).parent))
+                return super().render_stl(scad_path, stl_path, timeout, params)
+
+        assert build_stl(part, {"x": 12}, renderer=Reading()).success
+        text, definitions, where = seen[0]
+        assert text == "cube([12.0, 40.0, 30.0], center=false);\n"
+        assert definitions is None and where != tmp_path
+        assert read_params_sidecar(part.get_stl_output_path())["params"] == {"x": 12}
+        assert build_stl(part, {"x": 12}, renderer=Reading()).skipped == "fresh"
+        assert sorted(p.name for p in tmp_path.iterdir()) == [
+            "block.params.json",
+            "block.scad",
+            "block.stl",
+        ]
+
+    @needs_openscad
+    def test_python_geometry_is_turned_by_display_rotation(self, tmp_path):
+        part = _Built(
+            name="block",
+            source_file=_part(tmp_path).source_file,
+            params_model=Size,
+            display_rotation=Vector3D(x=90, y=0, z=0),
+        )
+        result = build_stl(part, {"x": 12})
+        assert result.success, result.error_message
+        lo, hi = bounds(read_mesh(result.stl_path))
+        assert [round(hi[axis] - lo[axis], 3) for axis in range(3)] == [12, 30, 40]
 
     def test_a_default_build_clears_a_variants_sidecar(self, tmp_path):
         part, fake = _part(tmp_path), FakeRenderer()

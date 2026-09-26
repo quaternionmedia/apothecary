@@ -11,10 +11,14 @@ cube([120.0, 3.0, 45.0], center=true);
 cube([40.0, 4.0, 12.0], center=true);
   union() {
   translate([-12.0, 0.0, 0.0]) {
-  cylinder(h=20.0, r=1, center=true);
+  rotate([90.0, 0.0, 0.0]) {
+  cylinder(h=6.0, r=1.5, center=true);
+}
 }
   translate([12.0, 0.0, 0.0]) {
-  cylinder(h=20.0, r=1, center=true);
+  rotate([90.0, 0.0, 0.0]) {
+  cylinder(h=6.0, r=1.5, center=true);
+}
 }
 }
 }

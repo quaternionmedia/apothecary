@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Type
 
 from pydantic import BaseModel, Field, computed_field, field_validator
 
+from apothecary.core import OpenSCADObject
 from apothecary.models import (
     GRAY,
     BoundingBox3D,
@@ -151,6 +152,12 @@ class BasePart(BaseModel):
         params themselves. A part whose model names things differently from its
         SCAD translates here; the params sidecar still records ``params``."""
         return dict(params)
+
+    def geometry(self, params: Mapping[str, Any]) -> Optional[OpenSCADObject]:
+        """The part built in Python for already-validated ``params``, or None:
+        the SCAD file is the source. A part that returns an object is rendered
+        from that object's SCAD, and its SCAD file is only what a reader sees."""
+        return None
 
     def get_bounds(self, params: Optional[Dict] = None) -> Optional[BoundingBox3D]:
         """
