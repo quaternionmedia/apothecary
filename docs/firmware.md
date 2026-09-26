@@ -128,8 +128,8 @@ mismatch is red.
 
 `GET /firmware/devices/stream?port=…&baud=…` streams a board's serial output
 (server-sent events). Starting any task stops every monitor first. Bytes are
-paced at the baud rate, so a bridge replaying bytes it already delivered (a
-CP2102 does) is dropped, and three replays in a row reopen the port.
+paced at the baud rate, so bytes a bridge replays after delivering them (a
+CP2102 does) are dropped, and three replays in a row reopen the port.
 
 ## Printers: boards that already run a G-code firmware
 
