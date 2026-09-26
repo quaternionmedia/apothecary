@@ -292,11 +292,11 @@ class SimulatedPrinter:
         self.paused_at = 0.0
         self.hot_target = 210.0 if self.printing else 0.0
         self.bed_target = 60.0 if self.printing else 0.0
-        self.fan = 0
         self.pos = {"X": 0.0, "Y": 0.0, "Z": 0.0}
         self.relative = False
         self.halted = False
-        self._heat_t0 = time.monotonic()
+        # Multiplies every G4 dwell: 1 is real time, 0 skips them.
+        self.dwell_scale = float(os.environ.get("APOTHECARY_SIMULATED_SPEED", "1"))
 
     def _progress(self) -> float:
         # A print that goes round: a browser suite that runs longer than one
@@ -312,10 +312,6 @@ class SimulatedPrinter:
             self.hot_target = float(args.get("S", 0))
         elif code == "M140":
             self.bed_target = float(args.get("S", 0))
-        elif code == "M106":
-            self.fan = int(args.get("S", 255))
-        elif code == "M107":
-            self.fan = 0
         elif code == "G28":
             for axis in "XYZ" if len(parts) == 1 else [a for a in "XYZ" if a in args]:
                 self.pos[axis] = 0.0
@@ -353,7 +349,7 @@ class SimulatedPrinter:
             # A dwell takes the time it says (capped), so a streamed file takes
             # time to stream and a pause has something to interrupt.
             ms = float(args.get("P", 0)) or 1000 * float(args.get("S", 0))
-            time.sleep(min(2.0, ms / 1000))
+            time.sleep(min(2.0, ms / 1000) * self.dwell_scale)
         elif code == "G29":
             # A probe takes a while; the busy lines are what Marlin prints while it does.
             return ["echo:busy: processing", "echo:busy: processing", *self._grid_lines(), "ok"]
@@ -891,7 +887,6 @@ GRID_HEADER_RE = re.compile(r"^\s*(\d+(?:\s+\d+)+)\s*$")
 GRID_ROW_RE = re.compile(r"^\s*(\d+)((?:\s+[-+]?\d+\.\d+)+)\s*$")
 G29_POINT_RE = re.compile(r"G29 W I(\d+) J(\d+) Z([-+]?\d+\.\d+)")
 PROBE_OFFSET_RE = re.compile(r"M851 X([-+]?\d+\.?\d*) Y([-+]?\d+\.?\d*) Z([-+]?\d+\.?\d*)")
-G30_RE = re.compile(r"Bed X:\s*([-+]?\d+\.?\d*)\s*Y:\s*([-+]?\d+\.?\d*)\s*Z:\s*([-+]?\d+\.?\d*)")
 LEVELING_STATE_RE = re.compile(r"Bed Leveling (ON|OFF)")
 
 
@@ -977,14 +972,6 @@ def mesh_stats(mesh: List[List[float]]) -> dict:
 def parse_probe_offset(lines: List[str]) -> Optional[dict]:
     for line in lines:
         m = PROBE_OFFSET_RE.search(line)
-        if m:
-            return {"x": float(m.group(1)), "y": float(m.group(2)), "z": float(m.group(3))}
-    return None
-
-
-def parse_g30(lines: List[str]) -> Optional[dict]:
-    for line in lines:
-        m = G30_RE.search(line)
         if m:
             return {"x": float(m.group(1)), "y": float(m.group(2)), "z": float(m.group(3))}
     return None

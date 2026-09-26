@@ -844,6 +844,16 @@ def test_simulator_honours_controls(monkeypatch):
         gcode.poll_printer(link)
 
 
+def test_simulated_dwells_scale_with_the_speed_setting(monkeypatch):
+    monkeypatch.delenv("APOTHECARY_SIMULATED_SPEED", raising=False)
+    assert gcode.SimulatedPrinter("/dev/ttySIM", 115200).dwell_scale == 1.0
+    monkeypatch.setenv("APOTHECARY_SIMULATED_SPEED", "0.1")
+    started = time.monotonic()
+    # 1.5 s, and 9 s capped at 2 s: 3.5 s at full length, 0.35 s at a tenth.
+    gcode.SimulatedPrinter("/dev/ttySIM", 115200).write(b"G4 P1500\nG4 S9\n")
+    assert 0.3 < time.monotonic() - started < 2.0
+
+
 # --- review fixes: the monitor page never reflects a raw port; polls carry the latch -------
 
 
@@ -974,15 +984,9 @@ def test_mesh_stats_reports_range_tilt_and_corners():
     assert gcode.mesh_stats([[0.3]])["tilt_x"] == 0.0
 
 
-def test_parse_probe_offset_single_probe_and_leveling_state():
+def test_parse_probe_offset_and_leveling_state():
     assert gcode.parse_probe_offset(LEVELING["M851"]) == {"x": -44.0, "y": -10.0, "z": -3.15}
     assert gcode.parse_probe_offset(["ok"]) is None
-    assert gcode.parse_g30(["Bed X: 110.00 Y: 110.00 Z: 0.12", "ok"]) == {
-        "x": 110.0,
-        "y": 110.0,
-        "z": 0.12,
-    }
-    assert gcode.parse_g30(["ok"]) is None
     assert gcode.parse_leveling_state(MESH_REPORT) is True
     assert gcode.parse_leveling_state(["echo:Bed Leveling OFF"]) is False
     assert gcode.parse_leveling_state(["ok"]) is None
@@ -1008,8 +1012,9 @@ def test_simulator_answers_the_leveling_codes(monkeypatch):
     stats = gcode.mesh_stats(grids[0])
     assert 0.3 < stats["range"] < 1.2 and stats["tilt_x"] > 0 > stats["tilt_y"]
     assert gcode.parse_probe_offset(link.command("M851")) == {"x": -44.0, "y": -10.0, "z": -3.15}
-    hit = gcode.parse_g30(gcode.control_printer(link, "G30 X110 Y110"))
-    assert hit["x"] == 110.0 and hit["y"] == 110.0 and abs(hit["z"]) < 0.5
+    hit = gcode.control_printer(link, "G30 X110 Y110")
+    assert hit[0].startswith("Bed X: 110.00 Y: 110.00 Z: ") and hit[-1] == "ok"
+    assert abs(float(hit[0].rsplit(" ", 1)[1])) < 0.5
 
 
 def test_leveling_job_homes_probes_reads_and_saves(fake_arduino_cli, scripted_links):
