@@ -1,11 +1,13 @@
 """The documentation served by the viewer's server: /docs and /walkthrough."""
 
 import json
+import re
 
 from fastapi.testclient import TestClient
 
 from apothecary import docs_site
 from apothecary.api import app
+from apothecary.projects.parts.skeleton import ROOT
 
 
 def test_the_renderer_covers_what_the_docs_use():
@@ -71,8 +73,50 @@ def test_every_page_renders_and_its_links_resolve():
             if not rel:
                 continue
             path = (here / rel).resolve()
-            if not path.exists() and "generated/" not in rel and ".placeholder" not in rel:
+            if not path.exists() and "generated/" not in rel:
                 missing.append(f"{url} -> {href}")
+    assert not missing, "\n".join(missing)
+
+
+ROOT_DOCS = ["README.md", "QUICKSTART.md", "CONTRIBUTING.md", "AGENTS.md", "CHANGELOG.md"]
+FENCE = re.compile(r"^```.*?^```", re.M | re.S)
+REMOVED = re.compile(r"^### Removed$.*?(?=^#|\Z)", re.M | re.S)  # names what is gone
+HTML_LINK = re.compile(r'\b(?:src|href)="([^"]+)"')
+CODE_SPAN = re.compile(r"`([^`\n]+)`")
+TOP = ["governance", "apothecary", "docs", "parts", "tests", "walkthrough", "templates", "examples"]
+REPO_DIRS = tuple(f"{d}/" for d in TOP)
+
+
+def _names_a_repo_path(span: str) -> bool:
+    """A code span that names a file or folder here: under a top-level directory,
+    or a Markdown file or folder anywhere. A placeholder or wildcard is a pattern,
+    and a route, a home-relative or dot path, or docs/generated/ is not committed."""
+    if any(c in span for c in " <>*{}\\") or span.startswith(("/", "~", ".", "docs/generated/")):
+        return False
+    return span.startswith(REPO_DIRS) or span.endswith((".md", "/"))
+
+
+def test_the_root_docs_name_only_files_that_exist():
+    """README, QUICKSTART, CONTRIBUTING, AGENTS and CHANGELOG link to, and name in
+    code, only files and folders this checkout has."""
+    governance = (ROOT / "governance" / "qm" / "README.md").exists()
+    missing = []
+    for name in ROOT_DOCS:
+        text = (ROOT / name).read_text(encoding="utf-8")
+        hrefs = [href for _, href in docs_site.LINK.findall(text)] + HTML_LINK.findall(text)
+        for href in hrefs:
+            rel = href.split("#", 1)[0]
+            if "://" in href or href.startswith("mailto:") or not rel:
+                continue
+            if not (ROOT / rel).exists():
+                missing.append(f"{name} -> {href}")
+        for span in CODE_SPAN.findall(REMOVED.sub("", FENCE.sub("", text))):
+            if not _names_a_repo_path(span):
+                continue
+            if span.startswith("governance/") and not governance:
+                continue  # the submodule is not checked out: git submodule update --init
+            if not (ROOT / span).exists():
+                missing.append(f"{name} -> `{span}`")
     assert not missing, "\n".join(missing)
 
 
