@@ -1,4 +1,4 @@
-"""One check every server fixture makes before it starts anything.
+"""The check a test server makes before it takes a port someone named (--server-port).
 
 Its own module, imported by name, because ``conftest`` is a name two files
 share here and which one wins depends on collection order.

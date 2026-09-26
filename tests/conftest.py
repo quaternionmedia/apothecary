@@ -25,8 +25,8 @@ def pytest_addoption(parser):
     parser.addoption(
         "--server-port",
         action="store",
-        default="8765",
-        help="Port for the test server (default: 8765)",
+        default=None,
+        help="Port for --start-server's server (default: a free one) or for yours (8765)",
     )
     parser.addoption(
         "--slow",
