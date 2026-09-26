@@ -1106,6 +1106,7 @@
 
             async loadSite(name, focusPathStr = '') {
                 if (!name) return;
+                this.closeMachine();
                 this.setStatus(`Loading ${name}...`, 'loading');
                 try {
                     const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(name)}`);
@@ -2738,7 +2739,9 @@
                 // The machines' badges are this method's; a camera's badge is
                 // syncCameras', and stays whichever of the two runs last.
                 for (const key of this.anchors.keys()) if (!wanted.has(key) && !key.startsWith('camera:')) this.anchors.remove(key);
-                for (const [key, m] of Object.entries(this.marks)) if (!wanted.has(key)) { m.marks.destroy(); delete this.marks[key]; }
+                for (const [key, m] of Object.entries(this.marks)) if (!wanted.has(key)) { m.marks?.destroy(); delete this.marks[key]; }
+                // The machine's popup goes with its badge: nothing is left polling it unseen.
+                if (this.machine && !wanted.has(this.machine.path)) this.closeMachine();
             }
 
             fillBadge(badge, row, isPrinter) {
@@ -2783,19 +2786,23 @@
                 this.panels.register('machine', {
                     title: `${bearer} · ${port}`, where: 'free', open: true,
                     body: (slot) => { handle = mountMachine(slot, { base: BASE_URL, port, host: 'popup', logRoot: logSlot }); },
+                    onClose: () => this.closeMachine(),  // its ✕: the polling stops with it
                 });
                 this.panels.tether('machine', bearer);
                 this.machine = { port, path: bearer, handle };
                 window.apothecaryMachine = handle;
                 return true;
             }
+            // Stops the machine's polling and takes its two panels away. Called
+            // again from inside (the panel's onClose), it does nothing.
             closeMachine() {
-                if (!this.machine) return;
-                this.machine.handle.destroy();
-                this.panels.unregister('machine');
-                this.panels.unregister('log');
+                const machine = this.machine;
+                if (!machine) return;
                 this.machine = null;
                 window.apothecaryMachine = null;
+                machine.handle.destroy();
+                this.panels.unregister('machine');
+                this.panels.unregister('log');
             }
 
             // A printer's marks at its node, from what GET /firmware/printers/where
