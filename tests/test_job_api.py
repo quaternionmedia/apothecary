@@ -3,14 +3,16 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from apothecary.api import app
+from apothecary.api import _job_store, _site_store, app
 
 client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
 def reset_garage_site():
-    client.post("/sites/garage/reset")
+    """Each test starts from the factory garage with an empty job queue."""
+    _site_store.reset("garage")
+    _job_store.reset("garage")
     yield
 
 

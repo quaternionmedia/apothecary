@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import apothecary.api as api
-from apothecary.api import _find_node_by_path, _site_store, app
+from apothecary.api import _find_node_by_path, _job_store, _site_store, app
 from apothecary.example_hierarchy import create_example_site
 from apothecary.firmware import devices as firmware_devices
 from apothecary.firmware import gcode as firmware_gcode
@@ -23,11 +23,10 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def reset_garage_site():
-    """The site store persists edits across requests (see site_store.py), so
-    reset garage to its factory defaults before every test in this module --
-    otherwise a test that moves a printer would leak state into the next one.
-    """
-    client.post("/sites/garage/reset")
+    """The site store keeps edits between requests: each test starts from the
+    factory garage. test_reset_endpoint_discards_edits covers the route."""
+    _site_store.reset("garage")
+    _job_store.reset("garage")
     yield
 
 
