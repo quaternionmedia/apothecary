@@ -140,7 +140,9 @@ class OpenSCADRenderer:
         return self._detected_path
 
     def _detect_openscad(self) -> Optional[Path]:
-        """OpenSCAD on PATH, else at one of the usual install locations."""
+        """OpenSCAD on PATH, else at one of the usual install locations, else a
+        development snapshot: on a machine that has only a snapshot, it is the
+        OpenSCAD every build uses."""
         found = shutil.which("openscad")
         if found:
             return Path(found)
@@ -148,7 +150,7 @@ class OpenSCADRenderer:
             path = Path(path_str)
             if path.exists():
                 return path
-        return None
+        return next(iter(_snapshots()), None)
 
     @property
     def is_available(self) -> bool:
@@ -362,18 +364,19 @@ def openscad_version(executable: Path) -> Optional[str]:
     return _VERSIONS[key]
 
 
+def _snapshots() -> List[Path]:
+    """Development snapshots on this machine: ``openscad-nightly`` on PATH,
+    then the places snapshots install."""
+    found = [Path(p) for p in [shutil.which("openscad-nightly")] if p]
+    return found + [Path(p) for p in OpenSCADRenderer.OPENSCAD_NIGHTLY_PATHS if Path(p).exists()]
+
+
 def _openscad_candidates() -> List[Path]:
     """The default OpenSCAD, then development snapshots, each executable once."""
-    found: List[Path] = []
     default = get_renderer()
-    if default.is_available:
-        found.append(default.openscad_path)
-    nightly = shutil.which("openscad-nightly")
-    if nightly:
-        found.append(Path(nightly))
-    found.extend(Path(p) for p in OpenSCADRenderer.OPENSCAD_NIGHTLY_PATHS if Path(p).exists())
+    found = [default.openscad_path] if default.is_available else []
     unique: Dict[Path, Path] = {}
-    for path in found:
+    for path in found + _snapshots():
         unique.setdefault(path.resolve(), path)
     return list(unique.values())
 

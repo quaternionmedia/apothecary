@@ -62,10 +62,14 @@ def test_cases_include_described_and_nested_parts():
 
 
 def _fake_openscad(path: Path, version: str) -> Path:
-    """An `openscad` that reports ``version`` and logs its arguments to ``<path>.calls``."""
+    """An `openscad` that reports ``version``, writes a stand-in STL where `-o`
+    says, and logs its arguments to ``<path>.calls``."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        f'#!/bin/sh\necho "$@" >> "{path}.calls"\necho "OpenSCAD version {version}" >&2\n'
+        "#!/bin/sh\n"
+        f'echo "$@" >> "{path}.calls"\n'
+        f'echo "OpenSCAD version {version}" >&2\n'
+        'if [ "$1" = "-o" ]; then printf "solid fake\\nendsolid fake\\n" > "$2"; fi\n'
     )
     path.chmod(0o755)
     return path
@@ -93,10 +97,12 @@ def installed(tmp_path, monkeypatch):
         stable = tmp_path / "stable" / "openscad"
         if default:
             _fake_openscad(stable, default)
-        monkeypatch.setattr(stl_renderer, "_renderer", OpenSCADRenderer(str(stable)))
         snapshot = _fake_openscad(tmp_path / "nightly" / "openscad", nightly) if nightly else None
+        # Found as on a real machine: the default at a usual place, if it is there.
+        monkeypatch.setattr(OpenSCADRenderer, "OPENSCAD_PATHS", [str(stable)])
         paths = [str(snapshot)] if snapshot else []
         monkeypatch.setattr(OpenSCADRenderer, "OPENSCAD_NIGHTLY_PATHS", paths)
+        monkeypatch.setattr(stl_renderer, "_renderer", None)
         monkeypatch.setattr(stl_renderer, "_VERSIONS", {}, raising=False)
         return stable, snapshot
 
@@ -123,6 +129,10 @@ class TestOpenSCADRequirement:
         from apothecary.projects.parts.stl_renderer import parse_openscad_version
 
         assert parse_openscad_version(text) == version
+
+    def test_a_snapshot_alone_is_the_default(self, installed):
+        _, snapshot = installed(nightly="2025.03.15")
+        assert get_renderer().openscad_path == snapshot
 
     def test_a_snapshot_stands_in_for_a_default_that_is_too_old(self, installed, tmp_path):
         _, snapshot = installed(default="2021.01", nightly="2025.03.15")
@@ -179,6 +189,22 @@ class TestGridfinityOpenSCAD:
         stable, _ = installed(default="2021.10.01")
         assert GRIDFINITY.can_generate_stl() == (True, "")
         assert GRIDFINITY.get_openscad_path() == stable
+
+    def test_a_snapshot_alone_builds_it_through_the_api(self, installed, monkeypatch, tmp_path):
+        """What the part's metadata offers, the build route does."""
+        from fastapi.testclient import TestClient
+
+        from apothecary.api import app
+
+        _, snapshot = installed(nightly="2025.03.15")
+        stl = tmp_path / "gridfinity.stl"
+        monkeypatch.setattr(type(GRIDFINITY), "get_stl_output_path", lambda self: stl)
+        client = TestClient(app)
+        assert client.get("/parts/gridfinity").json()["files"]["stl"]["can_generate"] is True
+        r = client.post("/parts/gridfinity/stl/generate")
+        assert r.status_code == 200, r.text
+        assert [call.split()[0] for call in _calls(snapshot)] == ["--version", "-o"]
+        assert stl.exists()
 
     def test_it_is_refused_on_2021_01_naming_what_it_needs(self, installed):
         from apothecary.projects.parts.gridfinity import OPENSCAD_MIN_VERSION

@@ -40,6 +40,7 @@ class TestOpenSCADRenderer:
     def test_detect_openscad_not_found(self, monkeypatch):
         monkeypatch.setattr("shutil.which", lambda name: None)
         monkeypatch.setattr(OpenSCADRenderer, "OPENSCAD_PATHS", [])
+        monkeypatch.setattr(OpenSCADRenderer, "OPENSCAD_NIGHTLY_PATHS", [])
         assert OpenSCADRenderer()._detect_openscad() is None
 
     def test_render_stl_missing_source(self, tmp_path):
