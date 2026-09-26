@@ -229,9 +229,6 @@ class FirmwareState:
         rows = [ManualBinding(**b) for b in self._load()["bindings"]]
         return [b for b in rows if site is None or b.site == site]
 
-    def binding_for(self, site: str, path: str) -> Optional[ManualBinding]:
-        return next((b for b in self.bindings(site) if b.path == path), None)
-
 
 _STATE: Optional[FirmwareState] = None
 

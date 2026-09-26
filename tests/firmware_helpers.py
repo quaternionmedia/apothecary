@@ -38,7 +38,7 @@ FAKE_ARDUINO_CLI = textwrap.dedent(r"""
         print(json.dumps({"platforms": [
             {"id": "arduino:avr", "installed_version": "1.8.8", "latest_version": "1.8.8",
              "releases": {"1.8.8": {"name": "Arduino AVR Boards"}}}]}))
-    elif "flash_id" in args or "chip_id" in args:  # standing in for esptool
+    elif "flash_id" in args:  # standing in for esptool
         print("Chip type:          ESP32-D0WD-V3 (revision v3.1)")
         print("Features:           Wi-Fi, BT, Dual Core, 240MHz")
         print("Crystal frequency:  40MHz")

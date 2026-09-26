@@ -370,9 +370,6 @@ class Esptool:
             raise ToolchainError("esptool could not talk to the chip: " + " | ".join(tail))
         return parse_esptool_probe(text)
 
-    def chip_id_argv(self, port: str, chip: str = "auto") -> List[str]:
-        return self._base(port, chip) + ["chip_id"]
-
     def erase_argv(self, port: str, chip: str = "auto") -> List[str]:
         return self._base(port, chip) + ["erase_flash"]
 
