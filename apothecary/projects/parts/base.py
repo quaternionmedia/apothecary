@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Optional, Type
+from typing import Any, Dict, List, Mapping, Optional, Tuple, Type
 
 from pydantic import BaseModel, Field, computed_field
 
@@ -84,6 +84,35 @@ class BasePart(BaseModel):
         """Get the JSCAD file path if it exists."""
         jscad_path = self.source_file.with_suffix(".jscad")
         return jscad_path if jscad_path.exists() else None
+
+    def can_generate_stl(self) -> Tuple[bool, str]:
+        """Whether this part's STL can be built on this machine, and if not, why."""
+        return True, ""
+
+    def get_openscad_path(self) -> Optional[Path]:
+        """The OpenSCAD this part needs, or None for whichever is installed."""
+        return None
+
+    def validate_overrides(self, params: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
+        """Parameter overrides checked against ``params_model``, as it coerced them.
+
+        OpenSCAD accepts any ``-D`` name, defined or not, so a misspelled one
+        would render the defaults and look like success. Raises ValueError
+        (a pydantic ValidationError for a bad value).
+        """
+        if not params:
+            return {}
+        if self.params_model is None:
+            return dict(params)
+        known = set(self.params_model.model_fields)
+        unknown = sorted(set(params) - known)
+        if unknown:
+            raise ValueError(
+                f"unknown parameter(s): {', '.join(unknown)}. "
+                f"{self.name} declares: {', '.join(sorted(known))}"
+            )
+        validated = self.params_model(**params)
+        return {name: getattr(validated, name) for name in params}
 
     def get_bounds(self, params: Optional[Dict] = None) -> Optional[BoundingBox3D]:
         """

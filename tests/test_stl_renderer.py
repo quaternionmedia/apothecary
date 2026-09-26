@@ -1,14 +1,32 @@
-"""Tests for STL rendering."""
+"""Tests for STL rendering and build_stl, the one way a part's STL is built."""
 
+import os
 import stat
 from enum import IntEnum
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from click.testing import CliRunner
 from pydantic import BaseModel
 
-from apothecary.projects.parts.stl_renderer import OpenSCADRenderer, RenderResult, scad_literal
+from apothecary.meshes import bounds, read_mesh
+from apothecary.models import Vector3D
+from apothecary.projects.parts.base import BasePart
+from apothecary.projects.parts.stl_renderer import (
+    OpenSCADRenderer,
+    RenderResult,
+    build_stl,
+    get_renderer,
+    read_params_sidecar,
+    scad_literal,
+    write_params_sidecar,
+)
+from apothecary.projects.registry import ProjectInfo
+
+needs_openscad = pytest.mark.skipif(
+    not get_renderer().is_available, reason="OpenSCAD not installed"
+)
 
 
 class TestOpenSCADRenderer:
@@ -95,13 +113,113 @@ class TestScadLiteralTypes:
             scad_literal(Holes())
 
 
+class Size(BaseModel):
+    x: float = 10
+
+
+class FakeRenderer:
+    """Writes a stand-in STL and counts the renders."""
+
+    def __init__(self):
+        self.calls = []
+
+    def render_stl(self, scad_path, stl_path=None, timeout=120.0, params=None):
+        self.calls.append((Path(scad_path), params))
+        stl_path.write_text("solid fake\nendsolid fake\n")
+        return RenderResult(success=True, stl_path=stl_path)
+
+
+def _part(tmp_path, **kw) -> BasePart:
+    scad = tmp_path / "block.scad"
+    if not scad.exists():
+        scad.write_text("x = 10;\ncube([x, 20, 30]);\n")
+    return BasePart(name="block", source_file=scad, params_model=Size, **kw)
+
+
+class TestBuildStl:
+    def test_an_up_to_date_stl_is_kept_and_an_edited_scad_rebuilds_it(self, tmp_path):
+        part, fake = _part(tmp_path), FakeRenderer()
+        assert build_stl(part, renderer=fake).skipped is None
+        assert build_stl(part, renderer=fake).skipped == "fresh"
+        assert len(fake.calls) == 1
+
+        later = part.get_stl_output_path().stat().st_mtime + 5
+        os.utime(part.source_file, (later, later))
+        result = build_stl(part, renderer=fake)
+        assert result.success and result.skipped is None
+        assert len(fake.calls) == 2
+
+    def test_other_parameters_are_not_up_to_date(self, tmp_path):
+        part, fake = _part(tmp_path), FakeRenderer()
+        build_stl(part, {"x": 12}, renderer=fake)
+        assert build_stl(part, {"x": 12}, renderer=fake).skipped == "fresh"
+        assert build_stl(part, renderer=fake).skipped is None
+        assert len(fake.calls) == 2
+
+    def test_overrides_are_validated_before_anything_renders(self, tmp_path):
+        part, fake = _part(tmp_path), FakeRenderer()
+        with pytest.raises(ValueError, match="unknown parameter.*y.*declares: x"):
+            build_stl(part, {"y": 1}, renderer=fake)
+        assert fake.calls == []
+
+    def test_a_part_that_cannot_be_built_here_is_refused(self, tmp_path):
+        class Unbuildable(BasePart):
+            def can_generate_stl(self):
+                return False, "needs a newer OpenSCAD"
+
+        scad = tmp_path / "block.scad"
+        scad.write_text("cube(1);")
+        fake = FakeRenderer()
+        result = build_stl(Unbuildable(name="block", source_file=scad), renderer=fake)
+        assert not result.success and result.skipped == "refused"
+        assert result.error_message == "needs a newer OpenSCAD"
+        assert fake.calls == [] and not (tmp_path / "block.stl").exists()
+
+    def test_a_default_build_clears_a_variants_sidecar(self, tmp_path):
+        part, fake = _part(tmp_path), FakeRenderer()
+        build_stl(part, {"x": 12}, renderer=fake)
+        stl = part.get_stl_output_path()
+        assert read_params_sidecar(stl)["params"] == {"x": 12}
+        build_stl(part, renderer=fake)
+        assert read_params_sidecar(stl) is None
+
+    @needs_openscad
+    def test_display_rotation_is_applied(self, tmp_path):
+        part = _part(tmp_path, display_rotation=Vector3D(x=90, y=0, z=0))
+        result = build_stl(part)
+        assert result.success, result.error_message
+        lo, hi = bounds(read_mesh(result.stl_path))
+        size = [round(hi[axis] - lo[axis], 3) for axis in range(3)]
+        assert size == [10, 30, 20]  # 10 x 20 x 30, turned about X
+        # The upright render and its wrapper live in a scratch directory.
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["block.scad", "block.stl"]
+
+    @needs_openscad
+    def test_generate_stl_all_clears_a_stale_sidecar(self, tmp_path, monkeypatch):
+        part = _part(tmp_path)
+        stl = part.get_stl_output_path()
+        stl.write_text("solid variant\nendsolid variant\n")
+        write_params_sidecar(stl, {"x": 12})
+        entry = ProjectInfo(
+            name="block", path=part.source_file, kind="part", files=[], readme=False
+        )
+        monkeypatch.setattr("apothecary.cli.parts.scan_projects", lambda root: [entry])
+
+        from apothecary.cli import cli
+
+        result = CliRunner().invoke(cli, ["parts", "generate-stl", "--all"])
+        assert result.exit_code == 0, result.output
+        assert "1 generated" in result.output
+        assert read_params_sidecar(stl) is None
+        lo, hi = bounds(read_mesh(stl))
+        assert round(hi[0] - lo[0], 3) == 10
+
+
 class TestBasePart:
     """Tests for BasePart STL/JSCAD file properties."""
 
     def test_stl_file_property(self, tmp_path):
         """Test that stl_file property returns path when exists."""
-        from apothecary.projects.parts.base import BasePart
-
         scad = tmp_path / "test.scad"
         scad.write_text("cube([10,10,10]);")
 
@@ -115,8 +233,6 @@ class TestBasePart:
 
     def test_stl_file_property_missing(self, tmp_path):
         """Test that stl_file property returns None when missing."""
-        from apothecary.projects.parts.base import BasePart
-
         scad = tmp_path / "test.scad"
         scad.write_text("cube([10,10,10]);")
 
