@@ -12,6 +12,7 @@ from importlib import import_module
 
 import pytest
 
+from apothecary.projects.parts.base import scad_variables
 from apothecary.projects.parts.datum_cap import DEFAULT as CAP
 from apothecary.projects.parts.datum_core import DEFAULT as CORE
 from apothecary.projects.parts.skeleton import ROOT
@@ -49,10 +50,6 @@ def scad_numerics(path) -> list[str]:
     return [m.group(1) for m in re.finditer(r"^(\w+)\s*=\s*-?[\d.]+\s*;", text, re.M)]
 
 
-def scad_variables(path) -> set[str]:
-    """Every top-level assignment, whatever its value: what `-D` can override."""
-    text = path.read_text(encoding="utf-8")
-    return set(re.findall(r"^(\w+)\s*=", text, re.M))
 
 
 @pytest.mark.parametrize("part", PARTS)
@@ -82,3 +79,16 @@ def test_every_default_matches_the_scad_default(part):
     defaults = part.params_model()
     for name, value in values.items():
         assert getattr(defaults, name) == pytest.approx(value), name
+
+
+def test_a_part_without_a_model_refuses_a_name_its_scad_does_not_declare():
+    """dryerknob has no Python model; `-p knob_diameter=60` used to render the
+    defaults and report success, because OpenSCAD ignores an unknown -D."""
+    from apothecary.projects.parts.dryerknob import DEFAULT as knob
+
+    declared = scad_variables(knob.source_file)
+    with pytest.raises(ValueError, match="unknown parameter"):
+        knob.validate_overrides({"knob_diameter": 60})
+    if declared:
+        name = sorted(declared)[0]
+        assert knob.validate_overrides({name: 1}) == {name: 1}

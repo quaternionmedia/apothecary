@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Tuple, Type
+from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Type
 
 from pydantic import BaseModel, Field, computed_field
 
@@ -27,6 +28,11 @@ class ContestedValue(BaseModel):
     source: str
     note: str = ""
 
+
+
+def scad_variables(path: Path) -> Set[str]:
+    """Every top-level assignment in a SCAD file: the names `-D` can override."""
+    return set(re.findall(r"^(\w+)\s*=", Path(path).read_text(encoding="utf-8"), re.M))
 
 class BasePart(BaseModel):
     """Base metadata wrapper for a single SCAD part."""
@@ -103,6 +109,14 @@ class BasePart(BaseModel):
         if not params:
             return {}
         if self.params_model is None:
+            # No Python model: the SCAD's own top-level variables are what -D reaches.
+            declared = scad_variables(self.source_file) if self.source_file.exists() else set()
+            unknown = sorted(set(params) - declared)
+            if unknown:
+                raise ValueError(
+                    f"unknown parameter(s): {', '.join(unknown)}. {self.name} declares "
+                    f"{', '.join(sorted(declared)) or 'no top-level variables'} in its SCAD"
+                )
             return dict(params)
         known = set(self.params_model.model_fields)
         unknown = sorted(set(params) - known)
