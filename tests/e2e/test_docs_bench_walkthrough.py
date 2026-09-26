@@ -388,7 +388,9 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     expect(gone).to_contain_text("site gone")
     gone.locator(".pin-unpin").click()
     expect(rows).to_have_count(1, timeout=5000)
-    # Unpinned from the panel, the piece's Device section follows at once.
+    # The pin was made outside the viewer, which learns of it when its devices are
+    # refreshed. Unpinned from the panel, the piece's Device section follows at once.
+    page.evaluate("() => window.fractalViewer.rescanDevices()")
     page.locator("#contents-list .contents-item[data-path='esp32_blink']").click()
     expect(page.locator("#selected-body .device-section .dev-unpin")).to_be_visible(timeout=8000)
     rows.locator(".pin-unpin").click()

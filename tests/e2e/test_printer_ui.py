@@ -305,14 +305,15 @@ def test_manual_pin_poll_now_and_auto_refresh(page: Page, printer_url: str):
     expect(badge).to_contain_text("/", timeout=5000)  # temps, not the bare 🖨
     expect(page.locator("#serial-overlay")).to_be_hidden()
 
-    # Auto-refresh, on by default, at 5 s: one fresh scan each interval, none once off.
+    # Auto-refresh, off until ticked, at 5 s: one fresh scan each interval, none once off.
     # A scan is in flight from the moment its timer fires until the next is scheduled.
     scans = []
     page.on("request", lambda r: scans.append(r.url) if "/devices?fresh=1" in r.url else None)
     scan_done = "() => !window.fractalViewer.bindingsInFlight"
     _hold_clock(page)
     page.wait_for_function(scan_done)
-    expect(page.locator("#devices-auto")).to_be_checked()
+    expect(page.locator("#devices-auto")).not_to_be_checked()
+    page.locator("#devices-auto").check()
     page.locator("#devices-interval").select_option("5000")  # the next scan is 5 s away
     before = len(scans)
     for n in (1, 2):
@@ -413,7 +414,8 @@ def test_board_inside_the_printer_drives_it(page: Page, printer_url: str):
     section.locator(".dev-poll").click()
     # The page applies a poll's sync only if that poll changed the server's node; an
     # earlier request already had, so printer_1 turns "printing" at the next device
-    # refresh (10 s at most).
+    # refresh: 10 s after the auto-refresh is ticked.
+    page.locator("#devices-auto").check()
     page.clock.fast_forward(10_000)
     expect(page.locator("#status-select")).to_have_value("printing", timeout=5000)
 

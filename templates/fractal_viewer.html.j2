@@ -1024,12 +1024,13 @@
                 this.bindingsInFlight = false;
                 this.queryResult = null;  // last "Query" answer shown in the Device section
                 // Auto-refresh: rescan + re-poll on a schedule (self-scheduled,
-                // never overlapping, paused while the tab is hidden).
+                // never overlapping, paused while the tab is hidden). Off until
+                // ticked: each round runs arduino-cli and polls every held printer.
                 this.autoEl = document.getElementById('devices-auto');
                 this.intervalEl = document.getElementById('devices-interval');
                 this.autoTimer = null;
                 try {
-                    this.autoEl.checked = localStorage.getItem('apothecary.devices.auto') !== '0';
+                    this.autoEl.checked = localStorage.getItem('apothecary.devices.auto') === '1';
                     const iv = localStorage.getItem('apothecary.devices.interval');
                     if (iv) this.intervalEl.value = iv;
                 } catch (e) { /* storage blocked: defaults */ }
@@ -1107,6 +1108,7 @@
             async loadSite(name, focusPathStr = '') {
                 if (!name) return;
                 this.closeMachine();
+                this.whereByPort = {};
                 this.setStatus(`Loading ${name}...`, 'loading');
                 try {
                     const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(name)}`);
@@ -2603,6 +2605,7 @@
             async loadBindings(fresh = false) {
                 if (!this.siteName || this.bindingsInFlight) return;
                 this.bindingsInFlight = true;
+                if (fresh) this.whereByPort = {};  // a rescan asks again where each printer is pinned
                 try {
                     const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/devices${fresh ? '?fresh=1' : ''}`);
                     if (!response.ok) throw new Error(`devices (${response.status})`);
@@ -2818,8 +2821,11 @@
                     return;
                 }
                 if (this.whereByPort[port] === undefined) {
-                    this.whereByPort[port] = fetch(`${BASE_URL}/firmware/printers/where?port=${encodeURIComponent(port)}`)
-                        .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+                    // A failed answer is not kept: the next sync asks again.
+                    const asked = fetch(`${BASE_URL}/firmware/printers/where?port=${encodeURIComponent(port)}`)
+                        .then((r) => (r.ok ? r.json() : null)).catch(() => null)
+                        .then((where) => { if (!where && this.whereByPort[port] === asked) delete this.whereByPort[port]; return where; });
+                    this.whereByPort[port] = asked;
                 }
                 this.marks[path] = { marks: null, port, pending: true };
                 this.whereByPort[port].then(async (where) => {
@@ -3111,6 +3117,7 @@
                     // rather than paying for another arduino-cli scan.
                     const row = await response.json();
                     if (row.binding_source) this.bindings[path] = row; else delete this.bindings[path];
+                    this.whereByPort = {};  // where a printer stands follows its pin
                     this.queryResult = null;
                     this.renderDeviceViews();
                     this.setStatus(identity ? `${path} ← ${identity}` : `${path}: device unpinned`, 'success');
