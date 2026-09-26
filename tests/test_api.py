@@ -140,3 +140,9 @@ def test_viewer_home_redirects_to_the_named_default_site():
     r = client.get("/viewer", follow_redirects=False)
     assert r.status_code == 307
     assert r.headers.get("location", "") == "/viewer/sites/garage"
+
+
+@pytest.mark.parametrize("name", ["base", "stl_renderer", "readiness", "nope"])
+def test_a_part_name_from_a_url_is_never_an_import_path(name):
+    """GET /parts/stl_renderer imported that module and answered 500."""
+    assert TestClient(app).get(f"/parts/{name}").status_code == 404

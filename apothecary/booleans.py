@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, List, Literal
+from typing import TYPE_CHECKING, ClassVar, List, Literal
 
 from pydantic import Field
 
@@ -12,39 +12,31 @@ class BooleanOperation(OpenSCADObject):
     """Base class for boolean operations"""
 
     children: List["SceneObject"] = Field(default_factory=list)
+    keyword: ClassVar[str] = ""
+
+    def render(self, *_, **__) -> str:
+        return self._block(f"{self.keyword}()", self.children)
 
 
 class Union(BooleanOperation):
     """OpenSCAD union operation"""
 
     type: Literal["union"] = "union"
-
-    def render(self, *_, **__) -> str:
-        comment_str = f"// {self.comment}\n" if self.comment else ""
-        children_str = "\n".join(f"  {child.render()}" for child in self.children)
-        return f"{comment_str}union() {{\n{children_str}\n}}"
+    keyword: ClassVar[str] = "union"
 
 
 class Difference(BooleanOperation):
     """OpenSCAD difference operation"""
 
     type: Literal["difference"] = "difference"
-
-    def render(self, *_, **__) -> str:
-        comment_str = f"// {self.comment}\n" if self.comment else ""
-        children_str = "\n".join(f"  {child.render()}" for child in self.children)
-        return f"{comment_str}difference() {{\n{children_str}\n}}"
+    keyword: ClassVar[str] = "difference"
 
 
 class Intersection(BooleanOperation):
     """OpenSCAD intersection operation"""
 
     type: Literal["intersection"] = "intersection"
-
-    def render(self, *_, **__) -> str:
-        comment_str = f"// {self.comment}\n" if self.comment else ""
-        children_str = "\n".join(f"  {child.render()}" for child in self.children)
-        return f"{comment_str}intersection() {{\n{children_str}\n}}"
+    keyword: ClassVar[str] = "intersection"
 
 
 class Hull(BooleanOperation):
@@ -57,8 +49,4 @@ class Hull(BooleanOperation):
     """
 
     type: Literal["hull"] = "hull"
-
-    def render(self, *_, **__) -> str:
-        comment_str = f"// {self.comment}\n" if self.comment else ""
-        children_str = "\n".join(f"  {child.render()}" for child in self.children)
-        return f"{comment_str}hull() {{\n{children_str}\n}}"
+    keyword: ClassVar[str] = "hull"

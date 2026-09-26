@@ -55,7 +55,7 @@ from .primitives import Cube, Cylinder, Sphere
 from .projects.parts.skeleton import ROOT
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
 from .projects.parts.stl_renderer import write_params_sidecar
-from .projects.registry import resolve_wrapper_module, scan_projects, stl_output_for
+from .projects.registry import scan_projects, stl_output_for
 from .routes.pictures import router as pictures_router
 from .scene import Scene
 from .site_store import SiteStore, UnknownSiteError
@@ -200,11 +200,15 @@ def _part_template() -> str:
 
 
 def _load_part_wrapper(name: str):
-    full = resolve_wrapper_module(name, ROOT)
-    try:
-        module = import_module(full)
-    except ModuleNotFoundError as exc:  # pragma: no cover - error path
-        raise HTTPException(status_code=404, detail=f"Part '{name}' not found") from exc
+    # Only a registered part: a name from a URL is never turned into an import
+    # path (GET /parts/stl_renderer used to import that module and answer 500).
+    full = next(
+        (p.wrapper for p in scan_projects(ROOT) if p.kind == "part" and p.name == name),
+        None,
+    )
+    if full is None:
+        raise HTTPException(status_code=404, detail=f"Part '{name}' not found")
+    module = import_module(full)
     if not hasattr(module, "DEFAULT"):
         raise HTTPException(status_code=500, detail=f"Wrapper '{full}' missing DEFAULT part")
     part = module.DEFAULT
@@ -933,8 +937,7 @@ def _primitive_descriptor(obj: OpenSCADObject, offset: Vector3D) -> Dict[str, ob
         return {"type": "cube", "size": [size.x, size.y, size.z], "bounds": _bounds_dict(bounds)}
 
     if isinstance(obj, Cylinder):
-        r1 = obj.r if obj.r is not None else (obj.r1 if obj.r1 is not None else 1.0)
-        r2 = obj.r if obj.r is not None else (obj.r2 if obj.r2 is not None else r1)
+        r1, r2 = obj.radii()
         max_r = max(r1, r2)
         z0 = -obj.h / 2 if obj.center else 0.0
         local_min = Vector3D(x=-max_r, y=-max_r, z=z0)
@@ -1805,7 +1808,9 @@ class Dimensions(BaseModel):
 
 class CreateJobRequest(BaseModel):
     # A name is letters, digits and a little punctuation: what a page shows, never markup.
-    name: str = Field(..., min_length=1, max_length=80, pattern=r"^[\w][\w .+\-/]*$")
+    # No slash: a job's name is a path segment of its own routes, and one with a
+    # slash could be created and never assigned, completed or found again.
+    name: str = Field(..., min_length=1, max_length=80, pattern=r"^[\w][\w .+\-]*$")
     required_volume: Dimensions
 
 
@@ -1863,6 +1868,12 @@ async def assign_job(name: str, job_name: str, body: AssignJobRequest):
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Job '{job_name}' not found") from None
 
+    if job.status != "queued":
+        # Re-assigning an assigned job overwrote its printer and left the first
+        # one "printing" forever; a done job is done.
+        raise HTTPException(
+            status_code=409, detail=f"Job '{job_name}' is {job.status}, not queued"
+        )
     printer = next((s for s in site.children if s.name == body.printer), None)
     if printer is None or printer.build_volume is None:
         raise HTTPException(status_code=404, detail=f"Printer '{body.printer}' not found")
@@ -1901,11 +1912,14 @@ async def complete_job(name: str, job_name: str):
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Job '{job_name}' not found") from None
 
-    if job.assigned_printer:
-        printer = next((s for s in site.children if s.name == job.assigned_printer), None)
-        if printer is not None:
-            printer.status = "idle"
-
+    if job.status != "assigned":
+        # Completing a job twice freed a printer that had since started another.
+        raise HTTPException(
+            status_code=409, detail=f"Job '{job_name}' is {job.status}, not assigned"
+        )
+    printer = next((s for s in site.children if s.name == job.assigned_printer), None)
+    if printer is not None and printer.status == "printing":
+        printer.status = "idle"
     job.status = "done"
     return _job_summary(job, site)
 

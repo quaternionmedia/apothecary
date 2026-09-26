@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, List, Literal, Optional, Union
 
 from pydantic import Field
 
-from .core import OpenSCADObject
+from .core import OpenSCADObject, scad_vec
 from .models.vectors import Vector3D
 
 if TYPE_CHECKING:
@@ -23,11 +23,7 @@ class Translate(Transform):
     v: Vector3D
 
     def render(self, *_, **__) -> str:
-        comment_str = f"// {self.comment}\n" if self.comment else ""
-        children_str = "\n".join(f"  {child.render()}" for child in self.children)
-        return (
-            f"{comment_str}translate([{self.v.x}, {self.v.y}, {self.v.z}]) {{\n{children_str}\n}}"
-        )
+        return self._block(f"translate({scad_vec(self.v)})", self.children)
 
 
 class Rotate(Transform):
@@ -39,17 +35,13 @@ class Rotate(Transform):
     v: Optional[Vector3D] = None
 
     def render(self, *_, **__) -> str:
-        comment_str = f"// {self.comment}\n" if self.comment else ""
-
         if isinstance(self.a, Vector3D):
-            rotate_str = f"rotate([{self.a.x}, {self.a.y}, {self.a.z}])"
+            head = f"rotate({scad_vec(self.a)})"
         elif self.v:
-            rotate_str = f"rotate(a={self.a}, v=[{self.v.x}, {self.v.y}, {self.v.z}])"
+            head = f"rotate(a={self.a}, v={scad_vec(self.v)})"
         else:
-            rotate_str = f"rotate({self.a})"
-
-        children_str = "\n".join(f"  {child.render()}" for child in self.children)
-        return f"{comment_str}{rotate_str} {{\n{children_str}\n}}"
+            head = f"rotate({self.a})"
+        return self._block(head, self.children)
 
 
 class Scale(Transform):
@@ -60,6 +52,4 @@ class Scale(Transform):
     v: Vector3D
 
     def render(self, *_, **__) -> str:
-        comment_str = f"// {self.comment}\n" if self.comment else ""
-        children_str = "\n".join(f"  {child.render()}" for child in self.children)
-        return f"{comment_str}scale([{self.v.x}, {self.v.y}, {self.v.z}]) {{\n{children_str}\n}}"
+        return self._block(f"scale({scad_vec(self.v)})", self.children)
