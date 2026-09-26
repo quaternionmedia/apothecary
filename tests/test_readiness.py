@@ -205,6 +205,24 @@ class TestAStaleRenderIsNotDrift:
         assert bounds.state == PASS, bounds.detail
 
 
+class TestAPartThatCannotBeBuiltHere:
+    """The checklist does not send a reader to a build that will be refused."""
+
+    def test_it_says_why_rather_than_not_built_yet(self, tmp_path, monkeypatch):
+        class Unbuildable(BasePart):
+            def can_generate_stl(self, openscad=None):
+                return False, "needs OpenSCAD 2021.08.24 or newer"
+
+        scad = tmp_path / "block.scad"
+        scad.write_text("cube(1);")
+        monkeypatch.setattr(readiness, "get_renderer", lambda: SimpleNamespace(is_available=True))
+        report = assess(Unbuildable(name="block", source_file=scad))
+        renders = next(c for c in report.checks if c.name == "Geometry renders")
+        assert renders.state == UNKNOWN
+        assert renders.detail == "cannot build here: needs OpenSCAD 2021.08.24 or newer"
+        assert [c.detail for c in report.checks if c.name == BOUNDS] == ["needs a render"]
+
+
 class TestBoundsAreMeasuredFromTheMesh:
     """Declared bounds are for the default parameters, upright; the STL on disk
     may be neither, and a check that cannot compare says so."""
