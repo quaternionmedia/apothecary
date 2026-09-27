@@ -59,8 +59,11 @@ control is deleted.
   markup is the meter.
 - The drawing library's own listeners (turning and sliding the view) are not in
   this count.
-- It is one page at a time, plus the widget modules the page imports. The
-  command line, direct requests and the other pages are not in the number.
+- It is one page at a time, plus the widget modules the page imports and the
+  marks modules it imports by name (`MARKS`: what the world wears -- a
+  machine's marks, a picture's). `ring.js`, `panels.js` and `anchors.js` stay
+  off the meter as chrome with their own tests. The command line, direct
+  requests and the other pages are not in the number.
 - It refuses when it finds nothing, because a page it failed to read and a page
   with no controls must not produce the same answer.
 """
@@ -901,17 +904,36 @@ def widgets_of(page: Path) -> List[Path]:
     return [WIDGETS / f"{name}.js" for name in WIDGET_IMPORT.findall(text)]
 
 
+STATIC = TEMPLATES.parent / "apothecary" / "static"
+# The marks modules: what a thing wears in the world, drawn beside the page's own
+# scene and listening, when they listen, on what they draw. Counted with the page
+# that imports one directly, each entry saying which module it came from; a page
+# that reaches one only through another module (the monitor, through
+# board_view.js) is not counted for it.
+MARKS = ("machine_marks.js", "picture_marks.js", "pictures.js")
+STATIC_IMPORT = re.compile(r"from\s+[\"']/static/([\w-]+\.js)[\"']")
+
+
+def marks_of(page: Path) -> List[Path]:
+    """The marks modules a page imports directly, in the order it imports them."""
+    text = page.read_text(encoding="utf-8")
+    return [STATIC / name for name in STATIC_IMPORT.findall(text) if name in MARKS]
+
+
 def take(page: Path | None = None) -> Census:
     """Count what a person can operate, from the page itself.
 
     The viewer unless told otherwise; ``take(MONITOR)`` counts the monitor
     page. One page at a time, and the numbers are never added -- except
     that a widget module the page mounts (``/static/widgets/*.js``, its
-    markup written in the module) is counted as part of the page, each
-    entry saying which module it came from.
+    markup written in the module) and a marks module it imports (``MARKS``)
+    are counted as part of the page, each entry saying which module it came
+    from.
     """
     page = page or VIEWER
-    sources = [(page, "")] + [(w, w.name) for w in widgets_of(page) if w.is_file()]
+    sources = [(page, "")] + [
+        (module, module.name) for module in widgets_of(page) + marks_of(page) if module.is_file()
+    ]
     from_markup: List[Found] = []
     from_listening: List[Found] = []
     for path, label in sources:
