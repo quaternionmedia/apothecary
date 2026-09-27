@@ -641,6 +641,27 @@ what it asks about.
   from a picture, and one imports `apothecary_photos`' combine, both run in
   the job with the extra installed.
 
+## Decided by the owner (2026-09-27)
+
+- **§6, for the first build:** a look is what a page placed or pinned,
+  listed every site's in Kept and taken back the same way; forgetting a kept
+  picture unpins its looks and leaves made pieces marked forgotten, each
+  holding its shape's outline until Reset or Drop; `uploads/` also takes
+  dropped and pasted pictures (pasted ones named `<stamp>-paste.png`); a pin
+  may carry a person-stated width. **A made piece is a part like any other:**
+  it may be saved as a git variant (the browser-editing spike's variant
+  refs), so the rule below that a made piece is never written to a git ref,
+  and "never saved as a variant", do not hold.
+- **No new ring shapes.** The floor is reached from the canvas ring's
+  Pictures group (Pictures › Floor › Fit, Camera, Picture), and a shape from
+  its host's node ring (Picture › Make › <shape>, with Make all beside it;
+  Word and Drop under Picture on a made piece). The rad record is not edited
+  for ring shapes; paths are a level deeper where the plan had a ring of
+  their own. Make, Make all and Drop are site changes carried by the server
+  through the intent route, as other site changes are.
+
+Where the text below disagrees with these two, these win.
+
 ## What is decided here, and what a person decides
 
 Decided by this plan: a picture enters the world only as a look pinned at a
