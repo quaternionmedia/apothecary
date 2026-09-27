@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Callable, Dict, List, Tuple
 
-from .hierarchy import Assembly, LayoutReport
+from .hierarchy import Assembly, LayoutReport, check_no_overlaps
 
 SiteFactory = Callable[[], Assembly]
 SiteValidator = Callable[[Assembly], LayoutReport]
@@ -55,8 +55,19 @@ class SiteStore:
         return list(self._sites)
 
     def validator(self, name: str) -> SiteValidator:
+        """The site's own check, with the overlaps that name a piece made from a picture.
+
+        Only garage's validator runs the generic sibling overlap check; a piece
+        made from a picture stands in any site, and every caller of this --
+        the site routes, the ring's Reset, ``apothecary problems`` -- hears
+        about it overlapping, once per pair of structures."""
         _factory, validator = self._entry(name)
-        return validator
+
+        def checked(site: Assembly) -> LayoutReport:
+            report = validator(site)
+            return with_made_overlaps(name, site, report)
+
+        return checked
 
     def add(self, name: str, factory: SiteFactory, validator: SiteValidator) -> str:
         """Register another arrangement, replacing any of the same name.
@@ -83,7 +94,34 @@ class SiteStore:
         return self._registry.pop(name, None) is not None
 
     def reset(self, name: str) -> Assembly:
-        """Discard all edits and rebuild the site fresh from its factory."""
+        """Discard all edits and rebuild the site fresh from its factory.
+
+        Pieces made from pictures are layout edits and go with the rest, so
+        their records go too and their shapes read as found again; the looks
+        stay pinned (``apothecary/vision/looks.py``)."""
         factory, _validator = self._entry(name)
         self._sites[name] = factory()
+        from .vision.looks import forget_made
+
+        forget_made(name)
         return self._sites[name]
+
+
+def with_made_overlaps(name: str, site: Assembly, report: LayoutReport) -> LayoutReport:
+    """``report``, plus each overlap among the site's roots that names a made piece and
+    that the report does not already hold (garage's validator already holds them)."""
+    from .vision.looks import made_names
+
+    made = made_names(name)
+    if not made:
+        return report
+    held = {frozenset(v.structures) for v in report.violations if v.kind == "overlap"}
+    extra = []
+    for violation in check_no_overlaps(site.children):
+        pair = frozenset(violation.structures)
+        if pair & made and pair not in held:
+            held.add(pair)
+            extra.append(violation)
+    if not extra:
+        return report
+    return LayoutReport(violations=[*report.violations, *extra])

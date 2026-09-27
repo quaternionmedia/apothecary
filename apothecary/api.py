@@ -59,6 +59,7 @@ from .projects.parts.skeleton import ROOT
 from .projects.parts.stl_renderer import build_stl
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
 from .projects.registry import ProjectInfo, _sanitize_module_name, scan_projects
+from .routes.looks import router as looks_router
 from .routes.pictures import router as pictures_router
 from .scene import Scene
 from .site_store import SiteStore, UnknownSiteError
@@ -168,6 +169,8 @@ app.include_router(docs_router)
 # are matched before /photos/{name} can take "pictures" for a name. The router
 # reaches back into this module only inside its handlers.
 app.include_router(pictures_router)
+# Looks: a picture pinned at a place in a site, and the pieces made from its shapes.
+app.include_router(looks_router)
 THREE_DIR = STATIC_ROOT / "vendor" / "three"
 THREE_IS_VENDORED = (THREE_DIR / "three.module.js").is_file()
 

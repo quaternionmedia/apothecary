@@ -189,10 +189,18 @@ def keep_picture(
     data: bytes = Depends(_picture_body),
     name: str = Query("capture", min_length=1, max_length=120),
     kept: str = Query("capture", pattern="^(capture|upload)$"),
+    site: Optional[str] = Query(None, max_length=64),
+    host: Optional[str] = Query(None, max_length=400),
+    camera: Optional[str] = Query(None, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"),
 ):
     """Keep a picture the browser sends: a camera's frame under captures/, named by the
     moment, or (``kept=upload``) a file a person chose under uploads/, named as they
     named it. A picture by its first bytes, whatever its name says.
+
+    With ``site`` and ``host`` (``""`` is the floor), the picture is kept and pinned
+    there as a look in one request, its shapes found by the plain finder, and the
+    answer carries the look. A host that cannot hold a look is refused before
+    anything is kept.
 
     The body is read on the event loop; the write of up to 16 MB runs in the threadpool."""
     suffix = _suffix_by_bytes(data)
@@ -201,6 +209,15 @@ def keep_picture(
             status_code=415,
             detail="not a picture (PNG, JPEG, GIF, WebP, BMP or TIFF, judged by its first bytes)",
         )
+    pinning = site is not None
+    if pinning != (host is not None):
+        raise HTTPException(
+            status_code=422, detail="to pin a picture as it is kept, give both site and host"
+        )
+    if pinning:
+        from .looks import check_host
+
+        check_host(site, host)
     root = _root()
     stem = re.sub(r"[^A-Za-z0-9_-]+", "_", Path(name).stem).strip("_")[:60]
     if kept == "upload":
@@ -210,15 +227,41 @@ def keep_picture(
         stamp = f"{at:%Y%m%dT%H%M%S}.{at.microsecond // 1000:03d}"
         path = _private(root / CAPTURES) / f"{stamp}-{stem or 'capture'}{suffix}"
     path.write_bytes(data)
-    return _entry(path, root)
+    entry = _entry(path, root)
+    from ..vision.looks import store
+
+    store().kept_again(entry["path"])
+    if pinning:
+        from .looks import _view, pin_picture
+
+        try:
+            entry["look"] = _view(site, pin_picture(site, host, entry["path"], camera=camera))
+        except HTTPException as refused:
+            # Kept, and not pinned: the picture is the person's either way.
+            entry["look"], entry["not_pinned"] = None, refused.detail
+    return entry
+
+
+# The sizes a picture is served at, along its longer edge: a Kept card, a mat, a large mat.
+PICTURE_SIZES = (256, 512, 1024, 2048)
+# No picture enters the browser's disk cache: reuse is in the page's memory only.
+NO_STORE = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
 
 
 @router.get("/photos/pictures/file")
-def picture_file(path: str = Query(..., min_length=1, max_length=400)):
-    """One picture from the folder, by the relative path the listing gave -- for a thumbnail."""
+def picture_file(
+    path: str = Query(..., min_length=1, max_length=400),
+    px: Optional[int] = Query(None, ge=1, le=100_000),
+):
+    """One picture from the folder, by the relative path the listing gave.
+
+    With ``px``, no larger than the smallest of ``PICTURE_SIZES`` that holds it
+    along its longer edge (the largest when none does), turned upright as the
+    finder sees it: the pixels a mat or a card draws. A JPEG is decoded at a
+    reduced size first, so a large photograph costs little. Never cached."""
     import mimetypes
 
-    from fastapi.responses import FileResponse
+    from fastapi.responses import FileResponse, Response
 
     from ..api import PICTURE_TYPES, _picture_within_root
 
@@ -230,7 +273,33 @@ def picture_file(path: str = Query(..., min_length=1, max_length=400)):
     if kind is None or not _is_a_picture(settled):
         # A file that is not a picture is not served, whatever folder it is in.
         raise HTTPException(status_code=415, detail=f"{settled.name} is not a picture")
-    return FileResponse(settled, media_type=kind)
+    if px is None:
+        return FileResponse(settled, media_type=kind, headers=NO_STORE)
+    edge = next((size for size in PICTURE_SIZES if size >= px), PICTURE_SIZES[-1])
+    body, kind = _smaller(settled, edge)
+    return Response(content=body, media_type=kind, headers=NO_STORE)
+
+
+def _smaller(path: Path, edge: int):
+    """The picture at most ``edge`` along its longer edge, upright: (bytes, media type)."""
+    import io
+
+    from PIL import Image, ImageOps
+
+    with Image.open(path) as opened:
+        jpeg = opened.format == "JPEG"
+        if jpeg:
+            opened.draft("RGB", (edge, edge))
+        upright = ImageOps.exif_transpose(opened)
+        upright.thumbnail((edge, edge))
+        out = io.BytesIO()
+        if jpeg:
+            upright.convert("RGB").save(out, format="JPEG", quality=85)
+            return out.getvalue(), "image/jpeg"
+        if upright.mode not in ("RGB", "RGBA", "L", "LA"):
+            upright = upright.convert("RGBA")
+        upright.save(out, format="PNG")
+        return out.getvalue(), "image/png"
 
 
 def _is_a_picture(path: Path) -> bool:
@@ -269,9 +338,12 @@ def forget_kept_pictures(kept: str = Query("all", pattern="^(all|capture|upload)
     Never the folder's own pictures: those a person named, and only a person
     removes. A link inside the folders is left alone too; only regular files
     directly in them go."""
+    from ..vision.looks import store
+
     root = _root()
     folders = [KEPT[kept]] if kept != "all" else list(KEPT.values())
     forgotten: List[str] = []
+    unpinned: List[str] = []
     for folder in folders:
         for path in _pictures_in(root / folder):
             try:
@@ -279,18 +351,23 @@ def forget_kept_pictures(kept: str = Query("all", pattern="^(all|capture|upload)
             except FileNotFoundError:
                 continue  # gone since it was listed: another purge, or the person
             forgotten.append(f"{folder}/{path.name}")
-    return {"forgotten": forgotten, "left": len(_pictures_in(root))}
+            unpinned.extend(store().forget_picture(forgotten[-1]))
+    return {"forgotten": forgotten, "left": len(_pictures_in(root)), "unpinned": unpinned}
 
 
 @router.delete("/photos/pictures/{path:path}")
 def forget_picture(path: str):
     """Forget one kept picture (``captures/…`` or ``uploads/…``; a bare name is a capture).
 
-    Only what the browser put here: the folder's own pictures are a person's."""
+    Only what the browser put here: the folder's own pictures are a person's.
+    Its looks are unpinned, every site's; pieces made from it stay, marked forgotten."""
+    from ..vision.looks import store
+
     root = _root()
     kept = _kept_picture(root, path)
     kept.unlink()
-    return {"forgotten": kept.relative_to(root).as_posix()}
+    forgotten = kept.relative_to(root).as_posix()
+    return {"forgotten": forgotten, "unpinned": store().forget_picture(forgotten)}
 
 
 # Every pair is compared, so the work grows as the square: forty pictures is 780 pairs.
@@ -439,7 +516,8 @@ def gather_pictures(body: GatherRequest):
 class CameraPlacement(BaseModel):
     label: str = Field("camera", max_length=120)
     site: str = Field(..., pattern=r"^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$")
-    path: str = Field(..., max_length=400)
+    path: str = Field(..., max_length=400)  # a host; "" is the site's floor
+    mm_across: Optional[float] = Field(None, gt=0, allow_inf_nan=False)
 
 
 CAMERA_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
@@ -485,30 +563,72 @@ def list_cameras(site: Optional[str] = None) -> List[dict]:
     return [c for c in cams.values() if site is None or c.get("site") == site]
 
 
+def camera_rows(site: Optional[str]) -> List[dict]:
+    """The cameras pinned in one site (every site's with None), each saying whether its
+    host is still there: a row whose host is gone is still taken back from its list."""
+    from ..api import _site_store
+
+    names = set(_site_store.names())
+    rows = []
+    for cam in list_cameras(site):
+        where, host = cam.get("site"), cam.get("path", "")
+        found = False
+        if where in names:
+            try:
+                built = _site_store.get(where)
+            except KeyError:
+                built = None
+            found = built is not None and (
+                host == "" or any(c.name == host for c in built.children)
+            )
+        rows.append({**cam, "host_found": found})
+    return rows
+
+
+def set_camera_width(camera_id: str, mm_across: float) -> bool:
+    """Keep the width last typed for a camera's picture: the next look from it starts there."""
+    with _CAMERAS_LOCK:
+        cams = _load_cameras()
+        if camera_id not in cams:
+            return False
+        cams[camera_id]["mm_across"] = mm_across
+        _save_cameras(cams)
+    return True
+
+
 @router.put("/cameras/{camera_id}")
 def place_camera(camera_id: str, body: CameraPlacement):
-    """Place a browser's camera at a node: the world draws it there from now on."""
-    from ..api import _find_node_by_path, _get_site_or_404
+    """Pin a browser's camera at a host, or at the floor (``path: ""``): the world draws
+    it there from now on. A host holds one camera, so this replaces any other there;
+    pinning a camera elsewhere moves it. A host is a root structure with a footprint
+    that is not a made piece; anywhere else is refused with its reason."""
+    from .looks import check_host
 
     if not CAMERA_ID.match(camera_id):
         raise HTTPException(status_code=422, detail="not a camera id")
-    site = _get_site_or_404(body.site)
-    if _find_node_by_path(site, body.path) is None:
-        raise HTTPException(
-            status_code=404, detail=f"Node '{body.path}' not found in site '{body.site}'"
-        )
+    check_host(body.site, body.path)
     placed = {
         "id": camera_id,
         "label": body.label,
         "site": body.site,
         "path": body.path,
         "placed_at": datetime.now(timezone.utc).isoformat(),
+        "mm_across": body.mm_across,
     }
     with _CAMERAS_LOCK:
         cams = _load_cameras()
+        if placed["mm_across"] is None and camera_id in cams:
+            placed["mm_across"] = cams[camera_id].get("mm_across")
+        replaced = sorted(
+            other
+            for other, cam in cams.items()
+            if other != camera_id and cam.get("site") == body.site and cam.get("path") == body.path
+        )
+        for other in replaced:
+            del cams[other]
         cams[camera_id] = placed
         _save_cameras(cams)
-    return placed
+    return {**placed, "replaced": replaced}
 
 
 @router.delete("/cameras/{camera_id}")

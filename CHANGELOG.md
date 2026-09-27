@@ -46,8 +46,12 @@ One line per change, each with a link to where it is described. The format follo
 - `apothecary parts elephant-walk` lays every part out in a row, in `.cache/`. ([code](apothecary/cli/parts.py))
 - STLs built by the OpenSCAD CLI, from the CLI and the API. ([code](apothecary/projects/parts/stl_renderer.py))
 - Browser tests with Playwright. ([tests](tests/e2e/README.md))
+- Looks: a picture pinned at a structure or the floor, its shapes made into pieces there, over the API. ([plan](docs/plans/pictures-in-the-world-2026-09-26.md))
 
 ### Changed
+
+- A camera is pinned at a root structure with a footprint, or the floor, one per host. ([code](apothecary/routes/pictures.py))
+- Forgetting a kept picture unpins its looks; pictures are served at a size and never cached. ([code](apothecary/routes/pictures.py))
 
 - `/sites/{name}` carries the whole `tree` beside the flat `structures` list. ([code](apothecary/api.py))
 - Each part has its own folder, `parts/<name>/<name>.scad`. ([doc](docs/parts-authoring.md))
