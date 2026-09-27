@@ -48,12 +48,19 @@ One line per change, each with a link to where it is described. The format follo
 - Browser tests with Playwright. ([tests](tests/e2e/README.md))
 - Looks: a picture pinned at a structure or the floor, its shapes made into pieces there, over the API. ([plan](docs/plans/pictures-in-the-world-2026-09-26.md))
 - A look is drawn where it is pinned: the picture as a mat on its structure's top or the floor, its shapes as outlines to click, a camera's frustum looking down onto it, a place badge over each. ([code](apothecary/static/picture_marks.js))
+- A structure's ring holds Camera (pin this browser's camera, Live on the mat, Look, Keep, Unpin) and Picture (Add, Folder, Looks, Make, Size, Find, Unpin, Forget); the floor's are under the canvas ring's Pictures › Floor. ([code](apothecary/menu.py))
+- A picture dropped on a structure, or pasted, is kept, pinned at its root and found; on empty canvas, at the floor. ([test](tests/e2e/test_the_loop.py))
+- Make, Make all, Drop and a made piece's Word are carried out by the server through the ring's intent. ([code](apothecary/routes/menu.py))
+- Why this on a piece made from a picture draws its look and a thread to its outline. ([code](apothecary/static/picture_marks.js))
+- Selected sizes the drawn look: the picture's width, or a chosen shape's long side; a look's row draws it. ([viewer](templates/fractal_viewer.html.j2))
 
 ### Changed
 
 - A camera is pinned at a root structure with a footprint, or the floor, one per host. ([code](apothecary/routes/pictures.py))
 - A camera's badge is the place badge: a click selects the structure or the floor, and shows no camera live. ([test](tests/e2e/test_camera.py))
 - Forgetting a kept picture unpins its looks; pictures are served at a size and never cached. ([code](apothecary/routes/pictures.py))
+- The canvas ring's Camera is Pictures, in the same seat: Add (at the floor), Floor, Purge, Gather. ([code](apothecary/menu.py))
+- The camera panel is the pictures and pins panel: every camera and look pinned, every site's, each unpinned from its row. ([code](apothecary/static/widgets/camera.js))
 
 - `/sites/{name}` carries the whole `tree` beside the flat `structures` list. ([code](apothecary/api.py))
 - Each part has its own folder, `parts/<name>/<name>.scad`. ([doc](docs/parts-authoring.md))
@@ -85,6 +92,7 @@ One line per change, each with a link to where it is described. The format follo
 - The standalone parts browser and Site/Structure viewer. ([viewer](templates/fractal_viewer.html.j2))
 - Legacy JSCAD viewer endpoints and three orphaned modules. ([code](apothecary/api.py))
 - `E2E_SETUP.md`; the browser tests are described beside them. ([tests](tests/e2e/README.md))
+- The camera panel's camera, capture, Look, placement and Open as one; no verb opens another site. ([code](apothecary/static/widgets/camera.js))
 
 ### Fixed
 

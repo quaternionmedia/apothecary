@@ -22,7 +22,23 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # Phase 3, the looks drawn: the camera badge's listener leaves the page for
 # picture_marks.js as the place badge's (badge:click:onSelect); no ring address
 # moved. Before and after: 137 controls of its own, 65 ring-backed, 70 places.
-VIEWER_CEILING = 137
+#
+# Phase 4, the loop's verbs on the host. Before: 137 controls of its own, 65
+# ring-backed (47.4%), 70 places the page listens. After: 128, 61 ring-backed
+# (47.7%), 77 places. Gone with the camera panel's camera, capture, Look and
+# placement sections and Open as one: cam-pick, cam-allow, cam-refresh,
+# cam-name, cam-width, cam-capture, cam-look, cam-place, cam-unplace, pic-open,
+# and pic-refresh (the list is fetched when the panel mounts and after each
+# change). Added: Selected's width box (look-width) and a look's Unpin in the
+# pins list (look-unpin-one, ring-backed by Picture › Unpin); cam-unplace-one
+# and pic-forget are now backed by Camera › Unpin and Picture › Forget; pic-file
+# keeps a picture without pinning it, which no cell does, so it is no longer
+# backed. Ring addresses moved: Camera › Allow is Camera › Pin here › Allow on a
+# host's node ring (the floor's under Pictures › Floor); Unplace is Camera ›
+# Unpin there; Open as one is gone; the canvas ring's Camera is Pictures in the
+# same seat (Add, Floor, Purge, Gather), its Kept › Add and Purge now Pictures ›
+# Add (pinned at the floor) and Pictures › Purge.
+VIEWER_CEILING = 128
 
 
 def test_the_viewer_stays_under_its_ceiling():

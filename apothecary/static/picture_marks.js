@@ -22,6 +22,12 @@
  * redraws, disposed when the look goes or the site changes. Nothing here
  * runs per frame; the anchors layer projects the badges.
  *
+ * While a camera is live at a host (setLive), its mat shows the video instead
+ * of the picture, and the outlines of a past frame are hidden over it. Why this
+ * on a made piece (trace) draws the look it came from, lights its outline and
+ * draws a thread from the piece to it; with the look gone, the outline is drawn
+ * from the copy of the shape the piece keeps.
+ *
  * mountPictureMarks({ scene, anchors, base, hostBounds, hostInView,
  * atTopLevel, floorPoint, onSelect, onChange }):
  *   hostBounds(host) -> {min:[x,y,z], max:[x,y,z]} in the site's frame, or null;
@@ -41,6 +47,7 @@ export const FOUND_COLOR = 0xffcc66;
 export const MADE_COLOR = 0x6fdb75;
 export const ALREADY_COLOR = 0x9a9a9a;
 export const CHOSEN_COLOR = 0x66ccff;
+export const TRACE_COLOR = 0xff66cc;
 const FRUSTUM_COLOR = 0xffcc66;
 
 const MAT_LIFT = 1.0;      // mm above the top: the mat
@@ -59,6 +66,9 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
     let inflight = null, queued = null;
     const drawnPick = new Map();   // host -> look id a person picked to draw (Phase 4)
     let chosen = null;             // { look, index }
+    let live = null;               // { host, video, texture }: a camera live on its mat
+    let traced = null;             // { piece, look, index }: Why this, from a made piece
+    let traceGroup = null;         // the thread, and the outline drawn from a piece's copy
     const textures = new Map();    // look id -> THREE.Texture, for the page's time on the site
     const groups = new Map();      // host -> { mats: Group, frustum: LineSegments|null, look, mat }
     const pickables = [];
@@ -78,6 +88,7 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
         const set = new Set();
         for (const l of looks()) if (l.host_found) set.add(l.host);
         for (const c of cameras()) if (c.host_found) set.add(c.path);
+        if (live) set.add(live.host);
         return [...set];
     }
 
@@ -101,6 +112,21 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
             }
         }
         return { centre: [cx, cy, cz], width, depth: width * tall, sized };
+    }
+    // A camera live at a host with no look: the video on a mat fitted to the
+    // host's top (a fixed width on the floor), at the video's own shape.
+    function liveMat(host) {
+        const v = live && live.video;
+        const tall = v && v.videoWidth ? v.videoHeight / v.videoWidth : 0.75;
+        if (host === FLOOR) {
+            const p = floorPoint(madeNames());
+            return { centre: [p[0] + FLOOR_UNSIZED_MM / 2, p[1], p[2]], width: FLOOR_UNSIZED_MM, depth: FLOOR_UNSIZED_MM * tall, sized: false };
+        }
+        const b = hostBounds(host);
+        if (!b) return null;
+        const w = b.max[0] - b.min[0], d = b.max[1] - b.min[1];
+        const width = Math.max(1, Math.min(w, d / tall));
+        return { centre: [(b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, b.max[2]], width, depth: width * tall, sized: false };
     }
     // A point of the picture, as fractions (x right, y down), on its mat, in the site's frame.
     function onMat(mat, fx, fy, lift) {
@@ -133,6 +159,7 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
     }
 
     function colourOf(look, shape) {
+        if (traced && traced.look === look.id && traced.index === shape.index) return TRACE_COLOR;
         if (chosen && chosen.look === look.id && chosen.index === shape.index) return CHOSEN_COLOR;
         if (shape.status === "made") return MADE_COLOR;
         if (shape.status === "already_made") return ALREADY_COLOR;
@@ -141,17 +168,19 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
 
     function drawMat(host, look, mat) {
         const group = new THREE.Group();
-        group.name = `look:${look.id}`;
+        group.name = look ? `look:${look.id}` : `live:${host}`;
         // The picture: near-left is its bottom-left (picture y runs down, world y away).
         const corners = [
             onMat(mat, 0, 1, MAT_LIFT), onMat(mat, 1, 1, MAT_LIFT),
             onMat(mat, 1, 0, MAT_LIFT), onMat(mat, 0, 0, MAT_LIFT),
         ];
+        const showingLive = live && live.host === host;
         const picture = new THREE.Mesh(
             quad(corners, [[0, 0], [1, 0], [1, 1], [0, 1]]),
-            new THREE.MeshBasicMaterial({ map: textureFor(look), side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
+            new THREE.MeshBasicMaterial({ map: showingLive ? live.texture : textureFor(look), side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
         );
-        picture.userData.pick = { host, look: look.id, index: null };
+        picture.userData.pick = { host, look: look ? look.id : null, index: null };
+        picture.userData.live = !!showingLive;
         group.add(picture);
         pickables.push(picture);
         // Its border: dashed while it has no size of its own.
@@ -163,6 +192,8 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
         );
         if (!mat.sized) border.computeLineDistances();
         group.add(border);
+        // Live, the outlines of a past frame are not drawn over the present one.
+        if (showingLive || !look) return group;
         // The outlines, and a pick mesh under each one not made into a piece.
         for (const shape of look.shapes) {
             const pts = shape.points && shape.points.length >= 3
@@ -265,9 +296,10 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
         const wanted = new Set();
         for (const host of hosts()) {
             const look = drawnAt(host);
-            const mat = matOf(look);
+            const liveHere = !!(live && live.host === host);
+            const mat = matOf(look) || (liveHere ? liveMat(host) : null);
             const entry = { mats: null, frustum: null, look, mat };
-            if (look && mat) { entry.mats = drawMat(host, look, mat); scene.add(entry.mats); }
+            if (mat && (look || liveHere)) { entry.mats = drawMat(host, look, mat); scene.add(entry.mats); }
             if (cameraAt(host)) { entry.frustum = drawFrustum(host, mat); if (entry.frustum) scene.add(entry.frustum); }
             groups.set(host, entry);
             const key = keyFor(host);
@@ -292,7 +324,64 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
         const pinned = new Set(looks().map((l) => l.id));
         for (const [id, tex] of textures) if (!pinned.has(id)) { tex.dispose(); textures.delete(id); }
         if (chosen && !looks().some((l) => l.id === chosen.look && l.shapes.some((s) => s.index === chosen.index && s.status !== "made"))) chosen = null;
+        drawTrace();
         sync();
+    }
+
+    // Why this: a thread from a made piece's top to its outline, the outline lit
+    // on its look's mat, or drawn from the piece's own copy when the look is gone.
+    function clearTrace() {
+        if (!traceGroup) return;
+        scene.remove(traceGroup);
+        traceGroup.traverse((x) => { x.geometry?.dispose(); if (x.material) x.material.dispose(); });
+        traceGroup = null;
+    }
+    function drawTrace() {
+        clearTrace();
+        if (!traced) return;
+        const record = attached && attached.made ? attached.made[traced.piece] : null;
+        const top = hostBounds(traced.piece);
+        if (!record || !top) { traced = null; return; }
+        const group = new THREE.Group();
+        group.name = `trace:${traced.piece}`;
+        const g = groups.get(record.host);
+        const shown = !!(g && g.look && g.look.id === record.look && g.mat && g.mats && g.look.shapes.some((s) => s.index === record.shape_index));
+        const shape = shown ? g.look.shapes.find((s) => s.index === record.shape_index) : record.shape;
+        const pts = shape.points && shape.points.length >= 3
+            ? shape.points
+            : [[shape.min[0], shape.min[1]], [shape.max[0], shape.min[1]], [shape.max[0], shape.max[1]], [shape.min[0], shape.max[1]]];
+        let points;
+        if (shown) {
+            points = pts.map(([fx, fy]) => onMat(g.mat, fx, fy, OUTLINE_LIFT));
+        } else {
+            // From the copy: its mat's centre is where the extent says, less the
+            // shape's own offset from the middle of its picture.
+            const W = record.mm_across, H = W * record.pixel_height / record.pixel_width;
+            const cx = (shape.min[0] + shape.max[0]) / 2, cy = (shape.min[1] + shape.max[1]) / 2;
+            let base = [0, 0, 0];
+            if (record.host !== FLOOR) {
+                const hb = hostBounds(record.host);
+                if (hb) base = [(hb.min[0] + hb.max[0]) / 2, (hb.min[1] + hb.max[1]) / 2, hb.max[2]];
+            }
+            const mat = {
+                centre: [base[0] + record.extent.centre[0] - (cx - 0.5) * W, base[1] + record.extent.centre[1] - (0.5 - cy) * H, base[2]],
+                width: W, depth: H,
+            };
+            points = pts.map(([fx, fy]) => onMat(mat, fx, fy, OUTLINE_LIFT));
+            const ghost = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(points.map((c) => toScene(...c))), new THREE.LineDashedMaterial({ color: TRACE_COLOR, dashSize: 10, gapSize: 6 }));
+            ghost.computeLineDistances();
+            ghost.userData.ghost = true;
+            group.add(ghost);
+        }
+        const mid = points.reduce((a, c) => [a[0] + c[0] / points.length, a[1] + c[1] / points.length, a[2] + c[2] / points.length], [0, 0, 0]);
+        const from = [(top.min[0] + top.max[0]) / 2, (top.min[1] + top.max[1]) / 2, top.max[2] + BADGE_LIFT];
+        const thread = new THREE.Line(new THREE.BufferGeometry().setFromPoints([toScene(...from), toScene(...mid)]), new THREE.LineBasicMaterial({ color: TRACE_COLOR }));
+        thread.userData.thread = true;
+        group.add(thread);
+        traced.shown = shown;
+        traced.outline = mid;
+        traceGroup = group;
+        scene.add(group);
     }
 
     // Mats at the top level only; a frustum while its host is in view.
@@ -302,6 +391,7 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
             if (g.mats) g.mats.visible = top;
             if (g.frustum) g.frustum.visible = hostInView(host);
         }
+        if (traceGroup) traceGroup.visible = top;
     }
 
     // --- fetching: one request at a time, a second ask folded into one more ---------------
@@ -344,8 +434,11 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
             site = name;
             attached = null;
             chosen = null;
+            traced = null;
+            if (live) { live.texture.dispose(); live = null; }
             drawnPick.clear();
             clearDrawn();
+            clearTrace();
             for (const tex of textures.values()) tex.dispose();
             textures.clear();
             for (const key of anchors.keys()) if (key.startsWith("place:")) anchors.remove(key);
@@ -376,6 +469,40 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
             return true;
         },
         unchoose() { if (!chosen) return; chosen = null; redraw(); },
+        /* Draw another of a host's looks: a view change, never a site switch. */
+        draw(host, lookId) {
+            if (!looksAt(host).some((l) => l.id === lookId)) return false;
+            drawnPick.set(host, lookId);
+            if (chosen && chosen.look !== lookId) chosen = null;
+            redraw();
+            return true;
+        },
+        /* A camera's video on its host's mat (null: the picture again). */
+        setLive(host, video) {
+            if (live) { live.texture.dispose(); live = null; }
+            if (video) {
+                const texture = new THREE.VideoTexture(video);
+                texture.colorSpace = THREE.SRGBColorSpace;
+                live = { host, video, texture };
+            }
+            redraw();
+        },
+        liveAt() { return live ? live.host : null; },
+        /* Why this, from a made piece: its look drawn, its outline lit, a thread to it. */
+        trace(piece) {
+            const record = attached && attached.made ? attached.made[piece] : null;
+            if (!record) return null;
+            if (record.look_pinned) drawnPick.set(record.host, record.look);
+            traced = { piece, look: record.look, index: record.shape_index };
+            redraw();
+            return traced ? { ...record, shown: traced.shown, outline: traced.outline } : null;
+        },
+        untrace() { if (!traced) return; traced = null; clearTrace(); },
+        /* What Why this drew: the piece, the outline's centre, and whether its look is drawn. */
+        traced() {
+            if (!traced || !traceGroup) return null;
+            return { piece: traced.piece, look: traced.look, index: traced.index, shown: traced.shown, outline: traced.outline, visible: traceGroup.visible };
+        },
         chosen() { return chosen ? { ...chosen } : null; },
         attached() { return attached; },
         cameras,
@@ -398,12 +525,14 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
                 mat: g.mats ? { visible: g.mats.visible, centre: g.mat.centre, width: g.mat.width, depth: g.mat.depth, sized: g.mat.sized } : null,
                 outlines: g.mats ? g.mats.children.filter((o) => o.userData.shape).map((o) => ({ ...o.userData.shape, colour: o.material.color.getHex() })) : [],
                 texture: g.look && textures.get(g.look.id) ? { ...textures.get(g.look.id).userData } : null,
+                live: !!(live && live.host === host),
                 frustum: g.frustum ? { visible: g.frustum.visible } : null,
                 camera: cameraAt(host) ? cameraAt(host).id : null,
             }));
         },
         destroy() {
             clearDrawn();
+            clearTrace();
             for (const tex of textures.values()) tex.dispose();
             textures.clear();
             for (const key of anchors.keys()) if (key.startsWith("place:")) anchors.remove(key);

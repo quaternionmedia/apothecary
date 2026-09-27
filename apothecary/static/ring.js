@@ -165,10 +165,14 @@ export function annotate(ring, pairs) {
     return count;
 }
 
-export async function resolveRing({ base = "", context, site, device }) {
+/* `picture` is what the page knows about pictures and cameras where the ring
+ * stands (apothecary/menu.py's PictureContext), or a promise of it. */
+export async function resolveRing({ base = "", context, site, device, picture }) {
     const body = { context };
     if (site) body.site = site;
     if (device) body.device = device;
+    const told = await picture;
+    if (told) body.picture = told;
     const r = await fetch(`${base}/menu/resolve`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
@@ -242,9 +246,9 @@ export function close() {
  * (or the viewport's centre), and calls onIntent once when something is
  * chosen; onClose when it goes away for any reason.
  */
-export async function openRing({ base = "", context, site, device, at = null, onIntent, onClose }) {
+export async function openRing({ base = "", context, site, device, picture, at = null, onIntent, onClose }) {
     close();
-    const ring = await resolveRing({ base, context, site, device });
+    const ring = await resolveRing({ base, context, site, device, picture });
     if (current) current.close(false); // somebody opened another while we fetched
     const instance = new RingInstance({ ring, context, site, device, at, onIntent, onClose });
     current = instance;
@@ -490,6 +494,7 @@ export function installRing({ base = "", whatFor, onIntent, onResolved, onError,
                 context: spec.context,
                 site: spec.site,
                 device: spec.device,
+                picture: spec.picture,
                 at: at ?? spec.at ?? null,
                 onIntent,
                 onClose: spec.onClose,
