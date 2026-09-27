@@ -10,6 +10,7 @@ here: run `apothecary problems`.
 - Packaging: the wheel ships `apothecary/` only. `parts/` and `templates/` are
   not in it, so an installed wheel cannot render a part.
 - The one-screen move, phases 4-5: [docs/plans/one-screen-2026-09-20.md](docs/plans/one-screen-2026-09-20.md).
+- Designing a part from the browser, a spike with a recommended order: [docs/plans/part-editing-in-the-browser-2026-09-27.md](docs/plans/part-editing-in-the-browser-2026-09-27.md).
 - Optional local models behind the shape finder: [docs/plans/photo-finders-local-models-2026-09-21.md](docs/plans/photo-finders-local-models-2026-09-21.md).
 
 ## Next round
