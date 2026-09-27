@@ -108,12 +108,15 @@ def _geometry_checks(part, renderer, stl_path: Path) -> List[Check]:
         return checks
 
     if not stl_path.exists():
+        can_build, reason = part.can_generate_stl()
         checks.append(
             Check(
                 "Geometry renders",
                 UNKNOWN,
-                "not built yet",
-                f"apothecary parts generate-stl {part.name}",
+                "not built yet" if can_build else f"cannot build here: {reason}",
+                f"apothecary parts generate-stl {part.name}"
+                if can_build
+                else f"once it can be built: apothecary parts generate-stl {part.name}",
             )
         )
         checks.append(Check(BOUNDS, UNKNOWN, "needs a render"))

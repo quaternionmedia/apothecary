@@ -124,6 +124,48 @@ documents it). `tests/test_parameter_coverage.py` fails on a field with no
 SCAD variable behind it; `apothecary parts verify` fails when the two
 disagree about size.
 
+## Hooks for a part the SCAD file does not fully describe
+
+Most parts need none of these. Each is a `BasePart` field or method a
+wrapper sets or overrides, and every build path (`generate-stl`, `verify`,
+the viewer's `POST /parts/{name}/stl/generate`, server startup) goes
+through them.
+
+`openscad_min_version` is the oldest OpenSCAD that renders the part, as
+`openscad --version` numbers it (`"2021.08.24"`). The default install is
+used when it is new enough, else a development snapshot: `openscad-nightly`
+on `PATH` or one of the usual install locations. With neither,
+`can_generate_stl()` names the version needed and where snapshots are.
+`generate-stl --all`, `verify` and server startup skip the part with that
+reason, `checklist` gives it, and a build of that part alone is refused
+with it: `generate-stl NAME` fails, and `POST /parts/{name}/stl/generate`
+answers `503`. `generate-stl --openscad-path` checks the OpenSCAD it names
+instead. Gridfinity sets it: `gridfinity-rebuilt-openscad` does not
+evaluate on OpenSCAD 2021.01.
+
+`scad_overrides(params)` is what `-D` receives for validated parameters,
+for a part whose model does not name things as its SCAD does. Gridfinity's
+`hole_options` is one nested model in Python and six booleans in
+`gridfinity-rebuilt-bins.scad`, so it translates, and only the overrides
+given: a default build passes no `-D`, which is why its model's defaults
+are the file's own. The params sidecar records the parameters, not the
+translation. `tests/test_parameter_coverage.py` fails, for every part, when
+a name it emits is not a top-level variable of the file or a default is not
+the file's own.
+
+`geometry(params)` is the part built in Python, for a part whose source is
+code. When it returns an object, every build renders that object's SCAD
+from a scratch file, with no `-D`; `apothecary parts render NAME -o FILE`
+writes that SCAD; and the STL goes stale when the part's code changes. The
+SCAD file stays as the geometry at the default parameters, for a reader and
+the registry. The snowplow is one: `SnowplowPart.geometry` returns
+`snowplow_assembly(...)`, `apothecary parts render rc.snowplow -o
+parts/rc/snowplow/snowplow.scad` rewrites the file, and
+`tests/test_snowplow_part.py` fails when the two differ. A parameter of
+such a part lives in `Params` and in the code;
+`tests/test_parameter_coverage.py` fails on one that leaves the generated
+SCAD unchanged.
+
 ## Checking a part
 
 ```bash

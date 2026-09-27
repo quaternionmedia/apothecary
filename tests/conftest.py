@@ -47,6 +47,11 @@ def pytest_addoption(parser):
     )
 
 
+# `slow` marks what --slow's help names: full CGAL renders, accuracy benches. A
+# test that renders a primitive of its own with the real OpenSCAD -- a cube,
+# turned or cut -- is not one of those and stays unmarked: it is as quick as
+# the tests around it, and it is the default run's check that OpenSCAD takes
+# what the renderer writes.
 def pytest_collection_modifyitems(config, items):
     if config.getoption("--slow"):
         return
