@@ -314,21 +314,32 @@ def test_photographs_into_pieces(
     for word in words:
         expect(chips).to_contain_text(word)
     first_word = words[0]
+    listed = contents.locator(".contents-item").count()
     chips.get_by_text(first_word, exact=False).first.click()
     page.wait_for_timeout(400)
+    expect(chips.locator(".category-chip.active")).to_have_text(first_word)
+    expect(contents.locator(".contents-item")).to_have_count(listed)
     story.shows(
-        f"Filtering to '{first_word}' keeps that word and sets the rest aside",
-        "The filters the viewer already had are filters by word now, because the "
-        "pieces simply carry their word.",
+        f"Each word is a chip above the list, and '{first_word}' is chosen",
+        "The chips are the viewer's own, one per word the pieces carry. A chip "
+        "expands every node of its word, at any depth; these pieces are flat shapes "
+        "with nothing inside, so choosing one marks the chip and leaves the list "
+        "and the world as they were.",
     )
 
-    page.locator("#contents-list .contents-item").first.click()
+    first = page.locator("#contents-list .contents-item").first
+    piece = album["pieces"][first.get_attribute("data-path")]
+    first.click()
+    selected = page.locator("#selected-body")
+    expect(selected).to_contain_text(f"found by {album['finder']}")
+    expect(selected).to_contain_text(f"at {piece['confidence']:.2f} confidence")
+    expect(selected).to_contain_text("thickness is a guess")
     page.wait_for_timeout(400)
-    expect(page.locator("#selected-body")).not_to_be_empty()
     story.shows(
         "Choosing a piece shows where it came from",
-        "Which finder saw it, how sure it was, and that its thickness is a guess: "
-        "the same provenance the model half printed, in front of a person.",
+        f"Its word and why, the finder that saw it ('{album['finder']}'), how sure "
+        f"it was ({piece['confidence']:.2f}), and that its thickness is a guess: the "
+        "same provenance the model half printed, in Selected, beside its place.",
     )
 
     picture_response = page.request.get(f"{base_url}/photos/{SITE}/picture")
@@ -361,9 +372,9 @@ def test_the_walkthrough_would_notice_if_the_grouping_stopped_working(
 ):
     """A walkthrough that cannot fail is a screenshot with a caption.
 
-    The step above claiming the viewer filters by word rests on each piece
-    carrying its word. This checks the same thing from the other side: strip the
-    words out and the filters have nothing to show.
+    The step above showing a chip per word rests on each piece carrying its
+    word. This checks the same thing from the other side: strip the words out
+    and there is no chip to show.
     """
     built = page.request.post(
         f"{base_url}/photos",
@@ -381,3 +392,29 @@ def test_the_walkthrough_would_notice_if_the_grouping_stopped_working(
         f"show {carried} instead of {words} and the walkthrough step above would "
         "be describing something that no longer happens"
     )
+
+
+@pytest.mark.e2e
+def test_an_unsized_piece_shows_its_status_as_a_fact_not_a_printer_status(
+    page: Page, base_url: str, drawn_picture, tidy_up
+):
+    """A piece built without a width has the status "unsized". Selected says so in
+    words, beside its provenance, and offers no printer-status drop-down: one would
+    show 'idle', a status the piece does not have, and choosing it would set one."""
+    built = page.request.post(
+        f"{base_url}/photos", data={"picture": str(drawn_picture), "name": "unsized_check"}
+    )
+    assert built.ok, built.text()
+    tidy_up("unsized_check")
+    album = built.json()
+    assert album["sized"] is False
+
+    page.goto(f"{base_url}/viewer/sites/unsized_check")
+    first = page.locator("#contents-list .contents-item").first
+    expect(first).to_be_visible(timeout=20000)
+    first.click()
+    selected = page.locator("#selected-body")
+    expect(selected).to_contain_text("unsized")
+    expect(selected).to_contain_text(f"found by {album['finder']}")
+    expect(selected).to_contain_text("no real-world size was supplied")
+    expect(selected.locator("#status-select")).to_have_count(0)

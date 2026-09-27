@@ -399,7 +399,13 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     expect(page.locator("#selected-body .dev-unpin")).to_have_count(0)
     page.once("dialog", lambda d: d.accept())
     panel.locator("#pic-purge").click()
-    expect(panel.locator("#cam-note")).to_contain_text("of the folder's own stay", timeout=8000)
+    status = page.locator("#status")
+    expect(status).to_contain_text("of the folder's own stay", timeout=8000)
+    expect(status).not_to_have_class(re.compile(r"\berror\b"))
+    # A second purge has nothing to forget, and says so as a refusal.
+    panel.locator("#pic-purge").click()
+    expect(status).to_contain_text("nothing kept from the browser to forget", timeout=5000)
+    expect(status).to_have_class(re.compile(r"\berror\b"))
     left = page.request.get(f"{base_url}/photos/pictures").json()
     assert all(not p["kept"] for p in left)
     assert "a_person_put_this_here.png" in {p["name"] for p in left}
