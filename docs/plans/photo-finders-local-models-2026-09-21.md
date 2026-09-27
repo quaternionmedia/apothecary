@@ -72,7 +72,8 @@ Keep `ShapeFinder` and the lazy registry, and add three things.
    digest. Model output is cached, keyed by picture hash, backend, model
    digest and prompt version: in memory until what "this machine" means is
    decided (todo.md), then in an account-only folder (0700). The pictures
-   plan's looks read shapes from this cache.
+   plan's Phase 2 builds this cache (`apothecary/vision/cache.py`, in
+   memory) for its looks; this plan's phases fill it from model finders.
 
 Testing: a `recorded` finder replays JSON recorded against a local engine on
 `vision/bench.py`'s synthetic pictures. Every model finder splits into

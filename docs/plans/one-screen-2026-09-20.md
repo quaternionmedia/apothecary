@@ -94,7 +94,8 @@ Rules that hold throughout:
   of its own get cells: `Probe`, `Identify` and the serial `Listen` (named
   so, because Camera › Live is the pictures plan's) join Device › Link
   where they apply, because the Device ring on a printer already holds
-  eight. The rad record's Link cell is edited to match.
+  eight; proposed as an edit to the rad record's Link cell (see the
+  pictures plan's *For a person*).
 - Tests: the firmware-page suite runs on both hosts.
 
 ## Phase 5 — One screen
@@ -127,7 +128,8 @@ a cell; the old routes live until Phase 5; the census is the meter.
 For a person: whether the plain layouts survive Phase 5 as kiosk views;
 whether the Bench belongs in the world at all or stays its own page (the
 plan says in the world, docked, since a devkit is a thing at a place too);
-the record's ratification.
+the edit to the rad record's Link cell that Phase 4 proposes; the record's
+ratification.
 
 ## Not in this plan
 
