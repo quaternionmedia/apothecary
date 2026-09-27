@@ -69,8 +69,11 @@ Keep `ShapeFinder` and the lazy registry, and add three things.
 3. **Composition behind one `look()`**: optional `Segmenter`, `Labeller`
    and `Ranger` stages a composite finder chains; everything downstream
    sees one `Picture`. Every shape's `origin` names the backend and model
-   digest. Model output is cached in an account-only folder (0700), keyed by
-   picture hash, backend, model digest and prompt version.
+   digest. Model output is cached, keyed by picture hash, backend, model
+   digest and prompt version: in memory until what "this machine" means is
+   decided (todo.md), then in an account-only folder (0700). The pictures
+   plan's Phase 2 builds this cache (`apothecary/vision/cache.py`, in
+   memory) for its looks; this plan's phases fill it from model finders.
 
 Testing: a `recorded` finder replays JSON recorded against a local engine on
 `vision/bench.py`'s synthetic pictures. Every model finder splits into
@@ -161,4 +164,4 @@ first, then the edits it names to `stays_local.py` and its tests.
 | `CC0-1.0` (numpy) on the licence allowlist | the org: an allowlist addition is an amendment |
 | Whether a one-time model download is an install-time fetch | the sponsor (`todo.md`) |
 | The runner's protocol, or a seams-record exception | phase 3 |
-| Whether the camera panel offers a finder choice | the one-screen plan |
+| Whether the browser offers a finder choice | answered in [the pictures plan](pictures-in-the-world-2026-09-26.md): Picture › Find, where more than one finder can read the picture |
