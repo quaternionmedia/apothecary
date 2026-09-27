@@ -83,6 +83,11 @@ Rules that hold throughout:
   control, bed, print); split it when a host wants one part without the rest.
 - `board_view.js` stays on the monitor page until Phase 5.
 
+Pictures, cameras and found shapes take the same frame in their own plan,
+[pictures-in-the-world-2026-09-26.md](pictures-in-the-world-2026-09-26.md):
+it retires the camera panel, and its last phase closes the old photo routes
+together with Phase 5 below.
+
 ## Phase 4 — The bench in front of the world
 
 - `widgets/toolchain.js` (install, cores, libraries), `sketches.js`
