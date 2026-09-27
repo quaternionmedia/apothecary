@@ -47,10 +47,12 @@ One line per change, each with a link to where it is described. The format follo
 - STLs built by the OpenSCAD CLI, from the CLI and the API. ([code](apothecary/projects/parts/stl_renderer.py))
 - Browser tests with Playwright. ([tests](tests/e2e/README.md))
 - Looks: a picture pinned at a structure or the floor, its shapes made into pieces there, over the API. ([plan](docs/plans/pictures-in-the-world-2026-09-26.md))
+- A look is drawn where it is pinned: the picture as a mat on its structure's top or the floor, its shapes as outlines to click, a camera's frustum looking down onto it, a place badge over each. ([code](apothecary/static/picture_marks.js))
 
 ### Changed
 
 - A camera is pinned at a root structure with a footprint, or the floor, one per host. ([code](apothecary/routes/pictures.py))
+- A camera's badge is the place badge: a click selects the structure or the floor, and shows no camera live. ([test](tests/e2e/test_camera.py))
 - Forgetting a kept picture unpins its looks; pictures are served at a size and never cached. ([code](apothecary/routes/pictures.py))
 
 - `/sites/{name}` carries the whole `tree` beside the flat `structures` list. ([code](apothecary/api.py))
@@ -86,6 +88,7 @@ One line per change, each with a link to where it is described. The format follo
 
 ### Fixed
 
+- A piece moved with the gizmo keeps its new place when let go. ([code](templates/fractal_viewer.html.j2))
 - A placed camera's mark is hidden while its piece is out of view. ([page](walkthrough/12-the-bench-as-it-is.md))
 - A piece from a picture shows its provenance in Selected, and an unsized one no printer status. ([page](walkthrough/11-photographs-into-pieces.md))
 - The camera panel's messages are said once, in the status bar, refusals as errors. ([code](apothecary/static/widgets/camera.js))

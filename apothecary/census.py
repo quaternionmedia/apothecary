@@ -509,10 +509,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "li:click:selectChild": (LIST, WHAT_YOU_SEE, "picking a piece from the list"),
     # An anchor: a machine's badge standing over it in the world (anchors.js).
     "badge:click:selectPath": (LIST, WHAT_YOU_SEE, "picking the machine a badge stands over"),
-    "badge:click:openCamera": (
+    # A place badge: a host's camera and look, or the floor's (picture_marks.js).
+    "badge:click:onSelect": (
         LIST,
         WHAT_YOU_SEE,
-        "picking the piece a camera's badge stands over, and showing the camera",
+        "picking the place a badge stands over: a structure, or the floor",
     ),
     # ---- the camera panel --------------------------------------------------
     "cam-pick:change:useCamera": (WIDGET, WHAT_YOU_SEE, "choosing which camera is live"),

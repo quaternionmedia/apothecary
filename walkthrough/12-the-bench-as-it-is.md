@@ -73,7 +73,7 @@ esp32_blink is a sketch and the board it runs on, drawn as the board: the descri
 
 ## 9. A camera placed at the bench is drawn there
 
-Allowed in the Camera panel and placed at the selected piece, the camera gets a badge above the bench and a small frustum at it, kept on the server so every browser looking at this site sees it standing there.
+Allowed in the Camera panel and placed at the selected piece, the camera gets a place badge above the bench and a frustum looking down onto its top, kept on the server so every browser looking at this site sees it standing there.
 
 ![A camera placed at the bench is drawn there](screenshots/12-09-a-camera-placed-at-the-bench-is-drawn-there.png)
 

@@ -25,8 +25,9 @@
  * is shown as such: this is the one place it can be seen).
  *
  * mountCamera(root, { base, world, log }) renders into root; `world` is what
- * the page offers: siteName(), selectedPath(), openSite(name), placed(),
- * refreshCameras(), unpinned(path). log(text, kind) is the page's status bar,
+ * the page offers: siteName(), selectedPath() ("" is the floor, null is nothing
+ * selected), openSite(name), placed(), refreshCameras() (the site's cameras
+ * and looks, fetched again), unpinned(path). log(text, kind) is the page's status bar,
  * the only place a message is written; kind "bad" is a refusal. The handle's
  * `ready` settles once this browser's cameras are first listed, so a caller
  * can tell whose camera an id is only after it.
@@ -168,8 +169,9 @@ export function mountCamera(root, { base = "", world = null, log = null } = {}) 
     function renderPlacement() {
         const placed = world && world.placed ? world.placed() : [];
         const mine = placed.find((c) => c.id === state.chosen);
-        $("cam-place-note").textContent = !state.chosen ? "no camera chosen" : (mine ? `placed at ${mine.path} in ${mine.site}` : "not placed in the world");
-        $("cam-place").disabled = !state.chosen || !(world && world.selectedPath && world.selectedPath());
+        $("cam-place-note").textContent = !state.chosen ? "no camera chosen" : (mine ? `placed at ${mine.path || "the floor"} in ${mine.site}` : "not placed in the world");
+        // "" is the floor: a selection, and a place a camera stands.
+        $("cam-place").disabled = !state.chosen || !(world && world.selectedPath && world.selectedPath() != null);
         $("cam-unplace").disabled = !mine;
         renderPlaced();
     }
@@ -184,7 +186,7 @@ export function mountCamera(root, { base = "", world = null, log = null } = {}) 
         const list = $("cam-placed");
         if (!state.placed.length) { list.innerHTML = '<span class="empty">none placed</span>'; return; }
         const here = world && world.siteName ? world.siteName() : "";
-        list.innerHTML = state.placed.map((c) => `<div class="kept-row${c.site === here ? " here" : ""}${c.id === state.chosen ? " mine" : ""}"><span title="${esc(c.id)}">📷 ${esc(c.label || "camera")} · ${esc(c.site)} › ${esc(c.path)}${c.id === state.chosen ? " · this browser's" : ""}</span><button type="button" class="cam-unplace-one" data-id="${esc(c.id)}" title="Take this camera out of the world">Unplace</button></div>`).join("");
+        list.innerHTML = state.placed.map((c) => `<div class="kept-row${c.site === here ? " here" : ""}${c.id === state.chosen ? " mine" : ""}"><span title="${esc(c.id)}">📷 ${esc(c.label || "camera")} · ${esc(c.site)} › ${esc(c.path || "the floor")}${c.id === state.chosen ? " · this browser's" : ""}</span><button type="button" class="cam-unplace-one" data-id="${esc(c.id)}" title="Take this camera out of the world">Unplace</button></div>`).join("");
     }
     async function unplace(id) {
         await api(`/cameras/${encodeURIComponent(id)}`, { method: "DELETE" });
@@ -197,11 +199,11 @@ export function mountCamera(root, { base = "", world = null, log = null } = {}) 
     });
     $("cam-place").onclick = async () => {
         const path = world && world.selectedPath ? world.selectedPath() : null;
-        if (!state.chosen || !path) { say("choose a camera and select a piece to stand it at", "bad"); return; }
+        if (!state.chosen || path == null) { say("choose a camera and select a piece to stand it at", "bad"); return; }
         const cam = state.cameras.find((c) => c.deviceId === state.chosen);
         try {
             await api(`/cameras/${encodeURIComponent(state.chosen)}`, { method: "PUT", body: JSON.stringify({ label: (cam && cam.label) || "camera", site: world.siteName(), path }) });
-            say(`camera placed at ${path}`);
+            say(`camera placed at ${path || "the floor"}`);
             if (world.refreshCameras) await world.refreshCameras();
             await loadPlaced();
         } catch (e) { say(e.message, "bad"); }
@@ -230,6 +232,8 @@ export function mountCamera(root, { base = "", world = null, log = null } = {}) 
     $("pic-refresh").onclick = loadPictures;
     async function forget(path) {
         await api(`/photos/pictures/${path.split("/").map(encodeURIComponent).join("/")}`, { method: "DELETE" });
+        // Forgetting a kept picture unpins its looks: the world draws them no more.
+        if (world && world.refreshCameras) world.refreshCameras();
         await loadPictures();
     }
     $("pic-list").addEventListener("click", async (ev) => {
@@ -263,6 +267,7 @@ export function mountCamera(root, { base = "", world = null, log = null } = {}) 
         const own = state.pictures.length - kept.length;
         if (!confirm(`Forget every picture the browser put here? ${kept.length} kept picture(s) go; the folder's own (${own}) stay.`)) return null;
         const gone = await api("/photos/pictures", { method: "DELETE" });
+        if (world && world.refreshCameras) world.refreshCameras();
         say(`forgot ${gone.forgotten.length} kept picture(s); ${gone.left} of the folder's own stay`);
         await loadPictures();
         return gone;

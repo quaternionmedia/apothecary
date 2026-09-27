@@ -18,6 +18,10 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # the page imports (census.MARKS). Before: 137 controls of its own, 65
 # ring-backed, 70 places the page listens. After: the same -- machine_marks.js
 # writes no markup and listens nowhere, so the new count it adds is nothing.
+#
+# Phase 3, the looks drawn: the camera badge's listener leaves the page for
+# picture_marks.js as the place badge's (badge:click:onSelect); no ring address
+# moved. Before and after: 137 controls of its own, 65 ring-backed, 70 places.
 VIEWER_CEILING = 137
 
 

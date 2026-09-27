@@ -34,8 +34,10 @@ def _part_row(page):
 
 
 def _camera_marks_visible(page):
+    """Whether each camera's frustum is drawn (picture_marks.js), by host."""
     return page.evaluate(
-        "() => Object.values(window.fractalViewer.cameraMarks).map((l) => l.visible)"
+        "() => window.apothecaryPictures.state().filter((e) => e.frustum)"
+        ".map((e) => e.frustum.visible)"
     )
 
 
@@ -248,7 +250,7 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     expect(placed).to_have_count(1)
     expect(placed).to_contain_text("garage › workbench")
     page.evaluate("() => window.fractalViewer.zoomIn('workbench')")
-    badge = page.locator(".world-badge.camera-mark")
+    badge = page.locator(".world-badge.place-mark.has-camera")
     expect(badge).to_be_visible(timeout=5000)
     assert _camera_marks_visible(page) == [True]
     # Nothing stands between the camera and the top of the bench, so the badge
@@ -261,8 +263,9 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     story.shows(
         "A camera placed at the bench is drawn there",
         "Allowed in the Camera panel and placed at the selected piece, the camera "
-        "gets a badge above the bench and a small frustum at it, kept on the server "
-        "so every browser looking at this site sees it standing there.",
+        "gets a place badge above the bench and a frustum looking down onto its top, "
+        "kept on the server so every browser looking at this site sees it standing "
+        "there.",
     )
 
     page.evaluate("() => { const v = window.fractalViewer; v.zoomOut(); v.zoomIn('printer_1'); }")
