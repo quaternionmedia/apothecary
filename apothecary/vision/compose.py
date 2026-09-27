@@ -16,7 +16,7 @@ PROTOTYPE — not ratified.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Tuple
 
 from ..hierarchy import Assembly, Site
 from ..models.bounds import BoundingBox3D
@@ -26,7 +26,8 @@ from .album import Album, Built, Provenance
 from .models import Picture, ScaleReference
 
 if TYPE_CHECKING:  # pragma: no cover - for readers and type checkers only
-    from ..vocabulary import WordList
+    from ..vocabulary import WordList, WordShape
+    from .models import FoundShape
 
 # How thick a flat shape is assumed to be, as a fraction of its shorter side.
 # A guess, and named as one everywhere it lands.
@@ -75,7 +76,7 @@ def build(
     # describe shapes, and shapes live in this package, so importing it up there
     # made the two packages depend on each other and whichever was imported
     # second failed.
-    from ..vocabulary import WordShape, starter_words, word_for
+    from ..vocabulary import starter_words, word_for
 
     # `or` would swallow an explicitly empty list, which a caller supplying a
     # curated vocabulary would never expect.
@@ -101,80 +102,21 @@ def build(
     known: dict = {}
     for index, shape in enumerate(picture.shapes, start=1):
         choice = word_for(shape)
-        word = vocabulary.get(choice.word)
-
-        # Prefer the shape's own sides over its upright box. A bar lying at 35°
-        # has an upright box far larger than the bar, and building that box
-        # would be building the wrong object.
-        if shape.measured_sides:
-            width = max(shape.long_side * factor, MIN_THICKNESS)
-            depth = max(shape.short_side * factor, MIN_THICKNESS)
-        else:
-            width = max(shape.width * factor, MIN_THICKNESS)
-            depth = max(shape.height * tallness * factor, MIN_THICKNESS)
-        thickness = max(min(width, depth) * THICKNESS_GUESS, MIN_THICKNESS)
-
-        piece = word.make(
-            f"{choice.word}_{index}",
-            WordShape(width=width, depth=depth, height=thickness, sized=sized),
-        )
-
-        # Words are built with one corner at the origin. Shift each piece onto
-        # its own middle before anything else: a piece turned about its corner
-        # swings away from where it was seen, and a piece turned about its
-        # middle stays put.
-        if piece.base is not None:
-            piece.base = Translate(
-                v=Vector3D(x=-width / 2, y=-depth / 2, z=0.0), children=[piece.base]
-            )
-            # A picture counts its angles the other way round from a build,
-            # because the downward direction is flipped just below. Turning the
-            # other way puts the piece back the way it looked.
-            if shape.turned_degrees:
-                piece.base = Rotate(
-                    a=Vector3D(x=0.0, y=0.0, z=-shape.turned_degrees),
-                    children=[piece.base],
-                )
-
-        centre = shape.centre
-        piece.position = Vector3D(
-            x=centre.x * factor,
-            # A picture counts downward from the top; a build counts away from
-            # the front. Flipping here keeps what you see and what you build the
-            # same way up.
-            y=(1.0 - centre.y) * tallness * factor,
-            z=0.0,
-        )
-        # The piece now straddles its own position, so its extent does too.
-        piece.footprint = (
-            BoundingBox3D(
-                min_point=Vector3D(x=-width / 2, y=-depth / 2, z=0.0),
-                max_point=Vector3D(x=width / 2, y=depth / 2, z=thickness),
-            )
-            if sized
-            else None
-        )
-        piece.status = None if sized else "unsized"
-        # The viewer already gathers nodes by category and offers them as
-        # filters. Naming the word here means grouping by word costs nothing:
-        # the machinery for it was already there.
-        piece.category = choice.word
-        piece.comment = (
-            f"{choice.word} because {choice.reason}; "
-            f"found by {picture.finder} at {shape.confidence:.2f} confidence; "
-            f"thickness is a guess at {THICKNESS_GUESS:g} of the shorter side"
-            + ("" if sized else "; no real-world size was supplied")
-        )
-        known[piece.name] = Provenance(
+        piece, about = piece_from_shape(
+            shape,
+            name=f"{choice.word}_{index}",
             word=choice.word,
             reason=choice.reason,
+            per_unit=per_unit,
+            tallness=tallness,
             finder=picture.finder,
-            confidence=shape.confidence,
-            origin=shape.origin,
-            sized=sized,
-            turned_degrees=shape.turned_degrees,
-            thickness_guessed=True,
+            words=vocabulary,
         )
+        # piece_from_shape places a piece by its offset from the picture's
+        # centre; an arrangement of its own is measured from the picture's
+        # lower-left corner, half the picture away.
+        piece.position = piece.position + Vector3D(x=factor / 2, y=tallness * factor / 2, z=0.0)
+        known[piece.name] = about
         pieces.append(piece)
 
     site = Site(name or picture.name, structures=pieces)
@@ -202,4 +144,119 @@ def build(
     )
 
 
-__all__ = ["MIN_THICKNESS", "THICKNESS_GUESS", "ScaleUnknown", "build", "picture_to_site"]
+def piece_from_shape(
+    shape: "FoundShape",
+    *,
+    name: str,
+    word: str,
+    reason: str,
+    per_unit: Optional[float],
+    tallness: float,
+    finder: str,
+    size: Optional["WordShape"] = None,
+    words: Optional["WordList"] = None,
+) -> Tuple[Assembly, Provenance]:
+    """One found shape as one piece, and how it came to be.
+
+    The piece stands on its own middle, and its position is its offset from
+    the picture's centre in millimetres: ``((cx - 0.5) * W, (0.5 - cy) * H)``,
+    where ``W`` is ``per_unit`` and ``H`` is ``tallness * per_unit``. Without
+    ``per_unit`` the numbers are fractions of the picture and the piece is
+    marked ``unsized``. ``size`` replaces the sides and thickness read from the
+    shape (a person's parameters); ``word`` and ``reason`` are the word the
+    shape is made as and why, whether the table chose it or a person did.
+    """
+    from ..vocabulary import WordShape, starter_words
+
+    vocabulary = starter_words() if words is None else words
+    chosen = vocabulary.get(word)
+    sized = per_unit is not None
+    factor = per_unit if sized else 1.0
+
+    if size is not None:
+        width, depth, thickness = size.width, size.depth, size.height
+        sized = sized and size.sized
+    else:
+        # Prefer the shape's own sides over its upright box. A bar lying at 35°
+        # has an upright box far larger than the bar, and building that box
+        # would be building the wrong object.
+        if shape.measured_sides:
+            width = max(shape.long_side * factor, MIN_THICKNESS)
+            depth = max(shape.short_side * factor, MIN_THICKNESS)
+        else:
+            width = max(shape.width * factor, MIN_THICKNESS)
+            depth = max(shape.height * tallness * factor, MIN_THICKNESS)
+        thickness = max(min(width, depth) * THICKNESS_GUESS, MIN_THICKNESS)
+
+    piece = chosen.make(name, WordShape(width=width, depth=depth, height=thickness, sized=sized))
+
+    # Words are built with one corner at the origin. Shift each piece onto
+    # its own middle before anything else: a piece turned about its corner
+    # swings away from where it was seen, and a piece turned about its
+    # middle stays put.
+    if piece.base is not None:
+        piece.base = Translate(v=Vector3D(x=-width / 2, y=-depth / 2, z=0.0), children=[piece.base])
+        # A picture counts its angles the other way round from a build,
+        # because the downward direction is flipped just below. Turning the
+        # other way puts the piece back the way it looked.
+        if shape.turned_degrees:
+            piece.base = Rotate(
+                a=Vector3D(x=0.0, y=0.0, z=-shape.turned_degrees),
+                children=[piece.base],
+            )
+
+    centre = shape.centre
+    piece.position = Vector3D(
+        x=(centre.x - 0.5) * factor,
+        # A picture counts downward from the top; a build counts away from
+        # the front. Flipping here keeps what you see and what you build the
+        # same way up.
+        y=(0.5 - centre.y) * tallness * factor,
+        z=0.0,
+    )
+    # The piece now straddles its own position, so its extent does too.
+    piece.footprint = (
+        BoundingBox3D(
+            min_point=Vector3D(x=-width / 2, y=-depth / 2, z=0.0),
+            max_point=Vector3D(x=width / 2, y=depth / 2, z=thickness),
+        )
+        if sized
+        else None
+    )
+    piece.status = None if sized else "unsized"
+    # The viewer already gathers nodes by category and offers them as
+    # filters. Naming the word here means grouping by word costs nothing:
+    # the machinery for it was already there.
+    piece.category = word
+    guessed = size is None
+    piece.comment = (
+        f"{word} because {reason}; "
+        f"found by {finder} at {shape.confidence:.2f} confidence; "
+        + (
+            f"thickness is a guess at {THICKNESS_GUESS:g} of the shorter side"
+            if guessed
+            else "sides and thickness as a person gave them"
+        )
+        + ("" if sized else "; no real-world size was supplied")
+    )
+    about = Provenance(
+        word=word,
+        reason=reason,
+        finder=finder,
+        confidence=shape.confidence,
+        origin=shape.origin,
+        sized=sized,
+        turned_degrees=shape.turned_degrees,
+        thickness_guessed=guessed,
+    )
+    return piece, about
+
+
+__all__ = [
+    "MIN_THICKNESS",
+    "THICKNESS_GUESS",
+    "ScaleUnknown",
+    "build",
+    "picture_to_site",
+    "piece_from_shape",
+]
