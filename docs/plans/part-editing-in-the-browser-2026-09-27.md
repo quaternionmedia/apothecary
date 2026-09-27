@@ -140,14 +140,23 @@ the page, and needs a CSP change the personal-data record's tests hold
 against. Revisit only for a static export with no server, and take it to
 the licence review first.
 
-## For a person to decide
+## Decided (2026-09-27)
 
-- Whether apothecary may depend on an OpenSCAD development snapshot for its
-  fast path, given no stable release carries Manifold, and how a snapshot is
-  pinned (a version floor through `openscad_min_version`, or a tested
-  snapshot date).
-- Whether a saved SCAD edit from the browser is a commit, a file on disk the
-  person commits, or a variant that never touches the part's source.
-- Where part editing sits against the pictures-in-the-world plan: the part
-  editor is a panel tethered to the part, and a shape found in a picture
-  becomes a part the same editor opens.
+- **The fast path may depend on an OpenSCAD development snapshot**, and the
+  command line sets one up either way: installing the newest snapshot that
+  meets a part's version floor, or a snapshot pinned by date that the tests
+  ran against. `apothecary check` says which OpenSCAD each part will use and
+  whether it has Manifold. Downloading a snapshot is a tool fetch from
+  `files.openscad.org` by a second caller, so it is written into the
+  personal-data record (§2's sources and its one-caller test) before the code
+  lands, not after.
+- **A saved edit is a variant in the git tree.** Saving from the browser
+  commits the edited SCAD and its parameters to a variant ref of the part's
+  own (for example `refs/apothecary/variants/<part>/<name>`), built with
+  git's plumbing so the working tree, the index and the checked-out branch
+  are never touched. The part panel lists a part's variants from those refs;
+  making one the part's source is a merge the person does. History,
+  diffs and sharing are git's.
+- **One editor, tethered to the part, that also opens a shape found in a
+  picture**, as proposed; it is the pictures-in-the-world plan's editor for a
+  piece.
