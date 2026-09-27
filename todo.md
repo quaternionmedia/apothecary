@@ -21,8 +21,9 @@ Decided, not started. Each waits on what its line names.
 - Photo gathering becomes an optional extra (decided 2026-09-26).
   `apothecary/gathering/` and its benches move behind
   `pip install apothecary[photos]`, and `photo gather` names the extra when
-  it is missing. How much of `apothecary/vision/` goes with it is settled
-  then: the API's photo routes and `vocabulary/match.py` import from it. The
+  it is missing. `apothecary/vision/` stays in core, as
+  [the pictures plan](docs/plans/pictures-in-the-world-2026-09-26.md)
+  decides (its Phase 1 is this move). The
   `/cameras` routes and Pillow stay in core, because the bench walkthrough and
   `apothecary docs generate` use them. Split `gather` into steps only after
   the move.

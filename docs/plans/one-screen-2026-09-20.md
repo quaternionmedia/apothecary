@@ -83,11 +83,6 @@ Rules that hold throughout:
   control, bed, print); split it when a host wants one part without the rest.
 - `board_view.js` stays on the monitor page until Phase 5.
 
-Pictures, cameras and found shapes take the same frame in their own plan,
-[pictures-in-the-world-2026-09-26.md](pictures-in-the-world-2026-09-26.md):
-it retires the camera panel, and its last phase closes the old photo routes
-together with Phase 5 below.
-
 ## Phase 4 — The bench in front of the world
 
 - `widgets/toolchain.js` (install, cores, libraries), `sketches.js`
@@ -95,9 +90,10 @@ together with Phase 5 below.
   history), `devices.js` (the cards, minus the board view -- the world
   shows the boards). Mounted as the **Bench** panel, docked right, and as
   `/firmware` in a plain layout.
-- The device cards' verbs join the ring (a board's node ring gains
-  `Probe`, `Identify`, `Live` where they apply), so the firmware page's
-  controls of its own get cells.
+- The device cards' verbs join the ring, so the firmware page's controls
+  of its own get cells: `Probe`, `Identify`, `Live` join Device › Link
+  where they apply, which keeps a node ring within eight beside the
+  pictures plan's Camera and Picture.
 - Tests: the firmware-page suite runs on both hosts.
 
 ## Phase 5 — One screen
@@ -113,6 +109,13 @@ together with Phase 5 below.
   bench checklist is re-run on the one screen.
 - The draft record *One screen* is proposed for ratification with the
   numbers filled in.
+
+## Pictures, in their own plan
+
+Pictures, cameras and found shapes take the same frame in
+[pictures-in-the-world-2026-09-26.md](pictures-in-the-world-2026-09-26.md):
+it retires the camera panel, and its last phase closes the old photo routes
+together with Phase 5 above.
 
 ## What is decided here, and what a person decides
 
