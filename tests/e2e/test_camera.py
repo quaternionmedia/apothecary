@@ -26,6 +26,12 @@ WEDGES = (
 )
 
 
+# Whether each camera's frustum is drawn (picture_marks.js).
+FRUSTA = (
+    "() => window.apothecaryPictures.state().filter((e) => e.frustum).map((e) => e.frustum.visible)"
+)
+
+
 def _cell(page, label: str) -> str:
     """The keypad cell of the wedge with this label on the open ring."""
     return next(cell for cell, got in page.evaluate(WEDGES).items() if got == label)
@@ -108,8 +114,8 @@ def test_a_camera_records_its_own_surroundings(
     expect(panel.locator("#cam-place")).to_be_enabled(timeout=3000)
     panel.locator("#cam-place").click()
     expect(panel.locator("#cam-place-note")).to_contain_text("placed at workbench", timeout=5000)
-    expect(page.locator(".world-badge.camera-mark")).to_be_visible(timeout=5000)
-    assert page.evaluate("() => Object.keys(window.fractalViewer.cameraMarks).length") == 1
+    expect(page.locator(".world-badge.place-mark.has-camera")).to_be_visible(timeout=5000)
+    assert page.evaluate(FRUSTA) == [True]
     cameras = page.request.get(f"{base_url}/cameras?site=garage").json()
     assert len(cameras) == 1 and cameras[0]["path"] == "workbench"
 
@@ -132,15 +138,11 @@ def test_a_camera_records_its_own_surroundings(
     # The mark follows the focus: looking into another piece, neither the badge
     # nor the frustum stays behind; zooming back out brings both back.
     page.evaluate("() => window.fractalViewer.zoomIn('printer_1')")
-    expect(page.locator(".world-badge.camera-mark")).to_be_hidden(timeout=5000)
-    assert page.evaluate(
-        "() => Object.values(window.fractalViewer.cameraMarks).map((l) => l.visible)"
-    ) == [False]
+    expect(page.locator(".world-badge.place-mark.has-camera")).to_be_hidden(timeout=5000)
+    assert page.evaluate(FRUSTA) == [False]
     page.evaluate("() => window.fractalViewer.zoomOut()")
-    expect(page.locator(".world-badge.camera-mark")).to_be_visible(timeout=5000)
-    assert page.evaluate(
-        "() => Object.values(window.fractalViewer.cameraMarks).map((l) => l.visible)"
-    ) == [True]
+    expect(page.locator(".world-badge.place-mark.has-camera")).to_be_visible(timeout=5000)
+    assert page.evaluate(FRUSTA) == [True]
 
     # Its own surroundings: a frame kept on this machine, looked at, opened in the world.
     panel.locator("#cam-name").fill("surroundings")
@@ -164,7 +166,7 @@ def test_a_camera_records_its_own_surroundings(
     # Back in the garage the camera still stands where it was placed.
     page.evaluate("() => window.fractalViewer.openSite('garage')")
     page.wait_for_function("() => window.fractalViewer.siteName === 'garage'", timeout=15000)
-    expect(page.locator(".world-badge.camera-mark")).to_be_visible(timeout=5000)
+    expect(page.locator(".world-badge.place-mark.has-camera")).to_be_visible(timeout=5000)
 
     # Two captures gathered: the report, and the two opened as one arrangement.
     panel.locator("#cam-name").fill("again")
@@ -196,21 +198,20 @@ def test_a_camera_records_its_own_surroundings(
     # Unplaced, the camera leaves the world.
     page.evaluate("() => window.fractalViewer.openSite('garage')")
     page.wait_for_function("() => window.fractalViewer.siteName === 'garage'", timeout=15000)
-    expect(page.locator(".world-badge.camera-mark")).to_be_visible(timeout=5000)
+    expect(page.locator(".world-badge.place-mark.has-camera")).to_be_visible(timeout=5000)
     panel.locator("#cam-unplace").click()
-    expect(page.locator(".world-badge.camera-mark")).to_have_count(0, timeout=5000)
+    expect(page.locator(".world-badge.place-mark.has-camera")).to_have_count(0, timeout=5000)
     assert page.request.get(f"{base_url}/cameras?site=garage").json() == []
     assert errors == []
 
 
 @pytest.mark.e2e
-def test_a_camera_badge_shows_its_camera_before_the_panel_was_ever_opened(
+def test_a_place_badge_selects_its_host_and_opens_nothing(
     camera_page, base_url: str, leaves_no_trace
 ):
-    """The first click on a badge, on a page whose camera panel was never mounted,
-    selects the node the camera stands at and shows that camera live: the page
-    waits for this browser's cameras before deciding whose camera it is. A camera
-    another browser placed is refused in the status bar, as an error."""
+    """A place badge is read, not operated: a click selects the host its camera is
+    pinned at, whether the camera is this browser's or another's, on a page whose
+    camera panel was never mounted, and mounts nothing and goes live nowhere."""
     page = camera_page
     page.goto(f"{base_url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
@@ -227,24 +228,19 @@ def test_a_camera_badge_shows_its_camera_before_the_panel_was_ever_opened(
         )
         assert placed.ok, placed.text()
     # Not a reload: Chromium may hand a reloaded page other device ids.
-    page.evaluate("() => window.fractalViewer.syncCameras()")
-    badges = page.locator(".world-badge.camera-mark")
+    page.evaluate("() => window.apothecaryPictures.refresh()")
+    badges = page.locator(".world-badge.place-mark.has-camera")
     expect(badges).to_have_count(2, timeout=5000)
-    assert page.evaluate("() => window.apothecaryCamera === undefined")  # never mounted
+    assert page.evaluate(FRUSTA) == [True, True]
 
     status = page.locator("#status")
-    page.locator(f".world-badge.camera-mark[data-camera='{mine}']").click()
-    page.wait_for_function(
-        "() => window.apothecaryCamera && window.apothecaryCamera.live()", timeout=8000
-    )
+    page.locator(f".world-badge.place-mark[data-camera='{mine}']").click()
     assert page.evaluate("() => window.fractalViewer.selectedName") == "workbench"
-    expect(status).to_contain_text("is live")
-    expect(status).not_to_have_class(re.compile(r"\berror\b"))
-
-    page.locator(".world-badge.camera-mark[data-camera='another_browsers_camera']").click()
-    expect(status).to_contain_text("another browser", timeout=5000)
-    expect(status).to_have_class(re.compile(r"\berror\b"))
+    expect(page.locator("#selected-body [data-facts='camera']")).to_contain_text(mine[:12])
+    page.locator(".world-badge.place-mark[data-camera='another_browsers_camera']").click()
     assert page.evaluate("() => window.fractalViewer.selectedName") == "printer_1"
+    assert page.evaluate("() => window.apothecaryCamera === undefined")  # never mounted
+    expect(status).not_to_have_class(re.compile(r"\berror\b"))
 
 
 @pytest.mark.e2e

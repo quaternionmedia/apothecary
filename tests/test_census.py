@@ -13,6 +13,15 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 
 # The viewer's controls of its own today. A change that adds one raises this
 # on purpose; a change that removes one may lower it.
+#
+# Pictures plan Phase 3, first commit: the census also counts the marks modules
+# the page imports (census.MARKS). Before: 137 controls of its own, 65
+# ring-backed, 70 places the page listens. After: the same -- machine_marks.js
+# writes no markup and listens nowhere, so the new count it adds is nothing.
+#
+# Phase 3, the looks drawn: the camera badge's listener leaves the page for
+# picture_marks.js as the place badge's (badge:click:onSelect); no ring address
+# moved. Before and after: 137 controls of its own, 65 ring-backed, 70 places.
 VIEWER_CEILING = 137
 
 
@@ -255,3 +264,41 @@ def test_the_panel_module_keeps_its_chrome_to_itself():
         assert f'window.removeEventListener("{event}"' in text
     assert "/static/panels.js" in census.VIEWER.read_text(encoding="utf-8")
     assert "/static/panels.js" not in census.MONITOR.read_text(encoding="utf-8")
+
+
+# --------------------------------------------------------------------------
+# The marks modules: counted with the page that imports them
+# --------------------------------------------------------------------------
+
+
+def test_the_viewer_counts_its_marks_modules_and_the_monitor_does_not():
+    """The viewer imports machine_marks.js itself; the monitor reaches it only
+    through board_view.js, so its count does not change."""
+    assert (census.STATIC / "machine_marks.js") in census.marks_of(census.VIEWER)
+    assert census.marks_of(census.MONITOR) == []
+    assert census.marks_of(census.FIRMWARE) == []
+    for chrome in ("ring.js", "panels.js", "anchors.js"):
+        assert chrome not in census.MARKS
+
+
+def test_a_listener_in_a_marks_module_is_counted_and_named_when_unclassified(tmp_path, monkeypatch):
+    monkeypatch.setattr(census, "STATIC", tmp_path)
+    (tmp_path / "machine_marks.js").write_text(
+        "\nbadge.addEventListener('click', () => mystery(path));\n", encoding="utf-8"
+    )
+    page = tmp_path / "page.html"
+    page.write_text(
+        "import { makeMachineMarks } from '/static/machine_marks.js';\n"
+        "import { mountAnchors } from '/static/anchors.js';\n",
+        encoding="utf-8",
+    )
+    taken = census.take(page)
+    assert [(f.key, f.source, f.line) for f in taken.unclassified()] == [
+        ("badge:click:mystery", "machine_marks.js", 2)
+    ]
+
+
+def test_every_listener_in_the_viewers_marks_modules_is_classified():
+    taken = census.take()
+    marks = {m.name for m in census.marks_of(census.VIEWER)}
+    assert [f.key for f in taken.unclassified() if f.source in marks] == []
