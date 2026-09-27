@@ -21,9 +21,10 @@ Decided, not started. Each waits on what its line names.
 - Photo gathering becomes an optional extra (decided 2026-09-26).
   `apothecary/gathering/` and its benches move behind
   `pip install apothecary[photos]`, and `photo gather` names the extra when
-  it is missing. `apothecary/vision/` stays in core, as
-  [the pictures plan](docs/plans/pictures-in-the-world-2026-09-26.md)
-  decides (its Phase 1 is this move). The
+  it is missing. An extra only adds dependencies, so gathering becomes a
+  distribution of its own that the extra installs; `apothecary/vision/`
+  stays in core. [The pictures plan](docs/plans/pictures-in-the-world-2026-09-26.md)
+  says how, as its Phase 1, which lands with this round. The
   `/cameras` routes and Pillow stay in core, because the bench walkthrough and
   `apothecary docs generate` use them. Split `gather` into steps only after
   the move.

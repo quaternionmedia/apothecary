@@ -91,9 +91,10 @@ Rules that hold throughout:
   shows the boards). Mounted as the **Bench** panel, docked right, and as
   `/firmware` in a plain layout.
 - The device cards' verbs join the ring, so the firmware page's controls
-  of its own get cells: `Probe`, `Identify`, `Live` join Device › Link
-  where they apply, which keeps a node ring within eight beside the
-  pictures plan's Camera and Picture.
+  of its own get cells: `Probe`, `Identify` and the serial `Listen` (named
+  so, because Camera › Live is the pictures plan's) join Device › Link
+  where they apply, because the Device ring on a printer already holds
+  eight. The rad record's Link cell is edited to match.
 - Tests: the firmware-page suite runs on both hosts.
 
 ## Phase 5 — One screen
