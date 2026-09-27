@@ -37,6 +37,19 @@ class StatedFinder:
     def description_path(self, image: Path) -> Path:
         return Path(image).with_suffix(".shapes.json")
 
+    def model_digest(self, image: Path) -> str:
+        """The description is this finder's model: its hash, or empty when there is none.
+
+        What ``apothecary.vision.cache`` keys an answer by, so a description
+        rewritten beside the same picture is read again."""
+        import hashlib
+
+        described = self.description_path(image)
+        try:
+            return hashlib.sha256(described.read_bytes()).hexdigest()
+        except OSError:
+            return ""
+
     def look(self, image: Path) -> Picture:
         # Take a plain string too. The protocol says Path, and everything inside
         # here needs one, but a caller with a string should get a picture rather
