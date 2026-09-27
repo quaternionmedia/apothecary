@@ -232,6 +232,29 @@ def pin_picture(
     return looking.store().pin(look)
 
 
+def finders_for(picture: str) -> List[str]:
+    """The finders that can read a picture under the root: every one, except a
+    finder that reads a description beside the picture when there is none.
+    What the ring's Find offers, so it is offered only where it can do something."""
+    from ..api import _picture_root, _picture_within_root
+    from ..vision import get as get_finder
+    from ..vision import names as finder_names
+
+    root = _picture_root()
+    try:
+        where = _picture_within_root(root / picture)
+    except HTTPException:
+        return []
+    readable = []
+    for name in finder_names():
+        seer = get_finder(name)
+        described = getattr(seer, "description_path", None)
+        if described is not None and not described(where).is_file():
+            continue
+        readable.append(name)
+    return readable
+
+
 CAMERA_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
 
 
@@ -516,4 +539,4 @@ async def drop_made(site_name: str, piece: str):
     }
 
 
-__all__ = ["check_host", "look_view", "pin_picture", "router", "shape_view"]
+__all__ = ["check_host", "finders_for", "look_view", "pin_picture", "router", "shape_view"]

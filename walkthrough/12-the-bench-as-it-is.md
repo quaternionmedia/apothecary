@@ -71,11 +71,11 @@ esp32_blink is a sketch and the board it runs on, drawn as the board: the descri
 
 ![The DevKitC standing on its pins](screenshots/12-08-the-devkitc-standing-on-its-pins.png)
 
-## 9. A camera placed at the bench is drawn there
+## 9. A camera pinned at the bench is drawn there
 
-Allowed in the Camera panel and placed at the selected piece, the camera gets a place badge above the bench and a frustum looking down onto its top, kept on the server so every browser looking at this site sees it standing there.
+Pinned from the bench's own ring -- Camera, Pin here, and this browser's camera by its name -- the camera gets a place badge above the bench and a frustum looking down onto its top, kept on the server so every browser looking at this site sees it standing there.
 
-![A camera placed at the bench is drawn there](screenshots/12-09-a-camera-placed-at-the-bench-is-drawn-there.png)
+![A camera pinned at the bench is drawn there](screenshots/12-09-a-camera-pinned-at-the-bench-is-drawn-there.png)
 
 ## 10. Looking into a printer, the camera's mark stays at the bench
 
@@ -83,9 +83,9 @@ A mark is drawn at the level where its piece is. Zoomed into something else, nei
 
 ![Looking into a printer, the camera's mark stays at the bench](screenshots/12-10-looking-into-a-printer-the-camera-s-mark-stays-at-.png)
 
-## 11. Unplaced, it leaves the world
+## 11. Unpinned, it leaves the world
 
-The placement is a record on this machine and nothing more; taking it back removes the mark for every browser.
+The pin is a record on this machine and nothing more; taking it back removes the mark for every browser.
 
 ```
 GET /cameras?site=garage -> []

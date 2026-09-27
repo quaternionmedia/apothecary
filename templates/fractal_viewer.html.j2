@@ -582,6 +582,7 @@
         import { mountCamera } from '/static/widgets/camera.js';
         import { makeMachineMarks, toScene as marksToScene } from '/static/machine_marks.js';
         import { mountPictureMarks } from '/static/picture_marks.js';
+        import { mountPictures } from '/static/pictures.js';
 
         const BASE_URL = {{ base_url | tojson }};
         const DEFAULT_SITE = {{ default_site | tojson }};
@@ -967,29 +968,45 @@
                     onSelect: (host) => this.selectPlace(host),
                     onChange: (attached) => {
                         this.cameras = attached.cameras;
-                        if (this.cameraWidget) this.cameraWidget.renderPlacement();
+                        if (this.cameraWidget) this.cameraWidget.loadPlaced();
                         // Selected is redrawn only when what it says of the pictures changed,
                         // so a position being typed is not swept away by an answer.
                         if (this.selectedName && this.pictureFactsHtml(this.selectedName) !== this.shownFacts) this.renderSelectedPanel();
                     },
                 });
                 window.apothecaryPictures = this.pictureMarks;
-                // The camera and the pictures on this machine: the photo workflow,
-                // as a panel (closed until asked for).
+                // The loop's verbs at a host (pictures.js): a camera pinned, live and
+                // looked with; pictures added, dropped, pasted, pinned, found, sized;
+                // looks drawn and unpinned. Each is a ring cell; none has markup.
+                this.pictures = mountPictures({
+                    base: BASE_URL, marks: this.pictureMarks,
+                    log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
+                    world: {
+                        siteName: () => this.siteName,
+                        select: (host) => { if (this.hostKey() !== host) this.selectPlace(host); },
+                        // A picture lands at the top level, where mats are drawn: step out
+                        // first, as ◀ out does -- a view change, never a site switch.
+                        stepOut: () => { if (this.focusPath.length) this.jumpTo(0); },
+                        focusWidth: () => { this.panels.open('selected'); this.selectedBodyEl.querySelector('.look-width')?.focus(); },
+                        openPanel: (id) => this.panels.open(id),
+                        frameFloor: () => this.frameFloor(),
+                        rendered: () => this.renderSelectedPanel(),
+                    },
+                });
+                window.apothecaryPictureVerbs = this.pictures;
+                // What is left of the camera panel until the Kept panel: the pictures
+                // on this machine, the gathering's report, and every pin, every site's,
+                // each taken back from its row (closed until asked for).
                 this.cameraWidget = null;
                 this.panels.register('camera', {
-                    title: 'Camera & pictures', where: 'right', open: false,
+                    title: 'Pictures & pins', where: 'right', open: false,
                     body: (slot) => {
                         this.cameraWidget = mountCamera(slot, {
                             base: BASE_URL,
                             log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
                             world: {
                                 siteName: () => this.siteName,
-                                // The floor is a selection, not a node: "" to the routes.
-                                selectedPath: () => (this.selectedName === FLOOR_KEY ? '' : this.selectedName),
-                                placed: () => this.cameras,
                                 refreshCameras: () => this.pictureMarks.refresh(),
-                                openSite: (name) => this.openSite(name),
                                 // A pin of this site taken back from the panel's list:
                                 // the node's row, badge and marks go now, not at the
                                 // next poll.
@@ -1031,6 +1048,11 @@
                 this.canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
                 this.canvas.addEventListener('dblclick', (e) => this.onDoubleClick(e));
                 this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: true });
+                // A file dropped on a structure is kept and pinned at its root (at the
+                // floor, on empty canvas); a pasted picture, at the selected place.
+                this.canvas.addEventListener('dragover', (e) => e.preventDefault());
+                this.canvas.addEventListener('drop', (e) => this.onDropFiles(e));
+                window.addEventListener('paste', (e) => this.onPaste(e));
                 window.addEventListener('keydown', (e) => {
                     if (e.key === 'Backspace' && document.activeElement.tagName !== 'INPUT') {
                         e.preventDefault();
@@ -1163,6 +1185,7 @@
                     // fetched after the scene is on screen, never before.
                     this.loadBindings().then(() => { this.afterBindings(); this.scheduleAutoRefresh(); });
                     this.pictureMarks.unchoose();
+                    this.pictures.still();
                     this.pictureMarks.load(name);
                 } catch (err) {
                     this.setStatus(`Error: ${err.message}`, 'error');
@@ -1170,20 +1193,25 @@
                 }
             }
 
-            // A site built while the server runs (from a picture, from a gathering)
-            // is not in the picker yet: add it, then load it in place -- the world
-            // changes site without leaving the page or dropping the camera.
-            openSite(name) {
-                if (![...this.siteSelect.options].some((o) => o.value === name)) {
-                    const opt = document.createElement('option');
-                    opt.value = name; opt.textContent = name;
-                    this.siteSelect.appendChild(opt);
+            // The selection as a place a picture or camera stands at: a node's
+            // path, "" for the floor, null for nothing selected.
+            hostKey() {
+                if (this.selectedName === FLOOR_KEY) return '';
+                return this.selectedName;
+            }
+
+            // The floor's mat (or where it would lie), framed from above and in front.
+            frameFloor() {
+                const entry = this.pictureMarks.state().find((e) => e.host === '');
+                let box;
+                if (entry && entry.mat) {
+                    const [x, y, z] = entry.mat.centre, w = entry.mat.width / 2, d = entry.mat.depth / 2;
+                    box = { min: [x - w, y - d, z], max: [x + w, y + d, z + 1] };
+                } else {
+                    const [x, y, z] = this.floorPoint(Object.keys((this.pictureMarks.attached() || {}).made || {}));
+                    box = { min: [x, y - 300, z], max: [x + 600, y + 300, z + 1] };
                 }
-                this.siteSelect.value = name;
-                const url = new URL(location.href);
-                url.pathname = url.pathname.replace(/\/viewer\/sites\/[^/]+/, `/viewer/sites/${encodeURIComponent(name)}`);
-                history.replaceState(null, '', url);
-                return this.loadSite(name);
+                this.frameCameraForChildren([{ world_bounds: box, children: [] }]);
             }
 
             // Where the floor's things stand when no look says: past the +x edge
@@ -1350,6 +1378,7 @@
             }
 
             renderFocus() {
+                if (this.focusPath.length && this.pictures) this.pictures.still();
                 const focus = this.currentFocusNode();
                 const renderNodes = this.currentRenderNodes(focus);
                 this.rebuildRenderNodeByKey(focus);
@@ -1880,6 +1909,8 @@
 
             selectChild(key) {
                 this.pictureMarks.unchoose();
+                if (key !== this.selectedName) this.pictureMarks.untrace();
+                this.pictures.selectionChanged(key);
                 this.selectedName = key;
                 const focus = this.currentFocusNode();
                 const node = this.renderNodeByKey[key];
@@ -1906,11 +1937,11 @@
             // so anything deeper -- or any leaf of an expanded category that
             // isn't itself a direct child -- gets a read-only panel.
             renderSelectedPanel() {
-                if (this.cameraWidget) this.cameraWidget.renderPlacement();  // "Place at selected" follows the selection
                 this.shownFacts = this.selectedName ? this.pictureFactsHtml(this.selectedName) : '';
                 if (this.selectedName === FLOOR_KEY) {
                     this.selectedBodyEl.innerHTML = `<div class="prop-row"><label>Name</label><span>the floor</span></div>
                         <div class="prop-readonly">Beside the site, on the ground: a picture of something loose on the bench or on paper is pinned here.</div>${this.shownFacts}`;
+                    this.bindPictureFacts();
                     return;
                 }
                 const focus = this.currentFocusNode();
@@ -1934,6 +1965,18 @@
                 this.selectedBodyEl.insertAdjacentHTML('beforeend', this.deviceSectionHtml(this.selectedName));
                 this.bindDeviceSection(this.selectedName);
                 this.selectedBodyEl.insertAdjacentHTML('beforeend', this.shownFacts);
+                this.bindPictureFacts();
+            }
+
+            // The width box sets the drawn look's scale (a chosen shape's long side
+            // when one is chosen); a look's row draws that look.
+            bindPictureFacts() {
+                const host = this.hostKey();
+                const widthBox = this.selectedBodyEl.querySelector('.look-width');
+                if (widthBox) widthBox.addEventListener('change', () => this.pictures.setWidth(host, Number(widthBox.value)).catch((e) => this.setStatus(e.message, 'error')));
+                for (const row of this.selectedBodyEl.querySelectorAll('.look-row')) {
+                    row.addEventListener('click', () => this.pictures.drawLook(row.dataset.host, row.dataset.look));
+                }
             }
 
             // What the pictures know about the selection, as facts (no verb:
@@ -1960,7 +2003,7 @@
                 for (const look of [...looks].reverse()) {
                     const size = look.mat && look.mat.width ? `${Number(look.mat.width).toFixed(0)} mm across` : 'unsized';
                     const madeCount = Object.keys(look.made || {}).length;
-                    rows.push(`<div class="look-row${look === drawn ? ' drawn' : ''}" data-look="${esc(look.id)}">${look === drawn ? '▸ ' : ''}${esc(look.picture)} · ${esc(look.finder)} · ${look.shapes.length} shape(s)${look.left_out ? ` (+${look.left_out} left out)` : ''} · ${size}${madeCount ? ` · ${madeCount} made` : ''}</div>`);
+                    rows.push(`<div class="look-row${look === drawn ? ' drawn' : ''}" data-host="${esc(host)}" data-look="${esc(look.id)}" title="Draw this look">${look === drawn ? '▸ ' : ''}${esc(look.picture)} · ${esc(look.finder)} · ${look.shapes.length} shape(s)${look.left_out ? ` (+${look.left_out} left out)` : ''} · ${size}${madeCount ? ` · ${madeCount} made` : ''}</div>`);
                 }
                 const chosen = pm.chosen();
                 const look = chosen && looks.find((l) => l.id === chosen.look);
@@ -1972,6 +2015,13 @@
                     const status = shape.status === 'made' ? `made: ${esc(shape.piece)}` : shape.status === 'already_made' ? `already made (${esc(shape.piece)})` : 'found';
                     rows.push(`<div class="chosen-shape" data-facts="shape">Shape ${shape.index}: a ${esc(shape.word)} (${esc(shape.kind)}) because ${esc(shape.reason)}${shape.word_stated ? ' (a person said so)' : ''}; confidence ${Number(shape.confidence).toFixed(2)}; long side ${long}; ${status}</div>`);
                 }
+                // The one width: the drawn look's (or, with no look, its camera's
+                // next), or with a shape chosen, that shape's long side.
+                const bySide = shape && drawn && look === drawn;
+                const width = bySide
+                    ? (look.mat && look.mat.width ? Math.round((shape.long_side > 0 ? shape.long_side : shape.max[0] - shape.min[0]) * look.mat.width) : '')
+                    : (drawn ? (drawn.mat && drawn.mat.width ? Math.round(drawn.mat.width) : '') : (cam && cam.mm_across ? Math.round(cam.mm_across) : ''));
+                rows.push(`<div class="prop-row" data-facts="width"><label>${bySide ? "this shape's long side, mm" : 'picture width, mm'}</label><input type="number" class="look-width" min="1" step="1" value="${width}" title="${bySide ? 'How long this shape is in the world, in millimetres: the look is sized by it' : 'How wide the whole picture is in the world, in millimetres'}"></div>`);
                 return `<div class="prop-readonly picture-facts" data-facts="${host === '' ? 'floor' : 'host'}"><div class="k">Pictures at ${esc(where(host))}</div>${rows.join('')}</div>`;
             }
 
@@ -2990,6 +3040,8 @@
             // move, no row in Contents; Selected shows its camera and looks.
             selectFloor() {
                 this.pictureMarks.unchoose();
+                this.pictureMarks.untrace();
+                this.pictures.selectionChanged('');
                 this.selectedName = FLOOR_KEY;
                 this.transformControls.detach();
                 this.renderContentsList(this.currentFocusNode());
@@ -3369,6 +3421,51 @@
                 const { host, look, index } = hit.pick;
                 this.selectPlace(host);
                 if (index !== null && this.pictureMarks.choose(look, index)) this.renderSelectedPanel();
+            }
+
+            // Where a picture lands: a node's root ancestor, a made piece's host, a
+            // mark's host, or the floor for empty canvas. Null for nowhere a
+            // picture can be pinned, with the reason said.
+            placeFor(key) {
+                if (key === null || key === undefined || key === FLOOR_KEY || key === '') return '';
+                const root = key.split('.')[0];
+                const made = this.pictureMarks.madeRecord(root);
+                return made ? made.host : root;
+            }
+
+            async onDropFiles(event) {
+                const files = event.dataTransfer ? [...event.dataTransfer.files] : [];
+                if (!files.length) return;
+                event.preventDefault();
+                const hit = this.raycastPick(event);
+                const host = hit ? (hit.pick ? hit.pick.host : this.placeFor(hit.key)) : '';
+                try { await this.pictures.addFiles(files, host); } catch (e) { this.setStatus(e.message, 'error'); }
+            }
+
+            async onPaste(event) {
+                if (!this.siteName || event.target.closest('input, textarea, [contenteditable]')) return;
+                const item = [...(event.clipboardData ? event.clipboardData.items : [])].find((i) => i.kind === 'file' && i.type.startsWith('image/'));
+                if (!item) return;
+                event.preventDefault();
+                const host = this.placeFor(this.selectedName);
+                try { await this.pictures.paste(item.getAsFile(), host); } catch (e) { this.setStatus(e.message, 'error'); }
+            }
+
+            // What an intent the server carried answers with: the site as it is now,
+            // drawn without moving the camera, and the pictures fetched again.
+            applySite(payload) {
+                this.tree = payload.tree;
+                this.violations = payload.violations;
+                this.isValid = payload.is_valid;
+                if (payload.scad) this.codeContentEl.textContent = payload.scad;
+                if (this.selectedName && this.selectedName !== FLOOR_KEY && !this.nodeByPath(this.selectedName)) this.selectedName = null;
+                const at = this.camera.position.clone(), target = this.orbitControls.target.clone();
+                const near = this.orbitControls.minDistance, far = this.orbitControls.maxDistance;
+                this.renderFocus();
+                this.camera.position.copy(at); this.orbitControls.target.copy(target);
+                this.orbitControls.minDistance = near; this.orbitControls.maxDistance = far;
+                this.orbitControls.update();
+                return this.pictureMarks.refresh();
             }
 
             // A mesh is keyed by its full path and zoomIn takes a bare name:
@@ -3876,18 +3973,24 @@
             if (!row || !row.device) return undefined;
             return { port: row.device.port, printer: !!row.device.printer, armed: false, bound: true };
         }
-        const nodeSpec = (path, at) => ({
+        // What the page knows about pictures at the place a ring stands on (a
+        // node, or on the canvas ring the floor), told to the resolver as a
+        // device is: the pictures list is asked for again as the ring opens.
+        const nodeSpec = (path, at, fresh = true) => ({
             context: { pointing: 'node', targets: [path] },
             site: viewer.siteName, device: deviceFor(path), at,
+            picture: viewer.pictures.context(path, { fresh }),
         });
         // The canvas ring stands on the level you are looking at: its Pieces
         // are that node's children and Up steps back out. At the root the
-        // target list is empty, and the resolver offers no Up.
-        const canvasSpec = (at) => {
+        // target list is empty, and the resolver offers no Up. Its Pictures ›
+        // Floor holds the floor's Camera and Picture.
+        const canvasSpec = (at, fresh = true) => {
             const focus = viewer.focusPath.join('.');
             return {
                 context: { pointing: 'canvas', targets: focus ? [focus] : [] },
                 site: viewer.siteName, at,
+                picture: viewer.pictures.context('', { fresh }),
             };
         };
 
@@ -3897,7 +4000,7 @@
         // for whatever is selected, at the centre of the screen.
         function whatFor(event) {
             if (!viewer.siteName) return null;
-            // The floor has no ring of its own yet: the canvas ring stands for it.
+            // The floor has no ring of its own: the canvas ring's Pictures › Floor is its.
             if (!event) return viewer.selectedName && viewer.selectedName !== '@floor' ? nodeSpec(viewer.selectedName, null) : canvasSpec(null);
             const at = { x: event.clientX, y: event.clientY };
             const row = event.target.closest('#contents-list .contents-item');
@@ -3933,11 +4036,15 @@
                 if (open && /^(control:|level:|print:|device:(poll|query|watch|reconnect|reset|release))/.test(action)) {
                     if (await open.carry(intent)) { viewer.setStatus(`${intent.label}${tail}`, 'success'); return; }
                 }
-                if (action.startsWith('camera:')) {
+                // A camera's or a picture's verb the page carries (pictures.js); the
+                // ones that change the site fall through to the intent route below.
+                if (/^(camera|picture):/.test(action) || action === 'fit:@floor') {
+                    if (await viewer.pictures.carry(intent)) return;
+                }
+                if (action === 'camera:gather') {
                     viewer.panels.open('camera');
-                    const verb = action.slice('camera:'.length);
-                    if (viewer.cameraWidget && viewer.cameraWidget.act(verb)) viewer.setStatus(`Camera: ${intent.label}${tail}`, 'success');
-                    else viewer.setStatus(`${intent.label}: the camera panel cannot do that${tail}`, 'error');
+                    if (viewer.cameraWidget && viewer.cameraWidget.act('gather')) viewer.setStatus(`Gather${tail}`, 'success');
+                    else viewer.setStatus(`${intent.label}: the pictures panel cannot do that${tail}`, 'error');
                     return;
                 }
                 if (action === 'panel:rail:toggle') {
@@ -3976,6 +4083,13 @@
                     viewer.setStatus(`Framed ${nodes.length} piece(s)${tail}`, 'success');
                 } else if (action === 'explain') {
                     const node = viewer.renderNodeByKey[path] || viewer.nodeByPath(path);
+                    // A piece made from a picture is followed back to its outline.
+                    const traced = viewer.pictureMarks.trace(path);
+                    if (traced) {
+                        const at = traced.host === '' ? 'the floor' : traced.host;
+                        viewer.setStatus(`${path}: a ${traced.word} made from shape ${traced.shape_index} of ${traced.picture}${traced.picture_forgotten ? ' (forgotten)' : ''}, seen at ${at}${traced.shown ? '' : '; its look is gone, so the outline is drawn from the copy the piece keeps'}${tail}`, 'success');
+                        return;
+                    }
                     viewer.setStatus(node ? `${path}: a ${node.role}${node.category ? ' in ' + node.category : ''}${node.part_ref ? ', from part ' + node.part_ref : ''}, ${node.children.length} inside${tail}` : `${path}: not on screen${tail}`, 'success');
                 } else if (action.startsWith('site:')) {
                     const name = action.slice(5);
@@ -4012,6 +4126,7 @@
                     });
                     viewer.setStatus(`${intent.label}: ${answer.did}${tail}`, 'success');
                     if (action === 'reset') viewer.loadSite(viewer.siteName);
+                    else if (answer.site) await viewer.applySite(answer.site);
                 }
             } catch (err) {
                 viewer.setStatus(`${intent.label}: ${err.message}${tail}`, 'error');
@@ -4026,16 +4141,23 @@
         let lastRing = null;
         async function ringForCanvas() {
             if (!viewer.siteName) return null;
-            const spec = canvasSpec(null);
-            const key = JSON.stringify({ canvas: spec.context.targets, s: spec.site });
-            if (!rings.has(key)) rings.set(key, resolveRing({ base: BASE, context: spec.context, site: spec.site }).catch(() => null));
+            const spec = canvasSpec(null, false);
+            const picture = await spec.picture;
+            const key = ringKey(spec, picture);
+            if (!rings.has(key)) rings.set(key, resolveRing({ base: BASE, context: spec.context, site: spec.site, picture }).catch(() => null));
             return rings.get(key);
         }
+        // The key a ring is cached by: what it stands on, and what it was told of
+        // the board and the pictures, so a choose, look or make is never answered
+        // from a ring resolved before it.
+        const ringKey = (spec, picture) => JSON.stringify({ p: spec.context.pointing, c: spec.context.targets, s: spec.site, d: spec.device || null, pic: picture || null });
         async function ringForSelected() {
-            if (!viewer.siteName || !viewer.selectedName || viewer.selectedName === '@floor') return null;
-            const spec = nodeSpec(viewer.selectedName, null);
-            const key = JSON.stringify({ c: spec.context.targets, s: spec.site, d: spec.device || null });
-            if (!rings.has(key)) rings.set(key, resolveRing({ base: BASE, context: spec.context, site: spec.site, device: spec.device }).catch(() => null));
+            if (!viewer.siteName || !viewer.selectedName) return null;
+            // The floor's cells are the canvas ring's Pictures › Floor.
+            const spec = viewer.selectedName === '@floor' ? canvasSpec(null, false) : nodeSpec(viewer.selectedName, null, false);
+            const picture = await spec.picture;
+            const key = ringKey(spec, picture);
+            if (!rings.has(key)) rings.set(key, resolveRing({ base: BASE, context: spec.context, site: spec.site, device: spec.device, picture }).catch(() => null));
             return rings.get(key);
         }
         function annotateControls(ring) {
@@ -4046,6 +4168,10 @@
                 for (const el of document.querySelectorAll(selector)) pairs.push([el, action]);
             }
             for (const el of document.querySelectorAll('.zoom-in-btn')) pairs.push([el, 'zoom-in']);
+            // Selected's look rows are Picture › Looks' cells; its width box is Size's.
+            for (const el of viewer.selectedBodyEl.querySelectorAll('.look-row')) pairs.push([el, `picture:draw:${el.dataset.look}`]);
+            const floor = viewer.selectedName === '@floor' ? ':@floor' : '';
+            for (const el of viewer.selectedBodyEl.querySelectorAll('.look-width')) pairs.push([el, `picture:size${floor}`]);
             annotate(ring, pairs);
         }
         // The list, from the canvas ring: each row at this level is a piece the
@@ -4077,8 +4203,8 @@
             base: BASE,
             whatFor,
             onIntent: carry,
-            onResolved: (ring, spec) => {
-                if (spec.context.pointing === 'node') { rings.set(JSON.stringify({ c: spec.context.targets, s: spec.site, d: spec.device || null }), Promise.resolve(ring)); annotateControls(ring); }
+            onResolved: async (ring, spec) => {
+                if (spec.context.pointing === 'node') { rings.set(ringKey(spec, await spec.picture), Promise.resolve(ring)); annotateControls(ring); }
             },
             onError: (err) => viewer.setStatus(`Ring: ${err.message}`, 'error'),
         });

@@ -293,31 +293,26 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "dev-printer": (WIDGET, WHAT_YOU_SEE, "a button that asks M115, or polls a printer once"),
     "dev-live": (WIDGET, WHAT_YOU_SEE, "a button that streams the board's serial output"),
     # ---- the camera panel, apothecary/static/widgets/camera.js ------------
-    # The photo workflow from the browser: a camera, its frame kept here, the
-    # pictures on this machine gathered, and what a person says about them.
-    "cam-pick": (WIDGET, WHAT_YOU_SEE, "a drop-down of the browser's cameras"),
-    "cam-allow": (WIDGET, WHAT_YOU_SEE, "a button that asks the browser for its cameras"),
-    "cam-refresh": (WIDGET, WHAT_YOU_SEE, "a button that lists the cameras again"),
-    "cam-name": (WIDGET, WHAT_YOU_SEE, "a box for what the next capture is called"),
-    "cam-width": (WIDGET, WHAT_YOU_SEE, "a box for how wide the picture is, in millimetres"),
-    "cam-capture": (WIDGET, WHAT_IS_THERE, "a button that keeps a frame as a picture here"),
-    "cam-look": (WIDGET, WHAT_IS_THERE, "a button that captures, looks, and opens the result"),
-    "cam-place": (WIDGET, WHAT_IS_THERE, "a button that stands the camera at the chosen piece"),
-    "cam-unplace": (WIDGET, WHAT_IS_THERE, "a button that takes the camera out of the world"),
+    # What is left of it until the Kept panel: the pictures on this machine,
+    # gathered into a report, and what a person says about them. The camera
+    # itself is pinned, shown live and looked with from its host's ring.
     "pic-all": (WIDGET, WHAT_YOU_SEE, "a tick-box that ticks every picture"),
-    "pic-refresh": (WIDGET, WHAT_YOU_SEE, "a button that lists the pictures again"),
     "pic-gather": (WIDGET, WHAT_YOU_SEE, "a button that gathers the ticked pictures"),
-    "pic-open": (WIDGET, WHAT_IS_THERE, "a button that builds one arrangement and opens it"),
     "gather-answers": (WIDGET, WHAT_YOU_SEE, "a box for what you know about the pictures"),
     "answer": (WIDGET, WHAT_YOU_SEE, "a button that answers one of the machine's questions"),
     # What the browser put on this machine, taken back from the same panel:
     # pictures added from a file picker, kept pictures forgotten one at a
-    # time or all at once, the cameras placed in the world and the boards
-    # pinned to pieces listed (every site's) with the button that takes each back.
+    # time or all at once, the cameras and looks pinned in the world and the
+    # boards pinned to pieces listed (every site's) with the button that takes
+    # each back.
     "pic-file": (WIDGET, WHAT_YOU_SEE, "a file picker that keeps chosen pictures on this machine"),
     "pic-purge": (WIDGET, WHAT_YOU_SEE, "a button that forgets every picture the browser put here"),
     "pic-forget": (WIDGET, WHAT_YOU_SEE, "a button that forgets one kept picture"),
-    "cam-unplace-one": (WIDGET, WHAT_IS_THERE, "a button that takes one placed camera away"),
+    "cam-unplace-one": (WIDGET, WHAT_IS_THERE, "a button that unpins one camera"),
+    "look-unpin-one": (WIDGET, WHAT_IS_THERE, "a button that unpins one look"),
+    # Selected: the one width a look is sized by (a chosen shape's long side
+    # when one is chosen). A number the ring cannot type; Size puts the cursor in it.
+    "look-width": (WIDGET, WHAT_IS_THERE, "a box for how wide a picture is, or one shape's side"),
     "pin-refresh": (WIDGET, WHAT_YOU_SEE, "a button that lists the pins again"),
     "pin-unpin": (WIDGET, WHAT_IS_THERE, "a button that takes one pin back, wherever it points"),
     # printing from here: a kept file, streamed
@@ -397,17 +392,18 @@ RING_BACKED: Dict[str, str] = {
     "dev-printer": "device:poll",
     "dev-live": "device:watch",
     "boards-btn": "device:rescan",
-    # The camera panel's buttons, each a cell of the canvas ring's Camera.
-    "cam-allow": "camera:allow",
-    "cam-capture": "camera:capture",
-    "cam-look": "camera:look",
-    "cam-place": "camera:place",
-    "cam-unplace": "camera:unplace",
+    # The pictures panel's buttons: Gather and Purge are cells of the canvas
+    # ring's Pictures; a row's Unpin and a picture's forget are Camera › Unpin,
+    # Picture › Unpin and Picture › Forget at the place it names.
     "pic-gather": "camera:gather",
-    "pic-open": "camera:open",
-    # Behind the Camera cell's Kept: the file picker opens, the purge asks first.
-    "pic-file": "camera:add",
-    "pic-purge": "camera:purge",
+    "pic-purge": "picture:purge",
+    "pic-forget": "picture:forget",
+    "cam-unplace-one": "camera:unpin",
+    "look-unpin-one": "picture:unpin",
+    # A file dropped on the world, or chosen in the dialog Picture › Add opens.
+    "canvas:drop:onDropFiles": "picture:add",
+    "input:change:addFiles": "picture:add",
+    "row:click:drawLook": "picture:draw:look_1",
     # The Print cell's verbs go to whichever print is running, the card's or
     # the one from here; Send file is the one from here alone.
     "print-start": "print:start",
@@ -515,13 +511,50 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "picking the place a badge stands over: a structure, or the floor",
     ),
+    # ---- pictures in the world: a drop, a paste, Selected's width and rows --
+    "canvas:dragover:(nothing)": (
+        GESTURE,
+        NOTHING,
+        "holding a file over the world, so that it can be dropped there",
+    ),
+    "canvas:drop:onDropFiles": (
+        GESTURE,
+        WHAT_IS_THERE,
+        "dropping pictures on a structure or the floor: kept, pinned there, found",
+    ),
+    "window:paste:onPaste": (
+        GESTURE,
+        WHAT_IS_THERE,
+        "pasting a picture: kept, pinned at the selected place, found",
+    ),
+    "widthBox:change:setWidth": (WIDGET, WHAT_IS_THERE, "typing a picture's width, or a shape's"),
+    "row:click:drawLook": (LIST, WHAT_YOU_SEE, "a look's row in Selected, drawing that look"),
+    # pictures.js: the browser's cameras and the dialog Picture › Add opens.
+    "mediaDevices:devicechange:listCameras": (
+        AUTOMATIC,
+        NOTHING,
+        "a camera plugged in or out, and the list of this browser's cameras follows",
+    ),
+    "video:loadeddata:resolve": (
+        AUTOMATIC,
+        NOTHING,
+        "a camera's first frame arrived, so a look can keep one",
+    ),
+    "input:change:addFiles": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "the pictures chosen in the dialog Picture › Add opens: kept and pinned there",
+    ),
     # ---- the camera panel --------------------------------------------------
-    "cam-pick:change:useCamera": (WIDGET, WHAT_YOU_SEE, "choosing which camera is live"),
     "pic-all:change:(nothing)": (WIDGET, WHAT_YOU_SEE, "ticking every picture at once"),
     "gather-out:click:closest": (WIDGET, WHAT_YOU_SEE, "answering a question with a button"),
     "pic-list:click:closest": (WIDGET, WHAT_YOU_SEE, "forgetting a kept picture, from its own"),
     "pic-file:change:addFiles": (WIDGET, WHAT_YOU_SEE, "adding the chosen pictures"),
-    "cam-placed:click:closest": (WIDGET, WHAT_IS_THERE, "taking a placed camera out of the world"),
+    "cam-placed:click:closest": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "unpinning a camera or a look from its row, whatever site it is in",
+    ),
     "pin-list:click:closest": (WIDGET, WHAT_IS_THERE, "taking one pin back from the list"),
     "li:dblclick:zoomIn": (LIST, WHAT_YOU_SEE, "going into a piece from the list"),
     "rootCrumb:click:jumpTo": (LIST, WHAT_YOU_SEE, "the top of the trail"),

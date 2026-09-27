@@ -33,6 +33,29 @@ def _part_row(page):
     return page.locator("#selected-body .prop-row", has_text="Part")
 
 
+WEDGES = (
+    "() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]"
+    ".filter((w) => !w.classList.contains('empty'))"
+    ".map((w) => [w.dataset.cell, w.getAttribute('aria-label')]))"
+)
+
+
+def _wedges(page) -> dict:
+    """The open ring's wedges: cell -> label."""
+    return page.evaluate(WEDGES)
+
+
+def _press(page, label: str) -> None:
+    """Press the wedge of the open ring that reads this label."""
+    page.wait_for_function(
+        "(label) => [...document.querySelectorAll('#ring-overlay .wedge')]"
+        ".some((w) => w.getAttribute('aria-label') === label)",
+        arg=label,
+        timeout=5000,
+    )
+    page.keyboard.press(next(c for c, got in _wedges(page).items() if got == label))
+
+
 def _camera_marks_visible(page):
     """Whether each camera's frustum is drawn (picture_marks.js), by host."""
     return page.evaluate(
@@ -233,19 +256,18 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
         "described part from the model half of this page, in the world.",
     )
 
-    # A camera, placed at the bench and drawn there.
+    # A camera, pinned at the bench from the bench's own ring and drawn there.
     page.evaluate("() => window.fractalViewer.zoomOut()")
+    page.evaluate("() => window.apothecaryPictureVerbs.ready")
+    page.locator("#contents-list .contents-item[data-path='workbench']").click(button="right")
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    _press(page, "Camera")
+    _press(page, "Pin here")
+    _press(page, _wedges(page)["8"])  # this browser's camera, by its name
+    expect(page.locator("#status")).to_contain_text("pinned at workbench", timeout=5000)
     page.evaluate("() => window.apothecaryPanels.open('camera')")
     panel = page.locator(".panel[data-panel='camera']")
     expect(panel).to_be_visible(timeout=3000)
-    panel.locator("#cam-allow").click()
-    page.wait_for_function(
-        "() => window.apothecaryCamera && window.apothecaryCamera.live()", timeout=8000
-    )
-    page.locator("#contents-list .contents-item[data-path='workbench']").click()
-    expect(panel.locator("#cam-place")).to_be_enabled(timeout=3000)
-    panel.locator("#cam-place").click()
-    expect(panel.locator("#cam-place-note")).to_contain_text("placed at workbench", timeout=5000)
     placed = panel.locator("#cam-placed .kept-row")
     expect(placed).to_have_count(1)
     expect(placed).to_contain_text("garage › workbench")
@@ -261,11 +283,11 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     cameras = page.request.get(f"{base_url}/cameras?site=garage").json()
     assert [c["path"] for c in cameras] == ["workbench"]
     story.shows(
-        "A camera placed at the bench is drawn there",
-        "Allowed in the Camera panel and placed at the selected piece, the camera "
-        "gets a place badge above the bench and a frustum looking down onto its top, "
-        "kept on the server so every browser looking at this site sees it standing "
-        "there.",
+        "A camera pinned at the bench is drawn there",
+        "Pinned from the bench's own ring -- Camera, Pin here, and this browser's "
+        "camera by its name -- the camera gets a place badge above the bench and a "
+        "frustum looking down onto its top, kept on the server so every browser "
+        "looking at this site sees it standing there.",
     )
 
     page.evaluate("() => { const v = window.fractalViewer; v.zoomOut(); v.zoomIn('printer_1'); }")
@@ -282,15 +304,15 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     page.evaluate("() => window.fractalViewer.zoomOut()")
     expect(badge).to_be_visible(timeout=5000)
     assert _camera_marks_visible(page) == [True]
-    # Taken back from its row in the list of placed cameras.
+    # Taken back from its row in the list of pinned cameras and looks.
     placed.locator(".cam-unplace-one").click()
     expect(badge).to_have_count(0, timeout=5000)
-    expect(panel.locator("#cam-placed")).to_contain_text("none placed")
+    expect(panel.locator("#cam-placed")).to_contain_text("none pinned")
     assert page.request.get(f"{base_url}/cameras?site=garage").json() == []
     story.says(
-        "Unplaced, it leaves the world",
-        "The placement is a record on this machine and nothing more; taking it "
-        "back removes the mark for every browser.",
+        "Unpinned, it leaves the world",
+        "The pin is a record on this machine and nothing more; taking it back "
+        "removes the mark for every browser.",
         shown="GET /cameras?site=garage -> []",
     )
 
