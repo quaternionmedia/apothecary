@@ -115,15 +115,15 @@ The names in this list are the words from the top of this page. One vocabulary r
 
 ![Every piece is listed, named for the word it was matched to](screenshots/11-13-every-piece-is-listed-named-for-the-word-it-was-ma.png)
 
-## 14. Filtering to 'disc' keeps that word and sets the rest aside
+## 14. Each word is a chip above the list, and 'disc' is chosen
 
-The filters the viewer already had are filters by word now, because the pieces simply carry their word.
+The chips are the viewer's own, one per word the pieces carry. A chip expands every node of its word, at any depth; these pieces are flat shapes with nothing inside, so choosing one marks the chip and leaves the list and the world as they were.
 
-![Filtering to 'disc' keeps that word and sets the rest aside](screenshots/11-14-filtering-to-disc-keeps-that-word-and-sets-the-res.png)
+![Each word is a chip above the list, and 'disc' is chosen](screenshots/11-14-each-word-is-a-chip-above-the-list-and-disc-is-cho.png)
 
 ## 15. Choosing a piece shows where it came from
 
-Which finder saw it, how sure it was, and that its thickness is a guess: the same provenance the model half printed, in front of a person.
+Its word and why, the finder that saw it ('plain'), how sure it was (0.67), and that its thickness is a guess: the same provenance the model half printed, in Selected, beside its place.
 
 ![Choosing a piece shows where it came from](screenshots/11-15-choosing-a-piece-shows-where-it-came-from.png)
 

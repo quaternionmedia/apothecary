@@ -13,6 +13,8 @@ What the browser put here, it can take back: the bench walkthrough
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from PIL import Image, ImageDraw
 from playwright.sync_api import expect
@@ -92,7 +94,14 @@ def test_a_camera_records_its_own_surroundings(
     )
     expect(panel.locator("#cam-preview")).to_be_visible()
     assert page.evaluate("() => window.apothecaryCamera.state.cameras.length") >= 1
-    expect(panel.locator("#cam-note")).to_contain_text("is live")
+    # Said once, in the status bar; a refusal is said there as an error.
+    status = page.locator("#status")
+    expect(status).to_contain_text("is live")
+    expect(status).not_to_have_class(re.compile(r"\berror\b"))
+    assert panel.locator("#cam-note").count() == 0
+    page.evaluate("() => window.apothecaryCamera.act('unplace')")
+    expect(status).to_contain_text("unplace: not now")
+    expect(status).to_have_class(re.compile(r"\berror\b"))
 
     # Placed at the workbench: a badge and a frustum in the world, kept for every browser.
     page.locator("#contents-list .contents-item[data-path='workbench']").click()
@@ -177,8 +186,8 @@ def test_a_camera_records_its_own_surroundings(
         raise AssertionError(
             "the gathering did not open: "
             + panel.locator("#gather-out").inner_text()[:600]
-            + " | note: "
-            + panel.locator("#cam-note").inner_text()
+            + " | status: "
+            + page.locator("#status").inner_text()
         ) from None
     assert page.request.get(
         f"{base_url}/sites/{page.evaluate('() => window.fractalViewer.siteName')}"
@@ -192,6 +201,50 @@ def test_a_camera_records_its_own_surroundings(
     expect(page.locator(".world-badge.camera-mark")).to_have_count(0, timeout=5000)
     assert page.request.get(f"{base_url}/cameras?site=garage").json() == []
     assert errors == []
+
+
+@pytest.mark.e2e
+def test_a_camera_badge_shows_its_camera_before_the_panel_was_ever_opened(
+    camera_page, base_url: str, leaves_no_trace
+):
+    """The first click on a badge, on a page whose camera panel was never mounted,
+    selects the node the camera stands at and shows that camera live: the page
+    waits for this browser's cameras before deciding whose camera it is. A camera
+    another browser placed is refused in the status bar, as an error."""
+    page = camera_page
+    page.goto(f"{base_url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
+    page.evaluate("() => localStorage.removeItem('apothecary.panels')")
+    mine = page.evaluate(
+        "async () => (await navigator.mediaDevices.enumerateDevices())"
+        ".find((d) => d.kind === 'videoinput').deviceId"
+    )
+    assert mine
+    for camera, path in ((mine, "workbench"), ("another_browsers_camera", "printer_1")):
+        placed = page.request.put(
+            f"{base_url}/cameras/{camera}",
+            data={"label": camera[:12], "site": "garage", "path": path},
+        )
+        assert placed.ok, placed.text()
+    # Not a reload: Chromium may hand a reloaded page other device ids.
+    page.evaluate("() => window.fractalViewer.syncCameras()")
+    badges = page.locator(".world-badge.camera-mark")
+    expect(badges).to_have_count(2, timeout=5000)
+    assert page.evaluate("() => window.apothecaryCamera === undefined")  # never mounted
+
+    status = page.locator("#status")
+    page.locator(f".world-badge.camera-mark[data-camera='{mine}']").click()
+    page.wait_for_function(
+        "() => window.apothecaryCamera && window.apothecaryCamera.live()", timeout=8000
+    )
+    assert page.evaluate("() => window.fractalViewer.selectedName") == "workbench"
+    expect(status).to_contain_text("is live")
+    expect(status).not_to_have_class(re.compile(r"\berror\b"))
+
+    page.locator(".world-badge.camera-mark[data-camera='another_browsers_camera']").click()
+    expect(status).to_contain_text("another browser", timeout=5000)
+    expect(status).to_have_class(re.compile(r"\berror\b"))
+    assert page.evaluate("() => window.fractalViewer.selectedName") == "printer_1"
 
 
 @pytest.mark.e2e

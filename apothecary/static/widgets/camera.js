@@ -24,9 +24,12 @@
  * each with the button that takes it back (a pin whose site or piece is gone
  * is shown as such: this is the one place it can be seen).
  *
- * mountCamera(root, { base, world }) renders into root; `world` is what the
- * page offers: siteName(), selectedPath(), openSite(name), placed(),
- * refreshCameras(), unpinned(path).
+ * mountCamera(root, { base, world, log }) renders into root; `world` is what
+ * the page offers: siteName(), selectedPath(), openSite(name), placed(),
+ * refreshCameras(), unpinned(path). log(text, kind) is the page's status bar,
+ * the only place a message is written; kind "bad" is a refusal. The handle's
+ * `ready` settles once this browser's cameras are first listed, so a caller
+ * can tell whose camera an id is only after it.
  */
 
 const MARKUP = `
@@ -37,7 +40,6 @@ const MARKUP = `
         <button type="button" id="cam-refresh" title="List the cameras again: this browser's, and every one placed in the world">⟳</button>
     </div>
     <video id="cam-preview" autoplay muted playsinline hidden></video>
-    <div class="note" id="cam-note">No camera in use. Allow cameras, then pick one.</div>
     <div class="row">
         <label>name <input id="cam-name" value="surroundings" size="12" title="What the arrangement built from the next capture is called"></label>
         <label>width <input id="cam-width" type="number" min="1" step="10" placeholder="mm across" size="7" title="How wide the whole picture is in the real world, in millimetres; without it, nothing has a real size"></label>
@@ -75,7 +77,9 @@ export function mountCamera(root, { base = "", world = null, log = null } = {}) 
     root.innerHTML = MARKUP;
     const $ = (id) => root.querySelector(`#${CSS.escape(id)}`);
     const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-    const say = (text, kind = "") => { const n = $("cam-note"); n.textContent = text; n.className = "note " + kind; if (log) log(text); };
+    // Every message is said once, where the page says everything: its status
+    // bar. A refusal is kind "bad", and the page shows it as an error.
+    const say = (text, kind = "") => { if (log) log(text, kind); else console.log(text); };
     const state = { cameras: [], stream: null, chosen: "", pictures: [], gathered: null, answers: "", placed: [], pins: [] };
 
     async function api(path, opts = {}) {
@@ -326,7 +330,7 @@ export function mountCamera(root, { base = "", world = null, log = null } = {}) 
     });
     $("pin-refresh").onclick = loadPins;
 
-    listCameras().catch(() => {});
+    const ready = listCameras().catch(() => {});
     loadPictures();
     loadPlaced();
     loadPins();
@@ -342,7 +346,7 @@ export function mountCamera(root, { base = "", world = null, log = null } = {}) 
     }
 
     const handle = {
-        state, listCameras, useCamera, capture, loadPictures, gather, renderPlacement, act,
+        state, ready, listCameras, useCamera, capture, loadPictures, gather, renderPlacement, act,
         addFiles, forget, purge, unplace, loadPlaced, loadPins, unpin,
         chosen: () => state.chosen,
         live: () => !!state.stream,

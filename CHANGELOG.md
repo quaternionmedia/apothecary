@@ -83,6 +83,9 @@ One line per change, each with a link to where it is described. The format follo
 ### Fixed
 
 - A placed camera's mark is hidden while its piece is out of view. ([page](walkthrough/12-the-bench-as-it-is.md))
+- A piece from a picture shows its provenance in Selected, and an unsized one no printer status. ([page](walkthrough/11-photographs-into-pieces.md))
+- The camera panel's messages are said once, in the status bar, refusals as errors. ([code](apothecary/static/widgets/camera.js))
+- A camera's badge selects its piece, and a first click shows this browser's camera. ([test](tests/e2e/test_camera.py))
 - Closing a printer's port keeps DTR up, so the next open does not reboot the board. ([doc](docs/firmware.md))
 - A pin follows its board when the kernel renumbers the port. ([doc](docs/firmware.md))
 - The board view places its printer once, not offset twice. ([code](apothecary/static/board_view.js))
