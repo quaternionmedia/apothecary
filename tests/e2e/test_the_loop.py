@@ -403,12 +403,21 @@ def test_a_dropped_file_is_pinned_where_it_lands(
         """() => {
             const v = window.fractalViewer;
             const look = window.apothecaryPictures.drawnAt('workbench');
-            const p = window.apothecaryPictures.scenePoint(look.id, 0.95, 0.05);
-            p.project(v.camera);
             const r = v.canvas.getBoundingClientRect();
-            return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height };
+            // A point of the mat the page itself picks as the bench: whichever
+            // corner is clear of the printers standing on it at this viewport.
+            for (let fy = 0.05; fy < 1; fy += 0.1) for (let fx = 0.05; fx < 1; fx += 0.1) {
+                const p = window.apothecaryPictures.scenePoint(look.id, fx, fy);
+                p.project(v.camera);
+                const at = { clientX: r.left + (p.x + 1) / 2 * r.width, clientY: r.top + (1 - p.y) / 2 * r.height };
+                const hit = v.raycastPick(at);
+                const host = hit && (hit.pick ? hit.pick.host : hit.key);
+                if (host === 'workbench') return { x: at.clientX, y: at.clientY };
+            }
+            return null;
         }"""
     )
+    assert at, "no point of the bench's mat is picked as the bench"
     page.evaluate(drop, [at["x"], at["y"], ["one.png", "two.png"], encoded])
     _said(page, "2 picture(s) pinned at workbench")
     looks = [lk for lk in _attached(page, base_url)["looks"] if lk["host"] == "workbench"]
