@@ -410,13 +410,18 @@ def test_a_dropped_file_is_pinned_where_it_lands(
             // A point of the mat the page itself picks as the bench: whichever
             // corner is clear of the printers standing on it at this viewport.
             let at = null;
-            for (let fy = 0.05; fy < 1 && !at; fy += 0.1) for (let fx = 0.05; fx < 1 && !at; fx += 0.1) {
+            for (let fy = 0.025; fy < 1 && !at; fy += 0.05) for (let fx = 0.025; fx < 1 && !at; fx += 0.05) {
                 const p = window.apothecaryPictures.scenePoint(look.id, fx, fy);
                 p.project(v.camera);
-                const point = { clientX: r.left + (p.x + 1) / 2 * r.width, clientY: r.top + (1 - p.y) / 2 * r.height };
-                const hit = v.raycastPick(point);
-                const host = hit && (hit.pick ? hit.pick.host : hit.key);
-                if (host === 'workbench') at = point;
+                // Whole pixels, as the page's drop event carries them, and clear of
+                // the bench's edges: the pixels beside it must be the bench too.
+                const x = Math.round(r.left + (p.x + 1) / 2 * r.width);
+                const y = Math.round(r.top + (1 - p.y) / 2 * r.height);
+                const bench = (dx, dy) => {
+                    const hit = v.raycastPick({ clientX: x + dx, clientY: y + dy });
+                    return (hit && (hit.pick ? hit.pick.host : hit.key)) === 'workbench';
+                };
+                if ([[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]].every(([dx, dy]) => bench(dx, dy))) at = { clientX: x, clientY: y };
             }
             if (!at) return false;
             const dt = new DataTransfer();

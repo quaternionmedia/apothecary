@@ -64,18 +64,17 @@ jobs:
         /tmp/wheel-venv/bin/apothecary render --scene-file /tmp/scene.json -o /tmp/scene.scad
         grep -q "cube(\[1.0, 2.0, 3.0\]" /tmp/scene.scad
 
-  e2e:
-    name: 🎭 Browser tests (${{ matrix.shard }}/3)
+  # Three runners, each a third of the suite by recorded time (tests/e2e/durations.json);
+  # a file never splits, since the walkthroughs and the ring build on earlier steps.
+  # Three jobs rather than a matrix, so `apothecary preflight` can run them here; the
+  # steps are written once and shared by anchor.
+  e2e-1:
+    name: 🎭 Browser tests (1/3)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    # Three runners, each a third of the suite by recorded time (tests/e2e/durations.json);
-    # a file never splits, since the walkthroughs and the ring build on earlier steps.
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3]
-
-    steps:
+    env:
+      SHARD: 1
+    steps: &e2e-steps
     - name: 📰 Checkout
       uses: actions/checkout@v6
       with:
@@ -109,8 +108,24 @@ jobs:
 
     - name: 🎭 Browser tests
       # --start-server runs the app on state and pictures of its own (tests/e2e/conftest.py).
-      run: uv run pytest tests/e2e --start-server -q --shard ${{ matrix.shard }}/3
+      run: uv run pytest tests/e2e --start-server -q --shard ${{ env.SHARD }}/3
 
     - name: 📝 The committed walkthrough is the one this run wrote
       # The browser tests write walkthrough pages 11 and 12.
       run: git diff --exit-code -- 'walkthrough/*.md'
+
+  e2e-2:
+    name: 🎭 Browser tests (2/3)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SHARD: 2
+    steps: *e2e-steps
+
+  e2e-3:
+    name: 🎭 Browser tests (3/3)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SHARD: 3
+    steps: *e2e-steps

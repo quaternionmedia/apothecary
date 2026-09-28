@@ -348,7 +348,8 @@ def test_focused_monitor_page(page: Page, fresh_url: str):
         timer = page.evaluate(f"() => {MONITOR}.timer")
         page.clock.fast_forward(POLL_MS)
         page.wait_for_function(f"(t) => {MONITOR}.timer !== t", arg=timer)
-        expect(page.locator("#chart-span")).to_have_text(f"last {polls + n} polls")
+        count = polls + n  # the history this file's earlier tests left, if any, then one per poll
+        expect(page.locator("#chart-span")).to_have_text(f"last {count} poll{'' if count == 1 else 's'}")
     expect(page.locator("#chart path")).to_have_count(4)  # two series + two targets
 
     # Poll traffic shows when asked for; hidden, only the story is left: open, M115,
