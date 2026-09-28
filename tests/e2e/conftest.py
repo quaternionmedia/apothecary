@@ -4,6 +4,7 @@ pytest tests/e2e --start-server          # a scripted server for the session
 pytest tests/e2e --base-url URL          # a server you started yourself
 """
 
+import json
 import os
 import re
 import socket
@@ -23,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from doc_capture import GENERATED_DOCS_ROOT, DocRecorder, Walkthrough  # noqa: E402
 from firmware_helpers import write_fake_arduino_cli  # noqa: E402
 from ports import refuse_a_held_port  # noqa: E402
+from shards import shard_of  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 EXTERNAL_PORT = 8765  # a server you started, when neither --start-server nor --base-url is given
@@ -39,8 +41,31 @@ uvicorn.run("apothecary.api:app", host="127.0.0.1", port=int(sys.argv[1]),
 """
 
 
+DURATIONS = Path(__file__).with_name("durations.json")
+
+
+def _keep_this_shard(config, items) -> None:
+    spec = config.getoption("--shard")
+    if not spec:
+        return
+    k, n = (int(part) for part in spec.split("/"))
+    if not 1 <= k <= n:
+        raise pytest.UsageError(f"--shard {spec}: K must be between 1 and N")
+    known = json.loads(DURATIONS.read_text()) if DURATIONS.exists() else {}
+    average = sum(known.values()) / len(known) if known else 1.0
+    files: dict = {}
+    for item in items:
+        path = item.nodeid.split("::", 1)[0]
+        files[path] = files.get(path, 0.0) + known.get(item.nodeid, average)
+    placed = shard_of(files, n)
+    keep = [item for item in items if placed[item.nodeid.split("::", 1)[0]] == k - 1]
+    config.hook.pytest_deselected(items=[item for item in items if item not in keep])
+    items[:] = keep
+
+
 def pytest_collection_modifyitems(config, items):
-    """Tests marked docs run only with --generate-docs; without it they capture nothing."""
+    """Keep this shard's files; tests marked docs run only with --generate-docs."""
+    _keep_this_shard(config, items)
     if config.getoption("--generate-docs"):
         return
     skip = pytest.mark.skip(reason="doc capture: runs with --generate-docs (`apothecary docs`)")
@@ -84,6 +109,12 @@ def start_server(tmp_path_factory):
         )
         if port is None:
             port = _free_port()
+        elif os.environ.get("PYTEST_XDIST_WORKER"):
+            # Under -n every worker starts its own server: one named port cannot hold them all.
+            pytest.exit(
+                "--server-port names one port; with -n, leave it out so each worker takes a free one",
+                1,
+            )
         else:
             refuse_a_held_port(port)
         url = f"http://127.0.0.1:{port}"

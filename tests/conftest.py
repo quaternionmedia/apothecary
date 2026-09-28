@@ -29,6 +29,14 @@ def pytest_addoption(parser):
         help="Port for --start-server's server (default: a free one) or for yours (8765)",
     )
     parser.addoption(
+        "--shard",
+        action="store",
+        default=None,
+        metavar="K/N",
+        help="Browser tests only: run the K-th of N shards, whole files balanced by "
+        "tests/e2e/durations.json. CI runs the three shards on three runners.",
+    )
+    parser.addoption(
         "--slow",
         action="store_true",
         default=False,

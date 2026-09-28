@@ -65,9 +65,15 @@ jobs:
         grep -q "cube(\[1.0, 2.0, 3.0\]" /tmp/scene.scad
 
   e2e:
-    name: 🎭 Browser tests
+    name: 🎭 Browser tests (${{ matrix.shard }}/3)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    # Three runners, each a third of the suite by recorded time (tests/e2e/durations.json);
+    # a file never splits, since the walkthroughs and the ring build on earlier steps.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
 
     steps:
     - name: 📰 Checkout
@@ -103,7 +109,7 @@ jobs:
 
     - name: 🎭 Browser tests
       # --start-server runs the app on state and pictures of its own (tests/e2e/conftest.py).
-      run: uv run pytest tests/e2e --start-server -q
+      run: uv run pytest tests/e2e --start-server -q --shard ${{ matrix.shard }}/3
 
     - name: 📝 The committed walkthrough is the one this run wrote
       # The browser tests write walkthrough pages 11 and 12.
