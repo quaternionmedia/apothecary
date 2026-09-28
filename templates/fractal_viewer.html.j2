@@ -992,6 +992,9 @@
                         openPanel: (id) => this.panels.open(id),
                         frameFloor: () => this.frameFloor(),
                         rendered: () => this.renderSelectedPanel(),
+                        // The ring again at a host, entered to the option named: how
+                        // Allow hands over to Pin here when the browser named several cameras.
+                        reopenRing: (host, into, at) => { if (window.apothecaryRing && window.apothecaryRing.openOn) window.apothecaryRing.openOn(host, into, at); },
                     },
                 });
                 window.apothecaryPictureVerbs = this.pictures;
@@ -2016,10 +2019,22 @@
                 }
                 const cam = pm.cameraAt(host);
                 const looks = pm.looksAt(host);
-                if (!cam && !looks.length) return '';
+                // A verb's place on the ring, named as text: the floor's verbs are under
+                // the canvas ring's Pictures › Floor, and its Add is Pictures › Add.
+                const ring = (verb) => `⌗ ${host === '' ? 'Pictures › Floor › ' : ''}${verb}`;
+                // Nothing here yet: the way in, so the durable hint is where the person
+                // looks. The verbs stay the ring's.
+                if (!cam && !looks.length) return `<div class="prop-readonly picture-facts" data-facts="${host === '' ? 'floor' : 'host'}"><div class="k">Pictures at ${esc(where(host))}</div><div data-facts="way-in">${ring('Camera › Pin here')} puts this browser's camera at ${esc(where(host))}; ${host === '' ? '⌗ Pictures › Add' : '⌗ Picture › Add'} pins a picture from disk; m, or right-click, opens the ring</div></div>`;
                 const drawn = pm.drawnAt(host);
                 const rows = [];
-                if (cam) rows.push(`<div data-facts="camera">📷 ${esc(cam.label || 'camera')}${cam.mm_across ? ` · ${Number(cam.mm_across).toFixed(0)} mm across, from the last width typed` : ''}</div>`);
+                if (cam) {
+                    rows.push(`<div data-facts="camera">📷 ${esc(cam.label || 'camera')}${cam.mm_across ? ` · ${Number(cam.mm_across).toFixed(0)} mm across, from the last width typed` : ''}</div>`);
+                    // Whose camera it is decides what can be done with it from here.
+                    const mine = !!(this.pictures && this.pictures.state.cameras.some((c) => c.id === cam.id));
+                    rows.push(`<div data-facts="camera-verbs">${mine
+                        ? `${ring('Camera › Look')} takes a picture and finds its shapes; Live shows the camera on the mat; Keep keeps a frame on this machine`
+                        : `another browser's camera: a picture is taken here with one of this browser's cameras pinned in its place (${ring('Camera › Pin here')})`}</div>`);
+                }
                 for (const look of [...looks].reverse()) {
                     const size = look.mat && look.mat.width ? `${Number(look.mat.width).toFixed(0)} mm across` : 'unsized';
                     const madeCount = Object.keys(look.made || {}).length;
@@ -4231,6 +4246,12 @@
         });
         window.apothecaryRing.lastRing = () => lastRing;
         window.apothecaryRing.refreshAddresses = refreshAddresses;
+        // The ring again on a host, or on the floor through the canvas ring's
+        // Pictures › Floor, entered down to the option `into` names (an id), where
+        // the last ring stood: Allow hands over to Camera › Pin here this way when
+        // the browser named several cameras.
+        window.apothecaryRing.openOn = (host, into, at = null) =>
+            window.apothecaryRing.open({ ...(host === '' ? canvasSpec(at) : nodeSpec(host, at)), into }, at);
     })();
     </script>
 </body>
