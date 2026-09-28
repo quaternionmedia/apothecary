@@ -19,8 +19,11 @@ Apothecary builds 3D-printable things from Python and keeps the parts it has bui
 
 ## Install
 
-Python 3.11+ and [uv](https://docs.astral.sh/uv/). Rendering STLs needs the `openscad` CLI
-on `PATH`; nothing else does.
+Python 3.11+ and [uv](https://docs.astral.sh/uv/). Rendering STLs needs OpenSCAD; nothing
+else does. `uv run apothecary openscad install` downloads a development snapshot (Linux
+x86_64) from files.openscad.org into `~/.apothecary/tools`, and renders use it, with
+Manifold; otherwise the `openscad` CLI on `PATH` is used. `APOTHECARY_OPENSCAD` names
+another.
 
 ```bash
 git clone --recurse-submodules https://github.com/quaternionmedia/apothecary.git

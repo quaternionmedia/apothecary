@@ -64,9 +64,11 @@ uv run apothecary serve        # the viewer at :8000/viewer; docs at /docs, the 
 uv run apothecary check        # what is installed: packages, three.js, OpenSCAD, the firmware toolchain
 uv run --group preflight apothecary preflight   # the CI workflows, run here before a push
 uv run apothecary firmware install --avr   # arduino-cli + a core, to program boards from parts/*/*.ino
+uv run apothecary openscad install --latest   # an OpenSCAD snapshot with Manifold, the fast renders
 ```
 
-Rendering STLs requires the `openscad` CLI on `PATH`; the browser tests
+Rendering STLs requires OpenSCAD: the snapshot `apothecary openscad install`
+put in the tools dir, else the `openscad` CLI on `PATH`; the browser tests
 additionally require `uv run playwright install chromium`. `uv run apothecary
 --help` is the command reference; `CONTRIBUTING.md` has the test loop and what
 CI gates.

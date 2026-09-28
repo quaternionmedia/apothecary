@@ -12,6 +12,7 @@ One line per change, each with a link to where it is described. The format follo
 - A `part.json` beside a part's SCAD stands in for a Python wrapper. ([doc](docs/geometry-from-elsewhere.md))
 - The garage bench draws Ender 3s and real boards, from their makers' drawings. ([doc](docs/geometry-from-elsewhere.md))
 - Personal data stays on the device: only the toolchain fetch leaves this machine. ([code](apothecary/stays_local.py))
+- `apothecary openscad install` fetches a checksum-verified OpenSCAD snapshot; renders use it, with Manifold. ([code](apothecary/openscad_installer.py))
 - The ring menu seats options on nine keypad cells; the digits pressed are the address. ([code](apothecary/menu.py))
 - `apothecary firmware` installs arduino-cli, and compiles and uploads sketches kept with parts. ([doc](docs/firmware.md))
 - A board's identity, the sketch last flashed to it, and the sketch it announces over serial. ([doc](docs/firmware.md))
