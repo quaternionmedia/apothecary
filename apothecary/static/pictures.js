@@ -377,7 +377,7 @@ export function mountPictures({ base = "", marks, world, log }) {
             case "picture:unpin": await unpinLook(host); return true;
             case "picture:forget": await forget(host); return true;
             case "picture:purge": await purge(); return true;
-            case "picture:kept": world.openPanel("camera"); say("the other pictures are in the pictures panel"); return true;
+            case "picture:kept": world.openPanel("kept"); say("the other kept pictures are in Kept"); return true;
             case "picture:looks": world.openPanel("selected"); say("every look here is a row in Selected: click one to draw it"); return true;
             default: return false;
         }

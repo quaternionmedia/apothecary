@@ -38,6 +38,22 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # Unpin there; Open as one is gone; the canvas ring's Camera is Pictures in the
 # same seat (Add, Floor, Purge, Gather), its Kept › Add and Purge now Pictures ›
 # Add (pinned at the floor) and Pictures › Purge.
+#
+# The Kept stub (the pictures plan's Phase 5, stubbed at the owner's word "stub
+# kept now"). Before: 128 controls of its own, 61 ring-backed (47.7%), 77 places
+# the page listens. After: 128, 58 ring-backed (45.3%), 75 places. The per-row
+# buttons of the old "Pictures & pins" panel -- forget a picture, unpin a
+# camera, unpin a look (pic-forget, cam-unplace-one, look-unpin-one) -- move to
+# Kept (kept-forget, kept-camera-unpin, kept-look-unpin) and are reclassified:
+# not ring-backed but census.TAKEN_BACK, the lasting exception for taking a
+# thing back from the list that shows it. They were counted as backed by Camera
+# › Unpin, Picture › Unpin and Picture › Forget, though a row can name another
+# site's pin, which those cells reach only from that site; §6 asks for every
+# site's to be taken back from the one list. The boards' Unpin and the list's
+# refresh move with them (pin-unpin, pin-refresh become kept-board-unpin,
+# kept-refresh), and Purge (pic-purge, kept-purge) stays backed by Pictures ›
+# Purge. The three row listeners are one on Kept's list. No ring address moved
+# but the panels': Panels › Camera is Panels › Pictures › Gather, beside Kept.
 VIEWER_CEILING = 128
 
 
@@ -318,3 +334,43 @@ def test_every_listener_in_the_viewers_marks_modules_is_classified():
     taken = census.take()
     marks = {m.name for m in census.marks_of(census.VIEWER)}
     assert [f.key for f in taken.unclassified() if f.source in marks] == []
+
+
+# --------------------------------------------------------------------------
+# Kept's rows: taken back from the list that shows them, not ring-backed
+# --------------------------------------------------------------------------
+
+
+def test_kepts_take_back_buttons_are_counted_and_not_claimed_as_ring_backed():
+    """Forget a picture, unpin a camera, unpin a look: Kept's per-row buttons are
+    the lasting exception for taking a thing back from the list that shows it,
+    counted on the meter and never ring-backed, since a row can name another
+    site's pin that a ring cell reaches only from that site."""
+    taken = census.take()
+    by_name = {f.name: f for f in taken.controls_of_its_own()}
+    for name in ("kept-forget", "kept-camera-unpin", "kept-look-unpin", "kept-board-unpin"):
+        assert by_name[name].source == "kept.js"
+        assert by_name[name].ring_action is None, name
+        assert by_name[name].taken_back, name
+    assert {f.name for f in taken.taken_back()} == {
+        "kept-forget",
+        "kept-camera-unpin",
+        "kept-look-unpin",
+        "kept-board-unpin",
+    }
+    # Purge stays a cell of the canvas ring's Pictures.
+    assert by_name["kept-purge"].ring_action == "picture:purge"
+    # The old panel's rows are gone from the page, and from the tables.
+    for gone in ("pic-forget", "cam-unplace-one", "look-unpin-one", "pic-purge", "pin-unpin"):
+        assert gone not in by_name
+        assert gone not in census.CONTROLS and gone not in census.RING_BACKED
+    listening = {f.key: f for f in taken.found if f.how == "listening" and f.source == "kept.js"}
+    assert list(listening) == ["kept-list:click:closest"]
+    assert listening["kept-list:click:closest"].taken_back
+    assert "⤺ takes back a look, every site's" in census.report()
+
+
+def test_nothing_is_both_taken_back_and_ring_backed():
+    assert set(census.TAKEN_BACK) & set(census.RING_BACKED) == set()
+    for key in census.TAKEN_BACK:
+        assert key in census.CONTROLS or key in census.LISTENING, key

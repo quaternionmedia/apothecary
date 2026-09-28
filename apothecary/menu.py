@@ -548,27 +548,40 @@ PANELS: Sequence[Tuple[str, str]] = (
     ("jobs", "Jobs"),
     ("validation", "Validation"),
     ("scad", "OpenSCAD"),
-    # Registered by the page's script rather than marked in its markup: the
-    # camera panel at start; the machine and its comms log when a printer is
-    # opened. The last two share one cell, since a ring holds eight.
-    ("camera", "Camera"),
+    # Registered by the page's script rather than marked in its markup: Kept
+    # (every pin and kept picture, each taken back from its row) and what is
+    # left of the camera panel, the gathering, at start; the machine and its
+    # comms log when a printer is opened. Each pair shares one cell, since a
+    # ring holds eight.
+    ("kept", "Kept"),
+    ("camera", "Gather"),
     ("machine", "Machine"),
     ("log", "Comms log"),
 )
-GROUPED_PANELS = ("machine", "log")
+# The cells that hold two panels each, in the order they are seated after the
+# plain ones: (id, label, the panels behind it).
+PANEL_GROUPS: Sequence[Tuple[str, str, Tuple[str, ...]]] = (
+    ("panel:pictures-group", "Pictures", ("kept", "camera")),
+    ("panel:machine-group", "Machine", ("machine", "log")),
+)
+GROUPED_PANELS = tuple(pid for _, _, pids in PANEL_GROUPS for pid in pids)
 
 
 def _panels() -> Option:
     def toggle(pid: str, label: str) -> Option:
         return Option(id=f"panel:{pid}", label=label, action=f"panel:toggle:{pid}")
 
+    labels = dict(PANELS)
     plain = [toggle(pid, label) for pid, label in PANELS if pid not in GROUPED_PANELS]
-    grouped = [toggle(pid, label) for pid, label in PANELS if pid in GROUPED_PANELS]
+    groups = [
+        Option(id=gid, label=glabel, children=[toggle(pid, labels[pid]) for pid in pids])
+        for gid, glabel, pids in PANEL_GROUPS
+    ]
     return Option(
         id="panels",
         label="Panels",
         children=plain
-        + [Option(id="panel:machine-group", label="Machine", children=grouped)]
+        + groups
         # The rail itself: hidden and shown, as the tilde key does.
         + [Option(id="panel:rail", label="Rail", action="panel:rail:toggle")],
     )

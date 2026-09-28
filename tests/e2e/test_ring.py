@@ -491,7 +491,8 @@ def test_a_panel_closes_to_a_tab_and_collapses(page: Page, ring_url: str):
     A closed panel leaves a tab that brings it back; a collapsed one keeps its title."""
     rail, world = _open_panels(page, ring_url)
     ids = page.evaluate("() => window.apothecaryPanels.list().map((p) => p.id)")
-    assert ids == ["contents", "selected", "jobs", "validation", "scad", "camera"]
+    assert ids == ["contents", "selected", "jobs", "validation", "scad", "kept", "camera"]
+    assert page.evaluate("() => window.apothecaryPanels.state('kept').open") is False
     assert page.evaluate("() => window.apothecaryPanels.state('camera').open") is False
     expect(rail.locator(".panel[data-panel='contents']")).to_be_visible()
     assert world.bounding_box()["width"] >= page.viewport_size["width"] / 2
@@ -502,7 +503,7 @@ def test_a_panel_closes_to_a_tab_and_collapses(page: Page, ring_url: str):
     expect(rail.locator(".panel[data-panel='validation']")).to_have_count(0)
     page.locator(".panel-tab[data-panel='validation']").click()
     expect(rail.locator(".panel[data-panel='validation']")).to_be_visible(timeout=1000)
-    expect(page.locator(".panel-tab")).to_have_count(1)  # the camera's, closed by default
+    expect(page.locator(".panel-tab")).to_have_count(2)  # Kept's and Gather's, closed by default
 
     # Collapse: the body folds, the title stays.
     page.locator(".panel[data-panel='contents'] .panel-collapse").click()
@@ -564,12 +565,26 @@ def test_a_closed_panel_stays_closed_and_the_ring_reopens_it(page: Page, ring_ur
     page.keyboard.press(scad_cell)
     expect(page.locator("#ring-overlay")).to_have_count(0)
     expect(rail.locator(".panel[data-panel='scad']")).to_be_visible(timeout=2000)
-    expect(page.locator(".panel-tab")).to_have_count(1)  # the camera's, closed by default
+    expect(page.locator(".panel-tab")).to_have_count(2)  # Kept's and Gather's, closed by default
 
-    # Every panel closed: the world has the whole width, and six tabs wait.
-    for pid in ["contents", "selected", "jobs", "validation", "scad"]:
+    # Panels › Pictures holds Kept and the gathering; Kept opens from there.
+    page.locator("#viewer-canvas").click(button="right", position={"x": 30, "y": 30})
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    page.keyboard.press(panels_cell)
+    expect(page.locator("#ring-overlay .title")).to_have_text("Panels")
+    pictures_cell = next(cell for cell, label in _wedges(page).items() if label == "Pictures")
+    page.keyboard.press(pictures_cell)
+    expect(page.locator("#ring-overlay .title")).to_have_text("Pictures")
+    assert sorted(_wedges(page).values()) == ["Gather", "Kept"]
+    kept_cell = next(cell for cell, label in _wedges(page).items() if label == "Kept")
+    page.keyboard.press(kept_cell)
+    expect(rail.locator(".panel[data-panel='kept']")).to_be_visible(timeout=2000)
+    expect(page.locator(".panel-tab")).to_have_count(1)  # Gather's
+
+    # Every panel closed: the world has the whole width, and seven tabs wait.
+    for pid in ["contents", "selected", "jobs", "validation", "scad", "kept"]:
         page.evaluate("(id) => window.apothecaryPanels.close(id)", pid)
-    expect(page.locator(".panel-tab")).to_have_count(6, timeout=2000)
+    expect(page.locator(".panel-tab")).to_have_count(7, timeout=2000)
     _world_is(page, page.viewport_size["width"])
 
 
