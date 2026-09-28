@@ -660,7 +660,13 @@ what it asks about.
   their own. Make, Make all and Drop are site changes carried by the server
   through the intent route, as other site changes are.
 
-Where the text below disagrees with these two, these win.
+- **Kept's row buttons are the one control no ring backs.** Unpin on a pin
+  and Forget on a kept picture, every site's, stay in Kept because §6 asks
+  for a thing to be taken back from the list that shows it; the census lists
+  them apart (`census.TAKEN_BACK`) and claims no ring for them. The ring
+  record's §5 says so.
+
+Where the text below disagrees with these, these win.
 
 ## What is decided here, and what a person decides
 
