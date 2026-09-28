@@ -93,7 +93,7 @@ GET /cameras?site=garage -> []
 
 ## 12. What the browser put here, it can take back
 
-Pictures added from the file picker are kept as they were named, under the picture folder's uploads/, each with a button that forgets it; the cameras placed in the world and the boards pinned to pieces are listed, every site's, each with the button that takes it back -- a pin whose site or piece is gone is shown as such, and this is the one place it can be seen.
+Kept lists what a page pinned -- cameras, looks, boards -- every site's, and the pictures the browser kept, the ones added from the file picker kept as they were named under the picture folder's uploads/. Each row names its site and carries the button that takes it back, from here, without switching to that site; a pin whose site or piece is gone is shown as such, and this is the one place it can be seen.
 
 ![What the browser put here, it can take back](screenshots/12-12-what-the-browser-put-here-it-can-take-back.png)
 

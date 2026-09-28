@@ -61,6 +61,7 @@ One line per change, each with a link to where it is described. The format follo
 - Forgetting a kept picture unpins its looks; pictures are served at a size and never cached. ([code](apothecary/routes/pictures.py))
 - The canvas ring's Camera is Pictures, in the same seat: Add (at the floor), Floor, Purge, Gather. ([code](apothecary/menu.py))
 - The camera panel is the pictures and pins panel: every camera and look pinned, every site's, each unpinned from its row. ([code](apothecary/static/widgets/camera.js))
+- Kept lists every camera, look and board pinned, every site's, and every kept picture, each taken back from its row without switching the site; the camera panel keeps the gathering. ([code](apothecary/static/widgets/kept.js))
 
 - `/sites/{name}` carries the whole `tree` beside the flat `structures` list. ([code](apothecary/api.py))
 - Each part has its own folder, `parts/<name>/<name>.scad`. ([doc](docs/parts-authoring.md))

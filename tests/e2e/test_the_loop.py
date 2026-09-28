@@ -442,11 +442,11 @@ def test_a_dropped_file_is_pinned_where_it_lands(
     _said(page, "1 picture(s) pinned at the floor")
     assert [lk["host"] for lk in _attached(page, base_url)["looks"]].count("") == 1
 
-    # A look's row in the pins list unpins it.
-    page.evaluate("() => window.apothecaryPanels.open('camera')")
-    panel = page.locator(".panel[data-panel='camera']")
-    row = panel.locator(f"#cam-placed .kept-row.look[data-look='{looks[0]['id']}']")
+    # A look's row in Kept unpins it.
+    page.evaluate("() => window.apothecaryPanels.open('kept')")
+    panel = page.locator(".panel[data-panel='kept']")
+    row = panel.locator(f".kept-row.look:has(.kept-look-unpin[data-id='{looks[0]['id']}'])")
     expect(row).to_be_visible(timeout=5000)
-    row.locator(".look-unpin-one").click()
+    row.locator(".kept-look-unpin").click()
     expect(row).to_have_count(0, timeout=5000)
     assert looks[0]["id"] not in {lk["id"] for lk in _attached(page, base_url)["looks"]}

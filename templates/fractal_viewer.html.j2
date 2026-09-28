@@ -189,7 +189,7 @@
         .panel[data-panel="machine"].free { width: min(500px, 90%); }
         .panel[data-panel="machine"] .panel-body-slot, .panel[data-panel="log"] .panel-body-slot { padding: 0; }
         .panel[data-panel="log"] .machine-log { height: 100%; }
-        /* The camera panel (widgets/camera.js) */
+        /* The camera panel (widgets/camera.js) and Kept (widgets/kept.js), which shares its look */
         .camera { font-size: 0.8rem; color: #bbb; display: flex; flex-direction: column; gap: 0.4rem; }
         .camera .row { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
         .camera .grow { flex: 1; }
@@ -209,14 +209,14 @@
         .camera .question { border-top: 1px solid #2a332a; padding: 0.3rem 0; }
         .camera pre { white-space: pre-wrap; font-size: 0.7rem; color: #aaa; max-height: 200px; overflow: auto; }
         .camera .pic { position: relative; }
-        .camera .pic .pic-forget { position: absolute; top: 2px; right: 2px; padding: 0 0.3rem; font-size: 0.7rem; line-height: 1.3; opacity: 0.7; }
-        .camera .pic .pic-forget:hover { opacity: 1; border-color: #7a3a3a; color: #ff8080; }
         .camera input[type=file] { font-size: 0.72rem; max-width: 100%; }
         .camera .kept { display: flex; flex-direction: column; gap: 0.2rem; max-height: 160px; overflow: auto; }
         .camera .kept-row { display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; padding: 0.15rem 0.3rem; border-radius: 3px; background: #1d221d; }
         .camera .kept-row span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .camera .kept-row.here { border-left: 2px solid #4a6fa8; }
         .camera .kept-row.stale span { color: #b08a8a; }
+        .camera .kept-row img { width: 32px; height: 24px; object-fit: cover; border-radius: 2px; }
+        .kept-panel .kept { max-height: 260px; }
         /* The place badge: a host's (or the floor's) camera and look, in the
            world (picture_marks.js). Not `.camera`: that is the panel's own class
            above, and its `display: flex` would override the `hidden` the anchor
@@ -580,6 +580,7 @@
         import { mountPanels } from '/static/panels.js';
         import { mountMachine } from '/static/widgets/machine.js';
         import { mountCamera } from '/static/widgets/camera.js';
+        import { mountKept } from '/static/widgets/kept.js';
         import { makeMachineMarks, toScene as marksToScene } from '/static/machine_marks.js';
         import { mountPictureMarks } from '/static/picture_marks.js';
         import { mountPictures } from '/static/pictures.js';
@@ -968,7 +969,7 @@
                     onSelect: (host) => this.selectPlace(host),
                     onChange: (attached) => {
                         this.cameras = attached.cameras;
-                        if (this.cameraWidget) this.cameraWidget.loadPlaced();
+                        if (this.keptWidget) this.keptWidget.load();
                         // Selected is redrawn only when what it says of the pictures changed,
                         // so a position being typed is not swept away by an answer.
                         if (this.selectedName && this.pictureFactsHtml(this.selectedName) !== this.shownFacts) this.renderSelectedPanel();
@@ -994,24 +995,43 @@
                     },
                 });
                 window.apothecaryPictureVerbs = this.pictures;
-                // What is left of the camera panel until the Kept panel: the pictures
-                // on this machine, the gathering's report, and every pin, every site's,
-                // each taken back from its row (closed until asked for).
-                this.cameraWidget = null;
-                this.panels.register('camera', {
-                    title: 'Pictures & pins', where: 'right', open: false,
+                // Kept: every camera, look and board a page pinned, every site's, and
+                // every picture the browser kept, each taken back from its row
+                // without switching the site (closed until asked for).
+                this.keptWidget = null;
+                this.panels.register('kept', {
+                    title: 'Kept', where: 'right', open: false,
                     body: (slot) => {
-                        this.cameraWidget = mountCamera(slot, {
+                        this.keptWidget = mountKept(slot, {
                             base: BASE_URL,
                             log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
                             world: {
                                 siteName: () => this.siteName,
-                                refreshCameras: () => this.pictureMarks.refresh(),
-                                // A pin of this site taken back from the panel's list:
-                                // the node's row, badge and marks go now, not at the
-                                // next poll.
-                                unpinned: (path) => { delete this.bindings[path]; this.queryResult = null; this.renderDeviceViews(); this.syncWorldMarks(); },
+                                // Taken back in this site, or a picture forgotten
+                                // (its looks go wherever they were): the world's
+                                // marks are fetched again. Another site's row
+                                // changes nothing on screen.
+                                changed: (site) => (site === null || site === this.siteName ? this.pictureMarks.refresh() : null),
+                                // A board's pin of this site taken back: the node's
+                                // row, badge and marks go now, not at the next poll.
+                                unpinned: (site, path) => { if (site !== this.siteName) return; delete this.bindings[path]; this.queryResult = null; this.renderDeviceViews(); this.syncWorldMarks(); },
+                                picturesChanged: () => { if (this.cameraWidget) this.cameraWidget.loadPictures(); },
                             },
+                        });
+                        window.apothecaryKept = this.keptWidget;
+                    },
+                });
+                // What is left of the camera panel until gathering leaves core: the
+                // pictures on this machine and the gathering's report (closed until
+                // asked for).
+                this.cameraWidget = null;
+                this.panels.register('camera', {
+                    title: 'Gather pictures', where: 'right', open: false,
+                    body: (slot) => {
+                        this.cameraWidget = mountCamera(slot, {
+                            base: BASE_URL,
+                            log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
+                            world: { kept: () => { if (this.keptWidget) this.keptWidget.load(); } },
                         });
                         window.apothecaryCamera = this.cameraWidget;
                     },
@@ -3060,8 +3080,8 @@
             renderDeviceViews() {
                 this.renderContentsList(this.currentFocusNode());
                 this.renderSelectedPanel();
-                // A pin made or taken back here shows in the panel's list of pins too.
-                if (this.cameraWidget && this.cameraWidget.loadPins) this.cameraWidget.loadPins();
+                // A pin made or taken back here shows in Kept too.
+                if (this.keptWidget) this.keptWidget.load();
             }
 
             // Every 2 s while the overlay polls: swap only the badge spans
@@ -4039,7 +4059,8 @@
                 // A camera's or a picture's verb the page carries (pictures.js); the
                 // ones that change the site fall through to the intent route below.
                 if (/^(camera|picture):/.test(action) || action === 'fit:@floor') {
-                    if (await viewer.pictures.carry(intent)) return;
+                    // Kept, when open, lists what the verb pinned, unpinned or kept.
+                    if (await viewer.pictures.carry(intent)) { if (viewer.keptWidget) viewer.keptWidget.load(); return; }
                 }
                 if (action === 'camera:gather') {
                     viewer.panels.open('camera');

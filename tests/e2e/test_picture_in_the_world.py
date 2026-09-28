@@ -317,7 +317,7 @@ def test_the_mat_follows_its_bench_when_the_gizmo_moves_it(
 @pytest.mark.e2e
 def test_a_forgotten_pictures_look_leaves_the_world(page, base_url: str, leaves_garage_as_found):
     """A picture kept from the browser and pinned at the bench is drawn there;
-    forgotten from the camera panel, its look is unpinned and its mat goes."""
+    forgotten from Kept, its look is unpinned and its mat goes."""
     kept = page.request.post(
         f"{base_url}/photos/pictures?name=forget_me.png&kept=upload&site=garage&host=workbench",
         data=_picture(),
@@ -334,9 +334,9 @@ def test_a_forgotten_pictures_look_leaves_the_world(page, base_url: str, leaves_
     badge = page.locator(".world-badge.place-mark[data-host='workbench']")
     expect(badge).to_be_visible()
 
-    page.evaluate("() => window.apothecaryPanels.open('camera')")
-    panel = page.locator(".panel[data-panel='camera']")
-    card = panel.locator(f"#pic-list .pic-forget[data-path='{kept['path']}']")
+    page.evaluate("() => window.apothecaryPanels.open('kept')")
+    panel = page.locator(".panel[data-panel='kept']")
+    card = panel.locator(f".kept-forget[data-path='{kept['path']}']")
     expect(card).to_be_visible(timeout=5000)
     card.click()
     page.wait_for_function(

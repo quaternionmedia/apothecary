@@ -942,10 +942,17 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("panel:toggle:jobs", 2),
         ("panel:toggle:validation", 4),
         ("panel:toggle:scad", 9),
-        ("panel:toggle:camera", 3),
+        (None, 3),  # Pictures: Kept and the gathering behind one cell
         (None, 1),  # Machine: the machine and its comms log behind one cell
         ("panel:rail:toggle", 7),
     ]
+    kept = next(c for c in panels.children if c.label == "Pictures")
+    assert [(c.label, c.action, c.cell) for c in kept.children] == [
+        ("Kept", "panel:toggle:kept", 8),
+        ("Gather", "panel:toggle:camera", 6),
+    ]
+    assert address_of(root, "panel:kept") == "938"
+    assert carried_by("panel:toggle:kept").name == "VIEWER"
     machine = next(c for c in panels.children if c.label == "Machine")
     assert [(c.action, c.cell) for c in machine.children] == [
         ("panel:toggle:machine", 8),
