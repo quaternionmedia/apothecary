@@ -38,6 +38,8 @@ One line per change, each with a link to where it is described. The format follo
 - `problems`, `solutions`, `preflight`, `release`, `parts checklist` and `parts verify`. ([pages](docs/README.md))
 - Gridfinity bins, from the vendored gridfinity-rebuilt-openscad. ([part](parts/gridfinity/README.md))
 - A part can name its STL path and the OpenSCAD it needs. ([code](apothecary/projects/parts/stl_renderer.py))
+- One parameter contract for a part and for a piece made from a picture: `ParamsSpec` and `Validation`, answered by the parts routes and the made routes alike. ([code](apothecary/projects/parts/params.py))
+- A piece made from a picture is a part: `MadePart`, edited in the one editor from `Part › Edit`, its found size a candidate; re-sizing a look rebuilds the pieces nobody sized. ([doc](docs/parts-authoring.md))
 - The `Assembly` model: sites, structures and parts as one recursive tree. ([code](apothecary/hierarchy.py))
 - The fractal zoom viewer: any site's tree at any depth. ([page](walkthrough/04-serving-it.md))
 - Real geometry in the viewer: exact primitives, and nodes as STLs. ([viewer](templates/fractal_viewer.html.j2))
