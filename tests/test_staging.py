@@ -1,6 +1,7 @@
 """Move a slider, validate the staged set, then iterate the design.
 
-A render is thirty seconds of OpenSCAD. Validation is a Pydantic call. Putting
+A render runs OpenSCAD (`apothecary parts generate-stl` says how long).
+Validation is a Pydantic call. Putting
 the cheap check between the slider and the expensive one means a set that could
 never render is refused where it costs nothing, and the reader sees the
 envelope a change would produce before paying for it.
