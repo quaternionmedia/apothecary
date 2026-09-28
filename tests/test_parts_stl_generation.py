@@ -210,6 +210,7 @@ class TestOpenSCADRequirement:
         assert not can_build
         assert "2021.08.24 or newer" in reason and f"{stable} is OpenSCAD version 2021.01" in reason
         assert "https://openscad.org/downloads.html#snapshots" in reason
+        assert "`apothecary openscad install` fetches a development snapshot" in reason
 
     def test_no_openscad_at_all_is_refused(self, installed, tmp_path):
         installed()

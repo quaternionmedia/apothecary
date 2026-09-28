@@ -470,7 +470,7 @@ def _too_old(min_version: str, executables: List[Path]) -> str:
     )
     return (
         f"needs OpenSCAD {min_version} or newer ({found or 'none is installed'}); "
-        f"development snapshots: {SNAPSHOTS_URL}"
+        f"`apothecary openscad install` fetches a development snapshot ({SNAPSHOTS_URL})"
     )
 
 
@@ -483,8 +483,9 @@ def openscad_meets(executable: Path, min_version: str) -> Tuple[bool, str]:
 
 
 def find_openscad(min_version: str) -> Tuple[Optional[Path], str]:
-    """The first OpenSCAD that is ``min_version`` or newer, the default install
-    before any development snapshot: ``(path, "")``, or ``(None, why not)``."""
+    """The first OpenSCAD that is ``min_version`` or newer, in the order of
+    ``_openscad_candidates`` (the installed snapshot, the default install,
+    then other development snapshots): ``(path, "")``, or ``(None, why not)``."""
     wanted = _wanted(min_version)
     candidates = _openscad_candidates()
     for path in candidates:
