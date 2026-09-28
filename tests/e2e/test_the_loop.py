@@ -395,30 +395,39 @@ def test_a_dropped_file_is_pinned_where_it_lands(
     assert [lk["host"] for lk in looks] == ["workbench"]
     assert looks[0]["picture"].startswith("uploads/bench_drop")
 
-    # Two at once, on the bench's mat: two looks, the last one drawn.
+    # Two at once, on the bench's mat: two looks, the last one drawn. The first
+    # drop stepped the view out of the bench; measure only once it has stopped.
     page.wait_for_function(
         "() => window.apothecaryPictures.state().some((e) => e.host === 'workbench' && e.mat)"
     )
-    at = page.evaluate(
-        """() => {
+    settled(page)
+    # Measured and dropped in one call, so no mesh can arrive between the two.
+    dropped = page.evaluate(
+        """([names, bytes]) => {
             const v = window.fractalViewer;
             const look = window.apothecaryPictures.drawnAt('workbench');
             const r = v.canvas.getBoundingClientRect();
             // A point of the mat the page itself picks as the bench: whichever
             // corner is clear of the printers standing on it at this viewport.
-            for (let fy = 0.05; fy < 1; fy += 0.1) for (let fx = 0.05; fx < 1; fx += 0.1) {
+            let at = null;
+            for (let fy = 0.05; fy < 1 && !at; fy += 0.1) for (let fx = 0.05; fx < 1 && !at; fx += 0.1) {
                 const p = window.apothecaryPictures.scenePoint(look.id, fx, fy);
                 p.project(v.camera);
-                const at = { clientX: r.left + (p.x + 1) / 2 * r.width, clientY: r.top + (1 - p.y) / 2 * r.height };
-                const hit = v.raycastPick(at);
+                const point = { clientX: r.left + (p.x + 1) / 2 * r.width, clientY: r.top + (1 - p.y) / 2 * r.height };
+                const hit = v.raycastPick(point);
                 const host = hit && (hit.pick ? hit.pick.host : hit.key);
-                if (host === 'workbench') return { x: at.clientX, y: at.clientY };
+                if (host === 'workbench') at = point;
             }
-            return null;
-        }"""
+            if (!at) return false;
+            const dt = new DataTransfer();
+            const raw = Uint8Array.from(atob(bytes), (c) => c.charCodeAt(0));
+            for (const name of names) dt.items.add(new File([raw], name, { type: 'image/png' }));
+            v.canvas.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, clientX: at.clientX, clientY: at.clientY, bubbles: true, cancelable: true }));
+            return true;
+        }""",
+        [["one.png", "two.png"], encoded],
     )
-    assert at, "no point of the bench's mat is picked as the bench"
-    page.evaluate(drop, [at["x"], at["y"], ["one.png", "two.png"], encoded])
+    assert dropped, "no point of the bench's mat is picked as the bench"
     _said(page, "2 picture(s) pinned at workbench")
     looks = [lk for lk in _attached(page, base_url)["looks"] if lk["host"] == "workbench"]
     assert len(looks) == 3
