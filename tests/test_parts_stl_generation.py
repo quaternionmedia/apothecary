@@ -85,13 +85,21 @@ def installed(tmp_path, monkeypatch):
     """``installed(default=, nightly=, on_path=)``: the OpenSCADs the resolver can
     find are these fakes and nothing else. Returns (default, nightly) paths."""
 
-    def install(default=None, nightly=None, on_path=None):
+    def install(default=None, nightly=None, on_path=None, managed=None):
         from apothecary.projects.parts import stl_renderer
         from apothecary.projects.parts.stl_renderer import OpenSCADRenderer
 
         bin_dir = tmp_path / "bin"
         bin_dir.mkdir(exist_ok=True)
         monkeypatch.setenv("PATH", str(bin_dir))
+        # The snapshot `apothecary openscad install` put in the tools dir, if any.
+        tools = tmp_path / "tools"
+        monkeypatch.setenv("APOTHECARY_TOOLS_DIR", str(tools))
+        monkeypatch.delenv("APOTHECARY_OPENSCAD", raising=False)
+        if managed:
+            date = ".".join(managed.split(".")[:3])
+            _fake_openscad(tools / "openscad" / date / "openscad", managed)
+            (tools / "openscad" / "current").write_text(date + "\n")
         if on_path:
             _fake_openscad(bin_dir / "openscad-nightly", on_path)
         stable = tmp_path / "stable" / "openscad"
@@ -238,6 +246,72 @@ class TestOpenSCADRequirement:
         assert result.skipped == "refused"
         assert f"({chosen} is OpenSCAD version 2021.01)" in result.error_message
         assert _calls(chosen) == ["--version"]
+
+    def _managed(self, tmp_path, date="2026.09.27"):
+        return tmp_path / "tools" / "openscad" / date / "openscad"
+
+    def test_the_installed_snapshot_comes_before_every_other(self, installed, tmp_path):
+        """`apothecary openscad install` is the fast path: a part with a floor
+        takes it when it meets the floor, ahead of a default that also does."""
+        installed(default="2021.10.01", nightly="2025.03.15", managed="2026.09.27")
+        assert _needs(tmp_path).get_openscad_path() == self._managed(tmp_path)
+
+    def test_a_part_with_no_floor_renders_with_the_installed_snapshot(self, installed, tmp_path):
+        stable, _ = installed(default="2021.01", managed="2026.09.27")
+        assert get_renderer().openscad_path == self._managed(tmp_path)
+        part = BasePart(name="p", source_file=tmp_path / "p.scad")
+        part.source_file.write_text("cube(1);")
+        assert build_stl(part).success
+        assert [c.split()[0] for c in _calls(self._managed(tmp_path))] == ["--version", "-o"]
+        assert _calls(stable) == []
+
+    def test_an_installed_snapshot_below_the_floor_is_passed_over(self, installed, tmp_path):
+        stable, _ = installed(default="2021.10.01", managed="2021.05.01")
+        assert _needs(tmp_path).get_openscad_path() == stable
+
+    def test_a_current_that_names_nothing_installed_is_no_openscad(self, installed, tmp_path):
+        stable, _ = installed(default="2021.01", managed="2026.09.27")
+        (tmp_path / "tools" / "openscad" / "current").write_text("../../bin")
+        assert get_renderer().openscad_path == stable
+
+    def test_the_environment_names_the_one_openscad_over_everything(
+        self, installed, tmp_path, monkeypatch
+    ):
+        """APOTHECARY_OPENSCAD is for a person who wants another: it is the only
+        candidate, and a part it is too old for is refused naming it."""
+        installed(default="2025.03.15", nightly="2025.03.15", managed="2026.09.27")
+        mine = _fake_openscad(tmp_path / "mine" / "openscad", "2021.10.01")
+        monkeypatch.setenv("APOTHECARY_OPENSCAD", str(mine))
+        assert get_renderer().openscad_path == mine
+        assert _needs(tmp_path).get_openscad_path() == mine
+        can_build, reason = _needs(tmp_path, "2025.01.01").can_generate_stl()
+        assert not can_build and f"{mine} is OpenSCAD version 2021.10.01" in reason
+
+    @pytest.mark.parametrize(
+        "version,manifold",
+        [
+            ("2021.01", False),
+            ("2024.09.27", False),
+            ("2024.09.28", True),
+            ("2026.09.27", True),
+            ("2025.10.02.ai27993", True),
+        ],
+    )
+    def test_manifold_is_asked_of_an_openscad_that_has_it(self, tmp_path, version, manifold):
+        """`--backend=manifold` (never `--enable=manifold`, which renders with
+        CGAL) goes to a snapshot from 2024.09.28 on, and never to 2021.01."""
+        from apothecary.projects.parts import stl_renderer
+
+        exe = _fake_openscad(tmp_path / version / "openscad", version)
+        scad = tmp_path / "p.scad"
+        scad.write_text("cube(1);")
+        assert OpenSCADRenderer(str(exe)).render_stl(scad, tmp_path / "p.stl").success
+        render = [c for c in _calls(exe) if c.startswith("-o")]
+        assert len(render) == 1
+        assert ("--backend=manifold" in render[0].split()) is manifold
+        assert "--enable=manifold" not in render[0]
+        assert stl_renderer.has_manifold(exe) is manifold
+        assert _calls(exe).count("--version") == 1
 
     def test_a_minimum_that_is_not_a_version_is_refused(self, tmp_path):
         with pytest.raises(ValueError, match="not an OpenSCAD version"):
