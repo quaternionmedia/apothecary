@@ -203,6 +203,11 @@ def test_a_place_badge_selects_its_host_and_opens_nothing(
     expect(page.locator("#selected-body [data-facts='camera']")).to_contain_text(mine[:12])
     page.locator(".world-badge.place-mark[data-camera='another_browsers_camera']").click()
     assert page.evaluate("() => window.fractalViewer.selectedName") == "printer_1"
+    # Selected says whose it is, and how a picture is taken here all the same.
+    expect(page.locator("#selected-body [data-facts='camera-verbs']")).to_contain_text(
+        "another browser's camera: a picture is taken here with one of this browser's "
+        "cameras pinned in its place (⌗ Camera › Pin here)"
+    )
     assert page.evaluate("() => window.apothecaryCamera === undefined")  # never mounted
     expect(status).not_to_have_class(re.compile(r"\berror\b"))
 

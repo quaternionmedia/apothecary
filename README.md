@@ -43,6 +43,12 @@ uv run apothecary problems                          # what is open here, and who
 uv run apothecary photo view PICTURE.jpg --width-mm 300   # a picture's pieces, in the viewer
 ```
 
+In the viewer, a picture is taken from the ring. Select a structure (the bench, say) and
+open its ring -- `m`, or a right-click on it -- then Camera › Pin here › Allow: the browser
+asks once, and with one camera it is pinned there at once. Camera › Look then keeps a frame
+and finds its shapes, and Selected says what to do next. Picture › Add on the same ring pins
+a picture from disk instead; the floor's verbs are under the canvas ring's Pictures › Floor.
+
 From Python:
 
 ```python

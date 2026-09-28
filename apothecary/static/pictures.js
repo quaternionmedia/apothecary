@@ -16,10 +16,17 @@
  * opens the pinned device, waits for its first frame and half a second more,
  * keeps the frame, and closes it again.
  *
+ * The first time, the browser has to be asked: Camera › Pin here offers Allow
+ * until the cameras are named. Allow asks once and flows on -- one camera is
+ * pinned at the host at once, several reopen the ring at Pin here to choose
+ * from -- and a refusal says what to do. A yes given elsewhere (the address
+ * bar) is noticed where the browser reports it, and the cameras are named again
+ * as a ring opens, so Pin here lists them.
+ *
  * mountPictures({ base, marks, world, log }):
  *   marks: the handle mountPictureMarks returned;
  *   world: siteName(), select(host), stepOut(), focusWidth(), openPanel(id),
- *          frameFloor(), rendered();
+ *          frameFloor(), rendered(), reopenRing(host, into, at);
  *   log(text, kind): the page's status bar; kind "bad" is a refusal.
  */
 
@@ -41,6 +48,10 @@ export function mountPictures({ base = "", marks, world, log }) {
         return body;
     }
     const where = (host) => (host === FLOOR ? "the floor" : host);
+    const tailOf = (host) => (host === FLOOR ? `:${FLOOR_MARK}` : "");
+    // A verb's place on the ring, as a person reads it: the floor's are under the
+    // canvas ring's Pictures › Floor.
+    const ringPath = (host, verb) => `${host === FLOOR ? "Pictures › Floor › " : ""}${verb}`;
     const siteUrl = () => `/sites/${encodeURIComponent(world.siteName())}`;
 
     // --- this browser's cameras ---------------------------------------------------------
@@ -56,18 +67,42 @@ export function mountPictures({ base = "", marks, world, log }) {
     if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
         navigator.mediaDevices.addEventListener("devicechange", () => listCameras().catch(() => {}));
     }
+    // The camera allowed (or refused) for this site in the address bar: the
+    // browser says so here, where it can, and the cameras are named again.
+    if (navigator.permissions && navigator.permissions.query) {
+        navigator.permissions.query({ name: "camera" })
+            .then((status) => status.addEventListener("change", () => listCameras().catch(() => {})))
+            .catch(() => {});
+    }
     const ready = listCameras().catch(() => {});
     const mine = (id) => state.cameras.find((c) => c.id === id) || null;
 
-    async function allow() {
+    // Allow: the browser is asked once. It answers with its prompt, or with what
+    // the address bar holds for this site. Its yes flows on: one camera is pinned
+    // at the host at once; several reopen the ring at Camera › Pin here, where the
+    // ring stood, so the choice is made without another trip.
+    async function allow(host, at = null) {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("this browser has no cameras to offer");
-        const probe = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        let probe;
+        try {
+            probe = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        } catch (e) {
+            const said = e && e.message ? ` (${e.message})` : "";
+            if (e && e.name === "NotAllowedError") {
+                throw new Error(`the browser refused the camera${said}: answer its prompt, or allow the camera for this site in the address bar, then ${ringPath(host, "Camera › Pin here")} again`);
+            }
+            throw new Error(`this browser offered no camera it could use${said || (e && e.name ? ` (${e.name})` : "")}`);
+        }
         for (const t of probe.getTracks()) t.stop();
         await listCameras();
-        say(`${state.cameras.length} camera(s) allowed: Camera › Pin here names them`);
+        const n = state.cameras.length;
+        if (!n) throw new Error("the browser allowed a camera and then named none: this browser offered no camera it could use");
+        if (n === 1) { await pinCamera(host, state.cameras[0].id, { allowed: true }); return; }
+        say(`${n} cameras allowed: choose one to pin at ${where(host)}`);
+        if (world.reopenRing) world.reopenRing(host, `camera:pin${tailOf(host)}`, at);
     }
 
-    async function pinCamera(host, id) {
+    async function pinCamera(host, id, { allowed = false } = {}) {
         const cam = mine(id);
         const answer = await api(`/cameras/${encodeURIComponent(id)}`, {
             method: "PUT",
@@ -75,7 +110,8 @@ export function mountPictures({ base = "", marks, world, log }) {
         });
         await marks.refresh();
         const replaced = answer.replaced && answer.replaced.length ? `, in place of ${answer.replaced.length} pinned there before` : "";
-        say(`${cam ? cam.label : "camera"} pinned at ${where(host)}${replaced}`);
+        const next = allowed ? `: ${ringPath(host, "Camera › Look")} takes a picture and finds its shapes` : "";
+        say(`${cam ? cam.label : "camera"} ${allowed ? "allowed and " : ""}pinned at ${where(host)}${replaced}${next}`);
     }
 
     async function unpinCamera(host) {
@@ -311,6 +347,9 @@ export function mountPictures({ base = "", marks, world, log }) {
     // The Picture context for the place a ring stands on: a host, or "" the floor.
     async function context(host, { fresh = false } = {}) {
         const [pictures] = await Promise.all([picturesNow(fresh), ready]);
+        // Not yet named as a ring opens: the browser may have been allowed since
+        // (the address bar, or a yes it did not report), so ask it again.
+        if (fresh && !state.asked) await listCameras().catch(() => {});
         const keptPaths = new Set(pictures.filter((p) => p.kept).map((p) => p.path));
         const cam = host === null ? null : marks.cameraAt(host);
         const looks = host === null ? [] : [...marks.looksAt(host)].reverse();
@@ -355,7 +394,7 @@ export function mountPictures({ base = "", marks, world, log }) {
         const arg = rest.join(":");
         if (action === "fit") { world.frameFloor(); say("the floor, framed"); return true; }
         switch (`${action.split(":")[0]}:${verb}`) {
-            case "camera:allow": await allow(); return true;
+            case "camera:allow": await allow(host, intent.at || null); return true;
             case "camera:pin": await pinCamera(host, arg); return true;
             case "camera:unpin": await unpinCamera(host); return true;
             case "camera:live": await goLive(host); return true;

@@ -54,6 +54,13 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # kept-refresh), and Purge (pic-purge, kept-purge) stays backed by Pictures ›
 # Purge. The three row listeners are one on Kept's list. No ring address moved
 # but the panels': Panels › Camera is Panels › Pictures › Gather, beside Kept.
+#
+# The first-time camera flow: no control added or removed, and no ring address
+# moved. One place the page listens is added, in pictures.js: the browser's
+# camera permission changing (status:change:listCameras), automatic, since it
+# is the browser reporting a yes given in the address bar and not a control.
+# `apothecary census` before and after: the same meter and the same ring-backed
+# count; one more place the page listens.
 VIEWER_CEILING = 128
 
 

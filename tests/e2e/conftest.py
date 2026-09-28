@@ -15,6 +15,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from playwright.sync_api import Error as PlaywrightError
 
 import apothecary  # noqa: F401  -- the guard, before base_url connects anywhere
 
@@ -283,6 +284,42 @@ def camera_page(_camera_browser, base_url):
         viewport={"width": 1280, "height": 800}, base_url=base_url
     )
     context.grant_permissions(["camera"], origin=base_url)
+    yield context.new_page()
+    context.close()
+
+
+# The first time: full Chromium (the `chromium` channel, which `playwright
+# install chromium` puts beside the headless shell the other fixtures run) in its
+# new headless mode, with the fake camera and no fake UI. The browser's own
+# permission prompt stands, and headless there is nobody at it, so a page is
+# refused until its context is granted the camera -- the person's yes, given as
+# the address bar would give it. The headless shell has no prompt to stand.
+UNASKED_CAMERA = ["--use-fake-device-for-media-stream"]
+
+
+@pytest.fixture(scope="session")
+def _unasked_browser(browser_type):
+    try:
+        browser = browser_type.launch(channel="chromium", args=UNASKED_CAMERA)
+    except PlaywrightError as exc:
+        pytest.skip(
+            "full Chromium (Playwright's `chromium` channel) is not installed here; "
+            "`uv run playwright install chromium` installs it beside the headless shell: "
+            + str(exc).splitlines()[0]
+        )
+    yield browser
+    browser.close()
+
+
+@pytest.fixture
+def unasked_page(_unasked_browser, base_url):
+    """A page in full Chromium with a fake camera the page has no permission for yet.
+
+    ``page.context.grant_permissions(["camera"], origin=base_url)`` is the person's yes.
+    """
+    context = _unasked_browser.new_context(
+        viewport={"width": 1280, "height": 800}, base_url=base_url
+    )
     yield context.new_page()
     context.close()
 

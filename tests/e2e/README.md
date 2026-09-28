@@ -7,6 +7,11 @@ panel, and the two walkthrough pages. Chromium once per machine:
 uv run playwright install chromium
 ```
 
+That installs the headless shell most tests run in and, beside it, full
+Chromium: `test_first_camera.py` runs in that one (Playwright's `chromium`
+channel), where the browser's own camera prompt stands, and skips, saying so,
+when it is missing.
+
 ## Running them
 
 ```bash

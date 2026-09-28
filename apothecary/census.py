@@ -548,6 +548,12 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         NOTHING,
         "a camera plugged in or out, and the list of this browser's cameras follows",
     ),
+    "status:change:listCameras": (
+        AUTOMATIC,
+        NOTHING,
+        "the camera allowed or refused for this site in the address bar, "
+        "and the list of this browser's cameras follows",
+    ),
     "video:loadeddata:resolve": (
         AUTOMATIC,
         NOTHING,
