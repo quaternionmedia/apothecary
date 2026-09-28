@@ -123,6 +123,13 @@ class TestGridfinityBinPart:
         expected_height = 6 * HEIGHT_UNIT_MM + STACKING_LIP_MM
         assert bounds.size.z == pytest.approx(expected_height, abs=0.1)
 
+    def test_the_bin_is_declared_centred_on_the_origin_as_the_library_draws_it(self):
+        """gridfinity-rebuilt-openscad centres a bin on X and Y and stands it on Z = 0."""
+        bounds = DEFAULT.get_bounds({"gridx": 3, "gridy": 2})
+        assert bounds.min_point.to_list()[:2] == pytest.approx([-63.0, -42.0])
+        assert bounds.max_point.to_list()[:2] == pytest.approx([63.0, 42.0])
+        assert bounds.min_point.z == 0
+
     def test_get_bounds_of_one_override_keeps_the_other_defaults(self):
         bounds = DEFAULT.get_bounds({"gridx": 1})
         assert bounds.size.x == pytest.approx(GRID_SIZE_MM, abs=0.1)
