@@ -21,7 +21,7 @@ from apothecary.api import app
 from apothecary.projects.parts.params import ParamsSpec, Validation, params_spec, validate_staged
 from apothecary.projects.parts.stl_renderer import geometry_scad
 from apothecary.vision import looks as looking
-from apothecary.vision.compose import THICKNESS_GUESS
+from apothecary.vision.compose import THICKNESS_GUESS, piece_from_shape
 from apothecary.vision.piece import MadePart
 
 pytestmark = pytest.mark.usefixtures("world")
@@ -131,6 +131,35 @@ def test_get_bounds_is_the_box_it_occupies_turned_as_its_shape_was_seen():
     c30, s30 = math.cos(math.radians(30)), math.sin(math.radians(30))
     assert tilted.size.x == pytest.approx(40 * c30 + 10 * s30)
     assert tilted.size.y == pytest.approx(40 * s30 + 10 * c30)
+
+
+def test_a_turned_pieces_footprint_is_the_box_get_bounds_gives():
+    """The overlap check reads the footprint; the editor reads get_bounds. A bar
+    lying at 35 degrees fills one box, and both say it."""
+    from apothecary.vocabulary import WordShape
+
+    c = TestClient(app)
+    coin = _make(c, _pin(c, mm_across=1800))
+    record = _record(coin)
+    record = record.model_copy(
+        update={"shape": record.shape.model_copy(update={"turned_degrees": 35})}
+    )
+    sides = {"width": 40.0, "depth": 10.0, "height": 3.0}
+    piece, _about = piece_from_shape(
+        record.shape,
+        name=record.piece,
+        word="plate",
+        reason=record.reason,
+        per_unit=record.mm_across,
+        tallness=record.pixel_height / record.pixel_width,
+        finder=record.finder,
+        size=WordShape(**sides),
+    )
+    box = MadePart.of(record).get_bounds(sides)
+    assert box.size.x > 40 * math.cos(math.radians(35))  # the turned box, not 40 x 10
+    for corner in ("min_point", "max_point"):
+        got, want = getattr(piece.footprint, corner), getattr(box, corner)
+        assert (got.x, got.y, got.z) == pytest.approx((want.x, want.y, want.z))
 
 
 def test_its_geometry_is_what_piece_from_shape_builds_and_follows_the_parameters():
