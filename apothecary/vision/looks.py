@@ -32,6 +32,7 @@ PROTOTYPE — not ratified.
 
 from __future__ import annotations
 
+import math
 import threading
 from datetime import datetime
 from typing import Dict, List, Optional, Set, Tuple
@@ -40,7 +41,7 @@ from pydantic import BaseModel, Field
 
 from ..hierarchy import Assembly
 from ..models.vectors import Vector3D
-from .compose import piece_from_shape
+from .compose import piece_from_shape, sides_as_found, thickness_guess
 from .models import FoundShape
 
 # The most shapes a look keeps, the most confident first: the outline budget per mat.
@@ -145,6 +146,26 @@ class Made(BaseModel):
     pixel_height: int
     parameters: Dict[str, float]  # width, depth, height in mm
     parameters_stated: bool = False
+    # Where the piece was stood when made, or last laid on its shape by a
+    # re-scale, in the site's frame: a piece still standing there was not moved
+    # by a person, so a re-scale may lay it on its shape again.
+    placed_at: Vector3D = Field(default_factory=Vector3D)
+
+
+def found_size(record: Made) -> Dict[str, float]:
+    """The sides the finder found for a made piece, at the scale its provenance
+    records, and the thickness guessed from them: what ``piece_from_shape`` builds
+    when no person has stated a size. The candidates a made piece's editor offers."""
+    width, depth = sides_as_found(
+        record.shape, record.mm_across, record.pixel_height / record.pixel_width
+    )
+    return {"width": width, "depth": depth, "height": thickness_guess(width, depth)}
+
+
+def _same_size(a: Dict[str, float], b: Dict[str, float]) -> bool:
+    return all(
+        math.isclose(a[k], b[k], rel_tol=1e-9, abs_tol=1e-9) for k in ("width", "depth", "height")
+    )
 
 
 # --- where things are ----------------------------------------------------------------
@@ -530,7 +551,6 @@ def make(
             finder=look.finder,
         )
         piece.position = piece.position + centre
-        fp = piece.footprint
         record = Made(
             site=site_name,
             piece=name,
@@ -550,11 +570,8 @@ def make(
             mm_across=look.mm_across,
             pixel_width=look.pixel_width,
             pixel_height=look.pixel_height,
-            parameters={
-                "width": fp.max_point.x - fp.min_point.x,
-                "depth": fp.max_point.y - fp.min_point.y,
-                "height": fp.max_point.z - fp.min_point.z,
-            },
+            parameters=_size_of(piece),
+            placed_at=piece.position.model_copy(),
         )
         if looks.record_made(record):
             site.children.append(piece)
@@ -562,6 +579,42 @@ def make(
         else:
             skipped += 1
     return names, skipped
+
+
+def _size_of(piece: Assembly) -> Dict[str, float]:
+    fp = piece.footprint
+    assert fp is not None
+    return {
+        "width": fp.max_point.x - fp.min_point.x,
+        "depth": fp.max_point.y - fp.min_point.y,
+        "height": fp.max_point.z - fp.min_point.z,
+    }
+
+
+def _index_of(site_name: str, site: Assembly, piece: str) -> int:
+    index = next((i for i, c in enumerate(site.children) if c.name == piece), None)
+    if index is None:
+        raise NotMade(f"{piece!r} is no longer in site {site_name!r}")
+    return index
+
+
+def _rebuilt_in_place(
+    site: Assembly, index: int, record: Made, *, word: str, reason: str, size, mm_across: float
+) -> Assembly:
+    """The piece at ``index`` built again from its shape, standing where it stood."""
+    rebuilt, _about = piece_from_shape(
+        record.shape,
+        name=record.piece,
+        word=word,
+        reason=reason,
+        per_unit=mm_across,
+        tallness=record.pixel_height / record.pixel_width,
+        finder=record.finder,
+        size=size,
+    )
+    rebuilt.position = site.children[index].position
+    site.children[index] = rebuilt
+    return rebuilt
 
 
 def rebuild(
@@ -573,14 +626,17 @@ def rebuild(
     parameters: Optional[Dict[str, float]] = None,
 ) -> Made:
     """Rebuild a made piece in place from its shape: another word, or a person's sides
-    and thickness. Its name and position stay."""
+    and thickness. Its name and position stay.
+
+    Sides a person gives are ``parameters_stated`` -- unless they are the sides
+    the finder found, in which case the piece reads as found again: the found
+    candidate in its editor returns it to what it was, and a re-scale of its
+    look rebuilds it with the rest."""
     from ..vocabulary import WordShape, starter_words
 
     looks = store()
     record = looks.made_piece(site_name, piece)
-    index = next((i for i, c in enumerate(site.children) if c.name == piece), None)
-    if index is None:
-        raise NotMade(f"{piece!r} is no longer in site {site_name!r}")
+    index = _index_of(site_name, site, piece)
     if word is not None and word not in starter_words():
         raise ValueError(f"no word named {word!r}; have {starter_words().names()}")
     new_word = word or record.word
@@ -589,34 +645,62 @@ def rebuild(
     size = WordShape(**parameters) if parameters else None
     if size is None and record.parameters_stated:
         size = WordShape(**record.parameters)
-    rebuilt, _about = piece_from_shape(
-        record.shape,
-        name=piece,
-        word=new_word,
-        reason=reason,
-        per_unit=record.mm_across,
-        tallness=record.pixel_height / record.pixel_width,
-        finder=record.finder,
-        size=size,
+    rebuilt = _rebuilt_in_place(
+        site, index, record, word=new_word, reason=reason, size=size, mm_across=record.mm_across
     )
-    rebuilt.position = site.children[index].position
-    site.children[index] = rebuilt
-    fp = rebuilt.footprint
+    built = _size_of(rebuilt)
     record = record.model_copy(
         update={
             "word": new_word,
             "word_stated": stated,
             "reason": reason,
-            "parameters": {
-                "width": fp.max_point.x - fp.min_point.x,
-                "depth": fp.max_point.y - fp.min_point.y,
-                "height": fp.max_point.z - fp.min_point.z,
-            },
-            "parameters_stated": record.parameters_stated or parameters is not None,
+            "parameters": built,
+            "parameters_stated": (record.parameters_stated or parameters is not None)
+            and not _same_size(built, found_size(record)),
         }
     )
     looks.update_made(record)
     return record
+
+
+def _same_place(a: Vector3D, b: Vector3D) -> bool:
+    return all(math.isclose(getattr(a, k), getattr(b, k), abs_tol=1e-6) for k in ("x", "y", "z"))
+
+
+def rescale_made(site_name: str, site: Assembly, look: Look) -> List[str]:
+    """After a look is re-sized: every piece made from it whose sides no person
+    stated is rebuilt from its shape at the new width, the scale in its provenance
+    following, and laid on its shape again when it still stands where it was made
+    -- a piece a person moved stays put. The names of the pieces rebuilt."""
+    assert look.mm_across is not None
+    looks = store()
+    centre = mat_centre(look, site)
+    rebuilt: List[str] = []
+    for name, record in sorted(looks.made_at(site_name).items()):
+        if record.look != look.id or record.parameters_stated:
+            continue
+        index = next((i for i, c in enumerate(site.children) if c.name == name), None)
+        if index is None:
+            continue
+        stood_still = _same_place(site.children[index].position, record.placed_at)
+        piece = _rebuilt_in_place(
+            site,
+            index,
+            record,
+            word=record.word,
+            reason=record.reason,
+            size=None,
+            mm_across=look.mm_across,
+        )
+        update: Dict[str, object] = {"mm_across": look.mm_across, "parameters": _size_of(piece)}
+        if stood_still and centre is not None:
+            dx, dy = shape_offset(look, record.shape)
+            piece.position = Vector3D(x=centre.x + dx, y=centre.y + dy, z=centre.z)
+            update["placed_at"] = piece.position.model_copy()
+            update["extent"] = _extent(look, record.shape)
+        looks.update_made(record.model_copy(update=update))
+        rebuilt.append(name)
+    return rebuilt
 
 
 def drop(site_name: str, site: Assembly, piece: str) -> Made:
@@ -643,12 +727,14 @@ __all__ = [
     "drop",
     "floor_anchor",
     "forget_made",
+    "found_size",
     "host_node",
     "keep_the_most_sure",
     "make",
     "made_names",
     "mat_centre",
     "rebuild",
+    "rescale_made",
     "shape_offset",
     "status_of",
     "store",
