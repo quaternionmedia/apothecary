@@ -935,6 +935,18 @@ def _node_ring(
         options.append(host_pictures)
     elif path and "." not in path and path in picture.made:
         options.append(_made_picture_group(picture))
+    # A part, or a piece made from a picture, is edited in Selected: Part › Edit
+    # opens the one editor there (the part-editing spike's decision). Appended
+    # last, so no cell above moves; a host with a board, children and a part
+    # is the fullest node ring, eight.
+    if node is not None and (node.part_ref or (path and "." not in path and path in picture.made)):
+        options.append(
+            Option(
+                id="part",
+                label="Part",
+                children=[Option(id="part:edit", label="Edit", action="part:edit")],
+            )
+        )
     return Ring(title=shorten(path or (node.name if node else "")), options=options)
 
 
@@ -1143,6 +1155,10 @@ CARRIED_BY: Dict[str, Carries] = {
     "picture:make-all": Carries.SERVER,
     "picture:drop": Carries.SERVER,
     "picture:word": Carries.SERVER,
+    # The part editor is the page's: Part › Edit opens it in Selected and puts
+    # the cursor in its first control. What Apply then changes goes through the
+    # part and made routes the editor already calls, never the intent route.
+    "part": Carries.VIEWER,
 }
 
 

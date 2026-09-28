@@ -1051,7 +1051,9 @@ def test_a_host_appends_camera_and_picture_and_no_existing_cell_moves():
         ("Device", 2),
         ("Why this", 4),
     ]
-    assert [o.label for o in printer.options][-2:] == ["Camera", "Picture"]
+    # A printer drawn as a part (ender3) ends with Part: the fullest node ring, eight.
+    assert [o.label for o in printer.options][-3:] == ["Camera", "Picture", "Part"]
+    assert len(printer.options) == MOST_OPTIONS
 
 
 def test_camera_and_picture_are_absent_below_the_root_and_where_nothing_can_be_pinned():
@@ -1062,6 +1064,37 @@ def test_camera_and_picture_are_absent_below_the_root_and_where_nothing_can_be_p
         assert "Camera" not in labels and "Picture" not in labels, (path, labels)
 
 
+# --- the part editor on the ring (the part-editing spike's decision) --------------------
+#
+# One editor, in Selected, for a part and for a piece made from a picture: Part ›
+# Edit opens it there. Appended after every cell the ring had, so none moves; the
+# page carries it, and Apply goes through the part and made routes.
+
+
+def test_a_part_and_a_made_piece_end_with_part_edit_and_nothing_else_does():
+    from apothecary.menu import PictureContext, carried_by
+
+    garage = _garage()
+    # A part below the root (the board inside a printer) and a part at the root.
+    for path in ("printer_1.frame_system.mainboard", "footpedal", "printer_1"):
+        ring = resolve(Context(pointing=Pointing.NODE, targets=[path]), garage)
+        part = ring.options[-1]
+        assert part.label == "Part" and part.id == "part", (path, [o.label for o in ring.options])
+        assert [(c.label, c.action) for c in part.children] == [("Edit", "part:edit")]
+        assert len(ring.options) <= MOST_OPTIONS
+    # A made piece has Part too, after its Picture.
+    site = _garage()
+    site.children.append(Assembly(name="disc_1", role="word", base=Cube(size=10.0)))
+    told = PictureContext(made=["disc_1"], words=["disc", "plate"])
+    made = resolve(Context(pointing=Pointing.NODE, targets=["disc_1"]), site, picture=told)
+    assert [o.label for o in made.options][-2:] == ["Picture", "Part"]
+    assert _group(made, "Part", "Edit").action == "part:edit"
+    # A structure that is neither is left alone: the bench's ring ends as it did.
+    bench = resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), garage)
+    assert [o.label for o in bench.options][-2:] == ["Camera", "Picture"]
+    assert carried_by("part:edit").name == "VIEWER"
+
+
 def test_a_made_piece_has_picture_with_word_and_drop_and_no_camera():
     from apothecary.menu import PictureContext
 
@@ -1070,7 +1103,7 @@ def test_a_made_piece_has_picture_with_word_and_drop_and_no_camera():
     told = PictureContext(made=["disc_1"], words=["disc", "plate", "post"])
     ring = resolve(Context(pointing=Pointing.NODE, targets=["disc_1"]), site, picture=told)
     labels = [o.label for o in ring.options]
-    assert "Camera" not in labels and labels[-1] == "Picture"
+    assert "Camera" not in labels and labels[-2:] == ["Picture", "Part"]
     picture = _group(ring, "Picture")
     assert _ring_labels(picture) == [("Word", 8), ("Drop", 6)]
     assert [c.action for c in _group(picture, "Word").children] == [
@@ -1436,7 +1469,7 @@ def test_a_shape_is_made_worded_and_dropped_through_the_ring_and_the_intent_rout
         json={"context": {"pointing": "node", "targets": [piece]}, "site": "garage"},
     ).json()
     labels = [o["label"] for o in ring["options"]]
-    assert "Camera" not in labels and labels[-1] == "Picture"
+    assert "Camera" not in labels and labels[-2:] == ["Picture", "Part"]
     answer = _choose(client, ring, _address(ring, "picture:word:plate"), [piece])
     assert answer.status_code == 200, answer.text
     assert client.get("/sites/garage/attached").json()["made"][piece]["word"] == "plate"

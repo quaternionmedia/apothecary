@@ -92,8 +92,10 @@ def test_key_m_opens_the_node_ring_in_its_cells(page: Page, ring_url: str):
         # A host holds a camera and pictures: appended, so no cell above moved.
         "3": "Camera",
         "1": "Picture",
+        # A printer drawn as a part is edited from Part: appended last, the eighth.
+        "7": "Part",
     }
-    assert page.locator("#ring-overlay .wedge.empty").count() == 1
+    assert page.locator("#ring-overlay .wedge.empty").count() == 0
     assert page.locator("#ring-overlay .hub-digit").text_content() == "5"
     assert _title(page) == "printer_1"
     # Every wedge shows its digit, occupied or not; a parented option shows a chevron.
@@ -124,6 +126,7 @@ def test_the_toolbar_button_and_right_click_open_it_too(page: Page, ring_url: st
         "4": "Into",
         "9": "Camera",
         "3": "Picture",
+        "1": "Part",
     }
     expect(page.locator("#contents-list .contents-item[data-path='printer_2']")).to_have_class(
         "contents-item selected"
