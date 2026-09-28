@@ -92,8 +92,10 @@ def test_key_m_opens_the_node_ring_in_its_cells(page: Page, ring_url: str):
         # A host holds a camera and pictures: appended, so no cell above moved.
         "3": "Camera",
         "1": "Picture",
+        # A printer drawn as a part is edited from Part: appended last, the eighth.
+        "7": "Part",
     }
-    assert page.locator("#ring-overlay .wedge.empty").count() == 1
+    assert page.locator("#ring-overlay .wedge.empty").count() == 0
     assert page.locator("#ring-overlay .hub-digit").text_content() == "5"
     assert _title(page) == "printer_1"
     # Every wedge shows its digit, occupied or not; a parented option shows a chevron.
@@ -124,6 +126,7 @@ def test_the_toolbar_button_and_right_click_open_it_too(page: Page, ring_url: st
         "4": "Into",
         "9": "Camera",
         "3": "Picture",
+        "1": "Part",
     }
     expect(page.locator("#contents-list .contents-item[data-path='printer_2']")).to_have_class(
         "contents-item selected"
@@ -286,9 +289,25 @@ def test_the_pointer_uses_the_same_cells(page: Page, ring_url: str):
     # The menu names its highlighted item by that item's id.
     expect(page.locator("#ring-overlay")).to_have_attribute("aria-activedescendant", "ring-cell-6")
     expect(page.locator("#ring-cell-6")).to_have_attribute("data-cell", "6")
+    # Over an empty cell the pointer highlights nothing. printer_1's ring is
+    # full (its eighth cell is Part), so that is shown on printer_2's, which
+    # has no board pinned and leaves cell 7 empty.
+    page.keyboard.press("Escape")
+    expect(page.locator("#ring-overlay")).to_have_count(0)
+    page.locator("#contents-list .contents-item[data-path='printer_2']").click(button="right")
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    assert _title(page) == "printer_2"
+    box = page.locator("#ring-svg").bounding_box()
+    cx, cy = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
     page.mouse.move(cx - 51, cy - 51)  # up-left: cell 7, empty on this ring, so nothing
     expect(page.locator("#ring-overlay .wedge.hot")).to_have_count(0)
     assert page.locator("#ring-overlay").get_attribute("aria-activedescendant") is None
+    page.keyboard.press("Escape")
+    expect(page.locator("#ring-overlay")).to_have_count(0)
+    page.locator("#contents-list .contents-item[data-path='printer_1']").click(button="right")
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    box = page.locator("#ring-svg").bounding_box()
+    cx, cy = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
     page.mouse.move(cx, cy + 72)
     page.mouse.click(cx, cy + 72)  # down: Device, a submenu
     assert _title(page) == "Device"

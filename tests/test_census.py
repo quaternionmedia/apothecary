@@ -61,6 +61,12 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # is the browser reporting a yes given in the address bar and not a control.
 # `apothecary census` before and after: the same meter and the same ring-backed
 # count; one more place the page listens.
+# The picture-to-editor seam: the part panel became one editor over a target,
+# serving a made piece too, and Part › Edit joined the node ring. Before and
+# after: 128 controls of its own, 58 ring-backed, 75 places the page listens.
+# The editor's markup is written once for either target (a made piece leaves
+# its checklist and Regenerate STL unwritten), so no control was added; the
+# Regenerate STL listener is keyed by the editor's apply (applyEditor) now.
 VIEWER_CEILING = 128
 
 

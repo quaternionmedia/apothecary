@@ -166,6 +166,40 @@ such a part lives in `Params` and in the code;
 `tests/test_parameter_coverage.py` fails on one that leaves the generated
 SCAD unchanged.
 
+## A piece made from a picture is a part
+
+A shape a finder saw in a picture and a person made into a piece
+(`Picture › Make` on the ring; `apothecary/vision/looks.py`) has no file
+and no wrapper, and is a part all the same: `MadePart`
+(`apothecary/vision/piece.py`) wraps its record as a `BasePart`, and the
+viewer edits it in the one editor it edits any part in, opened from
+`Part › Edit` on either.
+
+What makes that possible is one parameter contract, in core
+(`apothecary/projects/parts/params.py`): `params_spec(part)` reads a
+`ParamsSpec` -- each field's type, default, range, pattern and the
+candidates its sources disagree about -- off `params_model`, `contested`
+and `get_bounds`, and `validate_staged(part, params)` answers a
+`Validation`. `GET /parts/{name}/params` and `POST /parts/{name}/validate`
+return them for a part from this folder; `GET /sites/{s}/made/{piece}/params`
+and `POST /sites/{s}/made/{piece}/validate` return the same shapes for a
+made piece, and `PUT /sites/{s}/made/{piece}` with `{params}` is its Apply.
+
+The hooks a made piece implements are the ones above. Its `params_model` is
+a `PieceParams` built for the record: the word it is made as, drawn from
+the vocabulary, and its three sides in millimetres, each defaulting to what
+the piece is now. Its `contested` is its provenance: the thickness always
+carries the guess (a picture from above cannot see it), and the sides the
+finder measured are offered whenever the piece no longer has them, so after
+a person states a size, or after the look is re-scaled, the found number is
+one click away, and taking it reads the piece as found again. Its
+`geometry` is what `piece_from_shape` builds for the parameters, rendered
+through the same seam as the snowplow's; its `get_bounds` is the box it
+occupies as built, turned as its shape was seen. `validate_overrides` is
+`BasePart`'s. Re-sizing a look (`PUT /sites/{s}/looks/{id}/scale`) rebuilds
+every piece made from it whose sides no person stated, and lays it on its
+shape again only if it still stands where it was made.
+
 ## Checking a part
 
 ```bash

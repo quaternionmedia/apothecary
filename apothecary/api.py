@@ -55,6 +55,13 @@ from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
 from .primitives import Cube, Cylinder, Sphere, absolute_imports
 from .projects.parts.base import BasePart
+from .projects.parts.params import (
+    NoParameters,
+    ParamsSpec,
+    Validation,
+    params_spec,
+    validate_staged,
+)
 from .projects.parts.skeleton import ROOT
 from .projects.parts.stl_renderer import build_stl
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
@@ -451,71 +458,25 @@ def generate_part_stl(
     }
 
 
-@app.get("/parts/{name}/params")
+@app.get("/parts/{name}/params", response_model=ParamsSpec)
 def get_part_params(name: str):
     """What a part accepts, in a form a control surface can build itself from.
 
-    Types, defaults and bounds come from the part's own Pydantic model, so the
-    dashboard cannot drift from what the renderer will actually accept.
-    ``contested`` carries the parameters whose value this project's sources
-    disagree about, with the provenance of each candidate -- an ambiguity a
-    reader can turn is worth more than one they have to argue about.
+    ``params_spec`` (apothecary/projects/parts/params.py) reads it off the
+    part's own Pydantic model, so the editor cannot drift from what the
+    renderer will actually accept. ``contested`` carries the parameters whose
+    value this project's sources disagree about, with the provenance of each
+    candidate -- an ambiguity a reader can turn is worth more than one they
+    have to argue about. A made piece answers the same shape from
+    ``GET /sites/{s}/made/{piece}/params``.
     """
     part = _load_part_wrapper(name)
-    model_cls = getattr(part, "params_model", None)
-    if model_cls is None:
-        raise HTTPException(status_code=404, detail=f"Part '{name}' declares no parameters")
-
-    schema = model_cls.model_json_schema()
-    defaults = model_cls()
-
-    fields = []
-    for field_name, spec in schema.get("properties", {}).items():
-        default = getattr(defaults, field_name)
-        candidates = [c.model_dump() for c in part.contested.get(field_name, [])]
-        # A slider needs a range. Pydantic states one only where the field
-        # constrains it, so the rest get a span around the default wide enough
-        # to be worth dragging -- and wide enough to reach every candidate.
-        interesting = [default, *(c["value"] for c in candidates)]
-        low = spec.get("minimum")
-        # gt=0 arrives as exclusiveMinimum, and a slider stopping exactly there
-        # offers a value the model then refuses -- which is the one thing this
-        # endpoint exists to prevent.
-        exclusive_low = spec.get("exclusiveMinimum")
-        high = spec.get("maximum")
-        if not isinstance(default, (int, float)):
-            low = high = None
-        else:
-            if low is None:
-                low = float(exclusive_low) if exclusive_low is not None else None
-            else:
-                low = float(low)
-            if low is None:
-                low = max(0.0, min(interesting) * 0.25)
-            high = max(interesting) * 2.5 if high is None else float(high)
-            if exclusive_low is not None and low <= float(exclusive_low):
-                # One slider step above the bound it may not touch.
-                low = float(exclusive_low) + (high - float(exclusive_low)) / 200
-
-        fields.append(
-            {
-                "name": field_name,
-                "type": "enum" if spec.get("pattern") else ("number" if high else "text"),
-                "default": default,
-                "min": low,
-                "max": high,
-                "pattern": spec.get("pattern"),
-                "description": spec.get("description"),
-                "contested": candidates,
-            }
-        )
-
-    return {
-        "part": part.name,
-        "description": part.description,
-        "fields": fields,
-        "bounds": jsonable_encoder(part.get_bounds()),
-    }
+    try:
+        return params_spec(part)
+    except NoParameters:
+        raise HTTPException(
+            status_code=404, detail=f"Part '{name}' declares no parameters"
+        ) from None
 
 
 def _parse_build_volume(raw: Optional[str]):
@@ -557,58 +518,18 @@ def get_part_checklist(name: str, build_volume: Optional[str] = Query(None)):
     }
 
 
-@app.post("/parts/{name}/validate")
+@app.post("/parts/{name}/validate", response_model=Validation)
 def validate_part_params(name: str, body: Optional[StlGenerateRequest] = None):
     """Check a staged parameter set without rendering anything.
 
-    The step between moving a slider and spending thirty seconds of OpenSCAD on
-    it: the values go through the part's own model, and the envelope they would
-    produce comes back. A set that cannot be rendered is rejected here, where it
-    costs nothing.
+    The step between moving a slider and paying for a render (`apothecary
+    parts generate-stl` measures one): ``validate_staged`` puts the values
+    through the part's own model, and the envelope they would produce comes
+    back. A set that cannot be rendered is rejected here, where it costs
+    nothing.
     """
     part = _load_part_wrapper(name)
-    params = body.params if body else {}
-
-    model_cls = getattr(part, "params_model", None)
-    if model_cls is None:
-        return {"valid": True, "params": {}, "errors": [], "bounds": None}
-
-    unknown = sorted(set(params) - set(model_cls.model_fields))
-    if unknown:
-        return {
-            "valid": False,
-            "params": {},
-            "errors": [{"field": u, "message": "no such parameter"} for u in unknown],
-            "bounds": None,
-        }
-
-    try:
-        validated = model_cls(**params)
-    except ValidationError as exc:
-        return {
-            "valid": False,
-            "params": {},
-            "errors": [
-                {"field": ".".join(str(p) for p in e["loc"]), "message": e["msg"]}
-                for e in exc.errors()
-            ],
-            "bounds": None,
-        }
-
-    staged = {key: getattr(validated, key) for key in params}
-    # The envelope the staged set would produce, so a reader sees the
-    # consequence before paying for the render.
-    try:
-        bounds = part.get_bounds(staged or None)
-    except Exception:  # pragma: no cover - a wrapper that cannot size itself
-        bounds = None
-
-    return {
-        "valid": True,
-        "params": jsonable_encoder(staged),
-        "errors": [],
-        "bounds": jsonable_encoder(bounds),
-    }
+    return validate_staged(part, body.params if body else {})
 
 
 # =============================================================================

@@ -63,29 +63,50 @@ class TestValidationIsCheapAndHonest:
 
 
 class TestStagingReachesTheViewer:
+    """The editor is one, over a *target*: a part from the parts folder, or a
+    piece made from a picture. The target says where a staged set is validated
+    and what Apply does; the staging is the same code for both."""
+
     def test_the_panel_stages_rather_than_applying(self):
         page = client.get("/viewer/sites/parts_library").text
         for marker in ("stagedDiff", "refreshStage", "committedParams", "apply-btn"):
             assert marker in page, marker
 
     def test_a_slider_change_calls_validate_not_generate(self):
-        """`refreshStage` is what a control's handler runs, and it posts to
-        /validate. Only the Apply handler reaches stl/generate.
+        """`refreshStage` is what a control's handler runs, and it posts to the
+        target's validateUrl, which for either target ends in /validate. Only
+        a part target's apply reaches stl/generate; a made piece's PUTs the
+        made route.
         """
         page = client.get("/viewer/sites/parts_library").text
         stage = page[page.index("async refreshStage()") : page.index("bindStageActions")]
-        assert "/validate" in stage
+        assert "target.validateUrl" in stage
         assert "stl/generate" not in stage
+        targets = page[page.index("partTarget(ref) {") : page.index("appendPartPanel(node")]
+        assert targets.count("/validate`") == 2
+        assert targets.count("stl/generate") == 1
+        assert "method: 'PUT'" in targets[targets.index("pieceTarget(name") :]
 
     def test_a_render_commits_what_it_sent(self):
         """Otherwise the next diff is measured against the wrong baseline and
         the panel shows changes that are already in the geometry.
         """
         page = client.get("/viewer/sites/parts_library").text
-        bind = page[page.index("bindStageActions(name)") :]
+        bind = page[page.index("bindStageActions(target)") :]
         bind = bind[: bind.index("// The part's parameters")]
-        assert "regeneratePart" in bind
-        render = page[page.index("async regeneratePart(name)") :]
+        assert "applyEditor" in bind
+        render = page[page.index("async applyEditor(target)") :]
         render = render[: render.index("recomputeWorldBounds")]
-        # What was sent, once the render succeeded: not what the sliders say by then.
+        # What was sent, once the build succeeded: not what the sliders say by then.
         assert "Object.assign(stage.committed, params)" in render
+
+    def test_a_made_piece_gets_the_same_editor_under_its_provenance(self):
+        """Selected appends the editor for a made piece after its picture facts,
+        with the same element ids a part's editor has."""
+        page = client.get("/viewer/sites/garage").text
+        panel = page[page.index("renderSelectedPanel() {") : page.index("bindPictureFacts() {")]
+        assert "this.appendEditor(this.pieceTarget(" in panel
+        assert panel.index("this.shownFacts") < panel.index("this.appendEditor(this.pieceTarget(")
+        editor = page[page.index("appendEditor(target) {") : page.index("openEditor(path) {")]
+        for element in ("part-params", "stage-summary", "apply-btn", "revert-btn", "part-envelope"):
+            assert f'id="{element}"' in editor, element

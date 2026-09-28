@@ -172,7 +172,7 @@ def test_the_loop_at_the_bench_from_the_ring(page, base_url: str, leaves_garage_
 
     # Pinned at the bench: its badge and a frustum looking down onto it.
     _ring_on(page, "workbench")
-    assert _labels(page)[-2:] == ["Camera", "Picture"]
+    assert _labels(page)[-2:] == ["Camera", "Picture"]  # the bench is no part: no Part
     label = _pin_the_camera(page)
     _said(page, f"{label} pinned at workbench")
     expect(page.locator(".world-badge.place-mark[data-host='workbench'].has-camera")).to_be_visible(
@@ -269,7 +269,7 @@ def test_the_loop_at_the_bench_from_the_ring(page, base_url: str, leaves_garage_
     # selection stays on the piece.
     _ring_on(page, piece)
     labels = _labels(page)
-    assert "Camera" not in labels and labels[-1] == "Picture"
+    assert "Camera" not in labels and labels[-2:] == ["Picture", "Part"]
     _press(page, "Why this")
     _said(page, f"made from shape {record['shape_index']}")
     traced = page.evaluate("() => window.apothecaryPictures.traced()")

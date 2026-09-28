@@ -41,6 +41,34 @@ class ScaleUnknown(ValueError):
     """A real-world size was asked for and the reference could not supply one."""
 
 
+def sides_as_found(
+    shape: "FoundShape", per_unit: Optional[float], tallness: float
+) -> Tuple[float, float]:
+    """The shape's two sides as the finder saw them: millimetres at ``per_unit``,
+    fractions of the picture without one, each at least ``MIN_THICKNESS``.
+
+    Its own long and short side when the finder measured them, else its
+    upright box. A bar lying at 35° has an upright box far larger than the
+    bar, and building that box would be building the wrong object.
+    """
+    factor = per_unit if per_unit is not None else 1.0
+    if shape.measured_sides:
+        return (
+            max(shape.long_side * factor, MIN_THICKNESS),
+            max(shape.short_side * factor, MIN_THICKNESS),
+        )
+    return (
+        max(shape.width * factor, MIN_THICKNESS),
+        max(shape.height * tallness * factor, MIN_THICKNESS),
+    )
+
+
+def thickness_guess(width: float, depth: float) -> float:
+    """A flat shape's thickness, guessed: ``THICKNESS_GUESS`` of its shorter side,
+    never below ``MIN_THICKNESS``. A picture from above cannot see it."""
+    return max(min(width, depth) * THICKNESS_GUESS, MIN_THICKNESS)
+
+
 def picture_to_site(
     picture: Picture,
     *,
@@ -177,16 +205,8 @@ def piece_from_shape(
         width, depth, thickness = size.width, size.depth, size.height
         sized = sized and size.sized
     else:
-        # Prefer the shape's own sides over its upright box. A bar lying at 35°
-        # has an upright box far larger than the bar, and building that box
-        # would be building the wrong object.
-        if shape.measured_sides:
-            width = max(shape.long_side * factor, MIN_THICKNESS)
-            depth = max(shape.short_side * factor, MIN_THICKNESS)
-        else:
-            width = max(shape.width * factor, MIN_THICKNESS)
-            depth = max(shape.height * tallness * factor, MIN_THICKNESS)
-        thickness = max(min(width, depth) * THICKNESS_GUESS, MIN_THICKNESS)
+        width, depth = sides_as_found(shape, per_unit, tallness)
+        thickness = thickness_guess(width, depth)
 
     piece = chosen.make(name, WordShape(width=width, depth=depth, height=thickness, sized=sized))
 
@@ -259,4 +279,6 @@ __all__ = [
     "build",
     "picture_to_site",
     "piece_from_shape",
+    "sides_as_found",
+    "thickness_guess",
 ]

@@ -8,21 +8,32 @@ reads a file and may be slow, and the store's lock is never held across it:
 
 - ``POST /sites/{s}/looks`` ``{host, picture, camera?, finder?, mm_across?}``
   finds the shapes in a picture under the picture root and pins the look.
-- ``PUT /sites/{s}/looks/{id}/scale`` ``{mm_across} | {known_index, mm}`` sizes
-  a look, and stores the width it comes to on the look's camera, so the next
-  look from that camera is sized alike.
 - ``DELETE /sites/{s}/looks/{id}`` unpins a look; its picture and pieces stay.
 - ``GET /sites/{s}/attached``: a site's cameras, looks and made pieces, in one.
 - ``GET /placed``: every site's cameras, boards and looks, each a row to take back.
 
+A made piece is a part (``vision/piece.py``), and answers the parameter contract
+a part from the parts folder answers (``projects/parts/params.py``):
+
+- ``GET /sites/{s}/made/{piece}/params``: its fields, defaults and the
+  candidates its provenance offers, as ``GET /parts/{name}/params`` does.
+- ``POST /sites/{s}/made/{piece}/validate`` ``{params}``: a staged set checked
+  and the envelope it would produce, as ``POST /parts/{name}/validate`` does.
+- ``GET /sites/{s}/made/{piece}/scad``: the few lines of SCAD its geometry is.
+
 ``async def``, one at a time on the event loop, as api.py's rule for routes that
 change a site says; each answers with the site as ``GET /sites/{s}`` does:
 
+- ``PUT /sites/{s}/looks/{id}/scale`` ``{mm_across} | {known_index, mm}`` sizes
+  a look, stores the width it comes to on the look's camera, so the next look
+  from that camera is sized alike, and rebuilds every piece made from it whose
+  sides no person stated (``rebuilt`` names them).
 - ``PUT /sites/{s}/looks/{id}/shapes/{i}`` ``{word}``: a person's word for a
   shape; on a made shape it rebuilds the piece in place.
 - ``POST /sites/{s}/looks/{id}/make`` ``{shape} | {all: true}``: pieces from
   shapes, skipping the shapes already made.
-- ``PUT /sites/{s}/made/{piece}`` ``{word?, parameters?}`` and ``DELETE
+- ``PUT /sites/{s}/made/{piece}`` ``{params: {word?, width?, depth?, height?}}``
+  (the editor's), or ``{word?, parameters?}`` (the ring's Word), and ``DELETE
   /sites/{s}/made/{piece}`` (Drop): keyed by the piece, so they work after its
   look is unpinned or its picture forgotten.
 """
@@ -31,15 +42,19 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from ..hierarchy import Assembly
+from ..projects.parts.params import ParamsSpec, Validation, params_spec, validate_staged
+from ..projects.parts.stl_renderer import geometry_scad
 from ..vision import looks as looking
 from ..vision.looks import Look, Made
 from ..vision.models import FoundShape, ScaleReference
+from ..vision.piece import SIDES, MadePart
 
 router = APIRouter(tags=["looks"])
 
@@ -129,9 +144,13 @@ def look_row(look: Look, site: Optional[Assembly]) -> Dict[str, object]:
 
 
 def made_view(record: Made, pinned: bool) -> Dict[str, object]:
+    """A made piece as the page reads it: its provenance, and beside the sides it
+    has (``parameters``) the sides the finder found (``found``), so the page can
+    say whose the size is."""
     view = record.model_dump(mode="json")
     view["shape"] = shape_view(record.shape)
     view["look_pinned"] = pinned
+    view["found"] = looking.found_size(record)
     return view
 
 
@@ -299,12 +318,19 @@ class ScaleBody(BaseModel):
 
 
 @router.put("/sites/{site_name}/looks/{look_id}/scale")
-def size_look(site_name: str, look_id: str, body: ScaleBody):
-    """Size a look; the width it comes to is stored on its camera as the next look's."""
+async def size_look(site_name: str, look_id: str, body: ScaleBody):
+    """Size a look; the width it comes to is stored on its camera as the next look's.
+
+    Every piece made from the look whose sides no person stated is rebuilt at
+    the new width, in place, and laid on its shape again if it still stands
+    where it was made (``rebuilt`` names them; ``site`` is the site as it is
+    now). A piece whose sides a person stated keeps them, and the scale it was
+    made at, in its provenance. ``async def``: a rebuild changes the site."""
     from ..vision.models import Picture
     from .pictures import set_camera_width
 
     look = _look_or_404(site_name, look_id)
+    site = _site(site_name)
     if body.mm_across is not None:
         scale, mm_across = {"mm_across": body.mm_across}, body.mm_across
     else:
@@ -334,7 +360,12 @@ def size_look(site_name: str, look_id: str, body: ScaleBody):
         raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
     if look.camera:
         set_camera_width(look.camera, mm_across)
-    return _view(site_name, look)
+    rebuilt = looking.rescale_made(site_name, site, look)
+    return {
+        **look_view(look, site, looking.store().made_at(site_name)),
+        "rebuilt": rebuilt,
+        "site": _site_answer(site_name, site) if rebuilt else None,
+    }
 
 
 @router.delete("/sites/{site_name}/looks/{look_id}")
@@ -483,13 +514,21 @@ class Parameters(BaseModel):
 
 
 class RebuildBody(BaseModel):
+    """What to rebuild a made piece with: the editor's ``params`` (any of the
+    piece's fields; the rest stay as they are), or the ring's ``word``, or all
+    three sides as ``parameters``."""
+
     word: Optional[str] = Field(None, min_length=1, max_length=64)
     parameters: Optional[Parameters] = None
+    params: Optional[Dict[str, Any]] = None
 
     @model_validator(mode="after")
     def _something(self) -> "RebuildBody":
-        if self.word is None and self.parameters is None:
-            raise ValueError("give a word, or parameters (width, depth, height in mm)")
+        if self.word is None and self.parameters is None and self.params is None:
+            raise ValueError(
+                "give params (word, width, depth, height), a word, or parameters "
+                "(width, depth, height in mm)"
+            )
         if self.word is not None:
             WordBody(word=self.word)
         return self
@@ -502,25 +541,92 @@ def _made_or_404(site_name: str, piece: str) -> Made:
         raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
 
 
+def _made_part(site_name: str, piece: str) -> MadePart:
+    return MadePart.of(_made_or_404(site_name, piece))
+
+
+@router.get("/sites/{site_name}/made/{piece}/params", response_model=ParamsSpec)
+def made_params(site_name: str, piece: str):
+    """What a made piece accepts, in the form ``GET /parts/{name}/params`` answers:
+    its word and sides, defaulting to what it is now, and its provenance as the
+    candidates a person can turn to."""
+    return params_spec(_made_part(site_name, piece))
+
+
+class StagedParams(BaseModel):
+    params: Dict[str, Any] = Field(default_factory=dict)
+
+
+@router.post("/sites/{site_name}/made/{piece}/validate", response_model=Validation)
+def validate_made(site_name: str, piece: str, body: Optional[StagedParams] = None):
+    """Check a staged set against the piece's own model, as ``POST
+    /parts/{name}/validate`` does: an unknown field or a side of nothing is
+    refused here, where it costs nothing, and a valid set says the box it
+    would occupy."""
+    return validate_staged(_made_part(site_name, piece), body.params if body else {})
+
+
+@router.get("/sites/{site_name}/made/{piece}/scad", response_class=PlainTextResponse)
+def made_scad(site_name: str, piece: str):
+    """The SCAD a made piece's geometry renders to: a few lines, the word's body
+    shifted onto its middle and turned as the shape was seen."""
+    part = _made_part(site_name, piece)
+    text = geometry_scad(part, {})
+    assert text is not None  # a made piece is always built from its geometry
+    return PlainTextResponse(text)
+
+
+def _normalised(part: MadePart, body: RebuildBody) -> Dict[str, object]:
+    """``params`` as ``word`` and ``parameters``: only what differs from the piece
+    is a change, so applying a staged set that touched one side states one side's
+    worth, and leaves the word the table's. Refused (422) for an unknown field or
+    a side of nothing."""
+    if body.params is None:
+        return {
+            "word": body.word,
+            "parameters": body.parameters.model_dump() if body.parameters else None,
+        }
+    try:
+        given = part.validate_overrides(body.params)
+    except ValueError as refused:
+        raise HTTPException(status_code=422, detail=str(refused)) from None
+    record = part.record
+    word = given.get("word")
+    if word == record.word:
+        word = None
+    sides = {side: given[side] for side in SIDES if side in given}
+    parameters = None
+    if any(sides[side] != record.parameters[side] for side in sides):
+        parameters = {**record.parameters, **sides}
+    if body.word is not None:
+        word = body.word
+    if body.parameters is not None:
+        parameters = body.parameters.model_dump()
+    return {"word": word, "parameters": parameters}
+
+
 @router.put("/sites/{site_name}/made/{piece}")
 async def rebuild_made(site_name: str, piece: str, body: RebuildBody):
-    """Rebuild a made piece in place, by another word or a person's parameters."""
+    """Rebuild a made piece in place: by the editor's staged set, by another word,
+    or by a person's sides. Its name and position stay; the answer carries its
+    provenance as it is now (``found`` beside ``parameters``), the box it
+    occupies (``bounds``) and the site."""
     site = _site(site_name)
-    _made_or_404(site_name, piece)
-    try:
-        record = looking.rebuild(
-            site_name,
-            site,
-            piece,
-            word=body.word,
-            parameters=body.parameters.model_dump() if body.parameters else None,
-        )
-    except looking.NotMade as missing:
-        raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
+    change = _normalised(_made_part(site_name, piece), body)
+    if change["word"] is None and change["parameters"] is None:
+        record = _made_or_404(site_name, piece)  # nothing differs: nothing to rebuild
+    else:
+        try:
+            record = looking.rebuild(
+                site_name, site, piece, word=change["word"], parameters=change["parameters"]
+            )
+        except looking.NotMade as missing:
+            raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
     pinned = {lk.id for lk in looking.store().looks_at(site_name)}
     return {
         "piece": piece,
         "provenance": made_view(record, record.look in pinned),
+        "bounds": MadePart.of(record).get_bounds().model_dump(),
         "site": _site_answer(site_name, site),
     }
 
