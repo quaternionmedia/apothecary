@@ -503,7 +503,10 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "jobFormEl:submit:createJob": (WIDGET, WHAT_IS_THERE, "sending the job form"),
     "posAxis:change:recomputeWorldBounds": (WIDGET, WHAT_IS_THERE, "typing a position"),
     "statusSelect:change:submitStatus": (WIDGET, WHAT_IS_THERE, "choosing a state"),
-    "regenerateBtn:click:regeneratePart": (WIDGET, WHAT_IS_THERE, "the rebuild button"),
+    # The editor's Regenerate STL: the staged set applied to its target, a
+    # part's STL rendered again (a made piece has no such button: Apply is its
+    # rebuild).
+    "regenerateBtn:click:applyEditor": (WIDGET, WHAT_IS_THERE, "the rebuild button"),
     "jobBtn:click:assignJob": (WIDGET, WHAT_IS_THERE, "giving a job to a machine"),
     "jobBtn:click:completeJob": (WIDGET, WHAT_IS_THERE, "finishing a job"),
     "zoomInLink:click:zoomIn": (WIDGET, WHAT_YOU_SEE, "the go-in button on the chosen piece"),

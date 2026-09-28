@@ -19,7 +19,8 @@
  * mountPictures({ base, marks, world, log }):
  *   marks: the handle mountPictureMarks returned;
  *   world: siteName(), select(host), stepOut(), focusWidth(), openPanel(id),
- *          frameFloor(), rendered();
+ *          frameFloor(), rendered(), applySite(site) (the site as an answer
+ *          carries it, drawn again: a re-scale may have rebuilt made pieces);
  *   log(text, kind): the page's status bar; kind "bad" is a refusal.
  */
 
@@ -292,9 +293,14 @@ export function mountPictures({ base = "", marks, world, log }) {
         const byShape = chosen && chosen.look === drawn.id;
         const body = byShape ? { known_index: chosen.index, mm } : { mm_across: mm };
         const sized = await api(`${siteUrl()}/looks/${encodeURIComponent(drawn.id)}/scale`, { method: "PUT", body: JSON.stringify(body) });
-        await marks.refresh();
+        // Pieces made from the look whose sides nobody stated were rebuilt at the
+        // new width: the site is drawn as it is now (which fetches the marks too).
+        const rebuilt = sized.rebuilt || [];
+        if (rebuilt.length && sized.site && world.applySite) await world.applySite(sized.site);
+        else await marks.refresh();
         if (byShape) marks.choose(drawn.id, chosen.index);
-        say(`${drawn.picture}: ${Math.round(sized.mm_across)} mm across${byShape ? `, from shape ${chosen.index}'s long side` : ""}; Picture › Make makes its shapes`);
+        const followed = rebuilt.length ? `; ${rebuilt.length} made piece(s) rebuilt at that width: ${rebuilt.join(", ")}` : "";
+        say(`${drawn.picture}: ${Math.round(sized.mm_across)} mm across${byShape ? `, from shape ${chosen.index}'s long side` : ""}${followed}; Picture › Make makes its shapes`);
     }
 
     // --- what the ring is told -------------------------------------------------------------

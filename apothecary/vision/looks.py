@@ -159,7 +159,14 @@ def found_size(record: Made) -> Dict[str, float]:
     width, depth = sides_as_found(
         record.shape, record.mm_across, record.pixel_height / record.pixel_width
     )
-    return {"width": width, "depth": depth, "height": thickness_guess(width, depth)}
+    # To a nanometre: a fraction of the picture times a width in millimetres
+    # carries a floating-point tail no finder measured, and a candidate reads
+    # as the number it is.
+    return {
+        "width": round(width, 6),
+        "depth": round(depth, 6),
+        "height": round(thickness_guess(width, depth), 6),
+    }
 
 
 def _same_size(a: Dict[str, float], b: Dict[str, float]) -> bool:
