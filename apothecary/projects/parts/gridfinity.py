@@ -162,9 +162,10 @@ class GridfinityBinPart(BasePart):
         if include_lip:
             height += STACKING_LIP_MM
 
+        # The library centres a bin on X and Y and stands it on Z = 0.
         return BoundingBox3D(
-            min_point=Vector3D(x=0, y=0, z=0),
-            max_point=Vector3D(x=width_x, y=width_y, z=height),
+            min_point=Vector3D(x=-width_x / 2, y=-width_y / 2, z=0),
+            max_point=Vector3D(x=width_x / 2, y=width_y / 2, z=height),
         )
 
     def scad_overrides(self, params: Mapping[str, Any]) -> Dict[str, Any]:

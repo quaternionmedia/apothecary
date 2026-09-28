@@ -12,14 +12,17 @@ editing this code and having that edit reviewed:
    process could smuggle data out without a connection. It is installed when
    the ``apothecary`` package is imported, so every apothecary process -- the
    server, the CLI, the docs generator's server, the tests -- is under it
-   before any of its code runs. The one allowance is a *tool fetch*: the
-   firmware installer downloads arduino-cli, and it does so through
+   before any of its code runs. The one allowance is a *tool fetch*, and it
+   has two callers: the firmware installer downloads arduino-cli, and the
+   OpenSCAD installer (apothecary/openscad_installer.py) downloads a
+   development snapshot from files.openscad.org. Both go through
    ``tool_fetch()``, which admits, for the duration of that one call on that
    one thread, connections to the fixed hosts in ``TOOL_SOURCES`` -- by name,
    or by an address the guarded resolver returned for one of them -- and
-   nowhere else, with no proxy in the way. A tool fetch is a GET of a release archive
-   at a URL built from a version string; no personal data is in it, and a
-   test holds the callers of ``tool_fetch`` to the installer alone.
+   nowhere else, with no proxy in the way. A tool fetch is a GET of a release
+   archive at a URL built from a version string, three numbers (an OpenSCAD
+   snapshot's version is its date, three numbers too); no personal data is in
+   it, and a test holds the callers of ``tool_fetch`` to the two installers.
 
 2. **The server refuses to listen anywhere but this machine, and refuses
    anyone who is not on it.** ``require_loopback()`` is what every ``--host``
@@ -77,7 +80,8 @@ from urllib.parse import urlsplit
 LOOPBACK_NAMES = frozenset({"localhost", "127.0.0.1", "::1", "0:0:0:0:0:0:0:1", "ip6-localhost"})
 
 # The fixed hosts a tool fetch may reach: arduino-cli's releases (the API
-# that names the latest, the archive, and where GitHub redirects the archive).
+# that names the latest, the archive, and where GitHub redirects the archive),
+# and OpenSCAD's snapshots (the listing, a night's AppImage, its checksum).
 TOOL_SOURCES = frozenset(
     {
         "api.github.com",
@@ -85,6 +89,7 @@ TOOL_SOURCES = frozenset(
         "objects.githubusercontent.com",
         "release-assets.githubusercontent.com",
         "downloads.arduino.cc",
+        "files.openscad.org",
     }
 )
 
@@ -369,7 +374,8 @@ class tool_fetch:
     ``with tool_fetch(url):`` checks the URL's host is one of ``TOOL_SOURCES``
     before anything is opened, then lets the sockets underneath the fetch
     reach those hosts (and only those; a redirect elsewhere is refused). The
-    firmware installer is the only caller; a test holds it to that.
+    firmware installer and the OpenSCAD installer are the only callers; a
+    test holds it to those two.
     """
 
     def __init__(self, url: str, sources: Iterable[str] = TOOL_SOURCES):

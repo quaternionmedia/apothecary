@@ -191,7 +191,7 @@ def test_this_machine_is_still_reachable(loopback_port):
 
 
 def test_a_tool_fetch_reaches_its_sources_and_nothing_else(monkeypatch):
-    """The firmware installer's download is the one connection past this machine:
+    """An installer's download is the one kind of connection past this machine:
     to fixed hosts, for the duration of one call on one thread, and a redirect
     elsewhere is refused mid-fetch."""
     reached = []
@@ -270,6 +270,70 @@ def test_a_tool_fetch_takes_no_proxy_and_a_version_is_three_numbers(monkeypatch)
     for bad in ("../../other/repo/releases/download/v1", "1.5", "1.5.1/../x", "latest;rm"):
         with pytest.raises(installer.ToolchainError, match="not an arduino-cli version"):
             installer.resolve_version(bad, fetch=lambda url: b"")
+
+
+def _callers_of_tool_fetch() -> set:
+    """Every module under apothecary/ that names ``tool_fetch``, read from the source."""
+    import ast
+
+    found = set()
+    for source in PACKAGE.rglob("*.py"):
+        if source.name == "stays_local.py" and source.parent == PACKAGE:
+            continue
+        tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+        for node in ast.walk(tree):
+            named = (isinstance(node, ast.Name) and node.id == "tool_fetch") or (
+                isinstance(node, ast.Attribute) and node.attr == "tool_fetch"
+            )
+            imported = isinstance(node, ast.ImportFrom) and any(
+                alias.name == "tool_fetch" for alias in node.names
+            )
+            if named or imported:
+                found.add(source.relative_to(ROOT).as_posix())
+    return found
+
+
+def test_a_tool_fetch_has_two_callers_the_two_installers():
+    """The record allows one kind of connection past this machine, by two callers:
+    the firmware installer (arduino-cli) and the OpenSCAD installer (a snapshot
+    from files.openscad.org). A third is a change to the record first."""
+    assert _callers_of_tool_fetch() == {
+        "apothecary/firmware/installer.py",
+        "apothecary/openscad_installer.py",
+    }
+    assert "files.openscad.org" in stays_local.TOOL_SOURCES
+
+
+def test_the_openscad_installer_fetches_from_its_source_alone_by_a_date(monkeypatch):
+    """A host that is not a tool source is refused before anything is opened; a
+    snapshot's version is its date, three numbers, spliced into the URL."""
+    from apothecary import openscad_installer
+
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:9")
+    opened = {}
+
+    class Opener:
+        def open(self, req, timeout=None):
+            opened["url"] = req.full_url
+            raise OSError("not reached")
+
+    def build_opener(*handlers):
+        assert len(handlers) == 1
+        assert isinstance(handlers[0], openscad_installer.urllib.request.ProxyHandler)
+        assert handlers[0].proxies == {}
+        return Opener()
+
+    monkeypatch.setattr(openscad_installer.urllib.request, "build_opener", build_opener)
+    with pytest.raises(stays_local.LeftTheMachine):
+        openscad_installer._fetch("https://evil.example/snapshots/")
+    assert opened == {}
+    with pytest.raises(OSError, match="not reached"):
+        openscad_installer._fetch(openscad_installer.SNAPSHOTS)
+    assert opened["url"] == "https://files.openscad.org/snapshots/"
+    assert openscad_installer.check_date("2026.09.27") == "2026.09.27"
+    for bad in ("../../x", "2026.9.27", "2026.09.27/../x", "latest;rm", "2026.09"):
+        with pytest.raises(openscad_installer.InstallError, match="not an OpenSCAD snapshot date"):
+            openscad_installer.check_date(bad)
 
 
 def test_require_loopback_accepts_this_machine_only():
