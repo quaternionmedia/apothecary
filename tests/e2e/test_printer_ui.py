@@ -922,12 +922,21 @@ def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
     expect(machine.locator("#c-state")).to_contain_text("idle", timeout=WITHIN_A_POLL)
     before = page.evaluate("() => window.fractalViewer.marks['printer_1'].marks.target()")
     machine.locator("#control button[data-step='10']").click()
-    machine.locator("#control button[data-jog='X+']").click()
-    page.wait_for_function(
-        "(bx) => window.fractalViewer.marks['printer_1'].marks.target().x === bx + 10",
-        arg=before["x"],
-        timeout=1500,
+    # Ahead of the poll, by mechanism rather than by the clock: where the marker
+    # stands at the moment the jog's own event is dispatched, before any poll can
+    # answer. (A wall-clock bound here measured the machine's load, not the page.)
+    page.evaluate(
+        """() => {
+            window.__atJog = null;
+            window.addEventListener('apothecary:position', (ev) => {
+                if (ev.detail && ev.detail.source === 'jog' && window.__atJog === null)
+                    window.__atJog = window.fractalViewer.marks['printer_1'].marks.target().x;
+            });
+        }"""
     )
+    machine.locator("#control button[data-jog='X+']").click()
+    page.wait_for_function("() => window.__atJog !== null", timeout=8000)
+    assert page.evaluate("() => window.__atJog") == before["x"] + 10
     expect(log.locator("#log .tx.control", has_text="G1 X10 F3000").last).to_be_visible(
         timeout=8000
     )
