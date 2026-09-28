@@ -316,6 +316,7 @@ class SnapshotInstaller:
         home = openscad_dir()
         home.mkdir(parents=True, exist_ok=True)
         staging = Path(tempfile.mkdtemp(prefix=f".{date}.", suffix=".tmp", dir=home))
+        staging.chmod(0o755)  # mkdtemp makes it the owner's alone; it is a tools directory
         try:
             exe = staging / _exe_name()
             exe.write_bytes(body)

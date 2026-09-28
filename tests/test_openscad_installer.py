@@ -91,6 +91,7 @@ def test_the_newest_snapshot_is_installed_verified_and_made_current(tools):
     path = oi.SnapshotInstaller(fetch=host, log=log.append).install()
     assert path == tools / "2026.09.27" / "openscad"
     assert path.stat().st_mode & 0o111
+    assert path.parent.stat().st_mode & 0o777 == 0o755
     assert (tools / "current").read_text().strip() == "2026.09.27"
     assert oi.current_executable() == path
     assert host.urls == [
