@@ -347,6 +347,10 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
         [str(tmp_path / "shelf.png"), str(tmp_path / "shelf_again.png")]
     )
     expect(gathering.locator("#pic-list .pic")).to_have_count(pictures_before + 2, timeout=8000)
+    # Kept and pinned nowhere: the message names the step that pins one.
+    expect(page.locator("#status")).to_contain_text(
+        "added 2 picture(s) on this machine: Picture › Folder pins one at a place as a view"
+    )
     page.evaluate("() => window.apothecaryPanels.close('camera')")
     kept_pictures = kept.locator("#kept-pictures .kept-row.picture")
     expect(kept_pictures).to_have_count(kept_before + 2, timeout=5000)
@@ -387,7 +391,9 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
         "kept as they were named under the picture folder's uploads/. Each row "
         "names its site and carries the button that takes it back, from here, "
         "without switching to that site; a pin whose site or piece is gone is "
-        "shown as such, and this is the one place it can be seen.",
+        "shown as such, and this is the one place it can be seen. A picture kept "
+        "and pinned nowhere waits for Picture › Folder, which the status bar names, "
+        "to pin it at a place as a view.",
     )
 
     page.evaluate("() => window.apothecaryPanels.dock('kept', 'right')")

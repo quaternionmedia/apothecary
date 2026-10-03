@@ -78,7 +78,9 @@ export function mountCamera(root, { base = "", world = null, log = null } = {}) 
                 kept.push(body);
             } catch (e) { refused.push(`${file.name}: ${e.message}`); }
         }
-        say(`added ${kept.length} picture(s) on this machine` + (refused.length ? ` — refused: ${refused.join("; ")}` : ""), refused.length ? "bad" : "");
+        // Kept and pinned nowhere: the next step is pinning one at a place as a view.
+        const next = kept.length ? ": Picture › Folder pins one at a place as a view" : "";
+        say(`added ${kept.length} picture(s) on this machine${next}` + (refused.length ? ` — refused: ${refused.join("; ")}` : ""), refused.length ? "bad" : "");
         await loadPictures();
         if (world && world.kept) world.kept();
         return kept;

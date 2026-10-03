@@ -73,7 +73,7 @@ esp32_blink is a sketch and the board it runs on, drawn as the board: the descri
 
 ## 9. A camera pinned at the bench is drawn there
 
-Pinned from the bench's own ring -- Camera, Pin here, and this browser's camera by its name -- the camera gets a place badge above the bench and a frustum looking down onto its top, kept on the server so every browser looking at this site sees it standing there.
+Pinned from the bench's own ring -- Camera, Pin here, and this browser's camera by its name -- the camera gets a place badge above the bench and a frustum looking down onto its top, kept on the server so every browser looking at this site sees it standing there. The status bar names the next step, Camera › Take picture, which keeps a frame and pins it at the bench as a view.
 
 ![A camera pinned at the bench is drawn there](screenshots/12-09-a-camera-pinned-at-the-bench-is-drawn-there.png)
 
@@ -93,7 +93,7 @@ GET /cameras?site=garage -> []
 
 ## 12. What the browser put here, it can take back
 
-Kept lists what a page pinned -- cameras, looks, boards -- every site's, and the pictures the browser kept, the ones added from the file picker kept as they were named under the picture folder's uploads/. Each row names its site and carries the button that takes it back, from here, without switching to that site; a pin whose site or piece is gone is shown as such, and this is the one place it can be seen.
+Kept lists what a page pinned -- cameras, views, boards -- every site's, and the pictures the browser kept, the ones added from the file picker kept as they were named under the picture folder's uploads/. Each row names its site and carries the button that takes it back, from here, without switching to that site; a pin whose site or piece is gone is shown as such, and this is the one place it can be seen. A picture kept and pinned nowhere waits for Picture › Folder, which the status bar names, to pin it at a place as a view.
 
 ![What the browser put here, it can take back](screenshots/12-12-what-the-browser-put-here-it-can-take-back.png)
 
