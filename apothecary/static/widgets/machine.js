@@ -386,13 +386,14 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
         if (!port || state.inFlight === gen) return;
         state.inFlight = gen;  // per generation: a new port's first poll is never skipped
         try {
+            const mark = latchMark();
             const st = await api(`/firmware/printers/status?port=${encodeURIComponent(port)}`);
             if (gen !== state.gen) return;  // the user switched ports meanwhile
             state.status = st; pushHistory(st); renderStatus(); renderChart();
             if (st.position) emit("apothecary:position", { position: st.position, source: "poll", port });
             emit("apothecary:printer-status", st);  // the world's rows, badges and marks read this
             followJob(st);
-            if (st.control) applyControlState(st.control);
+            if (st.control && latchFresh(mark)) applyControlState(st.control);
             const hadLink = !!(state.info && state.info.link);
             if (!state.info || hadLink !== !!st.held) {
                 // The link came or went (a failed poll drops it): refresh the
@@ -417,11 +418,12 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
     async function loadInfo() {
         const port = state.port, gen = state.gen;
         if (!port) { state.info = null; renderBoard(); return; }
+        const mark = latchMark();
         const info = await api(`/firmware/printers/info?port=${encodeURIComponent(port)}`);
         if (gen !== state.gen) return;
         state.info = info;
         if (info.last_status && !state.status) { state.status = info.last_status; }
-        applyControlState(info.control);
+        if (latchFresh(mark)) applyControlState(info.control);
         renderStatus();
     }
 
@@ -495,7 +497,12 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
     };
 
     // --- control latch + pad ---------------------------------------------------------------
-    const ctl = { armed: false, until: 0, step: 10, timer: null };
+    // `asked` counts arm and disarm requests, `pending` the ones in flight: an
+    // answer carries the latch as it was when it was asked for, so one asked
+    // before the latest arm or disarm, or while one is in flight, is stale.
+    const ctl = { armed: false, until: 0, step: 10, timer: null, asked: 0, pending: 0 };
+    const latchMark = () => ctl.asked;
+    const latchFresh = (mark) => mark === ctl.asked && ctl.pending === 0;
     function renderControl() {
         const left = Math.max(0, Math.round((ctl.until - Date.now()) / 1000));
         if (ctl.armed && left <= 0) { ctl.armed = false; }
@@ -514,8 +521,10 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
     }
     async function arm(on) {
         if (!state.port) { $("ctl").checked = false; return; }
+        ctl.asked++; ctl.pending++;
         try { applyControlState(await post("/firmware/printers/control", { port: state.port, armed: on })); }
         catch (e) { logLine("sys", "control: " + e.message); applyControlState(null); }
+        finally { ctl.pending--; }
         await pullLog().catch(() => {});
     }
     function fillTemplate(cmd) {
@@ -534,8 +543,9 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
         for (const command of lines) {
             sent.textContent = "> " + command; sent.classList.remove("bad");
             try {
+                const mark = latchMark();
                 const r = await post("/firmware/printers/command", { port: state.port, command });
-                applyControlState(r.control);
+                if (latchFresh(mark)) applyControlState(r.control);
             } catch (e) {
                 sent.textContent = `${command}: ${e.message}`; sent.classList.add("bad");
                 if (/not armed/.test(e.message)) applyControlState(null);

@@ -429,6 +429,40 @@ def test_board_inside_the_printer_drives_it(page: Page, printer_url: str):
 
 
 @pytest.mark.e2e
+def test_a_poll_answered_after_arming_does_not_disarm_the_page(page: Page, printer_url: str):
+    """A poll asked before Control is armed carries the latch as it was then
+    (disarmed). If its answer lands after the arm's, the page must not take it:
+    the server is armed, and the pad stays open."""
+    page.goto(f"{printer_url}/firmware/monitor?port=/dev/ttyFAKE1")
+    expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
+    page.locator("#auto").uncheck()  # only the poll this test sends
+
+    # The poll's answer is read at once (disarmed) and handed to the page late,
+    # after the arm has answered: inside the page, so the arm is not held up.
+    page.evaluate(
+        """() => {
+            const real = window.fetch;
+            window.__held = 0;
+            window.fetch = async (url, opts) => {
+                const r = await real(url, opts);
+                if (String(url).includes('/firmware/printers/status')) {
+                    window.__held++;
+                    await new Promise((ok) => setTimeout(ok, 1500));
+                }
+                return r;
+            };
+        }"""
+    )
+    page.locator("#poll").click()
+    page.locator("#ctl").click()
+    expect(page.locator("#control")).to_be_visible(timeout=5000)
+    page.wait_for_timeout(2500)  # the held answer has landed by now
+    assert page.evaluate("() => window.__held") >= 1, "the poll was not held"
+    assert page.locator("#ctl").is_checked()
+    expect(page.locator("#control")).to_be_visible()
+    page.locator("#ctl-disarm").click()
+
+
 def test_control_overlay_is_latched(page: Page, printer_url: str):
     """Nothing heats or moves until Control is armed; armed, the effect shows within a poll."""
     page.goto(f"{printer_url}/firmware/monitor?port=/dev/ttyFAKE1")
