@@ -59,6 +59,7 @@ One line per change, each with a link to where it is described. The format follo
 
 ### Changed
 
+- `apothecary photo look` is `apothecary photo find`, the viewer's Find shapes; the old name prints the new one and exits 1, for one release.
 - A picture pinned at a place is a view: `/sites/{s}/views`, `views` in every answer, Picture › Views, and Camera › Look is Camera › Take picture. ([plan](docs/plans/consolidation-2026-10-03.md))
 - Taking and finding are two steps: Take picture, a drop, a paste, Picture › Add and Folder pin a view and find nothing; Picture › Find shapes (`POST /sites/{s}/views/{id}/find`) finds its shapes, with a finder to choose where several can read the picture. ([code](apothecary/routes/views.py))
 - Make and Make all refuse a view whose shapes are not found or that has no width, naming the step that comes first. ([code](apothecary/vision/views.py))

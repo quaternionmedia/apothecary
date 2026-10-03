@@ -286,7 +286,7 @@ picture-shaped is stored in the browser, its HTTP cache included.
 | `/photos/pictures*` | Stay; `POST` gains `site`, `host`, `camera` (keep and pin in one request); forget and purge cascade | §6's file layer, now joined |
 | `/cameras` | Stay; `PUT` gains `mm_across` and accepts the floor | The pin store is right |
 | Board pin routes, Selected › Device | Unchanged; listed through `GET /placed` | Firmware's own |
-| `photo look / build / words / finders / check` | Stay; `build` uses `piece_from_shape` | Terminal tools, not windows |
+| `photo find / build / words / finders / check` | Stay; `build` uses `piece_from_shape` | Terminal tools, not windows |
 | `photo view`, `photo gather --open` | Deleted (Phase 1 for `--open`, Phase 7 for `view`): `apothecary serve`, then drop the file on a structure | Each starts a second server on the same port and can cover a built-in site |
 | `photo gather`, `gather-check`, the gathering map | The `[photos]` extra | Decided |
 | Walkthroughs 11 and 12 | Rewritten to drive the world, not `page.request` | Chapter 11's captions for steps 14-15 say more than its screenshots show |
@@ -749,5 +749,5 @@ offset, inherited like `mm_across`, is the follow-up if that proves costly);
 pictures standing upright on a wall; looks below the root; a gathering face
 in the browser (when the extra grows one, it pins a look at a host, never a
 site); a finder chosen by a model; persistence across restart, until the
-record allows it; the CLI's `photo look` and `build` reading paths outside
+record allows it; the CLI's `photo find` and `build` reading paths outside
 the picture root.

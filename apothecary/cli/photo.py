@@ -16,6 +16,7 @@ from pydantic import ValidationError
 from ..vision import ScaleReference, get, names
 from ..vision import build as build_arrangement
 from ..vocabulary import starter_words, word_for
+from .retired import retired
 from .server import _loopback_or_die, run_server
 
 
@@ -63,7 +64,7 @@ def _scale_or_explain(**given) -> ScaleReference:
         ) from None
 
 
-@photo.command("look")
+@photo.command("find")
 @click.argument("image", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option(
     "--finder",
@@ -73,7 +74,7 @@ def _scale_or_explain(**given) -> ScaleReference:
     "hand-written description sitting beside the picture.",
 )
 @click.option("--as-json", is_flag=True, help="Print the full result instead of a summary.")
-def look(image: Path, finder: str, as_json: bool):
+def find_shapes(image: Path, finder: str, as_json: bool):
     """Report the flat shapes found in a picture.
 
     Nothing is measured. Positions come back as fractions of the picture,
@@ -102,6 +103,10 @@ def look(image: Path, finder: str, as_json: bool):
     click.echo("")
     click.echo("Nothing above is a measurement. To get millimetres, use 'photo build'")
     click.echo("with --width-mm, or name a shape whose real width you know.")
+
+
+# The viewer calls this step Find shapes; `photo look` names it for one release.
+photo.add_command(retired("photo look", "use `apothecary photo find`"), name="look")
 
 
 @photo.command("build")
