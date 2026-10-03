@@ -15,14 +15,19 @@ editing this code and having that edit reviewed:
    before any of its code runs. The one allowance is a *tool fetch*, and it
    has two callers: the firmware installer downloads arduino-cli, and the
    OpenSCAD installer (apothecary/openscad_installer.py) downloads a
-   development snapshot from files.openscad.org. Both go through
+   development snapshot from files.openscad.org -- or, on Linux arm64, where
+   none is published, OpenSCAD's source from GitHub: api.github.com names the
+   commit of the snapshot's date and the commits its submodules pin, and
+   codeload.github.com serves each one's tarball. Both go through
    ``tool_fetch()``, which admits, for the duration of that one call on that
    one thread, connections to the fixed hosts in ``TOOL_SOURCES`` -- by name,
    or by an address the guarded resolver returned for one of them -- and
    nowhere else, with no proxy in the way. A tool fetch is a GET of a release
    archive at a URL built from a version string, three numbers (an OpenSCAD
-   snapshot's version is its date, three numbers too); no personal data is in
-   it, and a test holds the callers of ``tool_fetch`` to the two installers.
+   snapshot's version is its date, three numbers too), or from a commit, 40
+   hex characters; no personal data is in it, and a test holds the callers of
+   ``tool_fetch`` to the two installers. (The source build that follows runs
+   cmake told to fetch nothing.)
 
 2. **The server refuses to listen anywhere but this machine, and refuses
    anyone who is not on it.** ``require_loopback()`` is what every ``--host``
@@ -81,7 +86,9 @@ LOOPBACK_NAMES = frozenset({"localhost", "127.0.0.1", "::1", "0:0:0:0:0:0:0:1", 
 
 # The fixed hosts a tool fetch may reach: arduino-cli's releases (the API
 # that names the latest, the archive, and where GitHub redirects the archive),
-# and OpenSCAD's snapshots (the listing, a night's AppImage, its checksum).
+# OpenSCAD's snapshots (the listing, a night's file, its checksum), and, for a
+# Linux arm64 source build, OpenSCAD's source (the API names the commits,
+# codeload serves a tarball of each).
 TOOL_SOURCES = frozenset(
     {
         "api.github.com",
@@ -90,6 +97,7 @@ TOOL_SOURCES = frozenset(
         "release-assets.githubusercontent.com",
         "downloads.arduino.cc",
         "files.openscad.org",
+        "codeload.github.com",
     }
 )
 
