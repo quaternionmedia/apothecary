@@ -302,6 +302,8 @@ def test_a_tool_fetch_has_two_callers_the_two_installers():
         "apothecary/openscad_installer.py",
     }
     assert "files.openscad.org" in stays_local.TOOL_SOURCES
+    # OpenSCAD's source, for a Linux arm64 build: the tarballs GitHub serves.
+    assert "codeload.github.com" in stays_local.TOOL_SOURCES
 
 
 def test_the_openscad_installer_fetches_from_its_source_alone_by_a_date(monkeypatch):
@@ -334,6 +336,15 @@ def test_the_openscad_installer_fetches_from_its_source_alone_by_a_date(monkeypa
     for bad in ("../../x", "2026.9.27", "2026.09.27/../x", "latest;rm", "2026.09"):
         with pytest.raises(openscad_installer.InstallError, match="not an OpenSCAD snapshot date"):
             openscad_installer.check_date(bad)
+    # A source build's tarball: a commit, 40 hex characters, spliced into a codeload URL.
+    sha = "31f27b7522af858ebabed764e67ecc10d9e27add"
+    with pytest.raises(OSError, match="not reached"):
+        openscad_installer._fetch(f"https://codeload.github.com/openscad/openscad/tar.gz/{sha}")
+    assert opened["url"].startswith("https://codeload.github.com/")
+    assert openscad_installer.check_sha(sha) == sha
+    for bad in ("../../x", sha[:7], sha + "/../x", "g" * 40, "master", sha.upper()):
+        with pytest.raises(openscad_installer.InstallError, match="not a commit SHA"):
+            openscad_installer.check_sha(bad)
 
 
 def test_require_loopback_accepts_this_machine_only():

@@ -49,14 +49,35 @@ def openscad():
     help="Refuse a snapshot older than this; defaults to the highest any part declares",
 )
 @click.option("--force", is_flag=True, help="Download it again even if it is installed")
-def openscad_install(latest: bool, snapshot: Optional[str], minimum: Optional[str], force: bool):
-    """Download an OpenSCAD snapshot from files.openscad.org and nowhere else.
+@click.option(
+    "--jobs",
+    type=click.IntRange(min=1),
+    metavar="N",
+    help="Compilers a source build (Linux arm64) runs at once; "
+    "default one a core and one per 2 GiB of memory",
+)
+def openscad_install(
+    latest: bool,
+    snapshot: Optional[str],
+    minimum: Optional[str],
+    force: bool,
+    jobs: Optional[int],
+):
+    """Install an OpenSCAD snapshot, fetched from files.openscad.org (on Linux
+    arm64, its source from GitHub) and nowhere else.
 
-    It reads the host's listing for this platform's file, downloads it, checks
-    its size and published SHA-256 and that it runs and reports its date, puts
-    it under the tools dir (~/.apothecary/tools/openscad/<date>/, or
-    $APOTHECARY_TOOLS_DIR) and makes it current: every render then uses it,
-    with Manifold. Linux x86_64 only.
+    \b
+    Linux x86_64   the night's AppImage; extracted where there is no FUSE
+    macOS          OpenSCAD.app copied out of the night's disk image (universal)
+    Windows x64    the night's portable zip, unpacked
+    Linux arm64    built here with cmake from OpenSCAD's source at the night's
+                   date; what the build needs is checked first (the apt line)
+    Windows on ARM not supported yet
+
+    A download is checked against its listed size and published SHA-256; what
+    is installed must run and report its date before it goes under the tools
+    dir (~/.apothecary/tools/openscad/<date>/, or $APOTHECARY_TOOLS_DIR) and is
+    made current: every render then uses it, with Manifold.
     """
     if latest and snapshot:
         raise click.UsageError("--latest or --snapshot DATE: one or the other")
@@ -68,7 +89,7 @@ def openscad_install(latest: bool, snapshot: Optional[str], minimum: Optional[st
         click.echo(f"Oldest OpenSCAD asked for: {minimum}{why}")
     try:
         oi.SnapshotInstaller(
-            snapshot=snapshot, minimum=minimum, force=force, log=click.echo
+            snapshot=snapshot, minimum=minimum, force=force, log=click.echo, jobs=jobs
         ).install()
     except (oi.InstallError, OSError) as exc:
         raise click.ClickException(f"{exc}{why}") from exc
@@ -85,14 +106,16 @@ def _status() -> None:
     home = oi.openscad_dir()
     current = oi.current_version()
     versions = oi.installed_versions()
+    _safe_echo(f"This machine: {oi.what_install_does()}")
     click.secho("Installed snapshots:", bold=True)
     click.echo(f"  {home}")
     if not versions:
         click.echo("  none (apothecary openscad install)")
     for date in versions:
-        exe = oi.executable_for(date)
+        found = oi.describe(date)
         mark = " (current)" if date == current else ""
-        _safe_echo(f"  • {date}{mark}: {exe}")
+        _safe_echo(f"  • {date}{mark}: {found.executable}")
+        _safe_echo(f"      {found.line()}")
     override = openscad_override()
     if override is not None:
         click.echo(f"APOTHECARY_OPENSCAD names {override}; it is used instead of any of these.")
@@ -109,5 +132,6 @@ def _status() -> None:
 
 @openscad.command("status")
 def openscad_status():
-    """What is installed, which is current, and whether it has Manifold."""
+    """What is installed, which is current, and for each its platform, how it was
+    installed, whether it runs natively here, and whether it has Manifold."""
     _status()
