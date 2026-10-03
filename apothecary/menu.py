@@ -117,19 +117,22 @@ class CameraSeen(BaseModel):
 
 
 class ShapeSeen(BaseModel):
-    """One shape of a drawn look: its index, its word, and whether it is made."""
+    """One shape of a drawn view: its index, its word, and whether it is made."""
 
     index: int
     word: str = "shape"
     status: str = "found"  # found | made | already_made
 
 
-class LookSeen(BaseModel):
-    """A look at the place the ring stands on, as the page has it drawn."""
+class ViewSeen(BaseModel):
+    """A view at the place the ring stands on, as the page has it drawn.
+
+    ``finder`` is None for a view pinned and not yet searched: Find shapes is its
+    next step."""
 
     id: str
     picture: str = ""
-    finder: str = "plain"
+    finder: Optional[str] = "plain"
     sized: bool = False
     kept: bool = False  # its picture is one the browser kept, so it can be forgotten
     shapes: List[ShapeSeen] = Field(default_factory=list)
@@ -137,13 +140,13 @@ class LookSeen(BaseModel):
 
 class Place(BaseModel):
     """The place the ring stands on -- a host, or on the canvas ring the floor:
-    its camera's pin, whether that camera is live, and its looks, newest first."""
+    its camera's pin, whether that camera is live, and its views, newest first."""
 
     camera: Optional[CameraSeen] = None
     live: bool = False
-    looks: List[LookSeen] = Field(default_factory=list)
+    views: List[ViewSeen] = Field(default_factory=list)
     drawn: Optional[str] = None
-    chosen_look: Optional[str] = None
+    chosen_view: Optional[str] = None
 
 
 class PictureContext(BaseModel):
@@ -153,7 +156,7 @@ class PictureContext(BaseModel):
     the browser has been allowed to name them), ``pictures`` the ones under the
     picture root, newest first, and ``here`` the place the ring stands on. The
     intent route fills in ``made`` (the site's made pieces), ``words`` (the
-    vocabulary) and ``finders`` (those that can read the drawn look's picture)
+    vocabulary) and ``finders`` (those that can read the drawn view's picture)
     from what the server knows, so a page cannot claim them."""
 
     cameras: List[CameraSeen] = Field(default_factory=list)
@@ -595,10 +598,10 @@ def _panels() -> Option:
 # ring's Pictures › Floor, since the floor is a selection but not a node. A
 # floor verb carries the floor in its action, as ``@floor`` after its last
 # colon; a host's verb names its host by the ring's target. A verb about one
-# look names the look, which knows its own host.
+# view names the view, which knows its own host.
 
 FLOOR_MARK = "@floor"
-# A list of pictures or looks shows the seven newest; the eighth cell acts on
+# A list of pictures or views shows the seven newest; the eighth cell acts on
 # the one chosen in the panel that holds the rest, or opens that panel.
 NEWEST = MOST_OPTIONS - 1
 
@@ -659,8 +662,10 @@ def _is_host(site: Optional[Assembly], path: str, made: Sequence[str]) -> bool:
 
 def _camera_group(picture: PictureContext, floor: bool) -> Option:
     """Camera: Pin here › this browser's cameras (Allow until it has been asked),
-    Live or Still, Look, Keep, Unpin. Live, Look and Keep only when the camera
-    pinned here is one of this browser's: a pin is a device of one origin."""
+    Live or Still, Take picture, Unpin. Live and Take picture only when the camera
+    pinned here is one of this browser's: a pin is a device of one origin. Take
+    picture keeps a frame and pins it here as a view; there is no keeping a frame
+    without pinning it, and unpinning a view leaves its picture in the folder."""
     tail = f":{FLOOR_MARK}" if floor else ""
     here = picture.here
     mine = {c.id for c in picture.cameras}
@@ -678,8 +683,13 @@ def _camera_group(picture: PictureContext, floor: bool) -> Option:
             if here.live
             else Option(id=f"camera:live{tail}", label="Live", action=f"camera:live{tail}")
         )
-        options.append(Option(id=f"camera:look{tail}", label="Look", action=f"camera:look{tail}"))
-        options.append(Option(id=f"camera:keep{tail}", label="Keep", action=f"camera:keep{tail}"))
+        options.append(
+            Option(
+                id=f"camera:take-picture{tail}",
+                label="Take picture",
+                action=f"camera:take-picture{tail}",
+            )
+        )
     if here.camera is not None:
         options.append(
             Option(id=f"camera:unpin{tail}", label="Unpin", action=f"camera:unpin{tail}")
@@ -690,9 +700,13 @@ def _camera_group(picture: PictureContext, floor: bool) -> Option:
 def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
     """Picture at a host or the floor: Add (a host's; the floor's is Pictures ›
     Add), Folder › the newest pictures, and with
-    a look drawn here, Looks › the newest looks, Make › Make all and each found
-    shape (once the look has a width), Size, Find › another finder, Unpin, and
-    Forget for a picture the browser kept. Eight at the most."""
+    a view drawn here, Views › the newest views, Make › Make all and each found
+    shape (once its shapes are found and it has a width), Size, Unpin, Forget for
+    a picture the browser kept, and Find shapes last: the step after a pin, with
+    the finder that can read the picture (or Find shapes › each, when several
+    can), and on a view already searched, Find shapes › the other finders. Last,
+    so Unpin and Forget keep their cells whether it is there or not. Eight at
+    the most."""
     tail = f":{FLOOR_MARK}" if floor else ""
     here = picture.here
     # The floor's Add is the canvas ring's Pictures › Add, one ring up: an action
@@ -716,30 +730,30 @@ def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
             )
         )
 
-    drawn = next((lk for lk in here.looks if lk.id == here.drawn), None)
-    if drawn is None and here.looks:
-        drawn = here.looks[0]
+    drawn = next((vw for vw in here.views if vw.id == here.drawn), None)
+    if drawn is None and here.views:
+        drawn = here.views[0]
     if drawn is None:
         return Option(id=f"picture{tail}", label="Picture", children=options) if options else None
 
-    if len(here.looks) > 1:
+    if len(here.views) > 1:
         leaves = [
-            (f"picture:draw:{lk.id}", _stem(lk.picture) or lk.id) for lk in here.looks[:NEWEST]
+            (f"picture:draw:{vw.id}", _stem(vw.picture) or vw.id) for vw in here.views[:NEWEST]
         ]
-        if len(here.looks) > NEWEST:
-            chosen_look = next(
-                (lk for lk in here.looks[NEWEST:] if lk.id == here.chosen_look), None
+        if len(here.views) > NEWEST:
+            chosen_view = next(
+                (vw for vw in here.views[NEWEST:] if vw.id == here.chosen_view), None
             )
             leaves.append(
-                (f"picture:draw:{chosen_look.id}", _stem(chosen_look.picture) or chosen_look.id)
-                if chosen_look is not None
-                else (f"picture:looks{tail}", "In Selected")
+                (f"picture:draw:{chosen_view.id}", _stem(chosen_view.picture) or chosen_view.id)
+                if chosen_view is not None
+                else (f"picture:views{tail}", "In Selected")
             )
         options.append(
             Option(
-                id=f"picture:looks-group{tail}",
-                label="Looks",
-                children=_listed(f"picture:looks-group{tail}", leaves),
+                id=f"picture:views-group{tail}",
+                label="Views",
+                children=_listed(f"picture:views-group{tail}", leaves),
             )
         )
 
@@ -762,17 +776,6 @@ def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
             )
         )
     options.append(Option(id=f"picture:size{tail}", label="Size", action=f"picture:size{tail}"))
-    others = [f for f in picture.finders if f != drawn.finder]
-    if len(picture.finders) > 1 and others:
-        options.append(
-            Option(
-                id=f"picture:find-group{tail}",
-                label="Find",
-                children=_listed(
-                    f"picture:find-group{tail}", [(f"picture:find:{f}{tail}", f) for f in others]
-                ),
-            )
-        )
     options.append(Option(id=f"picture:unpin{tail}", label="Unpin", action=f"picture:unpin{tail}"))
     if drawn.kept:
         options.append(
@@ -783,7 +786,30 @@ def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
                 destructive=True,
             )
         )
+    find = _find_shapes(drawn, picture.finders, tail)
+    if find is not None:
+        options.append(find)
     return Option(id=f"picture{tail}", label="Picture", children=options)
+
+
+def _find_shapes(drawn: ViewSeen, finders: Sequence[str], tail: str) -> Optional[Option]:
+    """Find shapes on the drawn view: before it is searched, the one finder that can
+    read its picture as a leaf, or each of several behind it; after, only the other
+    finders, each making a view of its own; nothing when no finder has anything to
+    do here."""
+    offered = list(finders) if drawn.finder is None else [f for f in finders if f != drawn.finder]
+    if not offered:
+        return None
+    if drawn.finder is None and len(offered) == 1:
+        action = f"picture:find:{offered[0]}{tail}"
+        return Option(id=action, label="Find shapes", action=action)
+    return Option(
+        id=f"picture:find-group{tail}",
+        label="Find shapes",
+        children=_listed(
+            f"picture:find-group{tail}", [(f"picture:find:{f}{tail}", f) for f in offered]
+        ),
+    )
 
 
 def _made_picture_group(picture: PictureContext) -> Option:
@@ -927,7 +953,7 @@ def _node_ring(
         options.append(Option(id="up", label="Up", action=f"select:{parent}"))
 
     # Appended after every cell the ring had, so none of them moves: a host
-    # holds a camera and looks; a made piece has its word and can be dropped.
+    # holds a camera and views; a made piece has its word and can be dropped.
     if _is_host(site, path, picture.made):
         options.append(_camera_group(picture, floor=False))
         host_pictures = _picture_group(picture, floor=False)
@@ -1141,16 +1167,16 @@ CARRIED_BY: Dict[str, Carries] = {
     "print": Carries.VIEWER,
     # Opening, closing, floating what stands in front of the world (panels.js).
     "panel": Carries.VIEWER,
-    # A camera's verbs: this browser's device pinned, live, a frame kept or
-    # looked at, and the gathering's report -- all of it the page's: the pin
-    # and the picture routes are what the page calls.
+    # A camera's verbs: this browser's device pinned, live, a picture taken and
+    # pinned as a view, and the gathering's report -- all of it the page's: the
+    # pin and the picture routes are what the page calls.
     "camera": Carries.VIEWER,
-    # A picture's verbs that choose, draw, find, size or pin: what is on screen,
-    # or data attached to a host that no site sees.
+    # A picture's verbs that choose, draw, find shapes, size or pin: what is on
+    # screen, or data attached to a host that no site sees.
     "picture": Carries.VIEWER,
     # Those that add, remove or rebuild a root structure change the arrangement,
     # as a reset does: the intent route carries them, calling the functions the
-    # look routes call (apothecary/vision/looks.py's make, drop and rebuild).
+    # view routes call (apothecary/vision/views.py's make, drop and rebuild).
     "picture:make": Carries.SERVER,
     "picture:make-all": Carries.SERVER,
     "picture:drop": Carries.SERVER,
@@ -1165,8 +1191,8 @@ CARRIED_BY: Dict[str, Carries] = {
 def carried_by(action: str) -> Carries:
     """Who carries out this action; ``site:garage`` is looked up as ``site``.
 
-    The longest classified prefix wins, so ``picture:make:look_1:2`` is
-    ``picture:make``'s and ``picture:draw:look_1`` is ``picture``'s.
+    The longest classified prefix wins, so ``picture:make:view_1:2`` is
+    ``picture:make``'s and ``picture:draw:view_1`` is ``picture``'s.
 
     Raises rather than guessing, so an action nobody has classified is an error
     rather than a wedge that does nothing.
@@ -1188,7 +1214,7 @@ __all__ = [
     "CARRIED_BY",
     "CameraSeen",
     "FLOOR_MARK",
-    "LookSeen",
+    "ViewSeen",
     "PictureContext",
     "Place",
     "ShapeSeen",

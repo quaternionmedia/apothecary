@@ -63,6 +63,11 @@ One line per change, each with a link to where it is described. The format follo
 ### Changed
 
 - A tool fetch may also reach codeload.github.com, for OpenSCAD's source on Linux arm64. ([code](apothecary/stays_local.py))
+- `apothecary photo look` is `apothecary photo find`, the viewer's Find shapes; the old name prints the new one and exits 1, for one release.
+- A picture pinned at a place is a view: `/sites/{s}/views`, `views` in every answer, Picture › Views, and Camera › Look is Camera › Take picture. ([plan](docs/plans/consolidation-2026-10-03.md))
+- Taking and finding are two steps: Take picture, a drop, a paste, Picture › Add and Folder pin a view and find nothing; Picture › Find shapes (`POST /sites/{s}/views/{id}/find`) finds its shapes, with a finder to choose where several can read the picture. ([code](apothecary/routes/views.py))
+- Make and Make all refuse a view whose shapes are not found or that has no width, naming the step that comes first. ([code](apothecary/vision/views.py))
+- Every step's message names the next one: a camera pinned names Take picture, a view pinned names Find shapes, shapes found name Make. ([code](apothecary/static/pictures.js))
 - A camera is pinned at a root structure with a footprint, or the floor, one per host. ([code](apothecary/routes/pictures.py))
 - A camera's badge is the place badge: a click selects the structure or the floor, and shows no camera live. ([test](tests/e2e/test_camera.py))
 - Forgetting a kept picture unpins its looks; pictures are served at a size and never cached. ([code](apothecary/routes/pictures.py))
@@ -101,6 +106,7 @@ One line per change, each with a link to where it is described. The format follo
 - Legacy JSCAD viewer endpoints and three orphaned modules. ([code](apothecary/api.py))
 - `E2E_SETUP.md`; the browser tests are described beside them. ([tests](tests/e2e/README.md))
 - The camera panel's camera, capture, Look, placement and Open as one; no verb opens another site. ([code](apothecary/static/widgets/camera.js))
+- Camera › Keep: Take picture always pins a view, and unpinning a view leaves its picture in the folder. ([code](apothecary/menu.py))
 
 ### Fixed
 

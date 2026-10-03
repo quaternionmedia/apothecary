@@ -4,7 +4,7 @@
  * same page, every site's, and taken back the same way; a page forgets only
  * what the browser put there.
  *
- * A stub of the pictures plan's Phase 5: the cameras, looks and boards pinned
+ * A stub of the pictures plan's Phase 5: the cameras, views and boards pinned
  * (GET /placed) and the kept pictures (captures/ and uploads/ under the picture
  * root), each row naming its site and carrying the one button that takes it
  * back, and Purge. A row on another site is taken back from here without
@@ -36,7 +36,7 @@ export function mountKept(root, { base = "", world = null, log = null } = {}) {
     const $ = (id) => root.querySelector(`#${CSS.escape(id)}`);
     const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     const say = (text, kind = "") => { if (log) log(text, kind); else console.log(text); };
-    const state = { cameras: [], looks: [], boards: [], pictures: [] };
+    const state = { cameras: [], views: [], boards: [], pictures: [] };
 
     async function api(path, opts = {}) {
         const r = await fetch(base + path, { headers: { "Content-Type": "application/json" }, ...opts });
@@ -56,16 +56,16 @@ export function mountKept(root, { base = "", world = null, log = null } = {}) {
         const boardNote = (b) => (!b.site_known ? " · site gone" : !b.node_found ? " · piece gone" : "");
         const pins = state.cameras.map((c) => row("camera", c.site, !c.host_found,
             `📷 ${esc(c.label || "camera")} · ${esc(c.site)} › ${esc(at(c.path))}${gone(c.host_found)}`,
-            `<button type="button" class="kept-camera-unpin" data-id="${esc(c.id)}" title="Unpin this camera; its looks stay">Unpin</button>`))
-            + state.looks.map((l) => row("look", l.site, !l.host_found,
+            `<button type="button" class="kept-camera-unpin" data-id="${esc(c.id)}" title="Unpin this camera; its views stay">Unpin</button>`))
+            + state.views.map((l) => row("view", l.site, !l.host_found,
                 `🖼 ${esc(l.picture)} · ${esc(l.site)} › ${esc(at(l.host))}${gone(l.host_found)}`,
-                `<button type="button" class="kept-look-unpin" data-site="${esc(l.site)}" data-id="${esc(l.id)}" title="Unpin this look; its picture and any pieces made from it stay">Unpin</button>`))
+                `<button type="button" class="kept-view-unpin" data-site="${esc(l.site)}" data-id="${esc(l.id)}" title="Unpin this view; its picture and any pieces made from it stay">Unpin</button>`))
             + state.boards.map((b) => row("board", b.site, !(b.site_known && b.node_found),
                 `📌 ${esc(b.site)} › ${esc(b.path)} ← ${esc(b.identity)}${boardNote(b)}`,
                 `<button type="button" class="kept-board-unpin" data-site="${esc(b.site)}" data-path="${esc(b.path)}" title="Take this board's pin back">Unpin</button>`));
         $("kept-pins").innerHTML = pins || '<span class="empty">none pinned</span>';
         const HOW = { capture: "captured", upload: "added" };
-        $("kept-pictures").innerHTML = state.pictures.map((p) => `<div class="kept-row picture" data-path="${esc(p.path)}"><img src="${base}/photos/pictures/file?path=${encodeURIComponent(p.path)}&px=64" alt="" loading="lazy"><span title="${esc(p.path)}">${esc(p.path)} · ${HOW[p.kept] || "kept"}</span><button type="button" class="kept-forget" data-path="${esc(p.path)}" title="Forget this picture; its looks are unpinned">Forget</button></div>`).join("")
+        $("kept-pictures").innerHTML = state.pictures.map((p) => `<div class="kept-row picture" data-path="${esc(p.path)}"><img src="${base}/photos/pictures/file?path=${encodeURIComponent(p.path)}&px=64" alt="" loading="lazy"><span title="${esc(p.path)}">${esc(p.path)} · ${HOW[p.kept] || "kept"}</span><button type="button" class="kept-forget" data-path="${esc(p.path)}" title="Forget this picture; its views are unpinned">Forget</button></div>`).join("")
             || '<span class="empty">none kept</span>';
     }
 
@@ -75,7 +75,7 @@ export function mountKept(root, { base = "", world = null, log = null } = {}) {
             api("/photos/pictures").catch((e) => { say(e.message, "bad"); return []; }),
         ]);
         state.cameras = placed.cameras || [];
-        state.looks = placed.looks || [];
+        state.views = placed.views || [];
         state.boards = placed.boards || [];
         state.pictures = pictures.filter((p) => p.kept);
         render();
@@ -86,12 +86,12 @@ export function mountKept(root, { base = "", world = null, log = null } = {}) {
     async function unpinCamera(id) {
         const cam = state.cameras.find((c) => c.id === id);
         await api(`/cameras/${encodeURIComponent(id)}`, { method: "DELETE" });
-        say(`camera unpinned${cam ? ` from ${cam.site} › ${at(cam.path)}` : ""}; its looks stay`);
+        say(`camera unpinned${cam ? ` from ${cam.site} › ${at(cam.path)}` : ""}; its views stay`);
         if (world && world.changed) await world.changed(cam ? cam.site : null);
     }
-    async function unpinLook(site, id) {
-        await api(`/sites/${encodeURIComponent(site)}/looks/${encodeURIComponent(id)}`, { method: "DELETE" });
-        say(`look unpinned in ${site}; its picture and any pieces made from it stay`);
+    async function unpinView(site, id) {
+        await api(`/sites/${encodeURIComponent(site)}/views/${encodeURIComponent(id)}`, { method: "DELETE" });
+        say(`view unpinned in ${site}; its picture and any pieces made from it stay`);
         if (world && world.changed) await world.changed(site);
     }
     async function unpinBoard(site, path) {
@@ -101,7 +101,7 @@ export function mountKept(root, { base = "", world = null, log = null } = {}) {
     }
     async function forget(path) {
         await api(`/photos/pictures/${segs(path)}`, { method: "DELETE" });
-        say(`forgot ${path}; its looks are unpinned`);
+        say(`forgot ${path}; its views are unpinned`);
         if (world && world.changed) await world.changed(null);
         if (world && world.picturesChanged) world.picturesChanged();
     }
@@ -118,11 +118,11 @@ export function mountKept(root, { base = "", world = null, log = null } = {}) {
     }
 
     $("kept-list").addEventListener("click", async (ev) => {
-        const b = ev.target.closest("button.kept-camera-unpin, button.kept-look-unpin, button.kept-board-unpin, button.kept-forget");
+        const b = ev.target.closest("button.kept-camera-unpin, button.kept-view-unpin, button.kept-board-unpin, button.kept-forget");
         if (!b) return;
         try {
             if (b.classList.contains("kept-camera-unpin")) await unpinCamera(b.dataset.id);
-            else if (b.classList.contains("kept-look-unpin")) await unpinLook(b.dataset.site, b.dataset.id);
+            else if (b.classList.contains("kept-view-unpin")) await unpinView(b.dataset.site, b.dataset.id);
             else if (b.classList.contains("kept-board-unpin")) await unpinBoard(b.dataset.site, b.dataset.path);
             else await forget(b.dataset.path);
         } catch (e) { say(e.message, "bad"); }
@@ -134,7 +134,7 @@ export function mountKept(root, { base = "", world = null, log = null } = {}) {
     load();
 
     return {
-        state, load, unpinCamera, unpinLook, unpinBoard, forget, purge,
+        state, load, unpinCamera, unpinView, unpinBoard, forget, purge,
         destroy() { root.innerHTML = ""; },
     };
 }

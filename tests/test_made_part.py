@@ -4,7 +4,7 @@
 ``BasePart``, so the one parameter contract serves it: its fields default to
 what it is now, its provenance is offered as candidates, its geometry is what
 ``piece_from_shape`` builds, and the made routes answer the shapes the parts
-routes answer. The fixture is tests/test_looks_api.py's: a stated picture 1000
+routes answer. The fixture is tests/test_views_api.py's: a stated picture 1000
 by 500 pinned at ``workbench`` in ``garage``; at 1800 mm across, shape 1 (the
 coin) is 54 by 54 mm, its thickness guessed at 8.1, standing at (1080, 50, 780).
 """
@@ -15,12 +15,12 @@ import math
 
 import pytest
 from fastapi.testclient import TestClient
-from test_looks_api import _pin, _roots, world  # noqa: F401 - the fixture, used by every test here
+from test_views_api import _pin, _roots, world  # noqa: F401 - the fixture, used by every test here
 
 from apothecary.api import app
 from apothecary.projects.parts.params import ParamsSpec, Validation, params_spec, validate_staged
 from apothecary.projects.parts.stl_renderer import geometry_scad
-from apothecary.vision import looks as looking
+from apothecary.vision import views as viewing
 from apothecary.vision.compose import THICKNESS_GUESS, piece_from_shape
 from apothecary.vision.piece import MadePart
 
@@ -30,14 +30,14 @@ COIN = {"width": 54.0, "depth": 54.0, "height": 8.1}
 COIN_AT = {"x": 1080.0, "y": 50.0, "z": 780.0}
 
 
-def _make(c, look, shape=1):
-    r = c.post(f"/sites/garage/looks/{look['id']}/make", json={"shape": shape})
+def _make(c, view, shape=1):
+    r = c.post(f"/sites/garage/views/{view['id']}/make", json={"shape": shape})
     assert r.status_code == 200, r.text
     return r.json()["made"][0]
 
 
 def _record(piece):
-    return looking.store().made_piece("garage", piece)
+    return viewing.store().made_piece("garage", piece)
 
 
 def _put(c, piece, body):
@@ -103,10 +103,10 @@ def test_after_a_stated_size_the_measured_sides_are_one_click_away():
 
 def test_after_a_rescale_a_stated_piece_offers_the_sides_measured_at_its_own_scale():
     c = TestClient(app)
-    look = _pin(c, mm_across=1800)
-    coin = _make(c, look)
+    view = _pin(c, mm_across=1800)
+    coin = _make(c, view)
     assert _put(c, coin, {"params": {"width": 40}}).status_code == 200
-    r = c.put(f"/sites/garage/looks/{look['id']}/scale", json={"mm_across": 900})
+    r = c.put(f"/sites/garage/views/{view['id']}/scale", json={"mm_across": 900})
     assert r.status_code == 200 and r.json()["rebuilt"] == []
     record = _record(coin)
     assert record.mm_across == 1800 and record.parameters["width"] == 40
@@ -268,8 +268,8 @@ def test_the_found_candidate_returns_a_piece_to_as_found():
 
 def test_a_rescale_rebuilds_unstated_pieces_and_leaves_stated_and_moved_ones():
     c = TestClient(app)
-    look = _pin(c, mm_across=1800)
-    block, coin, bar = (_make(c, look, shape=i) for i in range(3))
+    view = _pin(c, mm_across=1800)
+    block, coin, bar = (_make(c, view, shape=i) for i in range(3))
     before = _roots(c)
     # The coin's sides are a person's; the bar was moved by hand.
     assert _put(c, coin, {"params": {"width": 40}}).status_code == 200
@@ -277,7 +277,7 @@ def test_a_rescale_rebuilds_unstated_pieces_and_leaves_stated_and_moved_ones():
     r = c.post("/sites/garage/layout", json={"positions": {bar: moved}})
     assert r.status_code == 200, r.text
 
-    r = c.put(f"/sites/garage/looks/{look['id']}/scale", json={"mm_across": 900})
+    r = c.put(f"/sites/garage/views/{view['id']}/scale", json={"mm_across": 900})
     assert r.status_code == 200, r.text
     assert r.json()["rebuilt"] == sorted([block, bar])
     assert r.json()["site"] is not None
@@ -289,7 +289,7 @@ def test_a_rescale_rebuilds_unstated_pieces_and_leaves_stated_and_moved_ones():
         after[block]["footprint"]["max"][i] - after[block]["footprint"]["min"][i] for i in range(3)
     ]
     assert block_size == pytest.approx([90, 45, 6.75])
-    shape = look["shapes"][0]
+    shape = view["shapes"][0]
     cx = (shape["min"][0] + shape["max"][0]) / 2
     cy = (shape["min"][1] + shape["max"][1]) / 2
     assert after[block]["position"]["x"] == pytest.approx(900 + (cx - 0.5) * 900)
@@ -310,7 +310,7 @@ def test_a_rescale_rebuilds_unstated_pieces_and_leaves_stated_and_moved_ones():
 
 def test_a_rescale_answer_without_a_rebuild_carries_no_site():
     c = TestClient(app)
-    look = _pin(c, mm_across=1800)
-    r = c.put(f"/sites/garage/looks/{look['id']}/scale", json={"mm_across": 900})
+    view = _pin(c, mm_across=1800)
+    r = c.put(f"/sites/garage/views/{view['id']}/scale", json={"mm_across": 900})
     assert r.status_code == 200 and r.json()["rebuilt"] == [] and r.json()["site"] is None
     assert r.json()["mm_across"] == 900

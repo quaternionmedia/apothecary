@@ -41,7 +41,8 @@ Decided, not started. Each waits on what its line names.
   snowplow gets one name.
 - The unit suite under pytest-xdist.
 - The hidden command stubs (`system`, `install`, `testrun`, `dev`,
-  `inventory`, `submodules`) are removed one release after they were hidden.
+  `inventory`, `submodules`, `photo look`) are removed one release after they
+  were hidden.
 
 ## For a person to decide
 

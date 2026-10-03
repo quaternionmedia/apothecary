@@ -1,10 +1,10 @@
 """Kept: every pin a page made and every picture the browser kept, every site's,
 each taken back from its row -- from another site's page, without switching to it.
 
-A stub of the pictures plan's Phase 5. A camera and a look are pinned in
-``garage`` and two pictures kept (one pinned there as the look, one pinned
+A stub of the pictures plan's Phase 5. A camera and a view are pinned in
+``garage`` and two pictures kept (one pinned there as the view, one pinned
 nowhere); the page shows ``parts_library``. Kept lists all of it, each row naming
-its site, and takes back the camera, the look and the unpinned picture from their
+its site, and takes back the camera, the view and the unpinned picture from their
 rows; the site on screen and the URL never change.
 """
 
@@ -40,15 +40,15 @@ def _keep(page, base_url: str, name: str, offset: int, where: str = "") -> dict:
 
 @pytest.fixture
 def leaves_as_found(page, base_url: str):
-    """After the test: the camera, looks and kept pictures it added are taken back."""
+    """After the test: the camera, views and kept pictures it added are taken back."""
     api = page.request
-    looks = {lk["id"] for lk in api.get(f"{base_url}/placed").json()["looks"]}
+    views = {vw["id"] for vw in api.get(f"{base_url}/placed").json()["views"]}
     pictures = {p["path"] for p in api.get(f"{base_url}/photos/pictures").json()}
     yield
     api.delete(f"{base_url}/cameras/{CAMERA}")
-    for look in api.get(f"{base_url}/placed").json()["looks"]:
-        if look["id"] not in looks:
-            api.delete(f"{base_url}/sites/{look['site']}/looks/{look['id']}")
+    for view in api.get(f"{base_url}/placed").json()["views"]:
+        if view["id"] not in views:
+            api.delete(f"{base_url}/sites/{view['site']}/views/{view['id']}")
     for picture in api.get(f"{base_url}/photos/pictures").json():
         if picture["path"] not in pictures and picture["kept"]:
             api.delete(f"{base_url}/photos/pictures/{picture['path']}")
@@ -64,11 +64,11 @@ def test_kept_takes_back_another_sites_pins_and_a_kept_picture_without_switching
         data={"label": "kept test camera", "site": "garage", "path": "workbench"},
     )
     assert placed.ok, placed.text()
-    pinned = _keep(page, base_url, "kept_look.png", 0, "&site=garage&host=workbench")
-    look = pinned["look"]
-    assert look, pinned
+    pinned = _keep(page, base_url, "kept_view.png", 0, "&site=garage&host=workbench")
+    view = pinned["view"]
+    assert view, pinned
     loose = _keep(page, base_url, "kept_loose.png", 60)
-    assert not loose.get("look")
+    assert not loose.get("view")
 
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
@@ -87,7 +87,7 @@ def test_kept_takes_back_another_sites_pins_and_a_kept_picture_without_switching
     camera = panel.locator(".kept-row.camera", has_text="kept test camera")
     expect(camera).to_contain_text("garage › workbench", timeout=5000)
     expect(camera).not_to_have_class(re.compile(r"\bhere\b"))
-    row = panel.locator(f".kept-row.look:has(.kept-look-unpin[data-id='{look['id']}'])")
+    row = panel.locator(f".kept-row.view:has(.kept-view-unpin[data-id='{view['id']}'])")
     expect(row).to_contain_text("garage › workbench")
     picture = panel.locator(f".kept-row.picture[data-path='{loose['path']}']")
     expect(picture).to_be_visible()
@@ -99,11 +99,11 @@ def test_kept_takes_back_another_sites_pins_and_a_kept_picture_without_switching
     assert CAMERA not in {c["id"] for c in api.get(f"{base_url}/cameras").json()}
     expect(status).to_contain_text("camera unpinned from garage › workbench")
 
-    # The look, unpinned from its row; its picture stays kept.
-    row.locator(".kept-look-unpin").click()
+    # The view, unpinned from its row; its picture stays kept.
+    row.locator(".kept-view-unpin").click()
     expect(row).to_have_count(0, timeout=5000)
-    looks = api.get(f"{base_url}/sites/garage/attached").json()["looks"]
-    assert look["id"] not in {lk["id"] for lk in looks}
+    views = api.get(f"{base_url}/sites/garage/attached").json()["views"]
+    assert view["id"] not in {vw["id"] for vw in views}
     expect(panel.locator(f".kept-row.picture[data-path='{pinned['path']}']")).to_be_visible()
 
     # The picture pinned nowhere, forgotten from its row.

@@ -1,6 +1,6 @@
 """A piece made from a picture is a part like any other.
 
-``MadePart`` wraps one ``Made`` record (``vision/looks.py``) as a ``BasePart``, so
+``MadePart`` wraps one ``Made`` record (``vision/views.py``) as a ``BasePart``, so
 the one parameter contract (``projects/parts/params.py``) and the one editor in
 the browser serve it as they serve a part from the parts folder:
 
@@ -10,7 +10,7 @@ the browser serve it as they serve a part from the parts folder:
 - ``contested`` carries the piece's provenance as candidates a person can turn
   to: the thickness is always a guess, since a picture from above cannot see
   it, and the sides the finder measured are offered whenever the piece no
-  longer has them (a person stated a size, or the look was re-scaled);
+  longer has them (a person stated a size, or the view was re-scaled);
 - ``geometry`` is what ``piece_from_shape`` builds for the parameters, so the
   geometry seam that renders a Python-built part renders a made piece too;
 - ``get_bounds`` is the box the piece occupies as built, standing on its own
@@ -35,7 +35,7 @@ from ..core import OpenSCADObject
 from ..models.bounds import BoundingBox3D
 from ..projects.parts.base import BasePart, ContestedValue
 from .compose import THICKNESS_GUESS, piece_from_shape, turned_box
-from .looks import Made, found_size
+from .views import Made, found_size
 
 SIDES = ("width", "depth", "height")
 
@@ -82,7 +82,7 @@ def candidates(record: Made) -> Dict[str, List[ContestedValue]]:
     thickness, so the number stands only until a person states one, and the
     guess is where a stated one returns to. ``width`` and ``depth`` carry the
     finder's measurement whenever the piece no longer has it -- after a person
-    stated a size, or after its look was re-scaled -- so the measured number is
+    stated a size, or after its view was re-scaled -- so the measured number is
     one click away.
     """
     found = found_size(record)

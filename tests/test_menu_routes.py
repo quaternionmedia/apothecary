@@ -242,12 +242,12 @@ def _every_ring():
     printer = Device(port="/dev/ttyUSB0", printer=True, armed=False, bound=True)
     armed = Device(port="/dev/ttyUSB0", printer=True, armed=True, bound=True)
     board = Device(port="/dev/ttyACM0", printer=False, bound=False)
-    # A camera, pictures and a sized look at the bench: every picture verb is on offer.
-    from apothecary.menu import CameraSeen, LookSeen, PictureContext, Place, ShapeSeen
+    # A camera, pictures and a sized view at the bench: every picture verb is on offer.
+    from apothecary.menu import CameraSeen, PictureContext, Place, ShapeSeen, ViewSeen
 
     cam = CameraSeen(id="bench_cam", label="bench cam")
-    look = LookSeen(
-        id="look_1", picture="a.png", sized=True, kept=True, shapes=[ShapeSeen(index=0)]
+    view = ViewSeen(
+        id="view_1", picture="a.png", sized=True, kept=True, shapes=[ShapeSeen(index=0)]
     )
     told = PictureContext(
         cameras=[cam],
@@ -256,7 +256,7 @@ def _every_ring():
         finders=["plain", "stated"],
         words=["disc", "plate"],
         made=["disc_1"],
-        here=Place(camera=cam, looks=[look, look.model_copy(update={"id": "look_2"})]),
+        here=Place(camera=cam, views=[view, view.model_copy(update={"id": "view_2"})]),
     )
     pictured = [
         resolve(Context(pointing=Pointing.CANVAS), site, picture=told),

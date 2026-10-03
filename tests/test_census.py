@@ -67,6 +67,29 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # The editor's markup is written once for either target (a made piece leaves
 # its checklist and Regenerate STL unwritten), so no control was added; the
 # Regenerate STL listener is keyed by the editor's apply (applyEditor) now.
+#
+# Consolidation Phase 1, the words: a picture pinned at a place is a view. The
+# census's keys follow the page: kept-look-unpin is kept-view-unpin, look-width
+# is view-width, and Selected's row listener is row:click:drawView, still backed
+# by Picture › Views' picture:draw. Camera › Look is Camera › Take picture in the
+# same cell, Picture › Looks is Picture › Views in the same cell; no ring address
+# moved. Before and after: 128 controls of its own, 58 ring-backed, 76 places
+# the page listens.
+#
+# Consolidation Phase 1, taking and finding: Take picture, a drop, a paste,
+# Picture › Add and Picture › Folder pin a view and find nothing; Picture › Find
+# shapes finds, a cell of its own; Camera › Keep is gone. Keep and Find shapes
+# are ring cells with no control behind them, and no listener was added, removed
+# or re-keyed (the drop, paste and Add listeners only say what they do now).
+# Before and after: 128 controls of its own, 58 ring-backed, 76 places the page
+# listens. Ring addresses moved, inside a host's Camera and Picture (and the
+# floor's, under Pictures › Floor): with this browser's camera pinned, Keep left
+# cell 4 and Unpin moved from cell 9 to cell 4 (Look's cell 2 is Take picture's).
+# Find shapes is appended after Unpin and Forget, so their cells stay put
+# whether it is there or not; where it replaces Find (another finder can read a
+# view already searched), Find moved from before Unpin to the last cell, and
+# Unpin and Forget each moved one cell earlier in the seating order (at a host:
+# Unpin 3 to 9, Forget 1 to 3; at the floor: Unpin 9 to 4, Forget 3 to 9).
 VIEWER_CEILING = 128
 
 
@@ -355,20 +378,20 @@ def test_every_listener_in_the_viewers_marks_modules_is_classified():
 
 
 def test_kepts_take_back_buttons_are_counted_and_not_claimed_as_ring_backed():
-    """Forget a picture, unpin a camera, unpin a look: Kept's per-row buttons are
+    """Forget a picture, unpin a camera, unpin a view: Kept's per-row buttons are
     the lasting exception for taking a thing back from the list that shows it,
     counted on the meter and never ring-backed, since a row can name another
     site's pin that a ring cell reaches only from that site."""
     taken = census.take()
     by_name = {f.name: f for f in taken.controls_of_its_own()}
-    for name in ("kept-forget", "kept-camera-unpin", "kept-look-unpin", "kept-board-unpin"):
+    for name in ("kept-forget", "kept-camera-unpin", "kept-view-unpin", "kept-board-unpin"):
         assert by_name[name].source == "kept.js"
         assert by_name[name].ring_action is None, name
         assert by_name[name].taken_back, name
     assert {f.name for f in taken.taken_back()} == {
         "kept-forget",
         "kept-camera-unpin",
-        "kept-look-unpin",
+        "kept-view-unpin",
         "kept-board-unpin",
     }
     # Purge stays a cell of the canvas ring's Pictures.
@@ -380,7 +403,7 @@ def test_kepts_take_back_buttons_are_counted_and_not_claimed_as_ring_backed():
     listening = {f.key: f for f in taken.found if f.how == "listening" and f.source == "kept.js"}
     assert list(listening) == ["kept-list:click:closest"]
     assert listening["kept-list:click:closest"].taken_back
-    assert "⤺ takes back a look, every site's" in census.report()
+    assert "⤺ takes back a view, every site's" in census.report()
 
 
 def test_nothing_is_both_taken_back_and_ring_backed():
