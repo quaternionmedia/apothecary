@@ -1,18 +1,18 @@
-/* The loop's verbs at a host: a camera pinned, live, looked with; a picture
- * added, dropped or pasted, pinned, found, sized; a look drawn or unpinned; a
+/* The loop's verbs at a host: a camera pinned, live, a picture taken; a picture
+ * added, dropped or pasted, pinned, found, sized; a view drawn or unpinned; a
  * kept picture forgotten. No markup of its own: the ring is how each is asked
  * for (apothecary/menu.py builds the cells), the world is where each is seen
  * (picture_marks.js draws it), and the status bar is where each is said.
  *
  * A host is a root structure with a footprint, or the floor (""). A verb on a
  * host names it by the ring's target; a floor verb carries "@floor" after its
- * last colon. A verb about one look names the look.
+ * last colon. A verb about one view names the view.
  *
  * The browser's cameras are this origin's devices: a pin in cameras.json
  * names one by its deviceId, so a pin made in another browser is shown by its
  * label and can be moved or unpinned here, never opened. The stream exists
- * only while Live is on at its host; it stops when a Look is taken, when the
- * host is no longer selected, or when the site changes. A Look from Still
+ * only while Live is on at its host; it stops when a picture is taken, when the
+ * host is no longer selected, or when the site changes. Take picture from Still
  * opens the pinned device, waits for its first frame and half a second more,
  * keeps the frame, and closes it again.
  *
@@ -34,7 +34,7 @@
 
 export const FLOOR = "";
 const FLOOR_MARK = "@floor";
-const LOOK_SETTLE_MS = 500;     // after the first frame, before a still is kept
+const FRAME_SETTLE_MS = 500;     // after the first frame, before a still is kept
 const PICTURES_FRESH_MS = 1500; // a pictures list this young is not asked for again
 const FILE_MOST = 16 * 1024 * 1024;
 
@@ -112,7 +112,7 @@ export function mountPictures({ base = "", marks, world, log }) {
         });
         await marks.refresh();
         const replaced = answer.replaced && answer.replaced.length ? `, in place of ${answer.replaced.length} pinned there before` : "";
-        const next = allowed ? `: ${ringPath(host, "Camera › Look")} takes a picture and finds its shapes` : "";
+        const next = allowed ? `: ${ringPath(host, "Camera › Take picture")} takes a picture and finds its shapes` : "";
         say(`${cam ? cam.label : "camera"} ${allowed ? "allowed and " : ""}pinned at ${where(host)}${replaced}${next}`);
     }
 
@@ -122,7 +122,7 @@ export function mountPictures({ base = "", marks, world, log }) {
         if (state.live && state.live.host === host) still();
         await api(`/cameras/${encodeURIComponent(cam.id)}`, { method: "DELETE" });
         await marks.refresh();
-        say(`${cam.label || "camera"} unpinned from ${where(host)}; its looks stay`);
+        say(`${cam.label || "camera"} unpinned from ${where(host)}; its views stay`);
     }
 
     function pinnedHere(host) {
@@ -160,7 +160,7 @@ export function mountPictures({ base = "", marks, world, log }) {
         await loaded;
         if (!state.live || state.live.video !== video) return;
         marks.setLive(host, video);
-        say(`${cam.label} is live on ${where(host)}: Look keeps a frame and finds what is in it`);
+        say(`${cam.label} is live on ${where(host)}: Take picture keeps a frame and finds what is in it`);
     }
     function still() {
         if (!state.live) return false;
@@ -184,7 +184,7 @@ export function mountPictures({ base = "", marks, world, log }) {
         const { video, loaded } = videoFor(stream);
         try {
             await loaded;
-            await new Promise((resolve) => setTimeout(resolve, LOOK_SETTLE_MS));
+            await new Promise((resolve) => setTimeout(resolve, FRAME_SETTLE_MS));
             return await grab(video);
         } finally { close(stream, video); }
     }
@@ -200,27 +200,27 @@ export function mountPictures({ base = "", marks, world, log }) {
         return body;
     }
 
-    function found(look) {
-        const n = look.shapes.length;
-        const sized = look.mat && look.mat.width ? `, ${Math.round(look.mat.width)} mm across` : "; give its width in Selected";
-        return `${n} shape${n === 1 ? "" : "s"} found at ${where(look.host)}${look.left_out ? ` (${look.left_out} left out)` : ""}${sized}`;
+    function found(view) {
+        const n = view.shapes.length;
+        const sized = view.mat && view.mat.width ? `, ${Math.round(view.mat.width)} mm across` : "; give its width in Selected";
+        return `${n} shape${n === 1 ? "" : "s"} found at ${where(view.host)}${view.left_out ? ` (${view.left_out} left out)` : ""}${sized}`;
     }
-    async function drawNew(host, look) {
+    async function drawNew(host, view) {
         await marks.refresh();
-        marks.draw(host, look.id);
+        marks.draw(host, view.id);
         world.select(host);
     }
 
-    // Look: a frame kept with its camera and host, found, pinned; Live ends.
-    async function look(host) {
+    // Take picture: a frame kept with its camera and host, found, pinned; Live ends.
+    async function takePicture(host) {
         const cam = pinnedHere(host);
         const blob = await frame(cam);
         still();
         const kept = await keepBlob(blob, { name: cam.id, host, camera: cam.id });
-        if (!kept.look) throw new Error(`kept ${kept.path}, and not pinned: ${kept.not_pinned || "refused"}`);
-        await drawNew(host, kept.look);
-        say(found(kept.look));
-        return kept.look;
+        if (!kept.view) throw new Error(`kept ${kept.path}, and not pinned: ${kept.not_pinned || "refused"}`);
+        await drawNew(host, kept.view);
+        say(found(kept.view));
+        return kept.view;
     }
     // Keep: the frame is kept on this machine, and nothing more.
     async function keep(host) {
@@ -231,7 +231,7 @@ export function mountPictures({ base = "", marks, world, log }) {
     }
 
     // --- pictures from this machine --------------------------------------------------------
-    // Several at once: each kept under uploads/ and pinned as its own look, found
+    // Several at once: each kept under uploads/ and pinned as its own view, found
     // one after another; the last is drawn, and every refusal is named.
     async function addFiles(files, host) {
         const chosen = [...(files || [])];
@@ -242,7 +242,7 @@ export function mountPictures({ base = "", marks, world, log }) {
             if (file.size > FILE_MOST) { refused.push(`${file.name}: larger than 16 MB`); continue; }
             try {
                 const kept = await keepBlob(file, { name: file.name, kept: "upload", host });
-                if (kept.look) pinned.push(kept.look); else refused.push(`${file.name}: kept, not pinned: ${kept.not_pinned}`);
+                if (kept.view) pinned.push(kept.view); else refused.push(`${file.name}: kept, not pinned: ${kept.not_pinned}`);
             } catch (e) { refused.push(`${file.name}: ${e.message}`); }
         }
         if (pinned.length) await drawNew(host, pinned[pinned.length - 1]);
@@ -268,28 +268,28 @@ export function mountPictures({ base = "", marks, world, log }) {
         if (finder) body.finder = finder;
         const drawn = marks.drawnAt(host);
         if (finder && drawn && drawn.camera) body.camera = drawn.camera;
-        const lookNow = await api(`${siteUrl()}/looks`, { method: "POST", body: JSON.stringify(body) });
-        await drawNew(host, lookNow);
-        say(found(lookNow));
-        return lookNow;
+        const viewNow = await api(`${siteUrl()}/views`, { method: "POST", body: JSON.stringify(body) });
+        await drawNew(host, viewNow);
+        say(found(viewNow));
+        return viewNow;
     }
 
-    // --- the drawn look --------------------------------------------------------------------
+    // --- the drawn view --------------------------------------------------------------------
     function drawnHere(host) {
         const drawn = marks.drawnAt(host);
-        if (!drawn) throw new Error(`no look is pinned at ${where(host)}`);
+        if (!drawn) throw new Error(`no view is pinned at ${where(host)}`);
         return drawn;
     }
-    function drawLook(host, id) {
-        if (!marks.draw(host, id)) { say(`no look ${id} at ${where(host)}`, "bad"); return false; }
+    function drawView(host, id) {
+        if (!marks.draw(host, id)) { say(`no view ${id} at ${where(host)}`, "bad"); return false; }
         const drawn = marks.drawnAt(host);
         world.rendered();
         say(`drawing ${drawn.picture} at ${where(host)}`);
         return true;
     }
-    async function unpinLook(host) {
+    async function unpinView(host) {
         const drawn = drawnHere(host);
-        await api(`${siteUrl()}/looks/${encodeURIComponent(drawn.id)}`, { method: "DELETE" });
+        await api(`${siteUrl()}/views/${encodeURIComponent(drawn.id)}`, { method: "DELETE" });
         await marks.refresh();
         say(`unpinned ${drawn.picture} from ${where(host)}; the picture and any pieces made stay`);
     }
@@ -298,7 +298,7 @@ export function mountPictures({ base = "", marks, world, log }) {
         await api(`/photos/pictures/${drawn.picture.split("/").map(encodeURIComponent).join("/")}`, { method: "DELETE" });
         state.picturesAt = 0;
         await marks.refresh();
-        say(`forgot ${drawn.picture}: its looks are unpinned, every site's; pieces made from it stay`);
+        say(`forgot ${drawn.picture}: its views are unpinned, every site's; pieces made from it stay`);
     }
     async function purge() {
         const pictures = await picturesNow(true);
@@ -312,9 +312,9 @@ export function mountPictures({ base = "", marks, world, log }) {
         return gone;
     }
 
-    // The one width: a look's scale. With a shape chosen on the drawn look, the
+    // The one width: a view's scale. With a shape chosen on the drawn view, the
     // number is that shape's long side; otherwise the picture's width. At a host
-    // with a camera and no look, it is the camera's width for its next look.
+    // with a camera and no view, it is the camera's width for its next view.
     async function setWidth(host, mm) {
         if (!(mm > 0)) throw new Error("a width is a number of millimetres, more than nothing");
         const drawn = marks.drawnAt(host);
@@ -323,14 +323,14 @@ export function mountPictures({ base = "", marks, world, log }) {
             if (!cam) throw new Error(`nothing at ${where(host)} to size`);
             await api(`/cameras/${encodeURIComponent(cam.id)}`, { method: "PUT", body: JSON.stringify({ label: cam.label || "camera", site: world.siteName(), path: host, mm_across: mm }) });
             await marks.refresh();
-            say(`${cam.label || "camera"}: its next look is ${mm} mm across`);
+            say(`${cam.label || "camera"}: its next view is ${mm} mm across`);
             return;
         }
         const chosen = marks.chosen();
-        const byShape = chosen && chosen.look === drawn.id;
+        const byShape = chosen && chosen.view === drawn.id;
         const body = byShape ? { known_index: chosen.index, mm } : { mm_across: mm };
-        const sized = await api(`${siteUrl()}/looks/${encodeURIComponent(drawn.id)}/scale`, { method: "PUT", body: JSON.stringify(body) });
-        // Pieces made from the look whose sides nobody stated were rebuilt at the
+        const sized = await api(`${siteUrl()}/views/${encodeURIComponent(drawn.id)}/scale`, { method: "PUT", body: JSON.stringify(body) });
+        // Pieces made from the view whose sides nobody stated were rebuilt at the
         // new width: the site is drawn as it is now (which fetches the marks too).
         const rebuilt = sized.rebuilt || [];
         if (rebuilt.length && sized.site && world.applySite) await world.applySite(sized.site);
@@ -359,7 +359,7 @@ export function mountPictures({ base = "", marks, world, log }) {
         if (fresh && !state.asked) await listCameras().catch(() => {});
         const keptPaths = new Set(pictures.filter((p) => p.kept).map((p) => p.path));
         const cam = host === null ? null : marks.cameraAt(host);
-        const looks = host === null ? [] : [...marks.looksAt(host)].reverse();
+        const views = host === null ? [] : [...marks.viewsAt(host)].reverse();
         const drawn = host === null ? null : marks.drawnAt(host);
         return {
             cameras: state.cameras.map((c) => ({ id: c.id, label: c.label })),
@@ -368,7 +368,7 @@ export function mountPictures({ base = "", marks, world, log }) {
             here: {
                 camera: cam ? { id: cam.id, label: cam.label || "camera" } : null,
                 live: !!(state.live && state.live.host === host),
-                looks: looks.map((l) => ({
+                views: views.map((l) => ({
                     id: l.id,
                     picture: l.picture,
                     finder: l.finder,
@@ -406,25 +406,25 @@ export function mountPictures({ base = "", marks, world, log }) {
             case "camera:unpin": await unpinCamera(host); return true;
             case "camera:live": await goLive(host); return true;
             case "camera:still": if (still()) say(`${where(host)}: still again`); return true;
-            case "camera:look": await look(host); return true;
+            case "camera:take-picture": await takePicture(host); return true;
             case "camera:keep": await keep(host); return true;
             case "camera:gather": return false;  // the camera panel's report, until gathering leaves core
             case "picture:add": pickFiles(host); say(`choose pictures to pin at ${where(host)}`); return true;
             case "picture:pin": world.stepOut(); await pinPicture(host, arg); return true;
             case "picture:find": await pinPicture(host, drawnHere(host).picture, arg); return true;
             case "picture:draw": {
-                const lookAt = marks.attached() && marks.attached().looks.find((l) => l.id === arg);
-                if (!lookAt) throw new Error(`no look ${arg} in this site`);
-                world.select(lookAt.host);
-                drawLook(lookAt.host, arg);
+                const viewAt = marks.attached() && marks.attached().views.find((l) => l.id === arg);
+                if (!viewAt) throw new Error(`no view ${arg} in this site`);
+                world.select(viewAt.host);
+                drawView(viewAt.host, arg);
                 return true;
             }
             case "picture:size": world.focusWidth(); say("type a width in Selected, in millimetres"); return true;
-            case "picture:unpin": await unpinLook(host); return true;
+            case "picture:unpin": await unpinView(host); return true;
             case "picture:forget": await forget(host); return true;
             case "picture:purge": await purge(); return true;
             case "picture:kept": world.openPanel("kept"); say("the other kept pictures are in Kept"); return true;
-            case "picture:looks": world.openPanel("selected"); say("every look here is a row in Selected: click one to draw it"); return true;
+            case "picture:views": world.openPanel("selected"); say("every view here is a row in Selected: click one to draw it"); return true;
             default: return false;
         }
     }
@@ -435,8 +435,8 @@ export function mountPictures({ base = "", marks, world, log }) {
     }
 
     return {
-        ready, state, listCameras, allow, pinCamera, unpinCamera, goLive, still, look, keep,
-        addFiles, pickFiles, paste, pinPicture, drawLook, unpinLook, forget, purge, setWidth,
+        ready, state, listCameras, allow, pinCamera, unpinCamera, goLive, still, takePicture, keep,
+        addFiles, pickFiles, paste, pinPicture, drawView, unpinView, forget, purge, setWidth,
         context, carry, selectionChanged, picturesNow,
         live: () => (state.live ? state.live.host : null),
         destroy() { still(); },

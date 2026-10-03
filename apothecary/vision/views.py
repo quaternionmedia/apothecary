@@ -1,6 +1,6 @@
-"""Looks: a picture pinned at one place in a site, and the pieces made from its shapes.
+"""Views: a picture pinned at one place in a site, and the pieces made from its shapes.
 
-A *look* is a picture pinned at a *host* -- a root structure of the site that
+A *view* is a picture pinned at a *host* -- a root structure of the site that
 has a footprint and is not itself a made piece -- or at the site's floor
 (``host == ""``). It keeps what a finder saw there: the shapes, with no size
 until a person gives the picture's width or one shape's long side. It is data
@@ -12,18 +12,18 @@ the shape was seen, built by ``compose.piece_from_shape``. What is known about
 a piece -- its picture, host, camera, shape index, a copy of the shape, its
 extent as made, its word and why -- is kept here, keyed by (site, piece), and
 never in the site store, so a plain-``def`` forget can mark it and the piece
-can find its outline after the look is gone.
+can find its outline after the view is gone.
 
-Where a look's picture is laid (its *mat*): centred on the host's current top,
+Where a view's picture is laid (its *mat*): centred on the host's current top,
 so it follows the host when the host is moved, or, at the floor, from an
-anchor fixed when the look is pinned, just past the site's roots in +x. A shape
+anchor fixed when the view is pinned, just past the site's roots in +x. A shape
 at fractions ``(cx, cy)`` of the picture stands ``((cx - 0.5) * W,
 (0.5 - cy) * H)`` from the mat's centre, where ``W`` is the picture's width in
 millimetres and ``H`` is ``W`` times the picture's height over its width.
 
 Held in memory behind one lock, as the shelf is, and lost on restart; the lock
-is held for dictionary reads and writes only, never while a finder looks or a
-file is read. Whether looks may be kept in the state folder across a restart
+is held for dictionary reads and writes only, never while a finder reads a
+picture or a file is read. Whether views may be kept in the state folder across a restart
 waits on what the draft record *Personal data stays on the device* counts as
 this machine.
 
@@ -44,8 +44,8 @@ from ..models.vectors import Vector3D
 from .compose import built_sides, piece_from_shape, sides_as_found, thickness_guess
 from .models import FoundShape
 
-# The most shapes a look keeps, the most confident first: the outline budget per mat.
-LOOK_SHAPES_MOST = 32
+# The most shapes a view keeps, the most confident first: the outline budget per mat.
+VIEW_SHAPES_MOST = 32
 
 # The most made pieces a site holds: what the canvas ring's one grouped Made
 # cell can list (two levels of eight, as `menu._grouped` allows).
@@ -61,15 +61,15 @@ STATED_REASON = "a person said so"
 
 
 class NotAHost(ValueError):
-    """A look or camera was asked to be pinned somewhere that cannot hold one."""
+    """A view or camera was asked to be pinned somewhere that cannot hold one."""
 
 
 class HostNotFound(LookupError):
     """The host named is not in the site."""
 
 
-class LookNotFound(LookupError):
-    """No look by that id in that site."""
+class ViewNotFound(LookupError):
+    """No view by that id in that site."""
 
 
 class NotMade(LookupError):
@@ -80,7 +80,7 @@ class CannotMake(ValueError):
     """A make was refused: unsized, already made, no room, or its host gone."""
 
 
-class Look(BaseModel):
+class View(BaseModel):
     """One picture pinned at one host, and what a finder saw in it."""
 
     id: str
@@ -128,7 +128,7 @@ class Made(BaseModel):
     site: str
     piece: str
     host: str
-    look: str
+    view: str
     picture: str
     picture_forgotten: bool = False
     camera: Optional[str] = None
@@ -233,151 +233,151 @@ def floor_anchor(site: Assembly, made: Set[str]) -> Vector3D:
     )
 
 
-def mat_centre(look: Look, site: Assembly) -> Optional[Vector3D]:
-    """Where the look's mat is centred now; None when its host is gone.
+def mat_centre(view: View, site: Assembly) -> Optional[Vector3D]:
+    """Where the view's mat is centred now; None when its host is gone.
 
     At the floor an unsized mat has no width, and its centre is the anchor."""
-    if look.at_floor:
-        anchor = look.anchor or Vector3D()
-        half = (look.mm_across or 0.0) / 2
+    if view.at_floor:
+        anchor = view.anchor or Vector3D()
+        half = (view.mm_across or 0.0) / 2
         return Vector3D(x=anchor.x + half, y=anchor.y, z=anchor.z)
-    node = next((c for c in site.children if c.name == look.host), None)
+    node = next((c for c in site.children if c.name == view.host), None)
     if node is None or node.world_bounds() is None:
         return None
     return top_centre(node)
 
 
-def shape_offset(look: Look, shape: FoundShape) -> Tuple[float, float]:
-    """A shape's centre from its mat's centre, in millimetres (the look is sized)."""
-    assert look.mm_across is not None
-    width = look.mm_across
+def shape_offset(view: View, shape: FoundShape) -> Tuple[float, float]:
+    """A shape's centre from its mat's centre, in millimetres (the view is sized)."""
+    assert view.mm_across is not None
+    width = view.mm_across
     centre = shape.centre
-    return ((centre.x - 0.5) * width, (0.5 - centre.y) * look.tallness * width)
+    return ((centre.x - 0.5) * width, (0.5 - centre.y) * view.tallness * width)
 
 
-def _in_frame(look: Look, shape: FoundShape) -> Tuple[float, float]:
+def _in_frame(view: View, shape: FoundShape) -> Tuple[float, float]:
     """A shape's centre where extents are kept: from the host's top-centre, or in the
     site's frame at the floor."""
-    dx, dy = shape_offset(look, shape)
-    if look.at_floor:
-        anchor = look.anchor or Vector3D()
-        return (anchor.x + look.mm_across / 2 + dx, anchor.y + dy)
+    dx, dy = shape_offset(view, shape)
+    if view.at_floor:
+        anchor = view.anchor or Vector3D()
+        return (anchor.x + view.mm_across / 2 + dx, anchor.y + dy)
     return (dx, dy)
 
 
-def _extent(look: Look, shape: FoundShape) -> Extent:
-    width = look.mm_across
+def _extent(view: View, shape: FoundShape) -> Extent:
+    width = view.mm_across
     return Extent(
-        centre=_in_frame(look, shape),
-        size=(shape.width * width, shape.height * look.tallness * width),
+        centre=_in_frame(view, shape),
+        size=(shape.width * width, shape.height * view.tallness * width),
     )
 
 
-def status_of(look: Look, index: int, made: Dict[str, Made]) -> Tuple[str, Optional[str]]:
-    """``("made", piece)`` when this look made it, ``("already_made", piece)`` when its
+def status_of(view: View, index: int, made: Dict[str, Made]) -> Tuple[str, Optional[str]]:
+    """``("made", piece)`` when this view made it, ``("already_made", piece)`` when its
     centre lies inside the extent recorded for a piece made at the same host from any
-    look, else ``("found", None)``. An unsized look is only ever found or made."""
-    if index in look.made:
-        return "made", look.made[index]
-    if look.mm_across is None:
+    view, else ``("found", None)``. An unsized view is only ever found or made."""
+    if index in view.made:
+        return "made", view.made[index]
+    if view.mm_across is None:
         return "found", None
-    point = _in_frame(look, look.shapes[index])
+    point = _in_frame(view, view.shapes[index])
     for record in made.values():
-        if record.host != look.host:
+        if record.host != view.host:
             continue
-        if record.look == look.id and record.shape_index == index:
+        if record.view == view.id and record.shape_index == index:
             continue
         if record.extent.holds(point):
             return "already_made", record.piece
     return "found", None
 
 
-def word_for_shape(look: Look, index: int) -> Tuple[str, str, bool]:
+def word_for_shape(view: View, index: int) -> Tuple[str, str, bool]:
     """(word, reason, stated) for one shape: a person's word, or the table's."""
     from ..vocabulary import word_for
 
-    if index in look.words:
-        return look.words[index], STATED_REASON, True
-    choice = word_for(look.shapes[index])
+    if index in view.words:
+        return view.words[index], STATED_REASON, True
+    choice = word_for(view.shapes[index])
     return choice.word, choice.reason, False
 
 
 def keep_the_most_sure(shapes: List[FoundShape]) -> Tuple[List[FoundShape], int]:
-    """At most ``LOOK_SHAPES_MOST`` shapes, the most confident, in the finder's order;
+    """At most ``VIEW_SHAPES_MOST`` shapes, the most confident, in the finder's order;
     and how many were left out."""
-    if len(shapes) <= LOOK_SHAPES_MOST:
+    if len(shapes) <= VIEW_SHAPES_MOST:
         return list(shapes), 0
     ranked = sorted(range(len(shapes)), key=lambda i: (-shapes[i].confidence, i))
-    kept = sorted(ranked[:LOOK_SHAPES_MOST])
-    return [shapes[i] for i in kept], len(shapes) - LOOK_SHAPES_MOST
+    kept = sorted(ranked[:VIEW_SHAPES_MOST])
+    return [shapes[i] for i in kept], len(shapes) - VIEW_SHAPES_MOST
 
 
-def new_look_id(at: datetime) -> str:
-    return f"look_{at:%Y%m%dT%H%M%S%f}Z"
+def new_view_id(at: datetime) -> str:
+    return f"view_{at:%Y%m%dT%H%M%S%f}Z"
 
 
 # --- the store -----------------------------------------------------------------------
 
 
-class Looks:
-    """Every look pinned and every piece made in this process, behind one lock."""
+class Views:
+    """Every view pinned and every piece made in this process, behind one lock."""
 
     def __init__(self) -> None:
-        self._looks: Dict[str, Look] = {}
+        self._views: Dict[str, View] = {}
         self._made: Dict[Tuple[str, str], Made] = {}
         self._forgotten: Set[str] = set()
         self._lock = threading.Lock()
 
-    # looks
+    # views
 
-    def pin(self, look: Look) -> Look:
+    def pin(self, view: View) -> View:
         with self._lock:
-            base, n = look.id, 2
-            while look.id in self._looks:
-                look = look.model_copy(update={"id": f"{base}-{n}"})
+            base, n = view.id, 2
+            while view.id in self._views:
+                view = view.model_copy(update={"id": f"{base}-{n}"})
                 n += 1
-            self._looks[look.id] = look.model_copy(deep=True)
-            self._forgotten.discard(look.picture)
-        return look
+            self._views[view.id] = view.model_copy(deep=True)
+            self._forgotten.discard(view.picture)
+        return view
 
-    def get(self, site: str, look_id: str) -> Look:
+    def get(self, site: str, view_id: str) -> View:
         with self._lock:
-            found = self._looks.get(look_id)
+            found = self._views.get(view_id)
             if found is None or found.site != site:
-                raise LookNotFound(f"no look {look_id!r} in site {site!r}")
+                raise ViewNotFound(f"no view {view_id!r} in site {site!r}")
             return found.model_copy(deep=True)
 
-    def looks_at(self, site: Optional[str] = None) -> List[Look]:
-        """A site's looks (every site's with none named), oldest first."""
+    def views_at(self, site: Optional[str] = None) -> List[View]:
+        """A site's views (every site's with none named), oldest first."""
         with self._lock:
             chosen = [
-                lk.model_copy(deep=True)
-                for lk in self._looks.values()
-                if site is None or lk.site == site
+                vw.model_copy(deep=True)
+                for vw in self._views.values()
+                if site is None or vw.site == site
             ]
-        return sorted(chosen, key=lambda lk: (lk.taken_at, lk.id))
+        return sorted(chosen, key=lambda vw: (vw.taken_at, vw.id))
 
-    def unpin(self, site: str, look_id: str) -> Look:
+    def unpin(self, site: str, view_id: str) -> View:
         with self._lock:
-            found = self._looks.get(look_id)
+            found = self._views.get(view_id)
             if found is None or found.site != site:
-                raise LookNotFound(f"no look {look_id!r} in site {site!r}")
-            return self._looks.pop(look_id)
+                raise ViewNotFound(f"no view {view_id!r} in site {site!r}")
+            return self._views.pop(view_id)
 
-    def set_scale(self, site: str, look_id: str, scale: Dict[str, float], mm_across: float) -> Look:
+    def set_scale(self, site: str, view_id: str, scale: Dict[str, float], mm_across: float) -> View:
         with self._lock:
-            found = self._looks.get(look_id)
+            found = self._views.get(view_id)
             if found is None or found.site != site:
-                raise LookNotFound(f"no look {look_id!r} in site {site!r}")
+                raise ViewNotFound(f"no view {view_id!r} in site {site!r}")
             found.scale = dict(scale)
             found.mm_across = mm_across
             return found.model_copy(deep=True)
 
-    def set_word(self, site: str, look_id: str, index: int, word: str) -> Look:
+    def set_word(self, site: str, view_id: str, index: int, word: str) -> View:
         with self._lock:
-            found = self._looks.get(look_id)
+            found = self._views.get(view_id)
             if found is None or found.site != site:
-                raise LookNotFound(f"no look {look_id!r} in site {site!r}")
+                raise ViewNotFound(f"no view {view_id!r} in site {site!r}")
             found.words[index] = word
             return found.model_copy(deep=True)
 
@@ -403,19 +403,19 @@ class Looks:
             return found.model_copy(deep=True)
 
     def record_made(self, record: Made) -> bool:
-        """Keep a made piece's provenance and mark its shape made in its look.
+        """Keep a made piece's provenance and mark its shape made in its view.
 
-        False, and nothing kept, when the look already made that shape. A look
+        False, and nothing kept, when the view already made that shape. A view
         unpinned meanwhile keeps nothing; the record is kept all the same, and
         marked forgotten when its picture was forgotten meanwhile."""
         with self._lock:
-            look = self._looks.get(record.look)
-            if look is not None and record.shape_index in look.made:
+            view = self._views.get(record.view)
+            if view is not None and record.shape_index in view.made:
                 return False
-            if record.picture in self._forgotten and look is None:
+            if record.picture in self._forgotten and view is None:
                 record = record.model_copy(update={"picture_forgotten": True})
-            if look is not None:
-                look.made[record.shape_index] = record.piece
+            if view is not None:
+                view.made[record.shape_index] = record.piece
             self._made[(record.site, record.piece)] = record.model_copy(deep=True)
             return True
 
@@ -430,31 +430,31 @@ class Looks:
             record = self._made.pop((site, piece), None)
             if record is None:
                 raise NotMade(f"{piece!r} is not a piece made from a picture in site {site!r}")
-            look = self._looks.get(record.look)
-            if look is not None and look.made.get(record.shape_index) == piece:
-                del look.made[record.shape_index]
+            view = self._views.get(record.view)
+            if view is not None and view.made.get(record.shape_index) == piece:
+                del view.made[record.shape_index]
             return record
 
     def forget_made(self, site: str) -> List[str]:
-        """Every made piece of a site is gone (a reset): its records and its looks' marks."""
+        """Every made piece of a site is gone (a reset): its records and its views' marks."""
         with self._lock:
             gone = [piece for (s, piece) in self._made if s == site]
             for piece in gone:
                 del self._made[(site, piece)]
-            for look in self._looks.values():
-                if look.site == site:
-                    look.made.clear()
+            for view in self._views.values():
+                if view.site == site:
+                    view.made.clear()
             return gone
 
     # pictures
 
     def forget_picture(self, picture: str) -> List[str]:
-        """A kept picture was forgotten: its looks are unpinned, every site's, and the
-        pieces made from it stay, marked forgotten. Returns the looks unpinned."""
+        """A kept picture was forgotten: its views are unpinned, every site's, and the
+        pieces made from it stay, marked forgotten. Returns the views unpinned."""
         with self._lock:
-            unpinned = [lid for lid, lk in self._looks.items() if lk.picture == picture]
+            unpinned = [lid for lid, vw in self._views.items() if vw.picture == picture]
             for lid in unpinned:
-                del self._looks[lid]
+                del self._views[lid]
             for record in self._made.values():
                 if record.picture == picture:
                     record.picture_forgotten = True
@@ -467,16 +467,16 @@ class Looks:
             self._forgotten.discard(picture)
 
 
-_store: Optional[Looks] = None
+_store: Optional[Views] = None
 _made_store = threading.Lock()
 
 
-def store() -> Looks:
-    """The one look store this process uses."""
+def store() -> Views:
+    """The one view store this process uses."""
     global _store
     with _made_store:
         if _store is None:
-            _store = Looks()
+            _store = Views()
         return _store
 
 
@@ -489,7 +489,7 @@ def made_names(site: str) -> Set[str]:
     return store().made_names(site)
 
 
-# --- making, rebuilding, dropping: the site changes the look routes carry out ----------
+# --- making, rebuilding, dropping: the site changes the view routes carry out ----------
 #
 # Each takes the live site and changes it in place. The routes that call them are
 # `async def`, one at a time on the event loop, as api.py's rule for routes that
@@ -506,30 +506,30 @@ def _unique_name(site: Assembly, word: str) -> str:
 
 
 def make(
-    site_name: str, site: Assembly, look_id: str, shape: Optional[int] = None
+    site_name: str, site: Assembly, view_id: str, shape: Optional[int] = None
 ) -> Tuple[List[str], int]:
     """Make one shape (``shape``) or every shape not yet made (``None``) into pieces.
 
     Returns the pieces made and how many shapes were skipped as already made.
-    Refused (``CannotMake``) for an unsized look, a single shape already made,
+    Refused (``CannotMake``) for an unsized view, a single shape already made,
     a host that is gone, or more made pieces than the site's Made cell holds."""
-    looks = store()
-    look = looks.get(site_name, look_id)
-    if shape is not None and not 0 <= shape < len(look.shapes):
-        raise LookNotFound(f"look {look_id!r} has no shape {shape}")
-    if look.mm_across is None:
+    views = store()
+    view = views.get(site_name, view_id)
+    if shape is not None and not 0 <= shape < len(view.shapes):
+        raise ViewNotFound(f"view {view_id!r} has no shape {shape}")
+    if view.mm_across is None:
         raise CannotMake(
-            "this look has no width yet: give the picture's width, or one shape's long "
+            "this view has no width yet: give the picture's width, or one shape's long "
             "side, and then make it"
         )
-    centre = mat_centre(look, site)
+    centre = mat_centre(view, site)
     if centre is None:
-        raise CannotMake(f"{look.host} is no longer in the site, so there is nowhere to stand it")
-    made = looks.made_at(site_name)
-    chosen = [shape] if shape is not None else list(range(len(look.shapes)))
+        raise CannotMake(f"{view.host} is no longer in the site, so there is nowhere to stand it")
+    made = views.made_at(site_name)
+    chosen = [shape] if shape is not None else list(range(len(view.shapes)))
     to_make, skipped = [], 0
     for index in chosen:
-        status, piece = status_of(look, index, made)
+        status, piece = status_of(view, index, made)
         if status == "found":
             to_make.append(index)
             continue
@@ -545,42 +545,42 @@ def make(
         )
     names: List[str] = []
     for index in to_make:
-        found = look.shapes[index]
-        word, reason, stated = word_for_shape(look, index)
+        found = view.shapes[index]
+        word, reason, stated = word_for_shape(view, index)
         name = _unique_name(site, word)
         piece, _about = piece_from_shape(
             found,
             name=name,
             word=word,
             reason=reason,
-            per_unit=look.mm_across,
-            tallness=look.tallness,
-            finder=look.finder,
+            per_unit=view.mm_across,
+            tallness=view.tallness,
+            finder=view.finder,
         )
         piece.position = piece.position + centre
         record = Made(
             site=site_name,
             piece=name,
-            host=look.host,
-            look=look.id,
-            picture=look.picture,
-            camera=look.camera,
+            host=view.host,
+            view=view.id,
+            picture=view.picture,
+            camera=view.camera,
             shape_index=index,
             shape=found,
-            extent=_extent(look, found),
+            extent=_extent(view, found),
             word=word,
             word_stated=stated,
             reason=reason,
-            finder=look.finder,
+            finder=view.finder,
             confidence=found.confidence,
             origin=found.origin,
-            mm_across=look.mm_across,
-            pixel_width=look.pixel_width,
-            pixel_height=look.pixel_height,
-            parameters=_size_of(found, look.mm_across, look.tallness),
+            mm_across=view.mm_across,
+            pixel_width=view.pixel_width,
+            pixel_height=view.pixel_height,
+            parameters=_size_of(found, view.mm_across, view.tallness),
             placed_at=piece.position.model_copy(),
         )
-        if looks.record_made(record):
+        if views.record_made(record):
             site.children.append(piece)
             names.append(name)
         else:
@@ -635,11 +635,11 @@ def rebuild(
     Sides a person gives are ``parameters_stated`` -- unless they are the sides
     the finder found, in which case the piece reads as found again: the found
     candidate in its editor returns it to what it was, and a re-scale of its
-    look rebuilds it with the rest."""
+    view rebuilds it with the rest."""
     from ..vocabulary import WordShape, starter_words
 
-    looks = store()
-    record = looks.made_piece(site_name, piece)
+    views = store()
+    record = views.made_piece(site_name, piece)
     index = _index_of(site_name, site, piece)
     if word is not None and word not in starter_words():
         raise ValueError(f"no word named {word!r}; have {starter_words().names()}")
@@ -663,7 +663,7 @@ def rebuild(
             and not _same_size(built, found_size(record)),
         }
     )
-    looks.update_made(record)
+    views.update_made(record)
     return record
 
 
@@ -671,17 +671,17 @@ def _same_place(a: Vector3D, b: Vector3D) -> bool:
     return all(math.isclose(getattr(a, k), getattr(b, k), abs_tol=1e-6) for k in ("x", "y", "z"))
 
 
-def rescale_made(site_name: str, site: Assembly, look: Look) -> List[str]:
-    """After a look is re-sized: every piece made from it whose sides no person
+def rescale_made(site_name: str, site: Assembly, view: View) -> List[str]:
+    """After a view is re-sized: every piece made from it whose sides no person
     stated is rebuilt from its shape at the new width, the scale in its provenance
     following, and laid on its shape again when it still stands where it was made
     -- a piece a person moved stays put. The names of the pieces rebuilt."""
-    assert look.mm_across is not None
-    looks = store()
-    centre = mat_centre(look, site)
+    assert view.mm_across is not None
+    views = store()
+    centre = mat_centre(view, site)
     rebuilt: List[str] = []
-    for name, record in sorted(looks.made_at(site_name).items()):
-        if record.look != look.id or record.parameters_stated:
+    for name, record in sorted(views.made_at(site_name).items()):
+        if record.view != view.id or record.parameters_stated:
             continue
         index = next((i for i, c in enumerate(site.children) if c.name == name), None)
         if index is None:
@@ -694,18 +694,18 @@ def rescale_made(site_name: str, site: Assembly, look: Look) -> List[str]:
             word=record.word,
             reason=record.reason,
             size=None,
-            mm_across=look.mm_across,
+            mm_across=view.mm_across,
         )
         update: Dict[str, object] = {
-            "mm_across": look.mm_across,
-            "parameters": _size_of(record.shape, look.mm_across, look.tallness),
+            "mm_across": view.mm_across,
+            "parameters": _size_of(record.shape, view.mm_across, view.tallness),
         }
         if stood_still and centre is not None:
-            dx, dy = shape_offset(look, record.shape)
+            dx, dy = shape_offset(view, record.shape)
             piece.position = Vector3D(x=centre.x + dx, y=centre.y + dy, z=centre.z)
             update["placed_at"] = piece.position.model_copy()
-            update["extent"] = _extent(look, record.shape)
-        looks.update_made(record.model_copy(update=update))
+            update["extent"] = _extent(view, record.shape)
+        views.update_made(record.model_copy(update=update))
         rebuilt.append(name)
     return rebuilt
 
@@ -720,14 +720,14 @@ def drop(site_name: str, site: Assembly, piece: str) -> Made:
 __all__ = [
     "FLOOR",
     "FLOOR_MARGIN_MM",
-    "LOOK_SHAPES_MOST",
+    "VIEW_SHAPES_MOST",
     "MADE_MOST",
     "CannotMake",
     "Extent",
     "HostNotFound",
-    "Look",
-    "LookNotFound",
-    "Looks",
+    "View",
+    "ViewNotFound",
+    "Views",
     "Made",
     "NotAHost",
     "NotMade",

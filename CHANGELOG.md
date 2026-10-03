@@ -59,6 +59,7 @@ One line per change, each with a link to where it is described. The format follo
 
 ### Changed
 
+- A picture pinned at a place is a view: `/sites/{s}/views`, `views` in every answer, Picture › Views, and Camera › Look is Camera › Take picture. ([plan](docs/plans/consolidation-2026-10-03.md))
 - A camera is pinned at a root structure with a footprint, or the floor, one per host. ([code](apothecary/routes/pictures.py))
 - A camera's badge is the place badge: a click selects the structure or the floor, and shows no camera live. ([test](tests/e2e/test_camera.py))
 - Forgetting a kept picture unpins its looks; pictures are served at a size and never cached. ([code](apothecary/routes/pictures.py))

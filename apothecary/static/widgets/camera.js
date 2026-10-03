@@ -3,7 +3,7 @@
  * report, and what a person says about them. A report only: nothing is built
  * or opened from it.
  *
- * What a page placed, pinned or kept -- cameras, looks, boards, kept pictures,
+ * What a page placed, pinned or kept -- cameras, views, boards, kept pictures,
  * every site's -- is listed and taken back in Kept (widgets/kept.js), the one
  * list §6 of the draft record *Personal data stays on the device* asks for. A
  * picture chosen from the file picker here is kept under uploads/ and pinned

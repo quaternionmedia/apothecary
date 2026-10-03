@@ -296,7 +296,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # What is left of it until gathering leaves core: the pictures on this
     # machine, gathered into a report, and what a person says about them, and
     # a file picker that keeps pictures here pinned nowhere. The camera itself
-    # is pinned, shown live and looked with from its host's ring.
+    # is pinned, shown live and takes pictures from its host's ring.
     "pic-all": (WIDGET, WHAT_YOU_SEE, "a tick-box that ticks every picture"),
     "pic-gather": (WIDGET, WHAT_YOU_SEE, "a button that gathers the ticked pictures"),
     "gather-answers": (WIDGET, WHAT_YOU_SEE, "a box for what you know about the pictures"),
@@ -308,12 +308,12 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "kept-refresh": (WIDGET, WHAT_YOU_SEE, "a button that lists what is pinned and kept again"),
     "kept-purge": (WIDGET, WHAT_YOU_SEE, "a button that forgets every picture the browser put here"),
     "kept-camera-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins one camera, in any site"),
-    "kept-look-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins one look, in any site"),
+    "kept-view-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins one view, in any site"),
     "kept-board-unpin": (WIDGET, WHAT_IS_THERE, "a button that takes one board's pin back"),
     "kept-forget": (WIDGET, WHAT_YOU_SEE, "a button that forgets one kept picture"),
-    # Selected: the one width a look is sized by (a chosen shape's long side
+    # Selected: the one width a view is sized by (a chosen shape's long side
     # when one is chosen). A number the ring cannot type; Size puts the cursor in it.
-    "look-width": (WIDGET, WHAT_IS_THERE, "a box for how wide a picture is, or one shape's side"),
+    "view-width": (WIDGET, WHAT_IS_THERE, "a box for how wide a picture is, or one shape's side"),
     # printing from here: a kept file, streamed
     "print-file": (WIDGET, WHAT_YOU_SEE, "a file picker that keeps a G-code file on the host"),
     "print-pick": (WIDGET, WHAT_YOU_SEE, "a drop-down of the files kept on the host"),
@@ -398,7 +398,7 @@ RING_BACKED: Dict[str, str] = {
     # A file dropped on the world, or chosen in the dialog Picture › Add opens.
     "canvas:drop:onDropFiles": "picture:add",
     "input:change:addFiles": "picture:add",
-    "row:click:drawLook": "picture:draw:look_1",
+    "row:click:drawView": "picture:draw:view_1",
     # The Print cell's verbs go to whichever print is running, the card's or
     # the one from here; Send file is the one from here alone.
     "print-start": "print:start",
@@ -420,7 +420,7 @@ RING_BACKED: Dict[str, str] = {
 }
 
 # A control kept on purpose beside the ring: the button on a row of Kept that
-# takes back what the row names -- a camera or a look unpinned, a board's pin
+# takes back what the row names -- a camera or a view unpinned, a board's pin
 # taken back, a kept picture forgotten -- in whichever site it stands. §6 of the
 # draft record *Personal data stays on the device* asks that what a page placed
 # or pinned be listed by the same page, every site's, and taken back the same
@@ -431,7 +431,7 @@ RING_BACKED: Dict[str, str] = {
 # control's name or its listening key; the value is what the row takes back.
 TAKEN_BACK: Dict[str, str] = {
     "kept-camera-unpin": "a camera's pin, every site's",
-    "kept-look-unpin": "a look, every site's",
+    "kept-view-unpin": "a view, every site's",
     "kept-board-unpin": "a board's pin, every site's",
     "kept-forget": "a picture the browser kept",
     "kept-list:click:closest": "any of those, from its row",
@@ -521,7 +521,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "li:click:selectChild": (LIST, WHAT_YOU_SEE, "picking a piece from the list"),
     # An anchor: a machine's badge standing over it in the world (anchors.js).
     "badge:click:selectPath": (LIST, WHAT_YOU_SEE, "picking the machine a badge stands over"),
-    # A place badge: a host's camera and look, or the floor's (picture_marks.js).
+    # A place badge: a host's camera and view, or the floor's (picture_marks.js).
     "badge:click:onSelect": (
         LIST,
         WHAT_YOU_SEE,
@@ -544,7 +544,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "pasting a picture: kept, pinned at the selected place, found",
     ),
     "widthBox:change:setWidth": (WIDGET, WHAT_IS_THERE, "typing a picture's width, or a shape's"),
-    "row:click:drawLook": (LIST, WHAT_YOU_SEE, "a look's row in Selected, drawing that look"),
+    "row:click:drawView": (LIST, WHAT_YOU_SEE, "a view's row in Selected, drawing that view"),
     # pictures.js: the browser's cameras and the dialog Picture › Add opens.
     "mediaDevices:devicechange:listCameras": (
         AUTOMATIC,
@@ -560,7 +560,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "video:loadeddata:resolve": (
         AUTOMATIC,
         NOTHING,
-        "a camera's first frame arrived, so a look can keep one",
+        "a camera's first frame arrived, so a picture can be taken from it",
     ),
     "input:change:addFiles": (
         WIDGET,
@@ -575,7 +575,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "kept-list:click:closest": (
         WIDGET,
         WHAT_IS_THERE,
-        "taking back what a row names -- a camera, a look, a board's pin, a kept picture -- "
+        "taking back what a row names -- a camera, a view, a board's pin, a kept picture -- "
         "whatever site it is in",
     ),
     "li:dblclick:zoomIn": (LIST, WHAT_YOU_SEE, "going into a piece from the list"),

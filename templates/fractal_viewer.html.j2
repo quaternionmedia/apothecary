@@ -217,14 +217,14 @@
         .camera .kept-row.stale span { color: #b08a8a; }
         .camera .kept-row img { width: 32px; height: 24px; object-fit: cover; border-radius: 2px; }
         .kept-panel .kept { max-height: 260px; }
-        /* The place badge: a host's (or the floor's) camera and look, in the
+        /* The place badge: a host's (or the floor's) camera and view, in the
            world (picture_marks.js). Not `.camera`: that is the panel's own class
            above, and its `display: flex` would override the `hidden` the anchor
            layer sets when the host is out of view. */
         .world-badge.place-mark { border-color: #7a5a1a; color: #ffcc66; }
         .world-badge.place-mark::after { border-top-color: #7a5a1a; }
         .picture-facts .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: #777; margin-top: 0.3rem; }
-        .picture-facts .look-row.drawn { color: #ffcc66; }
+        .picture-facts .view-row.drawn { color: #ffcc66; }
         .picture-facts .chosen-shape { color: #9cd2ff; }
 
         .contents-list { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; }
@@ -660,8 +660,8 @@
         const WHEEL_RESISTANCE_THRESHOLD = 500;
         const SNAP_INCREMENT = 50;    // mm -- matches WALL_THICKNESS; fine enough for by-hand placement
         // The site's floor: a selection but not a node. Its key in the page; "" in every
-        // look and camera route. Floor things stand this far past the site's roots in +x
-        // (vision/looks.py's FLOOR_MARGIN_MM).
+        // view and camera route. Floor things stand this far past the site's roots in +x
+        // (vision/views.py's FLOOR_MARGIN_MM).
         const FLOOR_KEY = '@floor';
         const FLOOR_MARGIN_MM = 200;
 
@@ -957,7 +957,7 @@
                 }
                 document.querySelector('.side-panel')?.remove();
                 this.machine = null;
-                // What a picture wears in the world (picture_marks.js): each look
+                // What a picture wears in the world (picture_marks.js): each view
                 // as a mat on its host's top or on the floor, its shapes as
                 // outlines, a camera's frustum looking down onto it, and one place
                 // badge per host -- from one GET /sites/{s}/attached per site, asked
@@ -980,8 +980,8 @@
                 });
                 window.apothecaryPictures = this.pictureMarks;
                 // The loop's verbs at a host (pictures.js): a camera pinned, live and
-                // looked with; pictures added, dropped, pasted, pinned, found, sized;
-                // looks drawn and unpinned. Each is a ring cell; none has markup.
+                // taking pictures; pictures added, dropped, pasted, pinned, found, sized;
+                // views drawn and unpinned. Each is a ring cell; none has markup.
                 this.pictures = mountPictures({
                     base: BASE_URL, marks: this.pictureMarks,
                     log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
@@ -991,7 +991,7 @@
                         // A picture lands at the top level, where mats are drawn: step out
                         // first, as ◀ out does -- a view change, never a site switch.
                         stepOut: () => { if (this.focusPath.length) this.jumpTo(0); },
-                        focusWidth: () => { this.panels.open('selected'); this.selectedBodyEl.querySelector('.look-width')?.focus(); },
+                        focusWidth: () => { this.panels.open('selected'); this.selectedBodyEl.querySelector('.view-width')?.focus(); },
                         openPanel: (id) => this.panels.open(id),
                         frameFloor: () => this.frameFloor(),
                         rendered: () => this.renderSelectedPanel(),
@@ -1003,7 +1003,7 @@
                     },
                 });
                 window.apothecaryPictureVerbs = this.pictures;
-                // Kept: every camera, look and board a page pinned, every site's, and
+                // Kept: every camera, view and board a page pinned, every site's, and
                 // every picture the browser kept, each taken back from its row
                 // without switching the site (closed until asked for).
                 this.keptWidget = null;
@@ -1016,7 +1016,7 @@
                             world: {
                                 siteName: () => this.siteName,
                                 // Taken back in this site, or a picture forgotten
-                                // (its looks go wherever they were): the world's
+                                // (its views go wherever they were): the world's
                                 // marks are fetched again. Another site's row
                                 // changes nothing on screen.
                                 changed: (site) => (site === null || site === this.siteName ? this.pictureMarks.refresh() : null),
@@ -1243,9 +1243,9 @@
                 this.frameCameraForChildren([{ world_bounds: box, children: [] }]);
             }
 
-            // Where the floor's things stand when no look says: past the +x edge
+            // Where the floor's things stand when no view says: past the +x edge
             // of the site's roots (made pieces left out), level with their middle,
-            // on the ground -- where vision/looks.py lays a floor look's anchor.
+            // on the ground -- where vision/views.py lays a floor view's anchor.
             floorPoint(made = []) {
                 const skip = new Set(made);
                 let box = null;
@@ -2002,19 +2002,19 @@
                 if (made) this.appendEditor(this.pieceTarget(this.selectedName, made));
             }
 
-            // The width box sets the drawn look's scale (a chosen shape's long side
-            // when one is chosen); a look's row draws that look.
+            // The width box sets the drawn view's scale (a chosen shape's long side
+            // when one is chosen); a view's row draws that view.
             bindPictureFacts() {
                 const host = this.hostKey();
-                const widthBox = this.selectedBodyEl.querySelector('.look-width');
+                const widthBox = this.selectedBodyEl.querySelector('.view-width');
                 if (widthBox) widthBox.addEventListener('change', () => this.pictures.setWidth(host, Number(widthBox.value)).catch((e) => this.setStatus(e.message, 'error')));
-                for (const row of this.selectedBodyEl.querySelectorAll('.look-row')) {
-                    row.addEventListener('click', () => this.pictures.drawLook(row.dataset.host, row.dataset.look));
+                for (const row of this.selectedBodyEl.querySelectorAll('.view-row')) {
+                    row.addEventListener('click', () => this.pictures.drawView(row.dataset.host, row.dataset.view));
                 }
             }
 
             // What the pictures know about the selection, as facts (no verb:
-            // verbs are the ring's): a host's or the floor's camera and looks,
+            // verbs are the ring's): a host's or the floor's camera and views,
             // the shape chosen on its mat, a made piece's provenance.
             pictureFactsHtml(selection) {
                 const pm = this.pictureMarks;
@@ -2035,20 +2035,20 @@
                         + `; thickness ${guessed ? 'a guess' : "a person's"}`
                         + (moved ? '; moved since it was made' : '');
                     return `<div class="prop-readonly picture-facts" data-facts="made">
-                        From a picture: ${esc(made.picture)}${made.picture_forgotten ? ' (forgotten)' : ''}, shape ${made.shape_index} of a look at ${esc(where(made.host))}${made.look_pinned ? '' : ' (no longer pinned)'}<br>
+                        From a picture: ${esc(made.picture)}${made.picture_forgotten ? ' (forgotten)' : ''}, shape ${made.shape_index} of a view at ${esc(where(made.host))}${made.view_pinned ? '' : ' (no longer pinned)'}<br>
                         A ${esc(made.word)} because ${esc(made.reason)}${made.word_stated ? ' (a person said so)' : ''}; found by ${esc(made.finder)}, confidence ${Number(made.confidence).toFixed(2)}<br>
                         Scale: ${Number(made.mm_across).toFixed(0)} mm across the picture<br>
                         Size: ${size}
                     </div>`;
                 }
                 const cam = pm.cameraAt(host);
-                const looks = pm.looksAt(host);
+                const views = pm.viewsAt(host);
                 // A verb's place on the ring, named as text: the floor's verbs are under
                 // the canvas ring's Pictures › Floor, and its Add is Pictures › Add.
                 const ring = (verb) => `⌗ ${host === '' ? 'Pictures › Floor › ' : ''}${verb}`;
                 // Nothing here yet: the way in, so the durable hint is where the person
                 // looks. The verbs stay the ring's.
-                if (!cam && !looks.length) return `<div class="prop-readonly picture-facts" data-facts="${host === '' ? 'floor' : 'host'}"><div class="k">Pictures at ${esc(where(host))}</div><div data-facts="way-in">${ring('Camera › Pin here')} puts this browser's camera at ${esc(where(host))}; ${host === '' ? '⌗ Pictures › Add' : '⌗ Picture › Add'} pins a picture from disk; m, or right-click, opens the ring</div></div>`;
+                if (!cam && !views.length) return `<div class="prop-readonly picture-facts" data-facts="${host === '' ? 'floor' : 'host'}"><div class="k">Pictures at ${esc(where(host))}</div><div data-facts="way-in">${ring('Camera › Pin here')} puts this browser's camera at ${esc(where(host))}; ${host === '' ? '⌗ Pictures › Add' : '⌗ Picture › Add'} pins a picture from disk; m, or right-click, opens the ring</div></div>`;
                 const drawn = pm.drawnAt(host);
                 const rows = [];
                 if (cam) {
@@ -2056,31 +2056,31 @@
                     // Whose camera it is decides what can be done with it from here.
                     const mine = !!(this.pictures && this.pictures.state.cameras.some((c) => c.id === cam.id));
                     rows.push(`<div data-facts="camera-verbs">${mine
-                        ? `${ring('Camera › Look')} takes a picture and finds its shapes; Live shows the camera on the mat; Keep keeps a frame on this machine`
+                        ? `${ring('Camera › Take picture')} takes a picture and finds its shapes; Live shows the camera on the mat; Keep keeps a frame on this machine`
                         : `another browser's camera: a picture is taken here with one of this browser's cameras pinned in its place (${ring('Camera › Pin here')})`}</div>`);
                 }
-                for (const look of [...looks].reverse()) {
-                    const size = look.mat && look.mat.width ? `${Number(look.mat.width).toFixed(0)} mm across` : 'unsized';
-                    const madeCount = Object.keys(look.made || {}).length;
-                    rows.push(`<div class="look-row${look === drawn ? ' drawn' : ''}" data-host="${esc(host)}" data-look="${esc(look.id)}" title="Draw this look">${look === drawn ? '▸ ' : ''}${esc(look.picture)} · ${esc(look.finder)} · ${look.shapes.length} shape(s)${look.left_out ? ` (+${look.left_out} left out)` : ''} · ${size}${madeCount ? ` · ${madeCount} made` : ''}</div>`);
+                for (const view of [...views].reverse()) {
+                    const size = view.mat && view.mat.width ? `${Number(view.mat.width).toFixed(0)} mm across` : 'unsized';
+                    const madeCount = Object.keys(view.made || {}).length;
+                    rows.push(`<div class="view-row${view === drawn ? ' drawn' : ''}" data-host="${esc(host)}" data-view="${esc(view.id)}" title="Draw this view">${view === drawn ? '▸ ' : ''}${esc(view.picture)} · ${esc(view.finder)} · ${view.shapes.length} shape(s)${view.left_out ? ` (+${view.left_out} left out)` : ''} · ${size}${madeCount ? ` · ${madeCount} made` : ''}</div>`);
                 }
                 const chosen = pm.chosen();
-                const look = chosen && looks.find((l) => l.id === chosen.look);
-                const shape = look && look.shapes.find((sh) => sh.index === chosen.index);
+                const view = chosen && views.find((v) => v.id === chosen.view);
+                const shape = view && view.shapes.find((sh) => sh.index === chosen.index);
                 if (shape) {
-                    const tall = look.pixel_height / look.pixel_width;
+                    const tall = view.pixel_height / view.pixel_width;
                     const across = shape.long_side > 0 && shape.short_side > 0 ? shape.long_side : Math.max(shape.max[0] - shape.min[0], (shape.max[1] - shape.min[1]) * tall);
-                    const long = look.mat && look.mat.width ? `${(across * look.mat.width).toFixed(0)} mm` : 'no size yet';
+                    const long = view.mat && view.mat.width ? `${(across * view.mat.width).toFixed(0)} mm` : 'no size yet';
                     const status = shape.status === 'made' ? `made: ${esc(shape.piece)}` : shape.status === 'already_made' ? `already made (${esc(shape.piece)})` : 'found';
                     rows.push(`<div class="chosen-shape" data-facts="shape">Shape ${shape.index}: a ${esc(shape.word)} (${esc(shape.kind)}) because ${esc(shape.reason)}${shape.word_stated ? ' (a person said so)' : ''}; confidence ${Number(shape.confidence).toFixed(2)}; long side ${long}; ${status}</div>`);
                 }
-                // The one width: the drawn look's (or, with no look, its camera's
+                // The one width: the drawn view's (or, with no view, its camera's
                 // next), or with a shape chosen, that shape's long side.
-                const bySide = shape && drawn && look === drawn;
+                const bySide = shape && drawn && view === drawn;
                 const width = bySide
-                    ? (look.mat && look.mat.width ? Math.round((shape.long_side > 0 ? shape.long_side : shape.max[0] - shape.min[0]) * look.mat.width) : '')
+                    ? (view.mat && view.mat.width ? Math.round((shape.long_side > 0 ? shape.long_side : shape.max[0] - shape.min[0]) * view.mat.width) : '')
                     : (drawn ? (drawn.mat && drawn.mat.width ? Math.round(drawn.mat.width) : '') : (cam && cam.mm_across ? Math.round(cam.mm_across) : ''));
-                rows.push(`<div class="prop-row" data-facts="width"><label>${bySide ? "this shape's long side, mm" : 'picture width, mm'}</label><input type="number" class="look-width" min="1" step="1" value="${width}" title="${bySide ? 'How long this shape is in the world, in millimetres: the look is sized by it' : 'How wide the whole picture is in the world, in millimetres'}"></div>`);
+                rows.push(`<div class="prop-row" data-facts="width"><label>${bySide ? "this shape's long side, mm" : 'picture width, mm'}</label><input type="number" class="view-width" min="1" step="1" value="${width}" title="${bySide ? 'How long this shape is in the world, in millimetres: the view is sized by it' : 'How wide the whole picture is in the world, in millimetres'}"></div>`);
                 return `<div class="prop-readonly picture-facts" data-facts="${host === '' ? 'floor' : 'host'}"><div class="k">Pictures at ${esc(where(host))}</div>${rows.join('')}</div>`;
             }
 
@@ -3194,7 +3194,7 @@
             }
 
             // The floor is selected as a node is, without being one: nothing to
-            // move, no row in Contents; Selected shows its camera and looks.
+            // move, no row in Contents; Selected shows its camera and views.
             selectFloor() {
                 this.pictureMarks.unchoose();
                 this.pictureMarks.untrace();
@@ -3546,7 +3546,7 @@
             // The nodes' meshes and the pictures' pick meshes (a mat, an outline)
             // in one depth-sorted cast: the nearest wins, so a printer standing
             // over an outline is still the printer. Answers { key } for a node,
-            // { pick: { host, look, index } } for a picture's mark, or null.
+            // { pick: { host, view, index } } for a picture's mark, or null.
             raycastPick(event) {
                 const rect = this.canvas.getBoundingClientRect();
                 this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -3575,9 +3575,9 @@
                 const hit = this.raycastPick(event);
                 if (!hit) return;
                 if (!hit.pick) { this.selectChild(hit.key); return; }
-                const { host, look, index } = hit.pick;
+                const { host, view, index } = hit.pick;
                 this.selectPlace(host);
-                if (index !== null && this.pictureMarks.choose(look, index)) this.renderSelectedPanel();
+                if (index !== null && this.pictureMarks.choose(view, index)) this.renderSelectedPanel();
             }
 
             // Where a picture lands: a node's root ancestor, a made piece's host, a
@@ -4251,7 +4251,7 @@
                     const traced = viewer.pictureMarks.trace(path);
                     if (traced) {
                         const at = traced.host === '' ? 'the floor' : traced.host;
-                        viewer.setStatus(`${path}: a ${traced.word} made from shape ${traced.shape_index} of ${traced.picture}${traced.picture_forgotten ? ' (forgotten)' : ''}, seen at ${at}${traced.shown ? '' : '; its look is gone, so the outline is drawn from the copy the piece keeps'}${tail}`, 'success');
+                        viewer.setStatus(`${path}: a ${traced.word} made from shape ${traced.shape_index} of ${traced.picture}${traced.picture_forgotten ? ' (forgotten)' : ''}, seen at ${at}${traced.shown ? '' : '; its view is gone, so the outline is drawn from the copy the piece keeps'}${tail}`, 'success');
                         return;
                     }
                     viewer.setStatus(node ? `${path}: a ${node.role}${node.category ? ' in ' + node.category : ''}${node.part_ref ? ', from part ' + node.part_ref : ''}, ${node.children.length} inside${tail}` : `${path}: not on screen${tail}`, 'success');
@@ -4312,7 +4312,7 @@
             return rings.get(key);
         }
         // The key a ring is cached by: what it stands on, and what it was told of
-        // the board and the pictures, so a choose, look or make is never answered
+        // the board and the pictures, so a choose, pin or make is never answered
         // from a ring resolved before it.
         const ringKey = (spec, picture) => JSON.stringify({ p: spec.context.pointing, c: spec.context.targets, s: spec.site, d: spec.device || null, pic: picture || null });
         async function ringForSelected() {
@@ -4332,10 +4332,10 @@
                 for (const el of document.querySelectorAll(selector)) pairs.push([el, action]);
             }
             for (const el of document.querySelectorAll('.zoom-in-btn')) pairs.push([el, 'zoom-in']);
-            // Selected's look rows are Picture › Looks' cells; its width box is Size's.
-            for (const el of viewer.selectedBodyEl.querySelectorAll('.look-row')) pairs.push([el, `picture:draw:${el.dataset.look}`]);
+            // Selected's view rows are Picture › Views' cells; its width box is Size's.
+            for (const el of viewer.selectedBodyEl.querySelectorAll('.view-row')) pairs.push([el, `picture:draw:${el.dataset.view}`]);
             const floor = viewer.selectedName === '@floor' ? ':@floor' : '';
-            for (const el of viewer.selectedBodyEl.querySelectorAll('.look-width')) pairs.push([el, `picture:size${floor}`]);
+            for (const el of viewer.selectedBodyEl.querySelectorAll('.view-width')) pairs.push([el, `picture:size${floor}`]);
             annotate(ring, pairs);
         }
         // The list, from the canvas ring: each row at this level is a piece the

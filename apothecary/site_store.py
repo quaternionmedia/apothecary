@@ -97,11 +97,11 @@ class SiteStore:
         """Discard all edits and rebuild the site fresh from its factory.
 
         Pieces made from pictures are layout edits and go with the rest, so
-        their records go too and their shapes read as found again; the looks
-        stay pinned (``apothecary/vision/looks.py``)."""
+        their records go too and their shapes read as found again; the views
+        stay pinned (``apothecary/vision/views.py``)."""
         factory, _validator = self._entry(name)
         self._sites[name] = factory()
-        from .vision.looks import forget_made
+        from .vision.views import forget_made
 
         forget_made(name)
         return self._sites[name]
@@ -110,7 +110,7 @@ class SiteStore:
 def with_made_overlaps(name: str, site: Assembly, report: LayoutReport) -> LayoutReport:
     """``report``, plus each overlap among the site's roots that names a made piece and
     that the report does not already hold (garage's validator already holds them)."""
-    from .vision.looks import made_names
+    from .vision.views import made_names
 
     made = made_names(name)
     if not made:

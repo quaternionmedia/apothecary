@@ -377,7 +377,7 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     settled(page)
     story.shows(
         "What the browser put here, it can take back",
-        "Kept lists what a page pinned -- cameras, looks, boards -- every site's, "
+        "Kept lists what a page pinned -- cameras, views, boards -- every site's, "
         "and the pictures the browser kept, the ones added from the file picker "
         "kept as they were named under the picture folder's uploads/. Each row "
         "names its site and carries the button that takes it back, from here, "

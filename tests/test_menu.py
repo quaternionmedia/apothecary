@@ -995,11 +995,11 @@ def _group(ring_or_option, *labels):
     return here
 
 
-def _look(look_id="look_1", *, sized=True, kept=True, shapes=3, picture="bench_top.png"):
-    from apothecary.menu import LookSeen, ShapeSeen
+def _view(view_id="view_1", *, sized=True, kept=True, shapes=3, picture="bench_top.png"):
+    from apothecary.menu import ShapeSeen, ViewSeen
 
-    return LookSeen(
-        id=look_id,
+    return ViewSeen(
+        id=view_id,
         picture=picture,
         sized=sized,
         kept=kept,
@@ -1112,7 +1112,7 @@ def test_a_made_piece_has_picture_with_word_and_drop_and_no_camera():
         "picture:word:post",
     ]
     assert _group(picture, "Drop").destructive
-    # A made piece is not a host: it holds no camera and no look of its own.
+    # A made piece is not a host: it holds no camera and no view of its own.
     assert "picture:add" not in every_action([ring])
 
 
@@ -1154,14 +1154,14 @@ def test_a_host_whose_camera_is_another_browsers_offers_pin_and_unpin_only():
     camera = _group(ring, "Camera")
     assert _ring_labels(camera) == [("Pin here", 8), ("Unpin", 6)]
     assert [c.action for c in _group(camera, "Pin here").children] == ["camera:pin:bench_cam"]
-    # This browser's own: Live (or Still while live), Look, Keep, then Unpin.
+    # This browser's own: Live (or Still while live), Take picture, Keep, then Unpin.
     mine = resolve(
         Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=_context()
     )
     assert [c.action for c in _group(mine, "Camera").children] == [
         None,
         "camera:live",
-        "camera:look",
+        "camera:take-picture",
         "camera:keep",
         "camera:unpin",
     ]
@@ -1173,18 +1173,18 @@ def test_a_host_whose_camera_is_another_browsers_offers_pin_and_unpin_only():
     assert _group(live, "Camera", "Still").action == "camera:still"
 
 
-def test_the_picture_group_offers_make_only_on_a_sized_look_and_forget_only_on_a_kept_one():
+def test_the_picture_group_offers_make_only_on_a_sized_view_and_forget_only_on_a_kept_one():
     ring = resolve(
         Context(pointing=Pointing.NODE, targets=["workbench"]),
         _garage(),
-        picture=_context(looks=[_look(sized=False, kept=False)], drawn="look_1"),
+        picture=_context(views=[_view(sized=False, kept=False)], drawn="view_1"),
     )
     picture = _group(ring, "Picture")
     assert [c.label for c in picture.children] == ["Add", "Folder", "Size", "Unpin"]
     sized = resolve(
         Context(pointing=Pointing.NODE, targets=["workbench"]),
         _garage(),
-        picture=_context(looks=[_look()], drawn="look_1"),
+        picture=_context(views=[_view()], drawn="view_1"),
     )
     picture = _group(sized, "Picture")
     assert [(c.label, c.cell) for c in picture.children] == [
@@ -1197,18 +1197,18 @@ def test_the_picture_group_offers_make_only_on_a_sized_look_and_forget_only_on_a
     ]
     # Make › Make all beside each found shape, by index.
     assert [(c.label, c.action) for c in _group(picture, "Make").children] == [
-        ("Make all", "picture:make-all:look_1"),
-        ("disc 0", "picture:make:look_1:0"),
-        ("disc 1", "picture:make:look_1:1"),
-        ("disc 2", "picture:make:look_1:2"),
+        ("Make all", "picture:make-all:view_1"),
+        ("disc 0", "picture:make:view_1:0"),
+        ("disc 1", "picture:make:view_1:1"),
+        ("disc 2", "picture:make:view_1:2"),
     ]
     assert _group(picture, "Forget").destructive
 
 
 def test_find_is_offered_only_where_another_finder_can_read_the_picture():
-    one = _context(looks=[_look()], drawn="look_1")
+    one = _context(views=[_view()], drawn="view_1")
     one.finders = ["plain"]
-    two = _context(looks=[_look()], drawn="look_1")
+    two = _context(views=[_view()], drawn="view_1")
     two.finders = ["plain", "stated"]
     for told, offered in ((one, False), (two, True)):
         ring = resolve(
@@ -1237,18 +1237,18 @@ def test_a_root_with_many_pictures_still_resolves_and_a_chosen_one_fills_the_eig
     assert last.action == "picture:pin:shot_042.png" and last.cell == 7
 
 
-def test_a_host_with_more_than_eight_looks_still_resolves_and_a_chosen_look_fills_the_eighth():
-    looks = [_look(f"look_{i:02d}", picture=f"shot_{i:02d}.png") for i in range(12)]
-    told = _context(looks=looks, drawn="look_00")
+def test_a_host_with_more_than_eight_views_still_resolves_and_a_chosen_view_fills_the_eighth():
+    views = [_view(f"view_{i:02d}", picture=f"shot_{i:02d}.png") for i in range(12)]
+    told = _context(views=views, drawn="view_00")
     ring = resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=told)
-    listed = _group(ring, "Picture", "Looks")
+    listed = _group(ring, "Picture", "Views")
     assert [c.action for c in listed.children] == [
-        *(f"picture:draw:look_{i:02d}" for i in range(7)),
-        "picture:looks",
+        *(f"picture:draw:view_{i:02d}" for i in range(7)),
+        "picture:views",
     ]
-    told.here.chosen_look = "look_10"
+    told.here.chosen_view = "view_10"
     ring = resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=told)
-    assert _group(ring, "Picture", "Looks").children[-1].action == "picture:draw:look_10"
+    assert _group(ring, "Picture", "Views").children[-1].action == "picture:draw:view_10"
 
 
 def test_garage_with_sixty_four_made_pieces_still_resolves_the_canvas_ring():
@@ -1271,15 +1271,15 @@ def test_garage_with_sixty_four_made_pieces_still_resolves_the_canvas_ring():
 
 
 def test_the_fullest_context_holds_every_ring_to_eight_and_says_how_deep_it_goes():
-    """A board, a camera, several looks, many shapes, many pictures, several finders:
+    """A board, a camera, several views, many shapes, many pictures, several finders:
     every ring and sub-ring holds eight or fewer. The deepest path on a node ring is
     four rings (Picture › Make › group › shape); on the canvas ring the floor is two
     further down (Pictures › Floor › Picture › Make › group › shape), the level deeper
     the owner's decision accepts for the floor having no ring of its own."""
     from apothecary.menu import CameraSeen
 
-    looks = [_look(f"look_{i:02d}", shapes=32) for i in range(10)]
-    told = _context(looks=looks, drawn="look_00")
+    views = [_view(f"view_{i:02d}", shapes=32) for i in range(10)]
+    told = _context(views=views, drawn="view_00")
     told.pictures = [f"shot_{i:03d}.png" for i in range(500)]
     told.finders = ["plain", "stated"]
     told.words = ["disc", "plate", "post", "slot", "wedge"]
@@ -1312,8 +1312,8 @@ def test_make_make_all_drop_and_a_made_pieces_word_are_the_servers_and_the_rest_
     from apothecary.menu import carried_by
 
     for action in (
-        "picture:make:look_1:0",
-        "picture:make-all:look_1",
+        "picture:make:view_1:0",
+        "picture:make-all:view_1",
         "picture:drop",
         "picture:word:plate",
     ):
@@ -1322,19 +1322,19 @@ def test_make_make_all_drop_and_a_made_pieces_word_are_the_servers_and_the_rest_
         "picture:add",
         "picture:add:@floor",
         "picture:pin:bench_top.png",
-        "picture:draw:look_1",
+        "picture:draw:view_1",
         "picture:size",
         "picture:find:stated:@floor",
         "picture:unpin",
         "picture:forget",
         "picture:kept",
-        "picture:looks",
+        "picture:views",
         "picture:purge",
         "camera:pin:bench_cam",
         "camera:allow:@floor",
         "camera:live",
         "camera:still",
-        "camera:look",
+        "camera:take-picture",
         "camera:keep",
         "camera:unpin",
         "camera:gather",
@@ -1347,7 +1347,7 @@ def test_make_make_all_drop_and_a_made_pieces_word_are_the_servers_and_the_rest_
 
 def test_the_camera_panels_retired_cells_are_off_every_ring():
     """Allow, Capture, Place, Unplace and Open as one left with the camera panel's
-    sections: the camera is pinned, kept and looked at from its host's Camera."""
+    sections: the camera is pinned and takes pictures from its host's Camera."""
     rings = [
         resolve(Context(pointing=Pointing.CANVAS), _garage(), picture=_context()),
         resolve(
@@ -1370,41 +1370,41 @@ def test_the_camera_panels_retired_cells_are_off_every_ring():
 # --- carried by the server: the intent route's picture arms --------------------------
 
 
-from test_looks_api import world  # noqa: E402, F401 - the looks world, as a fixture here
+from test_views_api import world  # noqa: E402, F401 - the views world, as a fixture here
 
 
 @pytest.fixture
 def carried(world):  # noqa: F811 - the fixture imported above
-    """The looks world of tests/test_looks_api.py, with the bench's look pinned
-    and sized: a client, and the look as the page has it."""
+    """The views world of tests/test_views_api.py, with the bench's view pinned
+    and sized: a client, and the view as the page has it."""
     from fastapi.testclient import TestClient
-    from test_looks_api import _pin
+    from test_views_api import _pin
 
     from apothecary.api import app
 
     client = TestClient(app)
-    look = _pin(client, mm_across=1800)
-    return client, look
+    view = _pin(client, mm_across=1800)
+    return client, view
 
 
-def _told_about(look: dict):
-    from apothecary.menu import LookSeen, PictureContext, Place, ShapeSeen
+def _told_about(view: dict):
+    from apothecary.menu import PictureContext, Place, ShapeSeen, ViewSeen
 
     return PictureContext(
         here=Place(
-            looks=[
-                LookSeen(
-                    id=look["id"],
-                    picture=look["picture"],
-                    finder=look["finder"],
-                    sized=bool(look["mat"] and look["mat"]["width"]),
+            views=[
+                ViewSeen(
+                    id=view["id"],
+                    picture=view["picture"],
+                    finder=view["finder"],
+                    sized=bool(view["mat"] and view["mat"]["width"]),
                     shapes=[
                         ShapeSeen(index=s["index"], word=s["word"], status=s["status"])
-                        for s in look["shapes"]
+                        for s in view["shapes"]
                     ],
                 )
             ],
-            drawn=look["id"],
+            drawn=view["id"],
         )
     )
 
@@ -1442,8 +1442,8 @@ def _address(ring: dict, action: str) -> str:
 
 
 def test_a_shape_is_made_worded_and_dropped_through_the_ring_and_the_intent_route(carried):
-    client, look = carried
-    told = _told_about(look).model_dump(mode="json")
+    client, view = carried
+    told = _told_about(view).model_dump(mode="json")
     ring = client.post(
         "/menu/resolve",
         json={
@@ -1452,8 +1452,8 @@ def test_a_shape_is_made_worded_and_dropped_through_the_ring_and_the_intent_rout
             "picture": told,
         },
     ).json()
-    make = _address(ring, f"picture:make:{look['id']}:1")
-    assert make.startswith(_address(ring, f"picture:make-all:{look['id']}")[:2])
+    make = _address(ring, f"picture:make:{view['id']}:1")
+    assert make.startswith(_address(ring, f"picture:make-all:{view['id']}")[:2])
     answer = _choose(client, ring, make, ["workbench"])
     assert answer.status_code == 200, answer.text
     body = answer.json()
@@ -1476,7 +1476,7 @@ def test_a_shape_is_made_worded_and_dropped_through_the_ring_and_the_intent_rout
     answer = _choose(client, ring, _address(ring, "picture:drop"), [piece])
     assert answer.status_code == 200, answer.text
     assert piece not in {s["name"] for s in answer.json()["site"]["structures"]}
-    shapes = client.get("/sites/garage/attached").json()["looks"][0]["shapes"]
+    shapes = client.get("/sites/garage/attached").json()["views"][0]["shapes"]
     assert shapes[1]["status"] == "found"
 
     # Make all, from the same ring once more.
@@ -1488,13 +1488,13 @@ def test_a_shape_is_made_worded_and_dropped_through_the_ring_and_the_intent_rout
             "picture": told,
         },
     ).json()
-    answer = _choose(client, ring, _address(ring, f"picture:make-all:{look['id']}"), ["workbench"])
+    answer = _choose(client, ring, _address(ring, f"picture:make-all:{view['id']}"), ["workbench"])
     assert answer.status_code == 200, answer.text
     assert answer.json()["did"].startswith("made 3 piece(s)")
 
 
 def test_a_carried_picture_intent_is_refused_with_its_reason_and_never_a_500(carried):
-    client, look = carried
+    client, view = carried
 
     def send(action, targets=("workbench",), site="garage"):
         intent = {
@@ -1508,18 +1508,18 @@ def test_a_carried_picture_intent_is_refused_with_its_reason_and_never_a_500(car
         return client.post("/menu/intent", json=body)
 
     unsized = client.post(
-        "/sites/garage/looks",
+        "/sites/garage/views",
         json={"host": "workbench", "picture": "bench_top.png", "finder": "stated"},
     ).json()
     cases = {
         "picture:make": 400,
         "picture:make:": 400,
-        f"picture:make:{look['id']}:x": 400,
-        f"picture:make:{look['id']}:9": 404,
-        "picture:make:look_nowhere:0": 404,
+        f"picture:make:{view['id']}:x": 400,
+        f"picture:make:{view['id']}:9": 404,
+        "picture:make:view_nowhere:0": 404,
         f"picture:make:{unsized['id']}:0": 409,
         "picture:make-all": 400,
-        "picture:make-all:look_nowhere": 404,
+        "picture:make-all:view_nowhere": 404,
         "picture:drop": 404,
         "picture:word": 400,
         "picture:word:no_such_word": 404,
@@ -1527,8 +1527,8 @@ def test_a_carried_picture_intent_is_refused_with_its_reason_and_never_a_500(car
     for action, status in cases.items():
         answer = send(action)
         assert answer.status_code == status, (action, answer.status_code, answer.text)
-    made = send(f"picture:make:{look['id']}:0").json()["did"].split("made ", 1)[1]
-    assert send(f"picture:make:{look['id']}:0").status_code == 409  # already made
+    made = send(f"picture:make:{view['id']}:0").json()["did"].split("made ", 1)[1]
+    assert send(f"picture:make:{view['id']}:0").status_code == 409  # already made
     assert send("picture:word:no_such_word", targets=[made]).status_code == 422
     assert send("picture:drop", site=None).status_code == 400
     assert send("picture:drop", site="no_such_site").status_code == 404

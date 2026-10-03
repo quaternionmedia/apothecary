@@ -11,7 +11,7 @@ The other camera tests run in the headless shell with the fake UI, where the
 camera is allowed before the page loads and Allow never appears; nothing here is
 covered there.
 
-Every camera and look a test adds is taken back after it, and garage is reset
+Every camera and view a test adds is taken back after it, and garage is reset
 (tests/e2e/test_picture_in_the_world.py's fixture).
 """
 
@@ -75,14 +75,15 @@ def test_allow_before_the_yes_is_refused_and_says_what_to_do(
 
 
 @pytest.mark.e2e
-def test_the_yes_pins_the_one_camera_and_a_look_follows(
+def test_the_yes_pins_the_one_camera_and_a_view_follows(
     page,
     base_url: str,
     leaves_garage_as_found,  # noqa: F811
 ):
     """With the ring open at Allow, the person's yes: Allow pins the one camera at
-    the bench at once and names Look; Selected says what Look, Live and Keep do;
-    Camera › Look takes a picture, and a look stands at the bench."""
+    the bench at once and names Take picture; Selected says what Take picture, Live
+    and Keep do; Camera › Take picture takes a picture, and a view stands at the
+    bench."""
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     _open_garage(page, base_url)
@@ -92,7 +93,8 @@ def test_the_yes_pins_the_one_camera_and_a_look_follows(
     page.context.grant_permissions(["camera"], origin=base_url)
     _press(page, "Allow")
     _said(
-        page, "allowed and pinned at workbench: Camera › Look takes a picture and finds its shapes"
+        page,
+        "allowed and pinned at workbench: Camera › Take picture takes a picture and finds its shapes",
     )
     expect(page.locator("#ring-overlay")).to_have_count(0)
     expect(page.locator(".world-badge.place-mark[data-host='workbench'].has-camera")).to_be_visible(
@@ -108,20 +110,20 @@ def test_the_yes_pins_the_one_camera_and_a_look_follows(
         cameras[0]["label"]
     )
     verbs = page.locator("#selected-body [data-facts='camera-verbs']")
-    expect(verbs).to_contain_text("⌗ Camera › Look takes a picture and finds its shapes")
+    expect(verbs).to_contain_text("⌗ Camera › Take picture takes a picture and finds its shapes")
     expect(verbs).to_contain_text("Live shows the camera on the mat")
     expect(verbs).to_contain_text("Keep keeps a frame on this machine")
     expect(page.locator("#selected-body [data-facts='way-in']")).to_have_count(0)
 
-    # Camera › Look: a frame kept, found and pinned at the bench, with its camera.
+    # Camera › Take picture: a frame kept, found and pinned at the bench, with its camera.
     _ring_on(page, "workbench")
     _press(page, "Camera")
-    assert _labels(page) == ["Pin here", "Live", "Look", "Keep", "Unpin"]
-    _press(page, "Look")
+    assert _labels(page) == ["Pin here", "Live", "Take picture", "Keep", "Unpin"]
+    _press(page, "Take picture")
     _said(page, "found at workbench")
-    looks = page.request.get(f"{base_url}/sites/garage/attached").json()["looks"]
-    assert [(lk["host"], lk["camera"]) for lk in looks] == [("workbench", cameras[0]["id"])]
-    assert looks[0]["picture"].startswith("captures/")
+    views = page.request.get(f"{base_url}/sites/garage/attached").json()["views"]
+    assert [(vw["host"], vw["camera"]) for vw in views] == [("workbench", cameras[0]["id"])]
+    assert views[0]["picture"].startswith("captures/")
     page.wait_for_function(
         "() => window.apothecaryPictures.state().some((e) => e.host === 'workbench' && e.mat)",
         timeout=10000,

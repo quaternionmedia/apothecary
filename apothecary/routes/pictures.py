@@ -198,8 +198,8 @@ def keep_picture(
     named it. A picture by its first bytes, whatever its name says.
 
     With ``site`` and ``host`` (``""`` is the floor), the picture is kept and pinned
-    there as a look in one request, its shapes found by the plain finder, and the
-    answer carries the look. A host that cannot hold a look is refused before
+    there as a view in one request, its shapes found by the plain finder, and the
+    answer carries the view. A host that cannot hold a view is refused before
     anything is kept.
 
     The body is read on the event loop; the write of up to 16 MB runs in the threadpool."""
@@ -215,7 +215,7 @@ def keep_picture(
             status_code=422, detail="to pin a picture as it is kept, give both site and host"
         )
     if pinning:
-        from .looks import check_host
+        from .views import check_host
 
         check_host(site, host)
     root = _root()
@@ -228,17 +228,17 @@ def keep_picture(
         path = _private(root / CAPTURES) / f"{stamp}-{stem or 'capture'}{suffix}"
     path.write_bytes(data)
     entry = _entry(path, root)
-    from ..vision.looks import store
+    from ..vision.views import store
 
     store().kept_again(entry["path"])
     if pinning:
-        from .looks import _view, pin_picture
+        from .views import _answer, pin_picture
 
         try:
-            entry["look"] = _view(site, pin_picture(site, host, entry["path"], camera=camera))
+            entry["view"] = _answer(site, pin_picture(site, host, entry["path"], camera=camera))
         except HTTPException as refused:
             # Kept, and not pinned: the picture is the person's either way.
-            entry["look"], entry["not_pinned"] = None, refused.detail
+            entry["view"], entry["not_pinned"] = None, refused.detail
     return entry
 
 
@@ -338,7 +338,7 @@ def forget_kept_pictures(kept: str = Query("all", pattern="^(all|capture|upload)
     Never the folder's own pictures: those a person named, and only a person
     removes. A link inside the folders is left alone too; only regular files
     directly in them go."""
-    from ..vision.looks import store
+    from ..vision.views import store
 
     root = _root()
     folders = [KEPT[kept]] if kept != "all" else list(KEPT.values())
@@ -360,8 +360,8 @@ def forget_picture(path: str):
     """Forget one kept picture (``captures/…`` or ``uploads/…``; a bare name is a capture).
 
     Only what the browser put here: the folder's own pictures are a person's.
-    Its looks are unpinned, every site's; pieces made from it stay, marked forgotten."""
-    from ..vision.looks import store
+    Its views are unpinned, every site's; pieces made from it stay, marked forgotten."""
+    from ..vision.views import store
 
     root = _root()
     kept = _kept_picture(root, path)
@@ -586,7 +586,7 @@ def camera_rows(site: Optional[str]) -> List[dict]:
 
 
 def set_camera_width(camera_id: str, mm_across: float) -> bool:
-    """Keep the width last typed for a camera's picture: the next look from it starts there."""
+    """Keep the width last typed for a camera's picture: the next view from it starts there."""
     with _CAMERAS_LOCK:
         cams = _load_cameras()
         if camera_id not in cams:
@@ -602,7 +602,7 @@ def place_camera(camera_id: str, body: CameraPlacement):
     it there from now on. A host holds one camera, so this replaces any other there;
     pinning a camera elsewhere moves it. A host is a root structure with a footprint
     that is not a made piece; anywhere else is refused with its reason."""
-    from .looks import check_host
+    from .views import check_host
 
     if not CAMERA_ID.match(camera_id):
         raise HTTPException(status_code=422, detail="not a camera id")

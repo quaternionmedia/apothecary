@@ -169,7 +169,7 @@ SCAD unchanged.
 ## A piece made from a picture is a part
 
 A shape a finder saw in a picture and a person made into a piece
-(`Picture › Make` on the ring; `apothecary/vision/looks.py`) has no file
+(`Picture › Make` on the ring; `apothecary/vision/views.py`) has no file
 and no wrapper, and is a part all the same: `MadePart`
 (`apothecary/vision/piece.py`) wraps its record as a `BasePart`, and the
 viewer edits it in the one editor it edits any part in, opened from
@@ -191,12 +191,12 @@ the vocabulary, and its three sides in millimetres, each defaulting to what
 the piece is now. Its `contested` is its provenance: the thickness always
 carries the guess (a picture from above cannot see it), and the sides the
 finder measured are offered whenever the piece no longer has them, so after
-a person states a size, or after the look is re-scaled, the found number is
+a person states a size, or after the view is re-scaled, the found number is
 one click away, and taking it reads the piece as found again. Its
 `geometry` is what `piece_from_shape` builds for the parameters, rendered
 through the same seam as the snowplow's; its `get_bounds` is the box it
 occupies as built, turned as its shape was seen. `validate_overrides` is
-`BasePart`'s. Re-sizing a look (`PUT /sites/{s}/looks/{id}/scale`) rebuilds
+`BasePart`'s. Re-sizing a view (`PUT /sites/{s}/views/{id}/scale`) rebuilds
 every piece made from it whose sides no person stated, and lays it on its
 shape again only if it still stands where it was made.
 

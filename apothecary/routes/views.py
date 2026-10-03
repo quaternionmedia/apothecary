@@ -1,16 +1,16 @@
-"""Looks from the browser: a picture pinned at a place, its shapes, the pieces made.
+"""Views from the browser: a picture pinned at a place, its shapes, the pieces made.
 
-The store, the anchors and the making are ``apothecary/vision/looks.py``; these
+The store, the anchors and the making are ``apothecary/vision/views.py``; these
 routes are its doors. ``host: ""`` is the site's floor in every one.
 
 Plain ``def``, on the threadpool, for the routes that change no site -- a find
 reads a file and may be slow, and the store's lock is never held across it:
 
-- ``POST /sites/{s}/looks`` ``{host, picture, camera?, finder?, mm_across?}``
-  finds the shapes in a picture under the picture root and pins the look.
-- ``DELETE /sites/{s}/looks/{id}`` unpins a look; its picture and pieces stay.
-- ``GET /sites/{s}/attached``: a site's cameras, looks and made pieces, in one.
-- ``GET /placed``: every site's cameras, boards and looks, each a row to take back.
+- ``POST /sites/{s}/views`` ``{host, picture, camera?, finder?, mm_across?}``
+  finds the shapes in a picture under the picture root and pins the view.
+- ``DELETE /sites/{s}/views/{id}`` unpins a view; its picture and pieces stay.
+- ``GET /sites/{s}/attached``: a site's cameras, views and made pieces, in one.
+- ``GET /placed``: every site's cameras, boards and views, each a row to take back.
 
 A made piece is a part (``vision/piece.py``), and answers the parameter contract
 a part from the parts folder answers (``projects/parts/params.py``):
@@ -24,18 +24,18 @@ a part from the parts folder answers (``projects/parts/params.py``):
 ``async def``, one at a time on the event loop, as api.py's rule for routes that
 change a site says; each answers with the site as ``GET /sites/{s}`` does:
 
-- ``PUT /sites/{s}/looks/{id}/scale`` ``{mm_across} | {known_index, mm}`` sizes
-  a look, stores the width it comes to on the look's camera, so the next look
+- ``PUT /sites/{s}/views/{id}/scale`` ``{mm_across} | {known_index, mm}`` sizes
+  a view, stores the width it comes to on the view's camera, so the next view
   from that camera is sized alike, and rebuilds every piece made from it whose
   sides no person stated (``rebuilt`` names them).
-- ``PUT /sites/{s}/looks/{id}/shapes/{i}`` ``{word}``: a person's word for a
+- ``PUT /sites/{s}/views/{id}/shapes/{i}`` ``{word}``: a person's word for a
   shape; on a made shape it rebuilds the piece in place.
-- ``POST /sites/{s}/looks/{id}/make`` ``{shape} | {all: true}``: pieces from
+- ``POST /sites/{s}/views/{id}/make`` ``{shape} | {all: true}``: pieces from
   shapes, skipping the shapes already made.
 - ``PUT /sites/{s}/made/{piece}`` ``{params: {word?, width?, depth?, height?}}``
   (the editor's), or ``{word?, parameters?}`` (the ring's Word), and ``DELETE
   /sites/{s}/made/{piece}`` (Drop): keyed by the piece, so they work after its
-  look is unpinned or its picture forgotten.
+  view is unpinned or its picture forgotten.
 """
 
 from __future__ import annotations
@@ -51,12 +51,12 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from ..hierarchy import Assembly
 from ..projects.parts.params import ParamsSpec, Validation, params_spec, validate_staged
 from ..projects.parts.stl_renderer import geometry_scad
-from ..vision import looks as looking
-from ..vision.looks import Look, Made
+from ..vision import views as viewing
 from ..vision.models import FoundShape, ScaleReference
 from ..vision.piece import SIDES, MadePart
+from ..vision.views import Made, View
 
-router = APIRouter(tags=["looks"])
+router = APIRouter(tags=["views"])
 
 
 # --- answers -------------------------------------------------------------------------
@@ -66,7 +66,7 @@ def _point(p) -> List[float]:
     return [p.x, p.y]
 
 
-def shape_view(shape: FoundShape) -> Dict[str, object]:
+def shape_answer(shape: FoundShape) -> Dict[str, object]:
     return {
         "kind": shape.kind.value,
         "min": _point(shape.min_point),
@@ -85,18 +85,18 @@ def _xyz(v) -> List[float]:
     return [v.x, v.y, v.z]
 
 
-def look_view(look: Look, site: Optional[Assembly], made: Dict[str, Made]) -> Dict[str, object]:
-    """A look as the page reads it: its mat where it lies now, and each shape's state."""
-    centre = looking.mat_centre(look, site) if site is not None else None
-    width = look.mm_across
+def view_answer(view: View, site: Optional[Assembly], made: Dict[str, Made]) -> Dict[str, object]:
+    """A view as the page reads it: its mat where it lies now, and each shape's state."""
+    centre = viewing.mat_centre(view, site) if site is not None else None
+    width = view.mm_across
     shapes = []
-    for index, shape in enumerate(look.shapes):
-        word, reason, stated = looking.word_for_shape(look, index)
-        status, piece = looking.status_of(look, index, made)
+    for index, shape in enumerate(view.shapes):
+        word, reason, stated = viewing.word_for_shape(view, index)
+        status, piece = viewing.status_of(view, index, made)
         shapes.append(
             {
                 "index": index,
-                **shape_view(shape),
+                **shape_answer(shape),
                 "word": word,
                 "reason": reason,
                 "word_stated": stated,
@@ -105,19 +105,19 @@ def look_view(look: Look, site: Optional[Assembly], made: Dict[str, Made]) -> Di
             }
         )
     return {
-        **look_row(look, site),
-        "scale": look.scale,
+        **view_row(view, site),
+        "scale": view.scale,
         "mm_across": width,
-        "pixel_width": look.pixel_width,
-        "pixel_height": look.pixel_height,
-        "left_out": look.left_out,
-        "made": {str(i): piece for i, piece in sorted(look.made.items())},
-        "anchor": _xyz(look.anchor) if look.anchor is not None else None,
+        "pixel_width": view.pixel_width,
+        "pixel_height": view.pixel_height,
+        "left_out": view.left_out,
+        "made": {str(i): piece for i, piece in sorted(view.made.items())},
+        "anchor": _xyz(view.anchor) if view.anchor is not None else None,
         "mat": (
             {
                 "centre": _xyz(centre),
                 "width": width,
-                "depth": width * look.tallness if width is not None else None,
+                "depth": width * view.tallness if width is not None else None,
             }
             if centre is not None
             else None
@@ -126,32 +126,32 @@ def look_view(look: Look, site: Optional[Assembly], made: Dict[str, Made]) -> Di
     }
 
 
-def look_row(look: Look, site: Optional[Assembly]) -> Dict[str, object]:
-    """A look as one row of what is pinned: enough to name it and take it back."""
+def view_row(view: View, site: Optional[Assembly]) -> Dict[str, object]:
+    """A view as one row of what is pinned: enough to name it and take it back."""
     host_found = site is not None and (
-        look.at_floor or any(c.name == look.host for c in site.children)
+        view.at_floor or any(c.name == view.host for c in site.children)
     )
     return {
-        "id": look.id,
-        "site": look.site,
-        "host": look.host,
+        "id": view.id,
+        "site": view.site,
+        "host": view.host,
         "host_found": host_found,
-        "picture": look.picture,
-        "camera": look.camera,
-        "taken_at": look.taken_at,
-        "finder": look.finder,
+        "picture": view.picture,
+        "camera": view.camera,
+        "taken_at": view.taken_at,
+        "finder": view.finder,
     }
 
 
-def made_view(record: Made, pinned: bool) -> Dict[str, object]:
+def made_answer(record: Made, pinned: bool) -> Dict[str, object]:
     """A made piece as the page reads it: its provenance, and beside the sides it
     has (``parameters``) the sides the finder found (``found``), so the page can
     say whose the size is."""
-    view = record.model_dump(mode="json")
-    view["shape"] = shape_view(record.shape)
-    view["look_pinned"] = pinned
-    view["found"] = looking.found_size(record)
-    return view
+    answer = record.model_dump(mode="json")
+    answer["shape"] = shape_answer(record.shape)
+    answer["view_pinned"] = pinned
+    answer["found"] = viewing.found_size(record)
+    return answer
 
 
 def _site_answer(site_name: str, site: Assembly) -> Dict[str, object]:
@@ -166,28 +166,28 @@ def _site(site_name: str) -> Assembly:
     return _get_site_or_404(site_name)
 
 
-def _look_or_404(site_name: str, look_id: str) -> Look:
+def _view_or_404(site_name: str, view_id: str) -> View:
     try:
-        return looking.store().get(site_name, look_id)
-    except looking.LookNotFound as missing:
+        return viewing.store().get(site_name, view_id)
+    except viewing.ViewNotFound as missing:
         raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
 
 
-def _view(site_name: str, look: Look) -> Dict[str, object]:
-    return look_view(look, _site(site_name), looking.store().made_at(site_name))
+def _answer(site_name: str, view: View) -> Dict[str, object]:
+    return view_answer(view, _site(site_name), viewing.store().made_at(site_name))
 
 
 # --- pinning ---------------------------------------------------------------------------
 
 
 def check_host(site_name: str, host: str) -> Assembly:
-    """The site, once ``host`` is known to be able to hold a look or a camera; or refused."""
+    """The site, once ``host`` is known to be able to hold a view or a camera; or refused."""
     site = _site(site_name)
     try:
-        looking.host_node(site, host, looking.made_names(site_name))
-    except looking.HostNotFound as missing:
+        viewing.host_node(site, host, viewing.made_names(site_name))
+    except viewing.HostNotFound as missing:
         raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
-    except looking.NotAHost as refused:
+    except viewing.NotAHost as refused:
         raise HTTPException(status_code=422, detail=str(refused)) from None
     return site
 
@@ -200,10 +200,10 @@ def pin_picture(
     camera: Optional[str] = None,
     finder: str = "plain",
     mm_across: Optional[float] = None,
-) -> Look:
-    """Find the shapes in a picture under the root and pin the look at ``host``.
+) -> View:
+    """Find the shapes in a picture under the root and pin the view at ``host``.
 
-    The finder runs outside every lock, through the finder cache. A look with
+    The finder runs outside every lock, through the finder cache. A view with
     no width given takes its camera's last one."""
     from ..api import _picture_root, _picture_within_root
     from ..vision import get as get_finder
@@ -226,10 +226,10 @@ def pin_picture(
         ) from None
     if mm_across is None and camera:
         mm_across = _load_cameras().get(camera, {}).get("mm_across")
-    shapes, left_out = looking.keep_the_most_sure(seen.shapes)
+    shapes, left_out = viewing.keep_the_most_sure(seen.shapes)
     at = datetime.now(timezone.utc)
-    look = Look(
-        id=looking.new_look_id(at),
+    view = View(
+        id=viewing.new_view_id(at),
         site=site_name,
         host=host,
         picture=where.relative_to(root).as_posix(),
@@ -243,12 +243,12 @@ def pin_picture(
         shapes=shapes,
         left_out=left_out,
         anchor=(
-            looking.floor_anchor(site, looking.made_names(site_name))
-            if host == looking.FLOOR
+            viewing.floor_anchor(site, viewing.made_names(site_name))
+            if host == viewing.FLOOR
             else None
         ),
     )
-    return looking.store().pin(look)
+    return viewing.store().pin(view)
 
 
 def finders_for(picture: str) -> List[str]:
@@ -277,7 +277,7 @@ def finders_for(picture: str) -> List[str]:
 CAMERA_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
 
 
-class PinLook(BaseModel):
+class PinView(BaseModel):
     host: str = Field("", max_length=400)
     picture: str = Field(..., min_length=1, max_length=400)
     camera: Optional[str] = Field(None, pattern=CAMERA_PATTERN)
@@ -285,10 +285,10 @@ class PinLook(BaseModel):
     mm_across: Optional[float] = Field(None, gt=0, allow_inf_nan=False)
 
 
-@router.post("/sites/{site_name}/looks", status_code=201)
-def pin_look(site_name: str, body: PinLook):
-    """Find the shapes in a picture and pin the look at a host, or the floor (``""``)."""
-    look = pin_picture(
+@router.post("/sites/{site_name}/views", status_code=201)
+def pin_view(site_name: str, body: PinView):
+    """Find the shapes in a picture and pin the view at a host, or the floor (``""``)."""
+    view = pin_picture(
         site_name,
         body.host,
         body.picture,
@@ -296,7 +296,7 @@ def pin_look(site_name: str, body: PinLook):
         finder=body.finder,
         mm_across=body.mm_across,
     )
-    return _view(site_name, look)
+    return _answer(site_name, view)
 
 
 class ScaleBody(BaseModel):
@@ -317,11 +317,11 @@ class ScaleBody(BaseModel):
         return self
 
 
-@router.put("/sites/{site_name}/looks/{look_id}/scale")
-async def size_look(site_name: str, look_id: str, body: ScaleBody):
-    """Size a look; the width it comes to is stored on its camera as the next look's.
+@router.put("/sites/{site_name}/views/{view_id}/scale")
+async def size_view(site_name: str, view_id: str, body: ScaleBody):
+    """Size a view; the width it comes to is stored on its camera as the next view's.
 
-    Every piece made from the look whose sides no person stated is rebuilt at
+    Every piece made from the view whose sides no person stated is rebuilt at
     the new width, in place, and laid on its shape again if it still stands
     where it was made (``rebuilt`` names them; ``site`` is the site as it is
     now). A piece whose sides a person stated keeps them, and the scale it was
@@ -329,22 +329,22 @@ async def size_look(site_name: str, look_id: str, body: ScaleBody):
     from ..vision.models import Picture
     from .pictures import set_camera_width
 
-    look = _look_or_404(site_name, look_id)
+    view = _view_or_404(site_name, view_id)
     site = _site(site_name)
     if body.mm_across is not None:
         scale, mm_across = {"mm_across": body.mm_across}, body.mm_across
     else:
-        if body.known_index >= len(look.shapes):
+        if body.known_index >= len(view.shapes):
             raise HTTPException(
                 status_code=422,
-                detail=f"this look has {len(look.shapes)} shape(s); there is no shape "
+                detail=f"this view has {len(view.shapes)} shape(s); there is no shape "
                 f"{body.known_index}",
             )
         seen = Picture(
-            name=look.picture,
-            pixel_width=look.pixel_width,
-            pixel_height=look.pixel_height,
-            shapes=look.shapes,
+            name=view.picture,
+            pixel_width=view.pixel_width,
+            pixel_height=view.pixel_height,
+            shapes=view.shapes,
         )
         mm_across = ScaleReference(
             known_index=body.known_index, known_width_mm=body.mm
@@ -355,50 +355,52 @@ async def size_look(site_name: str, look_id: str, body: ScaleBody):
             )
         scale = {"known_index": body.known_index, "mm": body.mm}
     try:
-        look = looking.store().set_scale(site_name, look_id, scale, mm_across)
-    except looking.LookNotFound as missing:
+        view = viewing.store().set_scale(site_name, view_id, scale, mm_across)
+    except viewing.ViewNotFound as missing:
         raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
-    if look.camera:
-        set_camera_width(look.camera, mm_across)
-    rebuilt = looking.rescale_made(site_name, site, look)
+    if view.camera:
+        set_camera_width(view.camera, mm_across)
+    rebuilt = viewing.rescale_made(site_name, site, view)
     return {
-        **look_view(look, site, looking.store().made_at(site_name)),
+        **view_answer(view, site, viewing.store().made_at(site_name)),
         "rebuilt": rebuilt,
         "site": _site_answer(site_name, site) if rebuilt else None,
     }
 
 
-@router.delete("/sites/{site_name}/looks/{look_id}")
-def unpin_look(site_name: str, look_id: str):
-    """Unpin a look. Its picture stays on disk and its made pieces stay in the site."""
+@router.delete("/sites/{site_name}/views/{view_id}")
+def unpin_view(site_name: str, view_id: str):
+    """Unpin a view. Its picture stays on disk and its made pieces stay in the site."""
     try:
-        look = looking.store().unpin(site_name, look_id)
-    except looking.LookNotFound as missing:
+        view = viewing.store().unpin(site_name, view_id)
+    except viewing.ViewNotFound as missing:
         raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
-    return {"unpinned": look.id, "picture": look.picture}
+    return {"unpinned": view.id, "picture": view.picture}
 
 
 @router.get("/sites/{site_name}/attached")
 def attached(site_name: str):
-    """A site's cameras, looks (oldest first) and made pieces, in one request."""
+    """A site's cameras, views (oldest first) and made pieces, in one request."""
     from .pictures import camera_rows
 
     site = _site(site_name)
-    store = looking.store()
+    store = viewing.store()
     made = store.made_at(site_name)
-    looks = store.looks_at(site_name)
-    pinned = {lk.id for lk in looks}
+    views = store.views_at(site_name)
+    pinned = {vw.id for vw in views}
     return {
         "site": site_name,
         "cameras": camera_rows(site_name),
-        "looks": [look_view(lk, site, made) for lk in looks],
-        "made": {piece: made_view(rec, rec.look in pinned) for piece, rec in sorted(made.items())},
+        "views": [view_answer(vw, site, made) for vw in views],
+        "made": {
+            piece: made_answer(rec, rec.view in pinned) for piece, rec in sorted(made.items())
+        },
     }
 
 
 @router.get("/placed")
 def placed():
-    """Everything a page pinned, every site's: cameras, boards and looks, each a row.
+    """Everything a page pinned, every site's: cameras, boards and views, each a row.
 
     A row whose host is gone says so (``host_found``/``node_found``), so it can
     still be taken back from the list that shows it."""
@@ -428,7 +430,7 @@ def placed():
     return {
         "cameras": camera_rows(None),
         "boards": boards,
-        "looks": [look_row(lk, site_or_none(lk.site)) for lk in looking.store().looks_at()],
+        "views": [view_row(vw, site_or_none(vw.site)) for vw in viewing.store().views_at()],
     }
 
 
@@ -449,22 +451,22 @@ class WordBody(BaseModel):
         return word
 
 
-@router.put("/sites/{site_name}/looks/{look_id}/shapes/{index}")
-async def word_for_shape(site_name: str, look_id: str, index: int, body: WordBody):
+@router.put("/sites/{site_name}/views/{view_id}/shapes/{index}")
+async def word_for_shape(site_name: str, view_id: str, index: int, body: WordBody):
     """A person's word for one shape; a made shape's piece is rebuilt in place."""
-    look = _look_or_404(site_name, look_id)
-    if not 0 <= index < len(look.shapes):
-        raise HTTPException(status_code=404, detail=f"look {look_id!r} has no shape {index}")
+    view = _view_or_404(site_name, view_id)
+    if not 0 <= index < len(view.shapes):
+        raise HTTPException(status_code=404, detail=f"view {view_id!r} has no shape {index}")
     site = _site(site_name)
-    look = looking.store().set_word(site_name, look_id, index, body.word)
-    rebuilt = look.made.get(index)
+    view = viewing.store().set_word(site_name, view_id, index, body.word)
+    rebuilt = view.made.get(index)
     if rebuilt is not None:
         try:
-            looking.rebuild(site_name, site, rebuilt, word=body.word)
-        except looking.NotMade:
+            viewing.rebuild(site_name, site, rebuilt, word=body.word)
+        except viewing.NotMade:
             rebuilt = None
     return {
-        "look": _view_if_pinned(site_name, look_id),
+        "view": _view_if_pinned(site_name, view_id),
         "rebuilt": rebuilt,
         "site": _site_answer(site_name, site),
     }
@@ -481,29 +483,29 @@ class MakeBody(BaseModel):
         return self
 
 
-@router.post("/sites/{site_name}/looks/{look_id}/make")
-async def make_pieces(site_name: str, look_id: str, body: MakeBody):
-    """Pieces from a look's shapes: one, or every one not already made."""
+@router.post("/sites/{site_name}/views/{view_id}/make")
+async def make_pieces(site_name: str, view_id: str, body: MakeBody):
+    """Pieces from a view's shapes: one, or every one not already made."""
     site = _site(site_name)
     try:
-        made, skipped = looking.make(site_name, site, look_id, body.shape)
-    except looking.LookNotFound as missing:
+        made, skipped = viewing.make(site_name, site, view_id, body.shape)
+    except viewing.ViewNotFound as missing:
         raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
-    except looking.CannotMake as refused:
+    except viewing.CannotMake as refused:
         raise HTTPException(status_code=409, detail=str(refused)) from None
     return {
         "made": made,
         "skipped": skipped,
-        "look": _view_if_pinned(site_name, look_id),
+        "view": _view_if_pinned(site_name, view_id),
         "site": _site_answer(site_name, site),
     }
 
 
-def _view_if_pinned(site_name: str, look_id: str) -> Optional[Dict[str, object]]:
-    """The look as it is now, or None when it was unpinned meanwhile (its picture forgotten)."""
+def _view_if_pinned(site_name: str, view_id: str) -> Optional[Dict[str, object]]:
+    """The view as it is now, or None when it was unpinned meanwhile (its picture forgotten)."""
     try:
-        return _view(site_name, looking.store().get(site_name, look_id))
-    except looking.LookNotFound:
+        return _answer(site_name, viewing.store().get(site_name, view_id))
+    except viewing.ViewNotFound:
         return None
 
 
@@ -536,8 +538,8 @@ class RebuildBody(BaseModel):
 
 def _made_or_404(site_name: str, piece: str) -> Made:
     try:
-        return looking.store().made_piece(site_name, piece)
-    except looking.NotMade as missing:
+        return viewing.store().made_piece(site_name, piece)
+    except viewing.NotMade as missing:
         raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
 
 
@@ -617,15 +619,15 @@ async def rebuild_made(site_name: str, piece: str, body: RebuildBody):
         record = _made_or_404(site_name, piece)  # nothing differs: nothing to rebuild
     else:
         try:
-            record = looking.rebuild(
+            record = viewing.rebuild(
                 site_name, site, piece, word=change["word"], parameters=change["parameters"]
             )
-        except looking.NotMade as missing:
+        except viewing.NotMade as missing:
             raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
-    pinned = {lk.id for lk in looking.store().looks_at(site_name)}
+    pinned = {vw.id for vw in viewing.store().views_at(site_name)}
     return {
         "piece": piece,
-        "provenance": made_view(record, record.look in pinned),
+        "provenance": made_answer(record, record.view in pinned),
         "bounds": MadePart.of(record).get_bounds().model_dump(),
         "site": _site_answer(site_name, site),
     }
@@ -636,13 +638,13 @@ async def drop_made(site_name: str, piece: str):
     """Drop: the piece leaves the site, and its shape reads as found again."""
     site = _site(site_name)
     _made_or_404(site_name, piece)
-    record = looking.drop(site_name, site, piece)
+    record = viewing.drop(site_name, site, piece)
     return {
         "dropped": piece,
-        "look": record.look,
+        "view": record.view,
         "shape": record.shape_index,
         "site": _site_answer(site_name, site),
     }
 
 
-__all__ = ["check_host", "finders_for", "look_view", "pin_picture", "router", "shape_view"]
+__all__ = ["check_host", "finders_for", "pin_picture", "router", "shape_answer", "view_answer"]

@@ -1,5 +1,5 @@
-"""The loop at a place, from the ring alone: a camera pinned at the bench, a frame
-looked at, its shapes found, the look sized, a shape made into a piece standing on
+"""The loop at a place, from the ring alone: a camera pinned at the bench, a picture
+taken, its shapes found, the view sized, a shape made into a piece standing on
 its outline, Why this back to it, the piece dropped, the picture forgotten; and the
 floor, reached from the canvas ring's Pictures › Floor.
 
@@ -12,7 +12,7 @@ The camera's deviceId is this browser context's: nothing here reloads the page
 between pinning a camera and using it, since Chromium may hand a reloaded page
 other ids for its fake devices.
 
-Every look, camera, kept picture and made piece a test adds is taken back after
+Every view, camera, kept picture and made piece a test adds is taken back after
 it (tests/e2e/test_picture_in_the_world.py's fixture), and garage is reset.
 """
 
@@ -182,22 +182,23 @@ def test_the_loop_at_the_bench_from_the_ring(page, base_url: str, leaves_garage_
     cameras = page.request.get(f"{base_url}/cameras?site=garage").json()
     assert [c["path"] for c in cameras] == ["workbench"]
 
-    # This browser's camera: Live, Look, Keep and Unpin beside Pin here.
+    # This browser's camera: Live, Take picture, Keep and Unpin beside Pin here.
     _ring_on(page, "workbench")
     _press(page, "Camera")
-    assert _labels(page) == ["Pin here", "Live", "Look", "Keep", "Unpin"]
-    # Look, from Still: the frame is kept with its camera and host, found, pinned.
-    _press(page, "Look")
+    assert _labels(page) == ["Pin here", "Live", "Take picture", "Keep", "Unpin"]
+    # Take picture, from Still: the frame is kept with its camera and host, found,
+    # pinned.
+    _press(page, "Take picture")
     _said(page, "found at workbench")
     page.wait_for_function(
         "() => window.apothecaryPictures.state().some((e) => e.host === 'workbench' && e.outlines.length)",
         timeout=10000,
     )
-    first = _attached(page, base_url)["looks"]
+    first = _attached(page, base_url)["views"]
     assert len(first) == 1 and first[0]["camera"] == cameras[0]["id"]
     assert first[0]["picture"].startswith("captures/") and first[0]["shapes"]
 
-    # Live puts the video on the mat and hides the outlines; Look ends it.
+    # Live puts the video on the mat and hides the outlines; Take picture ends it.
     _ring_on(page, "workbench")
     _press(page, "Camera", "Live")
     page.wait_for_function(
@@ -209,33 +210,33 @@ def test_the_loop_at_the_bench_from_the_ring(page, base_url: str, leaves_garage_
     _ring_on(page, "workbench")
     _press(page, "Camera")
     assert "Still" in _labels(page)
-    _press(page, "Look")
+    _press(page, "Take picture")
     page.wait_for_function(
         "(first) => window.apothecaryPictureVerbs.live() === null"
         " && window.apothecaryPictures.state().some((e) => e.host === 'workbench'"
-        " && e.look !== first && e.outlines.length)",
+        " && e.view !== first && e.outlines.length)",
         arg=first[0]["id"],
         timeout=10000,
     )
-    looks = _attached(page, base_url)["looks"]
-    assert len(looks) == 2
-    look = looks[-1]
-    assert _drawn(page, "workbench")["look"] == look["id"]
+    views = _attached(page, base_url)["views"]
+    assert len(views) == 2
+    view = views[-1]
+    assert _drawn(page, "workbench")["view"] == view["id"]
 
     # Unsized, the host's Picture offers no Make; Selected's width box sizes it.
     _ring_on(page, "workbench")
     _press(page, "Picture")
-    assert "Make" not in _labels(page) and {"Looks", "Size", "Unpin", "Forget"} <= set(
+    assert "Make" not in _labels(page) and {"Views", "Size", "Unpin", "Forget"} <= set(
         _labels(page)
     )
     _press(page, "Size")
-    box = page.locator("#selected-body .look-width")
+    box = page.locator("#selected-body .view-width")
     expect(box).to_be_focused(timeout=3000)
     box.fill("800")
     box.press("Tab")
     _said(page, "800 mm across")
-    look = _attached(page, base_url)["looks"][-1]
-    assert look["mm_across"] == 800
+    view = _attached(page, base_url)["views"][-1]
+    assert view["mm_across"] == 800
 
     # Picture › Make › a shape: the piece stands on its outline.
     _ring_on(page, "workbench")
@@ -250,9 +251,9 @@ def test_the_loop_at_the_bench_from_the_ring(page, base_url: str, leaves_garage_
     attached = _attached(page, base_url)
     ((piece, record),) = attached["made"].items()
     _said(page, f"made {piece}")
-    shape = next(s for s in attached["looks"][-1]["shapes"] if s["index"] == record["shape_index"])
+    shape = next(s for s in attached["views"][-1]["shapes"] if s["index"] == record["shape_index"])
     assert shape["status"] == "made"
-    mat = attached["looks"][-1]["mat"]
+    mat = attached["views"][-1]["mat"]
     cx = (shape["min"][0] + shape["max"][0]) / 2
     cy = (shape["min"][1] + shape["max"][1]) / 2
     want = (
@@ -265,7 +266,7 @@ def test_the_loop_at_the_bench_from_the_ring(page, base_url: str, leaves_garage_
     assert tree["min"][2] == pytest.approx(mat["centre"][2], abs=1)  # on the bench's top
     expect(page.locator(f"#contents-list .contents-item[data-path='{piece}']")).to_be_visible()
 
-    # Why this, from the piece: its look drawn, its outline lit, a thread to it; the
+    # Why this, from the piece: its view drawn, its outline lit, a thread to it; the
     # selection stays on the piece.
     _ring_on(page, piece)
     labels = _labels(page)
@@ -287,16 +288,16 @@ def test_the_loop_at_the_bench_from_the_ring(page, base_url: str, leaves_garage_
         timeout=10000,
     )
     expect(page.locator(f"#contents-list .contents-item[data-path='{piece}']")).to_have_count(0)
-    shapes = _attached(page, base_url)["looks"][-1]["shapes"]
+    shapes = _attached(page, base_url)["views"][-1]["shapes"]
     assert all(s["status"] == "found" for s in shapes)
 
-    # Forget: the kept frame goes, its look with it.
+    # Forget: the kept frame goes, its view with it.
     _ring_on(page, "workbench")
     _press(page, "Picture", "Forget")
-    _said(page, f"forgot {look['picture']}")
+    _said(page, f"forgot {view['picture']}")
     kept = {p["path"] for p in page.request.get(f"{base_url}/photos/pictures").json()}
-    assert look["picture"] not in kept
-    assert look["id"] not in {lk["id"] for lk in _attached(page, base_url)["looks"]}
+    assert view["picture"] not in kept
+    assert view["id"] not in {vw["id"] for vw in _attached(page, base_url)["views"]}
     assert page.url == url  # nothing switched the site
     assert errors == []
 
@@ -304,7 +305,7 @@ def test_the_loop_at_the_bench_from_the_ring(page, base_url: str, leaves_garage_
 @pytest.mark.e2e
 def test_the_floor_from_the_canvas_ring(page, base_url: str, leaves_garage_as_found):  # noqa: F811
     """Pictures › Floor on the canvas ring, with nothing pinned there: the fake camera
-    pinned at the floor, a Look taken, the floor's mat drawn beside the site, sized,
+    pinned at the floor, a picture taken, the floor's mat drawn beside the site, sized,
     and a shape made there."""
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
@@ -321,14 +322,14 @@ def test_the_floor_from_the_canvas_ring(page, base_url: str, leaves_garage_as_fo
     )
 
     _canvas_ring(page)
-    _press(page, "Pictures", "Floor", "Camera", "Look")
+    _press(page, "Pictures", "Floor", "Camera", "Take picture")
     _said(page, "found at the floor")
     page.wait_for_function(
         "() => window.apothecaryPictures.state().some((e) => e.host === '' && e.outlines.length)",
         timeout=10000,
     )
     assert page.evaluate("() => window.fractalViewer.selectedName") == "@floor"
-    box = page.locator("#selected-body .look-width")
+    box = page.locator("#selected-body .view-width")
     box.fill("400")
     box.press("Tab")
     _said(page, "400 mm across")
@@ -353,8 +354,8 @@ def test_a_dropped_file_is_pinned_where_it_lands(
     leaves_garage_as_found,  # noqa: F811
 ):
     """Dropped on a child while zoomed in, one file is pinned at its root and the view
-    steps out; two dropped at once are two looks, the last drawn; on empty canvas, the
-    floor; a look's row in the pins list unpins it."""
+    steps out; two dropped at once are two views, the last drawn; on empty canvas, the
+    floor; a view's row in the pins list unpins it."""
     _drawing().save(tmp_path / "bench_drop.png")
     data = (tmp_path / "bench_drop.png").read_bytes()
     _open_garage(page, base_url)
@@ -391,11 +392,11 @@ def test_a_dropped_file_is_pinned_where_it_lands(
     page.evaluate(drop, [child["x"], child["y"], ["bench_drop.png"], encoded])
     _said(page, "1 picture(s) pinned at workbench")
     assert page.evaluate("() => window.fractalViewer.focusPath.length") == 0
-    looks = _attached(page, base_url)["looks"]
-    assert [lk["host"] for lk in looks] == ["workbench"]
-    assert looks[0]["picture"].startswith("uploads/bench_drop")
+    views = _attached(page, base_url)["views"]
+    assert [vw["host"] for vw in views] == ["workbench"]
+    assert views[0]["picture"].startswith("uploads/bench_drop")
 
-    # Two at once, on the bench's mat: two looks, the last one drawn. The first
+    # Two at once, on the bench's mat: two views, the last one drawn. The first
     # drop stepped the view out of the bench; measure only once it has stopped.
     page.wait_for_function(
         "() => window.apothecaryPictures.state().some((e) => e.host === 'workbench' && e.mat)"
@@ -405,13 +406,13 @@ def test_a_dropped_file_is_pinned_where_it_lands(
     dropped = page.evaluate(
         """([names, bytes]) => {
             const v = window.fractalViewer;
-            const look = window.apothecaryPictures.drawnAt('workbench');
+            const view = window.apothecaryPictures.drawnAt('workbench');
             const r = v.canvas.getBoundingClientRect();
             // A point of the mat the page itself picks as the bench: whichever
             // corner is clear of the printers standing on it at this viewport.
             let at = null;
             for (let fy = 0.025; fy < 1 && !at; fy += 0.05) for (let fx = 0.025; fx < 1 && !at; fx += 0.05) {
-                const p = window.apothecaryPictures.scenePoint(look.id, fx, fy);
+                const p = window.apothecaryPictures.scenePoint(view.id, fx, fy);
                 p.project(v.camera);
                 // Whole pixels, as the page's drop event carries them, and clear of
                 // the bench's edges: the pixels beside it must be the bench too.
@@ -434,10 +435,10 @@ def test_a_dropped_file_is_pinned_where_it_lands(
     )
     assert dropped, "no point of the bench's mat is picked as the bench"
     _said(page, "2 picture(s) pinned at workbench")
-    looks = [lk for lk in _attached(page, base_url)["looks"] if lk["host"] == "workbench"]
-    assert len(looks) == 3
-    assert _drawn(page, "workbench")["look"] == looks[-1]["id"]
-    assert looks[-1]["picture"].startswith("uploads/two")
+    views = [vw for vw in _attached(page, base_url)["views"] if vw["host"] == "workbench"]
+    assert len(views) == 3
+    assert _drawn(page, "workbench")["view"] == views[-1]["id"]
+    assert views[-1]["picture"].startswith("uploads/two")
 
     # On empty canvas, where nothing is under the pointer: the floor.
     empty = page.evaluate(
@@ -454,13 +455,13 @@ def test_a_dropped_file_is_pinned_where_it_lands(
     assert empty, "nowhere on the canvas is empty"
     page.evaluate(drop, [empty["x"], empty["y"], ["floor.png"], encoded])
     _said(page, "1 picture(s) pinned at the floor")
-    assert [lk["host"] for lk in _attached(page, base_url)["looks"]].count("") == 1
+    assert [vw["host"] for vw in _attached(page, base_url)["views"]].count("") == 1
 
-    # A look's row in Kept unpins it.
+    # A view's row in Kept unpins it.
     page.evaluate("() => window.apothecaryPanels.open('kept')")
     panel = page.locator(".panel[data-panel='kept']")
-    row = panel.locator(f".kept-row.look:has(.kept-look-unpin[data-id='{looks[0]['id']}'])")
+    row = panel.locator(f".kept-row.view:has(.kept-view-unpin[data-id='{views[0]['id']}'])")
     expect(row).to_be_visible(timeout=5000)
-    row.locator(".kept-look-unpin").click()
+    row.locator(".kept-view-unpin").click()
     expect(row).to_have_count(0, timeout=5000)
-    assert looks[0]["id"] not in {lk["id"] for lk in _attached(page, base_url)["looks"]}
+    assert views[0]["id"] not in {vw["id"] for vw in _attached(page, base_url)["views"]}

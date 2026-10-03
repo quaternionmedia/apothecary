@@ -1,4 +1,4 @@
-"""Looks: a picture pinned at a place in a site, its shapes, and the pieces made from them.
+"""Views: a picture pinned at a place in a site, its shapes, and the pieces made from them.
 
 The fixture is a stated description of a picture 1000 by 500 pixels (so not
 square), pinned at node ``workbench`` in site ``garage``. The bench's top is
@@ -69,7 +69,7 @@ def _png(size=(WIDE, HIGH), shapes="rt") -> bytes:
 
 @pytest.fixture
 def world(tmp_path, monkeypatch):
-    """A picture root with the stated fixture, a state folder, and a fresh look store."""
+    """A picture root with the stated fixture, a state folder, and a fresh view store."""
     root = tmp_path / "pictures"
     root.mkdir()
     monkeypatch.setenv("APOTHECARY_PICTURE_ROOT", str(root))
@@ -84,10 +84,10 @@ def world(tmp_path, monkeypatch):
     (root / "drawn.png").write_bytes(_png(shapes="ret"))
     from apothecary.firmware import devices
     from apothecary.vision import cache as cache_module
-    from apothecary.vision import looks as looks_module
+    from apothecary.vision import views as views_module
 
     monkeypatch.setattr(devices, "_STATE", None)  # the boards pinned in this state folder
-    monkeypatch.setattr(looks_module, "_store", looks_module.Looks())
+    monkeypatch.setattr(views_module, "_store", views_module.Views())
     monkeypatch.setattr(cache_module, "_cache", cache_module.FinderCache())
     for name in _site_store.names():
         _site_store.reset(name)
@@ -98,7 +98,7 @@ def world(tmp_path, monkeypatch):
 
 def _pin(c, *, site="garage", host="workbench", picture="bench_top.png", **more):
     body = {"host": host, "picture": picture, "finder": "stated", **more}
-    r = c.post(f"/sites/{site}/looks", json=body)
+    r = c.post(f"/sites/{site}/views", json=body)
     assert r.status_code == 201, r.text
     return r.json()
 
@@ -124,36 +124,36 @@ def _outline_centre(mat_centre, width, shape):
 # --- pinning ------------------------------------------------------------------------
 
 
-def test_a_look_keeps_the_boxes_and_points_it_found(world):
+def test_a_view_keeps_the_boxes_and_points_it_found(world):
     c = TestClient(app)
-    look = _pin(c)
-    assert look["id"].startswith("look_") and look["host"] == "workbench"
-    assert look["picture"] == "bench_top.png" and look["finder"] == "stated"
-    assert (look["pixel_width"], look["pixel_height"]) == (WIDE, HIGH)
-    assert look["left_out"] == 0 and look["scale"] is None and look["mm_across"] is None
-    shapes = look["shapes"]
+    view = _pin(c)
+    assert view["id"].startswith("view_") and view["host"] == "workbench"
+    assert view["picture"] == "bench_top.png" and view["finder"] == "stated"
+    assert (view["pixel_width"], view["pixel_height"]) == (WIDE, HIGH)
+    assert view["left_out"] == 0 and view["scale"] is None and view["mm_across"] is None
+    shapes = view["shapes"]
     assert [s["index"] for s in shapes] == [0, 1, 2]
     assert shapes[0]["min"] == SHAPES[0]["min"] and shapes[0]["max"] == SHAPES[0]["max"]
     assert shapes[0]["points"] == SHAPES[0]["points"]
     assert shapes[1]["confidence"] == 0.9 and shapes[1]["word"] == "disc"
     assert all(s["status"] == "found" for s in shapes)
     # The mat lies on the bench's top, centred, unsized until a width is given.
-    assert look["mat"]["centre"] == list(BENCH_TOP) and look["mat"]["width"] is None
+    assert view["mat"]["centre"] == list(BENCH_TOP) and view["mat"]["width"] is None
     # Listed with the site's cameras in one request; GET /sites does not change.
     attached = c.get("/sites/garage/attached").json()
-    assert [lk["id"] for lk in attached["looks"]] == [look["id"]]
+    assert [vw["id"] for vw in attached["views"]] == [view["id"]]
     assert attached["cameras"] == [] and attached["made"] == {}
-    assert "looks" not in c.get("/sites/garage").json()
+    assert "views" not in c.get("/sites/garage").json()
 
 
 def test_a_pin_may_carry_a_typed_width(world):
     c = TestClient(app)
-    look = _pin(c, mm_across=1800)
-    assert look["mm_across"] == 1800 and look["scale"] == {"mm_across": 1800}
-    assert look["mat"]["width"] == 1800 and look["mat"]["depth"] == 900
+    view = _pin(c, mm_across=1800)
+    assert view["mm_across"] == 1800 and view["scale"] == {"mm_across": 1800}
+    assert view["mat"]["width"] == 1800 and view["mat"]["depth"] == 900
 
 
-def test_looks_and_cameras_are_refused_where_they_cannot_be_pinned(world):
+def test_views_and_cameras_are_refused_where_they_cannot_be_pinned(world):
     c = TestClient(app)
     for host, says in (
         ("storage_shelving.shelf_unit", "root"),
@@ -161,7 +161,7 @@ def test_looks_and_cameras_are_refused_where_they_cannot_be_pinned(world):
         ("nowhere", "not found"),
     ):
         r = c.post(
-            "/sites/garage/looks",
+            "/sites/garage/views",
             json={"host": host, "picture": "bench_top.png", "finder": "stated"},
         )
         assert r.status_code in (404, 422), (host, r.text)
@@ -169,11 +169,11 @@ def test_looks_and_cameras_are_refused_where_they_cannot_be_pinned(world):
         r = c.put("/cameras/cam1", json={"site": "garage", "path": host})
         assert r.status_code in (404, 422) and says in r.json()["detail"], (host, r.json())
     # A made piece is not a host: its pins would go stale when it is dropped or reset.
-    look = _pin(c, mm_across=1800)
-    made = c.post(f"/sites/garage/looks/{look['id']}/make", json={"shape": 1}).json()
+    view = _pin(c, mm_across=1800)
+    made = c.post(f"/sites/garage/views/{view['id']}/make", json={"shape": 1}).json()
     piece = made["made"][0]
     r = c.post(
-        "/sites/garage/looks", json={"host": piece, "picture": "bench_top.png", "finder": "stated"}
+        "/sites/garage/views", json={"host": piece, "picture": "bench_top.png", "finder": "stated"}
     )
     assert r.status_code == 422 and "made piece" in r.json()["detail"]
     r = c.put("/cameras/cam1", json={"site": "garage", "path": piece})
@@ -185,7 +185,7 @@ def test_a_path_outside_the_root_is_refused(world):
     outside = world.parent / "elsewhere.png"
     outside.write_bytes(_png())
     for picture in ("../elsewhere.png", str(outside)):
-        r = c.post("/sites/garage/looks", json={"host": "workbench", "picture": picture})
+        r = c.post("/sites/garage/views", json={"host": "workbench", "picture": picture})
         assert r.status_code == 403, r.text
 
 
@@ -202,11 +202,11 @@ def test_a_camera_at_the_floor_and_a_second_camera_at_a_host_replaces_the_first(
     assert ids == {"second": "workbench", "third": ""}
 
 
-def test_a_new_look_takes_its_cameras_width(world):
+def test_a_new_view_takes_its_cameras_width(world):
     c = TestClient(app)
     c.put("/cameras/bench_cam", json={"site": "garage", "path": "workbench", "mm_across": 1800})
-    look = _pin(c, camera="bench_cam")
-    assert look["camera"] == "bench_cam" and look["mm_across"] == 1800
+    view = _pin(c, camera="bench_cam")
+    assert view["camera"] == "bench_cam" and view["mm_across"] == 1800
 
 
 # --- making pieces ------------------------------------------------------------------
@@ -214,18 +214,18 @@ def test_a_new_look_takes_its_cameras_width(world):
 
 def test_an_unsized_make_is_refused_with_its_reason(world):
     c = TestClient(app)
-    look = _pin(c)
-    r = c.post(f"/sites/garage/looks/{look['id']}/make", json={"shape": 0})
+    view = _pin(c)
+    r = c.post(f"/sites/garage/views/{view['id']}/make", json={"shape": 0})
     assert r.status_code == 409 and "width" in r.json()["detail"]
-    assert c.post(f"/sites/garage/looks/{look['id']}/make", json={"all": True}).status_code == 409
+    assert c.post(f"/sites/garage/views/{view['id']}/make", json={"all": True}).status_code == 409
     assert set(_roots(c)) == set(_roots(c)) and not c.get("/sites/garage/attached").json()["made"]
 
 
 def test_a_piece_stands_on_its_outline_at_a_host(world):
     c = TestClient(app)
-    look = _pin(c, mm_across=1800)
+    view = _pin(c, mm_across=1800)
     for index in (0, 2):  # one off-centre either way, on a picture that is not square
-        r = c.post(f"/sites/garage/looks/{look['id']}/make", json={"shape": index})
+        r = c.post(f"/sites/garage/views/{view['id']}/make", json={"shape": index})
         assert r.status_code == 200, r.text
         piece = r.json()["made"][0]
         x, y, z = _centre(_roots(c)[piece])
@@ -237,13 +237,13 @@ def test_a_piece_stands_on_its_outline_at_a_host(world):
 
 def test_a_piece_stands_on_its_outline_at_the_floor(world):
     c = TestClient(app)
-    look = _pin(c, host="", mm_across=1000)
-    anchor = look["anchor"]
+    view = _pin(c, host="", mm_across=1000)
+    anchor = view["anchor"]
     # The floor's anchor: z 0, y at the centre of the code's roots, x past their +x edge.
     assert anchor[2] == 0 and anchor[0] > 5400
-    mat = look["mat"]
+    mat = view["mat"]
     assert mat["centre"] == pytest.approx([anchor[0] + 500, anchor[1], 0])
-    r = c.post(f"/sites/garage/looks/{look['id']}/make", json={"shape": 0})
+    r = c.post(f"/sites/garage/views/{view['id']}/make", json={"shape": 0})
     piece = r.json()["made"][0]
     x, y, z = _centre(_roots(c)[piece])
     assert (x, y) == pytest.approx(_outline_centre(mat["centre"], 1000, SHAPES[0]))
@@ -263,14 +263,14 @@ def test_a_floor_mat_and_a_piece_at_its_centre_touch_nothing_in_any_site(world):
     )
     for site in _site_store.names():
         before = [s for s in _roots(c, site).values() if s["world_bounds"]]
-        look = _pin(c, site=site, host="", picture="centred.png", mm_across=1800)
-        mat = look["mat"]
+        view = _pin(c, site=site, host="", picture="centred.png", mm_across=1800)
+        mat = view["mat"]
         mx, my, _ = mat["centre"]
         mat_box = BoundingBox3D(
             min_point=Vector3D(x=mx - 900, y=my - 450, z=0.0),
             max_point=Vector3D(x=mx + 900, y=my + 450, z=1.0),
         )
-        made = c.post(f"/sites/{site}/looks/{look['id']}/make", json={"shape": 0}).json()
+        made = c.post(f"/sites/{site}/views/{view['id']}/make", json={"shape": 0}).json()
         piece = _roots(c, site)[made["made"][0]]
         pb = piece["world_bounds"]
         piece_box = BoundingBox3D(
@@ -292,8 +292,8 @@ def test_an_overlap_with_a_made_piece_is_reported_once_everywhere(world):
     from apothecary.spaces import problems
 
     c = TestClient(app)
-    look = _pin(c, mm_across=1800)
-    made = c.post(f"/sites/garage/looks/{look['id']}/make", json={"shape": 1}).json()
+    view = _pin(c, mm_across=1800)
+    made = c.post(f"/sites/garage/views/{view['id']}/make", json={"shape": 1}).json()
     coin = made["made"][0]
     assert made["site"]["is_valid"], made["site"]["violations"]
     # Moved under printer_1 with the gizmo's route: one violation, not two.
@@ -303,26 +303,26 @@ def test_an_overlap_with_a_made_piece_is_reported_once_everywhere(world):
     found = [p for p in problems() if p.subject == "garage" and coin in p.sources]
     assert len(found) == 1 and "printer_1" in found[0].sources
     # datum_core's validator checks only tray against lid; a made piece is checked all the same.
-    tray_look = _pin(c, site="datum_core", host="tray", mm_across=40)
-    made = c.post(f"/sites/datum_core/looks/{tray_look['id']}/make", json={"shape": 1}).json()
+    tray_view = _pin(c, site="datum_core", host="tray", mm_across=40)
+    made = c.post(f"/sites/datum_core/views/{tray_view['id']}/make", json={"shape": 1}).json()
     piece = made["made"][0]
     r = c.post("/sites/datum_core/layout", json={"positions": {piece: {"x": 0, "y": 0, "z": 28}}})
     pairs = [sorted(v["structures"]) for v in r.json()["violations"] if v["kind"] == "overlap"]
     assert pairs == [sorted([piece, "lid"])]
 
 
-def test_make_all_skips_what_is_made_and_a_second_look_does_not_remake_it(world):
+def test_make_all_skips_what_is_made_and_a_second_view_does_not_remake_it(world):
     c = TestClient(app)
     first = _pin(c, mm_across=1800)
-    one = c.post(f"/sites/garage/looks/{first['id']}/make", json={"shape": 1}).json()
-    everything = c.post(f"/sites/garage/looks/{first['id']}/make", json={"all": True}).json()
+    one = c.post(f"/sites/garage/views/{first['id']}/make", json={"shape": 1}).json()
+    everything = c.post(f"/sites/garage/views/{first['id']}/make", json={"all": True}).json()
     assert len(everything["made"]) == 2 and everything["skipped"] == 1
     second = _pin(c, mm_across=1800)
-    statuses = [s["status"] for s in c.get("/sites/garage/attached").json()["looks"][1]["shapes"]]
+    statuses = [s["status"] for s in c.get("/sites/garage/attached").json()["views"][1]["shapes"]]
     assert statuses == ["already_made"] * 3
-    again = c.post(f"/sites/garage/looks/{second['id']}/make", json={"all": True})
+    again = c.post(f"/sites/garage/views/{second['id']}/make", json={"all": True})
     assert again.status_code == 200 and again.json()["made"] == [] and again.json()["skipped"] == 3
-    r = c.post(f"/sites/garage/looks/{second['id']}/make", json={"shape": 1})
+    r = c.post(f"/sites/garage/views/{second['id']}/make", json={"shape": 1})
     assert r.status_code == 409 and one["made"][0] in r.json()["detail"]
     assert len(c.get("/sites/garage/attached").json()["made"]) == 3
 
@@ -330,69 +330,69 @@ def test_make_all_skips_what_is_made_and_a_second_look_does_not_remake_it(world)
 def test_a_moved_piece_is_neither_made_twice_nor_hides_the_outline_it_stands_over(world):
     c = TestClient(app)
     first = _pin(c, mm_across=1800)
-    coin = c.post(f"/sites/garage/looks/{first['id']}/make", json={"shape": 1}).json()["made"][0]
+    coin = c.post(f"/sites/garage/views/{first['id']}/make", json={"shape": 1}).json()["made"][0]
     x, y, z = _centre(_roots(c)[coin])
     # Moved 500 mm onto where the bar was seen.
     bar_x, bar_y = _outline_centre(BENCH_TOP, 1800, SHAPES[2])
     c.post("/sites/garage/layout", json={"positions": {coin: {"x": bar_x, "y": bar_y, "z": z}}})
     second = _pin(c, mm_across=1800)
     shapes = next(
-        lk for lk in c.get("/sites/garage/attached").json()["looks"] if lk["id"] == second["id"]
+        vw for vw in c.get("/sites/garage/attached").json()["views"] if vw["id"] == second["id"]
     )["shapes"]
     assert shapes[1]["status"] == "already_made" and shapes[1]["piece"] == coin
     assert shapes[2]["status"] == "found"  # the coin stands over it now, and was not made from it
-    r = c.post(f"/sites/garage/looks/{second['id']}/make", json={"all": True}).json()
+    r = c.post(f"/sites/garage/views/{second['id']}/make", json={"all": True}).json()
     assert r["skipped"] == 1 and len(r["made"]) == 2
 
 
 def test_moving_the_host_moves_its_mat_and_not_its_pieces(world):
     c = TestClient(app)
-    look = _pin(c, mm_across=1800)
-    coin = c.post(f"/sites/garage/looks/{look['id']}/make", json={"shape": 1}).json()["made"][0]
+    view = _pin(c, mm_across=1800)
+    coin = c.post(f"/sites/garage/views/{view['id']}/make", json={"shape": 1}).json()["made"][0]
     before = _centre(_roots(c)[coin])
     c.post("/sites/garage/layout", json={"positions": {"workbench": {"x": 100, "y": 50, "z": 0}}})
-    moved = c.get("/sites/garage/attached").json()["looks"][0]
+    moved = c.get("/sites/garage/attached").json()["views"][0]
     assert moved["mat"]["centre"] == [1000.0, 350.0, 780.0]
     assert _centre(_roots(c)[coin]) == before
 
 
 def test_make_all_past_the_made_cells_room_is_refused(world):
-    from apothecary.vision import looks as looks_module
+    from apothecary.vision import views as views_module
 
     c = TestClient(app)
-    per_look = looks_module.LOOK_SHAPES_MOST
-    looks = []
-    for row in range(looks_module.MADE_MOST // per_look + 1):
+    per_view = views_module.VIEW_SHAPES_MOST
+    views = []
+    for row in range(views_module.MADE_MOST // per_view + 1):
         many = [
             {
                 "kind": "rect",
                 "min": [0.02 * i, 0.1 + 0.3 * row],
                 "max": [0.02 * i + 0.01, 0.12 + 0.3 * row],
             }
-            for i in range(per_look)
+            for i in range(per_view)
         ]
         (world / f"many_{row}.png").write_bytes(_png())
         (world / f"many_{row}.shapes.json").write_text(
             json.dumps({"pixel_width": WIDE, "pixel_height": HIGH, "shapes": many})
         )
-        looks.append(_pin(c, host="", picture=f"many_{row}.png", mm_across=5000))
-    for look in looks[:-1]:
-        r = c.post(f"/sites/garage/looks/{look['id']}/make", json={"all": True})
-        assert r.status_code == 200 and len(r.json()["made"]) == per_look, r.text
+        views.append(_pin(c, host="", picture=f"many_{row}.png", mm_across=5000))
+    for view in views[:-1]:
+        r = c.post(f"/sites/garage/views/{view['id']}/make", json={"all": True})
+        assert r.status_code == 200 and len(r.json()["made"]) == per_view, r.text
     made = c.get("/sites/garage/attached").json()["made"]
-    assert len(made) == looks_module.MADE_MOST
-    r = c.post(f"/sites/garage/looks/{looks[-1]['id']}/make", json={"all": True})
-    assert r.status_code == 409 and str(looks_module.MADE_MOST) in r.json()["detail"]
-    r = c.post(f"/sites/garage/looks/{looks[-1]['id']}/make", json={"shape": 0})
+    assert len(made) == views_module.MADE_MOST
+    r = c.post(f"/sites/garage/views/{views[-1]['id']}/make", json={"all": True})
+    assert r.status_code == 409 and str(views_module.MADE_MOST) in r.json()["detail"]
+    r = c.post(f"/sites/garage/views/{views[-1]['id']}/make", json={"shape": 0})
     assert r.status_code == 409
     assert c.get("/sites/garage/attached").json()["made"] == made
 
 
-def test_a_look_keeps_at_most_its_budget_of_shapes_by_confidence(world):
-    from apothecary.vision import looks as looks_module
+def test_a_view_keeps_at_most_its_budget_of_shapes_by_confidence(world):
+    from apothecary.vision import views as views_module
 
     c = TestClient(app)
-    most = looks_module.LOOK_SHAPES_MOST
+    most = views_module.VIEW_SHAPES_MOST
     lots = [
         {
             "kind": "rect",
@@ -407,27 +407,27 @@ def test_a_look_keeps_at_most_its_budget_of_shapes_by_confidence(world):
     (world / "lots.shapes.json").write_text(
         json.dumps({"pixel_width": WIDE, "pixel_height": HIGH, "shapes": lots})
     )
-    look = _pin(c, picture="lots.png")
-    assert len(look["shapes"]) == most and look["left_out"] == 3
-    confidences = [s["confidence"] for s in look["shapes"]]
+    view = _pin(c, picture="lots.png")
+    assert len(view["shapes"]) == most and view["left_out"] == 3
+    confidences = [s["confidence"] for s in view["shapes"]]
     assert 0.99 in confidences and 0.98 in confidences
 
 
-def test_find_with_another_finder_makes_a_second_look_and_leaves_the_first(world):
+def test_find_with_another_finder_makes_a_second_view_and_leaves_the_first(world):
     c = TestClient(app)
     first = _pin(c, mm_across=1800)
-    c.post(f"/sites/garage/looks/{first['id']}/make", json={"shape": 1})
+    c.post(f"/sites/garage/views/{first['id']}/make", json={"shape": 1})
     second = c.post(
-        "/sites/garage/looks",
+        "/sites/garage/views",
         json={"host": "workbench", "picture": "bench_top.png", "finder": "plain"},
     )
     assert second.status_code == 201 and second.json()["finder"] == "plain"
     assert second.json()["id"] != first["id"]
-    looks = {lk["id"]: lk for lk in c.get("/sites/garage/attached").json()["looks"]}
-    assert set(looks[first["id"]]["made"]) == {"1"} and looks[second.json()["id"]]["made"] == {}
+    views = {vw["id"]: vw for vw in c.get("/sites/garage/attached").json()["views"]}
+    assert set(views[first["id"]]["made"]) == {"1"} and views[second.json()["id"]]["made"] == {}
 
 
-def test_a_look_is_found_once_per_picture_and_finder(world):
+def test_a_view_is_found_once_per_picture_and_finder(world):
     from apothecary.vision import finder as finder_module
     from apothecary.vision.stated import StatedFinder
 
@@ -458,29 +458,29 @@ def test_a_look_is_found_once_per_picture_and_finder(world):
 # --- scale --------------------------------------------------------------------------
 
 
-def test_a_width_typed_for_a_shape_sizes_the_look_and_its_camera(world):
+def test_a_width_typed_for_a_shape_sizes_the_view_and_its_camera(world):
     c = TestClient(app)
     c.put("/cameras/bench_cam", json={"site": "garage", "path": "workbench"})
     first = _pin(c, camera="bench_cam")
     # The coin's long side is 0.03 of the picture's width; say it is 54 mm.
-    r = c.put(f"/sites/garage/looks/{first['id']}/scale", json={"known_index": 1, "mm": 54})
+    r = c.put(f"/sites/garage/views/{first['id']}/scale", json={"known_index": 1, "mm": 54})
     assert r.status_code == 200, r.text
     sized = r.json()
     assert sized["scale"] == {"known_index": 1, "mm": 54}
     assert sized["mm_across"] == pytest.approx(1800)
     assert c.get("/cameras").json()[0]["mm_across"] == pytest.approx(1800)
     second = _pin(c, camera="bench_cam")
-    per_pixel = [lk["mm_across"] / lk["pixel_width"] for lk in (sized, second)]
+    per_pixel = [vw["mm_across"] / vw["pixel_width"] for vw in (sized, second)]
     assert per_pixel[0] == pytest.approx(per_pixel[1])
-    # A later look can still be rescaled alone.
-    r = c.put(f"/sites/garage/looks/{second['id']}/scale", json={"mm_across": 900})
+    # A later view can still be rescaled alone.
+    r = c.put(f"/sites/garage/views/{second['id']}/scale", json={"mm_across": 900})
     assert r.json()["mm_across"] == 900
     assert c.get("/cameras").json()[0]["mm_across"] == 900
-    looks = {lk["id"]: lk for lk in c.get("/sites/garage/attached").json()["looks"]}
-    assert looks[first["id"]]["mm_across"] == pytest.approx(1800)
+    views = {vw["id"]: vw for vw in c.get("/sites/garage/attached").json()["views"]}
+    assert views[first["id"]]["mm_across"] == pytest.approx(1800)
     # Nonsense is refused.
     for bad in ({}, {"mm_across": -1}, {"known_index": 9, "mm": 10}, {"known_index": 1}):
-        assert c.put(f"/sites/garage/looks/{first['id']}/scale", json=bad).status_code == 422, bad
+        assert c.put(f"/sites/garage/views/{first['id']}/scale", json=bad).status_code == 422, bad
 
 
 # --- words, parameters, drop ---------------------------------------------------------
@@ -488,36 +488,36 @@ def test_a_width_typed_for_a_shape_sizes_the_look_and_its_camera(world):
 
 def test_a_word_on_a_made_shape_rebuilds_its_piece_in_place(world):
     c = TestClient(app)
-    look = _pin(c, mm_across=1800)
-    piece = c.post(f"/sites/garage/looks/{look['id']}/make", json={"shape": 0}).json()["made"][0]
+    view = _pin(c, mm_across=1800)
+    piece = c.post(f"/sites/garage/views/{view['id']}/make", json={"shape": 0}).json()["made"][0]
     before = _roots(c)[piece]
-    r = c.put(f"/sites/garage/looks/{look['id']}/shapes/0", json={"word": "disc"})
+    r = c.put(f"/sites/garage/views/{view['id']}/shapes/0", json={"word": "disc"})
     assert r.status_code == 200 and r.json()["rebuilt"] == piece
     after = _roots(c)[piece]
     assert after["position"] == before["position"]
     made = c.get("/sites/garage/attached").json()["made"][piece]
     assert made["word"] == "disc" and made["word_stated"] is True
     # An unmade shape takes the word too, and the piece made later uses it.
-    r = c.put(f"/sites/garage/looks/{look['id']}/shapes/1", json={"word": "post"})
+    r = c.put(f"/sites/garage/views/{view['id']}/shapes/1", json={"word": "post"})
     assert r.json()["rebuilt"] is None
-    coin = c.post(f"/sites/garage/looks/{look['id']}/make", json={"shape": 1}).json()["made"][0]
+    coin = c.post(f"/sites/garage/views/{view['id']}/make", json={"shape": 1}).json()["made"][0]
     assert coin.startswith("post_")
     assert (
-        c.put(f"/sites/garage/looks/{look['id']}/shapes/1", json={"word": "nope"}).status_code
+        c.put(f"/sites/garage/views/{view['id']}/shapes/1", json={"word": "nope"}).status_code
         == 422
     )
     assert (
-        c.put(f"/sites/garage/looks/{look['id']}/shapes/7", json={"word": "disc"}).status_code
+        c.put(f"/sites/garage/views/{view['id']}/shapes/7", json={"word": "disc"}).status_code
         == 404
     )
 
 
-def test_a_made_piece_is_rebuilt_by_its_word_or_parameters_after_its_look_is_gone(world):
+def test_a_made_piece_is_rebuilt_by_its_word_or_parameters_after_its_view_is_gone(world):
     c = TestClient(app)
-    look = _pin(c, mm_across=1800)
-    piece = c.post(f"/sites/garage/looks/{look['id']}/make", json={"shape": 0}).json()["made"][0]
+    view = _pin(c, mm_across=1800)
+    piece = c.post(f"/sites/garage/views/{view['id']}/make", json={"shape": 0}).json()["made"][0]
     position = _roots(c)[piece]["position"]
-    assert c.delete(f"/sites/garage/looks/{look['id']}").status_code == 200
+    assert c.delete(f"/sites/garage/views/{view['id']}").status_code == 200
     r = c.put(
         f"/sites/garage/made/{piece}", json={"parameters": {"width": 40, "depth": 30, "height": 5}}
     )
@@ -535,23 +535,23 @@ def test_a_made_piece_is_rebuilt_by_its_word_or_parameters_after_its_look_is_gon
 
 def test_drop_removes_the_piece_and_its_shape_reads_found_again(world):
     c = TestClient(app)
-    look = _pin(c, mm_across=1800)
-    piece = c.post(f"/sites/garage/looks/{look['id']}/make", json={"shape": 1}).json()["made"][0]
+    view = _pin(c, mm_across=1800)
+    piece = c.post(f"/sites/garage/views/{view['id']}/make", json={"shape": 1}).json()["made"][0]
     r = c.delete(f"/sites/garage/made/{piece}")
     assert r.status_code == 200 and piece not in {s["name"] for s in r.json()["site"]["structures"]}
-    shapes = c.get("/sites/garage/attached").json()["looks"][0]["shapes"]
+    shapes = c.get("/sites/garage/attached").json()["views"][0]["shapes"]
     assert shapes[1]["status"] == "found" and shapes[1].get("piece") is None
     assert c.delete(f"/sites/garage/made/{piece}").status_code == 404
 
 
 def test_names_stay_unique(world):
     c = TestClient(app)
-    look = _pin(c, mm_across=1800)
-    made = c.post(f"/sites/garage/looks/{look['id']}/make", json={"all": True}).json()["made"]
+    view = _pin(c, mm_across=1800)
+    made = c.post(f"/sites/garage/views/{view['id']}/make", json={"all": True}).json()["made"]
     c.delete(f"/sites/garage/made/{made[0]}")
-    again = c.post(f"/sites/garage/looks/{look['id']}/make", json={"shape": 0}).json()["made"]
+    again = c.post(f"/sites/garage/views/{view['id']}/make", json={"shape": 0}).json()["made"]
     second = _pin(c, host="printer_2", mm_across=1800)
-    more = c.post(f"/sites/garage/looks/{second['id']}/make", json={"all": True}).json()["made"]
+    more = c.post(f"/sites/garage/views/{second['id']}/make", json={"all": True}).json()["made"]
     names = [s["name"] for s in c.get("/sites/garage").json()["structures"]]
     assert len(names) == len(set(names))
     assert set(made[1:] + again + more) <= set(names)
@@ -578,12 +578,12 @@ def test_a_make_during_a_slow_find_loses_nothing_and_a_get_answers(world):
     finder_module.register("slow", Slow)
     try:
         c = TestClient(app)
-        look = _pin(c, mm_across=1800)
+        view = _pin(c, mm_across=1800)
         answers = {}
 
         def slow_pin():
             answers["slow"] = TestClient(app).post(
-                "/sites/garage/looks",
+                "/sites/garage/views",
                 json={"host": "printer_1", "picture": "bench_top.png", "finder": "slow"},
             )
 
@@ -592,13 +592,13 @@ def test_a_make_during_a_slow_find_loses_nothing_and_a_get_answers(world):
         assert started.wait(10)
         t0 = time.monotonic()
         assert c.get("/sites/garage/attached").status_code == 200
-        made = c.post(f"/sites/garage/looks/{look['id']}/make", json={"all": True}).json()
+        made = c.post(f"/sites/garage/views/{view['id']}/make", json={"all": True}).json()
         assert time.monotonic() - t0 < 5
         release.set()
         worker.join(10)
         assert answers["slow"].status_code == 201
         attached = c.get("/sites/garage/attached").json()
-        assert len(attached["looks"]) == 2
+        assert len(attached["views"]) == 2
         assert sorted(attached["made"]) == sorted(made["made"]) and len(made["made"]) == 3
     finally:
         release.set()
@@ -606,8 +606,8 @@ def test_a_make_during_a_slow_find_loses_nothing_and_a_get_answers(world):
 
 
 def test_a_forget_during_a_make_loses_neither_the_mark_nor_the_piece(world, monkeypatch):
-    from apothecary.vision import looks as looks_module
-    from apothecary.vision.looks import store
+    from apothecary.vision import views as views_module
+    from apothecary.vision.views import store
 
     c = TestClient(app)
     kept = c.post(
@@ -618,8 +618,8 @@ def test_a_forget_during_a_make_loses_neither_the_mark_nor_the_piece(world, monk
     (world / "uploads" / "table.shapes.json").write_text(
         (world / "bench_top.shapes.json").read_text()
     )
-    look = _pin(c, picture=kept["path"], mm_across=1800)
-    real = looks_module.piece_from_shape
+    view = _pin(c, picture=kept["path"], mm_across=1800)
+    real = views_module.piece_from_shape
 
     def forgetting(*args, **kwargs):
         # The picture is forgotten from the threadpool while the make is under way.
@@ -627,8 +627,8 @@ def test_a_forget_during_a_make_loses_neither_the_mark_nor_the_piece(world, monk
         store().forget_picture(kept["path"])
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(looks_module, "piece_from_shape", forgetting)
-    r = c.post(f"/sites/garage/looks/{look['id']}/make", json={"shape": 1})
+    monkeypatch.setattr(views_module, "piece_from_shape", forgetting)
+    r = c.post(f"/sites/garage/views/{view['id']}/make", json={"shape": 1})
     assert r.status_code == 200, r.text
     piece = r.json()["made"][0]
     assert piece in _roots(c)
@@ -639,21 +639,21 @@ def test_a_forget_during_a_make_loses_neither_the_mark_nor_the_piece(world, monk
 # --- cascades -----------------------------------------------------------------------
 
 
-def test_unpinning_a_look_leaves_its_file_and_its_pieces(world):
+def test_unpinning_a_view_leaves_its_file_and_its_pieces(world):
     c = TestClient(app)
-    look = _pin(c, mm_across=1800)
-    piece = c.post(f"/sites/garage/looks/{look['id']}/make", json={"shape": 1}).json()["made"][0]
-    r = c.delete(f"/sites/garage/looks/{look['id']}")
-    assert r.status_code == 200 and r.json()["unpinned"] == look["id"]
+    view = _pin(c, mm_across=1800)
+    piece = c.post(f"/sites/garage/views/{view['id']}/make", json={"shape": 1}).json()["made"][0]
+    r = c.delete(f"/sites/garage/views/{view['id']}")
+    assert r.status_code == 200 and r.json()["unpinned"] == view["id"]
     assert (world / "bench_top.png").is_file()
     attached = c.get("/sites/garage/attached").json()
-    assert attached["looks"] == [] and piece in attached["made"]
-    # The piece keeps a copy of its shape, so its outline can be drawn without the look.
+    assert attached["views"] == [] and piece in attached["made"]
+    # The piece keeps a copy of its shape, so its outline can be drawn without the view.
     assert attached["made"][piece]["shape"]["min"] == SHAPES[1]["min"]
-    assert c.delete(f"/sites/garage/looks/{look['id']}").status_code == 404
+    assert c.delete(f"/sites/garage/views/{view['id']}").status_code == 404
 
 
-def test_forgetting_a_kept_picture_unpins_its_looks_and_marks_its_pieces(world):
+def test_forgetting_a_kept_picture_unpins_its_views_and_marks_its_pieces(world):
     c = TestClient(app)
     kept = c.post(
         "/photos/pictures",
@@ -661,20 +661,20 @@ def test_forgetting_a_kept_picture_unpins_its_looks_and_marks_its_pieces(world):
         content=_png(shapes="ret"),
     )
     assert kept.status_code == 201, kept.text
-    look = kept.json()["look"]
-    assert look["picture"] == "uploads/desk.png" and look["host"] == "workbench"
-    assert look["finder"] == "plain" and look["shapes"]
+    view = kept.json()["view"]
+    assert view["picture"] == "uploads/desk.png" and view["host"] == "workbench"
+    assert view["finder"] == "plain" and view["shapes"]
     other = _pin(c, site="datum_core", host="tray", picture="uploads/desk.png", finder="plain")
-    c.put(f"/sites/garage/looks/{look['id']}/scale", json={"mm_across": 1800})
-    piece = c.post(f"/sites/garage/looks/{look['id']}/make", json={"shape": 0}).json()["made"][0]
+    c.put(f"/sites/garage/views/{view['id']}/scale", json={"mm_across": 1800})
+    piece = c.post(f"/sites/garage/views/{view['id']}/make", json={"shape": 0}).json()["made"][0]
     r = c.delete("/photos/pictures/uploads/desk.png")
     assert r.status_code == 200 and sorted(r.json()["unpinned"]) == sorted(
-        [look["id"], other["id"]]
+        [view["id"], other["id"]]
     )
     attached = c.get("/sites/garage/attached").json()
-    assert attached["looks"] == [] and attached["made"][piece]["picture_forgotten"] is True
+    assert attached["views"] == [] and attached["made"][piece]["picture_forgotten"] is True
     assert piece in _roots(c)
-    assert c.get("/sites/datum_core/attached").json()["looks"] == []
+    assert c.get("/sites/datum_core/attached").json()["views"] == []
 
 
 def test_purge_cascades_and_leaves_the_folders_own(world):
@@ -685,10 +685,10 @@ def test_purge_cascades_and_leaves_the_folders_own(world):
         params={"name": "frame", "site": "garage", "host": ""},
         content=_png(shapes="r"),
     ).json()
-    assert kept["look"]["host"] == ""
+    assert kept["view"]["host"] == ""
     r = c.delete("/photos/pictures")
-    assert r.status_code == 200 and r.json()["unpinned"] == [kept["look"]["id"]]
-    assert [lk["id"] for lk in c.get("/sites/garage/attached").json()["looks"]] == [own["id"]]
+    assert r.status_code == 200 and r.json()["unpinned"] == [kept["view"]["id"]]
+    assert [vw["id"] for vw in c.get("/sites/garage/attached").json()["views"]] == [own["id"]]
     assert (world / "bench_top.png").is_file()
 
 
@@ -703,18 +703,18 @@ def test_a_refused_pin_keeps_nothing(world):
     assert not (world / "uploads").exists() or not list((world / "uploads").iterdir())
 
 
-def test_reset_takes_made_pieces_back_and_leaves_the_looks(world):
+def test_reset_takes_made_pieces_back_and_leaves_the_views(world):
     c = TestClient(app)
-    look = _pin(c, mm_across=1800)
-    first = c.post(f"/sites/garage/looks/{look['id']}/make", json={"shape": 1}).json()["made"][0]
+    view = _pin(c, mm_across=1800)
+    first = c.post(f"/sites/garage/views/{view['id']}/make", json={"shape": 1}).json()["made"][0]
     c.post("/sites/garage/reset")
     attached = c.get("/sites/garage/attached").json()
     assert first not in _roots(c) and attached["made"] == {}
-    assert [lk["id"] for lk in attached["looks"]] == [look["id"]]
-    assert attached["looks"][0]["made"] == {}
-    assert all(s["status"] == "found" for s in attached["looks"][0]["shapes"])
+    assert [vw["id"] for vw in attached["views"]] == [view["id"]]
+    assert attached["views"][0]["made"] == {}
+    assert all(s["status"] == "found" for s in attached["views"][0]["shapes"])
     # And by the ring's intent.
-    second = c.post(f"/sites/garage/looks/{look['id']}/make", json={"shape": 1}).json()["made"][0]
+    second = c.post(f"/sites/garage/views/{view['id']}/make", json={"shape": 1}).json()["made"][0]
     intent = {
         "action": "reset",
         "option_id": "reset",
@@ -728,7 +728,7 @@ def test_reset_takes_made_pieces_back_and_leaves_the_looks(world):
 # --- every site's pins --------------------------------------------------------------
 
 
-def test_placed_lists_every_sites_cameras_and_looks(world):
+def test_placed_lists_every_sites_cameras_and_views(world):
     c = TestClient(app)
     c.put("/cameras/bench_cam", json={"site": "garage", "path": "workbench"})
     a = _pin(c)
@@ -736,10 +736,10 @@ def test_placed_lists_every_sites_cameras_and_looks(world):
     placed = c.get("/placed").json()
     assert [cam["id"] for cam in placed["cameras"]] == ["bench_cam"]
     assert placed["cameras"][0]["host_found"] is True
-    looks = {lk["id"]: lk for lk in placed["looks"]}
-    assert set(looks) == {a["id"], b["id"]} and looks[b["id"]]["site"] == "datum_core"
-    assert all(lk["host_found"] for lk in placed["looks"])
-    assert "shapes" not in looks[a["id"]]  # a row, not the look
+    views = {vw["id"]: vw for vw in placed["views"]}
+    assert set(views) == {a["id"], b["id"]} and views[b["id"]]["site"] == "datum_core"
+    assert all(vw["host_found"] for vw in placed["views"])
+    assert "shapes" not in views[a["id"]]  # a row, not the view
     assert placed["boards"] == []
 
 

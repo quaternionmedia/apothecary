@@ -6,7 +6,7 @@ fixture names) in a browser of its own, launched with Chromium's fake camera
 (the `camera_page` fixture in conftest) so there is a camera to pin, to see
 live and to keep a frame from on every machine, and no real camera is ever
 opened by a test. The camera's verbs are its host's ring's (Camera › Pin here,
-Live, Look, Keep, Unpin); tests/e2e/test_the_loop.py takes a look with them.
+Live, Take picture, Keep, Unpin); tests/e2e/test_the_loop.py takes pictures with them.
 
 What the browser put here, it can take back: the bench walkthrough
 (test_docs_bench_walkthrough.py) is that check.
@@ -157,7 +157,7 @@ def test_a_camera_is_pinned_at_the_bench_and_records_its_surroundings(
     ]
     assert len(kept) == 1 and kept[0]["name"].endswith(f"-{mine['id'][:60]}.png")
     assert (picture_folder / kept[0]["path"]).is_file()
-    assert page.request.get(f"{base_url}/sites/garage/attached").json()["looks"] == []
+    assert page.request.get(f"{base_url}/sites/garage/attached").json()["views"] == []
 
     # Unpinned from the same ring, the camera leaves the world.
     ring_on("workbench")

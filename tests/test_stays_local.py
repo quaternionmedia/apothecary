@@ -507,11 +507,11 @@ def test_the_picture_root_is_a_folder_of_pictures_never_everything(monkeypatch, 
     assert here.get("/photos/pictures/file", params={"path": "fake.png"}).status_code == 415
 
 
-def test_looks_write_nothing_outside_the_root_its_two_folders_and_the_state_folder(
+def test_views_write_nothing_outside_the_root_its_two_folders_and_the_state_folder(
     monkeypatch, tmp_path
 ):
-    """Pinning, sizing, making, dropping and forgetting a look keeps nothing anywhere
-    but the picture root's own two folders and the state folder (cameras.json): looks,
+    """Pinning, sizing, making, dropping and forgetting a view keeps nothing anywhere
+    but the picture root's own two folders and the state folder (cameras.json): views,
     made pieces and the finder cache are held in memory. And no picture the server
     answers with -- whole, or at a size for a mat -- may enter the browser's disk cache."""
     import io
@@ -520,13 +520,13 @@ def test_looks_write_nothing_outside_the_root_its_two_folders_and_the_state_fold
 
     from apothecary.api import _site_store
     from apothecary.vision import cache as cache_module
-    from apothecary.vision import looks as looks_module
+    from apothecary.vision import views as views_module
 
     root, state = tmp_path / "pics", tmp_path / "state"
     root.mkdir()
     monkeypatch.setenv("APOTHECARY_PICTURE_ROOT", str(root))
     monkeypatch.setenv("APOTHECARY_STATE_DIR", str(state))
-    monkeypatch.setattr(looks_module, "_store", looks_module.Looks())
+    monkeypatch.setattr(views_module, "_store", views_module.Views())
     monkeypatch.setattr(cache_module, "_cache", cache_module.FinderCache())
     image = Image.new("L", (400, 200), 245)
     ImageDraw.Draw(image).rectangle((40, 40, 160, 120), fill=20)
@@ -557,10 +557,10 @@ def test_looks_write_nothing_outside_the_root_its_two_folders_and_the_state_fold
             params={"name": "frame", "site": "garage", "host": ""},
             content=buf.getvalue(),
         ).json()
-        own = here.post("/sites/garage/looks", json={"host": "workbench", "picture": "own.png"})
-        for look in (kept["look"], captured["look"], own.json()):
-            here.put(f"/sites/garage/looks/{look['id']}/scale", json={"mm_across": 400})
-            made = here.post(f"/sites/garage/looks/{look['id']}/make", json={"all": True}).json()
+        own = here.post("/sites/garage/views", json={"host": "workbench", "picture": "own.png"})
+        for view in (kept["view"], captured["view"], own.json()):
+            here.put(f"/sites/garage/views/{view['id']}/scale", json={"mm_across": 400})
+            made = here.post(f"/sites/garage/views/{view['id']}/make", json={"all": True}).json()
             for piece in made["made"][:1]:
                 here.delete(f"/sites/garage/made/{piece}")
         for path in ("own.png", kept["path"]):
