@@ -248,21 +248,3 @@ def test_an_empty_word_list_is_used_rather_than_quietly_replaced():
     """Passing a curated list and getting the starters back is worse than an error."""
     with pytest.raises(KeyError):
         picture_to_site(_stated(), words=WordList())
-
-
-# ------------------------------------------------- the label fix broke nothing
-
-
-def test_a_bad_child_does_not_break_a_shape_that_never_looks_at_children():
-    from apothecary.api import _rehydrate
-
-    built = _rehydrate(
-        {"type": "sphere", "r": 3, "children": [{"type": "cube", "size": {"x": "?"}}]}
-    )
-    assert "sphere" in built.render()
-
-
-def test_a_turn_described_in_a_way_we_do_not_handle_still_renders_something():
-    from apothecary.api import _rehydrate
-
-    assert _rehydrate({"type": "rotate", "a": [0, 0, 45], "children": []}) is not None

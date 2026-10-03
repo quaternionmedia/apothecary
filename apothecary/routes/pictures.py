@@ -19,11 +19,12 @@ command line. These routes give the world's page the same, and no more:
   ``DELETE /photos/pictures`` forgets every kept picture: what the browser
   put under ``captures/`` and ``uploads/``, and only that. The folder's own
   pictures -- the ones a person named -- are never deleted from a page.
-- ``POST /photos/gather`` takes in several of those pictures at once, with
-  what a person has already said in the same five sentences the answers
-  file uses, and answers with the report, the groups, the questions worth
-  asking, and -- when asked to -- the whole gathering built as one
-  arrangement the world can open.
+- ``POST /photos/gather`` takes in up to forty of those pictures at once,
+  with what a person has already said in the same five sentences the
+  answers file uses, and answers with the report, the groups, the questions
+  worth asking, and -- when asked to -- the whole gathering built as one
+  arrangement the world can open. A file that cannot be read is set aside
+  with the reason, not a refusal of the rest.
 - ``GET/PUT/DELETE /cameras`` are the cameras a person placed in the world:
   a browser's camera (its id and label, which only the browser knows) at a
   node of a site, kept in the firmware state folder beside the pins, so
@@ -35,16 +36,19 @@ from __future__ import annotations
 import json
 import os
 import re
+import tempfile
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, field_validator
+
+from ..gathering.looking import PICTURE_SUFFIXES
 
 router = APIRouter(tags=["photos"])
 
-PICTURE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff"}
 CAPTURES = "captures"
 UPLOADS = "uploads"
 # The folders the browser fills, and the only ones a page may empty.
@@ -181,21 +185,39 @@ async def _picture_body(request: Request) -> bytes:
 
 
 @router.post("/photos/pictures", status_code=201)
-async def keep_picture(
-    request: Request,
+def keep_picture(
+    data: bytes = Depends(_picture_body),
     name: str = Query("capture", min_length=1, max_length=120),
     kept: str = Query("capture", pattern="^(capture|upload)$"),
+    site: Optional[str] = Query(None, max_length=64),
+    host: Optional[str] = Query(None, max_length=400),
+    camera: Optional[str] = Query(None, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"),
 ):
     """Keep a picture the browser sends: a camera's frame under captures/, named by the
     moment, or (``kept=upload``) a file a person chose under uploads/, named as they
-    named it. A picture by its first bytes, whatever its name says."""
-    data = await _picture_body(request)
+    named it. A picture by its first bytes, whatever its name says.
+
+    With ``site`` and ``host`` (``""`` is the floor), the picture is kept and pinned
+    there as a look in one request, its shapes found by the plain finder, and the
+    answer carries the look. A host that cannot hold a look is refused before
+    anything is kept.
+
+    The body is read on the event loop; the write of up to 16 MB runs in the threadpool."""
     suffix = _suffix_by_bytes(data)
     if suffix is None:
         raise HTTPException(
             status_code=415,
             detail="not a picture (PNG, JPEG, GIF, WebP, BMP or TIFF, judged by its first bytes)",
         )
+    pinning = site is not None
+    if pinning != (host is not None):
+        raise HTTPException(
+            status_code=422, detail="to pin a picture as it is kept, give both site and host"
+        )
+    if pinning:
+        from .looks import check_host
+
+        check_host(site, host)
     root = _root()
     stem = re.sub(r"[^A-Za-z0-9_-]+", "_", Path(name).stem).strip("_")[:60]
     if kept == "upload":
@@ -205,15 +227,41 @@ async def keep_picture(
         stamp = f"{at:%Y%m%dT%H%M%S}.{at.microsecond // 1000:03d}"
         path = _private(root / CAPTURES) / f"{stamp}-{stem or 'capture'}{suffix}"
     path.write_bytes(data)
-    return _entry(path, root)
+    entry = _entry(path, root)
+    from ..vision.looks import store
+
+    store().kept_again(entry["path"])
+    if pinning:
+        from .looks import _view, pin_picture
+
+        try:
+            entry["look"] = _view(site, pin_picture(site, host, entry["path"], camera=camera))
+        except HTTPException as refused:
+            # Kept, and not pinned: the picture is the person's either way.
+            entry["look"], entry["not_pinned"] = None, refused.detail
+    return entry
+
+
+# The sizes a picture is served at, along its longer edge: a Kept card, a mat, a large mat.
+PICTURE_SIZES = (256, 512, 1024, 2048)
+# No picture enters the browser's disk cache: reuse is in the page's memory only.
+NO_STORE = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
 
 
 @router.get("/photos/pictures/file")
-def picture_file(path: str = Query(..., min_length=1, max_length=400)):
-    """One picture from the folder, by the relative path the listing gave -- for a thumbnail."""
+def picture_file(
+    path: str = Query(..., min_length=1, max_length=400),
+    px: Optional[int] = Query(None, ge=1, le=100_000),
+):
+    """One picture from the folder, by the relative path the listing gave.
+
+    With ``px``, no larger than the smallest of ``PICTURE_SIZES`` that holds it
+    along its longer edge (the largest when none does), turned upright as the
+    finder sees it: the pixels a mat or a card draws. A JPEG is decoded at a
+    reduced size first, so a large photograph costs little. Never cached."""
     import mimetypes
 
-    from fastapi.responses import FileResponse
+    from fastapi.responses import FileResponse, Response
 
     from ..api import PICTURE_TYPES, _picture_within_root
 
@@ -225,22 +273,42 @@ def picture_file(path: str = Query(..., min_length=1, max_length=400)):
     if kind is None or not _is_a_picture(settled):
         # A file that is not a picture is not served, whatever folder it is in.
         raise HTTPException(status_code=415, detail=f"{settled.name} is not a picture")
-    return FileResponse(settled, media_type=kind)
+    if px is None:
+        return FileResponse(settled, media_type=kind, headers=NO_STORE)
+    edge = next((size for size in PICTURE_SIZES if size >= px), PICTURE_SIZES[-1])
+    body, kind = _smaller(settled, edge)
+    return Response(content=body, media_type=kind, headers=NO_STORE)
+
+
+def _smaller(path: Path, edge: int):
+    """The picture at most ``edge`` along its longer edge, upright: (bytes, media type)."""
+    import io
+
+    from PIL import Image, ImageOps
+
+    with Image.open(path) as opened:
+        jpeg = opened.format == "JPEG"
+        if jpeg:
+            opened.draft("RGB", (edge, edge))
+        upright = ImageOps.exif_transpose(opened)
+        upright.thumbnail((edge, edge))
+        out = io.BytesIO()
+        if jpeg:
+            upright.convert("RGB").save(out, format="JPEG", quality=85)
+            return out.getvalue(), "image/jpeg"
+        if upright.mode not in ("RGB", "RGBA", "L", "LA"):
+            upright = upright.convert("RGBA")
+        upright.save(out, format="PNG")
+        return out.getvalue(), "image/png"
 
 
 def _is_a_picture(path: Path) -> bool:
     """Judged by its first bytes, not its name."""
     try:
         with path.open("rb") as f:
-            head = f.read(16)
+            return _suffix_by_bytes(f.read(16)) is not None
     except OSError:
         return False
-    return (
-        head.startswith(PNG_MAGIC)
-        or head.startswith(JPEG_MAGIC)
-        or head.startswith((b"GIF87a", b"GIF89a", b"BM", b"II*\x00", b"MM\x00*"))
-        or (head[:4] == b"RIFF" and head[8:12] == b"WEBP")
-    )
 
 
 def _kept_picture(root: Path, given: str) -> Path:
@@ -250,13 +318,7 @@ def _kept_picture(root: Path, given: str) -> Path:
     parts = given.replace("\\", "/").split("/")
     if len(parts) == 1:
         parts = [CAPTURES, parts[0]]
-    if (
-        len(parts) != 2
-        or parts[0] not in KEPT.values()
-        or not parts[1]
-        or parts[1].startswith(".")
-        or parts[1] in ("..",)
-    ):
+    if len(parts) != 2 or parts[0] not in KEPT.values() or not parts[1] or parts[1].startswith("."):
         raise HTTPException(status_code=404, detail="no such kept picture")
     path = root / parts[0] / parts[1]
     if (
@@ -276,9 +338,12 @@ def forget_kept_pictures(kept: str = Query("all", pattern="^(all|capture|upload)
     Never the folder's own pictures: those a person named, and only a person
     removes. A link inside the folders is left alone too; only regular files
     directly in them go."""
+    from ..vision.looks import store
+
     root = _root()
     folders = [KEPT[kept]] if kept != "all" else list(KEPT.values())
     forgotten: List[str] = []
+    unpinned: List[str] = []
     for folder in folders:
         for path in _pictures_in(root / folder):
             try:
@@ -286,33 +351,45 @@ def forget_kept_pictures(kept: str = Query("all", pattern="^(all|capture|upload)
             except FileNotFoundError:
                 continue  # gone since it was listed: another purge, or the person
             forgotten.append(f"{folder}/{path.name}")
-    return {"forgotten": forgotten, "left": len(_pictures_in(root))}
+            unpinned.extend(store().forget_picture(forgotten[-1]))
+    return {"forgotten": forgotten, "left": len(_pictures_in(root)), "unpinned": unpinned}
 
 
 @router.delete("/photos/pictures/{path:path}")
 def forget_picture(path: str):
     """Forget one kept picture (``captures/…`` or ``uploads/…``; a bare name is a capture).
 
-    Only what the browser put here: the folder's own pictures are a person's."""
+    Only what the browser put here: the folder's own pictures are a person's.
+    Its looks are unpinned, every site's; pieces made from it stay, marked forgotten."""
+    from ..vision.looks import store
+
     root = _root()
     kept = _kept_picture(root, path)
     kept.unlink()
-    return {"forgotten": kept.relative_to(root).as_posix()}
+    forgotten = kept.relative_to(root).as_posix()
+    return {"forgotten": forgotten, "unpinned": store().forget_picture(forgotten)}
+
+
+# Every pair is compared, so the work grows as the square: forty pictures is 780 pairs.
+GATHER_MOST = 40
 
 
 class GatherRequest(BaseModel):
-    pictures: List[str] = Field(..., min_length=2, max_length=200)
+    pictures: List[str] = Field(..., min_length=2)
     finder: str = "plain"
     answers: str = ""  # the five sentences, as the answers file has them
     most: int = Field(8, ge=1, le=40)
     build: bool = False  # also build the whole gathering as one arrangement
-    name: str = Field("gathering", pattern=r"^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$")
+    name: str = "gathering"
 
     @field_validator("name")
     @classmethod
-    def _not_a_route(cls, value: str) -> str:
-        from ..api import RESERVED_NAMES
+    def _a_name(cls, value: str) -> str:
+        """The rule POST /photos names an arrangement by: one rule, whichever route builds it."""
+        from ..api import RESERVED_NAMES, SAFE_NAME
 
+        if not SAFE_NAME.match(value):
+            raise ValueError("a name is letters, digits, - and _, up to 64, starting alphanumeric")
         if value in RESERVED_NAMES:
             raise ValueError(f"{value!r} is the address of a route under /photos/")
         return value
@@ -329,12 +406,18 @@ def gather_pictures(body: GatherRequest):
         read_answers,
         unknown_names,
     )
-    from ..gathering.picture_map import as_html
-    from ..gathering.questions import how_many_worth_asking, worth_asking
+    from ..gathering.looking import look_at_each, set_aside_unopened
+    from ..gathering.questions import worth_asking
     from ..vision import build as build_arrangement
     from ..vision import get as get_finder
     from ..vision.shelf import shelf
 
+    if len(body.pictures) > GATHER_MOST:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{len(body.pictures)} pictures at once is too many: every pair is "
+            f"compared, so {GATHER_MOST} is the most. Gather them in smaller piles.",
+        )
     root = _root()
     paths = []
     for rel in body.pictures:
@@ -344,20 +427,10 @@ def gather_pictures(body: GatherRequest):
         finder = get_finder(body.finder)
     except KeyError:
         raise HTTPException(status_code=400, detail=f"no finder named {body.finder!r}") from None
-    pictures = []
-    for path in paths:
-        try:
-            pictures.append(finder.look(path))
-        except (OSError, ValueError) as exc:
-            raise HTTPException(
-                status_code=400, detail=f"{path.name} could not be read: {exc}"
-            ) from None
-    names_seen: Dict[str, List[Path]] = {}
-    for path, picture in zip(paths, pictures, strict=True):
-        names_seen.setdefault(picture.name, []).append(path)
-    clashing = {n: f for n, f in names_seen.items() if len(f) > 1}
-    if clashing:
-        name, found = next(iter(sorted(clashing.items())))
+    looked = look_at_each(finder, paths)
+    clash = looked.clash()
+    if clash:
+        name, found = clash
         where = ", ".join(f.name for f in found)
         raise HTTPException(
             status_code=409, detail=f"two pictures are called {name!r} ({where}); rename one"
@@ -368,30 +441,30 @@ def gather_pictures(body: GatherRequest):
             said = read_answers(body.answers, where="the answers")
         except (CannotRead, PeopleDisagree) as trouble:
             raise HTTPException(status_code=422, detail=str(trouble)) from None
-    strangers = unknown_names(said, [p.name for p in pictures])
+    strangers = unknown_names(said, looked.names())
     if strangers:
         raise HTTPException(
             status_code=422,
             detail=f"you named picture(s) that are not here: {', '.join(strangers)}",
         )
     try:
-        result = gather(pictures, paths=paths, answers=said)
+        result = gather(looked.pictures, paths=looked.paths, answers=said)
     except PeopleDisagree as trouble:
         raise HTTPException(status_code=422, detail=str(trouble)) from None
+    result = set_aside_unopened(result, looked, said)
 
-    asked = worth_asking(result, most=body.most)
+    # Ranked once: the report, the questions and the count held back all read it.
+    ranked = worth_asking(result, most=len(result.kinships) or 1)
+    asked = ranked[: body.most]
     answer: dict = {
-        "report": as_text(result),
-        "map_html": as_html(result),
+        "report": as_text(result, questions=ranked),
         "clusters": [c.model_dump() for c in result.clusters],
         "readings": [
             {k: (str(v) if isinstance(v, Path) else v) for k, v in r.model_dump().items()}
             for r in result.readings
         ],
         "set_aside": result.set_aside,
-        "ignored": result.ignored,
         "overruled": result.overruled,
-        "resolved_share": result.resolved_share(),
         "questions": [
             {
                 "left": q.left,
@@ -405,11 +478,11 @@ def gather_pictures(body: GatherRequest):
             }
             for q in asked
         ],
-        "withheld": max(0, how_many_worth_asking(result) - len(asked)),
+        "withheld": len(ranked) - len(asked),
         "site": None,
     }
     if body.build:
-        by_name = {p.name: (p, path) for p, path in zip(pictures, paths, strict=True)}
+        by_name = {p.name: (p, path) for p, path in zip(looked.pictures, looked.paths, strict=True)}
         built = {
             r.picture: build_arrangement(by_name[r.picture][0], picture_path=by_name[r.picture][1])
             for r in result.readings
@@ -419,8 +492,16 @@ def gather_pictures(body: GatherRequest):
             raise HTTPException(
                 status_code=422, detail="nothing could be read from any of these pictures"
             )
-        together = whole_gathering(result, built, name=body.name)
         stock = shelf()
+        if body.name in _site_store.names() and body.name not in stock:
+            # The same rule as POST /photos: a gathering never covers over a
+            # site that did not come from pictures (the garage, the library).
+            raise HTTPException(
+                status_code=409,
+                detail=f"{body.name!r} is already the name of an arrangement that did not "
+                "come from a picture. Choose another name rather than covering it over.",
+            )
+        together = whole_gathering(result, built, name=body.name)
         stock.put(together)
         _site_store.add(
             together.site.name, stock.factory(together.site.name), stock.checker(together.site.name)
@@ -435,7 +516,8 @@ def gather_pictures(body: GatherRequest):
 class CameraPlacement(BaseModel):
     label: str = Field("camera", max_length=120)
     site: str = Field(..., pattern=r"^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$")
-    path: str = Field(..., max_length=400)
+    path: str = Field(..., max_length=400)  # a host; "" is the site's floor
+    mm_across: Optional[float] = Field(None, gt=0, allow_inf_nan=False)
 
 
 CAMERA_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
@@ -455,12 +537,24 @@ def _load_cameras() -> Dict[str, dict]:
         return {}
 
 
+# PUT and DELETE run in the threadpool: each read-modify-write holds this, and a
+# write lands whole, so no placement is lost and a reader never sees half a file.
+_CAMERAS_LOCK = threading.Lock()
+
+
 def _save_cameras(cameras: Dict[str, dict]) -> None:
     from ..firmware.devices import private_folder
 
     path = _cameras_file()
     private_folder(path.parent)
-    path.write_text(json.dumps(cameras, indent=2), encoding="utf-8")
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".cameras.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as out:
+            out.write(json.dumps(cameras, indent=2))
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 @router.get("/cameras")
@@ -469,35 +563,80 @@ def list_cameras(site: Optional[str] = None) -> List[dict]:
     return [c for c in cams.values() if site is None or c.get("site") == site]
 
 
+def camera_rows(site: Optional[str]) -> List[dict]:
+    """The cameras pinned in one site (every site's with None), each saying whether its
+    host is still there: a row whose host is gone is still taken back from its list."""
+    from ..api import _site_store
+
+    names = set(_site_store.names())
+    rows = []
+    for cam in list_cameras(site):
+        where, host = cam.get("site"), cam.get("path", "")
+        found = False
+        if where in names:
+            try:
+                built = _site_store.get(where)
+            except KeyError:
+                built = None
+            found = built is not None and (
+                host == "" or any(c.name == host for c in built.children)
+            )
+        rows.append({**cam, "host_found": found})
+    return rows
+
+
+def set_camera_width(camera_id: str, mm_across: float) -> bool:
+    """Keep the width last typed for a camera's picture: the next look from it starts there."""
+    with _CAMERAS_LOCK:
+        cams = _load_cameras()
+        if camera_id not in cams:
+            return False
+        cams[camera_id]["mm_across"] = mm_across
+        _save_cameras(cams)
+    return True
+
+
 @router.put("/cameras/{camera_id}")
 def place_camera(camera_id: str, body: CameraPlacement):
-    """Place a browser's camera at a node: the world draws it there from now on."""
-    from ..api import _find_node_by_path, _get_site_or_404
+    """Pin a browser's camera at a host, or at the floor (``path: ""``): the world draws
+    it there from now on. A host holds one camera, so this replaces any other there;
+    pinning a camera elsewhere moves it. A host is a root structure with a footprint
+    that is not a made piece; anywhere else is refused with its reason."""
+    from .looks import check_host
 
     if not CAMERA_ID.match(camera_id):
         raise HTTPException(status_code=422, detail="not a camera id")
-    site = _get_site_or_404(body.site)
-    if _find_node_by_path(site, body.path) is None:
-        raise HTTPException(
-            status_code=404, detail=f"Node '{body.path}' not found in site '{body.site}'"
-        )
-    cams = _load_cameras()
-    cams[camera_id] = {
+    check_host(body.site, body.path)
+    placed = {
         "id": camera_id,
         "label": body.label,
         "site": body.site,
         "path": body.path,
         "placed_at": datetime.now(timezone.utc).isoformat(),
+        "mm_across": body.mm_across,
     }
-    _save_cameras(cams)
-    return cams[camera_id]
+    with _CAMERAS_LOCK:
+        cams = _load_cameras()
+        if placed["mm_across"] is None and camera_id in cams:
+            placed["mm_across"] = cams[camera_id].get("mm_across")
+        replaced = sorted(
+            other
+            for other, cam in cams.items()
+            if other != camera_id and cam.get("site") == body.site and cam.get("path") == body.path
+        )
+        for other in replaced:
+            del cams[other]
+        cams[camera_id] = placed
+        _save_cameras(cams)
+    return {**placed, "replaced": replaced}
 
 
 @router.delete("/cameras/{camera_id}")
 def unplace_camera(camera_id: str):
-    cams = _load_cameras()
-    if camera_id not in cams:
-        raise HTTPException(status_code=404, detail="no such camera")
-    del cams[camera_id]
-    _save_cameras(cams)
+    with _CAMERAS_LOCK:
+        cams = _load_cameras()
+        if camera_id not in cams:
+            raise HTTPException(status_code=404, detail="no such camera")
+        del cams[camera_id]
+        _save_cameras(cams)
     return {"unplaced": camera_id}

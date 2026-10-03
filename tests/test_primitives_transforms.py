@@ -1,7 +1,7 @@
+from apothecary.booleans import Difference, Intersection, Union
 from apothecary.models.vectors import Vector3D
-from apothecary.primitives import Cube, Sphere, Cylinder
-from apothecary.transforms import Translate, Rotate, Scale
-from apothecary.booleans import Union, Difference, Intersection
+from apothecary.primitives import Cube, Cylinder, Sphere
+from apothecary.transforms import Rotate, Scale, Translate
 
 
 def test_cube_vector_size_and_comment():
@@ -50,3 +50,24 @@ def test_boolean_blocks_render_children():
 def test_vector_to_list():
     v = Vector3D(x=1.0, y=2.0, z=3.0)
     assert v.to_list() == [1.0, 2.0, 3.0]
+
+
+def test_a_comment_cannot_become_code():
+    """A newline in a comment used to end the comment and start geometry."""
+    out = Cube(comment="a\nsphere(100);").render()
+    assert out.splitlines()[:2] == ["// a", "// sphere(100);"]
+
+
+def test_a_quote_in_a_mesh_path_stays_in_the_string():
+    from apothecary.primitives import Import
+
+    assert Import(file='we"ird.stl').render() == 'import("we\\"ird.stl", convexity=10);'
+
+
+def test_one_radius_given_sets_both_ends_as_the_viewer_draws_it():
+    """Cylinder(r1=3) rendered `r=1` while the viewer drew a 3 mm cylinder."""
+    from apothecary.primitives import Cylinder
+
+    assert "r=3.0" in Cylinder(h=5, r1=3).render()
+    assert "r1=3.0, r2=1.0" in Cylinder(h=5, r1=3, r2=1).render()
+    assert Cylinder(h=5, r2=2).radii() == (2, 2)

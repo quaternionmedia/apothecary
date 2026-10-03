@@ -1,26 +1,8 @@
 """The two routes the ring speaks through: what are my options, and I chose one.
 
-Step one of the migration in `docs/plans/edits/apothecary-surface.md`, and it is
-deliberately the step where **nothing visible changes**. The routes land,
-resolving and carrying out only verbs that already exist. The toolbar is
-untouched; the ring is not drawn yet. Landing the seam before the surface moves
-means every later step replaces a control rather than adding one.
-
-Two things this module refuses to do, both of which would make the promise
-underneath the ring untrue:
-
-- **It does not invent behaviour.** An option the rings offer with nothing behind
-  it is answered with a refusal naming itself, not with a cheerful 200. `word:*`
-  is exactly that today: the vocabulary is real, and swapping one piece's word
-  for another is not built.
-- **It does not decide who carries an action out.** That is written down once, in
-  `apothecary/menu.py`'s `CARRIED_BY`, where a check can read it without starting
-  a web server.
-
-Everything that changes an arrangement is meant to arrive as an `Intent`. It does
-not yet: the existing routes still change things directly, and rewiring them is
-the next step. What is true today is that nothing arrives here and quietly does
-nothing.
+Who carries an action out is written down once, in `apothecary/menu.py`'s
+`CARRIED_BY`; this module answers from it. An action nothing classifies is
+refused with a 400 naming it, never answered with a 200 that did nothing.
 
 **What the page knows about a board is carried beside the context, not inside
 it.** `device` on a resolve says whether the node has a board pinned, whether
@@ -30,12 +12,9 @@ those rings are the viewer's: the pages already have a handler for each, and
 the intent route never opens a port.
 
 **Which arrangement an intent is about is carried beside the intent, not inside
-it.** `Intent` is the shared contract's shape and names what was pointed at; the
-arrangement is this project's own idea of where. Reading a site name out of
-`context.targets` would work for the canvas ring and quietly mean the wrong thing
-for a node ring, where the target is a dotted path to a piece.
-
-PROTOTYPE -- not ratified. See `docs/plans/edits/apothecary-surface.md`.
+it.** Reading a site name out of `context.targets` would work for the canvas
+ring and mean the wrong thing for a node ring, where the target is a dotted
+path to a piece.
 """
 
 from __future__ import annotations
@@ -45,7 +24,18 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from ..menu import Carries, Context, Device, Intent, Ring, RingTooFull, carried_by, resolve
+from ..menu import (
+    FLOOR_MARK,
+    Carries,
+    Context,
+    Device,
+    Intent,
+    PictureContext,
+    Ring,
+    RingTooFull,
+    carried_by,
+    resolve,
+)
 
 router = APIRouter(prefix="/menu", tags=["menu"])
 
@@ -57,6 +47,7 @@ class ResolveRequest(BaseModel):
     context: Context
     site: Optional[str] = None
     device: Optional[Device] = None
+    picture: Optional[PictureContext] = None
 
 
 class Chosen(BaseModel):
@@ -102,24 +93,33 @@ def _site(name: Optional[str]):
 
 
 def _catalogue(name: Optional[str]) -> Dict[str, List[str]]:
-    """The lists a ring is built from: arrangements, groups, words.
-
-    Read fresh on every call. Held once at import, a ring would offer whatever
-    existed when the server started -- and the arrangements a person cares about
-    are the ones they made since.
-    """
+    """The lists a ring is built from, read fresh on every call: the
+    arrangements that exist now, and the groups in this one."""
     from ..api import _site_store
-    from ..vocabulary.starter import starter_words
 
     groups: List[str] = []
     site = _site(name)
     if site is not None:
         groups = sorted({child.category for child in site.children if child.category})
-    return {
-        "site_names": sorted(_site_store.names()),
-        "groups": groups,
-        "words": starter_words().names(),
-    }
+    return {"site_names": sorted(_site_store.names()), "groups": groups}
+
+
+def _pictures_known(site: Optional[str], told: Optional[PictureContext]) -> PictureContext:
+    """What the page told about pictures, with what only the server knows put in:
+    the site's made pieces, the vocabulary's words, and the finders that can read
+    the drawn look's picture. A page cannot claim these, so it is never asked."""
+    from ..vision import looks as looking
+    from ..vocabulary import starter_words
+    from .looks import finders_for
+
+    known = (told or PictureContext()).model_copy(deep=True)
+    known.made = sorted(looking.made_names(site)) if site else []
+    known.words = starter_words().names()
+    drawn = next((lk for lk in known.here.looks if lk.id == known.here.drawn), None)
+    if drawn is None and known.here.looks:
+        drawn = known.here.looks[0]
+    known.finders = finders_for(drawn.picture) if drawn is not None and drawn.picture else []
+    return known
 
 
 @router.post("/resolve", response_model=Ring)
@@ -136,8 +136,8 @@ def resolve_ring(request: ResolveRequest) -> Ring:
             _site(request.site),
             site_names=lists["site_names"],
             groups=lists["groups"],
-            words=lists["words"],
             device=request.device,
+            picture=_pictures_known(request.site, request.picture),
         )
     except RingTooFull as too_many:
         # A ring that cannot be built is a design problem, and the answer says so
@@ -157,32 +157,78 @@ def _needs_site(chosen: Chosen) -> str:
     return chosen.site
 
 
-@router.post("/intent", response_model=Carried)
-def carry_out(chosen: Chosen) -> Carried:
-    """Carry out a chosen option, or say who does, or refuse.
+def _carry_picture(chosen: Chosen, who: Carries) -> Carried:
+    """Make, Make all, Drop and a made piece's Word: a root structure added,
+    removed or rebuilt, by the functions the look routes call. Every refusal is
+    a 4xx naming its reason, so no picture intent reaches the 500 below."""
+    from ..api import _site_payload, _site_store
+    from ..vision import looks as looking
 
-    Three answers and no fourth. The one that matters is the refusal: an option
-    with nothing behind it has to come back as a refusal naming itself, because
-    the alternative is a wedge that can be pressed for ever with no effect and no
-    complaint.
-    """
-    from ..api import _find_node_by_path, _job_store, _site_payload, _site_store
+    action = chosen.intent.action
+    name = _needs_site(chosen)
+    site = _site(name)
+    verb, _, rest = action.partition(":")[2].partition(":")
+    rest = rest.removesuffix(f":{FLOOR_MARK}")
+    piece = chosen.intent.context.targets[0] if chosen.intent.context.targets else ""
+    try:
+        if verb == "make":
+            look_id, _, index = rest.rpartition(":")
+            if not look_id or not index.isdigit():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{action!r} names no look and shape: picture:make:<look>:<index>",
+                )
+            made, skipped = looking.make(name, site, look_id, int(index))
+            did = f"made {', '.join(made) or 'nothing'}" + (
+                f"; {skipped} already made" if skipped else ""
+            )
+        elif verb == "make-all":
+            if not rest:
+                raise HTTPException(
+                    status_code=400, detail=f"{action!r} names no look: picture:make-all:<look>"
+                )
+            made, skipped = looking.make(name, site, rest, None)
+            listed = f": {', '.join(made)}" if made else ""
+            did = f"made {len(made)} piece(s){listed}; skipped {skipped} already made"
+        elif verb == "drop":
+            record = looking.drop(name, site, piece)
+            did = f"dropped {piece}; shape {record.shape_index} of its look reads as found again"
+        elif verb == "word":
+            if not rest:
+                raise HTTPException(status_code=400, detail=f"{action!r} names no word")
+            record = looking.rebuild(name, site, piece, word=rest)
+            did = f"{piece} is a {record.word} now, rebuilt where it stands"
+        else:
+            raise HTTPException(status_code=400, detail=f"{action!r} is no picture verb")
+    except looking.LookNotFound as missing:
+        raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
+    except looking.NotMade as missing:
+        raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
+    except looking.CannotMake as refused:
+        raise HTTPException(status_code=409, detail=str(refused)) from None
+    except ValueError as refused:
+        raise HTTPException(status_code=422, detail=str(refused)) from None
+    return Carried(
+        action=action,
+        carried_by=who.value,
+        did=did,
+        site=_site_payload(site, _site_store.validator(name)(site)),
+        address=chosen.intent.address,
+    )
+
+
+# `async def`, one at a time on the event loop, as api.py's rule for routes that
+# change a site says: a reset and a make both change the site in place.
+@router.post("/intent", response_model=Carried)
+async def carry_out(chosen: Chosen) -> Carried:
+    """Carry out a chosen option, or say that the viewer does, or refuse."""
+    from ..api import _job_store, _site_payload, _site_store
 
     action = chosen.intent.action
     try:
         who = carried_by(action)
     except KeyError as unknown:
         raise HTTPException(status_code=400, detail=str(unknown).strip('"')) from None
-
-    if who is Carries.UNBUILT:
-        raise HTTPException(
-            status_code=501,
-            detail=(
-                f"{action!r} is on the ring and nothing carries it out yet. This "
-                "is a refusal rather than a silent no-op, so the wedge cannot "
-                "look like it worked."
-            ),
-        )
 
     if who is Carries.VIEWER:
         return Carried(
@@ -205,31 +251,12 @@ def carry_out(chosen: Chosen) -> Carried:
             address=chosen.intent.address,
         )
 
-    if action == "render-stl":
-        name = _needs_site(chosen)
-        site = _site(name)
-        path = chosen.intent.context.targets[0] if chosen.intent.context.targets else ""
-        node = _find_node_by_path(site, path) if path else None
-        if node is None:
-            raise HTTPException(status_code=404, detail=f"Node {path!r} not found in site {name!r}")
-        # Resolved here rather than taken on trust, so a wedge standing on a node
-        # that has gone comes back as a refusal instead of a URL that 404s later.
-        # The bytes themselves stay on the route that already serves them: this
-        # answer says what to fetch, having checked that there is something there.
-        return Carried(
-            action=action,
-            carried_by=who.value,
-            did=f"found {path} in {name}; its shape is at /sites/{name}/nodes/{path}/stl",
-            address=chosen.intent.address,
-        )
+    if action.startswith("picture:"):
+        return _carry_picture(chosen, who)
 
-    # Reachable only by classifying an action as the server's and not writing the
-    # arm that carries it out. Refused rather than returning a Carried that says
-    # nothing happened, which is what the UNBUILT answer above is for.
+    # Reachable only by classifying an action as the server's and not writing
+    # the arm that carries it out.
     raise HTTPException(
         status_code=500,
-        detail=(
-            f"{action!r} is written down as the server's and has no arm here. "
-            "Either give it one or classify it as not built yet."
-        ),
+        detail=f"{action!r} is written down as the server's and has no arm here.",
     )

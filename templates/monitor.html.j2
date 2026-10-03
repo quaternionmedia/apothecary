@@ -104,7 +104,7 @@
         function spec(at) {
             if (!m.state.port) { m.logLine("sys", "ring: pick a port first"); return null; }
             return {
-                context: { pointing: "device", targets: [m.state.port], where: at || { x: 0, y: 0 } },
+                context: { pointing: "device", targets: [m.state.port] },
                 device: m.device(), at,
             };
         }

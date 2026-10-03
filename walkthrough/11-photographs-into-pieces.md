@@ -115,15 +115,15 @@ The names in this list are the words from the top of this page. One vocabulary r
 
 ![Every piece is listed, named for the word it was matched to](screenshots/11-13-every-piece-is-listed-named-for-the-word-it-was-ma.png)
 
-## 14. Filtering to 'disc' keeps that word and sets the rest aside
+## 14. Each word is a chip above the list, and 'disc' is chosen
 
-The filters the viewer already had are filters by word now, because the pieces simply carry their word.
+The chips are the viewer's own, one per word the pieces carry. A chip expands every node of its word, at any depth; these pieces are flat shapes with nothing inside, so choosing one marks the chip and leaves the list and the world as they were.
 
-![Filtering to 'disc' keeps that word and sets the rest aside](screenshots/11-14-filtering-to-disc-keeps-that-word-and-sets-the-res.png)
+![Each word is a chip above the list, and 'disc' is chosen](screenshots/11-14-each-word-is-a-chip-above-the-list-and-disc-is-cho.png)
 
 ## 15. Choosing a piece shows where it came from
 
-Which finder saw it, how sure it was, and that its thickness is a guess: the same provenance the model half printed, in front of a person.
+Its word and why, the finder that saw it ('plain'), how sure it was (0.67), and that its thickness is a guess: the same provenance the model half printed, in Selected, beside its place.
 
 ![Choosing a piece shows where it came from](screenshots/11-15-choosing-a-piece-shows-where-it-came-from.png)
 
@@ -133,11 +133,10 @@ The picture it was all built from is served beside the arrangement while the arr
 
 ## 17. What the whole thing costs a person
 
-Two meters, because a tool that is pleasant to demonstrate and expensive to use is neither. The first counts the controls the viewer puts on screen, and unifying means it reaches nothing rather than a smaller pile. The second counts what a person types to reach a named job, and every job carried by nothing but typing is an open item about where the interface stops.
+The census counts the controls the viewer puts on screen of its own, because a tool that is pleasant to demonstrate and expensive to use is neither. Unifying means it reaches nothing rather than a smaller pile.
 
 ```
-137 controls of the viewer's own
-10 typed steps, 7 job(s) carried by nothing but typing
+128 controls of the viewer's own
 ```
 
 ## What this page does not show

@@ -6,7 +6,7 @@ This directory contains 3D printable parts designed for the [Gridfinity](https:/
 
 ```bash
 # Initialize the submodule
-uv run apothecary submodules
+git submodule update --init
 
 # List gridfinity part
 uv run apothecary parts list | grep gridfinity
@@ -40,32 +40,22 @@ params = BinParams(
 bounds = DEFAULT.get_bounds(params.model_dump())
 print(f"Volume: {bounds.volume:.0f} mm³")
 
-# Get OpenSCAD customizer parameters
-scad_params = DEFAULT.get_scad_customizer_params(params.model_dump())
+# The customizer variables a build passes to OpenSCAD as -D for these overrides
+scad_params = DEFAULT.scad_overrides(params.model_dump())
 ```
 
 ### Available Parameters
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `gridx` | 1 | Grid units in X (1 unit = 42mm) |
-| `gridy` | 1 | Grid units in Y |
-| `gridz` | 3 | Height units (1 unit = 7mm) |
+| `gridx` | 3 | Grid units in X (1 unit = 42mm) |
+| `gridy` | 2 | Grid units in Y |
+| `gridz` | 6 | Height units (1 unit = 7mm) |
 | `divx` | 1 | X compartment divisions |
 | `divy` | 1 | Y compartment divisions |
 | `include_lip` | true | Include stacking lip |
 | `scoop` | 1.0 | Scoop percentage (0-1) |
 | `style_tab` | AUTO | Tab style for compartments |
-
-### Pre-configured Variants
-
-The wrapper includes common bin configurations:
-
-- `1x1x3` - Single unit bin, 3 height units
-- `2x1x3` - 2-wide bin, 3 height units
-- `2x2x3` - 2x2 bin, 3 height units
-- `3x2x6` - Large bin, 6 height units
-- `1x1x2_divided` - Small bin with 2x2 compartments
 
 ## Submodules
 
@@ -73,14 +63,10 @@ The wrapper includes common bin configurations:
 
 This repository includes a Git submodule that contains the OpenSCAD designs for Gridfinity parts. The submodule is located at `parts/gridfinity/gridfinity-rebuilt-openscad`.
 
-To initialize and update the submodule, run the following commands in the root directory of the main repository:
+To initialize the submodule, run this in the root directory of the main repository:
 
 ```bash
-# Using Apothecary CLI (recommended)
-uv run apothecary submodules
-
-# Or manually with git
-git submodule init --recursive
+git submodule update --init
 ```
 
 Update the submodule to ensure you have the latest designs:
@@ -94,6 +80,8 @@ git submodule update --remote --merge
 The standard Gridfinity system uses:
 
 - **Grid unit**: 42mm × 42mm base
+- **Gap**: a bin is n × 42mm − 0.5mm across (a 41.5mm base top on each
+  42mm grid unit), the same 0.5mm at half grid, so it drops into a baseplate
 - **Height unit**: 7mm increments
 - **Stacking lip**: ~3.55mm (with fillet)
 

@@ -8,7 +8,7 @@ every dimension in it one of two kinds, and the split is the whole seam:
 > The consumer owns requirements and interfaces.
 > Apothecary owns realization and manufacturability.
 
-`docs/fitting-a-part.md` is the standard. This page is how you drive it.
+[`docs/fitting-a-part.md`](../docs/fitting-a-part.md) is the standard. This page is how you drive it.
 
 ## Manufacturing facts carry house defaults
 
@@ -54,8 +54,9 @@ after the cover moved to `datum_cap`.
 
 ## Staging, then iterating
 
-A render is thirty seconds of OpenSCAD; validation is a Pydantic call. Moving a
-slider stages a value and validates the whole staged set, which costs nothing:
+A render runs OpenSCAD (`apothecary parts generate-stl <part> --force` says how
+long); validation is a Pydantic call. Moving a slider stages a value and
+validates the whole staged set, which costs nothing:
 
     >>> from fastapi.testclient import TestClient
     >>> from apothecary.api import app

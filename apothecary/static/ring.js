@@ -111,7 +111,7 @@ export function withCells(options) {
 }
 
 // Every action a ring can produce, and the digits that reach it. The first
-// time an action turns up wins, as every_action() in menu.py does.
+// time an action turns up wins, as every_action() in tests/ring_helpers.py does.
 export function addresses(ring) {
     const found = {};
     const walk = (options, prefix) => {
@@ -144,8 +144,7 @@ export function addressOf(ring, target) {
 
 /* Write the address onto the page's own controls, where they already are.
  * `pairs` is [[element, action], ...]; an action not on the ring leaves its
- * element as it was. Ids and classes are never touched: the census keys on
- * them.
+ * element as it was. Ids and classes are never touched.
  */
 export function annotate(ring, pairs) {
     const map = addresses(ring);
@@ -166,10 +165,14 @@ export function annotate(ring, pairs) {
     return count;
 }
 
-export async function resolveRing({ base = "", context, site, device }) {
+/* `picture` is what the page knows about pictures and cameras where the ring
+ * stands (apothecary/menu.py's PictureContext), or a promise of it. */
+export async function resolveRing({ base = "", context, site, device, picture }) {
     const body = { context };
     if (site) body.site = site;
     if (device) body.device = device;
+    const told = await picture;
+    if (told) body.picture = told;
     const r = await fetch(`${base}/menu/resolve`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
@@ -241,15 +244,18 @@ export function close() {
 
 /* Open the ring. Resolves the options from the server, draws them at `at`
  * (or the viewport's centre), and calls onIntent once when something is
- * chosen; onClose when it goes away for any reason.
+ * chosen; onClose when it goes away for any reason. With `into`, the id or
+ * label of an option with children, the ring opens entered down to it, as if
+ * its digits had been pressed.
  */
-export async function openRing({ base = "", context, site, device, at = null, onIntent, onClose }) {
+export async function openRing({ base = "", context, site, device, picture, at = null, into = null, onIntent, onClose }) {
     close();
-    const ring = await resolveRing({ base, context, site, device });
+    const ring = await resolveRing({ base, context, site, device, picture });
     if (current) current.close(false); // somebody opened another while we fetched
     const instance = new RingInstance({ ring, context, site, device, at, onIntent, onClose });
     current = instance;
     instance.mount();
+    if (into) instance.enter(into);
     return instance;
 }
 
@@ -330,7 +336,7 @@ class RingInstance {
             }
             const label = option ? esc(option.label) + (option.children ? " ›" : "") : "";
             parts.push(
-                `<path class="${cls.join(" ")}" data-cell="${cell}" role="menuitem"`
+                `<path id="ring-cell-${cell}" class="${cls.join(" ")}" data-cell="${cell}" role="menuitem"`
                 + ` aria-label="${option ? esc(option.label) : "empty"}"`
                 + `${option ? "" : ' aria-disabled="true"'} d="${wedgePath(slot, r0, r1)}"></path>`
                 + (option ? `<text class="label" x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}">${label}</text>` : "")
@@ -346,6 +352,7 @@ class RingInstance {
         );
         this.svg.innerHTML = parts.join("");
         if (this.highlight != null) this.el.setAttribute("aria-activedescendant", `ring-cell-${this.highlight}`);
+        else this.el.removeAttribute("aria-activedescendant");
     }
 
     setHighlight(cell) {
@@ -440,10 +447,33 @@ class RingInstance {
             label: option.label,
             site: this.site,
             device: this.device,
+            at: { x: this.cx, y: this.cy }, // where the ring stood, for one that follows from it
         };
         this.close(true);
         window.dispatchEvent(new CustomEvent("apothecary:intent", { detail: intent }));
         if (this.onIntent) this.onIntent(intent);
+    }
+
+    /* Down to the option `target` names -- an id or a label, wherever it is in
+     * this ring's tree -- as if its digits had been pressed from the top: the
+     * ring then shows that option's children, and the address so far is theirs.
+     * False, and nothing pressed, when there is no such option or it is a leaf.
+     */
+    enter(target) {
+        const find = (options, trail) => {
+            for (const option of options) {
+                const here = [...trail, option];
+                if (option.id === target || option.label === target) return option.children ? here : null;
+                const deeper = option.children ? find(option.children, here) : null;
+                if (deeper) return deeper;
+            }
+            return null;
+        };
+        const path = find(this.root.options, []);
+        if (!path) return false;
+        while (this.stack.length > 1) this.back();
+        for (const option of path) this.commit(option.cell);
+        return true;
     }
 
     // One level out; at the top, away.
@@ -490,7 +520,9 @@ export function installRing({ base = "", whatFor, onIntent, onResolved, onError,
                 context: spec.context,
                 site: spec.site,
                 device: spec.device,
+                picture: spec.picture,
                 at: at ?? spec.at ?? null,
+                into: spec.into ?? null,
                 onIntent,
                 onClose: spec.onClose,
             });
@@ -538,5 +570,3 @@ export function installRing({ base = "", whatFor, onIntent, onResolved, onError,
     window.apothecaryRing = api;
     return api;
 }
-
-export default { openRing, installRing, nearest, addressOf, addresses, angleToIndex, annotate, resolveRing };

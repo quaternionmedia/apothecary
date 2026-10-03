@@ -9,9 +9,10 @@ no other briefing, read this file fully before your first commit or edit.
 
 1. Read `governance/qm/README.md` and `governance/qm/PRINCIPLES.md` in full
    — the namespaces/precedence rules and the charter. Both are short.
-2. This project's own decision records live in `adr/`, as `ADR-NNNN`
-   (numbered locally, at ratification) or `DRAFT-*.md` before ratification.
-   A human ratifies; you draft.
+2. This project's own decision records live in `governance/qm/adr/` — inside
+   the submodule, on this project's own branch, not at this repo's root — as
+   `ADR-NNNN` (numbered locally, at ratification) or `DRAFT-*.md` before
+   ratification. A human ratifies; you draft.
 3. **Human-only contributorship applies to every commit you make here** (see
    `governance/qm/records/DRAFT-human-only-contributorship.md`): do not add
    yourself, your model name, or any co-author trailer naming an unmonitored
@@ -19,9 +20,9 @@ no other briefing, read this file fully before your first commit or edit.
    tooling normally appends a `Co-Authored-By:` trailer, suppress it for
    this repo. Tool involvement is disclosed as a `Tools:` note where the
    artifact calls for one, never as a byline.
-4. Follow the drafting-session handoff contract in `adr/README.md` before
-   writing or amending any record.
-5. A QM record may be tightened by this project's own `adr/`, never
+4. Follow the drafting-session handoff contract in
+   `governance/qm/adr/README.md` before writing or amending any record.
+5. A QM record may be tightened by this project's own records, never
    relaxed — see `governance/qm/README.md`'s "Namespaces and precedence."
 
 ## One-time setup on a fresh clone (Windows)
@@ -57,13 +58,22 @@ this file's summary of the corpus instead of the corpus.
 
 ```bash
 uv sync                        # install dependencies
-uv run apothecary test all     # full test suite (unit + E2E)
-uv run pytest -q               # unit tests only
-uv run apothecary serve        # start the FastAPI viewer at :8000 (docs at /docs, refreshed on start)
-uv run apothecary check        # verify install (incl. OpenSCAD availability)
+uv run pytest -q               # unit tests and the walkthrough; browser tests skip
+uv run apothecary test all     # unit tests and the walkthrough, then the browser tests
+uv run apothecary serve        # the viewer at :8000/viewer; docs at /docs, the API at /openapi.json
+uv run apothecary check        # what is installed: packages, three.js, OpenSCAD, the firmware toolchain
+uv run --group preflight apothecary preflight   # the CI workflows, run here before a push
 uv run apothecary firmware install --avr   # arduino-cli + a core, to program boards from parts/*/*.ino
+uv run apothecary openscad install --latest   # an OpenSCAD snapshot with Manifold, the fast renders
 ```
 
-Rendering STLs requires the `openscad` CLI on `PATH`; the E2E suite additionally
-requires `playwright install` for browser binaries. See `README.md` and
-`QUICKSTART.md` for the full command reference.
+Rendering STLs requires OpenSCAD: the snapshot `apothecary openscad install`
+put in the tools dir, else the `openscad` CLI on `PATH`; the browser tests
+additionally require `uv run playwright install chromium`. `uv run apothecary
+--help` is the command reference; `CONTRIBUTING.md` has the test loop and what
+CI gates.
+
+A commit subject is one plain sentence saying what is now true (`git log
+--oneline` shows the style); the body says why, with evidence, and ends with
+the `Tools:` line when a tool took part. Prose states no number a command
+computes; it names the command (`apothecary census`, `apothecary problems`).

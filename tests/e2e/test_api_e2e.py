@@ -2,6 +2,7 @@
 End-to-end API tests using Playwright's request context.
 """
 import json
+
 import pytest
 from playwright.sync_api import Page
 
@@ -87,28 +88,6 @@ def test_part_scad_download(page: Page, base_url: str):
 
 
 @pytest.mark.e2e
-def test_part_jscad_format(page: Page, base_url: str):
-    """Test that JSCAD endpoint returns valid format."""
-    response = page.request.get(f"{base_url}/parts")
-    parts = response.json()
-    
-    if len(parts) > 0:
-        part_name = parts[0]["name"]
-        
-        jscad_response = page.request.get(f"{base_url}/parts/{part_name}/jscad")
-        
-        assert jscad_response.ok
-        assert jscad_response.headers["content-type"] == "application/javascript"
-        
-        content = jscad_response.text()
-        
-        # Verify JSCAD structure (CommonJS format)
-        assert "const jscad = require('@jscad/modeling')" in content
-        assert "const main = () => {" in content
-        assert "module.exports = { main }" in content
-
-
-@pytest.mark.e2e
 def test_nonexistent_part_returns_404(page: Page, base_url: str):
     """Test that requesting a non-existent part returns 404."""
     response = page.request.get(f"{base_url}/parts/nonexistent-part-name-12345")
@@ -141,6 +120,4 @@ def test_render_scene_endpoint(page: Page, base_url: str):
     
     assert data["success"] is True
     assert "code" in data
-    # Code should contain some OpenSCAD content (either the cube or a fallback)
-    assert len(data["code"]) > 0
-    assert "openscad" in data["code"].lower()
+    assert "cube([10.0, 10.0, 10.0], center=false);" in data["code"]

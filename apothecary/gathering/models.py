@@ -73,7 +73,6 @@ class Signature(BaseModel):
     picture: str
     marks: List[ShapeMark] = Field(default_factory=list)
     tone: List[float] = Field(default_factory=list, description="how light and dark it is")
-    wideness: float = Field(gt=0.0, description="pixels across divided by pixels down")
 
     @model_validator(mode="after")
     def _tone_is_a_share(self) -> "Signature":
@@ -105,6 +104,7 @@ class Reading(BaseModel):
     readable: bool
     because: str
     said_by: str = "the machine"
+    opened: bool = True  # False: the file itself could not be read, so nothing can use it
 
     @property
     def from_a_person(self) -> bool:
@@ -132,9 +132,6 @@ class Kinship(BaseModel):
     verdict: str
     strength: float = Field(ge=0.0, le=1.0)
     shared: int = Field(0, ge=0, description="shapes matched between the two")
-    covers_left: float = Field(0.0, ge=0.0, le=1.0)
-    covers_right: float = Field(0.0, ge=0.0, le=1.0)
-    tone_alike: float = Field(0.0, ge=0.0, le=1.0)
     because: List[str] = Field(default_factory=list)
     against: List[str] = Field(default_factory=list)
     pairs: List[Tuple[int, int]] = Field(
@@ -297,18 +294,6 @@ class Gathering(BaseModel):
 
     def undecided(self) -> List[Kinship]:
         return [k for k in self.kinships if k.verdict == CANNOT_TELL]
-
-    def bounded(self) -> List[Kinship]:
-        """Every answer where a limit fired part-way through the comparing.
-
-        A limit makes an endless question answerable at a stated cost: you learn
-        "did not finish inside this much", never "there is no answer". That trade
-        only holds while the firing is visible, so it is carried on the answer
-        itself and said out loud in the report. A limit that fires and is
-        swallowed is worse than no limit, because it turns not finishing into a
-        plausible answer.
-        """
-        return [k for k in self.kinships if k.bounded]
 
     def told(self) -> List[Kinship]:
         """Everything a person decided rather than the machine."""

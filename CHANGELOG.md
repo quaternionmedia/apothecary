@@ -1,132 +1,132 @@
 # Changelog
 
-All notable changes to Apothecary will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+One line per change, each with a link to where it is described. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
 ### Added
-- **What the browser put on this machine, taken back from the same panel** – the Camera & pictures panel manages what it keeps: **add** is a file picker (several files at once, one request each, the bytes as the body) whose pictures are kept under the picture folder's `uploads/` as the person named them (`POST /photos/pictures?kept=upload`; a PNG, JPEG, GIF, WebP, BMP or TIFF by its first bytes, whatever the name says; a second of the same name is numbered; the folder 0700 like `captures/`); every kept picture -- captured or added -- wears a ✕ that forgets it (`DELETE /photos/pictures/{captures|uploads}/{name}`; a bare name is a capture, as before); **Purge kept** forgets them all after asking once (`DELETE /photos/pictures?kept=all|capture|upload`), and never the folder's own pictures, nor a link left in either folder -- the pictures a person named are removed by the person. The cameras placed in the world are listed, every site's, each with its own Unplace (any browser's placement; `GET /cameras`, `DELETE /cameras/{id}`), and the boards pinned to pieces are listed the same way from `GET /firmware/pins` -- every pin on this machine, saying whether its site and piece still exist and which detected board carries the identity today -- each with an Unpin that works through `DELETE /firmware/pins/{site}/{path}` whether or not the site or piece is still there (the site's own unpin route refuses a vanished node; this is where such a pin was invisible and stuck). An unpin of this site's node drops its row, badge and marks at once. On the ring, the Camera cell's eighth cell is **Kept** › Add, Purge. The census: 137 controls of the viewer's own, 65 on the ring (one meter 169 / 69). Browser test; the walkthrough's page 12 gains the step. The stays-on-the-device record's §6 names `uploads/` beside `captures/` and says what a page may forget.
-- **Geometry made elsewhere, in a site and in the world** – `apothecary parts import FILE` brings an STL or OBJ (binary or ASCII STL; OBJ with quads fanned) in as a part: turned into millimetres and Z-up (`--units in`, `--up y`: a quarter turn, not a mirror), kept as `<name>.mesh.stl` beside a one-line SCAD that imports it, a copy as the part's render so the viewer needs no OpenSCAD for it, a `part.json` recording where it came from (`--title --author --url --license --note`, recorded, never fetched), and a `.license` file for REUSE. A part with a `part.json` beside its SCAD needs no Python wrapper: `apothecary/projects/parts/described.py` is an importer for `apothecary.projects.parts.described.<name>`, so the registry, the API, the CLI and the readiness checks see one more ordinary part; a folder of part folders is a category (`parts/boards/`), a SCAD of its own there a library. `Import` carries `scale`, `rotate` and `translate` (OpenSCAD's own nesting) and `.bounds()` reads the file to say where the transformed mesh lands -- the footprint a node needs; `apothecary/meshes.py` reads, measures and writes meshes with no dependency; JSCAD stands an imported mesh in as the box it fits instead of refusing the scene; the node-STL cache is keyed on the imported files too. A node whose `part_ref` names a part and has no `base` *is* the part, with its children inside it (a machine holding its board). `Assembly.build_origin` says where a machine's build volume starts in its own frame; `GET /firmware/printers/where` and the site tree carry it, and the world's marks, the board view and the viewer's volume box put the bed there. **The garage bench, drawn as it is:** the three printers are Ender 3s (`parts/ender3`, parametric from Creality's published dimensions -- the power supply on the right side behind the upright, the electronics box front-left with the Creality V4.2.2 mainboard in it, the LCD off the front-right corner, the spool over the top bar; the axes are parameters), and the boards are the boards (`parts/boards/`: Arduino Uno R3, Raspberry Pi 4 B, Teensy 4.0, ESP32-DevKitC V4, Creality V4.2.2, each from its maker's published drawing, each described by a sidecar); `esp32_blink` is the DevKitC, and an Uno, a Pi and a Teensy lie at the bench's right end. Only nodes that are boards make binding rows now (a sketch, a pin, or an electrical part), so the printers themselves do not. `docs/geometry-from-elsewhere.md`.
-- **Personal data stays on the device, by construction** – not a setting and not a test-time check: `apothecary/stays_local.py`, installed when the package is imported, so every apothecary process is under it before any of its code runs. The socket class (Python's and the C one beneath it, and every other stdlib name the originals were bound to), `create_connection`, `http.client`'s connect and the TLS socket's connect refuse to connect, send a datagram or bind a listener anywhere but loopback or a Unix socket; the resolver refuses to look up any name but this machine's, and port 53 on loopback -- the resolver's stub, which forwards whatever it is handed -- is refused to every socket. The one allowance is a *tool fetch* -- the firmware installer downloading arduino-cli from its fixed release hosts (`TOOL_SOURCES`), on that thread, for that call, with no proxy, a redirect elsewhere refused, and a version that is three numbers or nothing; a test holds it to one caller. Every `--host` (`serve`, `dev`, `photo view`, `photo gather`, `docs generate`) goes through `require_loopback`, and the app carries `LocalOnly`, an outermost ASGI middleware that answers 403 unless the client, the address it arrived on and the `Host` it asked for are all this machine (a page from elsewhere that resolved its own name to 127.0.0.1 gets nothing; a peer the server cannot name is not this machine) and the sender is not a page on another origin (`Origin`, `Sec-Fetch-Site`; a link from elsewhere still opens a page); every response carries a Content-Security-Policy that lets a page load from and send to this origin only, and `Referrer-Policy: no-referrer`. FastAPI's Swagger and ReDoc pages are off (each loaded from a CDN; `/openapi.json` remains) and the docs renderer names a picture from elsewhere instead of fetching it. arduino-cli, the one subprocess that fetches, is given a config file the program writes (`ARDUINO_CLI_CONFIG`: its cloud board lookup off -- it had been asking Arduino's API about every unrecognised USB device on every scan -- its update check off, its package indexes named) and an environment with no proxy and no `ARDUINO_*` override (`subprocess_env`), and `~/.arduino15/arduino-cli.yaml` is no longer read; a sketch that carries a profile (`sketch.yaml`, which arduino-cli honours over the command line and which can name any host to fetch from) is not built. The state folder and a camera's `captures/` are the account's alone (0700), and `apothecary test all` now runs its server on state and pictures of its own, as `test run` and `docs generate` do. Nothing reaches a page raw: template script values go through `tojson` (a crafted `?focus=` link ran script in this origin before), a job's name is a name (`^[\w][\w .+\-/]*$`) and the pages escape what they show. The picture root is never the whole machine, the person's home folder (by `HOME` or by the account) or anything above it, nor the state folder, and the picture route serves a picture by its first bytes and nothing else. `tests/test_stays_local.py` holds every door, and two rounds of skeptics (a fan-out of readers, then of refuters with a verifier each) grounded it. The named eventual exception is *secured user accounts*: a future record, not a setting. Governance: the draft *Personal data stays on the device, by construction*, with the service inventory and risk register the open-license record asks for.
-- **The ring addresses nine cells, and the census knows what it backs** – the ring menu (`⌗ Ring`, `m`, or right-click a piece; on the monitor page, the port) adopts rad's *the menu addresses nine cells* record: options are seated on a numeric keypad, cardinals first (`8 6 2 4 9 3 1 7`), cell 5 always backs out, a digit chooses its cell, an arrow moves to the nearest occupied cell in that direction, and the digits pressed to reach an option are its address (`⌗2728` is Device › Control › Jog › Y+ from a printer's node). `POST /menu/resolve` returns every option with its cell; intents carry their address; the Device and Control rings expose every device verb the viewer's Device section and the monitor's control overlay have, and each of those buttons shows its ⌗ address. `apothecary census` now reads `templates/monitor.html.j2` too (`census.MONITOR`), names a control by the G-code line it carries when it has no name, and reports *N controls of its own, M of them also on the ring* (`RING_BACKED`, `Found.ring_action`): the viewer stands at 54 and 15, the monitor at 64 and 41. The ring navigates too: the canvas ring's **Pieces** lists the current level in groups of a keypad's worth and a digit selects a piece; **Up** steps out; the node ring's **Into** and **Up** walk the tree; the Contents rows and the zoom buttons wear their addresses. Governance: the draft *rad host integration for apothecary*, pending rad's own record.
-- **Firmware toolchain seam** – `apothecary firmware` installs a checksum-verified `arduino-cli` into `~/.apothecary/tools`, validates it, installs cores (ESP32/ESP8266/RP2040 board-manager URLs added automatically) and libraries, discovers sketches under `parts/<name>/<name>.ino` (optional `firmware.json` sidecar for default FQBN/libraries), compiles and uploads, and esptool-flashes raw Espressif binaries. The `/firmware` page does the same from the GUI with polled task output; `/firmware/*` API routes return task ids. Both engines are invoked over a subprocess seam, never linked — see the *Firmware toolchain seam* decision record.
-- **Device identity and expected-vs-observed firmware** – `apothecary firmware devices|probe|listen` and the `/firmware` Devices panel: esptool probe (chip, revision, MAC, flash size), a persisted record of what apothecary last flashed to that MAC (with "source edited since" / "newer build never uploaded" drift flags), and the sketch observed announcing itself over serial (`apothecary <name>: hello`, printed at boot and periodically). Records live in `~/.apothecary/firmware-state.json`.
-- **Live serial log** – `GET /firmware/devices/stream` (SSE over `arduino-cli monitor`), shown inline on the firmware page and as a toggleable terminal overlay in the fractal viewer ("⌨ Serial log"). Monitors are stopped automatically before any upload needs the port. A baud-rate token bucket drops bytes a USB-UART bridge replays (seen on a CP2102) and reopens a wedged port.
-- **G-code printer seam** – a 3D-printer mainboard running Marlin (or RepRapFirmware, Klipper, Prusa) is monitored, not programmed: `apothecary firmware printer PORT` identifies it (`M115`), polls temperatures/position/endstops/SD progress, and runs report-only queries (`--query M503`; an allowlist refuses anything else). The port is held open and reset only on request (`--reset`), because DTR-on-open resets Creality boards and would kill a print. Transport is a swappable engine: pyserial (new dependency), stdlib `termios`, or an in-process **simulated printer** for demos and browser tests. See the *G-code printer seam* decision record.
-- **A printer drives its scene node** – each garage printer now carries a `mainboard` node inside its base enclosure (`printer_1.frame_system.mainboard`); pin a printer's port there (`PUT /sites/{name}/nodes/{path}/device`, or the viewer's Device panel) and every poll writes `idle`/`printing`/`offline` into the status of the nearest status-bearing ancestor — the printer Structure; a hand-set `maintenance` is never overridden. The printer's Contents row and Device section show the board's state "via" the board. `GET /sites/{name}/devices` carries the last poll per binding.
-- **Device panel and repolling in the viewer** – the Selected panel's Device section: pin from detected ports or by typed identity (`/dev/ender`, a MAC), Query (M115 without pinning), Poll now, Watch (opens the serial overlay, which polls a printer every 2 s instead of streaming it), Unpin, Rescan; live badges on Contents rows; **↻ Devices** auto-refresh on a schedule. Polls update the panel in place so an edit in progress is never lost; the `arduino-cli` port scan is cached for 2 s.
-- **Focused printer monitor** – `/firmware/monitor?port=…`: status cards, a temperature history chart, and the port's server-side **comms log** (every command/reply/boot line/link event, tagged by origin, surviving reconnects and reloads) with a query box; Poll, Reconnect, M115, Reset (confirmed), Release. Linked from the viewer, the overlay and the firmware page.
-- **Latched printer control** – the monitor's ⚙ Control toggle arms a per-port latch (five minutes of activity, server-side, dropped with the link) and opens an overlay: heater targets, fan, home, jog pad, motors off, SD start/pause/abort, mesh on/off. Commands come from a bounded allowlist (`gcode.CONTROL_CODES`; temperature and travel caps) and are refused with `409` unless armed; `M112` E-STOP always goes. The simulated printer honours the controls so the effect shows in the next poll.
-- **Printing without an SD card** – the monitor's Print from here card keeps a sliced G-code file on the host (`~/.apothecary/prints/`), checks it before anything is sent (`gcode.check_gcode`: no `M500`/`M502`/`M997`/`M999`/`M112`/`M0`/`M1`, no temperature over the seam's caps) and streams it to the printer one line per `ok` as a job (`devices.PrintJob`; latch required, confirmed once). Polls keep coming between lines (`GcodeLink.command(wait=…)`, `LinkBusy`), heaters and fan stay in reach, motion and the SD card are the job's, and release/reconnect/reset/upload on that port answer `409` until it ends. Pause stops the feed, Resume needs the latch, Cancel and any failed line send the safe-off (`M104 S0`, `M140 S0`, `M107`, `M84`); E-STOP ends it with nothing more sent. The stream stays out of the comms log (start, every 500 lines, objections and the end are logged); every print is a record with its outcome (`GET /firmware/printers/print/records`). Routes: `GET/POST/DELETE /firmware/printers/prints`, `POST/GET /firmware/printers/print`, `POST /firmware/printers/print/{pause,resume,cancel}`. On the ring the Control ring's SD cell is now **Print** and carries Resume/Pause/Abort to whichever print is running, with **Send file** (`⌗794`) starting the chosen one; the simulated printer honours `M109`/`M190`, `G92` and dwells on `G4`.
-- **The photo workflow from the browser, with a camera** – a **Camera & pictures** panel in the world (`apothecary/static/widgets/camera.js`; Panels › Camera on the ring, and a **Camera** cell with its verbs: Capture, Look, Place, Gather, Open as one, Allow, Unplace): the browser's cameras listed and one shown live; **Capture** keeps a frame on this machine (`POST /photos/pictures`, a PNG or JPEG by its bytes, under `captures/` in the picture folder, nowhere else); **Look** captures, looks (`POST /photos`) and opens the arrangement in the world without leaving the page -- a camera's first sanity check is to record its own surroundings; **Place at selected** stands the camera at a piece (`PUT /cameras/{id}`, kept in the state folder) and the world draws it there, a badge and a frustum, in every browser; the pictures on this machine (`GET /photos/pictures`, thumbnails from `/photos/pictures/file`) ticked and **gathered** (`POST /photos/gather`: the report, the groups, the questions worth a person's word, answered with buttons in the answers' own five sentences) and **opened as one** arrangement. The canvas ring's Panels cell groups the machine and its log behind one cell to stay at eight. Browser test with Chromium's fake camera; checked on this machine's own camera (48 pieces of a room).
-- **The rail resizes, hides on tilde, and moves** – the panel rail has a head of its own: drag its inner edge to set its width (220 px to half the page), press `` ` `` / `~` to hide and show it (never while typing; a tab stands in for a hidden rail), drag its grip across the page or press ⇄ to move every panel in it to the other side; a docked panel's body has a height you drag, a free panel resizes from its corner. The canvas ring's Panels cell gains **Rail**. Remembered per browser; browser test with bounds.
-- **The machine in front of the world (one screen, phase 3)** – the monitor's whole body becomes a module, `apothecary/static/widgets/machine.js` (`mountMachine(root, {base, port, host, logRoot})`), with its stylesheet `widgets/machine.css`: the monitor page mounts it as its body, and the world mounts it in a panel tethered to the printer when its badge is clicked or the node ring's Device › Monitor is chosen -- the same ids, chain, latch and confirms on both hosts, the comms log as a panel of its own on the left rail, a jog from the popup moving the world's nozzle ahead of the poll, the ring's control verbs carried to whichever machine is open, and a drag letting go of the tether. The census counts a widget module as part of every page that mounts it (each entry says its source) and the three-screen meter counts it once: still 148 / 60. The simulated printer's SD print now goes round instead of ending, so a long browser session still finds it printing. Browser test with bounds; the walkthrough gains a page.
-- **Panels in front of the world (one screen, phase 2)** – the viewer's side column becomes a rail of panels (`apothecary/static/panels.js`): Contents, Selected, Jobs, Layout Validation and Generated OpenSCAD each close to a tab, collapse, float free and drag by their title bar (clamped to the page), dock back, and are remembered per browser; a rail can never take more than a third of the page. The canvas ring gains **Panels** with a cell per panel (`panel:toggle:<id>`, `⌗98` is Contents at the root); the resolver's list and the template's `data-panel` marks are held to each other by a test. A tethered panel (following an anchor, with a leader line) is in the manager for the machine popup to use next. Browser test with bounds; the walkthrough gains a page.
-- **The docs are served with the viewer, and refreshed on start** – `/docs` renders `docs/` and `/walkthrough` renders `walkthrough/` (a small Markdown renderer written in `apothecary/docs_site.py`, no dependency; screenshots, GIFs, recordings and G-code files served as they are; relative links work because the URL is the path). `apothecary serve` and `apothecary dev` run `apothecary docs generate` in the background as they start, so the generated walkthroughs are current after a restart; the bar on every docs page says whether that run is going or how it ended (`docs/generated/.refresh.json`, `refresh.log`); `--no-refresh-docs` skips it. The API's Swagger page moved to `/api/docs` and was then switched off (below): it loaded its script from a public CDN.
-- **The world wears its machines (one screen, phase 1)** – the fractal viewer gains an anchor layer (`apothecary/static/anchors.js`: HTML fixed to a point in the scene, re-projected every frame with no layout reads, hidden out of frame, dimmed when occluded) and the first anchored things: a **badge above every pinned, connected board** -- a printer's state, hotend and bed, progress and job stage; a devkit's identity and last-flashed sketch -- fed by the same rows the Contents badges read, following the machine as the camera moves, a click selecting it; and a printer's **marks in the world** -- the nozzle marker tweening to each poll, the bed plane, the newest bed reading as a relief -- at the printer's node, from `apothecary/static/machine_marks.js`, which the monitor's board view now draws with too. Browser test with bounds (to the pixel after a pan, within the poll interval); the walkthrough gains a page.
-- **The census counts the third screen, and the one-screen plan begins** – `apothecary census --page templates/firmware.html.j2` counts the firmware page (30 controls of its own, 4 on the ring, no ring yet; a class that only says how a control looks, `small`, `primary`, does not name one), so the three screens have one meter: 148 controls of their own, 60 on a ring. `docs/plans/one-screen-2026-09-20.md` plans the world as the one screen with anchors, tethered popups and panels in front of it, in six phases; the draft record *One screen* is on the governance branch.
-- **The bed reading drawn in the world** – the board view on the monitor page and on the firmware page's device cards lays the shown reading over the bed as a relief: a surface through the probed points, its lowest point on the bed, stretched ×10–×50 (said in the note) so a few millimetres of tilt are visible, in the heatmap's two hues, with corner posts down to the bed; placed on the probeable area the probe offset leaves (Marlin's default inset), since Marlin prints the grid without positions. `mountBoardView(...).setMesh(record)` / `.mesh()`; the monitor dispatches `apothecary:mesh` whenever the shown reading changes. `GET /firmware/printers/where` now answers on a fresh server before any page has loaded the site.
-- **Bed leveling, read and recorded** – the monitor's Bed level card: **Read mesh** saves the board's stored mesh (`M420 V`), probe offset (`M851`) and temperatures as a *bed reading* without moving; **Probe bed** homes and probes (`G28`, `G29`; latch required, confirmed once) as a job that holds the port for the minutes it takes (polls report the stage without queueing, queries and controls answer `409`, E-STOP still goes). Readings are drawn as a heatmap with range, tilt and each corner against the mean, kept under `~/.apothecary/leveling/` with every line the firmware said, and listed per port newest first (`POST/GET /firmware/printers/level`, `GET /firmware/printers/leveling[/{id}]`). Four corner buttons move the nozzle to paper height at each corner for a tramming check. On the ring, Control › Level is seated so the keypad is the bed (`⌗741` front left, `⌗748` Probe); `G29` and `G30 X Y` join the control allowlist. `gcode.parse_meshes` reads Marlin's grid, its subdivided grid and `M503`'s `G29 W` points; the simulated printer answers all four codes with a tilted, bowed bed.
-- **The board drawn in its printer** – the monitor page and the firmware page's device cards draw a pinned board where it sits (`apothecary/static/board_view.js`, from the same STL routes the viewer uses): the printer translucent, the board solid, the build volume on the printer's base, and a nozzle marker that tweens to each polled position and moves ahead of every jog. `GET /firmware/printers/where` answers the site, node, positions and volume a view needs.
-- **Printer walkthrough docs** – `apothecary docs generate` now runs its server against scripted ports and the simulated printer (`--real-devices` to opt out), so `docs/generated/printer-monitor/` is identical on every machine; Playwright tests with timing bounds (`tests/e2e/test_printer_ui.py`) hold the UI to its cadence.
-- **`parts/esp32_blink`** – smoke-test sketch for classic ESP32 devkits (verified on ESP32-D0WD-V3): blinks GPIO 2 and self-announces over serial.
-- **Git submodules command** – `apothecary submodules` to init/update external dependencies
-- **Gridfinity integration** – Parametric storage bin wrapper for gridfinity-rebuilt-openscad
-- **OpenSCAD Nightly detection** – Auto-detect development builds for parts requiring newer syntax
-- **Part STL customization** – Parts can define custom STL output paths and OpenSCAD requirements
-- **Fractal `Assembly` model** (prototype, unratified) – Site/Structure/Substructure/Feature collapsed into one generic recursive class (`apothecary/hierarchy.py`); depth is unbounded rather than four fixed levels
-- **Revision/diff building blocks** (prototype) – `apothecary/revisions.py`: `Revision`, `RevisionGraph` (branching history), `diff_assemblies` (path-addressed structural diff) — first slice toward planning/comparing design iterations, no compositing/merge yet
-- **Fractal zoom viewer** (prototype, unratified) – `/viewer/sites/{name}` navigates any registered site's Assembly tree at any depth with standardized controls (click to select, double-click or scroll-past-resistance to zoom in, one zoom-out control) and an abstract depth-ladder minimap
-- **Parts library as a fractal tree** – the registered `parts/` library is migrated in as leaf `Assembly` nodes (`apothecary/example_parts_library.py`, new `part_ref` field), reachable by zooming into the `parts_library` site instead of a separate parts browser
-- **Real geometry in the fractal viewer** – placeholder boxes upgrade in the background to real geometry: a leaf's own Cube/Cylinder/Sphere renders as an exact Three.js primitive (`_primitive_descriptor` in `api.py`), and a `part_ref` leaf loads its real OpenSCAD-rendered STL, generating it on demand if missing.
-- **Garage scene expanded** – a building shell (four walls, a door opening, a window opening), abstract utility fixture stubs (lighting/HVAC/electrical/fluids, each a housing plus one "output" Feature), a storage shelving stub, and a floor-standing CNC router stub (subtractive manufacturing, deliberately not wired into the job queue) — all simple stubs left for further development, not modeled in functional detail. The garage floor plan is 6000mm × 6000mm (doubled from the original 3000mm × 2300mm) so the equipment reads as furnishing a real garage, not shrink-wrapping one.
-- **Real geometry for composite nodes** – `GET /sites/{name}/nodes/{path}/stl` renders any addressable Assembly node's own subtree through the same OpenSCAD CLI pipeline `/parts/{name}/stl` already uses, cached by content hash; the fractal viewer's wave-loading seam now upgrades composite nodes (walls, whole Structures), not just leaves, to real geometry. A container with no footprint of its own (e.g. the garage building shell) falls back to the envelope of its descendants' bounds for camera framing and placeholder placement.
-- **Subsystem category coloring** – `Assembly.category` (inherited from the nearest tagged ancestor, resolved server-side in `_assembly_tree`) tags each top-level garage Structure as wall/furniture/mechanical/fluid/electrical; the viewer colors every node by its resolved category instead of a single hardcoded workbench-brown special case.
-- **Snap-to-grid** – dragging a node snaps to a 50mm grid by default (three.js `TransformControls.setTranslationSnap`), toggleable from the toolbar.
-- **Hierarchy tree selector** – the Contents panel is a full expandable/collapsible tree of every descendant beneath the current focus (not just direct children), each row showing whether it's currently rendered in the 3D view; per-subsystem category chips expand just one subsystem's subtree at a time, replacing the single all-or-nothing "show all levels" toggle.
-- **Doc-generation videos** – `apothecary docs generate` now extracts each doc-workflow test's actual Playwright screen recording (previously discarded) into `docs/generated/<workflow>/<workflow>.webm` and embeds it in the workflow's Markdown alongside the existing step-screenshot GIF.
-- **Elephant walk** – `apothecary parts elephant-walk` generates a preview file with all parts arranged in a line, using bounding boxes to prevent overlap
-- **Dev command** – `apothecary dev` for quick development workflow (generate STLs + start server)
-- **STL rendering** – OpenSCAD CLI integration for SCAD→STL conversion
-- **STL API endpoints** – `GET /parts/{name}/stl`, `POST /parts/{name}/stl/generate`
-- **OpenSCAD status endpoint** – `GET /openscad/status` to check availability
-- **PartFiles data model** – Links SCAD/JSCAD/STL files with status tracking
-- **`apothecary test all`** – Combined test runner with aggregate summary
-- Three.js-based 3D viewer with real STL geometry loading
-- Viewer download/open dropdowns for SCAD and JSCAD files
-- Loading overlay with blur effect during STL generation
-- `QUICKSTART.md` for rapid onboarding
-- `CONTRIBUTING.md` with development guidelines
-- Documentation index at `docs/README.md`
-- Comprehensive E2E tests using Playwright
+
+- `apothecary parts import` brings an STL or OBJ in as a part. ([doc](docs/geometry-from-elsewhere.md))
+- A `part.json` beside a part's SCAD stands in for a Python wrapper. ([doc](docs/geometry-from-elsewhere.md))
+- The garage bench draws Ender 3s and real boards, from their makers' drawings. ([doc](docs/geometry-from-elsewhere.md))
+- Personal data stays on the device: only the toolchain fetch leaves this machine. ([code](apothecary/stays_local.py))
+- `apothecary openscad install` fetches a checksum-verified OpenSCAD snapshot; renders use it, with Manifold. ([code](apothecary/openscad_installer.py))
+- `apothecary openscad install` is native on each platform: the AppImage on Linux x86_64 (extracted where there is no FUSE), the app from the disk image on macOS, the portable zip on Windows x64. ([readme](README.md))
+- On Linux arm64 `apothecary openscad install` builds OpenSCAD from source at the snapshot's date, refusing with the `apt install` line when the build lacks something; `--jobs N`. ([code](apothecary/openscad_installer.py))
+- `apothecary openscad status` says, for each install, its platform, how it was installed, whether it runs natively, and whether it has Manifold. ([code](apothecary/cli/openscad.py))
+- The ring menu seats options on nine keypad cells; the digits pressed are the address. ([code](apothecary/menu.py))
+- `apothecary firmware` installs arduino-cli, and compiles and uploads sketches kept with parts. ([doc](docs/firmware.md))
+- A board's identity, the sketch last flashed to it, and the sketch it announces over serial. ([doc](docs/firmware.md))
+- A live serial log, on the firmware page and over the viewer. ([doc](docs/firmware.md))
+- `apothecary firmware printer` identifies and polls a G-code printer. ([doc](docs/firmware.md))
+- A printer pinned to its scene node sets that node's status from its polls. ([doc](docs/firmware.md))
+- The viewer's Device section pins, queries, polls and watches a board. ([doc](docs/firmware.md))
+- The printer monitor at `/firmware/monitor`: status, temperatures and the port's comms log. ([doc](docs/firmware.md))
+- Latched printer control: refused unless armed, held to fixed caps; E-STOP always goes. ([doc](docs/firmware.md))
+- Print from here: a kept G-code file, checked, then streamed one line per `ok`. ([doc](docs/firmware.md))
+- Bed leveling: the stored mesh read or the bed probed, and each reading kept and drawn. ([doc](docs/firmware.md))
+- The board drawn in its printer, with a nozzle marker that follows each poll. ([doc](docs/firmware.md))
+- `parts/esp32_blink`: a sketch that blinks GPIO 2 and announces itself over serial. ([doc](docs/firmware.md))
+- `apothecary photo` turns a picture into named, placed pieces. ([page](walkthrough/11-photographs-into-pieces.md))
+- The Camera & pictures panel: capture, look, place a camera, gather. ([page](walkthrough/12-the-bench-as-it-is.md))
+- Pictures added and forgotten there; pins and cameras listed and undone. ([page](walkthrough/12-the-bench-as-it-is.md))
+- Badges and printer marks anchored to their machines in the 3D view. ([plan](docs/plans/one-screen-2026-09-20.md))
+- Panels in front of the world, which close, collapse, float and dock. ([plan](docs/plans/one-screen-2026-09-20.md))
+- The panel rail resizes, hides on `~`, and moves to the other side. ([plan](docs/plans/one-screen-2026-09-20.md))
+- The machine popup: the printer monitor, tethered to its printer. ([plan](docs/plans/one-screen-2026-09-20.md))
+- `/docs` and `/walkthrough` serve this repository's Markdown, rendered. ([docs](docs/README.md))
+- `apothecary docs generate` writes screenshots, GIFs and recordings from the browser tests. ([docs](docs/README.md))
+- `apothecary census` counts the controls a page puts on screen. ([code](apothecary/census.py))
+- `problems`, `solutions`, `preflight`, `release`, `parts checklist` and `parts verify`. ([pages](docs/README.md))
+- Gridfinity bins, from the vendored gridfinity-rebuilt-openscad. ([part](parts/gridfinity/README.md))
+- A part can name its STL path and the OpenSCAD it needs. ([code](apothecary/projects/parts/stl_renderer.py))
+- One parameter contract for a part and for a piece made from a picture: `ParamsSpec` and `Validation`, answered by the parts routes and the made routes alike. ([code](apothecary/projects/parts/params.py))
+- A piece made from a picture is a part: `MadePart`, edited in the one editor from `Part › Edit`, its found size a candidate; re-sizing a look rebuilds the pieces nobody sized. ([doc](docs/parts-authoring.md))
+- The `Assembly` model: sites, structures and parts as one recursive tree. ([code](apothecary/hierarchy.py))
+- The fractal zoom viewer: any site's tree at any depth. ([page](walkthrough/04-serving-it.md))
+- Real geometry in the viewer: exact primitives, and nodes as STLs. ([viewer](templates/fractal_viewer.html.j2))
+- The garage: walls, utility stubs, shelving and a CNC router stub. ([code](apothecary/example_hierarchy.py))
+- Nodes coloured by subsystem, a 50 mm drag snap, and a Contents tree. ([viewer](templates/fractal_viewer.html.j2))
+- `apothecary parts elephant-walk` lays every part out in a row, in `.cache/`. ([code](apothecary/cli/parts.py))
+- STLs built by the OpenSCAD CLI, from the CLI and the API. ([code](apothecary/projects/parts/stl_renderer.py))
+- Browser tests with Playwright. ([tests](tests/e2e/README.md))
+- Looks: a picture pinned at a structure or the floor, its shapes made into pieces there, over the API. ([plan](docs/plans/pictures-in-the-world-2026-09-26.md))
+- A look is drawn where it is pinned: the picture as a mat on its structure's top or the floor, its shapes as outlines to click, a camera's frustum looking down onto it, a place badge over each. ([code](apothecary/static/picture_marks.js))
+- A structure's ring holds Camera (pin this browser's camera, Live on the mat, Look, Keep, Unpin) and Picture (Add, Folder, Looks, Make, Size, Find, Unpin, Forget); the floor's are under the canvas ring's Pictures › Floor. ([code](apothecary/menu.py))
+- A picture dropped on a structure, or pasted, is kept, pinned at its root and found; on empty canvas, at the floor. ([test](tests/e2e/test_the_loop.py))
+- Make, Make all, Drop and a made piece's Word are carried out by the server through the ring's intent. ([code](apothecary/routes/menu.py))
+- Why this on a piece made from a picture draws its look and a thread to its outline. ([code](apothecary/static/picture_marks.js))
+- Selected sizes the drawn look: the picture's width, or a chosen shape's long side; a look's row draws it. ([viewer](templates/fractal_viewer.html.j2))
 
 ### Changed
-- **`/sites/{name}` payload** – gains an additive recursive `tree` key (the whole Assembly tree, including additions/subtractions) alongside the existing flattened `structures` list
-- **Calibration cube** – Default size reduced to 10mm, labels as relief (not extruded), axes preview-only
-- **Parts reorganized** – Each part now has its own folder (`parts/<name>/<name>.scad`)
-- **Viewer renders actual STL** – No more placeholder geometry; auto-generates if missing
-- **Root redirects to viewer** – `/` now redirects to `/viewer` with elephant_walk as default
-- Refactored viewer into Jinja2 template + dedicated module
-- Registry scanner updated for new folder structure
-- Reduced `api.py` from 827 to ~450 lines
+
+- A tool fetch may also reach codeload.github.com, for OpenSCAD's source on Linux arm64. ([code](apothecary/stays_local.py))
+- A camera is pinned at a root structure with a footprint, or the floor, one per host. ([code](apothecary/routes/pictures.py))
+- A camera's badge is the place badge: a click selects the structure or the floor, and shows no camera live. ([test](tests/e2e/test_camera.py))
+- Forgetting a kept picture unpins its looks; pictures are served at a size and never cached. ([code](apothecary/routes/pictures.py))
+- The canvas ring's Camera is Pictures, in the same seat: Add (at the floor), Floor, Purge, Gather. ([code](apothecary/menu.py))
+- The camera panel is the pictures and pins panel: every camera and look pinned, every site's, each unpinned from its row. ([code](apothecary/static/widgets/camera.js))
+- Kept lists every camera, look and board pinned, every site's, and every kept picture, each taken back from its row without switching the site; the camera panel keeps the gathering. ([code](apothecary/static/widgets/kept.js))
+
+- `/sites/{name}` carries the whole `tree` beside the flat `structures` list. ([code](apothecary/api.py))
+- Each part has its own folder, `parts/<name>/<name>.scad`. ([doc](docs/parts-authoring.md))
+- The calibration cube is 10 mm by default, its labels cut in. ([part](apothecary/projects/parts/calibration_cube.py))
+- `/` and `/viewer` open the fractal viewer on the garage site. ([page](walkthrough/04-serving-it.md))
+- `apothecary serve` regenerates `docs/generated/` only when given `--refresh-docs`. ([docs](docs/README.md))
+- `apothecary test` is `run [--e2e] [--slow]` and `all [--slow]`, exiting as pytest does. ([doc](CONTRIBUTING.md))
+- `apothecary check` exits 1 when a required package is missing. ([readme](README.md))
+- `apothecary census` is a report: it lists what it cannot classify and refuses nothing. ([code](apothecary/census.py))
+- One ceiling holds the viewer's control count, in place of pinned counts per page. ([test](tests/test_census.py))
+- The printer seam has one serial engine, pyserial, beside the simulator. ([doc](docs/firmware.md))
+- Playwright is a dev dependency, and ruff is the one lint configuration. ([doc](CONTRIBUTING.md))
+- README.md is the entry doc; QUICKSTART.md points at it; CONTRIBUTING.md names the CI gates. ([readme](README.md))
+- CI lints with ruff and runs the unit and browser tests as parallel jobs on Python 3.11. ([doc](CONTRIBUTING.md))
 
 ### Removed
-- **Standalone parts browser and Site/Structure hierarchy viewer** – `templates/viewer.html.j2` and `templates/site_viewer.html.j2`, along with `/viewer/random` and `/viewer/parts/{name}`, absorbed into the fractal zoom viewer (`/viewer` now redirects to it)
-- `render_context.py` (orphaned, unused)
-- `openscad_framework.py` (deprecated compatibility shim)
-- `star_cookeicutter.py` (legacy misspelling)
-- Legacy JSCAD viewer endpoints (`/viewer/ui/*`, `/css/*`)
-- `_require_viewer_root()` helper (no longer needed)
-- `E2E_SETUP.md` (consolidated into CONTRIBUTING.md)
+
+- `system`, `install`, `submodules`, `testrun`, `dev`, `inventory`: stubs naming what to use. ([code](apothecary/cli/retired.py))
+- `test setup-e2e`, `validate-e2e` and `run-e2e`, also stubs. ([code](apothecary/cli/testing.py))
+- The JSCAD viewer's install step and `package.json`; no route served it. ([code](apothecary/cli/server.py))
+- `/parts/random`, `/parts/{name}/jscad`, `/parts/{name}/files`, `/openscad/status`. ([code](apothecary/api.py))
+- `/problems`, `/solutions`, `/spaces` and `/firmware/printers/controls`. ([code](apothecary/spaces.py))
+- `census --typed-only` and the hand-kept workflows table it printed. ([code](apothecary/census.py))
+- The ring's Get shape and Word wedges, and its selection and edge contexts. ([code](apothecary/menu.py))
+- `elephant_walk` as a registered part; the preview is written to `.cache/`. ([code](apothecary/cli/parts.py))
+- `PartFiles`, the revision-graph prototype, and the uncalled parts of `apothecary.models`. ([doc](docs/models.md))
+- The stdlib termios serial engine. ([doc](docs/firmware.md))
+- The tutorial, the library-expansion spec and the finished plans; git keeps them. ([docs](docs/README.md))
+- The standalone parts browser and Site/Structure viewer. ([viewer](templates/fractal_viewer.html.j2))
+- Legacy JSCAD viewer endpoints and three orphaned modules. ([code](apothecary/api.py))
+- `E2E_SETUP.md`; the browser tests are described beside them. ([tests](tests/e2e/README.md))
+- The camera panel's camera, capture, Look, placement and Open as one; no verb opens another site. ([code](apothecary/static/widgets/camera.js))
 
 ### Fixed
-- **A placed camera's mark was always on screen, and every badge was dimmed** – the camera's badge shared its class name with the Camera panel's root (`.camera`), whose `display: flex` overrode the `hidden` the anchor layer sets when a mark's piece is out of view, so every placed camera sat at the top-left corner of the canvas at every level -- zoomed into a board, two cameras from elsewhere in the site were still there. The badge is `camera-mark` now, `hidden` wins on every badge, and the frustum follows the same rule the badge does (drawn only while its piece is at the level being looked at; `refreshCameraMarks` on every focus change). Separately, the occlusion test that dims a badge behind something counted the transform gizmo's picking plane, a mesh the size of the scene, so nearly every badge was dimmed; the gizmo is not in the way. Browser test; the walkthrough gains a page (12) that places a camera, zooms into a printer and finds no mark there.
-- **The pyserial engine dropped DTR on close, so the next open rebooted the board** – seen on the bench with the Ender's FTDI: the kernel's `HUPCL` default hangs up on close, and only the termios engine cleared it. Both engines now clear it on open (`gcode.keep_dtr_on_close`); server → CLI → server reopen the port with no boot banner. The first open after a plug-in still resets the board (the bridge comes up with DTR dropped), and the docs say so.
-- **A pin by port broke when the kernel renumbered the port** – the printer came back as `/dev/ttyUSB0` after a night as `/dev/ttyUSB1`. A pin of a detected port is now kept as the board's own identity (MAC, else the USB bridge's serial number), and every place a pin is matched to a port (`bindings.same_device`: the bindings view, the board view's `where`, the status sync) accepts the serial number, a MAC, the port, or a path that resolves to the same device (`/dev/serial/by-id/…`, a udev name). A serial number is a valid typed identity in the Device section.
-- **The board view drew the printer's shape a bench-width away** – a node's STL arrives in its parent's frame (a printer on the bench at x 100–400), and the view placed it untranslated; the board was offset twice. Each body is now centred and placed at its envelope, as the fractal viewer does, and the browser test checks the printer encloses its board and its build volume.
-- **Fractal viewer: world position was only ever one level deep** – `Assembly.world_bounds()`/`api.py`'s tree serialization only offset a node by its own `position`, not its accumulated ancestor chain, so anything nested more than one level below a site's direct children rendered as if its parent were sitting at the origin. Fixed by threading cumulative world position through `_assembly_tree`'s recursion — the root cause of camera framing looking "too zoomed in and not centered" once you zoomed past the first level.
-- **Fractal viewer: camera framing and grid size** – framing now considers all three axes (not just the horizontal footprint) and targets the true 3D center instead of an arbitrary height guess; the grid/axes helpers resize to match whatever's actually in view instead of a fixed 2000mm grid, often far too small a few levels deep
-- **Fractal viewer: real geometry rendered rotated 90 degrees** – a loaded STL's raw vertex data is in apothecary's own (x, y, z) z-up frame; every other object in the scene is positioned via the (x, z, y) y-up axis swap `boxFromBounds` documents, but the loaded mesh's own geometry never had that swap applied, so its "up" landed on three.js's depth axis instead of its up axis. Fixed by applying the same swap to the loaded geometry (plus a matching triangle-winding reversal, since the swap is a reflection, not a rotation, and would otherwise shade every face inside-out).
-- **Fractal viewer: moving any item corrupted every real-geometry mesh on screen** – `rebuildSingleMesh` unconditionally re-scaled a node's mesh by its real-world millimeter size after every position edit, which was harmless for a still-placeholder box (a unit box stretched via `mesh.scale`) but ballooned an already-upgraded real-geometry mesh (already actual-size, scale left at 1) into a screen-filling artifact — for *every* currently-rendered node, not just the one being moved, since this ran once per node on every layout submit. Fixed by tagging placeholder meshes explicitly so only they get re-scaled.
-- Viewer loads without console errors
-- Parts dropdown properly populates on page load
-- `.gitignore` no longer lists tracked `parts/` folder
+
+- Camera › Pin here › Allow pins the one camera the browser names at once and names Look; with several it reopens the ring at Pin here; a refusal says what to do. ([test](tests/e2e/test_first_camera.py))
+- A camera allowed for the site in the address bar is named under Pin here without a reload. ([code](apothecary/static/pictures.js))
+- Selected names the ring path that takes or adds a picture at a host or the floor, and what Look, Live and Keep do once a camera is pinned. ([viewer](templates/fractal_viewer.html.j2))
+- A piece moved with the gizmo keeps its new place when let go. ([code](templates/fractal_viewer.html.j2))
+- A placed camera's mark is hidden while its piece is out of view. ([page](walkthrough/12-the-bench-as-it-is.md))
+- A piece from a picture shows its provenance in Selected, and an unsized one no printer status. ([page](walkthrough/11-photographs-into-pieces.md))
+- The camera panel's messages are said once, in the status bar, refusals as errors. ([code](apothecary/static/widgets/camera.js))
+- A camera's badge selects its piece, and a first click shows this browser's camera. ([test](tests/e2e/test_camera.py))
+- Closing a printer's port keeps DTR up, so the next open does not reboot the board. ([doc](docs/firmware.md))
+- A pin follows its board when the kernel renumbers the port. ([doc](docs/firmware.md))
+- The board view places its printer once, not offset twice. ([code](apothecary/static/board_view.js))
+- A node's world position accumulates down the whole tree, not one level. ([code](apothecary/hierarchy.py))
+- Framing uses all three axes, and the grid sizes to what is in view. ([viewer](templates/fractal_viewer.html.j2))
+- A loaded STL is no longer drawn turned 90 degrees. ([viewer](templates/fractal_viewer.html.j2))
+- Moving a node no longer rescales every real-geometry mesh on screen. ([viewer](templates/fractal_viewer.html.j2))
+- The viewer loads without console errors. ([tests](tests/e2e/README.md))
+- `.gitignore` no longer lists the tracked `parts/` folder. ([file](.gitignore))
 
 ## [0.1.0] - 2026-01-02
 
 ### Added
-- Initial release
-- Core primitives: `Cube`, `Sphere`, `Cylinder`
-- Boolean operations: `Union`, `Difference`, `Intersection`
-- Transform operations: `Translate`, `Rotate`, `Scale`
-- `Scene` model with `render()` and `render_jscad()` methods
-- FastAPI server with REST API
-- CLI with commands: `render`, `templategenerate`, `parts`, `serve`, `inventory`
-- Parts registry with wrapper system
-- Jinja2 template support
-- Example parts: parametric star, V-slot, dryer knob, solder fan mount
 
----
-
-## Release Notes Format
-
-### Added
-New features and capabilities.
-
-### Changed
-Changes in existing functionality.
-
-### Deprecated
-Features that will be removed in upcoming releases.
-
-### Removed
-Features removed in this release.
-
-### Fixed
-Bug fixes.
-
-### Security
-Security-related changes.
+- Primitives, booleans and transforms as Pydantic models, rendered by a `Scene`. ([doc](docs/scene-json.md))
+- A FastAPI server, Jinja2 templates, and `render`, `templategenerate`, `parts`, `serve`. ([doc](templates/README.md))
+- The parts registry, with wrappers. ([doc](docs/parts-authoring.md))
+- Example parts: parametric star, V-slot, dryer knob, solder fan mount. ([parts](parts/README.md))

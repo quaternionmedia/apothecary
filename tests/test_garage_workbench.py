@@ -122,7 +122,7 @@ def test_site_renders_valid_jscad():
     site = create_example_site()
     rendered = site.render_jscad()
     assert "export const main" in rendered
-    assert "cube(" in rendered
+    assert "cuboid(" in rendered
 
 
 def test_validate_garage_layout_is_clean_by_default():

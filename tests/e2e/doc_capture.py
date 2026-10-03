@@ -98,6 +98,26 @@ class DocRecorder:
 WALKTHROUGH_ROOT = Path(__file__).resolve().parents[2] / "walkthrough"
 
 
+def _keep_unless_changed(path: Path, png: bytes) -> None:
+    """Write the screenshot only when its pixels differ from the committed one: a
+    re-encode of the same picture is not a change, and every run used to leave
+    the tracked screenshots modified."""
+    import io
+
+    from PIL import Image, ImageChops
+
+    if path.exists():
+        old = Image.open(path).convert("RGB")
+        new = Image.open(io.BytesIO(png)).convert("RGB")
+        if old.size == new.size:
+            changed = sum(ImageChops.difference(old, new).convert("L").histogram()[1:])
+            # Software WebGL rasterises an edge a pixel differently now and then;
+            # a change is more than a hundredth of a percent of the picture.
+            if changed <= old.size[0] * old.size[1] // 10000:
+                return
+    path.write_bytes(png)
+
+
 @dataclass
 class ShownStep:
     """One step: a sentence of the page, and what the run had at that moment."""
@@ -140,7 +160,7 @@ class Walkthrough:
         filename = f"{self.ordinal}-{index:02d}-{_slugify(heading)}.png"
         shots = WALKTHROUGH_ROOT / "screenshots"
         shots.mkdir(parents=True, exist_ok=True)
-        self.page.screenshot(path=str(shots / filename))
+        _keep_unless_changed(shots / filename, self.page.screenshot())
         self.steps.append(
             ShownStep(
                 index=index,

@@ -1,20 +1,42 @@
+import json
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
-from typing import Optional, Union
+from typing import Iterator, Literal, Optional, Union
 
 from pydantic import Field
 
-from .core import OpenSCADObject
+from .core import OpenSCADObject, scad_vec
 from .models.vectors import Vector3D
+
+# Set by absolute_imports(): the root an Import's relative file is written under.
+_IMPORTS_UNDER: ContextVar[Optional[Path]] = ContextVar("imports_under", default=None)
+
+
+@contextmanager
+def absolute_imports(root: Path) -> Iterator[None]:
+    """Inside the block, every Import renders its file as an absolute path under ``root``.
+
+    OpenSCAD resolves a relative ``import()`` against the folder of the SCAD
+    file that names it, so SCAD written anywhere but ``root`` needs this.
+    """
+    token = _IMPORTS_UNDER.set(Path(root))
+    try:
+        yield
+    finally:
+        _IMPORTS_UNDER.reset(token)
 
 
 class Cube(OpenSCADObject):
     """Cube primitive"""
 
+    type: Literal["cube"] = "cube"
+
     size: Union[float, Vector3D] = 1.0
     center: bool = False
 
     def render(self, *_, **__) -> str:
-        comment_str = f"// {self.comment}\n" if self.comment else ""
+        comment_str = self._comment()
         size_str = (
             f"[{self.size.x}, {self.size.y}, {self.size.z}]"
             if isinstance(self.size, Vector3D)
@@ -26,17 +48,21 @@ class Cube(OpenSCADObject):
 class Sphere(OpenSCADObject):
     """Sphere primitive"""
 
+    type: Literal["sphere"] = "sphere"
+
     r: float = Field(1.0, gt=0)
     fn: Optional[int] = Field(None, gt=2)
 
     def render(self, *_, **__) -> str:
-        comment_str = f"// {self.comment}\n" if self.comment else ""
+        comment_str = self._comment()
         fn_str = f", $fn={self.fn}" if self.fn else ""
         return f"{comment_str}sphere(r={self.r}{fn_str});"
 
 
 class Cylinder(OpenSCADObject):
     """Cylinder primitive"""
+
+    type: Literal["cylinder"] = "cylinder"
 
     h: float = Field(1.0, gt=0)
     r: Optional[float] = Field(None, ge=0)
@@ -45,19 +71,22 @@ class Cylinder(OpenSCADObject):
     center: bool = False
     fn: Optional[int] = Field(None, gt=2)
 
+    def radii(self) -> tuple:
+        """(bottom, top). ``r`` sets both; one of ``r1``/``r2`` alone sets both
+        (the viewer draws it that way, so the SCAD must too); none is 1."""
+        if self.r is not None:
+            return self.r, self.r
+        r1 = self.r1 if self.r1 is not None else self.r2
+        r2 = self.r2 if self.r2 is not None else self.r1
+        return (1.0, 1.0) if r1 is None else (r1, r2)
+
     def render(self, *_, **__) -> str:
-        comment_str = f"// {self.comment}\n" if self.comment else ""
-        radius_str = (
-            f"r={self.r}"
-            if self.r is not None
-            else (
-                f"r1={self.r1}, r2={self.r2}"
-                if self.r1 is not None and self.r2 is not None
-                else "r=1"
-            )
-        )
+        comment_str = self._comment()
+        r1, r2 = self.radii()
+        radius_str = f"r={r1}" if r1 == r2 else f"r1={r1}, r2={r2}"
         fn_str = f", $fn={self.fn}" if self.fn else ""
-        return f"{comment_str}cylinder(h={self.h}, {radius_str}, center={str(self.center).lower()}{fn_str});"
+        center = str(self.center).lower()
+        return f"{comment_str}cylinder(h={self.h}, {radius_str}, center={center}{fn_str});"
 
 
 class Import(OpenSCADObject):
@@ -77,6 +106,8 @@ class Import(OpenSCADObject):
     site node needs for placement and overlap checks.
     """
 
+    type: Literal["import"] = "import"
+
     file: str
     convexity: int = Field(10, gt=0)
     scale: float = Field(1.0, gt=0)
@@ -84,16 +115,20 @@ class Import(OpenSCADObject):
     translate: Vector3D = Field(default_factory=Vector3D)
 
     def render(self, *_, **__) -> str:
-        comment_str = f"// {self.comment}\n" if self.comment else ""
-        path = self.file.replace("\\", "/")
-        text = f'import("{path}", convexity={self.convexity});'
+        comment_str = self._comment()
+        root = _IMPORTS_UNDER.get()
+        file = self.resolved_path(root).as_posix() if root is not None else self.file
+        # json quoting is OpenSCAD's string syntax: a quote in a file name
+        # stays in the string instead of ending it.
+        path = json.dumps(file.replace("\\", "/"), ensure_ascii=False)
+        text = f"import({path}, convexity={self.convexity});"
         if self.scale != 1.0:
             text = f"scale({self.scale}) {text}"
         if self.rotate != Vector3D():
-            text = f"rotate([{self.rotate.x}, {self.rotate.y}, {self.rotate.z}]) {text}"
+            text = f"rotate({scad_vec(self.rotate)}) {text}"
         if self.translate != Vector3D():
             t = self.translate
-            text = f"translate([{t.x}, {t.y}, {t.z}]) {text}"
+            text = f"translate({scad_vec(t)}) {text}"
         return f"{comment_str}{text}"
 
     def resolved_path(self, root: Optional[Path] = None) -> Path:

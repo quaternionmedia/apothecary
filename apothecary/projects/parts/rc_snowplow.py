@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Any, Dict, Mapping, Optional
 
 from pydantic import BaseModel, Field
 
+from apothecary.core import OpenSCADObject
 from apothecary.models import BoundingBox3D, Vector3D
 from apothecary.projects.parts.base import BasePart
 from apothecary.projects.parts.skeleton import ROOT
@@ -31,6 +32,12 @@ class SnowplowPart(BasePart):
     parameters that drive that assembly.
     """
 
+    def geometry(self, params: Mapping[str, Any]) -> OpenSCADObject:
+        # Imported here: that package imports this module for its DEFAULT.
+        from .rc.snowplow import snowplow_assembly
+
+        return snowplow_assembly(**Params(**params).model_dump())
+
     def get_bounds(self, params: Optional[Dict] = None) -> BoundingBox3D:
         p = Params(**(params or {}))
         # Blade: centered cube (w, t, h) rotated about X by blade_angle, then
@@ -44,13 +51,13 @@ class SnowplowPart(BasePart):
         )
         blade_min = Vector3D(x=-p.blade_width / 2, y=-half_y, z=p.blade_height / 2 - half_z)
         blade_max = Vector3D(x=p.blade_width / 2, y=half_y, z=p.blade_height / 2 + half_z)
-        # Mount: centered cube (mw, mt, mh) at y=-blade_thickness, lifted by mh/2.
-        mount_min = Vector3D(
-            x=-p.mount_width / 2, y=-p.blade_thickness - p.mount_thickness / 2, z=0
-        )
-        mount_max = Vector3D(
-            x=p.mount_width / 2, y=-p.blade_thickness + p.mount_thickness / 2, z=p.mount_height
-        )
+        # Mount: cube (mw, mt, mh) on the bed, its front face where
+        # snowplow_assembly puts it, against the blade's back face.
+        from .rc.snowplow import mount_front_y
+
+        front = mount_front_y(p.blade_height, p.blade_thickness, p.blade_angle, p.mount_height)
+        mount_min = Vector3D(x=-p.mount_width / 2, y=front - p.mount_thickness, z=0)
+        mount_max = Vector3D(x=p.mount_width / 2, y=front, z=p.mount_height)
         return BoundingBox3D(
             min_point=Vector3D(
                 x=min(blade_min.x, mount_min.x),
@@ -66,8 +73,8 @@ class SnowplowPart(BasePart):
 
 
 def create(metadata_root: Path) -> SnowplowPart:
-    # The .scad is a rendered artifact of the Python assembly; BasePart still
-    # needs a source_file for file discovery (STL output path, etc).
+    # The .scad is geometry() at the default parameters, for readers and the
+    # registry; `apothecary parts render rc.snowplow -o <this file>` rewrites it.
     scad = metadata_root / "parts" / "rc" / "snowplow" / "snowplow.scad"
     return SnowplowPart(
         name="rc.snowplow",

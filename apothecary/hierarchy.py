@@ -43,24 +43,29 @@ from .core import OpenSCADObject
 from .models.bounds import BoundingBox3D
 from .models.units import PrintSettings
 from .models.vectors import Vector3D
+from .objects import SceneObject
 from .primitives import Cylinder, Import
 from .scene import Scene
 from .transforms import Translate
 
 
 def part_stl_path(part_ref: str) -> Optional[str]:
-    """A registered part's STL, relative to the repository root, or None.
+    """A registered part's built STL, where the part says it goes, or None.
 
+    Relative to the repository root when it is inside it, since generated SCAD
+    is shown to people and an absolute path would carry the local layout.
     Imported lazily: the registry reaches back into this package, and a
     top-level import would close the loop.
     """
     from .projects.parts.skeleton import ROOT
-    from .projects.registry import scan_projects
+    from .projects.registry import scan_projects, stl_output_for
 
     for entry in scan_projects(ROOT):
         if entry.kind == "part" and entry.name == part_ref:
-            stl = entry.path.with_suffix(".stl")
-            return stl.relative_to(ROOT).as_posix() if stl.exists() else None
+            stl = stl_output_for(entry)
+            if not stl.exists():
+                return None
+            return (stl.relative_to(ROOT) if stl.is_relative_to(ROOT) else stl).as_posix()
     return None
 
 
@@ -109,7 +114,7 @@ class Assembly(BaseModel):
     build_volume: Optional[Vector3D] = None
     build_origin: Optional[Vector3D] = None
     status: Optional[str] = None
-    base: Optional[OpenSCADObject] = None
+    base: Optional[SceneObject] = None
     additions: List["Assembly"] = Field(default_factory=list)
     subtractions: List["Assembly"] = Field(default_factory=list)
     children: List["Assembly"] = Field(default_factory=list)

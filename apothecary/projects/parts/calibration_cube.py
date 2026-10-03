@@ -20,7 +20,6 @@ from pydantic import BaseModel, Field
 from apothecary.models import (
     BoundingBox3D,
     Color,
-    HardwareSizes,
     PrintSettings,
 )
 
@@ -33,7 +32,7 @@ class Params(BaseModel):
     Calibration cube parameters.
 
     Attributes:
-        size: Overall cube dimension in mm (default: 20mm calibration standard)
+        size: Overall cube dimension in mm (default 10, as the SCAD)
         show_axes: Include XYZ axis indicators for preview (not rendered to STL)
         show_dimensions: Include size markers on -X and -Y faces
         wall_thickness: Shell thickness for hollow printing
@@ -77,77 +76,8 @@ class CalibrationCubePart(BasePart):
         Since axes are preview-only (not rendered to STL), bounds
         always reflect just the cube geometry.
         """
-        if params:
-            size = params.get("size", 20)
-        elif self.params_model:
-            defaults = self.params_model()
-            size = defaults.size
-        else:
-            size = 20
-
-        # Cube bounds (axes are preview-only, not in STL)
+        size = (params or {}).get("size", Params().size)
         return BoundingBox3D.for_cube(size, center=False)
-
-    def get_recommended_print_settings(self) -> PrintSettings:
-        """
-        Return recommended print settings for calibration.
-
-        Calibration cubes should be printed with tight tolerances
-        to accurately measure dimensional accuracy.
-        """
-        return PrintSettings(
-            nozzle_diameter=0.4,
-            layer_height=0.2,
-            wall_thickness=1.2,  # 3 perimeters
-            tolerance=HardwareSizes.FDM_TIGHT,  # 0.1mm for calibration
-        )
-
-    def get_calibration_targets(self, params: Optional[Dict] = None) -> Dict:
-        """
-        Return target dimensions for calibration verification.
-
-        After printing, measure these dimensions to check accuracy:
-        - X, Y, Z dimensions should match 'size' parameter
-        - Corner notch helps identify orientation
-        - Dimension markers show expected values
-        """
-        size = params.get("size", 10) if params else 10
-        wall = params.get("wall_thickness", 2) if params else 2
-
-        return {
-            "external_dimensions": {
-                "x": size,
-                "y": size,
-                "z": size,
-                "tolerance": "±0.1mm for well-calibrated printer",
-            },
-            "internal_dimensions": {
-                "x": size - 2 * wall,
-                "y": size - 2 * wall,
-                "z": size - 2 * wall,
-                "note": "Measure if printed hollow",
-            },
-            "corner_notch": {
-                "size": size * 0.15,
-                "position": "Top corner at origin (0, 0, Z)",
-                "purpose": "Orientation reference",
-            },
-            "face_layout": {
-                "+X (right)": "X axis label",
-                "-X (left)": f"{size} dimension",
-                "+Y (back)": "Y axis label",
-                "-Y (front)": f"{size} dimension",
-                "+Z (top)": "Z axis label + notch",
-                "-Z (bottom)": "Flat (print bed)",
-            },
-            "verification_steps": [
-                "1. Measure X dimension with calipers",
-                "2. Measure Y dimension with calipers",
-                "3. Measure Z dimension with calipers",
-                "4. Calculate deviation from target",
-                "5. Adjust flow/steps-per-mm if needed",
-            ],
-        }
 
 
 def create(metadata_root: Path) -> CalibrationCubePart:
@@ -160,7 +90,7 @@ def create(metadata_root: Path) -> CalibrationCubePart:
         params_model=Params,
         category="calibration",
         tags=["calibration", "test", "axes", "dimensions", "demo"],
-        readme_path=metadata_root / "docs" / "tutorial.md",
+        readme_path=metadata_root / "parts" / "README.md",
         preview_color=Color.from_hex("#808080"),  # Gray
         print_settings=PrintSettings(
             nozzle_diameter=0.4,
@@ -171,39 +101,3 @@ def create(metadata_root: Path) -> CalibrationCubePart:
 
 
 DEFAULT = create(ROOT)
-
-
-# Convenience functions for tutorial use
-def print_info():
-    """Print part information for tutorial demonstration."""
-    part = DEFAULT
-    print(f"Part: {part.name}")
-    print(f"Description: {part.description}")
-    print(f"Category: {part.category}")
-    print(f"Tags: {', '.join(part.tags)}")
-    print(f"Source: {part.source_file}")
-    print()
-
-    # Show default parameters
-    if part.params_model:
-        defaults = part.params_model()
-        print("Default Parameters:")
-        for field_name, field_info in part.params_model.model_fields.items():
-            value = getattr(defaults, field_name)
-            print(f"  {field_name}: {value} - {field_info.description or ''}")
-    print()
-
-    # Show bounds
-    bounds = part.get_bounds()
-    print("Bounding Box:")
-    print(f"  Size: {bounds.size.to_list()} mm")
-    print(f"  Center: {bounds.center.to_list()} mm")
-    print(f"  Volume: {bounds.volume:.1f} mm³")
-    print()
-
-    # Show color
-    print(f"Preview Color: {part.preview_color.to_hex()}")
-
-
-if __name__ == "__main__":
-    print_info()

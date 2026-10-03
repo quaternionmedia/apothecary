@@ -25,8 +25,22 @@ def pytest_addoption(parser):
     parser.addoption(
         "--server-port",
         action="store",
-        default="8765",
-        help="Port for the test server (default: 8765)",
+        default=None,
+        help="Port for --start-server's server (default: a free one) or for yours (8765)",
+    )
+    parser.addoption(
+        "--shard",
+        action="store",
+        default=None,
+        metavar="K/N",
+        help="Browser tests only: run the K-th of N shards, whole files balanced by "
+        "tests/e2e/durations.json. CI runs the three shards on three runners.",
+    )
+    parser.addoption(
+        "--slow",
+        action="store_true",
+        default=False,
+        help="Also run tests marked slow: full CGAL renders, accuracy benches. CI passes it.",
     )
     parser.addoption(
         "--generate-docs",
@@ -41,6 +55,20 @@ def pytest_addoption(parser):
     )
 
 
+# `slow` marks what --slow's help names: full CGAL renders, accuracy benches. A
+# test that renders a primitive of its own with the real OpenSCAD -- a cube,
+# turned or cut -- is not one of those and stays unmarked: it is as quick as
+# the tests around it, and it is the default run's check that OpenSCAD takes
+# what the renderer writes.
+def pytest_collection_modifyitems(config, items):
+    if config.getoption("--slow"):
+        return
+    skip = pytest.mark.skip(reason="slow: run with --slow")
+    for item in items:
+        if "slow" in item.keywords:
+            item.add_marker(skip)
+
+
 # --- firmware toolchain fakes ---------------------------------------------------
 #
 # A stand-in `arduino-cli` executable that answers the JSON queries the seam
@@ -52,6 +80,41 @@ def pytest_addoption(parser):
 
 import pytest  # noqa: E402
 from firmware_helpers import _isolate_firmware_state, write_fake_arduino_cli  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _no_background_renders(monkeypatch):
+    """The app builds missing STLs in the background when it starts. A test that
+    starts it (a TestClient used as a context manager, a live uvicorn) would
+    render into the checkout from a worker thread that outlives the test and runs
+    under the next test's environment. Off for every test; the one test of
+    startup generation deletes the variable for itself. The browser suite's
+    servers are started before any test and keep their own environment."""
+    monkeypatch.setenv("APOTHECARY_SKIP_STL_GENERATION", "1")
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _cache_outside_the_checkout(tmp_path_factory):
+    """Node renders go to a cache of the run's own, never the checkout's."""
+    import os
+
+    previous = os.environ.get("APOTHECARY_CACHE_DIR")
+    os.environ["APOTHECARY_CACHE_DIR"] = str(tmp_path_factory.mktemp("cache"))
+    yield
+    if previous is None:
+        os.environ.pop("APOTHECARY_CACHE_DIR", None)
+    else:
+        os.environ["APOTHECARY_CACHE_DIR"] = previous
+
+
+@pytest.fixture(autouse=True)
+def _scripted_boards_answer_at_once(monkeypatch):
+    """Every board in the unit suite is scripted and answers at once; waiting out
+    a real board's silences (1.5 s settles, 5 s timeouts) was a minute of the run."""
+    from apothecary.firmware import gcode
+
+    monkeypatch.setattr(gcode.GcodeLink, "time_scale", 0.02)
+
 
 # The guard on the process and the TestClient that says it is this machine are
 # the repository's root conftest.py, so the walkthrough's doctests get them too.

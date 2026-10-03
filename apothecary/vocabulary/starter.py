@@ -1,8 +1,7 @@
 """The five words we start with.
 
 Chosen without a photograph in hand, which makes them a guess. They are meant to
-be replaced once somebody has pointed a camera at a real workbench. See the note
-at the end of ``docs/plans/HANDOFF.md``.
+be replaced once somebody has pointed a camera at a real workbench.
 
 Each is built out of pieces the tool already had — nothing new was invented to
 make a word possible.
@@ -16,7 +15,7 @@ from ..booleans import Difference
 from ..hierarchy import Assembly
 from ..models.vectors import Vector3D
 from ..primitives import Cube, Cylinder
-from ..transforms import Translate
+from ..transforms import Scale, Translate
 from .word import Word, WordList, WordShape
 
 
@@ -29,12 +28,38 @@ def _plate(name: str, shape: WordShape) -> Assembly:
     )
 
 
+def _corner_at_origin(shape: WordShape, round_thing) -> Translate:
+    """Every word is built with one corner at the origin (compose.py shifts each
+    piece onto its middle). A cylinder is centred on its axis, so a round word
+    stands on the middle of its box -- without this, every disc, post and wedge
+    was drawn half its size away from where it was seen."""
+    return Translate(
+        v=Vector3D(x=shape.width / 2, y=shape.depth / 2, z=0.0), children=[round_thing]
+    )
+
+
+def _round(shape: WordShape):
+    """A cylinder whose footprint is ``width`` x ``depth``: a circle when the two
+    are equal, else that circle squeezed along its shorter side into the ellipse
+    the shape was found as. Building a circle of the longer side put a mesh
+    wider than the footprint, the bounds and the editor all said it was."""
+    across = max(shape.width, shape.depth)
+    circle = Cylinder(h=shape.height, r=across / 2)
+    if shape.width == shape.depth:
+        return circle
+    # The circle keeps the longer side's radius, so it is faceted as finely as
+    # it always was; a unit circle scaled up would be faceted as a pentagon.
+    return Scale(
+        v=Vector3D(x=shape.width / across, y=shape.depth / across, z=1.0), children=[circle]
+    )
+
+
 def _disc(name: str, shape: WordShape) -> Assembly:
     """A round flat piece. The default reading of a circle."""
     return Assembly(
         name=name,
         role="word",
-        base=Cylinder(h=shape.height, r=max(shape.width, shape.depth) / 2),
+        base=_corner_at_origin(shape, _round(shape)),
     )
 
 
@@ -43,7 +68,7 @@ def _post(name: str, shape: WordShape) -> Assembly:
     return Assembly(
         name=name,
         role="word",
-        base=Cylinder(h=shape.height, r=max(shape.width, shape.depth) / 2),
+        base=_corner_at_origin(shape, _round(shape)),
     )
 
 
@@ -66,7 +91,10 @@ def _wedge(name: str, shape: WordShape) -> Assembly:
     return Assembly(
         name=name,
         role="word",
-        base=Cylinder(h=shape.height, r1=max(shape.width, shape.depth) / 2, r2=0.001, fn=3),
+        base=_corner_at_origin(
+            shape,
+            Cylinder(h=shape.height, r1=max(shape.width, shape.depth) / 2, r2=0.001, fn=3),
+        ),
     )
 
 

@@ -405,9 +405,8 @@ def test_a_piece_is_built_from_its_own_sides_not_its_upright_box():
     """The upright box round a tilted bar is far bigger than the bar."""
     site = picture_to_site(_turned_bar_picture(35), scale=ScaleReference(millimetres_across=1000))
     piece = site.children[0]
-    # On a bounding box, width is across, height is back, depth is up.
-    assert piece.footprint.width == pytest.approx(600.0)
-    assert piece.footprint.height == pytest.approx(150.0)
+    _dx, _dy, plate = _axis_offset(piece.base)
+    assert (plate.size.x, plate.size.y) == pytest.approx((600.0, 150.0))
 
 
 def test_a_turned_shape_produces_a_turned_piece():
@@ -429,8 +428,11 @@ def test_a_piece_sits_on_its_own_middle_so_turning_does_not_move_it():
     site = picture_to_site(_turned_bar_picture(90), scale=ScaleReference(millimetres_across=1000))
     piece = site.children[0]
     assert piece.position.x == pytest.approx(500.0)
-    assert piece.footprint.min_point.x == pytest.approx(-300.0)
-    assert piece.footprint.max_point.x == pytest.approx(300.0)
+    # Turned a quarter, the 600 x 150 bar runs back, still about its middle.
+    assert piece.footprint.min_point.x == pytest.approx(-75.0)
+    assert piece.footprint.max_point.x == pytest.approx(75.0)
+    assert piece.footprint.min_point.y == pytest.approx(-300.0)
+    assert piece.footprint.max_point.y == pytest.approx(300.0)
 
 
 def test_a_shape_whose_sides_were_never_measured_falls_back_to_its_box():
@@ -441,3 +443,31 @@ def test_a_shape_whose_sides_were_never_measured_falls_back_to_its_box():
 def test_both_finders_accept_a_plain_string(three_shapes, stated_picture):
     assert PlainFinder().look(str(three_shapes)).shapes
     assert StatedFinder().look(str(stated_picture)).shapes
+
+
+def _axis_offset(node):
+    """Sum of every translate between a piece's base and its first primitive."""
+    from apothecary.transforms import Rotate, Scale, Translate
+
+    x = y = 0.0
+    while isinstance(node, (Translate, Rotate, Scale)):
+        if isinstance(node, Translate):
+            x, y = x + node.v.x, y + node.v.y
+        node = node.children[0]
+    return x, y, node
+
+
+def test_a_round_piece_is_drawn_where_it_was_seen():
+    """A disc seen at 60-90 % of the picture was drawn half its size off: the
+    words' corner shift moved a cylinder that was already centred."""
+    from apothecary.primitives import Cube, Cylinder
+
+    site = picture_to_site(_two_shape_picture(), scale=ScaleReference(millimetres_across=1000))
+    by_kind = {}
+    for piece in site.children:
+        dx, dy, primitive = _axis_offset(piece.base)
+        by_kind[type(primitive)] = (dx, dy, primitive)
+    dx, dy, disc = by_kind[Cylinder]
+    assert (dx, dy) == pytest.approx((0.0, 0.0))  # the axis is on the piece's middle
+    dx, dy, plate = by_kind[Cube]
+    assert (dx, dy) == pytest.approx((-plate.size.x / 2, -plate.size.y / 2))  # corner shifted

@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 from click.testing import CliRunner
 
@@ -7,8 +6,6 @@ from apothecary.cli import cli
 
 
 def test_cli_validate_with_example_scene(tmp_path):
-    # Use the example scene JSON written by testrun as a stand-in
-    # Build a small scene JSON manually to avoid validation issues
     scene_json = {
         "name": "vtest",
         "objects": [{"type": "cube", "size": {"x": 1, "y": 2, "z": 3}, "center": False}],
@@ -73,35 +70,18 @@ def test_cli_templategenerate_from_file(tmp_path):
 
 
 def test_cli_parts_render_fallback_template(tmp_path):
-    # Run in isolated FS so default template path is missing, forcing fallback include
-    runner = CliRunner()
-    with runner.isolated_filesystem(temp_dir=tmp_path):
-        out = Path("p.scad")
-        r = runner.invoke(
-            cli,
-            [
-                "parts",
-                "render",
-                "parametric_star",
-                "-o",
-                str(out),
-            ],
-        )
-        assert r.exit_code == 0
-        text = out.read_text(encoding="utf-8")
-        assert text.strip().startswith("// ") and "include <" in text
+    # With no --template, the part is rendered as an include of its own SCAD.
+    out = tmp_path / "p.scad"
+    r = CliRunner().invoke(cli, ["parts", "render", "parametric_star", "-o", str(out)])
+    assert r.exit_code == 0
+    text = out.read_text(encoding="utf-8")
+    assert text.strip().startswith("// ") and "include <" in text
 
 
 def test_cli_parts_info_missing_wrapper_errors():
     r = CliRunner().invoke(cli, ["parts", "info", "nonexistent_part"])
     assert r.exit_code != 0
     assert "No wrapper module found" in r.output
-
-
-def test_cli_inventory_templates_lists_templates():
-    r = CliRunner().invoke(cli, ["inventory", "templates"])  # uses repo templates/
-    assert r.exit_code == 0
-    assert "template:" in r.output or "No templates found." in r.output
 
 
 def test_cli_parts_render_refuses_to_overwrite_source(tmp_path):
@@ -132,6 +112,22 @@ def test_cli_parts_render_snowplow_uses_validated_params(tmp_path):
     assert r.exit_code == 0, r.output
     text = out.read_text(encoding="utf-8")
     assert "200" in text and "cube" in text.lower()
+
+
+def test_cli_parts_render_writes_any_parts_python_geometry(tmp_path, monkeypatch):
+    """Not a name check: any part whose geometry() returns an object is written as its SCAD."""
+    from apothecary import Cube
+    from apothecary.projects.parts.calibration_cube import DEFAULT as cube
+
+    monkeypatch.setattr(
+        type(cube), "geometry", lambda self, params: Cube(size=params.get("size", 1) * 2)
+    )
+    out = tmp_path / "cube.scad"
+    r = CliRunner().invoke(
+        cli, ["parts", "render", "calibration_cube", "--params-json", '{"size": 7}', "-o", str(out)]
+    )
+    assert r.exit_code == 0, r.output
+    assert out.read_text(encoding="utf-8") == "cube(14.0, center=false);\n"
 
 
 def test_cli_parts_render_snowplow_rejects_bad_params(tmp_path):

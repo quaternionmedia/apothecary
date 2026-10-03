@@ -35,7 +35,8 @@ capable of lying. It reports the tray at its default parameters:
 
 `apothecary parts verify <name>` renders the part and measures the real
 bounding box against that claim. It exits non-zero on drift, so it belongs in
-CI. On the existing library it finds four of six parts wrong — see `todo.md`.
+CI. `apothecary problems --kind drift` lists the parts whose last render disagrees
+with their claim.
 
 ## Recipes
 

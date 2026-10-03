@@ -1,60 +1,31 @@
-"""The ring's options, built here rather than in the browser.
+"""The ring's options: a plain function from what was pointed at to a ring.
 
-rad — the shared ring of options that appears under your finger — says the part
-that decides *which* options to show is a plain function over data: given what
-you are pointing at, hand back a list. It never changes anything itself. That
-makes it ordinary Python, which is the point of putting it here: the two rules
-that are easiest to break by accident, at most eight options and at most twelve
-characters a label, become ordinary tests instead of something you notice in a
-screenshot.
+Nothing here changes anything; a chosen option becomes an `Intent`. Three
+rules are enforced here rather than described:
 
-What stays in the browser: how the ring is drawn, how a press becomes a choice,
-and the geometry of where your finger is. Rewriting those here would make this a
-second implementation of the ring, which is somebody else's job and a different
-piece of work.
+- **Eight options to a ring.** More means the ring needs grouping, so a ninth
+  is refused rather than hidden.
+- **Twelve characters to a label, never trailed off with dots.** Shortening is
+  this module's job (`shorten`, `distinct`).
+- **Nine cells, numbered as a keypad** (rad's ``DRAFT-the-menu-addresses-nine-cells``)::
 
-Two rules from the shared contract are enforced below rather than described:
+      7 8 9
+      4 5 6
+      1 2 3
 
-- **Eight options to a ring, no more.** Overflow is a design problem, not a
-  scrolling problem. Too many options means the ring needs grouping, so this
-  refuses to build one rather than quietly showing nine.
-- **Twelve characters to a label, and never trailed off with dots.** Shortening
-  is this function's job. A label that has run out of room has to be made
-  shorter, not hidden behind an ellipsis nobody can read.
-
-## The ring addresses nine cells
-
-rad's nine-cells record (``DRAFT-the-menu-addresses-nine-cells``) adds a third
-rule, and it is the one that makes the ring repeatable: **a ring is nine cells
-numbered as a numeric keypad**, and geometry is a rendering of the cells rather
-than the other way round.
-
-    7 8 9        up-left     up    up-right
-    4 5 6   =    left       BACK   right
-    1 2 3        down-left  down   down-right
-
-Eight cells hold options; cell 5 never does. It backs out one level, and closes
-at the top. Options are seated cardinals first — ``8, 6, 2, 4`` and only then
-the corners ``9, 3, 1, 7`` — so a four-option ring sits at up, right, down and
-left, where a ring would put it anyway. Every cell has one number and one
-direction and they are the same thing, so a digit chooses a cell from anywhere,
-an arrow moves to the nearest occupied cell in that direction, and the digits
-pressed to reach an option through nested rings are its **address**: ``"86"``
-is cell 8 (a submenu) and then cell 6. Given the same context the same address
-reaches the same option, which is what the numbering buys.
-
-The browser draws the eight cells as fixed compass wedges, up being cell 8 and
-clockwise from there ``8 9 6 3 2 1 4 7``; ``COMPASS`` is that mapping, so the
-polar arithmetic rad already has still names the same option this file does.
-
-PROTOTYPE — not ratified. See ``docs/plans/edits/apothecary-surface.md``.
+  Cell 5 holds nothing and backs out. Options are seated cardinals first
+  (``PLACEMENT``); a digit chooses a cell, an arrow moves to the nearest
+  occupied cell (``nearest``), and the digits pressed through nested rings are
+  an option's address. ``COMPASS`` names the cell each of the browser's eight
+  wedges draws, up first and clockwise. ``tests/conformance/nine_cells.json``
+  holds this module and ``static/ring.js`` to the same rules.
 """
 
 from __future__ import annotations
 
 import re
 from enum import Enum
-from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -106,31 +77,20 @@ class Pointing(str, Enum):
     """What the ring was opened on."""
 
     NODE = "node"
-    EDGE = "edge"
     CANVAS = "canvas"
-    SELECTION = "selection"
     DEVICE = "device"
-
-
-class Where(BaseModel):
-    """Where on the screen the ring was opened."""
-
-    x: float = 0.0
-    y: float = 0.0
 
 
 class Context(BaseModel):
     """What the ring was opened on, and which things it applies to.
 
-    ``targets`` are the same dotted paths everything else in this tool already
-    uses to name a node — ``printer_1.gantry_system`` and so on. No new way of
-    naming things was needed, which is worth knowing before anyone invents one.
-    A ring opened on a device names its port instead.
+    ``targets`` are the dotted paths the rest of the tool names a node by --
+    ``printer_1.gantry_system`` and so on. A ring opened on a device names its
+    port instead. Fields a page sends beyond these are ignored.
     """
 
     pointing: Pointing
     targets: List[str] = Field(default_factory=list)
-    where: Where = Field(default_factory=Where)
 
 
 class Device(BaseModel):
@@ -147,6 +107,63 @@ class Device(BaseModel):
     printer: bool = False
     armed: bool = False
     bound: bool = False
+
+
+class CameraSeen(BaseModel):
+    """A camera as the page names it: this browser's device, or a pin's record."""
+
+    id: str
+    label: str = "camera"
+
+
+class ShapeSeen(BaseModel):
+    """One shape of a drawn look: its index, its word, and whether it is made."""
+
+    index: int
+    word: str = "shape"
+    status: str = "found"  # found | made | already_made
+
+
+class LookSeen(BaseModel):
+    """A look at the place the ring stands on, as the page has it drawn."""
+
+    id: str
+    picture: str = ""
+    finder: str = "plain"
+    sized: bool = False
+    kept: bool = False  # its picture is one the browser kept, so it can be forgotten
+    shapes: List[ShapeSeen] = Field(default_factory=list)
+
+
+class Place(BaseModel):
+    """The place the ring stands on -- a host, or on the canvas ring the floor:
+    its camera's pin, whether that camera is live, and its looks, newest first."""
+
+    camera: Optional[CameraSeen] = None
+    live: bool = False
+    looks: List[LookSeen] = Field(default_factory=list)
+    drawn: Optional[str] = None
+    chosen_look: Optional[str] = None
+
+
+class PictureContext(BaseModel):
+    """What the resolver is told about pictures, as it is told a Device.
+
+    Told rather than looked up: ``cameras`` are this browser's (``asked`` once
+    the browser has been allowed to name them), ``pictures`` the ones under the
+    picture root, newest first, and ``here`` the place the ring stands on. The
+    intent route fills in ``made`` (the site's made pieces), ``words`` (the
+    vocabulary) and ``finders`` (those that can read the drawn look's picture)
+    from what the server knows, so a page cannot claim them."""
+
+    cameras: List[CameraSeen] = Field(default_factory=list)
+    asked: bool = False
+    pictures: List[str] = Field(default_factory=list)
+    chosen_picture: Optional[str] = None
+    finders: List[str] = Field(default_factory=list)
+    made: List[str] = Field(default_factory=list)
+    words: List[str] = Field(default_factory=list)
+    here: Place = Field(default_factory=Place)
 
 
 class Option(BaseModel):
@@ -171,12 +188,7 @@ class Option(BaseModel):
     @field_validator("label")
     @classmethod
     def _label_is_readable(cls, label: str) -> str:
-        """Checked on the field, so it still holds when a label is assigned later.
-
-        As a check run after the whole thing is built, it held only at the
-        moment of building: assigning a forty-character label afterwards sailed
-        straight past it.
-        """
+        """Checked on the field, so it still holds when a label is assigned later."""
         if not label.strip():
             raise ValueError("this option has no label; a blank wedge cannot be chosen")
         if len(label) > LONGEST_LABEL:
@@ -189,8 +201,7 @@ class Option(BaseModel):
     @field_validator("children")
     @classmethod
     def _a_submenu_is_a_ring(cls, children):
-        # Only the outermost ring was ever counted, so a submenu could hold any
-        # number at all. Seating the children here also gives each its cell.
+        # A submenu is held to the same limits, and seating gives each child its cell.
         if children is not None:
             place(children)
         return children
@@ -312,73 +323,6 @@ def place(options: Sequence[Option]) -> None:
         object.__setattr__(option, "cell", cell)
 
 
-def walk(ring: Ring, address: str) -> Option:
-    """Follow an address down through nested rings to the option it names.
-
-    Every digit but the last must open a further ring. An address that runs
-    into an option that does something, or into an empty cell, is refused
-    with the cell that stopped it rather than answered with the nearest thing.
-    """
-    if not address:
-        raise NoSuchCell("an empty address reaches nothing; press at least one cell")
-    if not ADDRESS.match(address):
-        raise NoSuchCell(f"address {address!r} is not a run of cells: digits 1 to 9, never {BACK}")
-    here = ring
-    option: Optional[Option] = None
-    for depth, digit in enumerate(address):
-        if option is not None:
-            if not option.children:
-                raise NoSuchCell(
-                    f"cell {option.cell} ({option.label}) does something rather than "
-                    f"opening a ring, so {address[depth:]!r} after it goes nowhere"
-                )
-            here = Ring(title=option.label, options=option.children)
-        option = here.at(int(digit))
-    assert option is not None
-    return option
-
-
-def address_of(ring: Ring, option_id: str) -> str:
-    """The digits that reach an option, searching in placement order."""
-
-    def search(options: Sequence[Option], so_far: str) -> Optional[str]:
-        for option in options:
-            path = f"{so_far}{option.cell}"
-            if option.id == option_id:
-                return path
-            if option.children:
-                found = search(option.children, path)
-                if found is not None:
-                    return found
-        return None
-
-    found = search(ring.options, "")
-    if found is None:
-        raise NoSuchCell(
-            f"no option called {option_id!r} on {ring.title or 'this ring'} or under it"
-        )
-    return found
-
-
-def every_address(ring: Ring) -> Dict[str, str]:
-    """Every address that does something, and the action it does.
-
-    Submenus are not listed; they are the way to a leaf, not a thing to do.
-    """
-    found: Dict[str, str] = {}
-
-    def search(options: Sequence[Option], so_far: str) -> None:
-        for option in options:
-            path = f"{so_far}{option.cell}"
-            if option.children:
-                search(option.children, path)
-            elif option.action:
-                found[path] = option.action
-
-    search(ring.options, "")
-    return found
-
-
 def nearest(occupied: Iterable[int], from_cell: Optional[int], direction: str) -> Optional[int]:
     """The occupied cell an arrow reaches, or where it was if the arrow reaches nothing.
 
@@ -426,11 +370,9 @@ def nearest(occupied: Iterable[int], from_cell: Optional[int], direction: str) -
 def shorten(text: str) -> str:
     """Make a label fit, without trailing it off.
 
-    **Nothing is taken away from a label that already fits.** That rule came
-    from a real fault: every dot used to be treated as a path separator before
-    the length was even checked, so ``M3.5_bolt`` became ``5 bolt`` and
-    ``nozzle_0.4mm`` became ``4mm``. In a tool for making parts, silently
-    turning a 0.4 mm nozzle into "4mm" is about the worst thing a label can do.
+    **Nothing is taken away from a label that already fits**, so ``M3.5_bolt``
+    and ``nozzle_0.4mm`` are never read as dotted paths and cut to ``5 bolt``
+    and ``4mm``.
 
     When it does not fit, four steps, each tried only if the one before was not
     enough:
@@ -477,13 +419,9 @@ def shorten(text: str) -> str:
 def distinct(names: Sequence[str]) -> List[str]:
     """Shorten a set of names so that no two come out the same.
 
-    Two wedges reading the same thing and doing different things is exactly
-    what the twelve-character rule was meant to prevent, and shortening alone
-    causes it: ``gantry_system_leftmost`` and ``gantry_system_leftish`` both
-    become ``gan sys lef``.
-
-    A repeat gets a number, and the number is made room for rather than pushing
-    the label over the limit.
+    Shortening alone can make two read the same (``gantry_system_leftmost`` and
+    ``gantry_system_leftish``), so a repeat gets a number, made room for rather
+    than pushing the label over the limit.
     """
     out: List[str] = []
     seen: Dict[str, int] = {}
@@ -520,124 +458,85 @@ def resolve(
     *,
     site_names: Sequence[str] = (),
     groups: Sequence[str] = (),
-    words: Sequence[str] = (),
     device: Optional[Device] = None,
+    picture: Optional[PictureContext] = None,
 ) -> Ring:
     """Work out which options belong on the ring, and hand them back.
 
-    Nothing here changes anything. A chosen option becomes an intent, and the
-    intent is what the rest of the program acts on.
-
     ``device`` is what the page knows about the board under the ring: for a
     node ring, the board pinned to that node, if any; for a device ring, the
-    board itself.
+    board itself. ``picture`` is what it knows about pictures and cameras
+    (``PictureContext``); without one, a host still offers Camera and Picture,
+    with nothing pinned, drawn or listed.
     """
+    picture = picture or PictureContext()
     if context.pointing is Pointing.CANVAS:
-        return _canvas_ring(context, site, site_names, groups)
+        return _canvas_ring(context, site, site_names, groups, picture)
     if context.pointing is Pointing.NODE:
-        return _node_ring(context, site, words, device)
-    if context.pointing is Pointing.SELECTION:
-        return _selection_ring(context)
+        return _node_ring(context, site, device, picture)
     if context.pointing is Pointing.DEVICE:
         return _device_ring_on_top(context, device)
-    return _edge_ring(context)
+    raise ValueError(f"no ring is built for {context.pointing!r}")
 
 
-def _grouped(prefix: str, action: str, names: Sequence[str]) -> Optional[Option]:
-    """One option that opens a further ring, or nothing when there is nothing.
+def _grouped(
+    prefix: str, names: Sequence[str], action_of: Callable[[str], str]
+) -> Optional[Option]:
+    """One option that opens a ring of names, or nothing when there are none.
 
-    A list of *things* is not a list of verbs. The eight-to-a-ring rule exists
-    because nine verbs means the menu was designed wrong, and that argument does
-    not carry over to nine arrangements a person happens to have. So a long list
-    is split into lettered groups — real grouping, one more press, nothing
-    hidden — rather than refused or quietly cut.
+    Each name is a leaf whose id and action are ``action_of(name)``, labelled
+    so that no two read the same. A list of things is not a list of verbs, so
+    more than eight are split into groups of at most eight -- one more press,
+    nothing hidden -- and more than two levels of eight can hold is refused.
     """
     ordered = list(names)
     if not ordered:
         return None
-    if len(ordered) <= MOST_OPTIONS:
-        return Option(id=prefix, label=shorten(prefix), children=_leaves(action, ordered))
-
-    if len(ordered) > MOST_OPTIONS * MOST_OPTIONS:
-        # Two levels of eight hold sixty-four. A third level would just move the
-        # problem one press further away; say so instead of pretending.
-        raise RingTooFull(
-            f"{len(ordered)} things to choose between under {prefix!r}, and two "
-            f"levels of grouping hold {MOST_OPTIONS * MOST_OPTIONS}. This needs "
-            "searching, not a bigger menu."
-        )
-    buckets = _bucket(ordered)
-    return Option(
-        id=prefix,
-        label=shorten(prefix),
-        children=[
-            Option(id=f"{prefix}:group{index}", label=head, children=_leaves(action, members))
-            for index, (head, members) in enumerate(buckets)
-        ],
-    )
-
-
-def _leaves(action: str, names: Sequence[str]) -> List[Option]:
-    """One option per thing, with labels no two of which read the same."""
-    return [
-        Option(id=f"{action}:{name}", label=label, action=f"{action}:{name}")
-        for name, label in zip(names, distinct(names), strict=True)
-    ]
-
-
-def _bucket(names: Sequence[str]) -> List[Tuple[str, List[str]]]:
-    """Split a long list into groups of at most eight, in order.
-
-    Each group is named for the first thing in it, so a person can guess where
-    to look. A list, not a dictionary keyed by that name: an earlier attempt
-    keyed on the first letter, every name began with the same letter, and
-    eighteen of twenty things silently vanished into one another. Losing things
-    quietly is the failure this whole function exists to avoid.
-    """
-    ordered = sorted(names)
-    per = -(-len(ordered) // MOST_OPTIONS)
-    chunks = [ordered[start : start + per] for start in range(0, len(ordered), per)]
-    heads = distinct([chunk[0] for chunk in chunks])
-    return list(zip(heads, chunks, strict=True))
-
-
-def _pieces(prefix: str, parent: str, nodes: Sequence[Assembly]) -> Optional[Option]:
-    """One option that opens the pieces beneath a node, each choosable by digit.
-
-    The same grouping rule as `_grouped`, but a piece is named by its dotted
-    path -- the identity everything else in this tool already uses -- so
-    choosing one is `select:<path>`, and the label is the name alone,
-    shortened, with no two reading the same. Nothing here is a verb: this is
-    the Contents list, reachable from the ring.
-    """
-    if not nodes:
-        return None
-    by_name = {node.name: node for node in nodes}
-    names = sorted(by_name)
-    path_of = {name: f"{parent}.{name}" if parent else name for name in names}
 
     def leaves(members: Sequence[str]) -> List[Option]:
         return [
-            Option(id=f"select:{path_of[name]}", label=label, action=f"select:{path_of[name]}")
+            Option(id=action_of(name), label=label, action=action_of(name))
             for name, label in zip(members, distinct(members), strict=True)
         ]
 
-    if len(names) <= MOST_OPTIONS:
-        return Option(id=prefix, label=shorten(prefix), children=leaves(names))
-    if len(names) > MOST_OPTIONS * MOST_OPTIONS:
+    if len(ordered) <= MOST_OPTIONS:
+        return Option(id=prefix, label=shorten(prefix), children=leaves(ordered))
+    if len(ordered) > MOST_OPTIONS * MOST_OPTIONS:
         raise RingTooFull(
-            f"{len(names)} pieces under {parent or 'the root'!r}, and two levels of "
-            f"grouping hold {MOST_OPTIONS * MOST_OPTIONS}. This needs searching, not "
-            "a bigger menu."
+            f"{len(ordered)} to choose between under {prefix!r}, and two levels "
+            f"of grouping hold {MOST_OPTIONS * MOST_OPTIONS}. This needs "
+            "searching, not a bigger menu."
         )
     return Option(
         id=prefix,
         label=shorten(prefix),
         children=[
             Option(id=f"{prefix}:group{index}", label=head, children=leaves(members))
-            for index, (head, members) in enumerate(_bucket(names))
+            for index, (head, members) in enumerate(_bucket(ordered))
         ],
     )
+
+
+def _pieces(prefix: str, parent: str, node: Optional[Assembly]) -> Optional[Option]:
+    """The pieces directly inside a node; choosing one is ``select:<its dotted path>``."""
+    names = sorted({child.name for child in node.children}) if node is not None else []
+    return _grouped(
+        prefix, names, lambda name: f"select:{parent}.{name}" if parent else f"select:{name}"
+    )
+
+
+def _bucket(names: Sequence[str]) -> List[Tuple[str, List[str]]]:
+    """Split a long list into groups of at most eight, in order.
+
+    Each group is named for the first thing in it, so a person can guess where
+    to look. A list rather than a dictionary keyed by that name, so two groups
+    that would share a name cannot swallow each other.
+    """
+    ordered = sorted(names)
+    per = -(-len(ordered) // MOST_OPTIONS)
+    chunks = [ordered[start : start + per] for start in range(0, len(ordered), per)]
+    heads = distinct([chunk[0] for chunk in chunks])
+    return list(zip(heads, chunks, strict=True))
 
 
 # The panels the world's page registers, in the order the ring seats them
@@ -649,76 +548,317 @@ PANELS: Sequence[Tuple[str, str]] = (
     ("jobs", "Jobs"),
     ("validation", "Validation"),
     ("scad", "OpenSCAD"),
-    # Registered by the page's script rather than marked in its markup: the
-    # camera panel at start; the machine and its comms log when a printer is
-    # opened. The last two share one cell, since a ring holds eight.
-    ("camera", "Camera"),
+    # Registered by the page's script rather than marked in its markup: Kept
+    # (every pin and kept picture, each taken back from its row) and what is
+    # left of the camera panel, the gathering, at start; the machine and its
+    # comms log when a printer is opened. Each pair shares one cell, since a
+    # ring holds eight.
+    ("kept", "Kept"),
+    ("camera", "Gather"),
     ("machine", "Machine"),
     ("log", "Comms log"),
 )
-GROUPED_PANELS = ("machine", "log")
+# The cells that hold two panels each, in the order they are seated after the
+# plain ones: (id, label, the panels behind it).
+PANEL_GROUPS: Sequence[Tuple[str, str, Tuple[str, ...]]] = (
+    ("panel:pictures-group", "Pictures", ("kept", "camera")),
+    ("panel:machine-group", "Machine", ("machine", "log")),
+)
+GROUPED_PANELS = tuple(pid for _, _, pids in PANEL_GROUPS for pid in pids)
 
 
 def _panels() -> Option:
     def toggle(pid: str, label: str) -> Option:
         return Option(id=f"panel:{pid}", label=label, action=f"panel:toggle:{pid}")
 
+    labels = dict(PANELS)
     plain = [toggle(pid, label) for pid, label in PANELS if pid not in GROUPED_PANELS]
-    grouped = [toggle(pid, label) for pid, label in PANELS if pid in GROUPED_PANELS]
+    groups = [
+        Option(id=gid, label=glabel, children=[toggle(pid, labels[pid]) for pid in pids])
+        for gid, glabel, pids in PANEL_GROUPS
+    ]
     return Option(
         id="panels",
         label="Panels",
         children=plain
-        + [Option(id="panel:machine-group", label="Machine", children=grouped)]
+        + groups
         # The rail itself: hidden and shown, as the tilde key does.
         + [Option(id="panel:rail", label="Rail", action="panel:rail:toggle")],
     )
 
 
-# The camera's verbs, in the order the ring seats them (cardinals first):
-# what the camera panel's buttons do, each a cell away from empty canvas.
-CAMERA_VERBS: Sequence[Tuple[str, str]] = (
-    ("capture", "Capture"),
-    ("look", "Look"),
-    ("place", "Place"),
-    ("gather", "Gather"),
-    ("open", "Open as one"),
-    ("allow", "Allow"),
-    ("unplace", "Unplace"),
-)
-# What the browser put on this machine, taken back: behind the eighth cell,
-# since a ring holds eight. Add opens the file picker; Purge forgets every
-# kept picture (captures and uploads, never the folder's own).
-KEPT_VERBS: Sequence[Tuple[str, str, bool]] = (
-    ("add", "Add", False),
-    ("purge", "Purge", True),
-)
+# --- pictures and cameras -------------------------------------------------------------
+#
+# A camera and a picture are pinned at a *host* -- a root structure with a
+# footprint that is not a made piece -- or at the site's floor. A host's node
+# ring appends Camera and Picture; the floor's are reached from the canvas
+# ring's Pictures › Floor, since the floor is a selection but not a node. A
+# floor verb carries the floor in its action, as ``@floor`` after its last
+# colon; a host's verb names its host by the ring's target. A verb about one
+# look names the look, which knows its own host.
+
+FLOOR_MARK = "@floor"
+# A list of pictures or looks shows the seven newest; the eighth cell acts on
+# the one chosen in the panel that holds the rest, or opens that panel.
+NEWEST = MOST_OPTIONS - 1
 
 
-def _camera() -> Option:
-    return Option(
-        id="camera",
-        label="Camera",
-        children=[
-            Option(id=f"camera:{verb}", label=label, action=f"camera:{verb}")
-            for verb, label in CAMERA_VERBS
-        ]
-        + [
+def _chunks(items: Sequence, most_groups: int) -> List[List]:
+    """Split a list, in order, into at most ``most_groups`` groups of at most eight."""
+    per = max(-(-len(items) // most_groups), 1)
+    if per > MOST_OPTIONS:
+        raise RingTooFull(
+            f"{len(items)} to choose between, and {most_groups} groups of "
+            f"{MOST_OPTIONS} hold {most_groups * MOST_OPTIONS}. This needs searching, "
+            "not a bigger menu."
+        )
+    return [list(items[start : start + per]) for start in range(0, len(items), per)]
+
+
+def _listed(
+    group_id: str,
+    leaves: Sequence[Tuple[str, str]],
+    *,
+    first: Sequence[Option] = (),
+) -> List[Option]:
+    """Options ``first``, then one leaf per ``(action, name)``, labelled so no two
+    read the same; grouped, each group named for its first, when the leaves do
+    not fit beside ``first`` in one ring."""
+    room = MOST_OPTIONS - len(first)
+    labels = distinct([name for _, name in leaves])
+    made = [
+        Option(id=action, label=label, action=action)
+        for (action, _), label in zip(leaves, labels, strict=True)
+    ]
+    if len(made) <= room:
+        return [*first, *made]
+    groups = _chunks(made, room)
+    heads = distinct([group[0].label for group in groups])
+    return [
+        *first,
+        *(
+            Option(id=f"{group_id}:group{i}", label=head, children=group)
+            for i, (head, group) in enumerate(zip(heads, groups, strict=True))
+        ),
+    ]
+
+
+def _stem(path: str) -> str:
+    """A picture's name without its folder or its suffix, for a label."""
+    name = path.rsplit("/", 1)[-1]
+    return name.rsplit(".", 1)[0] if "." in name else name
+
+
+def _is_host(site: Optional[Assembly], path: str, made: Sequence[str]) -> bool:
+    """A root structure with a footprint that is not a made piece."""
+    if site is None or not path or "." in path or path in made:
+        return False
+    node = next((c for c in site.children if c.name == path), None)
+    return node is not None and node.world_bounds() is not None
+
+
+def _camera_group(picture: PictureContext, floor: bool) -> Option:
+    """Camera: Pin here › this browser's cameras (Allow until it has been asked),
+    Live or Still, Look, Keep, Unpin. Live, Look and Keep only when the camera
+    pinned here is one of this browser's: a pin is a device of one origin."""
+    tail = f":{FLOOR_MARK}" if floor else ""
+    here = picture.here
+    mine = {c.id for c in picture.cameras}
+    if picture.asked and picture.cameras:
+        pin = _listed(
+            f"camera:pin{tail}",
+            [(f"camera:pin:{c.id}{tail}", c.label or "camera") for c in picture.cameras],
+        )
+    else:
+        pin = [Option(id=f"camera:allow{tail}", label="Allow", action=f"camera:allow{tail}")]
+    options = [Option(id=f"camera:pin{tail}", label="Pin here", children=pin)]
+    if here.camera is not None and here.camera.id in mine:
+        options.append(
+            Option(id=f"camera:still{tail}", label="Still", action=f"camera:still{tail}")
+            if here.live
+            else Option(id=f"camera:live{tail}", label="Live", action=f"camera:live{tail}")
+        )
+        options.append(Option(id=f"camera:look{tail}", label="Look", action=f"camera:look{tail}"))
+        options.append(Option(id=f"camera:keep{tail}", label="Keep", action=f"camera:keep{tail}"))
+    if here.camera is not None:
+        options.append(
+            Option(id=f"camera:unpin{tail}", label="Unpin", action=f"camera:unpin{tail}")
+        )
+    return Option(id=f"camera{tail}", label="Camera", children=options)
+
+
+def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
+    """Picture at a host or the floor: Add (a host's; the floor's is Pictures ›
+    Add), Folder › the newest pictures, and with
+    a look drawn here, Looks › the newest looks, Make › Make all and each found
+    shape (once the look has a width), Size, Find › another finder, Unpin, and
+    Forget for a picture the browser kept. Eight at the most."""
+    tail = f":{FLOOR_MARK}" if floor else ""
+    here = picture.here
+    # The floor's Add is the canvas ring's Pictures › Add, one ring up: an action
+    # has one address.
+    options = [] if floor else [Option(id="picture:add", label="Add", action="picture:add")]
+
+    pictures = list(picture.pictures)
+    if pictures:
+        leaves = [(f"picture:pin:{p}{tail}", _stem(p)) for p in pictures[:NEWEST]]
+        if len(pictures) > NEWEST:
+            chosen = picture.chosen_picture
+            if chosen and chosen not in pictures[:NEWEST]:
+                leaves.append((f"picture:pin:{chosen}{tail}", _stem(chosen)))
+            else:
+                leaves.append((f"picture:kept{tail}", "More"))
+        options.append(
             Option(
-                id="camera:kept",
-                label="Kept",
-                children=[
-                    Option(
-                        id=f"camera:{verb}",
-                        label=label,
-                        action=f"camera:{verb}",
-                        destructive=destructive,
-                    )
-                    for verb, label, destructive in KEPT_VERBS
-                ],
+                id=f"picture:folder{tail}",
+                label="Folder",
+                children=_listed(f"picture:folder{tail}", leaves),
             )
+        )
+
+    drawn = next((lk for lk in here.looks if lk.id == here.drawn), None)
+    if drawn is None and here.looks:
+        drawn = here.looks[0]
+    if drawn is None:
+        return Option(id=f"picture{tail}", label="Picture", children=options) if options else None
+
+    if len(here.looks) > 1:
+        leaves = [
+            (f"picture:draw:{lk.id}", _stem(lk.picture) or lk.id) for lk in here.looks[:NEWEST]
+        ]
+        if len(here.looks) > NEWEST:
+            chosen_look = next(
+                (lk for lk in here.looks[NEWEST:] if lk.id == here.chosen_look), None
+            )
+            leaves.append(
+                (f"picture:draw:{chosen_look.id}", _stem(chosen_look.picture) or chosen_look.id)
+                if chosen_look is not None
+                else (f"picture:looks{tail}", "In Selected")
+            )
+        options.append(
+            Option(
+                id=f"picture:looks-group{tail}",
+                label="Looks",
+                children=_listed(f"picture:looks-group{tail}", leaves),
+            )
+        )
+
+    found = [shape for shape in drawn.shapes if shape.status == "found"]
+    if drawn.sized and found:
+        make_all = Option(
+            id=f"picture:make-all:{drawn.id}",
+            label="Make all",
+            action=f"picture:make-all:{drawn.id}",
+        )
+        options.append(
+            Option(
+                id=f"picture:make-group{tail}",
+                label="Make",
+                children=_listed(
+                    f"picture:make-group{tail}",
+                    [(f"picture:make:{drawn.id}:{s.index}", f"{s.word} {s.index}") for s in found],
+                    first=[make_all],
+                ),
+            )
+        )
+    options.append(Option(id=f"picture:size{tail}", label="Size", action=f"picture:size{tail}"))
+    others = [f for f in picture.finders if f != drawn.finder]
+    if len(picture.finders) > 1 and others:
+        options.append(
+            Option(
+                id=f"picture:find-group{tail}",
+                label="Find",
+                children=_listed(
+                    f"picture:find-group{tail}", [(f"picture:find:{f}{tail}", f) for f in others]
+                ),
+            )
+        )
+    options.append(Option(id=f"picture:unpin{tail}", label="Unpin", action=f"picture:unpin{tail}"))
+    if drawn.kept:
+        options.append(
+            Option(
+                id=f"picture:forget{tail}",
+                label="Forget",
+                action=f"picture:forget{tail}",
+                destructive=True,
+            )
+        )
+    return Option(id=f"picture{tail}", label="Picture", children=options)
+
+
+def _made_picture_group(picture: PictureContext) -> Option:
+    """Picture on a made piece: Word › the vocabulary's words, and Drop (the piece
+    goes; its shape reads as found again). Both change the site, so the server
+    carries them."""
+    options: List[Option] = []
+    if picture.words:
+        options.append(
+            Option(
+                id="picture:word-group",
+                label="Word",
+                children=_listed(
+                    "picture:word-group", [(f"picture:word:{w}", w) for w in picture.words]
+                ),
+            )
+        )
+    options.append(Option(id="picture:drop", label="Drop", action="picture:drop", destructive=True))
+    return Option(id="picture", label="Picture", children=options)
+
+
+def _pictures(picture: PictureContext) -> Option:
+    """The canvas ring's Pictures, in the seat its Camera had: Add (pinned at the
+    floor), Floor › Fit, Camera, Picture (the floor's own verbs), Purge, and
+    Gather, the gathering's report, until gathering leaves core."""
+    return Option(
+        id="pictures",
+        label="Pictures",
+        children=[
+            Option(id="pictures:add", label="Add", action=f"picture:add:{FLOOR_MARK}"),
+            Option(
+                id="pictures:floor",
+                label="Floor",
+                children=[
+                    option
+                    for option in (
+                        Option(id="floor:fit", label="Fit", action=f"fit:{FLOOR_MARK}"),
+                        _camera_group(picture, floor=True),
+                        _picture_group(picture, floor=True),
+                    )
+                    if option is not None
+                ],
+            ),
+            Option(id="picture:purge", label="Purge", action="picture:purge", destructive=True),
+            Option(id="camera:gather", label="Gather", action="camera:gather"),
         ],
     )
+
+
+def _canvas_pieces(
+    prefix: str, focus_path: str, focus: Optional[Assembly], made: Sequence[str]
+) -> Optional[Option]:
+    """Pieces at this level. At the top, the pieces made from pictures are one
+    grouped Made cell after the code's own, so they cannot crowd the ring out."""
+    made_here = sorted(
+        {c.name for c in focus.children if c.name in set(made)} if focus is not None else set()
+    )
+    if focus_path or focus is None or not made_here:
+        return _pieces(prefix, focus_path, focus)
+    names = sorted({c.name for c in focus.children if c.name not in set(made_here)})
+    made_cell = _grouped("Made", made_here, lambda name: f"select:{name}")
+    assert made_cell is not None
+    children = _listed(prefix, [(f"select:{n}", n) for n in names], first=[])
+    if len(children) >= MOST_OPTIONS:
+        groups = _chunks(names, MOST_OPTIONS - 1)
+        heads = distinct([group[0] for group in groups])
+        children = [
+            Option(
+                id=f"{prefix}:group{i}",
+                label=head,
+                children=_listed(f"{prefix}:group{i}", [(f"select:{n}", n) for n in group]),
+            )
+            for i, (head, group) in enumerate(zip(heads, groups, strict=True))
+        ]
+    return Option(id=prefix, label=shorten(prefix), children=[*children, made_cell])
 
 
 def _canvas_ring(
@@ -726,6 +866,7 @@ def _canvas_ring(
     site: Optional[Assembly],
     site_names: Sequence[str],
     groups: Sequence[str],
+    picture: PictureContext,
 ) -> Ring:
     """The ring on empty canvas: the pieces at this level, the way back up, and the rest.
 
@@ -739,13 +880,13 @@ def _canvas_ring(
     options = [
         option
         for option in (
-            _pieces("Pieces", focus_path, focus.children if focus else []),
+            _canvas_pieces("Pieces", focus_path, focus, picture.made),
             Option(id="up", label="Up", action="zoom-out") if focus_path else None,
-            _grouped("Site", "site", site_names),
-            _grouped("Group", "group", groups),
+            _grouped("Site", site_names, lambda name: f"site:{name}"),
+            _grouped("Group", groups, lambda name: f"group:{name}"),
             Option(id="fit", label="Fit", action="fit"),
             _panels(),
-            _camera(),
+            _pictures(picture),
             Option(id="reset", label="Reset", action="reset", destructive=True),
         )
         if option is not None
@@ -757,8 +898,8 @@ def _canvas_ring(
 def _node_ring(
     context: Context,
     site: Optional[Assembly],
-    words: Sequence[str],
     device: Optional[Device],
+    picture: PictureContext,
 ) -> Ring:
     path = context.targets[0] if context.targets else ""
     node = _find(site, path) if site and path else None
@@ -774,51 +915,39 @@ def _node_ring(
     if device is not None and device.bound:
         options.append(Option(id="device", label="Device", children=_device_options(device)))
 
-    # A piece built from a picture can be swapped for a different word. Every
-    # other node cannot, so the option is simply not there rather than there
-    # and greyed out.
-    if node is not None and node.role == "word":
-        swap = _grouped("Word", "word", words)
-        if swap is not None:
-            options.append(swap)
-
-    # A part leaf's shape is a thing to get; a machine that is a part with
-    # things inside it (a printer holding its board) keeps the ring it had.
-    if node is not None and node.part_ref and not node.children:
-        options.append(Option(id="stl", label="Get shape", action="render-stl"))
-
     options.append(Option(id="why", label="Why this", action="explain"))
 
     # Navigation: the pieces inside this one, and the one it is inside.
     # Selecting, not zooming -- a chosen piece becomes the ring's next subject.
-    if node is not None:
-        into = _pieces("Into", path, node.children)
-        if into is not None:
-            options.append(into)
+    into = _pieces("Into", path, node)
+    if into is not None:
+        options.append(into)
     if "." in path:
         parent = path.rsplit(".", 1)[0]
         options.append(Option(id="up", label="Up", action=f"select:{parent}"))
+
+    # Appended after every cell the ring had, so none of them moves: a host
+    # holds a camera and looks; a made piece has its word and can be dropped.
+    if _is_host(site, path, picture.made):
+        options.append(_camera_group(picture, floor=False))
+        host_pictures = _picture_group(picture, floor=False)
+        assert host_pictures is not None  # a host's always holds Add
+        options.append(host_pictures)
+    elif path and "." not in path and path in picture.made:
+        options.append(_made_picture_group(picture))
+    # A part, or a piece made from a picture, is edited in Selected: Part › Edit
+    # opens the one editor there (the part-editing spike's decision). Appended
+    # last, so no cell above moves; a host with a board, children and a part
+    # is the fullest node ring, eight.
+    if node is not None and (node.part_ref or (path and "." not in path and path in picture.made)):
+        options.append(
+            Option(
+                id="part",
+                label="Part",
+                children=[Option(id="part:edit", label="Edit", action="part:edit")],
+            )
+        )
     return Ring(title=shorten(path or (node.name if node else "")), options=options)
-
-
-def _selection_ring(context: Context) -> Ring:
-    return Ring(
-        title=f"{len(context.targets)} chosen",
-        options=[
-            Option(id="fit", label="Fit to all", action="fit-selection"),
-            Option(id="why", label="Why these", action="explain"),
-        ],
-    )
-
-
-def _edge_ring(context: Context) -> Ring:
-    # Links between arrangements do not exist yet, so an edge can only be
-    # explained. When they arrive this ring grows; until then it says what it
-    # can rather than pretending.
-    return Ring(
-        title="Link",
-        options=[Option(id="why", label="Why this", action="explain")],
-    )
 
 
 def _device_ring_on_top(context: Context, device: Optional[Device]) -> Ring:
@@ -956,47 +1085,11 @@ def control_options(device: Device) -> List[Option]:
     ]
 
 
-def every_action(rings: Sequence[Ring]) -> Dict[str, str]:
-    """Every action any of these rings can produce, and the label it wore.
-
-    Used to check the promise that everything the program can be told to do is
-    reachable from the ring. A button that can do something the ring cannot is
-    the thing that promise forbids.
-    """
-    found: Dict[str, str] = {}
-    seen: Set[int] = set()
-
-    def walk_options(options: Sequence[Option]) -> None:
-        for option in options:
-            # Options can hold each other, and a ring built by hand can be made
-            # to hold itself. Walking that without remembering where you have
-            # been runs out of stack rather than reporting anything.
-            if id(option) in seen:
-                continue
-            seen.add(id(option))
-            if option.action and option.action not in found:
-                found[option.action] = option.label
-            if option.children:
-                walk_options(option.children)
-
-    for ring in rings:
-        walk_options(ring.options)
-    return found
-
-
 class Carries(str, Enum):
-    """Who does the thing an option names.
-
-    Written down rather than inferred, because the three are easy to confuse and
-    the confusion is silent. An action nobody carries out looks exactly like an
-    action the viewer handles: the ring shows a wedge, the wedge can be pressed,
-    and nothing happens. Saying which of the three an action is makes "not built
-    yet" a report rather than a shrug.
-    """
+    """Who does the thing an option names: the intent route, or the page."""
 
     SERVER = "the server carries it out"
     VIEWER = "the viewer carries it out"
-    UNBUILT = "nothing carries it out yet"
 
 
 class UnknownAction(KeyError):
@@ -1009,17 +1102,15 @@ class UnknownAction(KeyError):
 
 
 # Every action any ring can produce, and who carries it out. Actions that name a
-# thing -- an arrangement, a word, a group -- are written as their prefix, since
+# thing -- an arrangement, a group, a piece -- are written as their prefix, since
 # `site:garage` and `site:bench` are one entry and not two.
 #
-# The rule for reading this: SERVER means the intent endpoint does it and the
-# answer says what changed. VIEWER means the intent endpoint does nothing and
-# says so, because the work is where the drawing is. UNBUILT means the option is
-# on the ring and there is nothing behind it, which is refused loudly.
+# SERVER means the intent endpoint does it and the answer says what changed.
+# VIEWER means the intent endpoint does nothing and says so, because the work
+# is where the drawing is.
 CARRIED_BY: Dict[str, Carries] = {
     # The viewer's own business: what is on screen, and where you are looking.
     "fit": Carries.VIEWER,
-    "fit-selection": Carries.VIEWER,
     "zoom-in": Carries.VIEWER,
     "zoom-out": Carries.VIEWER,
     # Choosing a piece from the ring is what a click on the Contents list is.
@@ -1035,11 +1126,6 @@ CARRIED_BY: Dict[str, Carries] = {
     "group": Carries.VIEWER,
     # Discarding every edit and rebuilding from the factory.
     "reset": Carries.SERVER,
-    # Turning one node's subtree into a shape.
-    "render-stl": Carries.SERVER,
-    # A piece built from a picture can be swapped for a different word. The ring
-    # offers it because the vocabulary is real; nothing acts on the choice.
-    "word": Carries.UNBUILT,
     # A board's verbs. The pages already have a handler for each -- the Device
     # section, the serial overlay and the monitor -- and the ring hands the
     # choice to that handler. The server is reached through the firmware
@@ -1055,23 +1141,41 @@ CARRIED_BY: Dict[str, Carries] = {
     "print": Carries.VIEWER,
     # Opening, closing, floating what stands in front of the world (panels.js).
     "panel": Carries.VIEWER,
-    # The camera panel's verbs: the browser's cameras, a frame kept here, the
-    # pictures gathered -- all of it the page's, none of it the server's alone.
+    # A camera's verbs: this browser's device pinned, live, a frame kept or
+    # looked at, and the gathering's report -- all of it the page's: the pin
+    # and the picture routes are what the page calls.
     "camera": Carries.VIEWER,
+    # A picture's verbs that choose, draw, find, size or pin: what is on screen,
+    # or data attached to a host that no site sees.
+    "picture": Carries.VIEWER,
+    # Those that add, remove or rebuild a root structure change the arrangement,
+    # as a reset does: the intent route carries them, calling the functions the
+    # look routes call (apothecary/vision/looks.py's make, drop and rebuild).
+    "picture:make": Carries.SERVER,
+    "picture:make-all": Carries.SERVER,
+    "picture:drop": Carries.SERVER,
+    "picture:word": Carries.SERVER,
+    # The part editor is the page's: Part › Edit opens it in Selected and puts
+    # the cursor in its first control. What Apply then changes goes through the
+    # part and made routes the editor already calls, never the intent route.
+    "part": Carries.VIEWER,
 }
 
 
 def carried_by(action: str) -> Carries:
-    """Who carries out this action. Raises rather than guessing.
+    """Who carries out this action; ``site:garage`` is looked up as ``site``.
 
-    ``site:garage`` is looked up as ``site``. An action nobody has classified is
-    an error here rather than a wedge that does nothing.
+    The longest classified prefix wins, so ``picture:make:look_1:2`` is
+    ``picture:make``'s and ``picture:draw:look_1`` is ``picture``'s.
+
+    Raises rather than guessing, so an action nobody has classified is an error
+    rather than a wedge that does nothing.
     """
-    if action in CARRIED_BY:
-        return CARRIED_BY[action]
-    head = action.split(":", 1)[0]
-    if head in CARRIED_BY:
-        return CARRIED_BY[head]
+    parts = action.split(":")
+    for n in range(len(parts), 0, -1):
+        prefix = ":".join(parts[:n])
+        if prefix in CARRIED_BY:
+            return CARRIED_BY[prefix]
     raise UnknownAction(
         f"nothing says who carries out {action!r}. Add it to CARRIED_BY, as "
         "itself or as its prefix, and say which of the three it is -- a wedge "
@@ -1082,6 +1186,12 @@ def carried_by(action: str) -> Carries:
 __all__ = [
     "BACK",
     "CARRIED_BY",
+    "CameraSeen",
+    "FLOOR_MARK",
+    "LookSeen",
+    "PictureContext",
+    "Place",
+    "ShapeSeen",
     "CELLS",
     "COMPASS",
     "Carries",
@@ -1098,16 +1208,11 @@ __all__ = [
     "Ring",
     "RingTooFull",
     "UnknownAction",
-    "Where",
-    "address_of",
     "carried_by",
     "check_ring",
     "control_options",
-    "every_action",
-    "every_address",
     "nearest",
     "place",
     "resolve",
     "shorten",
-    "walk",
 ]

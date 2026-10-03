@@ -18,7 +18,7 @@
  * elements it makes, except the pointer moves that finish a drag, which
  * go on the window while a drag is in progress and come off after, and
  * the tilde key, which is on the window so it works wherever the pointer
- * is. The census's test on this module holds it to that.
+ * is.
  */
 
 const RAIL_MAX_FRACTION = 1 / 2;
@@ -123,6 +123,7 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
         if (typeof p.where === "object" && p.where && p.where.tether) { free.appendChild(p.el); p.el.classList.add("tethered"); }
         else if (p.where === "free") { free.appendChild(p.el); p.el.classList.remove("tethered"); p.el.style.left = `${p.x}px`; p.el.style.top = `${p.y}px`; }
         else { railBody(p.where === "left" ? "left" : "right").appendChild(p.el); p.el.classList.remove("tethered"); p.el.style.left = ""; p.el.style.top = ""; }
+        if (p.mount) { const mount = p.mount; p.mount = null; mount(p.slot); }  // filled the first time it opens
         const docked = p.where === "left" || p.where === "right";
         p.slot.style.height = docked && p.height ? `${p.height}px` : "";
         p.el.querySelector(".panel-resizer").hidden = !docked;
@@ -217,12 +218,13 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
     const api = {
         rails, free, tabs,
         /* Register a panel. `body` is an element the panel adopts (moved into
-         * it) or a function given the slot to fill. `where` is "right",
-         * "left" or "free"; `open` and `collapsed` are the defaults a browser
-         * that has not seen the panel starts from. */
-        register(id, { title, body, where = "right", open = true, collapsed = false, x = 40, y = 40 } = {}) {
+         * it) or a function given the slot to fill the first time the panel
+         * opens. `where` is "right", "left" or "free"; `open` and `collapsed`
+         * are the defaults a browser that has not seen the panel starts from.
+         * `onClose` is called when an open panel is closed or unregistered. */
+        register(id, { title, body, where = "right", open = true, collapsed = false, x = 40, y = 40, onClose = null } = {}) {
             if (panels.has(id)) this.unregister(id);
-            const p = { id, title: title || id, where, home: where === "free" ? "right" : where, open, collapsed, x, y, height: null, el: null, slot: null, leader: null, tether: null };
+            const p = { id, title: title || id, where, home: where === "free" ? "right" : where, open, collapsed, x, y, height: null, el: null, slot: null, leader: null, tether: null, mount: null, onClose };
             const had = remembered[id];
             if (had) {
                 if (typeof had.open === "boolean") p.open = had.open;
@@ -233,7 +235,7 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
                 if (typeof had.height === "number") p.height = had.height;
             }
             build(p);
-            if (typeof body === "function") body(p.slot);
+            if (typeof body === "function") p.mount = body;
             else if (body) p.slot.appendChild(body);
             panels.set(id, p);
             place(p);
@@ -246,9 +248,17 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
             if (p.leader) p.leader.remove();
             panels.delete(id);
             renderTabs();
+            if (p.open && p.onClose) p.onClose();
         },
         open(id) { const p = panels.get(id); if (!p) return false; p.open = true; place(p); remember(); return true; },
-        close(id) { const p = panels.get(id); if (!p) return false; p.open = false; place(p); remember(); return true; },
+        close(id) {
+            const p = panels.get(id);
+            if (!p) return false;
+            const was = p.open;
+            p.open = false; place(p); remember();
+            if (was && p.onClose) p.onClose();
+            return true;
+        },
         toggle(id) { const p = panels.get(id); if (!p) return false; return p.open ? this.close(id) : this.open(id); },
         collapse(id, collapsed = true) { const p = panels.get(id); if (!p) return false; p.collapsed = collapsed; place(p); remember(); return true; },
         float(id) {
@@ -313,13 +323,10 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
             layoutRails(); remember();
             return true;
         },
-        resizeRail(side, width) { railState[side].width = Math.max(RAIL_MIN_PX, Math.min(railMax(), width)); layoutRails(); remember(); return railState[side].width; },
         railWidth(side) { return rails[side].offsetWidth; },
         isOpen(id) { const p = panels.get(id); return !!(p && p.open); },
         state(id) { const p = panels.get(id); return p ? { id, title: p.title, open: p.open, collapsed: p.collapsed, where: p.where, x: p.x, y: p.y, height: p.height } : null; },
         list() { return [...panels.keys()].map((id) => this.state(id)); },
-        element(id) { const p = panels.get(id); return p ? p.el : null; },
-        railWidthLimit: railMax,
         destroy() {
             for (const id of [...panels.keys()]) this.unregister(id);
             window.removeEventListener("keydown", onKey);

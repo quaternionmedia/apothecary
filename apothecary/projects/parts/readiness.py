@@ -18,12 +18,20 @@ Three states, and the middle one is the point:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Sequence, Tuple
+
+from apothecary.meshes import MeshError, bounds, read_mesh
+from apothecary.projects.parts.stl_renderer import _sources, get_renderer, read_params_sidecar
 
 PASS = "pass"
 BLOCKED = "blocked"
 UNKNOWN = "unknown"
+
+BOUNDS = "Declared bounds match geometry"
+
+Size = Tuple[float, float, float]
 
 
 @dataclass
@@ -65,22 +73,11 @@ class Readiness:
 
 
 def _sources_newer_than(part, stl_path: Path) -> List[str]:
-    """Inputs that changed after the render, if any.
-
-    The wrapper counts, not just the SCAD. datum_core's geometry was reported
-    as drifted by 1.2 mm for exactly this reason: the SCAD was untouched and
-    the wrapper's `walls` default had moved to the house constant, so the STL
-    on disk answered a question nobody was asking any more. A re-render put
-    declared and measured at 46.8 to the millimetre.
-    """
-    import inspect
-
+    """Inputs that changed after the render, if any: the SCAD and the wrapper
+    (a Python module, or a described part's part.json) -- the same inputs
+    build_stl rebuilds from."""
     rendered = stl_path.stat().st_mtime
-    inputs = [part.source_file]
-    try:
-        inputs.append(Path(inspect.getfile(type(part))))
-    except (TypeError, OSError):  # a part defined somewhere unreadable
-        pass
+    inputs = _sources(part)
     return [f.name for f in inputs if f.exists() and f.stat().st_mtime > rendered]
 
 
@@ -107,19 +104,22 @@ def _geometry_checks(part, renderer, stl_path: Path) -> List[Check]:
                 "install OpenSCAD, then `apothecary parts generate-stl <part>`",
             )
         )
-        checks.append(Check("Declared bounds match geometry", UNKNOWN, "needs a render"))
+        checks.append(Check(BOUNDS, UNKNOWN, "needs a render"))
         return checks
 
     if not stl_path.exists():
+        can_build, reason = part.can_generate_stl()
         checks.append(
             Check(
                 "Geometry renders",
                 UNKNOWN,
-                "not built yet",
-                f"apothecary parts generate-stl {part.name}",
+                "not built yet" if can_build else f"cannot build here: {reason}",
+                f"apothecary parts generate-stl {part.name}"
+                if can_build
+                else f"once it can be built: apothecary parts generate-stl {part.name}",
             )
         )
-        checks.append(Check("Declared bounds match geometry", UNKNOWN, "needs a render"))
+        checks.append(Check(BOUNDS, UNKNOWN, "needs a render"))
         return checks
 
     newer = _sources_newer_than(part, stl_path)
@@ -132,43 +132,117 @@ def _geometry_checks(part, renderer, stl_path: Path) -> List[Check]:
                 f"apothecary parts generate-stl {part.name} --force",
             )
         )
-        checks.append(Check("Declared bounds match geometry", UNKNOWN, "needs a render"))
+        checks.append(Check(BOUNDS, UNKNOWN, "needs a render"))
         return checks
 
     checks.append(Check("Geometry renders", PASS, f"{stl_path.stat().st_size // 1024} KB"))
     return checks
 
 
-def _bounds_check(part, stl_path: Path, tolerance: float) -> Check:
-    from apothecary.cli.utils import _get_stl_bounding_box
+@dataclass(frozen=True)
+class BoundsComparison:
+    """Declared against measured extents (x, y, z), in mm."""
 
+    declared: Size
+    measured: Size
+    tolerance: float
+
+    @property
+    def deltas(self) -> Size:
+        return tuple(abs(m - d) for d, m in zip(self.declared, self.measured, strict=True))
+
+    @property
+    def worst(self) -> float:
+        return max(self.deltas)
+
+    @property
+    def ok(self) -> bool:
+        return self.worst <= self.tolerance
+
+
+def compare_bounds(
+    declared: Sequence[float], measured: Sequence[float], tol: float
+) -> BoundsComparison:
+    """A part's declared extents against an STL's, each axis allowed ``tol`` mm."""
+    return BoundsComparison(tuple(declared), tuple(measured), tol)
+
+
+@lru_cache(maxsize=256)
+def _measured_size(stl_path: Path, mtime_ns: int) -> Size:
+    """An STL's extents; keyed on its mtime, so a new render is measured again."""
+    lo, hi = bounds(read_mesh(stl_path))
+    return (hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2])
+
+
+def _turned(size: Size, rotation: Sequence[float]) -> Optional[Size]:
+    """``size`` after OpenSCAD's ``rotate(rotation)`` (about x, then y, then z), or
+    None when an angle is not a quarter turn, as the render's extents are then not the box's."""
+    x, y, z = size
+    for axis, angle in zip("xyz", rotation, strict=True):
+        if angle % 90:
+            return None
+        if (angle // 90) % 2:
+            if axis == "x":
+                y, z = z, y
+            elif axis == "y":
+                x, z = z, x
+            else:
+                x, y = y, x
+    return (x, y, z)
+
+
+def _bounds_check(part, stl_path: Path, tolerance: float) -> Check:
     declared = part.get_bounds()
     if declared is None:
         return Check(
-            "Declared bounds match geometry",
+            BOUNDS,
             BLOCKED,
             "the part declares no bounds",
             "give the wrapper a get_bounds or default_bounds",
         )
 
-    box = _get_stl_bounding_box(stl_path)
-    if box is None:
-        return Check("Declared bounds match geometry", UNKNOWN, "could not measure the STL")
-
-    measured = (box[1] - box[0], box[3] - box[2], box[5] - box[4])
-    want = (declared.size.x, declared.size.y, declared.size.z)
-    worst = max(abs(a - w) for a, w in zip(measured, want, strict=False))
-    if worst > tolerance:
+    # Declared bounds are for the default parameters, so an override render says nothing.
+    overrides = (read_params_sidecar(stl_path) or {}).get("params")
+    if overrides:
         return Check(
-            "Declared bounds match geometry",
+            BOUNDS,
+            UNKNOWN,
+            f"the STL was rendered with {', '.join(sorted(overrides))} overridden",
+            f"apothecary parts generate-stl {part.name}",
+        )
+
+    size = (declared.size.x, declared.size.y, declared.size.z)
+    want = _turned(size, part.display_rotation.to_list())
+    if want is None:
+        return Check(
+            BOUNDS,
+            UNKNOWN,
+            "the STL is turned by display_rotation, by other than quarter turns",
+            f"apothecary parts verify {part.name}",
+        )
+
+    try:
+        measured = _measured_size(stl_path, stl_path.stat().st_mtime_ns)
+    except (OSError, MeshError) as exc:
+        return Check(
+            BOUNDS,
+            UNKNOWN,
+            f"could not measure the STL: {exc}",
+            f"apothecary parts generate-stl {part.name} --force",
+        )
+
+    result = compare_bounds(want, measured, tolerance)
+    if not result.ok:
+        return Check(
+            BOUNDS,
             BLOCKED,
-            f"off by {worst:.2f} mm — declared "
+            f"off by {result.worst:.2f} mm — declared "
             f"{want[0]:.1f} x {want[1]:.1f} x {want[2]:.1f}, measured "
             f"{measured[0]:.1f} x {measured[1]:.1f} x {measured[2]:.1f}",
             "reconcile the wrapper with the SCAD; anything sizing around this part is wrong",
         )
     return Check(
-        "Declared bounds match geometry",
+        BOUNDS,
         PASS,
         f"{want[0]:.1f} x {want[1]:.1f} x {want[2]:.1f} mm, within {tolerance} mm",
     )
@@ -260,9 +334,7 @@ def _stub_check(part) -> Check:
 
     placements = getattr(assembly, "placements", None)
     if placements is None:
-        return Check(
-            "Fitted to measured artifacts", UNKNOWN, "the assembly reports no placements"
-        )
+        return Check("Fitted to measured artifacts", UNKNOWN, "the assembly reports no placements")
 
     # Only for a part the assembly actually places. This used to report the
     # bench's stubs for every part in the library, so `calibration_cube` was
@@ -291,13 +363,8 @@ def _stub_check(part) -> Check:
 
 def assess(part, build_volume: Optional[tuple] = None, tolerance: float = 0.5) -> Readiness:
     """Everything the repository can answer about printing this part."""
-    from apothecary.projects.parts.stl_renderer import get_renderer
-
     renderer = get_renderer()
-    # The part decides where its STL lives. gridfinity's SCAD is inside a
-    # third-party submodule and its wrapper overrides this precisely so the
-    # render does not land in somebody else's checkout; assuming
-    # source_file.with_suffix looked in the wrong place for it.
+    # The part decides where its STL lives (gridfinity's is outside its submodule).
     stl_path = part.get_stl_output_path()
 
     checks = _geometry_checks(part, renderer, stl_path)

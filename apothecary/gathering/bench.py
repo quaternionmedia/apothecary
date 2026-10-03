@@ -102,16 +102,6 @@ class Score:
         return self.declined / self.judged if self.judged else 0.0
 
     @property
-    def joined_wrongly_rate(self) -> float:
-        """How often two unrelated pictures were made into one thing.
-
-        The one number that has to be nothing. Every other mistake here costs a
-        person a moment of confusion; this one silently builds an object out of
-        two things that were never together, and nothing downstream can tell.
-        """
-        return self.joined_wrongly / self.judged if self.judged else 0.0
-
-    @property
     def found_rate(self) -> float:
         """How many of the groups that were there were actually found."""
         return self.groups_clean / self.groups_possible if self.groups_possible else 0.0

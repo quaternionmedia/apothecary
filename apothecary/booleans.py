@@ -1,42 +1,42 @@
-from typing import List
+from typing import TYPE_CHECKING, ClassVar, List, Literal
 
 from pydantic import Field
 
 from .core import OpenSCADObject
 
+if TYPE_CHECKING:
+    from .objects import SceneObject
+
 
 class BooleanOperation(OpenSCADObject):
     """Base class for boolean operations"""
 
-    # Simplicity over enforcement; validation happens logically by usage
-    children: List[OpenSCADObject] = Field(default_factory=list)
+    children: List["SceneObject"] = Field(default_factory=list)
+    keyword: ClassVar[str] = ""
+
+    def render(self, *_, **__) -> str:
+        return self._block(f"{self.keyword}()", self.children)
 
 
 class Union(BooleanOperation):
     """OpenSCAD union operation"""
 
-    def render(self, *_, **__) -> str:
-        comment_str = f"// {self.comment}\n" if self.comment else ""
-        children_str = "\n".join(f"  {child.render()}" for child in self.children)
-        return f"{comment_str}union() {{\n{children_str}\n}}"
+    type: Literal["union"] = "union"
+    keyword: ClassVar[str] = "union"
 
 
 class Difference(BooleanOperation):
     """OpenSCAD difference operation"""
 
-    def render(self, *_, **__) -> str:
-        comment_str = f"// {self.comment}\n" if self.comment else ""
-        children_str = "\n".join(f"  {child.render()}" for child in self.children)
-        return f"{comment_str}difference() {{\n{children_str}\n}}"
+    type: Literal["difference"] = "difference"
+    keyword: ClassVar[str] = "difference"
 
 
 class Intersection(BooleanOperation):
     """OpenSCAD intersection operation"""
 
-    def render(self, *_, **__) -> str:
-        comment_str = f"// {self.comment}\n" if self.comment else ""
-        children_str = "\n".join(f"  {child.render()}" for child in self.children)
-        return f"{comment_str}intersection() {{\n{children_str}\n}}"
+    type: Literal["intersection"] = "intersection"
+    keyword: ClassVar[str] = "intersection"
 
 
 class Hull(BooleanOperation):
@@ -48,7 +48,5 @@ class Hull(BooleanOperation):
     radius everything else is fitted around.
     """
 
-    def render(self, *_, **__) -> str:
-        comment_str = f"// {self.comment}\n" if self.comment else ""
-        children_str = "\n".join(f"  {child.render()}" for child in self.children)
-        return f"{comment_str}hull() {{\n{children_str}\n}}"
+    type: Literal["hull"] = "hull"
+    keyword: ClassVar[str] = "hull"

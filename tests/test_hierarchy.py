@@ -3,6 +3,8 @@
 See tests/test_garage_workbench.py for the worked-example / layout-verification tests.
 """
 
+import pytest
+
 from apothecary.hierarchy import Assembly, Feature, Site, Structure, Substructure
 from apothecary.models.bounds import BoundingBox3D
 from apothecary.models.units import HardwareSizes, PrintSettings
@@ -27,11 +29,8 @@ def test_feature_clearance_hole_uses_print_settings_tolerance():
 
 def test_substructure_with_only_subtractions_and_no_base_raises():
     empty = Substructure(name="empty")
-    try:
+    with pytest.raises(ValueError, match="empty"):
         empty.to_scad_object()
-        assert False, "expected ValueError"
-    except ValueError as exc:
-        assert "empty" in str(exc)
 
 
 def test_substructure_composes_positive_and_negative_features():
@@ -127,11 +126,8 @@ def test_structure_category_defaults_to_none_and_is_settable():
 
 def test_structure_with_no_substructures_raises():
     empty = Structure(name="empty")
-    try:
+    with pytest.raises(ValueError, match="empty"):
         empty.to_scad_object()
-        assert False, "expected ValueError"
-    except ValueError as exc:
-        assert "empty" in str(exc)
 
 
 def test_substructure_world_bounds_is_none_without_a_footprint():

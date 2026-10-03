@@ -738,12 +738,15 @@ def test_the_questions_come_out_in_the_same_order_every_time():
 # --------------------------------------------------------------------------
 
 
-@pytest.fixture
-def a_folder(tmp_path):
-    """Three drawn pictures: two of one thing and one of something else."""
+@pytest.fixture(scope="module")
+def a_folder(tmp_path_factory):
+    """Four drawn pictures: two of one thing, one of something else, a blank wall.
+
+    Drawn once for the module; a test writes its answers and sheets to its own
+    tmp_path, never in here."""
     from apothecary.gathering import bench
 
-    where = tmp_path / "pics"
+    where = tmp_path_factory.mktemp("pics")
     scene = bench._scene(__import__("random").Random(4), spread=bench.WINDOW_WIDE, count=4)
     window = (0.0, 0.0, bench.WINDOW_WIDE, bench.WINDOW_TALL)
     bench._photograph(scene, window, _made(where, "bench_left"), light=0)
@@ -895,6 +898,35 @@ def test_holding_questions_back_is_admitted_rather_than_hidden(a_folder, tmp_pat
         assert "not written here" in written
 
 
+def test_a_folder_of_phone_photos_is_taken_whatever_the_case_of_its_suffixes(a_folder, tmp_path):
+    """A phone names its pictures .JPG or .jpeg, and keeps other files beside them."""
+    from PIL import Image
+
+    phone = tmp_path / "phone"
+    phone.mkdir()
+    for source, name in (("bench_left", "IMG_0001.JPG"), ("bench_right", "IMG_0002.jpeg")):
+        Image.open(a_folder / f"{source}.png").convert("RGB").save(phone / name, "JPEG")
+    (phone / "IMG_0001.AAE").write_text("<plist/>")  # a phone's edit notes, not a picture
+    said = _run(phone)
+    assert said.exit_code == 0, said.output
+    assert "2 picture(s) taken in" in said.output
+    assert "IMG_0001" in said.output and "IMG_0002" in said.output
+    # A pattern given is taken as written: only the .jpeg, and one is not a gathering.
+    only = _run(phone, "--pattern", "*.jpeg")
+    assert only.exit_code != 0 and "only one picture (IMG_0002.jpeg)" in only.output
+
+
+def test_a_file_that_cannot_be_read_is_set_aside_and_the_rest_are_gathered(a_folder, tmp_path):
+    """One file the finder cannot read is reported with why; the others are gathered."""
+    broken = tmp_path / "half_downloaded.png"
+    broken.write_bytes((a_folder / "shed.png").read_bytes()[:60])
+    said = _run(a_folder, broken)
+    assert said.exit_code == 0, said.output
+    assert "5 picture(s) taken in" in said.output
+    unread = said.output.split("Could not be read at all")[1]
+    assert "half_downloaded — the finder could not read it" in unread
+
+
 def test_a_file_saved_by_an_ordinary_editor_is_read(a_folder, tmp_path):
     """Three invisible bytes at the front made the first name unrecognisable."""
     answers = tmp_path / "mine.txt"
@@ -902,3 +934,20 @@ def test_a_file_saved_by_an_ordinary_editor_is_read(a_folder, tmp_path):
     said = _run(a_folder, "--answers", answers)
     assert said.exit_code == 0, said.output
     assert "What you told it" in said.output
+
+
+def test_a_file_that_would_not_open_is_not_offered_as_worth_using():
+    """The sheet lists it with its reason; 'worth using anyway' is for a picture
+    that opened and showed nothing, not for one nothing could read at all."""
+    from apothecary.gathering.models import Reading
+
+    opened = Reading(picture="blank", shapes_found=0, readable=False, because="nothing found")
+    unopened = Reading(
+        picture="broken", shapes_found=0, readable=False, opened=False, because="not a picture"
+    )
+    gathering = gather([])
+    gathering = gathering.model_copy(update={"readings": [opened, unopened]})
+    sheet = as_sheet(gathering, [])
+    assert "blank is worth using anyway" in sheet
+    assert "broken is worth using anyway" not in sheet
+    assert "broken: not a picture" in sheet

@@ -1,141 +1,53 @@
-"""Tests for STL rendering and PartFiles data model."""
+"""Tests for STL rendering and build_stl, the one way a part's STL is built."""
 
+import os
+import stat
+from enum import IntEnum
 from pathlib import Path
 from unittest.mock import patch
 
-from apothecary.projects.parts.part_files import FileStatus, PartFile, PartFiles
-from apothecary.projects.parts.stl_renderer import OpenSCADRenderer, RenderResult
+import pytest
+from click.testing import CliRunner
+from pydantic import BaseModel
 
+from apothecary import Cube, Import
+from apothecary.meshes import bounds, read_mesh
+from apothecary.models import Vector3D
+from apothecary.projects.parts.base import BasePart
+from apothecary.projects.parts.stl_renderer import (
+    OpenSCADRenderer,
+    RenderResult,
+    build_stl,
+    get_renderer,
+    read_params_sidecar,
+    scad_literal,
+    write_params_sidecar,
+)
+from apothecary.projects.registry import ProjectInfo
 
-class TestPartFile:
-    """Tests for PartFile model."""
-
-    def test_part_file_exists_true(self, tmp_path):
-        """Test that exists returns True for existing files."""
-        test_file = tmp_path / "test.scad"
-        test_file.write_text("cube([10,10,10]);")
-
-        pf = PartFile(path=test_file, format="scad")
-        assert pf.exists is True
-        assert pf.size_bytes > 0
-        assert pf.modified_at is not None
-
-    def test_part_file_exists_false(self, tmp_path):
-        """Test that exists returns False for missing files."""
-        missing = tmp_path / "missing.scad"
-
-        pf = PartFile(path=missing, format="scad")
-        assert pf.exists is False
-        assert pf.size_bytes is None
-        assert pf.modified_at is None
-
-    def test_part_file_read_text(self, tmp_path):
-        """Test reading file contents."""
-        test_file = tmp_path / "test.scad"
-        content = "cube([10,10,10]);"
-        test_file.write_text(content)
-
-        pf = PartFile(path=test_file, format="scad")
-        assert pf.read_text() == content
-
-
-class TestPartFiles:
-    """Tests for PartFiles model."""
-
-    def test_from_scad_file(self, tmp_path):
-        """Test creating PartFiles from a SCAD file."""
-        scad_file = tmp_path / "test_part.scad"
-        scad_file.write_text("cube([10,10,10]);")
-
-        pf = PartFiles.from_scad_file(scad_file)
-
-        assert pf.part_name == "test_part"
-        assert pf.scad_file.exists is True
-        assert pf.stl_file is None  # No STL generated yet
-
-    def test_from_scad_file_with_stl(self, tmp_path):
-        """Test creating PartFiles when STL exists."""
-        scad_file = tmp_path / "test_part.scad"
-        scad_file.write_text("cube([10,10,10]);")
-
-        stl_file = tmp_path / "test_part.stl"
-        stl_file.write_bytes(b"solid test\nendsolid test")
-
-        pf = PartFiles.from_scad_file(scad_file)
-
-        assert pf.stl_file is not None
-        assert pf.stl_file.exists is True
-
-    def test_from_part_dir(self, tmp_path):
-        """Test creating PartFiles from a part directory."""
-        part_dir = tmp_path / "my_part"
-        part_dir.mkdir()
-
-        scad_file = part_dir / "my_part.scad"
-        scad_file.write_text("cube([10,10,10]);")
-
-        pf = PartFiles.from_part_dir(part_dir, "my_part")
-
-        assert pf.part_name == "my_part"
-        assert pf.part_dir == part_dir
-        assert pf.scad_file.exists is True
-
-    def test_get_stl_status_missing(self, tmp_path):
-        """Test STL status when file is missing."""
-        scad_file = tmp_path / "test.scad"
-        scad_file.write_text("cube([10,10,10]);")
-
-        pf = PartFiles.from_scad_file(scad_file)
-        assert pf.get_stl_status() == FileStatus.MISSING
-
-    def test_get_stl_status_present(self, tmp_path):
-        """Test STL status when file exists."""
-        scad_file = tmp_path / "test.scad"
-        scad_file.write_text("cube([10,10,10]);")
-
-        stl_file = tmp_path / "test.stl"
-        stl_file.write_bytes(b"solid test\nendsolid test")
-
-        pf = PartFiles.from_scad_file(scad_file)
-        assert pf.get_stl_status() == FileStatus.PRESENT
-
-    def test_to_api_dict(self, tmp_path):
-        """Test API dictionary generation."""
-        scad_file = tmp_path / "test.scad"
-        scad_file.write_text("cube([10,10,10]);")
-
-        pf = PartFiles.from_scad_file(scad_file)
-        api_dict = pf.to_api_dict("http://localhost:8000")
-
-        assert api_dict["part_name"] == "test"
-        assert api_dict["scad"]["exists"] is True
-        assert "download_url" in api_dict["scad"]
-        assert api_dict["stl"]["exists"] is False
-        assert "generate_url" in api_dict["stl"]
+needs_openscad = pytest.mark.skipif(
+    not get_renderer().is_available, reason="OpenSCAD not installed"
+)
 
 
 class TestOpenSCADRenderer:
     """Tests for OpenSCAD renderer."""
 
-    def test_detect_openscad_not_found(self):
-        """Test detection when OpenSCAD is not installed."""
-        renderer = OpenSCADRenderer()
-        # Clear any cached detection
-        renderer._detected_path = None
-        renderer._openscad_path = None
+    @pytest.fixture(autouse=True)
+    def _nothing_installed_here(self, tmp_path, monkeypatch):
+        """No snapshot `apothecary openscad install` put down, and no override."""
+        monkeypatch.setenv("APOTHECARY_TOOLS_DIR", str(tmp_path / "tools"))
+        monkeypatch.delenv("APOTHECARY_OPENSCAD", raising=False)
 
-        # Mock subprocess to simulate no OpenSCAD
-        with patch("subprocess.run") as mock_run:
-            mock_run.side_effect = FileNotFoundError()
+    def test_detect_openscad_on_path(self, monkeypatch):
+        monkeypatch.setattr("shutil.which", lambda name: "/opt/bin/openscad")
+        assert OpenSCADRenderer()._detect_openscad() == Path("/opt/bin/openscad")
 
-            # Mock Path.exists to return False for all common paths
-            with patch.object(Path, "exists", return_value=False):
-                # Force re-detection
-                renderer._detected_path = None
-                path = renderer._detect_openscad()
-                # Path might still be found if installed locally
-                # Just check it doesn't crash
-                assert path is None or isinstance(path, Path)
+    def test_detect_openscad_not_found(self, monkeypatch):
+        monkeypatch.setattr("shutil.which", lambda name: None)
+        monkeypatch.setattr(OpenSCADRenderer, "OPENSCAD_PATHS", [])
+        monkeypatch.setattr(OpenSCADRenderer, "OPENSCAD_NIGHTLY_PATHS", [])
+        assert OpenSCADRenderer()._detect_openscad() is None
 
     def test_render_stl_missing_source(self, tmp_path):
         """Test rendering with missing source file."""
@@ -151,10 +63,6 @@ class TestOpenSCADRenderer:
         """Test rendering when OpenSCAD is not installed."""
         scad_file = tmp_path / "test.scad"
         scad_file.write_text("cube([10,10,10]);")
-
-        renderer = OpenSCADRenderer()
-        renderer._openscad_path = None
-        renderer._detected_path = None
 
         # Force is_available to return False
         with patch.object(
@@ -178,14 +86,241 @@ class TestOpenSCADRenderer:
         assert result.render_time_seconds == 1.5
         assert result.error_message is None
 
+    def test_a_killed_render_leaves_no_stl(self, tmp_path):
+        """OpenSCAD writes a temporary file that replaces the STL only on success."""
+        hangs = tmp_path / "openscad"
+        # Writes half a file where it was told to, then never finishes.
+        hangs.write_text(
+            '#!/bin/sh\n[ "$1" = --version ] && echo "OpenSCAD version 2021.01" >&2 && exit 0\n'
+            'printf "solid partial\\n" > "$2"\nexec sleep 30\n'
+        )
+        hangs.chmod(hangs.stat().st_mode | stat.S_IEXEC)
+        scad = tmp_path / "part.scad"
+        scad.write_text("cube(1);")
+        stl = tmp_path / "part.stl"
+
+        result = OpenSCADRenderer(str(hangs)).render_stl(scad, stl, timeout=0.3)
+        assert not result.success and "timed out" in result.error_message
+        assert not stl.exists()
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["openscad", "part.scad"]
+
+        stl.write_text("solid previous\nendsolid previous\n")
+        OpenSCADRenderer(str(hangs)).render_stl(scad, stl, timeout=0.3)
+        assert stl.read_text() == "solid previous\nendsolid previous\n"
+
+
+class TestScadLiteralTypes:
+    def test_an_enum_is_its_value(self):
+        class Tab(IntEnum):
+            LEFT = 2
+
+        assert scad_literal(Tab.LEFT) == "2"
+
+    def test_a_nested_model_is_refused_by_name(self):
+        class Holes(BaseModel):
+            magnets: bool = True
+
+        with pytest.raises(TypeError, match="Holes is a nested parameter model"):
+            scad_literal(Holes())
+
+
+class Size(BaseModel):
+    x: float = 10
+
+
+class FakeRenderer:
+    """Writes a stand-in STL and counts the renders."""
+
+    openscad_path = None
+
+    def __init__(self):
+        self.calls = []
+
+    def render_stl(self, scad_path, stl_path=None, timeout=120.0, params=None):
+        self.calls.append((Path(scad_path), params))
+        stl_path.write_text("solid fake\nendsolid fake\n")
+        return RenderResult(success=True, stl_path=stl_path)
+
+
+class _Built(BasePart):
+    """A part built in Python: an x by 40 by 30 block, where its SCAD says x by 20 by 30."""
+
+    def geometry(self, params):
+        return Cube(size=Vector3D(x=params.get("x", 10), y=40, z=30))
+
+
+def _part(tmp_path, **kw) -> BasePart:
+    scad = tmp_path / "block.scad"
+    if not scad.exists():
+        scad.write_text("x = 10;\ncube([x, 20, 30]);\n")
+    return BasePart(name="block", source_file=scad, params_model=Size, **kw)
+
+
+class TestBuildStl:
+    def test_an_up_to_date_stl_is_kept_and_an_edited_scad_rebuilds_it(self, tmp_path):
+        part, fake = _part(tmp_path), FakeRenderer()
+        assert build_stl(part, renderer=fake).skipped is None
+        assert build_stl(part, renderer=fake).skipped == "fresh"
+        assert len(fake.calls) == 1
+
+        later = part.get_stl_output_path().stat().st_mtime + 5
+        os.utime(part.source_file, (later, later))
+        result = build_stl(part, renderer=fake)
+        assert result.success and result.skipped is None
+        assert len(fake.calls) == 2
+
+    def test_other_parameters_are_not_up_to_date(self, tmp_path):
+        part, fake = _part(tmp_path), FakeRenderer()
+        build_stl(part, {"x": 12}, renderer=fake)
+        assert build_stl(part, {"x": 12}, renderer=fake).skipped == "fresh"
+        assert build_stl(part, renderer=fake).skipped is None
+        assert len(fake.calls) == 2
+
+    def test_overrides_are_validated_before_anything_renders(self, tmp_path):
+        part, fake = _part(tmp_path), FakeRenderer()
+        with pytest.raises(ValueError, match="unknown parameter.*y.*declares: x"):
+            build_stl(part, {"y": 1}, renderer=fake)
+        assert fake.calls == []
+
+    def test_a_part_that_cannot_be_built_here_is_refused(self, tmp_path):
+        class Unbuildable(BasePart):
+            def can_generate_stl(self, openscad=None):
+                return False, "needs a newer OpenSCAD"
+
+        scad = tmp_path / "block.scad"
+        scad.write_text("cube(1);")
+        fake = FakeRenderer()
+        result = build_stl(Unbuildable(name="block", source_file=scad), renderer=fake)
+        assert not result.success and result.skipped == "refused"
+        assert result.error_message == "needs a newer OpenSCAD"
+        assert fake.calls == [] and not (tmp_path / "block.stl").exists()
+
+    @pytest.mark.parametrize(
+        "rotation", [Vector3D(), Vector3D(x=90, y=0, z=0)], ids=["upright", "rotated"]
+    )
+    def test_the_scad_gets_the_parts_translation_and_the_sidecar_the_params(
+        self, tmp_path, rotation
+    ):
+        class Renamed(BasePart):
+            def scad_overrides(self, params):
+                return {f"size_{name}": value for name, value in params.items()}
+
+        scad = tmp_path / "block.scad"
+        scad.write_text("size_x = 10;\ncube([size_x, 20, 30]);\n")
+        part = Renamed(name="block", source_file=scad, params_model=Size, display_rotation=rotation)
+        fake = FakeRenderer()
+        assert build_stl(part, {"x": 12}, renderer=fake).success
+        assert fake.calls[0] == (scad, {"size_x": 12})
+        assert read_params_sidecar(part.get_stl_output_path())["params"] == {"x": 12}
+        assert build_stl(part, {"x": 12}, renderer=fake).skipped == "fresh"
+
+    @pytest.mark.parametrize(
+        "rotation", [Vector3D(), Vector3D(x=90, y=0, z=0)], ids=["upright", "rotated"]
+    )
+    def test_python_geometry_is_what_renders(self, tmp_path, rotation):
+        part = _Built(
+            name="block",
+            source_file=_part(tmp_path).source_file,
+            params_model=Size,
+            display_rotation=rotation,
+        )
+        seen = []
+
+        class Reading(FakeRenderer):
+            def render_stl(self, scad_path, stl_path=None, timeout=120.0, params=None):
+                seen.append((Path(scad_path).read_text(), params, Path(scad_path).parent))
+                return super().render_stl(scad_path, stl_path, timeout, params)
+
+        assert build_stl(part, {"x": 12}, renderer=Reading()).success
+        text, definitions, where = seen[0]
+        assert text == "cube([12.0, 40.0, 30.0], center=false);\n"
+        assert definitions is None and where != tmp_path
+        # Scratch files sit beside the STL: a snap's OpenSCAD has its own /tmp.
+        assert [scratch.parent for _, _, scratch in seen] == [tmp_path] * len(seen)
+        assert read_params_sidecar(part.get_stl_output_path())["params"] == {"x": 12}
+        assert build_stl(part, {"x": 12}, renderer=Reading()).skipped == "fresh"
+        assert sorted(p.name for p in tmp_path.iterdir()) == [
+            "block.params.json",
+            "block.scad",
+            "block.stl",
+        ]
+
+    def test_an_import_in_python_geometry_names_its_file_absolutely(self, tmp_path):
+        """The SCAD renders from a scratch directory, not from the part's folder."""
+
+        class Imports(BasePart):
+            def geometry(self, params):
+                return Import(file="mesh.stl")
+
+        part = Imports(name="block", source_file=_part(tmp_path).source_file)
+        seen = []
+
+        class Reading(FakeRenderer):
+            def render_stl(self, scad_path, stl_path=None, timeout=120.0, params=None):
+                seen.append(Path(scad_path).read_text())
+                return super().render_stl(scad_path, stl_path, timeout, params)
+
+        assert build_stl(part, renderer=Reading()).success
+        assert f'import("{(tmp_path / "mesh.stl").as_posix()}"' in seen[0]
+
+    @needs_openscad
+    def test_python_geometry_is_turned_by_display_rotation(self, tmp_path):
+        part = _Built(
+            name="block",
+            source_file=_part(tmp_path).source_file,
+            params_model=Size,
+            display_rotation=Vector3D(x=90, y=0, z=0),
+        )
+        result = build_stl(part, {"x": 12})
+        assert result.success, result.error_message
+        lo, hi = bounds(read_mesh(result.stl_path))
+        assert [round(hi[axis] - lo[axis], 3) for axis in range(3)] == [12, 30, 40]
+
+    def test_a_default_build_clears_a_variants_sidecar(self, tmp_path):
+        part, fake = _part(tmp_path), FakeRenderer()
+        build_stl(part, {"x": 12}, renderer=fake)
+        stl = part.get_stl_output_path()
+        assert read_params_sidecar(stl)["params"] == {"x": 12}
+        build_stl(part, renderer=fake)
+        assert read_params_sidecar(stl) is None
+
+    @needs_openscad
+    def test_display_rotation_is_applied(self, tmp_path):
+        part = _part(tmp_path, display_rotation=Vector3D(x=90, y=0, z=0))
+        result = build_stl(part)
+        assert result.success, result.error_message
+        lo, hi = bounds(read_mesh(result.stl_path))
+        size = [round(hi[axis] - lo[axis], 3) for axis in range(3)]
+        assert size == [10, 30, 20]  # 10 x 20 x 30, turned about X
+        # The upright render and its wrapper live in a scratch directory.
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["block.scad", "block.stl"]
+
+    @needs_openscad
+    def test_generate_stl_all_clears_a_stale_sidecar(self, tmp_path, monkeypatch):
+        part = _part(tmp_path)
+        stl = part.get_stl_output_path()
+        stl.write_text("solid variant\nendsolid variant\n")
+        write_params_sidecar(stl, {"x": 12})
+        entry = ProjectInfo(
+            name="block", path=part.source_file, kind="part", files=[], readme=False
+        )
+        monkeypatch.setattr("apothecary.cli.parts.scan_projects", lambda root: [entry])
+
+        from apothecary.cli import cli
+
+        result = CliRunner().invoke(cli, ["parts", "generate-stl", "--all"])
+        assert result.exit_code == 0, result.output
+        assert "1 generated" in result.output
+        assert read_params_sidecar(stl) is None
+        lo, hi = bounds(read_mesh(stl))
+        assert round(hi[0] - lo[0], 3) == 10
+
 
 class TestBasePart:
     """Tests for BasePart STL/JSCAD file properties."""
 
     def test_stl_file_property(self, tmp_path):
         """Test that stl_file property returns path when exists."""
-        from apothecary.projects.parts.base import BasePart
-
         scad = tmp_path / "test.scad"
         scad.write_text("cube([10,10,10]);")
 
@@ -199,24 +334,9 @@ class TestBasePart:
 
     def test_stl_file_property_missing(self, tmp_path):
         """Test that stl_file property returns None when missing."""
-        from apothecary.projects.parts.base import BasePart
-
         scad = tmp_path / "test.scad"
         scad.write_text("cube([10,10,10]);")
 
         part = BasePart(name="test", source_file=scad)
 
         assert part.stl_file is None
-
-    def test_get_files_method(self, tmp_path):
-        """Test get_files() returns PartFiles instance."""
-        from apothecary.projects.parts.base import BasePart
-
-        scad = tmp_path / "test.scad"
-        scad.write_text("cube([10,10,10]);")
-
-        part = BasePart(name="test", source_file=scad)
-        files = part.get_files()
-
-        assert isinstance(files, PartFiles)
-        assert files.part_name == "test"

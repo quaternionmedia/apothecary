@@ -7,6 +7,7 @@ import pytest
 
 from apothecary.models import BoundingBox3D
 from apothecary.projects.parts.gridfinity import (
+    BASE_GAP_MM,
     DEFAULT,
     GRID_SIZE_MM,
     HEIGHT_UNIT_MM,
@@ -15,8 +16,12 @@ from apothecary.projects.parts.gridfinity import (
     GridfinityBinPart,
     GridzDefine,
     TabStyle,
-    check_submodule,
     get_bin_dimensions,
+)
+from apothecary.projects.parts.stl_renderer import (
+    RenderResult,
+    build_stl,
+    read_params_sidecar,
 )
 
 
@@ -40,11 +45,11 @@ class TestBinParams:
     """Tests for BinParams model."""
 
     def test_default_params(self):
-        """Test default parameter values."""
+        """The defaults are gridfinity-rebuilt-bins.scad's own."""
         params = BinParams()
-        assert params.gridx == 1
-        assert params.gridy == 1
-        assert params.gridz == 3
+        assert params.gridx == 3
+        assert params.gridy == 2
+        assert params.gridz == 6
         assert params.include_lip is True
         assert params.divx == 1
         assert params.divy == 1
@@ -113,20 +118,40 @@ class TestGridfinityBinPart:
         bounds = DEFAULT.get_bounds()
 
         assert isinstance(bounds, BoundingBox3D)
-        # 1x1x3 bin: 42mm x 42mm x (3*7 + 3.55)mm
-        assert bounds.size.x == pytest.approx(GRID_SIZE_MM, abs=0.1)
-        assert bounds.size.y == pytest.approx(GRID_SIZE_MM, abs=0.1)
-        expected_height = 3 * HEIGHT_UNIT_MM + STACKING_LIP_MM
+        # 3x2x6 bin: (126 - 0.5) mm x (84 - 0.5) mm x (6*7 + 3.55) mm
+        assert bounds.size.x == pytest.approx(3 * GRID_SIZE_MM - BASE_GAP_MM)
+        assert bounds.size.y == pytest.approx(2 * GRID_SIZE_MM - BASE_GAP_MM)
+        expected_height = 6 * HEIGHT_UNIT_MM + STACKING_LIP_MM
         assert bounds.size.z == pytest.approx(expected_height, abs=0.1)
+
+    def test_the_bin_is_declared_centred_on_the_origin_as_the_library_draws_it(self):
+        """gridfinity-rebuilt-openscad centres a bin on X and Y and stands it on Z = 0."""
+        bounds = DEFAULT.get_bounds({"gridx": 3, "gridy": 2})
+        assert bounds.min_point.to_list()[:2] == pytest.approx([-62.75, -41.75])
+        assert bounds.max_point.to_list()[:2] == pytest.approx([62.75, 41.75])
+        assert bounds.min_point.z == 0
+
+    def test_get_bounds_of_one_override_keeps_the_other_defaults(self):
+        bounds = DEFAULT.get_bounds({"gridx": 1})
+        assert bounds.size.x == pytest.approx(GRID_SIZE_MM - BASE_GAP_MM)
+        assert bounds.size.y == pytest.approx(2 * GRID_SIZE_MM - BASE_GAP_MM)
 
     def test_get_bounds_custom(self):
         """Test bounds calculation with custom params."""
         bounds = DEFAULT.get_bounds({"gridx": 2, "gridy": 3, "gridz": 6})
 
-        assert bounds.size.x == pytest.approx(2 * GRID_SIZE_MM, abs=0.1)
-        assert bounds.size.y == pytest.approx(3 * GRID_SIZE_MM, abs=0.1)
+        assert bounds.size.x == pytest.approx(2 * GRID_SIZE_MM - BASE_GAP_MM)
+        assert bounds.size.y == pytest.approx(3 * GRID_SIZE_MM - BASE_GAP_MM)
         expected_height = 6 * HEIGHT_UNIT_MM + STACKING_LIP_MM
         assert bounds.size.z == pytest.approx(expected_height, abs=0.1)
+
+    def test_the_gap_is_the_standards_whatever_the_grid(self):
+        """Gridfinity leaves one 0.5 mm gap per bin (a 41.5 mm base top on a 42 mm
+        grid), kept at half grid too, so bins fit a standard baseplate."""
+        assert BASE_GAP_MM == pytest.approx(0.5)
+        half = DEFAULT.get_bounds({"gridx": 3, "gridy": 2, "half_grid": True})
+        assert half.size.x == pytest.approx(3 * GRID_SIZE_MM / 2 - BASE_GAP_MM)
+        assert half.size.y == pytest.approx(2 * GRID_SIZE_MM / 2 - BASE_GAP_MM)
 
     def test_get_bounds_no_lip(self):
         """Test bounds without stacking lip."""
@@ -135,29 +160,52 @@ class TestGridfinityBinPart:
         expected_height = 3 * HEIGHT_UNIT_MM  # No lip
         assert bounds.size.z == pytest.approx(expected_height, abs=0.1)
 
-    def test_get_scad_customizer_params(self):
-        """Test OpenSCAD customizer parameter generation."""
-        scad_params = DEFAULT.get_scad_customizer_params({"gridx": 2, "gridy": 2})
+    def test_scad_overrides_translate_only_what_was_given(self):
+        """Customizer names are flat: hole_options is the SCAD's six booleans,
+        an enum is its plain int, and a default build passes nothing."""
+        given = DEFAULT.validate_overrides(
+            {"gridx": 2, "style_tab": TabStyle.LEFT, "hole_options": {"magnet_holes": True}}
+        )
+        scad = DEFAULT.scad_overrides(given)
+        assert scad == {
+            "gridx": 2,
+            "style_tab": 2,
+            "refined_holes": True,
+            "magnet_holes": True,
+            "screw_holes": False,
+            "crush_ribs": True,
+            "chamfer_holes": True,
+            "printable_hole_top": True,
+        }
+        assert type(scad["style_tab"]) is int
+        assert DEFAULT.scad_overrides({}) == {}
 
-        assert scad_params["gridx"] == 2
-        assert scad_params["gridy"] == 2
-        assert "divx" in scad_params
-        assert "style_tab" in scad_params
+    # That each name it emits is a variable of the SCAD, and each default the
+    # SCAD's own, is tests/test_parameter_coverage.py's, for every part.
 
-    def test_get_available_variants(self):
-        """Test variant configurations."""
-        variants = DEFAULT.get_available_variants()
+    def test_build_stl_hands_openscad_the_customizer_names(self, tmp_path, monkeypatch):
+        stl = tmp_path / "gridfinity.stl"
+        monkeypatch.setattr(GridfinityBinPart, "get_stl_output_path", lambda self: stl)
+        monkeypatch.setattr(
+            GridfinityBinPart, "can_generate_stl", lambda self, openscad=None: (True, "")
+        )
+        handed = []
 
-        assert len(variants) > 0
-        variant_names = [v["name"] for v in variants]
-        assert "1x1x3" in variant_names
-        assert "2x2x3" in variant_names
+        class Renderer:
+            openscad_path = None
 
-    def test_stl_output_dir(self):
-        """Test STL output directory is parts/gridfinity."""
-        output_dir = DEFAULT.stl_output_dir
-        assert output_dir.name == "gridfinity"
-        assert output_dir.parent.name == "parts"
+            def render_stl(self, scad_path, stl_path=None, timeout=120.0, params=None):
+                handed.append(params)
+                stl_path.write_text("solid fake\nendsolid fake\n")
+                return RenderResult(success=True, stl_path=stl_path)
+
+        given = {"gridx": 2, "hole_options": {"magnet_holes": True}}
+        assert build_stl(DEFAULT, given, renderer=Renderer()).success
+        assert "hole_options" not in handed[0]
+        assert handed[0]["gridx"] == 2 and handed[0]["magnet_holes"] is True
+        recorded = read_params_sidecar(stl)["params"]
+        assert recorded["gridx"] == 2 and recorded["hole_options"]["magnet_holes"] is True
+        assert build_stl(DEFAULT, given, renderer=Renderer()).skipped == "fresh"
 
     def test_get_stl_output_path(self):
         """Test STL output path is not in submodule."""
@@ -165,22 +213,6 @@ class TestGridfinityBinPart:
         # Should be parts/gridfinity/gridfinity.stl, NOT inside submodule
         assert "gridfinity-rebuilt-openscad" not in str(stl_path)
         assert stl_path.name == "gridfinity.stl"
-
-    def test_requires_dev_openscad(self):
-        """Test part requires development OpenSCAD."""
-        assert DEFAULT.requires_dev_openscad is True
-        assert DEFAULT.openscad_min_version == "2024.01"
-
-    def test_get_stl_path_variant(self):
-        """Test STL path for specific variant."""
-        path = DEFAULT.get_stl_path("2x2x3")
-        assert path.name == "gridfinity_2x2x3.stl"
-
-    def test_recommended_print_settings(self):
-        """Test recommended print settings."""
-        settings = DEFAULT.get_recommended_print_settings()
-        assert settings.layer_height == 0.2
-        assert settings.nozzle_diameter == 0.4
 
 
 class TestGetBinDimensions:
@@ -190,8 +222,8 @@ class TestGetBinDimensions:
         """Test default 1x1x3 dimensions."""
         dims = get_bin_dimensions()
 
-        assert dims["width_mm"] == GRID_SIZE_MM
-        assert dims["depth_mm"] == GRID_SIZE_MM
+        assert dims["width_mm"] == pytest.approx(GRID_SIZE_MM - BASE_GAP_MM)
+        assert dims["depth_mm"] == pytest.approx(GRID_SIZE_MM - BASE_GAP_MM)
         expected_height = 3 * HEIGHT_UNIT_MM + STACKING_LIP_MM
         assert dims["height_mm"] == pytest.approx(expected_height, abs=0.1)
 
@@ -199,8 +231,8 @@ class TestGetBinDimensions:
         """Test custom grid dimensions."""
         dims = get_bin_dimensions(gridx=2, gridy=3, gridz=6)
 
-        assert dims["width_mm"] == 2 * GRID_SIZE_MM
-        assert dims["depth_mm"] == 3 * GRID_SIZE_MM
+        assert dims["width_mm"] == pytest.approx(2 * GRID_SIZE_MM - BASE_GAP_MM)
+        assert dims["depth_mm"] == pytest.approx(3 * GRID_SIZE_MM - BASE_GAP_MM)
         expected_height = 6 * HEIGHT_UNIT_MM + STACKING_LIP_MM
         assert dims["height_mm"] == pytest.approx(expected_height, abs=0.1)
 
@@ -211,31 +243,8 @@ class TestGetBinDimensions:
         assert dims["height_unit_mm"] == HEIGHT_UNIT_MM
 
 
-class TestSubmoduleIntegration:
-    """Tests for submodule detection."""
-
-    def test_check_submodule_function(self):
-        """Test check_submodule convenience function."""
-        result = check_submodule()
-        assert isinstance(result, bool)
-
-    def test_submodule_initialized_property(self):
-        """Test submodule_initialized property."""
-        # This will be True if submodule is set up, False otherwise
-        result = DEFAULT.submodule_initialized
-        assert isinstance(result, bool)
-
-
 class TestCanGenerateSTL:
     """Tests for STL generation capability checking."""
-
-    def test_can_generate_returns_tuple(self):
-        """Test can_generate_stl returns (bool, str) tuple."""
-        result = DEFAULT.can_generate_stl()
-        assert isinstance(result, tuple)
-        assert len(result) == 2
-        assert isinstance(result[0], bool)
-        assert isinstance(result[1], str)
 
     def test_submodule_not_initialized_message(self):
         """Test message when submodule not initialized."""
@@ -250,4 +259,4 @@ class TestCanGenerateSTL:
             )
             can_gen, reason = part.can_generate_stl()
             assert can_gen is False
-            assert "submodule" in reason.lower()
+            assert "git submodule update --init" in reason

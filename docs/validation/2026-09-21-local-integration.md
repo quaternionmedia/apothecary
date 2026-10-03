@@ -1,7 +1,7 @@
 # Local integration run-through: the new features, by topic
 
-*A handoff for a person at the bench with the tip of `consolidate/2026-09-19`
-(`a6e9972` and after) checked out. It walks every capability the branch added
+*A handoff for a person at the bench with `review/2026-09-26` (the design
+review, on top of `consolidate/2026-09-19`) checked out. It walks every capability the branch added
 since the printer seam landed -- the guard that keeps personal data here, the
 geometry brought in from elsewhere, the bench drawn as it is, the rail and
 the machine popup, the camera, the printer with and without hardware, the
@@ -33,21 +33,39 @@ Read the page for a topic before its section if you want the why:
 [`../firmware.md`](../firmware.md), the one-screen plan, and the
 stays-on-the-device record in `governance/qm/adr/`.
 
+## 0. What the design review changed that you will notice
+
+- [ ] `uv run apothecary render --scene-file examples/scene.json -o /tmp/s.scad`
+      → a cube in `/tmp/s.scad` (it raised NotImplementedError before); an
+      object without a `type` is refused, not guessed.
+- [ ] `uv run pytest -q` → the unit suite and the walkthrough in well under a
+      minute; browser tests skip with a reason unless `--start-server`.
+- [ ] `uv run apothecary serve` starts only the server: the docs refresh is
+      `--refresh-docs` now.
+- [ ] `apothecary system`, `install`, `testrun`, `dev`, `inventory`,
+      `submodules` answer with what replaced them and exit 1.
+- [ ] Eight parts no longer show sliders OpenSCAD ignored; `apothecary parts
+      generate-stl dryerknob -p knob_diameter=60` is refused by name.
+- [ ] `apothecary census` is a report; a new button raises one ceiling in
+      `tests/test_census.py`, nothing else.
+- [ ] **Hardware, before relying on it:** printer ports are opened exclusively
+      now. Run the open, identify and poll steps of
+      [`2026-09-20-ender-bench.md`](2026-09-20-ender-bench.md) against the Ender.
+
 ## 1. Setup
 
 ```bash
 cd ~/Documents/apothecary
-git status -sb                      # ## consolidate/2026-09-19...origin/consolidate/2026-09-19
+git status -sb                      # ## review/2026-09-26
 git submodule status                # governance/qm at 20e00bd (the pin), or the adr/ branch if you were drafting
 uv sync
 uv run apothecary check             # OpenSCAD on PATH, playwright browsers, the parts count
 ```
 
-- [ ] `apothecary check` → OpenSCAD found; 22 parts, none marked `•` (every
-      part has a wrapper or a sidecar).
+- [ ] `apothecary check` → OpenSCAD found, every part with a wrapper or a
+      sidecar; it exits 1 if a required package is missing.
 - [ ] Terminal A: `uv run apothecary serve --reload` → *Application startup
-      complete*; a background `docs generate` starts (its log is
-      `docs/generated/refresh.log`); STLs for parts that lack one are
+      complete*; STLs for parts that lack one are
       generated in the background -- expect `ender3.stl` and the five
       boards' STLs to appear under `parts/` within a minute. (A node asked
       for before its parts are built builds them first: a fresh clone
@@ -56,8 +74,8 @@ uv run apothecary check             # OpenSCAD on PATH, playwright browsers, the
       workbench, three printers that look like Ender 3s (spools over the top
       bar, power supplies on the right), boards at the right end of the bench.
 - [ ] `http://127.0.0.1:8000/docs` → the docs index, with a bar that says when
-      the walkthroughs were last refreshed (it changes when the background
-      run finishes).
+      the generated walkthroughs were last refreshed (`--refresh-docs` or
+      `apothecary docs generate` refreshes them).
 
 ## 2. Personal data stays on the device
 
@@ -107,8 +125,7 @@ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/api/docs         
       uv run apothecary firmware boards`, then `grep -v "AF_UNIX\|127.0.0"
       /tmp/scan.log | grep connect` → nothing but the mDNS question to
       `224.0.0.251`/`ff02::fb` (named in the record, carries nothing of yours).
-- [ ] `APOTHECARY_PICTURE_ROOT=$HOME uv run apothecary serve --port 8003
-      --no-refresh-docs`, then `curl -s http://127.0.0.1:8003/photos/pictures`
+- [ ] `APOTHECARY_PICTURE_ROOT=$HOME uv run apothecary serve --port 8003`, then `curl -s http://127.0.0.1:8003/photos/pictures`
       → a 500 whose text says the folder *holds everything of yours, not a
       folder of pictures*. Stop it. (Same for
       `APOTHECARY_PICTURE_ROOT=~/.apothecary`.)
@@ -201,8 +218,7 @@ On your own server, in the garage, with the page freshly loaded.
       **Machine** (which groups the machine and its log), **Camera**); a
       digit toggles one.
 - [ ] Select `printer_1`, press **m** → the node ring: Device, Control, Why
-      this, Into, cardinals first, 5 backs out. (`Get shape` is a leaf's
-      option; a machine with things inside it keeps its ring.)
+      this, Into, cardinals first, 5 backs out.
 - [ ] A **badge** floats above every pinned, connected board and follows it
       as you orbit; with nothing pinned there is none. Pin something in
       section 6 and come back: the badge appears; a click selects the node;
@@ -223,7 +239,7 @@ mkdir -p /tmp/apothecary-pictures && cd /tmp/apothecary-pictures
 ARDUINO_CLI=$(uv run --project ~/Documents/apothecary python -c "import sys; sys.path.insert(0, '$HOME/Documents/apothecary/tests'); from pathlib import Path; from firmware_helpers import write_fake_arduino_cli; print(write_fake_arduino_cli(Path('/tmp/fake-arduino-cli')))") \
 APOTHECARY_SERIAL_ENGINE=simulated APOTHECARY_SIMULATED_PRINTER=printing \
 APOTHECARY_STATE_DIR=/tmp/apothecary-demo APOTHECARY_TOOLS_DIR=/tmp/apothecary-demo/tools \
-uv run --project ~/Documents/apothecary apothecary serve --port 8001 --no-refresh-docs
+uv run --project ~/Documents/apothecary apothecary serve --port 8001
 ```
 
 Open `http://127.0.0.1:8001/viewer/sites/garage`; ring → Panels → Camera.
@@ -326,13 +342,13 @@ release), unchanged, plus these two that the bench did not have:
 ## 7. The docs, and the walkthrough
 
 - [ ] `http://127.0.0.1:8000/docs/geometry-from-elsewhere.md`,
-      `/docs/firmware.md`, `/docs/plans/photo-finders-local-models-2026-09-21.md`,
-      `/docs/plans/pull-requests-2026-09-21.md` → rendered, links between
+      `/docs/firmware.md`, `/docs/plans/photo-finders-local-models-2026-09-21.md`
+      → rendered, links between
       pages work, every image is local (a picture from elsewhere would be
       named, not fetched).
-- [ ] `/walkthrough/11-photographs-into-pieces.md` → the page says *137
-      controls of the viewer's own* and shows the rail and the camera panel
-      in its screenshots.
+- [ ] `/walkthrough/11-photographs-into-pieces.md` → its last step gives the
+      census count (`apothecary census` says the same) and its screenshots
+      show the rail and the camera panel.
 - [ ] `/walkthrough/12-the-bench-as-it-is.md` → fourteen steps: a file from
       elsewhere measured, the sidecar part, the Ender 3s, the mainboard, the
       DevKitC, the camera placed at the bench and *not* following you into a
@@ -341,34 +357,115 @@ release), unchanged, plus these two that the bench did not have:
       output or the picture of the run that wrote it.
 - [ ] `uv run apothecary docs generate` → both doc workflows regenerate under
       a temporary server on 8766; the bar on every docs page then says when.
-      The two walkthrough pages (11 and 12) are rewritten by the ordinary
-      test command instead (`uv run apothecary test run`), screenshots
-      included.
+      The two walkthrough pages (11 and 12) are rewritten by the browser
+      run instead (`uv run pytest tests/e2e --start-server`); CI fails if the
+      committed pages differ from what the run writes.
 
 ## 8. The suites and the gates
 
 ```bash
-uv run pytest walkthrough -q                 # 10 pages, as doctests
-uv run apothecary test all                   # 1166 unit + 73 browser, on fenced state and pictures
+uv run pytest -q                             # unit + walkthrough doctests
+uv run pytest tests/e2e --start-server -q    # the browser suite, on a scripted machine
+uv run apothecary test all                   # both, exiting with pytest's own code
+uv run ruff check apothecary tests
 uv run --with "reuse[charset-normalizer]" python -m reuse lint
 git -C governance/qm log --oneline origin/project/apothecary..adr/firmware-toolchain-seam   # six records
 ```
 
-- [ ] All green; `test all` never touches `~/.apothecary` or your pictures
-      (its server runs on a temp state dir and a temp picture folder).
-- [ ] `uv run pytest -q tests/test_geometry_from_elsewhere.py` → 8 passed
-      (the mesh reader, `Import`, the sidecar importer, `parts import`, the
-      garage's printers and boards, the cache key, the licence rule).
+- [ ] All green; the browser run never touches `~/.apothecary`, your
+      pictures or your serial ports (temp state, temp pictures, the scripted
+      arduino-cli and the simulated printer).
+
+## 9. OpenSCAD on every platform
+
+`apothecary openscad install` installs a development snapshot natively where
+OpenSCAD publishes one, builds it from source on Linux arm64, and refuses
+Windows on ARM as a planned item. CI does not cover the other platforms yet;
+this section is how they are proven, on the machines themselves. The tools
+folder is `~/.apothecary/tools` (`%USERPROFILE%\.apothecary\tools` on Windows).
+`uv run apothecary openscad status` says, per install, how it was installed,
+whether it runs natively, and whether it has Manifold.
+
+**Linux x86_64**
+
+- [ ] `uv run apothecary openscad install --latest` → downloads the night's
+      AppImage, "SHA-256 verified", `OpenSCAD version <date>`; status reads
+      `AppImage, run through FUSE · native · Manifold`.
+- [ ] On a machine without FUSE (a container without `/dev/fuse`) → "cannot
+      mount itself here (no FUSE); extracting it instead", and status reads
+      `AppImage extracted (no FUSE here)`; a render works.
+
+**macOS (Apple Silicon; Intel too if one is to hand)**
+
+- [ ] `uv run apothecary openscad install --latest` → downloads the `.dmg`,
+      "SHA-256 verified", "A universal app (x86_64 and arm64)", installed at
+      `…/<date>/OpenSCAD.app/Contents/MacOS/OpenSCAD`; no Finder window or
+      desktop volume appears, and afterwards `hdiutil info` lists no
+      OpenSCAD image and `$TMPDIR` holds no `apothecary-openscad-*` folder.
+- [ ] `lipo -archs …/Contents/MacOS/OpenSCAD` → `x86_64 arm64`;
+      `xattr -l …/OpenSCAD.app` → no `com.apple.quarantine`;
+      `codesign --verify --deep --strict …/OpenSCAD.app` passes, and
+      `codesign -dv` names "Developer ID Application: Marius Kintel
+      (28U8KJ6T2P)". Write down what `spctl -a -vv` says; the first run shows
+      no Gatekeeper prompt.
+- [ ] Status → `OpenSCAD.app from the disk image · native (universal) ·
+      Manifold`; `uv run pytest -q --slow` renders with it, and Activity
+      Monitor shows OpenSCAD's Kind as Apple.
+- [ ] From an x86_64 Python (`uv run --python cpython-3.12-macos-x86_64-none
+      apothecary openscad status`) → "emulated: x86_64 under Rosetta 2", and
+      a render from it shows Kind Intel.
+
+**Windows x64 (a normal user, PowerShell)**
+
+- [ ] `uv run apothecary openscad install --latest` → downloads the
+      `-x86-64.zip`, "SHA-256 verified", "Unpacking", `OpenSCAD version
+      <date>`, installed at `…\<date>\openscad.exe`, with `openscad.com`,
+      `libraries`, `fonts` and `install.json` beside it. If it fails with
+      "reports no version", write it down (the fix is to ask `openscad.com`).
+- [ ] Status → `portable zip, unpacked · native · Manifold`, not "unknown
+      version" (a first scan by Defender can outlast the 10 s version check);
+      `uv run pytest -q --slow` renders; note any SmartScreen or Defender
+      prompt.
+- [ ] `install --snapshot <date> --force` replaces it in place, with no
+      `.tmp` folders left.
+
+**Windows on ARM (a Snapdragon PC, if one is to hand)**
+
+- [ ] `uv run apothecary openscad install`, from an ARM64 and from an x64
+      Python → both refuse with "Windows on ARM is not supported yet (a
+      planned item)", and download nothing.
+
+**Linux arm64 (a Raspberry Pi 4/5 on 64-bit Raspberry Pi OS, or another
+arm64 board)**
+
+- [ ] Before installing anything, `uv run apothecary openscad install` →
+      refuses, lists what the build needs and prints the `sudo apt install …`
+      line; nothing is read or downloaded.
+- [ ] Run that line, then the install again, in tmux → "building <date> from
+      source", the commit and six submodule lines, seven downloads,
+      "Configuring (cmake)", "Building with N jobs", "Built in N min",
+      "Manifold X.Y.Z: a cube renders with it", installed at
+      `…/<date>/bin/openscad`. Write down N, the wall time, peak memory
+      (`free -h`), whether it swapped, and the build folder's peak size. A
+      failure keeps its log at `~/.apothecary/tools/openscad/build-<date>.log`.
+- [ ] `grep -iE "download|fetchcontent"` over the kept build log → nothing
+      fetched during the build.
+- [ ] Status → `built from source at <sha> · native · Manifold X.Y.Z`;
+      `…/bin/openscad --info` (write down whether its OpenGL part works
+      headless); `uv run apothecary parts generate-stl gridfinity --force`
+      renders.
+- [ ] On a 2 GB board, `--jobs 1` completes; `install --snapshot <same date>`
+      again says "already installed" and fetches nothing.
 
 ## Results
 
 Fill this in as you go; anything refused or slow gets its time, port and
 command. Outcomes that change a number in a doc go to that doc; a defect
-goes to the queue page ([`../plans/queue-2026-09-20.md`](../plans/queue-2026-09-20.md))
-or an issue; a door found open goes to the record's risk register.
+goes to `todo.md` or an issue; a door found open goes to the record's risk register.
 
 | Section | Ticked | Notes (what, when, port, command) |
 |---|---|---|
+| 0. After the review | / 7 | |
 | 1. Setup | / 4 | |
 | 2. Stays on the device | / 12 | |
 | 3. Geometry | / 12 | |
@@ -378,3 +475,48 @@ or an issue; a door found open goes to the record's risk register.
 | 6. Printer (hardware) | / 2 + the bench record | |
 | 7. Docs | / 4 | |
 | 8. Suites | / 2 | |
+| 9. OpenSCAD, Linux x86_64 | / 2 | |
+| 9. OpenSCAD, macOS | / 4 | |
+| 9. OpenSCAD, Windows x64 | / 3 | |
+| 9. OpenSCAD, Windows on ARM | / 1 | |
+| 9. OpenSCAD, Linux arm64 | / 5 | |
+
+## For a person, and follow-ups
+
+What this branch leaves to a person, and the hardening that comes after it.
+Each item names what done looks like.
+
+**Governance, a person's acts**
+
+- [ ] **Ratify the records on qm#121** (`adr/firmware-toolchain-seam` into
+      `project/apothecary`), first *Personal data stays on the device*: its
+      §2 names the OpenSCAD installer as the second caller of the tool fetch
+      and `files.openscad.org`, `api.github.com` and `codeload.github.com`
+      as its sources, and §6 the rules for views. Done: the status flipped
+      and a number assigned by a human commit, the PR merged.
+- [ ] **Bump apothecary's governance pin** to the ratified
+      `project/apothecary` (`git -C governance/qm checkout <commit>`, commit
+      the pin alone). Done: `check-submodule-refs` green on the bump's PR.
+- [ ] **rad#7** proposes opening a ring entered at an item for rad's host
+      standard; apothecary's ring follows whatever rad decides (its host
+      record's revision trigger).
+
+**Hardening, after this branch**
+
+- [ ] **GPG signatures** on downloads: check the `.asc` beside each
+      OpenSCAD AppImage, zip and installer against OpenSCAD's signing key,
+      and the same for arduino-cli's releases where one is published, before
+      a download is accepted (needs GnuPG and the key, carried or fetched
+      once as a tool).
+- [ ] **macOS code signature in code**, not only on the checklist: the
+      app's signature verified and its Team ID (28U8KJ6T2P) checked, and its
+      notarisation; the `.dmg` has no `.asc`.
+- [ ] **Windows Authenticode** on `openscad.exe`, if it is signed.
+- [ ] **Source-build integrity**: codeload tarballs have no published
+      checksum; check the unpacked files against the git tree the API
+      returns, and record each tarball's SHA-256 in `install.json`.
+- [ ] **Nested submodules** in a source build (none at today's pins), and
+      the `.1` second builds some nights publish (the plain name is used).
+- [ ] **One day: Windows on ARM**, natively. No ARM64 snapshot is published;
+      today the installer refuses it as a planned item.
+

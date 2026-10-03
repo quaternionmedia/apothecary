@@ -3,10 +3,10 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from importlib import import_module
 from pathlib import Path
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, Iterable, List, Tuple
 
 
-@dataclass
+@dataclass(frozen=True)
 class ProjectInfo:
     name: str
     path: Path
@@ -49,12 +49,60 @@ def stl_output_for(item: ProjectInfo) -> Path:
     return item.path.with_suffix(".stl")
 
 
+_PARTS_PKG_DIR = Path(__file__).resolve().parent / "parts"
+
+# Scans by root: (the directory stamps the scan was taken at, its items).
+_SCANS: Dict[Path, Tuple[tuple, List[ProjectInfo]]] = {}
+
+
+def _mtime_ns(path: Path) -> int | None:
+    try:
+        return path.stat().st_mtime_ns
+    except OSError:
+        return None
+
+
+def _scan_stamp(root: Path) -> tuple:
+    """What a scan depends on: ``parts/``, each folder directly in it, and the
+    wrapper package. Adding or removing a part, a wrapper or a first-level
+    folder's file changes one of these; a change deeper down calls for
+    ``invalidate()``."""
+    parts_dir = root / "parts"
+    try:
+        folders = sorted(p for p in parts_dir.iterdir() if p.is_dir())
+    except OSError:
+        folders = []
+    return (
+        _mtime_ns(parts_dir),
+        tuple((p.name, _mtime_ns(p)) for p in folders),
+        _mtime_ns(_PARTS_PKG_DIR),
+    )
+
+
+def invalidate() -> None:
+    """Forget every scan, so the next ``scan_projects`` reads the disk again."""
+    _SCANS.clear()
+
+
 def scan_projects(root: Path) -> List[ProjectInfo]:
     """Scan the repository root for known projects and parts.
 
     - Detects 'fifel', 'footpedal', and 'parts' directories if present
     - For 'parts', returns a top-level ProjectInfo and per-part entries
+
+    The scan is kept per root until a directory it depends on changes (see
+    ``_scan_stamp``); each call returns a new list of the same entries.
     """
+    root = Path(root)
+    stamp = _scan_stamp(root)
+    cached = _SCANS.get(root)
+    if cached is None or cached[0] != stamp:
+        cached = (stamp, _scan(root))
+        _SCANS[root] = cached
+    return list(cached[1])
+
+
+def _scan(root: Path) -> List[ProjectInfo]:
     items: List[ProjectInfo] = []
 
     # Fifel project (canonical location under 'fifel/')

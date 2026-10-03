@@ -17,6 +17,7 @@ import socket
 
 import pytest
 from playwright.sync_api import expect
+from viewer_ready import OCCLUSION_TESTED, settled
 
 # A lid, one inch by two by half an inch, drawn Y-up as a game or web tool
 # would: the kind of file that arrives from elsewhere.
@@ -32,9 +33,34 @@ def _part_row(page):
     return page.locator("#selected-body .prop-row", has_text="Part")
 
 
+WEDGES = (
+    "() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]"
+    ".filter((w) => !w.classList.contains('empty'))"
+    ".map((w) => [w.dataset.cell, w.getAttribute('aria-label')]))"
+)
+
+
+def _wedges(page) -> dict:
+    """The open ring's wedges: cell -> label."""
+    return page.evaluate(WEDGES)
+
+
+def _press(page, label: str) -> None:
+    """Press the wedge of the open ring that reads this label."""
+    page.wait_for_function(
+        "(label) => [...document.querySelectorAll('#ring-overlay .wedge')]"
+        ".some((w) => w.getAttribute('aria-label') === label)",
+        arg=label,
+        timeout=5000,
+    )
+    page.keyboard.press(next(c for c, got in _wedges(page).items() if got == label))
+
+
 def _camera_marks_visible(page):
+    """Whether each camera's frustum is drawn (picture_marks.js), by host."""
     return page.evaluate(
-        "() => Object.values(window.fractalViewer.cameraMarks).map((l) => l.visible)"
+        "() => window.apothecaryPictures.state().filter((e) => e.frustum)"
+        ".map((e) => e.frustum.visible)"
     )
 
 
@@ -177,7 +203,6 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     for name in ("workbench", "printer_1", "printer_3", "esp32_blink", "raspberry_pi_4"):
         expect(page.locator("#contents-list")).to_contain_text(name)
     page.evaluate("() => localStorage.removeItem('apothecary.panels')")
-    page.wait_for_timeout(1500)
     # The root frames the whole building; the bench is what this page is
     # about, so frame the view on it and what stands on it.
     page.evaluate(
@@ -189,7 +214,7 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
             v.frameCameraForChildren(level.filter((n) => on.has(n.name)));
         }"""
     )
-    page.wait_for_timeout(600)
+    settled(page)
     story.shows(
         "The bench at the garage's root: three Ender 3s on it, the boards at its right end",
         "The root shows the whole building; here the view is framed on the bench. "
@@ -199,7 +224,7 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
 
     page.locator("#contents-list .contents-item[data-path='printer_1']").click()
     expect(_part_row(page)).to_contain_text("ender3", timeout=5000)
-    page.wait_for_timeout(300)
+    settled(page)
     story.shows(
         "A printer is the part it names",
         "Selecting printer_1 shows its rows and, below them, the part its body is. "
@@ -212,7 +237,7 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     mainboard_row = "#contents-list .contents-item[data-path='printer_1.frame_system.mainboard']"
     page.locator(mainboard_row).click()
     expect(_part_row(page)).to_contain_text("creality_v422", timeout=5000)
-    page.wait_for_timeout(1200)
+    settled(page)
     story.shows(
         "Inside it, the mainboard is the Creality V4.2.2",
         "Zoomed into the printer's frame, its children are drawn and the printer's "
@@ -224,49 +249,51 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     page.evaluate("() => window.fractalViewer.zoomIn('esp32_blink')")
     page.locator("#contents-list .contents-item[data-path='esp32_blink']").click()
     expect(_part_row(page)).to_contain_text("esp32_devkitc", timeout=5000)
-    page.wait_for_timeout(1200)
+    settled(page)
     story.shows(
         "The DevKitC standing on its pins",
         "esp32_blink is a sketch and the board it runs on, drawn as the board: the "
         "described part from the model half of this page, in the world.",
     )
 
-    # A camera, placed at the bench and drawn there.
+    # A camera, pinned at the bench from the bench's own ring and drawn there.
     page.evaluate("() => window.fractalViewer.zoomOut()")
-    page.evaluate("() => window.apothecaryPanels.open('camera')")
-    panel = page.locator(".panel[data-panel='camera']")
-    expect(panel).to_be_visible(timeout=3000)
-    panel.locator("#cam-allow").click()
-    page.wait_for_function(
-        "() => window.apothecaryCamera && window.apothecaryCamera.live()", timeout=8000
-    )
-    page.locator("#contents-list .contents-item[data-path='workbench']").click()
-    expect(panel.locator("#cam-place")).to_be_enabled(timeout=3000)
-    panel.locator("#cam-place").click()
-    expect(panel.locator("#cam-place-note")).to_contain_text("placed at workbench", timeout=5000)
+    page.evaluate("() => window.apothecaryPictureVerbs.ready")
+    page.locator("#contents-list .contents-item[data-path='workbench']").click(button="right")
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    _press(page, "Camera")
+    _press(page, "Pin here")
+    _press(page, _wedges(page)["8"])  # this browser's camera, by its name
+    expect(page.locator("#status")).to_contain_text("pinned at workbench", timeout=5000)
+    page.evaluate("() => window.apothecaryPanels.open('kept')")
+    kept = page.locator(".panel[data-panel='kept']")
+    expect(kept).to_be_visible(timeout=3000)
+    placed = kept.locator("#kept-pins .kept-row.camera")
+    expect(placed).to_have_count(1)
+    expect(placed).to_contain_text("garage › workbench")
     page.evaluate("() => window.fractalViewer.zoomIn('workbench')")
-    badge = page.locator(".world-badge.camera-mark")
+    badge = page.locator(".world-badge.place-mark.has-camera")
     expect(badge).to_be_visible(timeout=5000)
     assert _camera_marks_visible(page) == [True]
     # Nothing stands between the camera and the top of the bench, so the badge
     # is not dimmed: the transform gizmo's picking plane, a mesh the size of the
     # scene, is not something in the way.
-    page.wait_for_timeout(300)
+    settled(page, frames=OCCLUSION_TESTED)
     expect(badge).not_to_have_class(re.compile(r"\bbehind\b"))
     cameras = page.request.get(f"{base_url}/cameras?site=garage").json()
     assert [c["path"] for c in cameras] == ["workbench"]
-    page.wait_for_timeout(600)
     story.shows(
-        "A camera placed at the bench is drawn there",
-        "Allowed in the Camera panel and placed at the selected piece, the camera "
-        "gets a badge above the bench and a small frustum at it, kept on the server "
-        "so every browser looking at this site sees it standing there.",
+        "A camera pinned at the bench is drawn there",
+        "Pinned from the bench's own ring -- Camera, Pin here, and this browser's "
+        "camera by its name -- the camera gets a place badge above the bench and a "
+        "frustum looking down onto its top, kept on the server so every browser "
+        "looking at this site sees it standing there.",
     )
 
     page.evaluate("() => { const v = window.fractalViewer; v.zoomOut(); v.zoomIn('printer_1'); }")
     expect(badge).to_be_hidden(timeout=5000)
     assert _camera_marks_visible(page) == [False]
-    page.wait_for_timeout(600)
+    settled(page)
     story.shows(
         "Looking into a printer, the camera's mark stays at the bench",
         "A mark is drawn at the level where its piece is. Zoomed into something "
@@ -277,20 +304,22 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     page.evaluate("() => window.fractalViewer.zoomOut()")
     expect(badge).to_be_visible(timeout=5000)
     assert _camera_marks_visible(page) == [True]
-    panel.locator("#cam-unplace").click()
+    # Taken back from its row in Kept.
+    placed.locator(".kept-camera-unpin").click()
     expect(badge).to_have_count(0, timeout=5000)
+    expect(kept.locator("#kept-pins")).to_contain_text("none pinned")
     assert page.request.get(f"{base_url}/cameras?site=garage").json() == []
     story.says(
-        "Unplaced, it leaves the world",
-        "The placement is a record on this machine and nothing more; taking it "
-        "back removes the mark for every browser.",
+        "Unpinned, it leaves the world",
+        "The pin is a record on this machine and nothing more; taking it back "
+        "removes the mark for every browser.",
         shown="GET /cameras?site=garage -> []",
     )
 
     # ------------------------------------------------------ kept, taken back
-    # Two pictures drawn to order, added from the file picker; a board pinned to
-    # the DevKitC by a typed identity; both listed on the panel with the button
-    # that takes each back.
+    # Two pictures drawn to order, added from the gathering panel's file picker; a
+    # board pinned to the DevKitC by a typed identity; both listed in Kept with
+    # the button that takes each back.
     from PIL import Image, ImageDraw
 
     for name in ("shelf.png", "shelf_again.png"):
@@ -302,16 +331,24 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     theirs = Image.new("L", (320, 240), 245)
     ImageDraw.Draw(theirs).ellipse((40, 40, 220, 200), fill=20)
     theirs.save(picture_folder / "a_person_put_this_here.png")
-    pictures_before = len(page.request.get(f"{base_url}/photos/pictures").json())
+    listed = page.request.get(f"{base_url}/photos/pictures").json()
+    pictures_before = len(listed)
+    kept_before = len([p for p in listed if p["kept"]])
+    page.evaluate("() => window.apothecaryPanels.open('camera')")
+    gathering = page.locator(".panel[data-panel='camera']")
+    expect(gathering).to_be_visible(timeout=3000)
     page.evaluate("() => window.apothecaryCamera.loadPictures()")
-    panel.locator("#pic-file").set_input_files(
+    gathering.locator("#pic-file").set_input_files(
         [str(tmp_path / "shelf.png"), str(tmp_path / "shelf_again.png")]
     )
-    expect(panel.locator("#pic-list .pic")).to_have_count(pictures_before + 2, timeout=8000)
-    added = [
+    expect(gathering.locator("#pic-list .pic")).to_have_count(pictures_before + 2, timeout=8000)
+    page.evaluate("() => window.apothecaryPanels.close('camera')")
+    kept_pictures = kept.locator("#kept-pictures .kept-row.picture")
+    expect(kept_pictures).to_have_count(kept_before + 2, timeout=5000)
+    added = sorted(
         p["path"] for p in page.request.get(f"{base_url}/photos/pictures").json() if p["kept"]
-    ]
-    assert "uploads/shelf.png" in added and "uploads/shelf_again.png" in added
+    )
+    assert added == ["uploads/shelf.png", "uploads/shelf_again.png"]
     # The server outlives every test in the run: start from no pins, so the
     # picture below shows this run's pin and nothing an earlier test left.
     for pin in page.request.get(f"{base_url}/firmware/pins").json()["pins"]:
@@ -321,35 +358,80 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
         data={"identity": "aa:bb:cc:dd:ee:ff"},
     )
     assert pinned.ok, pinned.text()
-    panel.locator("#pin-refresh").click()
-    expect(panel.locator("#pin-list .kept-row")).to_have_count(1, timeout=5000)
-    expect(panel.locator("#pin-list .kept-row")).to_contain_text("garage › esp32_blink")
+    kept.locator("#kept-refresh").click()
+    boards = kept.locator("#kept-pins .kept-row.board")
+    expect(boards).to_have_count(1, timeout=5000)
+    expect(boards).to_contain_text("garage › esp32_blink")
     # Floated free of the rail for the picture, so the whole panel is in view.
     page.evaluate(
         """() => {
-            window.apothecaryPanels.float('camera');
-            const el = document.querySelector(".panel-free-layer .panel[data-panel='camera']");
+            window.apothecaryPanels.float('kept');
+            const el = document.querySelector(".panel-free-layer .panel[data-panel='kept']");
             el.style.left = '16px'; el.style.top = '16px';
-            el.querySelector('#pic-list').scrollIntoView({ block: 'start' });
         }"""
     )
-    page.wait_for_timeout(400)
+    # The thumbnails load lazily: every one has arrived.
+    page.wait_for_function(
+        "() => [...document.querySelectorAll('#kept-pictures img')].every((i) => i.complete)"
+    )
+    settled(page)
     story.shows(
         "What the browser put here, it can take back",
-        "Pictures added from the file picker are kept as they were named, under "
-        "the picture folder's uploads/, each with a button that forgets it; the "
-        "cameras placed in the world and the boards pinned to pieces are listed, "
-        "every site's, each with the button that takes it back -- a pin whose "
-        "site or piece is gone is shown as such, and this is the one place it "
-        "can be seen.",
+        "Kept lists what a page pinned -- cameras, looks, boards -- every site's, "
+        "and the pictures the browser kept, the ones added from the file picker "
+        "kept as they were named under the picture folder's uploads/. Each row "
+        "names its site and carries the button that takes it back, from here, "
+        "without switching to that site; a pin whose site or piece is gone is "
+        "shown as such, and this is the one place it can be seen.",
     )
 
-    page.evaluate("() => window.apothecaryPanels.dock('camera', 'right')")
-    panel.locator("#pin-list .pin-unpin").click()
-    expect(panel.locator("#pin-list")).to_contain_text("none pinned", timeout=5000)
+    page.evaluate("() => window.apothecaryPanels.dock('kept', 'right')")
+    # Forgotten from its row.
+    kept.locator(".kept-forget[data-path='uploads/shelf_again.png']").click()
+    expect(kept_pictures).to_have_count(kept_before + 1, timeout=5000)
+    assert not (picture_folder / "uploads" / "shelf_again.png").exists()
+    # A pin whose site is gone is listed as such, and taken back from its row.
+    drawn = Image.new("L", (400, 300), 245)
+    ImageDraw.Draw(drawn).rectangle((40, 40, 200, 160), fill=30)
+    drawn.save(picture_folder / "pins_check.png")
+    built = page.request.post(
+        f"{base_url}/photos",
+        data={"picture": "pins_check.png", "name": "pins_check", "width_mm": 400},
+    )
+    assert built.ok, built.text()
+    piece = next(iter(built.json()["pieces"]))
+    pinned = page.request.put(
+        f"{base_url}/sites/pins_check/nodes/{piece}/device", data={"identity": "/dev/ttyNOWHERE"}
+    )
+    assert pinned.ok, pinned.text()
+    assert page.request.delete(f"{base_url}/photos/pins_check").ok
+    (picture_folder / "pins_check.png").unlink()
+    kept.locator("#kept-refresh").click()
+    rows = boards
+    expect(rows).to_have_count(2, timeout=5000)
+    gone = rows.filter(has_text="pins_check")
+    expect(gone).to_have_class(re.compile(r"\bstale\b"))
+    expect(gone).to_contain_text("site gone")
+    gone.locator(".kept-board-unpin").click()
+    expect(rows).to_have_count(1, timeout=5000)
+    # The pin was made outside the viewer, which learns of it when its devices are
+    # refreshed. Unpinned from the panel, the piece's Device section follows at once.
+    page.evaluate("() => window.fractalViewer.rescanDevices()")
+    page.locator("#contents-list .contents-item[data-path='esp32_blink']").click()
+    expect(page.locator("#selected-body .device-section .dev-unpin")).to_be_visible(timeout=8000)
+    rows.locator(".kept-board-unpin").click()
+    expect(kept.locator("#kept-pins")).to_contain_text("none pinned", timeout=5000)
+    expect(page.locator("#selected-body .dev-pin-manual")).to_be_visible(timeout=3000)
+    expect(page.locator("#selected-body .dev-unpin")).to_have_count(0)
     page.once("dialog", lambda d: d.accept())
-    panel.locator("#pic-purge").click()
-    expect(panel.locator("#cam-note")).to_contain_text("of the folder's own stay", timeout=8000)
+    kept.locator("#kept-purge").click()
+    status = page.locator("#status")
+    expect(status).to_contain_text("of the folder's own stay", timeout=8000)
+    expect(status).not_to_have_class(re.compile(r"\berror\b"))
+    # A second purge has nothing to forget, and says so as a refusal.
+    kept.locator("#kept-purge").click()
+    expect(status).to_contain_text("nothing kept from the browser to forget", timeout=5000)
+    expect(status).to_have_class(re.compile(r"\berror\b"))
     left = page.request.get(f"{base_url}/photos/pictures").json()
     assert all(not p["kept"] for p in left)
     assert "a_person_put_this_here.png" in {p["name"] for p in left}

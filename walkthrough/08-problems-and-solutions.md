@@ -47,7 +47,7 @@ has a hole:
     >>> all(p.owner and p.closes_with for p in problems())
     True
 
-`docs/boundaries.md` is the prose; this is the part a machine can check.
+[`docs/fitting-a-part.md`](../docs/fitting-a-part.md) is the prose; this is the part a machine can check.
 
 ## The owner comes from one table
 
@@ -74,7 +74,6 @@ never "is the build green".
 | Only what needs deciding | `apothecary problems --owner human --detail` |
 | Only what datum owes | `apothecary problems --owner datum` |
 | What can close them | `apothecary solutions` |
-| Over HTTP | `/problems`, `/problems?owner=human`, `/solutions`, `/spaces` |
 
 A build volume changes the answer, because "fits the printer" cannot be
 answered without one:

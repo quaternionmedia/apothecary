@@ -249,6 +249,15 @@ def test_a_name_that_is_not_a_name_is_refused(picture, bad):
     )
 
 
+@pytest.mark.parametrize("width", ["0", "-5", "inf", "nan"])
+def test_a_width_that_is_not_a_real_width_is_refused_plainly(picture, width):
+    """ScaleReference is the one check; the command says which option was wrong."""
+    with patch("uvicorn.run") as started:
+        said = CliRunner().invoke(cli, ["photo", "view", str(picture), "--width-mm", width])
+    assert said.exit_code != 0 and not started.called
+    assert "--width-mm was" in said.output and "Traceback" not in said.output
+
+
 def test_an_empty_name_falls_back_to_the_file_name(picture):
     answer = client.post("/photos", json={"picture": str(picture), "name": ""})
     assert answer.status_code == 200

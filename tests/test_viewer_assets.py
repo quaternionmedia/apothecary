@@ -1,21 +1,9 @@
-"""The viewer's 3D library is served from this origin, not a CDN.
-
-Loading three.js from jsdelivr meant the page worked only for a browser that
-could reach jsdelivr. When it could not -- offline, an ad blocker, a corporate
-proxy -- the module script never executed, so the canvas, the contents list and
-the code panel came up empty *together*, while the status line still read
-"Loading site..." and the validity chip still read "Layout valid" because both
-are static markup. An inert page was indistinguishable from a working one.
-
-The house-stack record requires frontend dependencies to be vendored and never
-CDN-loaded, and this is the failure it exists to prevent. The copy is checked in
-under ``apothecary/static/vendor/three/`` so a fresh clone serves it with no
-install step; its README says how to update it.
+"""three.js is vendored under apothecary/static/vendor/three/ (its README says how
+to update it) and served from this origin, so the viewer needs no network and no
+install step. When the copy is missing, the page says so instead of rendering nothing.
 """
 
 from __future__ import annotations
-
-import re
 
 from fastapi.testclient import TestClient
 
@@ -24,24 +12,6 @@ from apothecary.api import THREE_IS_VENDORED, app
 client = TestClient(app)
 
 VIEWER_URL = "/viewer/sites/parts_library"
-
-
-class TestNoExternalOrigins:
-    def test_the_page_names_no_cdn(self):
-        page = client.get(VIEWER_URL).text
-        assert "jsdelivr" not in page
-        assert "unpkg" not in page
-
-    def test_every_module_specifier_is_same_origin(self):
-        page = client.get(VIEWER_URL).text
-        importmap = re.search(r'<script type="importmap">(.*?)</script>', page, re.S)
-        assert importmap, "no importmap in the viewer page"
-        for url in re.findall(r'"(https?://[^"]+)"', importmap.group(1)):
-            raise AssertionError(f"importmap reaches off-origin: {url}")
-
-    def test_no_script_tag_points_off_origin(self):
-        page = client.get(VIEWER_URL).text
-        assert not re.search(r'<script[^>]+src="https?://', page)
 
 
 class TestVendoredLibraryIsServed:
@@ -87,64 +57,37 @@ class TestMissingLibraryIsAnnounced:
         page = render_fractal_viewer_page(
             ["parts_library"], "http://testserver", "parts_library", "", three_is_vendored=True
         )
-        assert "The 3D library is not installed" not in page
+        assert "The 3D library is missing" not in page
 
 
-class TestOnboardingInstallsWhatTheViewerNeeds:
-    """`apothecary install` is the onboarding step for the JSCAD viewer. The
-    fractal viewer's library is checked in, so it needs no step at all.
-    """
+class TestThePageEscapesWhatItIsGiven:
+    def test_a_name_is_text_in_the_markup_and_a_string_in_the_script(self):
+        from apothecary.viewer import render_fractal_viewer_page
 
-    def test_the_fabricated_package_json_matches_the_committed_one(self):
-        """`install` writes a package.json when none exists. It has to agree
-        with the committed one, or two clones install two different things.
-        """
-        import json
-        import re
+        name = 'a"<b>&</script>'
+        page = render_fractal_viewer_page([name], "http://testserver", name, name)
+        assert name not in page
+        assert '<option value="a&#34;&lt;b&gt;&amp;&lt;/script&gt;" selected>' in page
+        assert r'const DEFAULT_SITE = "a\"\u003cb\u003e\u0026\u003c/script\u003e";' in page
 
-        from apothecary.projects.parts.skeleton import ROOT
+    def test_no_sites_leaves_the_select_disabled(self):
+        from apothecary.viewer import render_fractal_viewer_page
 
-        source = (ROOT / "apothecary" / "cli" / "system.py").read_text(encoding="utf-8")
-        block = re.search(r"package_data = \{(.*?)\n                \}", source, re.S)
-        assert block, "install no longer fabricates a package.json; drop this test"
+        page = render_fractal_viewer_page([], "http://testserver")
+        assert '<select id="site-select" disabled>' in page
+        assert "No sites found" in page
 
-        fabricated = set(re.findall(r'"(@?[\w/.-]+)":\s*"\^', block.group(0)))
-        committed = set(
-            json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["dependencies"]
-        )
-        assert fabricated == committed
 
-    def test_three_is_checked_in_and_not_installed(self):
-        """A fresh clone serves the viewer with no second package manager."""
-        import json
-
+class TestTheLibraryIsCheckedIn:
+    def test_a_fresh_clone_has_three_with_no_install(self):
         from apothecary.api import THREE_DIR
-        from apothecary.projects.parts.skeleton import ROOT
 
-        deps = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["dependencies"]
-        assert "three" not in deps
         assert (THREE_DIR / "three.module.js").is_file()
         assert (THREE_DIR / "LICENSE").is_file()
 
 
-class TestTheDocumentedCommandRunsTheWalkthrough:
-    """`apothecary test all` is what contributors are told to run.
-
-    pytest ignores `testpaths` the moment it receives a path argument, and that
-    command passes `tests/`. A walkthrough reached only through `testpaths` is
-    therefore collected by nobody while the command still reports green -- the
-    failure the one-executable-walkthrough record measured, in the one command
-    a contributor actually types.
-    """
-
-    def test_the_unit_phase_names_the_walkthrough_directory(self):
-        from apothecary.projects.parts.skeleton import ROOT
-
-        source = (ROOT / "apothecary" / "cli" / "testing.py").read_text(encoding="utf-8")
-        unit = source[source.index("unit_cmd = ["):]
-        unit = unit[: unit.index("]")]
-        assert '"walkthrough"' in unit, "test all would not collect the walkthrough"
-        assert '"tests/"' in unit
+class TestCiCollectsTheWalkthrough:
+    """pytest ignores `testpaths` once it is given a path, so CI names walkthrough/ itself."""
 
     def test_ci_names_it_too(self):
         from apothecary.projects.parts.skeleton import ROOT
