@@ -264,7 +264,10 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     _press(page, "Camera")
     _press(page, "Pin here")
     _press(page, _wedges(page)["8"])  # this browser's camera, by its name
-    expect(page.locator("#status")).to_contain_text("pinned at workbench", timeout=5000)
+    expect(page.locator("#status")).to_contain_text(
+        "pinned at workbench: Camera › Take picture keeps a frame and pins it here as a view",
+        timeout=5000,
+    )
     page.evaluate("() => window.apothecaryPanels.open('kept')")
     kept = page.locator(".panel[data-panel='kept']")
     expect(kept).to_be_visible(timeout=3000)
@@ -287,7 +290,9 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
         "Pinned from the bench's own ring -- Camera, Pin here, and this browser's "
         "camera by its name -- the camera gets a place badge above the bench and a "
         "frustum looking down onto its top, kept on the server so every browser "
-        "looking at this site sees it standing there.",
+        "looking at this site sees it standing there. The status bar names the next "
+        "step, Camera › Take picture, which keeps a frame and pins it at the bench as "
+        "a view.",
     )
 
     page.evaluate("() => { const v = window.fractalViewer; v.zoomOut(); v.zoomIn('printer_1'); }")

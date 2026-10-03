@@ -75,6 +75,21 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # same cell, Picture › Looks is Picture › Views in the same cell; no ring address
 # moved. Before and after: 128 controls of its own, 58 ring-backed, 76 places
 # the page listens.
+#
+# Consolidation Phase 1, taking and finding: Take picture, a drop, a paste,
+# Picture › Add and Picture › Folder pin a view and find nothing; Picture › Find
+# shapes finds, a cell of its own; Camera › Keep is gone. Keep and Find shapes
+# are ring cells with no control behind them, and no listener was added, removed
+# or re-keyed (the drop, paste and Add listeners only say what they do now).
+# Before and after: 128 controls of its own, 58 ring-backed, 76 places the page
+# listens. Ring addresses moved, inside a host's Camera and Picture (and the
+# floor's, under Pictures › Floor): with this browser's camera pinned, Keep left
+# cell 4 and Unpin moved from cell 9 to cell 4 (Look's cell 2 is Take picture's).
+# Find shapes is appended after Unpin and Forget, so their cells stay put
+# whether it is there or not; where it replaces Find (another finder can read a
+# view already searched), Find moved from before Unpin to the last cell, and
+# Unpin and Forget each moved one cell earlier in the seating order (at a host:
+# Unpin 3 to 9, Forget 1 to 3; at the floor: Unpin 9 to 4, Forget 3 to 9).
 VIEWER_CEILING = 128
 
 

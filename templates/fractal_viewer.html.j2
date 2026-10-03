@@ -2056,13 +2056,17 @@
                     // Whose camera it is decides what can be done with it from here.
                     const mine = !!(this.pictures && this.pictures.state.cameras.some((c) => c.id === cam.id));
                     rows.push(`<div data-facts="camera-verbs">${mine
-                        ? `${ring('Camera › Take picture')} takes a picture and finds its shapes; Live shows the camera on the mat; Keep keeps a frame on this machine`
+                        ? `${ring('Camera › Take picture')} keeps a frame and pins it here as a view; ${ring('Picture › Find shapes')} then finds its shapes; Live shows the camera on the mat`
                         : `another browser's camera: a picture is taken here with one of this browser's cameras pinned in its place (${ring('Camera › Pin here')})`}</div>`);
                 }
                 for (const view of [...views].reverse()) {
                     const size = view.mat && view.mat.width ? `${Number(view.mat.width).toFixed(0)} mm across` : 'unsized';
                     const madeCount = Object.keys(view.made || {}).length;
-                    rows.push(`<div class="view-row${view === drawn ? ' drawn' : ''}" data-host="${esc(host)}" data-view="${esc(view.id)}" title="Draw this view">${view === drawn ? '▸ ' : ''}${esc(view.picture)} · ${esc(view.finder)} · ${view.shapes.length} shape(s)${view.left_out ? ` (+${view.left_out} left out)` : ''} · ${size}${madeCount ? ` · ${madeCount} made` : ''}</div>`);
+                    // Not yet searched reads apart from searched and empty, and names its next step.
+                    const shapes = view.finder === null
+                        ? `shapes not found yet: ${ring('Picture › Find shapes')}`
+                        : `${esc(view.finder)} · ${view.shapes.length} shape(s)${view.left_out ? ` (+${view.left_out} left out)` : ''}`;
+                    rows.push(`<div class="view-row${view === drawn ? ' drawn' : ''}" data-host="${esc(host)}" data-view="${esc(view.id)}" title="Draw this view">${view === drawn ? '▸ ' : ''}${esc(view.picture)} · ${shapes} · ${size}${madeCount ? ` · ${madeCount} made` : ''}</div>`);
                 }
                 const chosen = pm.chosen();
                 const view = chosen && views.find((v) => v.id === chosen.view);

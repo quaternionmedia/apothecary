@@ -6,8 +6,13 @@ routes are its doors. ``host: ""`` is the site's floor in every one.
 Plain ``def``, on the threadpool, for the routes that change no site -- a find
 reads a file and may be slow, and the store's lock is never held across it:
 
-- ``POST /sites/{s}/views`` ``{host, picture, camera?, finder?, mm_across?}``
-  finds the shapes in a picture under the picture root and pins the view.
+- ``POST /sites/{s}/views`` ``{host, picture, camera?, mm_across?}`` pins a
+  picture under the picture root at a host as a view, and finds nothing: its
+  ``finder`` and ``found_at`` are null and it has no shapes.
+- ``POST /sites/{s}/views/{id}/find`` ``{finder?}`` is Find shapes: the finder
+  (``plain`` unless named) reads the view's picture, through the finder cache,
+  and its shapes are kept on the view; another finder's shapes on a view
+  already searched are a new view of the same picture at the same host.
 - ``DELETE /sites/{s}/views/{id}`` unpins a view; its picture and pieces stay.
 - ``GET /sites/{s}/attached``: a site's cameras, views and made pieces, in one.
 - ``GET /placed``: every site's cameras, boards and views, each a row to take back.
@@ -42,11 +47,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ..hierarchy import Assembly
 from ..projects.parts.params import ParamsSpec, Validation, params_spec, validate_staged
@@ -86,7 +91,8 @@ def _xyz(v) -> List[float]:
 
 
 def view_answer(view: View, site: Optional[Assembly], made: Dict[str, Made]) -> Dict[str, object]:
-    """A view as the page reads it: its mat where it lies now, and each shape's state."""
+    """A view as the page reads it: its mat where it lies now, and each shape's state.
+    ``finder`` and ``found_at`` are null until Find shapes has run on it."""
     centre = viewing.mat_centre(view, site) if site is not None else None
     width = view.mm_across
     shapes = []
@@ -106,6 +112,7 @@ def view_answer(view: View, site: Optional[Assembly], made: Dict[str, Made]) -> 
         )
     return {
         **view_row(view, site),
+        "found_at": view.found_at,
         "scale": view.scale,
         "mm_across": width,
         "pixel_width": view.pixel_width,
@@ -192,28 +199,82 @@ def check_host(site_name: str, host: str) -> Assembly:
     return site
 
 
+def _picture_at(picture: str) -> Path:
+    """A picture under the root, by the path the listing gave; refused elsewhere."""
+    from ..api import _picture_root, _picture_within_root
+
+    asked = Path(picture)
+    return _picture_within_root(asked if asked.is_absolute() else _picture_root() / asked)
+
+
+def _picture_size(where: Path) -> Tuple[int, int]:
+    """A picture's width and height in pixels, upright as a finder reads it: read
+    from its header and its orientation tag, without decoding its pixels."""
+    from PIL import Image, UnidentifiedImageError
+
+    try:
+        with Image.open(where) as opened:
+            width, height = opened.size
+            turned = opened.getexif().get(0x0112) in (5, 6, 7, 8)
+    except (OSError, UnidentifiedImageError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400, detail=f"{where.name} could not be read as a picture: {exc}"
+        ) from None
+    return (height, width) if turned else (width, height)
+
+
 def pin_picture(
     site_name: str,
     host: str,
     picture: str,
     *,
     camera: Optional[str] = None,
-    finder: str = "plain",
     mm_across: Optional[float] = None,
 ) -> View:
-    """Find the shapes in a picture under the root and pin the view at ``host``.
+    """Pin a picture under the root at ``host`` as a view, finding nothing in it.
 
-    The finder runs outside every lock, through the finder cache. A view with
-    no width given takes its camera's last one."""
-    from ..api import _picture_root, _picture_within_root
-    from ..vision import get as get_finder
-    from ..vision.cache import cache
+    Find shapes (``find_in``) is the step that finds its shapes. A view with no
+    width given takes its camera's last one."""
+    from ..api import _picture_root
     from .pictures import _load_cameras
 
     site = check_host(site_name, host)
     root = _picture_root()
-    asked = Path(picture)
-    where = _picture_within_root(asked if asked.is_absolute() else root / asked)
+    where = _picture_at(picture)
+    width, height = _picture_size(where)
+    if mm_across is None and camera:
+        mm_across = _load_cameras().get(camera, {}).get("mm_across")
+    at = datetime.now(timezone.utc)
+    view = View(
+        id=viewing.new_view_id(at),
+        site=site_name,
+        host=host,
+        picture=where.relative_to(root).as_posix(),
+        camera=camera,
+        taken_at=at.isoformat(),
+        scale={"mm_across": mm_across} if mm_across else None,
+        mm_across=mm_across or None,
+        pixel_width=width,
+        pixel_height=height,
+        anchor=(
+            viewing.floor_anchor(site, viewing.made_names(site_name))
+            if host == viewing.FLOOR
+            else None
+        ),
+    )
+    return viewing.store().pin(view)
+
+
+def find_in(site_name: str, view_id: str, finder: str = "plain") -> View:
+    """Find shapes: ``finder`` reads a view's picture, and what it saw is kept on the
+    view -- or, on a view another finder searched already, on a new view of the
+    same picture at the same host. The finder runs outside every lock, through the
+    finder cache, so the same picture is read once per finder."""
+    from ..vision import get as get_finder
+    from ..vision.cache import cache
+
+    view = _view_or_404(site_name, view_id)
+    where = _picture_at(view.picture)
     try:
         seer = get_finder(finder)
     except KeyError:
@@ -224,37 +285,28 @@ def pin_picture(
         raise HTTPException(
             status_code=400, detail=f"{where.name} could not be read: {exc}"
         ) from None
-    if mm_across is None and camera:
-        mm_across = _load_cameras().get(camera, {}).get("mm_across")
     shapes, left_out = viewing.keep_the_most_sure(seen.shapes)
-    at = datetime.now(timezone.utc)
-    view = View(
-        id=viewing.new_view_id(at),
-        site=site_name,
-        host=host,
-        picture=where.relative_to(root).as_posix(),
-        camera=camera,
-        taken_at=at.isoformat(),
-        finder=seen.finder,
-        scale={"mm_across": mm_across} if mm_across else None,
-        mm_across=mm_across or None,
-        pixel_width=seen.pixel_width,
-        pixel_height=seen.pixel_height,
-        shapes=shapes,
-        left_out=left_out,
-        anchor=(
-            viewing.floor_anchor(site, viewing.made_names(site_name))
-            if host == viewing.FLOOR
-            else None
-        ),
-    )
-    return viewing.store().pin(view)
+    try:
+        found = viewing.store().record_found(
+            site_name,
+            view_id,
+            finder=seen.finder,
+            shapes=shapes,
+            left_out=left_out,
+            pixel_width=seen.pixel_width,
+            pixel_height=seen.pixel_height,
+            at=datetime.now(timezone.utc),
+        )
+    except viewing.ViewNotFound as missing:
+        raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
+    return found
 
 
 def finders_for(picture: str) -> List[str]:
     """The finders that can read a picture under the root: every one, except a
     finder that reads a description beside the picture when there is none.
-    What the ring's Find offers, so it is offered only where it can do something."""
+    What the ring's Find shapes offers, so it is offered only where it can do
+    something."""
     from ..api import _picture_root, _picture_within_root
     from ..vision import get as get_finder
     from ..vision import names as finder_names
@@ -278,25 +330,38 @@ CAMERA_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
 
 
 class PinView(BaseModel):
+    """A picture to pin, and where. A finder is not asked for here: finding is Find
+    shapes, its own request, so a pin that names one is refused rather than
+    silently not found."""
+
+    model_config = ConfigDict(extra="forbid")
+
     host: str = Field("", max_length=400)
     picture: str = Field(..., min_length=1, max_length=400)
     camera: Optional[str] = Field(None, pattern=CAMERA_PATTERN)
-    finder: str = Field("plain", max_length=64)
     mm_across: Optional[float] = Field(None, gt=0, allow_inf_nan=False)
 
 
 @router.post("/sites/{site_name}/views", status_code=201)
 def pin_view(site_name: str, body: PinView):
-    """Find the shapes in a picture and pin the view at a host, or the floor (``""``)."""
+    """Pin a picture as a view at a host, or the floor (``""``); nothing is found yet."""
     view = pin_picture(
-        site_name,
-        body.host,
-        body.picture,
-        camera=body.camera,
-        finder=body.finder,
-        mm_across=body.mm_across,
+        site_name, body.host, body.picture, camera=body.camera, mm_across=body.mm_across
     )
     return _answer(site_name, view)
+
+
+class FindBody(BaseModel):
+    finder: str = Field("plain", min_length=1, max_length=64)
+
+
+@router.post("/sites/{site_name}/views/{view_id}/find")
+def find_shapes(site_name: str, view_id: str, body: Optional[FindBody] = None):
+    """Find shapes in a view's picture: the view as it is now, its shapes found --
+    or, when another finder had searched it, the new view that holds this
+    finder's shapes, which is the newest at its host."""
+    found = find_in(site_name, view_id, (body or FindBody()).finder)
+    return _answer(site_name, found)
 
 
 class ScaleBody(BaseModel):
@@ -334,6 +399,12 @@ async def size_view(site_name: str, view_id: str, body: ScaleBody):
     if body.mm_across is not None:
         scale, mm_across = {"mm_across": body.mm_across}, body.mm_across
     else:
+        if not view.found:
+            raise HTTPException(
+                status_code=422,
+                detail="no shapes have been found in this view yet, so none can be "
+                "measured: give the picture's width, or Picture › Find shapes first",
+            )
         if body.known_index >= len(view.shapes):
             raise HTTPException(
                 status_code=422,

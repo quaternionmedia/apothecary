@@ -198,8 +198,8 @@ def keep_picture(
     named it. A picture by its first bytes, whatever its name says.
 
     With ``site`` and ``host`` (``""`` is the floor), the picture is kept and pinned
-    there as a view in one request, its shapes found by the plain finder, and the
-    answer carries the view. A host that cannot hold a view is refused before
+    there as a view in one request, and the answer carries the view: nothing is
+    found in it yet, since Find shapes is a step of its own. A host that cannot hold a view is refused before
     anything is kept.
 
     The body is read on the event loop; the write of up to 16 MB runs in the threadpool."""

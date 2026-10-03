@@ -125,11 +125,14 @@ class ShapeSeen(BaseModel):
 
 
 class ViewSeen(BaseModel):
-    """A view at the place the ring stands on, as the page has it drawn."""
+    """A view at the place the ring stands on, as the page has it drawn.
+
+    ``finder`` is None for a view pinned and not yet searched: Find shapes is its
+    next step."""
 
     id: str
     picture: str = ""
-    finder: str = "plain"
+    finder: Optional[str] = "plain"
     sized: bool = False
     kept: bool = False  # its picture is one the browser kept, so it can be forgotten
     shapes: List[ShapeSeen] = Field(default_factory=list)
@@ -659,9 +662,10 @@ def _is_host(site: Optional[Assembly], path: str, made: Sequence[str]) -> bool:
 
 def _camera_group(picture: PictureContext, floor: bool) -> Option:
     """Camera: Pin here › this browser's cameras (Allow until it has been asked),
-    Live or Still, Take picture, Keep, Unpin. Live, Take picture and Keep only
-    when the camera pinned here is one of this browser's: a pin is a device of
-    one origin."""
+    Live or Still, Take picture, Unpin. Live and Take picture only when the camera
+    pinned here is one of this browser's: a pin is a device of one origin. Take
+    picture keeps a frame and pins it here as a view; there is no keeping a frame
+    without pinning it, and unpinning a view leaves its picture in the folder."""
     tail = f":{FLOOR_MARK}" if floor else ""
     here = picture.here
     mine = {c.id for c in picture.cameras}
@@ -686,7 +690,6 @@ def _camera_group(picture: PictureContext, floor: bool) -> Option:
                 action=f"camera:take-picture{tail}",
             )
         )
-        options.append(Option(id=f"camera:keep{tail}", label="Keep", action=f"camera:keep{tail}"))
     if here.camera is not None:
         options.append(
             Option(id=f"camera:unpin{tail}", label="Unpin", action=f"camera:unpin{tail}")
@@ -698,8 +701,12 @@ def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
     """Picture at a host or the floor: Add (a host's; the floor's is Pictures ›
     Add), Folder › the newest pictures, and with
     a view drawn here, Views › the newest views, Make › Make all and each found
-    shape (once the view has a width), Size, Find › another finder, Unpin, and
-    Forget for a picture the browser kept. Eight at the most."""
+    shape (once its shapes are found and it has a width), Size, Unpin, Forget for
+    a picture the browser kept, and Find shapes last: the step after a pin, with
+    the finder that can read the picture (or Find shapes › each, when several
+    can), and on a view already searched, Find shapes › the other finders. Last,
+    so Unpin and Forget keep their cells whether it is there or not. Eight at
+    the most."""
     tail = f":{FLOOR_MARK}" if floor else ""
     here = picture.here
     # The floor's Add is the canvas ring's Pictures › Add, one ring up: an action
@@ -769,17 +776,6 @@ def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
             )
         )
     options.append(Option(id=f"picture:size{tail}", label="Size", action=f"picture:size{tail}"))
-    others = [f for f in picture.finders if f != drawn.finder]
-    if len(picture.finders) > 1 and others:
-        options.append(
-            Option(
-                id=f"picture:find-group{tail}",
-                label="Find",
-                children=_listed(
-                    f"picture:find-group{tail}", [(f"picture:find:{f}{tail}", f) for f in others]
-                ),
-            )
-        )
     options.append(Option(id=f"picture:unpin{tail}", label="Unpin", action=f"picture:unpin{tail}"))
     if drawn.kept:
         options.append(
@@ -790,7 +786,30 @@ def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
                 destructive=True,
             )
         )
+    find = _find_shapes(drawn, picture.finders, tail)
+    if find is not None:
+        options.append(find)
     return Option(id=f"picture{tail}", label="Picture", children=options)
+
+
+def _find_shapes(drawn: ViewSeen, finders: Sequence[str], tail: str) -> Optional[Option]:
+    """Find shapes on the drawn view: before it is searched, the one finder that can
+    read its picture as a leaf, or each of several behind it; after, only the other
+    finders, each making a view of its own; nothing when no finder has anything to
+    do here."""
+    offered = list(finders) if drawn.finder is None else [f for f in finders if f != drawn.finder]
+    if not offered:
+        return None
+    if drawn.finder is None and len(offered) == 1:
+        action = f"picture:find:{offered[0]}{tail}"
+        return Option(id=action, label="Find shapes", action=action)
+    return Option(
+        id=f"picture:find-group{tail}",
+        label="Find shapes",
+        children=_listed(
+            f"picture:find-group{tail}", [(f"picture:find:{f}{tail}", f) for f in offered]
+        ),
+    )
 
 
 def _made_picture_group(picture: PictureContext) -> Option:
@@ -1148,12 +1167,12 @@ CARRIED_BY: Dict[str, Carries] = {
     "print": Carries.VIEWER,
     # Opening, closing, floating what stands in front of the world (panels.js).
     "panel": Carries.VIEWER,
-    # A camera's verbs: this browser's device pinned, live, a picture taken,
-    # and the gathering's report -- all of it the page's: the pin
-    # and the picture routes are what the page calls.
+    # A camera's verbs: this browser's device pinned, live, a picture taken and
+    # pinned as a view, and the gathering's report -- all of it the page's: the
+    # pin and the picture routes are what the page calls.
     "camera": Carries.VIEWER,
-    # A picture's verbs that choose, draw, find, size or pin: what is on screen,
-    # or data attached to a host that no site sees.
+    # A picture's verbs that choose, draw, find shapes, size or pin: what is on
+    # screen, or data attached to a host that no site sees.
     "picture": Carries.VIEWER,
     # Those that add, remove or rebuild a root structure change the arrangement,
     # as a reset does: the intent route carries them, calling the functions the

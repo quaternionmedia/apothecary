@@ -510,7 +510,7 @@ def test_the_picture_root_is_a_folder_of_pictures_never_everything(monkeypatch, 
 def test_views_write_nothing_outside_the_root_its_two_folders_and_the_state_folder(
     monkeypatch, tmp_path
 ):
-    """Pinning, sizing, making, dropping and forgetting a view keeps nothing anywhere
+    """Pinning, finding, sizing, making, dropping and forgetting a view keeps nothing anywhere
     but the picture root's own two folders and the state folder (cameras.json): views,
     made pieces and the finder cache are held in memory. And no picture the server
     answers with -- whole, or at a size for a mat -- may enter the browser's disk cache."""
@@ -559,6 +559,7 @@ def test_views_write_nothing_outside_the_root_its_two_folders_and_the_state_fold
         ).json()
         own = here.post("/sites/garage/views", json={"host": "workbench", "picture": "own.png"})
         for view in (kept["view"], captured["view"], own.json()):
+            here.post(f"/sites/garage/views/{view['id']}/find", json={})
             here.put(f"/sites/garage/views/{view['id']}/scale", json={"mm_across": 400})
             made = here.post(f"/sites/garage/views/{view['id']}/make", json={"all": True}).json()
             for piece in made["made"][:1]:

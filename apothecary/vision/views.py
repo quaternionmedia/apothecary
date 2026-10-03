@@ -2,10 +2,13 @@
 
 A *view* is a picture pinned at a *host* -- a root structure of the site that
 has a footprint and is not itself a made piece -- or at the site's floor
-(``host == ""``). It keeps what a finder saw there: the shapes, with no size
-until a person gives the picture's width or one shape's long side. It is data
-attached to a host, not a node in the tree: ``GET /sites/{name}`` does not
-change, so SCAD, STL, validation and jobs never see one.
+(``host == ""``). Pinning one finds nothing: Find shapes is a step of its own,
+and until it runs a view has no finder and no shapes (``found`` is false), which
+is not the same as a finder that found none. What a finder saw is kept on the
+view: the shapes, with no size until a person gives the picture's width or one
+shape's long side. It is data attached to a host, not a node in the tree:
+``GET /sites/{name}`` does not change, so SCAD, STL, validation and jobs never
+see one.
 
 A shape becomes a *piece*: a root structure of the same site, standing where
 the shape was seen, built by ``compose.piece_from_shape``. What is known about
@@ -81,7 +84,10 @@ class CannotMake(ValueError):
 
 
 class View(BaseModel):
-    """One picture pinned at one host, and what a finder saw in it."""
+    """One picture pinned at one host, and what a finder saw in it, once one has.
+
+    ``finder`` and ``found_at`` are None until Find shapes runs: a view pinned and
+    not yet searched. A view searched and holding no shapes has both."""
 
     id: str
     site: str
@@ -89,7 +95,8 @@ class View(BaseModel):
     picture: str  # relative to the picture root
     camera: Optional[str] = None
     taken_at: str
-    finder: str
+    finder: Optional[str] = None
+    found_at: Optional[str] = None
     scale: Optional[Dict[str, float]] = None  # {mm_across} | {known_index, mm}
     mm_across: Optional[float] = None
     pixel_width: int
@@ -107,6 +114,11 @@ class View(BaseModel):
     @property
     def at_floor(self) -> bool:
         return self.host == FLOOR
+
+    @property
+    def found(self) -> bool:
+        """Whether a finder has looked at its picture yet (Find shapes)."""
+        return self.found_at is not None
 
 
 class Extent(BaseModel):
@@ -373,6 +385,58 @@ class Views:
             found.mm_across = mm_across
             return found.model_copy(deep=True)
 
+    def record_found(
+        self,
+        site: str,
+        view_id: str,
+        *,
+        finder: str,
+        shapes: List[FoundShape],
+        left_out: int,
+        pixel_width: int,
+        pixel_height: int,
+        at: datetime,
+    ) -> View:
+        """What a finder saw in a view's picture: kept on the view when it has not
+        been searched yet; the view as it is when that finder searched it already;
+        and, when another finder did, a new view of the same picture at the same
+        host, sized as the first, which becomes the newest and is answered."""
+        with self._lock:
+            view = self._views.get(view_id)
+            if view is None or view.site != site:
+                raise ViewNotFound(f"no view {view_id!r} in site {site!r}")
+            found = {
+                "finder": finder,
+                "found_at": at.isoformat(),
+                "shapes": list(shapes),
+                "left_out": left_out,
+                "pixel_width": pixel_width,
+                "pixel_height": pixel_height,
+            }
+            if not view.found:
+                for key, value in found.items():
+                    setattr(view, key, value)
+                return view.model_copy(deep=True)
+            if view.finder == finder:
+                return view.model_copy(deep=True)
+            base, n = new_view_id(at), 2
+            new_id = base
+            while new_id in self._views:
+                new_id, n = f"{base}-{n}", n + 1
+            another = view.model_copy(
+                deep=True,
+                update={
+                    **found,
+                    "id": new_id,
+                    "taken_at": at.isoformat(),
+                    "scale": {"mm_across": view.mm_across} if view.mm_across else None,
+                    "words": {},
+                    "made": {},
+                },
+            )
+            self._views[new_id] = another
+            return another.model_copy(deep=True)
+
     def set_word(self, site: str, view_id: str, index: int, word: str) -> View:
         with self._lock:
             found = self._views.get(view_id)
@@ -511,16 +575,28 @@ def make(
     """Make one shape (``shape``) or every shape not yet made (``None``) into pieces.
 
     Returns the pieces made and how many shapes were skipped as already made.
-    Refused (``CannotMake``) for an unsized view, a single shape already made,
-    a host that is gone, or more made pieces than the site's Made cell holds."""
+    Refused (``CannotMake``), naming the step that comes first, for a view whose
+    shapes have not been found (Find shapes) or that has none, for an unsized view
+    (its width in Selected, Size), a single shape already made, a host that is
+    gone, or more made pieces than the site's Made cell holds."""
     views = store()
     view = views.get(site_name, view_id)
+    if not view.found:
+        raise CannotMake(
+            "no shapes have been found in this view yet: Picture › Find shapes finds "
+            "them, and then Make makes them pieces"
+        )
+    if not view.shapes:
+        raise CannotMake(
+            f"{view.finder} found no shapes in this view, so there is nothing to make: "
+            "Find shapes with another finder, or pin another picture"
+        )
     if shape is not None and not 0 <= shape < len(view.shapes):
         raise ViewNotFound(f"view {view_id!r} has no shape {shape}")
     if view.mm_across is None:
         raise CannotMake(
-            "this view has no width yet: give the picture's width, or one shape's long "
-            "side, and then make it"
+            "this view has no width yet: type the picture's width, or one shape's long "
+            "side, in Selected (Picture › Size), and then Make"
         )
     centre = mat_centre(view, site)
     if centre is None:

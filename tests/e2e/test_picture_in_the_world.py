@@ -116,12 +116,17 @@ def leaves_garage_as_found(page, base_url: str):
 
 
 def _pin(page, base_url: str, host: str, picture: str, mm_across: float | None = None) -> dict:
-    body = {"host": host, "picture": picture, "finder": "stated"}
+    """Pin the picture as a view and Find shapes in it with the stated finder."""
+    body = {"host": host, "picture": picture}
     if mm_across:
         body["mm_across"] = mm_across
     answer = page.request.post(f"{base_url}/sites/garage/views", data=body)
     assert answer.status == 201, answer.text()
-    return answer.json()
+    found = page.request.post(
+        f"{base_url}/sites/garage/views/{answer.json()['id']}/find", data={"finder": "stated"}
+    )
+    assert found.status == 200, found.text()
+    return found.json()
 
 
 def _open_garage(page, base_url: str) -> None:

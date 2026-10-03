@@ -536,12 +536,12 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "canvas:drop:onDropFiles": (
         GESTURE,
         WHAT_IS_THERE,
-        "dropping pictures on a structure or the floor: kept, pinned there, found",
+        "dropping pictures on a structure or the floor: kept, and pinned there as views",
     ),
     "window:paste:onPaste": (
         GESTURE,
         WHAT_IS_THERE,
-        "pasting a picture: kept, pinned at the selected place, found",
+        "pasting a picture: kept, and pinned at the selected place as a view",
     ),
     "widthBox:change:setWidth": (WIDGET, WHAT_IS_THERE, "typing a picture's width, or a shape's"),
     "row:click:drawView": (LIST, WHAT_YOU_SEE, "a view's row in Selected, drawing that view"),
@@ -565,7 +565,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "input:change:addFiles": (
         WIDGET,
         WHAT_IS_THERE,
-        "the pictures chosen in the dialog Picture › Add opens: kept and pinned there",
+        "the pictures chosen in the dialog Picture › Add opens: kept, and pinned there as views",
     ),
     # ---- the camera panel --------------------------------------------------
     "pic-all:change:(nothing)": (WIDGET, WHAT_YOU_SEE, "ticking every picture at once"),

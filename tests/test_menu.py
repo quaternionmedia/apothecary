@@ -1154,7 +1154,7 @@ def test_a_host_whose_camera_is_another_browsers_offers_pin_and_unpin_only():
     camera = _group(ring, "Camera")
     assert _ring_labels(camera) == [("Pin here", 8), ("Unpin", 6)]
     assert [c.action for c in _group(camera, "Pin here").children] == ["camera:pin:bench_cam"]
-    # This browser's own: Live (or Still while live), Take picture, Keep, then Unpin.
+    # This browser's own: Live (or Still while live), Take picture, then Unpin.
     mine = resolve(
         Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=_context()
     )
@@ -1162,7 +1162,6 @@ def test_a_host_whose_camera_is_another_browsers_offers_pin_and_unpin_only():
         None,
         "camera:live",
         "camera:take-picture",
-        "camera:keep",
         "camera:unpin",
     ]
     live = resolve(
@@ -1205,7 +1204,7 @@ def test_the_picture_group_offers_make_only_on_a_sized_view_and_forget_only_on_a
     assert _group(picture, "Forget").destructive
 
 
-def test_find_is_offered_only_where_another_finder_can_read_the_picture():
+def test_find_shapes_on_a_searched_view_is_offered_only_where_another_finder_can_read_it():
     one = _context(views=[_view()], drawn="view_1")
     one.finders = ["plain"]
     two = _context(views=[_view()], drawn="view_1")
@@ -1215,9 +1214,89 @@ def test_find_is_offered_only_where_another_finder_can_read_the_picture():
             Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=told
         )
         labels = [c.label for c in _group(ring, "Picture").children]
-        assert ("Find" in labels) is offered
+        assert ("Find shapes" in labels) is offered
     ring = resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=two)
-    assert [c.action for c in _group(ring, "Picture", "Find").children] == ["picture:find:stated"]
+    assert [c.action for c in _group(ring, "Picture", "Find shapes").children] == [
+        "picture:find:stated"
+    ]
+
+
+def test_find_shapes_is_the_step_after_a_view_is_pinned_and_appended_after_unpin():
+    """A view pinned and not yet searched offers Find shapes, the one finder that can
+    read it as a leaf or several behind it; once searched, Find shapes offers only the
+    other finders, and is absent when there are none. Appended last, so Unpin and
+    Forget keep their cells whether it is there or not; and no Make before shapes."""
+    unsearched = _context(views=[_view(shapes=0, sized=False)], drawn="view_1")
+    unsearched.here.views[0].finder = None
+    unsearched.finders = ["plain"]
+    ring = resolve(
+        Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=unsearched
+    )
+    picture = _group(ring, "Picture")
+    assert [(c.label, c.cell) for c in picture.children] == [
+        ("Add", 8),
+        ("Folder", 6),
+        ("Size", 2),
+        ("Unpin", 4),
+        ("Forget", 9),
+        ("Find shapes", 3),
+    ]
+    assert _group(picture, "Find shapes").action == "picture:find:plain"
+    # Two finders can read it: Find shapes › each, by name.
+    unsearched.finders = ["plain", "stated"]
+    ring = resolve(
+        Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=unsearched
+    )
+    assert [c.action for c in _group(ring, "Picture", "Find shapes").children] == [
+        "picture:find:plain",
+        "picture:find:stated",
+    ]
+    # Searched by the only finder there is: nothing more to find.
+    searched = _context(views=[_view()], drawn="view_1")
+    searched.finders = ["plain"]
+    ring = resolve(
+        Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=searched
+    )
+    labels = [c.label for c in _group(ring, "Picture").children]
+    assert "Find shapes" not in labels and labels[-2:] == ["Unpin", "Forget"]
+    # At the floor, the same step under Pictures › Floor › Picture.
+    floor = resolve(Context(pointing=Pointing.CANVAS), _garage(), picture=unsearched)
+    assert [
+        c.action for c in _group(floor, "Pictures", "Floor", "Picture", "Find shapes").children
+    ] == [
+        "picture:find:plain:@floor",
+        "picture:find:stated:@floor",
+    ]
+
+
+def test_keep_is_gone_from_every_ring_and_take_picture_is_in_its_place():
+    """Camera › Keep went: Take picture always pins a view. A camera of this browser's
+    holds Pin here, Live (or Still), Take picture and Unpin, at a host and at the floor."""
+    told = _context(views=[_view()], drawn="view_1")
+    told.finders = ["plain", "stated"]
+    rings = [
+        resolve(Context(pointing=Pointing.CANVAS), _garage(), picture=told),
+        resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=told),
+        resolve(
+            Context(pointing=Pointing.NODE, targets=["printer_1"]),
+            _garage(),
+            device=PRINTER,
+            picture=told,
+        ),
+    ]
+    actions = set(every_action(rings))
+    assert not [a for a in actions if a.startswith("camera:keep")], sorted(actions)
+    assert {"camera:take-picture", "camera:take-picture:@floor"} <= actions
+    for ring in rings:
+        for address in every_address(ring):
+            assert walk(ring, address).label != "Keep", address
+    camera = _group(rings[1], "Camera")
+    assert [(c.label, c.cell) for c in camera.children] == [
+        ("Pin here", 8),
+        ("Live", 6),
+        ("Take picture", 2),
+        ("Unpin", 4),
+    ]
 
 
 @pytest.mark.parametrize("how_many", [65, 500])
@@ -1324,6 +1403,7 @@ def test_make_make_all_drop_and_a_made_pieces_word_are_the_servers_and_the_rest_
         "picture:pin:bench_top.png",
         "picture:draw:view_1",
         "picture:size",
+        "picture:find:plain",
         "picture:find:stated:@floor",
         "picture:unpin",
         "picture:forget",
@@ -1335,7 +1415,6 @@ def test_make_make_all_drop_and_a_made_pieces_word_are_the_servers_and_the_rest_
         "camera:live",
         "camera:still",
         "camera:take-picture",
-        "camera:keep",
         "camera:unpin",
         "camera:gather",
         "fit:@floor",
@@ -1507,10 +1586,9 @@ def test_a_carried_picture_intent_is_refused_with_its_reason_and_never_a_500(car
             body["site"] = site
         return client.post("/menu/intent", json=body)
 
-    unsized = client.post(
-        "/sites/garage/views",
-        json={"host": "workbench", "picture": "bench_top.png", "finder": "stated"},
-    ).json()
+    from test_views_api import _pin
+
+    unsized = _pin(client)
     cases = {
         "picture:make": 400,
         "picture:make:": 400,

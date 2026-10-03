@@ -1,8 +1,9 @@
 /* What a picture wears in the world: a view drawn where it was pinned.
  *
  * A view is a picture pinned at a host -- a root structure of the site -- or
- * at the site's floor (host ""), with the shapes a finder saw in it
- * (GET /sites/{s}/attached; apothecary/vision/views.py). Here it is drawn:
+ * at the site's floor (host ""), with the shapes a finder saw in it once Find
+ * shapes has run (GET /sites/{s}/attached; apothecary/vision/views.py). Here it
+ * is drawn:
  *
  * - the mat: the picture itself, lying on the host's top (or on the floor
  *   beside the site), sized by the view's scale; an unsized view is fitted to
@@ -261,7 +262,9 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
         if (cam) bits.push(`📷 ${cam.label || "camera"}`);
         if (view) {
             const mat = view.mat && view.mat.width;
-            bits.push(`view: ${view.shapes.length} shape${view.shapes.length === 1 ? "" : "s"}${mat ? "" : " · unsized"}`);
+            // Not yet searched reads apart from searched and empty: Find shapes is next.
+            const shapes = view.finder === null ? "Find shapes next" : `${view.shapes.length} shape${view.shapes.length === 1 ? "" : "s"}`;
+            bits.push(`view: ${shapes}${mat ? "" : " · unsized"}`);
         }
         return bits.join(" · ");
     }

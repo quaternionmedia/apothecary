@@ -81,9 +81,9 @@ def test_the_yes_pins_the_one_camera_and_a_view_follows(
     leaves_garage_as_found,  # noqa: F811
 ):
     """With the ring open at Allow, the person's yes: Allow pins the one camera at
-    the bench at once and names Take picture; Selected says what Take picture, Live
-    and Keep do; Camera › Take picture takes a picture, and a view stands at the
-    bench."""
+    the bench at once and names Take picture; Selected says what Take picture and
+    Live do; Camera › Take picture takes a picture, and a view stands at the bench,
+    naming Find shapes."""
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     _open_garage(page, base_url)
@@ -94,7 +94,8 @@ def test_the_yes_pins_the_one_camera_and_a_view_follows(
     _press(page, "Allow")
     _said(
         page,
-        "allowed and pinned at workbench: Camera › Take picture takes a picture and finds its shapes",
+        "allowed and pinned at workbench: Camera › Take picture keeps a frame and pins it here "
+        "as a view",
     )
     expect(page.locator("#ring-overlay")).to_have_count(0)
     expect(page.locator(".world-badge.place-mark[data-host='workbench'].has-camera")).to_be_visible(
@@ -110,17 +111,20 @@ def test_the_yes_pins_the_one_camera_and_a_view_follows(
         cameras[0]["label"]
     )
     verbs = page.locator("#selected-body [data-facts='camera-verbs']")
-    expect(verbs).to_contain_text("⌗ Camera › Take picture takes a picture and finds its shapes")
+    expect(verbs).to_contain_text(
+        "⌗ Camera › Take picture keeps a frame and pins it here as a view; "
+        "⌗ Picture › Find shapes then finds its shapes"
+    )
     expect(verbs).to_contain_text("Live shows the camera on the mat")
-    expect(verbs).to_contain_text("Keep keeps a frame on this machine")
+    expect(verbs).not_to_contain_text("Keep")
     expect(page.locator("#selected-body [data-facts='way-in']")).to_have_count(0)
 
-    # Camera › Take picture: a frame kept, found and pinned at the bench, with its camera.
+    # Camera › Take picture: a frame kept and pinned at the bench, with its camera.
     _ring_on(page, "workbench")
     _press(page, "Camera")
-    assert _labels(page) == ["Pin here", "Live", "Take picture", "Keep", "Unpin"]
+    assert _labels(page) == ["Pin here", "Live", "Take picture", "Unpin"]
     _press(page, "Take picture")
-    _said(page, "found at workbench")
+    _said(page, "pinned at workbench as a view: Picture › Find shapes")
     views = page.request.get(f"{base_url}/sites/garage/attached").json()["views"]
     assert [(vw["host"], vw["camera"]) for vw in views] == [("workbench", cameras[0]["id"])]
     assert views[0]["picture"].startswith("captures/")

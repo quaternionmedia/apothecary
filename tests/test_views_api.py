@@ -96,10 +96,13 @@ def world(tmp_path, monkeypatch):
         _site_store.reset(name)
 
 
-def _pin(c, *, site="garage", host="workbench", picture="bench_top.png", **more):
-    body = {"host": host, "picture": picture, "finder": "stated", **more}
-    r = c.post(f"/sites/{site}/views", json=body)
+def _pin(c, *, site="garage", host="workbench", picture="bench_top.png", finder="stated", **more):
+    """Pin a picture as a view and Find shapes in it: the two steps a person takes,
+    as most tests here want them taken."""
+    r = c.post(f"/sites/{site}/views", json={"host": host, "picture": picture, **more})
     assert r.status_code == 201, r.text
+    r = c.post(f"/sites/{site}/views/{r.json()['id']}/find", json={"finder": finder})
+    assert r.status_code == 200, r.text
     return r.json()
 
 
@@ -119,6 +122,107 @@ def _outline_centre(mat_centre, width, shape):
         mat_centre[0] + (cx - 0.5) * width,
         mat_centre[1] + (0.5 - cy) * width * TALLNESS,
     )
+
+
+# --- taking and finding: two steps -----------------------------------------------------
+
+
+def test_a_pinned_view_has_no_shapes_until_find_shapes_finds_them(world):
+    """Pinning finds nothing; Find shapes is the step that does, as its own request.
+    A view not yet searched (no finder, no time found) reads apart from one searched
+    with nothing in it (a finder and a time, no shapes)."""
+    c = TestClient(app)
+    r = c.post("/sites/garage/views", json={"host": "workbench", "picture": "bench_top.png"})
+    assert r.status_code == 201, r.text
+    pinned = r.json()
+    assert pinned["shapes"] == [] and pinned["finder"] is None and pinned["found_at"] is None
+    # Its mat is laid all the same, at the picture's own proportions.
+    assert (pinned["pixel_width"], pinned["pixel_height"]) == (WIDE, HIGH)
+    assert pinned["mat"]["centre"] == list(BENCH_TOP)
+    found = c.post(f"/sites/garage/views/{pinned['id']}/find", json={"finder": "stated"})
+    assert found.status_code == 200, found.text
+    view = found.json()
+    assert view["id"] == pinned["id"] and view["finder"] == "stated" and view["found_at"]
+    assert [s["index"] for s in view["shapes"]] == [0, 1, 2]
+    attached = c.get("/sites/garage/attached").json()["views"]
+    assert [(v["id"], len(v["shapes"])) for v in attached] == [(pinned["id"], 3)]
+    # A picture with nothing in it, searched: a finder and a time, and no shapes.
+    (world / "blank.png").write_bytes(_png(shapes=""))
+    blank = c.post("/sites/garage/views", json={"host": "printer_1", "picture": "blank.png"})
+    none = c.post(f"/sites/garage/views/{blank.json()['id']}/find", json={}).json()
+    assert none["finder"] == "plain" and none["found_at"] and none["shapes"] == []
+    # Nothing to find in a view that is not there, or with a finder that is not.
+    assert c.post("/sites/garage/views/view_nowhere/find", json={}).status_code == 404
+    r = c.post(f"/sites/garage/views/{pinned['id']}/find", json={"finder": "nope"})
+    assert r.status_code == 400
+
+
+def test_a_taken_picture_is_kept_and_pinned_with_no_shapes(world):
+    """What Camera › Take picture sends: a frame kept under captures/ with its camera
+    and host, pinned there as a view, and no finder run."""
+    c = TestClient(app)
+    c.put("/cameras/bench_cam", json={"site": "garage", "path": "workbench", "mm_across": 1800})
+    r = c.post(
+        "/photos/pictures",
+        params={"name": "bench_cam", "site": "garage", "host": "workbench", "camera": "bench_cam"},
+        content=_png(shapes="ret"),
+    )
+    assert r.status_code == 201, r.text
+    view = r.json()["view"]
+    assert r.json()["path"].startswith("captures/") and view["picture"] == r.json()["path"]
+    assert view["camera"] == "bench_cam" and view["mm_across"] == 1800
+    assert view["shapes"] == [] and view["finder"] is None and view["found_at"] is None
+    found = c.post(f"/sites/garage/views/{view['id']}/find", json={"finder": "plain"}).json()
+    assert found["finder"] == "plain" and len(found["shapes"]) == 3
+
+
+def test_make_before_find_shapes_is_refused_and_names_find_shapes(world):
+    """Make and Make all need shapes found and a width; each refusal names the step."""
+    c = TestClient(app)
+    pinned = c.post(
+        "/sites/garage/views",
+        json={"host": "workbench", "picture": "bench_top.png", "mm_across": 1800},
+    ).json()
+    for body in ({"shape": 0}, {"all": True}):
+        r = c.post(f"/sites/garage/views/{pinned['id']}/make", json=body)
+        assert r.status_code == 409, r.text
+        assert "Find shapes" in r.json()["detail"], r.json()
+    # And through the ring's intent, as a person would press it.
+    intent = {
+        "action": f"picture:make-all:{pinned['id']}",
+        "option_id": "picture:make-all",
+        "context": {"pointing": "node", "targets": ["workbench"]},
+    }
+    r = c.post("/menu/intent", json={"intent": intent, "site": "garage"})
+    assert r.status_code == 409 and "Find shapes" in r.json()["detail"], r.text
+    # Found, and unsized: the refusal names the width and where it is typed.
+    unsized = c.post(
+        "/sites/garage/views", json={"host": "printer_2", "picture": "bench_top.png"}
+    ).json()
+    c.post(f"/sites/garage/views/{unsized['id']}/find", json={"finder": "stated"})
+    r = c.post(f"/sites/garage/views/{unsized['id']}/make", json={"all": True})
+    assert r.status_code == 409 and "width" in r.json()["detail"]
+    assert "Size" in r.json()["detail"], r.json()
+    assert c.get("/sites/garage/attached").json()["made"] == {}
+
+
+def test_find_shapes_with_another_finder_pins_a_second_view_and_keeps_the_first(world):
+    """A view's shapes are its finder's: another finder's shapes are a new view of the
+    same picture at the same host, sized as the first, and the first keeps its own."""
+    c = TestClient(app)
+    first = _pin(c, mm_across=1800)
+    c.post(f"/sites/garage/views/{first['id']}/make", json={"shape": 1})
+    again = c.post(f"/sites/garage/views/{first['id']}/find", json={"finder": "stated"})
+    assert again.status_code == 200 and again.json()["id"] == first["id"]  # unchanged
+    r = c.post(f"/sites/garage/views/{first['id']}/find", json={"finder": "plain"})
+    assert r.status_code == 200, r.text
+    second = r.json()
+    assert second["id"] != first["id"] and second["finder"] == "plain"
+    assert (second["host"], second["picture"]) == (first["host"], first["picture"])
+    assert second["mm_across"] == 1800 and second["made"] == {}
+    views = {v["id"]: v for v in c.get("/sites/garage/attached").json()["views"]}
+    assert set(views[first["id"]]["made"]) == {"1"} and views[first["id"]]["finder"] == "stated"
+    assert list(views)[-1] == second["id"]  # the newest, so the one drawn
 
 
 # --- pinning ------------------------------------------------------------------------
@@ -162,7 +266,7 @@ def test_views_and_cameras_are_refused_where_they_cannot_be_pinned(world):
     ):
         r = c.post(
             "/sites/garage/views",
-            json={"host": host, "picture": "bench_top.png", "finder": "stated"},
+            json={"host": host, "picture": "bench_top.png"},
         )
         assert r.status_code in (404, 422), (host, r.text)
         assert says in r.json()["detail"], (host, r.json())
@@ -172,9 +276,7 @@ def test_views_and_cameras_are_refused_where_they_cannot_be_pinned(world):
     view = _pin(c, mm_across=1800)
     made = c.post(f"/sites/garage/views/{view['id']}/make", json={"shape": 1}).json()
     piece = made["made"][0]
-    r = c.post(
-        "/sites/garage/views", json={"host": piece, "picture": "bench_top.png", "finder": "stated"}
-    )
+    r = c.post("/sites/garage/views", json={"host": piece, "picture": "bench_top.png"})
     assert r.status_code == 422 and "made piece" in r.json()["detail"]
     r = c.put("/cameras/cam1", json={"site": "garage", "path": piece})
     assert r.status_code == 422 and "made piece" in r.json()["detail"]
@@ -413,20 +515,6 @@ def test_a_view_keeps_at_most_its_budget_of_shapes_by_confidence(world):
     assert 0.99 in confidences and 0.98 in confidences
 
 
-def test_find_with_another_finder_makes_a_second_view_and_leaves_the_first(world):
-    c = TestClient(app)
-    first = _pin(c, mm_across=1800)
-    c.post(f"/sites/garage/views/{first['id']}/make", json={"shape": 1})
-    second = c.post(
-        "/sites/garage/views",
-        json={"host": "workbench", "picture": "bench_top.png", "finder": "plain"},
-    )
-    assert second.status_code == 201 and second.json()["finder"] == "plain"
-    assert second.json()["id"] != first["id"]
-    views = {vw["id"]: vw for vw in c.get("/sites/garage/attached").json()["views"]}
-    assert set(views[first["id"]]["made"]) == {"1"} and views[second.json()["id"]]["made"] == {}
-
-
 def test_a_view_is_found_once_per_picture_and_finder(world):
     from apothecary.vision import finder as finder_module
     from apothecary.vision.stated import StatedFinder
@@ -579,15 +667,17 @@ def test_a_make_during_a_slow_find_loses_nothing_and_a_get_answers(world):
     try:
         c = TestClient(app)
         view = _pin(c, mm_across=1800)
+        waiting = c.post(
+            "/sites/garage/views", json={"host": "printer_1", "picture": "bench_top.png"}
+        ).json()
         answers = {}
 
-        def slow_pin():
+        def slow_find():
             answers["slow"] = TestClient(app).post(
-                "/sites/garage/views",
-                json={"host": "printer_1", "picture": "bench_top.png", "finder": "slow"},
+                f"/sites/garage/views/{waiting['id']}/find", json={"finder": "slow"}
             )
 
-        worker = threading.Thread(target=slow_pin)
+        worker = threading.Thread(target=slow_find)
         worker.start()
         assert started.wait(10)
         t0 = time.monotonic()
@@ -596,9 +686,10 @@ def test_a_make_during_a_slow_find_loses_nothing_and_a_get_answers(world):
         assert time.monotonic() - t0 < 5
         release.set()
         worker.join(10)
-        assert answers["slow"].status_code == 201
+        assert answers["slow"].status_code == 200
         attached = c.get("/sites/garage/attached").json()
         assert len(attached["views"]) == 2
+        assert len(attached["views"][1]["shapes"]) == 3
         assert sorted(attached["made"]) == sorted(made["made"]) and len(made["made"]) == 3
     finally:
         release.set()
@@ -663,6 +754,7 @@ def test_forgetting_a_kept_picture_unpins_its_views_and_marks_its_pieces(world):
     assert kept.status_code == 201, kept.text
     view = kept.json()["view"]
     assert view["picture"] == "uploads/desk.png" and view["host"] == "workbench"
+    view = c.post(f"/sites/garage/views/{view['id']}/find", json={}).json()
     assert view["finder"] == "plain" and view["shapes"]
     other = _pin(c, site="datum_core", host="tray", picture="uploads/desk.png", finder="plain")
     c.put(f"/sites/garage/views/{view['id']}/scale", json={"mm_across": 1800})

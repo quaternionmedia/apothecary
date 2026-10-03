@@ -1,8 +1,14 @@
 /* The loop's verbs at a host: a camera pinned, live, a picture taken; a picture
- * added, dropped or pasted, pinned, found, sized; a view drawn or unpinned; a
- * kept picture forgotten. No markup of its own: the ring is how each is asked
- * for (apothecary/menu.py builds the cells), the world is where each is seen
- * (picture_marks.js draws it), and the status bar is where each is said.
+ * added, dropped or pasted and pinned as a view; its shapes found; the view
+ * sized, drawn or unpinned; a kept picture forgotten. No markup of its own: the
+ * ring is how each is asked for (apothecary/menu.py builds the cells), the world
+ * is where each is seen (picture_marks.js draws it), and the status bar is where
+ * each is said -- every step's message naming the step after it: a camera pinned
+ * names Take picture, a view pinned names Find shapes, shapes found name Make.
+ *
+ * Taking and finding are two steps. Take picture, a drop, a paste, Picture ›
+ * Add and Picture › Folder pin a view and find nothing; Picture › Find shapes
+ * runs a finder on the view drawn at the host.
  *
  * A host is a root structure with a footprint, or the floor (""). A verb on a
  * host names it by the ring's target; a floor verb carries "@floor" after its
@@ -112,8 +118,7 @@ export function mountPictures({ base = "", marks, world, log }) {
         });
         await marks.refresh();
         const replaced = answer.replaced && answer.replaced.length ? `, in place of ${answer.replaced.length} pinned there before` : "";
-        const next = allowed ? `: ${ringPath(host, "Camera › Take picture")} takes a picture and finds its shapes` : "";
-        say(`${cam ? cam.label : "camera"} ${allowed ? "allowed and " : ""}pinned at ${where(host)}${replaced}${next}`);
+        say(`${cam ? cam.label : "camera"} ${allowed ? "allowed and " : ""}pinned at ${where(host)}${replaced}: ${ringPath(host, "Camera › Take picture")} keeps a frame and pins it here as a view`);
     }
 
     async function unpinCamera(host) {
@@ -160,7 +165,7 @@ export function mountPictures({ base = "", marks, world, log }) {
         await loaded;
         if (!state.live || state.live.video !== video) return;
         marks.setLive(host, video);
-        say(`${cam.label} is live on ${where(host)}: Take picture keeps a frame and finds what is in it`);
+        say(`${cam.label} is live on ${where(host)}: ${ringPath(host, "Camera › Take picture")} keeps a frame and pins it here as a view`);
     }
     function still() {
         if (!state.live) return false;
@@ -200,10 +205,20 @@ export function mountPictures({ base = "", marks, world, log }) {
         return body;
     }
 
+    // What a view pinned is, and the step after it: Find shapes.
+    function pinned(view) {
+        return `${view.picture} pinned at ${where(view.host)} as a view: ${ringPath(view.host, "Picture › Find shapes")} finds what is in it`;
+    }
+    // What Find shapes found, and the step after it: Make, once the view has a width.
     function found(view) {
         const n = view.shapes.length;
-        const sized = view.mat && view.mat.width ? `, ${Math.round(view.mat.width)} mm across` : "; give its width in Selected";
-        return `${n} shape${n === 1 ? "" : "s"} found at ${where(view.host)}${view.left_out ? ` (${view.left_out} left out)` : ""}${sized}`;
+        const left = view.left_out ? ` (${view.left_out} left out)` : "";
+        if (!n) return `no shapes found in ${view.picture} at ${where(view.host)} by ${view.finder}: pin another picture here, from the camera or from disk`;
+        const make = ringPath(view.host, "Picture › Make");
+        const next = view.mat && view.mat.width
+            ? `, ${Math.round(view.mat.width)} mm across: ${make} makes them pieces`
+            : `: type the picture's width in Selected (${ringPath(view.host, "Picture › Size")}), then ${make} makes them pieces`;
+        return `${n} shape${n === 1 ? "" : "s"} found at ${where(view.host)}${left}${next}`;
     }
     async function drawNew(host, view) {
         await marks.refresh();
@@ -211,7 +226,8 @@ export function mountPictures({ base = "", marks, world, log }) {
         world.select(host);
     }
 
-    // Take picture: a frame kept with its camera and host, found, pinned; Live ends.
+    // Take picture: a frame kept with its camera and host, and pinned there as a
+    // view; nothing found in it yet; Live ends.
     async function takePicture(host) {
         const cam = pinnedHere(host);
         const blob = await frame(cam);
@@ -219,36 +235,39 @@ export function mountPictures({ base = "", marks, world, log }) {
         const kept = await keepBlob(blob, { name: cam.id, host, camera: cam.id });
         if (!kept.view) throw new Error(`kept ${kept.path}, and not pinned: ${kept.not_pinned || "refused"}`);
         await drawNew(host, kept.view);
-        say(found(kept.view));
+        say(pinned(kept.view));
         return kept.view;
     }
-    // Keep: the frame is kept on this machine, and nothing more.
-    async function keep(host) {
-        const cam = pinnedHere(host);
-        const kept = await keepBlob(await frame(cam), { name: cam.id });
-        say(`kept ${kept.path} on this machine; Picture › Folder pins it at a place`);
-        return kept;
+    // Find shapes: a finder reads the view drawn here. On a view another finder
+    // searched already, its shapes are a new view, drawn in its place.
+    async function findShapes(host, finder) {
+        const drawn = drawnHere(host);
+        const body = finder ? { finder } : {};
+        const view = await api(`${siteUrl()}/views/${encodeURIComponent(drawn.id)}/find`, { method: "POST", body: JSON.stringify(body) });
+        await drawNew(host, view);
+        say(found(view));
+        return view;
     }
 
     // --- pictures from this machine --------------------------------------------------------
-    // Several at once: each kept under uploads/ and pinned as its own view, found
-    // one after another; the last is drawn, and every refusal is named.
+    // Several at once: each kept under uploads/ and pinned as its own view, one
+    // after another; the last is drawn, and every refusal is named.
     async function addFiles(files, host) {
         const chosen = [...(files || [])];
         if (!chosen.length) return [];
         world.stepOut();
-        const pinned = [], refused = [];
+        const views = [], refused = [];
         for (const file of chosen) {
             if (file.size > FILE_MOST) { refused.push(`${file.name}: larger than 16 MB`); continue; }
             try {
                 const kept = await keepBlob(file, { name: file.name, kept: "upload", host });
-                if (kept.view) pinned.push(kept.view); else refused.push(`${file.name}: kept, not pinned: ${kept.not_pinned}`);
+                if (kept.view) views.push(kept.view); else refused.push(`${file.name}: kept, not pinned: ${kept.not_pinned}`);
             } catch (e) { refused.push(`${file.name}: ${e.message}`); }
         }
-        if (pinned.length) await drawNew(host, pinned[pinned.length - 1]);
-        const last = pinned.length ? `; ${found(pinned[pinned.length - 1])}` : "";
-        say(`${pinned.length} picture(s) pinned at ${where(host)}${last}` + (refused.length ? ` -- refused: ${refused.join("; ")}` : ""), refused.length && !pinned.length ? "bad" : "");
-        return pinned;
+        if (views.length) await drawNew(host, views[views.length - 1]);
+        const next = views.length ? ` as views: ${ringPath(host, "Picture › Find shapes")} finds what is in the one drawn` : "";
+        say(`${views.length} picture(s) pinned at ${where(host)}${next}` + (refused.length ? ` -- refused: ${refused.join("; ")}` : ""), refused.length && !views.length ? "bad" : "");
+        return views;
     }
     function pickFiles(host) {
         const input = document.createElement("input");
@@ -263,15 +282,12 @@ export function mountPictures({ base = "", marks, world, log }) {
         const file = new File([blob], `${stamp}-paste.png`, { type: blob.type || "image/png" });
         return addFiles([file], host);
     }
-    async function pinPicture(host, picture, finder = null) {
-        const body = { host, picture };
-        if (finder) body.finder = finder;
-        const drawn = marks.drawnAt(host);
-        if (finder && drawn && drawn.camera) body.camera = drawn.camera;
-        const viewNow = await api(`${siteUrl()}/views`, { method: "POST", body: JSON.stringify(body) });
-        await drawNew(host, viewNow);
-        say(found(viewNow));
-        return viewNow;
+    // Picture › Folder: a picture already under the root, pinned here as a view.
+    async function pinPicture(host, picture) {
+        const view = await api(`${siteUrl()}/views`, { method: "POST", body: JSON.stringify({ host, picture }) });
+        await drawNew(host, view);
+        say(pinned(view));
+        return view;
     }
 
     // --- the drawn view --------------------------------------------------------------------
@@ -291,7 +307,7 @@ export function mountPictures({ base = "", marks, world, log }) {
         const drawn = drawnHere(host);
         await api(`${siteUrl()}/views/${encodeURIComponent(drawn.id)}`, { method: "DELETE" });
         await marks.refresh();
-        say(`unpinned ${drawn.picture} from ${where(host)}; the picture and any pieces made stay`);
+        say(`unpinned ${drawn.picture} from ${where(host)}; the picture stays in the folder, and any pieces made from it stay`);
     }
     async function forget(host) {
         const drawn = drawnHere(host);
@@ -323,7 +339,7 @@ export function mountPictures({ base = "", marks, world, log }) {
             if (!cam) throw new Error(`nothing at ${where(host)} to size`);
             await api(`/cameras/${encodeURIComponent(cam.id)}`, { method: "PUT", body: JSON.stringify({ label: cam.label || "camera", site: world.siteName(), path: host, mm_across: mm }) });
             await marks.refresh();
-            say(`${cam.label || "camera"}: its next view is ${mm} mm across`);
+            say(`${cam.label || "camera"}: its next picture is ${mm} mm across; ${ringPath(host, "Camera › Take picture")} takes it`);
             return;
         }
         const chosen = marks.chosen();
@@ -337,7 +353,10 @@ export function mountPictures({ base = "", marks, world, log }) {
         else await marks.refresh();
         if (byShape) marks.choose(drawn.id, chosen.index);
         const followed = rebuilt.length ? `; ${rebuilt.length} made piece(s) rebuilt at that width: ${rebuilt.join(", ")}` : "";
-        say(`${drawn.picture}: ${Math.round(sized.mm_across)} mm across${byShape ? `, from shape ${chosen.index}'s long side` : ""}${followed}; Picture › Make makes its shapes`);
+        const next = sized.finder === null
+            ? `${ringPath(host, "Picture › Find shapes")} finds its shapes, then Make makes them pieces`
+            : sized.shapes.length ? `${ringPath(host, "Picture › Make")} makes its shapes pieces` : "it holds no shapes to make";
+        say(`${drawn.picture}: ${Math.round(sized.mm_across)} mm across${byShape ? `, from shape ${chosen.index}'s long side` : ""}${followed}; ${next}`);
     }
 
     // --- what the ring is told -------------------------------------------------------------
@@ -407,11 +426,10 @@ export function mountPictures({ base = "", marks, world, log }) {
             case "camera:live": await goLive(host); return true;
             case "camera:still": if (still()) say(`${where(host)}: still again`); return true;
             case "camera:take-picture": await takePicture(host); return true;
-            case "camera:keep": await keep(host); return true;
             case "camera:gather": return false;  // the camera panel's report, until gathering leaves core
             case "picture:add": pickFiles(host); say(`choose pictures to pin at ${where(host)}`); return true;
             case "picture:pin": world.stepOut(); await pinPicture(host, arg); return true;
-            case "picture:find": await pinPicture(host, drawnHere(host).picture, arg); return true;
+            case "picture:find": await findShapes(host, arg); return true;
             case "picture:draw": {
                 const viewAt = marks.attached() && marks.attached().views.find((l) => l.id === arg);
                 if (!viewAt) throw new Error(`no view ${arg} in this site`);
@@ -435,8 +453,8 @@ export function mountPictures({ base = "", marks, world, log }) {
     }
 
     return {
-        ready, state, listCameras, allow, pinCamera, unpinCamera, goLive, still, takePicture, keep,
-        addFiles, pickFiles, paste, pinPicture, drawView, unpinView, forget, purge, setWidth,
+        ready, state, listCameras, allow, pinCamera, unpinCamera, goLive, still, takePicture,
+        findShapes, addFiles, pickFiles, paste, pinPicture, drawView, unpinView, forget, purge, setWidth,
         context, carry, selectionChanged, picturesNow,
         live: () => (state.live ? state.live.host : null),
         destroy() { still(); },

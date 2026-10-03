@@ -7,6 +7,13 @@ the meter) and under the draft record* Personal data stays on the device
 *(§6: the picture root, `captures/` and `uploads/`, and what a page may
 forget).*
 
+*Renamed by the consolidation plan's Phase 1
+([consolidation-2026-10-03.md](consolidation-2026-10-03.md), Words): a look is
+a **view** (`/sites/{s}/views`, `apothecary/vision/views.py`, Picture › Views);
+Camera › Look is Camera › Take picture, which pins a view and finds nothing;
+Picture › Find shapes finds, as a step of its own; Camera › Keep is gone. This
+page keeps the words it was decided in.*
+
 ## The end state
 
 A picture is not a record in a panel. When a picture is taken or dropped at

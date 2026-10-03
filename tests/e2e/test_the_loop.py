@@ -1,7 +1,8 @@
 """The loop at a place, from the ring alone: a camera pinned at the bench, a picture
-taken, its shapes found, the view sized, a shape made into a piece standing on
-its outline, Why this back to it, the piece dropped, the picture forgotten; and the
-floor, reached from the canvas ring's Pictures › Floor.
+taken and pinned as a view, its shapes found as a step of their own, the view
+sized, a shape made into a piece standing on its outline, Why this back to it, the
+piece dropped, the picture forgotten; and the floor, reached from the canvas
+ring's Pictures › Floor.
 
 The browser is Chromium with its fake camera fed a drawn picture
 (``--use-file-for-fake-video-capture``): a dark rectangle, disc and triangle on a
@@ -164,6 +165,63 @@ def _attached(page, base_url: str) -> dict:
 
 
 @pytest.mark.e2e
+def test_take_picture_pins_a_view_and_find_shapes_is_its_own_step(
+    page,
+    base_url: str,
+    leaves_garage_as_found,  # noqa: F811
+):
+    """The plain pin names Take picture; Take picture keeps a frame and pins it at the
+    bench as a view with no shapes, and names Find shapes; Find shapes finds them and
+    names Make. The camera's ring holds no Keep."""
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    _open_garage(page, base_url)
+
+    _ring_on(page, "workbench")
+    label = _pin_the_camera(page)
+    _said(page, f"{label} pinned at workbench: Camera › Take picture")
+
+    _ring_on(page, "workbench")
+    _press(page, "Camera")
+    assert _labels(page) == ["Pin here", "Live", "Take picture", "Unpin"]
+    _press(page, "Take picture")
+    _said(page, "pinned at workbench as a view: Picture › Find shapes")
+    (view,) = _attached(page, base_url)["views"]
+    assert view["shapes"] == [] and view["finder"] is None and view["found_at"] is None
+    assert view["picture"].startswith("captures/")
+    page.wait_for_function(
+        "() => window.apothecaryPictures.state().some((e) => e.host === 'workbench' && e.mat)",
+        timeout=10000,
+    )
+    assert _drawn(page, "workbench")["outlines"] == []
+    badge = page.locator(".world-badge.place-mark[data-host='workbench']")
+    expect(badge).to_contain_text("Find shapes next")
+
+    # No Make before shapes are found; Find shapes is the step that finds them.
+    _ring_on(page, "workbench")
+    _press(page, "Picture")
+    labels = _labels(page)
+    assert "Make" not in labels and labels[-1] == "Find shapes", labels
+    _press(page, "Find shapes")
+    _said(page, "found at workbench")
+    expect(_status(page)).to_contain_text("Picture › Make")
+    page.wait_for_function(
+        "() => window.apothecaryPictures.state().some((e) => e.host === 'workbench' && e.outlines.length)",
+        timeout=10000,
+    )
+    (found,) = _attached(page, base_url)["views"]
+    assert found["id"] == view["id"] and found["finder"] == "plain" and found["shapes"]
+    expect(badge).to_contain_text(f"view: {len(found['shapes'])} shape")
+
+    # Found by the one finder there is: Find shapes has nothing more to do.
+    _ring_on(page, "workbench")
+    _press(page, "Picture")
+    assert "Find shapes" not in _labels(page)
+    _close_ring(page)
+    assert errors == []
+
+
+@pytest.mark.e2e
 def test_the_loop_at_the_bench_from_the_ring(page, base_url: str, leaves_garage_as_found):  # noqa: F811
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
@@ -182,13 +240,16 @@ def test_the_loop_at_the_bench_from_the_ring(page, base_url: str, leaves_garage_
     cameras = page.request.get(f"{base_url}/cameras?site=garage").json()
     assert [c["path"] for c in cameras] == ["workbench"]
 
-    # This browser's camera: Live, Take picture, Keep and Unpin beside Pin here.
+    # This browser's camera: Live, Take picture and Unpin beside Pin here.
     _ring_on(page, "workbench")
     _press(page, "Camera")
-    assert _labels(page) == ["Pin here", "Live", "Take picture", "Keep", "Unpin"]
-    # Take picture, from Still: the frame is kept with its camera and host, found,
-    # pinned.
+    assert _labels(page) == ["Pin here", "Live", "Take picture", "Unpin"]
+    # Take picture, from Still: the frame is kept with its camera and host and
+    # pinned; Find shapes finds what is in it.
     _press(page, "Take picture")
+    _said(page, "pinned at workbench as a view")
+    _ring_on(page, "workbench")
+    _press(page, "Picture", "Find shapes")
     _said(page, "found at workbench")
     page.wait_for_function(
         "() => window.apothecaryPictures.state().some((e) => e.host === 'workbench' && e.outlines.length)",
@@ -214,6 +275,14 @@ def test_the_loop_at_the_bench_from_the_ring(page, base_url: str, leaves_garage_
     page.wait_for_function(
         "(first) => window.apothecaryPictureVerbs.live() === null"
         " && window.apothecaryPictures.state().some((e) => e.host === 'workbench'"
+        " && e.view && e.view !== first)",
+        arg=first[0]["id"],
+        timeout=10000,
+    )
+    _ring_on(page, "workbench")
+    _press(page, "Picture", "Find shapes")
+    page.wait_for_function(
+        "(first) => window.apothecaryPictures.state().some((e) => e.host === 'workbench'"
         " && e.view !== first && e.outlines.length)",
         arg=first[0]["id"],
         timeout=10000,
@@ -305,8 +374,8 @@ def test_the_loop_at_the_bench_from_the_ring(page, base_url: str, leaves_garage_
 @pytest.mark.e2e
 def test_the_floor_from_the_canvas_ring(page, base_url: str, leaves_garage_as_found):  # noqa: F811
     """Pictures › Floor on the canvas ring, with nothing pinned there: the fake camera
-    pinned at the floor, a picture taken, the floor's mat drawn beside the site, sized,
-    and a shape made there."""
+    pinned at the floor, a picture taken, its shapes found, the floor's mat drawn
+    beside the site, sized, and a shape made there."""
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     _open_garage(page, base_url)
@@ -323,6 +392,9 @@ def test_the_floor_from_the_canvas_ring(page, base_url: str, leaves_garage_as_fo
 
     _canvas_ring(page)
     _press(page, "Pictures", "Floor", "Camera", "Take picture")
+    _said(page, "pinned at the floor as a view: Pictures › Floor › Picture › Find shapes")
+    _canvas_ring(page)
+    _press(page, "Pictures", "Floor", "Picture", "Find shapes")
     _said(page, "found at the floor")
     page.wait_for_function(
         "() => window.apothecaryPictures.state().some((e) => e.host === '' && e.outlines.length)",
