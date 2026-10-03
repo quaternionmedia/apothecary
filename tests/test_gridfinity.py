@@ -7,6 +7,7 @@ import pytest
 
 from apothecary.models import BoundingBox3D
 from apothecary.projects.parts.gridfinity import (
+    BASE_GAP_MM,
     DEFAULT,
     GRID_SIZE_MM,
     HEIGHT_UNIT_MM,
@@ -117,32 +118,40 @@ class TestGridfinityBinPart:
         bounds = DEFAULT.get_bounds()
 
         assert isinstance(bounds, BoundingBox3D)
-        # 3x2x6 bin: 126mm x 84mm x (6*7 + 3.55)mm
-        assert bounds.size.x == pytest.approx(3 * GRID_SIZE_MM, abs=0.1)
-        assert bounds.size.y == pytest.approx(2 * GRID_SIZE_MM, abs=0.1)
+        # 3x2x6 bin: (126 - 0.5) mm x (84 - 0.5) mm x (6*7 + 3.55) mm
+        assert bounds.size.x == pytest.approx(3 * GRID_SIZE_MM - BASE_GAP_MM)
+        assert bounds.size.y == pytest.approx(2 * GRID_SIZE_MM - BASE_GAP_MM)
         expected_height = 6 * HEIGHT_UNIT_MM + STACKING_LIP_MM
         assert bounds.size.z == pytest.approx(expected_height, abs=0.1)
 
     def test_the_bin_is_declared_centred_on_the_origin_as_the_library_draws_it(self):
         """gridfinity-rebuilt-openscad centres a bin on X and Y and stands it on Z = 0."""
         bounds = DEFAULT.get_bounds({"gridx": 3, "gridy": 2})
-        assert bounds.min_point.to_list()[:2] == pytest.approx([-63.0, -42.0])
-        assert bounds.max_point.to_list()[:2] == pytest.approx([63.0, 42.0])
+        assert bounds.min_point.to_list()[:2] == pytest.approx([-62.75, -41.75])
+        assert bounds.max_point.to_list()[:2] == pytest.approx([62.75, 41.75])
         assert bounds.min_point.z == 0
 
     def test_get_bounds_of_one_override_keeps_the_other_defaults(self):
         bounds = DEFAULT.get_bounds({"gridx": 1})
-        assert bounds.size.x == pytest.approx(GRID_SIZE_MM, abs=0.1)
-        assert bounds.size.y == pytest.approx(2 * GRID_SIZE_MM, abs=0.1)
+        assert bounds.size.x == pytest.approx(GRID_SIZE_MM - BASE_GAP_MM)
+        assert bounds.size.y == pytest.approx(2 * GRID_SIZE_MM - BASE_GAP_MM)
 
     def test_get_bounds_custom(self):
         """Test bounds calculation with custom params."""
         bounds = DEFAULT.get_bounds({"gridx": 2, "gridy": 3, "gridz": 6})
 
-        assert bounds.size.x == pytest.approx(2 * GRID_SIZE_MM, abs=0.1)
-        assert bounds.size.y == pytest.approx(3 * GRID_SIZE_MM, abs=0.1)
+        assert bounds.size.x == pytest.approx(2 * GRID_SIZE_MM - BASE_GAP_MM)
+        assert bounds.size.y == pytest.approx(3 * GRID_SIZE_MM - BASE_GAP_MM)
         expected_height = 6 * HEIGHT_UNIT_MM + STACKING_LIP_MM
         assert bounds.size.z == pytest.approx(expected_height, abs=0.1)
+
+    def test_the_gap_is_the_standards_whatever_the_grid(self):
+        """Gridfinity leaves one 0.5 mm gap per bin (a 41.5 mm base top on a 42 mm
+        grid), kept at half grid too, so bins fit a standard baseplate."""
+        assert BASE_GAP_MM == pytest.approx(0.5)
+        half = DEFAULT.get_bounds({"gridx": 3, "gridy": 2, "half_grid": True})
+        assert half.size.x == pytest.approx(3 * GRID_SIZE_MM / 2 - BASE_GAP_MM)
+        assert half.size.y == pytest.approx(2 * GRID_SIZE_MM / 2 - BASE_GAP_MM)
 
     def test_get_bounds_no_lip(self):
         """Test bounds without stacking lip."""
@@ -213,8 +222,8 @@ class TestGetBinDimensions:
         """Test default 1x1x3 dimensions."""
         dims = get_bin_dimensions()
 
-        assert dims["width_mm"] == GRID_SIZE_MM
-        assert dims["depth_mm"] == GRID_SIZE_MM
+        assert dims["width_mm"] == pytest.approx(GRID_SIZE_MM - BASE_GAP_MM)
+        assert dims["depth_mm"] == pytest.approx(GRID_SIZE_MM - BASE_GAP_MM)
         expected_height = 3 * HEIGHT_UNIT_MM + STACKING_LIP_MM
         assert dims["height_mm"] == pytest.approx(expected_height, abs=0.1)
 
@@ -222,8 +231,8 @@ class TestGetBinDimensions:
         """Test custom grid dimensions."""
         dims = get_bin_dimensions(gridx=2, gridy=3, gridz=6)
 
-        assert dims["width_mm"] == 2 * GRID_SIZE_MM
-        assert dims["depth_mm"] == 3 * GRID_SIZE_MM
+        assert dims["width_mm"] == pytest.approx(2 * GRID_SIZE_MM - BASE_GAP_MM)
+        assert dims["depth_mm"] == pytest.approx(3 * GRID_SIZE_MM - BASE_GAP_MM)
         expected_height = 6 * HEIGHT_UNIT_MM + STACKING_LIP_MM
         assert dims["height_mm"] == pytest.approx(expected_height, abs=0.1)
 
