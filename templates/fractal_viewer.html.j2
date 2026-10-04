@@ -386,6 +386,12 @@
         .contents-item.invalid-inside .problem-mark { color: #b06060; }
         .validity-indicator { cursor: pointer; }
         .site-scad .code-content { max-height: 320px; }
+        .site-jobs { list-style: none; margin: 0; padding: 0; font-size: 0.78rem; max-height: 220px; overflow: auto; }
+        .site-jobs li { padding: 0.25rem 0.45rem; margin-bottom: 0.15rem; border-radius: 4px; color: #ccc; cursor: pointer; }
+        .site-jobs li:hover { background: #2f2f2f; }
+        .site-jobs li.running { color: #ffcc66; background: #2e2716; }
+        .site-jobs li.cancelled, .site-jobs li.failed { color: #dc9a7a; }
+        .site-jobs li.empty { cursor: default; color: #888; font-style: italic; background: none; }
 
         .code-header {
             padding: 0.4rem 0; font-weight: 600; font-size: 0.8rem; color: #ccc;
@@ -541,6 +547,10 @@
                         <details id="site-pinned" class="fold" title="Every camera, view and board a page pinned, every site's, each taken back from its row">
                             <summary>Pinned · every site's</summary>
                             <div id="site-pinned-body"></div>
+                        </details>
+                        <details id="site-jobs" class="fold" title="The jobs of this site's machines -- a print started from a pinned printer's Print card -- the running ones first, then the newest; a row selects its machine and opens it">
+                            <summary>Jobs<span id="site-jobs-count"></span></summary>
+                            <ul id="site-jobs-list" class="site-jobs"></ul>
                         </details>
                         <details id="site-scad" class="fold site-scad" title="The site as OpenSCAD, generated from its tree">
                             <summary>SCAD</summary>
@@ -846,6 +856,10 @@
                 this.validityEl = document.getElementById('validity-indicator');
                 this.codeContentEl = document.getElementById('code-content');
                 this.pinnedEl = document.getElementById('site-pinned');
+                this.siteJobsCountEl = document.getElementById('site-jobs-count');
+                this.siteJobsListEl = document.getElementById('site-jobs-list');
+                this.siteJobs = [];      // GET /jobs?site= for the loaded site: running first, then newest
+                this.siteJobsAt = 0;     // when they were last asked for
                 this.statusEl = document.getElementById('status');
 
                 this.tree = null;            // full recursive tree for the loaded site
@@ -1050,6 +1064,13 @@
                 this.zoomOutBtn.addEventListener('click', () => this.zoomOut());
                 // The toolbar's count of problems opens them, at the top of Site.
                 this.validityEl.addEventListener('click', () => this.openProblems());
+                // A row of Site's Jobs selects its machine, at its level, and opens it.
+                this.siteJobsListEl.addEventListener('click', (e) => {
+                    const row = e.target.closest('li[data-job]');
+                    if (row) this.openJobMachine(row.dataset.job);
+                });
+                // A print begun or ended from a Machine: the site's jobs, asked for again.
+                window.addEventListener('apothecary:jobs-changed', () => this.loadSiteJobs());
                 this.snapToggle.addEventListener('change', () => {
                     this.transformControls.setTranslationSnap(this.snapToggle.checked ? SNAP_INCREMENT : null);
                 });
@@ -1129,6 +1150,7 @@
                         if (n.site === this.siteName) recoloured = this.applyNodeStatus(n.path, n.status) || recoloured;
                     }
                     if (touched || recoloured) { this.updateDeviceViews(); this.syncWorldMarks(); }
+                    this.followJobs(st);
                 });
                 // A bed reading shown in the machine popup lands on the marks, and a
                 // jog sent from it moves the nozzle ahead of the poll that confirms it.
@@ -1200,6 +1222,9 @@
                     // Bindings shell out to arduino-cli (a second or two):
                     // fetched after the scene is on screen, never before.
                     this.loadBindings().then(() => { this.afterBindings(); this.scheduleAutoRefresh(); });
+                    this.siteJobs = [];
+                    this.renderSiteJobs();
+                    this.loadSiteJobs();
                     this.pictureMarks.unchoose();
                     this.pictures.still();
                     this.pictureMarks.load(name);
@@ -2876,6 +2901,11 @@
             // view steps there first when it is another.
             goToProblem(path) {
                 if (!path || !this.nodeByPath(path)) { this.setStatus(`${path || 'that problem'} names no piece in this site`, 'error'); return false; }
+                return this.selectAtItsLevel(path);
+            }
+
+            // A piece selected at its own level: the view steps out (or in) to its parent first.
+            selectAtItsLevel(path) {
                 const parent = path.includes('.') ? path.slice(0, path.lastIndexOf('.')) : '';
                 if (parent !== this.focusPath.join('.')) {
                     this.focusPath = parent ? parent.split('.') : [];
@@ -2883,6 +2913,81 @@
                     this.renderFocus();
                 }
                 return this.selectPath(path);
+            }
+
+            // ---------------------------------------------------------------
+            // Site's Jobs: what the site's machines ran (GET /jobs?site=), the
+            // running ones first, then the newest. A job is started from its
+            // machine's card -- a print from the Print card -- never here.
+            // ---------------------------------------------------------------
+
+            async loadSiteJobs() {
+                const site = this.siteName;
+                if (!site) return;
+                this.siteJobsAt = Date.now();
+                let found = [];
+                try {
+                    const response = await fetch(`${BASE_URL}/jobs?site=${encodeURIComponent(site)}`);
+                    if (!response.ok) throw new Error(`jobs: ${response.status}`);
+                    found = await response.json();
+                } catch (err) {
+                    console.error(err);
+                }
+                if (site !== this.siteName) return;  // another site was loaded meanwhile
+                this.siteJobs = found;
+                this.renderSiteJobs();
+            }
+
+            // The machine a job ran on, by the node it is pinned to: the printer above its board.
+            jobMachine(job) {
+                return job.machine.path && this.nodeByPath(job.machine.path) ? this.bearerPathFor(job.machine.path) : job.machine.port;
+            }
+
+            renderSiteJobs() {
+                const jobs = this.siteJobs;
+                const running = jobs.filter((j) => j.outcome === 'running').length;
+                this.siteJobsCountEl.textContent = jobs.length ? ` · ${jobs.length}${running ? ` · ${running} running` : ''}` : '';
+                this.siteJobsListEl.innerHTML = jobs.length
+                    ? jobs.map((j) => {
+                        const machine = this.jobMachine(j);
+                        const part = j.part ? ` → ${esc(j.part.path)}` : '';
+                        const how = j.outcome === 'running' ? `running ${Math.round((j.progress || 0) * 100)}%` : esc(j.outcome);
+                        const why = j.reason ? `${j.reason}. ` : '';
+                        return `<li class="site-job ${esc(j.outcome)}" data-job="${esc(j.id)}" title="${esc(why)}Started ${esc(new Date(j.started_at).toLocaleString())}${j.finished_at ? `, ended ${esc(new Date(j.finished_at).toLocaleString())}` : ''}. Select ${esc(machine)} and open it">${esc(machine)} · ${esc(j.kind)} · ${esc(j.input.name)}${part} · ${how} · ${esc(new Date(j.started_at).toLocaleString())}</li>`;
+                    }).join('')
+                    : '<li class="empty">none yet: a print started from the Print card of a printer pinned here is listed here</li>';
+            }
+
+            // A poll of a machine: a running job's progress shown, and a job begun or
+            // ended on one of this site's machines asked for again (not more than
+            // every few seconds).
+            followJobs(st) {
+                const live = st.job && st.job.kind === 'print' && st.job.running ? st.job : null;
+                const listed = this.siteJobs.find((j) => j.outcome === 'running' && j.machine.port === st.port);
+                if (live && listed && listed.id === live.job_id) {
+                    listed.progress = live.progress;
+                    this.renderSiteJobs();
+                    return;
+                }
+                if (!live && !listed) return;
+                const ours = Object.values(this.bindings).some((row) => row.device && row.device.port === st.port);
+                if ((ours || listed) && Date.now() - this.siteJobsAt > 3000) this.loadSiteJobs();
+            }
+
+            // A job's row in Site: its machine selected at its level, and its Machine opened.
+            openJobMachine(id) {
+                const job = this.siteJobs.find((j) => j.id === id);
+                if (!job) return false;
+                const pinned = job.machine.path;
+                if (!pinned || !this.nodeByPath(pinned)) {
+                    this.setStatus(`${job.machine.port}: that machine is pinned nowhere in ${this.siteName} now`, 'error');
+                    return false;
+                }
+                const machine = this.bearerPathFor(pinned);
+                this.selectAtItsLevel(machine);
+                if (!this.openMachine(machine)) return false;
+                this.setStatus(`Opened ${machine}: its ${job.kind} of ${job.input.name}, ${job.outcome}`, 'success');
+                return true;
             }
 
             // The toolbar's count: Site opened (and the rail shown, where it is

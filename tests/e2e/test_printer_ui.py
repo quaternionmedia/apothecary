@@ -893,6 +893,81 @@ def test_the_print_records_kept_before_jobs_show_in_the_cards_history(
     expect(log).to_have_attribute("href", re.compile(r"/jobs/20260920T132512\.468-dev_ttyFAKE1$"))
 
 
+def _printing(url: str, file_id: str, part: str | None = None) -> dict:
+    """A print started over the API, as the card starts one: armed, the card's own print
+    paused (the simulator is mid-way through one) and polled, then the file sent."""
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        http.post(
+            "/firmware/printers/control", json={"port": PRINTER, "armed": True}
+        ).raise_for_status()
+        http.post(
+            "/firmware/printers/command", json={"port": PRINTER, "command": "M25"}
+        ).raise_for_status()
+        http.get("/firmware/printers/status", params={"port": PRINTER}).raise_for_status()
+        r = http.post(
+            "/firmware/printers/print", json={"port": PRINTER, "file_id": file_id, "part": part}
+        )
+        r.raise_for_status()
+        return r.json()
+
+
+def _until_it_ends(url: str, cancel: bool = False) -> dict:
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        if cancel:
+            http.post("/firmware/printers/print/cancel", json={"port": PRINTER})
+        for _ in range(600):  # 30 s
+            job = http.get("/firmware/printers/print", params={"port": PRINTER}).json()
+            if not job["running"]:
+                return job
+            time.sleep(0.05)
+    raise AssertionError(f"the print did not end: {job}")
+
+
+@pytest.mark.e2e
+def test_site_lists_the_sites_jobs_and_a_row_opens_its_machine(page: Page, printer_url: str):
+    """Site's Jobs lists the jobs of the garage's machines: a print running on printer_1
+    on top, then the one before it with the part it made and how it ended; the row of
+    either selects printer_1 and opens its Machine, from whatever level is shown."""
+    _pin(printer_url, BOARD)
+    _identify(printer_url)
+    dot = _keep(printer_url, "dot.gcode", "G28\nG1 X5 Y5 E0.1\nM84\n")
+    slow = _keep(printer_url, "slow cube.gcode", SLOW)
+    before = _printing(printer_url, dot, part="footpedal")
+    assert _until_it_ends(printer_url)["stage"] == "done"
+    running = _printing(printer_url, slow)
+    try:
+        page.goto(f"{printer_url}/viewer/sites/garage")
+        expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+        jobs = page.locator("#site-jobs")
+        expect(jobs.locator("summary")).to_contain_text("running", timeout=10000)
+        jobs.locator("summary").click()
+        rows = page.locator("#site-jobs-list li[data-job]")
+        expect(rows.first).to_have_attribute("data-job", running["job_id"])
+        expect(rows.first).to_have_class(re.compile(r"\brunning\b"))
+        expect(rows.first).to_contain_text("printer_1 · print · slow cube.gcode · running")
+        expect(rows.nth(1)).to_have_attribute("data-job", before["job_id"])
+        expect(rows.nth(1)).to_contain_text("printer_1 · print · dot.gcode → footpedal · done")
+        # From a level below, the row steps out to printer_1, selects it and opens it.
+        page.locator("#contents-list .contents-item[data-path='workbench']").dblclick()
+        expect(page.locator("#contents-list .contents-item[data-path='printer_1']")).to_have_count(
+            0, timeout=10000
+        )
+        rows.first.click()
+        machine = page.locator(".panel[data-panel='machine']")
+        expect(machine).to_be_visible(timeout=10000)
+        expect(machine.locator(".panel-name")).to_contain_text("printer_1 · /dev/ttyFAKE1")
+        expect(page.locator("#selected-body .prop-row", has_text="Name")).to_contain_text(
+            "printer_1"
+        )
+        # It ends: the row says how, and running is no longer said.
+        ended = _until_it_ends(printer_url, cancel=True)
+        assert ended["stage"] == "cancelled"
+        expect(rows.first).to_contain_text("slow cube.gcode · cancelled", timeout=10000)
+        expect(jobs.locator("summary")).not_to_contain_text("running")
+    finally:
+        _until_it_ends(printer_url, cancel=True)
+
+
 def _wearing_its_badge(page: Page, url: str):
     """The garage with the printer's board pinned and identified: the badge over printer_1."""
     _pin(url, BOARD)

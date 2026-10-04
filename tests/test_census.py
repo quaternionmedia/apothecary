@@ -152,6 +152,12 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # read when Print is pressed, so nothing listens to it. Not ring-backed: Control ›
 # Print › Send file prints what the card has chosen, the part with the file, and no
 # cell chooses either. No ring address moved.
+#
+# Phase 3, Site lists the site's jobs. Before: 119 controls of its own, 58
+# ring-backed (48.7%), 80 places the page listens. After: 119, 58 ring-backed
+# (48.7%), 81 places. Added: a job's row in Site's Jobs, a list, selecting its
+# machine at its level and opening it (siteJobsListEl:click:closest). Site's Jobs
+# is a fold, as Pinned is, and adds no control. No ring address moved.
 VIEWER_CEILING = 119
 
 

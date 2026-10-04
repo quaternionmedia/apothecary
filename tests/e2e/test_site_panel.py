@@ -1,5 +1,6 @@
 """Site: the site's Contents tree as its body, its problems at the top, its
-generated SCAD and Pinned -- every site's pins, each taken back from its row.
+generated SCAD, Pinned -- every site's pins, each taken back from its row -- and
+its Jobs (tests/e2e/test_printer_ui.py prints one and opens its machine from it).
 
 The problems: a piece a problem names -- by the tree path the server sends
 beside its name -- is red in the tree and its ancestors say something inside is

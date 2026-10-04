@@ -609,6 +609,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "a problem's row at the top of Site, selecting its piece at its level",
     ),
+    "siteJobsListEl:click:closest": (
+        LIST,
+        WHAT_YOU_SEE,
+        "a job's row in Site's Jobs, selecting its machine at its level and opening it",
+    ),
     # A readout that opens what it counts, as a badge selects what it stands over;
     # a span listened to, not a control written into the markup.
     "validityEl:click:openProblems": (
