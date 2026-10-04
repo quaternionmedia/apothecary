@@ -270,10 +270,33 @@ or answered with an error or a resend, ends the print. While it prints,
 heaters, fan and break-wait stay available; motion, SD, homing, the bed and
 release, reconnect, reset or upload on that port are refused. **Cancel** and
 a failed line send the safe-off (`M104 S0`, `M140 S0`, `M107`, `M84`); E-STOP
-ends the job with nothing more sent. Every print is recorded under
-`~/.apothecary/prints/records/` with its outcome. It is not a queue, a
-slicer or a webcam; the *G-code printer seam* record's sixth decision draws
-that line.
+ends the job with nothing more sent. It is not a queue, a slicer or a
+webcam; the *G-code printer seam* record's sixth decision draws that line.
+
+### A print is a job
+
+Every print started from the card is a *job* (`apothecary/jobs.py`): one
+operation a machine performs on a part. The job records its kind (`print`),
+the printer (its port, the board's own identity, the node it is pinned to),
+the site, the part or piece it makes when one is chosen on the card (the
+**makes** drop-down lists the parts and pieces of the site the printer is
+pinned in), the file it ran (name, size, SHA-256), when it started and
+finished, and how it ended -- done, cancelled or failed, with the reason. A
+running job is what marks the printer's node `printing`, from the moment it
+starts; a hand-set `maintenance` is left alone. Jobs are kept under
+`~/.apothecary/jobs/`, this account's alone.
+
+The card's history is the printer's jobs (`GET /jobs?machine=PORT&kind=print`),
+each with its JSON (`GET /jobs/{id}`, with the tail of what the firmware
+said), and the viewer's **Site** lists the jobs of the site's machines, a row
+opening its machine. `GET /jobs/choices?machine=PORT` says what a job there
+would record and which parts it can name. The print records kept before jobs
+(`~/.apothecary/prints/records/`) are carried over as print jobs the first
+time jobs are read, and left where they were.
+
+A kind of job belongs to a kind of machine: a printer offers `print`
+(`jobs.PRINT`), and a mill or a laser would register its own operation with
+`jobs.register` and start its jobs from its own card in the same way.
 
 ## Serial engines
 
