@@ -94,6 +94,7 @@ One line per change, each with a link to where it is described. The format follo
 - Make and Make all refuse a view whose shapes are not found or that has no width, naming the step that comes first. ([code](apothecary/vision/views.py))
 - Every step's message names the next one: a camera pinned names Take picture, a view pinned names Find shapes, shapes found name Make. ([code](apothecary/static/pictures.js))
 - A camera is pinned at a root structure with a footprint, or the floor, one per host. ([code](apothecary/routes/pictures.py))
+- The garage has one printer, printer_1, at the bench's left end, the bench's middle clear; printer_2 and printer_3 are gone. ([plan](docs/plans/cameras-and-clutter-2026-10-04.md))
 - A camera's badge is the place badge: a click selects the structure or the floor, and shows no camera live. ([test](tests/e2e/test_camera.py))
 - Forgetting a kept picture unpins its looks; pictures are served at a size and never cached. ([code](apothecary/routes/pictures.py))
 - The canvas ring's Camera is Pictures, in the same seat: Add (at the floor), Floor, Purge, Gather. ([code](apothecary/menu.py))

@@ -1,9 +1,9 @@
 """A camera is a part standing in a site, aimed where it looks.
 
 The fixture is tests/test_views_api.py's world: the garage, its bench's top at
-z 780, three printers standing on it whose tops are at z 1350 (printer_2 over
-the bench's middle), and a stated picture 1000 by 500 pixels. A camera added
-above the bench stands 600 mm above printer_2; one added at the floor stands
+z 780, printer_1 standing at the bench's left end with its top at z 1350, the
+bench's middle clear, and a stated picture 1000 by 500 pixels. A camera added
+above the bench stands 600 mm above its middle; one added at the floor stands
 600 mm above the floor just past the garage's roots.
 """
 
@@ -83,19 +83,20 @@ def test_add_here_stands_a_camera_above_the_place_looking_straight_down():
     assert added.status_code == 201, added.text
     camera = added.json()["camera"]
     assert camera["name"] == "camera_1"
-    assert camera["position"] == [900.0, 300.0, 1950.0]  # 600 above printer_2 on the bench
+    assert camera["position"] == [900.0, 300.0, 1380.0]  # 600 above the bench's middle
     assert (camera["turn"], camera["tilt"], camera["fov"]) == (0.0, 0.0, 60.0)
     assert camera["fov_taught"] is False and camera["device"] is None
-    assert camera["added"] == {"position": [900.0, 300.0, 1950.0], "turn": 0.0, "tilt": 0.0}
-    assert camera["lands"] == {"host": "printer_2", "point": [900.0, 300.0, 1350.0]}
+    assert camera["added"] == {"position": [900.0, 300.0, 1380.0], "turn": 0.0, "tilt": 0.0}
+    # Its picture lands on the bench's own top, where it was added.
+    assert camera["lands"] == {"host": "workbench", "point": [900.0, 300.0, 780.0]}
     # A root structure of the site, drawn as the webcam, standing in the air.
     root = _roots(c)["camera_1"]
     tree = next(
         n for n in c.get("/sites/garage").json()["tree"]["children"] if n["name"] == "camera_1"
     )
     assert tree["part_ref"] == "webcam" and tree["category"] == "camera"
-    assert root["world_bounds"]["min"] == pytest.approx([855.0, 285.0, 1950.0])
-    assert root["world_bounds"]["max"] == pytest.approx([945.0, 315.0, 1984.0])
+    assert root["world_bounds"]["min"] == pytest.approx([855.0, 285.0, 1380.0])
+    assert root["world_bounds"]["max"] == pytest.approx([945.0, 315.0, 1414.0])
     assert added.json()["site"]["is_valid"], added.json()["site"]["violations"]
     # At the floor: just past the roots, 600 up; its picture lands on the floor.
     floor = _add(c, host="")
@@ -134,9 +135,10 @@ def test_a_camera_is_moved_turned_and_tilted_and_its_pictures_stay_where_they_la
     # Its node is aimed too, and its box grew.
     box = _roots(c)["camera_1"]["world_bounds"]
     assert box["max"][2] - box["min"][2] > 34.0
-    # The picture it took before still lies on printer_2, as it was.
+    # The picture it took before still lies on the bench's middle, as it was.
     still = next(v for v in _attached(c)["views"] if v["id"] == first["id"])
-    assert still["host"] == "printer_2" and still["mat"]["centre"] == pytest.approx(
+    assert still["mat"]["centre"] == pytest.approx([900.0, 300.0, 780.0])
+    assert still["host"] == "workbench" and still["mat"]["centre"] == pytest.approx(
         first["mat"]["centre"]
     )
     # Only what is given changes; nonsense is refused.
@@ -230,7 +232,7 @@ def test_reset_stands_a_camera_back_where_it_was_added_and_keeps_its_device_lens
     r = c.post("/sites/garage/reset")
     assert r.status_code == 200, r.text
     camera = _attached(c)["cameras"][0]
-    assert camera["position"] == [900.0, 300.0, 1950.0] and (camera["turn"], camera["tilt"]) == (
+    assert camera["position"] == [900.0, 300.0, 1380.0] and (camera["turn"], camera["tilt"]) == (
         0,
         0,
     )
@@ -246,11 +248,13 @@ def test_reset_stands_a_camera_back_where_it_was_added_and_keeps_its_device_lens
 def test_a_picture_lands_on_a_top_on_the_floor_or_nowhere_and_nowhere_makes_nothing():
     c = TestClient(app)
     _add(c)
-    on_top = _pin(c, host=None, camera="camera_1")
-    assert on_top["host"] == "printer_2"
-    # Over the bench's clear front strip: the bench.
-    _pose(c, "camera_1", position=[900.0, 50.0, 1380.0])
+    # Added at the bench, over its clear middle: the bench's top.
     assert _pin(c, host=None, camera="camera_1")["host"] == "workbench"
+    # Over printer_1, standing on the bench: the printer's top, the first it meets.
+    _pose(c, "camera_1", position=[333.0, 336.0, 1950.0])
+    on_top = _pin(c, host=None, camera="camera_1")
+    assert on_top["host"] == "printer_1"
+    assert on_top["mat"]["centre"] == pytest.approx([333.0, 336.0, 1350.0])
     # Past the garage: the floor, the picture's anchor where its centre ray lands.
     _pose(c, "camera_1", position=[7000.0, 300.0, 600.0])
     floor = _pin(c, host=None, camera="camera_1")
@@ -273,14 +277,14 @@ def test_a_picture_lands_on_a_top_on_the_floor_or_nowhere_and_nowhere_makes_noth
 
 
 def test_a_tilted_cameras_pieces_stand_where_their_shapes_land():
-    """A camera 600 mm over the bench's clear left end, tilted 20 degrees toward the
-    back: each piece stands where its shape's middle lands through the pinhole.
-    Over the clear front strip, the same tilt meets printer_2's front first: a wall."""
+    """A camera 600 mm over the bench's middle, tilted 20 degrees toward the back:
+    each piece stands where its shape's middle lands through the pinhole. In front
+    of printer_1, the same tilt meets the printer's front first: a wall."""
     c = TestClient(app)
     _add(c)
-    _pose(c, "camera_1", position=[900.0, 50.0, 1380.0], tilt=20)
+    _pose(c, "camera_1", position=[333.0, 50.0, 1380.0], tilt=20)
     assert _pin(c, host=None, camera="camera_1")["host"] is None
-    _pose(c, "camera_1", position=[40.0, 300.0, 1380.0], tilt=20)
+    _pose(c, "camera_1", position=[900.0, 300.0, 1380.0], tilt=20)
     view = _pin(c, host=None, camera="camera_1")
     assert view["host"] == "workbench" and view["mat"]["homography"] is not None
     made = c.post(f"/sites/garage/views/{view['id']}/make", json={"shape": 1}).json()
@@ -300,7 +304,7 @@ def test_a_tilted_cameras_pieces_stand_where_their_shapes_land():
         for f, r, d in zip(forward, right, down, strict=True)
     ]
     s = 600.0 / -ray[2]
-    expected = (40.0 + s * ray[0], 300.0 + s * ray[1], 780.0)
+    expected = (900.0 + s * ray[0], 300.0 + s * ray[1], 780.0)
     root = _roots(c)[piece]
     assert (root["position"]["x"], root["position"]["y"], root["position"]["z"]) == pytest.approx(
         expected
@@ -396,6 +400,8 @@ def test_add_here_and_remove_are_carried_by_the_server_and_the_ring_knows_a_came
         "Remove",
         "Part",
     ]
+    part = next(o for o in ring["options"] if o["label"] == "Part")
+    assert [(o["label"], o["action"]) for o in part["children"]] == [("Edit", "part:edit")]
     device = next(o for o in ring["options"] if o["label"] == "Device")
     assert [(o["action"], o["marked"]) for o in device["children"]] == [
         ("camera:device:mine", True)
@@ -414,7 +420,13 @@ def test_add_here_and_remove_are_carried_by_the_server_and_the_ring_knows_a_came
     }
     assert c.post("/menu/intent", json=_intent("camera:remove", ["camera_1"])).status_code == 404
     # The page's verbs are the page's.
-    for action in ("camera:live", "camera:take-picture", "camera:device:mine", "camera:allow"):
+    for action in (
+        "camera:live",
+        "camera:take-picture",
+        "camera:device:mine",
+        "camera:allow",
+        "part:edit",
+    ):
         r = c.post("/menu/intent", json=_intent(action, ["camera_2"]))
         assert r.status_code == 200 and r.json()["carried_by"] == "the viewer carries it out"
 

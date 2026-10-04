@@ -213,14 +213,14 @@ def test_bisection_finds_the_field_of_view_that_gives_a_width():
 # --- where a centre ray lands -------------------------------------------------------------
 
 BENCH = Box("workbench", (0.0, 0.0, 0.0), (1800.0, 600.0, 780.0))
-PRINTER = Box("printer_2", (618.0, 109.0, 780.0), (1088.0, 563.0, 1350.0))
+PRINTER = Box("printer", (618.0, 109.0, 780.0), (1088.0, 563.0, 1350.0))
 
 
 def test_a_ray_lands_on_the_first_top_the_floor_or_nowhere():
     down = (0.0, 0.0, -1.0)
     # Above a printer standing on a bench: the printer's top, not the bench's.
     hit = first_surface((900.0, 300.0, 2000.0), down, [BENCH, PRINTER])
-    assert (hit.name, hit.side) == ("printer_2", False) and hit.point[2] == 1350.0
+    assert (hit.name, hit.side) == ("printer", False) and hit.point[2] == 1350.0
     # Above the bench's clear front strip: the bench.
     hit = first_surface((900.0, 50.0, 2000.0), down, [BENCH, PRINTER])
     assert (hit.name, hit.side, hit.point) == ("workbench", False, (900.0, 50.0, 780.0))
@@ -229,7 +229,7 @@ def test_a_ray_lands_on_the_first_top_the_floor_or_nowhere():
     assert (hit.name, hit.point) == ("", (3000.0, 50.0, 0.0))
     # Level, at a printer's side: a wall, landed on nowhere.
     hit = first_surface((300.0, 336.0, 1000.0), (1.0, 0.0, 0.0), [BENCH, PRINTER])
-    assert hit.side and hit.name == "printer_2"
+    assert hit.side and hit.name == "printer"
     # Level past everything, or up: the sky.
     assert first_surface((300.0, 336.0, 3000.0), (1.0, 0.0, 0.0), [BENCH, PRINTER]) is None
     assert first_surface((300.0, 336.0, 1000.0), (0.0, 0.0, 1.0), [BENCH, PRINTER]) is None

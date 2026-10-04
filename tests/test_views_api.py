@@ -8,7 +8,7 @@ Its three shapes, read in the world at that width:
 
 - 0, ``block``: centre (333, 336), under ``printer_1`` (x 98..568, y 109..563);
 - 1, ``coin``: centre (1080, 50), in front of every printer, touching nothing;
-- 2, ``bar``: centre (590, 590), between ``printer_1`` and ``printer_2``, behind them.
+- 2, ``bar``: centre (590, 590), just past ``printer_1``'s right side, behind it.
 """
 
 from __future__ import annotations
@@ -170,15 +170,15 @@ def test_a_pinned_view_has_no_shapes_until_find_shapes_finds_them(world):
 def test_a_taken_picture_is_kept_and_pinned_with_no_shapes(world):
     """What a camera's Take picture sends: a frame kept under captures/ with its
     camera, lying where the camera looks, sized by how the camera stands, and no
-    finder run. A camera added above the bench's middle stands 600 mm above
-    printer_2, which stands there, and its picture lies on printer_2's top: the
-    first top its centre ray meets."""
+    finder run. A camera added above the bench stands 600 mm above its clear
+    middle, and its picture lies on the bench's own top: the first top its centre
+    ray meets."""
     import math
 
     c = TestClient(app)
     added = c.post("/sites/garage/cameras", json={"host": "workbench"})
     assert added.status_code == 201, added.text
-    assert added.json()["camera"]["position"] == [900.0, 300.0, 1350.0 + 600.0]
+    assert added.json()["camera"]["position"] == [900.0, 300.0, 780.0 + 600.0]
     r = c.post(
         "/photos/pictures",
         params={"name": "camera_1", "site": "garage", "camera": "camera_1"},
@@ -187,9 +187,9 @@ def test_a_taken_picture_is_kept_and_pinned_with_no_shapes(world):
     assert r.status_code == 201, r.text
     view = r.json()["view"]
     assert r.json()["path"].startswith("captures/") and view["picture"] == r.json()["path"]
-    assert view["camera"] == "camera_1" and view["host"] == "printer_2"
+    assert view["camera"] == "camera_1" and view["host"] == "workbench"
     assert view["mm_across"] == pytest.approx(2 * 600 * math.tan(math.radians(30)))
-    assert view["mat"]["centre"] == pytest.approx([900.0, 300.0, 1350.0])
+    assert view["mat"]["centre"] == pytest.approx(list(BENCH_TOP))
     assert view["shapes"] == [] and view["finder"] is None and view["found_at"] is None
     # A host and a camera together are refused, and a camera that is not there.
     both = {"name": "x", "site": "garage", "camera": "camera_1", "host": "workbench"}
@@ -221,7 +221,7 @@ def test_make_before_find_shapes_is_refused_and_names_find_shapes(world):
     assert r.status_code == 409 and "Find shapes" in r.json()["detail"], r.text
     # Found, and unsized: the refusal names the width and where it is typed.
     unsized = c.post(
-        "/sites/garage/views", json={"host": "printer_2", "picture": "bench_top.png"}
+        "/sites/garage/views", json={"host": "printer_1", "picture": "bench_top.png"}
     ).json()
     c.post(f"/sites/garage/views/{unsized['id']}/find", json={"finder": "stated"})
     r = c.post(f"/sites/garage/views/{unsized['id']}/make", json={"all": True})
@@ -328,7 +328,7 @@ def test_cameras_added_at_a_host_and_at_the_floor_are_listed_where_they_look(wor
     floor = c.post("/sites/garage/cameras", json={"host": ""}).json()["camera"]
     listed = c.get("/sites/garage/attached").json()["cameras"]
     assert [(cam["name"], cam["lands"]["host"]) for cam in listed] == [
-        (bench["name"], "printer_2"),  # it stands on the bench's middle
+        (bench["name"], "workbench"),
         (floor["name"], ""),
     ]
     assert all(cam["device"] is None and cam["fov"] == 60 for cam in listed)
@@ -340,7 +340,7 @@ def test_a_new_view_from_a_camera_is_sized_by_how_it_stands(world):
     c = TestClient(app)
     c.post("/sites/garage/cameras", json={"host": "workbench"})
     view = _pin(c, host=None, camera="camera_1")
-    assert view["camera"] == "camera_1" and view["host"] == "printer_2"
+    assert view["camera"] == "camera_1" and view["host"] == "workbench"
     assert view["mm_across"] == pytest.approx(1200 * math.tan(math.radians(30)))
     assert view["scale"] is None  # no person sized it: it follows its camera's lens
 
@@ -681,7 +681,7 @@ def test_names_stay_unique(world):
     made = c.post(f"/sites/garage/views/{view['id']}/make", json={"all": True}).json()["made"]
     c.delete(f"/sites/garage/made/{made[0]}")
     again = c.post(f"/sites/garage/views/{view['id']}/make", json={"shape": 0}).json()["made"]
-    second = _pin(c, host="printer_2", mm_across=1800)
+    second = _pin(c, host="printer_1", mm_across=1800)
     more = c.post(f"/sites/garage/views/{second['id']}/make", json={"all": True}).json()["made"]
     names = [s["name"] for s in c.get("/sites/garage").json()["structures"]]
     assert len(names) == len(set(names))
