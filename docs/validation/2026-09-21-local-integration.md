@@ -158,8 +158,8 @@ On your own server, in the garage.
       uprights, the top bar, the belt tensioner boss at the Y rail's front).
       The printer's own body is not drawn at this level -- it is the picture
       one level up, which is how the viewer treats every parent. *Zoom Out*.
-- [ ] In the parts library (`/viewer/sites/parts_library`): 22 parts in a
-      grid; double-click `arduino_uno` → the breadcrumb reads
+- [ ] In the parts library (`/viewer/sites/parts_library`): every part
+      `apothecary parts list` names, in a grid; double-click `arduino_uno` → the breadcrumb reads
       `parts_library › arduino_uno`, the Selected panel carries the part's
       section (SCAD source, readiness, no parameters -- it is described by
       its sidecar, not a wrapper). `ender3` has parameters: `z_axis`,
@@ -183,8 +183,8 @@ ls parts/demo_brick/ ; cat parts/demo_brick/part.json
       with the footprint to paste.
 - [ ] `parts info` → `category: imported`, bounds `min y -76.2`, the source
       block with your title, author, licence, URL and `obtained` today.
-- [ ] Reload `/viewer/sites/parts_library` → 23 parts; `demo_brick` is a
-      grid cell; double-click it → its SCAD is the one `import(...)` line.
+- [ ] Reload `/viewer/sites/parts_library` → one part more; `demo_brick` is
+      a grid cell; double-click it → its SCAD is the one `import(...)` line.
 - [ ] `uv run apothecary parts import /tmp/brick.obj --name demo_brick` →
       refused: *exists; --force replaces it*. With `--license CC-BY-NC-4.0`
       and `--force` → a yellow line: *a licence with a field-of-use
@@ -207,12 +207,12 @@ On your own server, in the garage, with the page freshly loaded.
 - [ ] One rail, on the right of the world: **Site** and **Selected**
       stacked in it, both open -- Site with the garage's tree, the category
       chips above it and three folded sections below it, **Pinned**,
-      **Jobs** and **SCAD** -- and below them a strip of tabs, **Pictures**,
-      not shown. The other side of the world is world, and the rail leaves it
-      at least half the page.
-- [ ] Press the tab → its panel shows under the strip; press it again → it
-      folds away. With a machine open and docked (section 6), its tab and its
-      log's join the strip: pressing one shows that one instead.
+      **Jobs** and **SCAD** -- and below them a strip of tabs, **Pictures**
+      and **Bench**, neither shown. The other side of the world is world, and
+      the rail leaves it at least half the page.
+- [ ] Press a tab → its panel shows under the strip; press it again → it
+      folds away. With a machine open and docked (section 6), its tab joins
+      the strip, its log in it: pressing a tab shows that one instead.
 - [ ] Press **`** (or `~`) → the rail hides and a tab stands in for it;
       press again → back. Typing in a text box never triggers it.
 - [ ] Drag the rail's inner edge → its width follows, never more than half
@@ -233,8 +233,9 @@ On your own server, in the garage, with the page freshly loaded.
       and printer_1 is selected. Close Site, click the toolbar's count →
       Site opens on its problems. Type 100 back → *Layout valid*.
 - [ ] Right-click the canvas → the ring; **Panels** → a cell per panel
-      (Site, Selected, Pictures, **Machine** (which groups the machine and
-      its log), Rail); a digit toggles one.
+      (Site, Selected, Pictures, **Machine** (a board's, its log in it),
+      Rail, and **Bench**, which opens on the Bench itself, then its verbs);
+      a digit toggles one.
 - [ ] Select `printer_1`, press **m** → the node ring: Device, Control, Why
       this, Into, cardinals first, 5 backs out.
 - [ ] A **badge** floats above every pinned, connected board and follows it

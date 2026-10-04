@@ -9,8 +9,11 @@ Apothecary builds 3D-printable things from Python and keeps the parts it has bui
   OpenSCAD or JSCAD, from Python or from a scene JSON file.
 - **A parts library.** Each part is a folder under `parts/`: its SCAD, the parameters and
   bounds it declares, and the STL the `openscad` CLI builds from it.
-- **A viewer.** A local FastAPI server and a three.js viewer that zooms through sites,
-  assemblies and parts at any depth.
+- **A viewer.** A local FastAPI server and one page: a three.js world that zooms through
+  sites, assemblies and parts at any depth, with one rail beside it -- **Site** (the
+  tree, its problems, its SCAD, every pin and the site's jobs) and **Selected** stacked
+  over a strip of tabs, **Pictures**, the **Bench** and a docked **Machine**. The ring
+  (`m`, or a right-click) reaches every one of them by address.
 - **Boards and printers.** Sketches kept with their parts are compiled and uploaded to
   Arduinos and ESP32s, from the command line or the viewer's Bench; a Marlin printer is
   monitored, and drives its node in the viewer. Each board pinned in the viewer has one

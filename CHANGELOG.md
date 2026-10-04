@@ -150,6 +150,7 @@ One line per change, each with a link to where it is described. The format follo
 
 ### Fixed
 
+- A wedge is drawn in the viewer as the triangle it is built as, not a round cone. ([test](tests/test_photo_in_the_viewer.py))
 - Camera › Pin here › Allow pins the one camera the browser names at once and names Look; with several it reopens the ring at Pin here; a refusal says what to do. ([test](tests/e2e/test_first_camera.py))
 - A camera allowed for the site in the address bar is named under Pin here without a reload. ([code](apothecary/static/pictures.js))
 - Selected names the ring path that takes or adds a picture at a host or the floor, and what Look, Live and Keep do once a camera is pinned. ([viewer](templates/fractal_viewer.html.j2))

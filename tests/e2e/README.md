@@ -32,10 +32,13 @@ Without a server, `pytest` skips the browser tests with a note saying so.
 
 Every server comes from one factory, the `start_server` fixture in
 `conftest.py`, on a free port with state of its own. `test_printer_ui.py`,
-`test_ring.py`, `test_one_machine.py` and `test_bench.py` ask it for servers of their own, so
-what they pin, arm, flash and print stays off the session's server. Every
-other module uses that one, which lives for the whole run: take back what a
-test pins, places or adds, or the tests after it see it.
+`test_ring.py`, `test_one_machine.py`, `test_bench.py` and
+`test_viewer_regressions.py` ask it for servers of their own, so what they pin,
+arm, flash and print stays off the session's server, and
+`test_docs_bench_walkthrough.py` for one whose picture folder holds only what
+its page puts there. Every other module uses that one, which lives for the
+whole run: take back what a test pins, places or adds, or the tests after it
+see it.
 
 ## Running in parallel
 
