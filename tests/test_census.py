@@ -249,7 +249,43 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # went with it; those the Bench kept are named above (Phase 5, the Bench), and its
 # device cards are each board's Machine: Probe and Live are a devkit's Probe and
 # Listen, Printer?/Poll its Identify and a printer's Poll, ⤢ Monitor its Open.
-VIEWER_CEILING = 116
+#
+# Cameras-and-clutter Phase 2, one header row. Before: 116 controls of its own, 60
+# ring-backed (51.7%), 77 places the page listens. After: 114, 62 ring-backed
+# (54.4%), 76 places. Gone: Load (load-btn, and its listener; choosing a site in its
+# drop-down loads it, as it already did) and Zoom Out (zoom-out-btn, and its
+# listener; ring-backed by Up, which the trail's crumb one level up now wears, and
+# which a crumb, Backspace and Up all do). Snap to grid, Detail and Assembly
+# outlines move into the header's ⚙ View menu -- a fold, as Site's sections are, so
+# no control is added for it -- and are ring-backed by the canvas ring's new
+# Panels › View (snap-toggle by View › Snap to grid, detail-mode by View › Detail,
+# overlay-toggle by View › Outlines). One place the page listens is added: a press
+# outside the View menu folds it away (document:pointerdown:foldViewMenu). The
+# trail's listeners keep their keys. No ring address moved: View is seated after
+# Panels › Bench, at 91 (31 inside a piece, where the canvas ring's top holds
+# eight): Snap to grid 918, Detail 916 (Full 9168, Black box 9166, Dot 9162),
+# Outlines 912.
+#
+# Phase 2, the hint bar. Before: 114 controls of its own, 62 ring-backed, 76 places
+# the page listens; after: 114, 62, 77. The hint bar shows on a first visit and
+# fades after a few things done; one place is added, ? bringing it back
+# (window:keydown:onHintKey), a key, as Backspace is. No control was added and no
+# ring address moved.
+#
+# Phase 2, walls. Before: 114 controls of its own, 62 ring-backed (54.4%), 77 places
+# the page listens. After: 115, 63 ring-backed (54.8%), 78 places. Walls are drawn
+# faded and a click in the world passes through them; the View menu's Walls
+# selectable (walls-toggle, and its listener wallsToggle:change:setWallsSelectable)
+# lets a click pick them again for the session, ring-backed by Panels › View ›
+# Select walls (914, appended after Outlines; nothing moved). For the phase as a
+# whole: 116 controls, 60 ring-backed (51.7%), 77 places before; 115, 63 ring-backed
+# (54.8%), 78 places after. The ceiling follows the count down by one.
+#
+# Phase 2, the trail's crumbs. The same counts: the crumbs' listeners are keyed by
+# what a crumb does now (rootCrumb:click:goUpTo, crumb:click:goUpTo), going up one
+# level as Up does and further as the trail did, so jumpTo keeps its meaning for the
+# page's own callers.
+VIEWER_CEILING = 115
 
 
 def test_the_viewer_stays_under_its_ceiling():
@@ -707,3 +743,35 @@ def test_one_page_is_counted_and_the_retired_pages_left_nothing_behind():
     by_name = {f.name: f for f in taken.controls_of_its_own()}
     assert by_name["compile-btn"].ring_action == "bench:compile"
     assert by_name["listen"].ring_action == "device:listen"
+
+
+def test_the_header_is_one_row_with_its_view_menu_on_the_ring():
+    """Load and Zoom Out are gone from the header, counted nowhere; Snap to grid,
+    Detail, Assembly outlines and Walls selectable are in the View menu, each backed
+    by a cell of the canvas ring's Panels › View that the ring really produces."""
+    from apothecary.menu import Context, Pointing, resolve
+
+    taken = census.take()
+    for gone in ("load-btn", "zoom-out-btn", "loadBtn:click:loadSite", "zoomOutBtn:click:zoomOut"):
+        assert gone not in {f.key for f in taken.found}
+        for table in (census.CONTROLS, census.LISTENING, census.RING_BACKED):
+            assert gone not in table
+    by_name = {f.name: f for f in taken.controls_of_its_own()}
+    ring = resolve(Context(pointing=Pointing.CANVAS), site_names=["garage"], groups=["wall"])
+    produced = set()
+
+    def walk(options):
+        for option in options:
+            if option.action:
+                produced.add(option.action)
+            walk(option.children or [])
+
+    walk(ring.options)
+    for name, action in (
+        ("snap-toggle", "view:snap"),
+        ("detail-mode", "view:detail:full"),
+        ("overlay-toggle", "view:outlines"),
+        ("walls-toggle", "view:walls"),
+    ):
+        assert by_name[name].ring_action == action and action in produced, name
+    assert "view-menu" in census.VIEWER.read_text(encoding="utf-8")

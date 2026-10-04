@@ -15,15 +15,18 @@
         .app-container { display: flex; flex-direction: column; height: 100vh; }
         .main-content { display: flex; flex: 1; overflow: hidden; }
 
+        /* The header: one row at any width a laptop has, 1024 px included. Its
+           parts keep their size; only the trail gives way (see #breadcrumb). */
         .toolbar {
-            display: flex; gap: 0.75rem; padding: 0.75rem 1rem;
+            display: flex; gap: 0.6rem; padding: 0.5rem 0.75rem;
             background: #252525; border-bottom: 1px solid #333;
-            align-items: center; flex-wrap: wrap;
+            align-items: center; flex-wrap: nowrap; white-space: nowrap;
         }
-        .toolbar h1 { margin: 0; font-size: 1.25rem; font-weight: 600; color: #fff; }
+        .toolbar > * { flex: 0 0 auto; }
+        .toolbar h1 { margin: 0; font-size: 1.15rem; font-weight: 600; color: #fff; }
         .toolbar .badge {
             font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 3px;
-            background: #664400; color: #ffcc66; font-weight: 600;
+            background: #664400; color: #ffcc66; font-weight: 600; cursor: help;
         }
         .toolbar select {
             min-width: 160px; padding: 0.5rem; border-radius: 4px;
@@ -32,14 +35,26 @@
         /* As wide as the name of a site can be, not as the longest one there is
            today: a site made from a picture no longer shifts the whole toolbar. */
         #site-select { width: 11rem; }
-        .toolbar button {
-            padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;
-            border: none; font-size: 0.9rem; transition: background 0.15s;
+        .toolbar button, .view-menu > summary {
+            padding: 0.45rem 0.8rem; border-radius: 4px; cursor: pointer;
+            border: none; font-size: 0.9rem; line-height: 1.25; transition: background 0.15s;
             background: #404040; color: #e0e0e0;
         }
-        .toolbar button:hover { background: #505050; }
+        .toolbar button:hover, .view-menu > summary:hover, .view-menu[open] > summary { background: #505050; }
         .toolbar button:disabled { opacity: 0.4; cursor: not-allowed; }
-        .toolbar .spacer { flex: 1; }
+        .toolbar .spacer { flex: 1 1 0; min-width: 0; }
+        /* The View menu: how the world is drawn, folded behind ⚙ View as Site's
+           sections fold; each item a cell of the canvas ring's Panels › View. */
+        .view-menu { position: relative; }
+        .view-menu > summary { list-style: none; user-select: none; }
+        .view-menu > summary::-webkit-details-marker { display: none; }
+        .view-menu-body {
+            position: absolute; right: 0; top: calc(100% + 4px); z-index: 30;
+            display: flex; flex-direction: column; align-items: flex-start; gap: 0.55rem;
+            padding: 0.65rem 0.8rem; background: #252525; border: 1px solid #3a3a3a; border-radius: 6px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+        }
+        .view-menu-body select { min-width: 0; padding: 0.15rem 0.3rem; }
         .toolbar .toolbar-link { color: #9cd2ff; font-size: 0.85rem; text-decoration: none; }
         .toolbar .toolbar-link:hover { text-decoration: underline; }
         .validity-indicator {
@@ -49,7 +64,14 @@
         .validity-indicator.valid { background: #1e4620; color: #6fdb75; }
         .validity-indicator.invalid { background: #4a1e1e; color: #ff8080; }
 
-        #breadcrumb { font-size: 0.85rem; color: #999; }
+        /* The trail: where you are, a crumb going up to its level (Zoom Out was
+           this). The one part of the header that gives way: too long for its row,
+           its start is cut, so the level being looked at stays in view. */
+        #breadcrumb {
+            flex: 0 1 auto; min-width: 3rem; overflow: hidden; text-overflow: ellipsis;
+            direction: rtl; text-align: left; font-size: 0.85rem; color: #999;
+        }
+        #breadcrumb .trail { direction: ltr; unicode-bidi: isolate; }
         #breadcrumb .crumb { cursor: pointer; color: #9cd2ff; }
         #breadcrumb .crumb:hover { text-decoration: underline; }
         .toolbar-toggle {
@@ -62,12 +84,14 @@
 
         .viewer-panel { flex: 2; min-width: 0; position: relative; background: #111; }
         #viewer-canvas { width: 100%; height: 100%; display: block; }
+        /* The hint bar: on a first visit, faded away after a few actions; ? shows it again. */
         .viewer-hint {
             position: absolute; bottom: 1rem; left: 1rem;
             background: rgba(0,0,0,0.7); padding: 0.5rem 0.75rem;
             border-radius: 4px; font-size: 0.75rem; color: #888;
-            pointer-events: none;
+            pointer-events: none; transition: opacity 0.6s;
         }
+        .viewer-hint.faded { opacity: 0; }
 
         /* Minimap: a very abstract depth ladder, not a node-link graph --
            one tick per possible depth in the loaded tree, filled from the
@@ -176,7 +200,7 @@
             font: inherit; font-size: 0.78rem; cursor: pointer;
         }
         .panel-tab:hover { color: #fff; border-color: #666; }
-        /* The Machine: a board's one surface, in a tethered panel (widgets/machine.js), its log in it. */
+        /* The Machine: a board's one surface, a tab of the rail (widgets/machine.js), its log in it; as wide as this when floated. */
         .panel[data-panel="machine"].free { width: min(500px, 90%); }
         .panel[data-panel="machine"] .panel-body-slot { padding: 0; }
         /* Pictures (widgets/picture_list.js) and Site's Pinned (widgets/pinned.js): rows, each with its buttons */
@@ -298,20 +322,42 @@
         .contents-item .dev-badge.printing { background: #2a2410; color: #ffcc66; border-color: #4a3f1a; }
         .contents-item .dev-badge.mismatch { color: #ff9b9b; border-color: #4a2f2f; }
         .contents-item .dev-badge.via { opacity: 0.75; }
-        /* Anchors: badges fixed to a point in the world (anchors.js) */
+        /* Anchors: badges fixed to a point in the world (anchors.js). A badge is
+           a small icon at its thing's own spot; its words are a card the layer
+           opens on hover or while its thing is selected, and places clear of
+           the other open cards and of the edges. Badges in each other's way
+           step aside (.aside) or merge into a count (.cluster, the members
+           .merged). */
         .world-badge {
-            font: 0.7rem/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; cursor: pointer;
-            padding: 0.2rem 0.5rem; border-radius: 6px; background: rgba(20, 28, 20, 0.92); color: #b8e6b8; border: 1px solid #3a4a3a;
+            font: 13px/1 system-ui, sans-serif; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            min-width: 24px; height: 22px; padding: 0 0.3rem; border-radius: 6px; background: rgba(20, 28, 20, 0.92); color: #b8e6b8; border: 1px solid #3a4a3a;
             box-shadow: 0 2px 8px rgba(0,0,0,0.5); user-select: none; transition: opacity 0.2s;
         }
         .world-badge::after { content: ""; position: absolute; left: 50%; bottom: -6px; margin-left: -5px; border: 5px solid transparent; border-bottom: 0; border-top-color: #3a4a3a; }
+        .world-badge.aside::after { display: none; }
+        .world-badge .badge-words {
+            display: none; position: absolute; left: 0; top: 0; z-index: 1; width: max-content;
+            font: 0.7rem/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: normal; overflow-wrap: anywhere;
+            padding: 0.25rem 0.5rem; border-radius: 6px; background: rgba(20, 28, 20, 0.96); color: inherit; border: 1px solid #3a4a3a;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.6); cursor: default; pointer-events: none;
+        }
+        .world-badge.cluster .badge-words { pointer-events: auto; }
+        .world-badge .badge-words .sub { color: #8a9a8a; font-size: 0.64rem; }
+        .world-badge.open { z-index: 3; opacity: 1; }
+        .world-badge.open .badge-words { display: block; }
+        .world-badge.selected { border-color: #9cd2ff; }
+        .world-badge.merged { display: none; }
+        .world-badge.cluster { width: 34px; font: 600 0.72rem/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: #ddd; }
+        .world-badge.cluster .cluster-row { cursor: pointer; padding: 0.1rem 0.15rem; border-radius: 3px; white-space: nowrap; }
+        .world-badge.cluster .cluster-row:hover { background: #2a342a; }
+        .world-badge.cluster .cluster-row.selected { color: #9cd2ff; }
         .world-badge .state { color: #8fc78f; }
         .world-badge.printing { border-color: #7a5a1a; color: #ffcc66; background: rgba(42, 36, 16, 0.92); }
         .world-badge.printing::after { border-top-color: #7a5a1a; }
         .world-badge.offline { color: #b08a8a; border-color: #3f2f2f; }
         .world-badge.mismatch { color: #ff9b9b; }
         .world-badge.job { border-color: #4a6fa8; }
-        .world-badge.behind { opacity: 0.45; }
+        .world-badge.behind:not(.open) { opacity: 0.45; }
         .world-badge[hidden] { display: none; }
         .world-badge:hover { opacity: 1; filter: brightness(1.15); }
         .no-selection { color: #666; font-size: 0.85rem; font-style: italic; }
@@ -329,11 +375,17 @@
         }
         .part-actions button:hover, .part-actions a:hover { background: #505050; }
 
-        /* Site: its problems at the top, each a row that selects its piece; in
-           the tree, a piece in a problem is red and its ancestors say so. */
-        .site-problems { margin-bottom: 0.6rem; }
+        /* Site: its problems once, as one folded line at its top, "N problems ›",
+           unfolded by itself or by the header's count, each row selecting its
+           piece; in the tree, a piece in a problem is red and its ancestors say so. */
+        details.fold.site-problems { margin: 0 0 0.5rem; padding: 0; border: 0; }
         .site-problems[hidden] { display: none; }
-        .site-problems .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: #ff8080; margin-bottom: 0.25rem; }
+        details.fold.site-problems > summary {
+            list-style: none; color: #ff8080; font-size: 0.8rem; text-transform: none; letter-spacing: 0;
+        }
+        details.fold.site-problems > summary::-webkit-details-marker { display: none; }
+        .site-problems .fold-mark { display: inline-block; margin-left: 0.3em; transition: transform 0.15s; }
+        .site-problems[open] .fold-mark { transform: rotate(90deg); }
         .problem-list { list-style: none; margin: 0; padding: 0; font-size: 0.8rem; }
         .problem-list li {
             padding: 0.35rem 0.5rem; margin-bottom: 0.25rem; border-radius: 4px;
@@ -424,7 +476,7 @@
     <div class="app-container">
         <div class="toolbar">
             <h1>🧪 Apothecary</h1>
-            <span class="badge">FRACTAL VIEWER — unratified prototype</span>
+            <span class="badge" title="FRACTAL VIEWER — unratified prototype">prototype</span>
             <select id="site-select"{% if not site_names %} disabled{% endif %}>
                 {% for name in site_names %}
                 <option value="{{ name }}"{% if name == default_site %} selected{% endif %}>{{ name }}</option>
@@ -432,24 +484,30 @@
                 <option value="" disabled>No sites found</option>
                 {% endfor %}
             </select>
-            <button type="button" id="load-btn">Load</button>
-            <button type="button" id="zoom-out-btn" title="Zoom out one level (Backspace)" disabled>⤴ Zoom Out</button>
-            <span id="breadcrumb"></span>
-            <label class="toolbar-toggle" title="Snap dragged positions to a 50mm grid -- keeps hand-placed layouts exact instead of off by a few millimeters">
-                <input type="checkbox" id="snap-toggle" checked> Snap to grid
-            </label>
-            <label class="toolbar-toggle" title="How much of each compound node to draw. Full renders its real geometry; Black box draws only its bounding extent; Dot collapses it to a marker. Leaves always render in full -- they have no subassembly to stand in for. Set per node from the Selected panel.">
-                Detail
-                <select id="detail-mode">
-                    <option value="full">Full</option>
-                    <option value="box">Black box</option>
-                    <option value="dot">Dot</option>
-                </select>
-            </label>
-            <label class="toolbar-toggle" title="Outline each compound node's full assembly extent, so a subassembly reads as one thing even when its parts are drawn separately">
-                <input type="checkbox" id="overlay-toggle" checked> Assembly outlines
-            </label>
+            <span id="breadcrumb" title="Where you are: a crumb goes up to its level (Backspace goes up one)"></span>
             <div class="spacer"></div>
+            <details id="view-menu" class="view-menu">
+                <summary title="How the world is drawn (⌗ Panels › View)">⚙ View</summary>
+                <div class="view-menu-body">
+                    <label class="toolbar-toggle" title="Snap dragged positions to a 50mm grid -- keeps hand-placed layouts exact instead of off by a few millimeters">
+                        <input type="checkbox" id="snap-toggle" checked> Snap to grid
+                    </label>
+                    <label class="toolbar-toggle" title="How much of each compound node to draw. Full renders its real geometry; Black box draws only its bounding extent; Dot collapses it to a marker. Leaves always render in full -- they have no subassembly to stand in for. Set per node from the Selected panel.">
+                        Detail
+                        <select id="detail-mode">
+                            <option value="full">Full</option>
+                            <option value="box">Black box</option>
+                            <option value="dot">Dot</option>
+                        </select>
+                    </label>
+                    <label class="toolbar-toggle" title="Outline each compound node's full assembly extent, so a subassembly reads as one thing even when its parts are drawn separately">
+                        <input type="checkbox" id="overlay-toggle" checked> Assembly outlines
+                    </label>
+                    <label class="toolbar-toggle" title="Walls are drawn faded and a click in the world passes through them to what is behind or inside; ticked, a click picks a wall again, until the page is left. A wall's row in Site selects it either way">
+                        <input type="checkbox" id="walls-toggle"> Walls selectable
+                    </label>
+                </div>
+            </details>
             <button type="button" id="ring-open" title="Open the ring for the chosen piece (m, or right-click a piece). Digits choose cells as on a numeric keypad; 5 backs out.">⌗ Ring</button>
             <span id="validity-indicator" class="validity-indicator valid" title="The site's problems: click to open them at the top of Site">Layout valid</span>
         </div>
@@ -457,16 +515,16 @@
             <div class="viewer-panel">
                 <canvas id="viewer-canvas"></canvas>
                 <div id="minimap"></div>
-                <div class="viewer-hint">Click to select • Double-click (or scroll past the edge) to zoom in • Drag arrows to move • Shift+drag to pan</div>
+                <div class="viewer-hint" id="viewer-hint">Click to select • Double-click (or scroll past the edge) to zoom in • Drag arrows to move • Shift+drag to pan • ? shows or hides this</div>
             </div>
             <div class="side-panel">
                 <div class="panel-section" data-panel="site" data-zone="stack">
                     <div class="panel-header">Site</div>
                     <div class="panel-body">
-                        <div id="site-problems" class="site-problems" hidden>
-                            <div class="k" id="site-problems-count"></div>
+                        <details id="site-problems" class="fold site-problems" hidden>
+                            <summary title="The site's problems: unfold them (or press the header's count); each selects its piece"><span id="site-problems-count"></span><span class="fold-mark"> ›</span></summary>
                             <ul id="problem-list" class="problem-list"></ul>
-                        </div>
+                        </details>
                         <div id="category-filters" class="category-filters"
                              title="Expand every node of a subsystem at once, at any depth beneath the current level, at the cost of render time"></div>
                         <ul id="contents-list" class="contents-list contents-tree"></ul>
@@ -528,7 +586,7 @@
         import { mountToolchain } from '/static/widgets/toolchain.js';
         import { mountBuild, mountRawFlash } from '/static/widgets/sketches.js';
         import { mountTasks } from '/static/widgets/tasks.js';
-        import { makeMachineMarks, toScene as marksToScene } from '/static/machine_marks.js';
+        import { makeMachineMarks, makeBoardBadge, sayBoard, toScene as marksToScene } from '/static/machine_marks.js';
         import { mountPictureMarks } from '/static/picture_marks.js';
         import { mountPictures } from '/static/pictures.js';
 
@@ -610,10 +668,21 @@
         const WAVE_CONCURRENCY = 3;    // real-geometry loads in flight at once
         const WHEEL_RESISTANCE_THRESHOLD = 500;
         const SNAP_INCREMENT = 50;    // mm -- matches WALL_THICKNESS; fine enough for by-hand placement
+        // Walls -- the pieces of this category -- are drawn this opaque, and a click
+        // in the world passes through them, unless the View menu says otherwise.
+        const WALL_CATEGORY = 'wall';
+        const WALL_OPACITY = 0.25;
+        const HANDLE_SIZE = 0.6;      // the move arrows, against TransformControls' own 1
+        const HANDLE_LIGHTNESS = 0.55; // and their opacity, against its own
         // The site's floor: a selection but not a node. Its key in the page; "" in every
         // view and camera route. Floor things stand this far past the site's roots in +x
         // (vision/views.py's FLOOR_MARGIN_MM).
         const FLOOR_KEY = '@floor';
+        // The hint bar fades after this many things done -- a selection, a step in or
+        // out, a move, however each was asked for -- and is remembered as seen under
+        // this key.
+        const HINT_ACTIONS = 4;
+        const HINT_SEEN_KEY = 'apothecary.hint';
         const FLOOR_MARGIN_MM = 200;
 
         // How far out of the current level you can dolly, as a multiple of the
@@ -776,9 +845,10 @@
             constructor() {
                 this.canvas = document.getElementById('viewer-canvas');
                 this.siteSelect = document.getElementById('site-select');
-                this.loadBtn = document.getElementById('load-btn');
-                this.zoomOutBtn = document.getElementById('zoom-out-btn');
+                this.viewMenuEl = document.getElementById('view-menu');
                 this.snapToggle = document.getElementById('snap-toggle');
+                this.wallsToggle = document.getElementById('walls-toggle');
+                this.wallsSelectable = false;  // for the page's session: never remembered
                 this.detailModeEl = document.getElementById('detail-mode');
                 this.overlayToggle = document.getElementById('overlay-toggle');
                 this.breadcrumbEl = document.getElementById('breadcrumb');
@@ -797,6 +867,14 @@
                 this.siteJobs = [];      // GET /jobs?site= for the loaded site: running first, then newest
                 this.siteJobsAt = 0;     // when they were last asked for
                 this.statusEl = document.getElementById('status');
+                // The hint bar: shown on a first visit, until a few things have been done.
+                // Whether this browser saw it is a convenience kept per viewer; a browser
+                // that keeps nothing shows it on every visit.
+                this.hintEl = document.getElementById('viewer-hint');
+                this.hintLeft = HINT_ACTIONS;
+                let hintSeen = false;
+                try { hintSeen = localStorage.getItem(HINT_SEEN_KEY) === 'seen'; } catch (e) { hintSeen = false; }
+                this.hintEl.classList.toggle('faded', hintSeen);
 
                 this.tree = null;            // full recursive tree for the loaded site
                 this.siteName = null;
@@ -846,8 +924,8 @@
             }
 
             // A link into the world with a panel open: the Bench, or a board's Machine
-            // -- tethered where the board is pinned in this site, floating over the
-            // world when it is pinned nowhere here -- once the site's boards are known.
+            // in the rail, pinned in this site or nowhere here, once the site's boards
+            // are known.
             async followDeepLink() {
                 const panel = DEEP_LINK.get('panel');
                 if (panel) this.panels.open(panel);
@@ -875,8 +953,19 @@
                 this.orbitControls.dampingFactor = 0.05;
                 this.orbitControls.zoomSpeed = 0.6;
 
+                // The handles a selected movable thing wears: one compact set, shown
+                // and hidden by showHandles and hideHandles alone. Today that is the
+                // move arrows -- three.js's TransformControls, translating -- drawn
+                // smaller than its default and lighter (each handle's own opacity
+                // scaled once; the one under the pointer still lights up), so they
+                // do not dominate what they move. A camera's turn ring and tilt arc
+                // (the cameras-and-clutter plan's Phase 3) join this set there.
                 this.transformControls = new TransformControls(this.camera, this.renderer.domElement);
                 this.transformControls.setMode('translate');
+                this.transformControls.setSize(HANDLE_SIZE);
+                const handleMaterials = new Set();
+                this.transformControls.traverse((o) => { if (o.material) handleMaterials.add(o.material); });
+                for (const material of handleMaterials) material.opacity *= HANDLE_LIGHTNESS;
                 this.transformControls.setTranslationSnap(SNAP_INCREMENT);
                 this.transformControls.addEventListener('dragging-changed', (event) => {
                     this.orbitControls.enabled = !event.value;
@@ -900,8 +989,9 @@
                 this.scene.add(this.axesHelper);
 
                 // What stands in front of the world (anchors.js) and what a
-                // machine wears in it (machine_marks.js): badges above every
-                // pinned machine, and its nozzle, bed and reading at its node.
+                // machine wears in it (machine_marks.js): a badge at every pinned
+                // board, and a printer's nozzle, bed and reading at its node. The
+                // badges keep out of each other's way there, every badge alike.
                 // Both survive renderFocus(), which clears only the nodes' meshes.
                 this.anchors = mountAnchors({ container: this.canvas.parentElement, canvas: this.canvas, camera: this.camera, scene: this.scene });
                 // The side column's sections become panels in the one rail: Site and
@@ -938,6 +1028,7 @@
                     atTopLevel: () => this.focusPath.length === 0,
                     floorPoint: (made) => this.floorPoint(made),
                     onSelect: (host) => this.selectPlace(host),
+                    isSelected: (host) => this.selectedName === (host === '' ? FLOOR_KEY : host),
                     onChange: (attached) => {
                         this.cameras = attached.cameras;
                         this.listsChanged();
@@ -1024,9 +1115,10 @@
             }
 
             bindEvents() {
-                this.loadBtn.addEventListener('click', () => this.loadSite(this.siteSelect.value));
+                // Choosing a site loads it; the trail's crumbs are the way back out.
                 this.siteSelect.addEventListener('change', () => this.loadSite(this.siteSelect.value));
-                this.zoomOutBtn.addEventListener('click', () => this.zoomOut());
+                // The View menu folds away when a press lands anywhere else, as a menu does.
+                document.addEventListener('pointerdown', (e) => this.foldViewMenu(e));
                 // The toolbar's count of problems opens them, at the top of Site.
                 this.validityEl.addEventListener('click', () => this.openProblems());
                 // A row of Site's Jobs selects its machine, at its level, and opens it.
@@ -1039,6 +1131,7 @@
                 this.snapToggle.addEventListener('change', () => {
                     this.transformControls.setTranslationSnap(this.snapToggle.checked ? SNAP_INCREMENT : null);
                 });
+                this.wallsToggle.addEventListener('change', () => this.setWallsSelectable(this.wallsToggle.checked));
                 // Changing the global default drops every per-node override:
                 // otherwise picking "Dot" would silently leave whichever nodes
                 // you had already set to Full still rendering full, and the
@@ -1066,6 +1159,8 @@
                         this.zoomOut();
                     }
                 });
+                // ? brings the hint bar back (and puts it away again).
+                window.addEventListener('keydown', (e) => this.onHintKey(e));
                 window.addEventListener('resize', () => this.onResize());
                 // What a board's Query answered in Selected, before it is pinned.
                 this.queryResult = null;
@@ -1103,6 +1198,28 @@
             setStatus(message, type = '') {
                 this.statusEl.textContent = message;
                 this.statusEl.className = 'status' + (type ? ' ' + type : '');
+            }
+
+            // One thing done (a selection, a step in or out, a move): after HINT_ACTIONS
+            // of them the hint bar fades, and is remembered as seen.
+            acted() {
+                if (this.hintEl.classList.contains('faded')) return;
+                this.hintLeft -= 1;
+                if (this.hintLeft <= 0) this.showHint(false);
+            }
+            showHint(shown) {
+                this.hintEl.classList.toggle('faded', !shown);
+                this.hintLeft = HINT_ACTIONS;
+                if (shown) return;
+                try { localStorage.setItem(HINT_SEEN_KEY, 'seen'); } catch (e) { /* kept nowhere: shown again next visit */ }
+            }
+            // ? shows the hint bar again, or puts it away -- unless a person is typing.
+            onHintKey(event) {
+                if (event.key !== '?' || event.ctrlKey || event.metaKey || event.altKey) return;
+                const t = event.target;
+                if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+                event.preventDefault();
+                this.showHint(this.hintEl.classList.contains('faded'));
             }
 
             // ---------------------------------------------------------------
@@ -1256,6 +1373,7 @@
                 this.focusPath = [...this.focusPath, name];
                 this.selectedName = null;
                 this.renderFocus();
+                this.acted();
             }
 
             // The standardized "-1" control: the node just exited becomes
@@ -1272,12 +1390,22 @@
                 this.focusPath = this.focusPath.slice(0, -1);
                 this.selectedName = exitingPath;
                 this.renderFocus();
+                this.acted();
             }
 
             jumpTo(depth) {
                 this.focusPath = this.focusPath.slice(0, depth);
                 this.selectedName = null;
                 this.renderFocus();
+                this.acted();
+            }
+
+            // A crumb of the trail: up to its level. One level up is the "-1" control
+            // itself, Zoom Out as it was -- a crumb, Backspace and the ring's Up all
+            // land on the node just left; further up, nothing is selected.
+            goUpTo(depth) {
+                if (depth === this.focusPath.length - 1) this.zoomOut();
+                else this.jumpTo(depth);
             }
 
             // Each direct child of focus renders collapsed (its own single
@@ -1361,7 +1489,7 @@
             // ---------------------------------------------------------------
 
             clearScene() {
-                this.transformControls.detach();
+                this.hideHandles();
                 for (const object of [
                     ...Object.values(this.meshByName),
                     ...Object.values(this.buildVolumeMeshByName),
@@ -1546,6 +1674,34 @@
                 if (mesh.userData.isDot && mesh.material.emissive) {
                     mesh.material.emissive.set(isSelected ? SELECTED_EDGE_COLOR : 0x000000);
                 }
+                // A wall is drawn faded, and solid again while it is the selection.
+                this.fadeMesh(mesh, this.isWall(node) && !isSelected);
+            }
+
+            isWall(node) { return !!node && node.category === WALL_CATEGORY; }
+
+            // Faded: seen through, hiding nothing behind it (its depth unwritten) and
+            // dimming no badge (anchors.js reads passThrough). Solid: as it was built,
+            // which each part (the mesh, its edges) keeps the first time it is faded.
+            fadeMesh(mesh, faded) {
+                for (const part of [mesh, mesh.getObjectByName('edges')]) {
+                    if (!part || !part.material) continue;
+                    const m = part.material;
+                    if (!part.userData.solid) part.userData.solid = { opacity: m.opacity, transparent: m.transparent, depthWrite: m.depthWrite };
+                    const solid = part.userData.solid, was = m.transparent;
+                    m.opacity = faded ? Math.min(solid.opacity, WALL_OPACITY) : solid.opacity;
+                    m.transparent = faded || solid.transparent;
+                    m.depthWrite = faded ? false : solid.depthWrite;
+                    if (m.transparent !== was) m.needsUpdate = true;
+                }
+                mesh.userData.passThrough = faded;
+            }
+
+            // ⚙ View › Walls selectable: whether a click in the world picks a wall,
+            // for the page's session (a wall's row in Site selects it either way).
+            setWallsSelectable(on) {
+                this.wallsSelectable = !!on;
+                this.setStatus(on ? 'A click in the world picks walls, until the page is left' : 'A click in the world passes through walls', 'success');
             }
 
             // A wireframe-only box showing the usable print area within a
@@ -1680,24 +1836,48 @@
             // Breadcrumb + minimap
             // ---------------------------------------------------------------
 
+            // The trail, in the header's one row: in a span of its own, so the row
+            // can cut its start and keep its end (the level in view) when it is long.
             renderBreadcrumb() {
                 this.breadcrumbEl.innerHTML = '';
+                const trail = document.createElement('span');
+                trail.className = 'trail';
+                this.breadcrumbEl.appendChild(trail);
                 const rootCrumb = document.createElement('span');
                 rootCrumb.className = 'crumb';
                 rootCrumb.textContent = this.siteName;
-                rootCrumb.addEventListener('click', () => this.jumpTo(0));
-                this.breadcrumbEl.appendChild(rootCrumb);
+                rootCrumb.addEventListener('click', () => this.goUpTo(0));
+                trail.appendChild(rootCrumb);
 
                 this.focusPath.forEach((name, i) => {
-                    this.breadcrumbEl.appendChild(document.createTextNode(' › '));
+                    trail.appendChild(document.createTextNode(' › '));
                     const crumb = document.createElement('span');
                     crumb.className = 'crumb';
                     crumb.textContent = name;
-                    crumb.addEventListener('click', () => this.jumpTo(i + 1));
-                    this.breadcrumbEl.appendChild(crumb);
+                    crumb.addEventListener('click', () => this.goUpTo(i + 1));
+                    trail.appendChild(crumb);
                 });
+            }
 
-                this.zoomOutBtn.disabled = this.focusPath.length === 0;
+            // A press outside the View menu folds it away.
+            foldViewMenu(event) {
+                if (this.viewMenuEl.open && !this.viewMenuEl.contains(event.target)) this.viewMenuEl.open = false;
+            }
+
+            // A cell of the canvas ring's Panels › View: what its item in the View menu
+            // does, done to that item (as a person would), so the two never disagree.
+            // Answers what the status line says.
+            viewVerb(verb) {
+                const flip = (box) => { box.checked = !box.checked; box.dispatchEvent(new Event('change')); return box.checked; };
+                if (verb === 'snap') return flip(this.snapToggle) ? 'Snapping to the grid' : 'Not snapping to the grid';
+                if (verb === 'outlines') return flip(this.overlayToggle) ? 'Assembly outlines shown' : 'Assembly outlines hidden';
+                if (verb === 'walls') return flip(this.wallsToggle) ? 'A click in the world picks walls' : 'A click in the world passes through walls';
+                if (verb.startsWith('detail:') && DETAIL_LABELS[verb.slice('detail:'.length)]) {
+                    this.detailModeEl.value = verb.slice('detail:'.length);
+                    this.detailModeEl.dispatchEvent(new Event('change'));
+                    return `Detail: ${DETAIL_LABELS[this.detailModeEl.value]}`;
+                }
+                return null;
             }
 
             // Deliberately a depth ladder, not a node-link graph: one tick
@@ -1889,15 +2069,21 @@
                 // out); a machine that is a part with things inside it moves
                 // like any other structure.
                 if (mesh && node && this.isEditableSelection(focus, node) && !(node.part_ref && node.children.length === 0)) {
-                    this.transformControls.attach(mesh);
+                    this.showHandles(mesh);
                 } else {
-                    this.transformControls.detach();
+                    this.hideHandles();
                 }
 
                 this.renderContentsList(focus);
                 this.renderSelectedPanel();
                 for (const k of Object.keys(this.meshByName)) this.colorMesh(k, this.renderNodeByKey[k]);
+                this.acted();
             }
+
+            // The handles' one set (see initThreeJS), on a movable thing's mesh or on
+            // nothing: whatever else joins the set comes and goes here with the arrows.
+            showHandles(object) { this.transformControls.attach(object); }
+            hideHandles() { this.transformControls.detach(); }
 
             // The one place the three possible "Selected" panels are chosen:
             // a parts-library leaf always gets the absorbed part view
@@ -2076,7 +2262,7 @@
                 if (!node) return;
                 const existing = this.meshByName[key];
                 if (existing) {
-                    this.transformControls.detach();
+                    this.hideHandles();
                     this.scene.remove(existing);
                     disposeDeep(existing);
                     delete this.meshByName[key];
@@ -2669,7 +2855,7 @@
                     overlay.position.set(center[0], center[1], center[2]);
                 }
                 this.updateBuildVolumeIndicator(node, bounds);
-                if (this.selectedName === key) this.transformControls.attach(mesh);
+                if (this.selectedName === key) this.showHandles(mesh);
             }
 
             // ---------------------------------------------------------------
@@ -2733,6 +2919,7 @@
 
             commitCurrentDrag() {
                 if (this.selectedName && this.focusPath.length === 0) this.submitLayout();
+                this.acted();
             }
 
             async submitLayout() {
@@ -2782,9 +2969,10 @@
                 return (v.paths || []).filter((path) => this.nodeByPath(path));
             }
 
-            // Site's problems: listed at its top, each row selecting its piece; in
-            // the tree, each piece a problem names is marked, and every piece above
-            // it says something inside is invalid. The toolbar counts them.
+            // Site's problems: one folded line at its top, "N problems ›", a row in it
+            // each, selecting its piece; in the tree, each piece a problem names is
+            // marked, and every piece above it says something inside is invalid. The
+            // toolbar counts them, and its count opens the fold (openProblems).
             renderProblems({ list = true } = {}) {
                 this.invalidPaths = new Map();
                 this.invalidInside = new Map();
@@ -2909,10 +3097,11 @@
             }
 
             // The toolbar's count: Site opened (and the rail shown, where it is
-            // docked), unfolded, and scrolled to the problems at its top.
+            // docked), unfolded, its problems' fold opened, and scrolled to them.
             openProblems() {
                 this.panels.open('site');
                 this.panels.collapse('site', false);
+                this.problemsEl.open = true;
                 const slot = this.problemsEl.closest('.panel-body-slot');
                 if (slot) slot.scrollTop = 0;
                 this.problemsEl.scrollIntoView({ block: 'nearest' });
@@ -3079,10 +3268,13 @@
                 return new THREE.Vector3((bounds.min[0] + bounds.max[0]) / 2, bounds.max[2], (bounds.min[1] + bounds.max[1]) / 2);
             }
 
-            // One badge above every pinned, connected board, and a printer's
+            // One badge for every pinned, connected board, at the board's own spot
+            // (the top of its node, inside the printer it drives), and a printer's
             // marks (nozzle, bed, reading) at its node -- made once, updated in
-            // place from the same rows the tree badges read, removed when the
-            // pin goes. Called after bindings load and after every poll.
+            // place from the same rows the tree badges read, removed when the pin
+            // goes. A badge is keyed and clicked by the machine it stands for: the
+            // printer a board inside drives, else the board's own node. Called
+            // after bindings load and after every poll.
             syncWorldMarks() {
                 const wanted = new Set(), anchorOf = {};
                 for (const [path, row] of Object.entries(this.bindings)) {
@@ -3092,89 +3284,71 @@
                     wanted.add(anchorPath);
                     anchorOf[row.device.port] = anchorPath;
                     let badge = this.anchors.get(anchorPath);
-                    if (!badge) {
-                        badge = document.createElement('div');
-                        badge.className = 'world-badge';
-                        badge.dataset.path = anchorPath;
-                        badge.title = 'Select this board and open its Machine';
+                    if (!badge || badge.dataset.board !== path) {
+                        badge = makeBoardBadge(this.anchors, anchorPath, path, {
+                            point: () => this.anchorPointFor(path),
+                            selected: () => this.selectedName === anchorPath || this.selectedName === path,
+                        });
                         badge.addEventListener('click', () => { this.selectPath(anchorPath); this.openMachine(anchorPath); });
-                        this.anchors.add(anchorPath, badge, () => this.anchorPointFor(anchorPath));
                     }
-                    this.fillBadge(badge, row);
+                    sayBoard(this.anchors, anchorPath, boardSummary(this.boards.board(row.device.port)), { label: boardLabel(row.device), port: row.device.port });
                     if (isPrinter && row.device.port) this.ensureMarks(anchorPath, row);
                 }
                 // The machines' badges are this method's; a place badge is
                 // picture_marks.js', and stays whichever of the two runs last.
                 for (const key of this.anchors.keys()) if (!wanted.has(key) && !key.startsWith('place:')) this.anchors.remove(key);
                 for (const [key, m] of Object.entries(this.marks)) if (!wanted.has(key)) { m.marks?.destroy(); delete this.marks[key]; }
-                // The Machine follows its badge -- to the printer a board inside drives,
+                // The Machine follows its board -- to the printer a board inside drives,
                 // once it is known to be one -- and goes with it: nothing is left
                 // polling a board unseen.
                 if (this.machine && this.machine.path && !wanted.has(this.machine.path)) {
                     const moved = anchorOf[this.machine.port];
                     if (!moved) { this.closeMachine(); return; }
-                    const where = this.panels.state('machine') && this.panels.state('machine').where;
                     this.machine.path = moved;
-                    if (where && typeof where === 'object') this.panels.tether('machine', moved);
                 }
             }
 
-            // A board's badge in the world, from what the board model has of it.
-            fillBadge(badge, row) {
-                const sum = boardSummary(this.boards.board(row.device.port));
-                badge.classList.remove('printing', 'offline', 'job', 'mismatch');
-                badge.title = `${sum.title} — click to select it and open its Machine`;
-                if (sum.kind === 'devkit') {
-                    badge.innerHTML = `⚡ ${esc(boardLabel(row.device))} · <span class="state">${esc(sum.short)}</span>`;
-                    if (sum.cls) badge.classList.add(sum.cls);
-                    return;
-                }
-                const parts = [`🖨 <span class="state">${esc(sum.state)}</span>`];
-                if (sum.readings) parts.push(sum.readings);
-                parts.push(...sum.extra.map(esc));
-                badge.innerHTML = parts.join(' · ');
-                if (sum.job) badge.classList.add('job');
-                if (sum.cls) badge.classList.add(sum.cls);
-            }
-
-            // A board's Machine in front of the world (widgets/machine.js): a printer's
-            // cards and controls or a devkit's sketch and serial output, with the
-            // board's one log, in a panel tethered to where its badge stands -- the
-            // printer a board inside drives, else the board's own node. One at a
-            // time; opening another closes the first. Docked, it is a tab of the
-            // rail's strip.
+            // A board's Machine (widgets/machine.js): a printer's cards and controls or
+            // a devkit's sketch and serial output, with the board's one log, shown in
+            // the rail's tab strip beside Pictures and the Bench, its tab active --
+            // every way into a Machine comes here. It floats only when a person floats
+            // it from its tab, until it is closed: opened again while it floats, it
+            // stays where they put it. It stands for the printer a board inside drives,
+            // else the board's own node. One at a time; opening another closes the first.
             openMachine(path) {
                 const { row } = this.bindingFor(path);
                 const port = row && row.device && row.device.port;
                 if (!port) { this.setStatus(`${path}: no board pinned here`, 'error'); return false; }
                 const anchor = row.device.printer ? this.bearerPathFor(row.path) : row.path;
-                if (this.machine && this.machine.port === port) { this.panels.open('machine'); this.panels.tether('machine', anchor); return true; }
-                this.mountMachinePanel(port, anchor, row);
-                this.panels.tether('machine', anchor);
-                return true;
+                return this.showMachine(port, anchor, row);
             }
-            // A board's Machine by its port: tethered to where it is pinned in this
-            // site, or, pinned nowhere here, floating over the world -- what a link
-            // to the printer monitor opens.
+            // A board's Machine by its port, pinned in this site or nowhere here --
+            // what a link to the printer monitor opens.
             openMachineFor(port) {
                 const row = Object.values(this.bindings).find((r) => r.device && r.device.port === port);
                 if (row) return this.openMachine(row.path);
+                return this.showMachine(port, null, null);
+            }
+            showMachine(port, anchor, row) {
                 if (this.machine && this.machine.port === port) { this.panels.open('machine'); return true; }
-                this.mountMachinePanel(port, null, null);
+                this.mountMachinePanel(port, anchor, row);
+                this.panels.dock('machine');
                 return true;
             }
             // The Machine's panel, its body mounted when it is first in front of a
-            // person -- at once when it floats or is tethered, when its tab is shown
-            // when a browser remembered it docked.
+            // person. A board pinned inside a printer is the printer's, whatever it has
+            // been identified as so far: its Machine has no Flashing.
             mountMachinePanel(port, anchor, row) {
                 this.closeMachine();
                 const machine = { port, path: anchor, pin: row, handle: null };
                 this.machine = machine;
+                const bearer = row ? this.statusBearerFor(row.path) : null;
+                const inPrinter = !!(bearer && PRINTER_STATUSES.includes(bearer.status));
                 this.panels.register('machine', {
-                    title: anchor ? `${anchor} · ${port}` : `${port} · pinned nowhere in ${this.siteName}`, where: 'free', open: true,
+                    title: anchor ? `${anchor} · ${port}` : `${port} · pinned nowhere in ${this.siteName}`,
                     body: (slot) => {
                         machine.handle = mountMachine(slot, {
-                            base: BASE_URL, port, host: 'popup', boards: this.boards,
+                            base: BASE_URL, port, host: 'popup', boards: this.boards, inPrinter,
                             pin: row ? { site: this.siteName, path: row.path, how: row.binding_source, sketch: row.sketch || null } : null,
                             say: (text, kind) => this.setStatus(text, kind),
                         });
@@ -3182,7 +3356,6 @@
                     },
                     onClose: () => this.closeMachine(),  // its ✕: the watching stops with it
                 });
-                if (!anchor) this.panels.open('machine');
                 return machine;
             }
             // A Machine opened: its buttons wear its device ring's addresses, the
@@ -3286,6 +3459,7 @@
                     // The world already draws each printer's build volume (updateBuildVolumeIndicator).
                     const marks = makeMachineMarks(where.printer, { drawVolume: false });
                     marks.group.position.copy(marksToScene(where.printer.position));
+                    marks.group.userData.key = path;  // the printer's: they never dim its board's badge
                     this.scene.add(marks.group);
                     const first = this.bindings[row.path] && this.bindings[row.path].printer_status;
                     if (first && first.position) marks.setPosition(first.position, { immediate: true });
@@ -3397,10 +3571,11 @@
                 this.pictureMarks.untrace();
                 this.pictures.selectionChanged('');
                 this.selectedName = FLOOR_KEY;
-                this.transformControls.detach();
+                this.hideHandles();
                 this.renderContentsList(this.currentFocusNode());
                 this.renderSelectedPanel();
                 for (const k of Object.keys(this.meshByName)) this.colorMesh(k, this.renderNodeByKey[k]);
+                this.acted();
             }
             // A place a picture or camera is pinned at: a host by its path, "" the floor.
             selectPlace(host) {
@@ -3582,14 +3757,18 @@
 
             // The nodes' meshes and the pictures' pick meshes (a mat, an outline)
             // in one depth-sorted cast: the nearest wins, so a printer standing
-            // over an outline is still the printer. Answers { key } for a node,
-            // { pick: { host, view, index } } for a picture's mark, or null.
+            // over an outline is still the printer. A wall is passed through, to
+            // what is behind or inside it, unless the View menu makes walls
+            // selectable. Answers { key } for a node, { pick: { host, view, index } }
+            // for a picture's mark, or null. Every click, drop and right-click in
+            // the world asks here.
             raycastPick(event) {
                 const rect = this.canvas.getBoundingClientRect();
                 this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
                 this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
                 this.raycaster.setFromCamera(this.pointer, this.camera);
-                const intersects = this.raycaster.intersectObjects([...Object.values(this.meshByName), ...this.pictureMarks.pickables()], false);
+                const intersects = this.raycaster.intersectObjects([...Object.values(this.meshByName), ...this.pictureMarks.pickables()], false)
+                    .filter((hit) => this.wallsSelectable || !this.isWall(this.renderNodeByKey[hit.object.userData.key]));
                 if (!intersects.length) return null;
                 const hit = intersects[0].object;
                 const pick = this.pictureMarks.picked(hit);
@@ -3858,7 +4037,7 @@
                 this.scene.add(realMesh);
                 this.meshByName[key] = realMesh;
                 this.colorMesh(key, node);
-                if (this.selectedName === key) this.transformControls.attach(realMesh);
+                if (this.selectedName === key) this.showHandles(realMesh);
             }
 
             // Every load of a node takes a token; only the newest may land.
@@ -4094,6 +4273,10 @@
                 } else if (action === 'move') {
                     if (viewer.renderNodeByKey[path]) viewer.selectChild(path);
                     viewer.setStatus(viewer.transformControls.object ? `Drag the handle to move ${path}${tail}` : `${path} cannot be moved from here: only a direct child of the site can${tail}`, 'success');
+                } else if (action.startsWith('view:')) {
+                    // The View menu's items, as a person changes them there.
+                    const said = viewer.viewVerb(action.slice('view:'.length));
+                    viewer.setStatus(said ? `${said}${tail}` : `${intent.label}: the View menu has no such item${tail}`, said ? 'success' : 'error');
                 } else if (action.startsWith('panel:toggle:')) {
                     const id = action.slice('panel:toggle:'.length);
                     const open = viewer.panels.toggle(id) && viewer.panels.isOpen(id);
@@ -4193,13 +4376,19 @@
             ['.esp-flash-btn', 'bench:esptool'], ['.cancel-btn', 'bench:cancel'], ['.lib-btn', 'bench:libraries'],
         ];
         // The list, from the canvas ring: each row at this level is a piece the
-        // ring's Pieces cell reaches, and the step-out button is its Up; and the
-        // Bench's buttons, its verbs under Panels › Bench.
+        // ring's Pieces cell reaches, and the trail's crumb one level up is its Up;
+        // the View menu's items, Panels › View; and the Bench's buttons, its verbs
+        // under Panels › Bench.
         function annotateList(ring) {
             if (!ring) return;
             const pairs = [];
             for (const li of viewer.contentsEl.querySelectorAll('li[data-path]')) pairs.push([li, `select:${li.dataset.path}`]);
-            pairs.push([viewer.zoomOutBtn, 'zoom-out']);
+            const crumbs = viewer.breadcrumbEl.querySelectorAll('.crumb');
+            if (crumbs.length > 1) pairs.push([crumbs[crumbs.length - 2], 'zoom-out']);
+            pairs.push([viewer.snapToggle.closest('label'), 'view:snap']);
+            pairs.push([viewer.detailModeEl.closest('label'), `view:detail:${viewer.detailModeEl.value}`]);
+            pairs.push([viewer.overlayToggle.closest('label'), 'view:outlines']);
+            pairs.push([viewer.wallsToggle.closest('label'), 'view:walls']);
             const bench = document.querySelector(".panel[data-panel='bench']");
             if (bench) {
                 for (const [selector, action] of BENCH_VERBS) for (const el of bench.querySelectorAll(selector)) pairs.push([el, action]);

@@ -111,10 +111,11 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     expect(world_badge).to_contain_text("printing", timeout=10000)
     page.wait_for_timeout(600)
     docs.step(
-        "The world wears its machines: a badge stands above the printer in the 3D view -- "
-        "state, hotend and bed, progress, a job's stage -- fixed to the printer and following "
-        "it as the camera moves; a click selects it. Inside the printer the nozzle marker "
-        "sits where the board last said, and a bed reading lies over the bed"
+        "The world wears its machines: a ⚡ badge stands at the printer's board in the 3D "
+        "view, following it as the camera moves; its words -- state, hotend and bed, "
+        "progress, a job's stage, the port -- open on hover or while the printer is "
+        "selected, and a click selects it. Inside the printer the nozzle marker sits where "
+        "the board last said, and a bed reading lies over the bed"
     )
 
     world_badge.click()
@@ -123,12 +124,12 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     page.wait_for_timeout(2500)
     docs.step(
         "Click the badge, or Open, or Device › Open on the ring, and the printer's Machine "
-        "opens in front of the world: the monitor's own body -- cards, chart, the latch and "
-        "control pad, the bed reading, the print from here -- with the board's one log in "
-        "it, in a panel tethered to the printer. It is the one place for the board, and "
+        "opens in the rail's tab strip, beside Pictures and the Bench: the monitor's own "
+        "body -- cards, chart, the latch and control pad, the bed reading, the print from "
+        "here -- with the board's one log in it. It is the one place for the board, and "
         "the one thing that polls it: the badges and Selected's line say what its polls "
-        "said. Drag it to let go of the tether, or dock it into the rail's strip; the "
-        "ring's control verbs go to it"
+        "said. Float it from its tab to have it over the world; the ring's control verbs "
+        "go to it"
     )
 
     machine.locator("#q").fill("M119")

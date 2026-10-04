@@ -53,12 +53,15 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     expect(page.locator("#minimap .minimap-tick.filled")).to_have_count(3)
     docs.step("The abstract minimap shows the current depth")
 
-    page.locator("#zoom-out-btn").click()
+    page.keyboard.press("Backspace")
     page.wait_for_timeout(300)
-    page.locator("#zoom-out-btn").click()
+    page.locator("#breadcrumb .crumb").first.click()
     page.wait_for_timeout(300)
     expect(page.locator("#contents-list")).to_contain_text("workbench")
-    docs.step("Zoom back out to the root -- same control at every level")
+    docs.step(
+        "Back out to the root -- Backspace goes up a level, and a crumb of the trail in "
+        "the header goes up to it -- the same at every level"
+    )
 
     # The same navigation from the ring: a right-click on empty canvas opens
     # the canvas ring; Pieces (cell 8) lists this level in groups; digits choose.
@@ -92,11 +95,12 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     x_input.fill("650")
     x_input.press("Tab")
     expect(page.locator("#validity-indicator")).to_contain_text("violation")
+    page.locator("#validity-indicator").click()
     expect(page.locator("#problem-list li")).to_contain_text("printer_1 and printer_2 overlap")
     docs.step(
-        "Select printer_1 at the root and move it to overlap printer_2 -- caught: the "
-        "problem is listed at the top of Site, both pieces are red in its tree, and a "
-        "click on the toolbar's count opens it"
+        "Select printer_1 at the root and move it to overlap printer_2 -- caught: Site's "
+        "folded line says how many problems there are, both pieces are red in its tree, "
+        "and a click on the header's count opens the fold"
     )
 
     x_input.fill("100")

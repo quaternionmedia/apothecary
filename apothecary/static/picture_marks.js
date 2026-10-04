@@ -13,8 +13,11 @@
  *   into a piece is drawn green and not picked (its piece is), one already
  *   made from another view is drawn dashed;
  * - a camera's frustum looking down onto its host, its base the mat;
- * - one place badge (an anchor) per host that holds a camera or a view, the
- *   floor included. A click on it selects the host.
+ * - one place badge (an anchors.js badge) per host that holds a camera or a
+ *   view, the floor included: ▣ (📷 while a camera is pinned there) at the
+ *   picture's top-left corner, or the host's top's, never at the host's middle,
+ *   where what stands on it stands; its words open on hover or while the host
+ *   is selected. A click on it selects the host.
  *
  * Mats and outlines are drawn at the site's top level only; a frustum and a
  * badge follow their host's level, as a machine's badge does. The mat's
@@ -30,12 +33,13 @@
  * from the copy of the shape the piece keeps.
  *
  * mountPictureMarks({ scene, anchors, base, hostBounds, hostInView,
- * atTopLevel, floorPoint, onSelect, onChange }):
+ * atTopLevel, floorPoint, onSelect, isSelected, onChange }):
  *   hostBounds(host) -> {min:[x,y,z], max:[x,y,z]} in the site's frame, or null;
  *   hostInView(host) -> whether the host is at the level being looked at;
  *   atTopLevel() -> whether the site's top level is on screen;
  *   floorPoint(made) -> [x,y,z] where the floor's things stand when no view says;
  *   onSelect(host) -> the page selects the host ("" is the floor);
+ *   isSelected(host) -> whether the host is the selection;
  *   onChange(attached) -> after every fetch that answered.
  */
 
@@ -43,6 +47,8 @@ import * as THREE from "three";
 
 // apothecary (x, y, z) z-up -> three.js (x, z, y) y-up.
 const toScene = (x, y, z) => new THREE.Vector3(x, z, y);
+// A badge's words are markup: a camera's label and a picture's name are text in it.
+const escapeText = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 export const FOUND_COLOR = 0xffcc66;
 export const MADE_COLOR = 0x6fdb75;
@@ -60,7 +66,7 @@ const TEXTURE_PX = 1024;   // the long side a mat's texture is asked at
 export const FLOOR = "";
 const keyFor = (host) => `place:${host === FLOOR ? "@floor" : host}`;
 
-export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostInView, atTopLevel, floorPoint, onSelect, onChange }) {
+export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostInView, atTopLevel, floorPoint, onSelect, isSelected = () => false, onChange }) {
     let site = null;
     let attached = null;           // the last answer of GET /sites/{s}/attached
     let generation = 0;            // a site change makes answers still in flight stale
@@ -269,17 +275,19 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
         return bits.join(" · ");
     }
 
+    // The place's own spot: the drawn picture's top-left corner, or with none
+    // the same corner of the host's top (of where the floor's mat would lie).
     function badgePoint(host) {
         if (!hostInView(host)) return null;
         const g = groups.get(host);
+        if (g && g.mat) return toScene(...onMat(g.mat, 0, 0, BADGE_LIFT));
         if (host === FLOOR) {
-            if (g && g.mat) return toScene(g.mat.centre[0], g.mat.centre[1], g.mat.centre[2] + BADGE_LIFT);
             const p = floorPoint(madeNames());
-            return toScene(p[0] + FLOOR_UNSIZED_MM / 2, p[1], p[2] + BADGE_LIFT);
+            return toScene(p[0], p[1] + FLOOR_UNSIZED_MM / 2, p[2] + BADGE_LIFT);
         }
         const b = hostBounds(host);
         if (!b) return null;
-        return toScene((b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, b.max[2] + BADGE_LIFT);
+        return toScene(b.min[0], b.max[1], b.max[2] + BADGE_LIFT);
     }
 
     function clearDrawn() {
@@ -309,18 +317,16 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
             wanted.add(key);
             let badge = anchors.get(key);
             if (!badge) {
-                badge = document.createElement("div");
-                badge.className = "world-badge place-mark";
+                badge = anchors.badge(key, () => badgePoint(host), { className: "place-mark", selected: () => isSelected(host) });
                 badge.dataset.host = host;
-                badge.title = host === FLOOR ? "Select the floor" : `Select ${host}`;
+                badge.setAttribute("aria-label", host === FLOOR ? "Select the floor" : `Select ${host}`);
                 badge.addEventListener("click", () => onSelect(host));
-                anchors.add(key, badge, () => badgePoint(host), { offset: { x: 0, y: -30 } });
             }
             const cam = cameraAt(host);
             if (cam) badge.dataset.camera = cam.id; else delete badge.dataset.camera;
             badge.classList.toggle("has-camera", !!cam);
             badge.classList.toggle("has-view", !!view);
-            badge.textContent = badgeText(host);
+            anchors.say(key, { icon: cam ? "📷" : "▣", words: escapeText(badgeText(host)) });
         }
         for (const key of anchors.keys()) if (key.startsWith("place:") && !wanted.has(key)) anchors.remove(key);
         // A texture is kept while its view is pinned here, and no longer.

@@ -100,9 +100,11 @@ def test_viewer_shows_contents_for_the_loaded_site(page: Page, base_url: str):
 
 
 @pytest.mark.e2e
-def test_double_click_zooms_in_and_zoom_out_returns(page: Page, base_url: str):
-    """Test the standardized zoom-in/zoom-out navigation controls."""
+def test_double_click_zooms_in_and_a_crumb_returns(page: Page, base_url: str):
+    """Test the standardized zoom-in/zoom-out navigation controls: the breadcrumb is
+    the way out (Zoom Out is gone), a crumb going up as Backspace does."""
     _open(page, f"{base_url}/viewer/sites/garage")
+    expect(page.locator("#zoom-out-btn")).to_have_count(0)
 
     page.locator("#contents-list .contents-item", has_text="printer_1").dblclick()
 
@@ -110,12 +112,13 @@ def test_double_click_zooms_in_and_zoom_out_returns(page: Page, base_url: str):
     # breadcrumb reflects the new depth.
     expect(page.locator("#breadcrumb")).to_contain_text("printer_1")
     expect(page.locator("#contents-list")).to_contain_text("gantry_system")
-    expect(page.locator("#zoom-out-btn")).to_be_enabled()
 
-    page.locator("#zoom-out-btn").click()
+    page.locator("#breadcrumb .crumb").first.click()
 
     expect(page.locator("#contents-list")).to_contain_text("workbench")
-    expect(page.locator("#zoom-out-btn")).to_be_disabled()
+    # Up one level, as Backspace goes: the piece just left is the one selected.
+    assert page.evaluate("() => window.fractalViewer.selectedName") == "printer_1"
+    expect(page.locator("#breadcrumb .crumb")).to_have_count(1)
 
 
 def _depth(node: dict) -> int:
@@ -305,10 +308,11 @@ def test_far_plane_clears_the_furthest_the_camera_can_dolly(page: Page, base_url
 
 @pytest.mark.e2e
 def test_assembly_outlines_toggle_off_and_on(page: Page, base_url: str):
-    """Each compound node gets one outline, and the toolbar toggle removes them."""
+    """Each compound node gets one outline, and the View menu's toggle removes them."""
     state = _load_garage(page, base_url)
     assert state["overlays"] > 0, "expected an outline per compound node"
 
+    page.locator("#view-menu > summary").click()
     page.locator("#overlay-toggle").uncheck()
     _state_once(page, "s.overlays === 0")
 
@@ -322,6 +326,7 @@ def test_detail_mode_collapses_compound_nodes_to_dots(page: Page, base_url: str)
     state = _load_garage(page, base_url)
     assert state["dots"] == 0
 
+    page.locator("#view-menu > summary").click()
     page.locator("#detail-mode").select_option("dot")
     dotted = _state_once(page, "s.dots > 0")
     assert dotted["meshes"] == state["meshes"], "detail level changed how many nodes render"

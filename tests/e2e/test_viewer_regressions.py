@@ -146,7 +146,8 @@ def _unpin(page: Page, url: str) -> None:
 
 
 def _close(page: Page, url: str) -> None:
-    page.locator(".panel[data-panel='machine'] .panel-close").click()
+    # In the rail, its tab's ✕.
+    page.locator(".panel-rail .rail-tab[data-panel='machine'] .rail-tab-close").click()
 
 
 @pytest.mark.e2e

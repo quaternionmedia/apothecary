@@ -122,10 +122,10 @@ class NothingFound(Exception):
 # Every control written into the page, by the name it carries there. The name is
 # its id where it has one and its class where it does not.
 CONTROLS: Dict[str, Tuple[str, str, str]] = {
-    "site-select": (WIDGET, WHAT_YOU_SEE, "a drop-down of arrangements"),
-    "load-btn": (WIDGET, WHAT_YOU_SEE, "a button that loads the chosen arrangement"),
-    "zoom-out-btn": (WIDGET, WHAT_YOU_SEE, "a button that steps back out"),
+    "site-select": (WIDGET, WHAT_YOU_SEE, "a drop-down of arrangements, loading the one chosen"),
+    # The header's View menu (a fold, like Site's): how the world is drawn.
     "snap-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box for snapping to a grid"),
+    "walls-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box that lets a click in the world pick a wall"),
     "zoom-in-btn": (WIDGET, WHAT_YOU_SEE, "a button that goes into the chosen piece"),
     "status-select": (WIDGET, WHAT_IS_THERE, "a drop-down for the state of a piece"),
     "pos-x": (WIDGET, WHAT_IS_THERE, "a box for typing where a piece is, across"),
@@ -402,14 +402,23 @@ RING_BACKED: Dict[str, str] = {
     "print-pause": "control:sd-pause",
     "print-resume": "control:sd-resume",
     "print-cancel": "control:sd-abort",
-    # Navigation: the list rows, the step-out button and the go-in button are
-    # what the canvas ring's Pieces and Up and the node ring's Zoom in do.
-    "zoom-out-btn": "zoom-out",
+    # Navigation: the list rows and the go-in button are what the canvas ring's
+    # Pieces and the node ring's Zoom in do; the trail's crumb one level up is Up.
     "zoom-in-btn": "zoom-in",
     "li:click:selectChild": "select:printer_1",
     "badge:click:selectPath": "select:printer_1",
-    "zoomOutBtn:click:zoomOut": "zoom-out",
+    "crumb:click:goUpTo": "zoom-out",
     "zoomInLink:click:zoomIn": "zoom-in",
+    # The header's View menu: each of its items a cell of the canvas ring's
+    # Panels › View (a Detail value is View › Detail › that value).
+    "snap-toggle": "view:snap",
+    "detail-mode": "view:detail:full",
+    "overlay-toggle": "view:outlines",
+    "walls-toggle": "view:walls",
+    "snapToggle:change:setTranslationSnap": "view:snap",
+    "detailModeEl:change:clear": "view:detail:full",
+    "overlayToggle:change:renderFocus": "view:outlines",
+    "wallsToggle:change:setWallsSelectable": "view:walls",
     "reconnect": "device:reconnect",
     "reset": "device:reset",
     "release": "device:release",
@@ -494,10 +503,19 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "letting go keeps the move",
     ),
     # controls of its own
-    "loadBtn:click:loadSite": (WIDGET, WHAT_YOU_SEE, "the load button"),
-    "siteSelect:change:loadSite": (WIDGET, WHAT_YOU_SEE, "choosing from the drop-down"),
-    "zoomOutBtn:click:zoomOut": (WIDGET, WHAT_YOU_SEE, "the step-out button"),
+    "siteSelect:change:loadSite": (WIDGET, WHAT_YOU_SEE, "choosing from the drop-down, which loads it"),
     "snapToggle:change:setTranslationSnap": (WIDGET, WHAT_YOU_SEE, "the snapping tick-box"),
+    "wallsToggle:change:setWallsSelectable": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "the tick-box that lets a click pick walls, for the session",
+    ),
+    # The View menu folds away when a press lands anywhere else, as a menu does.
+    "document:pointerdown:foldViewMenu": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a press outside the View menu, folding it away",
+    ),
     "posAxis:change:recomputeWorldBounds": (WIDGET, WHAT_IS_THERE, "typing a position"),
     "statusSelect:change:submitStatus": (WIDGET, WHAT_IS_THERE, "choosing a state"),
     # The editor's Regenerate STL: the staged set applied to its target, a
@@ -510,6 +528,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "canvas:dblclick:onDoubleClick": (GESTURE, WHAT_YOU_SEE, "double-tapping to go in"),
     "canvas:wheel:onWheel": (GESTURE, WHAT_YOU_SEE, "the wheel, with a counter of its own"),
     "window:keydown:zoomOut": (GESTURE, WHAT_YOU_SEE, "a key that steps back out"),
+    "window:keydown:onHintKey": (GESTURE, WHAT_YOU_SEE, "a key (?) that brings the hint bar back"),
     # the trails, trees and rows beside the scene
     "chip:click:delete": (LIST, WHAT_YOU_SEE, "a word button that folds and unfolds"),
     "caret:click:delete": (LIST, WHAT_YOU_SEE, "an arrow that opens a branch"),
@@ -613,8 +632,8 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "the toolbar's count of problems, opening them at the top of Site",
     ),
     "li:dblclick:zoomIn": (LIST, WHAT_YOU_SEE, "going into a piece from the list"),
-    "rootCrumb:click:jumpTo": (LIST, WHAT_YOU_SEE, "the top of the trail"),
-    "crumb:click:jumpTo": (LIST, WHAT_YOU_SEE, "a step on the trail"),
+    "rootCrumb:click:goUpTo": (LIST, WHAT_YOU_SEE, "the top of the trail"),
+    "crumb:click:goUpTo": (LIST, WHAT_YOU_SEE, "a step on the trail"),
     # how much to draw
     "detailModeEl:change:clear": (WIDGET, WHAT_YOU_SEE, "choosing how much to draw"),
     "overlayToggle:change:renderFocus": (WIDGET, WHAT_YOU_SEE, "the outlines tick-box"),
