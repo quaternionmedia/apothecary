@@ -48,23 +48,6 @@ def test_viewer_toolbar_links_to_firmware_and_monitor(page: Page, base_url: str)
 
 
 @pytest.mark.e2e
-def test_viewer_serial_overlay_toggle(page: Page, base_url: str):
-    """The serial-log overlay floats over the 3D view, toggles from the toolbar, and persists."""
-    page.goto(f"{base_url}/viewer/sites/garage")
-    overlay = page.locator("#serial-overlay")
-    expect(overlay).to_be_hidden()
-    page.locator("#serial-toggle").check()
-    expect(overlay).to_be_visible()
-    # Whether or not a board is attached, the header explains the situation.
-    expect(page.locator("#serial-meta")).not_to_have_text("—", timeout=10000)
-    page.reload()
-    expect(page.locator("#serial-overlay")).to_be_visible()
-    page.locator("#serial-close").click()
-    expect(page.locator("#serial-overlay")).to_be_hidden()
-    assert not page.locator("#serial-toggle").is_checked()
-
-
-@pytest.mark.e2e
 def test_firmware_page_devices_panel(page: Page, base_url: str):
     """Each detected board has a card: a devkit can be probed; a printer, once asked,
     has Poll and Monitor and nothing that would take its port (it is monitored, never

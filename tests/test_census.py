@@ -158,7 +158,46 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # (48.7%), 81 places. Added: a job's row in Site's Jobs, a list, selecting its
 # machine at its level and opening it (siteJobsListEl:click:closest). Site's Jobs
 # is a fold, as Pinned is, and adds no control. No ring address moved.
-VIEWER_CEILING = 119
+#
+# Consolidation Phase 4, one Machine per board. Before: 119 controls of its own,
+# 58 ring-backed (48.7%), 81 places the page listens. After: 101, 51 ring-backed
+# (50.5%), 72 places. Gone with the serial overlay: its toolbar tick-box
+# (serial-toggle), its port and speed drop-downs (serial-port, serial-baud), its
+# rescan, identify and monitor link (serial-refresh, serial-identify,
+# serial-monitor, all three ring-backed), its clear and close (serial-clear,
+# serial-close), its query form, box and send button (serial-query-row,
+# serial-query, serial-query-row:submit), and the firmware link it offered when
+# no board was found (firmware-page-link). Gone from the toolbar: the
+# look-for-boards tick-box and its interval (devices-auto, devices-interval) --
+# the board model looks again by itself when a board it watches goes quiet, and
+# Rescan is the one way to ask. Gone from Selected's Device section, which is one
+# line now: Watch, Poll now and the Monitor link (dev-watch, dev-poll,
+# dev-monitor, ring-backed), and the second of its two Unpin and of its two
+# Rescan buttons, each written once now (dev-unpin, dev-rescan, ring-backed).
+# Added: Selected's Open (dev-open), backed by Device › Open. The Machine's log,
+# its one query box and a devkit's cards are machine.js's, written once whatever
+# board it shows, and add no control. Listeners gone: the overlay's
+# (toggle:change:show, portSel:change:renderMeta, baudSel:change:connect,
+# queryRow:submit:line, es:open:add, es:close:line,
+# window:beforeunload:disconnect), the look-for-boards three (autoEl:change:setItem,
+# intervalEl:change:setItem, document:visibilitychange:scheduleAutoRefresh), Watch's
+# and Poll now's (devWatch:click:dispatchEvent, devPoll:click:pollNow), and the
+# visibility and unload listeners machine.js had, which move to boards.js. Added:
+# Open's (devOpen:click:openMachine), and boards.js's, counted with the viewer
+# now (census.MARKS): a devkit's stream (es:open:opened, es:close:streamStopped)
+# and the page's visibility and unload (document:visibilitychange:onVisibility,
+# window:beforeunload:onUnload). The Machine's query box is keyed by what it does
+# now (qform:submit:query). Ring addresses moved, all on the Device ring (cell 2 of
+# a node ring, the whole ring on the monitor page): Watch's cell 8 is Open's (⌗28,
+# ⌗8), which opens the board's Machine as Monitor did; Monitor (⌗22, ⌗2) is gone;
+# Query moved from 4 to 2 (⌗24 to ⌗22), Unpin from 9 to 4 (⌗29 to ⌗24), Rescan from
+# 3 to 9 (⌗23 to ⌗29), Link from 1 to 3 (⌗21 to ⌗23: Reconnect ⌗218 to ⌗238, Reset
+# ⌗216 to ⌗236, Release ⌗212 to ⌗232) and Control from 7 to 1 (⌗27 to ⌗21, and
+# every address under it: Jog › Y+ ⌗2728 to ⌗2128, Arm ⌗277 to ⌗217, Stop ⌗271 to
+# ⌗211; on the monitor page ⌗728 to ⌗128). Under the canvas ring's Panels, the
+# Machine group (94: the machine 948, its comms log 946) is the Machine's own cell,
+# 94.
+VIEWER_CEILING = 101
 
 
 def test_the_viewer_stays_under_its_ceiling():
@@ -327,12 +366,12 @@ def test_pin_and_pin_by_typing_are_two_listeners(tmp_path):
 def test_the_report_says_how_many_are_on_the_ring(tmp_path):
     page = tmp_path / "page.html"
     page.write_text(
-        '<button class="dev-watch">w</button><button id="serial-clear">c</button>\n',
+        '<button class="dev-open">o</button><button id="mystery-btn">m</button>\n',
         encoding="utf-8",
     )
     written = census.report(page)
     assert written.startswith("2 controls of its own, 1 of them also on the ring.")
-    assert "⌗ device:watch" in written
+    assert "⌗ device:open" in written
 
 
 # --------------------------------------------------------------------------
@@ -411,6 +450,7 @@ def test_the_viewer_counts_its_marks_modules_and_the_monitor_does_not():
     """The viewer imports machine_marks.js itself; the monitor reaches it only
     through board_view.js, so its count does not change."""
     assert (census.STATIC / "machine_marks.js") in census.marks_of(census.VIEWER)
+    assert (census.STATIC / "boards.js") in census.marks_of(census.VIEWER)
     assert census.marks_of(census.MONITOR) == []
     assert census.marks_of(census.FIRMWARE) == []
     for chrome in ("ring.js", "panels.js", "anchors.js"):
@@ -513,11 +553,52 @@ def test_pictures_chooses_a_row_and_has_no_pin_here():
 
 def test_the_viewers_ring_backed_share_did_not_fall():
     """Consolidation Phase 2 held the ring-backed share where it was, 58 of 128; its
-    follow-ups do not let it fall below that, and neither does Phase 3, which deleted
-    the Jobs panel's controls, none of them ring-backed."""
+    follow-ups did not let it fall, nor did Phase 3, which deleted the Jobs panel's
+    controls, none of them ring-backed, and left it at 58 of 119. Phase 4 deleted the
+    serial overlay and most of Selected's Device section, ring-backed and not, and
+    does not let it fall below where Phase 3 left it."""
     taken = census.take()
     own, backed = len(taken.controls_of_its_own()), len(taken.ring_backed())
-    assert backed / own >= 58 / 128, f"{backed} of {own} ring-backed"
+    assert backed / own >= 58 / 119, f"{backed} of {own} ring-backed"
+
+
+def test_the_serial_overlay_left_nothing_behind():
+    """No control or listener of the serial overlay, the toolbar's look-for-boards
+    tick-box or Selected's Watch, Poll now and Monitor is counted or classified; a
+    board's Machine is opened by Open, which the ring backs, and the boards' model is
+    counted with the viewer, every listener of it classified."""
+    taken = census.take()
+    gone = (
+        "serial-",
+        "devices-auto",
+        "devices-interval",
+        "firmware-page-link",
+        "dev-watch",
+        "dev-poll",
+        "toggle:change:show",
+        "portSel:change:renderMeta",
+        "baudSel:",
+        "queryRow:",
+        "autoEl:",
+        "intervalEl:",
+        "devWatch:",
+        "devPoll:",
+        "es:open:add",
+        "es:close:line",
+        "window:beforeunload:disconnect",
+        "document:visibilitychange:scheduleAutoRefresh",
+    )
+    assert not [f.key for f in taken.found if f.key.startswith(gone)]
+    for table in (census.CONTROLS, census.LISTENING, census.RING_BACKED):
+        assert not [k for k in table if k.startswith(gone)], table
+    by_name = {f.name: f for f in taken.controls_of_its_own()}
+    assert by_name["dev-open"].ring_action == "device:open"
+    listening = {f.key: f for f in taken.found if f.how == "listening"}
+    assert listening["devOpen:click:openMachine"].ring_action == "device:open"
+    from_model = [f for f in taken.found if f.source == "boards.js"]
+    assert from_model and all(f.surface == census.AUTOMATIC for f in from_model), from_model
+    assert "device:watch" not in census.RING_BACKED.values()
+    assert "device:monitor" not in census.RING_BACKED.values()
 
 
 def test_the_jobs_panel_left_nothing_behind():

@@ -557,35 +557,21 @@ PANELS: Sequence[Tuple[str, str]] = (
     ("selected", "Selected"),
     # Registered by the page's script rather than marked in its markup: Pictures
     # (every picture under the picture root, each pinned here or forgotten, and
-    # the gathering) at start; the machine and its comms log when a printer is
-    # opened. That pair shares one cell.
+    # the gathering) at start; a board's Machine, its log in it, when a board is
+    # opened.
     ("pictures", "Pictures"),
     ("machine", "Machine"),
-    ("log", "Comms log"),
 )
-# The cells that hold two panels each, in the order they are seated after the
-# plain ones: (id, label, the panels behind it).
-PANEL_GROUPS: Sequence[Tuple[str, str, Tuple[str, ...]]] = (
-    ("panel:machine-group", "Machine", ("machine", "log")),
-)
-GROUPED_PANELS = tuple(pid for _, _, pids in PANEL_GROUPS for pid in pids)
 
 
 def _panels() -> Option:
     def toggle(pid: str, label: str) -> Option:
         return Option(id=f"panel:{pid}", label=label, action=f"panel:toggle:{pid}")
 
-    labels = dict(PANELS)
-    plain = [toggle(pid, label) for pid, label in PANELS if pid not in GROUPED_PANELS]
-    groups = [
-        Option(id=gid, label=glabel, children=[toggle(pid, labels[pid]) for pid in pids])
-        for gid, glabel, pids in PANEL_GROUPS
-    ]
     return Option(
         id="panels",
         label="Panels",
-        children=plain
-        + groups
+        children=[toggle(pid, label) for pid, label in PANELS]
         # The rail itself: hidden and shown, as the tilde key does.
         + [Option(id="panel:rail", label="Rail", action="panel:rail:toggle")],
     )
@@ -1000,14 +986,15 @@ def _device_ring_on_top(context: Context, device: Optional[Device]) -> Ring:
 def _device_options(device: Device) -> List[Option]:
     """What can be done with a board. The pages' existing handlers do each one.
 
-    Pin and Unpin are one cell, since a port is either pinned to this node or
-    not. Control appears only for a printer: a board running a sketch has no
-    G-code to be driven with.
+    Open is the board's Machine, the one place for it, in the cell Watch had;
+    Watch and Monitor were two ways into two views of one board, and are that
+    one cell now. Pin and Unpin are one cell, since a port is either pinned to
+    this node or not. Control appears only for a printer: a board running a
+    sketch has no G-code to be driven with.
     """
     options = [
-        Option(id="device:watch", label="Watch", action="device:watch"),
+        Option(id="device:open", label="Open", action="device:open"),
         Option(id="device:poll", label="Poll", action="device:poll"),
-        Option(id="device:monitor", label="Monitor", action="device:monitor"),
         Option(id="device:query", label="Query", action="device:query"),
         (
             Option(id="device:unpin", label="Unpin", action="device:unpin")
@@ -1161,10 +1148,10 @@ CARRIED_BY: Dict[str, Carries] = {
     "group": Carries.VIEWER,
     # Discarding every edit and rebuilding from the factory.
     "reset": Carries.SERVER,
-    # A board's verbs. The pages already have a handler for each -- the Device
-    # section, the serial overlay and the monitor -- and the ring hands the
-    # choice to that handler. The server is reached through the firmware
-    # routes those handlers already call, never through the intent route.
+    # A board's verbs. The pages already have a handler for each -- Selected's
+    # Device line and the board's Machine -- and the ring hands the choice to
+    # that handler. The server is reached through the firmware routes those
+    # handlers already call, never through the intent route.
     "device": Carries.VIEWER,
     # Driving a printer. Each leaf is one allowlisted G-code line, sent by the
     # monitor page's control chain, which is where the latch is checked and

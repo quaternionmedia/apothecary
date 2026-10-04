@@ -1,7 +1,7 @@
 /* The machine (widgets/machine.js), wherever it is mounted: the monitor page
  * and the world's popup share these rules. The variables are the monitor's
  * palette; a host that sets them differently recolours the whole thing. */
-.machine, .machine-log {
+.machine {
     --bg: #141614; --panel: #1c1f1c; --line: #2a302a; --ink: #d8e0d8; --ink-2: #9aa89a; --ink-3: #66746a;
     --ok: #6fdb75; --warn: #ffcc66; --bad: #ff8080; --tx: #9cd2ff;
     --hotend: #e8b04a; --bed: #6fb3e8;  /* the two series; validated against --bg (dark) */
@@ -66,6 +66,8 @@
 #log .sys { color: var(--ink-3); font-style: italic; }
 #log .rx.temp { color: #c9b98a; }
 #log .err { color: var(--bad); }
+#log .banner { color: var(--tx); font-weight: 600; }
+#log .marker { color: var(--warn); }
 .empty { color: var(--ink-3); font-style: italic; }
 /* Bed level: the mesh as a heatmap, its numbers, the history */
 #level-card .row { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; margin: 0.3rem 0; font-size: 0.78rem; color: var(--ink-2); }
@@ -125,11 +127,14 @@
 #control .steps button.on { background: #3a3020; border-color: #7a5a1a; color: var(--warn); }
 #control .sent { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.7rem; color: var(--tx); min-height: 1.1em; }
 #control .sent.bad { color: var(--bad); }
-/* In a popup over the world: one column, the log in its own panel, the control pad inline. */
+/* A printer's controls and cards, or a devkit's: the root's kind shows one set. */
+.machine.kind-devkit .printer-only, .machine.kind-printer .devkit-only { display: none !important; }
+#c-sketch .ok { color: var(--ok); } #c-sketch .bad { color: var(--bad); } #c-sketch .warn { color: var(--warn); }
+/* In a popup over the world: one column, the log under the cards, the control pad inline. */
 .machine.host-popup .machine-head { padding: 0.4rem 0.5rem; gap: 0.4rem; border-bottom: 0; }
 .machine.host-popup .machine-main { display: block; padding: 0.4rem 0.5rem; height: auto; }
 .machine.host-popup .cards { grid-template-columns: repeat(2, 1fr); }
 .machine.host-popup #control { position: static; width: auto; margin: 0.5rem 0.5rem 0; box-shadow: none; }
 .machine.host-popup .chart svg { height: 110px; }
-.machine-log { display: flex; flex-direction: column; min-height: 0; }
-.machine-log #log { min-height: 160px; max-height: 50vh; }
+.machine.host-popup .right { margin-top: 0.5rem; }
+.machine.host-popup #log { min-height: 140px; max-height: 40vh; }

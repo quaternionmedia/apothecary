@@ -61,8 +61,9 @@ control is deleted.
   this count.
 - It is one page at a time, plus the widget modules the page imports and the
   marks modules it imports by name (`MARKS`: what the world wears -- a
-  machine's marks, a picture's). `ring.js`, `panels.js` and `anchors.js` stay
-  off the meter as chrome with their own tests. The command line, direct
+  machine's marks, a picture's -- and the boards' model behind them).
+  `ring.js`, `panels.js` and `anchors.js` stay off the meter as chrome with
+  their own tests; `board_text.js` writes text and listens to nothing. The command line, direct
   requests and the other pages are not in the number.
 - It refuses when it finds nothing, because a page it failed to read and a page
   with no controls must not produce the same answer.
@@ -135,32 +136,14 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "detail-mode": (WIDGET, WHAT_YOU_SEE, "a drop-down for how much of each subassembly to draw"),
     "overlay-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box that outlines each subassembly's extent"),
     "detail-select": (WIDGET, WHAT_YOU_SEE, "the same drop-down, for the chosen piece only"),
-    # A board's serial log, floated over the view.
-    "serial-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box that floats a board's serial log"),
-    "serial-port": (WIDGET, WHAT_YOU_SEE, "a drop-down of connected boards"),
-    "serial-baud": (WIDGET, WHAT_YOU_SEE, "a drop-down of speeds to listen at"),
-    "serial-refresh": (WIDGET, WHAT_YOU_SEE, "a button that looks for boards again"),
-    "serial-clear": (WIDGET, WHAT_YOU_SEE, "a button that empties the log"),
-    "serial-close": (WIDGET, WHAT_YOU_SEE, "a button that puts the log away"),
     "firmware-link": (WIDGET, NOTHING, "a link to the firmware page"),
-    "firmware-page-link": (WIDGET, NOTHING, "the same link, offered when no board is found"),
     "monitor-link": (WIDGET, NOTHING, "a link to the printer monitor page"),
-    # The serial log's second row: identify the board, open its monitor, and
-    # ask it for a report by code.
-    "serial-identify": (WIDGET, WHAT_YOU_SEE, "a button that asks a board what it is"),
-    "serial-monitor": (WIDGET, NOTHING, "a link to the monitor for the board being watched"),
-    "serial-query-row": (WIDGET, WHAT_YOU_SEE, "a form for asking a printer for a report"),
-    "serial-query": (WIDGET, WHAT_YOU_SEE, "a box for the report code to ask for"),
-    "serial-query-row:submit": (WIDGET, WHAT_YOU_SEE, "the button that asks for the report"),
-    # Looking for boards again on a schedule.
-    "devices-auto": (WIDGET, WHAT_YOU_SEE, "a tick-box that looks for boards on a schedule"),
-    "devices-interval": (WIDGET, WHAT_YOU_SEE, "a drop-down for how often to look"),
-    # The Device section of the chosen piece: what board it is pinned to, and
-    # what can be done with that board. Drawn afresh each time the piece
-    # changes, so these are found by class rather than id.
-    "dev-watch": (WIDGET, WHAT_YOU_SEE, "a button that floats the pinned board's serial log"),
-    "dev-poll": (WIDGET, WHAT_YOU_SEE, "a button that polls the pinned printer once"),
-    "dev-monitor": (WIDGET, NOTHING, "a link to the pinned printer's monitor"),
+    # The Device section of the chosen piece: one line, the board pinned to it
+    # and what it is doing, with Open (its Machine) and the pin's take-back; or,
+    # with nothing pinned, the boards it can be pinned to. Drawn afresh each
+    # time the piece changes, so these are found by class rather than id.
+    "dev-open": (WIDGET, WHAT_YOU_SEE, "a button that opens the pinned board's Machine"),
+    "dev-monitor": (WIDGET, NOTHING, "a link to a printer's monitor page"),
     "dev-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins the board from the piece"),
     "dev-via": (WIDGET, WHAT_YOU_SEE, "a link to the piece inside that holds the board"),
     "dev-rescan": (WIDGET, WHAT_YOU_SEE, "a button that looks for boards again"),
@@ -191,7 +174,8 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "ctl": (WIDGET, WHAT_YOU_SEE, "a tick-box that arms the control latch"),
     "estop": (WIDGET, WHAT_IS_THERE, "the emergency stop"),
     "viewer-link": (WIDGET, NOTHING, "a link back to the viewer"),
-    # The comms log: a report to ask for, and what to show of the traffic.
+    # The board's one log, in its Machine: a report to ask a printer for, and
+    # what to show of the traffic.
     "qform": (WIDGET, WHAT_YOU_SEE, "a form for asking the printer for a report"),
     "q": (WIDGET, WHAT_YOU_SEE, "a box for the report code to ask for"),
     "qform:submit": (WIDGET, WHAT_YOU_SEE, "the button that asks for the report"),
@@ -330,20 +314,14 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
 # `apothecary.menu`'s vocabulary, so a control cannot claim a backing that
 # does not exist.
 RING_BACKED: Dict[str, str] = {
-    # the viewer's Device section and serial log
-    "dev-watch": "device:watch",
-    "dev-poll": "device:poll",
-    "dev-monitor": "device:monitor",
+    # the viewer's Device section: Open is Device › Open, the board's Machine
+    "dev-open": "device:open",
     "dev-query": "device:query",
     "dev-pin": "device:pin",
     "dev-pin-manual": "device:pin",
     "dev-unpin": "device:unpin",
     "dev-rescan": "device:rescan",
-    "serial-identify": "device:query",
-    "serial-monitor": "device:monitor",
-    "serial-refresh": "device:rescan",
-    "devWatch:click:dispatchEvent": "device:watch",
-    "devPoll:click:pollNow": "device:poll",
+    "devOpen:click:openMachine": "device:open",
     "devQuery:click:queryPort": "device:query",
     "devPin:click:setNodeDevice": "device:pin",
     "devPinManual:click:pinManual": "device:pin",
@@ -385,10 +363,12 @@ RING_BACKED: Dict[str, str] = {
     "corner:FR": "control:corner:FR",
     "corner:BL": "control:corner:BL",
     "corner:BR": "control:corner:BR",
-    # The firmware page's device cards: a poll and the monitor link have cells;
-    # probe, identify and the live stream do not yet.
+    # The firmware page's device cards: a poll has its cell; the monitor link and
+    # the live stream open a board's Machine on a page of its own, as Device ›
+    # Open does in front of the world; probe and identify have no cell yet.
     "dev-printer": "device:poll",
-    "dev-live": "device:watch",
+    "dev-monitor": "device:open",
+    "dev-live": "device:open",
     "boards-btn": "device:rescan",
     # Gather and Pictures' Purge are cells of the canvas ring's Pictures. The
     # per-row take-backs of Pinned and Pictures are not here: see TAKEN_BACK.
@@ -628,20 +608,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "detailModeEl:change:clear": (WIDGET, WHAT_YOU_SEE, "choosing how much to draw"),
     "overlayToggle:change:renderFocus": (WIDGET, WHAT_YOU_SEE, "the outlines tick-box"),
     "select:change:delete": (WIDGET, WHAT_YOU_SEE, "choosing how much to draw of one piece"),
-    # the serial log
-    "toggle:change:show": (WIDGET, WHAT_YOU_SEE, "the serial log tick-box"),
-    "portSel:change:renderMeta": (WIDGET, WHAT_YOU_SEE, "choosing a board"),
-    "baudSel:change:connect": (WIDGET, WHAT_YOU_SEE, "choosing a speed"),
-    "queryRow:submit:line": (WIDGET, WHAT_YOU_SEE, "asking the watched printer for a report"),
-    # looking for boards on a schedule
-    "autoEl:change:setItem": (WIDGET, WHAT_YOU_SEE, "the look-for-boards tick-box"),
-    "intervalEl:change:setItem": (WIDGET, WHAT_YOU_SEE, "choosing how often to look"),
     # the Device section of the chosen piece
-    "devWatch:click:dispatchEvent": (WIDGET, WHAT_YOU_SEE, "floating the pinned board's log"),
+    "devOpen:click:openMachine": (WIDGET, WHAT_YOU_SEE, "opening the pinned board's Machine"),
     "devUnpin:click:setNodeDevice": (WIDGET, WHAT_IS_THERE, "unpinning the board"),
     "devPin:click:setNodeDevice": (WIDGET, WHAT_IS_THERE, "pinning the chosen board"),
     "devQuery:click:queryPort": (WIDGET, WHAT_YOU_SEE, "asking the chosen board what it is"),
-    "devPoll:click:pollNow": (WIDGET, WHAT_YOU_SEE, "polling the pinned printer once"),
     "devVia:click:selectPath": (
         WIDGET,
         WHAT_YOU_SEE,
@@ -652,13 +623,12 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "manualIn:keydown:pinManual": (WIDGET, WHAT_IS_THERE, "pinning the typed board, by Enter"),
     # the page reacting to itself
     "window:resize:onResize": (AUTOMATIC, NOTHING, "the window changed size on its own"),
-    "es:open:add": (AUTOMATIC, NOTHING, "the serial stream connected, and says so"),
-    "es:close:line": (AUTOMATIC, NOTHING, "the serial stream stopped, and says so"),
-    "window:beforeunload:disconnect": (AUTOMATIC, NOTHING, "leaving the page lets go of the port"),
-    "document:visibilitychange:scheduleAutoRefresh": (
+    # boards.js: a devkit's serial stream, while its Machine listens to it
+    "es:open:opened": (AUTOMATIC, NOTHING, "a devkit's serial stream connected, and says so"),
+    "es:close:streamStopped": (
         AUTOMATIC,
         NOTHING,
-        "the page was hidden or shown, and looks for boards accordingly",
+        "a devkit's serial stream stopped (a task took the port), and is opened again",
     ),
     # ---- the monitor page, templates/monitor.html.j2 ----------------------
     # Most of the monitor's buttons are wired by assignment rather than by
@@ -704,7 +674,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     ),
     "auto:change:schedule": (WIDGET, WHAT_YOU_SEE, "the poll-on-a-schedule tick-box"),
     "interval:change:schedule": (WIDGET, WHAT_YOU_SEE, "choosing how often to poll"),
-    "qform:submit:post": (WIDGET, WHAT_YOU_SEE, "asking the printer for a report"),
+    "qform:submit:query": (WIDGET, WHAT_YOU_SEE, "asking the printer for a report"),
     "show-polls:change:renderLog": (WIDGET, WHAT_YOU_SEE, "the poll-traffic tick-box"),
     "ctl:change:arm": (WIDGET, WHAT_YOU_SEE, "arming or disarming the control latch"),
     "h-fan:input:(nothing)": (WIDGET, WHAT_YOU_SEE, "sliding the fan speed, shown beside it"),
@@ -716,9 +686,13 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "document:visibilitychange:onVisibility": (
         AUTOMATIC,
         NOTHING,
-        "the page was hidden or shown, and polls accordingly",
+        "the page was hidden or shown, and the boards' pollers pause or go on",
     ),
-    "window:beforeunload:onUnload": (AUTOMATIC, NOTHING, "leaving the page stops the polling"),
+    "window:beforeunload:onUnload": (
+        AUTOMATIC,
+        NOTHING,
+        "leaving the page stops the polling and lets go of the serial streams",
+    ),
 }
 
 LISTENS = re.compile(r"addEventListener\s*\(\s*['\"]([\w-]+)['\"]\s*,")
@@ -732,8 +706,7 @@ FETCHED_BY_LABEL: Sequence[Tuple[str, str]] = (
     (r"part-regenerate-btn", "regenerateBtn"),
     (r"\.zoom-in-btn", "zoomInLink"),
     (r"\.dev-pin-manual", "devPinManual"),
-    (r"\.dev-watch", "devWatch"),
-    (r"\.dev-poll", "devPoll"),
+    (r"\.dev-open", "devOpen"),
     (r"\.dev-unpin", "devUnpin"),
     (r"\.dev-pin", "devPin"),
     (r"\.dev-query", "devQuery"),
@@ -1013,11 +986,13 @@ def widgets_of(page: Path) -> List[Path]:
 
 STATIC = TEMPLATES.parent / "apothecary" / "static"
 # The marks modules: what a thing wears in the world, drawn beside the page's own
-# scene and listening, when they listen, on what they draw. Counted with the page
-# that imports one directly, each entry saying which module it came from; a page
-# that reaches one only through another module (the monitor, through
-# board_view.js) is not counted for it.
-MARKS = ("machine_marks.js", "picture_marks.js", "pictures.js")
+# scene and listening, when they listen, on what they draw -- and the boards'
+# model (boards.js), whose poller, serial streams and page-level listeners stand
+# behind every drawer of a board. Counted with the page that imports one
+# directly, each entry saying which module it came from; a page that reaches one
+# only through another module (the monitor, through board_view.js and
+# widgets/machine.js) is not counted for it.
+MARKS = ("machine_marks.js", "picture_marks.js", "pictures.js", "boards.js")
 STATIC_IMPORT = re.compile(r"from\s+[\"']/static/([\w-]+\.js)[\"']")
 
 
