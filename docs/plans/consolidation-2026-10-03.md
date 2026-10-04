@@ -131,3 +131,11 @@ Drafted on the project's governance branch, ratified by a person:
   not only the seven newest, is pinned from the ring.
 - `apothecary photo look` is `apothecary photo find`, the word the viewer's
   Find shapes uses.
+
+## Decided after Phase 3
+
+- Selected's status drop-down keeps "printing" as a hand-set status (a
+  print started outside apothecary, from the printer's own menu, is still
+  shown as busy), beside idle, maintenance and offline.
+- The part a print job names can be any part or piece in the printer's site;
+  the list is not narrowed to what fits.
