@@ -417,13 +417,18 @@ class PrintFile(BaseModel):
     id: str
     name: str
     size: int
+    sha256: Optional[str] = None  # of its bytes; None for a file kept before it was recorded
     lines: int  # the lines that would be sent: comments and blanks dropped
     uploaded_at: datetime
     problems: List[str] = Field(default_factory=list)  # why it may not be sent, if it may not
 
 
 class PrintRecord(BaseModel):
-    """One print streamed from the host: what was sent, to where, and how it ended."""
+    """One print streamed from the host, as it was kept before a print was a job.
+
+    Nothing writes one any more; ``apothecary/jobs.py`` reads the ones kept under
+    ``prints/records/`` once, and carries each over as a print job.
+    """
 
     id: str
     port: str
@@ -441,6 +446,8 @@ class PrintRecord(BaseModel):
 
 class PrintRequest(ProbeRequest):
     file_id: str = Field(..., pattern=r"^[A-Za-z0-9_.\-]{1,120}$")
+    # The part or piece the print makes: a node's path in the printer's site.
+    part: Optional[str] = Field(None, pattern=r"^[A-Za-z0-9_][A-Za-z0-9_.\-]{0,199}$")
 
 
 class PrinterIdentifyRequest(ProbeRequest):

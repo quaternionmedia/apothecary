@@ -144,7 +144,15 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # the canvas ring's Panels (cell 9), Jobs (92) being gone: Pictures moved from 94
 # to 92, the Machine group from 99 to 94 (the machine 998 to 948, its comms log
 # 996 to 946), and Rail from 93 to 99. Site 98 and Selected 96 stay.
-VIEWER_CEILING = 118
+#
+# Phase 3, the Print card starts a print job. Before: 118 controls of its own, 58
+# ring-backed (49.2%), 80 places the page listens. After: 119, 58 ring-backed
+# (48.7%), 80 places. Added: the card's drop-down of the part a print makes
+# (print-part), the parts and pieces of the site the printer is pinned in; it is
+# read when Print is pressed, so nothing listens to it. Not ring-backed: Control ›
+# Print › Send file prints what the card has chosen, the part with the file, and no
+# cell chooses either. No ring address moved.
+VIEWER_CEILING = 119
 
 
 def test_the_viewer_stays_under_its_ceiling():

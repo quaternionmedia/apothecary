@@ -312,6 +312,11 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "print-file": (WIDGET, WHAT_YOU_SEE, "a file picker that keeps a G-code file on the host"),
     "print-pick": (WIDGET, WHAT_YOU_SEE, "a drop-down of the files kept on the host"),
     "print-delete": (WIDGET, WHAT_YOU_SEE, "a button that forgets the chosen file"),
+    "print-part": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a drop-down of the parts a print from here makes, from the printer's site",
+    ),
     "print-start": (WIDGET, WHAT_IS_THERE, "a button that streams the chosen file to the printer"),
     "print-pause": (WIDGET, WHAT_IS_THERE, "a button that stops feeding the print from here"),
     "print-resume": (WIDGET, WHAT_IS_THERE, "a button that feeds the print from here again"),

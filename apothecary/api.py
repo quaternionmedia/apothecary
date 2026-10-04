@@ -1587,6 +1587,35 @@ def _sync_printer_status(status) -> List[Dict[str, object]]:
 firmware_devices.STATUS_LISTENERS.append(_sync_printer_status)
 
 
+def _sync_job_status(job: jobs.Job) -> None:
+    """A job running on a machine marks the node its port is pinned to -- or the
+    nearest above it that carries a status -- busy (its kind's ``busy``, "printing"
+    for a print), and its end lets the node go back to idle.
+
+    Registered on ``jobs.LISTENERS`` at import, beside the poll's sync: a running
+    job, not a hand-typed one, is what makes a printer busy, from the moment it
+    begins rather than at the next poll. A hand-set ``maintenance`` is the
+    person's and is left alone, as a poll leaves it.
+    """
+    operation = jobs.operation(job.kind)
+    if operation is None or operation.busy is None or not job.site or not job.machine.path:
+        return
+    if job.site not in _site_store.loaded():
+        return
+    site = _site_store.get(job.site)
+    target = status_bearer_for(site, job.machine.path)
+    node = _find_node_by_path(site, target) if target is not None else None
+    if node is None or node.status == "maintenance":
+        return
+    if job.running:
+        node.status = operation.busy
+    elif node.status == operation.busy:
+        node.status = "idle"
+
+
+jobs.LISTENERS.append(_sync_job_status)
+
+
 def _site_devices_payload(name: str, site: Assembly, fresh: bool = False) -> Dict[str, object]:
     problem = None
     try:

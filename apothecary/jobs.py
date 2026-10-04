@@ -136,6 +136,7 @@ class Operation:
     machine: str  # the kind of machine that offers it: "printer"
     label: str  # what a person calls it: "Print"
     inputs: Tuple[str, ...] = ()  # the file suffixes it runs
+    busy: Optional[str] = None  # the status a running job gives its machine's node
 
 
 _OPERATIONS: Dict[str, Operation] = {}
@@ -165,7 +166,13 @@ def machine_kinds() -> List[str]:
 
 
 PRINT = register(
-    Operation(kind="print", machine="printer", label="Print", inputs=(".gcode", ".gco", ".g"))
+    Operation(
+        kind="print",
+        machine="printer",
+        label="Print",
+        inputs=(".gcode", ".gco", ".g"),
+        busy="printing",
+    )
 )
 
 

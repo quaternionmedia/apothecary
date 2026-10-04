@@ -620,6 +620,19 @@ def test_what_is_kept_is_the_persons_alone(monkeypatch, tmp_path):
         assert stat.S_IMODE(folder.stat().st_mode) == 0o700, folder
 
 
+def test_a_part_named_for_a_print_that_is_markup_is_refused():
+    """The part a print names is a path in its site -- letters, digits and a little
+    punctuation -- refused as it arrives, before any port is touched."""
+    here = TestClient(app)
+    for bad in ('<img src=x onerror="fetch(1)">', "a&b", 'x"y', " lead", "x" * 201):
+        r = here.post(
+            "/firmware/printers/print",
+            json={"port": "/dev/ttyFAKE1", "file_id": "f1", "part": bad},
+        )
+        assert r.status_code == 422, bad
+        assert r.json()["detail"][0]["loc"] == ["body", "part"], bad
+
+
 def test_a_subprocess_inherits_no_proxy_and_no_arduino_override(monkeypatch):
     """arduino-cli is outside the socket guard, and lets either outrank its config file."""
     from apothecary.firmware import installer
