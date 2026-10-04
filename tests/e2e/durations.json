@@ -48,6 +48,7 @@
  "tests/e2e/test_printer_ui.py::test_pin_identify_watch_poll_and_sync[chromium]": 5.41,
  "tests/e2e/test_printer_ui.py::test_query_from_panel_and_overlay[chromium]": 8.53,
  "tests/e2e/test_printer_ui.py::test_the_machine_stands_in_front_of_the_world[chromium]": 22.89,
+ "tests/e2e/test_printer_ui.py::test_the_printer_s_drawing_encloses_its_board_and_its_build_volume[chromium]": 4.52,
  "tests/e2e/test_printer_ui.py::test_the_reading_shown_is_drawn_over_the_bed[chromium]": 1.83,
  "tests/e2e/test_printer_ui.py::test_the_world_wears_its_machines[chromium]": 3.69,
  "tests/e2e/test_ring.py::test_a_closed_panel_stays_closed_and_the_ring_reopens_it[chromium]": 8.96,

@@ -57,7 +57,7 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
 
     docs = doc_recorder(
         "printer-monitor",
-        title="Printer Monitor: a real printer drives its scene node",
+        title="Boards and printers: a board's Machine, the Bench",
         intro=(
             "A 3D-printer mainboard running a G-code firmware (Marlin on a Creality "
             "board, say) is not a board Apothecary programs -- it is one Apothecary "

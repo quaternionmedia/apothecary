@@ -38,6 +38,16 @@ markup still read "Layout valid".
 The library is checked in under `apothecary/static/vendor/three/`, so a fresh
 clone serves it with no install step; the README beside it says how to update it.
 
+## One page
+
+The viewer is the only page. The firmware page's address opens it with the
+Bench in front of the world, and the printer monitor's with that board's
+Machine:
+
+    >>> r = client.get("/firmware", follow_redirects=False)
+    >>> r.status_code, r.headers["location"]
+    (307, '/viewer/sites/garage?panel=bench')
+
 ## Recipes
 
 | | |
@@ -47,3 +57,5 @@ clone serves it with no install step; the README beside it says how to update it
 | The assembly | `/viewer/sites/datum_core` |
 | The catalog | `/viewer/sites/parts_library` |
 | One part, zoomed to | `/viewer/sites/parts_library?focus=datum_core` |
+| The Bench | `/firmware` |
+| A board's Machine | `/firmware/monitor?port=/dev/ttyUSB0` |

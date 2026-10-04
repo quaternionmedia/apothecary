@@ -1,18 +1,32 @@
 # Pictures in the world: a look is pinned where it was seen
 
-*Nothing in this page is built. It works inside the frame of
+*It works inside the frame of
 [one-screen-2026-09-20.md](one-screen-2026-09-20.md) (anchors, popups,
 panels; the world is never replaced; every action has a cell; the census is
 the meter) and under the draft record* Personal data stays on the device
 *(§6: the picture root, `captures/` and `uploads/`, and what a page may
 forget).*
 
-*Renamed by the consolidation plan's Phase 1
-([consolidation-2026-10-03.md](consolidation-2026-10-03.md), Words): a look is
-a **view** (`/sites/{s}/views`, `apothecary/vision/views.py`, Picture › Views);
-Camera › Look is Camera › Take picture, which pins a view and finds nothing;
-Picture › Find shapes finds, as a step of its own; Camera › Keep is gone. This
-page keeps the words it was decided in.*
+*Built: Phases 0, 2, 3 and 4. The consolidation plan
+([consolidation-2026-10-03.md](consolidation-2026-10-03.md)) changed what
+followed:*
+
+- *A look is a **view** (`/sites/{s}/views`, `apothecary/vision/views.py`,
+  Picture › Views). Camera › Look is Camera › Take picture, which pins a view
+  and finds nothing; Picture › Find shapes finds, as a step of its own;
+  Camera › Keep is gone; `apothecary photo look` is `apothecary photo find`.*
+- *Kept is gone, and Phase 5's one Kept panel is not built: Site's
+  **Pinned** lists every site's pins -- cameras, views, boards -- each taken
+  back from its row, and **Pictures**, a tab of the rail's strip, lists every
+  picture under the picture root, the folder's and the kept ones, with Forget
+  on a kept one, Purge, and the gathering as a section. A row chosen in
+  Pictures is pinned from the ring's Picture › Folder. The row buttons no
+  ring backs are Pinned's Unpin and Pictures' Forget (`census.TAKEN_BACK`).*
+- *Phase 1 waits on the next round (`todo.md`). Phase 6 is not built:
+  Selected stays in the one rail. Phase 7 is open: `POST /photos` and the
+  album routes answer, and walkthrough 11 runs on them.*
+
+*This page keeps the words it was decided in.*
 
 ## The end state
 

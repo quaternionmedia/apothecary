@@ -172,8 +172,8 @@ A shape a finder saw in a picture and a person made into a piece
 (`Picture › Make` on the ring; `apothecary/vision/views.py`) has no file
 and no wrapper, and is a part all the same: `MadePart`
 (`apothecary/vision/piece.py`) wraps its record as a `BasePart`, and the
-viewer edits it in the one editor it edits any part in, opened from
-`Part › Edit` on either.
+viewer edits it in Selected, in the one editor it edits any part in, opened
+from `Part › Edit` on either.
 
 What makes that possible is one parameter contract, in core
 (`apothecary/projects/parts/params.py`): `params_spec(part)` reads a

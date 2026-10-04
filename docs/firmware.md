@@ -102,8 +102,8 @@ several it refuses to guess.
 ### In the viewer: the Bench
 
 The **Bench** is the same toolchain in front of the world: a tab of the
-viewer's rail (the ring's Panels › Bench; `/firmware`, where the firmware page
-was, opens the viewer with it). It holds arduino-cli and esptool as installed,
+viewer's rail (the ring's Panels › Bench; `/firmware` opens the viewer with
+it). It holds arduino-cli and esptool as installed,
 with **Install** or **Update** (*force* downloads it again); the suggested
 cores, each with **Install**; libraries typed and installed; the sketches
 under `parts/`, each with the board its `firmware.json` names, **Compile**d,
@@ -224,12 +224,12 @@ differently after a replug. A pin by a path that resolves to the same device
 
 A pinned board has one surface in the viewer, its **Machine**
 (`apothecary/static/widgets/machine.js`): a popup tethered to the board's
-badge, which docks into the rail's tab strip. A printer's Machine is what the
-printer monitor was -- its state cards, temperature chart, link verbs, the
-control latch and pad, the bed reading, the print from here -- and a devkit's
-is its port and board, the sketch it should run against the sketch it was
-heard saying (its `apothecary <name>: hello` banner), what changed since it
-was flashed, and its **Flashing** card. Both carry the board's **one log**: a
+badge, which docks into the rail's tab strip. A printer's Machine holds its
+state cards, temperature chart, link verbs, the control latch and pad, the bed
+reading and the print from here; a devkit's holds its port and board, the
+sketch it should run against the sketch it was heard saying (its
+`apothecary <name>: hello` banner), what changed since it was flashed, and
+its **Flashing** card. Both carry the board's **one log**: a
 printer's comms log, with the one box that asks it for a report code (poll
 traffic hidden unless asked for), or a devkit's serial output. A refusal is
 said in the log and in the status bar.
@@ -263,10 +263,9 @@ poller per board, whatever draws it. The model scans for boards when a site
 loads, when **Rescan** asks, and by itself when a board it watches goes quiet,
 so a replugged board is found without a reload; it never scans on a timer.
 
-`/firmware/monitor?port=…`, where the printer monitor was, opens the viewer
-on the site the port is pinned in with its Machine open and tethered there,
-or, for a port pinned nowhere, on the default site with its Machine floating
-over the world; the address carries `?machine=` while a Machine is open, so a
+`/firmware/monitor?port=…` opens the viewer on the site the port is pinned
+in with its Machine open and tethered there, or, for a port pinned nowhere,
+on the default site with its Machine floating over the world; the address carries `?machine=` while a Machine is open, so a
 reload opens it again. `apothecary docs generate` writes all of it step by
 step against the simulated printer into
 [`generated/printer-monitor/printer-monitor.md`](generated/printer-monitor/printer-monitor.md);
@@ -431,7 +430,8 @@ The G-code tests replay a transcript captured from a real Marlin board. Every
 browser-test server runs the scripted `arduino-cli` and the simulated printer,
 with its firmware state in a folder of its own, so no test opens a real port
 or edits what is pinned in `~/.apothecary`. `tests/e2e/test_printer_ui.py`
-holds the viewer and a printer's Machine to timing bounds;
+holds the viewer and a printer's Machine to timing bounds, and the printer as
+the world draws it to enclosing its board and its build volume;
 `tests/e2e/test_bench.py` drives the Bench, and `tests/e2e/test_one_machine.py`
 a board's Machine, its flashing and its port opened only by Listen.
 [`validation/2026-09-20-ender-bench.md`](validation/2026-09-20-ender-bench.md)
