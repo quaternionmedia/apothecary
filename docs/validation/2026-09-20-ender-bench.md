@@ -30,12 +30,6 @@ have caught it; they are in the changelog under *Fixed*.
 | Firmware page | the card identifies the printer, offers Poll and ⤢ Monitor only, draws the board in `garage › printer_1` |
 | Test suites with the board plugged in | 1123 unit passed, 2 skipped; 67 e2e passed, 1 skipped -- after two audit fixes: the firmware-page test accepted only "no devices" or a devkit's *Probe* and failed on a real printer's *Monitor*; and the shared e2e server used the person's own `~/.apothecary`, so a test could have edited real pins -- it now keeps its state in a folder of its own |
 
-![The Device section, the board pinned by its serial number](screenshots/2026-09-20-ender-device-section.png)
-
-![The stored mesh as read: 2.34 mm of range, the right side high](screenshots/2026-09-20-ender-bed-reading.png)
-
-![The board in its printer, once the printer was drawn where it stands](screenshots/2026-09-20-ender-board-view.png)
-
 ## What the numbers say about the machine
 
 The stored mesh is the bed as it was last probed, and it is far from
