@@ -586,7 +586,42 @@ def _panels() -> Option:
         children=[toggle(pid, label) for pid, label in PANELS if pid in _BEFORE_RAIL]
         # The rail itself: hidden and shown, as the tilde key does.
         + [Option(id="panel:rail", label="Rail", action="panel:rail:toggle")]
-        + [_bench(toggle("bench", "Bench"))],
+        + [_bench(toggle("bench", "Bench"))]
+        # How the world is drawn: the header's View menu. Seated after the Bench,
+        # so no address learned under Panels moves; the canvas ring's top holds
+        # eight already when it stands inside a piece.
+        + [_view()],
+    )
+
+
+def _view() -> Option:
+    """View, under Panels: the header's ⚙ View menu, each of its items a cell.
+
+    Snap to grid snaps a dragged piece to the grid; Detail draws every subassembly
+    in full, as a black box or as a dot; Outlines draws each subassembly's extent;
+    Select walls (the menu's "Walls selectable") lets a click in the world pick a
+    wall, which it otherwise passes through, for the page's session. Snap, Outlines
+    and Select walls each turn what they name the other way, as their tick-boxes
+    do, and the status line says which way it went; the ring is not told how they
+    stand.
+    """
+    return Option(
+        id="view",
+        label="View",
+        children=[
+            Option(id="view:snap", label="Snap to grid", action="view:snap"),
+            Option(
+                id="view:detail",
+                label="Detail",
+                children=[
+                    Option(id="view:detail:full", label="Full", action="view:detail:full"),
+                    Option(id="view:detail:box", label="Black box", action="view:detail:box"),
+                    Option(id="view:detail:dot", label="Dot", action="view:detail:dot"),
+                ],
+            ),
+            Option(id="view:outlines", label="Outlines", action="view:outlines"),
+            Option(id="view:walls", label="Select walls", action="view:walls"),
+        ],
     )
 
 
@@ -962,7 +997,7 @@ def _canvas_ring(
     `context.targets[0]`, when given, is the path the viewer is zoomed into;
     Pieces lists that node's children and Up steps back out. At the root
     there is no Up, because there is nothing above. Panels opens and closes
-    what stands in front of the world.
+    what stands in front of the world, and holds View, how the world is drawn.
     """
     focus_path = context.targets[0] if context.targets else ""
     focus = _find(site, focus_path) if site and focus_path else site
@@ -1258,6 +1293,9 @@ CARRIED_BY: Dict[str, Carries] = {
     "print": Carries.VIEWER,
     # Opening, closing, floating what stands in front of the world (panels.js).
     "panel": Carries.VIEWER,
+    # How the world is drawn: the header's View menu (snapping, detail, outlines,
+    # whether a click picks a wall).
+    "view": Carries.VIEWER,
     # The Bench's verbs: its buttons, each acting on what the Bench has chosen.
     # The tasks they start are the firmware routes' (POST /firmware/install,
     # /cores/install, /libraries/install, /sketches/{name}/compile and /upload,

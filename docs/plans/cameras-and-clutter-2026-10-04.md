@@ -181,3 +181,19 @@ Asked of the owner on 2026-10-04, after the camera's server side was built:
 - **One device, one camera.** Choosing a device for a camera takes it off any
   other camera. Two cameras added at one place still stand in one spot and
   show as an overlap, and the Print card's parts still include cameras.
+
+## Decided after Phase 2
+
+Asked of the owner on 2026-10-04, after the screen was cleared:
+
+- **A camera's pyramid** (lens to where its picture lands) is drawn only
+  while the camera is selected or live; unselected, a camera shows its body
+  and its latest picture lying on the surface.
+- **View is a top-level cell of the canvas ring**, and Fit moves inside it
+  (View › Fit), so Fit's address changes; Snap to grid, Detail, Assembly
+  outlines and Walls selectable are View's other cells.
+- Kept as built: two badges in each other's way step aside and three or
+  more merge into a count; a Machine floated and then closed opens docked
+  again; a board pinned inside a printer and not yet identified keeps its
+  Flash cell, which says why when pressed; the ring's label for Walls
+  selectable is "Select walls".

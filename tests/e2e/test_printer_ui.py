@@ -353,8 +353,8 @@ def test_manual_pin_poll_and_rescan(page: Page, printer_url: str):
 
 @pytest.mark.e2e
 def test_focused_monitor_page(page: Page, fresh_url: str):
-    """The printer monitor's address: the printer's Machine, pinned nowhere, floating in
-    front of the world on the default site, its port kept in the address -- status within
+    """The printer monitor's address: the printer's Machine, pinned nowhere, in the rail's
+    tab strip on the default site, its port kept in the address -- status within
     a bound, cadence, log, query, reconnect, reset. A server of its own, so the log holds
     only this test's lines."""
     _identify(fresh_url)
@@ -363,7 +363,7 @@ def test_focused_monitor_page(page: Page, fresh_url: str):
     expect(page).to_have_url(re.compile(r"/viewer/sites/garage\?machine=%2Fdev%2FttyFAKE1$"))
     expect(page.locator("#c-state")).to_contain_text("printing", timeout=15000)
     expect(page.locator("#ident")).to_contain_text("Marlin Apothecary Simulator")
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "free"
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
     expect(page.locator("#c-board")).to_contain_text("held", timeout=5000)
     expect(page.locator("#c-hot")).to_contain_text("/210°")
 
@@ -680,9 +680,7 @@ def test_the_reading_shown_is_drawn_over_the_bed(page: Page, printer_url: str):
     page.goto(f"{printer_url}/firmware/monitor?port=/dev/ttyFAKE1")
     machine = page.locator(MACHINE)
     expect(machine.locator("#c-state")).not_to_have_text("—", timeout=15000)
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == {
-        "tether": "printer_1"
-    }
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
     marks = "window.fractalViewer.marks['printer_1']"
     shown = f"() => {marks} && {marks}.marks && {marks}.marks.mesh()"
     page.wait_for_function(f"(id) => ({shown})() && ({shown})().record_id === id", arg=probe_id)
@@ -985,10 +983,11 @@ def test_site_lists_the_sites_jobs_and_a_row_opens_its_machine(page: Page, print
 
 
 def _wearing_its_badge(page: Page, url: str):
-    """The garage with the printer's board pinned and identified: the badge over printer_1."""
+    """The garage with the printer's board pinned and identified: the badge, keyed by
+    printer_1, at the board's own spot inside it."""
     _pin(url, BOARD)
-    # Until the board is identified it wears a devkit's badge on its own node; once
-    # it is known to be a printer the badge stands over the printer it drives.
+    # Until the board is identified its badge is keyed by its own node; once it is
+    # known to be a printer, by the printer it drives. It stands at the board either way.
     _identify(url)
     page.clock.install()
     page.goto(f"{url}/viewer/sites/garage")
@@ -1000,18 +999,19 @@ def _wearing_its_badge(page: Page, url: str):
 
 @pytest.mark.e2e
 def test_the_world_wears_its_machines(page: Page, printer_url: str):
-    """A pinned printer stands under a badge in the 3D view that follows it as the camera
-    moves and updates within a poll; its nozzle is drawn at its node."""
+    """A pinned printer's board wears a badge in the 3D view, at the board, that follows
+    it as the camera moves and updates within a poll; its nozzle is drawn at its node."""
     badge = _wearing_its_badge(page, printer_url)
     expect(badge).to_contain_text("🖨")
+    expect(badge.locator(".badge-icon")).to_have_text("⚡")
     assert page.evaluate("() => window.fractalViewer.anchors.keys()") == ["printer_1"]
 
-    # Fixed to the printer: drawn where the top of its envelope projects, to the pixel.
+    # Fixed to the board: drawn where the top of its envelope projects, to the pixel.
     def projected():
         return page.evaluate(
             """() => {
                 const v = window.fractalViewer;
-                const p = v.anchorPointFor('printer_1').project(v.camera);
+                const p = v.anchorPointFor('printer_1.frame_system.mainboard').project(v.camera);
                 const w = v.canvas.clientWidth, h = v.canvas.clientHeight;
                 const at = v.anchors.at('printer_1');
                 return { x: (p.x + 1) / 2 * w, y: (1 - p.y) / 2 * h, at };
@@ -1084,10 +1084,10 @@ def test_a_reading_lies_on_the_bed_and_the_badge_selects_its_printer(page: Page,
 
 @pytest.mark.e2e
 def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
-    """A badge click opens the Machine in a popup tethered to the printer: the cards
-    and latch the monitor page had, on the module it was made of; a jog from it moves
-    the world's nozzle ahead of the poll; its comms log is in it, the board's one log;
-    the ring's verbs go to it; closing it stops its polling."""
+    """A badge click opens the Machine in the rail's tab strip: the cards and latch the
+    monitor page had, on the module it was made of; a jog from it moves the world's
+    nozzle ahead of the poll; its comms log is in it, the board's one log; the ring's
+    verbs go to it; closing it stops its polling."""
     _pin(printer_url, BOARD)
     _identify(printer_url)
     page.goto(f"{printer_url}/viewer/sites/garage")
@@ -1097,9 +1097,7 @@ def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
     badge.click()
     machine = page.locator(".panel[data-panel='machine']")
     expect(machine).to_be_visible(timeout=3000)
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == {
-        "tether": "printer_1"
-    }
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
     expect(machine.locator("#ident")).to_contain_text("Marlin")
     # The module the monitor page was made of: the same ids, the same latch.
@@ -1154,14 +1152,7 @@ def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
     machine.locator("#ctl-disarm").click()
     expect(machine.locator("#control")).to_be_hidden(timeout=3000)
 
-    # Dragging the popup lets go of the tether; closing it stops its polling, and
-    # its log goes with it.
-    tb = machine.locator(".panel-title").bounding_box()
-    page.mouse.move(tb["x"] + 150, tb["y"] + tb["height"] / 2)
-    page.mouse.down()
-    page.mouse.move(tb["x"] + 150 - 120, tb["y"] + tb["height"] / 2 + 60, steps=6)
-    page.mouse.up()
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "free"
+    # Closing it stops its polling, and its log goes with it.
     page.evaluate("() => window.fractalViewer.closeMachine()")
     expect(machine).to_have_count(0)
     expect(log).to_have_count(0)
@@ -1169,10 +1160,10 @@ def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
 
 
 @pytest.mark.e2e
-def test_a_tethered_machine_floats_and_docks_into_the_rails_strip(page: Page, printer_url: str):
-    """The machine opens as a popup tethered to its printer, in front of the world. Its
-    dock button lets go of the printer and puts it in the rail's tab strip, shown; floated
-    from its tab it is a free panel; opened from the badge again it is tethered again."""
+def test_the_machine_docks_in_the_rails_strip_and_floats_when_floated(page: Page, printer_url: str):
+    """The machine opens in the rail's tab strip, shown, with no leader to anything;
+    floated from its tab it is a free panel, and opened from the badge again it stays
+    one; its dock button puts it back in the strip."""
     _pin(printer_url, BOARD)
     _identify(printer_url)
     page.goto(f"{printer_url}/viewer/sites/garage")
@@ -1180,19 +1171,13 @@ def test_a_tethered_machine_floats_and_docks_into_the_rails_strip(page: Page, pr
     badge = page.locator(".world-badge[data-path='printer_1']")
     expect(badge).to_be_visible(timeout=15000)
     badge.click()
-    popup = page.locator(".panel-free-layer .panel.tethered[data-panel='machine']")
-    expect(popup).to_be_visible(timeout=3000)
-    expect(page.locator(".panel-leader[visibility='visible']")).to_have_count(1, timeout=3000)
-    expect(popup.locator(".panel-float")).to_have_attribute("title", re.compile("Dock"))
-
-    popup.locator(".panel-float").click()
     rail = page.locator(".panel-rail")
     docked = rail.locator(".panel-tabbody .panel[data-panel='machine']")
-    expect(docked).to_be_visible(timeout=2000)
+    expect(docked).to_be_visible(timeout=3000)
     expect(rail.locator(".rail-tab[data-panel='machine']")).to_have_class(re.compile(r"\bactive\b"))
     assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
     expect(docked.locator("#c-state")).to_contain_text("printing", timeout=10000)
-    expect(page.locator(".panel-leader")).to_have_count(0)
+    expect(page.locator(".panel-leader[visibility='visible']")).to_have_count(0)
     # Site and Selected stay stacked above it.
     for pid in ("site", "selected"):
         expect(rail.locator(f".panel[data-panel='{pid}']")).to_be_visible()
@@ -1204,11 +1189,13 @@ def test_a_tethered_machine_floats_and_docks_into_the_rails_strip(page: Page, pr
     assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "free"
     expect(rail.locator(".rail-tab[data-panel='machine']")).to_have_count(0)
 
-    # The badge again: tethered to its printer again.
-    badge.click()
-    expect(popup).to_be_visible(timeout=3000)
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == {
-        "tether": "printer_1"
-    }
+    # Opened again from the board's Open: it stays where the person put it.
+    page.evaluate("() => window.fractalViewer.openMachine('printer_1')")
+    expect(free).to_be_visible(timeout=3000)
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "free"
+    expect(free.locator(".panel-float")).to_have_attribute("title", re.compile("Dock"))
+    free.locator(".panel-float").click()
+    expect(docked).to_be_visible(timeout=2000)
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
     page.evaluate("() => window.fractalViewer.closeMachine()")
     expect(page.locator(".panel[data-panel='machine']")).to_have_count(0)

@@ -128,6 +128,8 @@
 #control .sent.bad { color: var(--bad); }
 /* A printer's controls and cards, or a devkit's: the root's kind shows one set. */
 .machine.kind-devkit .printer-only, .machine.kind-printer .devkit-only { display: none !important; }
+/* A board pinned inside a printer is never flashed: its Flashing folds away. */
+.machine.in-printer #flash-card { display: none !important; }
 #c-sketch .ok { color: var(--ok); } #c-sketch .bad { color: var(--bad); } #c-sketch .warn { color: var(--warn); }
 /* In a popup over the world: one column, the log under the cards, the control pad inline. */
 .machine.host-popup .machine-head { padding: 0.4rem 0.5rem; gap: 0.4rem; border-bottom: 0; }
