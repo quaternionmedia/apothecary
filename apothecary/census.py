@@ -293,15 +293,11 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "dev-printer": (WIDGET, WHAT_YOU_SEE, "a button that asks M115, or polls a printer once"),
     "dev-live": (WIDGET, WHAT_YOU_SEE, "a button that streams the board's serial output"),
     # ---- Pictures, apothecary/static/widgets/picture_list.js -------------
-    # Every picture under the picture root, each with Pin here, a kept one with
+    # Every picture under the picture root, each row chosen by a click for the
+    # ring's Picture › Folder to pin (a list, not a control), a kept one with
     # Forget (TAKEN_BACK), Purge, a file picker that keeps pictures here pinned
     # nowhere, and the gathering's section until gathering leaves core: the
     # pictures ticked, gathered into a report, and what a person says about them.
-    "pictures-pin": (
-        WIDGET,
-        WHAT_IS_THERE,
-        "a button that pins one picture, any in the folder, at the selected place as a view",
-    ),
     "pictures-forget": (WIDGET, WHAT_YOU_SEE, "a button that forgets one kept picture"),
     "pictures-purge": (
         WIDGET,
@@ -400,9 +396,9 @@ RING_BACKED: Dict[str, str] = {
     "boards-btn": "device:rescan",
     # Gather and Pictures' Purge are cells of the canvas ring's Pictures. The
     # per-row take-backs of Pinned and Pictures are not here: see TAKEN_BACK.
-    # Nor is Pictures' Pin here: the ring's Picture › Folder pins the seven
-    # newest pictures (and a chosen one, which the page does not tell it), and
-    # Pin here pins any of them, the older ones included, which no cell reaches.
+    # Pictures has no Pin here: a row chosen there is told to the ring, whose
+    # Picture › Folder pins it, the seven newest by name and an older one as
+    # the eighth cell.
     "pic-gather": "camera:gather",
     "pictures-purge": "picture:purge",
     # A file dropped on the world, or chosen in the dialog Picture › Add opens.
@@ -583,11 +579,13 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "the pictures chosen in the dialog Picture › Add opens: kept, and pinned there as views",
     ),
     # ---- Pictures ----------------------------------------------------------
-    "pin:click:pinHere": (
-        WIDGET,
-        WHAT_IS_THERE,
-        "a picture's Pin here: pinned at the selected place as a view",
+    # A row chosen, one at a time, and told to the ring; Escape lets it go.
+    "row:click:rowClicked": (
+        LIST,
+        WHAT_YOU_SEE,
+        "a picture's row, chosen for the ring's Picture › Folder to pin, or let go",
     ),
+    "window:keydown:letGo": (GESTURE, WHAT_YOU_SEE, "a key that lets go of the chosen picture"),
     "forgetBtn:click:forget": (
         WIDGET,
         WHAT_IS_THERE,

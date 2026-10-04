@@ -352,7 +352,8 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     expect(rows).to_have_count(pictures_before + 2, timeout=8000)
     # Kept, and pinned nowhere: the message names the step that pins one.
     expect(page.locator("#status")).to_contain_text(
-        "added 2 picture(s) on this machine: Pin here pins one at the selected place as a view"
+        "added 2 picture(s) on this machine: choose one, and the ring's Picture › Folder "
+        "pins it at a place as a view"
     )
     kept_pictures = pictures.locator(".picture-row:has(.pictures-forget)")
     expect(kept_pictures).to_have_count(kept_before + 2, timeout=5000)
@@ -402,9 +403,11 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
         "is shown as such, and this is the one place it can be seen. Pictures lists "
         "every picture in the picture folder, the folder's own and the ones the "
         "browser kept -- those added from its file picker kept as they were named "
-        "under uploads/ -- each with where it is pinned as a view, Pin here, and "
-        "Forget on a kept one. A picture kept and pinned nowhere waits for Pin here, "
-        "which the status bar names, to pin it at a place as a view.",
+        "under uploads/ -- each with where it is pinned as a view, and Forget on a kept "
+        "one. A picture kept and pinned nowhere waits to be chosen: a row clicked is "
+        "chosen, and the ring's Picture › Folder pins it where the ring stands, the "
+        "seven newest by name and an older one as its last cell, as the status bar "
+        "says.",
     )
 
     page.evaluate("() => window.apothecaryPanels.dock('pictures', 'right')")

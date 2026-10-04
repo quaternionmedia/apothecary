@@ -634,6 +634,7 @@
           "action": null,
           "enabled": true,
           "destructive": false,
+          "marked": false,
           "children": [
             {
               "id": "control:hotend-on",
@@ -641,6 +642,7 @@
               "action": "control:hotend-on",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 8
             },
@@ -650,6 +652,7 @@
               "action": "control:hotend-off",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 6
             },
@@ -659,6 +662,7 @@
               "action": "control:bed-on",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 2
             },
@@ -668,6 +672,7 @@
               "action": "control:bed-off",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 4
             },
@@ -677,6 +682,7 @@
               "action": "control:fan-on",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 9
             },
@@ -686,6 +692,7 @@
               "action": "control:fan-off",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 3
             }
@@ -698,6 +705,7 @@
           "action": null,
           "enabled": true,
           "destructive": false,
+          "marked": false,
           "children": [
             {
               "id": "control:home:all",
@@ -705,6 +713,7 @@
               "action": "control:home",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 8
             },
@@ -714,6 +723,7 @@
               "action": "control:home-xy",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 6
             },
@@ -723,6 +733,7 @@
               "action": "control:home-z",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 2
             }
@@ -735,6 +746,7 @@
           "action": null,
           "enabled": true,
           "destructive": false,
+          "marked": false,
           "children": [
             {
               "id": "control:jog:Y+",
@@ -742,6 +754,7 @@
               "action": "control:jog:Y+",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 8
             },
@@ -751,6 +764,7 @@
               "action": "control:jog:X+",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 6
             },
@@ -760,6 +774,7 @@
               "action": "control:jog:Y-",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 2
             },
@@ -769,6 +784,7 @@
               "action": "control:jog:X-",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 4
             },
@@ -778,6 +794,7 @@
               "action": "control:jog:Z+",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 9
             },
@@ -787,6 +804,7 @@
               "action": "control:jog:Z-",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 3
             }
@@ -799,6 +817,7 @@
           "action": null,
           "enabled": true,
           "destructive": false,
+          "marked": false,
           "children": [
             {
               "id": "level:probe",
@@ -806,6 +825,7 @@
               "action": "level:probe",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 8
             },
@@ -815,6 +835,7 @@
               "action": "level:read",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 6
             },
@@ -824,6 +845,7 @@
               "action": "control:mesh-on",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 2
             },
@@ -833,6 +855,7 @@
               "action": "control:mesh-off",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 4
             },
@@ -842,6 +865,7 @@
               "action": "control:corner:BR",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 9
             },
@@ -851,6 +875,7 @@
               "action": "control:corner:FR",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 3
             },
@@ -860,6 +885,7 @@
               "action": "control:corner:FL",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 1
             },
@@ -869,6 +895,7 @@
               "action": "control:corner:BL",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 7
             }
@@ -881,6 +908,7 @@
           "action": null,
           "enabled": true,
           "destructive": false,
+          "marked": false,
           "children": [
             {
               "id": "control:sd-resume",
@@ -888,6 +916,7 @@
               "action": "control:sd-resume",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 8
             },
@@ -897,6 +926,7 @@
               "action": "control:sd-pause",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 6
             },
@@ -906,6 +936,7 @@
               "action": "control:sd-abort",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 2
             },
@@ -915,6 +946,7 @@
               "action": "print:start",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 4
             }
@@ -927,6 +959,7 @@
           "action": null,
           "enabled": true,
           "destructive": false,
+          "marked": false,
           "children": [
             {
               "id": "control:motors-off",
@@ -934,6 +967,7 @@
               "action": "control:motors-off",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 8
             },
@@ -943,6 +977,7 @@
               "action": "control:quickstop",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 6
             },
@@ -952,6 +987,7 @@
               "action": "control:break-wait",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 2
             }
@@ -964,6 +1000,7 @@
           "action": "control:estop",
           "enabled": true,
           "destructive": true,
+          "marked": false,
           "children": null,
           "cell": 1
         },
@@ -973,6 +1010,7 @@
           "action": "control:arm",
           "enabled": true,
           "destructive": false,
+          "marked": false,
           "children": null,
           "cell": 7
         }
@@ -987,6 +1025,7 @@
           "action": "device:watch",
           "enabled": true,
           "destructive": false,
+          "marked": false,
           "children": null,
           "cell": 8
         },
@@ -996,6 +1035,7 @@
           "action": "device:poll",
           "enabled": true,
           "destructive": false,
+          "marked": false,
           "children": null,
           "cell": 6
         },
@@ -1005,6 +1045,7 @@
           "action": "device:monitor",
           "enabled": true,
           "destructive": false,
+          "marked": false,
           "children": null,
           "cell": 2
         },
@@ -1014,6 +1055,7 @@
           "action": "device:query",
           "enabled": true,
           "destructive": false,
+          "marked": false,
           "children": null,
           "cell": 4
         },
@@ -1023,6 +1065,7 @@
           "action": "device:unpin",
           "enabled": true,
           "destructive": false,
+          "marked": false,
           "children": null,
           "cell": 9
         },
@@ -1032,6 +1075,7 @@
           "action": "device:rescan",
           "enabled": true,
           "destructive": false,
+          "marked": false,
           "children": null,
           "cell": 3
         },
@@ -1041,6 +1085,7 @@
           "action": null,
           "enabled": true,
           "destructive": false,
+          "marked": false,
           "children": [
             {
               "id": "device:reconnect",
@@ -1048,6 +1093,7 @@
               "action": "device:reconnect",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 8
             },
@@ -1057,6 +1103,7 @@
               "action": "device:reset",
               "enabled": true,
               "destructive": true,
+              "marked": false,
               "children": null,
               "cell": 6
             },
@@ -1066,6 +1113,7 @@
               "action": "device:release",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 2
             }
@@ -1078,6 +1126,7 @@
           "action": null,
           "enabled": true,
           "destructive": false,
+          "marked": false,
           "children": [
             {
               "id": "control:heat",
@@ -1085,6 +1134,7 @@
               "action": null,
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": [
                 {
                   "id": "control:hotend-on",
@@ -1092,6 +1142,7 @@
                   "action": "control:hotend-on",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 8
                 },
@@ -1101,6 +1152,7 @@
                   "action": "control:hotend-off",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 6
                 },
@@ -1110,6 +1162,7 @@
                   "action": "control:bed-on",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 2
                 },
@@ -1119,6 +1172,7 @@
                   "action": "control:bed-off",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 4
                 },
@@ -1128,6 +1182,7 @@
                   "action": "control:fan-on",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 9
                 },
@@ -1137,6 +1192,7 @@
                   "action": "control:fan-off",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 3
                 }
@@ -1149,6 +1205,7 @@
               "action": null,
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": [
                 {
                   "id": "control:home:all",
@@ -1156,6 +1213,7 @@
                   "action": "control:home",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 8
                 },
@@ -1165,6 +1223,7 @@
                   "action": "control:home-xy",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 6
                 },
@@ -1174,6 +1233,7 @@
                   "action": "control:home-z",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 2
                 }
@@ -1186,6 +1246,7 @@
               "action": null,
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": [
                 {
                   "id": "control:jog:Y+",
@@ -1193,6 +1254,7 @@
                   "action": "control:jog:Y+",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 8
                 },
@@ -1202,6 +1264,7 @@
                   "action": "control:jog:X+",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 6
                 },
@@ -1211,6 +1274,7 @@
                   "action": "control:jog:Y-",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 2
                 },
@@ -1220,6 +1284,7 @@
                   "action": "control:jog:X-",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 4
                 },
@@ -1229,6 +1294,7 @@
                   "action": "control:jog:Z+",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 9
                 },
@@ -1238,6 +1304,7 @@
                   "action": "control:jog:Z-",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 3
                 }
@@ -1250,6 +1317,7 @@
               "action": null,
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": [
                 {
                   "id": "level:probe",
@@ -1257,6 +1325,7 @@
                   "action": "level:probe",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 8
                 },
@@ -1266,6 +1335,7 @@
                   "action": "level:read",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 6
                 },
@@ -1275,6 +1345,7 @@
                   "action": "control:mesh-on",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 2
                 },
@@ -1284,6 +1355,7 @@
                   "action": "control:mesh-off",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 4
                 },
@@ -1293,6 +1365,7 @@
                   "action": "control:corner:BR",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 9
                 },
@@ -1302,6 +1375,7 @@
                   "action": "control:corner:FR",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 3
                 },
@@ -1311,6 +1385,7 @@
                   "action": "control:corner:FL",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 1
                 },
@@ -1320,6 +1395,7 @@
                   "action": "control:corner:BL",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 7
                 }
@@ -1332,6 +1408,7 @@
               "action": null,
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": [
                 {
                   "id": "control:sd-resume",
@@ -1339,6 +1416,7 @@
                   "action": "control:sd-resume",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 8
                 },
@@ -1348,6 +1426,7 @@
                   "action": "control:sd-pause",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 6
                 },
@@ -1357,6 +1436,7 @@
                   "action": "control:sd-abort",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 2
                 },
@@ -1366,6 +1446,7 @@
                   "action": "print:start",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 4
                 }
@@ -1378,6 +1459,7 @@
               "action": null,
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": [
                 {
                   "id": "control:motors-off",
@@ -1385,6 +1467,7 @@
                   "action": "control:motors-off",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 8
                 },
@@ -1394,6 +1477,7 @@
                   "action": "control:quickstop",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 6
                 },
@@ -1403,6 +1487,7 @@
                   "action": "control:break-wait",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 2
                 }
@@ -1415,6 +1500,7 @@
               "action": "control:estop",
               "enabled": true,
               "destructive": true,
+              "marked": false,
               "children": null,
               "cell": 1
             },
@@ -1424,6 +1510,7 @@
               "action": "control:arm",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 7
             }
@@ -1441,6 +1528,7 @@
           "action": "zoom-in",
           "enabled": true,
           "destructive": false,
+          "marked": false,
           "children": null,
           "cell": 8
         },
@@ -1450,6 +1538,7 @@
           "action": "move",
           "enabled": true,
           "destructive": false,
+          "marked": false,
           "children": null,
           "cell": 6
         },
@@ -1459,6 +1548,7 @@
           "action": null,
           "enabled": true,
           "destructive": false,
+          "marked": false,
           "children": [
             {
               "id": "device:watch",
@@ -1466,6 +1556,7 @@
               "action": "device:watch",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 8
             },
@@ -1475,6 +1566,7 @@
               "action": "device:poll",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 6
             },
@@ -1484,6 +1576,7 @@
               "action": "device:monitor",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 2
             },
@@ -1493,6 +1586,7 @@
               "action": "device:query",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 4
             },
@@ -1502,6 +1596,7 @@
               "action": "device:unpin",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 9
             },
@@ -1511,6 +1606,7 @@
               "action": "device:rescan",
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": null,
               "cell": 3
             },
@@ -1520,6 +1616,7 @@
               "action": null,
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": [
                 {
                   "id": "device:reconnect",
@@ -1527,6 +1624,7 @@
                   "action": "device:reconnect",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 8
                 },
@@ -1536,6 +1634,7 @@
                   "action": "device:reset",
                   "enabled": true,
                   "destructive": true,
+                  "marked": false,
                   "children": null,
                   "cell": 6
                 },
@@ -1545,6 +1644,7 @@
                   "action": "device:release",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 2
                 }
@@ -1557,6 +1657,7 @@
               "action": null,
               "enabled": true,
               "destructive": false,
+              "marked": false,
               "children": [
                 {
                   "id": "control:heat",
@@ -1564,6 +1665,7 @@
                   "action": null,
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": [
                     {
                       "id": "control:hotend-on",
@@ -1571,6 +1673,7 @@
                       "action": "control:hotend-on",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 8
                     },
@@ -1580,6 +1683,7 @@
                       "action": "control:hotend-off",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 6
                     },
@@ -1589,6 +1693,7 @@
                       "action": "control:bed-on",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 2
                     },
@@ -1598,6 +1703,7 @@
                       "action": "control:bed-off",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 4
                     },
@@ -1607,6 +1713,7 @@
                       "action": "control:fan-on",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 9
                     },
@@ -1616,6 +1723,7 @@
                       "action": "control:fan-off",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 3
                     }
@@ -1628,6 +1736,7 @@
                   "action": null,
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": [
                     {
                       "id": "control:home:all",
@@ -1635,6 +1744,7 @@
                       "action": "control:home",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 8
                     },
@@ -1644,6 +1754,7 @@
                       "action": "control:home-xy",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 6
                     },
@@ -1653,6 +1764,7 @@
                       "action": "control:home-z",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 2
                     }
@@ -1665,6 +1777,7 @@
                   "action": null,
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": [
                     {
                       "id": "control:jog:Y+",
@@ -1672,6 +1785,7 @@
                       "action": "control:jog:Y+",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 8
                     },
@@ -1681,6 +1795,7 @@
                       "action": "control:jog:X+",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 6
                     },
@@ -1690,6 +1805,7 @@
                       "action": "control:jog:Y-",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 2
                     },
@@ -1699,6 +1815,7 @@
                       "action": "control:jog:X-",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 4
                     },
@@ -1708,6 +1825,7 @@
                       "action": "control:jog:Z+",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 9
                     },
@@ -1717,6 +1835,7 @@
                       "action": "control:jog:Z-",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 3
                     }
@@ -1729,6 +1848,7 @@
                   "action": null,
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": [
                     {
                       "id": "level:probe",
@@ -1736,6 +1856,7 @@
                       "action": "level:probe",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 8
                     },
@@ -1745,6 +1866,7 @@
                       "action": "level:read",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 6
                     },
@@ -1754,6 +1876,7 @@
                       "action": "control:mesh-on",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 2
                     },
@@ -1763,6 +1886,7 @@
                       "action": "control:mesh-off",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 4
                     },
@@ -1772,6 +1896,7 @@
                       "action": "control:corner:BR",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 9
                     },
@@ -1781,6 +1906,7 @@
                       "action": "control:corner:FR",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 3
                     },
@@ -1790,6 +1916,7 @@
                       "action": "control:corner:FL",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 1
                     },
@@ -1799,6 +1926,7 @@
                       "action": "control:corner:BL",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 7
                     }
@@ -1811,6 +1939,7 @@
                   "action": null,
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": [
                     {
                       "id": "control:sd-resume",
@@ -1818,6 +1947,7 @@
                       "action": "control:sd-resume",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 8
                     },
@@ -1827,6 +1957,7 @@
                       "action": "control:sd-pause",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 6
                     },
@@ -1836,6 +1967,7 @@
                       "action": "control:sd-abort",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 2
                     },
@@ -1845,6 +1977,7 @@
                       "action": "print:start",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 4
                     }
@@ -1857,6 +1990,7 @@
                   "action": null,
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": [
                     {
                       "id": "control:motors-off",
@@ -1864,6 +1998,7 @@
                       "action": "control:motors-off",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 8
                     },
@@ -1873,6 +2008,7 @@
                       "action": "control:quickstop",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 6
                     },
@@ -1882,6 +2018,7 @@
                       "action": "control:break-wait",
                       "enabled": true,
                       "destructive": false,
+                      "marked": false,
                       "children": null,
                       "cell": 2
                     }
@@ -1894,6 +2031,7 @@
                   "action": "control:estop",
                   "enabled": true,
                   "destructive": true,
+                  "marked": false,
                   "children": null,
                   "cell": 1
                 },
@@ -1903,6 +2041,7 @@
                   "action": "control:arm",
                   "enabled": true,
                   "destructive": false,
+                  "marked": false,
                   "children": null,
                   "cell": 7
                 }
@@ -1918,6 +2057,7 @@
           "action": "explain",
           "enabled": true,
           "destructive": false,
+          "marked": false,
           "children": null,
           "cell": 4
         }

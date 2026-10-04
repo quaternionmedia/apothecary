@@ -118,7 +118,21 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # machine 918 to 998, its comms log 916 to 996); the Pictures group (93: Kept
 # 938, Gather 936) is gone, and Rail moved from 97 to 93. Picture › Folder's
 # eighth leaf keeps its cell: More opens Pictures (picture:more), not Kept.
-VIEWER_CEILING = 128
+#
+# Consolidation Phase 2's follow-ups, a picture chosen in Pictures feeds the
+# ring. Before: 128 controls of its own, 58 ring-backed (45.3%), 82 places the
+# page listens. After: 127, 58 ring-backed (45.7%), 83 places. Pictures' Pin
+# here (pictures-pin, and its listener pin:click:pinHere) is gone: a row of
+# Pictures is chosen by a click (row:click:rowClicked, a list, not a control)
+# and let go by Escape (window:keydown:letGo, a key), the page tells every ring
+# the chosen picture, and Picture › Folder pins it -- the seven newest by name,
+# an older one as the eighth cell, "Pin" and its short name -- so every picture
+# in the folder is pinned from the ring and the button only did the same thing
+# again. No ring address moved: Pin <name> takes the eighth cell More holds
+# when nothing older is chosen (at the bench ⌗367, at the floor under the
+# canvas ring's Pictures › Floor ⌗46287), and a chosen picture among the seven
+# is marked in its own cell. The one rail (panels.js) is chrome, off the meter.
+VIEWER_CEILING = 127
 
 
 def test_the_viewer_stays_under_its_ceiling():
@@ -451,17 +465,19 @@ def test_the_rows_take_backs_are_counted_and_not_claimed_as_ring_backed():
     assert "⤺ takes back a view, every site's" in census.report()
 
 
-def test_pin_here_is_counted_and_not_claimed_as_ring_backed():
-    """Pictures' Pin here pins any picture in the folder at the selected place. The
-    ring's Picture › Folder pins the seven newest only, so the button is counted on
-    the meter and claims no ring action; nor is it a take-back."""
+def test_pictures_chooses_a_row_and_has_no_pin_here():
+    """A picture's row is chosen for the ring's Picture › Folder to pin, the older
+    pictures included, so Pictures has no Pin here: its rows are a list a person
+    chooses from, as Site's tree is, and Escape is a key."""
     taken = census.take()
-    pin = next(f for f in taken.controls_of_its_own() if f.name == "pictures-pin")
-    assert pin.source == "picture_list.js"
-    assert pin.ring_action is None and pin.taken_back is None
+    assert "pictures-pin" not in {f.name for f in taken.controls_of_its_own()}
+    for gone in ("pictures-pin", "pin:click:pinHere"):
+        assert gone not in census.CONTROLS and gone not in census.LISTENING
+        assert gone not in census.RING_BACKED and gone not in census.TAKEN_BACK
     listening = {f.key: f for f in taken.found if f.how == "listening"}
-    assert listening["pin:click:pinHere"].ring_action is None
-    assert listening["pin:click:pinHere"].taken_back is None
+    row = listening["row:click:rowClicked"]
+    assert (row.source, row.surface) == ("picture_list.js", census.LIST)
+    assert listening["window:keydown:letGo"].surface == census.GESTURE
     assert listening["forgetBtn:click:forget"].taken_back
     # A view's place on a picture's row draws it, as Selected's view rows do.
     assert (
@@ -470,7 +486,8 @@ def test_pin_here_is_counted_and_not_claimed_as_ring_backed():
 
 
 def test_the_viewers_ring_backed_share_did_not_fall():
-    """Consolidation Phase 2 holds the ring-backed share where it was: 58 of 128."""
+    """Consolidation Phase 2 held the ring-backed share where it was, 58 of 128; its
+    follow-ups do not let it fall below that."""
     taken = census.take()
     own, backed = len(taken.controls_of_its_own()), len(taken.ring_backed())
     assert backed / own >= 58 / 128, f"{backed} of {own} ring-backed"

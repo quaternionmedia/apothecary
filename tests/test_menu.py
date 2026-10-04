@@ -1319,6 +1319,58 @@ def test_a_root_with_many_pictures_still_resolves_and_a_chosen_one_fills_the_eig
     ring = resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=told)
     last = _group(ring, "Picture", "Folder").children[-1]
     assert last.action == "picture:pin:shot_042.png" and last.cell == 7
+    assert last.label == "Pin shot_042" and not last.marked
+
+
+def _folder(told, floor: bool = False):
+    """Picture › Folder's cells, at the bench or (floor) under the canvas ring's Pictures › Floor."""
+    if floor:
+        ring = resolve(Context(pointing=Pointing.CANVAS, targets=[]), _garage(), picture=told)
+        return _group(ring, "Pictures", "Floor", "Picture", "Folder").children
+    ring = resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=told)
+    return _group(ring, "Picture", "Folder").children
+
+
+@pytest.mark.parametrize("floor", [False, True], ids=["bench", "floor"])
+def test_a_picture_chosen_in_pictures_older_than_the_seven_is_folders_eighth_cell(floor):
+    """Chosen in Pictures and older than the seven newest, a picture is Folder's eighth
+    cell -- "Pin" and as much of its name as fits -- which pins it where the ring stands.
+    Unchosen, or chosen and gone from the folder, the eighth is More."""
+    told = _context()
+    told.pictures = [f"uploads/bench_shot_{i:02d}.png" for i in range(12)]
+    tail = ":@floor" if floor else ""
+    assert [(o.label, o.action) for o in _folder(told, floor)][-1] == (
+        "More",
+        f"picture:more{tail}",
+    )
+    told.chosen_picture = "uploads/bench_shot_09.png"
+    cells = _folder(told, floor)
+    assert len(cells) == MOST_OPTIONS
+    last = cells[-1]
+    assert (last.cell, last.action) == (7, f"picture:pin:uploads/bench_shot_09.png{tail}")
+    assert last.label.startswith("Pin ") and len(last.label) <= LONGEST_LABEL
+    assert last.label == "Pin bench 09"
+    assert not any(o.marked for o in cells)
+    told.chosen_picture = "uploads/no_longer_there.png"
+    assert _folder(told, floor)[-1].label == "More"
+
+
+def test_a_picture_chosen_among_the_seven_is_marked_in_its_own_cell():
+    """Chosen and among the seven newest, a picture's own cell is marked and nothing else
+    changes: the eighth is still More, or absent when there are no more."""
+    told = _context()
+    told.pictures = [f"shot_{i:02d}.png" for i in range(10)]
+    unchosen = _folder(told)
+    told.chosen_picture = "shot_03.png"
+    cells = _folder(told)
+    assert [o.marked for o in cells] == [o.action == "picture:pin:shot_03.png" for o in cells]
+    assert [(o.label, o.cell, o.action) for o in cells] == [
+        (o.label, o.cell, o.action) for o in unchosen
+    ]
+    assert cells[-1].label == "More"
+    told.pictures = told.pictures[:5]
+    cells = _folder(told)
+    assert len(cells) == 5 and [o.label for o in cells if o.marked] == ["shot_03"]
 
 
 def test_a_host_with_more_than_eight_views_still_resolves_and_a_chosen_view_fills_the_eighth():

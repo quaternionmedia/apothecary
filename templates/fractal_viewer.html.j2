@@ -237,6 +237,10 @@
         .pin-list { display: flex; flex-direction: column; gap: 0.2rem; max-height: 260px; overflow: auto; }
         .pin-row { display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; padding: 0.15rem 0.3rem; border-radius: 3px; background: #1d221d; }
         .pin-row > span, .pin-row .picture-what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* A picture's row is chosen by a click, for the ring's Picture › Folder to pin. */
+        .picture-row { cursor: pointer; border: 1px solid transparent; }
+        .picture-row:hover { background: #222a22; }
+        .picture-row.chosen { background: #1f3346; border-color: #6fb3e8; }
         .pin-row.here { border-left: 2px solid #4a6fa8; }
         .pin-row.stale > span { color: #b08a8a; }
         .pin-row img { width: 40px; height: 30px; object-fit: cover; border-radius: 2px; flex: 0 0 auto; }
@@ -1061,10 +1065,11 @@
                 // time it does.
                 this.pinnedWidget = null;
                 this.pinnedEl.addEventListener('toggle', () => this.pinnedOpened());
-                // Pictures: every picture under the picture root, each with its views
-                // and Pin here, Forget on a kept one, Purge, and the gathering -- a
-                // tab of the rail's strip, filled the first time it is shown and
-                // listed again each time it is shown again.
+                // Pictures: every picture under the picture root, each with its views,
+                // Forget on a kept one, Purge, and the gathering -- a tab of the rail's
+                // strip, filled the first time it is shown and listed again each time
+                // it is shown again. A row chosen there is told to every ring, whose
+                // Picture › Folder pins it where the ring stands.
                 this.picturesWidget = null;
                 this.panels.register('pictures', {
                     title: 'Pictures',
@@ -1075,9 +1080,7 @@
                             log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
                             world: {
                                 siteName: () => this.siteName,
-                                place: () => this.pinPlace(),
-                                // As Picture › Folder pins one: at the top level, where mats are drawn.
-                                pin: (path, host) => { if (this.focusPath.length) this.jumpTo(0); return this.pictures.pinPicture(host, path); },
+                                choose: (path) => this.pictures.choose(path),
                                 showView: (id) => this.showView(id),
                                 purge: () => this.pictures.purge(),
                                 // A picture forgotten: its views go wherever they were.
@@ -2022,8 +2025,6 @@
             // so anything deeper -- or any leaf of an expanded category that
             // isn't itself a direct child -- gets a read-only panel.
             renderSelectedPanel() {
-                // Pictures' Pin here pins at the selection: it says where, or why not.
-                if (this.picturesWidget) this.picturesWidget.placeChanged();
                 this.shownFacts = this.selectedName ? this.pictureFactsHtml(this.selectedName) : '';
                 if (this.selectedName === FLOOR_KEY) {
                     this.selectedBodyEl.innerHTML = `<div class="prop-row"><label>Name</label><span>the floor</span></div>
@@ -2106,7 +2107,7 @@
                 const ring = (verb) => `⌗ ${host === '' ? 'Pictures › Floor › ' : ''}${verb}`;
                 // Nothing here yet: the way in, so the durable hint is where the person
                 // looks. The verbs stay the ring's.
-                if (!cam && !views.length) return `<div class="prop-readonly picture-facts" data-facts="${host === '' ? 'floor' : 'host'}"><div class="k">Pictures at ${esc(where(host))}</div><div data-facts="way-in">${ring('Camera › Pin here')} puts this browser's camera at ${esc(where(host))}; ${host === '' ? '⌗ Pictures › Add' : '⌗ Picture › Add'} pins a picture from disk, and Pin here in Pictures one already in the folder; m, or right-click, opens the ring</div></div>`;
+                if (!cam && !views.length) return `<div class="prop-readonly picture-facts" data-facts="${host === '' ? 'floor' : 'host'}"><div class="k">Pictures at ${esc(where(host))}</div><div data-facts="way-in">${ring('Camera › Pin here')} puts this browser's camera at ${esc(where(host))}; ${host === '' ? '⌗ Pictures › Add' : '⌗ Picture › Add'} pins a picture from disk, and ${host === '' ? '⌗ Pictures › Floor › Picture › Folder' : '⌗ Picture › Folder'} one already in the folder, any chosen in Pictures; m, or right-click, opens the ring</div></div>`;
                 const drawn = pm.drawnAt(host);
                 const rows = [];
                 if (cam) {
@@ -2987,24 +2988,6 @@
             listsChanged() {
                 if (this.pinnedWidget && this.pinnedEl.open) this.pinnedWidget.load();
                 if (this.picturesWidget && this.panels.isShown('pictures')) this.picturesWidget.load();
-            }
-
-            // Where Pictures' Pin here pins: the selected host -- a root structure
-            // with a footprint that is not a made piece -- or the floor; with
-            // nothing like it selected, null and the reason, as the server would
-            // refuse it (vision/views.py's host_node).
-            pinPlace() {
-                if (!this.siteName || !this.tree) return { host: null, why: 'no site is loaded' };
-                const key = this.selectedName;
-                if (key === FLOOR_KEY) return { host: '' };
-                if (!key) return { host: null, why: 'select a structure, or the floor (⌗ Pictures › Floor), to pin a picture there' };
-                const root = key.split('.')[0];
-                if (key.includes('.')) return { host: null, why: `${key} is inside ${root}: pictures are pinned at a root structure, so select ${root}` };
-                const node = (this.tree.children || []).find((c) => c.name === key);
-                if (!node) return { host: null, why: `${key} is not a structure of ${this.siteName}` };
-                if (this.pictureMarks.madeRecord(key)) return { host: null, why: `${key} is a made piece: pin at a structure, or the floor` };
-                if (!node.world_bounds) return { host: null, why: `${key} has no footprint, so there is no top to lay a picture on` };
-                return { host: key };
             }
 
             // A view's place in Pictures: selected, and the view drawn there, as

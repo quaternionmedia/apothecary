@@ -183,6 +183,9 @@ class Option(BaseModel):
     action: Optional[str] = None
     enabled: bool = True
     destructive: bool = False
+    # The one of a list the page has chosen elsewhere (a picture chosen in
+    # Pictures), drawn marked; a leaf like any other.
+    marked: bool = False
     children: Optional[List["Option"]] = None
     cell: Optional[int] = None
 
@@ -370,8 +373,9 @@ def nearest(occupied: Iterable[int], from_cell: Optional[int], direction: str) -
     return best[2] if best is not None else from_cell
 
 
-def shorten(text: str) -> str:
-    """Make a label fit, without trailing it off.
+def shorten(text: str, most: int = LONGEST_LABEL) -> str:
+    """Make a label fit, without trailing it off -- in ``most`` characters, a
+    label's twelve unless a part of one is being made.
 
     **Nothing is taken away from a label that already fits**, so ``M3.5_bolt``
     and ``nozzle_0.4mm`` are never read as dotted paths and cut to ``5 bolt``
@@ -391,7 +395,7 @@ def shorten(text: str) -> str:
     can choose on purpose.
     """
     whole = text.strip()
-    if 0 < len(whole) <= LONGEST_LABEL:
+    if 0 < len(whole) <= most:
         return whole
 
     label = whole.rsplit(".", 1)[-1].replace("_", " ").replace("-", " ").replace(".", " ").strip()
@@ -401,22 +405,22 @@ def shorten(text: str) -> str:
         # Nothing but separators. Fall back to what was actually passed in, so
         # the wedge says something rather than nothing.
         stripped = "".join(ch for ch in whole if not ch.isspace())
-        return (stripped or "unnamed")[:LONGEST_LABEL]
+        return (stripped or "unnamed")[:most]
 
-    if len(label) <= LONGEST_LABEL:
+    if len(label) <= most:
         return label
 
     words = label.split()
     if len(words) == 1:
-        return label[:LONGEST_LABEL].rstrip()
+        return label[:most].rstrip()
 
     for keep in (6, 5, 4, 3):
         shortened = " ".join(word[:keep] for word in words)
-        if len(shortened) <= LONGEST_LABEL:
+        if len(shortened) <= most:
             return shortened
 
     ends = f"{words[0][:5]} {words[-1][:5]}"
-    return ends[:LONGEST_LABEL].rstrip() or words[0][:LONGEST_LABEL]
+    return ends[:most].rstrip() or words[0][:most]
 
 
 def distinct(names: Sequence[str]) -> List[str]:
@@ -601,6 +605,9 @@ FLOOR_MARK = "@floor"
 # A list of pictures or views shows the seven newest; the eighth cell acts on
 # the one chosen in the panel that holds the rest, or opens that panel.
 NEWEST = MOST_OPTIONS - 1
+# Folder's eighth cell, for a picture chosen in Pictures older than the seven:
+# the verb, then as much of its name as the label has room for.
+PIN_CHOSEN = "Pin "
 
 
 def _chunks(items: Sequence, most_groups: int) -> List[List]:
@@ -696,8 +703,10 @@ def _camera_group(picture: PictureContext, floor: bool) -> Option:
 
 def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
     """Picture at a host or the floor: Add (a host's; the floor's is Pictures ›
-    Add), Folder › the seven newest pictures and, when there are more, the one
-    chosen or More (the Pictures panel, where every picture is), and with
+    Add), Folder › the seven newest pictures and, when there are more, Pin and
+    the short name of the one chosen in Pictures when it is older than those,
+    else More (the Pictures panel, where every picture is) -- the chosen one,
+    among the seven, is marked in its own cell; and with
     a view drawn here, Views › the newest views, Make › Make all and each found
     shape (once its shapes are found and it has a width), Size, Unpin, Forget for
     a picture the browser kept, and Find shapes last: the step after a pin, with
@@ -712,21 +721,23 @@ def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
     options = [] if floor else [Option(id="picture:add", label="Add", action="picture:add")]
 
     pictures = list(picture.pictures)
+    # A picture chosen in Pictures that is no longer there is not chosen.
+    chosen = picture.chosen_picture if picture.chosen_picture in pictures else None
     if pictures:
-        leaves = [(f"picture:pin:{p}{tail}", _stem(p)) for p in pictures[:NEWEST]]
+        newest = pictures[:NEWEST]
+        leaves = [(f"picture:pin:{p}{tail}", _stem(p)) for p in newest]
         if len(pictures) > NEWEST:
-            chosen = picture.chosen_picture
-            if chosen and chosen not in pictures[:NEWEST]:
-                leaves.append((f"picture:pin:{chosen}{tail}", _stem(chosen)))
+            if chosen is not None and chosen not in newest:
+                short = shorten(_stem(chosen) or chosen, LONGEST_LABEL - len(PIN_CHOSEN))
+                leaves.append((f"picture:pin:{chosen}{tail}", f"{PIN_CHOSEN}{short}"))
             else:
                 leaves.append((f"picture:more{tail}", "More"))
-        options.append(
-            Option(
-                id=f"picture:folder{tail}",
-                label="Folder",
-                children=_listed(f"picture:folder{tail}", leaves),
-            )
-        )
+        folder = _listed(f"picture:folder{tail}", leaves)
+        if chosen in newest:
+            for leaf in folder:
+                if leaf.action == f"picture:pin:{chosen}{tail}":
+                    leaf.marked = True
+        options.append(Option(id=f"picture:folder{tail}", label="Folder", children=folder))
 
     drawn = next((vw for vw in here.views if vw.id == here.drawn), None)
     if drawn is None and here.views:
