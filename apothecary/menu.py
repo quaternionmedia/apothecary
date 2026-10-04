@@ -561,7 +561,16 @@ PANELS: Sequence[Tuple[str, str]] = (
     # opened.
     ("pictures", "Pictures"),
     ("machine", "Machine"),
+    # The Bench: the toolchain, the sketches, compile and upload, raw flash and
+    # the task log -- what the firmware page was -- a tab of the rail's strip,
+    # registered at start and shown when asked for. Its verbs are a ring of
+    # their own under its cell (_bench).
+    ("bench", "Bench"),
 )
+# The panels seated before the rail's own cell, which keeps the cell it has had
+# since Phase 3 (Panels › Rail, 99); a panel registered after them is seated
+# after it, so no learned address moves.
+_BEFORE_RAIL = ("site", "selected", "pictures", "machine")
 
 
 def _panels() -> Option:
@@ -571,9 +580,50 @@ def _panels() -> Option:
     return Option(
         id="panels",
         label="Panels",
-        children=[toggle(pid, label) for pid, label in PANELS]
+        children=[toggle(pid, label) for pid, label in PANELS if pid in _BEFORE_RAIL]
         # The rail itself: hidden and shown, as the tilde key does.
-        + [Option(id="panel:rail", label="Rail", action="panel:rail:toggle")],
+        + [Option(id="panel:rail", label="Rail", action="panel:rail:toggle")]
+        + [_bench(toggle("bench", "Bench"))],
+    )
+
+
+def _bench(show: Option) -> Option:
+    """The Bench's cell under Panels: the panel itself first, then its verbs.
+
+    Each verb is the Bench's button of the same name and acts on what the Bench
+    has chosen -- the sketch, the board (FQBN) and the port in its boxes, the
+    images in its raw-flash list, the libraries typed in its box -- as Control ›
+    Print › Send file prints what the Print card has chosen. Install installs or
+    updates arduino-cli; Cores installs one of the suggested cores; Cancel stops
+    the running task. Upload and Raw flash overwrite what a board runs.
+    """
+    from .firmware.toolchains import SUGGESTED_CORES
+
+    return Option(
+        id="bench",
+        label="Bench",
+        children=[
+            show,
+            Option(id="bench:install", label="Install", action="bench:install"),
+            Option(id="bench:compile", label="Compile", action="bench:compile"),
+            Option(id="bench:upload", label="Upload", action="bench:upload", destructive=True),
+            Option(id="bench:esptool", label="Raw flash", action="bench:esptool", destructive=True),
+            Option(id="bench:cancel", label="Cancel", action="bench:cancel"),
+            Option(
+                id="bench:cores",
+                label="Cores",
+                # A core by its architecture: AVR, ESP32, RP2040 ...
+                children=[
+                    Option(
+                        id=f"bench:core:{core}",
+                        label=shorten(core.rsplit(":", 1)[-1].upper()),
+                        action=f"bench:core:{core}",
+                    )
+                    for core, _ in SUGGESTED_CORES
+                ],
+            ),
+            Option(id="bench:libraries", label="Libraries", action="bench:libraries"),
+        ],
     )
 
 
@@ -1163,6 +1213,12 @@ CARRIED_BY: Dict[str, Carries] = {
     "print": Carries.VIEWER,
     # Opening, closing, floating what stands in front of the world (panels.js).
     "panel": Carries.VIEWER,
+    # The Bench's verbs: its buttons, each acting on what the Bench has chosen.
+    # The tasks they start are the firmware routes' (POST /firmware/install,
+    # /cores/install, /libraries/install, /sketches/{name}/compile and /upload,
+    # /esptool/flash, /tasks/{id}/cancel), called by the page, never through
+    # the intent route.
+    "bench": Carries.VIEWER,
     # A camera's verbs: this browser's device pinned, live, a picture taken and
     # pinned as a view, and the gathering's report -- all of it the page's: the
     # pin and the picture routes are what the page calls.

@@ -506,6 +506,7 @@
     </div>
     {% endif %}
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/machine.css">
+    <link rel="stylesheet" href="{{ base_url }}/static/widgets/bench.css">
     <script type="importmap">
     {
         "imports": {
@@ -526,6 +527,9 @@
         import { boardLabel, boardSummary } from '/static/board_text.js';
         import { mountPinned } from '/static/widgets/pinned.js';
         import { mountPictureList } from '/static/widgets/picture_list.js';
+        import { mountToolchain } from '/static/widgets/toolchain.js';
+        import { mountBuild, mountRawFlash } from '/static/widgets/sketches.js';
+        import { mountTasks } from '/static/widgets/tasks.js';
         import { makeMachineMarks, toScene as marksToScene } from '/static/machine_marks.js';
         import { mountPictureMarks } from '/static/picture_marks.js';
         import { mountPictures } from '/static/pictures.js';
@@ -983,6 +987,18 @@
                         });
                         window.apothecaryPictureList = this.picturesWidget;
                     },
+                });
+                // The Bench: the toolchain, the sketches built and uploaded, raw flash
+                // and the task log -- what the firmware page was (widgets/toolchain.js,
+                // sketches.js, tasks.js) -- a tab of the rail's strip, closed until it
+                // is pressed, filled the first time it is shown and asked for the
+                // toolchain's state again each time it is shown again. A board's own
+                // flashing is in its Machine; the Bench is for any sketch and any port.
+                this.bench = null;
+                this.panels.register('bench', {
+                    title: 'Bench',
+                    onOpen: () => { if (this.bench) this.bench.load(); },
+                    body: (slot) => { this.bench = this.mountBench(slot); window.apothecaryBench = this.bench; },
                 });
                 window.apothecaryPanels = this.panels;
                 this.onResize();
@@ -3137,6 +3153,55 @@
                 window.apothecaryMachine = handle;
                 return true;
             }
+            // The Bench's body: its three modules over one task log. A task's end asks
+            // the toolchain, the sketches and the ports again, and the boards the site
+            // binds (an upload changes what a board should run). Each verb is also a
+            // cell of Panels › Bench (act), acting on what the Bench has chosen.
+            mountBench(slot) {
+                slot.classList.add('bench-ui');
+                slot.innerHTML = '<div class="bench-toolchain-slot"></div><div class="k">Build &amp; upload</div><div class="bench-build-slot"></div>'
+                    + '<div class="k">Raw flash (esptool)</div><div class="bench-raw-slot"></div><div class="bench-tasks-slot"></div>';
+                const say = (text, kind) => this.setStatus(text, kind);
+                let bench = null;
+                const enableAll = () => { if (bench) { bench.toolchain.enable(); bench.build.enable(); bench.raw.enable(); } };
+                const tasks = mountTasks(slot.querySelector('.bench-tasks-slot'), {
+                    base: BASE_URL, say, onStart: enableAll,
+                    onEnd: () => { if (bench) bench.load(); if (this.siteName) this.boards.scan(); },
+                });
+                const toolchain = mountToolchain(slot.querySelector('.bench-toolchain-slot'), { base: BASE_URL, tasks, say });
+                const build = mountBuild(slot.querySelector('.bench-build-slot'), { base: BASE_URL, tasks, say, onPort: () => bench && bench.raw.enable() });
+                const raw = mountRawFlash(slot.querySelector('.bench-raw-slot'), { base: BASE_URL, tasks, say, port: () => build.port() });
+                const load = async () => {
+                    const status = await toolchain.load();
+                    await build.load(status);
+                    raw.setStatus(status);
+                    if (status && status.active_task) tasks.attach(status.active_task.id);
+                    tasks.list();
+                    if (window.apothecaryRing && window.apothecaryRing.refreshAddresses) window.apothecaryRing.refreshAddresses();
+                    return status;
+                };
+                let ready = load();
+                bench = {
+                    toolchain, build, raw, tasks,
+                    load: () => (ready = load()),
+                    ready: () => ready,
+                    // A verb of Panels › Bench: what its button does. Null when it was
+                    // refused, which the module has said.
+                    async act(verb) {
+                        await ready;
+                        if (verb === 'install') return toolchain.install();
+                        if (verb === 'compile') return build.compile();
+                        if (verb === 'upload') return build.upload();
+                        if (verb === 'esptool') return raw.flash();
+                        if (verb === 'cancel') return tasks.cancel();
+                        if (verb === 'libraries') return toolchain.libraries();
+                        if (verb.startsWith('core:')) return toolchain.core(verb.slice('core:'.length));
+                        return null;
+                    },
+                };
+                return bench;
+            }
+
             // Stops the Machine watching its board and takes its panel away. Called
             // again from inside (the panel's onClose), it does nothing.
             closeMachine() {
@@ -3912,6 +3977,14 @@
                     if (!(viewer.picturesWidget && viewer.picturesWidget.act('gather'))) viewer.setStatus(`${intent.label}: Pictures cannot do that${tail}`, 'error');
                     return;
                 }
+                // A Bench verb: the Bench shown, and what its button does done on what
+                // it has chosen. Said first, so a refusal of the Bench's own is the last word.
+                if (action.startsWith('bench:')) {
+                    viewer.panels.open('bench');
+                    viewer.setStatus(`${intent.label}${tail}`, 'success');
+                    if (viewer.bench) viewer.bench.act(action.slice('bench:'.length));
+                    return;
+                }
                 if (action === 'panel:rail:toggle') {
                     const hidden = viewer.panels.hideRail(!viewer.panels.railHidden());
                     viewer.setStatus(`${hidden ? 'Hid' : 'Showed'} the rail${tail}`, 'success');
@@ -4037,13 +4110,24 @@
             for (const el of viewer.selectedBodyEl.querySelectorAll('.view-width')) pairs.push([el, `picture:size${floor}`]);
             annotate(ring, pairs);
         }
+        // The Bench's buttons, by the verb each one is (Panels › Bench).
+        const BENCH_VERBS = [
+            ['.install-btn', 'bench:install'], ['.compile-btn', 'bench:compile'], ['.upload-btn', 'bench:upload'],
+            ['.esp-flash-btn', 'bench:esptool'], ['.cancel-btn', 'bench:cancel'], ['.lib-btn', 'bench:libraries'],
+        ];
         // The list, from the canvas ring: each row at this level is a piece the
-        // ring's Pieces cell reaches, and the step-out button is its Up.
+        // ring's Pieces cell reaches, and the step-out button is its Up; and the
+        // Bench's buttons, its verbs under Panels › Bench.
         function annotateList(ring) {
             if (!ring) return;
             const pairs = [];
             for (const li of viewer.contentsEl.querySelectorAll('li[data-path]')) pairs.push([li, `select:${li.dataset.path}`]);
             pairs.push([viewer.zoomOutBtn, 'zoom-out']);
+            const bench = document.querySelector(".panel[data-panel='bench']");
+            if (bench) {
+                for (const [selector, action] of BENCH_VERBS) for (const el of bench.querySelectorAll(selector)) pairs.push([el, action]);
+                for (const el of bench.querySelectorAll('.core-install[data-id]')) pairs.push([el, `bench:core:${el.dataset.id}`]);
+            }
             annotate(ring, pairs);
         }
         let pending = null;

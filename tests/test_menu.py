@@ -942,20 +942,51 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert carried_by("picture:purge").name == "VIEWER"
     # Site (Contents, its problems, its SCAD, Pinned, the site's jobs), Selected,
     # Pictures (every picture, and the gathering) and a board's Machine (its log in
-    # it) each a cell; the rail last. A print is the job: Jobs is no panel.
+    # it) each a cell; then the rail, in the cell it has had since Phase 3; then the
+    # Bench, the firmware page's sections, a group of its own: the panel and its
+    # verbs. A print is the job: Jobs is no panel.
     assert [(c.label, c.action, c.cell) for c in panels.children] == [
         ("Site", "panel:toggle:site", 8),
         ("Selected", "panel:toggle:selected", 6),
         ("Pictures", "panel:toggle:pictures", 2),
         ("Machine", "panel:toggle:machine", 4),
         ("Rail", "panel:rail:toggle", 9),
+        ("Bench", None, 3),
     ]
     assert address_of(root, "panel:site") == "98"  # by the option's id
     assert address_of(root, "panel:pictures") == "92"
     assert address_of(root, "panel:machine") == "94"
     assert address_of(root, "panel:rail") == "99"
-    for pid in ("site", "pictures", "machine"):
+    bench = panels.children[-1]
+    assert [(c.label, c.action, c.cell) for c in bench.children] == [
+        ("Bench", "panel:toggle:bench", 8),
+        ("Install", "bench:install", 6),
+        ("Compile", "bench:compile", 2),
+        ("Upload", "bench:upload", 4),
+        ("Raw flash", "bench:esptool", 9),
+        ("Cancel", "bench:cancel", 3),
+        ("Cores", None, 1),
+        ("Libraries", "bench:libraries", 7),
+    ]
+    assert address_of(root, "panel:bench") == "938"
+    assert address_of(root, "bench:compile") == "932"
+    # A core by its architecture, one leaf per suggested core.
+    cores = bench.children[6]
+    assert [c.label for c in cores.children] == ["AVR", "ESP32", "ESP8266", "RP2040", "SAMD"]
+    assert address_of(root, "bench:core:arduino:avr") == "9318"
+    assert {o.id for o in bench.children if o.destructive} == {"bench:upload", "bench:esptool"}
+    for pid in ("site", "pictures", "machine", "bench"):
         assert carried_by(f"panel:toggle:{pid}").name == "VIEWER"
+    for verb in (
+        "install",
+        "compile",
+        "upload",
+        "esptool",
+        "cancel",
+        "libraries",
+        "core:esp32:esp32",
+    ):
+        assert carried_by(f"bench:{verb}").name == "VIEWER"
     # The retired panels are on no ring: the Comms log is in the Machine.
     for gone in ("contents", "validation", "scad", "kept", "camera", "jobs", "log"):
         assert f"panel:toggle:{gone}" not in set(every_action([root])), gone

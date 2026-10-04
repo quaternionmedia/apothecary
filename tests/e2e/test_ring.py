@@ -531,12 +531,12 @@ def _second_tab(page: Page):
 @pytest.mark.e2e
 def test_one_rail_stacks_site_and_selected_over_a_strip_of_tabs(page: Page, ring_url: str):
     """One rail, on the right of the world: Site and Selected stacked in it, both
-    shown, and below them a strip of tabs -- Pictures, and a docked Machine when one
-    is open -- none shown until pressed, one at a time, pressed again to fold away.
-    The other side is world."""
+    shown, and below them a strip of tabs -- Pictures, the Bench, and a docked Machine
+    when one is open -- none shown until pressed, one at a time, pressed again to fold
+    away. The other side is world."""
     rail, world = _open_panels(page, ring_url)
     ids = page.evaluate("() => window.apothecaryPanels.list().map((p) => p.id)")
-    assert ids == ["site", "selected", "pictures"]
+    assert ids == ["site", "selected", "pictures", "bench"]
     expect(page.locator(".panel-rail")).to_have_count(1)
     expect(rail).to_have_attribute("data-side", "right")
     site = rail.locator(".panel[data-panel='site']")
@@ -548,11 +548,12 @@ def test_one_rail_stacks_site_and_selected_over_a_strip_of_tabs(page: Page, ring
     assert world.bounding_box()["x"] <= 1  # nothing docked on the other side
     assert world.bounding_box()["width"] >= page.viewport_size["width"] / 2
     # The strip: a tab for each, in the order they were registered, none shown.
-    expect(rail.locator(".rail-tab")).to_have_count(1)
-    _second_tab(page)
     expect(rail.locator(".rail-tab")).to_have_count(2)
+    _second_tab(page)
+    expect(rail.locator(".rail-tab")).to_have_count(3)
     assert rail.locator(".rail-tab").evaluate_all("(ts) => ts.map((t) => t.dataset.panel)") == [
         "pictures",
+        "bench",
         "second",
     ]
     expect(rail.locator(".panel[data-panel='pictures']")).to_be_hidden()
@@ -680,7 +681,7 @@ def test_a_closed_panel_stays_closed_and_the_ring_reopens_it(page: Page, ring_ur
     page.keyboard.press(panels_cell)
     assert _title(page) == "Panels"
     inner = _wedges(page)
-    assert sorted(inner.values()) == ["Machine", "Pictures", "Rail", "Selected", "Site"]
+    assert sorted(inner.values()) == ["Bench", "Machine", "Pictures", "Rail", "Selected", "Site"]
     site_cell = next(cell for cell, label in inner.items() if label == "Site")
     page.keyboard.press(site_cell)
     expect(page.locator("#ring-overlay")).to_have_count(0)
@@ -699,10 +700,10 @@ def test_a_closed_panel_stays_closed_and_the_ring_reopens_it(page: Page, ring_ur
     expect(_tab(page, "pictures")).to_have_class(re.compile(r"\bactive\b"))
     expect(page.locator(".panel-tab")).to_have_count(0)
 
-    # Every panel closed: the world has the whole width, and three tabs wait.
-    for pid in ["site", "selected", "pictures"]:
+    # Every panel closed: the world has the whole width, and four tabs wait.
+    for pid in ["site", "selected", "pictures", "bench"]:
         page.evaluate("(id) => window.apothecaryPanels.close(id)", pid)
-    expect(page.locator(".panel-tab")).to_have_count(3, timeout=2000)
+    expect(page.locator(".panel-tab")).to_have_count(4, timeout=2000)
     expect(rail).to_be_hidden()
     _world_is(page, page.viewport_size["width"])
 

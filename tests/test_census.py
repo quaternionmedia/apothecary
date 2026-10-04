@@ -197,7 +197,26 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # ⌗211; on the monitor page ⌗728 to ⌗128). Under the canvas ring's Panels, the
 # Machine group (94: the machine 948, its comms log 946) is the Machine's own cell,
 # 94.
-VIEWER_CEILING = 101
+#
+# Consolidation Phase 5, the Bench. Before: 101 controls of its own, 51 ring-backed
+# (50.5%), 72 places the page listens. After: 117, 58 ring-backed (49.6%), 78
+# places. The firmware page's toolchain, sketches, build and upload, raw flash and
+# task log are the Bench, a tab of the rail's strip, written once in
+# widgets/toolchain.js, sketches.js and tasks.js and counted with the viewer, which
+# imports them: install-btn, install-force, core-install, lib-input, lib-btn,
+# sketch-select (the sketch list's rows are a drop-down now), fqbn-input,
+# port-select, compile-btn, upload-btn, esp-chip, esp-baud, esp-images (raw flash's
+# rows of offset, path and drop, and its add button, are lines of one box),
+# esp-erase, esp-flash-btn and cancel-btn. Seven are cells of the canvas ring's
+# Panels › Bench (93), which is a group now -- the panel (938) and its verbs:
+# Install 936, Compile 932, Upload 934, Raw flash 939, Cancel 933, Cores 931 (a
+# core by its architecture, 9318 AVR on), Libraries 937 -- and are ring-backed.
+# Places it listens, added: a core's Install (coresEl:click:closest), Enter in the
+# libraries box (libEl:keydown:libraries), the sketch, board and port boxes
+# (sketchEl:change:choose, fqbnEl:input:enable, portEl:change:enable) and a recent
+# task's row (historyEl:click:closest). No ring address moved: the Bench is seated
+# after Panels › Rail, which keeps 99.
+VIEWER_CEILING = 117
 
 
 def test_the_viewer_stays_under_its_ceiling():

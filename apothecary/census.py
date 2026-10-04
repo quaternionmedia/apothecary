@@ -267,6 +267,18 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "dev-identify": (WIDGET, WHAT_YOU_SEE, "a button that listens for the sketch's hello"),
     "dev-printer": (WIDGET, WHAT_YOU_SEE, "a button that asks M115, or polls a printer once"),
     "dev-live": (WIDGET, WHAT_YOU_SEE, "a button that streams the board's serial output"),
+    # ---- the Bench, apothecary/static/widgets/{toolchain,sketches,tasks}.js
+    # The firmware page's sections in front of the world, written once in the
+    # modules, named as the page named them (by class now, since a form is
+    # mounted by the Bench and by a board's Flashing card). Added: the sketch is
+    # chosen from a drop-down rather than a list, and raw flash takes its images
+    # as lines of one box rather than rows of three controls and an add button.
+    "sketch-select": (WIDGET, WHAT_YOU_SEE, "a drop-down of the sketches under parts/"),
+    "esp-images": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a box for the images to flash, one offset and path a line",
+    ),
     # ---- Pictures, apothecary/static/widgets/picture_list.js -------------
     # Every picture under the picture root, each row chosen by a click for the
     # ring's Picture › Folder to pin (a list, not a control), a kept one with
@@ -370,6 +382,19 @@ RING_BACKED: Dict[str, str] = {
     "dev-monitor": "device:open",
     "dev-live": "device:open",
     "boards-btn": "device:rescan",
+    # The Bench's buttons are the cells of the canvas ring's Panels › Bench, each
+    # acting on what the Bench has chosen; a core's Install is Bench › Cores › its
+    # core. The form's boxes and drop-downs, the force tick-box and raw flash's
+    # boxes choose what a cell acts on, and no cell chooses them.
+    "install-btn": "bench:install",
+    "core-install": "bench:core:arduino:avr",
+    "coresEl:click:closest": "bench:core:arduino:avr",
+    "lib-btn": "bench:libraries",
+    "libEl:keydown:libraries": "bench:libraries",
+    "compile-btn": "bench:compile",
+    "upload-btn": "bench:upload",
+    "esp-flash-btn": "bench:esptool",
+    "cancel-btn": "bench:cancel",
     # Gather and Pictures' Purge are cells of the canvas ring's Pictures. The
     # per-row take-backs of Pinned and Pictures are not here: see TAKEN_BACK.
     # Pictures has no Pin here: a row chosen there is told to the ring, whose
@@ -641,6 +666,17 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "picking an earlier bed reading to look at",
     ),
     "level-card:click:closest": (WIDGET, WHAT_IS_THERE, "a corner button, moving the nozzle there"),
+    # ---- the Bench --------------------------------------------------------
+    "coresEl:click:closest": (WIDGET, WHAT_IS_THERE, "a core's Install button"),
+    "libEl:keydown:libraries": (WIDGET, WHAT_IS_THERE, "installing the typed libraries, by Enter"),
+    "sketchEl:change:choose": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "choosing a sketch, which fills in the board it is built for",
+    ),
+    "fqbnEl:input:enable": (WIDGET, WHAT_YOU_SEE, "typing a board, which enables the buttons"),
+    "portEl:change:enable": (WIDGET, WHAT_YOU_SEE, "choosing a port, which enables the buttons"),
+    "historyEl:click:closest": (LIST, WHAT_YOU_SEE, "opening an earlier task's output"),
     # ---- the firmware page ------------------------------------------------
     "es:close:stopLive": (AUTOMATIC, NOTHING, "the serial stream stopped, and the card says so"),
     "devices:click:closest": (

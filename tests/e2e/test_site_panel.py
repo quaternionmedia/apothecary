@@ -82,7 +82,7 @@ def test_site_is_stacked_in_the_one_rail_and_the_retired_panels_are_gone(page, b
     expect(site.locator("#contents-list")).to_be_visible()
     assert page.evaluate("() => window.apothecaryPanels.state('site').zone") == "stack"
     ids = page.evaluate("() => window.apothecaryPanels.list().map((p) => p.id)")
-    assert ids == ["site", "selected", "pictures"]
+    assert ids == ["site", "selected", "pictures", "bench"]
     for gone in ("contents", "validation", "scad", "kept", "camera", "jobs"):
         assert page.evaluate("(id) => window.apothecaryPanels.state(id)", gone) is None
     # The one rail leaves the world at least half the page.
@@ -120,6 +120,7 @@ def test_a_layout_remembered_with_the_old_panels_is_ignored(page, base_url: str)
         ("site", True, False, "rail"),
         ("selected", True, False, "rail"),
         ("pictures", True, False, "rail"),
+        ("bench", True, False, "rail"),
     ]
     expect(page.locator(".panel-tab")).to_have_count(0)  # nothing closed
     rail = page.locator(".panel-rail")
@@ -156,6 +157,7 @@ def test_a_layout_remembered_with_the_jobs_panel_is_harmless(page, base_url: str
         ("site", True, False),
         ("selected", True, True),
         ("pictures", False, False),
+        ("bench", True, False),
     ]
     assert page.evaluate("() => window.apothecaryPanels.state('jobs')") is None
     expect(page.locator("[data-panel='jobs']")).to_have_count(0)
