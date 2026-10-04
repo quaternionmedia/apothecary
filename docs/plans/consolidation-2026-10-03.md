@@ -152,3 +152,9 @@ Drafted on the project's governance branch, ratified by a person:
   starts the live serial stream and says it may reset the board.
 - **Boards are found on request.** No timed rescan; Rescan from Selected, the
   ring or a Machine, and when a watched board goes quiet.
+
+## Decided after Phase 5
+
+- A printer's Device › Flash is shown disabled, not absent, so its later
+  cells keep the addresses a hand learned (jog Y+ ⌗2728); the ring record
+  states this as the one exception to "absent, not greyed".
