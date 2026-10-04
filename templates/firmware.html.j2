@@ -240,7 +240,9 @@
     </div>
 </div>
 
-<script>
+<script type="module">
+// A printer's poll is written as every other drawer of a board writes it.
+import { printerLine } from '/static/board_text.js';
 (() => {
     const BASE = {{ base_url | tojson }};
     const SUGGESTED = {{ suggested_cores | tojson }};
@@ -319,12 +321,9 @@
             const d = v.device, rec = v.expected.record, obs = state.observed[d.port];
             const live = !!state.live[d.port];
             const pst = state.printerStatus[d.port];
-            const heater = (h) => h ? `${h.actual.toFixed(1)}/${h.target.toFixed(0)}°` : "—";
             const pollLine = !d.printer ? "" : !pst
                 ? `<div class="printer-status meta">not polled yet — click Poll</div>`
-                : pst.state === "offline"
-                ? `<div class="printer-status"><span class="bad">offline</span> <span class="meta">${esc((pst.raw || [])[0] || "")}</span></div>`
-                : `<div class="printer-status"><b class="${pst.state === "printing" ? "ok" : ""}">${esc(pst.state)}</b>${pst.heating ? " (heating)" : ""} · T ${esc(heater(pst.hotends[0]))}${pst.bed ? " · B " + esc(heater(pst.bed)) : ""}${pst.position ? ` · X${pst.position.x.toFixed(0)} Y${pst.position.y.toFixed(0)} Z${pst.position.z.toFixed(1)}` : ""}${pst.sd_printing && pst.sd_progress != null ? ` · ${(pst.sd_progress * 100).toFixed(1)}%` : ""}${pst.filament_present === false ? ' · <span class="bad">filament out</span>' : ""}<span class="meta"> · ${new Date(pst.polled_at).toLocaleTimeString()}</span></div>`;
+                : `<div class="printer-status${pst.state === "offline" ? " bad" : ""}">${esc(printerLine(pst))}<span class="meta"> · ${new Date(pst.polled_at).toLocaleTimeString()}</span></div>`;
             const chip = d.printer
                 ? `<div class="chip">🖨 ${esc(d.printer.firmware_name)}${d.printer.machine_type ? " · " + esc(d.printer.machine_type) : ""} · ${esc(String(d.printer.baud))} baud${d.serial_number ? " · S/N " + esc(d.serial_number) : ""}</div>${pollLine}`
                 : d.chip

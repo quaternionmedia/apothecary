@@ -613,6 +613,17 @@ def test_site_devices_fresh_forces_a_scan(fake_arduino_cli, scripted_links, gara
     assert len(scans) == 2
 
 
+def test_site_devices_say_which_printer_links_are_held(fake_arduino_cli, scripted_links, garage):
+    """The page's board model polls a printer it pins only when its link is held, which
+    opens no port; the site's devices say which links are, as /firmware/devices does."""
+    c = TestClient(app)
+    assert c.get("/sites/garage/devices").json()["printers"] == []
+    c.post("/firmware/devices/identify", json={"port": "/dev/ttyFAKE1"}).raise_for_status()
+    assert c.get("/sites/garage/devices").json()["printers"] == ["/dev/ttyFAKE1"]
+    c.post("/firmware/printers/release", json={"port": "/dev/ttyFAKE1"}).raise_for_status()
+    assert c.get("/sites/garage/devices").json()["printers"] == []
+
+
 # --- the port scan cache -------------------------------------------------------------
 
 
