@@ -727,6 +727,7 @@ def validate_garage_layout(site: Assembly) -> LayoutReport:
                         f"(z={bounds.min_point.z}, bench top={bench_bounds.max_point.z})"
                     ),
                     structures=[structure.name],
+                    paths=[structure.name],
                 )
             )
             continue
@@ -745,6 +746,7 @@ def validate_garage_layout(site: Assembly) -> LayoutReport:
                     kind="out_of_bounds",
                     message=f"{structure.name} overhangs the bench",
                     structures=[structure.name],
+                    paths=[structure.name],
                 )
             )
 

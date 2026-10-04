@@ -2892,26 +2892,12 @@
                 }
             }
 
-            // The pieces a problem names, as dotted paths. A problem names pieces by
-            // their names alone: siblings, under the shallowest node that holds
-            // them all (an overlap is between siblings); failing that, each where
-            // a node of that name is first found, nearest the top.
+            // The pieces a problem names, as the dotted paths the server sends
+            // beside their names -- a name alone can be any of several pieces
+            // (every printer has a gantry) -- each one that is in this site's tree.
             problemPaths(v) {
-                const names = v.structures || [];
-                if (!names.length || !this.tree) return [];
-                const queue = [[this.tree, '']];
-                const first = new Map();
-                while (queue.length) {
-                    const [node, path] = queue.shift();
-                    const kids = node.children || [];
-                    if (names.every((n) => kids.some((c) => c.name === n))) return names.map((n) => pathForChild(path, n));
-                    for (const c of kids) {
-                        const p = pathForChild(path, c.name);
-                        if (names.includes(c.name) && !first.has(c.name)) first.set(c.name, p);
-                        queue.push([c, p]);
-                    }
-                }
-                return names.map((n) => first.get(n)).filter(Boolean);
+                if (!this.tree) return [];
+                return (v.paths || []).filter((path) => this.nodeByPath(path));
             }
 
             // Site's problems: listed at its top, each row selecting its piece; in
