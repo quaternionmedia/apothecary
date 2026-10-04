@@ -9,6 +9,8 @@ don't depend on whatever a previous test left behind in the process-lifetime
 SiteStore (see apothecary/site_store.py).
 """
 
+import re
+
 import pytest
 from playwright.sync_api import Page, expect
 
@@ -115,6 +117,11 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     )
     page.locator(".panel-free-layer .panel[data-panel='pictures'] .panel-float").click()
     page.locator(".panel-tab[data-panel='selected']").click()
+    # Pictures, docked again, is folded away to its tab, so the rail is as it was.
+    pictures_tab = page.locator(".panel-rail .rail-tab[data-panel='pictures']")
+    pictures_tab.locator(".rail-tab-name").click()
+    expect(page.locator(".panel[data-panel='pictures']")).to_be_hidden()
+    expect(pictures_tab).not_to_have_class(re.compile(r"\bactive\b"))
     page.wait_for_timeout(200)
 
     page.goto(f"{base_url}/viewer/sites/parts_library")
@@ -123,5 +130,7 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
 
     page.locator("#contents-list .contents-item").first.click()
     page.wait_for_timeout(800)
-    expect(page.locator("#part-scad-content")).to_be_visible()
+    scad = page.locator("#part-scad-content")
+    expect(scad).to_be_visible()
+    scad.scroll_into_view_if_needed()
     docs.step("Select a part leaf -- its real SCAD source is the absorbed part view")
