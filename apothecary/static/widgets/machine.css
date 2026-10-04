@@ -51,7 +51,7 @@
 .chart svg { width: 100%; height: 150px; display: block; }
 .chart .tip { position: absolute; pointer-events: none; background: #0f120f; border: 1px solid #3a443a; border-radius: 4px; padding: 0.25rem 0.5rem; font-size: 0.72rem; color: var(--ink); white-space: nowrap; display: none; font-variant-numeric: tabular-nums; }
 .chart .wrap { position: relative; }
-/* Comms log */
+/* The board's one log: a printer's comms log, or a devkit's serial output */
 .right { display: flex; flex-direction: column; min-height: 0; background: #0f120f; border: 1px solid var(--line); border-radius: 6px; }
 .log-head { display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .log-head .title { font-size: 0.8rem; font-weight: 600; margin-right: 0.3rem; }
