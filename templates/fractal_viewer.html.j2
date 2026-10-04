@@ -15,15 +15,18 @@
         .app-container { display: flex; flex-direction: column; height: 100vh; }
         .main-content { display: flex; flex: 1; overflow: hidden; }
 
+        /* The header: one row at any width a laptop has, 1024 px included. Its
+           parts keep their size; only the trail gives way (see #breadcrumb). */
         .toolbar {
-            display: flex; gap: 0.75rem; padding: 0.75rem 1rem;
+            display: flex; gap: 0.6rem; padding: 0.5rem 0.75rem;
             background: #252525; border-bottom: 1px solid #333;
-            align-items: center; flex-wrap: wrap;
+            align-items: center; flex-wrap: nowrap; white-space: nowrap;
         }
-        .toolbar h1 { margin: 0; font-size: 1.25rem; font-weight: 600; color: #fff; }
+        .toolbar > * { flex: 0 0 auto; }
+        .toolbar h1 { margin: 0; font-size: 1.15rem; font-weight: 600; color: #fff; }
         .toolbar .badge {
             font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 3px;
-            background: #664400; color: #ffcc66; font-weight: 600;
+            background: #664400; color: #ffcc66; font-weight: 600; cursor: help;
         }
         .toolbar select {
             min-width: 160px; padding: 0.5rem; border-radius: 4px;
@@ -32,14 +35,26 @@
         /* As wide as the name of a site can be, not as the longest one there is
            today: a site made from a picture no longer shifts the whole toolbar. */
         #site-select { width: 11rem; }
-        .toolbar button {
-            padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;
-            border: none; font-size: 0.9rem; transition: background 0.15s;
+        .toolbar button, .view-menu > summary {
+            padding: 0.45rem 0.8rem; border-radius: 4px; cursor: pointer;
+            border: none; font-size: 0.9rem; line-height: 1.25; transition: background 0.15s;
             background: #404040; color: #e0e0e0;
         }
-        .toolbar button:hover { background: #505050; }
+        .toolbar button:hover, .view-menu > summary:hover, .view-menu[open] > summary { background: #505050; }
         .toolbar button:disabled { opacity: 0.4; cursor: not-allowed; }
-        .toolbar .spacer { flex: 1; }
+        .toolbar .spacer { flex: 1 1 0; min-width: 0; }
+        /* The View menu: how the world is drawn, folded behind ⚙ View as Site's
+           sections fold; each item a cell of the canvas ring's Panels › View. */
+        .view-menu { position: relative; }
+        .view-menu > summary { list-style: none; user-select: none; }
+        .view-menu > summary::-webkit-details-marker { display: none; }
+        .view-menu-body {
+            position: absolute; right: 0; top: calc(100% + 4px); z-index: 30;
+            display: flex; flex-direction: column; align-items: flex-start; gap: 0.55rem;
+            padding: 0.65rem 0.8rem; background: #252525; border: 1px solid #3a3a3a; border-radius: 6px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+        }
+        .view-menu-body select { min-width: 0; padding: 0.15rem 0.3rem; }
         .toolbar .toolbar-link { color: #9cd2ff; font-size: 0.85rem; text-decoration: none; }
         .toolbar .toolbar-link:hover { text-decoration: underline; }
         .validity-indicator {
@@ -49,7 +64,14 @@
         .validity-indicator.valid { background: #1e4620; color: #6fdb75; }
         .validity-indicator.invalid { background: #4a1e1e; color: #ff8080; }
 
-        #breadcrumb { font-size: 0.85rem; color: #999; }
+        /* The trail: where you are, a crumb going up to its level (Zoom Out was
+           this). The one part of the header that gives way: too long for its row,
+           its start is cut, so the level being looked at stays in view. */
+        #breadcrumb {
+            flex: 0 1 auto; min-width: 3rem; overflow: hidden; text-overflow: ellipsis;
+            direction: rtl; text-align: left; font-size: 0.85rem; color: #999;
+        }
+        #breadcrumb .trail { direction: ltr; unicode-bidi: isolate; }
         #breadcrumb .crumb { cursor: pointer; color: #9cd2ff; }
         #breadcrumb .crumb:hover { text-decoration: underline; }
         .toolbar-toggle {
@@ -446,32 +468,35 @@
     <div class="app-container">
         <div class="toolbar">
             <h1>🧪 Apothecary</h1>
-            <span class="badge">FRACTAL VIEWER — unratified prototype</span>
-            <select id="site-select"{% if not site_names %} disabled{% endif %}>
+            <span class="badge" title="FRACTAL VIEWER — unratified prototype">prototype</span>
+            <select id="site-select" title="The site to look at: choosing one loads it"{% if not site_names %} disabled{% endif %}>
                 {% for name in site_names %}
                 <option value="{{ name }}"{% if name == default_site %} selected{% endif %}>{{ name }}</option>
                 {% else %}
                 <option value="" disabled>No sites found</option>
                 {% endfor %}
             </select>
-            <button type="button" id="load-btn">Load</button>
-            <button type="button" id="zoom-out-btn" title="Zoom out one level (Backspace)" disabled>⤴ Zoom Out</button>
-            <span id="breadcrumb"></span>
-            <label class="toolbar-toggle" title="Snap dragged positions to a 50mm grid -- keeps hand-placed layouts exact instead of off by a few millimeters">
-                <input type="checkbox" id="snap-toggle" checked> Snap to grid
-            </label>
-            <label class="toolbar-toggle" title="How much of each compound node to draw. Full renders its real geometry; Black box draws only its bounding extent; Dot collapses it to a marker. Leaves always render in full -- they have no subassembly to stand in for. Set per node from the Selected panel.">
-                Detail
-                <select id="detail-mode">
-                    <option value="full">Full</option>
-                    <option value="box">Black box</option>
-                    <option value="dot">Dot</option>
-                </select>
-            </label>
-            <label class="toolbar-toggle" title="Outline each compound node's full assembly extent, so a subassembly reads as one thing even when its parts are drawn separately">
-                <input type="checkbox" id="overlay-toggle" checked> Assembly outlines
-            </label>
+            <span id="breadcrumb" title="Where you are: a crumb goes up to its level (Backspace goes up one)"></span>
             <div class="spacer"></div>
+            <details id="view-menu" class="view-menu">
+                <summary title="How the world is drawn (⌗ Panels › View)">⚙ View</summary>
+                <div class="view-menu-body">
+                    <label class="toolbar-toggle" title="Snap dragged positions to a 50mm grid -- keeps hand-placed layouts exact instead of off by a few millimeters">
+                        <input type="checkbox" id="snap-toggle" checked> Snap to grid
+                    </label>
+                    <label class="toolbar-toggle" title="How much of each compound node to draw. Full renders its real geometry; Black box draws only its bounding extent; Dot collapses it to a marker. Leaves always render in full -- they have no subassembly to stand in for. Set per node from the Selected panel.">
+                        Detail
+                        <select id="detail-mode">
+                            <option value="full">Full</option>
+                            <option value="box">Black box</option>
+                            <option value="dot">Dot</option>
+                        </select>
+                    </label>
+                    <label class="toolbar-toggle" title="Outline each compound node's full assembly extent, so a subassembly reads as one thing even when its parts are drawn separately">
+                        <input type="checkbox" id="overlay-toggle" checked> Assembly outlines
+                    </label>
+                </div>
+            </details>
             <button type="button" id="ring-open" title="Open the ring for the chosen piece (m, or right-click a piece). Digits choose cells as on a numeric keypad; 5 backs out.">⌗ Ring</button>
             <span id="validity-indicator" class="validity-indicator valid" title="The site's problems: click to open them at the top of Site">Layout valid</span>
         </div>
@@ -800,8 +825,7 @@
             constructor() {
                 this.canvas = document.getElementById('viewer-canvas');
                 this.siteSelect = document.getElementById('site-select');
-                this.loadBtn = document.getElementById('load-btn');
-                this.zoomOutBtn = document.getElementById('zoom-out-btn');
+                this.viewMenuEl = document.getElementById('view-menu');
                 this.snapToggle = document.getElementById('snap-toggle');
                 this.detailModeEl = document.getElementById('detail-mode');
                 this.overlayToggle = document.getElementById('overlay-toggle');
@@ -1061,9 +1085,10 @@
             }
 
             bindEvents() {
-                this.loadBtn.addEventListener('click', () => this.loadSite(this.siteSelect.value));
+                // Choosing a site loads it; the trail's crumbs are the way back out.
                 this.siteSelect.addEventListener('change', () => this.loadSite(this.siteSelect.value));
-                this.zoomOutBtn.addEventListener('click', () => this.zoomOut());
+                // The View menu folds away when a press lands anywhere else, as a menu does.
+                document.addEventListener('pointerdown', (e) => this.foldViewMenu(e));
                 // The toolbar's count of problems opens them, at the top of Site.
                 this.validityEl.addEventListener('click', () => this.openProblems());
                 // A row of Site's Jobs selects its machine, at its level, and opens it.
@@ -1311,7 +1336,10 @@
                 this.renderFocus();
             }
 
+            // Up to a level of the trail. One level up is the "-1" control itself --
+            // a crumb, Backspace and the ring's Up all land on the node just left.
             jumpTo(depth) {
+                if (depth === this.focusPath.length - 1) { this.zoomOut(); return; }
                 this.focusPath = this.focusPath.slice(0, depth);
                 this.selectedName = null;
                 this.renderFocus();
@@ -1717,24 +1745,47 @@
             // Breadcrumb + minimap
             // ---------------------------------------------------------------
 
+            // The trail, in the header's one row: in a span of its own, so the row
+            // can cut its start and keep its end (the level in view) when it is long.
             renderBreadcrumb() {
                 this.breadcrumbEl.innerHTML = '';
+                const trail = document.createElement('span');
+                trail.className = 'trail';
+                this.breadcrumbEl.appendChild(trail);
                 const rootCrumb = document.createElement('span');
                 rootCrumb.className = 'crumb';
                 rootCrumb.textContent = this.siteName;
                 rootCrumb.addEventListener('click', () => this.jumpTo(0));
-                this.breadcrumbEl.appendChild(rootCrumb);
+                trail.appendChild(rootCrumb);
 
                 this.focusPath.forEach((name, i) => {
-                    this.breadcrumbEl.appendChild(document.createTextNode(' › '));
+                    trail.appendChild(document.createTextNode(' › '));
                     const crumb = document.createElement('span');
                     crumb.className = 'crumb';
                     crumb.textContent = name;
                     crumb.addEventListener('click', () => this.jumpTo(i + 1));
-                    this.breadcrumbEl.appendChild(crumb);
+                    trail.appendChild(crumb);
                 });
+            }
 
-                this.zoomOutBtn.disabled = this.focusPath.length === 0;
+            // A press outside the View menu folds it away.
+            foldViewMenu(event) {
+                if (this.viewMenuEl.open && !this.viewMenuEl.contains(event.target)) this.viewMenuEl.open = false;
+            }
+
+            // A cell of the canvas ring's Panels › View: what its item in the View menu
+            // does, done to that item (as a person would), so the two never disagree.
+            // Answers what the status line says.
+            viewVerb(verb) {
+                const flip = (box) => { box.checked = !box.checked; box.dispatchEvent(new Event('change')); return box.checked; };
+                if (verb === 'snap') return flip(this.snapToggle) ? 'Snapping to the grid' : 'Not snapping to the grid';
+                if (verb === 'outlines') return flip(this.overlayToggle) ? 'Assembly outlines shown' : 'Assembly outlines hidden';
+                if (verb.startsWith('detail:') && DETAIL_LABELS[verb.slice('detail:'.length)]) {
+                    this.detailModeEl.value = verb.slice('detail:'.length);
+                    this.detailModeEl.dispatchEvent(new Event('change'));
+                    return `Detail: ${DETAIL_LABELS[this.detailModeEl.value]}`;
+                }
+                return null;
             }
 
             // Deliberately a depth ladder, not a node-link graph: one tick
@@ -4120,6 +4171,10 @@
                 } else if (action === 'move') {
                     if (viewer.renderNodeByKey[path]) viewer.selectChild(path);
                     viewer.setStatus(viewer.transformControls.object ? `Drag the handle to move ${path}${tail}` : `${path} cannot be moved from here: only a direct child of the site can${tail}`, 'success');
+                } else if (action.startsWith('view:')) {
+                    // The View menu's items, as a person changes them there.
+                    const said = viewer.viewVerb(action.slice('view:'.length));
+                    viewer.setStatus(said ? `${said}${tail}` : `${intent.label}: the View menu has no such item${tail}`, said ? 'success' : 'error');
                 } else if (action.startsWith('panel:toggle:')) {
                     const id = action.slice('panel:toggle:'.length);
                     const open = viewer.panels.toggle(id) && viewer.panels.isOpen(id);
@@ -4219,13 +4274,18 @@
             ['.esp-flash-btn', 'bench:esptool'], ['.cancel-btn', 'bench:cancel'], ['.lib-btn', 'bench:libraries'],
         ];
         // The list, from the canvas ring: each row at this level is a piece the
-        // ring's Pieces cell reaches, and the step-out button is its Up; and the
-        // Bench's buttons, its verbs under Panels › Bench.
+        // ring's Pieces cell reaches, and the trail's crumb one level up is its Up;
+        // the View menu's items, Panels › View; and the Bench's buttons, its verbs
+        // under Panels › Bench.
         function annotateList(ring) {
             if (!ring) return;
             const pairs = [];
             for (const li of viewer.contentsEl.querySelectorAll('li[data-path]')) pairs.push([li, `select:${li.dataset.path}`]);
-            pairs.push([viewer.zoomOutBtn, 'zoom-out']);
+            const crumbs = viewer.breadcrumbEl.querySelectorAll('.crumb');
+            if (crumbs.length > 1) pairs.push([crumbs[crumbs.length - 2], 'zoom-out']);
+            pairs.push([viewer.snapToggle.closest('label'), 'view:snap']);
+            pairs.push([viewer.detailModeEl.closest('label'), `view:detail:${viewer.detailModeEl.value}`]);
+            pairs.push([viewer.overlayToggle.closest('label'), 'view:outlines']);
             const bench = document.querySelector(".panel[data-panel='bench']");
             if (bench) {
                 for (const [selector, action] of BENCH_VERBS) for (const el of bench.querySelectorAll(selector)) pairs.push([el, action]);

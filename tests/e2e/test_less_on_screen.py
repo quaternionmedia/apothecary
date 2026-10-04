@@ -383,3 +383,113 @@ def test_a_printers_machine_has_no_flashing(page: Page, start_server):
     page.evaluate("() => window.fractalViewer.rescanDevices()")
     page.evaluate("() => window.fractalViewer.openMachine('footpedal')")
     expect(_rail_machine(page).locator("#flash-card")).to_be_visible(timeout=10000)
+
+
+# --------------------------------------------------------------------------
+# One header row, and the View menu
+# --------------------------------------------------------------------------
+
+# Whether the header is one row: every one of its parts centred on one line, and the
+# bar no taller than one.
+ONE_ROW = """() => {
+    const bar = document.querySelector('.toolbar');
+    const mids = [...bar.children].map((el) => el.getBoundingClientRect())
+        .filter((r) => r.width > 0).map((r) => (r.top + r.bottom) / 2);
+    return { spread: Math.max(...mids) - Math.min(...mids), height: bar.offsetHeight };
+}"""
+
+
+def _canvas_ring(page: Page) -> None:
+    """The canvas ring, from the key, with nothing selected."""
+    page.evaluate(
+        "() => { document.activeElement && document.activeElement.blur(); "
+        "const v = window.fractalViewer; v.selectedName = null; v.renderSelectedPanel(); }"
+    )
+    page.keyboard.press("m")
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+
+
+@pytest.mark.e2e
+def test_the_header_is_one_row_at_1024_px(page: Page, bench: str):
+    """At 1024 px wide the header is one row, at the top of the site and deep in it: the
+    site's drop-down (choosing loads; Load is gone), the trail (Zoom Out is gone), ⚙ View,
+    the ring and the problems' count, and a short pill whose tooltip is the whole of it."""
+    page.set_viewport_size({"width": 1024, "height": 700})
+    _open(page, bench)
+    for gone in ("#load-btn", "#zoom-out-btn"):
+        expect(page.locator(gone)).to_have_count(0)
+    pill = page.locator(".toolbar .badge")
+    expect(pill).to_have_text("prototype")
+    expect(pill).to_have_attribute("title", "FRACTAL VIEWER — unratified prototype")
+    row = page.evaluate(ONE_ROW)
+    assert row["spread"] < 4 and row["height"] < 60, row
+
+    # Deep in the site the trail is longest; still one row, the level in view.
+    page.evaluate("() => window.fractalViewer.selectAtItsLevel('printer_1.frame_system.mainboard')")
+    expect(page.locator("#breadcrumb .crumb")).to_have_count(3)
+    row = page.evaluate(ONE_ROW)
+    assert row["spread"] < 4 and row["height"] < 60, row
+    trail, last = _rect(page, "#breadcrumb"), _rect(page, "#breadcrumb .crumb >> nth=-1")
+    assert last["r"] <= trail["r"] + 1 and last["l"] >= trail["l"] - 1, (trail, last)
+    # A crumb goes up to its level; Backspace goes up one.
+    page.locator("#breadcrumb .crumb").nth(1).click()
+    expect(page.locator("#breadcrumb .crumb")).to_have_count(2)
+    assert page.evaluate("() => window.fractalViewer.selectedName") == "printer_1.frame_system"
+    page.keyboard.press("Backspace")
+    expect(page.locator("#breadcrumb .crumb")).to_have_count(1)
+
+    # Choosing a site loads it.
+    page.locator("#site-select").select_option("parts_library")
+    expect(page.locator("#contents-list")).not_to_contain_text("workbench", timeout=15000)
+    expect(page.locator("#breadcrumb .crumb").first).not_to_have_text("garage")
+    page.locator("#site-select").select_option("garage")
+    expect(page.locator("#contents-list")).to_contain_text("workbench", timeout=15000)
+
+    # The View menu, opened, stays inside the page.
+    page.locator("#view-menu > summary").click()
+    body = _rect(page, "#view-menu .view-menu-body")
+    assert body["r"] <= 1024 and body["l"] >= 0, body
+
+
+@pytest.mark.e2e
+def test_the_view_menu_holds_snap_detail_and_outlines_and_the_ring_backs_each(
+    page: Page, bench: str
+):
+    """Snap to grid, Detail and Assembly outlines are in one ⚙ View menu, folded until
+    opened and folded away by a press elsewhere; each wears the address of its cell of
+    the canvas ring's Panels › View, and the cell does what the item does."""
+    _open(page, bench)
+    for item in ("#snap-toggle", "#detail-mode", "#overlay-toggle"):
+        expect(page.locator(item)).to_be_hidden()
+    page.locator("#view-menu > summary").click()
+    for item in ("#snap-toggle", "#detail-mode", "#overlay-toggle"):
+        expect(page.locator(item)).to_be_visible()
+    label = lambda item: page.locator(f"#view-menu label:has({item})")  # noqa: E731
+    expect(label("#snap-toggle")).to_have_attribute("data-address", "918", timeout=5000)
+    expect(label("#detail-mode")).to_have_attribute("data-address", "9168")
+    expect(label("#overlay-toggle")).to_have_attribute("data-address", "912")
+    page.locator("#snap-toggle").uncheck()
+    assert page.evaluate("() => window.fractalViewer.transformControls.translationSnap") is None
+    page.locator("#status").click()
+    expect(page.locator("#snap-toggle")).to_be_hidden()
+
+    # Panels › View › Snap to grid: the tick-box's own work, and the tick-box follows.
+    _canvas_ring(page)
+    for digit in "918":
+        page.keyboard.press(digit)
+    expect(page.locator("#status")).to_contain_text("⌗918")
+    assert page.evaluate("() => window.fractalViewer.transformControls.translationSnap") == 50
+    expect(page.locator("#snap-toggle")).to_be_checked()
+    # Panels › View › Detail › Dot, and › Outlines.
+    _canvas_ring(page)
+    for digit in "9162":
+        page.keyboard.press(digit)
+    expect(page.locator("#detail-mode")).to_have_value("dot")
+    page.wait_for_function(
+        "() => Object.values(window.fractalViewer.meshByName).some((m) => m.userData.isDot)"
+    )
+    _canvas_ring(page)
+    for digit in "912":
+        page.keyboard.press(digit)
+    expect(page.locator("#overlay-toggle")).not_to_be_checked()
+    assert page.evaluate("() => Object.keys(window.fractalViewer.compoundOverlayByKey).length") == 0

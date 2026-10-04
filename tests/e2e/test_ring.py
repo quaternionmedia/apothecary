@@ -494,7 +494,9 @@ def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: s
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     wedges = _wedges(page)
     assert wedges["8"] == "Pieces" and wedges["6"] == "Up"
-    expect(page.locator("#zoom-out-btn")).to_have_attribute("data-address", "6", timeout=5000)
+    # The trail's crumb one level up is Up, and wears its address.
+    up_crumb = page.locator("#breadcrumb .crumb").nth(-2)
+    expect(up_crumb).to_have_attribute("data-address", "6", timeout=5000)
     page.keyboard.press("6")
     assert _intents(page)[-1]["action"] == "zoom-out"
     expect(page.locator("#contents-list .contents-item", has_text="workbench")).to_be_visible(
@@ -686,7 +688,9 @@ def test_a_closed_panel_stays_closed_and_the_ring_reopens_it(page: Page, ring_ur
     page.keyboard.press(panels_cell)
     assert _title(page) == "Panels"
     inner = _wedges(page)
-    assert sorted(inner.values()) == ["Bench", "Machine", "Pictures", "Rail", "Selected", "Site"]
+    assert sorted(inner.values()) == [
+        "Bench", "Machine", "Pictures", "Rail", "Selected", "Site", "View",
+    ]  # fmt: skip
     site_cell = next(cell for cell, label in inner.items() if label == "Site")
     page.keyboard.press(site_cell)
     expect(page.locator("#ring-overlay")).to_have_count(0)
