@@ -1047,9 +1047,9 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
 
 def test_the_header_s_view_menu_is_a_group_of_the_canvas_ring_under_panels():
     """The header's ⚙ View menu is ring-backed: Snap to grid, Detail (Full, Black box,
-    Dot) and Outlines are cells of Panels › View, seated after the Bench so no address
-    learned under Panels moves, at the root and inside a piece alike (inside one, the
-    canvas ring's top already holds eight); the page carries them."""
+    Dot), Outlines and Select walls are cells of Panels › View, seated after the Bench
+    so no address learned under Panels moves, at the root and inside a piece alike
+    (inside one, the canvas ring's top already holds eight); the page carries them."""
     from apothecary.menu import carried_by
 
     for targets, panels_cell in (([], "9"), (["printer_1"], "3")):
@@ -1065,6 +1065,7 @@ def test_the_header_s_view_menu_is_a_group_of_the_canvas_ring_under_panels():
             ("Snap to grid", "view:snap", 8),
             ("Detail", None, 6),
             ("Outlines", "view:outlines", 2),
+            ("Select walls", "view:walls", 4),
         ]
         assert [(c.label, c.action) for c in view.children[1].children] == [
             ("Full", "view:detail:full"),
@@ -1073,8 +1074,9 @@ def test_the_header_s_view_menu_is_a_group_of_the_canvas_ring_under_panels():
         ]
         assert address_of(root, "view:snap") == f"{panels_cell}18"
         assert address_of(root, "view:detail:box") == f"{panels_cell}166"
+        assert address_of(root, "view:walls") == f"{panels_cell}14"
         assert address_of(root, "panel:bench") == f"{panels_cell}38"  # the Bench stays put
-    for action in ("view:snap", "view:detail:dot", "view:outlines"):
+    for action in ("view:snap", "view:detail:dot", "view:outlines", "view:walls"):
         assert carried_by(action).name == "VIEWER"
 
 

@@ -125,6 +125,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "site-select": (WIDGET, WHAT_YOU_SEE, "a drop-down of arrangements, loading the one chosen"),
     # The header's View menu (a fold, like Site's): how the world is drawn.
     "snap-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box for snapping to a grid"),
+    "walls-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box that lets a click in the world pick a wall"),
     "zoom-in-btn": (WIDGET, WHAT_YOU_SEE, "a button that goes into the chosen piece"),
     "status-select": (WIDGET, WHAT_IS_THERE, "a drop-down for the state of a piece"),
     "pos-x": (WIDGET, WHAT_IS_THERE, "a box for typing where a piece is, across"),
@@ -413,9 +414,11 @@ RING_BACKED: Dict[str, str] = {
     "snap-toggle": "view:snap",
     "detail-mode": "view:detail:full",
     "overlay-toggle": "view:outlines",
+    "walls-toggle": "view:walls",
     "snapToggle:change:setTranslationSnap": "view:snap",
     "detailModeEl:change:clear": "view:detail:full",
     "overlayToggle:change:renderFocus": "view:outlines",
+    "wallsToggle:change:setWallsSelectable": "view:walls",
     "reconnect": "device:reconnect",
     "reset": "device:reset",
     "release": "device:release",
@@ -502,6 +505,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     # controls of its own
     "siteSelect:change:loadSite": (WIDGET, WHAT_YOU_SEE, "choosing from the drop-down, which loads it"),
     "snapToggle:change:setTranslationSnap": (WIDGET, WHAT_YOU_SEE, "the snapping tick-box"),
+    "wallsToggle:change:setWallsSelectable": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "the tick-box that lets a click pick walls, for the session",
+    ),
     # The View menu folds away when a press lands anywhere else, as a menu does.
     "document:pointerdown:foldViewMenu": (
         WIDGET,

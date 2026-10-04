@@ -216,11 +216,18 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
 
 /* A board's badge on the anchors layer (anchors.js): ⚡ at the board's own spot
  * -- `point()`, the top of its node, inside the printer it drives -- and never
- * dimmed by the node it is inside. Keyed by `key`, the machine it stands for
- * (the printer a board inside drives, else the board's node); the page listens
- * to it. `selected()` opens its words. */
+ * dimmed by the node it is inside, nor by that node's marks (a group keyed as
+ * the node is). Keyed by `key`, the machine it stands for (the printer a board
+ * inside drives, else the board's node); the page listens to it. `selected()`
+ * opens its words. */
 export function makeBoardBadge(anchors, key, boardPath, { point, selected }) {
-    const inside = (mesh) => !!mesh.userData.key && (mesh.userData.key === boardPath || boardPath.startsWith(`${mesh.userData.key}.`));
+    const inside = (mesh) => {
+        for (let o = mesh; o; o = o.parent) {
+            const k = o.userData.key;
+            if (k && (k === boardPath || boardPath.startsWith(`${k}.`))) return true;
+        }
+        return false;
+    };
     const badge = anchors.badge(key, point, { selected, ignore: inside });
     badge.dataset.path = key;
     badge.dataset.board = boardPath;

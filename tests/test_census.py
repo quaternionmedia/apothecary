@@ -271,7 +271,16 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # fades after a few things done; one place is added, ? bringing it back
 # (window:keydown:onHintKey), a key, as Backspace is. No control was added and no
 # ring address moved.
-VIEWER_CEILING = 116
+#
+# Phase 2, walls. Before: 114 controls of its own, 62 ring-backed (54.4%), 77 places
+# the page listens. After: 115, 63 ring-backed (54.8%), 78 places. Walls are drawn
+# faded and a click in the world passes through them; the View menu's Walls
+# selectable (walls-toggle, and its listener wallsToggle:change:setWallsSelectable)
+# lets a click pick them again for the session, ring-backed by Panels › View ›
+# Select walls (914, appended after Outlines; nothing moved). For the phase as a
+# whole: 116 controls, 60 ring-backed (51.7%), 77 places before; 115, 63 ring-backed
+# (54.8%), 78 places after. The ceiling follows the count down by one.
+VIEWER_CEILING = 115
 
 
 def test_the_viewer_stays_under_its_ceiling():
@@ -733,8 +742,8 @@ def test_one_page_is_counted_and_the_retired_pages_left_nothing_behind():
 
 def test_the_header_is_one_row_with_its_view_menu_on_the_ring():
     """Load and Zoom Out are gone from the header, counted nowhere; Snap to grid,
-    Detail and Assembly outlines are in the View menu, each backed by a cell of the
-    canvas ring's Panels › View that the ring really produces."""
+    Detail, Assembly outlines and Walls selectable are in the View menu, each backed
+    by a cell of the canvas ring's Panels › View that the ring really produces."""
     from apothecary.menu import Context, Pointing, resolve
 
     taken = census.take()
@@ -757,6 +766,7 @@ def test_the_header_is_one_row_with_its_view_menu_on_the_ring():
         ("snap-toggle", "view:snap"),
         ("detail-mode", "view:detail:full"),
         ("overlay-toggle", "view:outlines"),
+        ("walls-toggle", "view:walls"),
     ):
         assert by_name[name].ring_action == action and action in produced, name
     assert "view-menu" in census.VIEWER.read_text(encoding="utf-8")

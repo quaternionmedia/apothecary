@@ -503,6 +503,9 @@
                     <label class="toolbar-toggle" title="Outline each compound node's full assembly extent, so a subassembly reads as one thing even when its parts are drawn separately">
                         <input type="checkbox" id="overlay-toggle" checked> Assembly outlines
                     </label>
+                    <label class="toolbar-toggle" title="Walls are drawn faded and a click in the world passes through them to what is behind or inside; ticked, a click picks a wall again, until the page is left. A wall's row in Site selects it either way">
+                        <input type="checkbox" id="walls-toggle"> Walls selectable
+                    </label>
                 </div>
             </details>
             <button type="button" id="ring-open" title="Open the ring for the chosen piece (m, or right-click a piece). Digits choose cells as on a numeric keypad; 5 backs out.">⌗ Ring</button>
@@ -665,6 +668,10 @@
         const WAVE_CONCURRENCY = 3;    // real-geometry loads in flight at once
         const WHEEL_RESISTANCE_THRESHOLD = 500;
         const SNAP_INCREMENT = 50;    // mm -- matches WALL_THICKNESS; fine enough for by-hand placement
+        // Walls -- the pieces of this category -- are drawn this opaque, and a click
+        // in the world passes through them, unless the View menu says otherwise.
+        const WALL_CATEGORY = 'wall';
+        const WALL_OPACITY = 0.25;
         const HANDLE_SIZE = 0.6;      // the move arrows, against TransformControls' own 1
         const HANDLE_LIGHTNESS = 0.55; // and their opacity, against its own
         // The site's floor: a selection but not a node. Its key in the page; "" in every
@@ -840,6 +847,8 @@
                 this.siteSelect = document.getElementById('site-select');
                 this.viewMenuEl = document.getElementById('view-menu');
                 this.snapToggle = document.getElementById('snap-toggle');
+                this.wallsToggle = document.getElementById('walls-toggle');
+                this.wallsSelectable = false;  // for the page's session: never remembered
                 this.detailModeEl = document.getElementById('detail-mode');
                 this.overlayToggle = document.getElementById('overlay-toggle');
                 this.breadcrumbEl = document.getElementById('breadcrumb');
@@ -1122,6 +1131,7 @@
                 this.snapToggle.addEventListener('change', () => {
                     this.transformControls.setTranslationSnap(this.snapToggle.checked ? SNAP_INCREMENT : null);
                 });
+                this.wallsToggle.addEventListener('change', () => this.setWallsSelectable(this.wallsToggle.checked));
                 // Changing the global default drops every per-node override:
                 // otherwise picking "Dot" would silently leave whichever nodes
                 // you had already set to Full still rendering full, and the
@@ -1659,6 +1669,34 @@
                 if (mesh.userData.isDot && mesh.material.emissive) {
                     mesh.material.emissive.set(isSelected ? SELECTED_EDGE_COLOR : 0x000000);
                 }
+                // A wall is drawn faded, and solid again while it is the selection.
+                this.fadeMesh(mesh, this.isWall(node) && !isSelected);
+            }
+
+            isWall(node) { return !!node && node.category === WALL_CATEGORY; }
+
+            // Faded: seen through, hiding nothing behind it (its depth unwritten) and
+            // dimming no badge (anchors.js reads passThrough). Solid: as it was built,
+            // which each part (the mesh, its edges) keeps the first time it is faded.
+            fadeMesh(mesh, faded) {
+                for (const part of [mesh, mesh.getObjectByName('edges')]) {
+                    if (!part || !part.material) continue;
+                    const m = part.material;
+                    if (!part.userData.solid) part.userData.solid = { opacity: m.opacity, transparent: m.transparent, depthWrite: m.depthWrite };
+                    const solid = part.userData.solid, was = m.transparent;
+                    m.opacity = faded ? Math.min(solid.opacity, WALL_OPACITY) : solid.opacity;
+                    m.transparent = faded || solid.transparent;
+                    m.depthWrite = faded ? false : solid.depthWrite;
+                    if (m.transparent !== was) m.needsUpdate = true;
+                }
+                mesh.userData.passThrough = faded;
+            }
+
+            // ⚙ View › Walls selectable: whether a click in the world picks a wall,
+            // for the page's session (a wall's row in Site selects it either way).
+            setWallsSelectable(on) {
+                this.wallsSelectable = !!on;
+                this.setStatus(on ? 'A click in the world picks walls, until the page is left' : 'A click in the world passes through walls', 'success');
             }
 
             // A wireframe-only box showing the usable print area within a
@@ -1828,6 +1866,7 @@
                 const flip = (box) => { box.checked = !box.checked; box.dispatchEvent(new Event('change')); return box.checked; };
                 if (verb === 'snap') return flip(this.snapToggle) ? 'Snapping to the grid' : 'Not snapping to the grid';
                 if (verb === 'outlines') return flip(this.overlayToggle) ? 'Assembly outlines shown' : 'Assembly outlines hidden';
+                if (verb === 'walls') return flip(this.wallsToggle) ? 'A click in the world picks walls' : 'A click in the world passes through walls';
                 if (verb.startsWith('detail:') && DETAIL_LABELS[verb.slice('detail:'.length)]) {
                     this.detailModeEl.value = verb.slice('detail:'.length);
                     this.detailModeEl.dispatchEvent(new Event('change'));
@@ -3415,6 +3454,7 @@
                     // The world already draws each printer's build volume (updateBuildVolumeIndicator).
                     const marks = makeMachineMarks(where.printer, { drawVolume: false });
                     marks.group.position.copy(marksToScene(where.printer.position));
+                    marks.group.userData.key = path;  // the printer's: they never dim its board's badge
                     this.scene.add(marks.group);
                     const first = this.bindings[row.path] && this.bindings[row.path].printer_status;
                     if (first && first.position) marks.setPosition(first.position, { immediate: true });
@@ -3712,14 +3752,18 @@
 
             // The nodes' meshes and the pictures' pick meshes (a mat, an outline)
             // in one depth-sorted cast: the nearest wins, so a printer standing
-            // over an outline is still the printer. Answers { key } for a node,
-            // { pick: { host, view, index } } for a picture's mark, or null.
+            // over an outline is still the printer. A wall is passed through, to
+            // what is behind or inside it, unless the View menu makes walls
+            // selectable. Answers { key } for a node, { pick: { host, view, index } }
+            // for a picture's mark, or null. Every click, drop and right-click in
+            // the world asks here.
             raycastPick(event) {
                 const rect = this.canvas.getBoundingClientRect();
                 this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
                 this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
                 this.raycaster.setFromCamera(this.pointer, this.camera);
-                const intersects = this.raycaster.intersectObjects([...Object.values(this.meshByName), ...this.pictureMarks.pickables()], false);
+                const intersects = this.raycaster.intersectObjects([...Object.values(this.meshByName), ...this.pictureMarks.pickables()], false)
+                    .filter((hit) => this.wallsSelectable || !this.isWall(this.renderNodeByKey[hit.object.userData.key]));
                 if (!intersects.length) return null;
                 const hit = intersects[0].object;
                 const pick = this.pictureMarks.picked(hit);
@@ -4339,6 +4383,7 @@
             pairs.push([viewer.snapToggle.closest('label'), 'view:snap']);
             pairs.push([viewer.detailModeEl.closest('label'), `view:detail:${viewer.detailModeEl.value}`]);
             pairs.push([viewer.overlayToggle.closest('label'), 'view:outlines']);
+            pairs.push([viewer.wallsToggle.closest('label'), 'view:walls']);
             const bench = document.querySelector(".panel[data-panel='bench']");
             if (bench) {
                 for (const [selector, action] of BENCH_VERBS) for (const el of bench.querySelectorAll(selector)) pairs.push([el, action]);

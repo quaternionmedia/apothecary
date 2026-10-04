@@ -595,8 +595,10 @@ def _view() -> Option:
     """View, under Panels: the header's ⚙ View menu, each of its items a cell.
 
     Snap to grid snaps a dragged piece to the grid; Detail draws every subassembly
-    in full, as a black box or as a dot; Outlines draws each subassembly's extent.
-    Snap and Outlines each turn what they name the other way, as their tick-boxes
+    in full, as a black box or as a dot; Outlines draws each subassembly's extent;
+    Select walls (the menu's "Walls selectable") lets a click in the world pick a
+    wall, which it otherwise passes through, for the page's session. Snap, Outlines
+    and Select walls each turn what they name the other way, as their tick-boxes
     do, and the status line says which way it went; the ring is not told how they
     stand.
     """
@@ -615,6 +617,7 @@ def _view() -> Option:
                 ],
             ),
             Option(id="view:outlines", label="Outlines", action="view:outlines"),
+            Option(id="view:walls", label="Select walls", action="view:walls"),
         ],
     )
 
@@ -1263,7 +1266,8 @@ CARRIED_BY: Dict[str, Carries] = {
     "print": Carries.VIEWER,
     # Opening, closing, floating what stands in front of the world (panels.js).
     "panel": Carries.VIEWER,
-    # How the world is drawn: the header's View menu (snapping, detail, outlines).
+    # How the world is drawn: the header's View menu (snapping, detail, outlines,
+    # whether a click picks a wall).
     "view": Carries.VIEWER,
     # The Bench's verbs: its buttons, each acting on what the Bench has chosen.
     # The tasks they start are the firmware routes' (POST /firmware/install,

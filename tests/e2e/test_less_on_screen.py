@@ -588,3 +588,81 @@ def test_the_hint_shows_and_fades_with_no_storage(page: Page, bench: str):
         _select(page, path)
     expect(hint).to_have_class(re.compile(r"\bfaded\b"))
     assert errors == []
+
+
+# --------------------------------------------------------------------------
+# Walls
+# --------------------------------------------------------------------------
+
+# A point of the world, in page pixels, where the first mesh a ray from the camera
+# meets is the garage's wall and another piece stands behind or inside it: found by
+# casting through a grid of points, as a click there would, walls included.
+THROUGH_THE_WALL = """() => {
+    const v = window.fractalViewer;
+    const rect = v.canvas.getBoundingClientRect();
+    const meshes = Object.values(v.meshByName);
+    for (let gy = 0.15; gy < 0.95; gy += 0.025) {
+        for (let gx = 0.05; gx < 0.95; gx += 0.025) {
+            v.pointer.set(gx * 2 - 1, -(gy * 2 - 1));
+            v.raycaster.setFromCamera(v.pointer, v.camera);
+            const hits = v.raycaster.intersectObjects(meshes, false).map((h) => h.object.userData.key);
+            if (hits[0] !== 'garage_building') continue;
+            const behind = hits.find((k) => k !== 'garage_building' && !k.startsWith('garage_building.'));
+            if (behind) return { x: rect.left + gx * rect.width, y: rect.top + gy * rect.height, behind };
+        }
+    }
+    return null;
+}"""
+
+WALL = """() => {
+    const m = window.fractalViewer.meshByName['garage_building'];
+    return { opacity: m.material.opacity, through: !!m.userData.passThrough };
+}"""
+
+
+@pytest.mark.e2e
+def test_a_click_passes_through_a_wall_and_the_toggle_restores_it(page: Page, bench: str):
+    """The garage's walls are drawn faded, and a click on them in the world selects what
+    is behind or inside; Contents still selects a wall, drawn solid then and with its
+    handles; ⚙ View › Walls selectable -- or Panels › View › Select walls on the ring --
+    lets a click pick it again."""
+    _open(page, bench)
+    wall = page.evaluate(WALL)
+    assert wall["opacity"] == pytest.approx(0.25, abs=0.01) and wall["through"], wall
+    spot = page.evaluate(THROUGH_THE_WALL)
+    assert spot, "no point of the world where a wall stands in front of a piece"
+    page.mouse.click(spot["x"], spot["y"])
+    assert page.evaluate("() => window.fractalViewer.selectedName") == spot["behind"]
+
+    _select(page, "garage_building")
+    wall = page.evaluate(WALL)
+    assert wall["opacity"] > 0.5 and not wall["through"], wall
+    assert page.evaluate(HANDLES)["on"] == "garage_building"
+    page.mouse.click(spot["x"], spot["y"])  # still passes through, solid or not
+    assert page.evaluate("() => window.fractalViewer.selectedName") == spot["behind"]
+    assert page.evaluate(WALL)["opacity"] == pytest.approx(0.25, abs=0.01)
+
+    page.locator("#view-menu > summary").click()
+    page.locator("#walls-toggle").check()
+    page.locator("#status").click()
+    page.mouse.click(spot["x"], spot["y"])
+    assert page.evaluate("() => window.fractalViewer.selectedName") == "garage_building"
+
+    # The ring's cell turns it back off: the click passes through again.
+    _canvas_ring(page)
+    for digit in "914":
+        page.keyboard.press(digit)
+    expect(page.locator("#status")).to_contain_text("⌗914")
+    expect(page.locator("#walls-toggle")).not_to_be_checked()
+    page.mouse.click(spot["x"], spot["y"])
+    assert page.evaluate("() => window.fractalViewer.selectedName") == spot["behind"]
+
+
+@pytest.mark.e2e
+def test_a_faded_wall_does_not_dim_the_badges_inside(page: Page, bench: str):
+    """Seen through the garage's faded wall, the badges inside are not dimmed as being
+    behind something."""
+    _open(page, bench)
+    page.evaluate(FRAMES, OCCLUSION_TESTED)
+    for badge in (BOARD_BADGE, PLACE_BADGE, FOOTPEDAL_BADGE):
+        expect(page.locator(badge)).not_to_have_class(re.compile(r"\bbehind\b"))
