@@ -12,10 +12,11 @@ Apothecary builds 3D-printable things from Python and keeps the parts it has bui
 - **A viewer.** A local FastAPI server and a three.js viewer that zooms through sites,
   assemblies and parts at any depth.
 - **Boards and printers.** Sketches kept with their parts are compiled and uploaded to
-  Arduinos and ESP32s; a Marlin printer is monitored, and drives its node in the viewer.
-  Each board pinned in the viewer has one Machine -- its state, its one log, its
-  controls -- opened from its badge, polled once whatever shows it. A print is a job,
-  kept with the part it makes and listed in the printer's site.
+  Arduinos and ESP32s, from the command line or the viewer's Bench; a Marlin printer is
+  monitored, and drives its node in the viewer. Each board pinned in the viewer has one
+  Machine -- its state, its one log, its controls, a devkit's flashing -- opened from its
+  badge, polled once whatever shows it. A print is a job, kept with the part it makes
+  and listed in the printer's site.
 - **Photographs into pieces.** A picture becomes named, placed pieces you can build.
 - **It stays on this machine.** The server answers this machine only, and the process
   connects nowhere else but to fetch its tools, the firmware toolchain and OpenSCAD

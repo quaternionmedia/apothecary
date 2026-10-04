@@ -23,6 +23,7 @@
 .bench-ui .upload-btn, .bench-ui .esp-flash-btn { border-color: #7a5a1a; }
 .bench-ui ul { list-style: none; margin: 0; padding: 0; }
 .bench-ui li { display: flex; align-items: center; gap: 0.35rem; padding: 0.15rem 0.2rem; border-radius: 3px; }
+.bench-ui .tc-cores .meta { white-space: nowrap; }
 .bench-ui .task-history li[data-id] { cursor: pointer; }
 .bench-ui .task-history li[data-id]:hover { background: #262d26; }
 .bench-ui .task-title { font-size: 0.78rem; }

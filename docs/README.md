@@ -33,7 +33,7 @@ HTTP API is described at `/openapi.json`, the commands by `apothecary --help`.
 | [Fitting a part](fitting-a-part.md) | Which numbers belong to a consumer and which to this repository, and who owns each open problem |
 | [Geometry models](models.md) | Vectors, bounds, colors, shapes and units |
 | [Geometry made elsewhere](geometry-from-elsewhere.md) | An STL or OBJ as a part (`apothecary parts import`), and a part described by a sidecar |
-| [Firmware](firmware.md) | Programming boards from sketches kept with their parts; monitoring a G-code printer from its scene node |
+| [Firmware](firmware.md) | Programming boards from sketches kept with their parts, from the Bench or a board's Machine; monitoring a G-code printer from its scene node |
 
 ## Plans and records
 
@@ -56,4 +56,4 @@ background.
 | Page | |
 |---|---|
 | Fractal zoom viewer | [`generated/fractal-viewer/fractal-viewer.md`](generated/fractal-viewer/fractal-viewer.md) |
-| Printer monitor | [`generated/printer-monitor/printer-monitor.md`](generated/printer-monitor/printer-monitor.md) |
+| Boards and printers: a board's Machine, the Bench | [`generated/printer-monitor/printer-monitor.md`](generated/printer-monitor/printer-monitor.md) |

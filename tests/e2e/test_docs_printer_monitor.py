@@ -226,12 +226,26 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
         " return m && m.marks && m.marks.mesh(); }",
         timeout=10000,
     )
-    page.wait_for_timeout(600)
+    # The Machine docked into the rail's strip, and the world zoomed into the printer, so
+    # its bed is in view.
+    page.evaluate("() => window.apothecaryPanels.dock('machine')")
+    page.evaluate("() => window.fractalViewer.zoomIn('printer_1')")
+    expect(page.locator("#contents-list .contents-item", has_text="gantry_system")).to_be_visible(
+        timeout=10000
+    )
+    page.wait_for_timeout(2500)
     docs.step(
         "The reading is drawn in the world too: the printer's marks lay the mesh over its "
         "bed as a relief, stretched so the tilt can be seen and coloured as the heatmap is. "
-        "It follows whichever reading the card shows"
+        "It follows whichever reading the card shows. Here the Machine is docked, a tab of "
+        "the rail's strip, and the world is zoomed into the printer"
     )
+    page.evaluate("() => window.fractalViewer.jumpTo(0)")
+    expect(page.locator("#contents-list .contents-item", has_text="workbench")).to_be_visible(
+        timeout=10000
+    )
+    page.evaluate("() => window.fractalViewer.openMachine('printer_1')")
+    expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
 
     page.locator("#control button[data-cmd='M25']").click()  # the card's print gives way
     expect(page.locator("#c-state")).to_contain_text("idle", timeout=8000)
