@@ -426,7 +426,7 @@ export function mountPictures({ base = "", marks, world, log }) {
             case "camera:live": await goLive(host); return true;
             case "camera:still": if (still()) say(`${where(host)}: still again`); return true;
             case "camera:take-picture": await takePicture(host); return true;
-            case "camera:gather": return false;  // the camera panel's report, until gathering leaves core
+            case "camera:gather": return false;  // Pictures' gathering section, until gathering leaves core
             case "picture:add": pickFiles(host); say(`choose pictures to pin at ${where(host)}`); return true;
             case "picture:pin": world.stepOut(); await pinPicture(host, arg); return true;
             case "picture:find": await findShapes(host, arg); return true;
@@ -441,7 +441,8 @@ export function mountPictures({ base = "", marks, world, log }) {
             case "picture:unpin": await unpinView(host); return true;
             case "picture:forget": await forget(host); return true;
             case "picture:purge": await purge(); return true;
-            case "picture:kept": world.openPanel("kept"); say("the other kept pictures are in Kept"); return true;
+            // Folder's eighth leaf: every picture is a row of Pictures, each with Pin here.
+            case "picture:more": world.openPanel("pictures"); say(`every picture is in Pictures: Pin here pins one at ${where(host)} as a view`); return true;
             case "picture:views": world.openPanel("selected"); say("every view here is a row in Selected: click one to draw it"); return true;
             default: return false;
         }

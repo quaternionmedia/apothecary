@@ -506,28 +506,30 @@ def _world_is(page: Page, width: float):
 
 @pytest.mark.e2e
 def test_a_panel_closes_to_a_tab_and_collapses(page: Page, ring_url: str):
-    """The side column is a rail of panels, and the world keeps at least half the window.
-    A closed panel leaves a tab that brings it back; a collapsed one keeps its title."""
+    """The side column is two rails of panels -- Site on the left, the rest on the
+    right -- and the world keeps at least half the window. A closed panel leaves a tab
+    that brings it back; a collapsed one keeps its title."""
     rail, world = _open_panels(page, ring_url)
     ids = page.evaluate("() => window.apothecaryPanels.list().map((p) => p.id)")
-    assert ids == ["contents", "selected", "jobs", "validation", "scad", "kept", "camera"]
-    assert page.evaluate("() => window.apothecaryPanels.state('kept').open") is False
-    assert page.evaluate("() => window.apothecaryPanels.state('camera').open") is False
-    expect(rail.locator(".panel[data-panel='contents']")).to_be_visible()
+    assert ids == ["site", "selected", "jobs", "pictures"]
+    assert page.evaluate("() => window.apothecaryPanels.state('pictures').open") is False
+    left = page.locator(".panel-rail-left")
+    expect(left.locator(".panel[data-panel='site']")).to_be_visible()
+    expect(rail.locator(".panel[data-panel='selected']")).to_be_visible()
     assert world.bounding_box()["width"] >= page.viewport_size["width"] / 2
 
     # Close: gone from the rail, a tab remains; the tab brings it back.
-    page.locator(".panel[data-panel='validation'] .panel-close").click()
-    expect(page.locator(".panel-tab[data-panel='validation']")).to_be_visible(timeout=1000)
-    expect(rail.locator(".panel[data-panel='validation']")).to_have_count(0)
-    page.locator(".panel-tab[data-panel='validation']").click()
-    expect(rail.locator(".panel[data-panel='validation']")).to_be_visible(timeout=1000)
-    expect(page.locator(".panel-tab")).to_have_count(2)  # Kept's and Gather's, closed by default
+    page.locator(".panel[data-panel='jobs'] .panel-close").click()
+    expect(page.locator(".panel-tab[data-panel='jobs']")).to_be_visible(timeout=1000)
+    expect(rail.locator(".panel[data-panel='jobs']")).to_have_count(0)
+    page.locator(".panel-tab[data-panel='jobs']").click()
+    expect(rail.locator(".panel[data-panel='jobs']")).to_be_visible(timeout=1000)
+    expect(page.locator(".panel-tab")).to_have_count(1)  # Pictures', closed by default
 
     # Collapse: the body folds, the title stays.
-    page.locator(".panel[data-panel='contents'] .panel-collapse").click()
+    page.locator(".panel[data-panel='site'] .panel-collapse").click()
     expect(page.locator("#contents-list")).to_be_hidden(timeout=1000)
-    page.locator(".panel[data-panel='contents'] .panel-collapse").click()
+    page.locator(".panel[data-panel='site'] .panel-collapse").click()
     expect(page.locator("#contents-list")).to_be_visible(timeout=1000)
 
 
@@ -566,13 +568,12 @@ def test_a_closed_panel_stays_closed_and_the_ring_reopens_it(page: Page, ring_ur
     """What was done survives a reload; the ring's Panels cell reaches a panel by address;
     with every panel closed the world has the whole width."""
     rail, world = _open_panels(page, ring_url)
-    page.locator(".panel[data-panel='scad'] .panel-close").click()
+    page.locator(".panel[data-panel='site'] .panel-close").click()
     page.reload()
-    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
-    expect(page.locator(".panel-tab[data-panel='scad']")).to_be_visible(timeout=2000)
-    assert page.evaluate("() => window.apothecaryPanels.state('scad').open") is False
+    expect(page.locator(".panel-tab[data-panel='site']")).to_be_visible(timeout=15000)
+    assert page.evaluate("() => window.apothecaryPanels.state('site').open") is False
 
-    # From the ring: Panels › OpenSCAD reopens it by address.
+    # From the ring: Panels › Site reopens it by address, in its rail.
     page.locator("#viewer-canvas").click(button="right", position={"x": 30, "y": 30})
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     wedges = _wedges(page)
@@ -580,39 +581,40 @@ def test_a_closed_panel_stays_closed_and_the_ring_reopens_it(page: Page, ring_ur
     page.keyboard.press(panels_cell)
     assert _title(page) == "Panels"
     inner = _wedges(page)
-    scad_cell = next(cell for cell, label in inner.items() if label == "OpenSCAD")
-    page.keyboard.press(scad_cell)
+    assert sorted(inner.values()) == ["Jobs", "Machine", "Pictures", "Rail", "Selected", "Site"]
+    site_cell = next(cell for cell, label in inner.items() if label == "Site")
+    page.keyboard.press(site_cell)
     expect(page.locator("#ring-overlay")).to_have_count(0)
-    expect(rail.locator(".panel[data-panel='scad']")).to_be_visible(timeout=2000)
-    expect(page.locator(".panel-tab")).to_have_count(2)  # Kept's and Gather's, closed by default
+    left = page.locator(".panel-rail-left")
+    expect(left.locator(".panel[data-panel='site']")).to_be_visible(timeout=2000)
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    expect(page.locator(".panel-tab")).to_have_count(1)  # Pictures', closed by default
 
-    # Panels › Pictures holds Kept and the gathering; Kept opens from there.
+    # Panels › Pictures opens Pictures.
     page.locator("#viewer-canvas").click(button="right", position={"x": 30, "y": 30})
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press(panels_cell)
     expect(page.locator("#ring-overlay .title")).to_have_text("Panels")
     pictures_cell = next(cell for cell, label in _wedges(page).items() if label == "Pictures")
     page.keyboard.press(pictures_cell)
-    expect(page.locator("#ring-overlay .title")).to_have_text("Pictures")
-    assert sorted(_wedges(page).values()) == ["Gather", "Kept"]
-    kept_cell = next(cell for cell, label in _wedges(page).items() if label == "Kept")
-    page.keyboard.press(kept_cell)
-    expect(rail.locator(".panel[data-panel='kept']")).to_be_visible(timeout=2000)
-    expect(page.locator(".panel-tab")).to_have_count(1)  # Gather's
+    expect(rail.locator(".panel[data-panel='pictures']")).to_be_visible(timeout=2000)
+    expect(page.locator(".panel-tab")).to_have_count(0)
 
-    # Every panel closed: the world has the whole width, and seven tabs wait.
-    for pid in ["contents", "selected", "jobs", "validation", "scad", "kept"]:
+    # Every panel closed: the world has the whole width, and four tabs wait.
+    for pid in ["site", "selected", "jobs", "pictures"]:
         page.evaluate("(id) => window.apothecaryPanels.close(id)", pid)
-    expect(page.locator(".panel-tab")).to_have_count(7, timeout=2000)
+    expect(page.locator(".panel-tab")).to_have_count(4, timeout=2000)
     _world_is(page, page.viewport_size["width"])
 
 
 @pytest.mark.e2e
 def test_the_rail_hides_resizes_and_changes_sides(page: Page, ring_url: str):
-    """The tilde hides and shows the rail (a tab stands in meanwhile), its edge drags to
-    a width of at most half the page, and its grip drags it to the other side -- all of
-    it remembered; the ring's Panels > Rail hides it too."""
+    """The tilde hides and shows the right rail (a tab stands in meanwhile); its edge
+    drags wider, the left rail giving way, and the two together never take more than
+    half the page; its grip drags it to the other side -- all of it remembered; the
+    ring's Panels > Rail hides it too."""
     rail, world = _open_panels(page, ring_url)
+    left = page.locator(".panel-rail-left")
     full = page.viewport_size["width"]
     page.locator("#job-name").focus()
     page.keyboard.press("`")  # typing a tilde into a box is typing, not a toggle
@@ -622,7 +624,8 @@ def test_the_rail_hides_resizes_and_changes_sides(page: Page, ring_url: str):
     page.keyboard.press("`")
     expect(rail).to_be_hidden(timeout=1000)
     expect(page.locator(".panel-tab-rail[data-rail='right']")).to_be_visible()
-    _world_is(page, full)
+    expect(left).to_be_visible()  # Site's rail stays
+    _world_is(page, full - page.evaluate("() => window.apothecaryPanels.railWidth('left')"))
     page.keyboard.press("`")
     expect(rail).to_be_visible(timeout=1000)
 
@@ -630,30 +633,40 @@ def test_the_rail_hides_resizes_and_changes_sides(page: Page, ring_url: str):
     edge = rail.locator(".panel-rail-resizer").bounding_box()
     page.mouse.move(edge["x"] + 3, edge["y"] + 200)
     page.mouse.down()
-    page.mouse.move(edge["x"] + 3 - 150, edge["y"] + 200, steps=6)
+    page.mouse.move(edge["x"] + 3 - 80, edge["y"] + 200, steps=6)
     page.mouse.up()
     wider = page.evaluate("() => window.apothecaryPanels.railWidth('right')")
-    assert wider == pytest.approx(before + 150, abs=3)
-    page.mouse.move(edge["x"] + 3 - 150, edge["y"] + 200)
+    assert wider == pytest.approx(before + 80, abs=3)
+    widths = page.evaluate(
+        "() => ['left', 'right'].map((s) => window.apothecaryPanels.railWidth(s))"
+    )
+    assert sum(widths) <= full / 2 + 2  # the left rail gave way
+    page.mouse.move(edge["x"] + 3 - 80, edge["y"] + 200)
     page.mouse.down()
     page.mouse.move(-2000, edge["y"] + 200, steps=6)  # far past the limit
     page.mouse.up()
-    assert page.evaluate("() => window.apothecaryPanels.railWidth('right')") <= full / 2 + 1
+    widths = page.evaluate(
+        "() => ['left', 'right'].map((s) => window.apothecaryPanels.railWidth(s))"
+    )
+    assert widths[1] <= full / 2 + 1 and sum(widths) <= full / 2 + 2
     assert world.bounding_box()["width"] >= full / 2 - 2
 
+    # The right rail's grip, dragged across: its panels join Site on the left.
     grip = rail.locator(".panel-rail-grip").bounding_box()
     page.mouse.move(grip["x"] + 5, grip["y"] + 5)
     page.mouse.down()
     page.mouse.move(100, grip["y"] + 5, steps=8)
     page.mouse.up()
-    left = page.locator(".panel-rail-left")
-    expect(left.locator(".panel[data-panel='contents']")).to_be_visible(timeout=1000)
+    expect(left.locator(".panel[data-panel='selected']")).to_be_visible(timeout=1000)
+    expect(left.locator(".panel[data-panel='site']")).to_be_visible()
     expect(rail).to_be_hidden()
     page.reload()
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
-    expect(left.locator(".panel[data-panel='contents']")).to_be_visible(timeout=2000)
+    expect(left.locator(".panel[data-panel='selected']")).to_be_visible(timeout=2000)
     left.locator(".panel-rail-swap").click()
-    expect(rail.locator(".panel[data-panel='contents']")).to_be_visible(timeout=1000)
+    expect(rail.locator(".panel[data-panel='site']")).to_be_visible(timeout=1000)
+    expect(rail.locator(".panel[data-panel='selected']")).to_be_visible()
+    expect(left).to_be_hidden()
 
     # From the ring: Panels > Rail hides it too.
     page.locator("#viewer-canvas").click(button="right", position={"x": 30, "y": 30})

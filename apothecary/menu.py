@@ -546,25 +546,22 @@ def _bucket(names: Sequence[str]) -> List[Tuple[str, List[str]]]:
 # (cardinals first): what stands in front of the world, each a cell away.
 # The page registers exactly these; a test holds the two lists to each other.
 PANELS: Sequence[Tuple[str, str]] = (
-    ("contents", "Contents"),
+    # Site: the site's Contents tree, its problems at the top, its generated
+    # SCAD and every site's pins (Pinned), each taken back from its row.
+    ("site", "Site"),
     ("selected", "Selected"),
     ("jobs", "Jobs"),
-    ("validation", "Validation"),
-    ("scad", "OpenSCAD"),
-    # Registered by the page's script rather than marked in its markup: Kept
-    # (every pin and kept picture, each taken back from its row) and what is
-    # left of the camera panel, the gathering, at start; the machine and its
-    # comms log when a printer is opened. Each pair shares one cell, since a
-    # ring holds eight.
-    ("kept", "Kept"),
-    ("camera", "Gather"),
+    # Registered by the page's script rather than marked in its markup: Pictures
+    # (every picture under the picture root, each pinned here or forgotten, and
+    # the gathering) at start; the machine and its comms log when a printer is
+    # opened. That pair shares one cell.
+    ("pictures", "Pictures"),
     ("machine", "Machine"),
     ("log", "Comms log"),
 )
 # The cells that hold two panels each, in the order they are seated after the
 # plain ones: (id, label, the panels behind it).
 PANEL_GROUPS: Sequence[Tuple[str, str, Tuple[str, ...]]] = (
-    ("panel:pictures-group", "Pictures", ("kept", "camera")),
     ("panel:machine-group", "Machine", ("machine", "log")),
 )
 GROUPED_PANELS = tuple(pid for _, _, pids in PANEL_GROUPS for pid in pids)
@@ -699,7 +696,8 @@ def _camera_group(picture: PictureContext, floor: bool) -> Option:
 
 def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
     """Picture at a host or the floor: Add (a host's; the floor's is Pictures ›
-    Add), Folder › the newest pictures, and with
+    Add), Folder › the seven newest pictures and, when there are more, the one
+    chosen or More (the Pictures panel, where every picture is), and with
     a view drawn here, Views › the newest views, Make › Make all and each found
     shape (once its shapes are found and it has a width), Size, Unpin, Forget for
     a picture the browser kept, and Find shapes last: the step after a pin, with
@@ -721,7 +719,7 @@ def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
             if chosen and chosen not in pictures[:NEWEST]:
                 leaves.append((f"picture:pin:{chosen}{tail}", _stem(chosen)))
             else:
-                leaves.append((f"picture:kept{tail}", "More"))
+                leaves.append((f"picture:more{tail}", "More"))
         options.append(
             Option(
                 id=f"picture:folder{tail}",
@@ -1139,7 +1137,7 @@ CARRIED_BY: Dict[str, Carries] = {
     "fit": Carries.VIEWER,
     "zoom-in": Carries.VIEWER,
     "zoom-out": Carries.VIEWER,
-    # Choosing a piece from the ring is what a click on the Contents list is.
+    # Choosing a piece from the ring is what a click on a row of Site's tree is.
     "select": Carries.VIEWER,
     "explain": Carries.VIEWER,
     # Taking hold of a piece happens under a finger. The commit that follows it

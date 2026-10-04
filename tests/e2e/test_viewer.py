@@ -47,9 +47,10 @@ def test_viewer_has_canvas(page: Page, base_url: str):
 
 @pytest.mark.e2e
 def test_viewer_has_code_panel(page: Page, base_url: str):
-    """Test that the Generated OpenSCAD code panel exists."""
+    """The site's generated OpenSCAD is Site's SCAD section, shown when unfolded."""
     page.goto(f"{base_url}/viewer/sites/garage")
 
+    page.locator(".panel[data-panel='site'] #site-scad summary").click()
     code_content = page.locator("#code-content")
     expect(code_content).to_be_visible()
 

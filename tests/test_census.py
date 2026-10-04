@@ -90,6 +90,34 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # view already searched), Find moved from before Unpin to the last cell, and
 # Unpin and Forget each moved one cell earlier in the seating order (at a host:
 # Unpin 3 to 9, Forget 1 to 3; at the floor: Unpin 9 to 4, Forget 3 to 9).
+#
+# Consolidation Phase 2, the Site and Pictures panels. Before: 128 controls of
+# its own, 58 ring-backed (45.3%), 76 places the page listens. After: 128, 58
+# ring-backed (45.3%), 82 places. Gone with Kept and the Gather panel: Kept's
+# refresh (kept-refresh; Site's Pinned lists again each time it is unfolded) and
+# its rows' buttons, which move: the pins' take-backs to Site's Pinned
+# (kept-camera-unpin, kept-view-unpin, kept-board-unpin become pinned-*-unpin,
+# TAKEN_BACK still, and the row listener kept-list:click:closest is
+# pinned-list:click:closest), a kept picture's Forget and Purge to Pictures
+# (pictures-forget, TAKEN_BACK; pictures-purge, backed by Pictures › Purge as
+# kept-purge was). The gathering (pic-all, pic-gather, gather-answers, answer)
+# and the file picker (pic-file) move with the same names to Pictures. Added:
+# Pictures' Pin here (pictures-pin), counted and not ring-backed -- the ring's
+# Picture › Folder pins the seven newest pictures (and a chosen one, which the
+# page does not tell it), and Pin here pins any picture in the folder, the older
+# ones included, which no cell reaches. The Validation and OpenSCAD panels had
+# no controls. Six places the page listens are added: Pin here
+# (pin:click:pinHere), Forget (forgetBtn:click:forget, TAKEN_BACK), a view's
+# place on a picture's row (chip:click:showView, backed as Selected's view rows
+# are), a problem's row (li:click:goToProblem), Pinned unfolded
+# (pinnedEl:toggle:pinnedOpened), and the toolbar's count, a readout listened to
+# and not a control in the markup (validityEl:click:openProblems). Ring
+# addresses moved, all under the canvas ring's Panels (cell 9): Contents' cell 8
+# is Site's (98); Selected 96 and Jobs 92 stay; Validation's cell 4 is Pictures'
+# (94); OpenSCAD (99) is gone, and the Machine group moved from 91 to 99 (the
+# machine 918 to 998, its comms log 916 to 996); the Pictures group (93: Kept
+# 938, Gather 936) is gone, and Rail moved from 97 to 93. Picture › Folder's
+# eighth leaf keeps its cell: More opens Pictures (picture:more), not Kept.
 VIEWER_CEILING = 128
 
 
@@ -373,37 +401,79 @@ def test_every_listener_in_the_viewers_marks_modules_is_classified():
 
 
 # --------------------------------------------------------------------------
-# Kept's rows: taken back from the list that shows them, not ring-backed
+# The rows' take-backs: taken back from the list that shows them, not ring-backed
 # --------------------------------------------------------------------------
 
 
-def test_kepts_take_back_buttons_are_counted_and_not_claimed_as_ring_backed():
-    """Forget a picture, unpin a camera, unpin a view: Kept's per-row buttons are
-    the lasting exception for taking a thing back from the list that shows it,
-    counted on the meter and never ring-backed, since a row can name another
-    site's pin that a ring cell reaches only from that site."""
+def test_the_rows_take_backs_are_counted_and_not_claimed_as_ring_backed():
+    """Unpin a camera, a view or a board's pin from Site's Pinned, forget a kept
+    picture from Pictures: the lasting exception for taking a thing back from the
+    list that shows it, counted on the meter and never ring-backed, since a row
+    can name another site's pin that a ring cell reaches only from that site."""
     taken = census.take()
     by_name = {f.name: f for f in taken.controls_of_its_own()}
-    for name in ("kept-forget", "kept-camera-unpin", "kept-view-unpin", "kept-board-unpin"):
-        assert by_name[name].source == "kept.js"
+    for name in ("pinned-camera-unpin", "pinned-view-unpin", "pinned-board-unpin"):
+        assert by_name[name].source == "pinned.js"
         assert by_name[name].ring_action is None, name
         assert by_name[name].taken_back, name
+    assert by_name["pictures-forget"].source == "picture_list.js"
     assert {f.name for f in taken.taken_back()} == {
+        "pictures-forget",
+        "pinned-camera-unpin",
+        "pinned-view-unpin",
+        "pinned-board-unpin",
+    }
+    # Purge stays a cell of the canvas ring's Pictures, and so does Gather.
+    assert by_name["pictures-purge"].ring_action == "picture:purge"
+    assert by_name["pic-gather"].ring_action == "camera:gather"
+    # Kept and the Gather panel are gone from the page, and from the tables; so
+    # are the older panel's rows before them.
+    for gone in (
+        "kept-refresh",
+        "kept-purge",
         "kept-forget",
         "kept-camera-unpin",
         "kept-view-unpin",
         "kept-board-unpin",
-    }
-    # Purge stays a cell of the canvas ring's Pictures.
-    assert by_name["kept-purge"].ring_action == "picture:purge"
-    # The old panel's rows are gone from the page, and from the tables.
-    for gone in ("pic-forget", "cam-unplace-one", "look-unpin-one", "pic-purge", "pin-unpin"):
+        "pic-forget",
+        "cam-unplace-one",
+        "look-unpin-one",
+        "pic-purge",
+        "pin-unpin",
+    ):
         assert gone not in by_name
         assert gone not in census.CONTROLS and gone not in census.RING_BACKED
-    listening = {f.key: f for f in taken.found if f.how == "listening" and f.source == "kept.js"}
-    assert list(listening) == ["kept-list:click:closest"]
-    assert listening["kept-list:click:closest"].taken_back
+        assert gone not in census.TAKEN_BACK
+    assert "kept-list:click:closest" not in census.LISTENING
+    listening = {f.key: f for f in taken.found if f.how == "listening" and f.source == "pinned.js"}
+    assert list(listening) == ["pinned-list:click:closest"]
+    assert listening["pinned-list:click:closest"].taken_back
     assert "⤺ takes back a view, every site's" in census.report()
+
+
+def test_pin_here_is_counted_and_not_claimed_as_ring_backed():
+    """Pictures' Pin here pins any picture in the folder at the selected place. The
+    ring's Picture › Folder pins the seven newest only, so the button is counted on
+    the meter and claims no ring action; nor is it a take-back."""
+    taken = census.take()
+    pin = next(f for f in taken.controls_of_its_own() if f.name == "pictures-pin")
+    assert pin.source == "picture_list.js"
+    assert pin.ring_action is None and pin.taken_back is None
+    listening = {f.key: f for f in taken.found if f.how == "listening"}
+    assert listening["pin:click:pinHere"].ring_action is None
+    assert listening["pin:click:pinHere"].taken_back is None
+    assert listening["forgetBtn:click:forget"].taken_back
+    # A view's place on a picture's row draws it, as Selected's view rows do.
+    assert (
+        listening["chip:click:showView"].ring_action == listening["row:click:drawView"].ring_action
+    )
+
+
+def test_the_viewers_ring_backed_share_did_not_fall():
+    """Consolidation Phase 2 holds the ring-backed share where it was: 58 of 128."""
+    taken = census.take()
+    own, backed = len(taken.controls_of_its_own()), len(taken.ring_backed())
+    assert backed / own >= 58 / 128, f"{backed} of {own} ring-backed"
 
 
 def test_nothing_is_both_taken_back_and_ring_backed():

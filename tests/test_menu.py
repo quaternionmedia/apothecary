@@ -936,37 +936,41 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert [c.destructive for c in pictures.children] == [False, False, True, False]
     assert carried_by("picture:add:@floor").name == "VIEWER"
     assert carried_by("picture:purge").name == "VIEWER"
-    assert [(c.action, c.cell) for c in panels.children] == [
-        ("panel:toggle:contents", 8),
-        ("panel:toggle:selected", 6),
-        ("panel:toggle:jobs", 2),
-        ("panel:toggle:validation", 4),
-        ("panel:toggle:scad", 9),
-        (None, 3),  # Pictures: Kept and the gathering behind one cell
-        (None, 1),  # Machine: the machine and its comms log behind one cell
-        ("panel:rail:toggle", 7),
+    # Site (Contents, its problems, its SCAD, Pinned), Selected, Jobs and Pictures
+    # (every picture, and the gathering) each a cell; the machine and its comms
+    # log behind one; the rail last.
+    assert [(c.label, c.action, c.cell) for c in panels.children] == [
+        ("Site", "panel:toggle:site", 8),
+        ("Selected", "panel:toggle:selected", 6),
+        ("Jobs", "panel:toggle:jobs", 2),
+        ("Pictures", "panel:toggle:pictures", 4),
+        ("Machine", None, 9),
+        ("Rail", "panel:rail:toggle", 3),
     ]
-    kept = next(c for c in panels.children if c.label == "Pictures")
-    assert [(c.label, c.action, c.cell) for c in kept.children] == [
-        ("Kept", "panel:toggle:kept", 8),
-        ("Gather", "panel:toggle:camera", 6),
-    ]
-    assert address_of(root, "panel:kept") == "938"
-    assert carried_by("panel:toggle:kept").name == "VIEWER"
     machine = next(c for c in panels.children if c.label == "Machine")
     assert [(c.action, c.cell) for c in machine.children] == [
         ("panel:toggle:machine", 8),
         ("panel:toggle:log", 6),
     ]
-    assert address_of(root, "panel:contents") == "98"  # by the option's id
-    assert carried_by("panel:toggle:contents").name == "VIEWER"
-    # The page's sections are marked in its markup; the machine and its log are
-    # registered when a printer is opened. Both lists are the resolver's, in order.
+    assert address_of(root, "panel:site") == "98"  # by the option's id
+    assert address_of(root, "panel:pictures") == "94"
+    assert address_of(root, "panel:machine") == "998"
+    assert address_of(root, "panel:rail") == "93"
+    for pid in ("site", "pictures"):
+        assert carried_by(f"panel:toggle:{pid}").name == "VIEWER"
+    # The retired panels are on no ring.
+    for gone in ("contents", "validation", "scad", "kept", "camera"):
+        assert f"panel:toggle:{gone}" not in set(every_action([root])), gone
+    # The page's sections are marked in its markup; Pictures is registered at
+    # start and the machine and its log when a printer is opened. Both lists are
+    # the resolver's, in order.
     page = VIEWER.read_text(encoding="utf-8")
     marked = re.findall(r'class="panel-section"[^>]*data-panel="([\w-]+)"', page)
     registered = re.findall(r"panels\.register\('([\w-]+)'", page)
     assert marked == [pid for pid, _ in PANELS[: len(marked)]]
     assert sorted(registered) == sorted(pid for pid, _ in PANELS[len(marked) :])
+    for gone in ("contents", "validation", "scad", "kept", "camera"):
+        assert f'data-panel="{gone}"' not in page and f"register('{gone}'" not in page
 
 
 # --- pictures and cameras on the ring (pictures plan, Phase 4) -------------------------
@@ -1309,7 +1313,8 @@ def test_a_root_with_many_pictures_still_resolves_and_a_chosen_one_fills_the_eig
     assert [c.action for c in folder.children][:7] == [
         f"picture:pin:shot_{i:03d}.png" for i in range(7)
     ]
-    assert (folder.children[-1].label, folder.children[-1].action) == ("More", "picture:kept")
+    # More opens the Pictures panel, where every picture is listed with Pin here.
+    assert (folder.children[-1].label, folder.children[-1].action) == ("More", "picture:more")
     told.chosen_picture = "shot_042.png"
     ring = resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=told)
     last = _group(ring, "Picture", "Folder").children[-1]
@@ -1407,7 +1412,7 @@ def test_make_make_all_drop_and_a_made_pieces_word_are_the_servers_and_the_rest_
         "picture:find:stated:@floor",
         "picture:unpin",
         "picture:forget",
-        "picture:kept",
+        "picture:more",
         "picture:views",
         "picture:purge",
         "camera:pin:bench_cam",

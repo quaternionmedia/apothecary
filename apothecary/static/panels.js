@@ -1,10 +1,11 @@
 /* Panels: windows in front of the world.
  *
- * A panel is a titled box the world's page registers once -- the Contents
- * tree, the Selected piece, Jobs -- and a person opens, closes, collapses,
+ * A panel is a titled box the world's page registers once -- the Site, the
+ * Selected piece, Jobs, Pictures -- and a person opens, closes, collapses,
  * drags free or docks back. Docked panels stack in a rail on the right or
  * the left. A rail is a thing of its own: it has a width a person drags
- * (never more than half the page, so the world is never pushed off the
+ * (never more than half the page, and with both rails showing never more
+ * than the half the other leaves, so the world is never pushed off the
  * screen), it hides and shows on the tilde key, and it moves -- drag its
  * grip across the page, or press its swap button, and every panel in it
  * goes to the other side. A docked panel's body has a height a person
@@ -12,7 +13,8 @@
  * and resized from its corner. A tethered panel follows an anchor
  * (anchors.js) and draws a leader to it; its position is set every frame
  * by update(). What a person did to the panels and the rails is
- * remembered per browser.
+ * remembered per browser; a remembered panel the page no longer registers
+ * is ignored, and forgotten the next time anything is remembered.
  *
  * The chrome is the module's: every listener it installs is on the
  * elements it makes, except the pointer moves that finish a drag, which
@@ -72,12 +74,26 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
     }
 
     function railMax() { return Math.floor(container.clientWidth * RAIL_MAX_FRACTION); }
+    // What one rail may take: half the page, less what the other rail takes
+    // when it is showing -- the two together leave the world its half.
+    const otherSide = (side) => (side === "left" ? "right" : "left");
+    function railRoom(side) {
+        const other = rails[otherSide(side)];
+        return Math.max(RAIL_MIN_PX, railMax() - (other.hidden ? 0 : other.offsetWidth));
+    }
     function layoutRails() {
         for (const side of ["left", "right"]) {
-            const rail = rails[side], st = railState[side];
+            const st = railState[side];
             const docked = [...panels.values()].filter((p) => p.open && p.where === side);
-            rail.hidden = st.hidden || docked.length === 0;
-            rail.style.width = st.width ? `${Math.max(RAIL_MIN_PX, Math.min(railMax(), st.width))}px` : "";
+            rails[side].hidden = st.hidden || docked.length === 0;
+        }
+        // Both showing: each gives way (the stylesheet halves the default
+        // width; a width a person dragged is held to what the other leaves).
+        const both = !rails.left.hidden && !rails.right.hidden;
+        container.classList.toggle("panel-rails-both", both);
+        for (const side of ["left", "right"]) {
+            const st = railState[side];
+            rails[side].style.width = st.width ? `${Math.max(RAIL_MIN_PX, Math.min(railRoom(side), st.width))}px` : "";
         }
     }
     function startRailResize(side, ev) {
@@ -85,7 +101,12 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
         const startX = ev.clientX, from = rails[side].offsetWidth;
         const move = (e) => {
             const delta = side === "right" ? startX - e.clientX : e.clientX - startX;
-            railState[side].width = Math.max(RAIL_MIN_PX, Math.min(railMax(), from + delta));
+            // The other rail, when it shows, gives way down to its least, so the
+            // two together still leave the world its half.
+            const other = otherSide(side), showing = !rails[other].hidden;
+            const want = Math.max(RAIL_MIN_PX, Math.min(railMax() - (showing ? RAIL_MIN_PX : 0), from + delta));
+            railState[side].width = want;
+            if (showing && rails[other].offsetWidth + want > railMax()) railState[other].width = Math.max(RAIL_MIN_PX, railMax() - want);
             layoutRails();
         };
         const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); remember(); };
@@ -221,10 +242,12 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
          * it) or a function given the slot to fill the first time the panel
          * opens. `where` is "right", "left" or "free"; `open` and `collapsed`
          * are the defaults a browser that has not seen the panel starts from.
-         * `onClose` is called when an open panel is closed or unregistered. */
-        register(id, { title, body, where = "right", open = true, collapsed = false, x = 40, y = 40, onClose = null } = {}) {
+         * `onClose` is called when an open panel is closed or unregistered;
+         * `onOpen` when a closed panel whose body is already filled opens again
+         * (the first time, filling it is the panel's to do). */
+        register(id, { title, body, where = "right", open = true, collapsed = false, x = 40, y = 40, onClose = null, onOpen = null } = {}) {
             if (panels.has(id)) this.unregister(id);
-            const p = { id, title: title || id, where, home: where === "free" ? "right" : where, open, collapsed, x, y, height: null, el: null, slot: null, leader: null, tether: null, mount: null, onClose };
+            const p = { id, title: title || id, where, home: where === "free" ? "right" : where, open, collapsed, x, y, height: null, el: null, slot: null, leader: null, tether: null, mount: null, onClose, onOpen };
             const had = remembered[id];
             if (had) {
                 if (typeof had.open === "boolean") p.open = had.open;
@@ -250,7 +273,14 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
             renderTabs();
             if (p.open && p.onClose) p.onClose();
         },
-        open(id) { const p = panels.get(id); if (!p) return false; p.open = true; place(p); remember(); return true; },
+        open(id) {
+            const p = panels.get(id);
+            if (!p) return false;
+            const again = !p.open && !p.mount;
+            p.open = true; place(p); remember();
+            if (again && p.onOpen) p.onOpen();
+            return true;
+        },
         close(id) {
             const p = panels.get(id);
             if (!p) return false;
