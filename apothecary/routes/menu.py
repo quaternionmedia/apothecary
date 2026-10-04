@@ -222,7 +222,7 @@ def _carry_picture(chosen: Chosen, who: Carries) -> Carried:
 @router.post("/intent", response_model=Carried)
 async def carry_out(chosen: Chosen) -> Carried:
     """Carry out a chosen option, or say that the viewer does, or refuse."""
-    from ..api import _job_store, _site_payload, _site_store
+    from ..api import _site_payload, _site_store
 
     action = chosen.intent.action
     try:
@@ -242,11 +242,10 @@ async def carry_out(chosen: Chosen) -> Carried:
         name = _needs_site(chosen)
         _site(name)  # 404s on a name that is not there, before anything is reset
         rebuilt = _site_store.reset(name)
-        _job_store.reset(name)
         return Carried(
             action=action,
             carried_by=who.value,
-            did=f"rebuilt {name} from its factory and emptied its jobs",
+            did=f"rebuilt {name} from its factory",
             site=_site_payload(rebuilt, _site_store.validator(name)(rebuilt)),
             address=chosen.intent.address,
         )

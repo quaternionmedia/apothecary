@@ -59,6 +59,10 @@ One line per change, each with a link to where it is described. The format follo
 - Make, Make all, Drop and a made piece's Word are carried out by the server through the ring's intent. ([code](apothecary/routes/menu.py))
 - Why this on a piece made from a picture draws its look and a thread to its outline. ([code](apothecary/static/picture_marks.js))
 - Selected sizes the drawn look: the picture's width, or a chosen shape's long side; a look's row draws it. ([viewer](templates/fractal_viewer.html.j2))
+- A print is a job: one operation a machine performs on a part, kept in the state folder with its kind, machine, site, part, file, times and outcome; a kind of job belongs to a kind of machine, and a mill would register its own. ([code](apothecary/jobs.py))
+- `GET /jobs` by site, machine and kind, `GET /jobs/{id}`, and `GET /jobs/choices` for what a job on a machine can name. ([code](apothecary/routes/jobs.py))
+- The Print card names the part a print makes, from the site its printer is pinned in, and its history is the printer's jobs. ([doc](docs/firmware.md))
+- Site lists the jobs of the site's machines, the running ones first; a row selects its machine and opens it. ([test](tests/e2e/test_printer_ui.py))
 
 ### Changed
 
@@ -76,8 +80,10 @@ One line per change, each with a link to where it is described. The format follo
 - Kept lists every camera, look and board pinned, every site's, and every kept picture, each taken back from its row without switching the site; the camera panel keeps the gathering. ([code](apothecary/static/widgets/pinned.js))
 - Site is one panel, docked left: the Contents tree as its body, a piece in a problem red in it and the pieces above it saying so, the site's problems at its top (each row selecting its piece at its level; the toolbar's count opens them), and the site's SCAD and every site's pins (Pinned, each taken back from its row) as sections. ([test](tests/e2e/test_site_panel.py))
 - Pictures lists every picture under the picture root, the folder's and the kept ones, each with where it is pinned as a view and Pin here, which pins any of them at the selected place; Forget on a kept one, Purge, and the gathering as a section. Picture › Folder › More opens it. ([test](tests/e2e/test_pictures_panel.py))
-- The ring's Panels are Site, Selected, Jobs, Pictures, Machine (the machine and its log) and Rail; with both rails showing, the two together leave the world half the page. ([code](apothecary/menu.py))
-- Every docked panel is in one rail beside the world, on the right until ⇄ or its grip moves it: Site and Selected stacked, and below them a strip of tabs -- Jobs, Pictures, a docked machine and its log -- one shown at a time; its side and width are remembered per browser, and a layout remembered with two rails is ignored. ([test](tests/e2e/test_ring.py))
+- The ring's Panels are Site, Selected, Pictures, Machine (the machine and its log) and Rail; with both rails showing, the two together leave the world half the page. ([code](apothecary/menu.py))
+- Every docked panel is in one rail beside the world, on the right until ⇄ or its grip moves it: Site and Selected stacked, and below them a strip of tabs -- Pictures, a docked machine and its log -- one shown at a time; its side and width are remembered per browser, and a layout remembered with two rails, or naming the Jobs panel, is ignored. ([test](tests/e2e/test_ring.py))
+- A running print job marks its printer busy from the moment it starts, and its end frees it; a hand-typed job no longer does. ([code](apothecary/api.py))
+- The print records kept before jobs are carried over as print jobs the first time jobs are read, and left where they were. ([code](apothecary/jobs.py))
 - A machine tethered to its printer still floats in front of the world; docked, it is a tab of the rail's strip. ([test](tests/e2e/test_printer_ui.py))
 - A row of Pictures is chosen by a click and let go by Escape; the ring is told, and Picture › Folder's last cell pins the chosen picture where the ring stands when it is older than the seven newest, or marks its own cell among them. ([test](tests/e2e/test_pictures_panel.py))
 - A problem names its pieces by tree path beside their names (`paths` on each violation), and Site marks and selects them by path, so two pieces of one name are told apart. ([test](tests/e2e/test_site_panel.py))
@@ -118,6 +124,8 @@ One line per change, each with a link to where it is described. The format follo
 - The Validation, OpenSCAD, Kept and Gather panels: what they showed is in Site and Pictures. ([plan](docs/plans/consolidation-2026-10-03.md))
 - The second rail: one rail holds every docked panel, and the other side of the world is world. ([code](apothecary/static/panels.js))
 - Pictures' Pin here: a chosen row is pinned from the ring's Picture › Folder. ([code](apothecary/static/widgets/picture_list.js))
+- The Jobs panel and its hand-typed jobs: `/sites/{name}/jobs`, its assign and its complete. ([plan](docs/plans/consolidation-2026-10-03.md))
+- `/firmware/printers/print/records` and `/firmware/printers/print/records/{id}`: a printer's prints are its jobs. ([code](apothecary/routes/jobs.py))
 
 ### Fixed
 

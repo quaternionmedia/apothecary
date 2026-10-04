@@ -3,7 +3,8 @@
  * What the monitor page is made of -- the header's link verbs and the
  * control latch, the status cards, the temperature chart, the comms log
  * with its query box, the latched control pad, the bed reading, the
- * print from here -- as one module the monitor page mounts as its whole
+ * print from here (a print job, naming the part it makes, and the
+ * printer's jobs as its history) -- as one module the monitor page mounts as its whole
  * body and the world mounts in a popup tethered to the printer. The same
  * markup, the same ids, the same chain, latch and confirms on both hosts.
  *
@@ -79,6 +80,10 @@ const CARDS = `
             <button type="button" id="print-pause" title="Stop feeding lines; the printer finishes what it has queued">⏸ Pause</button>
             <button type="button" id="print-resume" title="Feed lines again (control must be armed)">▶ Resume</button>
             <button type="button" id="print-cancel" title="Stop feeding, then heaters off, fan off, motors free">■ Cancel</button>
+        </div>
+        <div class="row"><label for="print-part">makes</label>
+            <select id="print-part" title="The part or piece this print makes, from the site the printer is pinned in: the print's job records it, and Site lists the job. The ring's Send file prints what is chosen here"><option value="">— no part named —</option></select>
+            <span class="s" id="print-where"></span>
         </div>
         <div class="row"><span id="print-progress" class="empty">nothing printing from here</span><span class="grow"></span><span class="job" id="print-job"></span></div>
         <div class="bar print"><i id="b-print" style="width:0"></i></div>
@@ -436,7 +441,7 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
         }
         if ($("port").value !== port) $("port").value = port;
         renderStatus(); renderChart(); renderLog();
-        loadLevel(); loadPrintRecords();
+        loadLevel(); loadPrintJobs(); loadChoices();
         if (!port) return;
         $("ident").textContent = "connecting…";
         loadCodes();
@@ -692,8 +697,11 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
         if (job && job.kind === "print") { prt.job = job; renderPrint(); if (!prt.timer) prt.timer = setTimeout(watchPrint, 1000); }
     }
 
-    // --- print from here: a kept file streamed over the link -------------------------
-    const prt = { files: [], records: [], job: null, timer: null };
+    // --- print from here: a kept file streamed over the link, as a print job ----------
+    // `jobs` is the printer's print jobs, running first then newest (GET /jobs): the
+    // history. `choices` is what a job here can name (GET /jobs/choices): the parts
+    // and pieces of the site the printer is pinned in.
+    const prt = { files: [], jobs: [], job: null, timer: null, choices: null };
     function renderPrint() {
         const job = prt.job, running = !!(job && job.running);
         const paused = running && job.stage === "paused";
@@ -711,7 +719,17 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
             $("print-progress").className = "empty"; $("print-progress").textContent = "nothing printing from here"; $("b-print").style.width = "0";
         }
         $("print-job").textContent = running ? `${job.stage}…` : "";
-        $("print-history").innerHTML = prt.records.map((r) => `<div><span class="${esc(r.outcome)}">${new Date(r.at).toLocaleString()} · ${esc(r.name)} · ${esc(r.outcome)} · ${r.sent}/${r.total} lines</span><a href="${BASE}/firmware/printers/print/records/${encodeURIComponent(r.id)}" download="${esc(r.id)}.json" title="The record as JSON, with the tail of what the firmware said">⤓ log</a></div>`).join("");
+        $("print-history").innerHTML = prt.jobs.map(jobRow).join("");
+    }
+    // One job of the history: when it started and finished, its kind, the file it ran
+    // and the part it makes, how it ended (and why), and how far it got.
+    function jobRow(j) {
+        const d = j.detail || {};
+        const when = `${new Date(j.started_at).toLocaleString()} – ${j.finished_at ? new Date(j.finished_at).toLocaleTimeString() : "…"}`;
+        const part = j.part ? ` → ${esc(j.part.path)}` : "";
+        const lines = d.total != null ? ` · ${d.sent}/${d.total} lines` : "";
+        const why = j.reason ? ` (${esc(j.reason)})` : "";
+        return `<div><span class="${esc(j.outcome)}">${when} · ${esc(j.kind)} · ${esc(j.input.name)}${part} · ${esc(j.outcome)}${lines}${why}</span><a href="${BASE}/jobs/${encodeURIComponent(j.id)}" download="${esc(j.id)}.json" title="The job as JSON, with the tail of what the firmware said">⤓ log</a></div>`;
     }
     async function loadPrintFiles(pick) {
         try { prt.files = await api("/firmware/printers/prints"); } catch (e) { prt.files = []; }
@@ -722,10 +740,25 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
         if (had && prt.files.some((f) => f.id === had)) sel.value = had;
         renderPrint();
     }
-    async function loadPrintRecords() {
-        if (!state.port) { prt.records = []; renderPrint(); return; }
-        try { prt.records = await api(`/firmware/printers/print/records?port=${encodeURIComponent(state.port)}`); } catch (e) { prt.records = []; }
+    async function loadPrintJobs() {
+        if (!state.port) { prt.jobs = []; renderPrint(); return; }
+        try { prt.jobs = await api(`/jobs?kind=print&machine=${encodeURIComponent(state.port)}`); } catch (e) { prt.jobs = []; }
         renderPrint();
+    }
+    // The parts a print here can name: the site's, when the printer is pinned in one.
+    async function loadChoices() {
+        const sel = $("print-part"), had = sel.value, port = state.port;
+        let c = null;
+        if (port) { try { c = await api(`/jobs/choices?machine=${encodeURIComponent(port)}`); } catch (e) { c = null; } }
+        if (port !== state.port) return;  // another port was chosen meanwhile
+        prt.choices = c;
+        const parts = (c && c.site && c.parts) || [];
+        sel.innerHTML = c && c.site
+            ? '<option value="">— no part named —</option>' + parts.map((p) => `<option value="${esc(p.path)}">${esc(p.path)}${p.name !== p.path ? " · " + esc(p.name) : ""}</option>`).join("")
+            : '<option value="">— pinned in no site —</option>';
+        sel.disabled = !(c && c.site);
+        if (had && parts.some((p) => p.path === had)) sel.value = had;
+        $("print-where").textContent = c && c.site ? `in ${c.site}` : "";
     }
     async function watchPrint() {
         clearTimeout(prt.timer); prt.timer = null;
@@ -734,7 +767,8 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
             prt.job = await api(`/firmware/printers/print?port=${encodeURIComponent(state.port)}`);
             renderPrint();
             if (prt.job.running) { prt.timer = setTimeout(watchPrint, 1000); return; }
-            await loadPrintRecords();
+            await loadPrintJobs();
+            emit("apothecary:jobs-changed", { port: state.port, job_id: prt.job.job_id });
             await pollOnce();
         } catch (e) { $("print-job").textContent = e.message; }
     }
@@ -754,11 +788,14 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
         if (!state.port || !fileId) { logLine("sys", "print: pick a port and a file first"); return; }
         if (!ctl.armed) { logLine("sys", "a print heats and moves the machine: arm control first"); return; }
         const f = prt.files.find((x) => x.id === fileId);
-        if (!confirm(`Print ${f ? f.name : fileId} on ${state.port}?\n${f ? f.lines + " lines" : ""} will stream from here; the printer will heat and move.`)) return;
+        const part = $("print-part").value || null;
+        if (!confirm(`Print ${f ? f.name : fileId} on ${state.port}${part ? `, making ${part}` : ""}?\n${f ? f.lines + " lines" : ""} will stream from here; the printer will heat and move.`)) return;
         try {
-            prt.job = await post("/firmware/printers/print", { port: state.port, file_id: fileId });
+            prt.job = await post("/firmware/printers/print", { port: state.port, file_id: fileId, part });
             renderPrint();
             prt.timer = setTimeout(watchPrint, 800);
+            await loadPrintJobs();
+            emit("apothecary:jobs-changed", { port: state.port, job_id: prt.job.job_id });
         } catch (e) { logLine("sys", "print: " + e.message); $("print-job").textContent = e.message; }
     }
     async function printVerb(verb) {
@@ -842,7 +879,7 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
         identify: () => $("identify").onclick(),
         device, carry, pairs,
         level: { start: startLevel, corner: (which) => enqueue(cornerLines(which)), lines: cornerLines, records: () => level.records, shown: () => level.shown, load: loadLevel },
-        print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, records: () => prt.records, load: loadPrintFiles },
+        print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, jobs: () => prt.jobs, choices: () => prt.choices, load: loadPrintFiles, loadJobs: loadPrintJobs },
         destroy() {
             state.gen++; clearTimeout(state.timer); clearTimeout(level.timer); clearTimeout(prt.timer); clearInterval(ctl.timer);
             document.removeEventListener("visibilitychange", onVisibility);
@@ -852,7 +889,7 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
         },
     };
 
-    loadPrintFiles(); loadPrintRecords(); watchPrint();
+    loadPrintFiles(); loadPrintJobs(); loadChoices(); watchPrint();
     loadPorts().then(() => { if (state.port) selectPort(state.port); });
     return handle;
 }

@@ -90,6 +90,8 @@
 #print-card select { font: inherit; font-size: 0.75rem; background: #1a1e1a; color: var(--ink); border: 1px solid #3a443a; border-radius: 4px; padding: 0.15rem 0.3rem; max-width: 16rem; }
 #print-card input[type=file] { font-size: 0.72rem; color: var(--ink-2); max-width: 14rem; }
 #print-card .job { color: var(--warn); font-variant-numeric: tabular-nums; }
+#print-card label { color: var(--ink-3); }
+#print-card select:disabled { opacity: 0.6; }
 #print-card .bar { margin-top: 0.3rem; }
 #print-card .bar.print i { background: var(--tx); }
 #print-history { font-size: 0.74rem; color: var(--ink-2); max-height: 6rem; overflow: auto; margin-top: 0.3rem; }

@@ -1,10 +1,10 @@
 """In-memory, single-process store for Site instances (prototype).
 
 Sites carry no real persistence layer yet -- this is a process-lifetime
-singleton, not a database. It exists so that edits (position moves, and in
-later phases printer status and job assignments) survive across requests
-instead of being rebuilt fresh each time, unlike /render's stateless Scene
-handling, which fits because a Scene has no state to keep between calls.
+singleton, not a database. It exists so that edits (position moves, and a
+printer's status) survive across requests instead of being rebuilt fresh
+each time, unlike /render's stateless Scene handling, which fits because a
+Scene has no state to keep between calls.
 
 Known limitations, stated rather than hidden: state is lost on server
 restart, and is not shared across multiple worker processes (each Uvicorn

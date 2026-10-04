@@ -15,6 +15,7 @@ import pytest
 from click.testing import CliRunner
 from fastapi.testclient import TestClient
 
+from apothecary import jobs
 from apothecary.api import app
 from apothecary.cli import cli
 from apothecary.firmware import devices, gcode
@@ -1148,7 +1149,7 @@ def test_leveling_routes(fake_arduino_cli, fresh_task_runner, scripted_links):
     # The listing filters take one port or "" for every port, and nothing else.
     assert c.get("/firmware/printers/leveling", params={"port": ""}).json() == []
     assert c.get("/firmware/printers/leveling", params={"port": "bad"}).status_code == 422
-    assert c.get("/firmware/printers/print/records", params={"port": "bad"}).status_code == 422
+    assert c.get("/jobs", params={"machine": "bad"}).status_code == 422
 
     r = c.post("/firmware/printers/level", json={"port": port, "probe": True})
     assert r.status_code == 409 and "arm control" in r.json()["detail"]
@@ -1298,20 +1299,21 @@ def test_print_job_streams_pauses_resumes_and_polls_between_lines(fake_arduino_c
         "M84",
     ]
     assert len(transport.sent) > sent_while_paused
-    rec = job.record
-    assert rec is not None and rec.outcome == "done" and rec.sent == 12 == rec.total
-    assert rec.firmware == "Marlin TH3D UFW 2.94a (Jan 17 2025 11:35:34)"
-    assert [r.id for r in devices.print_records(port)] == [rec.id]
-    assert devices.print_record(rec.id) == rec
+    rec = job.record  # the print is a job, ended and kept
+    assert rec is not None and rec.outcome == "done" and rec.reason is None
+    assert rec.detail["sent"] == 12 == rec.detail["total"] and rec.progress == 1.0
+    assert rec.detail["firmware"] == "Marlin TH3D UFW 2.94a (Jan 17 2025 11:35:34)"
+    assert [r.id for r in jobs.list_jobs(machine=port)] == [rec.id]
+    assert jobs.get(rec.id) == rec
     # The stream stays out of the comms log (a print is thousands of lines); the
-    # record keeps the tail, and the log says how it started and how it ended.
+    # job keeps the tail, and the log says how it started and how it ended.
     log = scripted_links.log_for(port).since(0)["entries"]
     assert not any(e["origin"] == "print" and e["kind"] == "tx" for e in log)
     assert any(
         e["kind"] == "sys" and "print started: small.gcode (12 lines)" in e["text"] for e in log
     )
     assert any(e["kind"] == "sys" and "print done: small.gcode, 12/12" in e["text"] for e in log)
-    assert rec.lines[-3:] == ["> M140 S0", "ok", "> M84"] or rec.lines[-1] == "ok"
+    assert rec.log[-3:] == ["> M140 S0", "ok", "> M84"] or rec.log[-1] == "ok"
     # The port is free again: the poll goes to the board and the state is the card's.
     st = devices.printer_status(port, links=scripted_links)
     assert st.job is None and st.state == "idle"
@@ -1338,7 +1340,9 @@ def test_print_job_cancel_sends_the_safe_off_and_a_stop_does_not(fake_arduino_cl
     transport = ScriptedTransport.instances[0]
     assert job.stage == "cancelled" and 0 < job.sent < 400
     assert transport.sent[-4:] == ["M104 S0", "M140 S0", "M107", "M84"]
-    assert job.record.outcome == "cancelled" and job.record.sent == job.sent
+    assert job.record.outcome == "cancelled" and job.record.detail["sent"] == job.sent
+    assert "heaters" in job.record.reason
+    assert jobs.get(job.record.id).outcome == "cancelled"
     # The stop: the board halts, the job is cancelled quietly, nothing more is sent.
     job = devices.start_print(port, kept.id, links=scripted_links)
     time.sleep(0.1)
@@ -1347,6 +1351,7 @@ def test_print_job_cancel_sends_the_safe_off_and_a_stop_does_not(fake_arduino_cl
         devices.printer_control(port, "M112", links=scripted_links)
     job.thread.join(5)
     assert job.stage == "cancelled" and job.record.outcome == "cancelled"
+    assert "emergency stop" in job.record.reason
     assert "M112" in transport.sent and transport.sent[-1] != "M84"
     assert transport.sent.index("M112") >= len(transport.sent) - 2  # at most one line after
 
@@ -1372,7 +1377,8 @@ def test_print_job_fails_on_a_board_error_and_still_turns_the_heat_off(
     assert [e["text"] for e in objected[2:] if e["kind"] == "tx"] == list(devices.PRINT_SAFE_OFF)
     sent = ScriptedTransport.instances[0].sent
     assert sent[-4:] == ["M104 S0", "M140 S0", "M107", "M84"] and "G1 X6" not in sent
-    assert job.record.outcome == "failed" and job.record.sent == 1
+    assert job.record.outcome == "failed" and job.record.detail["sent"] == 1
+    assert "Failed to enable" in job.record.reason
 
 
 def test_print_refuses_a_file_with_problems_and_a_card_that_is_printing(
@@ -1420,6 +1426,7 @@ def test_print_routes(fake_arduino_cli, fresh_task_runner, scripted_links):
     )
     r = c.post("/firmware/printers/print", json={"port": port, "file_id": file_id})
     assert r.status_code == 202 and r.json()["kind"] == "print" and r.json()["total"] == 12
+    assert r.json()["job_id"] and r.json()["part"] is None
     # While it streams, the file cannot be forgotten and the link cannot be dropped.
     assert c.delete(f"/firmware/printers/prints/{file_id}").status_code in (409, 200)
     for _ in range(500):
@@ -1427,12 +1434,15 @@ def test_print_routes(fake_arduino_cli, fresh_task_runner, scripted_links):
         if not job["running"]:
             break
         time.sleep(0.01)
-    assert job["stage"] == "done" and job["sent"] == 12 and job["record_id"]
-    records = c.get("/firmware/printers/print/records", params={"port": port}).json()
-    assert len(records) == 1 and records[0]["outcome"] == "done" and "lines" not in records[0]
-    full = c.get(f"/firmware/printers/print/records/{job['record_id']}").json()
-    assert full["lines"][-1] == "ok"
-    assert c.get("/firmware/printers/print/records/nope").status_code == 404
+    assert job["stage"] == "done" and job["sent"] == 12 and job["record_id"] == job["job_id"]
+    # Its history is the printer's print jobs; the old record routes are gone.
+    listed = c.get("/jobs", params={"machine": port, "kind": "print"}).json()
+    assert [j["id"] for j in listed] == [job["job_id"]]
+    assert listed[0]["outcome"] == "done" and "log" not in listed[0]
+    full = c.get(f"/jobs/{job['job_id']}").json()
+    assert full["log"][-1] == "ok"
+    assert c.get("/firmware/printers/print/records", params={"port": port}).status_code == 404
+    assert c.get(f"/firmware/printers/print/records/{job['job_id']}").status_code == 404
     assert c.post("/firmware/printers/release", json={"port": port}).json()["released"] is True
     assert c.delete(f"/firmware/printers/prints/{file_id}").json()["deleted"] is True
     assert c.delete(f"/firmware/printers/prints/{file_id}").status_code == 404
@@ -1665,3 +1675,133 @@ def test_every_safe_off_line_is_tried_when_one_is_not_answered(tmp_path, monkeyp
     job.cancel()
     job.thread.join(30)
     assert [c for c in board.sent if c in devices.PRINT_SAFE_OFF] == list(devices.PRINT_SAFE_OFF)
+
+
+# --- a print is a job -------------------------------------------------------------------
+
+BOARD = "printer_1.frame_system.mainboard"
+
+
+def _printer_1(garage):
+    return next(s for s in garage.children if s.name == "printer_1")
+
+
+def test_a_print_started_from_the_card_is_a_job_with_its_file_machine_part_and_outcome(
+    fake_arduino_cli, fresh_task_runner, scripted_links, garage
+):
+    """Started on a printer pinned in the garage, naming a part of the garage: the job
+    records its kind, the machine (port, board, pinned node), the site, the part, the
+    file (name, size, hash), when it started; it lists under its machine and its site,
+    and while it runs the printer is busy -- from the job, before any poll says so. It
+    ends done, and the printer is idle again."""
+    import hashlib
+
+    c = TestClient(app)
+    port = "/dev/ttyFAKE1"
+    gate = threading.Event()
+
+    class GatedTransport(ScriptedTransport):
+        def write(self, data):
+            if data.decode().strip().startswith("G1 X20 Y10"):
+                gate.wait(5)  # the test holds the stream here
+            super().write(data)
+
+    scripted_links.factory = GatedTransport
+    assert c.put(f"/sites/garage/nodes/{BOARD}/device", json={"identity": port}).is_success
+    kept = c.post(
+        "/firmware/printers/prints", params={"name": "bracket.gcode"}, content=SMALL_PRINT.encode()
+    ).json()
+    c.post("/firmware/printers/control", json={"port": port, "armed": True})
+    # A part is one of the site's: anything else is refused before a line is sent.
+    for bad in ("printer_1", "nowhere", "<img src=x>"):
+        r = c.post(
+            "/firmware/printers/print", json={"port": port, "file_id": kept["id"], "part": bad}
+        )
+        assert r.status_code == 422, (bad, r.text)
+    assert jobs.list_jobs() == []
+
+    r = c.post(
+        "/firmware/printers/print", json={"port": port, "file_id": kept["id"], "part": "footpedal"}
+    )
+    assert r.status_code == 202, r.text
+    snapshot = r.json()
+    assert snapshot["part"] == "footpedal" and snapshot["running"] is True
+    job = jobs.get(snapshot["job_id"])
+    assert (job.kind, job.outcome, job.site) == ("print", "running", "garage")
+    assert job.machine.model_dump() == {
+        "kind": "printer",
+        "port": port,
+        "identity": "FAKESERIAL1",
+        "path": BOARD,
+    }
+    assert job.part.model_dump() == {"path": "footpedal", "name": "footpedal"}
+    assert job.input.model_dump() == {
+        "name": "bracket.gcode",
+        "size": len(SMALL_PRINT),
+        "sha256": hashlib.sha256(SMALL_PRINT.encode()).hexdigest(),
+        "file_id": kept["id"],
+    }
+    assert job.started_at is not None and job.finished_at is None
+    assert _printer_1(garage).status == "printing"  # the running job's, not a poll's
+    by_site = c.get("/jobs", params={"site": "garage"}).json()
+    by_machine = c.get("/jobs", params={"machine": port, "kind": "print"}).json()
+    assert [j["id"] for j in by_site] == [job.id] == [j["id"] for j in by_machine]
+    assert by_site[0]["outcome"] == "running" and by_site[0]["detail"]["total"] == 12
+
+    gate.set()
+    devices.print_job(port).thread.join(5)
+    ended = jobs.get(job.id)
+    assert (ended.outcome, ended.reason, ended.progress) == ("done", None, 1.0)
+    assert ended.finished_at >= ended.started_at and ended.part == job.part
+    assert _printer_1(garage).status == "idle"
+    c.delete(f"/sites/garage/nodes/{BOARD}/device")
+
+
+def test_a_cancelled_print_ends_its_job_cancelled_and_frees_the_printer(
+    fake_arduino_cli, fresh_task_runner, scripted_links, garage
+):
+    c = TestClient(app)
+    port = "/dev/ttyFAKE1"
+
+    class SlowTransport(ScriptedTransport):
+        def write(self, data):
+            if data.decode().strip() == "G1 X1":
+                time.sleep(0.02)
+            super().write(data)
+
+    scripted_links.factory = SlowTransport
+    c.put(f"/sites/garage/nodes/{BOARD}/device", json={"identity": port})
+    kept = devices.save_print_file("long.gcode", ("G1 X1\n" * 400).encode())
+    c.post("/firmware/printers/control", json={"port": port, "armed": True})
+    started = c.post("/firmware/printers/print", json={"port": port, "file_id": kept.id}).json()
+    assert _printer_1(garage).status == "printing"
+    time.sleep(0.2)
+    assert c.post("/firmware/printers/print/cancel", json={"port": port}).status_code == 200
+    devices.print_job(port).thread.join(5)
+    job = c.get(f"/jobs/{started['job_id']}").json()
+    assert job["outcome"] == "cancelled" and "heaters" in job["reason"]
+    assert 0 < job["progress"] < 1 and job["finished_at"] and job["part"] is None
+    assert _printer_1(garage).status == "idle"
+    # A hand-set maintenance is the person's: a job neither sets nor clears it.
+    c.post("/sites/garage/structures/printer_1/status", json={"status": "maintenance"})
+    c.post("/firmware/printers/print", json={"port": port, "file_id": kept.id})
+    assert _printer_1(garage).status == "maintenance"
+    c.post("/firmware/printers/print/cancel", json={"port": port})
+    devices.print_job(port).thread.join(5)
+    assert _printer_1(garage).status == "maintenance"
+    c.delete(f"/sites/garage/nodes/{BOARD}/device")
+
+
+def test_a_print_on_a_printer_pinned_nowhere_is_a_job_of_no_site_and_names_no_part(
+    fake_arduino_cli, scripted_links
+):
+    port = "/dev/ttyFAKE1"
+    kept = devices.save_print_file("dot.gcode", b"G28\n")
+    scripted_links.control.arm(port)
+    with pytest.raises(ValueError, match="pinned in no site"):
+        devices.start_print(port, kept.id, part="footpedal", links=scripted_links)
+    job = devices.start_print(port, kept.id, links=scripted_links)
+    job.thread.join(5)
+    record = jobs.get(job.job.id)
+    assert (record.site, record.part, record.machine.path) == (None, None, None)
+    assert record.outcome == "done" and record.input.name == "dot.gcode"

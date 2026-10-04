@@ -4,9 +4,9 @@ Same on-demand pattern as the rest of tests/e2e: a plain test run takes no
 screenshots; `apothecary docs generate` runs this with `--generate-docs` and
 turns the manifest into docs/generated/fractal-viewer/fractal-viewer.md.
 
-Resets the garage site's layout and job queue first so the workflow (and its
-screenshots) don't depend on whatever a previous test left behind in the
-process-lifetime SiteStore/JobStore (see apothecary/site_store.py).
+Resets the garage site's layout first so the workflow (and its screenshots)
+don't depend on whatever a previous test left behind in the process-lifetime
+SiteStore (see apothecary/site_store.py).
 """
 
 import pytest
@@ -17,8 +17,7 @@ from playwright.sync_api import Page, expect
 @pytest.mark.docs
 def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     """Zoom from the garage's Structures down to a Feature, then switch to
-    the parts library and zoom to a part -- the absorbed part view -- and
-    run a job through the queue at the root.
+    the parts library and zoom to a part -- the absorbed part view.
     """
     page.request.post(f"{base_url}/sites/garage/reset")
 
@@ -103,23 +102,8 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     expect(page.locator("#validity-indicator")).to_contain_text("valid")
     docs.step("Move it back -- the layout is valid again")
 
-    page.locator(".panel-rail .rail-tab[data-panel='jobs'] .rail-tab-name").click()
-    page.locator("#job-name").fill("small_bracket")
-    page.locator("#job-x").fill("50")
-    page.locator("#job-y").fill("50")
-    page.locator("#job-z").fill("20")
-    page.locator("#job-form button[type=submit]").click()
-    page.wait_for_timeout(400)
-    docs.step(
-        "Queue a print job from the Jobs tab under Site and Selected -- the Jobs panel is "
-        "site-wide, not tied to zoom depth"
-    )
-
-    page.locator(".job-assign-btn").first.click()
-    page.wait_for_timeout(500)
-    docs.step("Assign it to a compatible, idle printer")
-
-    page.locator(".panel-rail .rail-tab[data-panel='jobs'] .rail-tab-float").click()
+    page.locator(".panel-rail .rail-tab[data-panel='pictures'] .rail-tab-name").click()
+    page.locator(".panel-rail .rail-tab[data-panel='pictures'] .rail-tab-float").click()
     page.locator(".panel[data-panel='selected'] .panel-close").click()
     page.wait_for_timeout(400)
     docs.step(
@@ -129,7 +113,7 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
         "every one by address. The rail never takes more than half the page, and what you "
         "did to the panels is remembered"
     )
-    page.locator(".panel-free-layer .panel[data-panel='jobs'] .panel-float").click()
+    page.locator(".panel-free-layer .panel[data-panel='pictures'] .panel-float").click()
     page.locator(".panel-tab[data-panel='selected']").click()
     page.wait_for_timeout(200)
 

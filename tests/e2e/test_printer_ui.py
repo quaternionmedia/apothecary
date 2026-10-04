@@ -19,6 +19,7 @@ the failure modes they name: a blocked event loop, stacked polls, a panel
 rebuilt under the user's cursor.
 """
 
+import json
 import re
 import time
 
@@ -799,10 +800,15 @@ def test_a_print_from_here_pauses_from_the_ring_and_cancels(page: Page, printer_
     page.locator("#print-cancel").click()
     expect(page.locator("#print-progress")).to_contain_text("· cancelled ·", timeout=8000)
     expect(page.locator("#print-history")).to_contain_text(
-        "slow cube.gcode · cancelled", timeout=5000
+        "print · slow cube.gcode · cancelled", timeout=5000
     )
     expect(page.locator("#log .tx.control", has_text="M104 S0").last).to_be_visible()
     expect(page.locator("#print-start")).to_be_enabled(timeout=5000)
+    # Cancel ended the print's job, cancelled, and said why.
+    job_id = page.evaluate("() => window.apothecaryMonitor.print.job().job_id")
+    job = page.request.get(f"{printer_url}/jobs/{job_id}").json()
+    assert job["outcome"] == "cancelled" and "heaters" in job["reason"], job
+    assert job["input"]["name"] == "slow cube.gcode" and job["finished_at"]
 
 
 @pytest.mark.e2e
@@ -816,9 +822,150 @@ def test_a_short_file_prints_to_the_end(page: Page, printer_url: str):
     expect(page.locator("#print-progress")).to_contain_text("dot.gcode · done · 3/3", timeout=10000)
     expect(page.locator("#print-history")).to_contain_text("dot.gcode · done · 3/3")
     expect(page.locator("#c-state")).to_contain_text("idle", timeout=WITHIN_A_POLL)
-    r = page.request.get(f"{printer_url}/firmware/printers/print/records?port=/dev/ttyFAKE1")
+    r = page.request.get(f"{printer_url}/jobs?machine=/dev/ttyFAKE1&kind=print")
     newest = r.json()[0]
-    assert (newest["name"], newest["outcome"]) == ("dot.gcode", "done")
+    assert (newest["input"]["name"], newest["outcome"]) == ("dot.gcode", "done")
+
+
+@pytest.mark.e2e
+def test_a_print_from_the_card_is_a_job_that_names_the_part_it_makes(page: Page, printer_url: str):
+    """Pinned in the garage, the card offers the garage's parts and pieces, the printer's
+    own left out; a print started naming one is a job of the garage with its file, its
+    machine, the part and how it ended, and the card's history is the printer's jobs."""
+    _pin(printer_url, BOARD)
+    _identify(printer_url)
+    dot = _keep(printer_url, "dot.gcode", "G28\nG1 X5 Y5 E0.1\nM84\n")
+    _armed_with_the_card_paused(page, printer_url, dot)
+    part = page.locator("#print-part")
+    expect(part.locator("option[value='footpedal']")).to_be_attached(timeout=5000)
+    expect(part.locator("option[value^='printer_1']")).to_have_count(0)
+    expect(page.locator("#print-where")).to_have_text("in garage")
+    part.select_option("footpedal")
+    page.once("dialog", lambda d: d.accept())
+    page.locator("#print-start").click()
+    expect(page.locator("#print-progress")).to_contain_text("dot.gcode · done · 3/3", timeout=10000)
+    expect(page.locator("#print-history")).to_contain_text(
+        "print · dot.gcode → footpedal · done · 3/3 lines", timeout=5000
+    )
+    newest = page.request.get(f"{printer_url}/jobs?site=garage").json()[0]
+    assert (newest["kind"], newest["input"]["name"], newest["outcome"]) == (
+        "print",
+        "dot.gcode",
+        "done",
+    )
+    assert newest["part"] == {"path": "footpedal", "name": "footpedal"}
+    assert (newest["machine"]["port"], newest["machine"]["path"]) == (PRINTER, BOARD)
+    assert newest["started_at"] and newest["finished_at"]
+
+
+@pytest.mark.e2e
+def test_the_print_records_kept_before_jobs_show_in_the_cards_history(
+    page: Page, start_server, tmp_path
+):
+    """A print record kept before a print was a job is in the printer's history,
+    carried over as a print job, on a server that never saw it printed."""
+    records = tmp_path / "state" / "prints" / "records"
+    records.mkdir(parents=True)
+    (records / "20260920T132512.468-dev_ttyFAKE1.json").write_text(
+        json.dumps(
+            {
+                "id": "20260920T132512.468-dev_ttyFAKE1",
+                "port": PRINTER,
+                "file_id": "20260920T130000.000-old_cube",
+                "name": "old cube.gcode",
+                "at": "2026-09-20T13:25:12.468000+00:00",
+                "finished": "2026-09-20T13:55:12.468000+00:00",
+                "outcome": "done",
+                "sent": 12,
+                "total": 12,
+                "error": None,
+                "firmware": "Marlin",
+                "lines": ["ok"],
+            }
+        )
+    )
+    url = start_server({"APOTHECARY_STATE_DIR": str(tmp_path / "state")})
+    page.goto(f"{url}/firmware/monitor?port={PRINTER}")
+    expect(page.locator("#print-history")).to_contain_text(
+        "print · old cube.gcode · done · 12/12 lines", timeout=10000
+    )
+    log = page.locator("#print-history a").first
+    expect(log).to_have_attribute("href", re.compile(r"/jobs/20260920T132512\.468-dev_ttyFAKE1$"))
+
+
+def _printing(url: str, file_id: str, part: str | None = None) -> dict:
+    """A print started over the API, as the card starts one: armed, the card's own print
+    paused (the simulator is mid-way through one) and polled, then the file sent."""
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        http.post(
+            "/firmware/printers/control", json={"port": PRINTER, "armed": True}
+        ).raise_for_status()
+        http.post(
+            "/firmware/printers/command", json={"port": PRINTER, "command": "M25"}
+        ).raise_for_status()
+        http.get("/firmware/printers/status", params={"port": PRINTER}).raise_for_status()
+        r = http.post(
+            "/firmware/printers/print", json={"port": PRINTER, "file_id": file_id, "part": part}
+        )
+        r.raise_for_status()
+        return r.json()
+
+
+def _until_it_ends(url: str, cancel: bool = False) -> dict:
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        if cancel:
+            http.post("/firmware/printers/print/cancel", json={"port": PRINTER})
+        for _ in range(600):  # 30 s
+            job = http.get("/firmware/printers/print", params={"port": PRINTER}).json()
+            if not job["running"]:
+                return job
+            time.sleep(0.05)
+    raise AssertionError(f"the print did not end: {job}")
+
+
+@pytest.mark.e2e
+def test_site_lists_the_sites_jobs_and_a_row_opens_its_machine(page: Page, printer_url: str):
+    """Site's Jobs lists the jobs of the garage's machines: a print running on printer_1
+    on top, then the one before it with the part it made and how it ended; the row of
+    either selects printer_1 and opens its Machine, from whatever level is shown."""
+    _pin(printer_url, BOARD)
+    _identify(printer_url)
+    dot = _keep(printer_url, "dot.gcode", "G28\nG1 X5 Y5 E0.1\nM84\n")
+    slow = _keep(printer_url, "slow cube.gcode", SLOW)
+    before = _printing(printer_url, dot, part="footpedal")
+    assert _until_it_ends(printer_url)["stage"] == "done"
+    running = _printing(printer_url, slow)
+    try:
+        page.goto(f"{printer_url}/viewer/sites/garage")
+        expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+        jobs = page.locator("#site-jobs")
+        expect(jobs.locator("summary")).to_contain_text("running", timeout=10000)
+        jobs.locator("summary").click()
+        rows = page.locator("#site-jobs-list li[data-job]")
+        expect(rows.first).to_have_attribute("data-job", running["job_id"])
+        expect(rows.first).to_have_class(re.compile(r"\brunning\b"))
+        expect(rows.first).to_contain_text("printer_1 · print · slow cube.gcode · running")
+        expect(rows.nth(1)).to_have_attribute("data-job", before["job_id"])
+        expect(rows.nth(1)).to_contain_text("printer_1 · print · dot.gcode → footpedal · done")
+        # From a level below, the row steps out to printer_1, selects it and opens it.
+        page.locator("#contents-list .contents-item[data-path='workbench']").dblclick()
+        expect(page.locator("#contents-list .contents-item[data-path='printer_1']")).to_have_count(
+            0, timeout=10000
+        )
+        rows.first.click()
+        machine = page.locator(".panel[data-panel='machine']")
+        expect(machine).to_be_visible(timeout=10000)
+        expect(machine.locator(".panel-name")).to_contain_text("printer_1 · /dev/ttyFAKE1")
+        expect(page.locator("#selected-body .prop-row", has_text="Name")).to_contain_text(
+            "printer_1"
+        )
+        # It ends: the row says how, and running is no longer said.
+        ended = _until_it_ends(printer_url, cancel=True)
+        assert ended["stage"] == "cancelled"
+        expect(rows.first).to_contain_text("slow cube.gcode · cancelled", timeout=10000)
+        expect(jobs.locator("summary")).not_to_contain_text("running")
+    finally:
+        _until_it_ends(printer_url, cancel=True)
 
 
 def _wearing_its_badge(page: Page, url: str):

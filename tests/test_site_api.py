@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import apothecary.api as api
-from apothecary.api import _find_node_by_path, _job_store, _site_store, app
+from apothecary.api import _find_node_by_path, _site_store, app
 from apothecary.example_hierarchy import create_example_site
 from apothecary.firmware import devices as firmware_devices
 from apothecary.firmware import gcode as firmware_gcode
@@ -26,7 +26,6 @@ def reset_garage_site():
     """The site store keeps edits between requests: each test starts from the
     factory garage. test_reset_endpoint_discards_edits covers the route."""
     _site_store.reset("garage")
-    _job_store.reset("garage")
     yield
 
 
@@ -151,8 +150,8 @@ def test_printers_default_to_idle_with_a_build_volume():
 
 
 def test_cnc_router_has_no_build_volume():
-    """Unlike the printers, the CNC router stub isn't wired into the job
-    queue yet (see example_hierarchy.py's BENCH_MOUNTED_STRUCTURES comment).
+    """Unlike the printers, the CNC router stub has no build volume (see
+    example_hierarchy.py's BENCH_MOUNTED_STRUCTURES comment).
     """
     data = client.get("/sites/garage").json()
     router = next(s for s in data["structures"] if s["name"] == "cnc_router")

@@ -421,9 +421,11 @@ async def firmware_print_delete(file_id: str):
 
 @router.post("/printers/print", status_code=202)
 def firmware_print_start(body: PrintRequest):
-    """Stream a kept file to the printer (latch required); the job's first snapshot."""
+    """Stream a kept file to the printer (latch required), as a print job naming the
+    part it makes, if one is named; the print's first snapshot, with its ``job_id``.
+    The printer's jobs are ``GET /jobs?machine=``."""
     _busy_guard(body.port)
-    return devices.start_print(body.port, body.file_id).snapshot()
+    return devices.start_print(body.port, body.file_id, part=body.part).snapshot()
 
 
 @router.get("/printers/print")
@@ -461,22 +463,6 @@ def firmware_print_resume(body: ProbeRequest):
 def firmware_print_cancel(body: ProbeRequest):
     """Stop feeding and send the safe-off (heaters and fan off, motors free). No latch needed."""
     return _print_verb(body.port, "cancel")
-
-
-@router.get("/printers/print/records")
-async def firmware_print_records(port: PortOrAll = ""):
-    """Prints streamed from here, newest first (all ports when ``port`` is empty)."""
-    return [
-        r.model_dump(mode="json", exclude={"lines"}) for r in devices.print_records(port or None)
-    ]
-
-
-@router.get("/printers/print/records/{record_id}")
-async def firmware_print_record(record_id: str):
-    record = devices.print_record(record_id)
-    if record is None:
-        raise HTTPException(status_code=404, detail="no such print")
-    return record.model_dump(mode="json")
 
 
 @router.get("/printers/queries")

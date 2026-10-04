@@ -386,41 +386,12 @@
         .contents-item.invalid-inside .problem-mark { color: #b06060; }
         .validity-indicator { cursor: pointer; }
         .site-scad .code-content { max-height: 320px; }
-
-        .job-form { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.75rem; }
-        .job-form input[type="text"], .job-form input[type="number"] {
-            padding: 0.35rem 0.5rem; border-radius: 4px;
-            border: 1px solid #444; background: #2a2a2a; color: #e0e0e0;
-        }
-        .job-form-dims { display: flex; gap: 0.4rem; }
-        .job-form-dims input { width: 0; flex: 1; }
-        .job-form button, .job-item button {
-            padding: 0.4rem 0.6rem; border-radius: 4px; cursor: pointer;
-            border: none; background: #0d6efd; color: white; font-size: 0.8rem;
-        }
-        .job-form button:hover, .job-item button:hover { background: #0b5ed7; }
-
-        .job-list { list-style: none; margin: 0; padding: 0; font-size: 0.8rem; }
-        .job-item {
-            padding: 0.5rem; margin-bottom: 0.4rem; border-radius: 4px;
-            background: #2a2a2a; border: 1px solid #383838;
-        }
-        .job-item-header { display: flex; justify-content: space-between; align-items: center; }
-        .job-status {
-            font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 3px; text-transform: uppercase;
-        }
-        .job-status-queued { background: #444; color: #ccc; }
-        .job-status-assigned, .job-status-printing { background: #664400; color: #ffcc66; }
-        .job-status-done { background: #1e4620; color: #6fdb75; }
-        .job-item-dims { color: #999; margin: 0.2rem 0; }
-        .job-item-actions { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.3rem; }
-        .job-item-actions select {
-            padding: 0.3rem; border-radius: 4px; border: 1px solid #444;
-            background: #2a2a2a; color: #e0e0e0; flex: 1;
-        }
-        .job-no-printers { color: #dc7a7a; font-size: 0.75rem; }
-        .job-assigned-to { color: #999; }
-        .job-done { color: #6fdb75; }
+        .site-jobs { list-style: none; margin: 0; padding: 0; font-size: 0.78rem; max-height: 220px; overflow: auto; }
+        .site-jobs li { padding: 0.25rem 0.45rem; margin-bottom: 0.15rem; border-radius: 4px; color: #ccc; cursor: pointer; }
+        .site-jobs li:hover { background: #2f2f2f; }
+        .site-jobs li.running { color: #ffcc66; background: #2e2716; }
+        .site-jobs li.cancelled, .site-jobs li.failed { color: #dc9a7a; }
+        .site-jobs li.empty { cursor: default; color: #888; font-style: italic; background: none; }
 
         .code-header {
             padding: 0.4rem 0; font-weight: 600; font-size: 0.8rem; color: #ccc;
@@ -577,6 +548,10 @@
                             <summary>Pinned · every site's</summary>
                             <div id="site-pinned-body"></div>
                         </details>
+                        <details id="site-jobs" class="fold" title="The jobs of this site's machines -- a print started from a pinned printer's Print card -- the running ones first, then the newest; a row selects its machine and opens it">
+                            <summary>Jobs<span id="site-jobs-count"></span></summary>
+                            <ul id="site-jobs-list" class="site-jobs"></ul>
+                        </details>
                         <details id="site-scad" class="fold site-scad" title="The site as OpenSCAD, generated from its tree">
                             <summary>SCAD</summary>
                             <div id="code-content" class="code-content">Load a site to see its generated OpenSCAD</div>
@@ -587,21 +562,6 @@
                     <div class="panel-header">Selected</div>
                     <div class="panel-body" id="selected-body">
                         <div class="no-selection">Click a node to select it</div>
-                    </div>
-                </div>
-                <div class="panel-section" id="jobs-section" data-panel="jobs" style="display: none;">
-                    <div class="panel-header">Jobs</div>
-                    <div class="panel-body">
-                        <form id="job-form" class="job-form">
-                            <input type="text" id="job-name" placeholder="Job name" required>
-                            <div class="job-form-dims">
-                                <input type="number" id="job-x" placeholder="X mm" step="10" min="0" required>
-                                <input type="number" id="job-y" placeholder="Y mm" step="10" min="0" required>
-                                <input type="number" id="job-z" placeholder="Z mm" step="10" min="0" required>
-                            </div>
-                            <button type="submit">+ Add Job</button>
-                        </form>
-                        <ul id="job-list" class="job-list"></ul>
                     </div>
                 </div>
             </div>
@@ -754,11 +714,6 @@
             return node.children.find((c) => c.name === name);
         }
 
-        function treeHasBuildVolume(node) {
-            if (node.build_volume) return true;
-            return node.children.some(treeHasBuildVolume);
-        }
-
         // The same color-priority chain used for both a rendered mesh
         // (colorMesh) and a Contents-tree/category-chip swatch: a part's own
         // color, then a subtraction-composed cutout, then operational status,
@@ -895,22 +850,22 @@
                 this.categoryFiltersEl = document.getElementById('category-filters');
                 this.contentsEl = document.getElementById('contents-list');
                 this.selectedBodyEl = document.getElementById('selected-body');
-                this.jobFormEl = document.getElementById('job-form');
-                this.jobListEl = document.getElementById('job-list');
                 this.problemsEl = document.getElementById('site-problems');
                 this.problemsCountEl = document.getElementById('site-problems-count');
                 this.problemListEl = document.getElementById('problem-list');
                 this.validityEl = document.getElementById('validity-indicator');
                 this.codeContentEl = document.getElementById('code-content');
                 this.pinnedEl = document.getElementById('site-pinned');
+                this.siteJobsCountEl = document.getElementById('site-jobs-count');
+                this.siteJobsListEl = document.getElementById('site-jobs-list');
+                this.siteJobs = [];      // GET /jobs?site= for the loaded site: running first, then newest
+                this.siteJobsAt = 0;     // when they were last asked for
                 this.statusEl = document.getElementById('status');
 
                 this.tree = null;            // full recursive tree for the loaded site
                 this.siteName = null;
                 this.focusPath = [];          // names from root -- the only navigation state
                 this.maxDepthValue = 0;
-                this.hasBuildVolumes = false;
-                this.jobs = [];
                 this.violations = [];
                 this.isValid = true;
                 this.selectedName = null;     // nodeKey() of the selected rendered node
@@ -1002,11 +957,10 @@
                 // Both survive renderFocus(), which clears only the nodes' meshes.
                 this.anchors = mountAnchors({ container: this.canvas.parentElement, canvas: this.canvas, camera: this.camera, scene: this.scene });
                 // The side column's sections become panels in the one rail: Site and
-                // Selected stacked at its top, Jobs a tab of the strip below them,
-                // each one closable, collapsible and draggable free; what a person
-                // did to them is remembered per browser (panels.js), and a
-                // remembered layout naming a panel that is gone, or from before
-                // the one rail, is ignored.
+                // Selected stacked at its top, each one closable, collapsible and
+                // draggable free; what a person did to them is remembered per
+                // browser (panels.js), and a remembered layout naming a panel that
+                // is gone (Jobs), or from before the one rail, is ignored.
                 this.panels = mountPanels({ container: document.querySelector('.main-content'), overlay: this.canvas.parentElement });
                 for (const section of document.querySelectorAll('.side-panel [data-panel]')) {
                     const id = section.dataset.panel;
@@ -1015,8 +969,6 @@
                         body: section.querySelector('.panel-body'),
                         zone: section.dataset.zone || 'tabs',
                     });
-                    // Jobs is offered when a site has build volumes.
-                    if (section.style.display === 'none') this.panels.offer(id, false);
                 }
                 document.querySelector('.side-panel')?.remove();
                 this.machine = null;
@@ -1112,6 +1064,13 @@
                 this.zoomOutBtn.addEventListener('click', () => this.zoomOut());
                 // The toolbar's count of problems opens them, at the top of Site.
                 this.validityEl.addEventListener('click', () => this.openProblems());
+                // A row of Site's Jobs selects its machine, at its level, and opens it.
+                this.siteJobsListEl.addEventListener('click', (e) => {
+                    const row = e.target.closest('li[data-job]');
+                    if (row) this.openJobMachine(row.dataset.job);
+                });
+                // A print begun or ended from a Machine: the site's jobs, asked for again.
+                window.addEventListener('apothecary:jobs-changed', () => this.loadSiteJobs());
                 this.snapToggle.addEventListener('change', () => {
                     this.transformControls.setTranslationSnap(this.snapToggle.checked ? SNAP_INCREMENT : null);
                 });
@@ -1141,10 +1100,6 @@
                         e.preventDefault();
                         this.zoomOut();
                     }
-                });
-                this.jobFormEl.addEventListener('submit', (e) => {
-                    e.preventDefault();
-                    this.createJob();
                 });
                 window.addEventListener('resize', () => this.onResize());
                 // Device bindings of the loaded site (path -> NodeBinding row
@@ -1195,6 +1150,7 @@
                         if (n.site === this.siteName) recoloured = this.applyNodeStatus(n.path, n.status) || recoloured;
                     }
                     if (touched || recoloured) { this.updateDeviceViews(); this.syncWorldMarks(); }
+                    this.followJobs(st);
                 });
                 // A bed reading shown in the machine popup lands on the marks, and a
                 // jog sent from it moves the nozzle ahead of the poll that confirms it.
@@ -1250,13 +1206,11 @@
                     this.siteName = name;
                     this.tree = data.tree;
                     this.maxDepthValue = maxDepth(this.tree);
-                    this.hasBuildVolumes = treeHasBuildVolume(this.tree);
                     this.violations = data.violations;
                     this.isValid = data.is_valid;
                     this.focusPath = this.resolveFocusPath(focusPathStr);
                     this.selectedName = null;
                     this.editorOpenFor = null;
-                    this.jobs = this.hasBuildVolumes ? await this.fetchJobs() : [];
                     if (data.scad) this.codeContentEl.textContent = data.scad;
                     this.renderFocus();
                     // A ?focus= deep link should land on the part, not one
@@ -1268,6 +1222,9 @@
                     // Bindings shell out to arduino-cli (a second or two):
                     // fetched after the scene is on screen, never before.
                     this.loadBindings().then(() => { this.afterBindings(); this.scheduleAutoRefresh(); });
+                    this.siteJobs = [];
+                    this.renderSiteJobs();
+                    this.loadSiteJobs();
                     this.pictureMarks.unchoose();
                     this.pictures.still();
                     this.pictureMarks.load(name);
@@ -1476,7 +1433,6 @@
                 this.renderCategoryFilters();
                 this.renderContentsList(focus);
                 this.renderSelectedPanel();
-                this.renderJobsSection();
                 this.frameCameraForChildren(renderNodes);
                 this.scheduleWaveLoad(renderNodes);
                 this.pictureMarks.sync();
@@ -2945,6 +2901,11 @@
             // view steps there first when it is another.
             goToProblem(path) {
                 if (!path || !this.nodeByPath(path)) { this.setStatus(`${path || 'that problem'} names no piece in this site`, 'error'); return false; }
+                return this.selectAtItsLevel(path);
+            }
+
+            // A piece selected at its own level: the view steps out (or in) to its parent first.
+            selectAtItsLevel(path) {
                 const parent = path.includes('.') ? path.slice(0, path.lastIndexOf('.')) : '';
                 if (parent !== this.focusPath.join('.')) {
                     this.focusPath = parent ? parent.split('.') : [];
@@ -2952,6 +2913,81 @@
                     this.renderFocus();
                 }
                 return this.selectPath(path);
+            }
+
+            // ---------------------------------------------------------------
+            // Site's Jobs: what the site's machines ran (GET /jobs?site=), the
+            // running ones first, then the newest. A job is started from its
+            // machine's card -- a print from the Print card -- never here.
+            // ---------------------------------------------------------------
+
+            async loadSiteJobs() {
+                const site = this.siteName;
+                if (!site) return;
+                this.siteJobsAt = Date.now();
+                let found = [];
+                try {
+                    const response = await fetch(`${BASE_URL}/jobs?site=${encodeURIComponent(site)}`);
+                    if (!response.ok) throw new Error(`jobs: ${response.status}`);
+                    found = await response.json();
+                } catch (err) {
+                    console.error(err);
+                }
+                if (site !== this.siteName) return;  // another site was loaded meanwhile
+                this.siteJobs = found;
+                this.renderSiteJobs();
+            }
+
+            // The machine a job ran on, by the node it is pinned to: the printer above its board.
+            jobMachine(job) {
+                return job.machine.path && this.nodeByPath(job.machine.path) ? this.bearerPathFor(job.machine.path) : job.machine.port;
+            }
+
+            renderSiteJobs() {
+                const jobs = this.siteJobs;
+                const running = jobs.filter((j) => j.outcome === 'running').length;
+                this.siteJobsCountEl.textContent = jobs.length ? ` · ${jobs.length}${running ? ` · ${running} running` : ''}` : '';
+                this.siteJobsListEl.innerHTML = jobs.length
+                    ? jobs.map((j) => {
+                        const machine = this.jobMachine(j);
+                        const part = j.part ? ` → ${esc(j.part.path)}` : '';
+                        const how = j.outcome === 'running' ? `running ${Math.round((j.progress || 0) * 100)}%` : esc(j.outcome);
+                        const why = j.reason ? `${j.reason}. ` : '';
+                        return `<li class="site-job ${esc(j.outcome)}" data-job="${esc(j.id)}" title="${esc(why)}Started ${esc(new Date(j.started_at).toLocaleString())}${j.finished_at ? `, ended ${esc(new Date(j.finished_at).toLocaleString())}` : ''}. Select ${esc(machine)} and open it">${esc(machine)} · ${esc(j.kind)} · ${esc(j.input.name)}${part} · ${how} · ${esc(new Date(j.started_at).toLocaleString())}</li>`;
+                    }).join('')
+                    : '<li class="empty">none yet: a print started from the Print card of a printer pinned here is listed here</li>';
+            }
+
+            // A poll of a machine: a running job's progress shown, and a job begun or
+            // ended on one of this site's machines asked for again (not more than
+            // every few seconds).
+            followJobs(st) {
+                const live = st.job && st.job.kind === 'print' && st.job.running ? st.job : null;
+                const listed = this.siteJobs.find((j) => j.outcome === 'running' && j.machine.port === st.port);
+                if (live && listed && listed.id === live.job_id) {
+                    listed.progress = live.progress;
+                    this.renderSiteJobs();
+                    return;
+                }
+                if (!live && !listed) return;
+                const ours = Object.values(this.bindings).some((row) => row.device && row.device.port === st.port);
+                if ((ours || listed) && Date.now() - this.siteJobsAt > 3000) this.loadSiteJobs();
+            }
+
+            // A job's row in Site: its machine selected at its level, and its Machine opened.
+            openJobMachine(id) {
+                const job = this.siteJobs.find((j) => j.id === id);
+                if (!job) return false;
+                const pinned = job.machine.path;
+                if (!pinned || !this.nodeByPath(pinned)) {
+                    this.setStatus(`${job.machine.port}: that machine is pinned nowhere in ${this.siteName} now`, 'error');
+                    return false;
+                }
+                const machine = this.bearerPathFor(pinned);
+                this.selectAtItsLevel(machine);
+                if (!this.openMachine(machine)) return false;
+                this.setStatus(`Opened ${machine}: its ${job.kind} of ${job.input.name}, ${job.outcome}`, 'success');
+                return true;
             }
 
             // The toolbar's count: Site opened (and the rail shown, where it is
@@ -3567,134 +3603,6 @@
                 if (data.scad) this.codeContentEl.textContent = data.scad;
                 this.renderFocus();
                 this.pictureMarks.refresh();
-            }
-
-            // ---------------------------------------------------------------
-            // Jobs (site-wide -- visible whenever the loaded tree has any
-            // build_volume anywhere, regardless of current zoom depth)
-            // ---------------------------------------------------------------
-
-            renderJobsSection() {
-                this.panels.offer('jobs', this.hasBuildVolumes);
-                if (this.hasBuildVolumes) this.renderJobs();
-            }
-
-            async fetchJobs() {
-                const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/jobs`);
-                if (!response.ok) throw new Error(`Failed to load jobs (${response.status})`);
-                return response.json();
-            }
-
-            renderJobs() {
-                this.jobListEl.innerHTML = '';
-                // A job's name is whatever was posted; everything from the server is escaped here.
-                for (const job of this.jobs) {
-                    const li = document.createElement('li');
-                    li.className = 'job-item';
-                    const dims = job.required_volume.map((v) => v.toFixed(0)).join(' × ');
-
-                    let actionsHtml;
-                    if (job.status === 'queued') {
-                        actionsHtml = job.compatible_printers.length
-                            ? `<select class="job-printer-select">
-                                 ${job.compatible_printers.map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join('')}
-                               </select>
-                               <button type="button" class="job-assign-btn">Assign</button>`
-                            : '<span class="job-no-printers">No idle printer fits this job</span>';
-                    } else if (job.status === 'assigned' || job.status === 'printing') {
-                        actionsHtml = `<span class="job-assigned-to">on ${esc(job.assigned_printer)}</span>
-                                       <button type="button" class="job-complete-btn">Mark Done</button>`;
-                    } else {
-                        actionsHtml = `<span class="job-done">done${job.assigned_printer ? ' on ' + esc(job.assigned_printer) : ''}</span>`;
-                    }
-
-                    li.innerHTML = `
-                        <div class="job-item-header">
-                            <strong>${esc(job.name)}</strong>
-                            <span class="job-status job-status-${esc(job.status)}">${esc(job.status)}</span>
-                        </div>
-                        <div class="job-item-dims">${dims} mm</div>
-                        <div class="job-item-actions">${actionsHtml}</div>
-                    `;
-
-                    li.querySelector('.job-assign-btn')?.addEventListener('click', () => {
-                        const printer = li.querySelector('.job-printer-select').value;
-                        this.assignJob(job.name, printer);
-                    });
-                    li.querySelector('.job-complete-btn')?.addEventListener('click', () => this.completeJob(job.name));
-                    this.jobListEl.appendChild(li);
-                }
-            }
-
-            async createJob() {
-                const name = document.getElementById('job-name').value.trim();
-                const x = parseFloat(document.getElementById('job-x').value);
-                const y = parseFloat(document.getElementById('job-y').value);
-                const z = parseFloat(document.getElementById('job-z').value);
-                if (!name || !this.siteName) return;
-
-                this.setStatus(`Creating job ${name}...`, 'loading');
-                try {
-                    const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/jobs`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name, required_volume: { x, y, z } }),
-                    });
-                    if (!response.ok) {
-                        const data = await response.json().catch(() => ({}));
-                        throw new Error(data.detail || `Create job failed (${response.status})`);
-                    }
-                    this.jobFormEl.reset();
-                    this.jobs = await this.fetchJobs();
-                    this.renderJobs();
-                    this.setStatus(`Job ${name} queued`, 'success');
-                } catch (err) {
-                    this.setStatus(`Error: ${err.message}`, 'error');
-                    console.error(err);
-                }
-            }
-
-            async assignJob(jobName, printerName) {
-                this.setStatus(`Assigning ${jobName} to ${printerName}...`, 'loading');
-                try {
-                    const response = await fetch(
-                        `${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/jobs/${encodeURIComponent(jobName)}/assign`,
-                        {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ printer: printerName }),
-                        }
-                    );
-                    if (!response.ok) {
-                        const data = await response.json().catch(() => ({}));
-                        throw new Error(data.detail || `Assign failed (${response.status})`);
-                    }
-                    await this.refreshTree();
-                    this.jobs = await this.fetchJobs();
-                    this.renderJobs();
-                    this.setStatus(`${jobName} assigned to ${printerName}`, 'success');
-                } catch (err) {
-                    this.setStatus(`Error: ${err.message}`, 'error');
-                    console.error(err);
-                }
-            }
-
-            async completeJob(jobName) {
-                this.setStatus(`Completing ${jobName}...`, 'loading');
-                try {
-                    const response = await fetch(
-                        `${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/jobs/${encodeURIComponent(jobName)}/complete`,
-                        { method: 'POST' }
-                    );
-                    if (!response.ok) throw new Error(`Complete failed (${response.status})`);
-                    await this.refreshTree();
-                    this.jobs = await this.fetchJobs();
-                    this.renderJobs();
-                    this.setStatus(`${jobName} done`, 'success');
-                } catch (err) {
-                    this.setStatus(`Error: ${err.message}`, 'error');
-                    console.error(err);
-                }
             }
 
             // ---------------------------------------------------------------

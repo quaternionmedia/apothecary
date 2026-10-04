@@ -16,7 +16,8 @@ where they disagree:
   and progress afterwards.
 
 Records live in ``~/.apothecary/firmware-state.json`` (``APOTHECARY_STATE_DIR``
-overrides): machine state, not repository state, so it is never committed.
+overrides): machine state, not repository state, so it is never committed. A
+print streamed from here is a job (``apothecary/jobs.py``), kept beside them.
 """
 
 from __future__ import annotations
@@ -42,6 +43,7 @@ try:
 except ImportError:
     msvcrt = None
 
+from .. import jobs
 from ..projects.parts.skeleton import ROOT
 from ..stays_local import subprocess_env
 from . import gcode
@@ -54,7 +56,6 @@ from .models import (
     ManualBinding,
     PrinterQueryResult,
     PrintFile,
-    PrintRecord,
     SketchInfo,
 )
 from .sketches import find_sketch
@@ -474,6 +475,12 @@ def known_device(port: str, state: Optional[FirmwareState] = None) -> Optional[D
         return None
 
 
+def machine_kind(device: Optional[DeviceInfo]) -> Optional[str]:
+    """The kind of machine a board drives, as ``apothecary/jobs.py`` registers
+    kinds: ``printer`` for one that answered as a G-code printer, else none."""
+    return "printer" if device is not None and device.printer is not None else None
+
+
 def stable_identity(identity: str, state: Optional[FirmwareState] = None) -> str:
     """The board's own identity for a port that is detected right now, else ``identity``.
 
@@ -865,6 +872,7 @@ def save_print_file(name: str, data: bytes) -> PrintFile:
         id=file_id,
         name=Path(name).name[:120] or file_id,
         size=len(data),
+        sha256=hashlib.sha256(data).hexdigest(),
         lines=total,
         uploaded_at=at,
         problems=problems,
@@ -912,38 +920,6 @@ def delete_print_file(file_id: str) -> bool:
     return found
 
 
-def print_records_dir() -> Path:
-    return prints_dir() / "records"
-
-
-def print_records(port: Optional[str] = None) -> List[PrintRecord]:
-    """Every print streamed from here, newest first; for one port when given."""
-    folder = print_records_dir()
-    if not folder.is_dir():
-        return []
-    records: List[PrintRecord] = []
-    for path in folder.glob("*.json"):
-        try:
-            rec = PrintRecord(**json.loads(path.read_text(encoding="utf-8")))
-        except (OSError, ValueError):
-            continue
-        if port is None or rec.port == port:
-            records.append(rec)
-    return sorted(records, key=lambda r: r.at, reverse=True)
-
-
-def print_record(record_id: str) -> Optional[PrintRecord]:
-    return next((r for r in print_records() if r.id == record_id), None)
-
-
-def _save_print_record(record: PrintRecord) -> Path:
-    folder = print_records_dir()
-    private_folder(folder)
-    path = folder / f"{record.id}.json"
-    path.write_text(record.model_dump_json(indent=2), encoding="utf-8")
-    return path
-
-
 # What is sent when a print stops short, in this order, each on its own and
 # none of them fatal: the heaters off, the fan off, the motors free. No move
 # -- a nozzle parked blind is worse than one left where it stopped.
@@ -960,9 +936,24 @@ class PrintJob:
     Pausing stops the feed (the firmware finishes what it has queued);
     cancelling stops it and sends ``PRINT_SAFE_OFF``. Between two lines
     the link is free, which is where polls and a temperature change go.
+
+    The print is a job (``apothecary/jobs.py``): ``job`` is what it records
+    from the start -- the printer, where it is pinned, the part it makes, the
+    file it runs -- ``current()`` the job as it stands now, and ``record`` the
+    job as it ended.
     """
 
-    def __init__(self, port: str, file: PrintFile, links: gcode.PrinterLinks):
+    def __init__(
+        self,
+        port: str,
+        file: PrintFile,
+        links: gcode.PrinterLinks,
+        place: Optional[jobs.Place] = None,
+        part: Optional[jobs.JobPart] = None,
+        identity: Optional[str] = None,
+        sha256: Optional[str] = None,
+        firmware: Optional[str] = None,
+    ):
         self.port, self.file, self.links = port, file, links
         self.stage = "starting"
         self.sent = 0
@@ -971,18 +962,51 @@ class PrintJob:
         self.started = datetime.now(timezone.utc)
         self.finished: Optional[datetime] = None
         self.error: Optional[str] = None
-        self.record: Optional[PrintRecord] = None
+        self.firmware = firmware
+        self.job = jobs.Job(
+            id=jobs.new_id(self.started, port),
+            kind=jobs.PRINT.kind,
+            machine=jobs.JobMachine(
+                kind=jobs.PRINT.machine,
+                port=port,
+                identity=identity,
+                path=place.path if place is not None else None,
+            ),
+            site=place.site if place is not None else None,
+            part=part,
+            input=jobs.JobInput(name=file.name, size=file.size, sha256=sha256, file_id=file.id),
+            started_at=self.started,
+            detail=self._detail(),
+        )
+        self.record: Optional[jobs.Job] = None  # the job as it ended
         self._go = threading.Event()
         self._go.set()
         self._stop = threading.Event()
         self._quiet = False
         self.thread = threading.Thread(target=self._run, daemon=True, name=f"print-{port}")
 
+    def _detail(self) -> dict:
+        detail = {"sent": self.sent, "total": self.total, "stage": self.stage}
+        if self.firmware:
+            detail["firmware"] = self.firmware
+        return detail
+
+    def progress(self) -> float:
+        return (self.sent / self.total) if self.total else 0.0
+
+    def now(self) -> jobs.Job:
+        """The job as it stands: its progress and stage, or how it ended."""
+        if self.record is not None:
+            return self.record
+        return self.job.model_copy(update={"progress": self.progress(), "detail": self._detail()})
+
     def snapshot(self) -> dict:
         elapsed = ((self.finished or datetime.now(timezone.utc)) - self.started).total_seconds()
         return {
             "kind": "print",
             "port": self.port,
+            "job_id": self.job.id,
+            "part": self.job.part.path if self.job.part is not None else None,
             "file_id": self.file.id,
             "name": self.file.name,
             "stage": self.stage,
@@ -1024,10 +1048,43 @@ class PrintJob:
         if link is not None and (self.finished is None):
             link.job = self.snapshot()
 
+    def _end(self, outcome: str, tail: List[str]) -> jobs.Job:
+        """The job as it ended, kept; a store that cannot be written does not stop the end."""
+        if outcome == "failed":
+            reason = self.error
+        elif outcome == "cancelled":
+            reason = (
+                "stopped by the emergency stop"
+                if self._quiet
+                else "cancelled; heaters and fan off, motors free"
+            )
+        else:
+            reason = None
+        self.record = self.job.model_copy(
+            update={
+                "finished_at": datetime.now(timezone.utc),
+                "outcome": outcome,
+                "reason": reason,
+                "progress": self.progress(),
+                "detail": self._detail(),
+                "log": tail,
+            }
+        )
+        try:
+            jobs.end(self.record)
+        except (OSError, ValueError) as exc:
+            link = self.links.get(self.port)
+            if link is not None:
+                link.log.add("sys", f"print not recorded: {exc}", "print")
+        return self.record
+
     def _run(self) -> None:
         link = self.links.get(self.port)
         if link is None:
-            self.error, self.finished = "no link", datetime.now(timezone.utc)
+            self.error = "no link"
+            self.stage = "failed"
+            self._end("failed", [])
+            self.finished = self.record.finished_at
             return
         tail: List[str] = []
         outcome = "done"
@@ -1073,24 +1130,7 @@ class PrintJob:
                     tail = (tail + link.command(cmd, timeout=10.0, origin="print"))[-200:]
                 except ToolchainError as exc:
                     tail.append(f"({cmd} not answered: {exc})")
-        ended = datetime.now(timezone.utc)
-        cached = get_state().cached_device(self.port)
-        self.record = PrintRecord(
-            id=f"{self.started:%Y%m%dT%H%M%S}.{self.started.microsecond // 1000:03d}-"
-            + re.sub(r"[^A-Za-z0-9]+", "_", self.port).strip("_"),
-            port=self.port,
-            file_id=self.file.id,
-            name=self.file.name,
-            at=self.started,
-            finished=ended,
-            outcome=outcome,
-            sent=self.sent,
-            total=self.total,
-            error=self.error,
-            firmware=cached.printer.firmware_name if cached and cached.printer else None,
-            lines=tail,
-        )
-        _save_print_record(self.record)
+        ended = self._end(outcome, tail).finished_at
         link.log.add(
             "sys",
             f"print {outcome}: {self.file.name}, {self.sent}/{self.total} lines"
@@ -1108,18 +1148,35 @@ def print_job(port: str) -> Optional[PrintJob]:
     return _PRINTS.get(port)
 
 
+def _sha256_of(file: PrintFile) -> str:
+    """The kept file's hash: from its description, or from its bytes for a file kept
+    before descriptions carried one."""
+    if file.sha256:
+        return file.sha256
+    digest = hashlib.sha256()
+    with _print_file_path(file.id).open("rb") as kept:
+        for block in iter(lambda: kept.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def start_print(
     port: str,
     file_id: str,
+    part: Optional[str] = None,
     state: Optional[FirmwareState] = None,
     links: Optional[gcode.PrinterLinks] = None,
 ) -> PrintJob:
-    """Begin streaming a kept file to ``port``; needs the control latch armed.
+    """Begin streaming a kept file to ``port``, as a print job; needs the latch armed.
 
-    Raises ``ValueError`` when the file is unknown or refused,
-    ``ControlNotArmed`` with the latch down, ``PortHeld`` when a job (a print,
-    a bed reading, the card) already has the machine, and ``ToolchainError``
-    when the port is not a printer.
+    ``part`` is the path of the part or piece the print makes, in the site the
+    printer is pinned in (``apothecary/jobs.py``'s ``part_at``); the job
+    records it, with where the printer stands and the file it runs.
+
+    Raises ``ValueError`` when the file is unknown or refused, or the part is
+    not one of the printer's site, ``ControlNotArmed`` with the latch down,
+    ``PortHeld`` when a job (a print, a bed reading, the card) already has the
+    machine, and ``ToolchainError`` when the port is not a printer.
     """
     state = state or get_state()
     links = links or gcode.get_printer_links()
@@ -1130,6 +1187,8 @@ def start_print(
         raise ValueError(f"{file.name} may not be sent: " + "; ".join(file.problems[:3]))
     if file.lines == 0:
         raise ValueError(f"{file.name} has nothing to send")
+    place = jobs.place_of(port)
+    chosen = jobs.part_at(place, part)
     if not links.control.armed(port):
         raise gcode.ControlNotArmed(
             f"{port}: a print heats and moves the machine -- arm control first"
@@ -1146,7 +1205,19 @@ def start_print(
     last = _LAST_STATUS.get(port)
     if last is not None and last.sd_printing:
         raise PortHeld(f"{port}: the card is printing -- pause or abort that first")
-    job = PrintJob(port, file, links)
+    cached = state.cached_device(port)
+    job = PrintJob(
+        port,
+        file,
+        links,
+        place=place,
+        part=chosen,
+        identity=cached.identity if cached is not None else None,
+        sha256=_sha256_of(file),
+        firmware=cached.printer.firmware_name if cached and cached.printer else None,
+    )
+    # Kept before it holds anything: a job that cannot be written never starts.
+    jobs.begin(job.job, live=job.now)
     _PRINTS[port] = job
     link.job = job.snapshot()
     job.thread.start()

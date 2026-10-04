@@ -206,12 +206,13 @@ On your own server, in the garage, with the page freshly loaded.
 
 - [ ] One rail, on the right of the world: **Site** and **Selected**
       stacked in it, both open -- Site with the garage's tree, the category
-      chips above it and two folded sections below it, **Pinned** and
-      **SCAD** -- and below them a strip of tabs, **Jobs** and **Pictures**,
-      neither shown. The other side of the world is world, and the rail
-      leaves it at least half the page.
-- [ ] Press a tab → its panel shows under the strip; press it again → it
-      folds away; press the other → that one instead.
+      chips above it and three folded sections below it, **Pinned**,
+      **Jobs** and **SCAD** -- and below them a strip of tabs, **Pictures**,
+      not shown. The other side of the world is world, and the rail leaves it
+      at least half the page.
+- [ ] Press the tab → its panel shows under the strip; press it again → it
+      folds away. With a machine open and docked (section 6), its tab and its
+      log's join the strip: pressing one shows that one instead.
 - [ ] Press **`** (or `~`) → the rail hides and a tab stands in for it;
       press again → back. Typing in a text box never triggers it.
 - [ ] Drag the rail's inner edge → its width follows, never more than half
@@ -222,9 +223,8 @@ On your own server, in the garage, with the page freshly loaded.
 - [ ] On **Site**: ▾ collapses it to its title; ⧉ floats it free (drag it
       by its title, resize from its corner); its title's ⇥ docks it back
       above Selected; ✕ closes it to a tab at the bottom right; the tab
-      reopens it. A shown tab's ⧉ floats Pictures or Jobs the same way, and
-      its ⇥ docks it back into the strip. Reload → the layout is
-      remembered.
+      reopens it. A shown tab's ⧉ floats Pictures the same way, and its ⇥
+      docks it back into the strip. Reload → the layout is remembered.
 - [ ] Unfold Site's **SCAD** → the site's generated OpenSCAD.
 - [ ] Select `printer_1`, type 650 into its X → the toolbar says *1
       violation*; Site lists *printer_1 and printer_2 overlap* at its top,
@@ -233,8 +233,8 @@ On your own server, in the garage, with the page freshly loaded.
       and printer_1 is selected. Close Site, click the toolbar's count →
       Site opens on its problems. Type 100 back → *Layout valid*.
 - [ ] Right-click the canvas → the ring; **Panels** → a cell per panel
-      (Site, Selected, Jobs, Pictures, **Machine** (which groups the machine
-      and its log), Rail); a digit toggles one.
+      (Site, Selected, Pictures, **Machine** (which groups the machine and
+      its log), Rail); a digit toggles one.
 - [ ] Select `printer_1`, press **m** → the node ring: Device, Control, Why
       this, Into, cardinals first, 5 backs out.
 - [ ] A **badge** floats above every pinned, connected board and follows it
@@ -347,16 +347,21 @@ bare board):
       printer's `build_origin`; **▤ Probe bed** → confirm → a job that holds
       the port, then a second record.
 - [ ] Print from here: **Choose File** →
-      `docs/validation/dry-run-square.gcode` → **▶ Print** → confirm → lines
-      stream one per `ok`; **⏸ Pause**, **Resume**, **■ Cancel** → the safe-off
-      lines in amber; `GET /firmware/printers/print/records` → the record
-      with its outcome.
+      `docs/validation/dry-run-square.gcode`, **makes** → `footpedal` (the
+      garage's parts, `printer_1`'s own left out) → **▶ Print** → confirm →
+      lines stream one per `ok`; Site's **Jobs** says *1 running* and lists
+      it on top; **⏸ Pause**, **Resume**, **■ Cancel** → the safe-off lines in
+      amber; the card's history and Site's row read *cancelled*, and
+      `GET /jobs?site=garage` → the job with its file, its printer, the part
+      and its outcome. Click its row in Site → `printer_1` is selected and its
+      machine opens.
 - [ ] `curl -s "http://127.0.0.1:8001/firmware/printers/where?port=/dev/ttyFAKE1"`
       → `build_volume [220,220,250]`, `build_origin [90,100,95]`,
       `base_height 95`, the board inside the printer at (80, 90, 26).
 - [ ] Stop the demo server. `ls /tmp/apothecary-demo` → `firmware-state.json`,
-      `cameras.json`, `leveling/`, `prints/`: everything the demo kept, in
-      the folder you gave it, and nothing under your own `~/.apothecary`.
+      `cameras.json`, `jobs/`, `leveling/`, `prints/`: everything the demo
+      kept, in the folder you gave it, and nothing under your own
+      `~/.apothecary`.
 
 **With hardware** -- your own server, the board plugged in: the latch-side
 checklist in [`2026-09-20-ender-bench.md`](2026-09-20-ender-bench.md)

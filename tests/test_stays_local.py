@@ -620,15 +620,17 @@ def test_what_is_kept_is_the_persons_alone(monkeypatch, tmp_path):
         assert stat.S_IMODE(folder.stat().st_mode) == 0o700, folder
 
 
-def test_a_job_name_that_is_markup_is_refused():
-    """A job name is letters, digits and a little punctuation."""
+def test_a_part_named_for_a_print_that_is_markup_is_refused():
+    """The part a print names is a path in its site -- letters, digits and a little
+    punctuation -- refused as it arrives, before any port is touched."""
     here = TestClient(app)
-    body = {"required_volume": {"x": 10, "y": 10, "z": 10}}
-    r = here.post("/sites/garage/jobs", json={"name": "small bracket v2", **body})
-    assert r.status_code == 200, r.text
-    for bad in ('<img src=x onerror="fetch(1)">', "a&b", 'x"y', "", " lead", "x" * 81):
-        r = here.post("/sites/garage/jobs", json={"name": bad, **body})
+    for bad in ('<img src=x onerror="fetch(1)">', "a&b", 'x"y', " lead", "x" * 201):
+        r = here.post(
+            "/firmware/printers/print",
+            json={"port": "/dev/ttyFAKE1", "file_id": "f1", "part": bad},
+        )
         assert r.status_code == 422, bad
+        assert r.json()["detail"][0]["loc"] == ["body", "part"], bad
 
 
 def test_a_subprocess_inherits_no_proxy_and_no_arduino_override(monkeypatch):

@@ -13,6 +13,7 @@ Apothecary builds 3D-printable things from Python and keeps the parts it has bui
   assemblies and parts at any depth.
 - **Boards and printers.** Sketches kept with their parts are compiled and uploaded to
   Arduinos and ESP32s; a Marlin printer is monitored, and drives its node in the viewer.
+  A print is a job, kept with the part it makes and listed in the printer's site.
 - **Photographs into pieces.** A picture becomes named, placed pieces you can build.
 - **It stays on this machine.** The server answers this machine only, and the process
   connects nowhere else but to fetch its tools, the firmware toolchain and OpenSCAD

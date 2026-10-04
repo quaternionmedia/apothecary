@@ -125,8 +125,8 @@ the log too. ✔ as you go.
       was queued and stops; `paused` in the card; a poll still answers.
       **▶ Resume** (needs the latch).
 - [ ] **■ Cancel** → confirm: `M104 S0`, `M140 S0`, `M107`, `M84` in amber;
-      the history row reads *cancelled · N/23*; the record is under
-      `~/.apothecary/prints/records/`.
+      the history row reads *cancelled · N/23 lines*; the job is under
+      `~/.apothecary/jobs/` (`GET /jobs?machine=/dev/ttyUSB0`), cancelled.
 - [ ] Print it again to the end: *done · 23/23*, `M117 dry run done` on the
       printer's screen, the state card back to `idle`.
 - [ ] Optional: a real sliced file with your usual start G-code. Watch for
