@@ -1,7 +1,7 @@
 /* Panels: windows in front of the world.
  *
  * A panel is a titled box the world's page registers once -- Site, Selected,
- * Pictures, Jobs, a machine and its log -- and a person opens, closes,
+ * Pictures, a machine and its log -- and a person opens, closes,
  * collapses, drags free or docks back. Docked panels live in one rail, on the
  * right of the world unless a person moved it; the other side stays world. In
  * the rail, the panels registered to stack (Site and Selected) are stacked at
@@ -83,17 +83,17 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
 
     const docked = (p) => p.where === "rail";
     const tethered = (p) => typeof p.where === "object" && p.where !== null;
-    const inStrip = (p) => p.open && p.offered && docked(p) && p.zone === "tabs";
+    const inStrip = (p) => p.open && docked(p) && p.zone === "tabs";
     // Whether a panel's body is in front of a person, the rail's hiding aside.
     function visible(p) {
-        if (!p.open || !p.offered) return false;
+        if (!p.open) return false;
         if (docked(p) && p.zone === "tabs") return rail.tab === p.id;
         return true;
     }
 
     function railMax() { return Math.floor(container.clientWidth * RAIL_MAX_FRACTION); }
     function layoutRail() {
-        const any = [...panels.values()].some((p) => p.open && p.offered && docked(p));
+        const any = [...panels.values()].some((p) => p.open && docked(p));
         railEl.hidden = rail.hidden || !any;
         railEl.dataset.side = rail.side;
         railEl.classList.toggle("panel-rail-right", rail.side === "right");
@@ -203,8 +203,8 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
     function renderTabs() {
         // Closed panels keep a tab, so nothing a person closed is lost; a hidden
         // rail with panels in it keeps one too, since the tilde is not a thing to see.
-        const closed = [...panels.values()].filter((p) => !p.open && p.offered);
-        const railTab = rail.hidden && [...panels.values()].some((p) => p.open && p.offered && docked(p));
+        const closed = [...panels.values()].filter((p) => !p.open);
+        const railTab = rail.hidden && [...panels.values()].some((p) => p.open && docked(p));
         tabs.innerHTML = (railTab ? `<button type="button" class="panel-tab panel-tab-rail" title="Show the rail (tilde does too)">⋮ Panels ~</button>` : "")
             + closed.map((p) => `<button type="button" class="panel-tab" data-panel="${esc(p.id)}" title="Open ${esc(p.title)}">${esc(p.title)}</button>`).join("");
         tabs.hidden = closed.length === 0 && !railTab;
@@ -311,7 +311,7 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
          * shown again. */
         register(id, { title, body, zone = "tabs", where = "rail", open = true, collapsed = false, x = 40, y = 40, onClose = null, onOpen = null } = {}) {
             if (panels.has(id)) this.unregister(id);
-            const p = { id, title: title || id, zone: zone === "stack" ? "stack" : "tabs", where: where === "free" ? "free" : "rail", order: order++, offered: true, open, collapsed, x, y, height: null, el: null, slot: null, leader: null, tether: null, mount: null, onClose, onOpen };
+            const p = { id, title: title || id, zone: zone === "stack" ? "stack" : "tabs", where: where === "free" ? "free" : "rail", order: order++, open, collapsed, x, y, height: null, el: null, slot: null, leader: null, tether: null, mount: null, onClose, onOpen };
             const had = remembered[id];
             if (had && typeof had === "object") {
                 if (typeof had.open === "boolean") p.open = had.open;
@@ -407,15 +407,6 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
                 if (rail.tab === id) rail.tab = null;
                 p.tether = anchorKey; p.where = { tether: anchorKey }; p.open = true;
             });
-            return true;
-        },
-        /* Whether the page offers a panel now (Jobs, on a site with build
-         * volumes): one it does not has no tab and no body, and keeps what a
-         * person did to it for when it is offered again. */
-        offer(id, offered = true) {
-            const p = panels.get(id);
-            if (!p) return false;
-            change(p, () => { p.offered = !!offered; });
             return true;
         },
         /* Called each frame with a function answering an anchor's canvas position. */

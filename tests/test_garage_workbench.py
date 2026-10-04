@@ -111,7 +111,7 @@ def test_garage_shell_fixtures_storage_and_cnc_router_render():
     assert "Feature: cable_pass_through" in rendered  # unaffected by the additions above
 
 
-def test_cnc_router_has_no_build_volume_and_is_not_job_compatible():
+def test_cnc_router_is_idle_and_has_no_build_volume():
     site = create_example_site()
     router = next(s for s in site.children if s.name == "cnc_router")
     assert router.status == "idle"

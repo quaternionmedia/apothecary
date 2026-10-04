@@ -81,8 +81,8 @@ def test_site_is_stacked_in_the_one_rail_and_the_retired_panels_are_gone(page, b
     expect(site.locator("#contents-list")).to_be_visible()
     assert page.evaluate("() => window.apothecaryPanels.state('site').zone") == "stack"
     ids = page.evaluate("() => window.apothecaryPanels.list().map((p) => p.id)")
-    assert ids == ["site", "selected", "jobs", "pictures"]
-    for gone in ("contents", "validation", "scad", "kept", "camera"):
+    assert ids == ["site", "selected", "pictures"]
+    for gone in ("contents", "validation", "scad", "kept", "camera", "jobs"):
         assert page.evaluate("(id) => window.apothecaryPanels.state(id)", gone) is None
     # The one rail leaves the world at least half the page.
     width = page.viewport_size["width"]
@@ -118,7 +118,6 @@ def test_a_layout_remembered_with_the_old_panels_is_ignored(page, base_url: str)
     assert [(s["id"], s["open"], s["collapsed"], s["where"]) for s in states] == [
         ("site", True, False, "rail"),
         ("selected", True, False, "rail"),
-        ("jobs", True, False, "rail"),
         ("pictures", True, False, "rail"),
     ]
     expect(page.locator(".panel-tab")).to_have_count(0)  # nothing closed
@@ -127,6 +126,45 @@ def test_a_layout_remembered_with_the_old_panels_is_ignored(page, base_url: str)
     expect(rail).to_have_attribute("data-side", "right")
     # The width it starts with, not the one a right rail was dragged to.
     assert page.evaluate("() => window.apothecaryPanels.railWidth()") != 300
+    assert errors == []
+
+
+@pytest.mark.e2e
+def test_a_layout_remembered_with_the_jobs_panel_is_harmless(page, base_url: str):
+    """A one-rail layout remembered while the Jobs panel was a tab of the strip -- Jobs
+    floated free, then its tab the one shown -- opens the page with no error and no
+    Jobs anywhere; the rest of what was remembered still holds, and the next thing
+    remembered forgets Jobs."""
+    old = {
+        "_rail": {"side": "left", "width": 360, "hidden": False, "tab": "jobs"},
+        "site": {"open": True, "collapsed": False, "where": "rail"},
+        "selected": {"open": True, "collapsed": True, "where": "rail"},
+        "jobs": {"open": True, "collapsed": False, "where": "free", "x": 80, "y": 60},
+        "pictures": {"open": False, "collapsed": False, "where": "rail"},
+    }
+    page.add_init_script(
+        f"if (!sessionStorage.getItem('seeded')) {{ sessionStorage.setItem('seeded', '1');"
+        f" localStorage.setItem('apothecary.panels', {json.dumps(json.dumps(old))}); }}"
+    )
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.goto(f"{base_url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
+    states = page.evaluate("() => window.apothecaryPanels.list()")
+    assert [(s["id"], s["open"], s["collapsed"]) for s in states] == [
+        ("site", True, False),
+        ("selected", True, True),
+        ("pictures", False, False),
+    ]
+    assert page.evaluate("() => window.apothecaryPanels.state('jobs')") is None
+    expect(page.locator("[data-panel='jobs']")).to_have_count(0)
+    rail = page.locator(".panel-rail")
+    expect(rail).to_have_attribute("data-side", "left")
+    # Pictures' tab, closed, brings it back into the strip and shows it.
+    page.locator(".panel-tab[data-panel='pictures']").click()
+    expect(rail.locator(".panel[data-panel='pictures']")).to_be_visible(timeout=2000)
+    remembered = json.loads(page.evaluate("() => localStorage.getItem('apothecary.panels')"))
+    assert "jobs" not in remembered and remembered["_rail"]["tab"] == "pictures"
     assert errors == []
 
 

@@ -121,12 +121,6 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "load-btn": (WIDGET, WHAT_YOU_SEE, "a button that loads the chosen arrangement"),
     "zoom-out-btn": (WIDGET, WHAT_YOU_SEE, "a button that steps back out"),
     "snap-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box for snapping to a grid"),
-    "job-form": (WIDGET, WHAT_IS_THERE, "a form for making a job"),
-    "job-name": (WIDGET, WHAT_IS_THERE, "a box for the name of a new job"),
-    "job-x": (WIDGET, WHAT_IS_THERE, "a box for where a new job goes, across"),
-    "job-y": (WIDGET, WHAT_IS_THERE, "a box for where a new job goes, along"),
-    "job-z": (WIDGET, WHAT_IS_THERE, "a box for where a new job goes, up"),
-    "job-form:submit": (WIDGET, WHAT_IS_THERE, "the button that makes the job"),
     "zoom-in-btn": (WIDGET, WHAT_YOU_SEE, "a button that goes into the chosen piece"),
     "status-select": (WIDGET, WHAT_IS_THERE, "a drop-down for the state of a piece"),
     "pos-x": (WIDGET, WHAT_IS_THERE, "a box for typing where a piece is, across"),
@@ -134,9 +128,6 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "pos-z": (WIDGET, WHAT_IS_THERE, "a box for typing where a piece is, up"),
     "part-regenerate-btn": (WIDGET, WHAT_IS_THERE, "a button that rebuilds a piece"),
     "part-scad-download": (WIDGET, NOTHING, "a link that downloads the piece's recipe"),
-    "job-printer-select": (WIDGET, WHAT_IS_THERE, "a drop-down of machines to give a job to"),
-    "job-assign-btn": (WIDGET, WHAT_IS_THERE, "a button that gives a job to a machine"),
-    "job-complete-btn": (WIDGET, WHAT_IS_THERE, "a button that finishes a job"),
     # The staged numbers of a piece: changed on the sliders, then kept or not.
     "apply-btn": (WIDGET, WHAT_IS_THERE, "a button that rebuilds a piece with its staged numbers"),
     "revert-btn": (WIDGET, WHAT_YOU_SEE, "a button that puts the staged numbers back"),
@@ -511,15 +502,12 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "siteSelect:change:loadSite": (WIDGET, WHAT_YOU_SEE, "choosing from the drop-down"),
     "zoomOutBtn:click:zoomOut": (WIDGET, WHAT_YOU_SEE, "the step-out button"),
     "snapToggle:change:setTranslationSnap": (WIDGET, WHAT_YOU_SEE, "the snapping tick-box"),
-    "jobFormEl:submit:createJob": (WIDGET, WHAT_IS_THERE, "sending the job form"),
     "posAxis:change:recomputeWorldBounds": (WIDGET, WHAT_IS_THERE, "typing a position"),
     "statusSelect:change:submitStatus": (WIDGET, WHAT_IS_THERE, "choosing a state"),
     # The editor's Regenerate STL: the staged set applied to its target, a
     # part's STL rendered again (a made piece has no such button: Apply is its
     # rebuild).
     "regenerateBtn:click:applyEditor": (WIDGET, WHAT_IS_THERE, "the rebuild button"),
-    "jobBtn:click:assignJob": (WIDGET, WHAT_IS_THERE, "giving a job to a machine"),
-    "jobBtn:click:completeJob": (WIDGET, WHAT_IS_THERE, "finishing a job"),
     "zoomInLink:click:zoomIn": (WIDGET, WHAT_YOU_SEE, "the go-in button on the chosen piece"),
     # done to the scene itself
     "canvas:pointerdown:onPointerDown": (GESTURE, WHAT_YOU_SEE, "pointing at a piece"),
@@ -730,7 +718,6 @@ LISTENS = re.compile(r"addEventListener\s*\(\s*['\"]([\w-]+)['\"]\s*,")
 # the line above cannot claim a listener that is not its own. Longer labels
 # before the ones they begin with, so `.dev-pin-manual` is not read as `.dev-pin`.
 FETCHED_BY_LABEL: Sequence[Tuple[str, str]] = (
-    (r"\.job-(assign|complete)-btn", "jobBtn"),
     (r"pos-\$\{axis\}", "posAxis"),
     (r"part-regenerate-btn", "regenerateBtn"),
     (r"\.zoom-in-btn", "zoomInLink"),

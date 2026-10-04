@@ -32,21 +32,14 @@ held to that same bench-specific rule (see ``BENCH_MOUNTED_STRUCTURES`` and
 ``validate_garage_layout``) -- not just that the generated .scad "looks about
 right."
 
-Manufacturing planning, first slice: ``Job``/``JobStore``/``job_fits_printer``
-below give each printer Structure a queue -- create a job with the volume it
-needs, and assignment is capacity-checked against the printer's
-``build_volume`` and rejected if the printer isn't idle. No rotation/packing
-optimization, no multi-job scheduling -- one job per printer at a time,
-checked on the same three axes the job was specified in. The CNC router
-carries no ``build_volume``, so it never participates in this queue yet --
-routing jobs across manufacturing types is future work, not modeled here.
+A printer's ``status`` (``PRINTER_STATUSES``) is set by hand from the viewer
+(maintenance, offline) and by the machine itself, through its polls. The CNC
+router carries no ``build_volume`` and has no operation of its own yet.
 """
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
-
-from pydantic import BaseModel
+from typing import List, Optional
 
 from .hierarchy import (
     Assembly,
@@ -196,9 +189,9 @@ SHELF_THICKNESS = 30.0
 SHELF_HEIGHTS = [400.0, 900.0, 1400.0]
 
 # --- Subtractive manufacturing (mm) -- a floor-standing CNC router, next to
-# storage: unlike the bench-top additive printers, deliberately not wired
-# into the job queue (no build_volume) -- a visual stub for a machine type
-# this scenario doesn't yet route jobs to, not a functional gap to hide.
+# storage: unlike the bench-top additive printers, deliberately given no
+# build_volume -- a visual stub for a machine type no job runs on yet, not a
+# functional gap to hide.
 CNC_ROUTER_POSITION = Vector3D(x=GARAGE_MAX.x - 600.0, y=900.0, z=0.0)
 CNC_ROUTER_SIZE = Vector3D(x=500.0, y=600.0, z=900.0)
 
@@ -595,7 +588,7 @@ def _build_cnc_router() -> Assembly:
     """Subtractive manufacturing, as a floor-standing stub next to storage --
     deliberately not given a build_volume (see BENCH_MOUNTED_STRUCTURES and
     the module-level comment on CNC_ROUTER_POSITION): a visual placeholder
-    for a machine type this scenario doesn't yet route jobs to.
+    for a machine type no job runs on yet.
     """
     frame_system = Substructure(
         name="frame_system",
@@ -751,67 +744,3 @@ def validate_garage_layout(site: Assembly) -> LayoutReport:
             )
 
     return LayoutReport(violations=violations)
-
-
-class Job(BaseModel):
-    """A print job: a required volume, waiting for (or assigned to) a printer.
-
-    ``assigned_printer`` is kept even after a job is marked ``done`` -- a
-    record of which printer produced it, not just current-assignment state.
-    """
-
-    name: str
-    required_volume: Vector3D
-    status: str = "queued"
-    assigned_printer: Optional[str] = None
-
-
-def job_fits_printer(job: Job, printer: Assembly) -> bool:
-    """Whether ``printer.build_volume`` is large enough for ``job.required_volume``.
-
-    Axis-aligned, no rotation: the job's X/Y/Z must each fit the printer's
-    build volume in that same axis. A printer with no ``build_volume`` set
-    (e.g. the workbench) never fits any job.
-    """
-    build_volume = printer.build_volume
-    if build_volume is None:
-        return False
-    required = job.required_volume
-    return (
-        required.x <= build_volume.x
-        and required.y <= build_volume.y
-        and required.z <= build_volume.z
-    )
-
-
-class JobStore:
-    """In-memory job queue, one list per site name (prototype -- see
-    site_store.py's SiteStore for the same caveats: in-process only, lost on
-    restart, not shared across worker processes).
-    """
-
-    def __init__(self) -> None:
-        self._jobs: Dict[str, List[Job]] = {}
-
-    def list_for_site(self, site_name: str) -> List[Job]:
-        return self._jobs.setdefault(site_name, [])
-
-    def add(self, site_name: str, job: Job) -> Job:
-        jobs = self.list_for_site(site_name)
-        if any(existing.name == job.name for existing in jobs):
-            raise ValueError(f"Job {job.name!r} already exists for site {site_name!r}")
-        jobs.append(job)
-        return job
-
-    def get(self, site_name: str, job_name: str) -> Job:
-        for job in self.list_for_site(site_name):
-            if job.name == job_name:
-                return job
-        raise KeyError(job_name)
-
-    def reset(self, site_name: str) -> None:
-        """Clear a site's job queue -- called when the site's own layout is
-        reset, since a reset re-idles every printer and a job still marked
-        "assigned" to one would otherwise be stale.
-        """
-        self._jobs[site_name] = []

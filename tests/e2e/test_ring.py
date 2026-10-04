@@ -510,14 +510,28 @@ def _tab(page: Page, pid: str):
     return page.locator(f".panel-rail .rail-tab[data-panel='{pid}']")
 
 
+def _second_tab(page: Page):
+    """A second tab in the strip, as a docked machine's comms log is: registered the
+    way the page registers one, with a body of its own."""
+    page.evaluate(
+        """() => {
+            const el = document.createElement('div');
+            el.id = 'second-body';
+            el.textContent = 'a second tab';
+            window.apothecaryPanels.register('second', { title: 'Second', body: el });
+        }"""
+    )
+
+
 @pytest.mark.e2e
 def test_one_rail_stacks_site_and_selected_over_a_strip_of_tabs(page: Page, ring_url: str):
     """One rail, on the right of the world: Site and Selected stacked in it, both
-    shown, and below them a strip of tabs -- Jobs and Pictures -- none shown until
-    pressed, one at a time, pressed again to fold away. The other side is world."""
+    shown, and below them a strip of tabs -- Pictures, and a docked machine and its
+    log when one is open -- none shown until pressed, one at a time, pressed again
+    to fold away. The other side is world."""
     rail, world = _open_panels(page, ring_url)
     ids = page.evaluate("() => window.apothecaryPanels.list().map((p) => p.id)")
-    assert ids == ["site", "selected", "jobs", "pictures"]
+    assert ids == ["site", "selected", "pictures"]
     expect(page.locator(".panel-rail")).to_have_count(1)
     expect(rail).to_have_attribute("data-side", "right")
     site = rail.locator(".panel[data-panel='site']")
@@ -528,14 +542,16 @@ def test_one_rail_stacks_site_and_selected_over_a_strip_of_tabs(page: Page, ring
     assert rail.bounding_box()["x"] >= world.bounding_box()["x"] + world.bounding_box()["width"] - 1
     assert world.bounding_box()["x"] <= 1  # nothing docked on the other side
     assert world.bounding_box()["width"] >= page.viewport_size["width"] / 2
-    # The strip: a tab for each, in the order the page registered them, none shown.
+    # The strip: a tab for each, in the order they were registered, none shown.
+    expect(rail.locator(".rail-tab")).to_have_count(1)
+    _second_tab(page)
     expect(rail.locator(".rail-tab")).to_have_count(2)
     assert rail.locator(".rail-tab").evaluate_all("(ts) => ts.map((t) => t.dataset.panel)") == [
-        "jobs",
         "pictures",
+        "second",
     ]
     expect(rail.locator(".panel[data-panel='pictures']")).to_be_hidden()
-    expect(rail.locator(".panel[data-panel='jobs']")).to_be_hidden()
+    expect(rail.locator(".panel[data-panel='second']")).to_be_hidden()
     strip = rail.locator(".panel-tabstrip").bounding_box()
     assert strip["y"] > selected.bounding_box()["y"]  # below the stack
     expect(page.locator(".panel-tab")).to_have_count(0)  # nothing closed
@@ -555,12 +571,12 @@ def test_one_rail_stacks_site_and_selected_over_a_strip_of_tabs(page: Page, ring
     expect(_tab(page, "pictures")).to_have_class(re.compile(r"\bactive\b"))
     # Under the strip, which Site gave room for.
     assert pictures.bounding_box()["y"] > rail.locator(".panel-tabstrip").bounding_box()["y"]
-    _tab(page, "jobs").locator(".rail-tab-name").click()
-    expect(rail.locator(".panel[data-panel='jobs']")).to_be_visible(timeout=2000)
+    _tab(page, "second").locator(".rail-tab-name").click()
+    expect(rail.locator(".panel[data-panel='second']")).to_be_visible(timeout=2000)
     expect(pictures).to_be_hidden()
     # Pressed again, it folds away; Site and Selected stay.
-    _tab(page, "jobs").locator(".rail-tab-name").click()
-    expect(rail.locator(".panel[data-panel='jobs']")).to_be_hidden(timeout=2000)
+    _tab(page, "second").locator(".rail-tab-name").click()
+    expect(rail.locator(".panel[data-panel='second']")).to_be_hidden(timeout=2000)
     expect(site).to_be_visible()
     expect(selected).to_be_visible()
 
@@ -571,14 +587,14 @@ def test_a_panel_closes_to_a_tab_and_collapses(page: Page, ring_url: str):
     a tab of the strip to the strip, shown; a collapsed one keeps its title."""
     rail, world = _open_panels(page, ring_url)
     # Close a tab of the strip: gone from it, a tab over the world remains, and brings it back.
-    _tab(page, "jobs").locator(".rail-tab-name").click()
-    _tab(page, "jobs").locator(".rail-tab-close").click()
-    expect(page.locator(".panel-tab[data-panel='jobs']")).to_be_visible(timeout=1000)
-    expect(_tab(page, "jobs")).to_have_count(0)
-    expect(rail.locator(".panel[data-panel='jobs']")).to_have_count(0)
-    page.locator(".panel-tab[data-panel='jobs']").click()
-    expect(rail.locator(".panel[data-panel='jobs']")).to_be_visible(timeout=1000)
-    expect(_tab(page, "jobs")).to_have_class(re.compile(r"\bactive\b"))
+    _tab(page, "pictures").locator(".rail-tab-name").click()
+    _tab(page, "pictures").locator(".rail-tab-close").click()
+    expect(page.locator(".panel-tab[data-panel='pictures']")).to_be_visible(timeout=1000)
+    expect(_tab(page, "pictures")).to_have_count(0)
+    expect(rail.locator(".panel[data-panel='pictures']")).to_have_count(0)
+    page.locator(".panel-tab[data-panel='pictures']").click()
+    expect(rail.locator(".panel[data-panel='pictures']")).to_be_visible(timeout=1000)
+    expect(_tab(page, "pictures")).to_have_class(re.compile(r"\bactive\b"))
     expect(page.locator(".panel-tab")).to_have_count(0)
 
     # A stacked one closes the same way and comes back to the stack.
@@ -659,7 +675,7 @@ def test_a_closed_panel_stays_closed_and_the_ring_reopens_it(page: Page, ring_ur
     page.keyboard.press(panels_cell)
     assert _title(page) == "Panels"
     inner = _wedges(page)
-    assert sorted(inner.values()) == ["Jobs", "Machine", "Pictures", "Rail", "Selected", "Site"]
+    assert sorted(inner.values()) == ["Machine", "Pictures", "Rail", "Selected", "Site"]
     site_cell = next(cell for cell, label in inner.items() if label == "Site")
     page.keyboard.press(site_cell)
     expect(page.locator("#ring-overlay")).to_have_count(0)
@@ -678,10 +694,10 @@ def test_a_closed_panel_stays_closed_and_the_ring_reopens_it(page: Page, ring_ur
     expect(_tab(page, "pictures")).to_have_class(re.compile(r"\bactive\b"))
     expect(page.locator(".panel-tab")).to_have_count(0)
 
-    # Every panel closed: the world has the whole width, and four tabs wait.
-    for pid in ["site", "selected", "jobs", "pictures"]:
+    # Every panel closed: the world has the whole width, and three tabs wait.
+    for pid in ["site", "selected", "pictures"]:
         page.evaluate("(id) => window.apothecaryPanels.close(id)", pid)
-    expect(page.locator(".panel-tab")).to_have_count(4, timeout=2000)
+    expect(page.locator(".panel-tab")).to_have_count(3, timeout=2000)
     expect(rail).to_be_hidden()
     _world_is(page, page.viewport_size["width"])
 
@@ -692,10 +708,11 @@ def test_the_tilde_hides_the_rail_and_the_ring_does_too(page: Page, ring_url: st
     has the whole width); typed into a box it is typing; Panels › Rail hides it too."""
     rail, world = _open_panels(page, ring_url)
     full = page.viewport_size["width"]
-    _tab(page, "jobs").locator(".rail-tab-name").click()
-    page.locator("#job-name").focus()
+    _tab(page, "pictures").locator(".rail-tab-name").click()
+    page.locator("#pictures-gather summary").click()
+    page.locator("#gather-answers").focus()
     page.keyboard.press("`")  # typing a tilde into a box is typing, not a toggle
-    expect(page.locator("#job-name")).to_have_value("`")
+    expect(page.locator("#gather-answers")).to_have_value("`")
     expect(rail).to_be_visible()
     page.locator("#viewer-canvas").click(position={"x": 200, "y": 200})
     page.keyboard.press("`")
@@ -760,7 +777,7 @@ def test_the_rail_swaps_to_the_left_and_is_remembered_there(page: Page, ring_url
     assert rb["x"] <= 1 and wb["x"] >= rb["width"] - 1  # the world is on its right
     for pid in ("site", "selected", "pictures"):
         expect(rail.locator(f".panel[data-panel='{pid}']")).to_be_visible()
-    expect(_tab(page, "jobs")).to_be_visible()
+    expect(_tab(page, "pictures")).to_be_visible()
     page.reload()
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     expect(rail).to_have_attribute("data-side", "left")

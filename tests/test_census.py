@@ -132,7 +132,19 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # when nothing older is chosen (at the bench ⌗367, at the floor under the
 # canvas ring's Pictures › Floor ⌗46287), and a chosen picture among the seven
 # is marked in its own cell. The one rail (panels.js) is chrome, off the meter.
-VIEWER_CEILING = 127
+#
+# Consolidation Phase 3, jobs: a print is the job. Before: 127 controls of its
+# own, 58 ring-backed (45.7%), 83 places the page listens. After: 118, 58
+# ring-backed (49.2%), 80 places. Gone with the Jobs panel and its hand-typed
+# records: its form (job-form, job-name, job-x, job-y, job-z and the form's send
+# button), a queued job's drop-down of printers and Assign (job-printer-select,
+# job-assign-btn), an assigned one's Mark Done (job-complete-btn), and their three
+# listeners (jobFormEl:submit:createJob, jobBtn:click:assignJob,
+# jobBtn:click:completeJob); none was ring-backed. Ring addresses moved, all under
+# the canvas ring's Panels (cell 9), Jobs (92) being gone: Pictures moved from 94
+# to 92, the Machine group from 99 to 94 (the machine 998 to 948, its comms log
+# 996 to 946), and Rail from 93 to 99. Site 98 and Selected 96 stay.
+VIEWER_CEILING = 118
 
 
 def test_the_viewer_stays_under_its_ceiling():
@@ -487,10 +499,19 @@ def test_pictures_chooses_a_row_and_has_no_pin_here():
 
 def test_the_viewers_ring_backed_share_did_not_fall():
     """Consolidation Phase 2 held the ring-backed share where it was, 58 of 128; its
-    follow-ups do not let it fall below that."""
+    follow-ups do not let it fall below that, and neither does Phase 3, which deleted
+    the Jobs panel's controls, none of them ring-backed."""
     taken = census.take()
     own, backed = len(taken.controls_of_its_own()), len(taken.ring_backed())
     assert backed / own >= 58 / 128, f"{backed} of {own} ring-backed"
+
+
+def test_the_jobs_panel_left_nothing_behind():
+    """No control or listener of the hand-typed Jobs panel is counted or classified."""
+    taken = census.take()
+    assert not [f.key for f in taken.found if f.key.startswith(("job-", "jobFormEl", "jobBtn"))]
+    assert not [k for k in census.CONTROLS if k.startswith("job-")]
+    assert not [k for k in census.LISTENING if k.startswith(("jobFormEl", "jobBtn"))]
 
 
 def test_nothing_is_both_taken_back_and_ring_backed():

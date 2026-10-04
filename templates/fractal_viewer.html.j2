@@ -387,41 +387,6 @@
         .validity-indicator { cursor: pointer; }
         .site-scad .code-content { max-height: 320px; }
 
-        .job-form { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.75rem; }
-        .job-form input[type="text"], .job-form input[type="number"] {
-            padding: 0.35rem 0.5rem; border-radius: 4px;
-            border: 1px solid #444; background: #2a2a2a; color: #e0e0e0;
-        }
-        .job-form-dims { display: flex; gap: 0.4rem; }
-        .job-form-dims input { width: 0; flex: 1; }
-        .job-form button, .job-item button {
-            padding: 0.4rem 0.6rem; border-radius: 4px; cursor: pointer;
-            border: none; background: #0d6efd; color: white; font-size: 0.8rem;
-        }
-        .job-form button:hover, .job-item button:hover { background: #0b5ed7; }
-
-        .job-list { list-style: none; margin: 0; padding: 0; font-size: 0.8rem; }
-        .job-item {
-            padding: 0.5rem; margin-bottom: 0.4rem; border-radius: 4px;
-            background: #2a2a2a; border: 1px solid #383838;
-        }
-        .job-item-header { display: flex; justify-content: space-between; align-items: center; }
-        .job-status {
-            font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 3px; text-transform: uppercase;
-        }
-        .job-status-queued { background: #444; color: #ccc; }
-        .job-status-assigned, .job-status-printing { background: #664400; color: #ffcc66; }
-        .job-status-done { background: #1e4620; color: #6fdb75; }
-        .job-item-dims { color: #999; margin: 0.2rem 0; }
-        .job-item-actions { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.3rem; }
-        .job-item-actions select {
-            padding: 0.3rem; border-radius: 4px; border: 1px solid #444;
-            background: #2a2a2a; color: #e0e0e0; flex: 1;
-        }
-        .job-no-printers { color: #dc7a7a; font-size: 0.75rem; }
-        .job-assigned-to { color: #999; }
-        .job-done { color: #6fdb75; }
-
         .code-header {
             padding: 0.4rem 0; font-weight: 600; font-size: 0.8rem; color: #ccc;
         }
@@ -589,21 +554,6 @@
                         <div class="no-selection">Click a node to select it</div>
                     </div>
                 </div>
-                <div class="panel-section" id="jobs-section" data-panel="jobs" style="display: none;">
-                    <div class="panel-header">Jobs</div>
-                    <div class="panel-body">
-                        <form id="job-form" class="job-form">
-                            <input type="text" id="job-name" placeholder="Job name" required>
-                            <div class="job-form-dims">
-                                <input type="number" id="job-x" placeholder="X mm" step="10" min="0" required>
-                                <input type="number" id="job-y" placeholder="Y mm" step="10" min="0" required>
-                                <input type="number" id="job-z" placeholder="Z mm" step="10" min="0" required>
-                            </div>
-                            <button type="submit">+ Add Job</button>
-                        </form>
-                        <ul id="job-list" class="job-list"></ul>
-                    </div>
-                </div>
             </div>
         </div>
         <div id="status" class="status">Loading site…</div>
@@ -754,11 +704,6 @@
             return node.children.find((c) => c.name === name);
         }
 
-        function treeHasBuildVolume(node) {
-            if (node.build_volume) return true;
-            return node.children.some(treeHasBuildVolume);
-        }
-
         // The same color-priority chain used for both a rendered mesh
         // (colorMesh) and a Contents-tree/category-chip swatch: a part's own
         // color, then a subtraction-composed cutout, then operational status,
@@ -895,8 +840,6 @@
                 this.categoryFiltersEl = document.getElementById('category-filters');
                 this.contentsEl = document.getElementById('contents-list');
                 this.selectedBodyEl = document.getElementById('selected-body');
-                this.jobFormEl = document.getElementById('job-form');
-                this.jobListEl = document.getElementById('job-list');
                 this.problemsEl = document.getElementById('site-problems');
                 this.problemsCountEl = document.getElementById('site-problems-count');
                 this.problemListEl = document.getElementById('problem-list');
@@ -909,8 +852,6 @@
                 this.siteName = null;
                 this.focusPath = [];          // names from root -- the only navigation state
                 this.maxDepthValue = 0;
-                this.hasBuildVolumes = false;
-                this.jobs = [];
                 this.violations = [];
                 this.isValid = true;
                 this.selectedName = null;     // nodeKey() of the selected rendered node
@@ -1002,11 +943,10 @@
                 // Both survive renderFocus(), which clears only the nodes' meshes.
                 this.anchors = mountAnchors({ container: this.canvas.parentElement, canvas: this.canvas, camera: this.camera, scene: this.scene });
                 // The side column's sections become panels in the one rail: Site and
-                // Selected stacked at its top, Jobs a tab of the strip below them,
-                // each one closable, collapsible and draggable free; what a person
-                // did to them is remembered per browser (panels.js), and a
-                // remembered layout naming a panel that is gone, or from before
-                // the one rail, is ignored.
+                // Selected stacked at its top, each one closable, collapsible and
+                // draggable free; what a person did to them is remembered per
+                // browser (panels.js), and a remembered layout naming a panel that
+                // is gone (Jobs), or from before the one rail, is ignored.
                 this.panels = mountPanels({ container: document.querySelector('.main-content'), overlay: this.canvas.parentElement });
                 for (const section of document.querySelectorAll('.side-panel [data-panel]')) {
                     const id = section.dataset.panel;
@@ -1015,8 +955,6 @@
                         body: section.querySelector('.panel-body'),
                         zone: section.dataset.zone || 'tabs',
                     });
-                    // Jobs is offered when a site has build volumes.
-                    if (section.style.display === 'none') this.panels.offer(id, false);
                 }
                 document.querySelector('.side-panel')?.remove();
                 this.machine = null;
@@ -1142,10 +1080,6 @@
                         this.zoomOut();
                     }
                 });
-                this.jobFormEl.addEventListener('submit', (e) => {
-                    e.preventDefault();
-                    this.createJob();
-                });
                 window.addEventListener('resize', () => this.onResize());
                 // Device bindings of the loaded site (path -> NodeBinding row
                 // from GET /sites/{name}/devices), the detected devices a node
@@ -1250,13 +1184,11 @@
                     this.siteName = name;
                     this.tree = data.tree;
                     this.maxDepthValue = maxDepth(this.tree);
-                    this.hasBuildVolumes = treeHasBuildVolume(this.tree);
                     this.violations = data.violations;
                     this.isValid = data.is_valid;
                     this.focusPath = this.resolveFocusPath(focusPathStr);
                     this.selectedName = null;
                     this.editorOpenFor = null;
-                    this.jobs = this.hasBuildVolumes ? await this.fetchJobs() : [];
                     if (data.scad) this.codeContentEl.textContent = data.scad;
                     this.renderFocus();
                     // A ?focus= deep link should land on the part, not one
@@ -1476,7 +1408,6 @@
                 this.renderCategoryFilters();
                 this.renderContentsList(focus);
                 this.renderSelectedPanel();
-                this.renderJobsSection();
                 this.frameCameraForChildren(renderNodes);
                 this.scheduleWaveLoad(renderNodes);
                 this.pictureMarks.sync();
@@ -3567,134 +3498,6 @@
                 if (data.scad) this.codeContentEl.textContent = data.scad;
                 this.renderFocus();
                 this.pictureMarks.refresh();
-            }
-
-            // ---------------------------------------------------------------
-            // Jobs (site-wide -- visible whenever the loaded tree has any
-            // build_volume anywhere, regardless of current zoom depth)
-            // ---------------------------------------------------------------
-
-            renderJobsSection() {
-                this.panels.offer('jobs', this.hasBuildVolumes);
-                if (this.hasBuildVolumes) this.renderJobs();
-            }
-
-            async fetchJobs() {
-                const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/jobs`);
-                if (!response.ok) throw new Error(`Failed to load jobs (${response.status})`);
-                return response.json();
-            }
-
-            renderJobs() {
-                this.jobListEl.innerHTML = '';
-                // A job's name is whatever was posted; everything from the server is escaped here.
-                for (const job of this.jobs) {
-                    const li = document.createElement('li');
-                    li.className = 'job-item';
-                    const dims = job.required_volume.map((v) => v.toFixed(0)).join(' × ');
-
-                    let actionsHtml;
-                    if (job.status === 'queued') {
-                        actionsHtml = job.compatible_printers.length
-                            ? `<select class="job-printer-select">
-                                 ${job.compatible_printers.map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join('')}
-                               </select>
-                               <button type="button" class="job-assign-btn">Assign</button>`
-                            : '<span class="job-no-printers">No idle printer fits this job</span>';
-                    } else if (job.status === 'assigned' || job.status === 'printing') {
-                        actionsHtml = `<span class="job-assigned-to">on ${esc(job.assigned_printer)}</span>
-                                       <button type="button" class="job-complete-btn">Mark Done</button>`;
-                    } else {
-                        actionsHtml = `<span class="job-done">done${job.assigned_printer ? ' on ' + esc(job.assigned_printer) : ''}</span>`;
-                    }
-
-                    li.innerHTML = `
-                        <div class="job-item-header">
-                            <strong>${esc(job.name)}</strong>
-                            <span class="job-status job-status-${esc(job.status)}">${esc(job.status)}</span>
-                        </div>
-                        <div class="job-item-dims">${dims} mm</div>
-                        <div class="job-item-actions">${actionsHtml}</div>
-                    `;
-
-                    li.querySelector('.job-assign-btn')?.addEventListener('click', () => {
-                        const printer = li.querySelector('.job-printer-select').value;
-                        this.assignJob(job.name, printer);
-                    });
-                    li.querySelector('.job-complete-btn')?.addEventListener('click', () => this.completeJob(job.name));
-                    this.jobListEl.appendChild(li);
-                }
-            }
-
-            async createJob() {
-                const name = document.getElementById('job-name').value.trim();
-                const x = parseFloat(document.getElementById('job-x').value);
-                const y = parseFloat(document.getElementById('job-y').value);
-                const z = parseFloat(document.getElementById('job-z').value);
-                if (!name || !this.siteName) return;
-
-                this.setStatus(`Creating job ${name}...`, 'loading');
-                try {
-                    const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/jobs`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name, required_volume: { x, y, z } }),
-                    });
-                    if (!response.ok) {
-                        const data = await response.json().catch(() => ({}));
-                        throw new Error(data.detail || `Create job failed (${response.status})`);
-                    }
-                    this.jobFormEl.reset();
-                    this.jobs = await this.fetchJobs();
-                    this.renderJobs();
-                    this.setStatus(`Job ${name} queued`, 'success');
-                } catch (err) {
-                    this.setStatus(`Error: ${err.message}`, 'error');
-                    console.error(err);
-                }
-            }
-
-            async assignJob(jobName, printerName) {
-                this.setStatus(`Assigning ${jobName} to ${printerName}...`, 'loading');
-                try {
-                    const response = await fetch(
-                        `${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/jobs/${encodeURIComponent(jobName)}/assign`,
-                        {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ printer: printerName }),
-                        }
-                    );
-                    if (!response.ok) {
-                        const data = await response.json().catch(() => ({}));
-                        throw new Error(data.detail || `Assign failed (${response.status})`);
-                    }
-                    await this.refreshTree();
-                    this.jobs = await this.fetchJobs();
-                    this.renderJobs();
-                    this.setStatus(`${jobName} assigned to ${printerName}`, 'success');
-                } catch (err) {
-                    this.setStatus(`Error: ${err.message}`, 'error');
-                    console.error(err);
-                }
-            }
-
-            async completeJob(jobName) {
-                this.setStatus(`Completing ${jobName}...`, 'loading');
-                try {
-                    const response = await fetch(
-                        `${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/jobs/${encodeURIComponent(jobName)}/complete`,
-                        { method: 'POST' }
-                    );
-                    if (!response.ok) throw new Error(`Complete failed (${response.status})`);
-                    await this.refreshTree();
-                    this.jobs = await this.fetchJobs();
-                    this.renderJobs();
-                    this.setStatus(`${jobName} done`, 'success');
-                } catch (err) {
-                    this.setStatus(`Error: ${err.message}`, 'error');
-                    console.error(err);
-                }
             }
 
             // ---------------------------------------------------------------

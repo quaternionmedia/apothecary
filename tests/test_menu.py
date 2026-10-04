@@ -936,16 +936,15 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert [c.destructive for c in pictures.children] == [False, False, True, False]
     assert carried_by("picture:add:@floor").name == "VIEWER"
     assert carried_by("picture:purge").name == "VIEWER"
-    # Site (Contents, its problems, its SCAD, Pinned), Selected, Jobs and Pictures
-    # (every picture, and the gathering) each a cell; the machine and its comms
-    # log behind one; the rail last.
+    # Site (Contents, its problems, its SCAD, Pinned, the site's jobs), Selected and
+    # Pictures (every picture, and the gathering) each a cell; the machine and its
+    # comms log behind one; the rail last. A print is the job: Jobs is no panel.
     assert [(c.label, c.action, c.cell) for c in panels.children] == [
         ("Site", "panel:toggle:site", 8),
         ("Selected", "panel:toggle:selected", 6),
-        ("Jobs", "panel:toggle:jobs", 2),
-        ("Pictures", "panel:toggle:pictures", 4),
-        ("Machine", None, 9),
-        ("Rail", "panel:rail:toggle", 3),
+        ("Pictures", "panel:toggle:pictures", 2),
+        ("Machine", None, 4),
+        ("Rail", "panel:rail:toggle", 9),
     ]
     machine = next(c for c in panels.children if c.label == "Machine")
     assert [(c.action, c.cell) for c in machine.children] == [
@@ -953,13 +952,13 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("panel:toggle:log", 6),
     ]
     assert address_of(root, "panel:site") == "98"  # by the option's id
-    assert address_of(root, "panel:pictures") == "94"
-    assert address_of(root, "panel:machine") == "998"
-    assert address_of(root, "panel:rail") == "93"
+    assert address_of(root, "panel:pictures") == "92"
+    assert address_of(root, "panel:machine") == "948"
+    assert address_of(root, "panel:rail") == "99"
     for pid in ("site", "pictures"):
         assert carried_by(f"panel:toggle:{pid}").name == "VIEWER"
     # The retired panels are on no ring.
-    for gone in ("contents", "validation", "scad", "kept", "camera"):
+    for gone in ("contents", "validation", "scad", "kept", "camera", "jobs"):
         assert f"panel:toggle:{gone}" not in set(every_action([root])), gone
     # The page's sections are marked in its markup; Pictures is registered at
     # start and the machine and its log when a printer is opened. Both lists are
@@ -969,7 +968,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     registered = re.findall(r"panels\.register\('([\w-]+)'", page)
     assert marked == [pid for pid, _ in PANELS[: len(marked)]]
     assert sorted(registered) == sorted(pid for pid, _ in PANELS[len(marked) :])
-    for gone in ("contents", "validation", "scad", "kept", "camera"):
+    for gone in ("contents", "validation", "scad", "kept", "camera", "jobs"):
         assert f'data-panel="{gone}"' not in page and f"register('{gone}'" not in page
 
 

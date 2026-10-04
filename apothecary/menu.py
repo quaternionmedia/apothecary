@@ -554,7 +554,6 @@ PANELS: Sequence[Tuple[str, str]] = (
     # SCAD and every site's pins (Pinned), each taken back from its row.
     ("site", "Site"),
     ("selected", "Selected"),
-    ("jobs", "Jobs"),
     # Registered by the page's script rather than marked in its markup: Pictures
     # (every picture under the picture root, each pinned here or forgotten, and
     # the gathering) at start; the machine and its comms log when a printer is
