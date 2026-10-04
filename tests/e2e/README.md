@@ -31,11 +31,11 @@ Without a server, `pytest` skips the browser tests with a note saying so.
 | `--headed`, `--slowmo 500`, `--tracing on` | pytest-playwright's own flags, for debugging. Open a trace with `uv run playwright show-trace test-results/<test>/trace.zip`. |
 
 Every server comes from one factory, the `start_server` fixture in
-`conftest.py`, on a free port with state of its own. `test_printer_ui.py` and
-`test_ring.py` ask it for servers of their own, so what they pin, arm and print
-stays off the session's server. Every other module uses that one, which lives
-for the whole run: take back what a test pins, places or adds, or the tests
-after it see it.
+`conftest.py`, on a free port with state of its own. `test_printer_ui.py`,
+`test_ring.py` and `test_one_machine.py` ask it for servers of their own, so
+what they pin, arm, flash and print stays off the session's server. Every
+other module uses that one, which lives for the whole run: take back what a
+test pins, places or adds, or the tests after it see it.
 
 ## Running in parallel
 

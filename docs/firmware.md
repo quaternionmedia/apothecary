@@ -182,28 +182,58 @@ link. `POST /firmware/printers/release` drops the link when another program
 Every printer in the garage carries a `mainboard` node inside its base
 (`printer_1.frame_system.mainboard`). Pin the real printer's port there
 (`PUT /sites/{name}/nodes/{path}/device` with `{"identity": "/dev/ttyUSB1"}`,
-or the viewer's Device section) and every poll writes the printer's `state`
+or Pin in the viewer's Selected) and every poll writes the printer's `state`
 (`offline` when a poll fails) into the `status` of **the nearest ancestor
 that carries one**: the board has none, the printer above it does, so the
 printer's mesh recolours with nobody editing it. A poll's `synced` list names
 the node it drove and, when that differs from the pin, `via` names the board.
 Nodes with no status anywhere up their path are left alone, and a hand-set
 `maintenance` is never overridden by a poll. `GET /sites/{name}/devices`
-returns the last poll on each binding (`printer_status`) and never opens a
-port itself.
+returns the last poll on each binding (`printer_status`) and the ports whose
+link is held (`printers`), and never opens a port itself. A pin talks to no
+printer; the viewer polls a printer whose link is held once as it pins it, so
+the node follows from then.
 
 A pin stores the board's own identity (its MAC, else its USB bridge's serial
 number, else the port), so it still holds when the kernel numbers the port
 differently after a replug. A pin by a path that resolves to the same device
 (`/dev/serial/by-id/…`, a udev name) matches too.
 
-### In the viewer and on the monitor
+### In the viewer: one Machine per board
 
-The viewer's Device section and ⌨ Serial log, the badge a pinned board wears
-in the 3D view and the machine popup it opens, and the focused monitor at
-`/firmware/monitor?port=…` (one module, `apothecary/static/widgets/machine.js`)
-are views over these routes. `apothecary docs generate` writes them step by
-step against the simulated printer into
+A pinned board has one surface in the viewer, its **Machine**
+(`apothecary/static/widgets/machine.js`): a popup tethered to the board's
+badge, which docks into the rail's tab strip. A printer's Machine is the
+monitor's body -- its state cards, temperature chart, link verbs, the control
+latch and pad, the bed reading, the print from here -- and a devkit's is its
+port and board, the sketch it should run against the sketch it was heard
+saying (its `apothecary <name>: hello` banner), what changed since it was
+flashed, and a marked place where flashing it will be when the Bench comes
+into the viewer. Both carry the board's **one log**: a printer's comms log,
+with the one box that asks it for a report code (poll traffic hidden unless
+asked for), or a devkit's serial output, streamed while its Machine is open.
+Its Identify asks a printer `M115`, and listens to a devkit for its hello
+(none heard, it asks `M115`, so a board pinned before it was asked can turn
+out to be a printer). A refusal is said in the log and in the status bar.
+
+Selected's Device section is one line for a pinned board -- its port and what
+it is doing -- with **Open** (its Machine) and **Unpin**; for a piece with
+nothing pinned, the detected ports to pin, Query (`M115` without pinning) and
+a box to pin by typed identity. The badge over a board in the world opens its
+Machine too.
+
+Every drawer of a board -- its badge in the world, its badge in Site's tree,
+Selected's line and its Machine -- reads one model of it
+(`apothecary/static/boards.js`), which polls a printer at the interval its
+Machine says, and only while its Machine is open with auto-poll on: one
+poller per board, whatever draws it. The model scans for boards when a site
+loads, when **Rescan** asks, and by itself when a board it watches goes quiet,
+so a replugged board is found without a reload.
+
+`/firmware/monitor?port=…` is the same Machine on a page of its own, until
+the consolidation plan's Phase 5 opens the viewer with the board's Machine
+instead. `apothecary docs generate` writes all of it step by step against the
+simulated printer into
 [`generated/printer-monitor/printer-monitor.md`](generated/printer-monitor/printer-monitor.md);
 [walkthrough 12](../walkthrough/12-the-bench-as-it-is.md) shows the boards
 drawn where they sit.
@@ -211,10 +241,12 @@ drawn where they sit.
 Every device verb is also on the ring (right-click a piece, or `m`), whose
 nine cells are numbered as a numeric keypad, so the digits pressed to reach
 an option are its address; each device button shows its address in its
-tooltip. `POST /menu/resolve` seats the options (`apothecary/menu.py`);
-`POST /menu/intent` receives the choice. A control verb from the ring goes
-through the same latch, allowlist and confirms as the button it replaces; the
-ring never opens a port.
+tooltip. Device › Open is the board's Machine. A board's verbs from the ring
+-- Poll, Query, the link's, Control's, the bed's, the print's -- go to its
+Machine, opened for it when it is not. `POST /menu/resolve` seats the options
+(`apothecary/menu.py`); `POST /menu/intent` receives the choice. A control
+verb from the ring goes through the same latch, allowlist and confirms as the
+button it replaces; the ring never opens a port.
 
 ### Control, behind a latch
 

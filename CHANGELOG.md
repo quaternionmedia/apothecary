@@ -19,10 +19,10 @@ One line per change, each with a link to where it is described. The format follo
 - The ring menu seats options on nine keypad cells; the digits pressed are the address. ([code](apothecary/menu.py))
 - `apothecary firmware` installs arduino-cli, and compiles and uploads sketches kept with parts. ([doc](docs/firmware.md))
 - A board's identity, the sketch last flashed to it, and the sketch it announces over serial. ([doc](docs/firmware.md))
-- A live serial log, on the firmware page and over the viewer. ([doc](docs/firmware.md))
+- A live serial log, on the firmware page and in a devkit's Machine. ([doc](docs/firmware.md))
 - `apothecary firmware printer` identifies and polls a G-code printer. ([doc](docs/firmware.md))
 - A printer pinned to its scene node sets that node's status from its polls. ([doc](docs/firmware.md))
-- The viewer's Device section pins, queries, polls and watches a board. ([doc](docs/firmware.md))
+- The viewer's Device section pins and queries a board, and opens its Machine. ([doc](docs/firmware.md))
 - The printer monitor at `/firmware/monitor`: status, temperatures and the port's comms log. ([doc](docs/firmware.md))
 - Latched printer control: refused unless armed, held to fixed caps; E-STOP always goes. ([doc](docs/firmware.md))
 - Print from here: a kept G-code file, checked, then streamed one line per `ok`. ([doc](docs/firmware.md))
@@ -36,6 +36,9 @@ One line per change, each with a link to where it is described. The format follo
 - Panels in front of the world, which close, collapse, float and dock. ([plan](docs/plans/one-screen-2026-09-20.md))
 - The panel rail resizes, hides on `~`, and moves to the other side. ([plan](docs/plans/one-screen-2026-09-20.md))
 - The machine popup: the printer monitor, tethered to its printer. ([plan](docs/plans/one-screen-2026-09-20.md))
+- A board's Machine is the one place for it, printer or devkit: its state, its one log with one query box, its controls and where it is pinned; a devkit's says the sketch it should run against the one it is heard saying, what changed since it was flashed, and its serial output, live while it is open, and marks where flashing will be. ([doc](docs/firmware.md))
+- One model of every board the page knows, which polls a board once whatever draws it -- its badges, Selected's line, its Machine -- and looks for boards again by itself when one it watches goes quiet. ([code](apothecary/static/boards.js))
+- `GET /sites/{name}/devices` says which printer links are held (`printers`). ([doc](docs/firmware.md))
 - `/docs` and `/walkthrough` serve this repository's Markdown, rendered. ([docs](docs/README.md))
 - `apothecary docs generate` writes screenshots, GIFs and recordings from the browser tests. ([docs](docs/README.md))
 - `apothecary census` counts the controls a page puts on screen. ([code](apothecary/census.py))
@@ -66,6 +69,13 @@ One line per change, each with a link to where it is described. The format follo
 
 ### Changed
 
+- Selected's Device section is one line for a pinned board -- its port and what it is doing -- with Open, its Machine, and Unpin. ([doc](docs/firmware.md))
+- The ring's Device › Open opens a board's Machine, in the cell Watch had; Query, Unpin, Rescan, Link and Control each moved a cell. ([code](apothecary/menu.py))
+- A board's verbs from the ring go to its Machine, opened for it when it is not; what the Machine refuses is said in the status bar as an error, and in its log. ([test](tests/e2e/test_one_machine.py))
+- A badge in the world opens its board's Machine, a devkit's as a printer's. ([test](tests/e2e/test_one_machine.py))
+- A board's state is written one way on every drawer, the firmware page's cards included: one heater, one printer line, one summary. ([code](apothecary/static/board_text.js))
+- Pinning a printer whose link is held polls it once, so the node it drives follows from then. ([doc](docs/firmware.md))
+
 - A tool fetch may also reach codeload.github.com, for OpenSCAD's source on Linux arm64. ([code](apothecary/stays_local.py))
 - `apothecary photo look` is `apothecary photo find`, the viewer's Find shapes; the old name prints the new one and exits 1, for one release.
 - A picture pinned at a place is a view: `/sites/{s}/views`, `views` in every answer, Picture › Views, and Camera › Look is Camera › Take picture. ([plan](docs/plans/consolidation-2026-10-03.md))
@@ -80,8 +90,8 @@ One line per change, each with a link to where it is described. The format follo
 - Kept lists every camera, look and board pinned, every site's, and every kept picture, each taken back from its row without switching the site; the camera panel keeps the gathering. ([code](apothecary/static/widgets/pinned.js))
 - Site is one panel, docked left: the Contents tree as its body, a piece in a problem red in it and the pieces above it saying so, the site's problems at its top (each row selecting its piece at its level; the toolbar's count opens them), and the site's SCAD and every site's pins (Pinned, each taken back from its row) as sections. ([test](tests/e2e/test_site_panel.py))
 - Pictures lists every picture under the picture root, the folder's and the kept ones, each with where it is pinned as a view and Pin here, which pins any of them at the selected place; Forget on a kept one, Purge, and the gathering as a section. Picture › Folder › More opens it. ([test](tests/e2e/test_pictures_panel.py))
-- The ring's Panels are Site, Selected, Pictures, Machine (the machine and its log) and Rail; with both rails showing, the two together leave the world half the page. ([code](apothecary/menu.py))
-- Every docked panel is in one rail beside the world, on the right until ⇄ or its grip moves it: Site and Selected stacked, and below them a strip of tabs -- Pictures, a docked machine and its log -- one shown at a time; its side and width are remembered per browser, and a layout remembered with two rails, or naming the Jobs panel, is ignored. ([test](tests/e2e/test_ring.py))
+- The ring's Panels are Site, Selected, Pictures, Machine (a board's, its log in it) and Rail; with both rails showing, the two together leave the world half the page. ([code](apothecary/menu.py))
+- Every docked panel is in one rail beside the world, on the right until ⇄ or its grip moves it: Site and Selected stacked, and below them a strip of tabs -- Pictures, a docked Machine -- one shown at a time; its side and width are remembered per browser, and a layout remembered with two rails, or naming the Jobs panel, is ignored. ([test](tests/e2e/test_ring.py))
 - A running print job marks its printer busy from the moment it starts, and its end frees it; a hand-typed job no longer does. ([code](apothecary/api.py))
 - The print records kept before jobs are carried over as print jobs the first time jobs are read, and left where they were. ([code](apothecary/jobs.py))
 - A machine tethered to its printer still floats in front of the world; docked, it is a tab of the rail's strip. ([test](tests/e2e/test_printer_ui.py))
@@ -126,6 +136,8 @@ One line per change, each with a link to where it is described. The format follo
 - Pictures' Pin here: a chosen row is pinned from the ring's Picture › Folder. ([code](apothecary/static/widgets/picture_list.js))
 - The Jobs panel and its hand-typed jobs: `/sites/{name}/jobs`, its assign and its complete. ([plan](docs/plans/consolidation-2026-10-03.md))
 - `/firmware/printers/print/records` and `/firmware/printers/print/records/{id}`: a printer's prints are its jobs. ([code](apothecary/routes/jobs.py))
+- The serial overlay and its toolbar toggle, the Comms log panel, the toolbar's ↻ Devices, and Selected's Watch, Poll now and Monitor link: a board's log is in its Machine, Open opens it, and Rescan looks for boards. ([plan](docs/plans/consolidation-2026-10-03.md))
+- The ring's Device › Watch and Device › Monitor, which are Device › Open. ([code](apothecary/menu.py))
 
 ### Fixed
 
@@ -138,6 +150,7 @@ One line per change, each with a link to where it is described. The format follo
 - The camera panel's messages are said once, in the status bar, refusals as errors. ([code](apothecary/static/widgets/picture_list.js))
 - A camera's badge selects its piece, and a first click shows this browser's camera. ([test](tests/e2e/test_camera.py))
 - Closing a printer's port keeps DTR up, so the next open does not reboot the board. ([doc](docs/firmware.md))
+- The printer monitor's doc capture: a printer pinned is polled, so its node says printing as the page does. ([test](tests/e2e/test_docs_printer_monitor.py))
 - A pin follows its board when the kernel renumbers the port. ([doc](docs/firmware.md))
 - The board view places its printer once, not offset twice. ([code](apothecary/static/board_view.js))
 - A node's world position accumulates down the whole tree, not one level. ([code](apothecary/hierarchy.py))

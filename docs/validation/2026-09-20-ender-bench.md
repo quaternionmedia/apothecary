@@ -52,8 +52,17 @@ Preconditions: printer powered, bed clear, nothing printing from the card,
 filament loaded. `uv run apothecary serve` on :8000 (the `--reload` server is
 fine) and the monitor at `/firmware/monitor?port=/dev/ttyUSB0` -- use
 whatever port `apothecary firmware devices` shows; the pin follows the
-board. State `idle`, temperatures near room. Keep a hand near the printer's
-own power switch; **E-STOP** is on the page but a switch is faster.
+board. The printer's Machine in the viewer is the same module and takes the
+same steps: **Open** on the mainboard's line in Selected, or a click on the
+printer's badge; from the ring there, every address below has a `2` in front
+(Device on the node ring). State `idle`, temperatures near room. Keep a hand
+near the printer's own power switch; **E-STOP** is on the page but a switch is
+faster.
+
+The addresses are the device ring's since One Machine per board (the
+consolidation plan's Phase 4): Device › Open took Watch's cell and Monitor's
+went, so Link is cell 3 and Control cell 1. The table above records the ring
+as it was on the day.
 
 Every line the page sends is amber in the comms log; refusals are said in
 the log too. ✔ as you go.
@@ -64,15 +73,15 @@ the log too. ✔ as you go.
       auto-poll) the endstop chip reads `filament OUT`; push it back →
       `present`. (Confirms `TRIGGERED` = present on this sensor.)
 - [ ] **⏻ Reset board** → confirm → the boot banner lands in the log, the
-      link is kept, the next poll answers. (`⌗16` from the ring: `1` Link,
+      link is kept, the next poll answers. (`⌗36` from the ring: `3` Link,
       `6` Reset.)
 
 **B. Arm and heat**
 
 - [ ] **⚙ Control** → the overlay opens, the header counts down from 5:00,
-      the ring's cell 7 › 7 reads *Disarm*.
+      the ring's cell 1 › 7 reads *Disarm*.
 - [ ] Bed **45** → Set: `M140 S45` in the log, the bed card's target reads
-      `/ 45°` on the next poll, the bar fills as it warms. **Off** → target 0.
+      `/45°` on the next poll, the bar fills as it warms. **Off** → target 0.
 - [ ] Hotend **150** → Set, watch it climb, **Off**. (Below printing
       temperature on purpose; nothing extrudes.)
 - [ ] Fan slider to ~128 → Set → the part fan spins; **Off**.
@@ -87,7 +96,7 @@ the log too. ✔ as you go.
       probes at the bed centre; the position card reads X0 Y0 and a Z.
 - [ ] Step **10**, **Y+**: the bed moves 10 mm; the nozzle marker in *Board
       in its printer* moves the moment the button is pressed and the position
-      card confirms within 2 s. From the ring: `m` `7` `2` `8` (⌗728) does the
+      card confirms within 2 s. From the ring: `m` `1` `2` `8` (⌗128) does the
       same; **Y−** twice, then **Motors off**.
 - [ ] Bed level card, **◣ FL**: four lines (`G90`, `G1 Z5`, `G1 X30 Y30`,
       `G1 Z0.2`), the nozzle parks at the front-left corner at paper height.
@@ -97,7 +106,7 @@ the log too. ✔ as you go.
 
 **D. Leveling**
 
-- [ ] **▤ Probe bed** (⌗748) → confirm: the state card says
+- [ ] **▤ Probe bed** (⌗148) → confirm: the state card says
       `leveling: homing`, then `probing`; the temperature cards keep
       updating; a jog pressed meanwhile is refused with *a bed reading holds
       the port*. Two to three minutes for 25 points. When it says `saved`
@@ -117,11 +126,11 @@ the log too. ✔ as you go.
 - [ ] Choose a file that must be refused: any `.gcode` with an `M500` line
       lists with *refused: line N: M500 saves settings to EEPROM* and
       **Print** stays refused for it.
-- [ ] **▶ Print** (⌗794) → confirm: the head homes and traces a 60 mm square
+- [ ] **▶ Print** (⌗194) → confirm: the head homes and traces a 60 mm square
       10 mm above the bed; the state card reads `printing` with the
       percentage, the card shows `sent/23` and the line in flight; the log
       shows *print started* and none of the lines.
-- [ ] **⏸ Pause** mid-square (or `m` `7` `9` `6`): the head finishes what
+- [ ] **⏸ Pause** mid-square (or `m` `1` `9` `6`): the head finishes what
       was queued and stops; `paused` in the card; a poll still answers.
       **▶ Resume** (needs the latch).
 - [ ] **■ Cancel** → confirm: `M104 S0`, `M140 S0`, `M107`, `M84` in amber;
@@ -135,7 +144,7 @@ the log too. ✔ as you go.
 
 **F. Stop and let go**
 
-- [ ] **E-STOP** (⌗71) with the printer idle: `Error:Printer halted. kill()
+- [ ] **E-STOP** (⌗11) with the printer idle: `Error:Printer halted. kill()
       called!` in the log, the next poll goes `offline`; **⏻ Reset board**
       brings it back.
 - [ ] **Release** → the link drops, the latch with it; `apothecary firmware

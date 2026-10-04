@@ -333,12 +333,26 @@ bare board):
 - [ ] Select `printer_1 › frame_system › mainboard` in the viewer; the
       Device section offers a pick list of free ports → choose
       `/dev/ttyFAKE1`, **Query** → an M115 answer from the simulator, **Pin**
-      → the section shows the last poll (`printing`, temperatures, `XX %`);
-      `printer_1`'s row wears the 🖨 badge and its status becomes `printing`
-      *via* the board.
-- [ ] The badge above `printer_1` in the world; click it → the machine popup:
-      status cards, a temperature chart after a few polls, the comms log a
-      tab of the rail's strip (from its tab at the bottom right).
+      → the section is one line: the port, `printing` and the temperatures,
+      **Open** and **Unpin**; `printer_1`'s row wears the 🖨 badge and its
+      status becomes `printing` *via* the board.
+- [ ] The badge above `printer_1` in the world; click it (or **Open**, or
+      Device › Open on the ring) → the printer's Machine: status cards, a
+      temperature chart after a few polls, and the board's log in it, its
+      query box below the cards: **M119** → the endstops in the log; **G28**
+      → *query refused*, in the log and in the status bar, red. There is no
+      serial log over the world and no Comms log tab; the badge, the row's
+      badge and Selected's line say what the Machine's polls say, and
+      nothing else polls the printer (the browser's network panel: one
+      `printers/status` request per interval).
+- [ ] A devkit's Machine: `curl -s -X POST -H 'Content-Type: application/json'
+      -d '{"fqbn":"arduino:avr:uno","port":"/dev/ttyFAKE0"}'
+      http://127.0.0.1:8001/firmware/sketches/footpedal/upload` (the scripted
+      arduino-cli flashes nothing) → **Rescan** in a piece's Device section →
+      `footpedal` wears a ⚡ badge; click it → its Machine: the Uno on
+      `/dev/ttyFAKE0`, *should run footpedal*, its serial output live in the
+      log, *observed fake_blink ✗ differs* once the scripted board says hello,
+      and a *Flashing* card that says it arrives with the Bench.
 - [ ] **⚙ Control** → the overlay, a 5:00 latch; **Bed 45 → Set** → `M140
       S45` in the log and the target on the card; **Home XY**; **Y+** by 10 →
       the nozzle marker in the world moves; **Off**.
