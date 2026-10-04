@@ -216,7 +216,22 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # (sketchEl:change:choose, fqbnEl:input:enable, portEl:change:enable) and a recent
 # task's row (historyEl:click:closest). No ring address moved: the Bench is seated
 # after Panels › Rail, which keeps 99.
-VIEWER_CEILING = 117
+#
+# Phase 5, a board's flashing in its Machine. Before: 117 controls of its own, 58
+# ring-backed, 78 places the page listens. After: 119, 60 ring-backed, 78 places.
+# Added to the Machine: a devkit's Listen (listen), which opens its port -- opening
+# its Machine no longer does -- and Probe (probe), esptool's chip read; both are
+# ring-backed, by Device › Link › Listen and Probe. Its Flashing card mounts the
+# Bench's form and task log, written once in sketches.js and tasks.js, and adds no
+# control. Ring addresses moved, all on the Device ring (cell 2 of a node ring, the
+# whole ring inside a Machine), back to where they were before Phase 4: Flash takes
+# Monitor's old cell 2 (⌗22); Query 2 to 4 (⌗22 to ⌗24), Unpin 4 to 9 (⌗24 to ⌗29),
+# Rescan 9 to 3 (⌗29 to ⌗23), Link 3 to 1 (⌗23 to ⌗21: Reconnect ⌗238 to ⌗218,
+# Reset ⌗236 to ⌗216, Release ⌗232 to ⌗212) and Control 1 to 7 (⌗21 to ⌗27, and
+# every address under it: Jog › Y+ ⌗2128 to ⌗2728, Arm ⌗217 to ⌗277, Stop ⌗211 to
+# ⌗271; on the device ring alone ⌗128 to ⌗728). Appended, so nothing else moves:
+# Link › Listen (⌗214) and Link › Probe (⌗219) on a board that is not a printer.
+VIEWER_CEILING = 119
 
 
 def test_the_viewer_stays_under_its_ceiling():

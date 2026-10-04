@@ -5,11 +5,18 @@
  * control pad, the bed reading, the print from here (a print job, naming the
  * part it makes, and the printer's jobs as its history). A devkit's Machine
  * is its port and what it is, the sketch it should run against what it was
- * heard saying, and a marked place where flashing it will be (it arrives with
- * the Bench, the consolidation plan's Phase 5). Both have the board's one log,
- * a printer's with the one box that asks it for a report: the comms log the
- * server keeps for the port (poll traffic hidden unless asked for), or a
- * devkit's serial output, listened to while the Machine is open.
+ * heard saying, and its Flashing card: a sketch (what it should run, to start
+ * with) built for a board and uploaded to this port, after asking, the task's
+ * output, then Identify -- the Bench's form and task log (widgets/sketches.js,
+ * tasks.js), for this one port. Both have the board's one log, a printer's with
+ * the one box that asks it for a report: the comms log the server keeps for the
+ * port (poll traffic hidden unless asked for), or a devkit's serial output.
+ *
+ * A devkit's port is opened only when asked: opening its Machine shows what is
+ * known of it and touches no port. Listen streams what it says (opening the
+ * port may reset the board); Identify listens a few seconds for its hello and,
+ * pressed, asks M115 when none was heard; Probe asks esptool what the chip is;
+ * an upload is followed by Identify's listen, never by its M115.
  *
  * The board itself is boards.js's: the Machine watches it (a printer polled at
  * the interval its head says, a devkit listened to), draws what the model's
@@ -33,6 +40,8 @@
 
 import { mountBoards } from "/static/boards.js";
 import { esc, heaterText, boardLabel, sketchWords } from "/static/board_text.js";
+import { mountBuild } from "/static/widgets/sketches.js";
+import { mountTasks } from "/static/widgets/tasks.js";
 
 const MAX_HISTORY = 300;
 
@@ -57,6 +66,8 @@ const HEAD = `
     <button type="button" id="identify" title="Ask M115 again (no reset)">M115</button>
     <button type="button" id="reset" class="danger printer-only" title="Reboot the board with a DTR pulse — never mid-print">⏻ Reset board</button>
     <button type="button" id="release" title="Drop the held link so another program can open the port">Release</button>
+    <button type="button" id="listen" class="devkit-only" title="Open the port and stream what the board says into the log. Opening the port may reset the board">Listen</button>
+    <button type="button" id="probe" class="devkit-only" title="Ask esptool for the chip, its MAC and its flash size (an Espressif board; this resets it)">Probe</button>
     <label class="ctl printer-only" id="ctl-label" title="Arm the control latch: heaters, fan, homing, bounded jogs and SD pause/resume/abort become available in an overlay for 5 minutes of activity. Disarmed, nothing on this page can heat or move the machine.">
         <input type="checkbox" id="ctl"> ⚙ Control <span class="ttl" id="ctl-ttl"></span>
     </label>
@@ -75,7 +86,8 @@ const CARDS = `
     <div class="card wide devkit-only" id="sketch-card"><div class="k">Sketch · should run, and observed</div><div class="kv" id="c-sketch">—</div></div>
     <div class="card wide devkit-only" id="flash-card">
         <div class="k">Flashing</div>
-        <div class="s">Flashing this board from its Machine arrives with the Bench (the consolidation plan's Phase 5): its sketch compiled and uploaded to this port, here. Until then, ⚡ Firmware compiles and uploads.</div>
+        <div class="bench-ui" id="flash-form"></div>
+        <div class="bench-ui" id="flash-task"></div>
     </div>
     <div class="card wide printer-only" id="level-card">
         <div class="k">Bed level <span class="s" id="level-note"></span></div>
@@ -232,7 +244,7 @@ export function mountMachine(root, { base = "", port = "", host = "page", boards
     // What the Machine keeps of its own: the port, its kind, the chart's history.
     // The board's status, link, poll timer and log are the model's, read through.
     const state = {
-        port, kind: null, history: [], codesLoaded: false, listening: true,
+        port, kind: null, history: [], codesLoaded: false, listening: false,
         get status() { return state.port ? b().status : null; },
         get info() { return state.port ? b().info : null; },
         get timer() { return state.port ? b().timer : null; },
@@ -269,11 +281,12 @@ export function mountMachine(root, { base = "", port = "", host = "page", boards
         root.classList.toggle("kind-devkit", k === "devkit");
         $("identify").textContent = k === "printer" ? "M115" : "Identify";
         $("identify").title = k === "printer" ? "Ask M115 again (no reset)" : "Listen a few seconds for the sketch's hello banner; none heard, ask M115 whether it is a G-code printer (no reset)";
-        $("reconnect").title = k === "printer" ? "Release and reopen the serial link (no reset); the remedy for a wedged port" : "Stop listening to the board and listen again";
+        $("reconnect").title = k === "printer" ? "Release and reopen the serial link (no reset); the remedy for a wedged port" : "Close the serial stream and open it again, while listening";
         $("release").title = k === "printer" ? "Drop the held link so another program can open the port" : "Stop listening, so another program (an upload) can open the port";
         if (changed && state.port) {
             watchNow();
             if (k === "printer") { loadCodes(); loadLevel(); loadPrintJobs(); loadChoices(); loadPrintFiles(); watchPrint(); }
+            else mountFlashing();
         }
         return changed;
     }
@@ -373,7 +386,9 @@ export function mountMachine(root, { base = "", port = "", host = "page", boards
             if (d.chip) rows.push(`chip <b>${esc(d.chip)}</b> rev ${esc(d.revision || "?")} · MAC ${esc(d.mac || "?")} · flash ${esc(d.flash_size || "?")}`);
         } else rows.push(`<b>${esc(state.port)}</b> — not detected`);
         if (pin) rows.push(pinRow());
-        rows.push(bd.live ? `serial <b class="ok">listening</b> @ 115200` : `serial <b>not listening</b>${state.listening ? " — opening it" : " — Reconnect listens again"}`);
+        rows.push(bd.live ? `serial <b class="ok">listening</b> @ 115200` : (state.listening ? "serial <b>not listening</b> — opening it" : "serial <b>not listening</b> — the port is closed; Listen opens it (that may reset the board)"));
+        $("listen").disabled = state.listening;
+        $("listen").textContent = state.listening ? "Listening" : "Listen";
         $("c-board").innerHTML = rows.join("<br>");
         const w = sketchWords(bd.expected, bd.observed);
         const lines = [];
@@ -508,7 +523,8 @@ export function mountMachine(root, { base = "", port = "", host = "page", boards
 
     async function selectPort(port) {
         if (state.port && state.port !== port) model.unwatch(state.port, who);
-        state.port = port; state.kind = null; state.history = []; state.listening = true;
+        if (flash && flash.port !== port) { flash.build.destroy(); flash.tasks.destroy(); flash = null; }
+        state.port = port; state.kind = null; state.history = []; state.listening = false;
         applyControlState(null);
         if (host === "page") {
             const url = new URL(location.href); if (port) url.searchParams.set("port", port); else url.searchParams.delete("port"); history.replaceState(null, "", url);
@@ -535,36 +551,56 @@ export function mountMachine(root, { base = "", port = "", host = "page", boards
     $("poll").onclick = () => (state.port ? model.poll(state.port).catch((e) => refuse(`poll: ${e.message}`)) : Promise.resolve());
     $("reconnect").onclick = async () => {
         if (!state.port) return;
-        if (state.kind === "devkit") { state.listening = true; schedule(); model.note(state.port, "listening again"); return; }
+        if (state.kind === "devkit") {
+            if (!state.listening) { refuse("Reconnect: not listening -- Listen opens the port (it may reset the board)"); return; }
+            model.restream(state.port); model.note(state.port, "listening again"); return;
+        }
         try { await model.reconnect(state.port); } catch (e) { refuse("reconnect failed: " + e.message); }
     };
+    // A devkit's live serial stream, asked for: the port opened, which may reset the board.
+    function listen() {
+        if (!state.port) return;
+        if (state.kind !== "devkit") { refuse("Listen: a printer is polled over its held link, never streamed -- opening its port would reset it"); return; }
+        if (state.listening) { logLine("sys", "already listening"); return; }
+        model.note(state.port, `Listen: opening ${state.port} -- this may reset the board`);
+        state.listening = true; schedule(); renderDevkit();
+    }
+    $("listen").onclick = () => listen();
+    async function probe() {
+        if (!state.port) return;
+        if (state.kind !== "devkit") { refuse("Probe: a printer is polled over its held link; esptool would take its port and reset it"); return; }
+        try { await model.probe(state.port); } catch (e) { refuse(`probe: ${e.message}`); }
+    }
+    $("probe").onclick = () => probe();
     // Asking the board what it is: a printer, M115; a devkit, its hello -- and, no
-    // hello heard, M115, since a board pinned before it was asked may be a printer
-    // (it answers, and its Machine becomes a printer's).
-    $("identify").onclick = async () => {
+    // hello heard and Identify pressed, M115, since a board pinned before it was
+    // asked may be a printer (it answers, and its Machine becomes a printer's).
+    // After an upload only the hello is listened for: M115 is a person's to ask.
+    async function identify({ pressed = true } = {}) {
         if (!state.port) return;
         try {
             if (state.kind === "devkit") {
                 const heard = await model.listen(state.port);
                 if (heard.running_sketch) return;
+                if (!pressed) { logLine("sys", "no hello heard -- Identify asks M115 too, when pressed"); return; }
                 try { await model.identify(state.port); }
                 catch (e) { refuse(`no hello heard in ${heard.seconds} s, and ${e.message}`); }
                 return;
             }
             await model.identify(state.port);
-            if (host === "page") loadPorts();
         } catch (e) { refuse(`${state.kind === "devkit" ? "listen" : "M115"}: ${e.message}`); }
-    };
+    }
+    $("identify").onclick = () => identify();
     $("reset").onclick = async () => {
         if (!state.port) return;
-        if (state.kind === "devkit") { refuse("a devkit is reset by flashing it, or by Probe on the firmware page"); return; }
+        if (state.kind === "devkit") { refuse("a devkit is reset by flashing it, or by Probe (Link › Probe)"); return; }
         if (!confirm(`Reboot the board on ${state.port} (DTR pulse)?\nA running print would be lost.`)) return;
         try { await model.reset(state.port); state.history = []; renderChart(); }
         catch (e) { refuse("reset failed: " + e.message); }
     };
     $("release").onclick = async () => {
         if (!state.port) return;
-        if (state.kind === "devkit") { state.listening = false; schedule(); model.note(state.port, "stopped listening — Reconnect listens again"); renderDevkit(); return; }
+        if (state.kind === "devkit") { state.listening = false; schedule(); model.note(state.port, "stopped listening — Listen opens the port again"); renderDevkit(); return; }
         $("auto").checked = false; schedule();
         try { const r = await model.release(state.port); logLine("sys", r.released ? "link released — auto-poll off" : "no link was held"); applyControlState(null); }
         catch (e) { refuse("release failed: " + e.message); }
@@ -906,10 +942,50 @@ export function mountMachine(root, { base = "", port = "", host = "page", boards
     $("print-resume").onclick = () => printVerb("resume");
     $("print-cancel").onclick = () => printVerb("cancel");
 
+    // --- flashing a devkit: the Bench's form and task log, for this port --------------
+    // Mounted the first time the board is shown as a devkit. The sketch it starts
+    // from is the one it should run: the last one flashed to it from here, else the
+    // one its node is bound to it by. An upload that succeeds is followed by what the
+    // board should run, read again, and Identify's listen for its hello.
+    let flash = null;
+    const flashSay = (text, kind) => (kind === "error" ? refuse(text) : logLine("sys", text));
+    function mountFlashing() {
+        if (flash || !state.port) return;
+        const port = state.port;
+        const tasks = mountTasks($("flash-task"), { base: BASE, history: false, say: flashSay });
+        const build = mountBuild($("flash-form"), {
+            base: BASE, tasks, port, say: flashSay,
+            suggest: () => {
+                const e = b().expected;
+                return (e && e.record && e.record.sketch) || (pin && pin.sketch) || null;
+            },
+            onEnd: (task, what) => flashed(port, task, what),
+        });
+        flash = { port, build, tasks };
+        build.load();
+    }
+    async function flashed(port, task, what) {
+        if (state.port !== port) return;
+        logLine("sys", `${what.kind === "upload" ? "upload" : "compile"} of ${what.sketch} (${what.fqbn}): ${task.status}`);
+        if (what.kind !== "upload" || task.status !== "succeeded") return;
+        await model.loadInfo(port).catch(() => {});
+        renderDevkit();
+        await identify({ pressed: false });
+    }
+    // Device › Flash: the card in view, its sketch under the cursor.
+    function showFlashing() {
+        if (!state.port) return;
+        if (state.kind !== "devkit") { refuse("Flash: a printer keeps its own firmware; Apothecary polls it and never flashes it"); return; }
+        mountFlashing();
+        $("flash-card").scrollIntoView({ block: "nearest" });
+        const pick = $("flash-form").querySelector(".sketch-select");
+        if (pick) pick.focus({ preventScroll: true });
+    }
+
     // --- the ring's side: what this board knows, and carrying a chosen verb ------------
     function device() {
         const d = state.port ? b().device : null;
-        return { port: state.port, printer: !!(d && d.printer), armed: ctl.armed, bound: true };
+        return { port: state.port, printer: !!(d && d.printer), armed: ctl.armed, bound: !!(pin && pin.how === "manual") };
     }
     // A verb of this board's: false when it is not one (the host's: open, pin, unpin);
     // else { refused }, the refusal it met or null.
@@ -947,7 +1023,10 @@ export function mountMachine(root, { base = "", port = "", host = "page", boards
             if (state.kind === "devkit") { await model.loadInfo(state.port).catch((e) => refuse(`poll: ${e.message}`)); renderDevkit(); return true; }
             await $("poll").onclick(); return true;
         }
-        if (action === "device:query") { await $("identify").onclick(); return true; }
+        if (action === "device:query") { await identify(); return true; }
+        if (action === "device:listen") { listen(); return true; }
+        if (action === "device:probe") { await probe(); return true; }
+        if (action === "device:flash") { showFlashing(); return true; }
         if (action === "device:rescan") { await model.rescan(); logLine("sys", "ports rescanned"); return true; }
         // The link verbs are the header buttons; their handlers already confirm what needs confirming.
         if (action === "device:reconnect") { await $("reconnect").onclick(); return true; }
@@ -969,6 +1048,8 @@ export function mountMachine(root, { base = "", port = "", host = "page", boards
         out.push([$("reconnect"), "device:reconnect"]);
         out.push([$("reset"), "device:reset"]);
         out.push([$("release"), "device:release"]);
+        out.push([$("listen"), "device:listen"]);
+        out.push([$("probe"), "device:probe"]);
         out.push([$("level-probe"), "level:probe"]);
         out.push([$("level-read"), "level:read"]);
         for (const btn of $("level-card").querySelectorAll("button[data-corner]")) out.push([btn, `control:corner:${btn.dataset.corner}`]);
@@ -982,7 +1063,8 @@ export function mountMachine(root, { base = "", port = "", host = "page", boards
     const handle = {
         root, host, $, boards: model,
         state, ctl, arm, jog, estop, enqueue, sendControl, fillTemplate, pollOnce: pollNow, loadPorts, logLine, refuse, schedule, selectPort,
-        identify: () => $("identify").onclick(),
+        identify, listen, probe, showFlashing,
+        flashing: () => flash,
         kind: () => state.kind,
         device, carry, pairs,
         level: { start: startLevel, corner: (which) => enqueue(cornerLines(which)), lines: cornerLines, records: () => level.records, shown: () => level.shown, load: loadLevel },
@@ -990,6 +1072,7 @@ export function mountMachine(root, { base = "", port = "", host = "page", boards
         destroy() {
             if (state.port) model.unwatch(state.port, who);
             clearTimeout(level.timer); clearTimeout(prt.timer); clearInterval(ctl.timer);
+            if (flash) { flash.build.destroy(); flash.tasks.destroy(); flash = null; }
             for (const [event, fn] of onWindow) window.removeEventListener(event, fn);
             if (!boards) model.destroy();
             root.innerHTML = ""; root.classList.remove("machine", `host-${host}`, "kind-printer", "kind-devkit");

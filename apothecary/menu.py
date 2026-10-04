@@ -1038,13 +1038,18 @@ def _device_options(device: Device) -> List[Option]:
 
     Open is the board's Machine, the one place for it, in the cell Watch had;
     Watch and Monitor were two ways into two views of one board, and are that
-    one cell now. Pin and Unpin are one cell, since a port is either pinned to
-    this node or not. Control appears only for a printer: a board running a
-    sketch has no G-code to be driven with.
+    one cell now. Flash is the Machine opened at its Flashing card, in the cell
+    Monitor freed, so every cell after it is where hands learned it before the
+    two became one (Control at 7). A printer keeps its own firmware and is
+    never flashed: its Flash holds the cell and cannot be chosen. Pin and Unpin
+    are one cell, since a port is either pinned to this node or not. Control
+    appears only for a printer: a board running a sketch has no G-code to be
+    driven with.
     """
     options = [
         Option(id="device:open", label="Open", action="device:open"),
         Option(id="device:poll", label="Poll", action="device:poll"),
+        Option(id="device:flash", label="Flash", action="device:flash", enabled=not device.printer),
         Option(id="device:query", label="Query", action="device:query"),
         (
             Option(id="device:unpin", label="Unpin", action="device:unpin")
@@ -1054,7 +1059,12 @@ def _device_options(device: Device) -> List[Option]:
         Option(id="device:rescan", label="Rescan", action="device:rescan"),
         # The link itself: reopen it, reboot the board on purpose, or hand the
         # port to another program. Before Control on purpose, so its cell is
-        # the same on a devkit (no Control) and on a printer.
+        # the same on a devkit (no Control) and on a printer. A devkit's port is
+        # opened only when asked: Listen opens it and streams what the board
+        # says (opening it may reset the board), and Probe asks esptool what
+        # the chip is (it resets the board). Both appended, so every cell
+        # before them stays; a printer is polled over its held link, never
+        # streamed or probed, and has neither.
         Option(
             id="device:link",
             label="Link",
@@ -1062,7 +1072,15 @@ def _device_options(device: Device) -> List[Option]:
                 Option(id="device:reconnect", label="Reconnect", action="device:reconnect"),
                 Option(id="device:reset", label="Reset", action="device:reset", destructive=True),
                 Option(id="device:release", label="Release", action="device:release"),
-            ],
+            ]
+            + (
+                []
+                if device.printer
+                else [
+                    Option(id="device:listen", label="Listen", action="device:listen"),
+                    Option(id="device:probe", label="Probe", action="device:probe"),
+                ]
+            ),
         ),
     ]
     if device.printer:

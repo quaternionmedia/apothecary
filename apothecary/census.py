@@ -171,6 +171,14 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "identify": (WIDGET, WHAT_YOU_SEE, "a button that asks the board what it is"),
     "reset": (WIDGET, WHAT_IS_THERE, "a button that reboots the board"),
     "release": (WIDGET, WHAT_YOU_SEE, "a button that lets go of the port"),
+    # A devkit's port is opened only when asked: Listen streams what it says
+    # (opening the port may reset it), Probe asks esptool what its chip is.
+    "listen": (WIDGET, WHAT_YOU_SEE, "a button that opens a devkit's port and streams it"),
+    "probe": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that asks esptool what a devkit's chip is (resets it)",
+    ),
     "ctl": (WIDGET, WHAT_YOU_SEE, "a tick-box that arms the control latch"),
     "estop": (WIDGET, WHAT_IS_THERE, "the emergency stop"),
     "viewer-link": (WIDGET, NOTHING, "a link back to the viewer"),
@@ -426,6 +434,8 @@ RING_BACKED: Dict[str, str] = {
     "reconnect": "device:reconnect",
     "reset": "device:reset",
     "release": "device:release",
+    "listen": "device:listen",
+    "probe": "device:probe",
     "ctl:change:arm": "control:arm",
 }
 

@@ -20,9 +20,10 @@
  * interval: never two requests in flight for one board, and a one-shot poll
  * from a button shares the one in flight. A devkit watched live is listened
  * to instead: one serial stream per board, its lines in the board's log and
- * its hello banner as what it was heard saying. A printer is polled over the
- * link the server holds, never streamed: opening its port to listen would
- * pulse DTR and reset it.
+ * its hello banner as what it was heard saying. A devkit's Machine watches it
+ * quiet until a person asks it to listen (its Listen), since opening the port
+ * may reset the board. A printer is polled over the link the server holds,
+ * never streamed: opening its port to listen would pulse DTR and reset it.
  *
  * Every request the model starts takes a number from one sequence, carried
  * in its event as `asked`; a host that changes something a poll reports (the
@@ -182,7 +183,7 @@ export function mountBoards({ base = "", site = () => null } = {}) {
     function opened(b, es) {
         if (b.stream !== es || b.live) return;
         b.live = true;
-        note(b.port, `listening to ${b.port} @ 115200`);
+        note(b.port, `listening to ${b.port} @ 115200 -- opening the port may have reset the board`);
         emit(b.port, "live", { live: true });
     }
     function closeStream(b) {
@@ -264,6 +265,28 @@ export function mountBoards({ base = "", site = () => null } = {}) {
             if (r.running_sketch && b.observed !== r.running_sketch) { b.observed = r.running_sketch; emit(port, "observed", { observed: b.observed }); }
             note(port, r.running_sketch ? `heard ${r.running_sketch} say hello` : `no hello in ${r.seconds} s (${r.lines.length} lines)`);
             return r;
+        } finally { follow(b); }
+    }
+    // The stream closed and opened again, for a devkit listened to: Reconnect.
+    function restream(port) {
+        const b = board(port);
+        closeStream(b);
+        follow(b);
+    }
+    // esptool's chip, MAC and flash size (it resets the board): the stream, if
+    // open, gives the port up meanwhile and is opened again after.
+    async function probe(port) {
+        const b = board(port);
+        closeStream(b);
+        note(port, `probing ${port} with esptool (this resets the board)`);
+        try {
+            const view = await post("/firmware/devices/probe", { port });
+            takeView(b, view);
+            const known = model.devices.find((v) => v.device.port === port);
+            if (known) Object.assign(known, view);
+            note(port, view.device.chip ? `${view.device.chip} rev ${view.device.revision || "?"} · MAC ${view.device.mac || "?"} · flash ${view.device.flash_size || "?"}` : "esptool answered with no chip");
+            emit(port, "device", { device: view.device });
+            return view;
         } finally { follow(b); }
     }
     // A report code (M503, M119 ...) over the held link; its answer is in the log.
@@ -355,7 +378,7 @@ export function mountBoards({ base = "", site = () => null } = {}) {
     const model = {
         rows: {}, devices: [], problem: null, loaded: false, scanning: false, links: new Set(),
         board, boards: () => [...all.values()], scan, rescan, setRow, forget,
-        poll, watch, setWatch, unwatch, loadInfo, identify, listen, query, reconnect, reset, release,
+        poll, watch, setWatch, unwatch, loadInfo, identify, listen, probe, restream, query, reconnect, reset, release,
         pullLog, clearLog, note, tick: () => ++seq, api, post,
         isHeld: (port) => model.links.has(port),
         destroy() {

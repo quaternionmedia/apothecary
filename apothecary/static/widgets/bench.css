@@ -2,6 +2,7 @@
  * card, which mounts the same form and task log inside its Machine. Scoped to
  * .bench-ui, so the page's own rules and the Machine's are left alone. */
 .bench-ui { font-size: 0.8rem; color: #c8d0c8; display: flex; flex-direction: column; gap: 0.35rem; }
+.bench-ui [hidden] { display: none !important; }
 .bench-ui .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: #7a867a; margin-top: 0.45rem; }
 .bench-ui .row { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; margin: 0.15rem 0; }
 .bench-ui .grow { flex: 1; min-width: 0; }

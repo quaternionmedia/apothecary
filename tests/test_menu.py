@@ -36,6 +36,7 @@ from apothecary.menu import (
     Pointing,
     Ring,
     RingTooFull,
+    carried_by,
     check_ring,
     control_options,
     nearest,
@@ -419,13 +420,15 @@ def test_walk_and_address_round_trip_through_device_control_jog():
     """Device > Control > Jog > Y+ on a node with a printer pinned to it.
 
     The address is computed, not assumed: Device is the third option on the
-    node ring, Control the seventh on the device ring (Link is the sixth),
-    Jog the third on the control ring, and Y+ the first on the jog pad.
+    node ring, Control the eighth on the device ring (Flash is the third, in
+    the cell Monitor had), Jog the third on the control ring, and Y+ the first
+    on the jog pad: ⌗2728, where hands learned it before Watch and Monitor
+    became Open.
     """
     ring = _node_with_printer()
-    expected = "".join(str(PLACEMENT[i]) for i in (2, 6, 2, 0))
+    expected = "".join(str(PLACEMENT[i]) for i in (2, 7, 2, 0))
     address = address_of(ring, "control:jog:Y+")
-    assert address == expected == "2128"
+    assert address == expected == "2728"
     assert walk(ring, address).action == "control:jog:Y+"
     assert BACK not in {int(digit) for digit in address}
 
@@ -492,9 +495,9 @@ def test_every_address_covers_every_leaf():
 def test_an_intent_carries_its_address():
     context = Context(pointing=Pointing.NODE, targets=["printer_1"])
     intent = Intent(
-        action="control:jog:Y+", context=context, option_id="control:jog:Y+", address="2128"
+        action="control:jog:Y+", context=context, option_id="control:jog:Y+", address="2728"
     )
-    assert intent.address == "2128"
+    assert intent.address == "2728"
     assert Intent(action="fit", context=context, option_id="fit").address is None
     for bad in ("5", "85", "", "x"):
         with pytest.raises(ValueError, match="run of cells"):
@@ -595,24 +598,63 @@ def test_a_bound_device_is_offered_after_move():
     ids = [o.id for o in ring.options]
     assert ids.index("device") == ids.index("move") + 1
     device = walk(ring, address_of(ring, "device"))
-    assert [c.label for c in device.children] == [
-        "Open",
-        "Poll",
-        "Query",
-        "Unpin",
-        "Rescan",
-        "Link",
-        "Control",
+    assert [(c.label, c.cell) for c in device.children] == [
+        ("Open", 8),
+        ("Poll", 6),
+        ("Flash", 2),
+        ("Query", 4),
+        ("Unpin", 9),
+        ("Rescan", 3),
+        ("Link", 1),
+        ("Control", 7),
     ]
     # Open is the board's Machine, in the cell Watch had; Watch and Monitor were
-    # two ways into two views of the one board, and Monitor's cell is gone.
-    assert device.children[0].cell == 8 and device.children[0].action == "device:open"
+    # two ways into two views of the one board. Flash takes the cell Monitor
+    # freed, so Query, Unpin, Rescan, Link and Control are where they were before
+    # the two became one: Control at 7, jog Y+ from a printer's node ⌗2728.
+    assert device.children[0].action == "device:open"
+    assert device.children[2].action == "device:flash"
     assert "device:watch" not in set(every_action([ring]))
     assert "device:monitor" not in set(every_action([ring]))
-    # Link sits before Control on purpose: cell 3 on a devkit and on a printer alike.
-    assert device.children[5].cell == 3 and device.children[6].cell == 1
+    assert address_of(ring, "device:query") == "24"
+    assert address_of(ring, "device:unpin") == "29"
+    assert address_of(ring, "device:rescan") == "23"
+    assert address_of(ring, "device:reconnect") == "218"
+    assert address_of(ring, "control:arm") == "277"
+    assert address_of(ring, "control:estop") == "271"
+    # A printer keeps its own firmware: its Flash holds the cell and cannot be chosen.
+    assert device.children[2].enabled is False
+    # Link sits before Control on purpose: cell 1 on a devkit and on a printer alike.
     devkit = walk(_node_with_printer(Device(port="/dev/ttyACM0", bound=True)), "2")
-    assert devkit.children[-1].label == "Link" and devkit.children[-1].cell == 3
+    assert devkit.children[-1].label == "Link" and devkit.children[-1].cell == 1
+    assert devkit.children[2].label == "Flash" and devkit.children[2].enabled is True
+
+
+def test_a_devkit_listens_and_probes_from_link_and_a_printer_does_neither():
+    """A devkit's port is opened only when asked: Link › Listen streams it (⌗214 from
+    its node), Link › Probe asks esptool (⌗219). Appended after Release, so Reconnect,
+    Reset and Release keep their cells; a printer is polled over its held link and has
+    neither."""
+    devkit = Device(port="/dev/ttyACM0", bound=True)
+    node = _node_with_printer(devkit)
+    link = walk(node, "21")
+    assert [(c.label, c.action, c.cell) for c in link.children] == [
+        ("Reconnect", "device:reconnect", 8),
+        ("Reset", "device:reset", 6),
+        ("Release", "device:release", 2),
+        ("Listen", "device:listen", 4),
+        ("Probe", "device:probe", 9),
+    ]
+    assert address_of(node, "device:listen") == "214"
+    assert address_of(_device_ring(devkit), "device:listen") == "14"
+    printer = walk(_node_with_printer(), "21")
+    assert [c.action for c in printer.children] == [
+        "device:reconnect",
+        "device:reset",
+        "device:release",
+    ]
+    for verb in ("device:listen", "device:probe", "device:flash"):
+        assert carried_by(verb).name == "VIEWER"
 
 
 def test_control_is_absent_when_the_board_is_not_a_printer():

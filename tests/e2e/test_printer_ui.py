@@ -157,9 +157,9 @@ def _polls_in_the_chart(page: Page, n: int):
 def test_pin_identify_open_poll_and_sync(page: Page, fresh_url: str):
     """Pin → Open → M115: a poll each period, never stacked, and the node follows. The
     board was pinned before anyone asked it what it is, so its Machine opens as a
-    devkit's and listens; its Identify hears a hello (the scripted monitor says one on
-    every port) and keeps it a devkit's. Pinned again once Query has said it is a
-    printer, its Machine is a printer's, polling."""
+    devkit's, its port closed until Listen; listened to, it says a hello (the scripted
+    monitor says one on every port). Pinned again once Query has said it is a printer,
+    its Machine is a printer's, polling."""
     page.clock.install()
     page.goto(f"{fresh_url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
@@ -175,10 +175,11 @@ def test_pin_identify_open_poll_and_sync(page: Page, fresh_url: str):
     expect(
         page.locator("#contents-list .contents-item[data-path='printer_1'] .dev-badge")
     ).to_be_visible()
-    # Not asked what it is: its Machine is a devkit's, listening to it.
+    # Not asked what it is: its Machine is a devkit's, and Listen opens its port.
     section.locator(".dev-open").click()
     machine = page.locator(MACHINE)
     expect(machine.locator("#c-sketch")).to_be_visible(timeout=5000)
+    machine.locator("#listen").click()
     expect(machine.locator("#log")).to_contain_text("blink", timeout=10000)
     page.evaluate("() => window.fractalViewer.closeMachine()")
     section.locator(".dev-unpin").click()
@@ -369,7 +370,9 @@ def test_focused_monitor_page(page: Page, fresh_url: str):
         page.clock.fast_forward(POLL_MS)
         page.wait_for_function(f"(t) => {MONITOR}.timer !== t", arg=timer)
         count = polls + n  # the history this file's earlier tests left, if any, then one per poll
-        expect(page.locator("#chart-span")).to_have_text(f"last {count} poll{'' if count == 1 else 's'}")
+        expect(page.locator("#chart-span")).to_have_text(
+            f"last {count} poll{'' if count == 1 else 's'}"
+        )
     expect(page.locator("#chart path")).to_have_count(4)  # two series + two targets
 
     # Poll traffic shows when asked for; hidden, only the story is left: open, M115,
@@ -803,7 +806,7 @@ def test_a_print_from_here_pauses_from_the_ring_and_cancels(page: Page, printer_
     m25_before = page.locator("#log .tx.control", has_text="M25").count()
     page.keyboard.press("m")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    page.keyboard.press("1")
+    page.keyboard.press("7")
     page.keyboard.press("9")
     expect(page.locator("#ring-overlay .title")).to_have_text("Print")
     page.keyboard.press("6")
@@ -1151,7 +1154,7 @@ def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
     page.locator("#contents-list .contents-item[data-path='printer_1']").click(button="right")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press("2")  # Device
-    page.keyboard.press("1")  # Control
+    page.keyboard.press("7")  # Control
     page.keyboard.press("2")  # Jog
     page.keyboard.press("8")  # Y+
     expect(page.locator("#ring-overlay")).to_have_count(0)

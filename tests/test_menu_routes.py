@@ -100,12 +100,16 @@ def test_a_node_with_a_printer_pinned_offers_the_device_ring_with_cells():
     assert labels == {
         "Open": 8,
         "Poll": 6,
-        "Query": 2,
-        "Unpin": 4,
-        "Rescan": 9,
-        "Link": 3,
-        "Control": 1,
+        "Flash": 2,
+        "Query": 4,
+        "Unpin": 9,
+        "Rescan": 3,
+        "Link": 1,
+        "Control": 7,
     }
+    # A printer keeps its own firmware: Flash holds Monitor's old cell, not to be chosen.
+    flash = next(c for c in device["children"] if c["id"] == "device:flash")
+    assert flash["enabled"] is False
     control = next(c for c in device["children"] if c["id"] == "control")
     jog = next(c for c in control["children"] if c["label"] == "Jog")
     assert {c["label"]: c["cell"] for c in jog["children"]} == {
@@ -135,7 +139,7 @@ def test_a_device_ring_needs_no_arrangement():
     assert answer.status_code == 200, answer.text
     ring = answer.json()
     assert ring["title"] == "ttyUSB0"
-    assert [o["label"] for o in ring["options"]][:3] == ["Open", "Poll", "Query"]
+    assert [o["label"] for o in ring["options"]][:4] == ["Open", "Poll", "Flash", "Query"]
 
 
 def test_an_unknown_pointing_is_refused():
@@ -171,11 +175,11 @@ def test_an_intent_with_an_address_has_it_echoed_back():
     answer = client.post(
         "/menu/intent",
         json=chosen(
-            "control:jog:Y+", targets=["printer_1"], pointing=Pointing.NODE, address="2128"
+            "control:jog:Y+", targets=["printer_1"], pointing=Pointing.NODE, address="2728"
         ),
     )
     assert answer.status_code == 200, answer.text
-    assert answer.json()["address"] == "2128"
+    assert answer.json()["address"] == "2728"
     assert answer.json()["carried_by"] == Carries.VIEWER.value
 
 
