@@ -315,14 +315,17 @@ def test_the_mat_follows_its_bench_when_the_gizmo_moves_it(
     after = page.evaluate("() => window.fractalViewer.anchors.at('place:workbench')")
     assert after["x"] > before["x"]
     point = page.evaluate(PROJECT, [view["id"], 0.5, 0.5])
-    assert abs(point["x"] - after["x"]) < 2  # the badge stands over the mat's middle
+    # An anchor's point is the canvas's (anchors.js), PROJECT's the page's: the
+    # canvas starts where Site's rail ends.
+    left = page.evaluate("() => window.fractalViewer.canvas.getBoundingClientRect().left")
+    assert abs(point["x"] - left - after["x"]) < 2  # the badge stands over the mat's middle
     assert len(asked) == 1
 
 
 @pytest.mark.e2e
 def test_a_forgotten_pictures_view_leaves_the_world(page, base_url: str, leaves_garage_as_found):
     """A picture kept from the browser and pinned at the bench is drawn there;
-    forgotten from Kept, its view is unpinned and its mat goes."""
+    forgotten from its row in Pictures, its view is unpinned and its mat goes."""
     kept = page.request.post(
         f"{base_url}/photos/pictures?name=forget_me.png&kept=upload&site=garage&host=workbench",
         data=_picture(),
@@ -339,9 +342,9 @@ def test_a_forgotten_pictures_view_leaves_the_world(page, base_url: str, leaves_
     badge = page.locator(".world-badge.place-mark[data-host='workbench']")
     expect(badge).to_be_visible()
 
-    page.evaluate("() => window.apothecaryPanels.open('kept')")
-    panel = page.locator(".panel[data-panel='kept']")
-    card = panel.locator(f".kept-forget[data-path='{kept['path']}']")
+    page.evaluate("() => window.apothecaryPanels.open('pictures')")
+    panel = page.locator(".panel[data-panel='pictures']")
+    card = panel.locator(f".pictures-forget[data-path='{kept['path']}']")
     expect(card).to_be_visible(timeout=5000)
     card.click()
     page.wait_for_function(

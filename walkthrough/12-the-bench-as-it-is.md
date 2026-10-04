@@ -93,7 +93,7 @@ GET /cameras?site=garage -> []
 
 ## 12. What the browser put here, it can take back
 
-Kept lists what a page pinned -- cameras, views, boards -- every site's, and the pictures the browser kept, the ones added from the file picker kept as they were named under the picture folder's uploads/. Each row names its site and carries the button that takes it back, from here, without switching to that site; a pin whose site or piece is gone is shown as such, and this is the one place it can be seen. A picture kept and pinned nowhere waits for Picture › Folder, which the status bar names, to pin it at a place as a view.
+Site's Pinned lists what a page pinned -- cameras, views, boards -- every site's, each row naming its site and carrying the button that takes it back, from here, without switching to that site; a pin whose site or piece is gone is shown as such, and this is the one place it can be seen. Pictures lists every picture in the picture folder, the folder's own and the ones the browser kept -- those added from its file picker kept as they were named under uploads/ -- each with where it is pinned as a view, Pin here, and Forget on a kept one. A picture kept and pinned nowhere waits for Pin here, which the status bar names, to pin it at a place as a view.
 
 ![What the browser put here, it can take back](screenshots/12-12-what-the-browser-put-here-it-can-take-back.png)
 

@@ -132,6 +132,13 @@
             display: flex; flex-direction: column; min-height: 0;
         }
         .panel-rail[hidden] { display: none; }
+        /* Both rails showing (Site on the left, the rest on the right): each
+           gives way, so the world keeps at least half the page. */
+        .panel-rails-both > .panel-rail { width: min(400px, 25vw); }
+        /* Site docked fills its rail; its tree and sections scroll inside it,
+           not the rail, so its title stays in view. */
+        .panel-rail-body > .panel[data-panel="site"]:not(.collapsed) { flex: 1 1 auto; min-height: 140px; }
+        .panel-rail-body > .panel[data-panel="site"] .panel-body-slot { max-height: none; flex: 1 1 auto; min-height: 0; }
         .panel-rail-right { border-left: 1px solid #333; }
         .panel-rail-left { border-right: 1px solid #333; }
         .panel-rail-head {
@@ -189,38 +196,47 @@
         .panel[data-panel="machine"].free { width: min(500px, 90%); }
         .panel[data-panel="machine"] .panel-body-slot, .panel[data-panel="log"] .panel-body-slot { padding: 0; }
         .panel[data-panel="log"] .machine-log { height: 100%; }
-        /* The camera panel (widgets/camera.js) and Kept (widgets/kept.js), which shares its look */
-        .camera { font-size: 0.8rem; color: #bbb; display: flex; flex-direction: column; gap: 0.4rem; }
-        .camera .row { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
-        .camera .grow { flex: 1; }
-        .camera .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: #777; margin-top: 0.3rem; }
-        .camera .note { color: #8a9a8a; font-style: italic; } .camera .note.bad, .camera .bad { color: #ff8080; font-style: normal; }
-        .camera button, .camera select, .camera input:not([type=checkbox]), .camera textarea { font: inherit; font-size: 0.78rem; background: #232823; color: #ddd; border: 1px solid #3a443a; border-radius: 4px; padding: 0.2rem 0.45rem; }
-        .camera button:hover { background: #2f382f; } .camera button:disabled { opacity: 0.45; }
-        .camera button.warm { border-color: #7a5a1a; }
-        .camera video { width: 100%; max-height: 200px; background: #000; border-radius: 4px; }
-        .camera .pics { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 0.3rem; max-height: 220px; overflow: auto; }
-        .camera .pic { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.7rem; cursor: pointer; }
-        .camera .pic img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 3px; border: 1px solid #333; }
-        .camera .pic span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .camera textarea { width: 100%; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; }
-        .camera .group { padding: 0.15rem 0; } .camera .group.alone { color: #8a9a8a; }
-        .camera .aside { color: #b08a8a; }
-        .camera .question { border-top: 1px solid #2a332a; padding: 0.3rem 0; }
-        .camera pre { white-space: pre-wrap; font-size: 0.7rem; color: #aaa; max-height: 200px; overflow: auto; }
-        .camera .pic { position: relative; }
-        .camera input[type=file] { font-size: 0.72rem; max-width: 100%; }
-        .camera .kept { display: flex; flex-direction: column; gap: 0.2rem; max-height: 160px; overflow: auto; }
-        .camera .kept-row { display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; padding: 0.15rem 0.3rem; border-radius: 3px; background: #1d221d; }
-        .camera .kept-row span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .camera .kept-row.here { border-left: 2px solid #4a6fa8; }
-        .camera .kept-row.stale span { color: #b08a8a; }
-        .camera .kept-row img { width: 32px; height: 24px; object-fit: cover; border-radius: 2px; }
-        .kept-panel .kept { max-height: 260px; }
+        /* Pictures (widgets/picture_list.js) and Site's Pinned (widgets/pinned.js): rows, each with its buttons */
+        .panel-ui { font-size: 0.8rem; color: #bbb; display: flex; flex-direction: column; gap: 0.4rem; }
+        .panel-ui .row { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+        .panel-ui .grow { flex: 1; }
+        .panel-ui .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: #777; margin-top: 0.3rem; }
+        .panel-ui .note { color: #8a9a8a; font-style: italic; } .panel-ui .note.bad, .panel-ui .bad { color: #ff8080; font-style: normal; }
+        .panel-ui button, .panel-ui input:not([type=checkbox]), .panel-ui textarea { font: inherit; font-size: 0.78rem; background: #232823; color: #ddd; border: 1px solid #3a443a; border-radius: 4px; padding: 0.2rem 0.45rem; }
+        .panel-ui button:hover { background: #2f382f; } .panel-ui button:disabled { opacity: 0.45; cursor: not-allowed; }
+        .panel-ui .empty { color: #666; font-style: italic; }
+        .panel-ui .pics { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 0.3rem; max-height: 220px; overflow: auto; margin: 0.3rem 0; }
+        .panel-ui .pic { position: relative; display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.7rem; cursor: pointer; }
+        .panel-ui .pic img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 3px; border: 1px solid #333; }
+        .panel-ui .pic span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .panel-ui textarea { width: 100%; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; }
+        .panel-ui .group { padding: 0.15rem 0; } .panel-ui .group.alone { color: #8a9a8a; }
+        .panel-ui .aside { color: #b08a8a; }
+        .panel-ui .question { border-top: 1px solid #2a332a; padding: 0.3rem 0; }
+        .panel-ui pre { white-space: pre-wrap; font-size: 0.7rem; color: #aaa; max-height: 200px; overflow: auto; }
+        .panel-ui input[type=file] { font-size: 0.72rem; max-width: 100%; }
+        .pin-list { display: flex; flex-direction: column; gap: 0.2rem; max-height: 260px; overflow: auto; }
+        .pin-row { display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; padding: 0.15rem 0.3rem; border-radius: 3px; background: #1d221d; }
+        .pin-row > span, .pin-row .picture-what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pin-row.here { border-left: 2px solid #4a6fa8; }
+        .pin-row.stale > span { color: #b08a8a; }
+        .pin-row img { width: 40px; height: 30px; object-fit: cover; border-radius: 2px; flex: 0 0 auto; }
+        .pictures-list { max-height: 340px; }
+        .picture-what { display: flex; flex-direction: column; gap: 0.1rem; }
+        .picture-what .picture-name { overflow: hidden; text-overflow: ellipsis; }
+        .picture-views { display: flex; flex-wrap: wrap; gap: 0.25rem; color: #888; }
+        .picture-view { padding: 0 0.3rem; border-radius: 6px; border: 1px solid #3a3a3a; color: #999; }
+        .picture-view.here { border-color: #4a6fa8; color: #9cd2ff; cursor: pointer; }
+        .picture-view.here:hover { background: #22324a; }
+        /* A section that folds away: Site's Pinned and SCAD, Pictures' gathering. */
+        details.fold { border-top: 1px solid #2a2a2a; margin-top: 0.5rem; padding-top: 0.35rem; }
+        details.fold > summary { cursor: pointer; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: #888; user-select: none; }
+        details.fold > summary:hover { color: #ccc; }
+        details.fold[open] > summary { margin-bottom: 0.35rem; }
         /* The place badge: a host's (or the floor's) camera and view, in the
-           world (picture_marks.js). Not `.camera`: that is the panel's own class
-           above, and its `display: flex` would override the `hidden` the anchor
-           layer sets when the host is out of view. */
+           world (picture_marks.js). Its own class, never a panel's: a panel
+           class's `display: flex` would override the `hidden` the anchor layer
+           sets when the host is out of view. */
         .world-badge.place-mark { border-color: #7a5a1a; color: #ffcc66; }
         .world-badge.place-mark::after { border-top-color: #7a5a1a; }
         .picture-facts .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: #777; margin-top: 0.3rem; }
@@ -324,12 +340,22 @@
         }
         .part-actions button:hover, .part-actions a:hover { background: #505050; }
 
-        .violations-list { list-style: none; margin: 0; padding: 0; font-size: 0.8rem; }
-        .violations-list li {
-            padding: 0.4rem 0.5rem; margin-bottom: 0.3rem; border-radius: 4px;
-            background: #3a1f1f; color: #ff9d9d;
+        /* Site: its problems at the top, each a row that selects its piece; in
+           the tree, a piece in a problem is red and its ancestors say so. */
+        .site-problems { margin-bottom: 0.6rem; }
+        .site-problems[hidden] { display: none; }
+        .site-problems .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: #ff8080; margin-bottom: 0.25rem; }
+        .problem-list { list-style: none; margin: 0; padding: 0; font-size: 0.8rem; }
+        .problem-list li {
+            padding: 0.35rem 0.5rem; margin-bottom: 0.25rem; border-radius: 4px;
+            background: #3a1f1f; color: #ff9d9d; cursor: pointer;
         }
-        .violations-clean { color: #6fdb75; font-size: 0.85rem; }
+        .problem-list li:hover { background: #4a2626; }
+        .contents-item.invalid .item-label { color: #ff8080; }
+        .contents-item .problem-mark { flex: 0 0 auto; font-size: 0.72rem; color: #ff6060; }
+        .contents-item.invalid-inside .problem-mark { color: #b06060; }
+        .validity-indicator { cursor: pointer; }
+        .site-scad .code-content { max-height: 320px; }
 
         .job-form { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.75rem; }
         .job-form input[type="text"], .job-form input[type="number"] {
@@ -476,7 +502,7 @@
             <a href="{{ base_url }}/firmware" id="firmware-link" class="toolbar-link" title="Install the firmware toolchain and program boards from sketches under parts/">⚡ Firmware</a>
             <a href="{{ base_url }}/firmware/monitor" id="monitor-link" class="toolbar-link" title="Focused printer monitor: status, temperature history, full comms log, reconnect/reset">🖨 Monitor</a>
             <button type="button" id="ring-open" title="Open the ring for the chosen piece (m, or right-click a piece). Digits choose cells as on a numeric keypad; 5 backs out.">⌗ Ring</button>
-            <span id="validity-indicator" class="validity-indicator valid">Layout valid</span>
+            <span id="validity-indicator" class="validity-indicator valid" title="The site's problems: click to open them at the top of Site">Layout valid</span>
         </div>
         <div class="main-content">
             <div class="viewer-panel">
@@ -507,12 +533,24 @@
                 <div class="viewer-hint">Click to select • Double-click (or scroll past the edge) to zoom in • Drag arrows to move • Shift+drag to pan</div>
             </div>
             <div class="side-panel">
-                <div class="panel-section" data-panel="contents">
-                    <div class="panel-header">Contents</div>
+                <div class="panel-section" data-panel="site" data-where="left">
+                    <div class="panel-header">Site</div>
                     <div class="panel-body">
+                        <div id="site-problems" class="site-problems" hidden>
+                            <div class="k" id="site-problems-count"></div>
+                            <ul id="problem-list" class="problem-list"></ul>
+                        </div>
                         <div id="category-filters" class="category-filters"
                              title="Expand every node of a subsystem at once, at any depth beneath the current level, at the cost of render time"></div>
                         <ul id="contents-list" class="contents-list contents-tree"></ul>
+                        <details id="site-pinned" class="fold" title="Every camera, view and board a page pinned, every site's, each taken back from its row">
+                            <summary>Pinned · every site's</summary>
+                            <div id="site-pinned-body"></div>
+                        </details>
+                        <details id="site-scad" class="fold site-scad" title="The site as OpenSCAD, generated from its tree">
+                            <summary>SCAD</summary>
+                            <div id="code-content" class="code-content">Load a site to see its generated OpenSCAD</div>
+                        </details>
                     </div>
                 </div>
                 <div class="panel-section" data-panel="selected">
@@ -534,19 +572,6 @@
                             <button type="submit">+ Add Job</button>
                         </form>
                         <ul id="job-list" class="job-list"></ul>
-                    </div>
-                </div>
-                <div class="panel-section" data-panel="validation">
-                    <div class="panel-header">Layout Validation</div>
-                    <div class="panel-body">
-                        <ul id="violations-list" class="violations-list"></ul>
-                        <div id="violations-clean" class="violations-clean">Layout valid</div>
-                    </div>
-                </div>
-                <div class="panel-section" data-panel="scad">
-                    <div class="panel-header">Generated OpenSCAD</div>
-                    <div class="panel-body">
-                        <div id="code-content" class="code-content">Load a site to see generated OpenSCAD</div>
                     </div>
                 </div>
             </div>
@@ -579,8 +604,8 @@
         import { mountAnchors } from '/static/anchors.js';
         import { mountPanels } from '/static/panels.js';
         import { mountMachine } from '/static/widgets/machine.js';
-        import { mountCamera } from '/static/widgets/camera.js';
-        import { mountKept } from '/static/widgets/kept.js';
+        import { mountPinned } from '/static/widgets/pinned.js';
+        import { mountPictureList } from '/static/widgets/picture_list.js';
         import { makeMachineMarks, toScene as marksToScene } from '/static/machine_marks.js';
         import { mountPictureMarks } from '/static/picture_marks.js';
         import { mountPictures } from '/static/pictures.js';
@@ -843,10 +868,12 @@
                 this.jobsSectionEl = document.getElementById('jobs-section');
                 this.jobFormEl = document.getElementById('job-form');
                 this.jobListEl = document.getElementById('job-list');
-                this.violationsListEl = document.getElementById('violations-list');
-                this.violationsCleanEl = document.getElementById('violations-clean');
+                this.problemsEl = document.getElementById('site-problems');
+                this.problemsCountEl = document.getElementById('site-problems-count');
+                this.problemListEl = document.getElementById('problem-list');
                 this.validityEl = document.getElementById('validity-indicator');
                 this.codeContentEl = document.getElementById('code-content');
+                this.pinnedEl = document.getElementById('site-pinned');
                 this.statusEl = document.getElementById('status');
 
                 this.tree = null;            // full recursive tree for the loaded site
@@ -873,7 +900,10 @@
                 this.detailOverrides = new Map();  // nodeKey() -> detail level, set per node
                                                     // from the Selected panel; survives a
                                                     // re-render but not a zoom to a new level
-                this.violationNames = new Set();
+                // The pieces the site's problems name, by path, each with what is
+                // wrong with it; and every path above one of them, with the same.
+                this.invalidPaths = new Map();
+                this.invalidInside = new Map();
                 this.wheelResistance = 0;
                 this.stlLoader = new STLLoader();
                 this.loadGeneration = 0;  // guards against a slow real-geometry
@@ -942,15 +972,18 @@
                 // pinned machine, and its nozzle, bed and reading at its node.
                 // Both survive renderFocus(), which clears only the nodes' meshes.
                 this.anchors = mountAnchors({ container: this.canvas.parentElement, canvas: this.canvas, camera: this.camera, scene: this.scene });
-                // The side column's sections become panels: docked in the right
-                // rail, each one closable, collapsible and draggable free; what a
-                // person did to them is remembered per browser (panels.js).
+                // The side column's sections become panels: Site docked in the left
+                // rail, the rest in the right, each one closable, collapsible and
+                // draggable free; what a person did to them is remembered per
+                // browser (panels.js), and a remembered layout naming a panel
+                // that is gone is ignored.
                 this.panels = mountPanels({ container: document.querySelector('.main-content'), overlay: this.canvas.parentElement });
                 for (const section of document.querySelectorAll('.side-panel [data-panel]')) {
                     const id = section.dataset.panel;
                     const el = this.panels.register(id, {
                         title: section.querySelector('.panel-header').textContent.trim(),
                         body: section.querySelector('.panel-body'),
+                        where: section.dataset.where || 'right',
                     });
                     if (section.id === 'jobs-section') { this.jobsSectionEl = el; }  // shown when a site has build volumes
                     if (section.style.display === 'none') el.style.display = 'none';
@@ -972,7 +1005,7 @@
                     onSelect: (host) => this.selectPlace(host),
                     onChange: (attached) => {
                         this.cameras = attached.cameras;
-                        if (this.keptWidget) this.keptWidget.load();
+                        this.listsChanged();
                         // Selected is redrawn only when what it says of the pictures changed,
                         // so a position being typed is not swept away by an answer.
                         if (this.selectedName && this.pictureFactsHtml(this.selectedName) !== this.shownFacts) this.renderSelectedPanel();
@@ -1003,45 +1036,35 @@
                     },
                 });
                 window.apothecaryPictureVerbs = this.pictures;
-                // Kept: every camera, view and board a page pinned, every site's, and
-                // every picture the browser kept, each taken back from its row
-                // without switching the site (closed until asked for).
-                this.keptWidget = null;
-                this.panels.register('kept', {
-                    title: 'Kept', where: 'right', open: false,
+                // Site's Pinned: every camera, view and board a page pinned, every
+                // site's, each taken back from its row without switching the site.
+                // Mounted the first time the section opens, and listed again each
+                // time it does.
+                this.pinnedWidget = null;
+                this.pinnedEl.addEventListener('toggle', () => this.pinnedOpened());
+                // Pictures: every picture under the picture root, each with its views
+                // and Pin here, Forget on a kept one, Purge, and the gathering
+                // (closed until asked for; listed again each time it opens).
+                this.picturesWidget = null;
+                this.panels.register('pictures', {
+                    title: 'Pictures', where: 'right', open: false,
+                    onOpen: () => { if (this.picturesWidget) this.picturesWidget.load(); },
                     body: (slot) => {
-                        this.keptWidget = mountKept(slot, {
+                        this.picturesWidget = mountPictureList(slot, {
                             base: BASE_URL,
                             log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
                             world: {
                                 siteName: () => this.siteName,
-                                // Taken back in this site, or a picture forgotten
-                                // (its views go wherever they were): the world's
-                                // marks are fetched again. Another site's row
-                                // changes nothing on screen.
-                                changed: (site) => (site === null || site === this.siteName ? this.pictureMarks.refresh() : null),
-                                // A board's pin of this site taken back: the node's
-                                // row, badge and marks go now, not at the next poll.
-                                unpinned: (site, path) => { if (site !== this.siteName) return; delete this.bindings[path]; this.queryResult = null; this.renderDeviceViews(); this.syncWorldMarks(); },
-                                picturesChanged: () => { if (this.cameraWidget) this.cameraWidget.loadPictures(); },
+                                place: () => this.pinPlace(),
+                                // As Picture › Folder pins one: at the top level, where mats are drawn.
+                                pin: (path, host) => { if (this.focusPath.length) this.jumpTo(0); return this.pictures.pinPicture(host, path); },
+                                showView: (id) => this.showView(id),
+                                purge: () => this.pictures.purge(),
+                                // A picture forgotten: its views go wherever they were.
+                                changed: () => this.pictureMarks.refresh(),
                             },
                         });
-                        window.apothecaryKept = this.keptWidget;
-                    },
-                });
-                // What is left of the camera panel until gathering leaves core: the
-                // pictures on this machine and the gathering's report (closed until
-                // asked for).
-                this.cameraWidget = null;
-                this.panels.register('camera', {
-                    title: 'Gather pictures', where: 'right', open: false,
-                    body: (slot) => {
-                        this.cameraWidget = mountCamera(slot, {
-                            base: BASE_URL,
-                            log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
-                            world: { kept: () => { if (this.keptWidget) this.keptWidget.load(); } },
-                        });
-                        window.apothecaryCamera = this.cameraWidget;
+                        window.apothecaryPictureList = this.picturesWidget;
                     },
                 });
                 window.apothecaryPanels = this.panels;
@@ -1057,6 +1080,8 @@
                 this.loadBtn.addEventListener('click', () => this.loadSite(this.siteSelect.value));
                 this.siteSelect.addEventListener('change', () => this.loadSite(this.siteSelect.value));
                 this.zoomOutBtn.addEventListener('click', () => this.zoomOut());
+                // The toolbar's count of problems opens them, at the top of Site.
+                this.validityEl.addEventListener('click', () => this.openProblems());
                 this.snapToggle.addEventListener('change', () => {
                     this.transformControls.setTranslationSnap(this.snapToggle.checked ? SNAP_INCREMENT : null);
                 });
@@ -1413,13 +1438,14 @@
                 this.rebuildRenderNodeByKey(focus);
 
                 this.clearScene();
+                // Before the meshes and the tree, which are both marked by it.
+                this.renderProblems({ list: false });
                 this.buildChildMeshes(renderNodes);
                 this.renderBreadcrumb();
                 this.renderMinimap();
                 this.renderCategoryFilters();
                 this.renderContentsList(focus);
                 this.renderSelectedPanel();
-                this.renderViolations();
                 this.renderJobsSection();
                 this.frameCameraForChildren(renderNodes);
                 this.scheduleWaveLoad(renderNodes);
@@ -1600,14 +1626,12 @@
 
             // ``key`` indexes meshByName/selectedName (nodeKey(), a dotted
             // path, since bare names collide across siblings of an expanded
-            // category); violation membership is checked
-            // against ``node.name`` instead, since that's what the server
-            // reports and, in this example, violations only ever occur
-            // between uniquely-named root-level Structures anyway.
+            // category); a piece in a problem is looked up by the same path
+            // (renderProblems resolves the names a problem gives to paths).
             colorMesh(key, node) {
                 const mesh = this.meshByName[key];
                 if (!mesh) return;
-                const isViolating = this.violationNames.has(node.name);
+                const isViolating = this.invalidPaths.has(key);
                 const isSelected = this.selectedName === key;
                 mesh.material.color.set(isViolating ? VIOLATION_COLOR : baseColorFor(node));
                 const edges = mesh.getObjectByName('edges');
@@ -1902,6 +1926,18 @@
                 const inside = hasChildren ? ` — ${node.children.length} inside` : '';
                 label.textContent = `${node.name} (${node.role})${inside}`;
                 li.appendChild(label);
+                // A piece a problem names is red, saying what is wrong on hover; a
+                // piece with one somewhere inside it says so.
+                const wrong = this.invalidPaths.get(path), within = this.invalidInside.get(path);
+                if (wrong || within) {
+                    li.classList.add(wrong ? 'invalid' : 'invalid-inside');
+                    const mark = document.createElement('span');
+                    mark.className = 'problem-mark';
+                    mark.textContent = '⚠';
+                    mark.title = wrong ? wrong.join('\n') : `something inside is invalid:\n${within.join('\n')}`;
+                    li.title = mark.title;
+                    li.appendChild(mark);
+                }
                 const badge = this.deviceBadgeHtml(path);
                 if (badge) li.appendChild(badge);
 
@@ -1966,6 +2002,8 @@
             // so anything deeper -- or any leaf of an expanded category that
             // isn't itself a direct child -- gets a read-only panel.
             renderSelectedPanel() {
+                // Pictures' Pin here pins at the selection: it says where, or why not.
+                if (this.picturesWidget) this.picturesWidget.placeChanged();
                 this.shownFacts = this.selectedName ? this.pictureFactsHtml(this.selectedName) : '';
                 if (this.selectedName === FLOOR_KEY) {
                     this.selectedBodyEl.innerHTML = `<div class="prop-row"><label>Name</label><span>the floor</span></div>
@@ -2048,7 +2086,7 @@
                 const ring = (verb) => `⌗ ${host === '' ? 'Pictures › Floor › ' : ''}${verb}`;
                 // Nothing here yet: the way in, so the durable hint is where the person
                 // looks. The verbs stay the ring's.
-                if (!cam && !views.length) return `<div class="prop-readonly picture-facts" data-facts="${host === '' ? 'floor' : 'host'}"><div class="k">Pictures at ${esc(where(host))}</div><div data-facts="way-in">${ring('Camera › Pin here')} puts this browser's camera at ${esc(where(host))}; ${host === '' ? '⌗ Pictures › Add' : '⌗ Picture › Add'} pins a picture from disk; m, or right-click, opens the ring</div></div>`;
+                if (!cam && !views.length) return `<div class="prop-readonly picture-facts" data-facts="${host === '' ? 'floor' : 'host'}"><div class="k">Pictures at ${esc(where(host))}</div><div data-facts="way-in">${ring('Camera › Pin here')} puts this browser's camera at ${esc(where(host))}; ${host === '' ? '⌗ Pictures › Add' : '⌗ Picture › Add'} pins a picture from disk, and Pin here in Pictures one already in the folder; m, or right-click, opens the ring</div></div>`;
                 const drawn = pm.drawnAt(host);
                 const rows = [];
                 if (cam) {
@@ -2823,7 +2861,7 @@
                     const renderNodes = this.currentRenderNodes(focus);
                     this.rebuildRenderNodeByKey(focus);
                     renderNodes.forEach((node) => this.rebuildSingleMesh(node));
-                    this.renderViolations();
+                    this.renderProblems();
                     this.renderSelectedPanel();
                     this.setStatus(this.isValid ? 'Layout valid' : 'Layout has violations', this.isValid ? 'success' : 'error');
                     // A moved host carries its mat: the server says where it lies now.
@@ -2834,24 +2872,145 @@
                 }
             }
 
-            renderViolations() {
-                this.violationNames = new Set(this.violations.flatMap((v) => v.structures));
-                this.violationsListEl.innerHTML = '';
-                if (this.violations.length) {
-                    this.violationsCleanEl.style.display = 'none';
-                    for (const v of this.violations) {
-                        const li = document.createElement('li');
-                        li.textContent = v.message;
-                        this.violationsListEl.appendChild(li);
+            // The pieces a problem names, as dotted paths. A problem names pieces by
+            // their names alone: siblings, under the shallowest node that holds
+            // them all (an overlap is between siblings); failing that, each where
+            // a node of that name is first found, nearest the top.
+            problemPaths(v) {
+                const names = v.structures || [];
+                if (!names.length || !this.tree) return [];
+                const queue = [[this.tree, '']];
+                const first = new Map();
+                while (queue.length) {
+                    const [node, path] = queue.shift();
+                    const kids = node.children || [];
+                    if (names.every((n) => kids.some((c) => c.name === n))) return names.map((n) => pathForChild(path, n));
+                    for (const c of kids) {
+                        const p = pathForChild(path, c.name);
+                        if (names.includes(c.name) && !first.has(c.name)) first.set(c.name, p);
+                        queue.push([c, p]);
                     }
-                } else {
-                    this.violationsCleanEl.style.display = '';
                 }
+                return names.map((n) => first.get(n)).filter(Boolean);
+            }
+
+            // Site's problems: listed at its top, each row selecting its piece; in
+            // the tree, each piece a problem names is marked, and every piece above
+            // it says something inside is invalid. The toolbar counts them.
+            renderProblems({ list = true } = {}) {
+                this.invalidPaths = new Map();
+                this.invalidInside = new Map();
+                const add = (map, path, message) => map.set(path, [...(map.get(path) || []), message]);
+                this.problemListEl.innerHTML = '';
+                for (const v of this.violations) {
+                    const paths = this.problemPaths(v);
+                    for (const path of paths) {
+                        add(this.invalidPaths, path, v.message);
+                        const parts = path.split('.');
+                        for (let i = 1; i < parts.length; i++) add(this.invalidInside, parts.slice(0, i).join('.'), v.message);
+                    }
+                    const li = document.createElement('li');
+                    li.textContent = v.message;
+                    li.dataset.path = paths[0] || '';
+                    li.title = paths.length ? `Select ${paths[0]}` : 'Names no piece in this site';
+                    li.addEventListener('click', () => this.goToProblem(paths[0]));
+                    this.problemListEl.appendChild(li);
+                }
+                const n = this.violations.length;
+                this.problemsEl.hidden = n === 0;
+                this.problemsCountEl.textContent = `${n} problem${n === 1 ? '' : 's'}`;
                 this.validityEl.textContent = this.isValid
                     ? 'Layout valid'
-                    : `${this.violations.length} violation${this.violations.length === 1 ? '' : 's'}`;
+                    : `${n} violation${n === 1 ? '' : 's'}`;
                 this.validityEl.className = 'validity-indicator ' + (this.isValid ? 'valid' : 'invalid');
+                if (list) this.renderContentsList(this.currentFocusNode());
                 for (const key of Object.keys(this.meshByName)) this.colorMesh(key, this.renderNodeByKey[key]);
+            }
+
+            // A problem's row: its piece selected, at the level it is at -- the
+            // view steps there first when it is another.
+            goToProblem(path) {
+                if (!path || !this.nodeByPath(path)) { this.setStatus(`${path || 'that problem'} names no piece in this site`, 'error'); return false; }
+                const parent = path.includes('.') ? path.slice(0, path.lastIndexOf('.')) : '';
+                if (parent !== this.focusPath.join('.')) {
+                    this.focusPath = parent ? parent.split('.') : [];
+                    this.selectedName = null;
+                    this.renderFocus();
+                }
+                return this.selectPath(path);
+            }
+
+            // The toolbar's count: Site opened (and its rail shown), unfolded, and
+            // scrolled to the problems at its top.
+            openProblems() {
+                this.panels.open('site');
+                this.panels.collapse('site', false);
+                const where = (this.panels.state('site') || {}).where;
+                if ((where === 'left' || where === 'right') && this.panels.railHidden(where)) this.panels.hideRail(where, false);
+                const slot = this.problemsEl.closest('.panel-body-slot');
+                if (slot) slot.scrollTop = 0;
+                this.problemsEl.scrollIntoView({ block: 'nearest' });
+            }
+
+            // Site's Pinned opened: mounted the first time, listed again each time
+            // after, so a pin made elsewhere shows.
+            pinnedOpened() {
+                if (!this.pinnedEl.open) return;
+                if (this.pinnedWidget) { this.pinnedWidget.load(); return; }
+                this.pinnedWidget = mountPinned(document.getElementById('site-pinned-body'), {
+                    base: BASE_URL,
+                    log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
+                    world: {
+                        siteName: () => this.siteName,
+                        // Taken back in this site: the world's marks are fetched again.
+                        // Another site's row changes nothing on screen but Pictures'
+                        // list of where each picture is pinned.
+                        changed: (site) => {
+                            if (site === null || site === this.siteName) return this.pictureMarks.refresh();
+                            if (this.picturesWidget && this.panels.isOpen('pictures')) this.picturesWidget.load();
+                            return null;
+                        },
+                        // A board's pin of this site taken back: the node's row, badge
+                        // and marks go now, not at the next poll.
+                        unpinned: (site, path) => { if (site !== this.siteName) return; delete this.bindings[path]; this.queryResult = null; this.renderDeviceViews(); this.syncWorldMarks(); },
+                    },
+                });
+                window.apothecaryPinned = this.pinnedWidget;
+            }
+
+            // Something pinned, unpinned, kept or forgotten: Site's Pinned and
+            // Pictures, where they are open, list it again.
+            listsChanged() {
+                if (this.pinnedWidget && this.pinnedEl.open) this.pinnedWidget.load();
+                if (this.picturesWidget && this.panels.isOpen('pictures')) this.picturesWidget.load();
+            }
+
+            // Where Pictures' Pin here pins: the selected host -- a root structure
+            // with a footprint that is not a made piece -- or the floor; with
+            // nothing like it selected, null and the reason, as the server would
+            // refuse it (vision/views.py's host_node).
+            pinPlace() {
+                if (!this.siteName || !this.tree) return { host: null, why: 'no site is loaded' };
+                const key = this.selectedName;
+                if (key === FLOOR_KEY) return { host: '' };
+                if (!key) return { host: null, why: 'select a structure, or the floor (⌗ Pictures › Floor), to pin a picture there' };
+                const root = key.split('.')[0];
+                if (key.includes('.')) return { host: null, why: `${key} is inside ${root}: pictures are pinned at a root structure, so select ${root}` };
+                const node = (this.tree.children || []).find((c) => c.name === key);
+                if (!node) return { host: null, why: `${key} is not a structure of ${this.siteName}` };
+                if (this.pictureMarks.madeRecord(key)) return { host: null, why: `${key} is a made piece: pin at a structure, or the floor` };
+                if (!node.world_bounds) return { host: null, why: `${key} has no footprint, so there is no top to lay a picture on` };
+                return { host: key };
+            }
+
+            // A view's place in Pictures: selected, and the view drawn there, as
+            // Picture › Views does.
+            showView(id) {
+                const view = ((this.pictureMarks.attached() || {}).views || []).find((v) => v.id === id);
+                if (!view) { this.setStatus(`no view ${id} in this site`, 'error'); return false; }
+                if (this.focusPath.length) this.jumpTo(0);
+                this.selectPlace(view.host);
+                return this.pictures.drawView(view.host, id);
             }
 
             // Re-fetches the whole tree (status/violations/positions may have
@@ -3221,8 +3380,8 @@
             renderDeviceViews() {
                 this.renderContentsList(this.currentFocusNode());
                 this.renderSelectedPanel();
-                // A pin made or taken back here shows in Kept too.
-                if (this.keptWidget) this.keptWidget.load();
+                // A pin made or taken back here shows in Site's Pinned too.
+                if (this.pinnedWidget && this.pinnedEl.open) this.pinnedWidget.load();
             }
 
             // Every 2 s while the overlay polls: swap only the badge spans
@@ -3411,6 +3570,7 @@
                 this.tree = data.tree;
                 this.violations = data.violations;
                 this.isValid = data.is_valid;
+                if (data.scad) this.codeContentEl.textContent = data.scad;
                 this.renderFocus();
                 this.pictureMarks.refresh();
             }
@@ -4200,13 +4360,15 @@
                 // A camera's or a picture's verb the page carries (pictures.js); the
                 // ones that change the site fall through to the intent route below.
                 if (/^(camera|picture):/.test(action) || action === 'fit:@floor') {
-                    // Kept, when open, lists what the verb pinned, unpinned or kept.
-                    if (await viewer.pictures.carry(intent)) { if (viewer.keptWidget) viewer.keptWidget.load(); return; }
+                    // Site's Pinned and Pictures, when open, list what the verb pinned, unpinned or kept.
+                    if (await viewer.pictures.carry(intent)) { viewer.listsChanged(); return; }
                 }
                 if (action === 'camera:gather') {
-                    viewer.panels.open('camera');
-                    if (viewer.cameraWidget && viewer.cameraWidget.act('gather')) viewer.setStatus(`Gather${tail}`, 'success');
-                    else viewer.setStatus(`${intent.label}: the pictures panel cannot do that${tail}`, 'error');
+                    // Pictures' gathering section, opened, does what its button does.
+                    // Said first, so a refusal of the gathering's own is the last word.
+                    viewer.panels.open('pictures');
+                    viewer.setStatus(`Gather${tail}`, 'success');
+                    if (!(viewer.picturesWidget && viewer.picturesWidget.act('gather'))) viewer.setStatus(`${intent.label}: Pictures cannot do that${tail}`, 'error');
                     return;
                 }
                 if (action === 'panel:rail:toggle') {

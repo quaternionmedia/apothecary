@@ -292,25 +292,32 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "dev-identify": (WIDGET, WHAT_YOU_SEE, "a button that listens for the sketch's hello"),
     "dev-printer": (WIDGET, WHAT_YOU_SEE, "a button that asks M115, or polls a printer once"),
     "dev-live": (WIDGET, WHAT_YOU_SEE, "a button that streams the board's serial output"),
-    # ---- the camera panel, apothecary/static/widgets/camera.js ------------
-    # What is left of it until gathering leaves core: the pictures on this
-    # machine, gathered into a report, and what a person says about them, and
-    # a file picker that keeps pictures here pinned nowhere. The camera itself
-    # is pinned, shown live and takes pictures from its host's ring.
+    # ---- Pictures, apothecary/static/widgets/picture_list.js -------------
+    # Every picture under the picture root, each with Pin here, a kept one with
+    # Forget (TAKEN_BACK), Purge, a file picker that keeps pictures here pinned
+    # nowhere, and the gathering's section until gathering leaves core: the
+    # pictures ticked, gathered into a report, and what a person says about them.
+    "pictures-pin": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that pins one picture, any in the folder, at the selected place as a view",
+    ),
+    "pictures-forget": (WIDGET, WHAT_YOU_SEE, "a button that forgets one kept picture"),
+    "pictures-purge": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button that forgets every picture the browser put here",
+    ),
+    "pic-file": (WIDGET, WHAT_YOU_SEE, "a file picker that keeps chosen pictures on this machine"),
     "pic-all": (WIDGET, WHAT_YOU_SEE, "a tick-box that ticks every picture"),
     "pic-gather": (WIDGET, WHAT_YOU_SEE, "a button that gathers the ticked pictures"),
     "gather-answers": (WIDGET, WHAT_YOU_SEE, "a box for what you know about the pictures"),
     "answer": (WIDGET, WHAT_YOU_SEE, "a button that answers one of the machine's questions"),
-    "pic-file": (WIDGET, WHAT_YOU_SEE, "a file picker that keeps chosen pictures on this machine"),
-    # ---- Kept, apothecary/static/widgets/kept.js --------------------------
-    # What a page pinned or kept, every site's, each taken back from its row
-    # (TAKEN_BACK), and Purge.
-    "kept-refresh": (WIDGET, WHAT_YOU_SEE, "a button that lists what is pinned and kept again"),
-    "kept-purge": (WIDGET, WHAT_YOU_SEE, "a button that forgets every picture the browser put here"),
-    "kept-camera-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins one camera, in any site"),
-    "kept-view-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins one view, in any site"),
-    "kept-board-unpin": (WIDGET, WHAT_IS_THERE, "a button that takes one board's pin back"),
-    "kept-forget": (WIDGET, WHAT_YOU_SEE, "a button that forgets one kept picture"),
+    # ---- Site's Pinned, apothecary/static/widgets/pinned.js ---------------
+    # What a page pinned, every site's, each taken back from its row (TAKEN_BACK).
+    "pinned-camera-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins one camera, in any site"),
+    "pinned-view-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins one view, in any site"),
+    "pinned-board-unpin": (WIDGET, WHAT_IS_THERE, "a button that takes one board's pin back"),
     # Selected: the one width a view is sized by (a chosen shape's long side
     # when one is chosen). A number the ring cannot type; Size puts the cursor in it.
     "view-width": (WIDGET, WHAT_IS_THERE, "a box for how wide a picture is, or one shape's side"),
@@ -391,14 +398,20 @@ RING_BACKED: Dict[str, str] = {
     "dev-printer": "device:poll",
     "dev-live": "device:watch",
     "boards-btn": "device:rescan",
-    # Gather and Kept's Purge are cells of the canvas ring's Pictures. Kept's
-    # per-row buttons are not here: see TAKEN_BACK.
+    # Gather and Pictures' Purge are cells of the canvas ring's Pictures. The
+    # per-row take-backs of Pinned and Pictures are not here: see TAKEN_BACK.
+    # Nor is Pictures' Pin here: the ring's Picture › Folder pins the seven
+    # newest pictures (and a chosen one, which the page does not tell it), and
+    # Pin here pins any of them, the older ones included, which no cell reaches.
     "pic-gather": "camera:gather",
-    "kept-purge": "picture:purge",
+    "pictures-purge": "picture:purge",
     # A file dropped on the world, or chosen in the dialog Picture › Add opens.
     "canvas:drop:onDropFiles": "picture:add",
     "input:change:addFiles": "picture:add",
+    # A view drawn from its row in Selected, or from its place on a picture's row
+    # in Pictures, as Picture › Views draws one.
     "row:click:drawView": "picture:draw:view_1",
+    "chip:click:showView": "picture:draw:view_1",
     # The Print cell's verbs go to whichever print is running, the card's or
     # the one from here; Send file is the one from here alone.
     "print-start": "print:start",
@@ -419,22 +432,24 @@ RING_BACKED: Dict[str, str] = {
     "ctl:change:arm": "control:arm",
 }
 
-# A control kept on purpose beside the ring: the button on a row of Kept that
-# takes back what the row names -- a camera or a view unpinned, a board's pin
-# taken back, a kept picture forgotten -- in whichever site it stands. §6 of the
-# draft record *Personal data stays on the device* asks that what a page placed
-# or pinned be listed by the same page, every site's, and taken back the same
-# way, and a ring cell reaches another site's pin only from that site. So these
-# are a lasting exception, the one the pictures plan asks the *rad host
-# integration* record's §5 to name, and are **not** ring-backed: the meter
-# counts them, and never expects them to go. Keyed like RING_BACKED, by the
-# control's name or its listening key; the value is what the row takes back.
+# A control kept on purpose beside the ring: the button on a row of Site's
+# Pinned or of Pictures that takes back what the row names -- a camera or a view
+# unpinned, a board's pin taken back, a kept picture forgotten -- in whichever
+# site it stands. §6 of the draft record *Personal data stays on the device* asks
+# that what a page placed or pinned be listed by the same page, every site's,
+# and taken back the same way, and a ring cell reaches another site's pin only
+# from that site. So these are a lasting exception, the one the pictures plan
+# asks the *rad host integration* record's §5 to name, and are **not**
+# ring-backed: the meter counts them, and never expects them to go. Keyed like
+# RING_BACKED, by the control's name or its listening key; the value is what the
+# row takes back.
 TAKEN_BACK: Dict[str, str] = {
-    "kept-camera-unpin": "a camera's pin, every site's",
-    "kept-view-unpin": "a view, every site's",
-    "kept-board-unpin": "a board's pin, every site's",
-    "kept-forget": "a picture the browser kept",
-    "kept-list:click:closest": "any of those, from its row",
+    "pinned-camera-unpin": "a camera's pin, every site's",
+    "pinned-view-unpin": "a view, every site's",
+    "pinned-board-unpin": "a board's pin, every site's",
+    "pinned-list:click:closest": "any pin, from its row",
+    "pictures-forget": "a picture the browser kept",
+    "forgetBtn:click:forget": "a picture the browser kept, from its row",
 }
 
 MARKUP = re.compile(
@@ -567,16 +582,48 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_IS_THERE,
         "the pictures chosen in the dialog Picture › Add opens: kept, and pinned there as views",
     ),
-    # ---- the camera panel --------------------------------------------------
+    # ---- Pictures ----------------------------------------------------------
+    "pin:click:pinHere": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a picture's Pin here: pinned at the selected place as a view",
+    ),
+    "forgetBtn:click:forget": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a kept picture's Forget: the picture forgotten and its views unpinned, every site's",
+    ),
+    "chip:click:showView": (
+        LIST,
+        WHAT_YOU_SEE,
+        "a place on a picture's row where it is pinned: selected, and that view drawn",
+    ),
     "pic-all:change:(nothing)": (WIDGET, WHAT_YOU_SEE, "ticking every picture at once"),
     "gather-out:click:closest": (WIDGET, WHAT_YOU_SEE, "answering a question with a button"),
     "pic-file:change:addFiles": (WIDGET, WHAT_YOU_SEE, "adding the chosen pictures"),
-    # ---- Kept --------------------------------------------------------------
-    "kept-list:click:closest": (
+    # ---- Site --------------------------------------------------------------
+    "pinned-list:click:closest": (
         WIDGET,
         WHAT_IS_THERE,
-        "taking back what a row names -- a camera, a view, a board's pin, a kept picture -- "
+        "taking back what a row of Pinned names -- a camera, a view, a board's pin -- "
         "whatever site it is in",
+    ),
+    "pinnedEl:toggle:pinnedOpened": (
+        LIST,
+        WHAT_YOU_SEE,
+        "unfolding Site's Pinned, which lists every site's pins again",
+    ),
+    "li:click:goToProblem": (
+        LIST,
+        WHAT_YOU_SEE,
+        "a problem's row at the top of Site, selecting its piece at its level",
+    ),
+    # A readout that opens what it counts, as a badge selects what it stands over;
+    # a span listened to, not a control written into the markup.
+    "validityEl:click:openProblems": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "the toolbar's count of problems, opening them at the top of Site",
     ),
     "li:dblclick:zoomIn": (LIST, WHAT_YOU_SEE, "going into a piece from the list"),
     "rootCrumb:click:jumpTo": (LIST, WHAT_YOU_SEE, "the top of the trail"),
@@ -750,8 +797,8 @@ class Found:
     # with one of these is a control the ring has already replaced in all but
     # deletion.
     ring_action: Optional[str] = None
-    # What the control takes back, when it is one of Kept's rows' buttons
-    # (TAKEN_BACK): kept beside the ring on purpose, and never ring-backed.
+    # What the control takes back, when it is a take-back on a row of Site's Pinned
+    # or of Pictures (TAKEN_BACK): kept beside the ring on purpose, never ring-backed.
     taken_back: Optional[str] = None
     # Where the control is written: the page itself, or a widget module the
     # page mounts (apothecary/static/widgets/*.js). A widget's controls are
@@ -781,7 +828,7 @@ class Census:
         return tuple(f for f in self.controls_of_its_own() if f.ring_action)
 
     def taken_back(self) -> Tuple[Found, ...]:
-        """The part of the meter kept beside the ring on purpose: Kept's rows."""
+        """The part of the meter kept beside the ring on purpose: the rows' take-backs."""
         return tuple(f for f in self.controls_of_its_own() if f.taken_back)
 
     def sentence(self) -> str:

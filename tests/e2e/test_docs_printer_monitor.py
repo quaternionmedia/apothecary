@@ -69,7 +69,7 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     section = page.locator("#selected-body .device-section")
     expect(section.locator(".dev-pick")).to_be_visible(timeout=10000)
     docs.step(
-        "Open printer_1 › frame_system › mainboard in Contents: the board's Device section "
+        "Open printer_1 › frame_system › mainboard in Site's tree: the board's Device section "
         "offers the detected ports to pin, a Query button, and a box to pin by typed identity"
     )
 
@@ -93,7 +93,7 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     page.wait_for_timeout(1500)  # the tree refresh re-fetches meshes; let them land before the shot
     docs.step(
         "The printer followed its board: printer_1's status is now `printing` (the mesh "
-        "recolours), its Contents row carries the board's live badge, and its Device "
+        "recolours), its row in Site carries the board's live badge, and its Device "
         "section says which board speaks for it"
     )
 

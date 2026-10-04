@@ -160,7 +160,7 @@ class Assembly(BaseModel):
         # constructed, and whatever it holds (a board inside a printer) is
         # drawn inside it. Without this a whole site of them -- which is
         # what the parts library is -- cannot render at all, and the viewer's
-        # canvas, contents and generated-OpenSCAD panel all come up empty
+        # canvas, the Site panel's tree and its generated OpenSCAD all come up empty
         # together. A node with a ``base`` keeps it: the part is then the
         # viewer's picture of it and the base is the site render's envelope.
         if self.base is None and self.part_ref is not None:

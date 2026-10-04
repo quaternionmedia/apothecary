@@ -162,7 +162,7 @@ app = FastAPI(
 # the network switched off, fetching it meant the viewer never loaded at all.
 # A CDN copy is also exactly what an ad blocker or a corporate proxy drops --
 # and when it goes, the page's script never executes, so the canvas, the
-# contents list and the code panel come up empty together while the static
+# Site panel's tree and its SCAD come up empty together while the static
 # markup still reads "Layout valid". Frontend dependencies are vendored per
 # the house-stack record for the same reason.
 STATIC_ROOT = Path(__file__).resolve().parent / "static"
