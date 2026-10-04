@@ -136,10 +136,17 @@
             display: flex; flex-direction: column; min-height: 0;
         }
         .panel-rail[hidden] { display: none; }
-        /* Site docked fills what the rail has left; its tree and sections scroll
-           inside it, not the rail, so its title stays in view. */
-        .panel-rail-body > .panel[data-panel="site"]:not(.collapsed) { flex: 1 1 auto; min-height: 140px; }
-        .panel-rail-body > .panel[data-panel="site"] .panel-body-slot { max-height: none; flex: 1 1 auto; min-height: 0; }
+        /* Site and Selected, stacked, share what the rail has left half and half,
+           whatever either holds: their bodies scroll inside them, not the rail, so
+           their titles stay in view, and selecting a piece in Site's tree does not
+           move the row under the pointer -- the second click of a double click
+           lands where the first did. One dragged from its bottom edge keeps the
+           height it was given (.sized), and the other takes the rest. */
+        .panel-rail-body > .panel[data-panel="site"]:not(.collapsed),
+        .panel-rail-body > .panel[data-panel="selected"]:not(.collapsed) { flex: 1 1 0; min-height: 140px; }
+        .panel-rail-body > .panel[data-panel="site"] .panel-body-slot,
+        .panel-rail-body > .panel[data-panel="selected"] .panel-body-slot { max-height: none; flex: 1 1 auto; min-height: 0; }
+        .panel-rail-body > .panel.sized:not(.collapsed) { flex: 0 0 auto; }
         /* The tab strip: one tab per docked panel that is not stacked, the one
            shown under it. A tab carries its panel's name, and shown, its float
            and close; the panel's own title bar is the tab. */

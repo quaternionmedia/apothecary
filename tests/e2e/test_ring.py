@@ -539,6 +539,13 @@ def test_one_rail_stacks_site_and_selected_over_a_strip_of_tabs(page: Page, ring
     strip = rail.locator(".panel-tabstrip").bounding_box()
     assert strip["y"] > selected.bounding_box()["y"]  # below the stack
     expect(page.locator(".panel-tab")).to_have_count(0)  # nothing closed
+    # Selecting a piece from Site's tree fills Selected and moves nothing in Site.
+    before = site.bounding_box()
+    row = page.locator("#contents-list .contents-item[data-path='printer_1']")
+    at = row.bounding_box()
+    row.click()
+    expect(selected.locator("#pos-x")).to_be_visible(timeout=5000)
+    assert site.bounding_box() == before and row.bounding_box() == at
 
     # A tab pressed shows its panel under the strip; another tab, that one instead.
     _tab(page, "pictures").locator(".rail-tab-name").click()

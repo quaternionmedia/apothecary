@@ -156,6 +156,7 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
         // Filled the first time its body is in front of a person.
         if (p.mount && visible(p)) { const mount = p.mount; p.mount = null; mount(p.slot); }
         p.slot.style.height = docked(p) && p.height ? `${p.height}px` : "";
+        p.el.classList.toggle("sized", docked(p) && !!p.height);  // a height a person dragged it to
         p.el.querySelector(".panel-resizer").hidden = !docked(p);
         p.el.classList.toggle("free", !docked(p));
         p.el.querySelector(".panel-title").title = p.tether ? "Drag to let go of the machine and float freely" : (p.where === "free" ? "Drag to move" : "");
@@ -264,7 +265,7 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
     function startPanelResize(p, ev) {
         ev.preventDefault();
         const startY = ev.clientY, from = p.slot.offsetHeight;
-        const move = (e) => { p.height = Math.max(PANEL_MIN_PX, from + (e.clientY - startY)); p.slot.style.height = `${p.height}px`; };
+        const move = (e) => { p.height = Math.max(PANEL_MIN_PX, from + (e.clientY - startY)); p.slot.style.height = `${p.height}px`; p.el.classList.add("sized"); };
         const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); remember(); };
         window.addEventListener("pointermove", move);
         window.addEventListener("pointerup", up);
