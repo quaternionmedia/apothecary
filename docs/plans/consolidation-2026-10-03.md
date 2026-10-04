@@ -139,3 +139,16 @@ Drafted on the project's governance branch, ratified by a person:
   shown as busy), beside idle, maintenance and offline.
 - The part a print job names can be any part or piece in the printer's site;
   the list is not narrowed to what fits.
+
+## Decided after Phase 4
+
+- **Addresses stay where hands learned them.** Watch and Monitor became one
+  Device cell, **Open** (where Watch was); the cell Monitor freed is taken by
+  **Flash** when flashing joins the Machine (Phase 5), so Query, Unpin,
+  Rescan, Link and Control keep their addresses (Control at ⌗7, jog Y+ from a
+  printer's node ⌗2728).
+- **A devkit's port is opened only when asked.** Opening its Machine shows
+  its state and touches no port; **Listen** (a button, and a ring verb)
+  starts the live serial stream and says it may reset the board.
+- **Boards are found on request.** No timed rescan; Rescan from Selected, the
+  ring or a Machine, and when a watched board goes quiet.
