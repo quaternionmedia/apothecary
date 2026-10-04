@@ -477,7 +477,7 @@
         <div class="toolbar">
             <h1>🧪 Apothecary</h1>
             <span class="badge" title="FRACTAL VIEWER — unratified prototype">prototype</span>
-            <select id="site-select" title="The site to look at: choosing one loads it"{% if not site_names %} disabled{% endif %}>
+            <select id="site-select"{% if not site_names %} disabled{% endif %}>
                 {% for name in site_names %}
                 <option value="{{ name }}"{% if name == default_site %} selected{% endif %}>{{ name }}</option>
                 {% else %}
