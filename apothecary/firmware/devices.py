@@ -474,6 +474,12 @@ def known_device(port: str, state: Optional[FirmwareState] = None) -> Optional[D
         return None
 
 
+def machine_kind(device: Optional[DeviceInfo]) -> Optional[str]:
+    """The kind of machine a board drives, as ``apothecary/jobs.py`` registers
+    kinds: ``printer`` for one that answered as a G-code printer, else none."""
+    return "printer" if device is not None and device.printer is not None else None
+
+
 def stable_identity(identity: str, state: Optional[FirmwareState] = None) -> str:
     """The board's own identity for a port that is detected right now, else ``identity``.
 

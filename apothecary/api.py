@@ -31,6 +31,7 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse,
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError
 
+from . import jobs
 from .core import OpenSCADObject
 from .datum_core_site import create_datum_core_site, validate_datum_core
 from .docs_site import router as docs_router
@@ -63,6 +64,7 @@ from .projects.parts.skeleton import ROOT
 from .projects.parts.stl_renderer import build_stl
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
 from .projects.registry import ProjectInfo, _sanitize_module_name, scan_projects
+from .routes.jobs import router as jobs_router
 from .routes.pictures import router as pictures_router
 from .routes.views import router as views_router
 from .scene import Scene
@@ -175,6 +177,8 @@ app.include_router(docs_router)
 app.include_router(pictures_router)
 # Views: a picture pinned at a place in a site, and the pieces made from its shapes.
 app.include_router(views_router)
+# Jobs: what the machines ran, of every kind; each is started by its machine's own route.
+app.include_router(jobs_router)
 THREE_DIR = STATIC_ROOT / "vendor" / "three"
 THREE_IS_VENDORED = (THREE_DIR / "three.module.js").is_file()
 
@@ -1416,32 +1420,85 @@ def printer_where(port: str):
     on -- what ``apothecary/static/board_view.js`` draws. ``board`` is
     ``None`` when nothing is pinned.
     """
+    pinned = _pinned_at(port)
+    if pinned is None:
+        return {"port": port, "site": None, "board": None, "printer": None}
+    name, site, path = pinned
+    node = _find_node_by_path(site, path)
+    bearer_path = status_bearer_for(site, path) or path
+    bearer = _find_node_by_path(site, bearer_path) or node
+    return {
+        "port": port,
+        "site": name,
+        "board": _describe_for_view(site, path, node, is_printer=False),
+        "printer": (
+            _describe_for_view(site, bearer_path, bearer, is_printer=True)
+            if bearer_path != path
+            else None
+        ),
+    }
+
+
+def _pinned_at(port: str) -> Optional[tuple[str, Assembly, str]]:
+    """Where the board on ``port`` is pinned: its site's name, the site, and the
+    pinned node's path -- the first pin naming it whose site and node exist.
+
+    Every pin, not just the loaded sites': the monitor is often the first page
+    opened after the server starts, and a pin names its site.
+    """
     state = firmware_devices.get_state()
     known = firmware_devices.known_device(port, state)
-    # Every pin, not just the loaded sites': the monitor is often the first
-    # page opened after the server starts, and a pin names its site.
     for binding in state.bindings():
         if not same_device(binding.identity, port, known):
             continue
         if binding.site not in _site_store.names():
             continue
-        site = _site_store.get(binding.site)
-        node = _find_node_by_path(site, binding.path)
-        if node is None:
+        try:
+            site = _site_store.get(binding.site)
+        except KeyError:  # forgotten, or its picture left the shelf, since names()
             continue
-        bearer_path = status_bearer_for(site, binding.path) or binding.path
-        bearer = _find_node_by_path(site, bearer_path) or node
-        return {
-            "port": port,
-            "site": binding.site,
-            "board": _describe_for_view(site, binding.path, node, is_printer=False),
-            "printer": (
-                _describe_for_view(site, bearer_path, bearer, is_printer=True)
-                if bearer_path != binding.path
-                else None
-            ),
-        }
-    return {"port": port, "site": None, "board": None, "printer": None}
+        if _find_node_by_path(site, binding.path) is None:
+            continue
+        return binding.site, site, binding.path
+    return None
+
+
+def _parts_of(site_name: str, site: Assembly, leave_out: str) -> List[jobs.JobPart]:
+    """What a job in ``site`` can name as the part it makes, by path: every node
+    built from a part (named for its ``part_ref``) and every piece made from a
+    picture (named for its word), but nothing at or under ``leave_out`` -- the
+    machine itself. Holes cut from a piece are not things made."""
+    from .vision import views as viewing
+
+    made = viewing.store().made_at(site_name)
+    found: Dict[str, str] = {}
+
+    def visit(node: Assembly, prefix: str) -> None:
+        for child in [*node.children, *node.additions]:
+            path = f"{prefix}.{child.name}" if prefix else child.name
+            if path == leave_out or path.startswith(leave_out + "."):
+                continue
+            if child.part_ref:
+                found[path] = child.part_ref
+            elif not prefix and child.name in made:
+                found[path] = made[child.name].word
+            visit(child, path)
+
+    visit(site, "")
+    return [jobs.JobPart(path=path, name=name) for path, name in sorted(found.items())]
+
+
+def _place_of(port: str) -> Optional[jobs.Place]:
+    """Where the machine on ``port`` stands, for a job it starts (``jobs.PLACES``)."""
+    pinned = _pinned_at(port)
+    if pinned is None:
+        return None
+    name, site, path = pinned
+    bearer = status_bearer_for(site, path) or path
+    return jobs.Place(site=name, path=path, parts=_parts_of(name, site, leave_out=bearer))
+
+
+jobs.PLACES.append(_place_of)
 
 
 @app.get("/firmware/pins", tags=["firmware"])
