@@ -731,6 +731,10 @@ def test_a_card_keeps_its_view_however_often_the_cards_are_redrawn(page: Page, p
 # Seconds to stream, dwell or no dwell: each line is a round trip to the simulator, a
 # millisecond at least, so a pause and a cancel land mid-file.
 SLOW = "".join(f"G1 X{i % 200} Y{i % 200}\n" for i in range(6000))
+# A minute at the least, whatever else the machine is doing: each move dwells 20 ms
+# on the simulator's own clock, so a print still running when a slow page gets to
+# it is not left to the page's speed.
+A_MINUTE = "".join(f"G1 X{i % 200} Y{i % 200}\nG4 P20\n" for i in range(3000))
 
 
 @pytest.mark.e2e
@@ -951,7 +955,7 @@ def test_site_lists_the_sites_jobs_and_a_row_opens_its_machine(page: Page, print
     _pin(printer_url, BOARD)
     _identify(printer_url)
     dot = _keep(printer_url, "dot.gcode", "G28\nG1 X5 Y5 E0.1\nM84\n")
-    slow = _keep(printer_url, "slow cube.gcode", SLOW)
+    slow = _keep(printer_url, "slow cube.gcode", A_MINUTE)
     before = _printing(printer_url, dot, part="footpedal")
     assert _until_it_ends(printer_url)["stage"] == "done"
     running = _printing(printer_url, slow)
