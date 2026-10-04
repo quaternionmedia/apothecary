@@ -534,3 +534,57 @@ def test_problems_are_one_folded_line_in_site_and_the_headers_count_opens_it(
     page.locator("#pos-x").press("Tab")
     expect(page.locator("#validity-indicator")).to_have_text("Layout valid", timeout=5000)
     expect(problems).to_be_hidden()
+
+
+# --------------------------------------------------------------------------
+# The hint bar
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.e2e
+def test_the_hint_shows_on_a_first_visit_fades_after_a_few_actions_and_question_mark_restores_it(
+    page: Page, bench: str
+):
+    """A first visit shows the hint bar; a few things done and it fades, and a later
+    visit starts without it; ? brings it back, and puts it away again."""
+    _open(page, bench)
+    hint = page.locator("#viewer-hint")
+    faded = re.compile(r"\bfaded\b")
+    expect(hint).not_to_have_class(faded)
+    expect(hint).to_have_css("opacity", "1")
+    for path in ("workbench", "printer_1", "printer_2"):
+        _select(page, path)
+    expect(hint).not_to_have_class(faded)
+    page.evaluate("() => window.fractalViewer.zoomIn('printer_2')")
+    expect(hint).to_have_class(faded)
+    expect(hint).to_have_css("opacity", "0", timeout=3000)
+
+    _open(page, bench)
+    expect(hint).to_have_class(faded)  # remembered for this browser
+    page.keyboard.press("?")
+    expect(hint).not_to_have_class(faded)
+    expect(hint).to_have_css("opacity", "1", timeout=3000)
+    page.keyboard.press("?")
+    expect(hint).to_have_class(faded)
+    page.keyboard.press("?")
+    for path in ("workbench", "printer_1", "printer_2", "printer_3"):
+        _select(page, path)
+    expect(hint).to_have_class(faded)  # and fades again after as many
+
+
+@pytest.mark.e2e
+def test_the_hint_shows_and_fades_with_no_storage(page: Page, bench: str):
+    """A browser that keeps nothing (storage refused) still shows the hint, and still
+    fades it: what is remembered is a convenience."""
+    page.add_init_script(
+        "Object.defineProperty(window, 'localStorage', { get() { throw new Error('refused'); } });"
+    )
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    _open(page, bench)
+    hint = page.locator("#viewer-hint")
+    expect(hint).not_to_have_class(re.compile(r"\bfaded\b"))
+    for path in ("workbench", "printer_1", "printer_2", "printer_3"):
+        _select(page, path)
+    expect(hint).to_have_class(re.compile(r"\bfaded\b"))
+    assert errors == []

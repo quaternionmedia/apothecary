@@ -520,6 +520,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "canvas:dblclick:onDoubleClick": (GESTURE, WHAT_YOU_SEE, "double-tapping to go in"),
     "canvas:wheel:onWheel": (GESTURE, WHAT_YOU_SEE, "the wheel, with a counter of its own"),
     "window:keydown:zoomOut": (GESTURE, WHAT_YOU_SEE, "a key that steps back out"),
+    "window:keydown:onHintKey": (GESTURE, WHAT_YOU_SEE, "a key (?) that brings the hint bar back"),
     # the trails, trees and rows beside the scene
     "chip:click:delete": (LIST, WHAT_YOU_SEE, "a word button that folds and unfolds"),
     "caret:click:delete": (LIST, WHAT_YOU_SEE, "an arrow that opens a branch"),

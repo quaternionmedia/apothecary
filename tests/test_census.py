@@ -265,6 +265,12 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # Panels › Bench, at 91 (31 inside a piece, where the canvas ring's top holds
 # eight): Snap to grid 918, Detail 916 (Full 9168, Black box 9166, Dot 9162),
 # Outlines 912.
+#
+# Phase 2, the hint bar. Before: 114 controls of its own, 62 ring-backed, 76 places
+# the page listens; after: 114, 62, 77. The hint bar shows on a first visit and
+# fades after a few things done; one place is added, ? bringing it back
+# (window:keydown:onHintKey), a key, as Backspace is. No control was added and no
+# ring address moved.
 VIEWER_CEILING = 116
 
 

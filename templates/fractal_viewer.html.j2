@@ -84,12 +84,14 @@
 
         .viewer-panel { flex: 2; min-width: 0; position: relative; background: #111; }
         #viewer-canvas { width: 100%; height: 100%; display: block; }
+        /* The hint bar: on a first visit, faded away after a few actions; ? shows it again. */
         .viewer-hint {
             position: absolute; bottom: 1rem; left: 1rem;
             background: rgba(0,0,0,0.7); padding: 0.5rem 0.75rem;
             border-radius: 4px; font-size: 0.75rem; color: #888;
-            pointer-events: none;
+            pointer-events: none; transition: opacity 0.6s;
         }
+        .viewer-hint.faded { opacity: 0; }
 
         /* Minimap: a very abstract depth ladder, not a node-link graph --
            one tick per possible depth in the loaded tree, filled from the
@@ -510,7 +512,7 @@
             <div class="viewer-panel">
                 <canvas id="viewer-canvas"></canvas>
                 <div id="minimap"></div>
-                <div class="viewer-hint">Click to select • Double-click (or scroll past the edge) to zoom in • Drag arrows to move • Shift+drag to pan</div>
+                <div class="viewer-hint" id="viewer-hint">Click to select • Double-click (or scroll past the edge) to zoom in • Drag arrows to move • Shift+drag to pan • ? shows or hides this</div>
             </div>
             <div class="side-panel">
                 <div class="panel-section" data-panel="site" data-zone="stack">
@@ -669,6 +671,11 @@
         // view and camera route. Floor things stand this far past the site's roots in +x
         // (vision/views.py's FLOOR_MARGIN_MM).
         const FLOOR_KEY = '@floor';
+        // The hint bar fades after this many things done -- a selection, a step in or
+        // out, a move, however each was asked for -- and is remembered as seen under
+        // this key.
+        const HINT_ACTIONS = 4;
+        const HINT_SEEN_KEY = 'apothecary.hint';
         const FLOOR_MARGIN_MM = 200;
 
         // How far out of the current level you can dolly, as a multiple of the
@@ -851,6 +858,14 @@
                 this.siteJobs = [];      // GET /jobs?site= for the loaded site: running first, then newest
                 this.siteJobsAt = 0;     // when they were last asked for
                 this.statusEl = document.getElementById('status');
+                // The hint bar: shown on a first visit, until a few things have been done.
+                // Whether this browser saw it is a convenience kept per viewer; a browser
+                // that keeps nothing shows it on every visit.
+                this.hintEl = document.getElementById('viewer-hint');
+                this.hintLeft = HINT_ACTIONS;
+                let hintSeen = false;
+                try { hintSeen = localStorage.getItem(HINT_SEEN_KEY) === 'seen'; } catch (e) { hintSeen = false; }
+                this.hintEl.classList.toggle('faded', hintSeen);
 
                 this.tree = null;            // full recursive tree for the loaded site
                 this.siteName = null;
@@ -1134,6 +1149,8 @@
                         this.zoomOut();
                     }
                 });
+                // ? brings the hint bar back (and puts it away again).
+                window.addEventListener('keydown', (e) => this.onHintKey(e));
                 window.addEventListener('resize', () => this.onResize());
                 // What a board's Query answered in Selected, before it is pinned.
                 this.queryResult = null;
@@ -1171,6 +1188,28 @@
             setStatus(message, type = '') {
                 this.statusEl.textContent = message;
                 this.statusEl.className = 'status' + (type ? ' ' + type : '');
+            }
+
+            // One thing done (a selection, a step in or out, a move): after HINT_ACTIONS
+            // of them the hint bar fades, and is remembered as seen.
+            acted() {
+                if (this.hintEl.classList.contains('faded')) return;
+                this.hintLeft -= 1;
+                if (this.hintLeft <= 0) this.showHint(false);
+            }
+            showHint(shown) {
+                this.hintEl.classList.toggle('faded', !shown);
+                this.hintLeft = HINT_ACTIONS;
+                if (shown) return;
+                try { localStorage.setItem(HINT_SEEN_KEY, 'seen'); } catch (e) { /* kept nowhere: shown again next visit */ }
+            }
+            // ? shows the hint bar again, or puts it away -- unless a person is typing.
+            onHintKey(event) {
+                if (event.key !== '?' || event.ctrlKey || event.metaKey || event.altKey) return;
+                const t = event.target;
+                if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+                event.preventDefault();
+                this.showHint(this.hintEl.classList.contains('faded'));
             }
 
             // ---------------------------------------------------------------
@@ -1324,6 +1363,7 @@
                 this.focusPath = [...this.focusPath, name];
                 this.selectedName = null;
                 this.renderFocus();
+                this.acted();
             }
 
             // The standardized "-1" control: the node just exited becomes
@@ -1340,6 +1380,7 @@
                 this.focusPath = this.focusPath.slice(0, -1);
                 this.selectedName = exitingPath;
                 this.renderFocus();
+                this.acted();
             }
 
             // Up to a level of the trail. One level up is the "-1" control itself --
@@ -1349,6 +1390,7 @@
                 this.focusPath = this.focusPath.slice(0, depth);
                 this.selectedName = null;
                 this.renderFocus();
+                this.acted();
             }
 
             // Each direct child of focus renders collapsed (its own single
@@ -1991,6 +2033,7 @@
                 this.renderContentsList(focus);
                 this.renderSelectedPanel();
                 for (const k of Object.keys(this.meshByName)) this.colorMesh(k, this.renderNodeByKey[k]);
+                this.acted();
             }
 
             // The handles' one set (see initThreeJS), on a movable thing's mesh or on
@@ -2832,6 +2875,7 @@
 
             commitCurrentDrag() {
                 if (this.selectedName && this.focusPath.length === 0) this.submitLayout();
+                this.acted();
             }
 
             async submitLayout() {
@@ -3486,6 +3530,7 @@
                 this.renderContentsList(this.currentFocusNode());
                 this.renderSelectedPanel();
                 for (const k of Object.keys(this.meshByName)) this.colorMesh(k, this.renderNodeByKey[k]);
+                this.acted();
             }
             // A place a picture or camera is pinned at: a host by its path, "" the floor.
             selectPlace(host) {
