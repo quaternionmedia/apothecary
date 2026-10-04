@@ -373,11 +373,17 @@
         }
         .part-actions button:hover, .part-actions a:hover { background: #505050; }
 
-        /* Site: its problems at the top, each a row that selects its piece; in
-           the tree, a piece in a problem is red and its ancestors say so. */
-        .site-problems { margin-bottom: 0.6rem; }
+        /* Site: its problems once, as one folded line at its top, "N problems ›",
+           unfolded by itself or by the header's count, each row selecting its
+           piece; in the tree, a piece in a problem is red and its ancestors say so. */
+        details.fold.site-problems { margin: 0 0 0.5rem; padding: 0; border: 0; }
         .site-problems[hidden] { display: none; }
-        .site-problems .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: #ff8080; margin-bottom: 0.25rem; }
+        details.fold.site-problems > summary {
+            list-style: none; color: #ff8080; font-size: 0.8rem; text-transform: none; letter-spacing: 0;
+        }
+        details.fold.site-problems > summary::-webkit-details-marker { display: none; }
+        .site-problems .fold-mark { display: inline-block; margin-left: 0.3em; transition: transform 0.15s; }
+        .site-problems[open] .fold-mark { transform: rotate(90deg); }
         .problem-list { list-style: none; margin: 0; padding: 0; font-size: 0.8rem; }
         .problem-list li {
             padding: 0.35rem 0.5rem; margin-bottom: 0.25rem; border-radius: 4px;
@@ -510,10 +516,10 @@
                 <div class="panel-section" data-panel="site" data-zone="stack">
                     <div class="panel-header">Site</div>
                     <div class="panel-body">
-                        <div id="site-problems" class="site-problems" hidden>
-                            <div class="k" id="site-problems-count"></div>
+                        <details id="site-problems" class="fold site-problems" hidden>
+                            <summary title="The site's problems: unfold them (or press the header's count); each selects its piece"><span id="site-problems-count"></span><span class="fold-mark"> ›</span></summary>
                             <ul id="problem-list" class="problem-list"></ul>
-                        </div>
+                        </details>
                         <div id="category-filters" class="category-filters"
                              title="Expand every node of a subsystem at once, at any depth beneath the current level, at the cost of render time"></div>
                         <ul id="contents-list" class="contents-list contents-tree"></ul>
@@ -2875,9 +2881,10 @@
                 return (v.paths || []).filter((path) => this.nodeByPath(path));
             }
 
-            // Site's problems: listed at its top, each row selecting its piece; in
-            // the tree, each piece a problem names is marked, and every piece above
-            // it says something inside is invalid. The toolbar counts them.
+            // Site's problems: one folded line at its top, "N problems ›", a row in it
+            // each, selecting its piece; in the tree, each piece a problem names is
+            // marked, and every piece above it says something inside is invalid. The
+            // toolbar counts them, and its count opens the fold (openProblems).
             renderProblems({ list = true } = {}) {
                 this.invalidPaths = new Map();
                 this.invalidInside = new Map();
@@ -3002,10 +3009,11 @@
             }
 
             // The toolbar's count: Site opened (and the rail shown, where it is
-            // docked), unfolded, and scrolled to the problems at its top.
+            // docked), unfolded, its problems' fold opened, and scrolled to them.
             openProblems() {
                 this.panels.open('site');
                 this.panels.collapse('site', false);
+                this.problemsEl.open = true;
                 const slot = this.problemsEl.closest('.panel-body-slot');
                 if (slot) slot.scrollTop = 0;
                 this.problemsEl.scrollIntoView({ block: 'nearest' });

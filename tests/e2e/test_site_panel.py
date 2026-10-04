@@ -173,8 +173,9 @@ def test_a_layout_remembered_with_the_jobs_panel_is_harmless(page, base_url: str
 
 @pytest.mark.e2e
 def test_a_problem_marks_its_pieces_and_its_row_selects_one_at_its_level(page, base_url: str):
-    """printer_1 moved onto printer_2: both rows red, saying why on hover; the problem
-    listed at Site's top selects printer_1 from a level below, stepping out to it."""
+    """printer_1 moved onto printer_2: both rows red, saying why on hover; Site's one
+    folded line says so, and unfolded, the problem selects printer_1 from a level
+    below, stepping out to it."""
     _open(page, base_url)
     status = page.locator("#status")
     problems = page.locator("#site-problems")
@@ -189,6 +190,9 @@ def test_a_problem_marks_its_pieces_and_its_row_selects_one_at_its_level(page, b
     expect(rows).to_have_count(1)
     expect(rows.first).to_have_text("printer_1 and printer_2 overlap")
     expect(page.locator("#site-problems-count")).to_have_text("1 problem")
+    expect(rows.first).to_be_hidden()  # folded until asked for
+    page.locator("#site-problems > summary").click()
+    expect(rows.first).to_be_visible()
     for name in ("printer_1", "printer_2"):
         expect(_row(page, name)).to_have_class(re.compile(r"\binvalid\b"))
         expect(_row(page, name)).to_have_attribute(
@@ -257,6 +261,7 @@ def test_a_problem_deep_in_the_tree_marks_every_piece_above_it(page, base_url: s
     expect(_row(page, "printer_2")).not_to_have_class(re.compile(r"\binvalid"))
     expect(page.locator("#validity-indicator")).to_have_text("1 violation")
 
+    page.locator("#validity-indicator").click()  # opens the problems' fold
     page.locator("#problem-list li", has_text="left_post and right_post overlap").click()
     assert page.evaluate("() => window.fractalViewer.focusPath") == ["printer_1", "gantry_system"]
     selected = "printer_1.gantry_system.left_post"
@@ -285,6 +290,7 @@ def test_a_problem_selects_the_right_one_of_two_pieces_of_the_same_name(page, ba
         "data-path", "printer_2.gantry_system.left_post"
     )
 
+    page.locator("#validity-indicator").click()  # opens the problems' fold
     page.locator("#problem-list li", has_text="left_post and right_post overlap").click()
     assert page.evaluate("() => window.fractalViewer.focusPath") == ["printer_2", "gantry_system"]
     selected = "printer_2.gantry_system.left_post"
@@ -304,7 +310,7 @@ def test_a_problem_selects_the_right_one_of_two_pieces_of_the_same_name(page, ba
 @pytest.mark.e2e
 def test_the_toolbar_count_opens_sites_problems(page, base_url: str):
     """Site closed, or the rail hidden: the toolbar's count opens Site, shows the rail and
-    brings the problems into view at its top."""
+    brings the problems into view at its top, their fold opened."""
     _open(page, base_url)
     _row(page, "printer_1").click()
     x = page.locator("#pos-x")
@@ -317,6 +323,8 @@ def test_the_toolbar_count_opens_sites_problems(page, base_url: str):
     problems = page.locator("#site-problems")
     expect(problems).to_be_visible(timeout=2000)
     expect(problems).to_be_in_viewport()
+    expect(problems).to_have_attribute("open", "")
+    expect(page.locator("#problem-list li").first).to_be_visible()
     assert page.evaluate("() => window.apothecaryPanels.state('site').open") is True
 
     page.evaluate(

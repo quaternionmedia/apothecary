@@ -493,3 +493,44 @@ def test_the_view_menu_holds_snap_detail_and_outlines_and_the_ring_backs_each(
         page.keyboard.press(digit)
     expect(page.locator("#overlay-toggle")).not_to_be_checked()
     assert page.evaluate("() => Object.keys(window.fractalViewer.compoundOverlayByKey).length") == 0
+
+
+# --------------------------------------------------------------------------
+# Problems once
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.e2e
+def test_problems_are_one_folded_line_in_site_and_the_headers_count_opens_it(
+    page: Page, start_server
+):
+    """Site says its problems in one folded line, "N problems ›", where the list stood
+    above Contents; the header's count opens the fold, and each problem still selects
+    its piece."""
+    url = start_server()
+    page.goto(f"{url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
+    problems = page.locator("#site-problems")
+    expect(problems).to_be_hidden()
+    _select(page, "printer_1")
+    page.locator("#pos-x").fill("650")
+    page.locator("#pos-x").press("Tab")
+    expect(page.locator("#validity-indicator")).to_contain_text("1 violation", timeout=5000)
+    expect(problems).to_be_visible()
+    expect(problems.locator("summary")).to_have_text("1 problem ›")
+    rows = page.locator("#problem-list li")
+    expect(rows.first).to_be_hidden()
+    assert problems.bounding_box()["height"] < 32  # one line, above Contents
+    assert problems.bounding_box()["y"] < page.locator("#contents-list").bounding_box()["y"]
+
+    page.locator("#validity-indicator").click()
+    expect(rows.first).to_be_visible(timeout=2000)
+    expect(rows.first).to_have_text("printer_1 and printer_2 overlap")
+    _select(page, "workbench")
+    rows.first.click()
+    assert page.evaluate("() => window.fractalViewer.selectedName") == "printer_1"
+
+    page.locator("#pos-x").fill("100")
+    page.locator("#pos-x").press("Tab")
+    expect(page.locator("#validity-indicator")).to_have_text("Layout valid", timeout=5000)
+    expect(problems).to_be_hidden()
