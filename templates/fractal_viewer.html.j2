@@ -176,7 +176,7 @@
             font: inherit; font-size: 0.78rem; cursor: pointer;
         }
         .panel-tab:hover { color: #fff; border-color: #666; }
-        /* The Machine: a board's one surface, in a tethered panel (widgets/machine.js), its log in it. */
+        /* The Machine: a board's one surface, a tab of the rail (widgets/machine.js), its log in it; as wide as this when floated. */
         .panel[data-panel="machine"].free { width: min(500px, 90%); }
         .panel[data-panel="machine"] .panel-body-slot { padding: 0; }
         /* Pictures (widgets/picture_list.js) and Site's Pinned (widgets/pinned.js): rows, each with its buttons */
@@ -870,8 +870,8 @@
             }
 
             // A link into the world with a panel open: the Bench, or a board's Machine
-            // -- tethered where the board is pinned in this site, floating over the
-            // world when it is pinned nowhere here -- once the site's boards are known.
+            // in the rail, pinned in this site or nowhere here, once the site's boards
+            // are known.
             async followDeepLink() {
                 const panel = DEEP_LINK.get('panel');
                 if (panel) this.panels.open(panel);
@@ -3161,44 +3161,47 @@
                 }
             }
 
-            // A board's Machine in front of the world (widgets/machine.js): a printer's
-            // cards and controls or a devkit's sketch and serial output, with the
-            // board's one log, in a panel tethered to where its badge stands -- the
-            // printer a board inside drives, else the board's own node. One at a
-            // time; opening another closes the first. Docked, it is a tab of the
-            // rail's strip.
+            // A board's Machine (widgets/machine.js): a printer's cards and controls or
+            // a devkit's sketch and serial output, with the board's one log, shown in
+            // the rail's tab strip beside Pictures and the Bench, its tab active --
+            // every way into a Machine comes here. It floats only when a person floats
+            // it from its tab, until it is closed: opened again while it floats, it
+            // stays where they put it. It stands for the printer a board inside drives,
+            // else the board's own node. One at a time; opening another closes the first.
             openMachine(path) {
                 const { row } = this.bindingFor(path);
                 const port = row && row.device && row.device.port;
                 if (!port) { this.setStatus(`${path}: no board pinned here`, 'error'); return false; }
                 const anchor = row.device.printer ? this.bearerPathFor(row.path) : row.path;
-                if (this.machine && this.machine.port === port) { this.panels.open('machine'); this.panels.tether('machine', anchor); return true; }
-                this.mountMachinePanel(port, anchor, row);
-                this.panels.tether('machine', anchor);
-                return true;
+                return this.showMachine(port, anchor, row);
             }
-            // A board's Machine by its port: tethered to where it is pinned in this
-            // site, or, pinned nowhere here, floating over the world -- what a link
-            // to the printer monitor opens.
+            // A board's Machine by its port, pinned in this site or nowhere here --
+            // what a link to the printer monitor opens.
             openMachineFor(port) {
                 const row = Object.values(this.bindings).find((r) => r.device && r.device.port === port);
                 if (row) return this.openMachine(row.path);
+                return this.showMachine(port, null, null);
+            }
+            showMachine(port, anchor, row) {
                 if (this.machine && this.machine.port === port) { this.panels.open('machine'); return true; }
-                this.mountMachinePanel(port, null, null);
+                this.mountMachinePanel(port, anchor, row);
+                this.panels.dock('machine');
                 return true;
             }
             // The Machine's panel, its body mounted when it is first in front of a
-            // person -- at once when it floats or is tethered, when its tab is shown
-            // when a browser remembered it docked.
+            // person. A board pinned inside a printer is the printer's, whatever it has
+            // been identified as so far: its Machine has no Flashing.
             mountMachinePanel(port, anchor, row) {
                 this.closeMachine();
                 const machine = { port, path: anchor, pin: row, handle: null };
                 this.machine = machine;
+                const bearer = row ? this.statusBearerFor(row.path) : null;
+                const inPrinter = !!(bearer && PRINTER_STATUSES.includes(bearer.status));
                 this.panels.register('machine', {
-                    title: anchor ? `${anchor} · ${port}` : `${port} · pinned nowhere in ${this.siteName}`, where: 'free', open: true,
+                    title: anchor ? `${anchor} · ${port}` : `${port} · pinned nowhere in ${this.siteName}`,
                     body: (slot) => {
                         machine.handle = mountMachine(slot, {
-                            base: BASE_URL, port, host: 'popup', boards: this.boards,
+                            base: BASE_URL, port, host: 'popup', boards: this.boards, inPrinter,
                             pin: row ? { site: this.siteName, path: row.path, how: row.binding_source, sketch: row.sketch || null } : null,
                             say: (text, kind) => this.setStatus(text, kind),
                         });
@@ -3206,7 +3209,6 @@
                     },
                     onClose: () => this.closeMachine(),  // its ✕: the watching stops with it
                 });
-                if (!anchor) this.panels.open('machine');
                 return machine;
             }
             // A Machine opened: its buttons wear its device ring's addresses, the

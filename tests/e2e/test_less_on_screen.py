@@ -285,3 +285,101 @@ def test_a_movable_thing_selected_wears_one_compact_set_of_handles(page: Page, b
     _select(page, "workbench")
     assert page.evaluate(HANDLES)["on"] == "workbench"
 
+
+
+# --------------------------------------------------------------------------
+# The Machine in the rail
+# --------------------------------------------------------------------------
+
+MACHINE = ".panel[data-panel='machine']"
+
+
+def _rail_machine(page: Page):
+    rail = page.locator(".panel-rail")
+    machine = rail.locator(f".panel-tabbody {MACHINE}")
+    expect(machine).to_be_visible(timeout=5000)
+    expect(rail.locator(".rail-tab[data-panel='machine']")).to_have_class(
+        re.compile(r"\bactive\b")
+    )
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
+    expect(page.locator(f".panel-free-layer {MACHINE}")).to_have_count(0)
+    return machine
+
+
+@pytest.mark.e2e
+def test_the_machine_opens_in_the_rail_and_floats_only_when_floated(page: Page, bench: str):
+    """Every way into a Machine -- its badge, Selected's Open, the ring's Device › Open,
+    the monitor's address -- shows it in the rail's tab strip beside Pictures and the
+    Bench, its tab active, over none of the world; floated from its tab it floats, and
+    opened again while it floats it stays where a person put it; closed and opened, it
+    is in the rail again."""
+    _open(page, bench)
+    page.locator(BOARD_BADGE).click()
+    machine = _rail_machine(page)
+    tabs = page.locator(".panel-rail .rail-tab .rail-tab-name")
+    expect(tabs).to_have_text(["Pictures", "Bench", re.compile(r"^printer_1")])
+    expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
+
+    page.evaluate("() => window.fractalViewer.closeMachine()")
+    _select(page, "footpedal")
+    page.locator("#selected-body .dev-open").click()
+    machine = _rail_machine(page)
+    expect(machine.locator("#c-board")).to_contain_text("Arduino Uno", timeout=10000)
+
+    page.evaluate("() => window.fractalViewer.closeMachine()")
+    page.locator("#contents-list .contents-item[data-path='printer_1']").click(button="right")
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    page.keyboard.press("2")  # Device
+    page.keyboard.press("8")  # Open
+    _rail_machine(page)
+
+    page.goto(f"{bench}/firmware/monitor?port={PRINTER}")
+    expect(page).to_have_url(re.compile(r"machine="))
+    expect(_rail_machine(page).locator("#c-state")).to_contain_text("printing", timeout=15000)
+
+    # Floated from its tab, it floats; opened again, it stays floating.
+    page.locator(".panel-rail .rail-tab[data-panel='machine'] .rail-tab-float").click()
+    free = page.locator(f".panel-free-layer {MACHINE}")
+    expect(free).to_be_visible(timeout=3000)
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "free"
+    _select(page, "printer_1")
+    page.locator("#selected-body .dev-open").click()
+    expect(free).to_be_visible()
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "free"
+    page.evaluate("() => window.fractalViewer.closeMachine()")
+    page.evaluate("() => window.fractalViewer.openMachine('printer_1')")
+    _rail_machine(page)
+
+
+@pytest.mark.e2e
+def test_a_printers_machine_has_no_flashing(page: Page, start_server):
+    """A board pinned inside a printer is the printer's, whatever it has been identified
+    as so far: its Machine folds Flashing away, and Device › Flash -- a cell the ring
+    keeps -- says why instead. A devkit's Machine keeps its Flashing."""
+    url = start_server()
+    httpx.put(  # never asked M115: not yet known to be a printer
+        f"{url}/sites/garage/nodes/{BOARD}/device", json={"identity": PRINTER}, timeout=15.0
+    ).raise_for_status()
+    page.goto(f"{url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
+    badge = page.locator(f".world-badge[data-path='{BOARD}']")
+    expect(badge).to_be_visible(timeout=15000)
+    badge.click()
+    machine = _rail_machine(page)
+    expect(machine.locator("#c-board")).to_be_visible(timeout=10000)
+    expect(machine.locator("#flash-card")).to_be_hidden()
+    page.locator("#contents-list .contents-item[data-path='printer_1']").click(button="right")
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    page.keyboard.press("2")  # Device
+    page.keyboard.press("2")  # Flash
+    expect(page.locator("#status")).to_contain_text(
+        "a printer keeps its own firmware", timeout=5000
+    )
+    expect(machine.locator("#flash-card")).to_be_hidden()
+
+    httpx.put(
+        f"{url}/sites/garage/nodes/footpedal/device", json={"identity": UNO}, timeout=15.0
+    ).raise_for_status()
+    page.evaluate("() => window.fractalViewer.rescanDevices()")
+    page.evaluate("() => window.fractalViewer.openMachine('footpedal')")
+    expect(_rail_machine(page).locator("#flash-card")).to_be_visible(timeout=10000)
