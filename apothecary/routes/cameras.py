@@ -13,6 +13,9 @@ change a site says; each answers with the camera and the site as ``GET
   of a host's top, or of the floor (``""``), looking straight down.
 - ``PUT /sites/{s}/cameras/{name}/pose`` ``{position?, turn?, tilt?}``: moved,
   turned or tilted; what is not given stays. Its pictures stay where they landed.
+- ``PUT /sites/{s}/cameras/{name}`` ``{params: {x?, y?, z?, turn?, tilt?, fov?}}``:
+  the editor's Apply (Part › Edit). A field of view given is the camera's lens
+  from then on, and its pictures no person sized follow it (``rebuilt``).
 - ``DELETE /sites/{s}/cameras/{name}``: Remove. Its pictures and the pieces made
   from them stay. A camera whose site is gone (an arrangement built from a
   picture and forgotten) is removed all the same, its record with it.
@@ -20,21 +23,27 @@ change a site says; each answers with the camera and the site as ``GET
 Plain ``def``, since they change only a record, never the site:
 
 - ``GET /sites/{s}/cameras/{name}``: one camera, as ``attached`` lists it.
+- ``GET /sites/{s}/cameras/{name}/params`` and ``POST .../validate``
+  ``{params}``: a camera is a part (``vision/camera_part.py``), and answers the
+  parameter contract a part from the parts folder answers.
 - ``PUT /sites/{s}/cameras/{name}/device`` ``{id, label}`` and ``DELETE`` it:
-  which of a browser's cameras this camera is, or none. The label stays on this
-  machine, in the state folder, and never enters the site.
+  which of a browser's cameras this camera is, or none. One device is one
+  camera: choosing it here takes it off any other (``taken_from``). The label
+  stays on this machine, in the state folder, and never enters the site.
 """
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..hierarchy import Assembly
 from ..models.vectors import Vector3D
+from ..projects.parts.params import ParamsSpec, Validation, params_spec, validate_staged
 from ..vision import cameras
+from ..vision.camera_part import CameraPart
 
 router = APIRouter(tags=["cameras"])
 
@@ -136,12 +145,17 @@ class DeviceBody(BaseModel):
 
 @router.put("/sites/{site_name}/cameras/{name}/device")
 def set_camera_device(site_name: str, name: str, body: DeviceBody):
-    """Tell a camera which of a browser's cameras it is. Another camera may be the
-    same device, as a board may be pinned at two nodes."""
+    """Tell a camera which of a browser's cameras it is. One device is one camera:
+    it is taken off any other camera it was, in any site (``taken_from`` names them)."""
     site = _site(site_name)
     _record_or_404(site_name, name)
-    camera = cameras.set_device(site_name, name, cameras.Device(id=body.id, label=body.label))
-    return cameras.answer(camera, site)
+    camera, taken = cameras.set_device(
+        site_name, name, cameras.Device(id=body.id, label=body.label)
+    )
+    return {
+        **cameras.answer(camera, site),
+        "taken_from": [{"site": c.site, "name": c.name} for c in taken],
+    }
 
 
 @router.delete("/sites/{site_name}/cameras/{name}/device")
@@ -149,7 +163,74 @@ def clear_camera_device(site_name: str, name: str):
     """A camera that is none of a browser's cameras now."""
     site = _site(site_name)
     _record_or_404(site_name, name)
-    return cameras.answer(cameras.set_device(site_name, name, None), site)
+    camera, _taken = cameras.set_device(site_name, name, None)
+    return cameras.answer(camera, site)
+
+
+@router.get("/sites/{site_name}/cameras/{name}/params", response_model=ParamsSpec)
+def camera_params(site_name: str, name: str):
+    """What a camera's editor edits, in the form ``GET /parts/{name}/params`` answers:
+    its lens's position, its turn and tilt and its field of view, defaulting to what
+    the camera is now, and where each started as the candidates to turn back to."""
+    site = _site(site_name)
+    return params_spec(CameraPart.of(_record_or_404(site_name, name), site))
+
+
+class StagedParams(BaseModel):
+    params: Dict[str, Any] = Field(default_factory=dict)
+
+
+@router.post("/sites/{site_name}/cameras/{name}/validate", response_model=Validation)
+def validate_camera(site_name: str, name: str, body: Optional[StagedParams] = None):
+    """Check a staged set against the camera's own model, as ``POST
+    /parts/{name}/validate`` does: an unknown field, a tilt past straight up or a
+    field of view of nothing is refused here, and a valid set says the box the
+    camera would fill about its lens."""
+    site = _site(site_name)
+    part = CameraPart.of(_record_or_404(site_name, name), site)
+    return validate_staged(part, body.params if body else {})
+
+
+class EditBody(BaseModel):
+    """The editor's Apply: any of the camera's numbers; the rest stay as they are."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    params: Dict[str, Any] = Field(..., min_length=1)
+
+
+@router.put("/sites/{site_name}/cameras/{name}")
+async def edit_camera(site_name: str, name: str, body: EditBody):
+    """Apply the editor's staged set: the camera moved, turned and tilted as it says,
+    and a field of view given is the camera's lens from now on -- a person's -- which
+    its pictures no person sized follow, the pieces made from them re-sized
+    (``rebuilt``). Only what differs from the camera is a change. Refused (422) for
+    an unknown field or a value out of range."""
+    from ..vision import views as viewing
+
+    site = _site(site_name)
+    camera = _record_or_404(site_name, name)
+    try:
+        given = CameraPart.of(camera, site).validate_overrides(body.params)
+    except ValueError as refused:
+        raise HTTPException(status_code=422, detail=str(refused)) from None
+    pose = camera.pose
+    now = {"x": pose.position.x, "y": pose.position.y, "z": pose.position.z}
+    moved = {axis: given[axis] for axis in now if axis in given and given[axis] != now[axis]}
+    position = Vector3D(**{**now, **moved}) if moved else None
+    turn = given["turn"] if "turn" in given and given["turn"] != pose.turn else None
+    tilt = given["tilt"] if "tilt" in given and given["tilt"] != pose.tilt else None
+    if position is not None or turn is not None or tilt is not None:
+        cameras.set_pose(site_name, site, name, position=position, turn=turn, tilt=tilt)
+    rebuilt: List[str] = []
+    if "fov" in given and given["fov"] != camera.fov:
+        cameras.set_lens(site_name, name, given["fov"])
+        rebuilt = viewing.lens_followed(site_name, site, name, given["fov"])
+    return {
+        "camera": cameras.answer(cameras.record(site_name, name), site),
+        "rebuilt": rebuilt,
+        "site": _site_answer(site_name, site),
+    }
 
 
 @router.delete("/sites/{site_name}/cameras/{name}")

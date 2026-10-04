@@ -15,6 +15,7 @@ standing in the air where it is put. What is known about one is its record:
 - its device: which of a browser's cameras it is, by the id and the label that
   browser gave it, or none. A device is one browser origin's, as a board's
   identity is one machine's: another browser shows its label and cannot open it.
+  And one device is one camera: choosing it for one takes it off any other.
 
 A label may be a person's own words ("FaceTime HD Camera (Built-in)"), so the
 records are kept in the state folder (``firmware.devices.state_dir``), made the
@@ -44,7 +45,7 @@ import tempfile
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Set
+from typing import Callable, Dict, List, Optional, Set, Tuple
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
@@ -430,10 +431,32 @@ def set_pose(
     return camera
 
 
-def set_device(site_name: str, name: str, device: Optional[Device]) -> Camera:
-    """Which of a browser's cameras this camera is, or (None) none. Another camera
-    may be the same device, as a board may be pinned at two nodes."""
-    return _change(site_name, name, lambda c: c.model_copy(update={"device": device}))
+def set_device(site_name: str, name: str, device: Optional[Device]) -> Tuple[Camera, List[Camera]]:
+    """Which of a browser's cameras this camera is, or (None) none; and the cameras
+    the device was taken from. One device is one camera: choosing it for this one
+    takes it off any other, in any site (the owner's decision of 2026-10-04)."""
+    with _LOCK:
+        cameras = _load()
+        index = next(
+            (i for i, c in enumerate(cameras) if c.site == site_name and c.name == name), None
+        )
+        if index is None:
+            raise CameraNotFound(f"no camera {name!r} in site {site_name!r}")
+        taken: List[Camera] = []
+        if device is not None:
+            for i, other in enumerate(cameras):
+                if i != index and other.device is not None and other.device.id == device.id:
+                    cameras[i] = other.model_copy(update={"device": None})
+                    taken.append(cameras[i])
+        cameras[index] = cameras[index].model_copy(update={"device": device})
+        _save(cameras)
+        return cameras[index], taken
+
+
+def set_lens(site_name: str, name: str, fov: float) -> Camera:
+    """A person's field of view for the camera, typed in its editor: the camera's
+    lens from now on, taught as a person's."""
+    return _change(site_name, name, lambda c: c.model_copy(update={"fov": fov, "fov_taught": True}))
 
 
 def teach(site_name: str, name: str, fov: float) -> Optional[Camera]:
@@ -518,6 +541,7 @@ __all__ = [
     "records",
     "remove",
     "set_device",
+    "set_lens",
     "set_pose",
     "stand",
     "starting_pose",

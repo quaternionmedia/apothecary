@@ -69,6 +69,8 @@ One line per change, each with a link to where it is described. The format follo
 - A picture lies on its surface through one mapping, a homography: a camera's through a pinhole as the camera stood, a file's flat; the mat, the outlines, Make, Why this and re-sizing all read it. ([code](apothecary/vision/projection.py))
 - A camera's picture lands on the first top or the floor its centre ray meets, and nowhere at a wall or the sky; the first width typed for one of its pictures teaches the camera its field of view. ([code](apothecary/vision/views.py))
 - The library's bare webcam, and a webcam on a desk stand, on a clamp arm and on a ceiling mount as stubs. ([part](parts/cameras/webcam/part.json))
+- A camera's Part › Edit edits its numbers -- its lens's position, its turn, tilt and field of view -- through the one parameter contract (`/sites/{s}/cameras/{name}/params`, `/validate`, `PUT`); a field of view typed there is its lens. ([code](apothecary/vision/camera_part.py))
+- One device is one camera: choosing a browser's camera for one takes it off any other, in any site. ([code](apothecary/vision/cameras.py))
 - Selected sizes the drawn look: the picture's width, or a chosen shape's long side; a look's row draws it. ([viewer](templates/fractal_viewer.html.j2))
 - A print is a job: one operation a machine performs on a part, kept in the state folder with its kind, machine, site, part, file, times and outcome; a kind of job belongs to a kind of machine, and a mill would register its own. ([code](apothecary/jobs.py))
 - `GET /jobs` by site, machine and kind, `GET /jobs/{id}`, and `GET /jobs/choices` for what a job on a machine can name. ([code](apothecary/routes/jobs.py))

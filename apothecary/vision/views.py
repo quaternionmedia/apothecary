@@ -1174,10 +1174,19 @@ def size_by_lens(
     rebuilt = rescale_made(site_name, site, sized)
     taught = cameras.teach(site_name, view.camera, fov) if view.camera else None
     if taught is not None:
-        for follower in views.follow_lens(site_name, taught.name, fov):
-            if follower.placed:  # one that landed nowhere has nothing made from it
-                rebuilt.extend(rescale_made(site_name, site, follower))
+        rebuilt.extend(lens_followed(site_name, site, taught.name, fov))
     return sized, sorted(set(rebuilt)), taught.name if taught is not None else None
+
+
+def lens_followed(site_name: str, site: Assembly, camera: str, fov: float) -> List[str]:
+    """A camera's lens changed -- taught by a width, or typed in its editor: each of
+    its pictures here that no person sized takes the new field of view, and the
+    pieces made from them re-size as a re-size re-sizes them. The pieces rebuilt."""
+    rebuilt: List[str] = []
+    for follower in store().follow_lens(site_name, camera, fov):
+        if follower.placed:  # one that landed nowhere has nothing made from it
+            rebuilt.extend(rescale_made(site_name, site, follower))
+    return sorted(set(rebuilt))
 
 
 def drop(site_name: str, site: Assembly, piece: str) -> Made:
@@ -1216,6 +1225,7 @@ __all__ = [
     "in_site",
     "keep_the_most_sure",
     "laid_of",
+    "lens_followed",
     "make",
     "made_names",
     "mapping",

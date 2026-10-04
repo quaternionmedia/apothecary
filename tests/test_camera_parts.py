@@ -165,6 +165,110 @@ def test_a_cameras_device_is_set_and_cleared_and_never_enters_the_site():
     assert c.put("/sites/garage/cameras/camera_9/device", json={"id": "x"}).status_code == 404
 
 
+def test_one_device_is_one_camera_in_any_site():
+    """Choosing a device for a camera takes it off any other camera it was, in any
+    site (the owner's decision of 2026-10-04); another device stays where it is."""
+    c = TestClient(app)
+    _add(c)
+    _add(c)
+    _add(c, site="datum_core", host="tray")
+    c.put("/sites/garage/cameras/camera_1/device", json={"id": "desk", "label": "desk cam"})
+    c.put("/sites/garage/cameras/camera_2/device", json={"id": "door", "label": "door cam"})
+    moved = c.put("/sites/datum_core/cameras/camera_1/device", json={"id": "desk", "label": "d"})
+    assert moved.status_code == 200, moved.text
+    assert moved.json()["device"]["id"] == "desk"
+    assert moved.json()["taken_from"] == [{"site": "garage", "name": "camera_1"}]
+    devices = {
+        (row["site"], row["name"]): row["device"] for row in c.get("/placed").json()["cameras"]
+    }
+    assert devices[("garage", "camera_1")] is None
+    assert devices[("garage", "camera_2")]["id"] == "door"
+    assert devices[("datum_core", "camera_1")]["id"] == "desk"
+    # Choosing it again for the camera that has it takes it from nothing.
+    again = c.put("/sites/datum_core/cameras/camera_1/device", json={"id": "desk", "label": "d"})
+    assert again.json()["taken_from"] == []
+
+
+# --- Part › Edit: a camera's numbers are its parameters ----------------------------------------
+
+
+def test_a_cameras_numbers_are_parameters_as_a_parts_are():
+    """Part › Edit on a camera's ring opens the one editor, on the camera's numbers:
+    its lens's position, its turn, tilt and field of view, in the shape a part's
+    parameters are answered in; a staged set is checked as a part's is."""
+    from apothecary.projects.parts.params import ParamsSpec, Validation
+
+    c = TestClient(app)
+    _add(c)
+    spec = c.get("/sites/garage/cameras/camera_1/params")
+    assert spec.status_code == 200, spec.text
+    reference = c.get("/parts/datum_core/params").json()
+    assert list(spec.json()) == list(reference)
+    assert list(spec.json()["fields"][0]) == list(reference["fields"][0])
+    fields = {f["name"]: f for f in ParamsSpec(**spec.json()).model_dump()["fields"]}
+    assert list(fields) == ["x", "y", "z", "turn", "tilt", "fov"]
+    assert [fields[n]["default"] for n in fields] == [900.0, 300.0, 1380.0, 0.0, 0.0, 60.0]
+    assert all(fields[n]["type"] == "number" for n in fields)
+    # A position's slider spans the garage and past it; the aim's are its own bounds.
+    assert fields["x"]["min"] < -400 and fields["x"]["max"] > 5400
+    assert (fields["tilt"]["min"], fields["tilt"]["max"]) == (0.0, 180.0)
+    assert (fields["turn"]["min"], fields["turn"]["max"]) == (0.0, 360.0)
+    assert 0 < fields["fov"]["min"] < 1 and 179 < fields["fov"]["max"] < 180
+    assert all(not fields[n]["contested"] for n in fields)  # nothing moved yet
+    checked = c.post("/sites/garage/cameras/camera_1/validate", json={"params": {"tilt": 30}})
+    assert checked.status_code == 200 and Validation(**checked.json()).valid
+    # Tilted, its body swings forward over its lens.
+    assert checked.json()["bounds"]["min_point"]["y"] < -15.0
+    for bad in ({"tilt": 190}, {"fov": 0}, {"fov": 180}, {"turn": -1}, {"nozzle": 1}):
+        refused = c.post("/sites/garage/cameras/camera_1/validate", json={"params": bad})
+        assert refused.json()["valid"] is False, bad
+    # A position outside the slider's span is a position all the same.
+    assert c.post(
+        "/sites/garage/cameras/camera_1/validate", json={"params": {"x": 50000.0}}
+    ).json()["valid"]
+    assert c.get("/sites/garage/cameras/camera_9/params").status_code == 404
+
+
+def test_applying_a_cameras_numbers_moves_it_and_a_field_of_view_is_its_lens():
+    """The editor's Apply: the camera moved, turned and tilted as it says; a field of
+    view given is the camera's lens from then on, a person's, and its pictures no
+    person sized follow, their pieces re-sized. Where each number started is a
+    candidate to turn back to."""
+    c = TestClient(app)
+    _add(c)
+    view = _pin(c, host=None, camera="camera_1")
+    piece = c.post(f"/sites/garage/views/{view['id']}/make", json={"shape": 1}).json()["made"][0]
+    before = _roots(c)[piece]["footprint"]
+    r = c.put(
+        "/sites/garage/cameras/camera_1",
+        json={"params": {"z": 1500.0, "tilt": 10.0, "fov": 90.0, "x": 900.0}},
+    )
+    assert r.status_code == 200, r.text
+    camera = r.json()["camera"]
+    assert camera["position"] == [900.0, 300.0, 1500.0] and camera["tilt"] == 10.0
+    assert camera["fov"] == 90.0 and camera["fov_taught"] is True
+    assert r.json()["rebuilt"] == [piece]
+    followed = next(v for v in _attached(c)["views"] if v["id"] == view["id"])
+    assert followed["taken"]["fov"] == 90.0 and followed["scale"] is None
+    # Its picture stays where it landed: only its lens changed, as the camera's did.
+    assert followed["mm_across"] == pytest.approx(2 * 600 * math.tan(math.radians(45)))
+    after = _roots(c)[piece]["footprint"]
+    grown = (after["max"][0] - after["min"][0]) / (before["max"][0] - before["min"][0])
+    assert grown == pytest.approx(math.tan(math.radians(45)) / math.tan(math.radians(30)))
+    # The node stands where the numbers say.
+    assert _roots(c)["camera_1"]["position"] == {"x": 900.0, "y": 300.0, "z": 1500.0}
+    # Each number that moved offers where it started.
+    fields = {f["name"]: f for f in c.get("/sites/garage/cameras/camera_1/params").json()["fields"]}
+    assert [v["value"] for v in fields["z"]["contested"]] == [1380.0]
+    assert [v["value"] for v in fields["tilt"]["contested"]] == [0.0]
+    assert [v["value"] for v in fields["fov"]["contested"]] == [60.0]
+    assert fields["x"]["contested"] == []
+    # Nonsense is refused, and nothing changes.
+    for bad in ({"params": {}}, {"params": {"tilt": 200}}, {"params": {"wheels": 4}}, {}):
+        assert c.put("/sites/garage/cameras/camera_1", json=bad).status_code == 422, bad
+    assert _attached(c)["cameras"][0]["tilt"] == 10.0
+
+
 def test_remove_takes_the_camera_away_and_leaves_its_pictures():
     c = TestClient(app)
     _add(c)

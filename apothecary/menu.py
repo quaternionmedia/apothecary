@@ -1032,8 +1032,12 @@ def _node_ring(
     # A part, or a piece made from a picture, is edited in Selected: Part › Edit
     # opens the one editor there (the part-editing spike's decision). Appended
     # last, so no cell above moves; a host with a board, children and a part
-    # is the fullest node ring, eight.
-    if node is not None and (node.part_ref or (path and "." not in path and path in picture.made)):
+    # is the fullest node ring, eight, and so is a camera of this browser's. A
+    # camera's editor edits its numbers -- its lens's position, its turn, tilt and
+    # field of view (vision/camera_part.py, GET /sites/{s}/cameras/{name}/params).
+    if node is not None and (
+        node.part_ref or camera or (path and "." not in path and path in picture.made)
+    ):
         options.append(
             Option(
                 id="part",
