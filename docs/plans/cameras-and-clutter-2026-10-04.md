@@ -163,3 +163,21 @@ Drafted on the project's governance branch, ratified by a person:
 - *rad host integration*: a camera's ring and the View menu's cells.
 - *Personal data stays on the device*: where a camera's device id and label
   are kept now that the cameras file is retired.
+
+## Decided after Phase 1
+
+Asked of the owner on 2026-10-04, after the camera's server side was built:
+
+- **The garage has one printer for now.** printer_2 stood on the workbench's
+  middle, so a camera added at the bench looked down on the printer's top and
+  its picture lay there, as the first-top rule says. printer_2 and printer_3
+  go from the garage; printer_1, which the real board is pinned to, stays.
+  The rule stays as it is.
+- **A camera's pictures are sized at once**, from its starting lens, so Find
+  shapes and Make all need no width typed; a width typed later teaches the
+  lens, and pieces made before re-size with it.
+- **Part on a camera's ring** edits the camera's numbers -- position, turn,
+  tilt and field of view -- in Selected, as Part › Edit opens a part's.
+- **One device, one camera.** Choosing a device for a camera takes it off any
+  other camera. Two cameras added at one place still stand in one spot and
+  show as an overlap, and the Print card's parts still include cameras.
