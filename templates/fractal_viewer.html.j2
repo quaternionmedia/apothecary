@@ -450,8 +450,6 @@
                 <input type="checkbox" id="overlay-toggle" checked> Assembly outlines
             </label>
             <div class="spacer"></div>
-            <a href="{{ base_url }}/firmware" id="firmware-link" class="toolbar-link" title="Install the firmware toolchain and program boards from sketches under parts/">⚡ Firmware</a>
-            <a href="{{ base_url }}/firmware/monitor" id="monitor-link" class="toolbar-link" title="Focused printer monitor: status, temperature history, full comms log, reconnect/reset">🖨 Monitor</a>
             <button type="button" id="ring-open" title="Open the ring for the chosen piece (m, or right-click a piece). Digits choose cells as on a numeric keypad; 5 backs out.">⌗ Ring</button>
             <span id="validity-indicator" class="validity-indicator valid" title="The site's problems: click to open them at the top of Site">Layout valid</span>
         </div>
@@ -537,6 +535,10 @@
         const BASE_URL = {{ base_url | tojson }};
         const DEFAULT_SITE = {{ default_site | tojson }};
         const INITIAL_FOCUS = {{ focus_path | tojson }};
+        // What a link into the world asks to have open: ?panel=bench (where /firmware
+        // leads) and ?machine=<port> (where /firmware/monitor?port= leads). Read once,
+        // before the first load closes any Machine and the address follows it.
+        const DEEP_LINK = new URLSearchParams(location.search);
 
         // Anything from the server that is written into markup goes through this.
         const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -840,7 +842,19 @@
                 this.onResize();
                 this.animate();
 
-                if (this.siteSelect.value) this.loadSite(this.siteSelect.value, INITIAL_FOCUS);
+                if (this.siteSelect.value) this.loadSite(this.siteSelect.value, INITIAL_FOCUS).then(() => this.followDeepLink());
+            }
+
+            // A link into the world with a panel open: the Bench, or a board's Machine
+            // -- tethered where the board is pinned in this site, floating over the
+            // world when it is pinned nowhere here -- once the site's boards are known.
+            async followDeepLink() {
+                const panel = DEEP_LINK.get('panel');
+                if (panel) this.panels.open(panel);
+                const port = DEEP_LINK.get('machine');
+                if (!port || !this.siteName) return;
+                await this.boards.scan();
+                if (this.openMachineFor(port)) this.setStatus(`Opened ${port}'s Machine`, 'success');
             }
 
             initThreeJS() {
@@ -3096,7 +3110,7 @@
                 // The Machine follows its badge -- to the printer a board inside drives,
                 // once it is known to be one -- and goes with it: nothing is left
                 // polling a board unseen.
-                if (this.machine && !wanted.has(this.machine.path)) {
+                if (this.machine && this.machine.path && !wanted.has(this.machine.path)) {
                     const moved = anchorOf[this.machine.port];
                     if (!moved) { this.closeMachine(); return; }
                     const where = this.panels.state('machine') && this.panels.state('machine').where;
@@ -3135,29 +3149,48 @@
                 if (!port) { this.setStatus(`${path}: no board pinned here`, 'error'); return false; }
                 const anchor = row.device.printer ? this.bearerPathFor(row.path) : row.path;
                 if (this.machine && this.machine.port === port) { this.panels.open('machine'); this.panels.tether('machine', anchor); return true; }
+                this.mountMachinePanel(port, anchor, row);
+                this.panels.tether('machine', anchor);
+                return true;
+            }
+            // A board's Machine by its port: tethered to where it is pinned in this
+            // site, or, pinned nowhere here, floating over the world -- what a link
+            // to the printer monitor opens.
+            openMachineFor(port) {
+                const row = Object.values(this.bindings).find((r) => r.device && r.device.port === port);
+                if (row) return this.openMachine(row.path);
+                if (this.machine && this.machine.port === port) { this.panels.open('machine'); return true; }
+                this.mountMachinePanel(port, null, null);
+                return true;
+            }
+            // The Machine's panel, its body mounted when it is first in front of a
+            // person -- at once when it floats or is tethered, when its tab is shown
+            // when a browser remembered it docked.
+            mountMachinePanel(port, anchor, row) {
                 this.closeMachine();
-                let handle = null;
+                const machine = { port, path: anchor, pin: row, handle: null };
+                this.machine = machine;
                 this.panels.register('machine', {
-                    title: `${anchor} · ${port}`, where: 'free', open: true,
+                    title: anchor ? `${anchor} · ${port}` : `${port} · pinned nowhere in ${this.siteName}`, where: 'free', open: true,
                     body: (slot) => {
-                        handle = mountMachine(slot, {
+                        machine.handle = mountMachine(slot, {
                             base: BASE_URL, port, host: 'popup', boards: this.boards,
-                            pin: { site: this.siteName, path: row.path, how: row.binding_source, sketch: row.sketch || null },
+                            pin: row ? { site: this.siteName, path: row.path, how: row.binding_source, sketch: row.sketch || null } : null,
                             say: (text, kind) => this.setStatus(text, kind),
                         });
+                        if (this.machine === machine) { window.apothecaryMachine = machine.handle; this.machineOpened(port); }
                     },
                     onClose: () => this.closeMachine(),  // its ✕: the watching stops with it
                 });
-                this.panels.tether('machine', anchor);
-                this.machine = { port, path: anchor, pin: row, handle };
-                window.apothecaryMachine = handle;
-                this.machineOpened(port);
-                return true;
+                if (!anchor) this.panels.open('machine');
+                return machine;
             }
-            // A Machine opened: its buttons wear its device ring's addresses, and a
+            // A Machine opened: its buttons wear its device ring's addresses, the
+            // address says which board's it is (so a reload opens it again), and a
             // printer's level card sizes its corners from where it stands.
             machineOpened(port) {
                 if (window.apothecaryRing && window.apothecaryRing.annotateMachine) window.apothecaryRing.annotateMachine();
+                this.keepMachineInAddress(port);
                 const where = this.whereByPort[port] || fetch(`${BASE_URL}/firmware/printers/where?port=${encodeURIComponent(port)}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
                 where.then((w) => { if (w && w.printer && this.machine && this.machine.port === port) window.dispatchEvent(new CustomEvent('apothecary:where', { detail: { ...w, port } })); });
             }
@@ -3217,8 +3250,14 @@
                 if (!machine) return;
                 this.machine = null;
                 window.apothecaryMachine = null;
-                machine.handle.destroy();
+                if (machine.handle) machine.handle.destroy();
                 this.panels.unregister('machine');
+                this.keepMachineInAddress(null);
+            }
+            keepMachineInAddress(port) {
+                const url = new URL(location.href);
+                if (port) url.searchParams.set('machine', port); else url.searchParams.delete('machine');
+                if (url.href !== location.href) history.replaceState(null, '', url);
             }
 
             // A printer's marks at its node, from what GET /firmware/printers/where
@@ -3257,7 +3296,7 @@
 
             // The newest bed reading for a printer's port, laid over its bed;
             // asked again at most every few seconds, on the device refresh, so
-            // a reading taken on the monitor page shows up here without a reload.
+            // a reading taken from a printer's Machine shows up here without a reload.
             refreshReading(path) {
                 const m = this.marks[path];
                 if (!m || !m.marks || Date.now() - m.readingAt < 5000) return;
@@ -4205,7 +4244,7 @@
             onIntent: carry,
             onResolved: async (ring, spec) => {
                 if (spec.context.pointing === 'node') { rings.set(ringKey(spec, await spec.picture), Promise.resolve(ring)); annotateControls(ring); }
-                if (spec.context.pointing === 'device' && viewer.machine) { machineRings.set(JSON.stringify(spec.device), Promise.resolve(ring)); annotate(ring, viewer.machine.handle.pairs()); }
+                if (spec.context.pointing === 'device' && viewer.machine && viewer.machine.handle) { machineRings.set(JSON.stringify(spec.device), Promise.resolve(ring)); annotate(ring, viewer.machine.handle.pairs()); }
             },
             onError: (err) => viewer.setStatus(`Ring: ${err.message}`, 'error'),
         });

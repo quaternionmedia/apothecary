@@ -684,8 +684,10 @@ def test_comms_log_records_traffic_and_survives_reconnect(fake_arduino_cli, scri
 
 def test_monitor_routes(fake_arduino_cli, fresh_task_runner, scripted_links):
     c = TestClient(app)
-    r = c.get("/firmware/monitor", params={"port": "/dev/ttyFAKE1"})
-    assert r.status_code == 200 and "Printer monitor" in r.text and "/dev/ttyFAKE1" in r.text
+    # The monitor page is the board's Machine in the viewer: pinned nowhere, the default site.
+    r = c.get("/firmware/monitor", params={"port": "/dev/ttyFAKE1"}, follow_redirects=False)
+    assert r.status_code == 307
+    assert r.headers["location"] == "/viewer/sites/garage?machine=%2Fdev%2FttyFAKE1"
 
     info = c.get("/firmware/printers/info", params={"port": "/dev/ttyFAKE1"}).json()
     assert info["detected"] and info["link"] is None and info["last_status"] is None
@@ -709,10 +711,6 @@ def test_monitor_routes(fake_arduino_cli, fresh_task_runner, scripted_links):
     assert c.get("/firmware/printers/log", params={"port": "nope"}).status_code == 422
     assert c.get("/firmware/printers/info", params={"port": "nope"}).status_code == 422
     assert c.post("/firmware/printers/reset", json={"port": "/dev/ttyNOPE"}).status_code == 503
-
-    # Viewer and firmware page link to the monitor for a printer.
-    assert "/firmware/monitor" in c.get("/viewer/sites/garage").text
-    assert "/firmware/monitor" in c.get("/firmware").text
 
 
 # --- the board inside the printer drives the printer --------------------------------
@@ -908,17 +906,19 @@ def test_simulated_dwells_scale_with_the_speed_setting(monkeypatch):
     assert 0.3 < time.monotonic() - started < 2.0
 
 
-# --- review fixes: the monitor page never reflects a raw port; polls carry the latch -------
+# --- review fixes: the monitor's address never reflects a raw port; polls carry the latch -
 
 
-def test_monitor_page_emits_the_port_as_json_and_drops_bad_ones(fake_arduino_cli):
+def test_the_monitor_address_drops_a_bad_port_and_quotes_a_good_one(fake_arduino_cli):
     c = TestClient(app)
-    r = c.get("/firmware/monitor", params={"port": '";alert(1);//'})
-    assert r.status_code == 200 and "alert(1)" not in r.text and 'port: ""' in r.text
-    r = c.get("/firmware/monitor", params={"port": "</script><script>alert(2)</script>"})
-    assert "alert(2)" not in r.text
-    r = c.get("/firmware/monitor", params={"port": "/dev/ttyFAKE1"})
-    assert 'port: "/dev/ttyFAKE1"' in r.text
+    for bad in ('";alert(1);//', "</script><script>alert(2)</script>"):
+        r = c.get("/firmware/monitor", params={"port": bad}, follow_redirects=False)
+        assert r.status_code == 307 and r.headers["location"] == "/viewer/sites/garage"
+    r = c.get("/firmware/monitor", params={"port": "/dev/ttyFAKE1"}, follow_redirects=False)
+    assert r.headers["location"].endswith("?machine=%2Fdev%2FttyFAKE1")
+    assert c.get("/firmware/monitor", follow_redirects=False).headers["location"] == (
+        "/viewer/sites/garage"
+    )
 
 
 def test_status_poll_reports_held_link_and_latch(

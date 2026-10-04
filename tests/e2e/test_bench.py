@@ -167,3 +167,22 @@ def test_the_bench_s_verbs_are_cells_of_panels_bench(page: Page, url: str):
     expect(page.locator("#ring-overlay")).to_have_count(0)
     _ended(bench, "Compile footpedal (arduino:avr:uno)")
     expect(page.locator("#status")).to_contain_text("⌗932")
+
+
+@pytest.mark.e2e
+def test_the_firmware_address_opens_the_viewer_with_the_bench(page: Page, url: str):
+    """/firmware, the firmware page's address, is the viewer on the default site with
+    the Bench open -- on a fresh load, as a link handed out lands -- and the toolbar
+    leads to no page of its own: Panels › Bench and a board's Machine are the way."""
+    page.goto(f"{url}/firmware")
+    expect(page).to_have_url(re.compile(r"/viewer/sites/garage\?panel=bench$"))
+    bench = page.locator(BENCH)
+    expect(bench).to_be_visible(timeout=15000)
+    expect(page.locator(".panel-rail .rail-tab[data-panel='bench']")).to_have_class(
+        re.compile(r"\bactive\b")
+    )
+    expect(bench.locator(".tc-status")).to_contain_text("✓ 9.9.9", timeout=10000)
+    expect(bench.locator(".sketch-select option[value='footpedal']")).to_have_count(1)
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    for gone in ("#firmware-link", "#monitor-link", ".toolbar a.toolbar-link"):
+        expect(page.locator(gone)).to_have_count(0)

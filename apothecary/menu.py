@@ -1092,7 +1092,7 @@ def control_options(device: Device) -> List[Option]:
     """The control ring: every allowlisted thing a printer can be told to do.
 
     Each leaf is one line from ``firmware.gcode.CONTROL_CODES``, sent by the
-    monitor page's control chain, which is where the latch is checked. Jog is
+    Machine's control chain, which is where the latch is checked. Jog is
     seated so the keypad is the jog pad: Y+ up, X+ right, Y- down, X- left,
     and Z+ and Z- in the right-hand corners. Stop is E-STOP and is marked
     destructive, since the board halts until it is reset.
@@ -1222,7 +1222,7 @@ CARRIED_BY: Dict[str, Carries] = {
     # handlers already call, never through the intent route.
     "device": Carries.VIEWER,
     # Driving a printer. Each leaf is one allowlisted G-code line, sent by the
-    # monitor page's control chain, which is where the latch is checked and
+    # Machine's control chain, which is where the latch is checked and
     # where a refusal is shown. The intent route never opens a port.
     "control": Carries.VIEWER,
     # Reading or probing the bed: the page starts the job and shows the record.

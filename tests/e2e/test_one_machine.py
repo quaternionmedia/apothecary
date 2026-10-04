@@ -481,3 +481,65 @@ def test_device_flash_opens_the_machine_at_its_card_and_uploads_then_identifies(
     expect(machine.locator("#c-sketch")).to_contain_text("observed fake_blink")
     assert any("/firmware/devices/listen" in u for u in asked), asked
     assert not [u for u in asked if "/firmware/devices/identify" in u], asked
+
+
+@pytest.mark.e2e
+def test_the_monitor_address_opens_the_board_s_machine_where_it_is_pinned(page: Page, url: str):
+    """/firmware/monitor?port=, the printer monitor's address, is the viewer on the site
+    the port is pinned in, with its Machine open and tethered to the printer -- on a fresh
+    load, the port kept in the address, so a reload opens it again."""
+    page.goto(f"{url}/firmware/monitor?port={PRINTER}")
+    expect(page).to_have_url(re.compile(r"/viewer/sites/garage\?machine=%2Fdev%2FttyFAKE1$"))
+    machine = page.locator(MACHINE)
+    expect(machine.locator("#c-state")).to_contain_text("printing", timeout=15000)
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == {
+        "tether": "printer_1"
+    }
+    page.reload()
+    expect(machine.locator("#c-state")).to_contain_text("printing", timeout=15000)
+    # Closed, the address lets go of it; a port of the wrong shape opens nothing.
+    page.evaluate("() => window.fractalViewer.closeMachine()")
+    expect(page).to_have_url(re.compile(r"/viewer/sites/garage$"))
+    page.goto(f"{url}/firmware/monitor?port=%3Cscript%3E")
+    expect(page).to_have_url(re.compile(r"/viewer/sites/garage$"))
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    expect(machine).to_have_count(0)
+
+
+@pytest.mark.e2e
+def test_a_board_pinned_nowhere_floats_on_the_default_site(page: Page, start_server):
+    """The monitor's address for a board pinned nowhere: the default site, its Machine
+    floating over the world. The Uno, never asked, is a devkit's Machine -- Probe and
+    Listen, no Poll, its port closed -- and the printer, asked M115, a printer's: Poll,
+    and nothing that would take its port. (The firmware page's device cards, each a
+    board's Machine now.)"""
+    url = start_server()
+    opened = []
+    page.on(
+        "request",
+        lambda r: opened.append(r.url) if any(p in r.url for p in PORT_OPENERS) else None,
+    )
+    page.goto(f"{url}/firmware/monitor?port={UNO}")
+    expect(page).to_have_url(re.compile(r"/viewer/sites/garage\?machine=%2Fdev%2FttyFAKE0$"))
+    machine = page.locator(MACHINE)
+    expect(machine.locator("#c-board")).to_contain_text("Arduino Uno", timeout=15000)
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "free"
+    expect(machine.locator(".panel-name")).to_contain_text("pinned nowhere in garage")
+    for shown in ("#probe", "#listen", "#identify", "#flash-card"):
+        expect(machine.locator(shown)).to_be_visible()
+    for hidden in ("#poll", "#qform", "#ctl-label", "#estop"):
+        expect(machine.locator(hidden)).to_be_hidden()
+    page.wait_for_timeout(1500)
+    assert opened == [], opened
+    # Its ring, with nothing selected, is its own device ring.
+    page.keyboard.press("m")
+    expect(page.locator("#ring-overlay .title")).to_have_text("ttyFAKE0", timeout=5000)
+    assert _wedges(page)["Flash"] == "2" and "Control" not in _wedges(page)
+    page.keyboard.press("Escape")
+
+    httpx.post(f"{url}/firmware/devices/identify", json={"port": PRINTER}, timeout=15.0)
+    page.goto(f"{url}/firmware/monitor?port={PRINTER}")
+    expect(machine.locator("#c-state")).to_contain_text("printing", timeout=15000)
+    expect(machine.locator("#poll")).to_be_visible()
+    for hidden in ("#probe", "#listen", "#flash-card"):
+        expect(machine.locator(hidden)).to_be_hidden()

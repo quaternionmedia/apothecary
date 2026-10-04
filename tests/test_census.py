@@ -231,7 +231,25 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # every address under it: Jog › Y+ ⌗2128 to ⌗2728, Arm ⌗217 to ⌗277, Stop ⌗211 to
 # ⌗271; on the device ring alone ⌗128 to ⌗728). Appended, so nothing else moves:
 # Link › Listen (⌗214) and Link › Probe (⌗219) on a board that is not a printer.
-VIEWER_CEILING = 119
+#
+# Phase 5, one page. Before: 119 controls of its own, 60 ring-backed, 78 places the
+# page listens. After: 116, 60 ring-backed, 77 places -- and for the phase as a
+# whole, from where Phase 4 left it: 101 controls, 51 ring-backed (50.5%), 72 places
+# before; 116, 60 ring-backed (51.7%), 77 places after. Retired: the firmware page
+# and the printer monitor, which were pages of their own (templates/firmware.html.j2,
+# templates/monitor.html.j2) and the census counted beside the viewer; census.PAGES
+# is the viewer alone. Their sections are the Bench and a board's Machine in front
+# of the world, so a person no longer leaves the world to install a core, flash a
+# board or watch a printer, and their addresses (/firmware, /firmware/monitor?port=)
+# open the viewer with the Bench or the board's Machine. Gone from the viewer with
+# them: the toolbar's ⚡ Firmware and 🖨 Monitor links (firmware-link, monitor-link,
+# neither ring-backed; Panels › Bench and a board's Machine replace them), and the
+# Machine's port picker, which only the monitor page showed (port, and its listener
+# port:change:selectPort). No ring address moved. The firmware page's own controls
+# went with it; those the Bench kept are named above (Phase 5, the Bench), and its
+# device cards are each board's Machine: Probe and Live are a devkit's Probe and
+# Listen, Printer?/Poll its Identify and a printer's Poll, ⤢ Monitor its Open.
+VIEWER_CEILING = 116
 
 
 def test_the_viewer_stays_under_its_ceiling():
@@ -370,12 +388,8 @@ def test_a_button_that_carries_its_line_is_named_by_the_line(tmp_path):
 
 
 def test_a_link_with_a_class_is_the_thing_its_class_says(tmp_path):
-    text = (
-        '<a class="dev-monitor" href="/firmware/monitor?port=x">m</a>\n'
-        '<a href="/parts/x/scad">d</a>\n'
-        '<a href="/viewer">v</a>\n'
-    )
-    assert _keys(tmp_path, text) == ["dev-monitor", "part-scad-download", "viewer-link"]
+    text = '<a class="dev-via" href="/parts/x/scad">m</a>\n<a href="/parts/x/scad">d</a>\n'
+    assert _keys(tmp_path, text) == ["dev-via", "part-scad-download"]
 
 
 def test_a_control_fetched_by_the_one_letter_helper_is_named(tmp_path):
@@ -454,15 +468,14 @@ def test_the_ring_module_opens_three_ways_and_the_pages_import_it():
     text = (STATIC / "ring.js").read_text(encoding="utf-8")
     assert _on_the_page(text) == [("document", "contextmenu"), ("window", "keydown")]
     assert 'button = "#ring-open"' in text
-    for page in census.PAGES:
-        imports_it = "/static/ring.js" in page.read_text(encoding="utf-8")
-        assert imports_it == (page is not census.FIRMWARE)
+    assert census.PAGES == (census.VIEWER,)
+    assert "/static/ring.js" in census.VIEWER.read_text(encoding="utf-8")
 
 
 def test_the_panel_module_keeps_its_chrome_to_itself():
     """panels.js listens on the elements it makes, and on the window only for
     the tilde key and the pointer moves that finish a drag, each taken off
-    again; the viewer loads it and the monitor does not."""
+    again; the viewer loads it."""
     text = (STATIC / "panels.js").read_text(encoding="utf-8")
     assert _on_the_page(text) == [
         ("window", "keydown"),
@@ -472,7 +485,6 @@ def test_the_panel_module_keeps_its_chrome_to_itself():
     for event in ("keydown", "pointermove", "pointerup"):
         assert f'window.removeEventListener("{event}"' in text
     assert "/static/panels.js" in census.VIEWER.read_text(encoding="utf-8")
-    assert "/static/panels.js" not in census.MONITOR.read_text(encoding="utf-8")
 
 
 # --------------------------------------------------------------------------
@@ -480,13 +492,11 @@ def test_the_panel_module_keeps_its_chrome_to_itself():
 # --------------------------------------------------------------------------
 
 
-def test_the_viewer_counts_its_marks_modules_and_the_monitor_does_not():
-    """The viewer imports machine_marks.js itself; the monitor reaches it only
-    through board_view.js, so its count does not change."""
+def test_the_viewer_counts_its_marks_modules():
+    """The viewer imports machine_marks.js and boards.js itself, so both are counted
+    with it."""
     assert (census.STATIC / "machine_marks.js") in census.marks_of(census.VIEWER)
     assert (census.STATIC / "boards.js") in census.marks_of(census.VIEWER)
-    assert census.marks_of(census.MONITOR) == []
-    assert census.marks_of(census.FIRMWARE) == []
     for chrome in ("ring.js", "panels.js", "anchors.js"):
         assert chrome not in census.MARKS
 
@@ -590,10 +600,12 @@ def test_the_viewers_ring_backed_share_did_not_fall():
     follow-ups did not let it fall, nor did Phase 3, which deleted the Jobs panel's
     controls, none of them ring-backed, and left it at 58 of 119. Phase 4 deleted the
     serial overlay and most of Selected's Device section, ring-backed and not, and
-    does not let it fall below where Phase 3 left it."""
+    left it at 51 of 101. Phase 5 brought the Bench in front of the world, its verbs
+    cells of Panels › Bench, and a devkit's Listen and Probe, cells of Device › Link,
+    and does not let it fall below where Phase 4 left it."""
     taken = census.take()
     own, backed = len(taken.controls_of_its_own()), len(taken.ring_backed())
-    assert backed / own >= 58 / 119, f"{backed} of {own} ring-backed"
+    assert backed / own >= 51 / 101, f"{backed} of {own} ring-backed"
 
 
 def test_the_serial_overlay_left_nothing_behind():
@@ -647,3 +659,51 @@ def test_nothing_is_both_taken_back_and_ring_backed():
     assert set(census.TAKEN_BACK) & set(census.RING_BACKED) == set()
     for key in census.TAKEN_BACK:
         assert key in census.CONTROLS or key in census.LISTENING, key
+
+
+def test_one_page_is_counted_and_the_retired_pages_left_nothing_behind():
+    """The census counts one page, the viewer: the firmware page and the printer monitor
+    are the Bench and a board's Machine in front of the world, their templates gone, and
+    nothing of theirs -- the toolbar's links to them, the monitor's port picker, the
+    firmware page's device cards and rows -- is counted or classified."""
+    assert census.PAGES == (census.VIEWER,)
+    for gone in ("firmware.html.j2", "monitor.html.j2"):
+        assert not (census.TEMPLATES / gone).exists(), gone
+    assert not (census.STATIC / "board_view.js").exists()
+    retired = (
+        "firmware-link",
+        "monitor-link",
+        "viewer-link",
+        "dev-monitor",
+        "port",
+        "refresh-btn",
+        "boards-btn",
+        "esp-off",
+        "esp-path",
+        "esp-rm",
+        "esp-add",
+        "dev-probe",
+        "dev-identify",
+        "dev-printer",
+        "dev-live",
+        "port:change:selectPort",
+        "portSel:change:mountFor",
+        "es:close:stopLive",
+        "devices:click:closest",
+        "cores:click:closest",
+        "sketches:click:closest",
+        "fqbn-input:input:updateButtons",
+        "port-select:change:updateButtons",
+        "esp-images:click:contains",
+        "history:click:closest",
+    )
+    taken = census.take()
+    assert not [f.key for f in taken.found if f.key in retired]
+    for table in (census.CONTROLS, census.LISTENING, census.RING_BACKED):
+        assert not [k for k in table if k in retired], table
+    # The Bench's modules are counted with the viewer, which imports them.
+    sources = {f.source for f in taken.found}
+    assert {"toolchain.js", "sketches.js", "tasks.js", "machine.js"} <= sources
+    by_name = {f.name: f for f in taken.controls_of_its_own()}
+    assert by_name["compile-btn"].ring_action == "bench:compile"
+    assert by_name["listen"].ring_action == "device:listen"

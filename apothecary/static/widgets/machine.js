@@ -1,6 +1,6 @@
 /* The Machine: one board, close up, wherever it is mounted -- the one place for it.
  *
- * A printer's Machine is what the monitor page is made of -- the header's link
+ * A printer's Machine is what the monitor page was made of -- the header's link
  * verbs and the control latch, the status cards, the temperature chart, the
  * control pad, the bed reading, the print from here (a print job, naming the
  * part it makes, and the printer's jobs as its history). A devkit's Machine
@@ -26,12 +26,10 @@
  *
  * mountMachine(root, { base, port, host, boards, kind, pin, say }) renders into
  * `root` and returns the handle the ring drives (carry, pairs, device) and the
- * tests read (state, ctl, level, print). `host` is "page" (the monitor: a port
- * picker, the control pad floating over the log, the URL kept in step) or
- * "popup" (the world: one board, everything inline). `boards` is the page's
- * model, made here when none is given. `kind` is "printer" or "devkit"; left
- * out, the page host is a printer's monitor and the popup is whatever the
- * board is. `pin` ({ site, path, how }) is where the board is pinned, or bound
+ * tests read (state, ctl, level, print). `host` is "popup": the world's, one
+ * board and everything inline (the monitor page, the other host, is a link to
+ * the world now). `boards` is the page's model, made here when none is given.
+ * `kind` is "printer" or "devkit"; left out, it is whatever the board is. `pin` ({ site, path, how }) is where the board is pinned, or bound
  * by its sketch when `how` is "sketch". `say(text,
  * kind)` is the host's status bar: a refusal is said there as an error as well
  * as in the log. destroy() stops watching and frees what the module put on the
@@ -55,7 +53,6 @@ function fmtDur(seconds) {
 const HEAD = `
 <div class="machine-head">
     <span class="dot" id="dot"></span>
-    <select id="port" aria-label="Printer port"><option value="">— pick a port —</option></select>
     <span id="ident" class="kv">—</span>
     <span class="grow"></span>
     <label class="auto printer-only"><input type="checkbox" id="auto" checked> auto-poll
@@ -124,10 +121,6 @@ const CARDS = `
         <div class="row"><span id="print-progress" class="empty">nothing printing from here</span><span class="grow"></span><span class="job" id="print-job"></span></div>
         <div class="bar print"><i id="b-print" style="width:0"></i></div>
         <div id="print-history"></div>
-    </div>
-    <div class="card wide printer-only" id="view-card" hidden>
-        <div class="k">Board in its printer <span class="s" id="view-note" style="text-transform: none; letter-spacing: 0;"></span></div>
-        <div id="board-view" style="height: 240px; border-radius: 4px; overflow: hidden;"></div>
     </div>
 </div>
 <div class="chart printer-only">
@@ -232,13 +225,12 @@ const BY_CMD = {
 };
 
 
-export function mountMachine(root, { base = "", port = "", host = "page", boards = null, kind = null, pin = null, say = null } = {}) {
+export function mountMachine(root, { base = "", port = "", host = "popup", boards = null, kind = null, pin = null, say = null } = {}) {
     const BASE = base;
     const model = boards || mountBoards({ base });
     root.classList.add("machine", `host-${host}`);
     root.innerHTML = HEAD + `<div class="machine-main"><section class="left">${CARDS}</section><section class="right">${LOG}</section></div>` + CONTROL;
     const $ = (id) => root.querySelector(`#${CSS.escape(id)}`);
-    if (host === "popup") $("port").hidden = true;  // the popup is one board's; the world chose it
     const who = {};  // this Machine, as the model's watcher of its board
     const b = () => model.board(state.port);
     // What the Machine keeps of its own: the port, its kind, the chart's history.
@@ -269,7 +261,6 @@ export function mountMachine(root, { base = "", port = "", host = "page", boards
     // --- the board: which, and what kind -------------------------------------------------
     function kindOf() {
         if (kind) return kind;
-        if (host === "page") return "printer";
         const d = state.port ? b().device : null;
         return d && !d.printer ? "devkit" : "printer";
     }
@@ -300,16 +291,6 @@ export function mountMachine(root, { base = "", port = "", host = "page", boards
     function schedule() {
         if (state.port) model.setWatch(state.port, who, { interval: interval(), live: isLive() });
     }
-
-    function renderPorts() {
-        const opts = model.devices.map((v) => {
-            const d = v.device, tag = d.printer ? (d.printer.firmware_name || "").replace(/\s*\(.*$/, "") : (d.chip || d.board_name || "unidentified");
-            return `<option value="${esc(d.port)}">${esc(d.port)} · ${esc(tag)}</option>`;
-        });
-        $("port").innerHTML = '<option value="">— pick a port —</option>' + opts.join("");
-        if (state.port) $("port").value = state.port;
-    }
-    function loadPorts() { return model.scan().then(renderPorts); }
 
     async function loadCodes() {
         if (state.codesLoaded) return;
@@ -486,7 +467,6 @@ export function mountMachine(root, { base = "", port = "", host = "page", boards
         const d = ev.detail;
         if (!root.isConnected) return;
         if (d.what === "scan") {
-            if (host === "page") renderPorts();
             if (state.port) { applyKind(); renderStatus(); }
             return;
         }
@@ -526,10 +506,6 @@ export function mountMachine(root, { base = "", port = "", host = "page", boards
         if (flash && flash.port !== port) { flash.build.destroy(); flash.tasks.destroy(); flash = null; }
         state.port = port; state.kind = null; state.history = []; state.listening = false;
         applyControlState(null);
-        if (host === "page") {
-            const url = new URL(location.href); if (port) url.searchParams.set("port", port); else url.searchParams.delete("port"); history.replaceState(null, "", url);
-        }
-        if ($("port").value !== port) $("port").value = port;
         if (!port) { applyKind(); renderAll(); loadLevel(); loadPrintJobs(); loadChoices(); loadPrintFiles(); return; }
         // Watched at once as what it is known to be, so a verb carried the moment
         // the Machine opens finds it so; what the server says of it follows.
@@ -545,7 +521,6 @@ export function mountMachine(root, { base = "", port = "", host = "page", boards
 
     // --- header controls ------------------------------------------------------------------
     // Each says what refused it, in the log and in the host's status bar.
-    $("port").addEventListener("change", () => selectPort($("port").value));
     $("auto").addEventListener("change", schedule);
     $("interval").addEventListener("change", schedule);
     $("poll").onclick = () => (state.port ? model.poll(state.port).catch((e) => refuse(`poll: ${e.message}`)) : Promise.resolve());
@@ -1062,7 +1037,7 @@ export function mountMachine(root, { base = "", port = "", host = "page", boards
 
     const handle = {
         root, host, $, boards: model,
-        state, ctl, arm, jog, estop, enqueue, sendControl, fillTemplate, pollOnce: pollNow, loadPorts, logLine, refuse, schedule, selectPort,
+        state, ctl, arm, jog, estop, enqueue, sendControl, fillTemplate, pollOnce: pollNow, logLine, refuse, schedule, selectPort,
         identify, listen, probe, showFlashing,
         flashing: () => flash,
         kind: () => state.kind,
@@ -1080,7 +1055,6 @@ export function mountMachine(root, { base = "", port = "", host = "page", boards
     };
 
     renderLevel(); renderPrint();
-    if (host === "page") loadPorts();
     selectPort(state.port);
     return handle;
 }

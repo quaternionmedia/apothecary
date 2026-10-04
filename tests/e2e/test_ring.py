@@ -24,6 +24,7 @@ import pytest
 from playwright.sync_api import Page, expect
 
 PRINTER = "/dev/ttyFAKE1"
+MACHINE = ".panel[data-panel='machine']"  # a board's Machine, in front of the world
 # The arrow rule as vectors, generated from menu.py's resolver; tests/test_menu.py
 # fails when the file is missing or stale.
 VECTORS = Path(__file__).resolve().parents[1] / "conformance" / "nine_cells.json"
@@ -337,15 +338,18 @@ def test_the_pointer_uses_the_same_cells(page: Page, ring_url: str):
 
 
 @pytest.mark.e2e
-def test_jog_by_address_on_the_monitor_page(page: Page, ring_url: str):
-    """Armed, 7 2 8 on the device ring jogs Y+: G91/G1/G90 in the log, and the button wears ⌗728."""
+def test_jog_by_address_on_a_machine_s_device_ring(page: Page, ring_url: str):
+    """The printer monitor's address opens the printer's Machine in front of the world;
+    inside it the ring is its device ring, as the monitor page's was. Armed, 7 2 8 jogs
+    Y+: G91/G1/G90 in the log, and the button wears ⌗728."""
     page.add_init_script(CAPTURE)
     page.goto(f"{ring_url}/firmware/monitor?port={PRINTER}")
+    expect(page.locator(MACHINE)).to_be_visible(timeout=15000)
     expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
     expect(page.locator("#ident")).to_contain_text("Marlin", timeout=8000)
     # Disarmed, the device ring's Control > Arm is the way in; the latch shows the address.
     expect(page.locator("#ctl")).to_have_attribute("data-address", "77", timeout=5000)
-    page.keyboard.press("m")
+    page.locator(f"{MACHINE} #ident").click(button="right")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     assert _title(page) == "ttyFAKE1"
     assert _wedges(page)["1"] == "Link"
@@ -414,7 +418,7 @@ def test_jog_by_address_on_the_monitor_page(page: Page, ring_url: str):
             + f"intents: {_intents(page)}"
         ) from None
     # Disarm by address, and the overlay goes.
-    page.keyboard.press("m")
+    page.locator(f"{MACHINE} #ident").click(button="right")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press("7")
     page.keyboard.press("7")

@@ -1,6 +1,6 @@
-/* The machine (widgets/machine.js), wherever it is mounted: the monitor page
- * and the world's popup share these rules. The variables are the monitor's
- * palette; a host that sets them differently recolours the whole thing. */
+/* The machine (widgets/machine.js), a board's one surface in front of the
+ * world. The variables are the monitor page's palette, which it kept; a host
+ * that sets them differently recolours the whole thing. */
 .machine {
     --bg: #141614; --panel: #1c1f1c; --line: #2a302a; --ink: #d8e0d8; --ink-2: #9aa89a; --ink-3: #66746a;
     --ok: #6fdb75; --warn: #ffcc66; --bad: #ff8080; --tx: #9cd2ff;
@@ -9,7 +9,6 @@
 }
 .machine-head { display: flex; align-items: center; gap: 0.75rem; padding: 0.55rem 1rem; background: #1a1d1a; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .machine-main { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(360px, 1.2fr); gap: 0.75rem; padding: 0.75rem 1rem; }
-.machine.host-page .machine-main { height: calc(100vh - 6.2rem); }
 @media (max-width: 900px) { .machine-main { grid-template-columns: 1fr; height: auto; } }
 * { box-sizing: border-box; }
 .machine-head { display: flex; align-items: center; gap: 0.75rem; padding: 0.55rem 1rem; background: #1a1d1a; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
