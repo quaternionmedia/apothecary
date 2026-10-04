@@ -419,13 +419,13 @@ def test_walk_and_address_round_trip_through_device_control_jog():
     """Device > Control > Jog > Y+ on a node with a printer pinned to it.
 
     The address is computed, not assumed: Device is the third option on the
-    node ring, Control the eighth on the device ring (Link is the seventh),
+    node ring, Control the seventh on the device ring (Link is the sixth),
     Jog the third on the control ring, and Y+ the first on the jog pad.
     """
     ring = _node_with_printer()
-    expected = "".join(str(PLACEMENT[i]) for i in (2, 7, 2, 0))
+    expected = "".join(str(PLACEMENT[i]) for i in (2, 6, 2, 0))
     address = address_of(ring, "control:jog:Y+")
-    assert address == expected == "2728"
+    assert address == expected == "2128"
     assert walk(ring, address).action == "control:jog:Y+"
     assert BACK not in {int(digit) for digit in address}
 
@@ -492,9 +492,9 @@ def test_every_address_covers_every_leaf():
 def test_an_intent_carries_its_address():
     context = Context(pointing=Pointing.NODE, targets=["printer_1"])
     intent = Intent(
-        action="control:jog:Y+", context=context, option_id="control:jog:Y+", address="2728"
+        action="control:jog:Y+", context=context, option_id="control:jog:Y+", address="2128"
     )
-    assert intent.address == "2728"
+    assert intent.address == "2128"
     assert Intent(action="fit", context=context, option_id="fit").address is None
     for bad in ("5", "85", "", "x"):
         with pytest.raises(ValueError, match="run of cells"):
@@ -596,19 +596,23 @@ def test_a_bound_device_is_offered_after_move():
     assert ids.index("device") == ids.index("move") + 1
     device = walk(ring, address_of(ring, "device"))
     assert [c.label for c in device.children] == [
-        "Watch",
+        "Open",
         "Poll",
-        "Monitor",
         "Query",
         "Unpin",
         "Rescan",
         "Link",
         "Control",
     ]
-    # Link sits before Control on purpose: cell 1 on a devkit and on a printer alike.
-    assert device.children[6].cell == 1 and device.children[7].cell == 7
+    # Open is the board's Machine, in the cell Watch had; Watch and Monitor were
+    # two ways into two views of the one board, and Monitor's cell is gone.
+    assert device.children[0].cell == 8 and device.children[0].action == "device:open"
+    assert "device:watch" not in set(every_action([ring]))
+    assert "device:monitor" not in set(every_action([ring]))
+    # Link sits before Control on purpose: cell 3 on a devkit and on a printer alike.
+    assert device.children[5].cell == 3 and device.children[6].cell == 1
     devkit = walk(_node_with_printer(Device(port="/dev/ttyACM0", bound=True)), "2")
-    assert devkit.children[-1].label == "Link" and devkit.children[-1].cell == 1
+    assert devkit.children[-1].label == "Link" and devkit.children[-1].cell == 3
 
 
 def test_control_is_absent_when_the_board_is_not_a_printer():
@@ -936,39 +940,34 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert [c.destructive for c in pictures.children] == [False, False, True, False]
     assert carried_by("picture:add:@floor").name == "VIEWER"
     assert carried_by("picture:purge").name == "VIEWER"
-    # Site (Contents, its problems, its SCAD, Pinned, the site's jobs), Selected and
-    # Pictures (every picture, and the gathering) each a cell; the machine and its
-    # comms log behind one; the rail last. A print is the job: Jobs is no panel.
+    # Site (Contents, its problems, its SCAD, Pinned, the site's jobs), Selected,
+    # Pictures (every picture, and the gathering) and a board's Machine (its log in
+    # it) each a cell; the rail last. A print is the job: Jobs is no panel.
     assert [(c.label, c.action, c.cell) for c in panels.children] == [
         ("Site", "panel:toggle:site", 8),
         ("Selected", "panel:toggle:selected", 6),
         ("Pictures", "panel:toggle:pictures", 2),
-        ("Machine", None, 4),
+        ("Machine", "panel:toggle:machine", 4),
         ("Rail", "panel:rail:toggle", 9),
-    ]
-    machine = next(c for c in panels.children if c.label == "Machine")
-    assert [(c.action, c.cell) for c in machine.children] == [
-        ("panel:toggle:machine", 8),
-        ("panel:toggle:log", 6),
     ]
     assert address_of(root, "panel:site") == "98"  # by the option's id
     assert address_of(root, "panel:pictures") == "92"
-    assert address_of(root, "panel:machine") == "948"
+    assert address_of(root, "panel:machine") == "94"
     assert address_of(root, "panel:rail") == "99"
-    for pid in ("site", "pictures"):
+    for pid in ("site", "pictures", "machine"):
         assert carried_by(f"panel:toggle:{pid}").name == "VIEWER"
-    # The retired panels are on no ring.
-    for gone in ("contents", "validation", "scad", "kept", "camera", "jobs"):
+    # The retired panels are on no ring: the Comms log is in the Machine.
+    for gone in ("contents", "validation", "scad", "kept", "camera", "jobs", "log"):
         assert f"panel:toggle:{gone}" not in set(every_action([root])), gone
     # The page's sections are marked in its markup; Pictures is registered at
-    # start and the machine and its log when a printer is opened. Both lists are
-    # the resolver's, in order.
+    # start and a board's Machine when one is opened. Both lists are the
+    # resolver's, in order.
     page = VIEWER.read_text(encoding="utf-8")
     marked = re.findall(r'class="panel-section"[^>]*data-panel="([\w-]+)"', page)
     registered = re.findall(r"panels\.register\('([\w-]+)'", page)
     assert marked == [pid for pid, _ in PANELS[: len(marked)]]
     assert sorted(registered) == sorted(pid for pid, _ in PANELS[len(marked) :])
-    for gone in ("contents", "validation", "scad", "kept", "camera", "jobs"):
+    for gone in ("contents", "validation", "scad", "kept", "camera", "jobs", "log"):
         assert f'data-panel="{gone}"' not in page and f"register('{gone}'" not in page
 
 

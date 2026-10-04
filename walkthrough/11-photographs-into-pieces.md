@@ -136,7 +136,7 @@ The picture it was all built from is served beside the arrangement while the arr
 The census counts the controls the viewer puts on screen of its own, because a tool that is pleasant to demonstrate and expensive to use is neither. Unifying means it reaches nothing rather than a smaller pile.
 
 ```
-119 controls of the viewer's own
+101 controls of the viewer's own
 ```
 
 ## What this page does not show

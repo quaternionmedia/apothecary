@@ -31,9 +31,10 @@ from viewer_ready import FRAMES
 PRINTER = "/dev/ttyFAKE1"
 UNO = "/dev/ttyFAKE0"
 BOARD = "printer_1.frame_system.mainboard"
-POLL_MS = 2000  # the overlay's POLL_MS (fractal_viewer.html.j2) and the monitor's default
+POLL_MS = 2000  # the Machine's default interval, in the world and on the monitor page
 WITHIN_A_POLL = POLL_MS + 3000  # an expect's timeout: the next poll and its round trip
 MONITOR = "window.apothecaryMonitor.state"  # the monitor page's polling state
+MACHINE = ".panel[data-panel='machine']"  # a board's Machine, in front of the world
 
 
 @pytest.fixture(scope="module")
@@ -62,7 +63,7 @@ def _as_it_starts(printer_url):
 
 
 def _identify(url: str, port: str = PRINTER):
-    """Ask the port what it is (M115), as the overlay's identify does."""
+    """Ask the port what it is (M115), as the Machine's M115 does."""
     r = httpx.post(f"{url}/firmware/devices/identify", json={"port": port}, timeout=15.0)
     r.raise_for_status()
 
@@ -145,43 +146,62 @@ def test_panel_opens_before_devices_finish_loading(page: Page, printer_url: str)
     assert any("/dev/ttyFAKE1" in o for o in options)
 
 
+def _polls_in_the_chart(page: Page, n: int):
+    """The open Machine's chart holds this many polls."""
+    expect(page.locator(f"{MACHINE} #chart-span")).to_have_text(
+        f"last {n} poll{'' if n == 1 else 's'}", timeout=WITHIN_A_POLL
+    )
+
+
 @pytest.mark.e2e
-def test_pin_identify_watch_poll_and_sync(page: Page, fresh_url: str):
-    """Pin → Watch → identify: a poll each period, never stacked, and the node follows."""
+def test_pin_identify_open_poll_and_sync(page: Page, fresh_url: str):
+    """Pin → Open → M115: a poll each period, never stacked, and the node follows. The
+    board was pinned before anyone asked it what it is, so its Machine opens as a
+    devkit's and listens; its Identify hears a hello (the scripted monitor says one on
+    every port) and keeps it a devkit's. Pinned again once Query has said it is a
+    printer, its Machine is a printer's, polling."""
     page.clock.install()
     page.goto(f"{fresh_url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     _select(page, "printer_1")
+    section = page.locator("#selected-body .device-section")
     pick = page.locator("#selected-body .dev-pick")
     expect(pick).to_be_visible(timeout=8000)
     pick.select_option("/dev/ttyFAKE1")
 
     page.locator("#selected-body .dev-pin").click()
-    expect(page.locator("#selected-body .device-section")).to_contain_text("pinned", timeout=5000)
+    expect(section.locator(".dev-unpin")).to_be_visible(timeout=5000)
+    expect(section.locator(".device-line")).to_contain_text("/dev/ttyFAKE1")
     expect(
         page.locator("#contents-list .contents-item[data-path='printer_1'] .dev-badge")
     ).to_be_visible()
+    # Not asked what it is: its Machine is a devkit's, listening to it.
+    section.locator(".dev-open").click()
+    machine = page.locator(MACHINE)
+    expect(machine.locator("#c-sketch")).to_be_visible(timeout=5000)
+    expect(machine.locator("#log")).to_contain_text("blink", timeout=10000)
+    page.evaluate("() => window.fractalViewer.closeMachine()")
+    section.locator(".dev-unpin").click()
 
-    # Watch opens the overlay on that port; identify tells it this is a printer.
+    # Query says it is a printer (M115); pinned, its link held, it is polled once.
+    expect(pick).to_be_visible(timeout=5000)
+    pick.select_option("/dev/ttyFAKE1")
+    section.locator(".dev-query").click()
+    expect(section.locator(".device-query")).to_contain_text("Marlin", timeout=8000)
+    section.locator(".dev-pin").click()
+    expect(section.locator(".temps")).to_be_visible(timeout=8000)
+
+    # Open: one poll at once, then one each period, each after the last has answered.
     _hold_clock(page)
-    page.locator("#selected-body .dev-watch").click()
-    expect(page.locator("#serial-overlay")).to_be_visible()
-    expect(page.locator("#serial-port")).to_have_value("/dev/ttyFAKE1", timeout=5000)
-    page.locator("#serial-identify").click()
-    expect(page.locator("#serial-meta")).to_contain_text(
-        "Marlin Apothecary Simulator", timeout=8000
-    )
-
-    # One poll at once, then one each period, each after the last has answered.
-    temps = page.locator("#serial-body .temp")
-    expect(temps).to_have_count(1, timeout=5000)
+    section.locator(".dev-open").click()
+    expect(machine.locator("#ident")).to_contain_text("Marlin Apothecary Simulator", timeout=8000)
+    _polls_in_the_chart(page, 1)
     for n in (2, 3, 4):
         page.clock.fast_forward(POLL_MS)
-        expect(temps).to_have_count(n)
+        _polls_in_the_chart(page, n)
     page.clock.resume()
 
     # What the polls said reached the panel, the badge and the node's status.
-    section = page.locator("#selected-body .device-section")
     expect(section).to_contain_text("printing")
     expect(section.locator(".temps")).to_contain_text("/210°")
     badge = page.locator("#contents-list .contents-item[data-path='printer_1'] .dev-badge")
@@ -204,11 +224,10 @@ def test_editing_survives_polling(page: Page, printer_url: str):
     page.goto(f"{printer_url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     _select(page, "printer_1")
-    expect(page.locator("#selected-body .device-section")).to_contain_text("pinned", timeout=8000)
+    expect(page.locator("#selected-body .device-section .dev-open")).to_be_visible(timeout=8000)
     _hold_clock(page)
-    page.locator("#selected-body .dev-watch").click()
-    temps = page.locator("#serial-body .temp")
-    expect(temps).to_have_count(1, timeout=8000)
+    page.locator("#selected-body .dev-open").click()
+    _polls_in_the_chart(page, 1)
 
     x = page.locator("#pos-x")
     x.click()
@@ -216,7 +235,7 @@ def test_editing_survives_polling(page: Page, printer_url: str):
     x.type("123")
     for n in (2, 3):  # two polls land while the field is being edited
         page.clock.fast_forward(POLL_MS)
-        expect(temps).to_have_count(n)
+        _polls_in_the_chart(page, n)
     assert page.evaluate("document.activeElement && document.activeElement.id") == "pos-x"
     expect(x).to_have_value("123")
     # And the panel's device section did keep updating underneath.
@@ -247,8 +266,8 @@ def test_firmware_page_printer_poll(page: Page, printer_url: str):
 
 
 @pytest.mark.e2e
-def test_query_from_panel_and_overlay(page: Page, printer_url: str):
-    """Query asks M115 without pinning; the overlay's query box runs allowlisted codes only."""
+def test_query_from_panel_and_the_machine(page: Page, printer_url: str):
+    """Query asks M115 without pinning; the Machine's query box runs allowlisted codes only."""
     _identify(printer_url)
     _pin(printer_url, "printer_1")
     page.goto(f"{printer_url}/viewer/sites/garage")
@@ -263,24 +282,28 @@ def test_query_from_panel_and_overlay(page: Page, printer_url: str):
     # The simulated engine answers M115 on any port, so FAKE0 identifies as a printer too --
     # and querying did not pin it.
     expect(section.locator(".device-query")).to_contain_text("Marlin Apothecary Simulator")
-    expect(section).not_to_contain_text("pinned")
+    expect(section.locator(".dev-unpin")).to_have_count(0)
+    expect(section.locator(".dev-pick")).to_be_visible()
 
-    # Overlay query box: visible only in printer mode; refuses non-report codes via the API.
+    # The Machine's query box: a printer's; refuses non-report codes via the API.
     _select(page, "printer_1")
-    page.locator("#selected-body .dev-watch").click()
-    expect(page.locator("#serial-query-row")).to_be_visible(timeout=8000)
-    page.locator("#serial-query").fill("M119")
-    page.locator("#serial-query-row button").click()
-    expect(page.locator("#serial-body")).to_contain_text("y_min: TRIGGERED", timeout=5000)
-    page.locator("#serial-query").fill("M104 S200")
-    page.locator("#serial-query-row button").click()
-    expect(page.locator("#serial-body")).to_contain_text("query refused", timeout=5000)
-    assert page.locator("#serial-query-codes option").count() >= 10
+    page.locator("#selected-body .dev-open").click()
+    machine = page.locator(MACHINE)
+    expect(machine.locator("#qform")).to_be_visible(timeout=8000)
+    machine.locator("#q").fill("M119")
+    machine.locator("#qform button").click()
+    expect(machine.locator("#log")).to_contain_text("y_min: TRIGGERED", timeout=5000)
+    machine.locator("#q").fill("M104 S200")
+    machine.locator("#qform button").click()
+    expect(machine.locator("#log")).to_contain_text("query refused", timeout=5000)
+    expect(machine.locator("#qcodes option")).not_to_have_count(0)
+    assert machine.locator("#qcodes option").count() >= 10
 
 
 @pytest.mark.e2e
-def test_manual_pin_poll_now_and_auto_refresh(page: Page, printer_url: str):
-    """Pin by typed identity, poll from the panel, and the auto-refresh keeps to its interval."""
+def test_manual_pin_poll_and_rescan(page: Page, printer_url: str):
+    """Pin by typed identity; a poll lands in the badge without a Machine; Rescan scans
+    once, and nothing scans on a schedule."""
     _identify(printer_url)
     _pin(printer_url, "printer_1")
     page.clock.install()
@@ -298,34 +321,29 @@ def test_manual_pin_poll_now_and_auto_refresh(page: Page, printer_url: str):
     section.locator(".dev-unpin").click()
     expect(section.locator(".dev-pick")).to_be_visible(timeout=5000)
 
-    # Poll now on the bound printer updates the badge without opening the overlay.
+    # A poll of the bound printer, through the board model, updates the badge with no
+    # Machine open.
     _select(page, "printer_1")
-    expect(page.locator("#selected-body .dev-poll")).to_be_visible(timeout=8000)
-    expect(page.locator("#serial-overlay")).to_be_hidden()
-    page.locator("#selected-body .dev-poll").click()
+    expect(page.locator("#selected-body .dev-open")).to_be_visible(timeout=8000)
+    page.evaluate("() => window.fractalViewer.pollNow('/dev/ttyFAKE1')")
     badge = page.locator("#contents-list .contents-item[data-path='printer_1'] .dev-badge")
     expect(badge).to_contain_text("/", timeout=5000)  # temps, not the bare 🖨
-    expect(page.locator("#serial-overlay")).to_be_hidden()
+    expect(page.locator(MACHINE)).to_have_count(0)
 
-    # Auto-refresh, off until ticked, at 5 s: one fresh scan each interval, none once off.
-    # A scan is in flight from the moment its timer fires until the next is scheduled.
+    # Rescan is one fresh scan; time passing is none.
     scans = []
     page.on("request", lambda r: scans.append(r.url) if "/devices?fresh=1" in r.url else None)
     scan_done = "() => !window.fractalViewer.bindingsInFlight"
     _hold_clock(page)
     page.wait_for_function(scan_done)
-    expect(page.locator("#devices-auto")).not_to_be_checked()
-    page.locator("#devices-auto").check()
-    page.locator("#devices-interval").select_option("5000")  # the next scan is 5 s away
-    before = len(scans)
-    for n in (1, 2):
-        page.clock.fast_forward(5000)
-        page.wait_for_function(scan_done)
-        assert len(scans) == before + n
-    page.locator("#devices-auto").uncheck()
-    page.clock.fast_forward(15000)
+    _select(page, "printer_2")
+    section.locator(".dev-rescan").click()
+    expect(page.locator("#status")).to_contain_text("device(s) detected", timeout=8000)
     page.wait_for_function(scan_done)
-    assert len(scans) == before + 2, "auto-refresh kept running after being switched off"
+    assert len(scans) == 1
+    page.clock.fast_forward(30000)
+    page.wait_for_function(scan_done)
+    assert len(scans) == 1, "the page looked for boards on a schedule"
 
 
 @pytest.mark.e2e
@@ -339,7 +357,7 @@ def test_focused_monitor_page(page: Page, fresh_url: str):
     expect(page.locator("#ident")).to_contain_text("Marlin Apothecary Simulator")
     expect(page.locator("#port")).to_have_value("/dev/ttyFAKE1")
     expect(page.locator("#c-board")).to_contain_text("held", timeout=5000)
-    expect(page.locator("#c-hot")).to_contain_text("/ 210°")
+    expect(page.locator("#c-hot")).to_contain_text("/210°")
 
     # Cadence: from a fresh schedule, each period brings one poll -- charted, logged, and
     # the next one scheduled, which is when the timer changes -- never two.
@@ -402,7 +420,7 @@ def test_board_inside_the_printer_drives_it(page: Page, printer_url: str):
     section.locator(".dev-query").click()  # identifies the port (M115) without pinning
     expect(section.locator(".device-query")).to_contain_text("Marlin", timeout=8000)
     section.locator(".dev-pin").click()
-    expect(section).to_contain_text("pinned", timeout=5000)
+    expect(section.locator(".dev-unpin")).to_be_visible(timeout=5000)
 
     # The printer's row carries the board's badge (dimmed, "via"), and its panel says so.
     badge = page.locator("#contents-list .contents-item[data-path='printer_1'] .dev-badge")
@@ -414,10 +432,12 @@ def test_board_inside_the_printer_drives_it(page: Page, printer_url: str):
     expect(section.locator(".dev-unpin")).to_have_count(
         0
     )  # unpin from the board, not through the printer
-    section.locator(".dev-poll").click()
+    section.locator(".dev-open").click()
+    expect(page.locator(MACHINE)).to_be_visible(timeout=5000)
     # The poll's sync lands on the tree even though an earlier request had already
     # moved the server's node, so printer_1 turns "printing" without a refresh.
     expect(page.locator("#status-select")).to_have_value("printing", timeout=5000)
+    page.evaluate("() => window.fractalViewer.closeMachine()")
 
     # The via link jumps to the board's own row and panel.
     section.locator(".dev-via").click()
@@ -483,7 +503,7 @@ def test_control_overlay_is_latched(page: Page, printer_url: str):
     expect(page.locator("#ctl-ttl")).to_contain_text(":")
     page.locator("#h-bed").fill("45")
     page.locator("#control button[data-cmd='M140 S{h-bed}']").click()
-    expect(page.locator("#c-bed")).to_contain_text("/ 45°", timeout=WITHIN_A_POLL)
+    expect(page.locator("#c-bed")).to_contain_text("/45°", timeout=WITHIN_A_POLL)
     expect(page.locator("#log .tx.control", has_text="M140 S45")).to_be_visible()
 
     # An out-of-bounds value never reaches the board.
@@ -711,6 +731,10 @@ def test_a_card_keeps_its_view_however_often_the_cards_are_redrawn(page: Page, p
 # Seconds to stream, dwell or no dwell: each line is a round trip to the simulator, a
 # millisecond at least, so a pause and a cancel land mid-file.
 SLOW = "".join(f"G1 X{i % 200} Y{i % 200}\n" for i in range(6000))
+# A minute at the least, whatever else the machine is doing: each move dwells 20 ms
+# on the simulator's own clock, so a print still running when a slow page gets to
+# it is not left to the page's speed.
+A_MINUTE = "".join(f"G1 X{i % 200} Y{i % 200}\nG4 P20\n" for i in range(3000))
 
 
 @pytest.mark.e2e
@@ -779,7 +803,7 @@ def test_a_print_from_here_pauses_from_the_ring_and_cancels(page: Page, printer_
     m25_before = page.locator("#log .tx.control", has_text="M25").count()
     page.keyboard.press("m")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    page.keyboard.press("7")
+    page.keyboard.press("1")
     page.keyboard.press("9")
     expect(page.locator("#ring-overlay .title")).to_have_text("Print")
     page.keyboard.press("6")
@@ -931,7 +955,7 @@ def test_site_lists_the_sites_jobs_and_a_row_opens_its_machine(page: Page, print
     _pin(printer_url, BOARD)
     _identify(printer_url)
     dot = _keep(printer_url, "dot.gcode", "G28\nG1 X5 Y5 E0.1\nM84\n")
-    slow = _keep(printer_url, "slow cube.gcode", SLOW)
+    slow = _keep(printer_url, "slow cube.gcode", A_MINUTE)
     before = _printing(printer_url, dot, part="footpedal")
     assert _until_it_ends(printer_url)["stage"] == "done"
     running = _printing(printer_url, slow)
@@ -1070,8 +1094,8 @@ def test_a_reading_lies_on_the_bed_and_the_badge_selects_its_printer(page: Page,
 def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
     """A badge click opens the monitor's body in a popup tethered to the printer: the
     same cards and latch as the monitor page, on the same module; a jog from it moves
-    the world's nozzle ahead of the poll; its comms log is a panel of its own; the
-    ring's verbs go to it; closing it stops its polling."""
+    the world's nozzle ahead of the poll; its comms log is in it, the board's one log;
+    the ring's verbs go to it; closing it stops its polling."""
     _pin(printer_url, BOARD)
     _identify(printer_url)
     page.goto(f"{printer_url}/viewer/sites/garage")
@@ -1089,14 +1113,9 @@ def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
     # The same module as the monitor page: the same ids, the same latch.
     expect(machine.locator("#control")).to_be_hidden()
     assert page.evaluate("() => window.apothecaryMachine.host") == "popup"
-    # Its comms log is a panel of its own, closed until asked for, then a tab of the rail's strip.
-    expect(page.locator(".panel-tab[data-panel='log']")).to_be_visible()
-    page.locator(".panel-tab[data-panel='log']").click()
-    log = page.locator(".panel-rail .panel-tabbody .panel[data-panel='log']")
-    expect(log).to_be_visible(timeout=2000)
-    expect(page.locator(".panel-rail .rail-tab[data-panel='log']")).to_have_class(
-        re.compile(r"\bactive\b")
-    )
+    # Its comms log is in it, the board's one log: no panel of its own.
+    expect(page.locator(".panel[data-panel='log']")).to_have_count(0)
+    log = machine
     expect(log.locator("#log")).to_contain_text("M115", timeout=8000)  # polls are hidden by default
     assert page.locator(".viewer-panel").bounding_box()["width"] >= 1280 / 3 - 2
 
@@ -1132,7 +1151,7 @@ def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
     page.locator("#contents-list .contents-item[data-path='printer_1']").click(button="right")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press("2")  # Device
-    page.keyboard.press("7")  # Control
+    page.keyboard.press("1")  # Control
     page.keyboard.press("2")  # Jog
     page.keyboard.press("8")  # Y+
     expect(page.locator("#ring-overlay")).to_have_count(0)
@@ -1143,8 +1162,8 @@ def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
     machine.locator("#ctl-disarm").click()
     expect(machine.locator("#control")).to_be_hidden(timeout=3000)
 
-    # Dragging the popup lets go of the tether; closing it stops its polling and
-    # takes the log with it.
+    # Dragging the popup lets go of the tether; closing it stops its polling, and
+    # its log goes with it.
     tb = machine.locator(".panel-title").bounding_box()
     page.mouse.move(tb["x"] + 150, tb["y"] + tb["height"] / 2)
     page.mouse.down()

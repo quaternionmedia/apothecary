@@ -140,6 +140,8 @@ def test_digits_walk_device_control_jog_and_the_intent_carries_the_address(
     page: Page, ring_url: str
 ):
     """2 1 2 8 reaches Jog > Y+ from the node ring; the intent says so, and so does the page."""
+    # Device's cells: Open (the board's Machine) where Watch was, Monitor gone, and
+    # Control, after Link, in cell 1.
     _open_viewer(page, ring_url)
     expect(
         page.locator("#contents-list .contents-item[data-path='printer_1'] .dev-badge")
@@ -149,16 +151,15 @@ def test_digits_walk_device_control_jog_and_the_intent_carries_the_address(
     page.keyboard.press("2")
     assert _title(page) == "Device"
     assert _wedges(page) == {
-        "8": "Watch",
+        "8": "Open",
         "6": "Poll",
-        "2": "Monitor",
-        "4": "Query",
-        "9": "Unpin",
-        "3": "Rescan",
-        "1": "Link",
-        "7": "Control",
+        "2": "Query",
+        "4": "Unpin",
+        "9": "Rescan",
+        "3": "Link",
+        "1": "Control",
     }
-    page.keyboard.press("7")
+    page.keyboard.press("1")
     assert _title(page) == "Control"
     assert _wedges(page)["2"] == "Jog"
     assert _wedges(page)["1"] == "Stop"
@@ -166,7 +167,7 @@ def test_digits_walk_device_control_jog_and_the_intent_carries_the_address(
     assert _title(page) == "Jog"
     # The numpad as a jog pad: up, right, down, left, up-right, down-right.
     assert _wedges(page) == {"8": "Y+", "6": "X+", "2": "Y-", "4": "X-", "9": "Z+", "3": "Z-"}
-    assert page.locator("#ring-overlay .address").text_content() == "⌗272"
+    assert page.locator("#ring-overlay .address").text_content() == "⌗212"
     page.keyboard.press("8")
     expect(page.locator("#ring-overlay")).to_have_count(0)
     intents = _intents(page)
@@ -174,7 +175,7 @@ def test_digits_walk_device_control_jog_and_the_intent_carries_the_address(
     intent = intents[0]
     assert intent["action"] == "control:jog:Y+"
     assert intent["option_id"] == "control:jog:Y+"
-    assert intent["address"] == "2728"
+    assert intent["address"] == "2128"
     assert intent["context"] == {"pointing": "node", "targets": ["printer_1"]}
     # The same address, worked out from the ring itself two ways.
     by_path = page.evaluate(
@@ -185,21 +186,25 @@ def test_digits_walk_device_control_jog_and_the_intent_carries_the_address(
         "() => window.apothecaryRing.addressOf(window.apothecaryRing.lastRing(), 'control:jog:Y+')"
     )
     assert by_path == by_action == intent["address"]
-    # A viewer-carried control verb is posted as the intent and answered in the status line.
-    expect(page.locator("#status")).to_contain_text("⌗2728", timeout=5000)
+    # A board's verb goes to its Machine, opened for it: disarmed, the jog is refused,
+    # and the status line says so as an error, with its address.
+    expect(page.locator("#status")).to_contain_text("⌗2128", timeout=5000)
+    expect(page.locator("#status")).to_contain_text("not armed")
+    expect(page.locator("#status")).to_have_class(re.compile(r"\berror\b"))
+    expect(page.locator(".panel[data-panel='machine']")).to_be_visible()
+    page.evaluate("() => window.fractalViewer.closeMachine()")
     # "Appear as generated": the Device section's buttons wear their addresses.
-    watch = page.locator("#selected-body .dev-watch")
-    expect(watch).to_have_attribute("data-address", "28", timeout=5000)
-    assert (watch.get_attribute("title") or "").endswith(" · ⌗28")
-    expect(page.locator("#selected-body .dev-poll")).to_have_attribute("data-address", "26")
-    expect(page.locator("#selected-body .dev-monitor")).to_have_attribute("data-address", "22")
+    opener = page.locator("#selected-body .dev-open")
+    expect(opener).to_have_attribute("data-address", "28", timeout=5000)
+    assert (opener.get_attribute("title") or "").endswith(" · ⌗28")
+    expect(page.locator("#selected-body .dev-unpin")).to_have_attribute("data-address", "24")
     # And they survive the panel being redrawn by a poll: the section is replaced,
     # so the one without the mark set here is the redrawn one.
     page.evaluate(
         "() => { document.querySelector('#selected-body .device-section').dataset.old = 1 }"
     )
-    page.locator("#selected-body .dev-poll").click()
-    redrawn = page.locator("#selected-body .device-section:not([data-old]) .dev-watch")
+    page.evaluate("() => window.fractalViewer.pollNow('/dev/ttyFAKE1')")
+    redrawn = page.locator("#selected-body .device-section:not([data-old]) .dev-open")
     expect(redrawn).to_have_attribute("data-address", "28", timeout=5000)
 
 
@@ -223,7 +228,7 @@ def test_arrows_reach_the_nearest_occupied_cell(page: Page, ring_url: str):
     page.keyboard.press("m")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press("2")
-    page.keyboard.press("7")  # the control ring: eight options, every cell held
+    page.keyboard.press("1")  # the control ring: eight options, every cell held
     assert len(_wedges(page)) == 8
     page.keyboard.press("ArrowUp")
     expect(page.locator("#ring-overlay .wedge.hot")).to_have_attribute("data-cell", "8")
@@ -257,7 +262,7 @@ def test_five_backs_out_and_escape_closes(page: Page, ring_url: str):
     page.keyboard.press("m")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press("2")
-    page.keyboard.press("7")
+    page.keyboard.press("1")
     assert _title(page) == "Control"
     page.keyboard.press("5")
     assert _title(page) == "Device"
@@ -332,37 +337,37 @@ def test_the_pointer_uses_the_same_cells(page: Page, ring_url: str):
 
 @pytest.mark.e2e
 def test_jog_by_address_on_the_monitor_page(page: Page, ring_url: str):
-    """Armed, 7 2 8 on the device ring jogs Y+: G91/G1/G90 in the log, and the button wears ⌗728."""
+    """Armed, 1 2 8 on the device ring jogs Y+: G91/G1/G90 in the log, and the button wears ⌗128."""
     page.add_init_script(CAPTURE)
     page.goto(f"{ring_url}/firmware/monitor?port={PRINTER}")
     expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
     expect(page.locator("#ident")).to_contain_text("Marlin", timeout=8000)
     # Disarmed, the device ring's Control > Arm is the way in; the latch shows the address.
-    expect(page.locator("#ctl")).to_have_attribute("data-address", "77", timeout=5000)
+    expect(page.locator("#ctl")).to_have_attribute("data-address", "17", timeout=5000)
     page.keyboard.press("m")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     assert _title(page) == "ttyFAKE1"
-    assert _wedges(page)["1"] == "Link"
-    assert _wedges(page)["7"] == "Control"
-    page.keyboard.press("7")
+    assert _wedges(page)["3"] == "Link"
+    assert _wedges(page)["1"] == "Control"
+    page.keyboard.press("1")
     assert _wedges(page)["7"] == "Arm"
     page.keyboard.press("7")
     expect(page.locator("#control")).to_be_visible(timeout=5000)
-    assert _intents(page)[-1]["address"] == "77"
+    assert _intents(page)[-1]["address"] == "17"
     # Armed now: the same cell reads Disarm, and the overlay's buttons are numbered.
-    expect(page.locator("#ctl")).to_have_attribute("data-address", "77", timeout=5000)
+    expect(page.locator("#ctl")).to_have_attribute("data-address", "17", timeout=5000)
     expect(page.locator("#control button[data-jog='Y+']")).to_have_attribute(
-        "data-address", "728", timeout=5000
+        "data-address", "128", timeout=5000
     )
-    expect(page.locator("#control button[data-cmd='M25']")).to_have_attribute("data-address", "796")
-    # The link verbs have cells too: Link > Reconnect is 18 from this ring.
-    expect(page.locator("#reconnect")).to_have_attribute("data-address", "18")
+    expect(page.locator("#control button[data-cmd='M25']")).to_have_attribute("data-address", "196")
+    # The link verbs have cells too: Link > Reconnect is 38 from this ring.
+    expect(page.locator("#reconnect")).to_have_attribute("data-address", "38")
     expect(page.locator("#control button[data-cmd='M410']")).to_have_attribute(
-        "data-address", "736"
+        "data-address", "136"
     )
-    expect(page.locator("#estop")).to_have_attribute("data-address", "71")
+    expect(page.locator("#estop")).to_have_attribute("data-address", "11")
     assert (page.locator("#control button[data-jog='Y+']").get_attribute("title") or "").endswith(
-        " · ⌗728"
+        " · ⌗128"
     )
 
     page.locator(
@@ -379,8 +384,8 @@ def test_jog_by_address_on_the_monitor_page(page: Page, ring_url: str):
             + "\n".join(page.locator("#log .sys").all_inner_texts()[-6:])
             + f"\nisOpen={page.evaluate('window.apothecaryRing.isOpen()')}"
         ) from None
-    assert _wedges(page)["7"] == "Control"
-    page.keyboard.press("7")
+    assert _wedges(page)["1"] == "Control"
+    page.keyboard.press("1")
     assert _wedges(page)["7"] == "Disarm"
     page.keyboard.press("2")
     assert _title(page) == "Jog"
@@ -388,7 +393,7 @@ def test_jog_by_address_on_the_monitor_page(page: Page, ring_url: str):
     expect(page.locator("#ring-overlay")).to_have_count(0)
     intent = _intents(page)[-1]
     assert intent["action"] == "control:jog:Y+"
-    assert intent["address"] == "728"
+    assert intent["address"] == "128"
     assert intent["address"] == page.locator("#control button[data-jog='Y+']").get_attribute(
         "data-address"
     )
@@ -410,7 +415,7 @@ def test_jog_by_address_on_the_monitor_page(page: Page, ring_url: str):
     # Disarm by address, and the overlay goes.
     page.keyboard.press("m")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    page.keyboard.press("7")
+    page.keyboard.press("1")
     page.keyboard.press("7")
     expect(page.locator("#control")).to_be_hidden(timeout=5000)
 
@@ -511,8 +516,8 @@ def _tab(page: Page, pid: str):
 
 
 def _second_tab(page: Page):
-    """A second tab in the strip, as a docked machine's comms log is: registered the
-    way the page registers one, with a body of its own."""
+    """A second tab in the strip, as a docked Machine is: registered the way the page
+    registers one, with a body of its own."""
     page.evaluate(
         """() => {
             const el = document.createElement('div');
@@ -526,9 +531,9 @@ def _second_tab(page: Page):
 @pytest.mark.e2e
 def test_one_rail_stacks_site_and_selected_over_a_strip_of_tabs(page: Page, ring_url: str):
     """One rail, on the right of the world: Site and Selected stacked in it, both
-    shown, and below them a strip of tabs -- Pictures, and a docked machine and its
-    log when one is open -- none shown until pressed, one at a time, pressed again
-    to fold away. The other side is world."""
+    shown, and below them a strip of tabs -- Pictures, and a docked Machine when one
+    is open -- none shown until pressed, one at a time, pressed again to fold away.
+    The other side is world."""
     rail, world = _open_panels(page, ring_url)
     ids = page.evaluate("() => window.apothecaryPanels.list().map((p) => p.id)")
     assert ids == ["site", "selected", "pictures"]

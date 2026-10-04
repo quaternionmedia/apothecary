@@ -87,7 +87,7 @@ def _sketch_or_404(name: str):
 
 
 def _start(kind: str, title: str, steps: List[List[str]], on_done=None, port=None):
-    devices.get_streams().stop_all()  # a live serial overlay must not hold the port
+    devices.get_streams().stop_all()  # a devkit's Machine listening must not hold the port
     if port:
         # Only the port being written to: releasing every printer link would
         # reset every printer (DTR) the next time it is polled.

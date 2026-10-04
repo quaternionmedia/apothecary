@@ -326,9 +326,9 @@ def expected_firmware(
 # --- detected + probed -------------------------------------------------------------
 
 
-# ``arduino-cli board list`` takes ~2 s; the viewer's panel, its serial
-# overlay and the firmware page each ask for it, often within a second of
-# one another. A short-lived cache of the raw scan (cached probes are merged
+# ``arduino-cli board list`` takes ~2 s; the viewer's board model, a Machine
+# and the firmware page each ask for it, often within a second of one
+# another. A short-lived cache of the raw scan (cached probes are merged
 # afresh each call) turns those into one scan. Long enough to coalesce a
 # page's requests, short enough that a replug shows on the next click.
 SCAN_TTL = 2.0
@@ -433,8 +433,8 @@ def identify_printer(
 ) -> DeviceInfo:
     """Ask ``M115`` on ``port`` and cache the answer on the device.
 
-    Opens (and keeps) the printer link; the serial overlay's monitor on that
-    port is closed first so only one process reads it. ``reset`` reboots the
+    Opens (and keeps) the printer link; a serial stream on that port (a
+    devkit's Machine listening) is closed first so only one process reads it. ``reset`` reboots the
     board deliberately to capture its boot banner -- never do that mid-print.
     Raises ``ToolchainError`` when nothing G-code answers.
     """
@@ -1255,8 +1255,8 @@ class SerialStreams:
     """Open ``arduino-cli monitor`` processes, one per port, stoppable as a group.
 
     Uploads and probes need the port; ``stop_all()`` is called before any
-    task starts so a live overlay never blocks a flash -- the overlay
-    reconnects when the task ends.
+    task starts so a devkit's Machine listening never blocks a flash -- it
+    listens again when the task ends.
     """
 
     def __init__(self):

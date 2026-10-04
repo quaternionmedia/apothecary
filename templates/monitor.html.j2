@@ -42,8 +42,11 @@
 
     <script type="module">
     // The machine -- cards, chart, log, latch and control pad, bed reading, print
-    // from here -- is one module the world mounts too (widgets/machine.js);
-    // this page mounts it as its whole body, for the port in the URL.
+    // from here -- is one module the world mounts too (widgets/machine.js), over
+    // the same model of the board (boards.js), which it makes for this page;
+    // this page mounts it as its whole body, for the port in the URL, until the
+    // consolidation plan's Phase 5 opens the viewer with the board's Machine
+    // instead.
     import { mountMachine } from '/static/widgets/machine.js';
     window.apothecaryMonitor = mountMachine(document.getElementById("machine"), {
         base: "{{ base_url }}", port: {{ port_json }}, host: "page",
@@ -111,12 +114,12 @@
         async function carry(intent) {
             if (await m.carry(intent)) return;
             const action = intent.action;
-            if (action === "device:monitor") { m.logLine("sys", "this is the monitor"); return; }
+            if (action === "device:open") { m.logLine("sys", "this is the board's Machine, as a page of its own"); return; }
             if (action === "device:pin" || action === "device:unpin") {
-                m.logLine("sys", `${intent.label}: pin and unpin from the viewer's Device section`);
+                m.refuse(`${intent.label}: pin and unpin from the viewer's Selected`);
                 return;
             }
-            m.logLine("sys", `${intent.label} (⌗${intent.address}): nothing on this page carries it out`);
+            m.refuse(`${intent.label} (⌗${intent.address}): nothing on this page carries it out`);
         }
 
         const rings = new Map();

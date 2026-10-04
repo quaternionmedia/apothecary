@@ -1,4 +1,5 @@
-"""Doc-workflow E2E test for the printer monitor (Device panel, overlay, firmware page).
+"""Doc-workflow E2E test for the printer monitor (Selected's Device line, the Machine, a
+devkit's Machine, the monitor and firmware pages).
 
 Same on-demand pattern as test_docs_fractal_viewer.py: a plain test run takes
 no screenshots; `apothecary docs generate` runs this with `--generate-docs`
@@ -11,10 +12,13 @@ other server -- a plain `pytest tests/e2e --start-server`, which sees the
 host's real ports -- this test skips rather than depend on hardware.
 """
 
+import time
+
 import pytest
 from playwright.sync_api import Page, expect
 
 BOARD = "printer_1.frame_system.mainboard"
+UNO = "/dev/ttyFAKE0"
 
 
 def _select(page: Page, name: str):
@@ -35,8 +39,9 @@ def _expand_to(page: Page, path: str):
 @pytest.mark.e2e
 @pytest.mark.docs
 def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
-    """Pin the simulated printer to printer_1, watch it, query it, see the
-    node follow its state, and poll it from the firmware page.
+    """Pin the simulated printer to printer_1, see the node follow its state, open
+    its Machine and query it, open a devkit's Machine, and poll the printer from
+    the firmware page.
     """
     devices = page.request.get(f"{base_url}/firmware/devices").json()
     if not any(v["device"]["port"] == "/dev/ttyFAKE1" for v in devices.get("devices", [])):
@@ -79,10 +84,12 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     docs.step("Query asks the port M115 without pinning it -- a Marlin, so a printer")
 
     section.locator(".dev-pin").click()
-    expect(section).to_contain_text("pinned", timeout=8000)
+    expect(section.locator(".dev-unpin")).to_be_visible(timeout=8000)
     expect(section.locator(".temps")).to_be_visible(timeout=8000)
     docs.step(
-        "Pin it: the section shows the last poll -- state, temperatures, position, SD progress"
+        "Pin it: the section is one line -- the port and what the board is doing, its "
+        "state and temperatures -- with Open, its Machine, and Unpin. Its link is held "
+        "since the Query, so it is polled once as it is pinned, and the node follows"
     )
 
     _select(page, "printer_1")
@@ -112,31 +119,60 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
     page.wait_for_timeout(2500)
     docs.step(
-        "Click the badge and the machine opens in front of the world: the monitor's own "
-        "body -- cards, chart, the latch and control pad, the bed reading, the print from "
-        "here -- in a panel tethered to the printer, its comms log a panel of its own, a tab "
-        "of the rail's strip. Drag it to let go of the tether, or dock it into the strip; the "
+        "Click the badge, or Open, or Device › Open on the ring, and the printer's Machine "
+        "opens in front of the world: the monitor's own body -- cards, chart, the latch and "
+        "control pad, the bed reading, the print from here -- with the board's one log in "
+        "it, in a panel tethered to the printer. It is the one place for the board, and "
+        "the one thing that polls it: the badges and Selected's line say what its polls "
+        "said. Drag it to let go of the tether, or dock it into the rail's strip; the "
         "ring's control verbs go to it"
+    )
+
+    machine.locator("#q").fill("M119")
+    machine.locator("#qform button").click()
+    expect(machine.locator("#log")).to_contain_text("y_min: TRIGGERED", timeout=8000)
+    machine.locator("#log").scroll_into_view_if_needed()
+    page.wait_for_timeout(300)
+    docs.step(
+        "The log's query box sends report-only G-code (M119 here) and the answer lands in "
+        "the log; anything else is refused, in the log and in the status bar. The polls' "
+        "own traffic stays out of the log until its tick-box asks for it"
     )
     page.evaluate("() => window.fractalViewer.closeMachine()")
 
-    section.locator(".dev-watch").click()
-    expect(page.locator("#serial-body .temp").first).to_be_visible(timeout=10000)
-    page.wait_for_timeout(2500)
-    docs.step("Watch opens the ⌨ Serial log on that port; it polls every 2 s instead of streaming")
-
-    page.locator("#serial-query").fill("M119")
-    page.locator("#serial-query-row button").click()
-    expect(page.locator("#serial-body")).to_contain_text("y_min: TRIGGERED", timeout=8000)
-    docs.step("The query box sends report-only G-code (M119 here); anything else is refused")
-
-    page.locator("#devices-auto").check()
-    page.locator("#devices-interval").select_option("5000")
-    page.wait_for_timeout(300)
-    docs.step(
-        "↻ Devices rescans ports and re-polls bound printers on a schedule, "
-        "so a replugged board shows up by itself"
+    # A devkit has a Machine too: the Uno, flashed footpedal by the scripted arduino-cli,
+    # is bound to the footpedal node by its sketch.
+    task = page.request.post(
+        f"{base_url}/firmware/sketches/footpedal/upload",
+        data={"fqbn": "arduino:avr:uno", "port": UNO},
+    ).json()
+    for _ in range(300):
+        if (
+            page.request.get(f"{base_url}/firmware/tasks/{task['id']}").json()["status"]
+            != "running"
+        ):
+            break
+        time.sleep(0.05)
+    page.evaluate("() => window.fractalViewer.rescanDevices()")
+    devkit = page.locator(".world-badge[data-path='footpedal']")
+    expect(devkit).to_be_visible(timeout=10000)
+    devkit.click()
+    expect(machine.locator("#c-sketch")).to_contain_text("should run footpedal", timeout=8000)
+    expect(machine.locator("#log")).to_contain_text("hello", timeout=10000)
+    expect(machine.locator("#c-sketch")).to_contain_text("observed", timeout=5000)
+    # The sketch at the top of the popup, the Flashing card and the live log below it.
+    page.evaluate(
+        "() => document.querySelector(\"#sketch-card\").scrollIntoView({ block: 'start' })"
     )
+    page.wait_for_timeout(1500)
+    docs.step(
+        "A devkit has a Machine too: its port and board, the sketch it should run against "
+        "what it was heard saying (here the scripted board says another sketch's hello, so "
+        "they differ), what changed since it was flashed, and its serial output, listened "
+        "to while the Machine is open. Identify listens for the hello again. Flashing it "
+        "from here is marked as arriving with the Bench"
+    )
+    page.evaluate("() => window.fractalViewer.closeMachine()")
 
     page.goto(f"{base_url}/firmware/monitor?port=/dev/ttyFAKE1")
     expect(page.locator("#c-state")).to_contain_text("printing", timeout=10000)
@@ -145,15 +181,16 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     page.locator("#qform button").click()
     expect(page.locator("#log")).to_contain_text("y_min: TRIGGERED", timeout=8000)
     docs.step(
-        "⤢ Monitor opens the focused view: status cards, temperature history, the port's "
-        "full comms log with a query box, and Reconnect / Reset / Release for the link"
+        "The monitor page is the same Machine as a page of its own, for a port in its URL: "
+        "status cards, temperature history, the port's comms log with its query box, and "
+        "Reconnect / Reset / Release for the link"
     )
 
     page.locator("#ctl").check()
     expect(page.locator("#control")).to_be_visible(timeout=5000)
     page.locator("#h-bed").fill("65")
     page.locator("#control button[data-cmd='M140 S{h-bed}']").click()
-    expect(page.locator("#c-bed")).to_contain_text("/ 65°", timeout=8000)
+    expect(page.locator("#c-bed")).to_contain_text("/65°", timeout=8000)
     page.wait_for_timeout(600)
     docs.step(
         "⚙ Control arms a latch for five minutes of activity and opens the control overlay: "

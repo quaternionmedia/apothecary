@@ -1634,6 +1634,8 @@ def _site_devices_payload(name: str, site: Assembly, fresh: bool = False) -> Dic
         "bindings": [r.model_dump(mode="json") for r in rows],
         "devices": [firmware_device_view(d) for d in found],
         "streaming": firmware_devices.get_streams().open_ports,
+        # Whose link is held: a page may poll those without opening a port.
+        "printers": links.open_ports,
         "problem": problem,
     }
 
