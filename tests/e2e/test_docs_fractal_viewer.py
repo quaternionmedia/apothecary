@@ -103,26 +103,31 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     expect(page.locator("#validity-indicator")).to_contain_text("valid")
     docs.step("Move it back -- the layout is valid again")
 
+    page.locator(".panel-rail .rail-tab[data-panel='jobs'] .rail-tab-name").click()
     page.locator("#job-name").fill("small_bracket")
     page.locator("#job-x").fill("50")
     page.locator("#job-y").fill("50")
     page.locator("#job-z").fill("20")
     page.locator("#job-form button[type=submit]").click()
     page.wait_for_timeout(400)
-    docs.step("Queue a print job -- the Jobs panel is site-wide, not tied to zoom depth")
+    docs.step(
+        "Queue a print job from the Jobs tab under Site and Selected -- the Jobs panel is "
+        "site-wide, not tied to zoom depth"
+    )
 
     page.locator(".job-assign-btn").first.click()
     page.wait_for_timeout(500)
     docs.step("Assign it to a compatible, idle printer")
 
-    page.locator(".panel[data-panel='jobs'] .panel-float").click()
+    page.locator(".panel-rail .rail-tab[data-panel='jobs'] .rail-tab-float").click()
     page.locator(".panel[data-panel='selected'] .panel-close").click()
     page.wait_for_timeout(400)
     docs.step(
-        "Panels stand in front of the world -- Site on the left, Selected and Jobs on the "
-        "right: each closes to a tab, collapses, floats free and drags, and docks back; the "
-        "ring's Panels cell reaches every one by address. Nothing docked can push the "
-        "world off the screen, and what you did to them is remembered"
+        "Panels stand in front of the world, in one rail beside it -- Site and Selected "
+        "stacked, the other panels tabs of a strip below them: each closes to a tab, "
+        "collapses, floats free and drags, and docks back; the ring's Panels cell reaches "
+        "every one by address. The rail never takes more than half the page, and what you "
+        "did to the panels is remembered"
     )
     page.locator(".panel-free-layer .panel[data-panel='jobs'] .panel-float").click()
     page.locator(".panel-tab[data-panel='selected']").click()

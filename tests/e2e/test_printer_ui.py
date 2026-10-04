@@ -19,6 +19,7 @@ the failure modes they name: a blocked event loop, stacked polls, a panel
 rebuilt under the user's cursor.
 """
 
+import re
 import time
 
 import httpx
@@ -941,11 +942,14 @@ def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
     # The same module as the monitor page: the same ids, the same latch.
     expect(machine.locator("#control")).to_be_hidden()
     assert page.evaluate("() => window.apothecaryMachine.host") == "popup"
-    # Its comms log is a panel of its own, on the left rail, closed until asked for.
+    # Its comms log is a panel of its own, closed until asked for, then a tab of the rail's strip.
     expect(page.locator(".panel-tab[data-panel='log']")).to_be_visible()
     page.locator(".panel-tab[data-panel='log']").click()
-    log = page.locator(".panel-rail-left .panel[data-panel='log']")
+    log = page.locator(".panel-rail .panel-tabbody .panel[data-panel='log']")
     expect(log).to_be_visible(timeout=2000)
+    expect(page.locator(".panel-rail .rail-tab[data-panel='log']")).to_have_class(
+        re.compile(r"\bactive\b")
+    )
     expect(log.locator("#log")).to_contain_text("M115", timeout=8000)  # polls are hidden by default
     assert page.locator(".viewer-panel").bounding_box()["width"] >= 1280 / 3 - 2
 
@@ -1004,3 +1008,49 @@ def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
     expect(machine).to_have_count(0)
     expect(log).to_have_count(0)
     assert page.evaluate("() => window.apothecaryMachine") is None
+
+
+@pytest.mark.e2e
+def test_a_tethered_machine_floats_and_docks_into_the_rails_strip(page: Page, printer_url: str):
+    """The machine opens as a popup tethered to its printer, in front of the world. Its
+    dock button lets go of the printer and puts it in the rail's tab strip, shown; floated
+    from its tab it is a free panel; opened from the badge again it is tethered again."""
+    _pin(printer_url, BOARD)
+    _identify(printer_url)
+    page.goto(f"{printer_url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    badge = page.locator(".world-badge[data-path='printer_1']")
+    expect(badge).to_be_visible(timeout=15000)
+    badge.click()
+    popup = page.locator(".panel-free-layer .panel.tethered[data-panel='machine']")
+    expect(popup).to_be_visible(timeout=3000)
+    expect(page.locator(".panel-leader[visibility='visible']")).to_have_count(1, timeout=3000)
+    expect(popup.locator(".panel-float")).to_have_attribute("title", re.compile("Dock"))
+
+    popup.locator(".panel-float").click()
+    rail = page.locator(".panel-rail")
+    docked = rail.locator(".panel-tabbody .panel[data-panel='machine']")
+    expect(docked).to_be_visible(timeout=2000)
+    expect(rail.locator(".rail-tab[data-panel='machine']")).to_have_class(re.compile(r"\bactive\b"))
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
+    expect(docked.locator("#c-state")).to_contain_text("printing", timeout=10000)
+    expect(page.locator(".panel-leader")).to_have_count(0)
+    # Site and Selected stay stacked above it.
+    for pid in ("site", "selected"):
+        expect(rail.locator(f".panel[data-panel='{pid}']")).to_be_visible()
+
+    rail.locator(".rail-tab[data-panel='machine'] .rail-tab-float").click()
+    free = page.locator(".panel-free-layer .panel[data-panel='machine']")
+    expect(free).to_be_visible(timeout=2000)
+    expect(free).not_to_have_class(re.compile(r"\btethered\b"))
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "free"
+    expect(rail.locator(".rail-tab[data-panel='machine']")).to_have_count(0)
+
+    # The badge again: tethered to its printer again.
+    badge.click()
+    expect(popup).to_be_visible(timeout=3000)
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == {
+        "tether": "printer_1"
+    }
+    page.evaluate("() => window.fractalViewer.closeMachine()")
+    expect(page.locator(".panel[data-panel='machine']")).to_have_count(0)

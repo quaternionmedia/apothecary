@@ -112,7 +112,9 @@ def test_a_camera_is_pinned_at_the_bench_and_records_its_surroundings(
     assert page.evaluate(FRUSTA) == [True]
     cameras = page.request.get(f"{base_url}/cameras?site=garage").json()
     assert [(c["id"], c["path"]) for c in cameras] == [(mine["id"], "workbench")]
-    assert page.locator(".panel[data-panel='pictures']").count() == 0  # never opened
+    # Pictures is a tab of the rail's strip, never shown, so never filled.
+    assert page.evaluate("() => window.apothecaryPanels.state('pictures').shown") is False
+    assert page.locator("#pictures-list").count() == 0
 
     # Choosing pieces asks nothing about cameras: the page already knows.
     asked = []

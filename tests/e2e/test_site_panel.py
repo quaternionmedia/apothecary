@@ -68,36 +68,43 @@ def leaves_as_found(page, base_url: str):
 
 
 @pytest.mark.e2e
-def test_site_holds_contents_on_the_left_and_the_retired_panels_are_gone(page, base_url: str):
-    """Site is the left rail's, open, with the tree as its body; Validation, OpenSCAD,
-    Kept and Gather are no panels of the page's."""
+def test_site_is_stacked_in_the_one_rail_and_the_retired_panels_are_gone(page, base_url: str):
+    """Site is the one rail's, open and stacked over Selected, with the tree as its body;
+    Validation, OpenSCAD, Kept and Gather are no panels of the page's."""
     _open(page, base_url)
-    left = page.locator(".panel-rail-left")
-    site = left.locator(".panel[data-panel='site']")
+    rail = page.locator(".panel-rail")
+    expect(rail).to_have_count(1)
+    site = rail.locator(".panel[data-panel='site']")
     expect(site).to_be_visible()
     expect(site.locator(".panel-name")).to_have_text("Site")
     expect(site.locator("#contents-list")).to_be_visible()
+    assert page.evaluate("() => window.apothecaryPanels.state('site').zone") == "stack"
     ids = page.evaluate("() => window.apothecaryPanels.list().map((p) => p.id)")
     assert ids == ["site", "selected", "jobs", "pictures"]
     for gone in ("contents", "validation", "scad", "kept", "camera"):
         assert page.evaluate("(id) => window.apothecaryPanels.state(id)", gone) is None
-    # Two rails showing leave the world at least half the page.
+    # The one rail leaves the world at least half the page.
     width = page.viewport_size["width"]
     assert page.locator(".viewer-panel").bounding_box()["width"] >= width / 2 - 2
 
 
 @pytest.mark.e2e
 def test_a_layout_remembered_with_the_old_panels_is_ignored(page, base_url: str):
-    """A browser that remembered Contents, Validation, OpenSCAD, Kept and Gather
-    opens the page with no error and the panels as they start."""
+    """A browser that remembered two rails -- Site docked left, the right rail narrowed
+    and the left hidden -- and Contents, Validation, OpenSCAD, Kept and Gather opens
+    the page with no error and the panels and the one rail as they start."""
     old = {
         "contents": {"open": False, "where": "free", "x": 9, "y": 9},
         "validation": {"open": True, "collapsed": True, "where": "left"},
         "scad": {"open": False},
         "kept": {"open": True, "where": "free"},
         "camera": {"open": True},
-        "selected": {"open": True, "where": "right"},
-        "_rails": {"right": {"width": 300, "hidden": False}},
+        "site": {"open": True, "collapsed": True, "where": "left"},
+        "selected": {"open": False, "where": "right"},
+        "_rails": {
+            "right": {"width": 300, "hidden": False},
+            "left": {"width": 260, "hidden": True},
+        },
     }
     page.add_init_script(
         f"try {{ localStorage.setItem('apothecary.panels', {json.dumps(json.dumps(old))}); }} catch (e) {{}}"
@@ -107,13 +114,18 @@ def test_a_layout_remembered_with_the_old_panels_is_ignored(page, base_url: str)
     page.goto(f"{base_url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
     states = page.evaluate("() => window.apothecaryPanels.list()")
-    assert [(s["id"], s["open"], s["where"]) for s in states] == [
-        ("site", True, "left"),
-        ("selected", True, "right"),
-        ("jobs", True, "right"),
-        ("pictures", False, "right"),
+    assert [(s["id"], s["open"], s["collapsed"], s["where"]) for s in states] == [
+        ("site", True, False, "rail"),
+        ("selected", True, False, "rail"),
+        ("jobs", True, False, "rail"),
+        ("pictures", True, False, "rail"),
     ]
-    expect(page.locator(".panel-tab")).to_have_count(1)  # Pictures', closed as it starts
+    expect(page.locator(".panel-tab")).to_have_count(0)  # nothing closed
+    rail = page.locator(".panel-rail")
+    expect(rail).to_be_visible()
+    expect(rail).to_have_attribute("data-side", "right")
+    # The width it starts with, not the one a right rail was dragged to.
+    assert page.evaluate("() => window.apothecaryPanels.railWidth()") != 300
     assert errors == []
 
 
@@ -206,7 +218,7 @@ def test_a_problem_deep_in_the_tree_marks_every_piece_above_it(page, base_url: s
 
 @pytest.mark.e2e
 def test_the_toolbar_count_opens_sites_problems(page, base_url: str):
-    """Site closed, its rail hidden: the toolbar's count opens Site, shows the rail and
+    """Site closed, or the rail hidden: the toolbar's count opens Site, shows the rail and
     brings the problems into view at its top."""
     _open(page, base_url)
     _row(page, "printer_1").click()
@@ -223,12 +235,12 @@ def test_the_toolbar_count_opens_sites_problems(page, base_url: str):
     assert page.evaluate("() => window.apothecaryPanels.state('site').open") is True
 
     page.evaluate(
-        "() => { window.apothecaryPanels.collapse('site'); window.apothecaryPanels.hideRail('left'); }"
+        "() => { window.apothecaryPanels.collapse('site'); window.apothecaryPanels.hideRail(); }"
     )
     expect(problems).to_be_hidden()
     page.locator("#validity-indicator").click()
     expect(problems).to_be_visible(timeout=2000)
-    assert page.evaluate("() => window.apothecaryPanels.railHidden('left')") is False
+    assert page.evaluate("() => window.apothecaryPanels.railHidden()") is False
     x = page.locator("#pos-x")
     x.fill("100")
     x.press("Tab")

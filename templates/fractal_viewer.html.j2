@@ -125,20 +125,38 @@
         }
         .minimap-tick.filled { background: #0d6efd; border-color: #9cd2ff; }
 
-        /* Panels (panels.js): the side column is a rail of them; any can float. */
+        /* Panels (panels.js): one rail of them beside the world -- Site and
+           Selected stacked, the rest tabs of a strip below them; any can float.
+           Its width holds Site's tree rows and Selected's label-and-box rows at
+           the garage's depths without cutting a name short, and leaves the world
+           more than half of any window wider than a phone. */
         .side-panel { display: none; }
         .panel-rail {
             flex: 0 0 auto; width: min(400px, 33vw); background: #1e1e1e; position: relative;
             display: flex; flex-direction: column; min-height: 0;
         }
         .panel-rail[hidden] { display: none; }
-        /* Both rails showing (Site on the left, the rest on the right): each
-           gives way, so the world keeps at least half the page. */
-        .panel-rails-both > .panel-rail { width: min(400px, 25vw); }
-        /* Site docked fills its rail; its tree and sections scroll inside it,
-           not the rail, so its title stays in view. */
+        /* Site docked fills what the rail has left; its tree and sections scroll
+           inside it, not the rail, so its title stays in view. */
         .panel-rail-body > .panel[data-panel="site"]:not(.collapsed) { flex: 1 1 auto; min-height: 140px; }
         .panel-rail-body > .panel[data-panel="site"] .panel-body-slot { max-height: none; flex: 1 1 auto; min-height: 0; }
+        /* The tab strip: one tab per docked panel that is not stacked, the one
+           shown under it. A tab carries its panel's name, and shown, its float
+           and close; the panel's own title bar is the tab. */
+        .panel-tabstrip {
+            flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 2px; padding: 0.3rem 0.4rem 0;
+            background: #191919; border-top: 1px solid #333; border-bottom: 1px solid #333; margin-top: auto;
+        }
+        .panel-tabstrip[hidden], .panel-tabbody[hidden] { display: none; }
+        .rail-tab { display: flex; align-items: center; background: #202020; border: 1px solid #333; border-bottom: 0; border-radius: 4px 4px 0 0; margin-bottom: -1px; }
+        .rail-tab.active { background: #1e1e1e; border-color: #4a4a4a; }
+        .rail-tab button { background: none; border: 0; color: #999; font: inherit; font-size: 0.8rem; cursor: pointer; padding: 0.3rem 0.55rem; line-height: 1; }
+        .rail-tab button:hover { color: #eee; }
+        .rail-tab.active .rail-tab-name { color: #eee; font-weight: 600; }
+        .rail-tab .rail-tab-float, .rail-tab .rail-tab-close { padding: 0.3rem 0.3rem; font-size: 0.75rem; }
+        .rail-tab button[hidden] { display: none; }
+        .panel-tabbody { flex: 0 0 auto; display: flex; flex-direction: column; }
+        .panel-tabbody > .panel > .panel-title { display: none; }
         .panel-rail-right { border-left: 1px solid #333; }
         .panel-rail-left { border-right: 1px solid #333; }
         .panel-rail-head {
@@ -155,6 +173,7 @@
         .panel-rail-left .panel-rail-resizer { right: -3px; }
         .panel-rail-resizer:hover { background: rgba(111, 179, 232, 0.35); }
         .panel { border-bottom: 1px solid #333; background: #1e1e1e; display: flex; flex-direction: column; min-height: 0; position: relative; }
+        .panel[hidden] { display: none; }
         .panel-resizer { height: 6px; cursor: ns-resize; flex: 0 0 auto; }
         .panel-resizer:hover { background: rgba(111, 179, 232, 0.35); }
         .panel-resizer[hidden] { display: none; }
@@ -533,7 +552,7 @@
                 <div class="viewer-hint">Click to select • Double-click (or scroll past the edge) to zoom in • Drag arrows to move • Shift+drag to pan</div>
             </div>
             <div class="side-panel">
-                <div class="panel-section" data-panel="site" data-where="left">
+                <div class="panel-section" data-panel="site" data-zone="stack">
                     <div class="panel-header">Site</div>
                     <div class="panel-body">
                         <div id="site-problems" class="site-problems" hidden>
@@ -553,7 +572,7 @@
                         </details>
                     </div>
                 </div>
-                <div class="panel-section" data-panel="selected">
+                <div class="panel-section" data-panel="selected" data-zone="stack">
                     <div class="panel-header">Selected</div>
                     <div class="panel-body" id="selected-body">
                         <div class="no-selection">Click a node to select it</div>
@@ -865,7 +884,6 @@
                 this.categoryFiltersEl = document.getElementById('category-filters');
                 this.contentsEl = document.getElementById('contents-list');
                 this.selectedBodyEl = document.getElementById('selected-body');
-                this.jobsSectionEl = document.getElementById('jobs-section');
                 this.jobFormEl = document.getElementById('job-form');
                 this.jobListEl = document.getElementById('job-list');
                 this.problemsEl = document.getElementById('site-problems');
@@ -972,21 +990,22 @@
                 // pinned machine, and its nozzle, bed and reading at its node.
                 // Both survive renderFocus(), which clears only the nodes' meshes.
                 this.anchors = mountAnchors({ container: this.canvas.parentElement, canvas: this.canvas, camera: this.camera, scene: this.scene });
-                // The side column's sections become panels: Site docked in the left
-                // rail, the rest in the right, each one closable, collapsible and
-                // draggable free; what a person did to them is remembered per
-                // browser (panels.js), and a remembered layout naming a panel
-                // that is gone is ignored.
+                // The side column's sections become panels in the one rail: Site and
+                // Selected stacked at its top, Jobs a tab of the strip below them,
+                // each one closable, collapsible and draggable free; what a person
+                // did to them is remembered per browser (panels.js), and a
+                // remembered layout naming a panel that is gone, or from before
+                // the one rail, is ignored.
                 this.panels = mountPanels({ container: document.querySelector('.main-content'), overlay: this.canvas.parentElement });
                 for (const section of document.querySelectorAll('.side-panel [data-panel]')) {
                     const id = section.dataset.panel;
-                    const el = this.panels.register(id, {
+                    this.panels.register(id, {
                         title: section.querySelector('.panel-header').textContent.trim(),
                         body: section.querySelector('.panel-body'),
-                        where: section.dataset.where || 'right',
+                        zone: section.dataset.zone || 'tabs',
                     });
-                    if (section.id === 'jobs-section') { this.jobsSectionEl = el; }  // shown when a site has build volumes
-                    if (section.style.display === 'none') el.style.display = 'none';
+                    // Jobs is offered when a site has build volumes.
+                    if (section.style.display === 'none') this.panels.offer(id, false);
                 }
                 document.querySelector('.side-panel')?.remove();
                 this.machine = null;
@@ -1043,11 +1062,12 @@
                 this.pinnedWidget = null;
                 this.pinnedEl.addEventListener('toggle', () => this.pinnedOpened());
                 // Pictures: every picture under the picture root, each with its views
-                // and Pin here, Forget on a kept one, Purge, and the gathering
-                // (closed until asked for; listed again each time it opens).
+                // and Pin here, Forget on a kept one, Purge, and the gathering -- a
+                // tab of the rail's strip, filled the first time it is shown and
+                // listed again each time it is shown again.
                 this.picturesWidget = null;
                 this.panels.register('pictures', {
-                    title: 'Pictures', where: 'right', open: false,
+                    title: 'Pictures',
                     onOpen: () => { if (this.picturesWidget) this.picturesWidget.load(); },
                     body: (slot) => {
                         this.picturesWidget = mountPictureList(slot, {
@@ -2940,13 +2960,11 @@
                 return this.selectPath(path);
             }
 
-            // The toolbar's count: Site opened (and its rail shown), unfolded, and
-            // scrolled to the problems at its top.
+            // The toolbar's count: Site opened (and the rail shown, where it is
+            // docked), unfolded, and scrolled to the problems at its top.
             openProblems() {
                 this.panels.open('site');
                 this.panels.collapse('site', false);
-                const where = (this.panels.state('site') || {}).where;
-                if ((where === 'left' || where === 'right') && this.panels.railHidden(where)) this.panels.hideRail(where, false);
                 const slot = this.problemsEl.closest('.panel-body-slot');
                 if (slot) slot.scrollTop = 0;
                 this.problemsEl.scrollIntoView({ block: 'nearest' });
@@ -2967,7 +2985,7 @@
                         // list of where each picture is pinned.
                         changed: (site) => {
                             if (site === null || site === this.siteName) return this.pictureMarks.refresh();
-                            if (this.picturesWidget && this.panels.isOpen('pictures')) this.picturesWidget.load();
+                            if (this.picturesWidget && this.panels.isShown('pictures')) this.picturesWidget.load();
                             return null;
                         },
                         // A board's pin of this site taken back: the node's row, badge
@@ -2982,7 +3000,7 @@
             // Pictures, where they are open, list it again.
             listsChanged() {
                 if (this.pinnedWidget && this.pinnedEl.open) this.pinnedWidget.load();
-                if (this.picturesWidget && this.panels.isOpen('pictures')) this.picturesWidget.load();
+                if (this.picturesWidget && this.panels.isShown('pictures')) this.picturesWidget.load();
             }
 
             // Where Pictures' Pin here pins: the selected host -- a root structure
@@ -3200,8 +3218,8 @@
                 const bearer = this.bearerPathFor(path);
                 if (this.machine && this.machine.port === port) { this.panels.open('machine'); this.panels.tether('machine', bearer); return true; }
                 this.closeMachine();
-                // The log takes the left rail, so the world keeps its middle; closed until asked for.
-                const logEl = this.panels.register('log', { title: `Comms log · ${port}`, where: 'left', open: false, body: (slot) => { slot.dataset.port = port; } });
+                // The log is a tab of the rail's strip, closed until asked for.
+                const logEl = this.panels.register('log', { title: `Comms log · ${port}`, open: false, body: (slot) => { slot.dataset.port = port; } });
                 const logSlot = logEl.querySelector('.panel-body-slot');
                 let handle = null;
                 this.panels.register('machine', {
@@ -3581,7 +3599,7 @@
             // ---------------------------------------------------------------
 
             renderJobsSection() {
-                this.jobsSectionEl.style.display = this.hasBuildVolumes ? '' : 'none';
+                this.panels.offer('jobs', this.hasBuildVolumes);
                 if (this.hasBuildVolumes) this.renderJobs();
             }
 
@@ -4372,7 +4390,7 @@
                     return;
                 }
                 if (action === 'panel:rail:toggle') {
-                    const hidden = viewer.panels.hideRail('right', !viewer.panels.railHidden('right'));
+                    const hidden = viewer.panels.hideRail(!viewer.panels.railHidden());
                     viewer.setStatus(`${hidden ? 'Hid' : 'Showed'} the rail${tail}`, 'success');
                     return;
                 }
