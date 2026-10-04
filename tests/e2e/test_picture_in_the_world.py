@@ -314,11 +314,13 @@ def test_the_mat_follows_its_bench_when_the_gizmo_moves_it(
     settled(page)
     after = page.evaluate("() => window.fractalViewer.anchors.at('place:workbench')")
     assert after["x"] > before["x"]
-    point = page.evaluate(PROJECT, [view["id"], 0.5, 0.5])
+    point = page.evaluate(PROJECT, [view["id"], 0, 0])
     # An anchor's point is the canvas's (anchors.js), PROJECT's the page's: the
     # canvas starts where Site's rail ends.
     left = page.evaluate("() => window.fractalViewer.canvas.getBoundingClientRect().left")
-    assert abs(point["x"] - left - after["x"]) < 2  # the badge stands over the mat's middle
+    # The badge stands at the picture's top-left corner, its own spot, and not at
+    # the middle of the bench, where the printers stand.
+    assert abs(point["x"] - left - after["x"]) < 2
     assert len(asked) == 1
 
 

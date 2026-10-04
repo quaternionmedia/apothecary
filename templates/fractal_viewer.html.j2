@@ -298,20 +298,42 @@
         .contents-item .dev-badge.printing { background: #2a2410; color: #ffcc66; border-color: #4a3f1a; }
         .contents-item .dev-badge.mismatch { color: #ff9b9b; border-color: #4a2f2f; }
         .contents-item .dev-badge.via { opacity: 0.75; }
-        /* Anchors: badges fixed to a point in the world (anchors.js) */
+        /* Anchors: badges fixed to a point in the world (anchors.js). A badge is
+           a small icon at its thing's own spot; its words are a card the layer
+           opens on hover or while its thing is selected, and places clear of
+           the other open cards and of the edges. Badges in each other's way
+           step aside (.aside) or merge into a count (.cluster, the members
+           .merged). */
         .world-badge {
-            font: 0.7rem/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; cursor: pointer;
-            padding: 0.2rem 0.5rem; border-radius: 6px; background: rgba(20, 28, 20, 0.92); color: #b8e6b8; border: 1px solid #3a4a3a;
+            font: 13px/1 system-ui, sans-serif; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            min-width: 24px; height: 22px; padding: 0 0.3rem; border-radius: 6px; background: rgba(20, 28, 20, 0.92); color: #b8e6b8; border: 1px solid #3a4a3a;
             box-shadow: 0 2px 8px rgba(0,0,0,0.5); user-select: none; transition: opacity 0.2s;
         }
         .world-badge::after { content: ""; position: absolute; left: 50%; bottom: -6px; margin-left: -5px; border: 5px solid transparent; border-bottom: 0; border-top-color: #3a4a3a; }
+        .world-badge.aside::after { display: none; }
+        .world-badge .badge-words {
+            display: none; position: absolute; left: 0; top: 0; z-index: 1; width: max-content;
+            font: 0.7rem/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: normal; overflow-wrap: anywhere;
+            padding: 0.25rem 0.5rem; border-radius: 6px; background: rgba(20, 28, 20, 0.96); color: inherit; border: 1px solid #3a4a3a;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.6); cursor: default; pointer-events: none;
+        }
+        .world-badge.cluster .badge-words { pointer-events: auto; }
+        .world-badge .badge-words .sub { color: #8a9a8a; font-size: 0.64rem; }
+        .world-badge.open { z-index: 3; opacity: 1; }
+        .world-badge.open .badge-words { display: block; }
+        .world-badge.selected { border-color: #9cd2ff; }
+        .world-badge.merged { display: none; }
+        .world-badge.cluster { width: 34px; font: 600 0.72rem/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: #ddd; }
+        .world-badge.cluster .cluster-row { cursor: pointer; padding: 0.1rem 0.15rem; border-radius: 3px; white-space: nowrap; }
+        .world-badge.cluster .cluster-row:hover { background: #2a342a; }
+        .world-badge.cluster .cluster-row.selected { color: #9cd2ff; }
         .world-badge .state { color: #8fc78f; }
         .world-badge.printing { border-color: #7a5a1a; color: #ffcc66; background: rgba(42, 36, 16, 0.92); }
         .world-badge.printing::after { border-top-color: #7a5a1a; }
         .world-badge.offline { color: #b08a8a; border-color: #3f2f2f; }
         .world-badge.mismatch { color: #ff9b9b; }
         .world-badge.job { border-color: #4a6fa8; }
-        .world-badge.behind { opacity: 0.45; }
+        .world-badge.behind:not(.open) { opacity: 0.45; }
         .world-badge[hidden] { display: none; }
         .world-badge:hover { opacity: 1; filter: brightness(1.15); }
         .no-selection { color: #666; font-size: 0.85rem; font-style: italic; }
@@ -528,7 +550,7 @@
         import { mountToolchain } from '/static/widgets/toolchain.js';
         import { mountBuild, mountRawFlash } from '/static/widgets/sketches.js';
         import { mountTasks } from '/static/widgets/tasks.js';
-        import { makeMachineMarks, toScene as marksToScene } from '/static/machine_marks.js';
+        import { makeMachineMarks, makeBoardBadge, sayBoard, toScene as marksToScene } from '/static/machine_marks.js';
         import { mountPictureMarks } from '/static/picture_marks.js';
         import { mountPictures } from '/static/pictures.js';
 
@@ -900,8 +922,9 @@
                 this.scene.add(this.axesHelper);
 
                 // What stands in front of the world (anchors.js) and what a
-                // machine wears in it (machine_marks.js): badges above every
-                // pinned machine, and its nozzle, bed and reading at its node.
+                // machine wears in it (machine_marks.js): a badge at every pinned
+                // board, and a printer's nozzle, bed and reading at its node. The
+                // badges keep out of each other's way there, every badge alike.
                 // Both survive renderFocus(), which clears only the nodes' meshes.
                 this.anchors = mountAnchors({ container: this.canvas.parentElement, canvas: this.canvas, camera: this.camera, scene: this.scene });
                 // The side column's sections become panels in the one rail: Site and
@@ -938,6 +961,7 @@
                     atTopLevel: () => this.focusPath.length === 0,
                     floorPoint: (made) => this.floorPoint(made),
                     onSelect: (host) => this.selectPlace(host),
+                    isSelected: (host) => this.selectedName === (host === '' ? FLOOR_KEY : host),
                     onChange: (attached) => {
                         this.cameras = attached.cameras;
                         this.listsChanged();
@@ -3079,10 +3103,13 @@
                 return new THREE.Vector3((bounds.min[0] + bounds.max[0]) / 2, bounds.max[2], (bounds.min[1] + bounds.max[1]) / 2);
             }
 
-            // One badge above every pinned, connected board, and a printer's
+            // One badge for every pinned, connected board, at the board's own spot
+            // (the top of its node, inside the printer it drives), and a printer's
             // marks (nozzle, bed, reading) at its node -- made once, updated in
-            // place from the same rows the tree badges read, removed when the
-            // pin goes. Called after bindings load and after every poll.
+            // place from the same rows the tree badges read, removed when the pin
+            // goes. A badge is keyed and clicked by the machine it stands for: the
+            // printer a board inside drives, else the board's own node. Called
+            // after bindings load and after every poll.
             syncWorldMarks() {
                 const wanted = new Set(), anchorOf = {};
                 for (const [path, row] of Object.entries(this.bindings)) {
@@ -3092,49 +3119,28 @@
                     wanted.add(anchorPath);
                     anchorOf[row.device.port] = anchorPath;
                     let badge = this.anchors.get(anchorPath);
-                    if (!badge) {
-                        badge = document.createElement('div');
-                        badge.className = 'world-badge';
-                        badge.dataset.path = anchorPath;
-                        badge.title = 'Select this board and open its Machine';
+                    if (!badge || badge.dataset.board !== path) {
+                        badge = makeBoardBadge(this.anchors, anchorPath, path, {
+                            point: () => this.anchorPointFor(path),
+                            selected: () => this.selectedName === anchorPath || this.selectedName === path,
+                        });
                         badge.addEventListener('click', () => { this.selectPath(anchorPath); this.openMachine(anchorPath); });
-                        this.anchors.add(anchorPath, badge, () => this.anchorPointFor(anchorPath));
                     }
-                    this.fillBadge(badge, row);
+                    sayBoard(this.anchors, anchorPath, boardSummary(this.boards.board(row.device.port)), { label: boardLabel(row.device), port: row.device.port });
                     if (isPrinter && row.device.port) this.ensureMarks(anchorPath, row);
                 }
                 // The machines' badges are this method's; a place badge is
                 // picture_marks.js', and stays whichever of the two runs last.
                 for (const key of this.anchors.keys()) if (!wanted.has(key) && !key.startsWith('place:')) this.anchors.remove(key);
                 for (const [key, m] of Object.entries(this.marks)) if (!wanted.has(key)) { m.marks?.destroy(); delete this.marks[key]; }
-                // The Machine follows its badge -- to the printer a board inside drives,
+                // The Machine follows its board -- to the printer a board inside drives,
                 // once it is known to be one -- and goes with it: nothing is left
                 // polling a board unseen.
                 if (this.machine && this.machine.path && !wanted.has(this.machine.path)) {
                     const moved = anchorOf[this.machine.port];
                     if (!moved) { this.closeMachine(); return; }
-                    const where = this.panels.state('machine') && this.panels.state('machine').where;
                     this.machine.path = moved;
-                    if (where && typeof where === 'object') this.panels.tether('machine', moved);
                 }
-            }
-
-            // A board's badge in the world, from what the board model has of it.
-            fillBadge(badge, row) {
-                const sum = boardSummary(this.boards.board(row.device.port));
-                badge.classList.remove('printing', 'offline', 'job', 'mismatch');
-                badge.title = `${sum.title} — click to select it and open its Machine`;
-                if (sum.kind === 'devkit') {
-                    badge.innerHTML = `⚡ ${esc(boardLabel(row.device))} · <span class="state">${esc(sum.short)}</span>`;
-                    if (sum.cls) badge.classList.add(sum.cls);
-                    return;
-                }
-                const parts = [`🖨 <span class="state">${esc(sum.state)}</span>`];
-                if (sum.readings) parts.push(sum.readings);
-                parts.push(...sum.extra.map(esc));
-                badge.innerHTML = parts.join(' · ');
-                if (sum.job) badge.classList.add('job');
-                if (sum.cls) badge.classList.add(sum.cls);
             }
 
             // A board's Machine in front of the world (widgets/machine.js): a printer's

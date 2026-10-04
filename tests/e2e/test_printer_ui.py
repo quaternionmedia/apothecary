@@ -985,10 +985,11 @@ def test_site_lists_the_sites_jobs_and_a_row_opens_its_machine(page: Page, print
 
 
 def _wearing_its_badge(page: Page, url: str):
-    """The garage with the printer's board pinned and identified: the badge over printer_1."""
+    """The garage with the printer's board pinned and identified: the badge, keyed by
+    printer_1, at the board's own spot inside it."""
     _pin(url, BOARD)
-    # Until the board is identified it wears a devkit's badge on its own node; once
-    # it is known to be a printer the badge stands over the printer it drives.
+    # Until the board is identified its badge is keyed by its own node; once it is
+    # known to be a printer, by the printer it drives. It stands at the board either way.
     _identify(url)
     page.clock.install()
     page.goto(f"{url}/viewer/sites/garage")
@@ -1000,18 +1001,19 @@ def _wearing_its_badge(page: Page, url: str):
 
 @pytest.mark.e2e
 def test_the_world_wears_its_machines(page: Page, printer_url: str):
-    """A pinned printer stands under a badge in the 3D view that follows it as the camera
-    moves and updates within a poll; its nozzle is drawn at its node."""
+    """A pinned printer's board wears a badge in the 3D view, at the board, that follows
+    it as the camera moves and updates within a poll; its nozzle is drawn at its node."""
     badge = _wearing_its_badge(page, printer_url)
     expect(badge).to_contain_text("🖨")
+    expect(badge.locator(".badge-icon")).to_have_text("⚡")
     assert page.evaluate("() => window.fractalViewer.anchors.keys()") == ["printer_1"]
 
-    # Fixed to the printer: drawn where the top of its envelope projects, to the pixel.
+    # Fixed to the board: drawn where the top of its envelope projects, to the pixel.
     def projected():
         return page.evaluate(
             """() => {
                 const v = window.fractalViewer;
-                const p = v.anchorPointFor('printer_1').project(v.camera);
+                const p = v.anchorPointFor('printer_1.frame_system.mainboard').project(v.camera);
                 const w = v.canvas.clientWidth, h = v.canvas.clientHeight;
                 const at = v.anchors.at('printer_1');
                 return { x: (p.x + 1) / 2 * w, y: (1 - p.y) / 2 * h, at };
