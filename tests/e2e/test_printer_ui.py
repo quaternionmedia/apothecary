@@ -460,6 +460,84 @@ def test_board_inside_the_printer_drives_it(page: Page, printer_url: str):
     ).to_have_count(0)
 
 
+# A node's body as the world draws it, in apothecary's frame (z up; three.js's y is
+# apothecary's z): the real geometry, centred on the node's envelope. None while the
+# placeholder box stands in for it.
+DRAWN_BODY = """(key) => {
+    const mesh = window.fractalViewer.meshByName[key];
+    if (!mesh || mesh.userData.isPlaceholder || mesh.userData.isDot) return null;
+    mesh.geometry.computeBoundingBox();
+    const b = mesh.geometry.boundingBox, p = mesh.position;
+    return { min: { x: b.min.x + p.x, y: b.min.z + p.z, z: b.min.y + p.y },
+             max: { x: b.max.x + p.x, y: b.max.z + p.z, z: b.max.y + p.y } };
+}"""
+
+# The world's wire box for a printer's build volume: a unit box scaled and placed.
+WIRE_VOLUME = """(name) => {
+    const box = window.fractalViewer.buildVolumeMeshByName[name];
+    if (!box) return null;
+    const c = box.position, s = box.scale;
+    return { min: { x: c.x - s.x / 2, y: c.z - s.z / 2, z: c.y - s.y / 2 },
+             max: { x: c.x + s.x / 2, y: c.z + s.z / 2, z: c.y + s.y / 2 } };
+}"""
+
+# The build volume the board's port lays its marks in (the bed, the nozzle, a reading),
+# in the printer's frame and placed at the printer.
+MARKED_VOLUME = """(path) => {
+    const m = window.fractalViewer.marks[path];
+    if (!m || !m.marks) return null;
+    const v = m.marks.volume(), g = m.marks.group.position;
+    const at = { x: g.x, y: g.z, z: g.y };
+    const add = (p) => ({ x: p.x + at.x, y: p.y + at.y, z: p.z + at.z });
+    return { min: add(v.min), max: add(v.max) };
+}"""
+
+
+@pytest.mark.e2e
+def test_the_printer_s_drawing_encloses_its_board_and_its_build_volume(
+    page: Page, printer_url: str
+):
+    """The bodies land where the site puts them, in the world: printer_1 drawn at the
+    garage's root encloses its mainboard, drawn inside its frame, and its build volume,
+    both the world's wire box and the marks its board's port lays on the bed. (A node's
+    STL arrives in its parent's frame; drawn untranslated, the printer sat a bench-width
+    away.) The monitor page's board view held this; the world that replaced it holds it
+    now."""
+    _pin(printer_url, BOARD)
+    _identify(printer_url)
+    page.goto(f"{printer_url}/viewer/sites/garage")
+    contents = page.locator("#contents-list .contents-item")
+    expect(contents.first).to_be_visible(timeout=15000)
+    page.wait_for_function(
+        "() => { const m = window.fractalViewer.marks['printer_1']; return m && m.marks; }",
+        timeout=15000,
+    )
+    page.evaluate("() => window.fractalViewer.waveDone")
+    printer = page.evaluate(DRAWN_BODY, "printer_1")
+    assert printer, "printer_1 is drawn from its part's STL"
+    wire = page.evaluate(WIRE_VOLUME, "printer_1")
+    marked = page.evaluate(MARKED_VOLUME, "printer_1")
+    origin = page.evaluate("() => window.fractalViewer.nodeByPath('printer_1').position")
+
+    page.evaluate("() => { const v = window.fractalViewer; v.zoomIn('printer_1'); }")
+    page.evaluate("() => window.fractalViewer.zoomIn('frame_system')")
+    expect(contents.filter(has_text="mainboard")).to_be_visible(timeout=10000)
+    page.evaluate("() => window.fractalViewer.waveDone")
+    board = page.evaluate(DRAWN_BODY, BOARD)
+    assert board, "the mainboard is drawn from its part's STL"
+
+    drawn = {"printer": printer, "board": board, "wire": wire, "marked": marked}
+    for name in ("board", "wire", "marked"):
+        inner = drawn[name]
+        for axis in "xyz":
+            assert printer["min"][axis] - 1 <= inner["min"][axis], (name, axis, drawn)
+            assert inner["max"][axis] <= printer["max"][axis] + 1, (name, axis, drawn)
+    # An Ender 3, drawn as it is: 472 wide with the PSU and the spool tube, and its
+    # board on the floor of the electronics box (21 up, the board 5 in it).
+    assert printer["max"]["x"] - printer["min"]["x"] == pytest.approx(472, abs=1)
+    assert board["min"]["z"] - origin["z"] == pytest.approx(26, abs=1)
+
+
 @pytest.mark.e2e
 def test_a_poll_answered_after_arming_does_not_disarm_the_page(page: Page, printer_url: str):
     """A poll asked before Control is armed carries the latch as it was then
