@@ -72,8 +72,11 @@ One line per change, each with a link to where it is described. The format follo
 - A camera's badge is the place badge: a click selects the structure or the floor, and shows no camera live. ([test](tests/e2e/test_camera.py))
 - Forgetting a kept picture unpins its looks; pictures are served at a size and never cached. ([code](apothecary/routes/pictures.py))
 - The canvas ring's Camera is Pictures, in the same seat: Add (at the floor), Floor, Purge, Gather. ([code](apothecary/menu.py))
-- The camera panel is the pictures and pins panel: every camera and look pinned, every site's, each unpinned from its row. ([code](apothecary/static/widgets/camera.js))
-- Kept lists every camera, look and board pinned, every site's, and every kept picture, each taken back from its row without switching the site; the camera panel keeps the gathering. ([code](apothecary/static/widgets/kept.js))
+- The camera panel is the pictures and pins panel: every camera and look pinned, every site's, each unpinned from its row. ([code](apothecary/static/widgets/picture_list.js))
+- Kept lists every camera, look and board pinned, every site's, and every kept picture, each taken back from its row without switching the site; the camera panel keeps the gathering. ([code](apothecary/static/widgets/pinned.js))
+- Site is one panel, docked left: the Contents tree as its body, a piece in a problem red in it and the pieces above it saying so, the site's problems at its top (each row selecting its piece at its level; the toolbar's count opens them), and the site's SCAD and every site's pins (Pinned, each taken back from its row) as sections. ([test](tests/e2e/test_site_panel.py))
+- Pictures lists every picture under the picture root, the folder's and the kept ones, each with where it is pinned as a view and Pin here, which pins any of them at the selected place; Forget on a kept one, Purge, and the gathering as a section. Picture › Folder › More opens it. ([test](tests/e2e/test_pictures_panel.py))
+- The ring's Panels are Site, Selected, Jobs, Pictures, Machine (the machine and its log) and Rail; with both rails showing, the two together leave the world half the page. ([code](apothecary/menu.py))
 
 - `/sites/{name}` carries the whole `tree` beside the flat `structures` list. ([code](apothecary/api.py))
 - Each part has its own folder, `parts/<name>/<name>.scad`. ([doc](docs/parts-authoring.md))
@@ -105,8 +108,9 @@ One line per change, each with a link to where it is described. The format follo
 - The standalone parts browser and Site/Structure viewer. ([viewer](templates/fractal_viewer.html.j2))
 - Legacy JSCAD viewer endpoints and three orphaned modules. ([code](apothecary/api.py))
 - `E2E_SETUP.md`; the browser tests are described beside them. ([tests](tests/e2e/README.md))
-- The camera panel's camera, capture, Look, placement and Open as one; no verb opens another site. ([code](apothecary/static/widgets/camera.js))
+- The camera panel's camera, capture, Look, placement and Open as one; no verb opens another site. ([code](apothecary/static/widgets/picture_list.js))
 - Camera › Keep: Take picture always pins a view, and unpinning a view leaves its picture in the folder. ([code](apothecary/menu.py))
+- The Validation, OpenSCAD, Kept and Gather panels: what they showed is in Site and Pictures. ([plan](docs/plans/consolidation-2026-10-03.md))
 
 ### Fixed
 
@@ -116,7 +120,7 @@ One line per change, each with a link to where it is described. The format follo
 - A piece moved with the gizmo keeps its new place when let go. ([code](templates/fractal_viewer.html.j2))
 - A placed camera's mark is hidden while its piece is out of view. ([page](walkthrough/12-the-bench-as-it-is.md))
 - A piece from a picture shows its provenance in Selected, and an unsized one no printer status. ([page](walkthrough/11-photographs-into-pieces.md))
-- The camera panel's messages are said once, in the status bar, refusals as errors. ([code](apothecary/static/widgets/camera.js))
+- The camera panel's messages are said once, in the status bar, refusals as errors. ([code](apothecary/static/widgets/picture_list.js))
 - A camera's badge selects its piece, and a first click shows this browser's camera. ([test](tests/e2e/test_camera.py))
 - Closing a printer's port keeps DTR up, so the next open does not reboot the board. ([doc](docs/firmware.md))
 - A pin follows its board when the kernel renumbers the port. ([doc](docs/firmware.md))

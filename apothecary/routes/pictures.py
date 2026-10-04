@@ -242,7 +242,7 @@ def keep_picture(
     return entry
 
 
-# The sizes a picture is served at, along its longer edge: a Kept card, a mat, a large mat.
+# The sizes a picture is served at, along its longer edge: a row of Pictures, a mat, a large mat.
 PICTURE_SIZES = (256, 512, 1024, 2048)
 # No picture enters the browser's disk cache: reuse is in the page's memory only.
 NO_STORE = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
