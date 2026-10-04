@@ -42,12 +42,11 @@ def _cell(page, label: str) -> str:
 @pytest.fixture
 def leaves_no_trace(camera_page, base_url: str, picture_folder):
     """The pictures already in the folder; after the test, every picture, arrangement
-    and camera placement it added is gone, so a later test finds the server as it
-    would alone."""
+    and camera it added is gone, so a later test finds the server as it would alone."""
     api = camera_page.request
     pictures = {p["path"] for p in api.get(f"{base_url}/photos/pictures").json()}
     sites = set(api.get(f"{base_url}/photos").json())
-    cameras = {c["id"] for c in api.get(f"{base_url}/cameras").json()}
+    cameras = {(c["site"], c["name"]) for c in api.get(f"{base_url}/placed").json()["cameras"]}
     yield pictures
     for picture in api.get(f"{base_url}/photos/pictures").json():
         if picture["path"] in pictures:
@@ -58,9 +57,9 @@ def leaves_no_trace(camera_page, base_url: str, picture_folder):
             (picture_folder / picture["path"]).unlink(missing_ok=True)
     for site in set(api.get(f"{base_url}/photos").json()) - sites:
         api.delete(f"{base_url}/photos/{site}")
-    for camera in api.get(f"{base_url}/cameras").json():
-        if camera["id"] not in cameras:
-            api.delete(f"{base_url}/cameras/{camera['id']}")
+    for camera in api.get(f"{base_url}/placed").json()["cameras"]:
+        if (camera["site"], camera["name"]) not in cameras:
+            api.delete(f"{base_url}/sites/{camera['site']}/cameras/{camera['name']}")
 
 
 @pytest.mark.e2e
