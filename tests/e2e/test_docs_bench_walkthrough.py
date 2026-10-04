@@ -6,7 +6,10 @@ Like the first (`test_docs_photo_walkthrough.py`), this module is the page:
 command runs it, and each step is an assertion the run has to satisfy before
 it becomes a sentence. The model half needs no browser; the browser half runs
 in a browser launched with Chromium's fake camera, so a camera can be placed
-in the world on every machine and no real one is ever opened.
+in the world on every machine and no real one is ever opened, against a server
+of its own whose picture folder holds only what the page puts there: the
+pictures another browser test leaves in the session server's folder never
+appear in its screenshots.
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ from __future__ import annotations
 import importlib
 import re
 import socket
+from types import SimpleNamespace
 
 import pytest
 from playwright.sync_api import expect
@@ -64,9 +68,24 @@ def _camera_marks_visible(page):
     )
 
 
+@pytest.fixture
+def bench(base_url, start_server, _camera_browser, tmp_path_factory):
+    """The page's own server, and a page on it in the fake-camera browser with the
+    camera allowed. Its picture folder starts empty and holds only what the test puts
+    there, so Pictures lists exactly those whatever else ran on this worker; its pins,
+    cameras and views start empty too. ``base_url`` is asked for only so that with no
+    server to run against this is skipped, as every browser test is."""
+    folder = tmp_path_factory.mktemp("bench_pictures")
+    url = start_server({"APOTHECARY_PICTURE_ROOT": str(folder)})
+    context = _camera_browser.new_context(viewport={"width": 1280, "height": 800}, base_url=url)
+    context.grant_permissions(["camera"], origin=url)
+    yield SimpleNamespace(page=context.new_page(), url=url, folder=folder)
+    context.close()
+
+
 @pytest.mark.e2e
 @pytest.mark.walkthrough
-def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, picture_folder):
+def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     """Geometry from elsewhere, the bench drawn as the machines it holds, a camera
     placed at a piece and drawn there, and the doors the program keeps shut."""
     from apothecary import meshes
@@ -79,7 +98,7 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
     from apothecary.projects.registry import scan_projects
     from apothecary.stays_local import LeftTheMachine
 
-    page = camera_page
+    page, base_url, picture_folder = bench.page, bench.url, bench.folder
     story = walkthrough(
         ordinal="12",
         slug="the-bench-as-it-is",
@@ -94,9 +113,10 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
         ),
         runtime=(
             "The model half runs in this process. The browser half drives a real "
-            "browser against a real server; the browser is launched with a fake "
-            "camera so there is one to place. It needs no network, and it refuses "
-            "one."
+            "browser against a real server of its own, whose picture folder holds "
+            "only the pictures this page puts there; the browser is launched with a "
+            "fake camera so there is one to place. It needs no network, and it "
+            "refuses one."
         ),
         does_not_show=[
             "**A real camera.** The camera placed here is Chromium's test pattern. "
@@ -367,10 +387,8 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
         p["path"] for p in page.request.get(f"{base_url}/photos/pictures").json() if p["kept"]
     )
     assert added == ["uploads/shelf.png", "uploads/shelf_again.png"]
-    # The server outlives every test in the run: start from no pins, so the
-    # picture below shows this run's pin and nothing an earlier test left.
-    for pin in page.request.get(f"{base_url}/firmware/pins").json()["pins"]:
-        page.request.delete(f"{base_url}/firmware/pins/{pin['site']}/{pin['path']}")
+    # The server is this page's own, so the only pin is the one made here.
+    assert page.request.get(f"{base_url}/firmware/pins").json()["pins"] == []
     board_pin = page.request.put(
         f"{base_url}/sites/garage/nodes/esp32_blink/device",
         data={"identity": "aa:bb:cc:dd:ee:ff"},
@@ -390,6 +408,21 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
             el.style.left = '16px'; el.style.top = '16px';
         }"""
     )
+    # Exactly what this page put in the folder, newest first.
+    assert rows.evaluate_all("(rs) => rs.map((r) => r.dataset.path)") == [
+        "uploads/shelf_again.png",
+        "uploads/shelf.png",
+        "a_person_put_this_here.png",
+    ]
+    # One chosen, for the ring's Picture › Folder to pin.
+    pictures.locator(".picture-row[data-path='uploads/shelf.png']").click()
+    expect(pictures.locator(".picture-row.chosen")).to_have_attribute(
+        "data-path", "uploads/shelf.png"
+    )
+    expect(page.locator("#status")).to_contain_text(
+        "uploads/shelf.png chosen: open the ring on a structure or the floor, and "
+        "Picture › Folder pins it there as a view"
+    )
     # The thumbnails load lazily: every one in view has arrived.
     page.wait_for_function(
         "() => [...document.querySelectorAll('#pictures-list img')].every((i) => i.complete)"
@@ -405,9 +438,9 @@ def test_the_bench_as_it_is(camera_page, base_url: str, walkthrough, tmp_path, p
         "browser kept -- those added from its file picker kept as they were named "
         "under uploads/ -- each with where it is pinned as a view, and Forget on a kept "
         "one. A picture kept and pinned nowhere waits to be chosen: a row clicked is "
-        "chosen, and the ring's Picture › Folder pins it where the ring stands, the "
-        "seven newest by name and an older one as its last cell, as the status bar "
-        "says.",
+        "chosen, as shelf.png is here, and the ring's Picture › Folder pins it where "
+        "the ring stands -- the seven newest by name, an older one as its last cell -- "
+        "as the status bar says.",
     )
 
     page.evaluate("() => window.apothecaryPanels.dock('pictures', 'right')")
