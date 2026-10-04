@@ -1,5 +1,5 @@
 """The photo workflow from the browser: the pictures on this machine, a
-picture a camera just took, many pictures gathered, and where cameras stand.
+picture a camera just took, and many pictures gathered.
 
 `POST /photos` in `api.py` already looks at one picture on disk and builds
 an arrangement from it; `apothecary photo gather` does the rest from the
@@ -25,22 +25,19 @@ command line. These routes give the world's page the same, and no more:
   worth asking, and -- when asked to -- the whole gathering built as one
   arrangement the world can open. A file that cannot be read is set aside
   with the reason, not a refusal of the rest.
-- ``GET/PUT/DELETE /cameras`` are the cameras a person placed in the world:
-  a browser's camera (its id and label, which only the browser knows) at a
-  node of a site, kept in the firmware state folder beside the pins, so
-  every browser draws every camera where it stands.
+
+A camera is a part standing in a site now (``apothecary/vision/cameras.py``,
+its routes ``apothecary/routes/cameras.py``); the cameras pinned at places
+before it, and the file they were kept in, are no longer read or written.
 """
 
 from __future__ import annotations
 
-import json
 import os
 import re
-import tempfile
-import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, field_validator
@@ -199,8 +196,11 @@ def keep_picture(
 
     With ``site`` and ``host`` (``""`` is the floor), the picture is kept and pinned
     there as a view in one request, and the answer carries the view: nothing is
-    found in it yet, since Find shapes is a step of its own. A host that cannot hold a view is refused before
-    anything is kept.
+    found in it yet, since Find shapes is a step of its own. With ``site`` and
+    ``camera`` -- a camera part of that site, Take picture -- it is kept and
+    becomes that camera's view, lying where the camera looks (or nowhere, at a
+    wall or the sky) and keeping how the camera stood. A host that cannot hold a
+    view, or a camera that is not there, is refused before anything is kept.
 
     The body is read on the event loop; the write of up to 16 MB runs in the threadpool."""
     suffix = _suffix_by_bytes(data)
@@ -209,12 +209,24 @@ def keep_picture(
             status_code=415,
             detail="not a picture (PNG, JPEG, GIF, WebP, BMP or TIFF, judged by its first bytes)",
         )
-    pinning = site is not None
-    if pinning != (host is not None):
+    if host is not None and camera is not None:
         raise HTTPException(
-            status_code=422, detail="to pin a picture as it is kept, give both site and host"
+            status_code=422,
+            detail="a camera's picture lies where the camera looks: give the camera, or a "
+            "host, not both",
         )
-    if pinning:
+    pinning = site is not None
+    if pinning != (host is not None or camera is not None):
+        raise HTTPException(
+            status_code=422,
+            detail="to pin a picture as it is kept, give the site and a host, or the site "
+            "and the camera that took it",
+        )
+    if pinning and camera is not None:
+        from .views import camera_or_404
+
+        camera_or_404(site, camera)
+    elif pinning:
         from .views import check_host
 
         check_host(site, host)
@@ -232,10 +244,15 @@ def keep_picture(
 
     store().kept_again(entry["path"])
     if pinning:
-        from .views import _answer, pin_picture
+        from .views import _answer, pin_picture, take_picture
 
         try:
-            entry["view"] = _answer(site, pin_picture(site, host, entry["path"], camera=camera))
+            view = (
+                take_picture(site, camera, entry["path"])
+                if camera is not None
+                else pin_picture(site, host, entry["path"])
+            )
+            entry["view"] = _answer(site, view)
         except HTTPException as refused:
             # Kept, and not pinned: the picture is the person's either way.
             entry["view"], entry["not_pinned"] = None, refused.detail
@@ -508,135 +525,3 @@ def gather_pictures(body: GatherRequest):
         )
         answer["site"] = together.site.name
     return answer
-
-
-# --- cameras placed in the world -------------------------------------------------------
-
-
-class CameraPlacement(BaseModel):
-    label: str = Field("camera", max_length=120)
-    site: str = Field(..., pattern=r"^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$")
-    path: str = Field(..., max_length=400)  # a host; "" is the site's floor
-    mm_across: Optional[float] = Field(None, gt=0, allow_inf_nan=False)
-
-
-CAMERA_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
-
-
-def _cameras_file() -> Path:
-    from ..firmware.devices import state_dir
-
-    return state_dir() / "cameras.json"
-
-
-def _load_cameras() -> Dict[str, dict]:
-    try:
-        data = json.loads(_cameras_file().read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
-    except (OSError, ValueError):
-        return {}
-
-
-# PUT and DELETE run in the threadpool: each read-modify-write holds this, and a
-# write lands whole, so no placement is lost and a reader never sees half a file.
-_CAMERAS_LOCK = threading.Lock()
-
-
-def _save_cameras(cameras: Dict[str, dict]) -> None:
-    from ..firmware.devices import private_folder
-
-    path = _cameras_file()
-    private_folder(path.parent)
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".cameras.", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as out:
-            out.write(json.dumps(cameras, indent=2))
-        os.replace(tmp, path)
-    except BaseException:
-        Path(tmp).unlink(missing_ok=True)
-        raise
-
-
-@router.get("/cameras")
-def list_cameras(site: Optional[str] = None) -> List[dict]:
-    cams = _load_cameras()
-    return [c for c in cams.values() if site is None or c.get("site") == site]
-
-
-def camera_rows(site: Optional[str]) -> List[dict]:
-    """The cameras pinned in one site (every site's with None), each saying whether its
-    host is still there: a row whose host is gone is still taken back from its list."""
-    from ..api import _site_store
-
-    names = set(_site_store.names())
-    rows = []
-    for cam in list_cameras(site):
-        where, host = cam.get("site"), cam.get("path", "")
-        found = False
-        if where in names:
-            try:
-                built = _site_store.get(where)
-            except KeyError:
-                built = None
-            found = built is not None and (
-                host == "" or any(c.name == host for c in built.children)
-            )
-        rows.append({**cam, "host_found": found})
-    return rows
-
-
-def set_camera_width(camera_id: str, mm_across: float) -> bool:
-    """Keep the width last typed for a camera's picture: the next view from it starts there."""
-    with _CAMERAS_LOCK:
-        cams = _load_cameras()
-        if camera_id not in cams:
-            return False
-        cams[camera_id]["mm_across"] = mm_across
-        _save_cameras(cams)
-    return True
-
-
-@router.put("/cameras/{camera_id}")
-def place_camera(camera_id: str, body: CameraPlacement):
-    """Pin a browser's camera at a host, or at the floor (``path: ""``): the world draws
-    it there from now on. A host holds one camera, so this replaces any other there;
-    pinning a camera elsewhere moves it. A host is a root structure with a footprint
-    that is not a made piece; anywhere else is refused with its reason."""
-    from .views import check_host
-
-    if not CAMERA_ID.match(camera_id):
-        raise HTTPException(status_code=422, detail="not a camera id")
-    check_host(body.site, body.path)
-    placed = {
-        "id": camera_id,
-        "label": body.label,
-        "site": body.site,
-        "path": body.path,
-        "placed_at": datetime.now(timezone.utc).isoformat(),
-        "mm_across": body.mm_across,
-    }
-    with _CAMERAS_LOCK:
-        cams = _load_cameras()
-        if placed["mm_across"] is None and camera_id in cams:
-            placed["mm_across"] = cams[camera_id].get("mm_across")
-        replaced = sorted(
-            other
-            for other, cam in cams.items()
-            if other != camera_id and cam.get("site") == body.site and cam.get("path") == body.path
-        )
-        for other in replaced:
-            del cams[other]
-        cams[camera_id] = placed
-        _save_cameras(cams)
-    return {**placed, "replaced": replaced}
-
-
-@router.delete("/cameras/{camera_id}")
-def unplace_camera(camera_id: str):
-    with _CAMERAS_LOCK:
-        cams = _load_cameras()
-        if camera_id not in cams:
-            raise HTTPException(status_code=404, detail="no such camera")
-        del cams[camera_id]
-        _save_cameras(cams)
-    return {"unplaced": camera_id}

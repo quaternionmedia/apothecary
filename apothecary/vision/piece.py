@@ -35,7 +35,7 @@ from ..core import OpenSCADObject
 from ..models.bounds import BoundingBox3D
 from ..projects.parts.base import BasePart, ContestedValue
 from .compose import THICKNESS_GUESS, piece_from_shape, turned_box
-from .views import Made, found_size
+from .views import Made, found_size, laid_of
 
 SIDES = ("width", "depth", "height")
 
@@ -150,19 +150,25 @@ class MadePart(BasePart):
             word=p.word,
             reason=self.record.reason,
             per_unit=self.record.mm_across,
-            tallness=self.record.pixel_height / self.record.pixel_width,
+            tallness=self.record.tallness,
             finder=self.record.finder,
             size=WordShape(width=p.width, depth=p.depth, height=p.height),
+            laid=laid_of(self.record),
         )
         assert piece.base is not None
         return piece.base
 
+    def turned_degrees(self) -> float:
+        """How the piece is turned: as its shape lies, read through its record's mapping."""
+        laid = laid_of(self.record)
+        return laid.turned_degrees if laid is not None else self.record.shape.turned_degrees
+
     def get_bounds(self, params: Optional[Dict] = None) -> BoundingBox3D:
         """The box the piece occupies as built: its sides, standing on its own
-        middle, turned about it by the shape's ``turned_degrees`` -- the same box
-        as the piece's footprint (``turned_box``)."""
+        middle, turned about it as its shape lies -- the same box as the piece's
+        footprint (``turned_box``)."""
         p = self._params(params)
-        return turned_box(p.width, p.depth, p.height, self.record.shape.turned_degrees)
+        return turned_box(p.width, p.depth, p.height, self.turned_degrees())
 
 
 __all__ = ["MadePart", "PieceParams", "SIDES", "candidates", "piece_params", "word_pattern"]

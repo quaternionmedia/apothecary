@@ -26,8 +26,8 @@ Decided, not started. Each waits on what its line names.
   photo routes and `vocabulary/match.py` import from it.
   [The pictures plan](docs/plans/pictures-in-the-world-2026-09-26.md)'s
   Phase 1 proposes an answer for a person to take or leave. The
-  `/cameras` routes and Pillow stay in core, because the bench walkthrough and
-  `apothecary docs generate` use them. Split `gather` into steps only after
+  camera routes (`/sites/{s}/cameras`) and Pillow stay in core, because the
+  bench walkthrough and `apothecary docs generate` use them. Split `gather` into steps only after
   the move.
 - `api.py` into routers, with a lock on the site store; first a pure move,
   then the behaviour changes.

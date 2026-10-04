@@ -104,16 +104,28 @@ def _catalogue(name: Optional[str]) -> Dict[str, List[str]]:
     return {"site_names": sorted(_site_store.names()), "groups": groups}
 
 
-def _pictures_known(site: Optional[str], told: Optional[PictureContext]) -> PictureContext:
+def _pictures_known(
+    site: Optional[str], told: Optional[PictureContext], context: Optional[Context] = None
+) -> PictureContext:
     """What the page told about pictures, with what only the server knows put in:
-    the site's made pieces, the vocabulary's words, and the finders that can read
-    the drawn view's picture. A page cannot claim these, so it is never asked."""
+    the site's made pieces and cameras, the vocabulary's words, the finders that
+    can read the drawn view's picture, and -- on a ring opened on a camera -- that
+    camera's device, from its record. A page cannot claim these, so it is never asked."""
+    from ..menu import CameraSeen, Pointing
+    from ..vision import cameras
     from ..vision import views as viewing
     from ..vocabulary import starter_words
     from .views import finders_for
 
     known = (told or PictureContext()).model_copy(deep=True)
     known.made = sorted(viewing.made_names(site)) if site else []
+    known.camera_parts = sorted(cameras.names(site)) if site else []
+    target = context.targets[0] if context is not None and context.targets else ""
+    if context is not None and context.pointing is Pointing.NODE and target in known.camera_parts:
+        device = cameras.record(site, target).device
+        known.here.camera = (
+            CameraSeen(id=device.id, label=device.label) if device is not None else None
+        )
     known.words = starter_words().names()
     drawn = next((vw for vw in known.here.views if vw.id == known.here.drawn), None)
     if drawn is None and known.here.views:
@@ -137,7 +149,7 @@ def resolve_ring(request: ResolveRequest) -> Ring:
             site_names=lists["site_names"],
             groups=lists["groups"],
             device=request.device,
-            picture=_pictures_known(request.site, request.picture),
+            picture=_pictures_known(request.site, request.picture, request.context),
         )
     except RingTooFull as too_many:
         # A ring that cannot be built is a design problem, and the answer says so
@@ -178,7 +190,7 @@ def _carry_picture(chosen: Chosen, who: Carries) -> Carried:
                     status_code=400,
                     detail=f"{action!r} names no view and shape: picture:make:<view>:<index>",
                 )
-            made, skipped = viewing.make(name, site, view_id, int(index))
+            made, skipped, _beyond = viewing.make(name, site, view_id, int(index))
             did = f"made {', '.join(made) or 'nothing'}" + (
                 f"; {skipped} already made" if skipped else ""
             )
@@ -187,9 +199,11 @@ def _carry_picture(chosen: Chosen, who: Carries) -> Carried:
                 raise HTTPException(
                     status_code=400, detail=f"{action!r} names no view: picture:make-all:<view>"
                 )
-            made, skipped = viewing.make(name, site, rest, None)
+            made, skipped, beyond = viewing.make(name, site, rest, None)
             listed = f": {', '.join(made)}" if made else ""
-            did = f"made {len(made)} piece(s){listed}; skipped {skipped} already made"
+            did = f"made {len(made)} piece(s){listed}; skipped {skipped} already made" + (
+                f"; left {beyond} past the picture's horizon" if beyond else ""
+            )
         elif verb == "drop":
             record = viewing.drop(name, site, piece)
             did = f"dropped {piece}; shape {record.shape_index} of its view reads as found again"
@@ -208,6 +222,49 @@ def _carry_picture(chosen: Chosen, who: Carries) -> Carried:
         raise HTTPException(status_code=409, detail=str(refused)) from None
     except ValueError as refused:
         raise HTTPException(status_code=422, detail=str(refused)) from None
+    return Carried(
+        action=action,
+        carried_by=who.value,
+        did=did,
+        site=_site_payload(site, _site_store.validator(name)(site)),
+        address=chosen.intent.address,
+    )
+
+
+def _carry_camera(chosen: Chosen, who: Carries) -> Carried:
+    """Add here and Remove: a camera part added above a place or taken away, by the
+    functions the camera routes call. Add here stands on a host (the ring's
+    target) or, with ``@floor``, the floor; Remove names the camera by the ring's
+    target. Every refusal is a 4xx naming its reason."""
+    from ..api import _site_payload, _site_store
+    from ..vision import cameras
+    from .views import check_host
+
+    action = chosen.intent.action
+    name = _needs_site(chosen)
+    target = chosen.intent.context.targets[0] if chosen.intent.context.targets else ""
+    if action in ("camera:add-here", f"camera:add-here:{FLOOR_MARK}"):
+        host = "" if action.endswith(f":{FLOOR_MARK}") else target
+        if not host and not action.endswith(f":{FLOOR_MARK}"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"{action!r} stands on a structure the ring names, and it named none",
+            )
+        site = check_host(name, host)
+        camera = cameras.add_here(name, site, host)
+        did = (
+            f"added {camera.name} above {host or 'the floor'}, looking straight down: "
+            "its Device says which of this browser's cameras it is"
+        )
+    elif action == "camera:remove":
+        site = _site(name)
+        try:
+            cameras.remove(name, site, target)
+        except cameras.CameraNotFound as missing:
+            raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
+        did = f"removed {target}; the pictures it took, and the pieces made from them, stay"
+    else:
+        raise HTTPException(status_code=400, detail=f"{action!r} is no camera verb")
     return Carried(
         action=action,
         carried_by=who.value,
@@ -252,6 +309,9 @@ async def carry_out(chosen: Chosen) -> Carried:
 
     if action.startswith("picture:"):
         return _carry_picture(chosen, who)
+
+    if action.startswith("camera:"):
+        return _carry_camera(chosen, who)
 
     # Reachable only by classifying an action as the server's and not writing
     # the arm that carries it out.
