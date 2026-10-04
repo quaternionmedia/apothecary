@@ -29,6 +29,11 @@
  * bar) is noticed where the browser reports it, and the cameras are named again
  * as a ring opens, so Pin here lists them.
  *
+ * The picture chosen in Pictures (choose(path)) is told to every ring as
+ * chosen_picture: Picture › Folder's eighth cell pins it when it is older than
+ * the seven newest the cell's ring holds, and marks its own cell when it is
+ * among them.
+ *
  * mountPictures({ base, marks, world, log }):
  *   marks: the handle mountPictureMarks returned;
  *   world: siteName(), select(host), stepOut(), focusWidth(), openPanel(id),
@@ -46,7 +51,7 @@ const FILE_MOST = 16 * 1024 * 1024;
 
 export function mountPictures({ base = "", marks, world, log }) {
     const say = (text, kind = "") => { if (log) log(text, kind); };
-    const state = { cameras: [], asked: false, live: null, pictures: [], picturesAt: 0 };
+    const state = { cameras: [], asked: false, live: null, pictures: [], picturesAt: 0, chosen: null };
     let picturesInflight = null;
 
     async function api(path, opts = {}) {
@@ -384,6 +389,7 @@ export function mountPictures({ base = "", marks, world, log }) {
             cameras: state.cameras.map((c) => ({ id: c.id, label: c.label })),
             asked: state.asked,
             pictures: pictures.map((p) => p.path),
+            chosen_picture: state.chosen,
             here: {
                 camera: cam ? { id: cam.id, label: cam.label || "camera" } : null,
                 live: !!(state.live && state.live.host === host),
@@ -441,12 +447,16 @@ export function mountPictures({ base = "", marks, world, log }) {
             case "picture:unpin": await unpinView(host); return true;
             case "picture:forget": await forget(host); return true;
             case "picture:purge": await purge(); return true;
-            // Folder's eighth leaf: every picture is a row of Pictures, each with Pin here.
-            case "picture:more": world.openPanel("pictures"); say(`every picture is in Pictures: Pin here pins one at ${where(host)} as a view`); return true;
+            // Folder's eighth leaf: every picture is a row of Pictures; one chosen there
+            // is this cell the next time, Pin and its name.
+            case "picture:more": world.openPanel("pictures"); say(`every picture is in Pictures: choose one there, and Folder's last cell pins it at ${where(host)} as a view`); return true;
             case "picture:views": world.openPanel("selected"); say("every view here is a row in Selected: click one to draw it"); return true;
             default: return false;
         }
     }
+
+    // The picture chosen in Pictures, or none (null): told to every ring after.
+    function choose(path) { state.chosen = path || null; return state.chosen; }
 
     // A selection elsewhere, a site change, a step out of the level: Live ends.
     function selectionChanged(host) {
@@ -456,7 +466,8 @@ export function mountPictures({ base = "", marks, world, log }) {
     return {
         ready, state, listCameras, allow, pinCamera, unpinCamera, goLive, still, takePicture,
         findShapes, addFiles, pickFiles, paste, pinPicture, drawView, unpinView, forget, purge, setWidth,
-        context, carry, selectionChanged, picturesNow,
+        context, carry, selectionChanged, picturesNow, choose,
+        chosen: () => state.chosen,
         live: () => (state.live ? state.live.host : null),
         destroy() { still(); },
     };

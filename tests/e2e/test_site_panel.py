@@ -1,9 +1,10 @@
 """Site: the site's Contents tree as its body, its problems at the top, its
 generated SCAD and Pinned -- every site's pins, each taken back from its row.
 
-The problems: a piece a problem names is red in the tree and its ancestors say
-something inside is invalid; each problem is a row that selects its piece, at
-its level; the toolbar's count opens them. Pinned is what Kept's pins list was
+The problems: a piece a problem names -- by the tree path the server sends
+beside its name -- is red in the tree and its ancestors say something inside is
+invalid; each problem is a row that selects its piece, at its level; the
+toolbar's count opens them. Pinned is what Kept's pins list was
 (the pictures plan's Phase 5): a camera and a view pinned in ``garage`` are
 taken back from their rows while the page shows ``parts_library``, and the site
 on screen and the URL never change.
@@ -68,36 +69,43 @@ def leaves_as_found(page, base_url: str):
 
 
 @pytest.mark.e2e
-def test_site_holds_contents_on_the_left_and_the_retired_panels_are_gone(page, base_url: str):
-    """Site is the left rail's, open, with the tree as its body; Validation, OpenSCAD,
-    Kept and Gather are no panels of the page's."""
+def test_site_is_stacked_in_the_one_rail_and_the_retired_panels_are_gone(page, base_url: str):
+    """Site is the one rail's, open and stacked over Selected, with the tree as its body;
+    Validation, OpenSCAD, Kept and Gather are no panels of the page's."""
     _open(page, base_url)
-    left = page.locator(".panel-rail-left")
-    site = left.locator(".panel[data-panel='site']")
+    rail = page.locator(".panel-rail")
+    expect(rail).to_have_count(1)
+    site = rail.locator(".panel[data-panel='site']")
     expect(site).to_be_visible()
     expect(site.locator(".panel-name")).to_have_text("Site")
     expect(site.locator("#contents-list")).to_be_visible()
+    assert page.evaluate("() => window.apothecaryPanels.state('site').zone") == "stack"
     ids = page.evaluate("() => window.apothecaryPanels.list().map((p) => p.id)")
     assert ids == ["site", "selected", "jobs", "pictures"]
     for gone in ("contents", "validation", "scad", "kept", "camera"):
         assert page.evaluate("(id) => window.apothecaryPanels.state(id)", gone) is None
-    # Two rails showing leave the world at least half the page.
+    # The one rail leaves the world at least half the page.
     width = page.viewport_size["width"]
     assert page.locator(".viewer-panel").bounding_box()["width"] >= width / 2 - 2
 
 
 @pytest.mark.e2e
 def test_a_layout_remembered_with_the_old_panels_is_ignored(page, base_url: str):
-    """A browser that remembered Contents, Validation, OpenSCAD, Kept and Gather
-    opens the page with no error and the panels as they start."""
+    """A browser that remembered two rails -- Site docked left, the right rail narrowed
+    and the left hidden -- and Contents, Validation, OpenSCAD, Kept and Gather opens
+    the page with no error and the panels and the one rail as they start."""
     old = {
         "contents": {"open": False, "where": "free", "x": 9, "y": 9},
         "validation": {"open": True, "collapsed": True, "where": "left"},
         "scad": {"open": False},
         "kept": {"open": True, "where": "free"},
         "camera": {"open": True},
-        "selected": {"open": True, "where": "right"},
-        "_rails": {"right": {"width": 300, "hidden": False}},
+        "site": {"open": True, "collapsed": True, "where": "left"},
+        "selected": {"open": False, "where": "right"},
+        "_rails": {
+            "right": {"width": 300, "hidden": False},
+            "left": {"width": 260, "hidden": True},
+        },
     }
     page.add_init_script(
         f"try {{ localStorage.setItem('apothecary.panels', {json.dumps(json.dumps(old))}); }} catch (e) {{}}"
@@ -107,13 +115,18 @@ def test_a_layout_remembered_with_the_old_panels_is_ignored(page, base_url: str)
     page.goto(f"{base_url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
     states = page.evaluate("() => window.apothecaryPanels.list()")
-    assert [(s["id"], s["open"], s["where"]) for s in states] == [
-        ("site", True, "left"),
-        ("selected", True, "right"),
-        ("jobs", True, "right"),
-        ("pictures", False, "right"),
+    assert [(s["id"], s["open"], s["collapsed"], s["where"]) for s in states] == [
+        ("site", True, False, "rail"),
+        ("selected", True, False, "rail"),
+        ("jobs", True, False, "rail"),
+        ("pictures", True, False, "rail"),
     ]
-    expect(page.locator(".panel-tab")).to_have_count(1)  # Pictures', closed as it starts
+    expect(page.locator(".panel-tab")).to_have_count(0)  # nothing closed
+    rail = page.locator(".panel-rail")
+    expect(rail).to_be_visible()
+    expect(rail).to_have_attribute("data-side", "right")
+    # The width it starts with, not the one a right rail was dragged to.
+    assert page.evaluate("() => window.apothecaryPanels.railWidth()") != 300
     assert errors == []
 
 
@@ -161,14 +174,12 @@ def test_a_problem_marks_its_pieces_and_its_row_selects_one_at_its_level(page, b
     expect(status).not_to_have_class(re.compile(r"\berror\b"))
 
 
-@pytest.mark.e2e
-def test_a_problem_deep_in_the_tree_marks_every_piece_above_it(page, base_url: str):
-    """A problem a validator finds below the root -- here two posts inside printer_1's
-    gantry, in the site's answer as an overlap between siblings would be -- marks the
-    posts, and printer_1 and its gantry say something inside is invalid; the row zooms
-    to the posts' level and selects the first."""
+def _with_posts_overlapping(printer: str):
+    """A route answering the garage with one more problem: two posts inside
+    ``printer``'s gantry, as the site's answer would carry an overlap between
+    siblings -- their names, and beside them their paths."""
 
-    def with_a_deep_problem(route):
+    def route_it(route):
         answer = route.fetch()
         body = answer.json()
         body["violations"] = [
@@ -177,12 +188,26 @@ def test_a_problem_deep_in_the_tree_marks_every_piece_above_it(page, base_url: s
                 "kind": "overlap",
                 "message": "left_post and right_post overlap",
                 "structures": ["left_post", "right_post"],
+                "paths": [
+                    f"{printer}.gantry_system.left_post",
+                    f"{printer}.gantry_system.right_post",
+                ],
             },
         ]
         body["is_valid"] = False
         route.fulfill(response=answer, json=body)
 
-    page.route(lambda url: urlparse(url).path == "/sites/garage", with_a_deep_problem)
+    return route_it
+
+
+@pytest.mark.e2e
+def test_a_problem_deep_in_the_tree_marks_every_piece_above_it(page, base_url: str):
+    """A problem a validator finds below the root -- here two posts inside printer_1's
+    gantry -- marks the posts, and printer_1 and its gantry say something inside is
+    invalid; the row zooms to the posts' level and selects the first."""
+    page.route(
+        lambda url: urlparse(url).path == "/sites/garage", _with_posts_overlapping("printer_1")
+    )
     _open(page, base_url)
     printer = _row(page, "printer_1")
     expect(printer).to_have_class(re.compile(r"\binvalid-inside\b"))
@@ -205,8 +230,39 @@ def test_a_problem_deep_in_the_tree_marks_every_piece_above_it(page, base_url: s
 
 
 @pytest.mark.e2e
+def test_a_problem_selects_the_right_one_of_two_pieces_of_the_same_name(page, base_url: str):
+    """Every printer's gantry has a left and a right post. A problem with printer_2's
+    posts marks printer_2's and its row selects printer_2's left post -- by the path
+    the problem carries, not the first piece of that name, which is printer_1's."""
+    page.route(
+        lambda url: urlparse(url).path == "/sites/garage", _with_posts_overlapping("printer_2")
+    )
+    _open(page, base_url)
+    expect(_row(page, "printer_2")).to_have_class(re.compile(r"\binvalid-inside\b"))
+    expect(_row(page, "printer_1")).not_to_have_class(re.compile(r"\binvalid"))
+    expect(page.locator("#problem-list li")).to_have_attribute(
+        "data-path", "printer_2.gantry_system.left_post"
+    )
+
+    page.locator("#problem-list li", has_text="left_post and right_post overlap").click()
+    assert page.evaluate("() => window.fractalViewer.focusPath") == ["printer_2", "gantry_system"]
+    selected = "printer_2.gantry_system.left_post"
+    assert page.evaluate("() => window.fractalViewer.selectedName") == selected
+    expect(_row(page, selected)).to_have_class(re.compile(r"\bselected\b"))
+    for path in (selected, "printer_2.gantry_system.right_post"):
+        expect(_row(page, path)).to_have_class(re.compile(r"\binvalid\b"))
+    # printer_1's posts, of the same names, are not in it.
+    page.evaluate(
+        "() => { const v = window.fractalViewer; v.jumpTo(0); v.zoomIn('printer_1'); v.zoomIn('gantry_system'); }"
+    )
+    expect(_row(page, "printer_1.gantry_system.left_post")).to_be_visible(timeout=5000)
+    for path in ("printer_1.gantry_system.left_post", "printer_1.gantry_system.right_post"):
+        expect(_row(page, path)).not_to_have_class(re.compile(r"\binvalid"))
+
+
+@pytest.mark.e2e
 def test_the_toolbar_count_opens_sites_problems(page, base_url: str):
-    """Site closed, its rail hidden: the toolbar's count opens Site, shows the rail and
+    """Site closed, or the rail hidden: the toolbar's count opens Site, shows the rail and
     brings the problems into view at its top."""
     _open(page, base_url)
     _row(page, "printer_1").click()
@@ -223,12 +279,12 @@ def test_the_toolbar_count_opens_sites_problems(page, base_url: str):
     assert page.evaluate("() => window.apothecaryPanels.state('site').open") is True
 
     page.evaluate(
-        "() => { window.apothecaryPanels.collapse('site'); window.apothecaryPanels.hideRail('left'); }"
+        "() => { window.apothecaryPanels.collapse('site'); window.apothecaryPanels.hideRail(); }"
     )
     expect(problems).to_be_hidden()
     page.locator("#validity-indicator").click()
     expect(problems).to_be_visible(timeout=2000)
-    assert page.evaluate("() => window.apothecaryPanels.railHidden('left')") is False
+    assert page.evaluate("() => window.apothecaryPanels.railHidden()") is False
     x = page.locator("#pos-x")
     x.fill("100")
     x.press("Tab")

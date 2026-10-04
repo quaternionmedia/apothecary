@@ -1,11 +1,12 @@
 """Pictures: every picture under the picture root, the folder's own and the kept
-ones, newest first, each with the places it is pinned at as a view and Pin here;
-Forget on a kept one, Purge kept, and the gathering as a section.
+ones, newest first, each with the places it is pinned at as a view; Forget on a
+kept one, Purge kept, and the gathering as a section.
 
-The ring's Picture › Folder holds the seven newest; a picture older than the
-seventh could not be pinned at all before this panel. Here one is, at the bench,
-from its row. Every picture, view and kept picture a test adds is taken back
-after it, so a later test finds the server as it would alone.
+The ring's Picture › Folder holds the seven newest. A row chosen in Pictures is
+told to the ring, and Folder's eighth cell pins it when it is older than those:
+here one is pinned at the bench that way. Every picture, view and kept picture a
+test adds is taken back after it, so a later test finds the server as it would
+alone.
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ WEDGES = (
     ".filter((w) => !w.classList.contains('empty'))"
     ".map((w) => [w.dataset.cell, w.getAttribute('aria-label')]))"
 )
-OLD = "an_old_picture.png"
+OLD = "oldest.png"
 NEWER = [f"a_newer_picture_{i}.png" for i in range(8)]
 
 
@@ -78,19 +79,38 @@ def leaves_as_found(page, base_url: str, picture_folder):
             (picture_folder / picture["path"]).unlink(missing_ok=True)
 
 
+def _folder_on_the_bench(page) -> dict:
+    """The bench's ring, entered to Picture › Folder: its wedges, cell -> label."""
+    page.locator("#contents-list .contents-item[data-path='workbench']").click(button="right")
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    _press(page, "Picture")
+    _press(page, "Folder")
+    return page.evaluate(WEDGES)
+
+
+def _marked(page) -> list:
+    return page.evaluate(
+        "() => [...document.querySelectorAll('#ring-overlay .wedge.marked')]"
+        ".map((w) => [w.dataset.cell, w.getAttribute('aria-label'), w.getAttribute('aria-current')])"
+    )
+
+
 @pytest.mark.e2e
-def test_pin_here_pins_a_picture_older_than_the_seventh_at_the_bench(
+def test_a_chosen_picture_older_than_the_seventh_is_pinned_at_the_bench_from_the_ring(
     page, base_url: str, picture_folder, leaves_as_found
 ):
-    """A picture put in the folder before eight others is not on the ring's Folder;
-    Folder's More opens Pictures, where its row's Pin here pins it at the bench as a
-    view. Pin here says why it cannot pin with nothing that holds a picture selected."""
+    """A picture put in the folder before eight others is not one of Folder's seven;
+    Folder's More opens Pictures. Its row, clicked, is chosen -- one at a time, let go
+    by a click again or by Escape -- and the bench's Folder then ends in "Pin oldest",
+    which pins it at the bench as a view. Chosen among the seven, a picture's own cell
+    is marked and the eighth is More. Pictures has no Pin here of its own."""
     _drawn(0).save(picture_folder / OLD)
     os.utime(picture_folder / OLD, (1_000_000_000, 1_000_000_000))  # 2001: older than any
     for i, name in enumerate(NEWER):
         _drawn(10 + i * 5).save(picture_folder / name)
     listed = [p["path"] for p in page.request.get(f"{base_url}/photos/pictures").json()]
     assert listed.index(OLD) >= 7  # past the seven newest the ring's Folder holds
+    newest = listed[0]
 
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
@@ -98,42 +118,50 @@ def test_pin_here_pins_a_picture_older_than_the_seventh_at_the_bench(
     status = page.locator("#status")
 
     # The bench's ring: Folder holds the seven newest and More, and not this picture.
-    page.locator("#contents-list .contents-item[data-path='workbench']").click(button="right")
-    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    _press(page, "Picture")
-    _press(page, "Folder")
-    labels = list(page.evaluate(WEDGES).values())
-    assert "More" in labels and "an_old_picture" not in labels
+    labels = list(_folder_on_the_bench(page).values())
+    assert "More" in labels and "oldest" not in labels and not _marked(page)
     _press(page, "More")
     panel = page.locator(".panel[data-panel='pictures']")
     expect(panel).to_be_visible(timeout=3000)
-    expect(status).to_contain_text("every picture is in Pictures: Pin here pins one at workbench")
-
+    expect(status).to_contain_text(
+        "every picture is in Pictures: choose one there, and Folder's last cell pins it at "
+        "workbench as a view"
+    )
+    expect(panel.locator(".pictures-pin")).to_have_count(0)
     row = panel.locator(f".picture-row[data-path='{OLD}']")
     expect(row).to_be_visible(timeout=5000)
     expect(row.locator(".picture-views")).to_contain_text("pinned nowhere")
-    pin = row.locator(".pictures-pin")
-    expect(pin).to_be_enabled()
-    expect(panel.locator("#pictures-where")).to_have_text("Pin here pins at workbench")
+    chosen = panel.locator(".picture-row.chosen")
+    expect(chosen).to_have_count(0)
 
-    # Nothing selected, or a piece inside a structure: Pin here says why not.
-    page.evaluate("() => window.fractalViewer.jumpTo(0)")
-    expect(pin).to_be_disabled()
-    expect(pin).to_have_attribute("title", re.compile("select a structure, or the floor"))
-    page.evaluate(
-        "() => { const v = window.fractalViewer; v.zoomIn('printer_1'); v.selectPath('printer_1.frame_system'); }"
+    # Chosen by a click, one at a time; a click again lets go, and so does Escape.
+    row.click()
+    expect(row).to_have_class(re.compile(r"\bchosen\b"))
+    expect(row).to_have_attribute("aria-selected", "true")
+    expect(status).to_contain_text(
+        f"{OLD} chosen: open the ring on a structure or the floor, and Picture › Folder "
+        "pins it there as a view"
     )
-    expect(pin).to_be_disabled()
-    expect(panel.locator("#pictures-where")).to_contain_text("is inside printer_1")
-    # The floor holds a picture.
-    page.evaluate("() => { const v = window.fractalViewer; v.jumpTo(0); v.selectFloor(); }")
-    expect(panel.locator("#pictures-where")).to_have_text("Pin here pins at the floor")
-    expect(pin).to_be_enabled()
+    expect(panel.locator("#pictures-where")).to_contain_text(f"{OLD} chosen")
+    other = panel.locator(f".picture-row[data-path='{newest}']")
+    other.click()
+    expect(chosen).to_have_count(1)
+    expect(other).to_have_class(re.compile(r"\bchosen\b"))
+    other.click()
+    expect(chosen).to_have_count(0)
+    row.click()
+    page.locator("#viewer-canvas").focus()
+    page.keyboard.press("Escape")
+    expect(chosen).to_have_count(0)
+    assert page.evaluate("() => window.apothecaryPictureVerbs.chosen()") is None
 
-    # The bench selected: pinned there as a view, drawn, and the row says where.
-    page.locator("#contents-list .contents-item[data-path='workbench']").click()
-    expect(panel.locator("#pictures-where")).to_have_text("Pin here pins at workbench")
-    pin.click()
+    # Chosen, it is Folder's eighth cell on the bench's ring: pressed, pinned there.
+    row.click()
+    expect(row).to_have_class(re.compile(r"\bchosen\b"))
+    wedges = _folder_on_the_bench(page)
+    assert wedges["7"] == "Pin oldest" and "More" not in wedges.values()
+    assert not _marked(page)
+    _press(page, "Pin oldest")
     expect(status).to_contain_text(
         f"{OLD} pinned at workbench as a view: Picture › Find shapes finds what is in it",
         timeout=5000,
@@ -141,28 +169,36 @@ def test_pin_here_pins_a_picture_older_than_the_seventh_at_the_bench(
     expect(status).not_to_have_class(re.compile(r"\berror\b"))
     views = [vw for vw in _views(page, base_url) if vw["picture"] == OLD]
     assert [vw["host"] for vw in views] == ["workbench"]
-    chip = row.locator(".picture-view.here")
-    expect(chip).to_have_text("workbench", timeout=5000)
+    expect(row.locator(".picture-view.here")).to_have_text("workbench", timeout=5000)
     page.wait_for_function(
         "(p) => { const d = window.apothecaryPictures.drawnAt('workbench'); return d && d.picture === p; }",
         arg=OLD,
         timeout=5000,
     )
+    expect(row).to_have_class(re.compile(r"\bchosen\b"))  # still chosen, to pin again elsewhere
+
+    # Chosen among the seven: its own cell marked, and the eighth is More.
+    other.click()
+    wedges = _folder_on_the_bench(page)
+    assert wedges["7"] == "More"
+    marked = _marked(page)
+    assert len(marked) == 1 and marked[0][2] == "true"
+    expect(page.locator(f"#ring-cell-{marked[0][0]}")).to_have_attribute(
+        "aria-label", wedges[marked[0][0]]
+    )
+    page.keyboard.press("Escape")  # the ring closes; the choice stays
+    expect(page.locator("#ring-overlay")).to_have_count(0)
+    expect(other).to_have_class(re.compile(r"\bchosen\b"))
 
     # A view's place, clicked: selected, and that view drawn there.
-    pin.click()  # a second view of it, now the one drawn
-    page.wait_for_function(
-        "(p) => window.apothecaryPictures.viewsAt('workbench').filter((v) => v.picture === p).length === 2",
-        arg=OLD,
-        timeout=5000,
-    )
-    first = views[0]["id"]
-    page.evaluate("() => window.fractalViewer.jumpTo(0)")
-    expect(row.locator(".picture-view.here")).to_have_count(2, timeout=5000)
-    row.locator(f".picture-view.here[data-view='{first}']").click()
+    page.evaluate("() => { const v = window.fractalViewer; v.jumpTo(0); v.selectFloor(); }")
+    row.locator(f".picture-view.here[data-view='{views[0]['id']}']").click()
     assert page.evaluate("() => window.fractalViewer.selectedName") == "workbench"
-    assert page.evaluate("() => window.apothecaryPictures.drawnAt('workbench').id") == first
+    assert (
+        page.evaluate("() => window.apothecaryPictures.drawnAt('workbench').id") == views[0]["id"]
+    )
     expect(status).to_contain_text(f"drawing {OLD} at workbench")
+    expect(other).to_have_class(re.compile(r"\bchosen\b"))  # a place clicked chooses nothing
     assert errors == []
 
 

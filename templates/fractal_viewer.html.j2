@@ -125,20 +125,45 @@
         }
         .minimap-tick.filled { background: #0d6efd; border-color: #9cd2ff; }
 
-        /* Panels (panels.js): the side column is a rail of them; any can float. */
+        /* Panels (panels.js): one rail of them beside the world -- Site and
+           Selected stacked, the rest tabs of a strip below them; any can float.
+           Its width holds Site's tree rows and Selected's label-and-box rows at
+           the garage's depths without cutting a name short, and leaves the world
+           more than half of any window wider than a phone. */
         .side-panel { display: none; }
         .panel-rail {
             flex: 0 0 auto; width: min(400px, 33vw); background: #1e1e1e; position: relative;
             display: flex; flex-direction: column; min-height: 0;
         }
         .panel-rail[hidden] { display: none; }
-        /* Both rails showing (Site on the left, the rest on the right): each
-           gives way, so the world keeps at least half the page. */
-        .panel-rails-both > .panel-rail { width: min(400px, 25vw); }
-        /* Site docked fills its rail; its tree and sections scroll inside it,
-           not the rail, so its title stays in view. */
-        .panel-rail-body > .panel[data-panel="site"]:not(.collapsed) { flex: 1 1 auto; min-height: 140px; }
-        .panel-rail-body > .panel[data-panel="site"] .panel-body-slot { max-height: none; flex: 1 1 auto; min-height: 0; }
+        /* Site and Selected, stacked, share what the rail has left half and half,
+           whatever either holds: their bodies scroll inside them, not the rail, so
+           their titles stay in view, and selecting a piece in Site's tree does not
+           move the row under the pointer -- the second click of a double click
+           lands where the first did. One dragged from its bottom edge keeps the
+           height it was given (.sized), and the other takes the rest. */
+        .panel-rail-body > .panel[data-panel="site"]:not(.collapsed),
+        .panel-rail-body > .panel[data-panel="selected"]:not(.collapsed) { flex: 1 1 0; min-height: 140px; }
+        .panel-rail-body > .panel[data-panel="site"] .panel-body-slot,
+        .panel-rail-body > .panel[data-panel="selected"] .panel-body-slot { max-height: none; flex: 1 1 auto; min-height: 0; }
+        .panel-rail-body > .panel.sized:not(.collapsed) { flex: 0 0 auto; }
+        /* The tab strip: one tab per docked panel that is not stacked, the one
+           shown under it. A tab carries its panel's name, and shown, its float
+           and close; the panel's own title bar is the tab. */
+        .panel-tabstrip {
+            flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 2px; padding: 0.3rem 0.4rem 0;
+            background: #191919; border-top: 1px solid #333; border-bottom: 1px solid #333; margin-top: auto;
+        }
+        .panel-tabstrip[hidden], .panel-tabbody[hidden] { display: none; }
+        .rail-tab { display: flex; align-items: center; background: #202020; border: 1px solid #333; border-bottom: 0; border-radius: 4px 4px 0 0; margin-bottom: -1px; }
+        .rail-tab.active { background: #1e1e1e; border-color: #4a4a4a; }
+        .rail-tab button { background: none; border: 0; color: #999; font: inherit; font-size: 0.8rem; cursor: pointer; padding: 0.3rem 0.55rem; line-height: 1; }
+        .rail-tab button:hover { color: #eee; }
+        .rail-tab.active .rail-tab-name { color: #eee; font-weight: 600; }
+        .rail-tab .rail-tab-float, .rail-tab .rail-tab-close { padding: 0.3rem 0.3rem; font-size: 0.75rem; }
+        .rail-tab button[hidden] { display: none; }
+        .panel-tabbody { flex: 0 0 auto; display: flex; flex-direction: column; }
+        .panel-tabbody > .panel > .panel-title { display: none; }
         .panel-rail-right { border-left: 1px solid #333; }
         .panel-rail-left { border-right: 1px solid #333; }
         .panel-rail-head {
@@ -155,6 +180,7 @@
         .panel-rail-left .panel-rail-resizer { right: -3px; }
         .panel-rail-resizer:hover { background: rgba(111, 179, 232, 0.35); }
         .panel { border-bottom: 1px solid #333; background: #1e1e1e; display: flex; flex-direction: column; min-height: 0; position: relative; }
+        .panel[hidden] { display: none; }
         .panel-resizer { height: 6px; cursor: ns-resize; flex: 0 0 auto; }
         .panel-resizer:hover { background: rgba(111, 179, 232, 0.35); }
         .panel-resizer[hidden] { display: none; }
@@ -218,6 +244,10 @@
         .pin-list { display: flex; flex-direction: column; gap: 0.2rem; max-height: 260px; overflow: auto; }
         .pin-row { display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; padding: 0.15rem 0.3rem; border-radius: 3px; background: #1d221d; }
         .pin-row > span, .pin-row .picture-what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* A picture's row is chosen by a click, for the ring's Picture › Folder to pin. */
+        .picture-row { cursor: pointer; border: 1px solid transparent; }
+        .picture-row:hover { background: #222a22; }
+        .picture-row.chosen { background: #1f3346; border-color: #6fb3e8; }
         .pin-row.here { border-left: 2px solid #4a6fa8; }
         .pin-row.stale > span { color: #b08a8a; }
         .pin-row img { width: 40px; height: 30px; object-fit: cover; border-radius: 2px; flex: 0 0 auto; }
@@ -533,7 +563,7 @@
                 <div class="viewer-hint">Click to select • Double-click (or scroll past the edge) to zoom in • Drag arrows to move • Shift+drag to pan</div>
             </div>
             <div class="side-panel">
-                <div class="panel-section" data-panel="site" data-where="left">
+                <div class="panel-section" data-panel="site" data-zone="stack">
                     <div class="panel-header">Site</div>
                     <div class="panel-body">
                         <div id="site-problems" class="site-problems" hidden>
@@ -553,7 +583,7 @@
                         </details>
                     </div>
                 </div>
-                <div class="panel-section" data-panel="selected">
+                <div class="panel-section" data-panel="selected" data-zone="stack">
                     <div class="panel-header">Selected</div>
                     <div class="panel-body" id="selected-body">
                         <div class="no-selection">Click a node to select it</div>
@@ -865,7 +895,6 @@
                 this.categoryFiltersEl = document.getElementById('category-filters');
                 this.contentsEl = document.getElementById('contents-list');
                 this.selectedBodyEl = document.getElementById('selected-body');
-                this.jobsSectionEl = document.getElementById('jobs-section');
                 this.jobFormEl = document.getElementById('job-form');
                 this.jobListEl = document.getElementById('job-list');
                 this.problemsEl = document.getElementById('site-problems');
@@ -972,21 +1001,22 @@
                 // pinned machine, and its nozzle, bed and reading at its node.
                 // Both survive renderFocus(), which clears only the nodes' meshes.
                 this.anchors = mountAnchors({ container: this.canvas.parentElement, canvas: this.canvas, camera: this.camera, scene: this.scene });
-                // The side column's sections become panels: Site docked in the left
-                // rail, the rest in the right, each one closable, collapsible and
-                // draggable free; what a person did to them is remembered per
-                // browser (panels.js), and a remembered layout naming a panel
-                // that is gone is ignored.
+                // The side column's sections become panels in the one rail: Site and
+                // Selected stacked at its top, Jobs a tab of the strip below them,
+                // each one closable, collapsible and draggable free; what a person
+                // did to them is remembered per browser (panels.js), and a
+                // remembered layout naming a panel that is gone, or from before
+                // the one rail, is ignored.
                 this.panels = mountPanels({ container: document.querySelector('.main-content'), overlay: this.canvas.parentElement });
                 for (const section of document.querySelectorAll('.side-panel [data-panel]')) {
                     const id = section.dataset.panel;
-                    const el = this.panels.register(id, {
+                    this.panels.register(id, {
                         title: section.querySelector('.panel-header').textContent.trim(),
                         body: section.querySelector('.panel-body'),
-                        where: section.dataset.where || 'right',
+                        zone: section.dataset.zone || 'tabs',
                     });
-                    if (section.id === 'jobs-section') { this.jobsSectionEl = el; }  // shown when a site has build volumes
-                    if (section.style.display === 'none') el.style.display = 'none';
+                    // Jobs is offered when a site has build volumes.
+                    if (section.style.display === 'none') this.panels.offer(id, false);
                 }
                 document.querySelector('.side-panel')?.remove();
                 this.machine = null;
@@ -1042,12 +1072,14 @@
                 // time it does.
                 this.pinnedWidget = null;
                 this.pinnedEl.addEventListener('toggle', () => this.pinnedOpened());
-                // Pictures: every picture under the picture root, each with its views
-                // and Pin here, Forget on a kept one, Purge, and the gathering
-                // (closed until asked for; listed again each time it opens).
+                // Pictures: every picture under the picture root, each with its views,
+                // Forget on a kept one, Purge, and the gathering -- a tab of the rail's
+                // strip, filled the first time it is shown and listed again each time
+                // it is shown again. A row chosen there is told to every ring, whose
+                // Picture › Folder pins it where the ring stands.
                 this.picturesWidget = null;
                 this.panels.register('pictures', {
-                    title: 'Pictures', where: 'right', open: false,
+                    title: 'Pictures',
                     onOpen: () => { if (this.picturesWidget) this.picturesWidget.load(); },
                     body: (slot) => {
                         this.picturesWidget = mountPictureList(slot, {
@@ -1055,9 +1087,7 @@
                             log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
                             world: {
                                 siteName: () => this.siteName,
-                                place: () => this.pinPlace(),
-                                // As Picture › Folder pins one: at the top level, where mats are drawn.
-                                pin: (path, host) => { if (this.focusPath.length) this.jumpTo(0); return this.pictures.pinPicture(host, path); },
+                                choose: (path) => this.pictures.choose(path),
                                 showView: (id) => this.showView(id),
                                 purge: () => this.pictures.purge(),
                                 // A picture forgotten: its views go wherever they were.
@@ -2002,8 +2032,6 @@
             // so anything deeper -- or any leaf of an expanded category that
             // isn't itself a direct child -- gets a read-only panel.
             renderSelectedPanel() {
-                // Pictures' Pin here pins at the selection: it says where, or why not.
-                if (this.picturesWidget) this.picturesWidget.placeChanged();
                 this.shownFacts = this.selectedName ? this.pictureFactsHtml(this.selectedName) : '';
                 if (this.selectedName === FLOOR_KEY) {
                     this.selectedBodyEl.innerHTML = `<div class="prop-row"><label>Name</label><span>the floor</span></div>
@@ -2086,7 +2114,7 @@
                 const ring = (verb) => `⌗ ${host === '' ? 'Pictures › Floor › ' : ''}${verb}`;
                 // Nothing here yet: the way in, so the durable hint is where the person
                 // looks. The verbs stay the ring's.
-                if (!cam && !views.length) return `<div class="prop-readonly picture-facts" data-facts="${host === '' ? 'floor' : 'host'}"><div class="k">Pictures at ${esc(where(host))}</div><div data-facts="way-in">${ring('Camera › Pin here')} puts this browser's camera at ${esc(where(host))}; ${host === '' ? '⌗ Pictures › Add' : '⌗ Picture › Add'} pins a picture from disk, and Pin here in Pictures one already in the folder; m, or right-click, opens the ring</div></div>`;
+                if (!cam && !views.length) return `<div class="prop-readonly picture-facts" data-facts="${host === '' ? 'floor' : 'host'}"><div class="k">Pictures at ${esc(where(host))}</div><div data-facts="way-in">${ring('Camera › Pin here')} puts this browser's camera at ${esc(where(host))}; ${host === '' ? '⌗ Pictures › Add' : '⌗ Picture › Add'} pins a picture from disk, and ${host === '' ? '⌗ Pictures › Floor › Picture › Folder' : '⌗ Picture › Folder'} one already in the folder, any chosen in Pictures; m, or right-click, opens the ring</div></div>`;
                 const drawn = pm.drawnAt(host);
                 const rows = [];
                 if (cam) {
@@ -2872,26 +2900,12 @@
                 }
             }
 
-            // The pieces a problem names, as dotted paths. A problem names pieces by
-            // their names alone: siblings, under the shallowest node that holds
-            // them all (an overlap is between siblings); failing that, each where
-            // a node of that name is first found, nearest the top.
+            // The pieces a problem names, as the dotted paths the server sends
+            // beside their names -- a name alone can be any of several pieces
+            // (every printer has a gantry) -- each one that is in this site's tree.
             problemPaths(v) {
-                const names = v.structures || [];
-                if (!names.length || !this.tree) return [];
-                const queue = [[this.tree, '']];
-                const first = new Map();
-                while (queue.length) {
-                    const [node, path] = queue.shift();
-                    const kids = node.children || [];
-                    if (names.every((n) => kids.some((c) => c.name === n))) return names.map((n) => pathForChild(path, n));
-                    for (const c of kids) {
-                        const p = pathForChild(path, c.name);
-                        if (names.includes(c.name) && !first.has(c.name)) first.set(c.name, p);
-                        queue.push([c, p]);
-                    }
-                }
-                return names.map((n) => first.get(n)).filter(Boolean);
+                if (!this.tree) return [];
+                return (v.paths || []).filter((path) => this.nodeByPath(path));
             }
 
             // Site's problems: listed at its top, each row selecting its piece; in
@@ -2940,13 +2954,11 @@
                 return this.selectPath(path);
             }
 
-            // The toolbar's count: Site opened (and its rail shown), unfolded, and
-            // scrolled to the problems at its top.
+            // The toolbar's count: Site opened (and the rail shown, where it is
+            // docked), unfolded, and scrolled to the problems at its top.
             openProblems() {
                 this.panels.open('site');
                 this.panels.collapse('site', false);
-                const where = (this.panels.state('site') || {}).where;
-                if ((where === 'left' || where === 'right') && this.panels.railHidden(where)) this.panels.hideRail(where, false);
                 const slot = this.problemsEl.closest('.panel-body-slot');
                 if (slot) slot.scrollTop = 0;
                 this.problemsEl.scrollIntoView({ block: 'nearest' });
@@ -2967,7 +2979,7 @@
                         // list of where each picture is pinned.
                         changed: (site) => {
                             if (site === null || site === this.siteName) return this.pictureMarks.refresh();
-                            if (this.picturesWidget && this.panels.isOpen('pictures')) this.picturesWidget.load();
+                            if (this.picturesWidget && this.panels.isShown('pictures')) this.picturesWidget.load();
                             return null;
                         },
                         // A board's pin of this site taken back: the node's row, badge
@@ -2982,25 +2994,7 @@
             // Pictures, where they are open, list it again.
             listsChanged() {
                 if (this.pinnedWidget && this.pinnedEl.open) this.pinnedWidget.load();
-                if (this.picturesWidget && this.panels.isOpen('pictures')) this.picturesWidget.load();
-            }
-
-            // Where Pictures' Pin here pins: the selected host -- a root structure
-            // with a footprint that is not a made piece -- or the floor; with
-            // nothing like it selected, null and the reason, as the server would
-            // refuse it (vision/views.py's host_node).
-            pinPlace() {
-                if (!this.siteName || !this.tree) return { host: null, why: 'no site is loaded' };
-                const key = this.selectedName;
-                if (key === FLOOR_KEY) return { host: '' };
-                if (!key) return { host: null, why: 'select a structure, or the floor (⌗ Pictures › Floor), to pin a picture there' };
-                const root = key.split('.')[0];
-                if (key.includes('.')) return { host: null, why: `${key} is inside ${root}: pictures are pinned at a root structure, so select ${root}` };
-                const node = (this.tree.children || []).find((c) => c.name === key);
-                if (!node) return { host: null, why: `${key} is not a structure of ${this.siteName}` };
-                if (this.pictureMarks.madeRecord(key)) return { host: null, why: `${key} is a made piece: pin at a structure, or the floor` };
-                if (!node.world_bounds) return { host: null, why: `${key} has no footprint, so there is no top to lay a picture on` };
-                return { host: key };
+                if (this.picturesWidget && this.panels.isShown('pictures')) this.picturesWidget.load();
             }
 
             // A view's place in Pictures: selected, and the view drawn there, as
@@ -3200,8 +3194,8 @@
                 const bearer = this.bearerPathFor(path);
                 if (this.machine && this.machine.port === port) { this.panels.open('machine'); this.panels.tether('machine', bearer); return true; }
                 this.closeMachine();
-                // The log takes the left rail, so the world keeps its middle; closed until asked for.
-                const logEl = this.panels.register('log', { title: `Comms log · ${port}`, where: 'left', open: false, body: (slot) => { slot.dataset.port = port; } });
+                // The log is a tab of the rail's strip, closed until asked for.
+                const logEl = this.panels.register('log', { title: `Comms log · ${port}`, open: false, body: (slot) => { slot.dataset.port = port; } });
                 const logSlot = logEl.querySelector('.panel-body-slot');
                 let handle = null;
                 this.panels.register('machine', {
@@ -3581,7 +3575,7 @@
             // ---------------------------------------------------------------
 
             renderJobsSection() {
-                this.jobsSectionEl.style.display = this.hasBuildVolumes ? '' : 'none';
+                this.panels.offer('jobs', this.hasBuildVolumes);
                 if (this.hasBuildVolumes) this.renderJobs();
             }
 
@@ -4372,7 +4366,7 @@
                     return;
                 }
                 if (action === 'panel:rail:toggle') {
-                    const hidden = viewer.panels.hideRail('right', !viewer.panels.railHidden('right'));
+                    const hidden = viewer.panels.hideRail(!viewer.panels.railHidden());
                     viewer.setStatus(`${hidden ? 'Hid' : 'Showed'} the rail${tail}`, 'success');
                     return;
                 }

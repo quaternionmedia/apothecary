@@ -1,14 +1,17 @@
 /* Pictures: every picture under the picture root -- the folder's own, and the
  * ones the browser kept under captures/ and uploads/ -- newest first, each with
- * the places it is pinned at as a view and Pin here; Forget on a kept one, and
- * Purge kept. The gathering is a section of it until gathering leaves core (the
- * pictures plan's Phase 1).
+ * the places it is pinned at as a view; Forget on a kept one, and Purge kept.
+ * The gathering is a section of it until gathering leaves core (the pictures
+ * plan's Phase 1).
  *
- * Pin here pins a picture as a view at the selection -- a host, a root
- * structure with a footprint that is not a made piece, or the floor -- as
- * Picture › Folder does. The ring's Folder holds the seven newest; Pin here is
- * on every row, the older pictures included. With nothing selected that can
- * hold a picture it is disabled, and says why.
+ * A row is chosen by a click on it, one at a time, and let go by a click on it
+ * again or by Escape. The choice is the ring's to act on: the page tells it with
+ * every ring it resolves, and Picture › Folder's eighth cell is then Pin and the
+ * chosen picture's name, pinning it as a view where the ring stands -- a host,
+ * a root structure with a footprint that is not a made piece, or the floor --
+ * when it is older than the seven newest Folder holds; among them, its own cell
+ * is marked. So every picture in the folder is pinned from the ring, the older
+ * ones included, and the list chooses, as Site's tree does for a piece.
  *
  * A row's views are the places it is pinned at. One in this site is clicked to
  * select that place and draw that view, as Picture › Views does; one in another
@@ -19,7 +22,7 @@
  * picture the browser kept is forgotten from its row, its views unpinned, every
  * site's. The folder's own pictures are a person's: only a person removes them.
  * A picture chosen in the file picker is kept under uploads/ and pinned nowhere;
- * Pin here pins it.
+ * chosen here, the ring pins it.
  *
  * Several pictures are gathered at once (POST /photos/gather): which are of one
  * thing, what the machine could not decide and would like a person to say --
@@ -27,14 +30,12 @@
  * only: nothing is built or opened from it.
  *
  * mountPictureList(root, { base, world, log }) renders into root; `world` is
- * what the page offers: siteName(); place() -> { host, why } (where Pin here
- * pins: "" the floor; null, with why, when nothing selected can hold a picture);
- * pin(path, host) (pinned there as a view and drawn); showView(id) (its place
- * selected and the view drawn); purge() (Pictures › Purge); changed() (a picture
- * was forgotten, so the world's marks follow). log(text, kind) is the page's
- * status bar, the only place a message is written; kind "bad" is a refusal. The
- * list is fetched when it mounts and after each change; load() fetches it again,
- * and placeChanged() says again where Pin here pins.
+ * what the page offers: siteName(); choose(path) (the picture chosen, or null
+ * when none is: what the page tells the ring); showView(id) (its place selected
+ * and the view drawn); purge() (Pictures › Purge); changed() (a picture was
+ * forgotten, so the world's marks follow). log(text, kind) is the page's status
+ * bar, the only place a message is written; kind "bad" is a refusal. The list
+ * is fetched when it mounts and after each change; load() fetches it again.
  */
 
 const MARKUP = `
@@ -42,7 +43,7 @@ const MARKUP = `
     <div id="pictures-where" class="note"></div>
     <div id="pictures-list" class="pin-list pictures-list"><span class="empty">no pictures yet</span></div>
     <div class="row">
-        <label class="grow">add <input type="file" id="pic-file" accept="image/png,image/jpeg,image/gif,image/webp,image/bmp,image/tiff" multiple title="Add pictures from this browser: kept under uploads/ in the picture folder, on this machine, as you named them, and pinned nowhere until Pin here pins one"></label>
+        <label class="grow">add <input type="file" id="pic-file" accept="image/png,image/jpeg,image/gif,image/webp,image/bmp,image/tiff" multiple title="Add pictures from this browser: kept under uploads/ in the picture folder, on this machine, as you named them, and pinned nowhere until one is chosen here and pinned from the ring's Picture › Folder"></label>
         <button type="button" id="pictures-purge" title="Forget every picture the browser put here -- captures and uploads -- after asking once. The folder's own pictures stay">Purge kept</button>
     </div>
     <details id="pictures-gather" class="fold">
@@ -67,7 +68,7 @@ export function mountPictureList(root, { base = "", world = null, log = null } =
     // Every message is said once, where the page says everything: its status
     // bar. A refusal is kind "bad", and the page shows it as an error.
     const say = (text, kind = "") => { if (log) log(text, kind); else console.log(text); };
-    const state = { pictures: [], views: [], gathered: null };
+    const state = { pictures: [], views: [], gathered: null, chosen: null };
 
     async function api(path, opts = {}) {
         const r = await fetch(base + path, { headers: { "Content-Type": "application/json" }, ...opts });
@@ -77,18 +78,41 @@ export function mountPictureList(root, { base = "", world = null, log = null } =
     }
     const at = (host) => (host ? host : "the floor");
     const segs = (path) => path.split("/").map(encodeURIComponent).join("/");
-    const place = () => (world && world.place ? world.place() : { host: null, why: "nothing to pin at" });
 
     // --- the list ------------------------------------------------------------------------
-    // Where Pin here pins, said once above the rows; each row's button follows.
-    function renderPlace() {
-        const where = place();
-        $("pictures-where").textContent = where.host === null ? where.why : `Pin here pins at ${at(where.host)}`;
-        for (const b of root.querySelectorAll(".pictures-pin")) {
-            b.disabled = where.host === null;
-            b.title = where.host === null ? where.why : `Pin this picture at ${at(where.host)} as a view`;
+    // What choosing a row does, said once above the rows: the step after it.
+    function renderChoice() {
+        $("pictures-where").textContent = state.chosen
+            ? `${state.chosen} chosen: the ring's Picture › Folder pins it where the ring stands (Escape lets go)`
+            : "Choose a picture to pin it from the ring: Picture › Folder, at a structure or the floor";
+        for (const row of root.querySelectorAll(".picture-row")) {
+            const on = row.dataset.path === state.chosen;
+            row.classList.toggle("chosen", on);
+            row.setAttribute("aria-selected", String(on));
         }
     }
+    // A row chosen, or let go (null); the page tells the ring.
+    function choose(path) {
+        state.chosen = path && state.pictures.some((p) => p.path === path) ? path : null;
+        if (world && world.choose) world.choose(state.chosen);
+        renderChoice();
+        return state.chosen;
+    }
+    // A click on a row chooses it, or lets it go when it is the one chosen; its
+    // button and its places are their own.
+    function rowClicked(path, ev) {
+        if (ev && ev.target.closest("button, .picture-view.here")) return;
+        const chosen = choose(state.chosen === path ? null : path);
+        if (chosen) say(`${chosen} chosen: open the ring on a structure or the floor, and Picture › Folder pins it there as a view`);
+    }
+    // Escape lets go -- unless a person is typing.
+    function letGo(ev) {
+        if (ev.key !== "Escape" || !state.chosen) return;
+        const t = ev.target;
+        if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+        choose(null);
+    }
+    window.addEventListener("keydown", letGo);
     function viewsHtml(path) {
         const here = world && world.siteName ? world.siteName() : "";
         return state.views.filter((v) => v.picture === path).map((v) => (v.site === here
@@ -102,19 +126,20 @@ export function mountPictureList(root, { base = "", world = null, log = null } =
         } else {
             list.innerHTML = state.pictures.map((p) => {
                 const views = viewsHtml(p.path);
-                return `<div class="pin-row picture-row" data-path="${esc(p.path)}">`
+                return `<div class="pin-row picture-row" data-path="${esc(p.path)}" role="option" title="Choose ${esc(p.path)}, for the ring's Picture › Folder to pin">`
                     + `<img src="${base}/photos/pictures/file?path=${encodeURIComponent(p.path)}&px=64" alt="" loading="lazy">`
                     + `<div class="picture-what"><span class="picture-name" title="${esc(p.path)} · ${Math.round(p.size / 1024)} kB">${esc(p.path)}${p.kept ? ` · ${HOW_KEPT[p.kept] || "kept"}` : ""}</span>`
                     + `<span class="picture-views">${views || '<span class="empty">pinned nowhere</span>'}</span></div>`
-                    + `<button type="button" class="pictures-pin" data-path="${esc(p.path)}">Pin here</button>`
                     + (p.kept ? `<button type="button" class="pictures-forget" data-path="${esc(p.path)}" title="Forget this picture; its views are unpinned, every site's">Forget</button>` : "")
                     + "</div>";
             }).join("");
         }
-        for (const pin of root.querySelectorAll(".pictures-pin")) pin.addEventListener("click", () => pinHere(pin.dataset.path).catch((e) => say(e.message, "bad")));
+        for (const row of root.querySelectorAll(".picture-row")) row.addEventListener("click", (ev) => rowClicked(row.dataset.path, ev));
         for (const forgetBtn of root.querySelectorAll(".pictures-forget")) forgetBtn.addEventListener("click", () => forget(forgetBtn.dataset.path).catch((e) => say(e.message, "bad")));
         for (const chip of root.querySelectorAll(".picture-view.here")) chip.addEventListener("click", () => showView(chip.dataset.view));
-        renderPlace();
+        // A chosen picture forgotten or purged is no longer chosen.
+        if (state.chosen && !state.pictures.some((p) => p.path === state.chosen)) choose(null);
+        renderChoice();
         renderGatherList();
     }
     async function load() {
@@ -128,14 +153,6 @@ export function mountPictureList(root, { base = "", world = null, log = null } =
         return state;
     }
 
-    // Pin here: the picture pinned as a view at the selected host or the floor.
-    async function pinHere(path) {
-        const where = place();
-        if (where.host === null) { say(where.why, "bad"); return null; }
-        const view = await world.pin(path, where.host);
-        await load();
-        return view;
-    }
     function showView(id) {
         if (world && world.showView) world.showView(id);
     }
@@ -167,7 +184,7 @@ export function mountPictureList(root, { base = "", world = null, log = null } =
             } catch (e) { refused.push(`${file.name}: ${e.message}`); }
         }
         // Kept and pinned nowhere: the next step is pinning one at a place as a view.
-        const next = kept.length ? ": Pin here pins one at the selected place as a view" : "";
+        const next = kept.length ? ": choose one, and the ring's Picture › Folder pins it at a place as a view" : "";
         say(`added ${kept.length} picture(s) on this machine${next}` + (refused.length ? ` — refused: ${refused.join("; ")}` : ""), refused.length ? "bad" : "");
         await load();
         return kept;
@@ -227,8 +244,8 @@ export function mountPictureList(root, { base = "", world = null, log = null } =
     load();
 
     return {
-        state, load, pinHere, forget, purge, addFiles, gather, act,
-        placeChanged: renderPlace,
-        destroy() { root.innerHTML = ""; },
+        state, load, choose, forget, purge, addFiles, gather, act,
+        chosen: () => state.chosen,
+        destroy() { window.removeEventListener("keydown", letGo); root.innerHTML = ""; },
     };
 }

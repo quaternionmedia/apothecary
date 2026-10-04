@@ -204,21 +204,27 @@ ls parts/demo_brick/ ; cat parts/demo_brick/part.json
 
 On your own server, in the garage, with the page freshly loaded.
 
-- [ ] **Site** is docked on the left, open: the garage's tree, with the
-      category chips above it and two folded sections below it, **Pinned**
-      and **SCAD**; Selected and Jobs are docked on the right; **Pictures**
-      waits as a tab at the bottom right. Both rails together leave the
-      world at least half the page.
-- [ ] Press **`** (or `~`) → the right rail hides and a tab stands in for
-      it; press again → back. Typing in a text box never triggers it.
-- [ ] Drag the right rail's inner edge → its width follows, the left rail
-      giving way, the two together never more than half the page; press
-      **⇄** in a rail's head (or drag its grip) → every panel in it moves to
-      the other side.
+- [ ] One rail, on the right of the world: **Site** and **Selected**
+      stacked in it, both open -- Site with the garage's tree, the category
+      chips above it and two folded sections below it, **Pinned** and
+      **SCAD** -- and below them a strip of tabs, **Jobs** and **Pictures**,
+      neither shown. The other side of the world is world, and the rail
+      leaves it at least half the page.
+- [ ] Press a tab → its panel shows under the strip; press it again → it
+      folds away; press the other → that one instead.
+- [ ] Press **`** (or `~`) → the rail hides and a tab stands in for it;
+      press again → back. Typing in a text box never triggers it.
+- [ ] Drag the rail's inner edge → its width follows, never more than half
+      the page; reload → the width is kept. Press **⇄** in the rail's head
+      (or drag its grip across the page) → the rail and every panel in it
+      move to the left of the world; reload → still on the left; **⇄** again
+      → back on the right.
 - [ ] On **Site**: ▾ collapses it to its title; ⧉ floats it free (drag it
-      by its title, resize from its corner); its title's ⧉ again docks it
-      back; ✕ closes it to a tab at the bottom right; the tab reopens it.
-      Reload → the layout is remembered.
+      by its title, resize from its corner); its title's ⇥ docks it back
+      above Selected; ✕ closes it to a tab at the bottom right; the tab
+      reopens it. A shown tab's ⧉ floats Pictures or Jobs the same way, and
+      its ⇥ docks it back into the strip. Reload → the layout is
+      remembered.
 - [ ] Unfold Site's **SCAD** → the site's generated OpenSCAD.
 - [ ] Select `printer_1`, type 650 into its X → the toolbar says *1
       violation*; Site lists *printer_1 and printer_2 overlap* at its top,
@@ -235,8 +241,10 @@ On your own server, in the garage, with the page freshly loaded.
       as you orbit; with nothing pinned there is none. Pin something in
       section 6 and come back: the badge appears; a click selects the node;
       clicking a printer's badge opens the **machine popup** tethered to the
-      printer with a leader line; drag the popup → the tether lets go; the
-      popup's jog moves the world's nozzle marker ahead of the next poll.
+      printer with a leader line, in front of the world; its ⇥ docks it into
+      the rail's strip as a tab, the tab's ⧉ floats it again, and its badge
+      tethers it again; drag the popup → the tether lets go; the popup's jog
+      moves the world's nozzle marker ahead of the next poll.
 - [ ] `/firmware/monitor?port=<your port>` → the same module as the popup,
       as a page of its own, and `/firmware` → the toolchain page with its
       config row naming `~/.apothecary/tools/arduino-cli.yaml`.
@@ -256,7 +264,8 @@ uv run --project ~/Documents/apothecary apothecary serve --port 8001
 
 Open `http://127.0.0.1:8001/viewer/sites/garage`. The camera's verbs are the
 ring's, on the place it is pinned at; the pictures are listed in **Pictures**
-(ring → Panels → Pictures), and every pin in Site's **Pinned**.
+(its tab in the rail, or ring → Panels → Pictures), and every pin in Site's
+**Pinned**.
 
 - [ ] Right-click `workbench` in Site's tree → **Camera › Pin here ›
       Allow** → the browser asks once; with one camera it is pinned at the
@@ -283,13 +292,18 @@ ring's, on the place it is pinned at; the pictures are listed in **Pictures**
 - [ ] **Pictures** → every picture in the folder, newest first, each with a
       thumbnail and where it is pinned as a view (the capture: *workbench*).
       **add** (its file picker) → choose two pictures of your own → the
-      status bar says *added 2 picture(s)* and names Pin here; they are
-      listed *· added*, *pinned nowhere*; `ls /tmp/apothecary-pictures/uploads/`
-      → the two, named as you named them, the folder `drwx------`.
-- [ ] With `workbench` selected, **Pin here** on one of them → pinned at the
-      bench as a view and drawn; its row names *workbench*. Select nothing →
-      Pin here is greyed and says why. Click a row's *workbench* → the bench
-      is selected and that view drawn.
+      status bar says *added 2 picture(s)* and names choosing one and
+      Picture › Folder; they are listed *· added*, *pinned nowhere*;
+      `ls /tmp/apothecary-pictures/uploads/` → the two, named as you named
+      them, the folder `drwx------`. A row has no Pin here of its own.
+- [ ] Click one of their rows → it is chosen, highlighted, and the status
+      bar names Picture › Folder; click it again, or press Escape → let go;
+      click another → that one instead. Choose one, right-click `workbench`
+      → **Picture › Folder**: among the seven newest pictures its own cell
+      is marked; older than those (put more than seven in the folder), the
+      last cell is *Pin* and its name. Press it → pinned at the bench as a
+      view and drawn; its row names *workbench*. Click a row's *workbench* →
+      the bench is selected and that view drawn.
 - [ ] **Forget** on the other → gone from the list and from the folder; a
       picture you put in the folder by hand has no Forget.
 - [ ] Unfold Pictures' **Gather**, tick **all**, **Gather** → a report with
@@ -323,8 +337,8 @@ bare board):
       `printer_1`'s row wears the 🖨 badge and its status becomes `printing`
       *via* the board.
 - [ ] The badge above `printer_1` in the world; click it → the machine popup:
-      status cards, a temperature chart after a few polls, the comms log as a
-      panel on the left rail.
+      status cards, a temperature chart after a few polls, the comms log a
+      tab of the rail's strip (from its tab at the bottom right).
 - [ ] **⚙ Control** → the overlay, a 5:00 latch; **Bed 45 → Set** → `M140
       S45` in the log and the target on the card; **Home XY**; **Y+** by 10 →
       the nozzle marker in the world moves; **Off**.
@@ -366,12 +380,14 @@ release), unchanged, plus these two that the bench did not have:
       named, not fetched).
 - [ ] `/walkthrough/11-photographs-into-pieces.md` → its last step gives the
       census count (`apothecary census` says the same) and its screenshots
-      show Site and the rail.
+      show the one rail, Site and Selected stacked in it.
 - [ ] `/walkthrough/12-the-bench-as-it-is.md` → fourteen steps: a file from
       elsewhere measured, the sidecar part, the Ender 3s, the mainboard, the
       DevKitC, the camera placed at the bench and *not* following you into a
-      printer, what the browser put here taken back (added pictures, a pin,
-      a purge), the guard's refusal and the server's 403 -- each with the
+      printer, what the browser put here taken back (added pictures, one of
+      them chosen, a pin, a purge) with Pictures listing only what the page
+      put in its own picture folder, the guard's refusal and the server's
+      403 -- each with the
       output or the picture of the run that wrote it.
 - [ ] `uv run apothecary docs generate` → both doc workflows regenerate under
       a temporary server on 8766; the bar on every docs page then says when.

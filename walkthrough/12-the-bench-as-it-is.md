@@ -7,7 +7,7 @@ the output of a program: the next run puts it back.
 
 A mesh made in another program is brought in measured, not trusted; a part can be a folder with a sidecar and no Python; the garage's printers are Ender 3s from published dimensions and its boards are the boards. A camera placed at a piece is drawn there, at the level where that piece is, and nowhere else. And nothing here leaves the machine, by construction rather than by anyone's care.
 
-**Runtime-bound.** The model half runs in this process. The browser half drives a real browser against a real server; the browser is launched with a fake camera so there is one to place. It needs no network, and it refuses one.
+**Runtime-bound.** The model half runs in this process. The browser half drives a real browser against a real server of its own, whose picture folder holds only the pictures this page puts there; the browser is launched with a fake camera so there is one to place. It needs no network, and it refuses one.
 
 ---
 
@@ -93,7 +93,7 @@ GET /cameras?site=garage -> []
 
 ## 12. What the browser put here, it can take back
 
-Site's Pinned lists what a page pinned -- cameras, views, boards -- every site's, each row naming its site and carrying the button that takes it back, from here, without switching to that site; a pin whose site or piece is gone is shown as such, and this is the one place it can be seen. Pictures lists every picture in the picture folder, the folder's own and the ones the browser kept -- those added from its file picker kept as they were named under uploads/ -- each with where it is pinned as a view, Pin here, and Forget on a kept one. A picture kept and pinned nowhere waits for Pin here, which the status bar names, to pin it at a place as a view.
+Site's Pinned lists what a page pinned -- cameras, views, boards -- every site's, each row naming its site and carrying the button that takes it back, from here, without switching to that site; a pin whose site or piece is gone is shown as such, and this is the one place it can be seen. Pictures lists every picture in the picture folder, the folder's own and the ones the browser kept -- those added from its file picker kept as they were named under uploads/ -- each with where it is pinned as a view, and Forget on a kept one. A picture kept and pinned nowhere waits to be chosen: a row clicked is chosen, as shelf.png is here, and the ring's Picture › Folder pins it where the ring stands -- the seven newest by name, an older one as its last cell -- as the status bar says.
 
 ![What the browser put here, it can take back](screenshots/12-12-what-the-browser-put-here-it-can-take-back.png)
 
