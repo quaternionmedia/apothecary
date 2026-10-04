@@ -1313,7 +1313,7 @@ def test_a_root_with_many_pictures_still_resolves_and_a_chosen_one_fills_the_eig
     assert [c.action for c in folder.children][:7] == [
         f"picture:pin:shot_{i:03d}.png" for i in range(7)
     ]
-    # More opens the Pictures panel, where every picture is listed with Pin here.
+    # More opens the Pictures panel, where every picture is listed to be chosen.
     assert (folder.children[-1].label, folder.children[-1].action) == ("More", "picture:more")
     told.chosen_picture = "shot_042.png"
     ring = resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=told)

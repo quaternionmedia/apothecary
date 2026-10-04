@@ -114,8 +114,9 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     docs.step(
         "Click the badge and the machine opens in front of the world: the monitor's own "
         "body -- cards, chart, the latch and control pad, the bed reading, the print from "
-        "here -- in a panel tethered to the printer, its comms log a panel of its own on the "
-        "left rail. Drag it to let go of the tether; the ring's control verbs go to it"
+        "here -- in a panel tethered to the printer, its comms log a panel of its own, a tab "
+        "of the rail's strip. Drag it to let go of the tether, or dock it into the strip; the "
+        "ring's control verbs go to it"
     )
     page.evaluate("() => window.fractalViewer.closeMachine()")
 
