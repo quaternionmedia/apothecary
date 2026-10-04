@@ -117,3 +117,17 @@ Drafted on the project's governance branch, ratified by a person:
   drafted as an input to rad's own record, in the rad repository).
 - *Personal data stays on the device* §6: "view" for "look"; Pinned lives in
   Site.
+
+## Decided after Phase 2
+
+- **One rail.** Everything docks on one side, the right by default and
+  moved by the rail's swap: Site and Selected stacked, and one tab strip
+  below them for the docked panels (Pictures, a docked Machine and its log,
+  and Jobs until Phase 3). The other side of the screen is world. A Machine
+  tethered to its board still stands in front of the world, and docks into
+  the strip.
+- **A chosen picture is the ring's.** Clicking a row in Pictures chooses it;
+  Picture › Folder's eighth cell then pins the chosen picture, so any picture,
+  not only the seven newest, is pinned from the ring.
+- `apothecary photo look` is `apothecary photo find`, the word the viewer's
+  Find shapes uses.
