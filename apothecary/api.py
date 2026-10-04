@@ -788,7 +788,12 @@ def _primitive_descriptor(obj: OpenSCADObject, offset: Vector3D) -> Dict[str, ob
         local_min = Vector3D(x=-max_r, y=-max_r, z=z0)
         local_max = Vector3D(x=max_r, y=max_r, z=z0 + obj.h)
         bounds = BoundingBox3D(min_point=local_min + offset, max_point=local_max + offset)
-        return {"type": "cylinder", "h": obj.h, "r1": r1, "r2": r2, "bounds": _bounds_dict(bounds)}
+        drawn = {"type": "cylinder", "h": obj.h, "r1": r1, "r2": r2, "bounds": _bounds_dict(bounds)}
+        # Its facets, when it names them: a wedge is a cylinder of three, and drawn
+        # without them it was a round cone.
+        if obj.fn:
+            drawn["fn"] = obj.fn
+        return drawn
 
     if isinstance(obj, Sphere):
         r = obj.r

@@ -81,6 +81,21 @@ def test_the_viewer_sees_those_groups_without_any_new_drawing_code(shelved):
     }
 
 
+def test_a_wedge_is_drawn_with_the_three_sides_it_is_built_with(shelved):
+    """A wedge is built as a cylinder of three facets. The viewer draws a leaf from the
+    primitive the tree describes, so the description names the facets: without them the
+    viewer drew a round cone, a disc where the picture had a triangle."""
+    tree = client.get("/sites/test_bench").json()["tree"]
+    wedges = [child for child in tree["children"] if child["category"] == "wedge"]
+    assert wedges
+    for wedge in wedges:
+        assert wedge["primitive"]["type"] == "cylinder"
+        assert wedge["primitive"]["fn"] == 3
+    # A round word names no facets, and the viewer draws it as finely as it always has.
+    rounds = [c["primitive"] for c in tree["children"] if c["category"] == "disc"]
+    assert rounds and all(p is None or p.get("fn") is None for p in rounds)
+
+
 def test_pieces_are_gathered_by_word_with_the_biggest_group_first(shelved):
     sizes = [len(paths) for paths in shelved.album.groups().values()]
     assert sizes == sorted(sizes, reverse=True)

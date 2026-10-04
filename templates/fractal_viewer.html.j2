@@ -3773,8 +3773,12 @@
                     // OpenSCAD cylinders are Z-aligned; after the standing
                     // apothecary(z-up) -> three(y-up) axis swap used
                     // everywhere else, that's three's own Y axis -- no extra
-                    // rotation needed.
-                    geometry = new THREE.CylinderGeometry(node.primitive.r2, node.primitive.r1, node.primitive.h, 32);
+                    // rotation needed. Its facets are OpenSCAD's $fn when it
+                    // names one (a wedge is three), the first at +X as OpenSCAD
+                    // puts it: three.js starts a cylinder's circle at +Z, so a
+                    // quarter turn.
+                    const p = node.primitive;
+                    geometry = new THREE.CylinderGeometry(p.r2, p.r1, p.h, p.fn || 32, 1, false, Math.PI / 2);
                 } else if (node.primitive.type === 'sphere') {
                     geometry = new THREE.SphereGeometry(node.primitive.r, 24, 16);
                 } else {

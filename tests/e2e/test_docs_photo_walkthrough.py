@@ -294,6 +294,15 @@ def test_photographs_into_pieces(
     page.goto(f"{base_url}/viewer/sites/{SITE}")
     expect(page.locator(".toolbar h1")).to_contain_text("Apothecary")
     page.wait_for_timeout(700)
+    # Each piece is drawn as the word builds it: a wedge, a cylinder of three facets,
+    # is a triangle in the world, as the picture's was, not a disc.
+    page.evaluate("() => window.fractalViewer.waveDone")
+    facets = page.evaluate(
+        "() => { const v = window.fractalViewer; return v.tree.children"
+        ".filter((c) => c.category === 'wedge')"
+        ".map((c) => v.meshByName[c.name].geometry.parameters.radialSegments); }"
+    )
+    assert facets and set(facets) == {3}, facets
     story.shows(
         "The arrangement opens in the viewer the tool already had",
         "No drawing code was written for any of this. An arrangement built from a "
