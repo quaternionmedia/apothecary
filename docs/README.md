@@ -42,6 +42,7 @@ HTTP API is described at `/openapi.json`, the commands by `apothecary --help`.
 | [One screen](plans/one-screen-2026-09-20.md) | The world as the one screen: anchors, popups and panels in front of it, and the census as the meter; done |
 | [Consolidation](plans/consolidation-2026-10-03.md) | One page and one place per thing: Site and Selected over a strip of tabs, one Machine per board, the Bench, one Pictures panel, jobs over machine kinds; done |
 | [Pictures in the world](plans/pictures-in-the-world-2026-09-26.md) | A picture pinned at a place as a view, its shapes made into pieces there; what is built, and what is open |
+| [Cameras as parts, less on the screen](plans/cameras-and-clutter-2026-10-04.md) | A camera as a part of its site, aimed, its pictures landing through one mapping; one header row, icon badges and the Machine in the rail; the phases |
 | [Designing a part from the browser](plans/part-editing-in-the-browser-2026-09-27.md) | A spike: the loop for changing a part from the viewer today, what other tools do, and a recommended order |
 | [The shape finder, with a model behind it](plans/photo-finders-local-models-2026-09-21.md) | Optional local models behind the photo finder: the seam, the plugin shape, what reach is lawful, the phases |
 | [Ender bench, 2026-09-20](validation/2026-09-20-ender-bench.md) | The printer seam against a real Marlin board, and the checklist for the rest |
