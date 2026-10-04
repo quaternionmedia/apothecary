@@ -450,8 +450,6 @@
                 <input type="checkbox" id="overlay-toggle" checked> Assembly outlines
             </label>
             <div class="spacer"></div>
-            <a href="{{ base_url }}/firmware" id="firmware-link" class="toolbar-link" title="Install the firmware toolchain and program boards from sketches under parts/">⚡ Firmware</a>
-            <a href="{{ base_url }}/firmware/monitor" id="monitor-link" class="toolbar-link" title="Focused printer monitor: status, temperature history, full comms log, reconnect/reset">🖨 Monitor</a>
             <button type="button" id="ring-open" title="Open the ring for the chosen piece (m, or right-click a piece). Digits choose cells as on a numeric keypad; 5 backs out.">⌗ Ring</button>
             <span id="validity-indicator" class="validity-indicator valid" title="The site's problems: click to open them at the top of Site">Layout valid</span>
         </div>
@@ -506,6 +504,7 @@
     </div>
     {% endif %}
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/machine.css">
+    <link rel="stylesheet" href="{{ base_url }}/static/widgets/bench.css">
     <script type="importmap">
     {
         "imports": {
@@ -526,6 +525,9 @@
         import { boardLabel, boardSummary } from '/static/board_text.js';
         import { mountPinned } from '/static/widgets/pinned.js';
         import { mountPictureList } from '/static/widgets/picture_list.js';
+        import { mountToolchain } from '/static/widgets/toolchain.js';
+        import { mountBuild, mountRawFlash } from '/static/widgets/sketches.js';
+        import { mountTasks } from '/static/widgets/tasks.js';
         import { makeMachineMarks, toScene as marksToScene } from '/static/machine_marks.js';
         import { mountPictureMarks } from '/static/picture_marks.js';
         import { mountPictures } from '/static/pictures.js';
@@ -533,6 +535,10 @@
         const BASE_URL = {{ base_url | tojson }};
         const DEFAULT_SITE = {{ default_site | tojson }};
         const INITIAL_FOCUS = {{ focus_path | tojson }};
+        // What a link into the world asks to have open: ?panel=bench (where /firmware
+        // leads) and ?machine=<port> (where /firmware/monitor?port= leads). Read once,
+        // before the first load closes any Machine and the address follows it.
+        const DEEP_LINK = new URLSearchParams(location.search);
 
         // Anything from the server that is written into markup goes through this.
         const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -836,7 +842,19 @@
                 this.onResize();
                 this.animate();
 
-                if (this.siteSelect.value) this.loadSite(this.siteSelect.value, INITIAL_FOCUS);
+                if (this.siteSelect.value) this.loadSite(this.siteSelect.value, INITIAL_FOCUS).then(() => this.followDeepLink());
+            }
+
+            // A link into the world with a panel open: the Bench, or a board's Machine
+            // -- tethered where the board is pinned in this site, floating over the
+            // world when it is pinned nowhere here -- once the site's boards are known.
+            async followDeepLink() {
+                const panel = DEEP_LINK.get('panel');
+                if (panel) this.panels.open(panel);
+                const port = DEEP_LINK.get('machine');
+                if (!port || !this.siteName) return;
+                await this.boards.scan();
+                if (this.openMachineFor(port)) this.setStatus(`Opened ${port}'s Machine`, 'success');
             }
 
             initThreeJS() {
@@ -983,6 +1001,18 @@
                         });
                         window.apothecaryPictureList = this.picturesWidget;
                     },
+                });
+                // The Bench: the toolchain, the sketches built and uploaded, raw flash
+                // and the task log -- what the firmware page was (widgets/toolchain.js,
+                // sketches.js, tasks.js) -- a tab of the rail's strip, closed until it
+                // is pressed, filled the first time it is shown and asked for the
+                // toolchain's state again each time it is shown again. A board's own
+                // flashing is in its Machine; the Bench is for any sketch and any port.
+                this.bench = null;
+                this.panels.register('bench', {
+                    title: 'Bench',
+                    onOpen: () => { if (this.bench) this.bench.load(); },
+                    body: (slot) => { this.bench = this.mountBench(slot); window.apothecaryBench = this.bench; },
                 });
                 window.apothecaryPanels = this.panels;
                 this.onResize();
@@ -3080,7 +3110,7 @@
                 // The Machine follows its badge -- to the printer a board inside drives,
                 // once it is known to be one -- and goes with it: nothing is left
                 // polling a board unseen.
-                if (this.machine && !wanted.has(this.machine.path)) {
+                if (this.machine && this.machine.path && !wanted.has(this.machine.path)) {
                     const moved = anchorOf[this.machine.port];
                     if (!moved) { this.closeMachine(); return; }
                     const where = this.panels.state('machine') && this.panels.state('machine').where;
@@ -3119,24 +3149,100 @@
                 if (!port) { this.setStatus(`${path}: no board pinned here`, 'error'); return false; }
                 const anchor = row.device.printer ? this.bearerPathFor(row.path) : row.path;
                 if (this.machine && this.machine.port === port) { this.panels.open('machine'); this.panels.tether('machine', anchor); return true; }
+                this.mountMachinePanel(port, anchor, row);
+                this.panels.tether('machine', anchor);
+                return true;
+            }
+            // A board's Machine by its port: tethered to where it is pinned in this
+            // site, or, pinned nowhere here, floating over the world -- what a link
+            // to the printer monitor opens.
+            openMachineFor(port) {
+                const row = Object.values(this.bindings).find((r) => r.device && r.device.port === port);
+                if (row) return this.openMachine(row.path);
+                if (this.machine && this.machine.port === port) { this.panels.open('machine'); return true; }
+                this.mountMachinePanel(port, null, null);
+                return true;
+            }
+            // The Machine's panel, its body mounted when it is first in front of a
+            // person -- at once when it floats or is tethered, when its tab is shown
+            // when a browser remembered it docked.
+            mountMachinePanel(port, anchor, row) {
                 this.closeMachine();
-                let handle = null;
+                const machine = { port, path: anchor, pin: row, handle: null };
+                this.machine = machine;
                 this.panels.register('machine', {
-                    title: `${anchor} · ${port}`, where: 'free', open: true,
+                    title: anchor ? `${anchor} · ${port}` : `${port} · pinned nowhere in ${this.siteName}`, where: 'free', open: true,
                     body: (slot) => {
-                        handle = mountMachine(slot, {
+                        machine.handle = mountMachine(slot, {
                             base: BASE_URL, port, host: 'popup', boards: this.boards,
-                            pin: { site: this.siteName, path: row.path, how: row.binding_source },
+                            pin: row ? { site: this.siteName, path: row.path, how: row.binding_source, sketch: row.sketch || null } : null,
                             say: (text, kind) => this.setStatus(text, kind),
                         });
+                        if (this.machine === machine) { window.apothecaryMachine = machine.handle; this.machineOpened(port); }
                     },
                     onClose: () => this.closeMachine(),  // its ✕: the watching stops with it
                 });
-                this.panels.tether('machine', anchor);
-                this.machine = { port, path: anchor, handle };
-                window.apothecaryMachine = handle;
-                return true;
+                if (!anchor) this.panels.open('machine');
+                return machine;
             }
+            // A Machine opened: its buttons wear its device ring's addresses, the
+            // address says which board's it is (so a reload opens it again), and a
+            // printer's level card sizes its corners from where it stands.
+            machineOpened(port) {
+                if (window.apothecaryRing && window.apothecaryRing.annotateMachine) window.apothecaryRing.annotateMachine();
+                this.keepMachineInAddress(port);
+                const where = this.whereByPort[port] || fetch(`${BASE_URL}/firmware/printers/where?port=${encodeURIComponent(port)}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+                where.then((w) => { if (w && w.printer && this.machine && this.machine.port === port) window.dispatchEvent(new CustomEvent('apothecary:where', { detail: { ...w, port } })); });
+            }
+            // The Bench's body: its three modules over one task log. A task's end asks
+            // the toolchain, the sketches and the ports again, and the boards the site
+            // binds (an upload changes what a board should run). Each verb is also a
+            // cell of Panels › Bench (act), acting on what the Bench has chosen.
+            mountBench(slot) {
+                slot.classList.add('bench-ui');
+                slot.innerHTML = '<div class="bench-toolchain-slot"></div><div class="k">Build &amp; upload</div><div class="bench-build-slot"></div>'
+                    + '<div class="k">Raw flash (esptool)</div><div class="bench-raw-slot"></div><div class="bench-tasks-slot"></div>';
+                const say = (text, kind) => this.setStatus(text, kind);
+                let bench = null;
+                const enableAll = () => { if (bench) { bench.toolchain.enable(); bench.build.enable(); bench.raw.enable(); } };
+                const tasks = mountTasks(slot.querySelector('.bench-tasks-slot'), {
+                    base: BASE_URL, say, onStart: enableAll,
+                    onEnd: () => { if (bench) bench.load(); if (this.siteName) this.boards.scan(); },
+                });
+                const toolchain = mountToolchain(slot.querySelector('.bench-toolchain-slot'), { base: BASE_URL, tasks, say });
+                const build = mountBuild(slot.querySelector('.bench-build-slot'), { base: BASE_URL, tasks, say, onPort: () => bench && bench.raw.enable() });
+                const raw = mountRawFlash(slot.querySelector('.bench-raw-slot'), { base: BASE_URL, tasks, say, port: () => build.port() });
+                const load = async () => {
+                    const status = await toolchain.load();
+                    await build.load(status);
+                    raw.setStatus(status);
+                    if (status && status.active_task) tasks.attach(status.active_task.id);
+                    tasks.list();
+                    if (window.apothecaryRing && window.apothecaryRing.refreshAddresses) window.apothecaryRing.refreshAddresses();
+                    return status;
+                };
+                let ready = load();
+                bench = {
+                    toolchain, build, raw, tasks,
+                    load: () => (ready = load()),
+                    ready: () => ready,
+                    // A verb of Panels › Bench: what its button does. Null when it was
+                    // refused, which the module has said.
+                    async act(verb) {
+                        await ready;
+                        if (verb === 'install') return toolchain.install();
+                        if (verb === 'compile') return build.compile();
+                        if (verb === 'upload') return build.upload();
+                        if (verb === 'esptool') return raw.flash();
+                        if (verb === 'cancel') return tasks.cancel();
+                        if (verb === 'libraries') return toolchain.libraries();
+                        if (verb.startsWith('core:')) return toolchain.core(verb.slice('core:'.length));
+                        return null;
+                    },
+                };
+                return bench;
+            }
+
             // Stops the Machine watching its board and takes its panel away. Called
             // again from inside (the panel's onClose), it does nothing.
             closeMachine() {
@@ -3144,8 +3250,14 @@
                 if (!machine) return;
                 this.machine = null;
                 window.apothecaryMachine = null;
-                machine.handle.destroy();
+                if (machine.handle) machine.handle.destroy();
                 this.panels.unregister('machine');
+                this.keepMachineInAddress(null);
+            }
+            keepMachineInAddress(port) {
+                const url = new URL(location.href);
+                if (port) url.searchParams.set('machine', port); else url.searchParams.delete('machine');
+                if (url.href !== location.href) history.replaceState(null, '', url);
             }
 
             // A printer's marks at its node, from what GET /firmware/printers/where
@@ -3184,7 +3296,7 @@
 
             // The newest bed reading for a printer's port, laid over its bed;
             // asked again at most every few seconds, on the device refresh, so
-            // a reading taken on the monitor page shows up here without a reload.
+            // a reading taken from a printer's Machine shows up here without a reload.
             refreshReading(path) {
                 const m = this.marks[path];
                 if (!m || !m.marks || Date.now() - m.readingAt < 5000) return;
@@ -3818,7 +3930,7 @@
             ['.dev-pin-manual', 'device:pin'], ['.dev-unpin', 'device:unpin'], ['.dev-rescan', 'device:rescan'],
         ];
         // A board's own verbs: carried by its Machine, opened for it when it is not.
-        const MACHINE_VERB = /^(control:|level:|print:|device:(poll|query|reconnect|reset|release))/;
+        const MACHINE_VERB = /^(control:|level:|print:|device:(poll|query|reconnect|reset|release|flash|listen|probe))/;
 
         // What the page knows about the board under a node, in the shape the
         // resolver is told it. A node with nothing pinned gets no `device`,
@@ -3849,15 +3961,28 @@
             };
         };
 
+        // A board's Machine has a ring of its own, the device ring on its port --
+        // what the monitor page's was: its cells are the Machine's buttons.
+        const machineSpec = (at) => ({
+            context: { pointing: 'device', targets: [viewer.machine.port] },
+            device: viewer.machine.handle.device(), at,
+        });
         // Right-click on a Contents row or on a piece in the 3D view opens the
         // node ring for that piece (and selects it, so the panel agrees); on
-        // empty canvas the canvas ring. The key and the button open the ring
-        // for whatever is selected, at the centre of the screen.
+        // empty canvas the canvas ring; inside a board's Machine, its device
+        // ring. The key and the button open the ring for whatever is selected,
+        // at the centre of the screen -- with nothing selected and a Machine
+        // open for a board pinned nowhere, that Machine's.
         function whatFor(event) {
             if (!viewer.siteName) return null;
+            const machineOpen = !!(viewer.machine && viewer.machine.handle);
             // The floor has no ring of its own: the canvas ring's Pictures › Floor is its.
-            if (!event) return viewer.selectedName && viewer.selectedName !== '@floor' ? nodeSpec(viewer.selectedName, null) : canvasSpec(null);
+            if (!event) {
+                if (!viewer.selectedName && machineOpen && !viewer.machine.path) return machineSpec(null);
+                return viewer.selectedName && viewer.selectedName !== '@floor' ? nodeSpec(viewer.selectedName, null) : canvasSpec(null);
+            }
             const at = { x: event.clientX, y: event.clientY };
+            if (machineOpen && event.target.closest && event.target.closest(".panel[data-panel='machine']")) return machineSpec(at);
             const row = event.target.closest('#contents-list .contents-item');
             if (row) {
                 if (viewer.renderNodeByKey[row.dataset.path]) viewer.selectChild(row.dataset.path);
@@ -3886,6 +4011,19 @@
             const port = intent.device ? intent.device.port : null;
             const tail = ` (⌗${intent.address})`;
             try {
+                // The device ring, opened inside a Machine: it stands on the port, not
+                // on a piece. Open is the Machine it was opened in; a pin is taken back
+                // from the piece it is pinned to, and made from Selected.
+                if (intent.context.pointing === 'device') {
+                    const m = viewer.machine;
+                    if (action === 'device:open') { viewer.setStatus(`${intent.label}: this is ${port}'s Machine${tail}`, 'success'); return; }
+                    if (action === 'device:unpin') {
+                        if (m && m.pin && m.pin.binding_source === 'manual') { await viewer.setNodeDevice(m.pin.path, null); viewer.setStatus(`Unpinned ${port} from ${m.pin.path}${tail}`, 'success'); }
+                        else viewer.setStatus(`${intent.label}: ${port} is pinned nowhere by hand${tail}`, 'error');
+                        return;
+                    }
+                    if (action === 'device:pin') { viewer.setStatus(`${intent.label}: choose the piece to pin ${port} to, and pin it from Selected${tail}`, 'error'); return; }
+                }
                 // A board's verb goes to its Machine, the one place for the board:
                 // opened for it first when it is not open. A refusal it meets is
                 // said here as an error, as well as in its log.
@@ -3910,6 +4048,14 @@
                     viewer.panels.open('pictures');
                     viewer.setStatus(`Gather${tail}`, 'success');
                     if (!(viewer.picturesWidget && viewer.picturesWidget.act('gather'))) viewer.setStatus(`${intent.label}: Pictures cannot do that${tail}`, 'error');
+                    return;
+                }
+                // A Bench verb: the Bench shown, and what its button does done on what
+                // it has chosen. Said first, so a refusal of the Bench's own is the last word.
+                if (action.startsWith('bench:')) {
+                    viewer.panels.open('bench');
+                    viewer.setStatus(`${intent.label}${tail}`, 'success');
+                    if (viewer.bench) viewer.bench.act(action.slice('bench:'.length));
                     return;
                 }
                 if (action === 'panel:rail:toggle') {
@@ -4037,13 +4183,24 @@
             for (const el of viewer.selectedBodyEl.querySelectorAll('.view-width')) pairs.push([el, `picture:size${floor}`]);
             annotate(ring, pairs);
         }
+        // The Bench's buttons, by the verb each one is (Panels › Bench).
+        const BENCH_VERBS = [
+            ['.install-btn', 'bench:install'], ['.compile-btn', 'bench:compile'], ['.upload-btn', 'bench:upload'],
+            ['.esp-flash-btn', 'bench:esptool'], ['.cancel-btn', 'bench:cancel'], ['.lib-btn', 'bench:libraries'],
+        ];
         // The list, from the canvas ring: each row at this level is a piece the
-        // ring's Pieces cell reaches, and the step-out button is its Up.
+        // ring's Pieces cell reaches, and the step-out button is its Up; and the
+        // Bench's buttons, its verbs under Panels › Bench.
         function annotateList(ring) {
             if (!ring) return;
             const pairs = [];
             for (const li of viewer.contentsEl.querySelectorAll('li[data-path]')) pairs.push([li, `select:${li.dataset.path}`]);
             pairs.push([viewer.zoomOutBtn, 'zoom-out']);
+            const bench = document.querySelector(".panel[data-panel='bench']");
+            if (bench) {
+                for (const [selector, action] of BENCH_VERBS) for (const el of bench.querySelectorAll(selector)) pairs.push([el, action]);
+                for (const el of bench.querySelectorAll('.core-install[data-id]')) pairs.push([el, `bench:core:${el.dataset.id}`]);
+            }
             annotate(ring, pairs);
         }
         let pending = null;
@@ -4059,17 +4216,41 @@
         new MutationObserver(refreshAddresses).observe(viewer.contentsEl, { childList: true });
         new MutationObserver(refreshAddresses).observe(viewer.selectedBodyEl, { childList: true, subtree: true });
 
+        // A Machine's buttons wear the addresses of its device ring, resolved for
+        // the board as it is now -- a printer or a devkit, armed or not -- and again
+        // when its latch or what it is identified as changes.
+        const machineRings = new Map();
+        async function annotateMachine() {
+            const m = viewer.machine;
+            if (!m || !m.handle) return;
+            const device = m.handle.device();
+            if (!device.port) return;
+            const key = JSON.stringify(device);
+            if (!machineRings.has(key)) {
+                machineRings.set(key, resolveRing({ base: BASE, context: { pointing: 'device', targets: [device.port] }, device }).catch(() => null));
+            }
+            const ring = await machineRings.get(key);
+            if (ring && viewer.machine === m) annotate(ring, m.handle.pairs());
+            if (!m.watched) {
+                m.watched = true;
+                new MutationObserver(annotateMachine).observe(m.handle.$('ctl-label'), { attributes: true, attributeFilter: ['class'] });
+                new MutationObserver(annotateMachine).observe(m.handle.$('ident'), { childList: true });
+            }
+        }
+
         installRing({
             base: BASE,
             whatFor,
             onIntent: carry,
             onResolved: async (ring, spec) => {
                 if (spec.context.pointing === 'node') { rings.set(ringKey(spec, await spec.picture), Promise.resolve(ring)); annotateControls(ring); }
+                if (spec.context.pointing === 'device' && viewer.machine && viewer.machine.handle) { machineRings.set(JSON.stringify(spec.device), Promise.resolve(ring)); annotate(ring, viewer.machine.handle.pairs()); }
             },
             onError: (err) => viewer.setStatus(`Ring: ${err.message}`, 'error'),
         });
         window.apothecaryRing.lastRing = () => lastRing;
         window.apothecaryRing.refreshAddresses = refreshAddresses;
+        window.apothecaryRing.annotateMachine = annotateMachine;
         // The ring again on a host, or on the floor through the canvas ring's
         // Pictures › Floor, entered down to the option `into` names (an id), where
         // the last ring stood: Allow hands over to Camera › Pin here this way when

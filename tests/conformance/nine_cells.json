@@ -472,14 +472,14 @@
         "Jog",
         "Y+"
       ],
-      "address": "128"
+      "address": "728"
     },
     {
       "ring": "device",
       "path": [
         "Unpin"
       ],
-      "address": "4"
+      "address": "9"
     },
     {
       "ring": "node",
@@ -489,7 +489,7 @@
         "Jog",
         "Y+"
       ],
-      "address": "2128"
+      "address": "2728"
     },
     {
       "ring": "node",
@@ -537,88 +537,90 @@
     "device": {
       "8": "device:open",
       "6": "device:poll",
-      "2": "device:query",
-      "4": "device:unpin",
-      "9": "device:rescan",
-      "38": "device:reconnect",
-      "36": "device:reset",
-      "32": "device:release",
-      "188": "control:hotend-on",
-      "186": "control:hotend-off",
-      "182": "control:bed-on",
-      "184": "control:bed-off",
-      "189": "control:fan-on",
-      "183": "control:fan-off",
-      "168": "control:home",
-      "166": "control:home-xy",
-      "162": "control:home-z",
-      "128": "control:jog:Y+",
-      "126": "control:jog:X+",
-      "122": "control:jog:Y-",
-      "124": "control:jog:X-",
-      "129": "control:jog:Z+",
-      "123": "control:jog:Z-",
-      "148": "level:probe",
-      "146": "level:read",
-      "142": "control:mesh-on",
-      "144": "control:mesh-off",
-      "149": "control:corner:BR",
-      "143": "control:corner:FR",
-      "141": "control:corner:FL",
-      "147": "control:corner:BL",
-      "198": "control:sd-resume",
-      "196": "control:sd-pause",
-      "192": "control:sd-abort",
-      "194": "print:start",
-      "138": "control:motors-off",
-      "136": "control:quickstop",
-      "132": "control:break-wait",
-      "11": "control:estop",
-      "17": "control:arm"
+      "2": "device:flash",
+      "4": "device:query",
+      "9": "device:unpin",
+      "3": "device:rescan",
+      "18": "device:reconnect",
+      "16": "device:reset",
+      "12": "device:release",
+      "788": "control:hotend-on",
+      "786": "control:hotend-off",
+      "782": "control:bed-on",
+      "784": "control:bed-off",
+      "789": "control:fan-on",
+      "783": "control:fan-off",
+      "768": "control:home",
+      "766": "control:home-xy",
+      "762": "control:home-z",
+      "728": "control:jog:Y+",
+      "726": "control:jog:X+",
+      "722": "control:jog:Y-",
+      "724": "control:jog:X-",
+      "729": "control:jog:Z+",
+      "723": "control:jog:Z-",
+      "748": "level:probe",
+      "746": "level:read",
+      "742": "control:mesh-on",
+      "744": "control:mesh-off",
+      "749": "control:corner:BR",
+      "743": "control:corner:FR",
+      "741": "control:corner:FL",
+      "747": "control:corner:BL",
+      "798": "control:sd-resume",
+      "796": "control:sd-pause",
+      "792": "control:sd-abort",
+      "794": "print:start",
+      "738": "control:motors-off",
+      "736": "control:quickstop",
+      "732": "control:break-wait",
+      "71": "control:estop",
+      "77": "control:arm"
     },
     "node": {
       "8": "zoom-in",
       "6": "move",
       "28": "device:open",
       "26": "device:poll",
-      "22": "device:query",
-      "24": "device:unpin",
-      "29": "device:rescan",
-      "238": "device:reconnect",
-      "236": "device:reset",
-      "232": "device:release",
-      "2188": "control:hotend-on",
-      "2186": "control:hotend-off",
-      "2182": "control:bed-on",
-      "2184": "control:bed-off",
-      "2189": "control:fan-on",
-      "2183": "control:fan-off",
-      "2168": "control:home",
-      "2166": "control:home-xy",
-      "2162": "control:home-z",
-      "2128": "control:jog:Y+",
-      "2126": "control:jog:X+",
-      "2122": "control:jog:Y-",
-      "2124": "control:jog:X-",
-      "2129": "control:jog:Z+",
-      "2123": "control:jog:Z-",
-      "2148": "level:probe",
-      "2146": "level:read",
-      "2142": "control:mesh-on",
-      "2144": "control:mesh-off",
-      "2149": "control:corner:BR",
-      "2143": "control:corner:FR",
-      "2141": "control:corner:FL",
-      "2147": "control:corner:BL",
-      "2198": "control:sd-resume",
-      "2196": "control:sd-pause",
-      "2192": "control:sd-abort",
-      "2194": "print:start",
-      "2138": "control:motors-off",
-      "2136": "control:quickstop",
-      "2132": "control:break-wait",
-      "211": "control:estop",
-      "217": "control:arm",
+      "22": "device:flash",
+      "24": "device:query",
+      "29": "device:unpin",
+      "23": "device:rescan",
+      "218": "device:reconnect",
+      "216": "device:reset",
+      "212": "device:release",
+      "2788": "control:hotend-on",
+      "2786": "control:hotend-off",
+      "2782": "control:bed-on",
+      "2784": "control:bed-off",
+      "2789": "control:fan-on",
+      "2783": "control:fan-off",
+      "2768": "control:home",
+      "2766": "control:home-xy",
+      "2762": "control:home-z",
+      "2728": "control:jog:Y+",
+      "2726": "control:jog:X+",
+      "2722": "control:jog:Y-",
+      "2724": "control:jog:X-",
+      "2729": "control:jog:Z+",
+      "2723": "control:jog:Z-",
+      "2748": "level:probe",
+      "2746": "level:read",
+      "2742": "control:mesh-on",
+      "2744": "control:mesh-off",
+      "2749": "control:corner:BR",
+      "2743": "control:corner:FR",
+      "2741": "control:corner:FL",
+      "2747": "control:corner:BL",
+      "2798": "control:sd-resume",
+      "2796": "control:sd-pause",
+      "2792": "control:sd-abort",
+      "2794": "print:start",
+      "2738": "control:motors-off",
+      "2736": "control:quickstop",
+      "2732": "control:break-wait",
+      "271": "control:estop",
+      "277": "control:arm",
       "4": "explain"
     }
   },
@@ -1038,6 +1040,16 @@
           "cell": 6
         },
         {
+          "id": "device:flash",
+          "label": "Flash",
+          "action": "device:flash",
+          "enabled": false,
+          "destructive": false,
+          "marked": false,
+          "children": null,
+          "cell": 2
+        },
+        {
           "id": "device:query",
           "label": "Query",
           "action": "device:query",
@@ -1045,7 +1057,7 @@
           "destructive": false,
           "marked": false,
           "children": null,
-          "cell": 2
+          "cell": 4
         },
         {
           "id": "device:unpin",
@@ -1055,7 +1067,7 @@
           "destructive": false,
           "marked": false,
           "children": null,
-          "cell": 4
+          "cell": 9
         },
         {
           "id": "device:rescan",
@@ -1065,7 +1077,7 @@
           "destructive": false,
           "marked": false,
           "children": null,
-          "cell": 9
+          "cell": 3
         },
         {
           "id": "device:link",
@@ -1106,7 +1118,7 @@
               "cell": 2
             }
           ],
-          "cell": 3
+          "cell": 1
         },
         {
           "id": "control",
@@ -1503,7 +1515,7 @@
               "cell": 7
             }
           ],
-          "cell": 1
+          "cell": 7
         }
       ]
     },
@@ -1559,6 +1571,16 @@
               "cell": 6
             },
             {
+              "id": "device:flash",
+              "label": "Flash",
+              "action": "device:flash",
+              "enabled": false,
+              "destructive": false,
+              "marked": false,
+              "children": null,
+              "cell": 2
+            },
+            {
               "id": "device:query",
               "label": "Query",
               "action": "device:query",
@@ -1566,7 +1588,7 @@
               "destructive": false,
               "marked": false,
               "children": null,
-              "cell": 2
+              "cell": 4
             },
             {
               "id": "device:unpin",
@@ -1576,7 +1598,7 @@
               "destructive": false,
               "marked": false,
               "children": null,
-              "cell": 4
+              "cell": 9
             },
             {
               "id": "device:rescan",
@@ -1586,7 +1608,7 @@
               "destructive": false,
               "marked": false,
               "children": null,
-              "cell": 9
+              "cell": 3
             },
             {
               "id": "device:link",
@@ -1627,7 +1649,7 @@
                   "cell": 2
                 }
               ],
-              "cell": 3
+              "cell": 1
             },
             {
               "id": "control",
@@ -2024,7 +2046,7 @@
                   "cell": 7
                 }
               ],
-              "cell": 1
+              "cell": 7
             }
           ],
           "cell": 2

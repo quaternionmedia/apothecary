@@ -245,9 +245,12 @@ On your own server, in the garage, with the page freshly loaded.
       the rail's strip as a tab, the tab's ⧉ floats it again, and its badge
       tethers it again; drag the popup → the tether lets go; the popup's jog
       moves the world's nozzle marker ahead of the next poll.
-- [ ] `/firmware/monitor?port=<your port>` → the same module as the popup,
-      as a page of its own, and `/firmware` → the toolchain page with its
-      config row naming `~/.apothecary/tools/arduino-cli.yaml`.
+- [ ] `/firmware/monitor?port=<your port>` → the viewer, on the site the
+      port is pinned in, with its Machine open (pinned nowhere: the default
+      site, the Machine floating), the address keeping `?machine=`; and
+      `/firmware` → the viewer with the **Bench** open, its toolchain naming
+      the config `~/.apothecary/tools/arduino-cli.yaml`. The toolbar has no
+      link to either: Panels › Bench and a board's Machine are the way.
 
 ## 5. The camera and the pictures
 
@@ -350,9 +353,19 @@ bare board):
       http://127.0.0.1:8001/firmware/sketches/footpedal/upload` (the scripted
       arduino-cli flashes nothing) → **Rescan** in a piece's Device section →
       `footpedal` wears a ⚡ badge; click it → its Machine: the Uno on
-      `/dev/ttyFAKE0`, *should run footpedal*, its serial output live in the
-      log, *observed fake_blink ✗ differs* once the scripted board says hello,
-      and a *Flashing* card that says it arrives with the Bench.
+      `/dev/ttyFAKE0`, *should run footpedal*, *not listening -- the port is
+      closed* (no `devices/stream` request in the network panel); **Listen**
+      → *may reset the board* in the log, then its serial output, and
+      *observed fake_blink ✗ differs* once the scripted board says hello. Its
+      **Flashing** card has *footpedal* and `arduino:avr:uno` chosen;
+      **Compile & upload** → confirm → the task's output in the card, then
+      *listening 6 s for the sketch's hello* in the log, and no M115. On the
+      ring, Device › Flash (⌗22 from `footpedal`) opens it at that card, and
+      Device › Link › Listen is ⌗214.
+- [ ] The **Bench** (Panels › Bench, or its tab in the rail's strip): the
+      scripted arduino-cli *✓ 9.9.9*, the suggested cores, the sketches with
+      their boards; **Compile** `footpedal` → the task log says *succeeded*
+      and lists it under Recent tasks.
 - [ ] **⚙ Control** → the overlay, a 5:00 latch; **Bed 45 → Set** → `M140
       S45` in the log and the target on the card; **Home XY**; **Y+** by 10 →
       the nozzle marker in the world moves; **Off**.
@@ -386,9 +399,7 @@ release), unchanged, plus these two that the bench did not have:
       its `0403:6001` as before; `~/.arduino15/inventory.yaml` does **not**
       gain a new `cache:` entry with today's time: the cloud lookup is off.
 - [ ] Pin it to `printer_1.frame_system.mainboard` → the bed reading's relief
-      and the nozzle marker sit on the Ender 3 model's bed in the world, and
-      the board view on the monitor page draws the whole machine as the
-      body, the board in its box at the front left.
+      and the nozzle marker sit on the Ender 3 model's bed in the world.
 
 ## 7. The docs, and the walkthrough
 

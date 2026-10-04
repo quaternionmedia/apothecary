@@ -1,7 +1,7 @@
 # Browser tests
 
-Playwright tests of the viewer, the firmware and printer pages, the camera
-panel, and the two walkthrough pages. Chromium once per machine:
+Playwright tests of the viewer -- the Bench, a board's Machine, the camera and
+the pictures -- and the two walkthrough pages. Chromium once per machine:
 
 ```bash
 uv run playwright install chromium
@@ -25,14 +25,14 @@ Without a server, `pytest` skips the browser tests with a note saying so.
 | Flag | What it does |
 |---|---|
 | `--start-server` | Starts one server for the session, on `--server-port` if given, else on a free port. It runs the scripted `arduino-cli` from `tests/firmware_helpers.py` and the simulated printer, and keeps its firmware state in a temp folder, and its pictures too unless `APOTHECARY_PICTURE_ROOT` names a folder. No test opens a real serial port, reads `~/.apothecary`, or sees a real board. |
-| `--base-url URL` | Uses a server you started yourself instead. Tests that show the server a picture skip unless `APOTHECARY_PICTURE_ROOT` names the folder that server reads. The firmware-page tests expect the scripted toolchain, so they fail against a real one. |
+| `--base-url URL` | Uses a server you started yourself instead. Tests that show the server a picture skip unless `APOTHECARY_PICTURE_ROOT` names the folder that server reads. The Bench's and the Machines' tests expect the scripted toolchain, so they fail against a real one. |
 | `--slow` | Also runs tests marked `slow`: full renders and accuracy benches. |
 | `--generate-docs` | Runs the tests marked `docs`, which skip without it, and turns on their `doc_recorder` screenshots (below). Pass it through `apothecary docs generate`, not by hand. |
 | `--headed`, `--slowmo 500`, `--tracing on` | pytest-playwright's own flags, for debugging. Open a trace with `uv run playwright show-trace test-results/<test>/trace.zip`. |
 
 Every server comes from one factory, the `start_server` fixture in
 `conftest.py`, on a free port with state of its own. `test_printer_ui.py`,
-`test_ring.py` and `test_one_machine.py` ask it for servers of their own, so
+`test_ring.py`, `test_one_machine.py` and `test_bench.py` ask it for servers of their own, so
 what they pin, arm, flash and print stays off the session's server. Every
 other module uses that one, which lives for the whole run: take back what a
 test pins, places or adds, or the tests after it see it.

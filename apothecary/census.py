@@ -59,12 +59,14 @@ control is deleted.
   markup is the meter.
 - The drawing library's own listeners (turning and sliding the view) are not in
   this count.
-- It is one page at a time, plus the widget modules the page imports and the
-  marks modules it imports by name (`MARKS`: what the world wears -- a
-  machine's marks, a picture's -- and the boards' model behind them).
+- It is one page, the viewer -- the only page there is since the firmware
+  page and the printer monitor became the Bench and a board's Machine in front
+  of the world (the consolidation plan's Phase 5) -- plus the widget modules it
+  imports and the marks modules it imports by name (`MARKS`: what the world
+  wears -- a machine's marks, a picture's -- and the boards' model behind them).
   `ring.js`, `panels.js` and `anchors.js` stay off the meter as chrome with
-  their own tests; `board_text.js` writes text and listens to nothing. The command line, direct
-  requests and the other pages are not in the number.
+  their own tests; `board_text.js` writes text and listens to nothing. The command line and
+  direct requests are not in the number.
 - It refuses when it finds nothing, because a page it failed to read and a page
   with no controls must not produce the same answer.
 """
@@ -78,9 +80,11 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 TEMPLATES = Path(__file__).resolve().parents[1] / "templates"
 VIEWER = TEMPLATES / "fractal_viewer.html.j2"
-MONITOR = TEMPLATES / "monitor.html.j2"
-FIRMWARE = TEMPLATES / "firmware.html.j2"
-PAGES = (VIEWER, MONITOR, FIRMWARE)
+# The pages there are to count: one, the viewer. The firmware page and the printer
+# monitor were pages of their own until the consolidation plan's Phase 5 made them
+# the Bench and a board's Machine, in front of the world; their addresses lead
+# there, and their templates are gone.
+PAGES = (VIEWER,)
 
 # --- what kind of surface -------------------------------------------------
 WIDGET = "widget"
@@ -136,14 +140,11 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "detail-mode": (WIDGET, WHAT_YOU_SEE, "a drop-down for how much of each subassembly to draw"),
     "overlay-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box that outlines each subassembly's extent"),
     "detail-select": (WIDGET, WHAT_YOU_SEE, "the same drop-down, for the chosen piece only"),
-    "firmware-link": (WIDGET, NOTHING, "a link to the firmware page"),
-    "monitor-link": (WIDGET, NOTHING, "a link to the printer monitor page"),
     # The Device section of the chosen piece: one line, the board pinned to it
     # and what it is doing, with Open (its Machine) and the pin's take-back; or,
     # with nothing pinned, the boards it can be pinned to. Drawn afresh each
     # time the piece changes, so these are found by class rather than id.
     "dev-open": (WIDGET, WHAT_YOU_SEE, "a button that opens the pinned board's Machine"),
-    "dev-monitor": (WIDGET, NOTHING, "a link to a printer's monitor page"),
     "dev-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins the board from the piece"),
     "dev-via": (WIDGET, WHAT_YOU_SEE, "a link to the piece inside that holds the board"),
     "dev-rescan": (WIDGET, WHAT_YOU_SEE, "a button that looks for boards again"),
@@ -160,10 +161,9 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "tree-caret": (LIST, WHAT_YOU_SEE, "the arrow that opens a branch of the list"),
     "contents-item": (LIST, WHAT_YOU_SEE, "a row of the list of pieces"),
     "breadcrumb": (LIST, WHAT_YOU_SEE, "the trail back to where you came from"),
-    # ---- the monitor page, templates/monitor.html.j2 ----------------------
-    # One printer, watched closely. The header: which port, how often to poll,
-    # and the link itself.
-    "port": (WIDGET, WHAT_YOU_SEE, "a drop-down of printer ports"),
+    # ---- a board's Machine, apothecary/static/widgets/machine.js ------------
+    # One board, close up, as the monitor page had it. The header: how often to
+    # poll, and the link itself.
     "auto": (WIDGET, WHAT_YOU_SEE, "a tick-box that polls on a schedule"),
     "interval": (WIDGET, WHAT_YOU_SEE, "a drop-down for how often to poll"),
     "poll": (WIDGET, WHAT_YOU_SEE, "a button that polls the printer once"),
@@ -171,9 +171,16 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "identify": (WIDGET, WHAT_YOU_SEE, "a button that asks the board what it is"),
     "reset": (WIDGET, WHAT_IS_THERE, "a button that reboots the board"),
     "release": (WIDGET, WHAT_YOU_SEE, "a button that lets go of the port"),
+    # A devkit's port is opened only when asked: Listen streams what it says
+    # (opening the port may reset it), Probe asks esptool what its chip is.
+    "listen": (WIDGET, WHAT_YOU_SEE, "a button that opens a devkit's port and streams it"),
+    "probe": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that asks esptool what a devkit's chip is (resets it)",
+    ),
     "ctl": (WIDGET, WHAT_YOU_SEE, "a tick-box that arms the control latch"),
     "estop": (WIDGET, WHAT_IS_THERE, "the emergency stop"),
-    "viewer-link": (WIDGET, NOTHING, "a link back to the viewer"),
     # The board's one log, in its Machine: a report to ask a printer for, and
     # what to show of the traffic.
     "qform": (WIDGET, WHAT_YOU_SEE, "a form for asking the printer for a report"),
@@ -237,36 +244,35 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     ),
     "corner:BL": (WIDGET, WHAT_IS_THERE, "a button that moves the nozzle to the back-left corner"),
     "corner:BR": (WIDGET, WHAT_IS_THERE, "a button that moves the nozzle to the back-right corner"),
-    # ---- the firmware page, templates/firmware.html.j2 -------------------
-    # The toolchain: install it, list what it knows, add to it.
-    "refresh-btn": (WIDGET, WHAT_YOU_SEE, "a button that asks the toolchain's state again"),
-    "boards-btn": (WIDGET, WHAT_YOU_SEE, "a button that rescans the ports"),
+    # ---- the Bench, apothecary/static/widgets/{toolchain,sketches,tasks}.js
+    # The firmware page's sections in front of the world, written once in the
+    # modules and named as the page named them (by class now, since the form and
+    # the task log are mounted by the Bench and by a board's Flashing card). The
+    # toolchain: install it, list what it knows, add to it.
     "install-btn": (WIDGET, WHAT_IS_THERE, "a button that installs or updates arduino-cli"),
     "install-force": (WIDGET, WHAT_YOU_SEE, "a tick-box that makes the install start over"),
     "lib-input": (WIDGET, WHAT_YOU_SEE, "a box for a library to install"),
     "lib-btn": (WIDGET, WHAT_IS_THERE, "a button that installs that library"),
     "core-install": (WIDGET, WHAT_IS_THERE, "a button that installs a board core"),
-    # Sketches: pick one, name the board and the port, build and send.
+    # Sketches: pick one from a drop-down (a list on the firmware page), name the
+    # board and the port, build and send.
+    "sketch-select": (WIDGET, WHAT_YOU_SEE, "a drop-down of the sketches under parts/"),
     "fqbn-input": (WIDGET, WHAT_YOU_SEE, "a box for the board to build for"),
     "port-select": (WIDGET, WHAT_YOU_SEE, "a drop-down of ports to upload to"),
     "compile-btn": (WIDGET, WHAT_IS_THERE, "a button that compiles the chosen sketch"),
     "upload-btn": (WIDGET, WHAT_IS_THERE, "a button that compiles and uploads it"),
-    # esptool: raw images onto an Espressif chip.
+    # esptool: raw images onto an Espressif chip, one offset and path a line (rows
+    # of three controls and an add button on the firmware page).
     "esp-chip": (WIDGET, WHAT_YOU_SEE, "a box for the chip to flash"),
     "esp-baud": (WIDGET, WHAT_YOU_SEE, "a box for the flashing baud rate"),
-    "esp-off": (WIDGET, WHAT_YOU_SEE, "a box for an image's flash offset"),
-    "esp-path": (WIDGET, WHAT_YOU_SEE, "a box for an image's path"),
-    "esp-rm": (WIDGET, WHAT_YOU_SEE, "a button that drops an image row"),
-    "esp-add": (WIDGET, WHAT_YOU_SEE, "a button that adds an image row"),
+    "esp-images": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a box for the images to flash, one offset and path a line",
+    ),
     "esp-erase": (WIDGET, WHAT_YOU_SEE, "a tick-box that erases the flash first"),
     "esp-flash-btn": (WIDGET, WHAT_IS_THERE, "a button that flashes the images"),
     "cancel-btn": (WIDGET, WHAT_IS_THERE, "a button that cancels the running task"),
-    # Each device card: what a board is, and the ways of asking it. (Its
-    # monitor link shares `dev-monitor` with the viewer's Device section.)
-    "dev-probe": (WIDGET, WHAT_IS_THERE, "a button that probes the chip with esptool (resets it)"),
-    "dev-identify": (WIDGET, WHAT_YOU_SEE, "a button that listens for the sketch's hello"),
-    "dev-printer": (WIDGET, WHAT_YOU_SEE, "a button that asks M115, or polls a printer once"),
-    "dev-live": (WIDGET, WHAT_YOU_SEE, "a button that streams the board's serial output"),
     # ---- Pictures, apothecary/static/widgets/picture_list.js -------------
     # Every picture under the picture root, each row chosen by a click for the
     # ring's Picture › Folder to pin (a list, not a control), a kept one with
@@ -328,7 +334,7 @@ RING_BACKED: Dict[str, str] = {
     "manualIn:keydown:pinManual": "device:pin",
     "devUnpin:click:setNodeDevice": "device:unpin",
     "devRescan:click:rescanDevices": "device:rescan",
-    # the monitor's header and control overlay
+    # a board's Machine: its header and control overlay
     "poll": "device:poll",
     "identify": "device:query",
     "ctl": "control:arm",
@@ -363,13 +369,19 @@ RING_BACKED: Dict[str, str] = {
     "corner:FR": "control:corner:FR",
     "corner:BL": "control:corner:BL",
     "corner:BR": "control:corner:BR",
-    # The firmware page's device cards: a poll has its cell; the monitor link and
-    # the live stream open a board's Machine on a page of its own, as Device ›
-    # Open does in front of the world; probe and identify have no cell yet.
-    "dev-printer": "device:poll",
-    "dev-monitor": "device:open",
-    "dev-live": "device:open",
-    "boards-btn": "device:rescan",
+    # The Bench's buttons are the cells of the canvas ring's Panels › Bench, each
+    # acting on what the Bench has chosen; a core's Install is Bench › Cores › its
+    # core. The form's boxes and drop-downs, the force tick-box and raw flash's
+    # boxes choose what a cell acts on, and no cell chooses them.
+    "install-btn": "bench:install",
+    "core-install": "bench:core:arduino:avr",
+    "coresEl:click:closest": "bench:core:arduino:avr",
+    "lib-btn": "bench:libraries",
+    "libEl:keydown:libraries": "bench:libraries",
+    "compile-btn": "bench:compile",
+    "upload-btn": "bench:upload",
+    "esp-flash-btn": "bench:esptool",
+    "cancel-btn": "bench:cancel",
     # Gather and Pictures' Purge are cells of the canvas ring's Pictures. The
     # per-row take-backs of Pinned and Pictures are not here: see TAKEN_BACK.
     # Pictures has no Pin here: a row chosen there is told to the ring, whose
@@ -401,6 +413,8 @@ RING_BACKED: Dict[str, str] = {
     "reconnect": "device:reconnect",
     "reset": "device:reset",
     "release": "device:release",
+    "listen": "device:listen",
+    "probe": "device:probe",
     "ctl:change:arm": "control:arm",
 }
 
@@ -452,9 +466,6 @@ BY_WHAT_IT_CARRIES: Sequence[Tuple[re.Pattern, str]] = (
 # link is the thing its class says.
 BY_SHAPE: Sequence[Tuple[re.Pattern, str]] = (
     (re.compile(r"\bhref=[\"'][^\"']*/scad[\"']"), "part-scad-download"),
-    (re.compile(r"\bhref=[\"'][^\"']*/firmware/monitor[\"']"), "monitor-link"),
-    (re.compile(r"\bhref=[\"'][^\"']*/firmware[\"']"), "firmware-link"),
-    (re.compile(r"\bhref=[\"'][^\"']*/viewer[\"']"), "viewer-link"),
 )
 
 
@@ -630,38 +641,27 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         NOTHING,
         "a devkit's serial stream stopped (a task took the port), and is opened again",
     ),
-    # ---- the monitor page, templates/monitor.html.j2 ----------------------
-    # Most of the monitor's buttons are wired by assignment rather than by
+    # ---- a board's Machine, apothecary/static/widgets/machine.js ------------
+    # Most of the Machine's buttons are wired by assignment rather than by
     # listening, so the markup carries them; these are the ones that listen.
-    "port:change:selectPort": (WIDGET, WHAT_YOU_SEE, "choosing a printer port"),
-    "portSel:change:mountFor": (AUTOMATIC, NOTHING, "the board view following the chosen port"),
     "level-history:click:closest": (
         LIST,
         WHAT_YOU_SEE,
         "picking an earlier bed reading to look at",
     ),
     "level-card:click:closest": (WIDGET, WHAT_IS_THERE, "a corner button, moving the nozzle there"),
-    # ---- the firmware page ------------------------------------------------
-    "es:close:stopLive": (AUTOMATIC, NOTHING, "the serial stream stopped, and the card says so"),
-    "devices:click:closest": (
+    # ---- the Bench --------------------------------------------------------
+    "coresEl:click:closest": (WIDGET, WHAT_IS_THERE, "a core's Install button"),
+    "libEl:keydown:libraries": (WIDGET, WHAT_IS_THERE, "installing the typed libraries, by Enter"),
+    "sketchEl:change:choose": (
         WIDGET,
         WHAT_YOU_SEE,
-        "a device card's button: probe, identify, poll, live",
+        "choosing a sketch, which fills in the board it is built for",
     ),
-    "cores:click:closest": (WIDGET, WHAT_IS_THERE, "a core's Install button"),
-    "sketches:click:closest": (LIST, WHAT_YOU_SEE, "choosing a sketch from the list"),
-    "fqbn-input:input:updateButtons": (
-        WIDGET,
-        WHAT_YOU_SEE,
-        "typing a board, which enables the buttons",
-    ),
-    "port-select:change:updateButtons": (
-        WIDGET,
-        WHAT_YOU_SEE,
-        "choosing a port, which enables the buttons",
-    ),
-    "esp-images:click:contains": (WIDGET, WHAT_YOU_SEE, "an image row's drop button"),
-    "history:click:closest": (LIST, WHAT_YOU_SEE, "opening an earlier task's log"),
+    "fqbnEl:input:enable": (WIDGET, WHAT_YOU_SEE, "typing a board, which enables the buttons"),
+    "portEl:change:enable": (WIDGET, WHAT_YOU_SEE, "choosing a port, which enables the buttons"),
+    "historyEl:click:closest": (LIST, WHAT_YOU_SEE, "opening an earlier task's output"),
+    # ---- a board's Machine, its print card, header, log and control overlay --
     "print-file:change:keepPrintFile": (
         WIDGET,
         WHAT_YOU_SEE,
@@ -714,7 +714,7 @@ FETCHED_BY_LABEL: Sequence[Tuple[str, str]] = (
     (r"\.dev-rescan", "devRescan"),
 )
 
-# Fetched by id through the monitor page's one-letter helper: `$("port")`.
+# Fetched by id through a module's one-letter helper: `$("auto")`.
 FETCHED_BY_ID = re.compile(r"\$\(\s*[\"']([\w-]+)[\"']\s*\)\s*$")
 
 # The last plain word before the listening: `this.loadBtn.` gives `loadBtn`.
@@ -989,9 +989,8 @@ STATIC = TEMPLATES.parent / "apothecary" / "static"
 # scene and listening, when they listen, on what they draw -- and the boards'
 # model (boards.js), whose poller, serial streams and page-level listeners stand
 # behind every drawer of a board. Counted with the page that imports one
-# directly, each entry saying which module it came from; a page that reaches one
-# only through another module (the monitor, through board_view.js and
-# widgets/machine.js) is not counted for it.
+# directly, each entry saying which module it came from; one reached only
+# through another module is not counted for it.
 MARKS = ("machine_marks.js", "picture_marks.js", "pictures.js", "boards.js")
 STATIC_IMPORT = re.compile(r"from\s+[\"']/static/([\w-]+\.js)[\"']")
 
@@ -1005,8 +1004,9 @@ def marks_of(page: Path) -> List[Path]:
 def take(page: Path | None = None) -> Census:
     """Count what a person can operate, from the page itself.
 
-    The viewer unless told otherwise; ``take(MONITOR)`` counts the monitor
-    page. One page at a time, and the numbers are never added -- except
+    The viewer unless told otherwise; ``take(path)`` counts another page (a
+    draft, or one a test writes). One page at a time, and the numbers are
+    never added -- except
     that a widget module the page mounts (``/static/widgets/*.js``, its
     markup written in the module) and a marks module it imports (``MARKS``)
     are counted as part of the page, each entry saying which module it came

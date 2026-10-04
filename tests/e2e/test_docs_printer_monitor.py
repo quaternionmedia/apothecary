@@ -1,5 +1,6 @@
-"""Doc-workflow E2E test for the printer monitor (Selected's Device line, the Machine, a
-devkit's Machine, the monitor and firmware pages).
+"""Doc-workflow E2E test for boards and printers in front of the world (Selected's Device
+line, a printer's Machine, a devkit's Machine and its Flashing card, the printer monitor's
+address, the Bench).
 
 Same on-demand pattern as test_docs_fractal_viewer.py: a plain test run takes
 no screenshots; `apothecary docs generate` runs this with `--generate-docs`
@@ -12,6 +13,7 @@ other server -- a plain `pytest tests/e2e --start-server`, which sees the
 host's real ports -- this test skips rather than depend on hardware.
 """
 
+import re
 import time
 
 import pytest
@@ -40,8 +42,9 @@ def _expand_to(page: Page, path: str):
 @pytest.mark.docs
 def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     """Pin the simulated printer to printer_1, see the node follow its state, open
-    its Machine and query it, open a devkit's Machine, and poll the printer from
-    the firmware page.
+    its Machine and query it, open a devkit's Machine and listen to it, follow the
+    printer monitor's address to the printer's Machine, and open the Bench from the
+    firmware page's address.
     """
     devices = page.request.get(f"{base_url}/firmware/devices").json()
     if not any(v["device"]["port"] == "/dev/ttyFAKE1" for v in devices.get("devices", [])):
@@ -158,9 +161,11 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     expect(devkit).to_be_visible(timeout=10000)
     devkit.click()
     expect(machine.locator("#c-sketch")).to_contain_text("should run footpedal", timeout=8000)
+    expect(machine.locator("#c-board")).to_contain_text("not listening")
+    machine.locator("#listen").click()
     expect(machine.locator("#log")).to_contain_text("hello", timeout=10000)
     expect(machine.locator("#c-sketch")).to_contain_text("observed", timeout=5000)
-    # The sketch at the top of the popup, the Flashing card and the live log below it.
+    # The sketch at the top of the popup, the Flashing card and the log below it.
     page.evaluate(
         "() => document.querySelector(\"#sketch-card\").scrollIntoView({ block: 'start' })"
     )
@@ -168,22 +173,26 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     docs.step(
         "A devkit has a Machine too: its port and board, the sketch it should run against "
         "what it was heard saying (here the scripted board says another sketch's hello, so "
-        "they differ), what changed since it was flashed, and its serial output, listened "
-        "to while the Machine is open. Identify listens for the hello again. Flashing it "
-        "from here is marked as arriving with the Bench"
+        "they differ) and what changed since it was flashed. Opening it opens no port: "
+        "Listen does, saying it may reset the board, and its serial output comes into the "
+        "log. Its Flashing card builds the sketch it should run for its board and, asked, "
+        "uploads it to this port, its output in the card, then listens for the hello"
     )
     page.evaluate("() => window.fractalViewer.closeMachine()")
 
     page.goto(f"{base_url}/firmware/monitor?port=/dev/ttyFAKE1")
-    expect(page.locator("#c-state")).to_contain_text("printing", timeout=10000)
+    expect(page).to_have_url(re.compile(r"/viewer/sites/garage\?machine=%2Fdev%2FttyFAKE1$"))
+    expect(page.locator("#c-state")).to_contain_text("printing", timeout=15000)
     page.wait_for_timeout(2 * 2100)  # a few polls, so the chart and log have something to show
     page.locator("#q").fill("M119")
     page.locator("#qform button").click()
     expect(page.locator("#log")).to_contain_text("y_min: TRIGGERED", timeout=8000)
     docs.step(
-        "The monitor page is the same Machine as a page of its own, for a port in its URL: "
+        "The printer monitor's address, /firmware/monitor?port=, opens the viewer on the "
+        "site the port is pinned in with the printer's Machine open in front of the world: "
         "status cards, temperature history, the port's comms log with its query box, and "
-        "Reconnect / Reset / Release for the link"
+        "Reconnect / Reset / Release for the link. A board pinned nowhere opens on the "
+        "default site, its Machine floating"
     )
 
     page.locator("#ctl").check()
@@ -213,16 +222,30 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
         "paper height for a tramming check. Read mesh does the same without moving"
     )
     page.wait_for_function(
-        "() => window.apothecaryBoardView && window.apothecaryBoardView.mesh()", timeout=10000
+        "() => { const m = window.fractalViewer.marks['printer_1'];"
+        " return m && m.marks && m.marks.mesh(); }",
+        timeout=10000,
     )
-    page.locator("#view-card").scroll_into_view_if_needed()
-    page.wait_for_timeout(600)
+    # The Machine docked into the rail's strip, and the world zoomed into the printer, so
+    # its bed is in view.
+    page.evaluate("() => window.apothecaryPanels.dock('machine')")
+    page.evaluate("() => window.fractalViewer.zoomIn('printer_1')")
+    expect(page.locator("#contents-list .contents-item", has_text="gantry_system")).to_be_visible(
+        timeout=10000
+    )
+    page.wait_for_timeout(2500)
     docs.step(
-        "The reading is drawn in the world too: the board view lays the mesh over the bed as "
-        "a relief, its lowest point resting on the bed and the rest stretched so the tilt can "
-        "be seen (the note says by how much), coloured as the heatmap is, on the area the "
-        "probe can reach. It follows whichever reading the card shows"
+        "The reading is drawn in the world too: the printer's marks lay the mesh over its "
+        "bed as a relief, stretched so the tilt can be seen and coloured as the heatmap is. "
+        "It follows whichever reading the card shows. Here the Machine is docked, a tab of "
+        "the rail's strip, and the world is zoomed into the printer"
     )
+    page.evaluate("() => window.fractalViewer.jumpTo(0)")
+    expect(page.locator("#contents-list .contents-item", has_text="workbench")).to_be_visible(
+        timeout=10000
+    )
+    page.evaluate("() => window.fractalViewer.openMachine('printer_1')")
+    expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
 
     page.locator("#control button[data-cmd='M25']").click()  # the card's print gives way
     expect(page.locator("#c-state")).to_contain_text("idle", timeout=8000)
@@ -235,7 +258,7 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     page.once("dialog", lambda d: d.accept())
     page.locator("#print-start").click()
     page.wait_for_function(
-        "() => { const j = window.apothecaryMonitor.print.job(); return j && j.sent >= 30; }",
+        "() => { const j = window.apothecaryMachine.print.job(); return j && j.sent >= 30; }",
         timeout=15000,
     )
     page.locator("#print-card").scroll_into_view_if_needed()
@@ -254,9 +277,15 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     page.locator("#ctl-disarm").click()
 
     page.goto(f"{base_url}/firmware")
-    card = page.locator(".device[data-port='/dev/ttyFAKE1']")
-    expect(card).to_be_visible(timeout=10000)
-    card.locator(".dev-printer").click()
-    expect(card.locator(".printer-status")).to_contain_text("printing", timeout=8000)
-    card.scroll_into_view_if_needed()
-    docs.step("The firmware page's device card identifies the printer and polls it too")
+    expect(page).to_have_url(re.compile(r"/viewer/sites/garage\?panel=bench$"))
+    bench = page.locator(".panel[data-panel='bench']")
+    expect(bench.locator(".tc-status")).to_contain_text("arduino-cli", timeout=15000)
+    expect(bench.locator(".sketch-select option[value='footpedal']")).to_have_count(1)
+    page.wait_for_timeout(600)
+    docs.step(
+        "The firmware page's address, /firmware, opens the viewer with the Bench, a tab of "
+        "the rail's strip: the toolchain as installed with Install / Update, the suggested "
+        "cores, libraries, the sketches under parts/ each with its board, Compile and "
+        "Compile & upload to any detected port, raw flash with esptool, and the task log. "
+        "Each verb is a cell of the ring's Panels › Bench too"
+    )

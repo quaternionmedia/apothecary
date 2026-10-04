@@ -561,7 +561,16 @@ PANELS: Sequence[Tuple[str, str]] = (
     # opened.
     ("pictures", "Pictures"),
     ("machine", "Machine"),
+    # The Bench: the toolchain, the sketches, compile and upload, raw flash and
+    # the task log -- what the firmware page was -- a tab of the rail's strip,
+    # registered at start and shown when asked for. Its verbs are a ring of
+    # their own under its cell (_bench).
+    ("bench", "Bench"),
 )
+# The panels seated before the rail's own cell, which keeps the cell it has had
+# since Phase 3 (Panels › Rail, 99); a panel registered after them is seated
+# after it, so no learned address moves.
+_BEFORE_RAIL = ("site", "selected", "pictures", "machine")
 
 
 def _panels() -> Option:
@@ -571,9 +580,50 @@ def _panels() -> Option:
     return Option(
         id="panels",
         label="Panels",
-        children=[toggle(pid, label) for pid, label in PANELS]
+        children=[toggle(pid, label) for pid, label in PANELS if pid in _BEFORE_RAIL]
         # The rail itself: hidden and shown, as the tilde key does.
-        + [Option(id="panel:rail", label="Rail", action="panel:rail:toggle")],
+        + [Option(id="panel:rail", label="Rail", action="panel:rail:toggle")]
+        + [_bench(toggle("bench", "Bench"))],
+    )
+
+
+def _bench(show: Option) -> Option:
+    """The Bench's cell under Panels: the panel itself first, then its verbs.
+
+    Each verb is the Bench's button of the same name and acts on what the Bench
+    has chosen -- the sketch, the board (FQBN) and the port in its boxes, the
+    images in its raw-flash list, the libraries typed in its box -- as Control ›
+    Print › Send file prints what the Print card has chosen. Install installs or
+    updates arduino-cli; Cores installs one of the suggested cores; Cancel stops
+    the running task. Upload and Raw flash overwrite what a board runs.
+    """
+    from .firmware.toolchains import SUGGESTED_CORES
+
+    return Option(
+        id="bench",
+        label="Bench",
+        children=[
+            show,
+            Option(id="bench:install", label="Install", action="bench:install"),
+            Option(id="bench:compile", label="Compile", action="bench:compile"),
+            Option(id="bench:upload", label="Upload", action="bench:upload", destructive=True),
+            Option(id="bench:esptool", label="Raw flash", action="bench:esptool", destructive=True),
+            Option(id="bench:cancel", label="Cancel", action="bench:cancel"),
+            Option(
+                id="bench:cores",
+                label="Cores",
+                # A core by its architecture: AVR, ESP32, RP2040 ...
+                children=[
+                    Option(
+                        id=f"bench:core:{core}",
+                        label=shorten(core.rsplit(":", 1)[-1].upper()),
+                        action=f"bench:core:{core}",
+                    )
+                    for core, _ in SUGGESTED_CORES
+                ],
+            ),
+            Option(id="bench:libraries", label="Libraries", action="bench:libraries"),
+        ],
     )
 
 
@@ -988,13 +1038,18 @@ def _device_options(device: Device) -> List[Option]:
 
     Open is the board's Machine, the one place for it, in the cell Watch had;
     Watch and Monitor were two ways into two views of one board, and are that
-    one cell now. Pin and Unpin are one cell, since a port is either pinned to
-    this node or not. Control appears only for a printer: a board running a
-    sketch has no G-code to be driven with.
+    one cell now. Flash is the Machine opened at its Flashing card, in the cell
+    Monitor freed, so every cell after it is where hands learned it before the
+    two became one (Control at 7). A printer keeps its own firmware and is
+    never flashed: its Flash holds the cell and cannot be chosen. Pin and Unpin
+    are one cell, since a port is either pinned to this node or not. Control
+    appears only for a printer: a board running a sketch has no G-code to be
+    driven with.
     """
     options = [
         Option(id="device:open", label="Open", action="device:open"),
         Option(id="device:poll", label="Poll", action="device:poll"),
+        Option(id="device:flash", label="Flash", action="device:flash", enabled=not device.printer),
         Option(id="device:query", label="Query", action="device:query"),
         (
             Option(id="device:unpin", label="Unpin", action="device:unpin")
@@ -1004,7 +1059,12 @@ def _device_options(device: Device) -> List[Option]:
         Option(id="device:rescan", label="Rescan", action="device:rescan"),
         # The link itself: reopen it, reboot the board on purpose, or hand the
         # port to another program. Before Control on purpose, so its cell is
-        # the same on a devkit (no Control) and on a printer.
+        # the same on a devkit (no Control) and on a printer. A devkit's port is
+        # opened only when asked: Listen opens it and streams what the board
+        # says (opening it may reset the board), and Probe asks esptool what
+        # the chip is (it resets the board). Both appended, so every cell
+        # before them stays; a printer is polled over its held link, never
+        # streamed or probed, and has neither.
         Option(
             id="device:link",
             label="Link",
@@ -1012,7 +1072,15 @@ def _device_options(device: Device) -> List[Option]:
                 Option(id="device:reconnect", label="Reconnect", action="device:reconnect"),
                 Option(id="device:reset", label="Reset", action="device:reset", destructive=True),
                 Option(id="device:release", label="Release", action="device:release"),
-            ],
+            ]
+            + (
+                []
+                if device.printer
+                else [
+                    Option(id="device:listen", label="Listen", action="device:listen"),
+                    Option(id="device:probe", label="Probe", action="device:probe"),
+                ]
+            ),
         ),
     ]
     if device.printer:
@@ -1024,7 +1092,7 @@ def control_options(device: Device) -> List[Option]:
     """The control ring: every allowlisted thing a printer can be told to do.
 
     Each leaf is one line from ``firmware.gcode.CONTROL_CODES``, sent by the
-    monitor page's control chain, which is where the latch is checked. Jog is
+    Machine's control chain, which is where the latch is checked. Jog is
     seated so the keypad is the jog pad: Y+ up, X+ right, Y- down, X- left,
     and Z+ and Z- in the right-hand corners. Stop is E-STOP and is marked
     destructive, since the board halts until it is reset.
@@ -1154,7 +1222,7 @@ CARRIED_BY: Dict[str, Carries] = {
     # handlers already call, never through the intent route.
     "device": Carries.VIEWER,
     # Driving a printer. Each leaf is one allowlisted G-code line, sent by the
-    # monitor page's control chain, which is where the latch is checked and
+    # Machine's control chain, which is where the latch is checked and
     # where a refusal is shown. The intent route never opens a port.
     "control": Carries.VIEWER,
     # Reading or probing the bed: the page starts the job and shows the record.
@@ -1163,6 +1231,12 @@ CARRIED_BY: Dict[str, Carries] = {
     "print": Carries.VIEWER,
     # Opening, closing, floating what stands in front of the world (panels.js).
     "panel": Carries.VIEWER,
+    # The Bench's verbs: its buttons, each acting on what the Bench has chosen.
+    # The tasks they start are the firmware routes' (POST /firmware/install,
+    # /cores/install, /libraries/install, /sketches/{name}/compile and /upload,
+    # /esptool/flash, /tasks/{id}/cancel), called by the page, never through
+    # the intent route.
+    "bench": Carries.VIEWER,
     # A camera's verbs: this browser's device pinned, live, a picture taken and
     # pinned as a view, and the gathering's report -- all of it the page's: the
     # pin and the picture routes are what the page calls.

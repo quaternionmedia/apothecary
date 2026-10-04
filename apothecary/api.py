@@ -46,7 +46,7 @@ from .firmware import gcode as firmware_gcode
 from .firmware.api import _device_view as firmware_device_view
 from .firmware.api import router as firmware_router
 from .firmware.bindings import bindings_for_site, device_for_identity, same_device
-from .firmware.models import DeviceAttachRequest
+from .firmware.models import DeviceAttachRequest, validate_port
 from .firmware.toolchains import ToolchainError
 from .hierarchy import Assembly
 from .models.bounds import BoundingBox3D
@@ -1417,8 +1417,9 @@ def printer_where(port: str):
     board (the pinned node) and the printer above it (the nearest
     status-bearing ancestor, or the board itself) with world positions, the
     footprint and build volume, and the base height the build volume sits
-    on -- what ``apothecary/static/board_view.js`` draws. ``board`` is
-    ``None`` when nothing is pinned.
+    on -- what the viewer's marks for a printer (``machine_marks.js``) are
+    made from, and what a printer's Machine sizes its corner moves by.
+    ``board`` is ``None`` when nothing is pinned.
     """
     pinned = _pinned_at(port)
     if pinned is None:
@@ -1443,8 +1444,8 @@ def _pinned_at(port: str) -> Optional[tuple[str, Assembly, str]]:
     """Where the board on ``port`` is pinned: its site's name, the site, and the
     pinned node's path -- the first pin naming it whose site and node exist.
 
-    Every pin, not just the loaded sites': the monitor is often the first page
-    opened after the server starts, and a pin names its site.
+    Every pin, not just the loaded sites': a link to a board's Machine is often
+    the first page opened after the server starts, and a pin names its site.
     """
     state = firmware_devices.get_state()
     known = firmware_devices.known_device(port, state)
@@ -1695,6 +1696,12 @@ def detach_device(name: str, path: str):
     return _binding_row(name, site, path)
 
 
+def _default_site() -> str:
+    """The site the viewer opens on when none is named: the garage, else the first."""
+    names = _site_store.names()
+    return DEFAULT_VIEWER_SITE if DEFAULT_VIEWER_SITE in names else names[0]
+
+
 @app.get("/viewer")
 async def viewer_home():
     """Redirect to the fractal zoom viewer for the first registered site.
@@ -1703,9 +1710,39 @@ async def viewer_home():
     both are absorbed into one viewer (see ``site_viewer`` below); this is
     just its default entry point.
     """
-    names = _site_store.names()
-    default_site = DEFAULT_VIEWER_SITE if DEFAULT_VIEWER_SITE in names else names[0]
-    return RedirectResponse(f"/viewer/sites/{default_site}", status_code=307)
+    return RedirectResponse(f"/viewer/sites/{_default_site()}", status_code=307)
+
+
+# The firmware page and the printer monitor were pages of their own; they are
+# the Bench and a board's Machine in front of the world now (the consolidation
+# plan's Phase 5). Their links were handed out, so each still answers, with the
+# viewer and the right panel open: the viewer reads ``panel`` and ``machine``
+# from its address once the site's boards are known.
+
+
+@app.get("/firmware", include_in_schema=False)
+def firmware_page():
+    """The firmware page is the Bench: the viewer, on the default site, with it open."""
+    return RedirectResponse(f"/viewer/sites/{_default_site()}?panel=bench", status_code=307)
+
+
+@app.get("/firmware/monitor", include_in_schema=False)
+def monitor_page(port: str = ""):
+    """The printer monitor is a board's Machine: the viewer on the site the port is
+    pinned in, its Machine open there -- or, pinned nowhere, on the default site with
+    its Machine floating. A port of the wrong shape is dropped, as the page dropped
+    it: the viewer opens with nothing in front of it."""
+    try:
+        validate_port(port) if port else None
+    except ValueError:
+        port = ""
+    if not port:
+        return RedirectResponse(f"/viewer/sites/{_default_site()}", status_code=307)
+    pinned = _pinned_at(port)
+    site = pinned[0] if pinned is not None else _default_site()
+    return RedirectResponse(
+        f"/viewer/sites/{quote(site, safe='')}?machine={quote(port, safe='')}", status_code=307
+    )
 
 
 @app.get("/viewer/sites/{name}", response_class=HTMLResponse)
