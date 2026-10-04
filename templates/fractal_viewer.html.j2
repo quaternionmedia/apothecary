@@ -1393,14 +1393,19 @@
                 this.acted();
             }
 
-            // Up to a level of the trail. One level up is the "-1" control itself --
-            // a crumb, Backspace and the ring's Up all land on the node just left.
             jumpTo(depth) {
-                if (depth === this.focusPath.length - 1) { this.zoomOut(); return; }
                 this.focusPath = this.focusPath.slice(0, depth);
                 this.selectedName = null;
                 this.renderFocus();
                 this.acted();
+            }
+
+            // A crumb of the trail: up to its level. One level up is the "-1" control
+            // itself, Zoom Out as it was -- a crumb, Backspace and the ring's Up all
+            // land on the node just left; further up, nothing is selected.
+            goUpTo(depth) {
+                if (depth === this.focusPath.length - 1) this.zoomOut();
+                else this.jumpTo(depth);
             }
 
             // Each direct child of focus renders collapsed (its own single
@@ -1841,7 +1846,7 @@
                 const rootCrumb = document.createElement('span');
                 rootCrumb.className = 'crumb';
                 rootCrumb.textContent = this.siteName;
-                rootCrumb.addEventListener('click', () => this.jumpTo(0));
+                rootCrumb.addEventListener('click', () => this.goUpTo(0));
                 trail.appendChild(rootCrumb);
 
                 this.focusPath.forEach((name, i) => {
@@ -1849,7 +1854,7 @@
                     const crumb = document.createElement('span');
                     crumb.className = 'crumb';
                     crumb.textContent = name;
-                    crumb.addEventListener('click', () => this.jumpTo(i + 1));
+                    crumb.addEventListener('click', () => this.goUpTo(i + 1));
                     trail.appendChild(crumb);
                 });
             }

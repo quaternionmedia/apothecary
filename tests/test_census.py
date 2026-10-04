@@ -280,6 +280,11 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # Select walls (914, appended after Outlines; nothing moved). For the phase as a
 # whole: 116 controls, 60 ring-backed (51.7%), 77 places before; 115, 63 ring-backed
 # (54.8%), 78 places after. The ceiling follows the count down by one.
+#
+# Phase 2, the trail's crumbs. The same counts: the crumbs' listeners are keyed by
+# what a crumb does now (rootCrumb:click:goUpTo, crumb:click:goUpTo), going up one
+# level as Up does and further as the trail did, so jumpTo keeps its meaning for the
+# page's own callers.
 VIEWER_CEILING = 115
 
 

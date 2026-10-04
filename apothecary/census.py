@@ -407,7 +407,7 @@ RING_BACKED: Dict[str, str] = {
     "zoom-in-btn": "zoom-in",
     "li:click:selectChild": "select:printer_1",
     "badge:click:selectPath": "select:printer_1",
-    "crumb:click:jumpTo": "zoom-out",
+    "crumb:click:goUpTo": "zoom-out",
     "zoomInLink:click:zoomIn": "zoom-in",
     # The header's View menu: each of its items a cell of the canvas ring's
     # Panels › View (a Detail value is View › Detail › that value).
@@ -632,8 +632,8 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "the toolbar's count of problems, opening them at the top of Site",
     ),
     "li:dblclick:zoomIn": (LIST, WHAT_YOU_SEE, "going into a piece from the list"),
-    "rootCrumb:click:jumpTo": (LIST, WHAT_YOU_SEE, "the top of the trail"),
-    "crumb:click:jumpTo": (LIST, WHAT_YOU_SEE, "a step on the trail"),
+    "rootCrumb:click:goUpTo": (LIST, WHAT_YOU_SEE, "the top of the trail"),
+    "crumb:click:goUpTo": (LIST, WHAT_YOU_SEE, "a step on the trail"),
     # how much to draw
     "detailModeEl:change:clear": (WIDGET, WHAT_YOU_SEE, "choosing how much to draw"),
     "overlayToggle:change:renderFocus": (WIDGET, WHAT_YOU_SEE, "the outlines tick-box"),
