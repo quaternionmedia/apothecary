@@ -251,3 +251,37 @@ def test_open_cards_never_overlap_and_keep_off_the_edges(page: Page, bench: str)
         got = _rect(page, ".world-badge.open .badge-words")
         assert got["l"] >= world["l"] + 8 and got["r"] <= world["r"] - 8, (edge, got, world)
         assert got["t"] >= world["t"] + 8 and got["b"] <= world["b"] - 8, (edge, got, world)
+
+
+# --------------------------------------------------------------------------
+# Handles: one compact set on a movable thing
+# --------------------------------------------------------------------------
+
+HANDLES = """() => {
+    const v = window.fractalViewer, tc = v.transformControls;
+    const seen = new Set();
+    tc._gizmo.gizmo.translate.traverse((o) => {
+        if (o.material) seen.add(o.material._opacity ?? o.material.opacity);
+    });
+    return { on: tc.object ? tc.object.userData.key : null, mode: tc.mode, size: tc.size,
+             most: Math.max(...seen) };
+}"""
+
+
+@pytest.mark.e2e
+def test_a_movable_thing_selected_wears_one_compact_set_of_handles(page: Page, bench: str):
+    """Selected, a piece that can be moved wears the move arrows, smaller and lighter
+    than three.js draws them; a piece inside another, which cannot be moved from
+    here, and the floor wear none."""
+    _open(page, bench)
+    _select(page, "printer_1")
+    got = page.evaluate(HANDLES)
+    assert got["on"] == "printer_1" and got["mode"] == "translate"
+    assert got["size"] < 1 and got["most"] < 1, got
+    page.evaluate("() => window.fractalViewer.selectPath('printer_1.frame_system')")
+    assert page.evaluate(HANDLES)["on"] is None
+    page.evaluate("() => window.fractalViewer.selectPlace('')")
+    assert page.evaluate(HANDLES)["on"] is None
+    _select(page, "workbench")
+    assert page.evaluate(HANDLES)["on"] == "workbench"
+

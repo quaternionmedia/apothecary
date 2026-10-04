@@ -632,6 +632,8 @@
         const WAVE_CONCURRENCY = 3;    // real-geometry loads in flight at once
         const WHEEL_RESISTANCE_THRESHOLD = 500;
         const SNAP_INCREMENT = 50;    // mm -- matches WALL_THICKNESS; fine enough for by-hand placement
+        const HANDLE_SIZE = 0.6;      // the move arrows, against TransformControls' own 1
+        const HANDLE_LIGHTNESS = 0.55; // and their opacity, against its own
         // The site's floor: a selection but not a node. Its key in the page; "" in every
         // view and camera route. Floor things stand this far past the site's roots in +x
         // (vision/views.py's FLOOR_MARGIN_MM).
@@ -897,8 +899,19 @@
                 this.orbitControls.dampingFactor = 0.05;
                 this.orbitControls.zoomSpeed = 0.6;
 
+                // The handles a selected movable thing wears: one compact set, shown
+                // and hidden by showHandles and hideHandles alone. Today that is the
+                // move arrows -- three.js's TransformControls, translating -- drawn
+                // smaller than its default and lighter (each handle's own opacity
+                // scaled once; the one under the pointer still lights up), so they
+                // do not dominate what they move. A camera's turn ring and tilt arc
+                // (the cameras-and-clutter plan's Phase 3) join this set there.
                 this.transformControls = new TransformControls(this.camera, this.renderer.domElement);
                 this.transformControls.setMode('translate');
+                this.transformControls.setSize(HANDLE_SIZE);
+                const handleMaterials = new Set();
+                this.transformControls.traverse((o) => { if (o.material) handleMaterials.add(o.material); });
+                for (const material of handleMaterials) material.opacity *= HANDLE_LIGHTNESS;
                 this.transformControls.setTranslationSnap(SNAP_INCREMENT);
                 this.transformControls.addEventListener('dragging-changed', (event) => {
                     this.orbitControls.enabled = !event.value;
@@ -1385,7 +1398,7 @@
             // ---------------------------------------------------------------
 
             clearScene() {
-                this.transformControls.detach();
+                this.hideHandles();
                 for (const object of [
                     ...Object.values(this.meshByName),
                     ...Object.values(this.buildVolumeMeshByName),
@@ -1913,15 +1926,20 @@
                 // out); a machine that is a part with things inside it moves
                 // like any other structure.
                 if (mesh && node && this.isEditableSelection(focus, node) && !(node.part_ref && node.children.length === 0)) {
-                    this.transformControls.attach(mesh);
+                    this.showHandles(mesh);
                 } else {
-                    this.transformControls.detach();
+                    this.hideHandles();
                 }
 
                 this.renderContentsList(focus);
                 this.renderSelectedPanel();
                 for (const k of Object.keys(this.meshByName)) this.colorMesh(k, this.renderNodeByKey[k]);
             }
+
+            // The handles' one set (see initThreeJS), on a movable thing's mesh or on
+            // nothing: whatever else joins the set comes and goes here with the arrows.
+            showHandles(object) { this.transformControls.attach(object); }
+            hideHandles() { this.transformControls.detach(); }
 
             // The one place the three possible "Selected" panels are chosen:
             // a parts-library leaf always gets the absorbed part view
@@ -2100,7 +2118,7 @@
                 if (!node) return;
                 const existing = this.meshByName[key];
                 if (existing) {
-                    this.transformControls.detach();
+                    this.hideHandles();
                     this.scene.remove(existing);
                     disposeDeep(existing);
                     delete this.meshByName[key];
@@ -2693,7 +2711,7 @@
                     overlay.position.set(center[0], center[1], center[2]);
                 }
                 this.updateBuildVolumeIndicator(node, bounds);
-                if (this.selectedName === key) this.transformControls.attach(mesh);
+                if (this.selectedName === key) this.showHandles(mesh);
             }
 
             // ---------------------------------------------------------------
@@ -3403,7 +3421,7 @@
                 this.pictureMarks.untrace();
                 this.pictures.selectionChanged('');
                 this.selectedName = FLOOR_KEY;
-                this.transformControls.detach();
+                this.hideHandles();
                 this.renderContentsList(this.currentFocusNode());
                 this.renderSelectedPanel();
                 for (const k of Object.keys(this.meshByName)) this.colorMesh(k, this.renderNodeByKey[k]);
@@ -3864,7 +3882,7 @@
                 this.scene.add(realMesh);
                 this.meshByName[key] = realMesh;
                 this.colorMesh(key, node);
-                if (this.selectedName === key) this.transformControls.attach(realMesh);
+                if (this.selectedName === key) this.showHandles(realMesh);
             }
 
             // Every load of a node takes a token; only the newest may land.
