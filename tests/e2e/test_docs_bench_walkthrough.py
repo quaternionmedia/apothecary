@@ -244,6 +244,10 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
 
     page.locator("#contents-list .contents-item[data-path='printer_1']").click()
     expect(_part_row(page)).to_contain_text("ender3", timeout=5000)
+    # Selected's rows run past the rail's lower half: the part row the caption names
+    # is scrolled into view.
+    _part_row(page).evaluate("(el) => el.scrollIntoView({ block: 'center' })")
+    expect(_part_row(page)).to_be_in_viewport(ratio=0.99)  # whole, but for a fraction of a pixel
     settled(page)
     story.shows(
         "A printer is the part it names",
@@ -327,9 +331,12 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
         "both back.",
     )
 
-    page.evaluate("() => window.fractalViewer.zoomOut()")
+    # Back to the root with nothing selected: zooming out one level would select the
+    # printer it left, and its rows and gizmo would stand in the pictures below.
+    page.evaluate("() => window.fractalViewer.jumpTo(0)")
     expect(badge).to_be_visible(timeout=5000)
     assert _camera_marks_visible(page) == [True]
+    expect(page.locator("#selected-body")).to_contain_text("Click a node to select it")
     # Taken back from its row in Site's Pinned.
     pinned.locator("summary").click()
     placed.locator(".pinned-camera-unpin").click()

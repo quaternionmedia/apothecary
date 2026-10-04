@@ -343,6 +343,10 @@ def test_photographs_into_pieces(
     expect(selected).to_contain_text(f"found by {album['finder']}")
     expect(selected).to_contain_text(f"at {piece['confidence']:.2f} confidence")
     expect(selected).to_contain_text("thickness is a guess")
+    # The provenance runs past the rail's lower half: scrolled into view, whole.
+    provenance = selected.locator(".prop-readonly", has_text="thickness is a guess")
+    provenance.evaluate("(el) => el.scrollIntoView({ block: 'center' })")
+    expect(provenance).to_be_in_viewport(ratio=0.99)  # whole, but for a fraction of a pixel
     page.wait_for_timeout(400)
     story.shows(
         "Choosing a piece shows where it came from",
