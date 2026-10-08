@@ -173,7 +173,7 @@ def test_a_layout_remembered_with_the_jobs_panel_is_harmless(page, base_url: str
 
 @pytest.mark.e2e
 def test_a_problem_marks_its_pieces_and_its_row_selects_one_at_its_level(page, base_url: str):
-    """printer_1 moved onto printer_2: both rows red, saying why on hover; Site's one
+    """printer_1 moved onto the footpedal: both rows red, saying why on hover; Site's one
     folded line says so, and unfolded, the problem selects printer_1 from a level
     below, stepping out to it."""
     _open(page, base_url)
@@ -183,22 +183,22 @@ def test_a_problem_marks_its_pieces_and_its_row_selects_one_at_its_level(page, b
     _row(page, "printer_1").click()
     x = page.locator("#pos-x")
     expect(x).to_be_visible()
-    x.fill("650")
+    x.fill("1160")
     x.press("Tab")
     expect(page.locator("#validity-indicator")).to_contain_text("violation", timeout=5000)
     rows = page.locator("#problem-list li")
     expect(rows).to_have_count(1)
-    expect(rows.first).to_have_text("printer_1 and printer_2 overlap")
+    expect(rows.first).to_have_text("printer_1 and footpedal overlap")
     expect(page.locator("#site-problems-count")).to_have_text("1 problem")
     expect(rows.first).to_be_hidden()  # folded until asked for
     page.locator("#site-problems > summary").click()
     expect(rows.first).to_be_visible()
-    for name in ("printer_1", "printer_2"):
+    for name in ("printer_1", "footpedal"):
         expect(_row(page, name)).to_have_class(re.compile(r"\binvalid\b"))
         expect(_row(page, name)).to_have_attribute(
-            "title", re.compile("printer_1 and printer_2 overlap")
+            "title", re.compile("printer_1 and footpedal overlap")
         )
-    expect(_row(page, "printer_3")).not_to_have_class(re.compile(r"\binvalid"))
+    expect(_row(page, "esp32_blink")).not_to_have_class(re.compile(r"\binvalid"))
 
     # From inside the bench, the row steps back out to the root and selects printer_1.
     page.evaluate("() => window.fractalViewer.zoomIn('workbench')")
@@ -258,7 +258,7 @@ def test_a_problem_deep_in_the_tree_marks_every_piece_above_it(page, base_url: s
     expect(printer).to_have_class(re.compile(r"\binvalid-inside\b"))
     expect(printer).to_have_attribute("title", re.compile("something inside is invalid"))
     expect(printer.locator(".problem-mark")).to_be_visible()
-    expect(_row(page, "printer_2")).not_to_have_class(re.compile(r"\binvalid"))
+    expect(_row(page, "cnc_router")).not_to_have_class(re.compile(r"\binvalid"))
     expect(page.locator("#validity-indicator")).to_have_text("1 violation")
 
     page.locator("#validity-indicator").click()  # opens the problems' fold
@@ -277,34 +277,44 @@ def test_a_problem_deep_in_the_tree_marks_every_piece_above_it(page, base_url: s
 
 @pytest.mark.e2e
 def test_a_problem_selects_the_right_one_of_two_pieces_of_the_same_name(page, base_url: str):
-    """Every printer's gantry has a left and a right post. A problem with printer_2's
-    posts marks printer_2's and its row selects printer_2's left post -- by the path
-    the problem carries, not the first piece of that name, which is printer_1's."""
-    page.route(
-        lambda url: urlparse(url).path == "/sites/garage", _with_posts_overlapping("printer_2")
-    )
+    """The bench, printer_1 and the CNC router each have a frame_system. A problem
+    with the router's marks the router's and its row selects the router's -- by the
+    path the problem carries, not the first piece of that name, which is the bench's."""
+
+    def route_it(route):
+        answer = route.fetch()
+        body = answer.json()
+        body["violations"] = [
+            *body["violations"],
+            {
+                "kind": "overlap",
+                "message": "frame_system and storage_shelving overlap",
+                "structures": ["frame_system", "storage_shelving"],
+                "paths": ["cnc_router.frame_system", "storage_shelving"],
+            },
+        ]
+        body["is_valid"] = False
+        route.fulfill(response=answer, json=body)
+
+    page.route(lambda url: urlparse(url).path == "/sites/garage", route_it)
     _open(page, base_url)
-    expect(_row(page, "printer_2")).to_have_class(re.compile(r"\binvalid-inside\b"))
-    expect(_row(page, "printer_1")).not_to_have_class(re.compile(r"\binvalid"))
+    expect(_row(page, "cnc_router")).to_have_class(re.compile(r"\binvalid-inside\b"))
+    expect(_row(page, "workbench")).not_to_have_class(re.compile(r"\binvalid"))
     expect(page.locator("#problem-list li")).to_have_attribute(
-        "data-path", "printer_2.gantry_system.left_post"
+        "data-path", "cnc_router.frame_system"
     )
 
     page.locator("#validity-indicator").click()  # opens the problems' fold
-    page.locator("#problem-list li", has_text="left_post and right_post overlap").click()
-    assert page.evaluate("() => window.fractalViewer.focusPath") == ["printer_2", "gantry_system"]
-    selected = "printer_2.gantry_system.left_post"
+    page.locator("#problem-list li", has_text="frame_system and storage_shelving").click()
+    assert page.evaluate("() => window.fractalViewer.focusPath") == ["cnc_router"]
+    selected = "cnc_router.frame_system"
     assert page.evaluate("() => window.fractalViewer.selectedName") == selected
     expect(_row(page, selected)).to_have_class(re.compile(r"\bselected\b"))
-    for path in (selected, "printer_2.gantry_system.right_post"):
-        expect(_row(page, path)).to_have_class(re.compile(r"\binvalid\b"))
-    # printer_1's posts, of the same names, are not in it.
-    page.evaluate(
-        "() => { const v = window.fractalViewer; v.jumpTo(0); v.zoomIn('printer_1'); v.zoomIn('gantry_system'); }"
-    )
-    expect(_row(page, "printer_1.gantry_system.left_post")).to_be_visible(timeout=5000)
-    for path in ("printer_1.gantry_system.left_post", "printer_1.gantry_system.right_post"):
-        expect(_row(page, path)).not_to_have_class(re.compile(r"\binvalid"))
+    expect(_row(page, selected)).to_have_class(re.compile(r"\binvalid\b"))
+    # The bench's frame_system, of the same name, is not in it.
+    page.evaluate("() => { const v = window.fractalViewer; v.jumpTo(0); v.zoomIn('workbench'); }")
+    expect(_row(page, "workbench.frame_system")).to_be_visible(timeout=5000)
+    expect(_row(page, "workbench.frame_system")).not_to_have_class(re.compile(r"\binvalid"))
 
 
 @pytest.mark.e2e
@@ -314,7 +324,7 @@ def test_the_toolbar_count_opens_sites_problems(page, base_url: str):
     _open(page, base_url)
     _row(page, "printer_1").click()
     x = page.locator("#pos-x")
-    x.fill("650")
+    x.fill("1160")
     x.press("Tab")
     expect(page.locator("#validity-indicator")).to_contain_text("violation", timeout=5000)
     page.evaluate("() => { window.apothecaryPanels.close('site'); }")

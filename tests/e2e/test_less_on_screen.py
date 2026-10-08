@@ -513,7 +513,7 @@ def test_problems_are_one_folded_line_in_site_and_the_headers_count_opens_it(
     problems = page.locator("#site-problems")
     expect(problems).to_be_hidden()
     _select(page, "printer_1")
-    page.locator("#pos-x").fill("650")
+    page.locator("#pos-x").fill("1160")
     page.locator("#pos-x").press("Tab")
     expect(page.locator("#validity-indicator")).to_contain_text("1 violation", timeout=5000)
     expect(problems).to_be_visible()
@@ -525,7 +525,7 @@ def test_problems_are_one_folded_line_in_site_and_the_headers_count_opens_it(
 
     page.locator("#validity-indicator").click()
     expect(rows.first).to_be_visible(timeout=2000)
-    expect(rows.first).to_have_text("printer_1 and printer_2 overlap")
+    expect(rows.first).to_have_text("printer_1 and footpedal overlap")
     _select(page, "workbench")
     rows.first.click()
     assert page.evaluate("() => window.fractalViewer.selectedName") == "printer_1"
@@ -552,10 +552,10 @@ def test_the_hint_shows_on_a_first_visit_fades_after_a_few_actions_and_question_
     faded = re.compile(r"\bfaded\b")
     expect(hint).not_to_have_class(faded)
     expect(hint).to_have_css("opacity", "1")
-    for path in ("workbench", "printer_1", "printer_2"):
+    for path in ("workbench", "printer_1", "cnc_router"):
         _select(page, path)
     expect(hint).not_to_have_class(faded)
-    page.evaluate("() => window.fractalViewer.zoomIn('printer_2')")
+    page.evaluate("() => window.fractalViewer.zoomIn('cnc_router')")
     expect(hint).to_have_class(faded)
     expect(hint).to_have_css("opacity", "0", timeout=3000)
 
@@ -567,7 +567,7 @@ def test_the_hint_shows_on_a_first_visit_fades_after_a_few_actions_and_question_
     page.keyboard.press("?")
     expect(hint).to_have_class(faded)
     page.keyboard.press("?")
-    for path in ("workbench", "printer_1", "printer_2", "printer_3"):
+    for path in ("workbench", "printer_1", "cnc_router", "storage_shelving"):
         _select(page, path)
     expect(hint).to_have_class(faded)  # and fades again after as many
 
@@ -584,7 +584,7 @@ def test_the_hint_shows_and_fades_with_no_storage(page: Page, bench: str):
     _open(page, bench)
     hint = page.locator("#viewer-hint")
     expect(hint).not_to_have_class(re.compile(r"\bfaded\b"))
-    for path in ("workbench", "printer_1", "printer_2", "printer_3"):
+    for path in ("workbench", "printer_1", "cnc_router", "storage_shelving"):
         _select(page, path)
     expect(hint).to_have_class(re.compile(r"\bfaded\b"))
     assert errors == []

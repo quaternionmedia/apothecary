@@ -70,19 +70,17 @@ def test_viewer_dark_theme(page: Page, base_url: str):
 @pytest.mark.e2e
 def test_viewer_shows_contents_for_the_loaded_site(page: Page, base_url: str):
     """Test that the garage site's top-level structures appear in Contents:
-    the workbench and its printer fleet, plus the building shell, utility
+    the workbench and its printer, plus the building shell, utility
     fixture stubs, storage, the CNC router stub, and the boards on the bench
     the firmware seam binds to (a devkit, the footpedal, an Uno, a Pi, a Teensy).
     """
     _open(page, f"{base_url}/viewer/sites/garage")
 
-    expect(page.locator("#contents-list .contents-item")).to_have_count(16)
+    expect(page.locator("#contents-list .contents-item")).to_have_count(14)
     contents = page.locator("#contents-list")
     for name in (
         "workbench",
         "printer_1",
-        "printer_2",
-        "printer_3",
         "garage_building",
         "lighting",
         "hvac",

@@ -214,8 +214,8 @@ def test_pin_identify_open_poll_and_sync(page: Page, fresh_url: str):
     assert "printing" in badge.get_attribute("class")
     expect(page.locator("#status-select")).to_have_value("printing", timeout=WITHIN_A_POLL)
 
-    # The other printer is untouched, and the pinned port is no longer offered to it.
-    _select(page, "printer_2")
+    # The CNC router is untouched, and the pinned port is no longer offered to it.
+    _select(page, "cnc_router")
     expect(page.locator("#status-select")).to_have_value("idle")
     expect(page.locator("#selected-body .device-section")).not_to_contain_text("/dev/ttyFAKE1")
 
@@ -277,7 +277,7 @@ def test_query_from_panel_and_the_machine(page: Page, printer_url: str):
     _pin(printer_url, "printer_1")
     page.goto(f"{printer_url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
-    _select(page, "printer_3")
+    _select(page, "cnc_router")
     section = page.locator("#selected-body .device-section")
     # printer_1 holds /dev/ttyFAKE1; FAKE0 (the Uno) is free.
     expect(section.locator(".dev-pick")).to_be_visible(timeout=8000)
@@ -316,7 +316,7 @@ def test_manual_pin_poll_and_rescan(page: Page, printer_url: str):
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
 
     # A typed identity that nothing detects pins as "not connected" and offers Rescan.
-    _select(page, "printer_2")
+    _select(page, "cnc_router")
     section = page.locator("#selected-body .device-section")
     expect(section.locator(".dev-manual")).to_be_visible(timeout=8000)
     section.locator(".dev-manual").fill("/dev/ender")
@@ -341,7 +341,7 @@ def test_manual_pin_poll_and_rescan(page: Page, printer_url: str):
     scan_done = "() => !window.fractalViewer.bindingsInFlight"
     _hold_clock(page)
     page.wait_for_function(scan_done)
-    _select(page, "printer_2")
+    _select(page, "cnc_router")
     section.locator(".dev-rescan").click()
     expect(page.locator("#status")).to_contain_text("device(s) detected", timeout=8000)
     page.wait_for_function(scan_done)

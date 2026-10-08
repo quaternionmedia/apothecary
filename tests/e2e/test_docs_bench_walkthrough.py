@@ -105,8 +105,8 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
         title="The bench as it is, and a camera looking at it",
         intro=(
             "A mesh made in another program is brought in measured, not trusted; a "
-            "part can be a folder with a sidecar and no Python; the garage's printers "
-            "are Ender 3s from published dimensions and its boards are the boards. A "
+            "part can be a folder with a sidecar and no Python; the garage's printer "
+            "is an Ender 3 from published dimensions and its boards are the boards. A "
             "camera placed at a piece is drawn there, at the level where that piece "
             "is, and nowhere else. And nothing here leaves the machine, by "
             "construction rather than by anyone's care."
@@ -121,7 +121,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
         does_not_show=[
             "**A real camera.** The camera placed here is Chromium's test pattern. "
             "Nothing of anyone's room is in these pictures.",
-            "**A printer or board that is connected.** The Ender 3s and the boards "
+            "**A printer or board that is connected.** The Ender 3 and the boards "
             "are drawn as what they are; none is pinned to a port, and the status "
             "each shows is the site's own.",
             "**The import command writing into the repository.** `apothecary parts "
@@ -203,7 +203,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     assert printer.build_origin == ender3.BUILD_ORIGIN
     assert mainboard.part_ref == "creality_v422"
     story.says(
-        "The printers are Ender 3s from published dimensions",
+        "The printer is an Ender 3 from published dimensions",
         "A printer node names the part it is, and its children live inside it: the "
         "Creality mainboard in the electronics box, the gantry at the uprights. "
         "`build_origin` puts the bed where it is, so a job's build volume and a "
@@ -220,7 +220,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     expect(page.locator(".toolbar h1")).to_contain_text("Apothecary")
     contents = page.locator("#contents-list .contents-item")
     expect(contents.first).to_be_visible(timeout=20000)
-    for name in ("workbench", "printer_1", "printer_3", "esp32_blink", "raspberry_pi_4"):
+    for name in ("workbench", "printer_1", "esp32_blink", "raspberry_pi_4"):
         expect(page.locator("#contents-list")).to_contain_text(name)
     page.evaluate("() => localStorage.removeItem('apothecary.panels')")
     # The root frames the whole building; the bench is what this page is
@@ -228,7 +228,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     page.evaluate(
         """() => {
             const v = window.fractalViewer;
-            const on = new Set(['workbench', 'printer_1', 'printer_2', 'printer_3', 'esp32_blink',
+            const on = new Set(['workbench', 'printer_1', 'esp32_blink',
                                 'footpedal', 'arduino_uno', 'raspberry_pi_4', 'teensy_40']);
             const level = v.currentRenderNodes(v.currentFocusNode());
             v.frameCameraForChildren(level.filter((n) => on.has(n.name)));
@@ -236,7 +236,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     )
     settled(page)
     story.shows(
-        "The bench at the garage's root: three Ender 3s on it, the boards at its right end",
+        "The bench at the garage's root: an Ender 3 at its left end, the boards at its right end",
         "The root shows the whole building; here the view is framed on the bench. "
         "Every machine and board is the part it names, drawn from its own STL, and "
         "the site places each by its footprint.",
