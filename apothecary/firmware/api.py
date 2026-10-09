@@ -37,6 +37,7 @@ from .models import (
     LevelingRequest,
     LibraryInstallRequest,
     ListenRequest,
+    ModuleInstallRequest,
     Port,
     PrinterControlArmRequest,
     PrinterControlRequest,
@@ -46,6 +47,7 @@ from .models import (
     ProbeRequest,
     UploadRequest,
 )
+from .modules import Plan, get_module
 from .sketches import discover_sketches, find_sketch
 from .tasks import TaskBusy, get_task_runner
 from .toolchains import SUGGESTED_CORES, PortHeld, ToolchainError, get_arduino_cli, get_esptool
@@ -83,14 +85,23 @@ def _sketch_or_404(name: str):
     return sketch
 
 
-def _start(kind: str, title: str, steps: List[List[str]], on_done=None, port=None):
+def _start(kind: str, title: str, steps: List[List[str]] | Plan, on_done=None, port=None):
+    """Run ``steps`` -- argv lists in arduino-cli's environment, or a module's
+    ``Plan`` in its own environment and folder -- as the one task."""
     devices.get_streams().stop_all()  # a devkit's Machine listening must not hold the port
     if port:
         # Only the port being written to: releasing every printer link would
         # reset every printer (DTR) the next time it is polled.
         gcode.get_printer_links().close(port)
+    plan = steps if isinstance(steps, Plan) else Plan(steps, env=env_for_arduino())
     task = get_task_runner().run(
-        kind, title, steps, env=env_for_arduino(), on_done=on_done, port=port
+        kind,
+        title,
+        plan.steps,
+        env=plan.env,
+        cwd=str(plan.cwd) if plan.cwd else None,
+        on_done=on_done,
+        port=port,
     )
     return task.snapshot()
 
@@ -110,6 +121,12 @@ def firmware_status():
     active = get_task_runner().active
     data["active_task"] = active.snapshot() if active else None
     return data
+
+
+@router.get("/toolchains")
+def firmware_toolchains():
+    """Every toolchain module: what it builds, its tools as found, its problems."""
+    return [t.model_dump() for t in service.toolchain_status().toolchains]
 
 
 @router.get("/boards")
@@ -146,6 +163,21 @@ async def firmware_install(body: InstallRequest):
     return task.snapshot()
 
 
+@router.post("/toolchains/{module_id}/install", status_code=202)
+async def firmware_module_install(module_id: str, body: ModuleInstallRequest):
+    """Install one toolchain module's tools (``arduino``, ``rust-esp32``), as a task."""
+    try:
+        module = get_module(module_id)
+    except ToolchainError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    task = get_task_runner().run_callable(
+        "install",
+        f"Install {module.label}" if module.id != "arduino" else "Install arduino-cli",
+        lambda log: service.install_module(module.id, log, force=body.force),
+    )
+    return task.snapshot()
+
+
 @router.post("/cores/install", status_code=202)
 async def firmware_core_install(body: CoreInstallRequest):
     cli = get_arduino_cli()
@@ -159,24 +191,40 @@ async def firmware_library_install(body: LibraryInstallRequest):
     return _start("lib-install", "Install libraries " + ", ".join(body.names), steps)
 
 
+def _board(sketch, given):
+    """An Arduino sketch's FQBN, as the request names it (required, as it always
+    was); None for a module's sketch that builds for what its project names."""
+    if get_module(sketch.toolchain).needs_board and not given:
+        raise ValueError(f"fqbn: {sketch.name} is an Arduino sketch; name the board to build for")
+    return service.resolve_board(sketch, given)
+
+
 @router.post("/sketches/{name}/compile", status_code=202)
 async def firmware_compile(name: str, body: CompileRequest):
+    """Build a sketch with its toolchain module. ``name`` is a sketch's id: an
+    Arduino sketch's name, or ``<name>@<module>`` (``esp32_blink@rust-esp32``)."""
     sketch = _sketch_or_404(name)
-    steps = service.compile_steps(sketch, body.fqbn)
-    return _start("compile", f"Compile {sketch.name} ({body.fqbn})", steps)
+    board = _board(sketch, body.fqbn)
+    plan = service.build_plan(sketch, board)
+    return _start("compile", service.compile_title(sketch, board), plan)
 
 
 @router.post("/sketches/{name}/upload", status_code=202)
 async def firmware_upload(name: str, body: UploadRequest):
     sketch = _sketch_or_404(name)
-    steps = service.upload_steps(sketch, body.fqbn, body.port)
+    board = _board(sketch, body.fqbn)
+    plan = service.flash_plan(sketch, board, body.port)
 
     def remember(task, status):
         if status.value == "succeeded":
-            service.record_upload(body.port, sketch, body.fqbn, task_id=task.id)
+            service.record_upload(body.port, sketch, board, task_id=task.id)
 
     return _start(
-        "upload", f"Upload {sketch.name} → {body.port}", steps, on_done=remember, port=body.port
+        "upload",
+        service.upload_title(sketch, body.port),
+        plan,
+        on_done=remember,
+        port=body.port,
     )
 
 

@@ -252,22 +252,24 @@ def get_state() -> FirmwareState:
 
 
 def source_sha256(sketch: SketchInfo) -> str:
-    """Hash of every source file in the sketch folder (not the sidecar)."""
+    """Hash of every source file of the sketch, as its toolchain module names them:
+    its folder's files but the sidecar, build output, and any sketch nested in it
+    (the Rust ``esp32_blink`` inside the Arduino one's folder is not its source)."""
+    from .modules import module_for
+    from .sketches import nested_sketch_folders
+
     h = hashlib.sha256()
-    for f in sorted(p for p in sketch.path.rglob("*") if p.is_file()):
-        if f.name == "firmware.json" or f.suffix in {".bin", ".elf", ".map"}:
-            continue
+    for f in module_for(sketch).source_files(sketch, nested_sketch_folders(sketch, ROOT)):
         h.update(str(f.relative_to(sketch.path)).encode())
         h.update(f.read_bytes())
     return h.hexdigest()
 
 
 def build_binary(sketch: SketchInfo, build_dir: Path) -> Optional[Path]:
-    candidate = build_dir / f"{sketch.name}.ino.bin"
-    if candidate.is_file():
-        return candidate
-    hexfile = build_dir / f"{sketch.name}.ino.hex"  # AVR
-    return hexfile if hexfile.is_file() else None
+    """What a build of ``sketch`` in ``build_dir`` wrote to flash, its module says where."""
+    from .modules import module_for
+
+    return module_for(sketch).artifact(sketch, build_dir)
 
 
 def file_sha256(path: Optional[Path]) -> Optional[str]:
@@ -293,6 +295,9 @@ def make_flash_record(
         port=port,
         mac=mac,
         sketch=sketch.name if sketch else None,
+        sketch_id=sketch.id if sketch else None,
+        toolchain=sketch.toolchain if sketch else None,
+        target=sketch.target if sketch and not fqbn else None,
         fqbn=fqbn,
         images=images or [],
         build_sha256=file_sha256(build_binary(sketch, build_dir)) if sketch and build_dir else None,
@@ -311,13 +316,13 @@ def expected_firmware(
         return ExpectedFirmware()
     out = ExpectedFirmware(record=record)
     if record.sketch:
-        sketch = find_sketch(record.sketch, ROOT)
+        sketch = find_sketch(record.sketch_id or record.sketch, ROOT)
         if sketch is None:
             out.sketch_missing = True
         else:
             if record.source_sha256 and source_sha256(sketch) != record.source_sha256:
                 out.source_changed = True
-            current = file_sha256(build_binary(sketch, build_root / sketch.name))
+            current = file_sha256(build_binary(sketch, build_root / sketch.id))
             if current and record.build_sha256 and current != record.build_sha256:
                 out.build_changed = True
     return out

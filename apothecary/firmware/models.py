@@ -8,7 +8,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Annotated, List, Optional
 
-from pydantic import AfterValidator, BaseModel, Field, field_validator
+from pydantic import AfterValidator, BaseModel, Field, field_validator, model_validator
 
 # vendor:arch:board[:menu=value,...] -- e.g. arduino:avr:uno, esp32:esp32:esp32:FlashMode=qio
 FQBN_RE = re.compile(r"^[A-Za-z0-9_.\-]+:[A-Za-z0-9_.\-]+:[A-Za-z0-9_.\-]+(:[A-Za-z0-9_.\-=,]+)?$")
@@ -85,19 +85,30 @@ class DisplaySpec(BaseModel):
 
 
 class SketchInfo(BaseModel):
-    """An Arduino sketch discovered under ``parts/``.
+    """A sketch discovered under ``parts/``, and the toolchain module that builds it.
 
-    A sketch is a folder holding ``<folder>.ino`` -- arduino-cli's own layout
-    rule. An optional ``firmware.json`` sidecar in that folder supplies
-    defaults (``fqbn``, ``cores``, ``libraries``, ``note``) so the GUI and CLI
-    can offer them without the user re-typing them for every build, plus
-    what the viewer needs to show the board's console in the scene
-    (``baud``, ``display``).
+    An Arduino sketch is a folder holding ``<folder>.ino`` -- arduino-cli's own
+    layout rule. Another module's sketch is the folder its module recognises
+    (a Cargo project, for Rust), with a ``firmware.json`` naming the module in
+    ``toolchain``. The sidecar supplies defaults (``fqbn``, ``cores``,
+    ``libraries``, ``note``) so the GUI and CLI can offer them without the
+    user re-typing them for every build, plus what the viewer needs to show
+    the board's console in the scene (``baud``, ``display``).
+
+    ``name`` is what the sketch announces (``apothecary <name>: hello``) and
+    what a scene node's ``sketch_ref`` names; two implementations of one
+    sketch -- the Arduino ``esp32_blink`` and the Rust one -- share it. ``id``
+    tells them apart: an Arduino sketch's is its name, as it always was;
+    another module's is ``<name>@<toolchain>``.
     """
 
     name: str
     path: Path
-    ino: Path
+    ino: Optional[Path] = None  # an Arduino sketch's .ino; None for another module's
+    toolchain: str = "arduino"  # the module that builds it (firmware/modules)
+    id: str = ""  # unique among the sketches: the name, or <name>@<toolchain>
+    language: str = "arduino"
+    target: Optional[str] = None  # what a sketch with no FQBN builds for: its chip ("esp32")
     part: Optional[str] = None
     fqbn: Optional[str] = None
     cores: List[str] = Field(default_factory=list)
@@ -106,11 +117,50 @@ class SketchInfo(BaseModel):
     baud: int = 115200
     display: Optional[DisplaySpec] = None
 
+    @model_validator(mode="after")
+    def _id(self) -> "SketchInfo":
+        if not self.id:
+            self.id = sketch_id(self.name, self.toolchain)
+        return self
+
     def to_json(self) -> dict:
         d = self.model_dump()
         d["path"] = str(self.path)
-        d["ino"] = str(self.ino)
+        d["ino"] = str(self.ino) if self.ino else None
         return d
+
+
+ARDUINO = "arduino"
+
+
+def sketch_id(name: str, toolchain: str) -> str:
+    """An Arduino sketch is known by its name; another module's by ``name@module``."""
+    return name if toolchain == ARDUINO else f"{name}@{toolchain}"
+
+
+class ToolStatus(BaseModel):
+    """One program a toolchain module runs, as found: where, and what it says it is."""
+
+    name: str
+    path: Optional[str] = None
+    found_by: Optional[str] = None  # the env variable that named it, "tools dir", or "PATH"
+    version: Optional[str] = None
+    ok: bool = False
+
+
+class ModuleStatus(BaseModel):
+    """What a toolchain module says of itself: what it builds, its tools, its problems."""
+
+    id: str
+    label: str
+    languages: List[str] = Field(default_factory=list)
+    families: List[str] = Field(default_factory=list)  # the board families it builds for
+    ok: bool = False  # it can build and flash a sketch
+    tools: List[ToolStatus] = Field(default_factory=list)
+    problems: List[str] = Field(default_factory=list)
+    install: Optional[str] = None  # the command that installs it
+    needs_board: bool = False  # a build names a board (an Arduino FQBN)
+    installable: bool = True  # whether that command can install it on this machine
 
 
 class ToolchainStatus(BaseModel):
@@ -126,6 +176,9 @@ class ToolchainStatus(BaseModel):
     esptool_version: Optional[str] = None
     esptool_ok: bool = False
     problems: List[str] = Field(default_factory=list)
+    # Every toolchain module, Arduino's first; the fields above are Arduino's, as
+    # they were before there were modules.
+    toolchains: List[ModuleStatus] = Field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -164,6 +217,10 @@ class FirmwareTask(BaseModel):
 # --- request bodies for the API --------------------------------------------
 
 
+class ModuleInstallRequest(BaseModel):
+    force: bool = False
+
+
 class InstallRequest(BaseModel):
     version: str = "latest"
     force: bool = False
@@ -198,12 +255,14 @@ class LibraryInstallRequest(BaseModel):
 
 
 class CompileRequest(BaseModel):
-    fqbn: str
+    # The board an Arduino sketch is built for. A sketch of another module builds
+    # for what its project names (a Rust sketch, its chip), and takes none.
+    fqbn: Optional[str] = None
 
     @field_validator("fqbn")
     @classmethod
-    def _fqbn(cls, v: str) -> str:
-        return validate_fqbn(v)
+    def _fqbn(cls, v: Optional[str]) -> Optional[str]:
+        return None if v is None else validate_fqbn(v)
 
 
 class UploadRequest(CompileRequest):
@@ -271,7 +330,10 @@ class FlashRecord(BaseModel):
     identity: str  # DeviceInfo.identity at flash time
     port: str
     mac: Optional[str] = None
-    sketch: Optional[str] = None  # None for a raw esptool flash
+    sketch: Optional[str] = None  # its name, what it announces; None for a raw esptool flash
+    sketch_id: Optional[str] = None  # which implementation of it (SketchInfo.id)
+    toolchain: Optional[str] = None  # the module that built and flashed it
+    target: Optional[str] = None  # what a sketch with no FQBN was built for (its chip)
     fqbn: Optional[str] = None
     images: List[str] = Field(default_factory=list)  # esptool: offset:path pairs
     build_sha256: Optional[str] = None  # of the uploaded .bin

@@ -1,0 +1,18 @@
+# What this project builds for: the classic ESP32 (Xtensa LX6), core built from
+# source (build-std, the rust-src espup installs), linked by the Xtensa GCC
+# espup installs. apothecary adds --offline and the vendored crates on the
+# command line; nothing here names a place to fetch from.
+[build]
+target = "xtensa-esp32-none-elf"
+
+[target.xtensa-esp32-none-elf]
+rustflags = [
+  "-C", "link-arg=-Wl,-Tlinkall.x",
+  "-C", "link-arg=-nostartfiles",
+]
+
+[env]
+ESP_LOG = "info"
+
+[unstable]
+build-std = ["core"]

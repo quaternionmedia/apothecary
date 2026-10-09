@@ -101,6 +101,10 @@ def start_server(tmp_path_factory):
             {
                 "ARDUINO_CLI": str(write_fake_arduino_cli(tmp / "arduino-cli")),
                 "ESPTOOL": "none",
+                # Rust's tools: none, unless a test names the scripted ones (the
+                # firmware loop); never a person's own on PATH.
+                "CARGO": "none",
+                "ESPFLASH": "none",
                 "APOTHECARY_TOOLS_DIR": str(tmp / "tools"),
                 "APOTHECARY_STATE_DIR": str(tmp / "state"),
                 "APOTHECARY_PICTURE_ROOT": str(tmp / "pictures"),

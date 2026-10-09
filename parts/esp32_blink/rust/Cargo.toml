@@ -1,0 +1,28 @@
+# esp32_blink in Rust: what parts/esp32_blink/esp32_blink.ino does, on esp-hal,
+# no_std, for the classic ESP32. Built by apothecary's rust-esp32 toolchain
+# module (docs/firmware.md): `cargo build --release --offline` in this folder,
+# from crates `apothecary firmware install --rust-esp32` vendored.
+[package]
+name = "esp32_blink"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "esp32_blink"
+path = "src/main.rs"
+test = false
+bench = false
+
+[dependencies]
+esp-hal = { version = "1.2.2", features = ["esp32", "unstable"] }
+esp-bootloader-esp-idf = { version = "0.6.0", features = ["esp32"] }
+esp-backtrace = { version = "0.20.0", features = ["esp32", "panic-handler", "println"] }
+esp-println = { version = "0.18.0", features = ["esp32"] }
+
+[profile.release]
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+debug = 2 # symbols for espflash's backtraces; nothing of it is flashed

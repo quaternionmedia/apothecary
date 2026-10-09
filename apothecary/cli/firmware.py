@@ -10,8 +10,9 @@ from typing import Optional, Tuple
 import click
 
 from ..firmware import devices, gcode, service
-from ..firmware.installer import InstallSpec, env_for_arduino
+from ..firmware.installer import InstallSpec
 from ..firmware.models import validate_core_id, validate_fqbn, validate_port
+from ..firmware.modules.rust_esp32 import RUST_ESP32
 from ..firmware.sketches import discover_sketches, find_sketch
 from ..firmware.tasks import stream
 from ..firmware.toolchains import SUGGESTED_CORES, ToolchainError, get_arduino_cli, get_esptool
@@ -25,10 +26,18 @@ def _require_sketch(name: str):
     sketch = find_sketch(name)
     if sketch is None:
         raise click.ClickException(
-            f"unknown sketch '{name}'. Sketches are parts/<name>/<name>.ino -- "
-            "see `apothecary firmware sketches`."
+            f"unknown sketch '{name}'. Sketches are parts/<name>/<name>.ino, or a Cargo "
+            "project whose firmware.json names its toolchain -- see `apothecary firmware sketches`."
         )
     return sketch
+
+
+def _run_plan(plan) -> None:
+    """A module's steps, in order, in its environment and folder; exit at the first failure."""
+    for argv in plan.steps:
+        rc = stream(argv, click.echo, plan.env, str(plan.cwd) if plan.cwd else None)
+        if rc != 0:
+            sys.exit(rc)
 
 
 @click.group()
@@ -53,6 +62,13 @@ def firmware():
 @click.option(
     "--library", "libraries", multiple=True, help="Library to install by name (repeatable)"
 )
+@click.option(
+    "--rust-esp32",
+    "rust_esp32",
+    is_flag=True,
+    help="Rust for the classic ESP32: rustup, espup's Xtensa toolchain and espflash into the "
+    "tools dir, and every Rust sketch's crates vendored, so builds run offline",
+)
 def firmware_install(
     version: str,
     force: bool,
@@ -60,23 +76,32 @@ def firmware_install(
     esp32: bool,
     avr: bool,
     libraries: Tuple[str, ...],
+    rust_esp32: bool,
 ):
-    """Download arduino-cli (checksum-verified), then install cores and libraries."""
+    """Download arduino-cli (checksum-verified), then install cores and libraries.
+
+    With --rust-esp32 alone, only the Rust toolchain for the ESP32 is installed;
+    with Arduino options as well, both are.
+    """
     wanted = list(cores) + (["esp32:esp32"] if esp32 else []) + (["arduino:avr"] if avr else [])
+    arduino = not rust_esp32 or bool(wanted or libraries or version != "latest")
     try:
         for c in wanted:
             validate_core_id(c)
-        spec = InstallSpec(
-            version=version,
-            force=force,
-            cores=list(dict.fromkeys(wanted)),
-            libraries=list(libraries),
-        )
-        status = service.install(spec, click.echo)
+        if arduino:
+            spec = InstallSpec(
+                version=version,
+                force=force,
+                cores=list(dict.fromkeys(wanted)),
+                libraries=list(libraries),
+            )
+            service.install(spec, click.echo)
+        if rust_esp32:
+            service.install_module(RUST_ESP32, click.echo, force=force)
     except (ToolchainError, ValueError) as exc:
         _die(exc)
     click.echo("")
-    _print_status(status)
+    _print_status(service.toolchain_status())
 
 
 @firmware.command("validate")
@@ -110,6 +135,20 @@ def _print_status(status) -> None:
         click.secho("  • esptool: not found (optional)", fg="yellow")
     for problem in status.problems:
         click.secho(f"  ! {problem}", fg="yellow")
+    for module in status.toolchains:
+        if module.id == "arduino":
+            continue
+        builds = ", ".join(module.languages) + " for " + ", ".join(module.families)
+        click.secho(f"{module.label} ({builds})", bold=True)
+        for tool in module.tools:
+            if tool.ok:
+                click.echo(f"  ✓ {tool.name} {tool.version}: {tool.path}")
+            elif tool.path:
+                click.secho(f"  ✗ {tool.name}: {tool.path} does not run", fg="red")
+            else:
+                click.secho(f"  • {tool.name}: not installed ({module.install})", fg="yellow")
+        for problem in module.problems:
+            click.secho(f"  ! {problem}", fg="yellow")
 
 
 @firmware.command("boards")
@@ -195,26 +234,33 @@ def firmware_sketches(json_out: bool):
         return
     for s in sketches:
         extra = f" fqbn={s.fqbn}" if s.fqbn else ""
+        if s.toolchain != "arduino":
+            extra += f" toolchain={s.toolchain} target={s.target}"
         libs = f" libraries={','.join(s.libraries)}" if s.libraries else ""
-        ino = s.ino.relative_to(Path.cwd()) if s.ino.is_relative_to(Path.cwd()) else s.ino
-        click.echo(f"{s.name:20s} {ino}{extra}{libs}")
+        where = s.ino or s.path
+        shown = where.relative_to(Path.cwd()) if where.is_relative_to(Path.cwd()) else where
+        click.echo(f"{s.id:20s} {shown}{extra}{libs}")
 
 
 @firmware.command("compile")
 @click.argument("sketch")
 @click.option("--fqbn", default=None, help="Board FQBN (defaults to the sketch's firmware.json)")
 def firmware_compile(sketch: str, fqbn: Optional[str]):
-    """Compile a sketch for a board."""
+    """Compile a sketch: an Arduino sketch for a board, a Rust one for its chip.
+
+    SKETCH is a sketch's name, or its id where two share a name
+    (esp32_blink@rust-esp32 is the Rust esp32_blink).
+    """
     s = _require_sketch(sketch)
     try:
-        chosen = validate_fqbn(service.resolve_fqbn(s, fqbn))
-        for argv in service.compile_steps(s, chosen):
-            rc = stream(argv, click.echo, env_for_arduino())
-            if rc != 0:
-                sys.exit(rc)
+        chosen = service.resolve_board(s, fqbn)
+        if chosen:
+            validate_fqbn(chosen)
+        _run_plan(service.build_plan(s, chosen))
     except (ToolchainError, ValueError) as exc:
         _die(exc)
-    click.secho(f"Compiled {s.name} for {chosen} -> {service.build_dir(s)}", fg="green")
+    what = service.target_words(s, chosen)
+    click.secho(f"Compiled {s.name} for {what} -> {service.build_dir(s)}", fg="green")
 
 
 @firmware.command("upload")
@@ -227,19 +273,20 @@ def firmware_compile(sketch: str, fqbn: Optional[str]):
     help="Serial port (auto-detected when exactly one board is connected)",
 )
 def firmware_upload(sketch: str, fqbn: Optional[str], port: Optional[str]):
-    """Compile and upload a sketch to a connected board."""
+    """Compile and upload a sketch to a connected board (a Rust sketch: build, then espflash)."""
     s = _require_sketch(sketch)
     try:
-        chosen = validate_fqbn(service.resolve_fqbn(s, fqbn))
+        chosen = service.resolve_board(s, fqbn)
+        if chosen:
+            validate_fqbn(chosen)
         chosen_port = validate_port(service.resolve_port(port))
-        for argv in service.upload_steps(s, chosen, chosen_port):
-            rc = stream(argv, click.echo, env_for_arduino())
-            if rc != 0:
-                sys.exit(rc)
+        _run_plan(service.flash_plan(s, chosen, chosen_port))
     except (ToolchainError, ValueError) as exc:
         _die(exc)
     service.record_upload(chosen_port, s, chosen)
-    click.secho(f"Uploaded {s.name} ({chosen}) to {chosen_port}", fg="green")
+    click.secho(
+        f"Uploaded {s.name} ({service.target_words(s, chosen)}) to {chosen_port}", fg="green"
+    )
 
 
 @firmware.command("flash-bin")
