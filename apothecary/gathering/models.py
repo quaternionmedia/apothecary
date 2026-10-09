@@ -104,6 +104,7 @@ class Reading(BaseModel):
     readable: bool
     because: str
     said_by: str = "the machine"
+    opened: bool = True  # False: the file itself could not be read, so nothing can use it
 
     @property
     def from_a_person(self) -> bool:

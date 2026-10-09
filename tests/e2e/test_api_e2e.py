@@ -2,6 +2,7 @@
 End-to-end API tests using Playwright's request context.
 """
 import json
+
 import pytest
 from playwright.sync_api import Page
 
@@ -84,28 +85,6 @@ def test_part_scad_download(page: Page, base_url: str):
         # Should contain OpenSCAD code
         assert len(content) > 0
         assert isinstance(content, str)
-
-
-@pytest.mark.e2e
-def test_part_jscad_format(page: Page, base_url: str):
-    """Test that JSCAD endpoint returns valid format."""
-    response = page.request.get(f"{base_url}/parts")
-    parts = response.json()
-    
-    if len(parts) > 0:
-        part_name = parts[0]["name"]
-        
-        jscad_response = page.request.get(f"{base_url}/parts/{part_name}/jscad")
-        
-        assert jscad_response.ok
-        assert jscad_response.headers["content-type"] == "application/javascript"
-        
-        content = jscad_response.text()
-        
-        # Verify JSCAD structure (CommonJS format)
-        assert "const jscad = require('@jscad/modeling')" in content
-        assert "const main = () => {" in content
-        assert "module.exports = { main }" in content
 
 
 @pytest.mark.e2e

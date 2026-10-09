@@ -1,7 +1,7 @@
+from apothecary.booleans import Difference, Intersection, Union
 from apothecary.models.vectors import Vector3D
-from apothecary.primitives import Cube, Sphere, Cylinder
-from apothecary.transforms import Translate, Rotate, Scale
-from apothecary.booleans import Union, Difference, Intersection
+from apothecary.primitives import Cube, Cylinder, Sphere
+from apothecary.transforms import Rotate, Scale, Translate
 
 
 def test_cube_vector_size_and_comment():

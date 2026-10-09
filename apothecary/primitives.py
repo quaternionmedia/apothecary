@@ -1,11 +1,30 @@
 import json
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
-from typing import Literal, Optional, Union
+from typing import Iterator, Literal, Optional, Union
 
 from pydantic import Field
 
 from .core import OpenSCADObject, scad_vec
 from .models.vectors import Vector3D
+
+# Set by absolute_imports(): the root an Import's relative file is written under.
+_IMPORTS_UNDER: ContextVar[Optional[Path]] = ContextVar("imports_under", default=None)
+
+
+@contextmanager
+def absolute_imports(root: Path) -> Iterator[None]:
+    """Inside the block, every Import renders its file as an absolute path under ``root``.
+
+    OpenSCAD resolves a relative ``import()`` against the folder of the SCAD
+    file that names it, so SCAD written anywhere but ``root`` needs this.
+    """
+    token = _IMPORTS_UNDER.set(Path(root))
+    try:
+        yield
+    finally:
+        _IMPORTS_UNDER.reset(token)
 
 
 class Cube(OpenSCADObject):
@@ -97,9 +116,11 @@ class Import(OpenSCADObject):
 
     def render(self, *_, **__) -> str:
         comment_str = self._comment()
+        root = _IMPORTS_UNDER.get()
+        file = self.resolved_path(root).as_posix() if root is not None else self.file
         # json quoting is OpenSCAD's string syntax: a quote in a file name
         # stays in the string instead of ending it.
-        path = json.dumps(self.file.replace("\\", "/"), ensure_ascii=False)
+        path = json.dumps(file.replace("\\", "/"), ensure_ascii=False)
         text = f"import({path}, convexity={self.convexity});"
         if self.scale != 1.0:
             text = f"scale({self.scale}) {text}"

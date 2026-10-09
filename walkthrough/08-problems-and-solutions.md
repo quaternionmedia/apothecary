@@ -74,7 +74,6 @@ never "is the build green".
 | Only what needs deciding | `apothecary problems --owner human --detail` |
 | Only what datum owes | `apothecary problems --owner datum` |
 | What can close them | `apothecary solutions` |
-| Over HTTP | `/problems`, `/problems?owner=human`, `/solutions`, `/spaces` |
 
 A build volume changes the answer, because "fits the printer" cannot be
 answered without one:

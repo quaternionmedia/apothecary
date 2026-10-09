@@ -78,7 +78,7 @@ def test_photographs_into_pieces(
     page: Page, base_url: str, walkthrough, drawn_picture, tidy_up, tmp_path
 ):
     """Walk the whole chain, from a photograph to pieces you can walk into."""
-    from apothecary import census, workflows
+    from apothecary import census
     from apothecary.gathering import bench, gather
     from apothecary.gathering.judgement import PeopleDisagree, read_answers, settle
     from apothecary.gathering.questions import worth_asking
@@ -110,7 +110,7 @@ def test_photographs_into_pieces(
             "**A printable model.** Turning an arrangement into a solid needs a "
             "program this run does not install. Nothing below the arrangement is "
             "exercised.",
-            "**Anything about how long it takes.** No timing is asserted anywhere in " "this run.",
+            "**Anything about how long it takes.** No timing is asserted anywhere in this run.",
             "**Anything surviving a restart.** Nothing here is stored. The run "
             "builds what it needs and forgets it.",
         ],
@@ -346,20 +346,12 @@ def test_photographs_into_pieces(
 
     # ------------------------------------------------------------ what it costs
     controls = census.take()
-    typed = workflows.take()
     story.says(
         "What the whole thing costs a person",
-        "Two meters, because a tool that is pleasant to demonstrate and expensive to "
-        "use is neither. The first counts the controls the viewer puts on screen, "
-        "and unifying means it reaches nothing rather than a smaller pile. The "
-        "second counts what a person types to reach a named job, and every job "
-        "carried by nothing but typing is an open item about where the interface "
-        "stops.",
-        shown=(
-            f"{len(controls.controls_of_its_own())} controls of the viewer's own\n"
-            f"{typed.typed} typed steps, "
-            f"{len(typed.only_typed())} job(s) carried by nothing but typing"
-        ),
+        "The census counts the controls the viewer puts on screen of its own, "
+        "because a tool that is pleasant to demonstrate and expensive to use is "
+        "neither. Unifying means it reaches nothing rather than a smaller pile.",
+        shown=f"{len(controls.controls_of_its_own())} controls of the viewer's own",
     )
 
 

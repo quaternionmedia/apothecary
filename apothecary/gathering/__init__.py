@@ -8,7 +8,11 @@ larger thing, and some of nothing in particular.
 This works out which is which, says how sure it is about each answer, and
 **refuses rather than guessing** when the answers contradict each other.
 
-PROTOTYPE — not ratified. See ``docs/plans/features/gathering.md``.
+``apothecary photo gather`` is the way in. ``resolve`` holds the rules and
+their thresholds, ``judgement`` what a person says and why it wins,
+``questions`` which pairs are worth asking about, and ``bench`` the meter.
+
+PROTOTYPE — not ratified.
 """
 
 from .combine import combine, whole_gathering
