@@ -993,7 +993,10 @@
                 // board, and a printer's nozzle, bed and reading at its node. The
                 // badges keep out of each other's way there, every badge alike.
                 // Both survive renderFocus(), which clears only the nodes' meshes.
-                this.anchors = mountAnchors({ container: this.canvas.parentElement, canvas: this.canvas, camera: this.camera, scene: this.scene });
+                this.anchors = mountAnchors({
+                    container: this.canvas.parentElement, canvas: this.canvas, camera: this.camera, scene: this.scene,
+                    keepClear: () => [this.hintEl, this.minimapEl],  // no badge's words over these
+                });
                 // The side column's sections become panels in the one rail: Site and
                 // Selected stacked at its top, each one closable, collapsible and
                 // draggable free; what a person did to them is remembered per

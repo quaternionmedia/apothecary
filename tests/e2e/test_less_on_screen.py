@@ -253,6 +253,50 @@ def test_open_cards_never_overlap_and_keep_off_the_edges(page: Page, bench: str)
         assert got["t"] >= world["t"] + 8 and got["b"] <= world["b"] - 8, (edge, got, world)
 
 
+# Slide the view until printer_1's board badge stands at the world's bottom-left,
+# where the hint bar is.
+TO_THE_HINT = """async () => {
+    const v = window.fractalViewer;
+    for (let i = 0; i < 6; i++) {
+        const s = v.anchors.at('printer_1');
+        const h = v.canvas.clientHeight;
+        const dx = s.x - 60, dy = s.y - (h - 6);
+        const k = v.camera.position.distanceTo(v.orbitControls.target)
+            * 2 * Math.tan(v.camera.fov * Math.PI / 360) / h;
+        const e = v.camera.matrixWorld.elements;
+        for (const [i, key] of [[0, 'x'], [1, 'y'], [2, 'z']]) {
+            const d = e[i] * dx * k - e[4 + i] * dy * k;
+            v.camera.position[key] += d;
+            v.orbitControls.target[key] += d;
+        }
+        v.orbitControls.update();
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    }
+}"""
+
+
+@pytest.mark.e2e
+def test_an_open_card_keeps_off_the_hint_bar(page: Page, bench: str):
+    """A first visit shows the hint bar at the world's bottom-left; the selected
+    printer's board, slid down onto it, opens its card clear of the bar, and
+    inside the world."""
+    _open(page, bench)
+    _select(page, "printer_1")
+    page.evaluate(TO_THE_HINT)
+    page.evaluate(FRAMES, 3)
+    hint = _rect(page, "#viewer-hint")
+    board = _rect(page, BOARD_BADGE)
+    assert board["b"] > hint["t"], (board, hint)  # the badge is down by the bar
+    expect(page.locator("#viewer-hint")).not_to_have_class(re.compile(r"\bfaded\b"))
+    card = page.locator(".world-badge.open .badge-words")
+    expect(card).to_have_count(1)
+    expect(card).to_contain_text(PRINTER)
+    got = _rect(page, ".world-badge.open .badge-words")
+    assert not _meet(got, hint), (got, hint)
+    world = _rect(page, ".viewer-panel")
+    assert got["t"] >= world["t"] + 8 and got["b"] <= world["b"] - 8, (got, world)
+
+
 # --------------------------------------------------------------------------
 # Handles: one compact set on a movable thing
 # --------------------------------------------------------------------------
