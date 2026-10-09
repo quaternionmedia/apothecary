@@ -29,3 +29,14 @@ def test_parts_info_json():
     assert r.exit_code == 0
     assert '"name"' in r.output
     assert "parametric_star" in r.output
+
+
+def test_an_unknown_parameter_for_a_part_without_a_model_is_a_clean_error():
+    from click.testing import CliRunner
+
+    from apothecary.cli import cli
+
+    result = CliRunner().invoke(cli, ["parts", "generate-stl", "couch_block", "-p", "nope=1"])
+    assert result.exit_code == 1
+    assert "unknown parameter(s): nope" in result.output
+    assert "Traceback" not in result.output

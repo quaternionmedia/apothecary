@@ -161,11 +161,7 @@ def test_digits_walk_device_control_jog_and_the_intent_carries_the_address(
     assert intent["action"] == "control:jog:Y+"
     assert intent["option_id"] == "control:jog:Y+"
     assert intent["address"] == "2728"
-    assert intent["context"] == {
-        "pointing": "node",
-        "targets": ["printer_1"],
-        "where": {"x": 0, "y": 0},
-    }
+    assert intent["context"] == {"pointing": "node", "targets": ["printer_1"]}
     # The same address, worked out from the ring itself two ways.
     by_path = page.evaluate(
         "() => window.apothecaryRing.addressOf(window.apothecaryRing.lastRing(), "

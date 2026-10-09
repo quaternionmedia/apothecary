@@ -412,11 +412,8 @@ def test_board_inside_the_printer_drives_it(page: Page, printer_url: str):
         0
     )  # unpin from the board, not through the printer
     section.locator(".dev-poll").click()
-    # The page applies a poll's sync only if that poll changed the server's node; an
-    # earlier request already had, so printer_1 turns "printing" at the next device
-    # refresh: 10 s after the auto-refresh is ticked.
-    page.locator("#devices-auto").check()
-    page.clock.fast_forward(10_000)
+    # The poll's sync lands on the tree even though an earlier request had already
+    # moved the server's node, so printer_1 turns "printing" without a refresh.
     expect(page.locator("#status-select")).to_have_value("printing", timeout=5000)
 
     # The via link jumps to the board's own row and panel.

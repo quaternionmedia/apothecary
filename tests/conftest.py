@@ -47,6 +47,11 @@ def pytest_addoption(parser):
     )
 
 
+# `slow` marks what --slow's help names: full CGAL renders, accuracy benches. A
+# test that renders a primitive of its own with the real OpenSCAD -- a cube,
+# turned or cut -- is not one of those and stays unmarked: it is as quick as
+# the tests around it, and it is the default run's check that OpenSCAD takes
+# what the renderer writes.
 def pytest_collection_modifyitems(config, items):
     if config.getoption("--slow"):
         return
@@ -67,6 +72,20 @@ def pytest_collection_modifyitems(config, items):
 
 import pytest  # noqa: E402
 from firmware_helpers import _isolate_firmware_state, write_fake_arduino_cli  # noqa: E402
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _cache_outside_the_checkout(tmp_path_factory):
+    """Node renders go to a cache of the run's own, never the checkout's."""
+    import os
+
+    previous = os.environ.get("APOTHECARY_CACHE_DIR")
+    os.environ["APOTHECARY_CACHE_DIR"] = str(tmp_path_factory.mktemp("cache"))
+    yield
+    if previous is None:
+        os.environ.pop("APOTHECARY_CACHE_DIR", None)
+    else:
+        os.environ["APOTHECARY_CACHE_DIR"] = previous
 
 
 @pytest.fixture(autouse=True)

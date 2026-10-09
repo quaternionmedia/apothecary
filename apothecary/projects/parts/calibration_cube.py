@@ -32,7 +32,7 @@ class Params(BaseModel):
     Calibration cube parameters.
 
     Attributes:
-        size: Overall cube dimension in mm (default: 20mm calibration standard)
+        size: Overall cube dimension in mm (default 10, as the SCAD)
         show_axes: Include XYZ axis indicators for preview (not rendered to STL)
         show_dimensions: Include size markers on -X and -Y faces
         wall_thickness: Shell thickness for hollow printing
@@ -76,15 +76,7 @@ class CalibrationCubePart(BasePart):
         Since axes are preview-only (not rendered to STL), bounds
         always reflect just the cube geometry.
         """
-        if params:
-            size = params.get("size", 20)
-        elif self.params_model:
-            defaults = self.params_model()
-            size = defaults.size
-        else:
-            size = 20
-
-        # Cube bounds (axes are preview-only, not in STL)
+        size = (params or {}).get("size", Params().size)
         return BoundingBox3D.for_cube(size, center=False)
 
 

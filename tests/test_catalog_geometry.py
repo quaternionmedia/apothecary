@@ -136,12 +136,13 @@ class TestViewerSurfaces:
         assert len(response.content) > 1000
 
     @pytest.mark.slow
-    def test_node_render_leaves_no_scratch_behind(self, built_stl, monkeypatch):
-        from apothecary.projects.parts.skeleton import ROOT
-
+    def test_node_render_leaves_no_scratch_behind(self, built_stl, monkeypatch, tmp_path):
+        """The scratch SCAD lives in the cache beside its STL, and goes once rendered."""
+        monkeypatch.setenv("APOTHECARY_CACHE_DIR", str(tmp_path))
         _build_to(monkeypatch, CUBE, built_stl(CUBE))
         assert client.get("/sites/parts_library/nodes/calibration_cube/stl").status_code == 200
-        assert list(ROOT.glob(".node-stl-*.scad")) == []
+        assert list((tmp_path / "node_stl").glob("*.stl"))
+        assert list((tmp_path / "node_stl").glob("*.scad")) == []
 
 
 class TestSitePayloadCarriesScad:

@@ -80,3 +80,11 @@ class TestCalibrationCubePart:
         assert "color" in geo
         assert "color_hex" in geo
         assert geo["bounds"]["size"] is not None
+
+
+def test_bounds_of_a_partial_override_keep_the_default_size():
+    """An override without `size` reported a 20 mm cube; the SCAD's default is 10."""
+    from apothecary.projects.parts.calibration_cube import DEFAULT as cube
+
+    assert cube.get_bounds({"show_dimensions": False}).size.x == 10
+    assert cube.get_bounds({"size": 25}).size.x == 25

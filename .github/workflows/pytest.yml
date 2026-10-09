@@ -5,72 +5,53 @@ on:
     branches:
     - main
     - 'release/**'
+  # Every pull request, whatever its base: a stacked one is still a proposal.
   pull_request:
-    branches:
-    - main
-  workflow_call:
-    inputs:
-      python_version:
-        description: The version of python to setup
-        type: string
-        default: 3.x
+
+# A newer push to a pull request cancels the run it replaces. On main and a
+# release branch every run is kept: it is the record of what that commit reported.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 jobs:
-  run_pytest:
-    name: 🥼 Run test suite
-    runs-on: ubuntu-latest
-    
+  unit:
+    name: 🥼 Lint, walkthrough, unit tests and the wheel
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
     steps:
     - name: 📰 Checkout
       uses: actions/checkout@v6
       with:
-        # The gridfinity part is a wrapper around a vendored submodule. Without
-        # its sources the part cannot render, and three tests fail on a
-        # checkout that looks otherwise complete.
+        # The gridfinity part renders from a vendored submodule.
         submodules: true
-
-    - name: 🐍 Setup Python
-      uses: actions/setup-python@v6
-      with:
-        python-version: ${{ inputs.python_version }}
 
     - name: 😎 Setup uv
       uses: astral-sh/setup-uv@v7
-
-    - name: 🚧 Install dependencies
-      run: uv sync --locked --dev
+      with:
+        # The floor of requires-python.
+        python-version: "3.11"
 
     - name: 📐 Install OpenSCAD
-      # The viewer E2E test asserts the page loads with no console errors. With
-      # no openscad on PATH the STL endpoints answer 503 ("OpenSCAD not
-      # installed") and the page fills with failed resource loads. A developer
-      # machine hides this behind a populated .cache/ of previously rendered
-      # STLs; a fresh checkout has none.
+      # The tests that render an STL skip without it.
       run: sudo apt-get update && sudo apt-get install -y openscad
 
-    - name: 🎭 Install Playwright browsers
-      # `apothecary test all` runs the E2E phase unconditionally. Without a
-      # browser that phase exits non-zero having collected nothing, which
-      # until now was invisible because the runner swallowed the code.
-      run: uv run playwright install --with-deps chromium
+    - name: 🚧 Install dependencies
+      run: uv sync --locked
+
+    - name: 🧹 Lint
+      run: uv run ruff check apothecary tests
 
     - name: 📖 Run the walkthrough
-      # Named explicitly rather than reached through testpaths: pytest ignores
-      # testpaths the moment it receives a path argument, so a walkthrough
-      # wired that way is one nobody runs and it stays green forever.
+      # Named on the command line: pytest ignores testpaths once it is given a path.
       run: uv run pytest walkthrough -q
 
     - name: 🔬 Unit tests
       run: uv run pytest tests -m "not e2e" -q --slow
-
-    - name: 🎭 Browser tests
-      # --start-server runs the app on state and pictures of its own (tests/e2e/conftest.py).
-      run: uv run pytest tests/e2e --start-server -q
-
-    - name: 📝 The committed walkthrough is the one this run wrote
-      # Pages 11 and 12 are written by the browser run above. A diff means the
-      # committed page describes a run that no longer happens.
-      run: git diff --exit-code -- 'walkthrough/*.md'
 
     - name: 📦 The wheel installs and runs
       # A consumer pins a released version; what they get is the wheel, not this checkout.
@@ -82,3 +63,48 @@ jobs:
         echo '{"objects":[{"type":"cube","size":{"x":1,"y":2,"z":3}}]}' > /tmp/scene.json
         /tmp/wheel-venv/bin/apothecary render --scene-file /tmp/scene.json -o /tmp/scene.scad
         grep -q "cube(\[1.0, 2.0, 3.0\]" /tmp/scene.scad
+
+  e2e:
+    name: 🎭 Browser tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+    - name: 📰 Checkout
+      uses: actions/checkout@v6
+      with:
+        submodules: true
+
+    - name: 😎 Setup uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        python-version: "3.11"
+
+    - name: 📐 Install OpenSCAD
+      # Without it the STL endpoints answer 503 and the page logs failed loads.
+      run: sudo apt-get update && sudo apt-get install -y openscad
+
+    - name: 🚧 Install dependencies
+      run: uv sync --locked
+
+    - name: 🔖 Locked Playwright version
+      id: playwright
+      run: echo "version=$(uv run python -c 'from importlib.metadata import version; print(version("playwright"))')" >> "$GITHUB_OUTPUT"
+
+    - name: 🗃️ Cache the Playwright browsers
+      uses: actions/cache@v5
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+    - name: 🎭 Install Chromium
+      # --with-deps installs the system libraries, which the cache does not hold.
+      run: uv run playwright install --with-deps chromium
+
+    - name: 🎭 Browser tests
+      # --start-server runs the app on state and pictures of its own (tests/e2e/conftest.py).
+      run: uv run pytest tests/e2e --start-server -q
+
+    - name: 📝 The committed walkthrough is the one this run wrote
+      # The browser tests write walkthrough pages 11 and 12.
+      run: git diff --exit-code -- 'walkthrough/*.md'

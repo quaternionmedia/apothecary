@@ -1,224 +1,82 @@
-# 🧪 Apothecary
-
-OpenSCAD generation toolkit + curated printable parts.
+# Apothecary
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Apothecary** composes OpenSCAD code from Python using Pydantic models. It provides a CLI, REST API, and web viewer for building and exploring 3D printable parts.
+Apothecary builds 3D-printable things from Python and keeps the parts it has built.
 
-<!-- Screenshot placeholder - replace with actual screenshot -->
-<p align="center">
-  <img src="docs/screenshot.png" alt="Apothecary Viewer" width="800">
-  <br>
-  <em>Interactive 3D parts browser with STL preview</em>
-</p>
+- **Scenes to OpenSCAD.** Pydantic models (`Cube`, `Union`, `Translate`, ...) render to
+  OpenSCAD or JSCAD, from Python or from a scene JSON file.
+- **A parts library.** Each part is a folder under `parts/`: its SCAD, the parameters and
+  bounds it declares, and the STL the `openscad` CLI builds from it.
+- **A viewer.** A local FastAPI server and a three.js viewer that zooms through sites,
+  assemblies and parts at any depth.
+- **Boards and printers.** Sketches kept with their parts are compiled and uploaded to
+  Arduinos and ESP32s; a Marlin printer is monitored, and drives its node in the viewer.
+- **Photographs into pieces.** A picture becomes named, placed pieces you can build.
+- **It stays on this machine.** The server answers this machine only, and the process
+  connects nowhere else but to fetch the firmware toolchain (`apothecary/stays_local.py`).
 
-## ✨ Features
+## Install
 
-- **Pydantic-based primitives** – Type-safe `Cube`, `Sphere`, `Cylinder`, boolean ops, and transforms
-- **Scene composition** – Build complex models by combining simple objects
-- **CLI & API** – Render scenes from JSON, serve via FastAPI, explore interactively
-- **Parts library** – Curated printable parts with metadata, parameters, and STL generation
-- **Web viewer** – Three.js-powered 3D browser with real STL rendering
-- **Elephant walk** – Preview all parts arranged in a single view
-- **STL generation** – Automatic OpenSCAD → STL conversion via API
-- **JSCAD export** – Generate JavaScript modules for OpenJSCAD
-
-## 🚀 Quick Start
+Python 3.11+ and [uv](https://docs.astral.sh/uv/). Rendering STLs needs the `openscad` CLI
+on `PATH`; nothing else does.
 
 ```bash
-# Install
-git clone https://github.com/quaternionmedia/apothecary.git
+git clone --recurse-submodules https://github.com/quaternionmedia/apothecary.git
 cd apothecary
 uv sync
-
-# Initialize submodules (Gridfinity, etc.)
-uv run apothecary submodules
-
-# Generate example
-uv run apothecary testrun -o example.scad
-
-# Explore parts
-uv run apothecary parts list
-
-# Start the viewer
-uv run apothecary serve
-# Open http://127.0.0.1:8000/viewer
+uv run apothecary check      # packages, three.js, OpenSCAD, the firmware toolchain, the parts
 ```
 
-The viewer serves three.js from this origin rather than a CDN, so it works
-offline. The library is checked in under `apothecary/static/vendor/three/`;
-nothing needs installing for it. (`apothecary install` fetches the separate
-JSCAD viewer, which is optional.)
+A clone made without `--recurse-submodules` has an empty `governance/qm` and no gridfinity
+library: run `git submodule update --init --recursive`.
 
-**[→ Full Quickstart Guide](QUICKSTART.md)**
-
-## 📖 Documentation
-
-| Guide                                              | Description                    |
-| -------------------------------------------------- | ------------------------------ |
-| [QUICKSTART.md](QUICKSTART.md)                     | Get running in 5 minutes       |
-| [docs/](docs/README.md)                            | Full documentation index       |
-| [docs/scene-json.md](docs/scene-json.md)           | JSON format for scenes         |
-| [docs/parts-authoring.md](docs/parts-authoring.md) | Add your own parts             |
-| [docs/firmware.md](docs/firmware.md)               | Program boards from parts' sketches; monitor a G-code printer and let it drive its scene node |
-| [CONTRIBUTING.md](CONTRIBUTING.md)                 | Development setup & guidelines |
-| [CHANGELOG.md](CHANGELOG.md)                       | Version history                |
-
-## 🖥️ CLI Commands
+## First commands
 
 ```bash
-apothecary --help              # Show all commands
-
-# Core
-apothecary testrun -o out.scad # Generate example scene
-apothecary render --scene-file scene.json -o out.scad
-apothecary render-jscad --scene-file scene.json -o out.js
-
-# Parts
-apothecary parts list          # List available parts
-apothecary parts info NAME     # Show part details
-apothecary parts render NAME   # Generate include stub
-apothecary parts generate-stl --all  # Generate all STLs
-apothecary parts generate-stl NAME -p wall=3   # Override a parameter
-apothecary parts verify NAME         # Declared bounds vs real geometry
-apothecary parts elephant-walk # Generate all-parts preview
-apothecary parts import FILE --name NAME --units in --up y   # An STL/OBJ made elsewhere, as a part (docs/geometry-from-elsewhere.md)
-
-# Submodules (external libraries like Gridfinity)
-apothecary submodules          # Init & update all submodules
-apothecary submodules --status # Check submodule status
-
-# Firmware (Arduino / ESP32 / RP2040 ...)
-apothecary firmware install --avr --esp32   # Install arduino-cli (checksum-verified) + cores
-apothecary firmware validate   # Check the toolchain; exit 1 if unusable
-apothecary firmware boards     # Connected boards (--all: every known FQBN)
-apothecary firmware sketches   # Sketches found under parts/<name>/<name>.ino
-apothecary firmware compile footpedal        # Build (FQBN from parts/footpedal/firmware.json)
-apothecary firmware upload footpedal -p /dev/ttyUSB0   # Compile + upload
-apothecary firmware flash-bin /dev/ttyUSB0 0x10000:app.bin --chip esp32   # esptool raw flash
-apothecary firmware printer /dev/ttyUSB1 --query M503    # a Marlin board: identify (M115), poll, report-only queries
-# GUI: /firmware (toolchain, devices), /firmware/monitor (one printer: status, temps, comms log), and the
-# viewer's Device panel, which pins a printer to a node so its status follows the machine
-apothecary firmware devices    # What's plugged in, chip identity, and what each should be running
-apothecary firmware probe /dev/ttyUSB0          # esptool chip/MAC/flash (resets the board)
-apothecary firmware listen /dev/ttyUSB0 --reset # Serial for a few seconds; names the running sketch
-
-# Server
-apothecary serve               # Start FastAPI server
-apothecary serve --port 8765   # Custom port
-apothecary dev                 # Dev mode: generate STLs + start server
-
-# Testing
-apothecary test all            # Run full suite (unit + E2E)
-apothecary test all --coverage # With coverage report
-apothecary test run            # Unit tests only
-apothecary test run-e2e        # E2E tests only
-
-# Development
-apothecary inventory structure # Show repo layout
-apothecary check               # Verify installation
+uv run apothecary render --scene-file examples/scene.json -o scene.scad   # a scene to OpenSCAD
+uv run apothecary parts list                        # the registered parts
+uv run apothecary parts generate-stl datum_core     # one part's STL (needs openscad)
+uv run apothecary serve                             # the viewer: http://127.0.0.1:8000/viewer
+uv run apothecary problems                          # what is open here, and who can close it
+uv run apothecary photo view PICTURE.jpg --width-mm 300   # a picture's pieces, in the viewer
 ```
 
-## 🌐 Web Interface
-
-Start the server and visit http://127.0.0.1:8000:
-
-| Endpoint                     | Description                             |
-| ---------------------------- | --------------------------------------- |
-| `/viewer`                    | Fractal zoom viewer (Three.js): navigates any registered site's Assembly tree at any depth, including the parts library |
-| `/firmware`                  | Firmware workbench: install the toolchain, install cores/libraries, pick a sketch, compile and upload to a connected board, or esptool-flash raw binaries — with live task output. Devices panel shows each port's chip identity (esptool probe), the sketch it *should* be running (last apothecary upload, with drift flags), and what it *is* running (serial banner) — plus a live serial terminal |
-| `/firmware/devices/stream`   | Server-sent events of a board's serial output; the fractal viewer's "⌨ Serial log" toggle floats it over the 3D view |
-| `/docs`                      | OpenAPI documentation (Swagger)         |
-| `/parts`                     | List all parts (JSON)                   |
-| `/parts/{name}/scad`         | Download OpenSCAD source                |
-| `/parts/{name}/stl`          | Download STL file                       |
-| `/parts/{name}/stl/generate` | Generate STL from SCAD                  |
-| `/health`                    | Health check                            |
-
-## 🐍 Python API
+From Python:
 
 ```python
-from apothecary import Scene, Cube, Sphere, Translate, Union, Vector3D
+from apothecary import Cube, Scene, Sphere, Translate, Union, Vector3D
 
-# Build a scene
 base = Cube(size=Vector3D(x=20, y=20, z=5))
 dome = Translate(v=Vector3D(x=10, y=10, z=5), children=[Sphere(r=8)])
-scene = Scene(name="demo", objects=[Union(children=[base, dome])])
-
-# Generate OpenSCAD
-print(scene.render())
-
-# Or JSCAD
-print(scene.render_jscad())
+print(Scene(name="demo", objects=[Union(children=[base, dome])]).render())
 ```
 
-## 📦 Project Structure
+STLs are build products and are not committed. `apothecary serve` builds the missing ones
+in the background when OpenSCAD is present (`APOTHECARY_SKIP_STL_GENERATION=1` skips that);
+`apothecary parts generate-stl --all` builds them all.
 
-```
-apothecary/
-├── apothecary/           # Python package
-│   ├── primitives.py     # Cube, Sphere, Cylinder
-│   ├── booleans.py       # Union, Difference, Intersection
-│   ├── transforms.py     # Translate, Rotate, Scale
-│   ├── scene.py          # Scene composition
-│   ├── api.py            # FastAPI endpoints
-│   ├── cli.py            # Click CLI
-│   ├── viewer.py         # Three.js viewer
-│   └── projects/parts/   # Part wrappers & STL renderer
-├── parts/                # Part folders with .scad/.stl
-│   ├── parametric_star/
-│   ├── couch_block/
-│   └── ...
-├── templates/            # Jinja2 templates
-├── tests/                # Test suite (unit + E2E)
-└── docs/                 # Documentation
-```
+## Where next
 
-## 🧪 Testing
+- [walkthrough/](walkthrough/01-a-part.md): the executable path through the repository,
+  run by `uv run pytest walkthrough`. Start here.
+- [docs/README.md](docs/README.md): the guides, plans and records.
+- `uv run apothecary --help`, and `--help` on every command: the command reference.
+- `/openapi.json` on a running server: the HTTP API. `/docs` serves `docs/` and
+  `/walkthrough` serves `walkthrough/`, rendered.
+- [CONTRIBUTING.md](CONTRIBUTING.md): the test loop, what CI gates, and how commits are
+  written. [CHANGELOG.md](CHANGELOG.md): what changed.
 
-```bash
-# Unit tests only
-uv run pytest -q
+## Troubleshooting
 
-# Full test suite (unit + E2E with auto-server)
-uv run apothecary test all
+- `apothecary: command not found`: prefix `uv run`, or activate `.venv`
+  (`source .venv/bin/activate`; on Windows `.venv\Scripts\activate`).
+- An import error after a pull: `uv sync`.
+- An empty viewer or a part that will not render: `uv run apothecary check` says what is
+  missing.
 
-# With coverage
-uv run apothecary test all --coverage
+## License
 
-# E2E only (requires running server)
-uv run apothecary serve --port 8765  # Terminal 1
-uv run apothecary test run-e2e       # Terminal 2
-```
-
-## 📁 STL Files
-
-STL files are **not committed to git** – they're generated locally from SCAD sources:
-
-- **On server startup**: Missing STLs are auto-generated if OpenSCAD is installed
-- **Manual generation**: `uv run apothecary parts generate-stl --all`
-- **Single part**: `uv run apothecary parts generate-stl calibration_cube`
-- **Force rebuild**: Add `--force` to regenerate existing STLs
-
-To skip auto-generation at startup: `APOTHECARY_SKIP_STL_GENERATION=1 apothecary serve`
-
-## 🤝 Contributing
-
-We welcome contributions! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for:
-
-- Development setup
-- Code style guidelines
-- Testing requirements
-- Pull request process
-
-## 📜 License
-
-MIT License. See [LICENSE](LICENSE) for details.
-
-## 🔗 Links
-
-- [OpenSCAD](https://openscad.org/) – The 3D CAD modeler we generate code for
-- [OpenJSCAD](https://openjscad.xyz/) – JavaScript-based alternative
-- [uv](https://docs.astral.sh/uv/) – Fast Python package manager
+MIT; see [LICENSE](LICENSE). Each file's licence is recorded for
+[REUSE](https://reuse.software/) (`REUSE.toml`, `LICENSES/`).
