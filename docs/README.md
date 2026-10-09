@@ -44,6 +44,7 @@ HTTP API is described at `/openapi.json`, the commands by `apothecary --help`.
 | [Cameras and clutter](plans/cameras-and-clutter-2026-10-04.md) | Cameras as parts, easier pictures, and less on the screen: badges as icons, the Machine in the rail, one header row, faded walls; in four phases |
 | [Cleanup, triaged](plans/cleanup-triage-2026-10-08.md) | Every open cleanup item sorted by kind and given an order: in flight, delivery, dead code, parts, tests, structure, the owner's |
 | [Rust](plans/rust-2026-10-08.md) | Firmware in Rust for the ESP32 behind modular toolchains; a Rust geometry kernel researched and compared by numbers; a Rust service and core stubbed |
+| [A Rust geometry kernel](plans/rust-geometry-kernels-2026-10-09.md) | A spike: which Rust kernel could render scenes to STL without OpenSCAD -- Manifold bindings, csgrs, boolmesh, truck, Fornjot, OCCT -- by licence, build, coverage and maturity, and which to try first |
 | [The loops through the page](plans/ui-flows-2026-10-08.md) | Designing a part, editing its SCAD, firmware, and a picture to a print: each built out and held end to end by a browser test |
 | [Pictures in the world](plans/pictures-in-the-world-2026-09-26.md) | A picture pinned at a place as a view, its shapes made into pieces there; what is built, and what is open |
 | [Designing a part from the browser](plans/part-editing-in-the-browser-2026-09-27.md) | A spike: the loop for changing a part from the viewer today, what other tools do, and a recommended order |
