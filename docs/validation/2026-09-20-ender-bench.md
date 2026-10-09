@@ -145,6 +145,42 @@ the log too. ✔ as you go.
       printer /dev/ttyUSB0` from a terminal answers **without a boot banner**;
       **⇄ Reconnect** in the Machine holds it again, also without one.
 
+**G. The ESP32: the Rust esp32_blink (added 2026-10-09; no latch, not the printer)**
+
+The bench's ESP32 devkit, flashed with the Rust `esp32_blink` and heard
+saying its hello -- the firmware loop's real run, which the suites only do
+against the simulated devkit. A person runs this; no test flashes a board.
+
+Preconditions: the devkit plugged in (its CP2102 bridge is the port that is
+*not* the printer's FTDI `A106ZTEU`: `apothecary firmware devices` says which);
+`uv run apothecary firmware install --rust-esp32` done once, with the network
+up; `uv run apothecary firmware validate` shows *Rust for the ESP32* with ✓
+cargo and ✓ espflash and no "not vendored" problem.
+
+- [ ] **Bench** (Panels › Bench): its toolchain card shows *Rust for the
+      ESP32* with cargo's and espflash's versions. Sketch **esp32_blink · Rust ·
+      esp32**: the board box goes, the note says *built by Rust for the ESP32
+      for esp32*. Port: the devkit's -- check it is not the printer's.
+- [ ] **Compile** (⌗932): `Compile esp32_blink (Rust, esp32)` succeeds, its
+      log showing `cargo build --release --offline`. Note how long the first
+      build takes. Unplug the network and Compile again: it still builds.
+- [ ] **Compile & upload** (⌗934) → confirm `Compile and upload "esp32_blink"
+      (Rust) to /dev/ttyUSBn?`: espflash ends `Flashing has completed!`; the
+      LED on GPIO 2 blinks once a second.
+- [ ] The garage's **esp32_blink** wears the board's badge; Device › Open
+      (⌗28): the Sketch card reads *should run esp32_blink · rust-esp32 ·
+      esp32*. Device › Query (⌗24): the log says *heard esp32_blink say hello*
+      and the card *observed esp32_blink ✓ matches*.
+- [ ] **Listen**: `apothecary esp32_blink: hello`, then the chip line, then
+      `blink 1`, `blink 2` … once a second, and the hello and chip line again
+      every ten blinks. Note the chip line exactly; it should be what the
+      Arduino one prints (`chip: ESP32-D0WD-V3 rev 301, 2 core(s), 240 MHz, LED
+      on GPIO 2` on this board, if its die is a v3.1). With the esp32 core
+      installed, flash **esp32_blink · esp32:esp32:esp32** the same way and
+      compare: a difference in any line is a defect of the Rust one.
+- [ ] **Release**, and Device › Flash (⌗22): the Flashing card starts from the
+      Rust esp32_blink, what the board should run.
+
 Anything refused, wrong, or slower than the bound in the table above: note
 the time and the port, and download the comms log (`⤓`) -- it is the whole
 story, including what the board said.

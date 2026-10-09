@@ -4,10 +4,11 @@ Parts are not only geometry. A footpedal has an Arduino in it; an RC snowplow
 has an ESP32; the bench has a 3D printer whose mainboard already runs Marlin.
 `apothecary firmware` and, in the viewer, the [Bench](#in-the-viewer-the-bench)
 and each board's [Machine](#in-the-viewer-one-machine-per-board) install the
-toolchain, keep sketches next to the parts they belong to, compile and upload
-them, say what each connected board is running, and, for a board Apothecary
-does not program, [monitor it](#printers-boards-that-already-run-a-g-code-firmware)
-and let it drive its node in the viewer.
+toolchains, keep sketches -- Arduino or [Rust](#rust-for-the-esp32) -- next to
+the parts they belong to, compile and upload them, say what each connected
+board is running, and, for a board Apothecary does not program,
+[monitor it](#printers-boards-that-already-run-a-g-code-firmware) and let it
+drive its node in the viewer.
 
 Apothecary owns only the control plane. Building, flashing and talking to
 serial ports are done by external engines, run as subprocesses (pyserial is
@@ -17,12 +18,26 @@ imported behind a swappable transport slot) and never modified:
 |---|---|---|
 | [arduino-cli](https://arduino.github.io/arduino-cli/) | boards, cores, libraries, compile, upload, serial monitor | `apothecary firmware install` (checksum-verified download into `~/.apothecary/tools/`) |
 | [esptool](https://github.com/espressif/esptool) | chip identification and raw binary flashing of Espressif chips | detected: on `PATH`, bundled with the `esp32:esp32` core, or as a Python module |
+| [cargo](https://doc.rust-lang.org/cargo/) on Espressif's Xtensa Rust ([rustup](https://rustup.rs), [espup](https://github.com/esp-rs/espup)) | building a Rust sketch for the classic ESP32, offline | `apothecary firmware install --rust-esp32` (into `~/.apothecary/tools/rust-esp32/`) |
+| [espflash](https://github.com/esp-rs/espflash) | flashing a Rust sketch's build to an ESP32 | `apothecary firmware install --rust-esp32` (checksum-verified download) |
 | [pyserial](https://pyserial.readthedocs.io/) | the byte transport under the G-code printer seam | a declared dependency (`uv sync`); see [Serial engines](#serial-engines) |
+
+Each way of building is a **toolchain module** (`apothecary/firmware/modules/`):
+it says what it builds -- its languages and board families -- finds its tools
+(the variable naming one, then the tools dir, then `PATH`), reports their
+status, installs them, and builds and flashes a sketch as steps the task
+runner runs. Arduino (arduino-cli, esptool) and Rust for the ESP32 (cargo,
+espflash) are the two today; a later family or language -- the ESP32-C3 on
+stable Rust, AVR, the RP2040 -- is a module of its own beside them, and the
+Bench, the Machine, the routes and the CLI draw it without a change of their
+own. `GET /firmware/toolchains` lists them; `GET /firmware/status` carries
+them as `toolchains`, its other fields Arduino's as they always were.
 
 ## Setup
 
 ```bash
 apothecary firmware install --avr --esp32      # arduino-cli + the AVR and ESP32 cores
+apothecary firmware install --rust-esp32       # Rust for the classic ESP32; see below
 apothecary firmware validate                   # exit 1 if arduino-cli is unusable
 apothecary firmware cores --install rp2040:rp2040   # more cores; index URLs are added for you
 apothecary firmware libraries --install FastLED --install "Control Surface@2.1.2"
@@ -33,6 +48,7 @@ apothecary firmware libraries --install FastLED --install "Control Surface@2.1.2
 | `APOTHECARY_TOOLS_DIR` | where Apothecary installs toolchains | `~/.apothecary/tools` |
 | `APOTHECARY_STATE_DIR` | flash records, cached probes, bed readings, kept prints | `~/.apothecary` |
 | `ARDUINO_CLI` | explicit path to an arduino-cli binary (checked first) | — |
+| `CARGO`, `ESPFLASH` | explicit paths to the cargo and espflash a Rust sketch is built and flashed with (checked first; `none` means none) | — |
 | `APOTHECARY_SERIAL_ENGINE` | byte transport for the printer seam: `pyserial` or `simulated` | `pyserial` |
 
 The tools dir is under `$HOME` because sandboxed editors (the VS Code snap)
@@ -83,7 +99,29 @@ is not built: a profile names where arduino-cli fetches a platform from, and
 arduino-cli honours it over the command line, so it would outrank the managed
 config.
 
-Build output goes to `build/firmware/<sketch>/` (git-ignored), never into `parts/`.
+A **Rust sketch** is a Cargo project in its part's folder, its `firmware.json`
+naming its module:
+
+```
+parts/esp32_blink/rust/Cargo.toml          # [package] name = "esp32_blink"
+parts/esp32_blink/rust/Cargo.lock          # the crates it is built from, vendored at install
+parts/esp32_blink/rust/firmware.json       # {"toolchain": "rust-esp32", "chip": "esp32", ...}
+parts/esp32_blink/rust/rust-toolchain.toml # channel = "esp" (espup's Xtensa Rust)
+parts/esp32_blink/rust/.cargo/config.toml  # target xtensa-esp32-none-elf, build-std core
+parts/esp32_blink/rust/src/main.rs         # esp-hal, no_std
+```
+
+Its name is its Cargo package's, and it is what the sketch announces, so the
+Rust `esp32_blink` is the sketch `esp32_blink` to a board's Machine and to the
+scene -- a node bound to `esp32_blink` finds the board either implementation
+was flashed to, and a board running either is heard saying the same hello.
+The Bench and the CLI tell the two apart by id: the Arduino one's is its name,
+as it always was; the Rust one's is `esp32_blink@rust-esp32`. Its
+`firmware.json` takes `note`, `baud` and `display` as an Arduino sketch's does,
+and `chip` in place of an FQBN: the project says what it builds for, so a
+build names no board. `Cargo.lock` is committed; an install vendors from it.
+
+Build output goes to `.cache/firmware/<sketch id>/` (git-ignored), never into `parts/`.
 
 ## Build and upload
 
@@ -92,8 +130,15 @@ apothecary firmware sketches                 # what was found
 apothecary firmware compile esp32_blink      # FQBN from firmware.json
 apothecary firmware upload esp32_blink       # compile, then upload the fresh build
 apothecary firmware upload footpedal --fqbn arduino:avr:nano:cpu=atmega328old -p /dev/ttyUSB1
-apothecary firmware flash-bin /dev/ttyUSB0 0x0:build/firmware/esp32_blink/esp32_blink.ino.merged.bin --chip esp32
+apothecary firmware flash-bin /dev/ttyUSB0 0x0:.cache/firmware/esp32_blink/esp32_blink.ino.merged.bin --chip esp32
+apothecary firmware compile esp32_blink@rust-esp32               # cargo build --release --offline
+apothecary firmware upload esp32_blink@rust-esp32 -p /dev/ttyUSB0  # build, then espflash flash
 ```
+
+A Rust sketch's compile is `cargo build --release --offline` in its folder,
+with crates.io replaced by the vendored crates; its upload builds, then
+`espflash flash --skip-update-check --non-interactive --chip esp32 --port …`
+writes that build. Neither takes `--fqbn`: the project names its chip.
 
 `upload` always compiles first and flashes that build, never a stale binary.
 The port is auto-detected only when exactly one board is connected; with
@@ -104,9 +149,14 @@ several it refuses to guess.
 The **Bench** is the same toolchain in front of the world: a tab of the
 viewer's rail (the ring's Panels › Bench; `/firmware` opens the viewer with
 it). It holds arduino-cli and esptool as installed,
-with **Install** or **Update** (*force* downloads it again); the suggested
+with **Install** or **Update** (*force* downloads it again); every other
+toolchain module under them -- Rust for the ESP32, its cargo and espflash as
+found and its problems -- with an **Install** of its own (`POST
+/firmware/toolchains/{id}/install`; *force* fetches its tools again); the suggested
 cores, each with **Install**; libraries typed and installed; the sketches
-under `parts/`, each with the board its `firmware.json` names, **Compile**d,
+under `parts/`, each with the board its `firmware.json` names -- a Rust one
+beside the Arduino ones, its row naming its language and chip; choosing it
+chooses its module, and the board box goes, since it takes none -- **Compile**d,
 or compiled and uploaded to a detected port after asking (**Compile &
 upload**); **Raw flash** with esptool, one `offset path` a line, after asking;
 and the task log -- the running task's output with **Cancel**, and the recent
@@ -118,6 +168,64 @@ filled the first time its tab is shown, so a page that never shows it asks
 nothing of the toolchain. A board's own flashing is in its Machine
 ([below](#in-the-viewer-one-machine-per-board)); the Bench is for any sketch
 and any port.
+
+## Rust for the ESP32
+
+The classic ESP32 -- the garage's `esp32_devkitc`, the ESP32 on the bench --
+in Rust: [`esp-hal`](https://github.com/esp-rs/esp-hal), `no_std`, on
+Espressif's Xtensa Rust toolchain, flashed with espflash.
+`parts/esp32_blink/rust` says what the Arduino `esp32_blink` says, line for line
+at 115200 baud: a blank line and `apothecary esp32_blink: hello` at boot, the
+chip line read from the same eFuses the Arduino core reads (`chip: ESP32-D0WD-V3
+rev 301, 2 core(s), 240 MHz, LED on GPIO 2`), `blink N` each time the LED on
+GPIO 2 comes on, every 500 ms a toggle, and the hello again every ten blinks.
+
+```bash
+apothecary firmware install --rust-esp32        # once; --force fetches the tools again
+apothecary firmware validate                    # Rust for the ESP32: ✓ cargo, ✓ espflash
+```
+
+The install puts everything under `~/.apothecary/tools/rust-esp32/`
+(`APOTHECARY_TOOLS_DIR` moves it), fetching each thing once:
+
+1. **rustup**, `rustup-init` at a pinned version from `static.rust-lang.org`,
+   checked against the `.sha256` published beside it, run with `CARGO_HOME`
+   and `RUSTUP_HOME` in the tools dir -- never `~/.cargo` or `~/.rustup` --
+   and no toolchain of its own.
+2. **espup's Xtensa toolchain**: espup from its GitHub release, checked against
+   the SHA-256 GitHub publishes for the asset, run as `espup install --targets
+   esp32` at a pinned Xtensa Rust version. It puts the `esp` toolchain
+   (rustc, cargo, rust-src), Espressif's LLVM and the Xtensa GCC linker under
+   `RUSTUP_HOME`, and its export file beside them; its `~/.espup` link is the
+   tools dir's too. espup's own downloads are espup's to check.
+3. **espflash**, from its GitHub release, checked the same way.
+4. **The crates**: `cargo vendor` of every Rust sketch's `Cargo.lock`, with the
+   `esp` toolchain's own library workspace (what `build-std` builds `core`
+   from), into `vendor/`; cargo checks each crate against the lockfile.
+
+Every build after that is offline: `cargo --offline` from the vendored crates,
+rustup told not to install a toolchain it lacks (`RUSTUP_AUTO_INSTALL=0`),
+espflash told not to look for updates, and no proxy, registry or source
+override, compiler wrapper or GitHub token inherited. A Rust sketch added or a
+`Cargo.lock` changed later says so in its module's status until the install
+runs again, which vendors afresh and fetches nothing else.
+
+| Platform | The install |
+|---|---|
+| Linux x86_64, Linux arm64 | as above; needs a C compiler and linker for the build scripts (`build-essential`) |
+| macOS on Apple Silicon | as above; needs the command-line tools (`xcode-select --install`) |
+| Windows x64 | as above, with `.exe`s and espup's PowerShell export file; needs the MSVC build tools. espup sets its variables for the user on Windows, not only in the tools dir |
+| macOS on Intel, Windows on ARM | refused: Espressif publishes no Xtensa Rust for an Intel Mac, and espup and espflash no ARM64 Windows build |
+
+What the install reaches, and why, is the install-time list in
+`apothecary/stays_local.py` (`TOOL_SOURCES`): `static.rust-lang.org`
+(rustup-init), the GitHub hosts (espup and espflash, their published digests,
+and espup's own downloads of the toolchain), `index.crates.io` and
+`static.crates.io` (`cargo vendor`), and `crates.io` (espup's own check for a
+newer espup, which it cannot be told not to make). A build or a flash reaches
+none of them. Detecting ports and listening still go through arduino-cli
+(`board list`, `monitor`), so the Machine hears a Rust board as it hears any
+other.
 
 ## Knowing what a board is running
 
@@ -243,8 +351,9 @@ hello and, pressed with none heard, asks `M115`, so a board pinned before it
 was asked can turn out to be a printer; a printer's Identify asks `M115`.
 
 The Flashing card is the Bench's form and task log for this one port: the
-sketch it should run to start with (the last one flashed to it from here,
-else the one its node is bound by), the board's FQBN, **Compile**, and
+sketch it should run to start with (the last one flashed to it from here --
+the Rust one, if that is what was flashed -- else the one its node is bound
+by), the board's FQBN (none for a Rust sketch), **Compile**, and
 **Compile & upload** after asking, the task's output in the card, then
 Identify's listen for the hello -- never its `M115`, which is a person's to
 press for. A printer keeps its own firmware and has no Flashing card.
@@ -419,11 +528,16 @@ serial ports on the host, which is why the server listens on this machine only.
 
 ## Testing
 
-The seam's tests run against a scripted fake `arduino-cli`
-(`tests/firmware_helpers.py`), so CI needs no toolchain, network or serial port:
+The seam's tests run against a scripted fake `arduino-cli`, and the Rust
+module's against a scripted `cargo` and `espflash` (`tests/firmware_helpers.py`),
+so CI needs no toolchain, network or serial port. The fakes in one folder are
+one simulated bench: with `FAKE_DEVKIT` set, an ESP32 devkit on
+`/dev/ttyFAKE2` runs whatever was last uploaded or flashed to it and says that
+sketch's hello. The scripted cargo refuses a build that is not `--offline`.
 
 ```bash
 uv run pytest tests/test_firmware_seam.py tests/test_firmware_api.py tests/test_firmware_devices.py tests/test_firmware_gcode.py
+uv run pytest tests/test_firmware_modules.py tests/test_rust_installer.py
 ```
 
 The G-code tests replay a transcript captured from a real Marlin board. Every
@@ -434,9 +548,15 @@ holds the viewer and a printer's Machine to timing bounds, and the printer as
 the world draws it to enclosing its board and its build volume;
 `tests/e2e/test_bench.py` drives the Bench, and `tests/e2e/test_one_machine.py`
 a board's Machine, its flashing and its port opened only by Listen.
+`tests/e2e/test_the_firmware_loop.py` goes round the firmware loop twice
+through the page -- the Arduino `esp32_blink` from the Bench, then the Rust one
+from the board's Machine, each built, flashed and heard saying its hello --
+against the simulated devkit; flashing the bench's own ESP32 is a step of the
+bench checklist.
 [`validation/2026-09-20-ender-bench.md`](validation/2026-09-20-ender-bench.md)
 is the seam against a real Ender mainboard, with a checklist for what needs
 control armed.
 
 The decision records are *Firmware toolchain seam* and *G-code printer seam*
-in `governance/qm/adr/`.
+in `governance/qm/adr/`; the toolchain modules extend the first
+([rust-2026-10-08.md](plans/rust-2026-10-08.md)).
