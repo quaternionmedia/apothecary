@@ -37,6 +37,10 @@ from .skeleton import ROOT
 GRID_SIZE_MM = 42.0  # Standard gridfinity grid unit in mm
 HEIGHT_UNIT_MM = 7.0  # Height unit in mm
 STACKING_LIP_MM = 3.55  # Stacking lip height (with fillet)
+# The standard's gap: each base's top is 41.5 mm on a 42 mm grid, so a bin is
+# n x 42 - 0.5 mm across, the same 0.5 mm at half grid (the library's
+# BASE_GAP_MM, src/core/standard.scad).
+BASE_GAP_MM = 0.5
 
 # The library's 2.0.0 source ends a call's arguments with a comma, which
 # OpenSCAD accepts from openscad/openscad#3814 (merged 2021-08-24), and relies
@@ -145,8 +149,8 @@ class GridfinityBinPart(BasePart):
         # Calculate dimensions
         grid_unit = GRID_SIZE_MM / (2 if half_grid else 1)
 
-        width_x = gridx * grid_unit
-        width_y = gridy * grid_unit
+        width_x = gridx * grid_unit - BASE_GAP_MM
+        width_y = gridy * grid_unit - BASE_GAP_MM
 
         # Height calculation based on gridz_define
         if gridz_define == 0:  # 7mm units, excludes lip
@@ -162,9 +166,10 @@ class GridfinityBinPart(BasePart):
         if include_lip:
             height += STACKING_LIP_MM
 
+        # The library centres a bin on X and Y and stands it on Z = 0.
         return BoundingBox3D(
-            min_point=Vector3D(x=0, y=0, z=0),
-            max_point=Vector3D(x=width_x, y=width_y, z=height),
+            min_point=Vector3D(x=-width_x / 2, y=-width_y / 2, z=0),
+            max_point=Vector3D(x=width_x / 2, y=width_y / 2, z=height),
         )
 
     def scad_overrides(self, params: Mapping[str, Any]) -> Dict[str, Any]:
@@ -246,8 +251,8 @@ def get_bin_dimensions(gridx: int = 1, gridy: int = 1, gridz: float = 3) -> Dict
         Dict with width, depth, height in mm
     """
     return {
-        "width_mm": gridx * GRID_SIZE_MM,
-        "depth_mm": gridy * GRID_SIZE_MM,
+        "width_mm": gridx * GRID_SIZE_MM - BASE_GAP_MM,
+        "depth_mm": gridy * GRID_SIZE_MM - BASE_GAP_MM,
         "height_mm": gridz * HEIGHT_UNIT_MM + STACKING_LIP_MM,
         "grid_unit_mm": GRID_SIZE_MM,
         "height_unit_mm": HEIGHT_UNIT_MM,

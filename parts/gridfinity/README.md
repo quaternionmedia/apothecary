@@ -80,6 +80,8 @@ git submodule update --remote --merge
 The standard Gridfinity system uses:
 
 - **Grid unit**: 42mm × 42mm base
+- **Gap**: a bin is n × 42mm − 0.5mm across (a 41.5mm base top on each
+  42mm grid unit), the same 0.5mm at half grid, so it drops into a baseplate
 - **Height unit**: 7mm increments
 - **Stacking lip**: ~3.55mm (with fillet)
 

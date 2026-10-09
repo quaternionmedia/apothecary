@@ -82,6 +82,17 @@ import pytest  # noqa: E402
 from firmware_helpers import _isolate_firmware_state, write_fake_arduino_cli  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _no_background_renders(monkeypatch):
+    """The app builds missing STLs in the background when it starts. A test that
+    starts it (a TestClient used as a context manager, a live uvicorn) would
+    render into the checkout from a worker thread that outlives the test and runs
+    under the next test's environment. Off for every test; the one test of
+    startup generation deletes the variable for itself. The browser suite's
+    servers are started before any test and keep their own environment."""
+    monkeypatch.setenv("APOTHECARY_SKIP_STL_GENERATION", "1")
+
+
 @pytest.fixture(autouse=True, scope="session")
 def _cache_outside_the_checkout(tmp_path_factory):
     """Node renders go to a cache of the run's own, never the checkout's."""

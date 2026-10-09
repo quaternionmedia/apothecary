@@ -140,9 +140,19 @@ class OpenSCADRenderer:
         return self._detected_path
 
     def _detect_openscad(self) -> Optional[Path]:
-        """OpenSCAD on PATH, else at one of the usual install locations, else a
-        development snapshot: on a machine that has only a snapshot, it is the
-        OpenSCAD every build uses."""
+        """The OpenSCAD ``APOTHECARY_OPENSCAD`` names, which wins over everything;
+        else the snapshot ``apothecary openscad install`` made current, the fast
+        path; else OpenSCAD on PATH, else at one of the usual install locations,
+        else a development snapshot: on a machine that has only a snapshot, it
+        is the OpenSCAD every build uses."""
+        chosen = openscad_override() or managed_openscad()
+        if chosen is not None:
+            return chosen
+        return self._system_openscad()
+
+    def _system_openscad(self) -> Optional[Path]:
+        """OpenSCAD as this machine has it, apart from apothecary: on PATH, at a
+        usual install location, or a development snapshot."""
         found = shutil.which("openscad")
         if found:
             return Path(found)
@@ -202,8 +212,10 @@ class OpenSCADRenderer:
         partial = stl_path.with_name(f".{stl_path.stem}.{uuid.uuid4().hex[:12]}.stl")
 
         # Definitions precede the source file, which is where OpenSCAD
-        # documents them and the only order that is safe to assume.
-        cmd = [str(self.openscad_path), "-o", str(partial), *definitions, str(scad_path)]
+        # documents them and the only order that is safe to assume. Manifold
+        # where the OpenSCAD has it: the same mesh, an order of magnitude sooner.
+        backend = ["--backend=manifold"] if has_manifold(self.openscad_path) else []
+        cmd = [str(self.openscad_path), "-o", str(partial), *backend, *definitions, str(scad_path)]
 
         start = time.monotonic()
         try:
@@ -389,6 +401,29 @@ def openscad_version(executable: Path) -> Optional[str]:
     return _VERSIONS[key]
 
 
+def has_manifold(executable: Optional[Path]) -> bool:
+    """Whether ``executable`` takes ``--backend=manifold``: a snapshot from
+    2024.09.28 on. Never 2021.01. (``--enable=manifold``, the older spelling,
+    is accepted by later snapshots and renders with CGAL, so it is not used.)"""
+    from apothecary.openscad_installer import has_manifold as reports_manifold
+
+    return executable is not None and reports_manifold(openscad_version(Path(executable)))
+
+
+def openscad_override() -> Optional[Path]:
+    """The OpenSCAD ``APOTHECARY_OPENSCAD`` names, for a person who wants another:
+    when set, it is the only one used, whether or not it is there."""
+    named = os.environ.get("APOTHECARY_OPENSCAD", "").strip()
+    return Path(named).expanduser() if named else None
+
+
+def managed_openscad() -> Optional[Path]:
+    """The snapshot ``apothecary openscad install`` made current, if there is one."""
+    from apothecary.openscad_installer import current_executable
+
+    return current_executable()
+
+
 def _snapshots() -> List[Path]:
     """Development snapshots on this machine: ``openscad-nightly`` on PATH,
     then the places snapshots install."""
@@ -397,11 +432,20 @@ def _snapshots() -> List[Path]:
 
 
 def _openscad_candidates() -> List[Path]:
-    """The default OpenSCAD, then development snapshots, each path once. Two
-    links to one executable stay two: a snap links every app in /snap/bin to
-    /usr/bin/snap, which runs the one its name says."""
+    """The OpenSCAD ``APOTHECARY_OPENSCAD`` names and nothing else, when it is
+    set; otherwise the installed snapshot, the default OpenSCAD, then
+    development snapshots, each path once. Two links to one executable stay
+    two: a snap links every app in /snap/bin to /usr/bin/snap, which runs the
+    one its name says."""
+    override = openscad_override()
+    if override is not None:
+        return [override]
     default = get_renderer()
-    found = [default.openscad_path] if default.is_available else []
+    found = [
+        path
+        for path in (managed_openscad(), default.openscad_path, default._system_openscad())
+        if path is not None and path.exists()
+    ]
     unique: Dict[str, Path] = {}
     for path in found + _snapshots():
         unique.setdefault(os.path.abspath(path), path)
@@ -426,7 +470,7 @@ def _too_old(min_version: str, executables: List[Path]) -> str:
     )
     return (
         f"needs OpenSCAD {min_version} or newer ({found or 'none is installed'}); "
-        f"development snapshots: {SNAPSHOTS_URL}"
+        f"`apothecary openscad install` fetches a development snapshot ({SNAPSHOTS_URL})"
     )
 
 
@@ -439,8 +483,9 @@ def openscad_meets(executable: Path, min_version: str) -> Tuple[bool, str]:
 
 
 def find_openscad(min_version: str) -> Tuple[Optional[Path], str]:
-    """The first OpenSCAD that is ``min_version`` or newer, the default install
-    before any development snapshot: ``(path, "")``, or ``(None, why not)``."""
+    """The first OpenSCAD that is ``min_version`` or newer, in the order of
+    ``_openscad_candidates`` (the installed snapshot, the default install,
+    then other development snapshots): ``(path, "")``, or ``(None, why not)``."""
     wanted = _wanted(min_version)
     candidates = _openscad_candidates()
     for path in candidates:

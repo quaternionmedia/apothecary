@@ -12,7 +12,11 @@ uv sync
 uv run playwright install chromium   # once per machine, for the browser tests
 ```
 
-Rendering STLs needs the `openscad` CLI on `PATH`.
+Rendering STLs needs OpenSCAD: `uv run apothecary openscad install` puts a development
+snapshot with Manifold in the tools dir (on Linux x86_64, macOS and Windows x64 the
+published build; on Linux arm64 a build from source; README.md says what each does), or
+the `openscad` CLI on `PATH` is used. With the snapshot installed, the `--slow` suite also renders the parts that need an
+OpenSCAD newer than 2021.01.
 
 ## The loop
 
