@@ -269,6 +269,32 @@ def test_applying_a_cameras_numbers_moves_it_and_a_field_of_view_is_its_lens():
     assert _attached(c)["cameras"][0]["tilt"] == 10.0
 
 
+def test_a_cameras_frame_is_named_for_it_and_listed_as_its():
+    """A frame a camera part took is named for its site and camera, so Pictures knows
+    its camera after the views that also say so are gone; any other picture has none."""
+    from test_views_api import _png
+
+    c = TestClient(app)
+    _add(c)
+    taken = c.post(
+        "/photos/pictures",
+        params={"name": "ignored", "site": "garage", "camera": "camera_1"},
+        content=_png(),
+    ).json()
+    assert taken["path"].endswith("-garage--camera_1.png"), taken["path"]
+    assert taken["camera"] == {"site": "garage", "name": "camera_1"}
+    added = c.post("/photos/pictures", params={"name": "desk", "kept": "upload"}, content=_png())
+    framed = c.post("/photos/pictures", params={"name": "garage--camera_1"}, content=_png())
+    # Its views gone, as after a restart, the name still says.
+    viewing.store().forget_picture(taken["path"])
+    listed = {p["path"]: p["camera"] for p in c.get("/photos/pictures").json()}
+    assert listed[taken["path"]] == {"site": "garage", "name": "camera_1"}
+    assert listed[added.json()["path"]] is None and listed["bench_top.png"] is None
+    # A frame kept with no camera part says none, whatever a page named it.
+    assert "--" not in framed.json()["path"]
+    assert listed[framed.json()["path"]] is None
+
+
 def test_remove_takes_the_camera_away_and_leaves_its_pictures():
     c = TestClient(app)
     _add(c)

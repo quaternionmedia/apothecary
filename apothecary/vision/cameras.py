@@ -498,8 +498,10 @@ def _pose_answer(pose: Pose) -> Dict[str, object]:
 
 def answer(camera: Camera, site: Optional[Assembly]) -> Dict[str, object]:
     """A camera as the page reads it: its pose, the pose it was added at, its lens,
-    its device, whether its node stands in the site, and where its next picture
-    would land (``lands``: a host or ``""`` and the point; null for a wall or the sky)."""
+    its device, whether its node stands in the site, where its next picture would
+    land (``lands``: a host or ``""`` and the point; null for a wall or the sky),
+    and the webcam it is drawn as (``body``: its size and its lens, about the lens's
+    front face, looking straight down)."""
     landing = lands(camera.site, site, camera.pose) if site is not None else None
     return {
         "name": camera.name,
@@ -513,6 +515,7 @@ def answer(camera: Camera, site: Optional[Assembly]) -> Dict[str, object]:
         "lands": (
             {"host": landing.name, "point": list(landing.point)} if landing is not None else None
         ),
+        "body": {"size": list(BODY), "lens_d": LENS_D, "lens_h": LENS_H},
     }
 
 

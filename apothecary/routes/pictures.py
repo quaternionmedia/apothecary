@@ -12,7 +12,8 @@ command line. These routes give the world's page the same, and no more:
   the browser are kept. Nothing outside that folder is ever listed or read.
 - ``POST /photos/pictures?name=…`` keeps a picture the browser sends, after
   checking it is a picture by its first bytes and not by its name: a frame
-  from a camera under ``captures/`` (named by the moment), or, with
+  from a camera under ``captures/`` (named by the moment, and a camera part's
+  by its camera too, which the listing reads back as ``camera``), or, with
   ``kept=upload``, a file a person chose under ``uploads/`` (named as the
   person named it). It stays on this machine; nothing is sent anywhere.
 - ``DELETE /photos/pictures/{path}`` forgets one kept picture and
@@ -68,6 +69,20 @@ def _kept_as(path: Path, root: Path) -> Optional[str]:
     return next((kind for kind, folder in KEPT.items() if path.parent.name == folder), None)
 
 
+# A frame a camera part took is named for the moment and for its camera:
+# ``20261004T120000.123-garage--camera_1.png``. The name is how Pictures knows a
+# picture's camera after the views that also say so are gone (a restart).
+TAKEN_BY = re.compile(
+    r"^\d{8}T\d{6}\.\d{3}-(?P<site>[A-Za-z0-9][A-Za-z0-9_-]*?)--(?P<camera>[A-Za-z0-9_]+)\.\w+$"
+)
+
+
+def _camera_of(path: Path, kept: Optional[str]) -> Optional[dict]:
+    """The camera part a kept frame was taken by, by its name; None for any other picture."""
+    taken = TAKEN_BY.match(path.name) if kept == "capture" else None
+    return {"site": taken["site"], "name": taken["camera"]} if taken else None
+
+
 def _entry(path: Path, root: Path) -> dict:
     stat = path.stat()
     kept = _kept_as(path, root)
@@ -78,6 +93,7 @@ def _entry(path: Path, root: Path) -> dict:
         "taken_at": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
         "captured": kept == "capture",
         "kept": kept,
+        "camera": _camera_of(path, kept),
     }
 
 
@@ -191,8 +207,9 @@ def keep_picture(
     camera: Optional[str] = Query(None, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"),
 ):
     """Keep a picture the browser sends: a camera's frame under captures/, named by the
-    moment, or (``kept=upload``) a file a person chose under uploads/, named as they
-    named it. A picture by its first bytes, whatever its name says.
+    moment (and a camera part's by its site and name, ``TAKEN_BY``), or
+    (``kept=upload``) a file a person chose under uploads/, named as they named it. A
+    picture by its first bytes, whatever its name says.
 
     With ``site`` and ``host`` (``""`` is the floor), the picture is kept and pinned
     there as a view in one request, and the answer carries the view: nothing is
@@ -231,7 +248,10 @@ def keep_picture(
 
         check_host(site, host)
     root = _root()
-    stem = re.sub(r"[^A-Za-z0-9_-]+", "_", Path(name).stem).strip("_")[:60]
+    # "--" is a camera part's mark in a frame's name (TAKEN_BY): no other picture has it.
+    stem = re.sub(r"-{2,}", "-", re.sub(r"[^A-Za-z0-9_-]+", "_", Path(name).stem)).strip("_")[:60]
+    if pinning and camera is not None and kept == "capture":
+        stem = f"{site}--{camera}"
     if kept == "upload":
         path = _unused(_private(root / UPLOADS), stem or "picture", suffix)
     else:
