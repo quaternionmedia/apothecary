@@ -1,20 +1,45 @@
-/* The machine: one printer, close up, wherever it is mounted.
+/* The Machine: one board, close up, wherever it is mounted -- the one place for it.
  *
- * What the monitor page is made of -- the header's link verbs and the
- * control latch, the status cards, the temperature chart, the comms log
- * with its query box, the latched control pad, the bed reading, the
- * print from here -- as one module the monitor page mounts as its whole
- * body and the world mounts in a popup tethered to the printer. The same
- * markup, the same ids, the same chain, latch and confirms on both hosts.
+ * A printer's Machine is what the monitor page was made of -- the header's link
+ * verbs and the control latch, the status cards, the temperature chart, the
+ * control pad, the bed reading, the print from here (a print job, naming the
+ * part it makes, and the printer's jobs as its history). A devkit's Machine
+ * is its port and what it is, the sketch it should run against what it was
+ * heard saying, and its Flashing card: a sketch (what it should run, to start
+ * with) built for a board and uploaded to this port, after asking, the task's
+ * output, then Identify -- the Bench's form and task log (widgets/sketches.js,
+ * tasks.js), for this one port. Both have the board's one log, a printer's with
+ * the one box that asks it for a report: the comms log the server keeps for the
+ * port (poll traffic hidden unless asked for), or a devkit's serial output.
  *
- * mountMachine(root, { base, port, host, logRoot }) renders into `root`
- * and returns the handle the ring drives (carry, pairs, device) and the
- * tests read (state, ctl, level, print). `host` is "page" (the monitor:
- * a port picker, the control pad floating over the log, the URL kept in
- * step) or "popup" (the world: one port, everything inline, the log in
- * `logRoot` when one is given). destroy() stops the polling and frees
- * what the module put on the window.
+ * A devkit's port is opened only when asked: opening its Machine shows what is
+ * known of it and touches no port. Listen streams what it says (opening the
+ * port may reset the board); Identify listens a few seconds for its hello and,
+ * pressed, asks M115 when none was heard; Probe asks esptool what the chip is;
+ * an upload is followed by Identify's listen, never by its M115.
+ *
+ * The board itself is boards.js's: the Machine watches it (a printer polled at
+ * the interval its head says, a devkit listened to), draws what the model's
+ * `apothecary:board` events say of it, and asks the model to poll, identify,
+ * query, reconnect, reset and release. Everything else that draws the board
+ * reads the same model, so nothing polls it a second time.
+ *
+ * mountMachine(root, { base, port, host, boards, kind, pin, say }) renders into
+ * `root` and returns the handle the ring drives (carry, pairs, device) and the
+ * tests read (state, ctl, level, print). `host` is "popup": the world's, one
+ * board and everything inline (the monitor page, the other host, is a link to
+ * the world now). `boards` is the page's model, made here when none is given.
+ * `kind` is "printer" or "devkit"; left out, it is whatever the board is. `pin` ({ site, path, how }) is where the board is pinned, or bound
+ * by its sketch when `how` is "sketch". `say(text,
+ * kind)` is the host's status bar: a refusal is said there as an error as well
+ * as in the log. destroy() stops watching and frees what the module put on the
+ * window.
  */
+
+import { mountBoards } from "/static/boards.js";
+import { esc, heaterText, boardLabel, sketchWords } from "/static/board_text.js";
+import { mountBuild } from "/static/widgets/sketches.js";
+import { mountTasks } from "/static/widgets/tasks.js";
 
 const MAX_HISTORY = 300;
 
@@ -23,36 +48,45 @@ function fmtDur(seconds) {
     return h ? `${h}h ${m}m` : `${m}m ${s % 60}s`;
 }
 
+// What is a printer's alone carries `printer-only`, a devkit's `devkit-only`;
+// the root's kind-* class shows one set. Written once, so each control is one.
 const HEAD = `
 <div class="machine-head">
     <span class="dot" id="dot"></span>
-    <select id="port" aria-label="Printer port"><option value="">— pick a port —</option></select>
     <span id="ident" class="kv">—</span>
     <span class="grow"></span>
-    <label class="auto"><input type="checkbox" id="auto" checked> auto-poll
+    <label class="auto printer-only"><input type="checkbox" id="auto" checked> auto-poll
         <select id="interval"><option value="1000">1 s</option><option value="2000" selected>2 s</option><option value="5000">5 s</option><option value="10000">10 s</option></select>
     </label>
-    <button type="button" id="poll" title="One poll now (M105/M114/M27/M119)">⟳ Poll</button>
+    <button type="button" id="poll" class="printer-only" title="One poll now (M105/M114/M27/M119)">⟳ Poll</button>
     <button type="button" id="reconnect" title="Release and reopen the serial link (no reset); the remedy for a wedged port">⇄ Reconnect</button>
     <button type="button" id="identify" title="Ask M115 again (no reset)">M115</button>
-    <button type="button" id="reset" class="danger" title="Reboot the board with a DTR pulse — never mid-print">⏻ Reset board</button>
+    <button type="button" id="reset" class="danger printer-only" title="Reboot the board with a DTR pulse — never mid-print">⏻ Reset board</button>
     <button type="button" id="release" title="Drop the held link so another program can open the port">Release</button>
-    <label class="ctl" id="ctl-label" title="Arm the control latch: heaters, fan, homing, bounded jogs and SD pause/resume/abort become available in an overlay for 5 minutes of activity. Disarmed, nothing on this page can heat or move the machine.">
+    <button type="button" id="listen" class="devkit-only" title="Open the port and stream what the board says into the log. Opening the port may reset the board">Listen</button>
+    <button type="button" id="probe" class="devkit-only" title="Ask esptool for the chip, its MAC and its flash size (an Espressif board; this resets it)">Probe</button>
+    <label class="ctl printer-only" id="ctl-label" title="Arm the control latch: heaters, fan, homing, bounded jogs and SD pause/resume/abort become available in an overlay for 5 minutes of activity. Disarmed, nothing on this page can heat or move the machine.">
         <input type="checkbox" id="ctl"> ⚙ Control <span class="ttl" id="ctl-ttl"></span>
     </label>
-    <button type="button" id="estop" title="M112: emergency stop. Always available, latch or not. Halts the board until it is reset.">⏹ E-STOP</button>
+    <button type="button" id="estop" class="printer-only" title="M112: emergency stop. Always available, latch or not. Halts the board until it is reset.">⏹ E-STOP</button>
 </div>`;
 
 const CARDS = `
 <div class="cards" id="cards">
-    <div class="card"><div class="k">State</div><div class="v" id="c-state">—</div><div class="s" id="c-state-s"></div></div>
-    <div class="card"><div class="k">Hotend</div><div class="v" id="c-hot">—</div><div class="s" id="c-hot-s"></div><div class="bar hotend"><i id="b-hot" style="width:0"></i></div></div>
-    <div class="card"><div class="k">Bed</div><div class="v" id="c-bed">—</div><div class="s" id="c-bed-s"></div><div class="bar bed"><i id="b-bed" style="width:0"></i></div></div>
-    <div class="card"><div class="k">Position</div><div class="v" id="c-pos">—</div><div class="s" id="c-pos-s"></div></div>
-    <div class="card"><div class="k">SD print</div><div class="v" id="c-sd">—</div><div class="s" id="c-sd-s"></div><div class="bar sd"><i id="b-sd" style="width:0"></i></div></div>
-    <div class="card"><div class="k">Endstops · filament</div><div class="chips" id="c-stops"><span class="empty">—</span></div></div>
+    <div class="card printer-only"><div class="k">State</div><div class="v" id="c-state">—</div><div class="s" id="c-state-s"></div></div>
+    <div class="card printer-only"><div class="k">Hotend</div><div class="v" id="c-hot">—</div><div class="s" id="c-hot-s"></div><div class="bar hotend"><i id="b-hot" style="width:0"></i></div></div>
+    <div class="card printer-only"><div class="k">Bed</div><div class="v" id="c-bed">—</div><div class="s" id="c-bed-s"></div><div class="bar bed"><i id="b-bed" style="width:0"></i></div></div>
+    <div class="card printer-only"><div class="k">Position</div><div class="v" id="c-pos">—</div><div class="s" id="c-pos-s"></div></div>
+    <div class="card printer-only"><div class="k">SD print</div><div class="v" id="c-sd">—</div><div class="s" id="c-sd-s"></div><div class="bar sd"><i id="b-sd" style="width:0"></i></div></div>
+    <div class="card printer-only"><div class="k">Endstops · filament</div><div class="chips" id="c-stops"><span class="empty">—</span></div></div>
     <div class="card wide"><div class="k">Board · link</div><div class="kv" id="c-board">—</div></div>
-    <div class="card wide" id="level-card">
+    <div class="card wide devkit-only" id="sketch-card"><div class="k">Sketch · should run, and observed</div><div class="kv" id="c-sketch">—</div></div>
+    <div class="card wide devkit-only" id="flash-card">
+        <div class="k">Flashing</div>
+        <div class="bench-ui" id="flash-form"></div>
+        <div class="bench-ui" id="flash-task"></div>
+    </div>
+    <div class="card wide printer-only" id="level-card">
         <div class="k">Bed level <span class="s" id="level-note"></span></div>
         <div class="row">
             <button type="button" id="level-probe" class="warm" title="G28, G29, then read the mesh, the probe offset and the temperatures; saved as a record. Moves the machine: control must be armed. ⌗ Control › Level › Probe">▤ Probe bed</button>
@@ -68,7 +102,7 @@ const CARDS = `
         <div class="stats" id="level-stats"><span class="empty">no reading yet — Read mesh, or arm control and Probe bed</span></div>
         <div id="level-history"></div>
     </div>
-    <div class="card wide" id="print-card">
+    <div class="card wide printer-only" id="print-card">
         <div class="k">Print from here <span class="s" id="print-note" style="text-transform: none; letter-spacing: 0;">· no SD card needed: the file streams over the link, one line per ok</span></div>
         <div class="row">
             <input type="file" id="print-file" accept=".gcode,.gco,.g,.txt,text/plain" title="A sliced G-code file to keep on the host. It is checked (no EEPROM writes, no temperatures over the caps) and listed here; nothing is sent until Print">
@@ -80,35 +114,37 @@ const CARDS = `
             <button type="button" id="print-resume" title="Feed lines again (control must be armed)">▶ Resume</button>
             <button type="button" id="print-cancel" title="Stop feeding, then heaters off, fan off, motors free">■ Cancel</button>
         </div>
+        <div class="row"><label for="print-part">makes</label>
+            <select id="print-part" title="The part or piece this print makes, from the site the printer is pinned in: the print's job records it, and Site lists the job. The ring's Send file prints what is chosen here"><option value="">— no part named —</option></select>
+            <span class="s" id="print-where"></span>
+        </div>
         <div class="row"><span id="print-progress" class="empty">nothing printing from here</span><span class="grow"></span><span class="job" id="print-job"></span></div>
         <div class="bar print"><i id="b-print" style="width:0"></i></div>
         <div id="print-history"></div>
     </div>
-    <div class="card wide" id="view-card" hidden>
-        <div class="k">Board in its printer <span class="s" id="view-note" style="text-transform: none; letter-spacing: 0;"></span></div>
-        <div id="board-view" style="height: 240px; border-radius: 4px; overflow: hidden;"></div>
-    </div>
 </div>
-<div class="chart">
+<div class="chart printer-only">
     <div class="head"><span class="title">Temperature</span><span id="chart-span">no polls yet</span>
         <span class="legend"><span class="hotend">hotend</span><span class="bed">bed</span><span style="color:var(--ink-3)">dashed = target</span></span></div>
     <div class="wrap"><svg id="chart" viewBox="0 0 600 150" preserveAspectRatio="none"></svg><div class="tip" id="tip"></div></div>
 </div>`;
 
+// The board's one log: a printer's comms log with the one box that asks it for
+// a report, or a devkit's serial output.
 const LOG = `
 <div class="log-head">
-    <span class="title">Comms log</span>
-    <form id="qform" autocomplete="off">
+    <span class="title">Log</span>
+    <form id="qform" class="printer-only" autocomplete="off">
         <input id="q" list="qcodes" aria-label="Report-only G-code to send" placeholder="report code — M503, M119, M20, M420 V …" spellcheck="false">
         <datalist id="qcodes"></datalist>
         <button type="submit">send</button>
     </form>
-    <label><input type="checkbox" id="show-polls"> poll traffic</label>
+    <label class="printer-only"><input type="checkbox" id="show-polls"> poll traffic</label>
     <label><input type="checkbox" id="follow" checked> follow</label>
     <button type="button" id="clear">clear</button>
-    <button type="button" id="download" title="Download the comms log as text" aria-label="Download the comms log">⤓</button>
+    <button type="button" id="download" title="Download the log as text" aria-label="Download the log">⤓</button>
 </div>
-<pre id="log"><span class="empty">pick a port to see its comms</span></pre>`;
+<pre id="log"><span class="empty">pick a port to see its log</span></pre>`;
 
 const CONTROL = `
 <div id="control" hidden>
@@ -188,37 +224,72 @@ const BY_CMD = {
     "M410": "control:quickstop", "M108": "control:break-wait", "M420 S1": "control:mesh-on", "M420 S0": "control:mesh-off",
 };
 
-export function mountMachine(root, { base = "", port = "", host = "page", logRoot = null } = {}) {
+
+export function mountMachine(root, { base = "", port = "", host = "popup", boards = null, kind = null, pin = null, say = null } = {}) {
     const BASE = base;
+    const model = boards || mountBoards({ base });
     root.classList.add("machine", `host-${host}`);
-    root.innerHTML = HEAD + `<div class="machine-main"><section class="left">${CARDS}</section>` + (logRoot ? "" : `<section class="right">${LOG}</section>`) + `</div>` + CONTROL;
-    if (logRoot) { logRoot.classList.add("machine-log", "right"); logRoot.innerHTML = LOG; }
-    const $ = (id) => root.querySelector(`#${CSS.escape(id)}`) || (logRoot ? logRoot.querySelector(`#${CSS.escape(id)}`) : null);
-    const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-    if (host === "popup") $("port").hidden = true;  // the popup is one printer's; the world chose it
-    const state = { port, info: null, status: null, history: [], logNext: 0, entries: [], timer: null, gen: 0, inFlight: false, codesLoaded: false };
+    root.innerHTML = HEAD + `<div class="machine-main"><section class="left">${CARDS}</section><section class="right">${LOG}</section></div>` + CONTROL;
+    const $ = (id) => root.querySelector(`#${CSS.escape(id)}`);
+    const who = {};  // this Machine, as the model's watcher of its board
+    const b = () => model.board(state.port);
+    // What the Machine keeps of its own: the port, its kind, the chart's history.
+    // The board's status, link, poll timer and log are the model's, read through.
+    const state = {
+        port, kind: null, history: [], codesLoaded: false, listening: false,
+        get status() { return state.port ? b().status : null; },
+        get info() { return state.port ? b().info : null; },
+        get timer() { return state.port ? b().timer : null; },
+        get entries() { return state.port ? b().log : []; },
+    };
     const onWindow = [];  // [event, handler] pairs the module put on the window, taken off by destroy()
     const emit = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
 
     // --- api ---------------------------------------------------------------------------
-    async function api(path, opts = {}) {
-        const r = await fetch(BASE + path, { headers: { "Content-Type": "application/json" }, ...opts });
-        const body = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(typeof body.detail === "string" ? body.detail : (body.detail ? JSON.stringify(body.detail) : r.statusText));
-        return body;
-    }
-    const post = (path, body) => api(path, { method: "POST", body: JSON.stringify(body) });
+    const api = (path, opts) => model.api(path, opts);
+    const post = (path, body) => model.post(path, body);
 
-    async function loadPorts() {
-        try {
-            const data = await api("/firmware/devices");
-            const opts = data.devices.map((v) => {
-                const d = v.device, tag = d.printer ? (d.printer.firmware_name || "").replace(/\s*\(.*$/, "") : (d.chip || d.board_name || "unidentified");
-                return `<option value="${esc(d.port)}">${esc(d.port)} · ${esc(tag)}</option>`;
-            });
-            $("port").innerHTML = '<option value="">— pick a port —</option>' + opts.join("");
-            if (state.port) $("port").value = state.port;
-        } catch (e) { logLine("sys", "device list: " + e.message); }
+    // --- refusals: in the log, and in the host's status bar as errors ------------------------
+    let refusals = 0, lastRefusal = null;
+    function logLine(kind, text) { if (state.port) model.note(state.port, text, { kind }); }
+    function refuse(text) {
+        refusals++; lastRefusal = text;
+        logLine("sys", text);
+        if (say) say(text, "error");
+    }
+
+    // --- the board: which, and what kind -------------------------------------------------
+    function kindOf() {
+        if (kind) return kind;
+        const d = state.port ? b().device : null;
+        return d && !d.printer ? "devkit" : "printer";
+    }
+    // The kind's controls shown, the board watched as that kind; answers whether it changed.
+    function applyKind() {
+        const k = kindOf(), changed = k !== state.kind;
+        state.kind = k;
+        root.classList.toggle("kind-printer", k === "printer");
+        root.classList.toggle("kind-devkit", k === "devkit");
+        $("identify").textContent = k === "printer" ? "M115" : "Identify";
+        $("identify").title = k === "printer" ? "Ask M115 again (no reset)" : "Listen a few seconds for the sketch's hello banner; none heard, ask M115 whether it is a G-code printer (no reset)";
+        $("reconnect").title = k === "printer" ? "Release and reopen the serial link (no reset); the remedy for a wedged port" : "Close the serial stream and open it again, while listening";
+        $("release").title = k === "printer" ? "Drop the held link so another program can open the port" : "Stop listening, so another program (an upload) can open the port";
+        if (changed && state.port) {
+            watchNow();
+            if (k === "printer") { loadCodes(); loadLevel(); loadPrintJobs(); loadChoices(); loadPrintFiles(); watchPrint(); }
+            else mountFlashing();
+        }
+        return changed;
+    }
+    const interval = () => Number($("interval").value) || 2000;
+    const isLive = () => (state.kind === "devkit" ? state.listening : $("auto").checked);
+    function watchNow() {
+        if (state.port) model.watch(state.port, who, { kind: state.kind, interval: interval(), live: isLive() });
+    }
+    // The poll-on-a-schedule tick-box and its interval (a devkit: listening or not):
+    // the model's poller for this board, scheduled afresh from now.
+    function schedule() {
+        if (state.port) model.setWatch(state.port, who, { interval: interval(), live: isLive() });
     }
 
     async function loadCodes() {
@@ -231,21 +302,22 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
     }
 
     // --- status ------------------------------------------------------------------------
-    const heater = (h) => h ? `${h.actual.toFixed(1)}° <span class="s">/ ${h.target.toFixed(0)}°</span>` : "—";
+    const pinRow = () => `${pin.how === "sketch" ? "bound by its sketch to" : "pinned at"} <b>${esc(pin.site)} › ${esc(pin.path)}</b>`;
     function renderStatus() {
-        const st = state.status, info = state.info;
-        const d = info && info.device ? info.device.device : null;
+        if (state.kind === "devkit") { renderDevkit(); return; }
+        const bd = state.port ? b() : null;
+        const st = bd && bd.status, d = bd && bd.device;
         const pr = d && d.printer;
-        $("ident").innerHTML = pr ? `<b>${esc(pr.firmware_name)}</b>${pr.machine_type ? " · " + esc(pr.machine_type) : ""}` : (d ? `${esc(d.port)} — not identified as a printer` : (state.port ? "not detected" : "—"));
-        if (!st) { $("c-state").textContent = "—"; $("c-state-s").textContent = ""; return; }
+        $("ident").innerHTML = pr ? `<b>${esc(pr.firmware_name)}</b>${pr.machine_type ? " · " + esc(pr.machine_type) : ""}` : (d ? `${esc(d.port)} — not identified as a printer` : (state.port ? (bd.info ? "not detected" : "connecting…") : "—"));
+        if (!st) { $("c-state").textContent = "—"; $("c-state-s").textContent = ""; renderBoard(); return; }
         const offline = st.state === "offline";
         $("dot").className = "dot " + (offline ? "bad" : "on");
         $("c-state").innerHTML = offline ? '<span class="bad">offline</span>' : (st.state === "printing" ? '<span class="ok">printing</span>' : (st.heating ? '<span class="warn">heating</span>' : "idle"));
         $("c-state-s").textContent = st.job ? (st.job.kind === "print" ? `print from here: ${st.job.stage} ${(st.job.progress * 100).toFixed(0)}%` : `${st.job.kind}: ${st.job.stage}`) : (offline ? (st.raw[0] || "") : `polled ${new Date(st.polled_at).toLocaleTimeString()}`);
         const hot = st.hotends[0];
-        $("c-hot").innerHTML = heater(hot); $("c-hot-s").textContent = hot && hot.power != null ? `power ${hot.power}/127` : "";
+        $("c-hot").textContent = heaterText(hot); $("c-hot-s").textContent = hot && hot.power != null ? `power ${hot.power}/127` : "";
         $("b-hot").style.width = hot && hot.target > 0 ? Math.min(100, hot.actual / hot.target * 100).toFixed(0) + "%" : "0";
-        $("c-bed").innerHTML = heater(st.bed); $("c-bed-s").textContent = st.bed && st.bed.power != null ? `power ${st.bed.power}/127` : "";
+        $("c-bed").textContent = heaterText(st.bed); $("c-bed-s").textContent = st.bed && st.bed.power != null ? `power ${st.bed.power}/127` : "";
         $("b-bed").style.width = st.bed && st.bed.target > 0 ? Math.min(100, st.bed.actual / st.bed.target * 100).toFixed(0) + "%" : "0";
         const p = st.position;
         $("c-pos").textContent = p ? `X${p.x.toFixed(1)} Y${p.y.toFixed(1)} Z${p.z.toFixed(2)}` : "—";
@@ -262,7 +334,8 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
     }
 
     function renderBoard() {
-        const info = state.info; if (!info) { $("c-board").textContent = "—"; return; }
+        if (state.kind === "devkit") { renderDevkit(); return; }
+        const info = state.info; if (!info) { $("c-board").innerHTML = pin ? pinRow() : "—"; return; }
         const d = info.device ? info.device.device : null, pr = d && d.printer, link = info.link;
         const rows = [];
         if (d) rows.push(`<b>${esc(d.port)}</b> vid:pid ${esc(d.vid || "?")}:${esc(d.pid || "?")}${d.serial_number ? " · S/N " + esc(d.serial_number) : ""}`);
@@ -273,12 +346,42 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
             if (caps.length) rows.push(`caps ${esc(caps.join(", "))}`);
             if (pr.boot_lines && pr.boot_lines.length) rows.push(`boot ${esc(pr.boot_lines.slice(0, 3).join(" | "))}`);
         }
+        if (pin) rows.push(pinRow());
         rows.push(link
             ? `link <b class="ok">held</b> @ ${link.baud} baud via ${esc(link.engine)} since ${new Date(link.opened_at).toLocaleTimeString()} · engine ${esc(info.engine)}`
             : `link <b>not held</b> · engine ${esc(info.engine)} — the next poll opens it`);
         if (info.active_task) rows.push(`<span class="warn">task ${esc(info.active_task.title)} holds the toolchain — polls wait</span>`);
         $("c-board").innerHTML = rows.join("<br>");
     }
+
+    // A devkit: the board, where it is pinned, whether it is listened to; what it
+    // should run against what it was heard saying, and what drifted since.
+    function renderDevkit() {
+        if (state.kind !== "devkit" || !state.port) return;
+        const bd = b(), d = bd.device;
+        $("ident").innerHTML = d ? `<b>${esc(boardLabel(d))}</b>` : "not detected";
+        $("dot").className = "dot " + (bd.live ? "on" : "");
+        const rows = [];
+        if (d) {
+            rows.push(`<b>${esc(d.port)}</b> vid:pid ${esc(d.vid || "?")}:${esc(d.pid || "?")}${d.board_name ? " · " + esc(d.board_name) : ""}${d.serial_number ? " · S/N " + esc(d.serial_number) : ""}`);
+            if (d.chip) rows.push(`chip <b>${esc(d.chip)}</b> rev ${esc(d.revision || "?")} · MAC ${esc(d.mac || "?")} · flash ${esc(d.flash_size || "?")}`);
+        } else rows.push(`<b>${esc(state.port)}</b> — not detected`);
+        if (pin) rows.push(pinRow());
+        rows.push(bd.live ? `serial <b class="ok">listening</b> @ 115200` : (state.listening ? "serial <b>not listening</b> — opening it" : "serial <b>not listening</b> — the port is closed; Listen opens it (that may reset the board)"));
+        $("listen").disabled = state.listening;
+        $("listen").textContent = state.listening ? "Listening" : "Listen";
+        $("c-board").innerHTML = rows.join("<br>");
+        const w = sketchWords(bd.expected, bd.observed);
+        const lines = [];
+        if (w.rec) lines.push(`should run <b>${esc(w.should)}</b> · ${esc(w.rec.fqbn || "esptool")} · flashed ${esc(new Date(w.rec.flashed_at).toLocaleString())}${w.rec.build_sha256 ? " · build " + esc(w.rec.build_sha256.slice(0, 10)) : ""}`);
+        else lines.push('<span class="warn">nothing flashed from apothecary</span>');
+        for (const t of w.drift) lines.push(`<span class="warn">! ${esc(t)}</span>`);
+        lines.push(w.observed
+            ? `observed <b class="${w.verdict === "match" ? "ok" : (w.verdict === "mismatch" ? "bad" : "")}">${esc(w.observed)}</b>${w.verdict === "match" ? " ✓ matches" : (w.verdict === "mismatch" ? " ✗ differs" : "")}`
+            : '<span class="empty">observed: no hello heard yet — Identify listens for it</span>');
+        $("c-sketch").innerHTML = lines.join("<br>");
+    }
+    function renderAll() { renderStatus(); renderChart(); renderLog(); }
 
     // --- chart: temperatures over the last N polls, one °C axis ------------------------
     function renderChart() {
@@ -319,20 +422,20 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
         svg.onmouseleave = () => { $("tip").style.display = "none"; const xh = $("xh"); if (xh) xh.style.display = "none"; };
     }
 
-    // --- log ---------------------------------------------------------------------------
-    // Routine polls are tagged origin "poll" on the server; a person's
-    // queries and M115s are not, so hiding poll traffic keeps them. Each
-    // entry drawn is one element of the log, so new entries are appended and
-    // the ones dropped off the front go with their elements; the whole log is
-    // redrawn only when the poll-traffic box changes, or it is cleared.
-    const LOG_MAX = 5000;
+    // --- log: the board's, the model's ------------------------------------------------------
+    // Routine polls are tagged origin "poll" on the server; a person's queries and
+    // M115s are not, so hiding poll traffic keeps them. Each entry drawn is one
+    // element of the log, so new entries are appended and the ones the model
+    // dropped off the front go with their elements; the whole log is redrawn only
+    // when the poll-traffic box changes, it is cleared, or the board changes.
     const LOG_EMPTY = '<span class="empty">nothing logged yet — poll or send a query</span>';
     function logRow(e) {
         e.drawn = $("show-polls").checked || !((e.kind === "tx" || e.kind === "rx") && e.origin === "poll");
         if (!e.drawn) return "";
         const d = new Date(e.t);
         const t = isNaN(d) ? e.t.slice(11, 23) : d.toLocaleTimeString([], { hour12: false }) + "." + String(d.getMilliseconds()).padStart(3, "0");
-        const cls = e.kind + (e.origin === "control" || e.origin === "print" ? " control" : "") + (/^\s*(ok\s+)?T:\s*-?\d/.test(e.text) ? " temp" : "") + (/^(Error:|!!)/.test(e.text) ? " err" : "");
+        const cls = e.kind + (e.origin === "control" || e.origin === "print" ? " control" : "") + (/^\s*(ok\s+)?T:\s*-?\d/.test(e.text) ? " temp" : "")
+            + (/^(Error:|!!)/.test(e.text) ? " err" : "") + (/apothecary\s+\S+:\s*hello/.test(e.text) ? " banner" : (e.text.startsWith("[apothecary:") ? " marker" : ""));
         return `<span><span class="t">${t}</span> <span class="${cls}">${e.kind === "tx" ? "&gt; " : ""}${esc(e.text)}</span>\n</span>`;
     }
     function drawLog(draw) {
@@ -345,157 +448,162 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
     function renderLog() {
         drawLog((log) => { log.innerHTML = state.entries.map(logRow).join(""); });
     }
-    function appendLog(entries) {
-        state.entries.push(...entries);
-        const dropped = state.entries.splice(0, Math.max(0, state.entries.length - LOG_MAX));
+    function appendLog(entries, dropped) {
         drawLog((log) => {
             if (log.querySelector(":scope > .empty")) log.innerHTML = "";
-            for (const e of dropped) if (e.drawn) log.firstElementChild?.remove();
-            log.insertAdjacentHTML("beforeend", entries.slice(-LOG_MAX).map(logRow).join(""));
+            for (const e of dropped || []) if (e.drawn) log.firstElementChild?.remove();
+            log.insertAdjacentHTML("beforeend", entries.map(logRow).join(""));
         });
     }
-    function logLine(kind, text) {
-        appendLog([{ i: -1, t: new Date().toISOString(), kind, text }]);
-    }
-    // One fetch at a time, and rows below the watermark are dropped, so the
-    // scheduled poll and a button's follow-up pull can never double up.
-    let logChain = Promise.resolve();
-    function pullLog() {
-        const port = state.port, gen = state.gen;
-        if (!port) return Promise.resolve();
-        logChain = logChain.then(async () => {
-            if (gen !== state.gen) return;
-            const data = await api(`/firmware/printers/log?port=${encodeURIComponent(port)}&since=${state.logNext}`);
-            if (gen !== state.gen) return;
-            const fresh = data.entries.filter((e) => e.i >= state.logNext);
-            if (fresh.length) appendLog(fresh);
-            state.logNext = Math.max(state.logNext, data.next);
-        }).catch(() => {});
-        return logChain;
-    }
 
-    // --- polling: self-scheduled, never overlapping ------------------------------------
+    // --- what the model says of the board -----------------------------------------------------
     function pushHistory(st) {
         if (st.state === "offline") return;
         const hot = st.hotends[0];
         state.history.push({ t: st.polled_at, hot: hot ? hot.actual : null, hotT: hot ? hot.target : null, bed: st.bed ? st.bed.actual : null, bedT: st.bed ? st.bed.target : null });
         if (state.history.length > MAX_HISTORY) state.history.shift();
     }
-    async function pollOnce() {
-        const port = state.port, gen = state.gen;
-        if (!port || state.inFlight === gen) return;
-        state.inFlight = gen;  // per generation: a new port's first poll is never skipped
-        try {
-            const st = await api(`/firmware/printers/status?port=${encodeURIComponent(port)}`);
-            if (gen !== state.gen) return;  // the user switched ports meanwhile
-            state.status = st; pushHistory(st); renderStatus(); renderChart();
-            if (st.position) emit("apothecary:position", { position: st.position, source: "poll", port });
-            emit("apothecary:printer-status", st);  // the world's rows, badges and marks read this
-            followJob(st);
-            if (st.control) applyControlState(st.control);
-            const hadLink = !!(state.info && state.info.link);
-            if (!state.info || hadLink !== !!st.held) {
-                // The link came or went (a failed poll drops it): refresh the
-                // board card; the port list only when we had no info at all.
-                const first = !state.info;
-                await loadInfo();
-                if (first) loadPorts();
-            }
-        } catch (e) {
-            if (gen !== state.gen) return;
-            $("dot").className = "dot bad"; $("c-state").innerHTML = '<span class="bad">error</span>'; $("c-state-s").textContent = e.message;
-        } finally { if (state.inFlight === gen) state.inFlight = false; }
-        await pullLog();
+    function onBoard(ev) {
+        const d = ev.detail;
+        if (!root.isConnected) return;
+        if (d.what === "scan") {
+            if (state.port) { applyKind(); renderStatus(); }
+            return;
+        }
+        if (!state.port || d.port !== state.port) return;
+        switch (d.what) {
+            case "status":
+                if (state.kind !== "printer") break;
+                pushHistory(d.status); renderStatus(); renderChart();
+                if (d.status.position) emit("apothecary:position", { position: d.status.position, source: "poll", port: state.port });
+                followJob(d.status);
+                if (d.status.control && latchFresh(d.asked)) applyControlState(d.status.control);
+                break;
+            case "info":
+                if (d.info && latchFresh(d.asked)) applyControlState(d.info.control);
+                applyKind(); renderStatus();
+                break;
+            case "error":
+                if (state.kind !== "printer") break;
+                $("dot").className = "dot bad"; $("c-state").innerHTML = '<span class="bad">error</span>'; $("c-state-s").textContent = d.error;
+                break;
+            case "log":
+                if (d.cleared) renderLog(); else appendLog(d.entries, d.dropped);
+                break;
+            case "device":
+                applyKind(); renderStatus();
+                break;
+            case "observed": case "live":
+                renderDevkit();
+                break;
+        }
     }
-    function schedule() {
-        clearTimeout(state.timer); state.timer = null;
-        const gen = ++state.gen;
-        // A root taken off the page (its panel closed) polls no more.
-        if (!$("auto").checked || !state.port || document.hidden || !root.isConnected) return;
-        state.timer = setTimeout(async () => { if (gen !== state.gen) return; await pollOnce(); if (gen === state.gen) schedule(); }, Number($("interval").value) || 2000);
-    }
-    async function loadInfo() {
-        const port = state.port, gen = state.gen;
-        if (!port) { state.info = null; renderBoard(); return; }
-        const info = await api(`/firmware/printers/info?port=${encodeURIComponent(port)}`);
-        if (gen !== state.gen) return;
-        state.info = info;
-        if (info.last_status && !state.status) { state.status = info.last_status; }
-        applyControlState(info.control);
+    window.addEventListener("apothecary:board", onBoard);
+    onWindow.push(["apothecary:board", onBoard]);
+
+    async function selectPort(port) {
+        if (state.port && state.port !== port) model.unwatch(state.port, who);
+        if (flash && flash.port !== port) { flash.build.destroy(); flash.tasks.destroy(); flash = null; }
+        state.port = port; state.kind = null; state.history = []; state.listening = false;
+        applyControlState(null);
+        if (!port) { applyKind(); renderAll(); loadLevel(); loadPrintJobs(); loadChoices(); loadPrintFiles(); return; }
+        // Watched at once as what it is known to be, so a verb carried the moment
+        // the Machine opens finds it so; what the server says of it follows.
+        applyKind();
+        renderAll();
+        $("ident").textContent = "connecting…";
+        try { await model.loadInfo(port); } catch (e) { refuse(e.message); }
+        if (state.port !== port) return;  // another port was chosen meanwhile
+        model.pullLog(port);
+        applyKind();
         renderStatus();
     }
 
-    async function selectPort(port) {
-        state.gen++; clearTimeout(state.timer); state.inFlight = false;
-        state.port = port; state.status = null; state.info = null; state.history = []; state.entries = []; state.logNext = 0;
-        applyControlState(null);
-        if (host === "page") {
-            const url = new URL(location.href); if (port) url.searchParams.set("port", port); else url.searchParams.delete("port"); history.replaceState(null, "", url);
-        }
-        if ($("port").value !== port) $("port").value = port;
-        renderStatus(); renderChart(); renderLog();
-        loadLevel(); loadPrintRecords();
-        if (!port) return;
-        $("ident").textContent = "connecting…";
-        loadCodes();
-        try { await loadInfo(); } catch (e) { logLine("sys", e.message); }
-        await pollOnce();
-        schedule();
-    }
-
     // --- header controls ------------------------------------------------------------------
-    $("port").addEventListener("change", () => selectPort($("port").value));
+    // Each says what refused it, in the log and in the host's status bar.
     $("auto").addEventListener("change", schedule);
     $("interval").addEventListener("change", schedule);
-    const onVisibility = () => schedule();
-    document.addEventListener("visibilitychange", onVisibility);
-    $("poll").onclick = () => pollOnce();
+    $("poll").onclick = () => (state.port ? model.poll(state.port).catch((e) => refuse(`poll: ${e.message}`)) : Promise.resolve());
     $("reconnect").onclick = async () => {
         if (!state.port) return;
-        try { state.status = await post("/firmware/printers/reconnect", { port: state.port }); pushHistory(state.status); await loadInfo(); renderChart(); }
-        catch (e) { logLine("sys", "reconnect failed: " + e.message); }
-        await pullLog().catch(() => {});
+        if (state.kind === "devkit") {
+            if (!state.listening) { refuse("Reconnect: not listening -- Listen opens the port (it may reset the board)"); return; }
+            model.restream(state.port); model.note(state.port, "listening again"); return;
+        }
+        try { await model.reconnect(state.port); } catch (e) { refuse("reconnect failed: " + e.message); }
     };
-    $("identify").onclick = async () => {
+    // A devkit's live serial stream, asked for: the port opened, which may reset the board.
+    function listen() {
         if (!state.port) return;
-        try { await post("/firmware/devices/identify", { port: state.port }); await loadInfo(); await loadPorts(); }
-        catch (e) { logLine("sys", "M115: " + e.message); }
-        await pullLog().catch(() => {});
-    };
+        if (state.kind !== "devkit") { refuse("Listen: a printer is polled over its held link, never streamed -- opening its port would reset it"); return; }
+        if (state.listening) { logLine("sys", "already listening"); return; }
+        model.note(state.port, `Listen: opening ${state.port} -- this may reset the board`);
+        state.listening = true; schedule(); renderDevkit();
+    }
+    $("listen").onclick = () => listen();
+    async function probe() {
+        if (!state.port) return;
+        if (state.kind !== "devkit") { refuse("Probe: a printer is polled over its held link; esptool would take its port and reset it"); return; }
+        try { await model.probe(state.port); } catch (e) { refuse(`probe: ${e.message}`); }
+    }
+    $("probe").onclick = () => probe();
+    // Asking the board what it is: a printer, M115; a devkit, its hello -- and, no
+    // hello heard and Identify pressed, M115, since a board pinned before it was
+    // asked may be a printer (it answers, and its Machine becomes a printer's).
+    // After an upload only the hello is listened for: M115 is a person's to ask.
+    async function identify({ pressed = true } = {}) {
+        if (!state.port) return;
+        try {
+            if (state.kind === "devkit") {
+                const heard = await model.listen(state.port);
+                if (heard.running_sketch) return;
+                if (!pressed) { logLine("sys", "no hello heard -- Identify asks M115 too, when pressed"); return; }
+                try { await model.identify(state.port); }
+                catch (e) { refuse(`no hello heard in ${heard.seconds} s, and ${e.message}`); }
+                return;
+            }
+            await model.identify(state.port);
+        } catch (e) { refuse(`${state.kind === "devkit" ? "listen" : "M115"}: ${e.message}`); }
+    }
+    $("identify").onclick = () => identify();
     $("reset").onclick = async () => {
         if (!state.port) return;
+        if (state.kind === "devkit") { refuse("a devkit is reset by flashing it, or by Probe (Link › Probe)"); return; }
         if (!confirm(`Reboot the board on ${state.port} (DTR pulse)?\nA running print would be lost.`)) return;
-        try { await post("/firmware/printers/reset", { port: state.port }); state.history = []; renderChart(); await loadInfo(); }
-        catch (e) { logLine("sys", "reset failed: " + e.message); }
-        await pullLog().catch(() => {});
+        try { await model.reset(state.port); state.history = []; renderChart(); }
+        catch (e) { refuse("reset failed: " + e.message); }
     };
     $("release").onclick = async () => {
         if (!state.port) return;
+        if (state.kind === "devkit") { state.listening = false; schedule(); model.note(state.port, "stopped listening — Listen opens the port again"); renderDevkit(); return; }
         $("auto").checked = false; schedule();
-        try { const r = await post("/firmware/printers/release", { port: state.port }); logLine("sys", r.released ? "link released — auto-poll off" : "no link was held"); applyControlState(null); await loadInfo(); }
-        catch (e) { logLine("sys", "release failed: " + e.message); }
+        try { const r = await model.release(state.port); logLine("sys", r.released ? "link released — auto-poll off" : "no link was held"); applyControlState(null); }
+        catch (e) { refuse("release failed: " + e.message); }
     };
     $("qform").addEventListener("submit", async (ev) => {
         ev.preventDefault();
         const command = $("q").value.trim(); if (!command || !state.port) return;
         $("q").disabled = true;
-        try { await post("/firmware/printers/query", { port: state.port, command }); $("q").value = ""; }
-        catch (e) { logLine("sys", "query refused: " + e.message); }
+        try { await model.query(state.port, command); $("q").value = ""; }
+        catch (e) { refuse("query refused: " + e.message); }
         $("q").disabled = false; $("q").focus();
-        await pullLog().catch(() => {});
     });
     $("show-polls").addEventListener("change", renderLog);
-    $("clear").onclick = () => { state.entries = []; renderLog(); };
+    $("clear").onclick = () => { if (state.port) model.clearLog(state.port); };
     $("download").onclick = () => {
         const text = state.entries.map((e) => `${e.t} ${e.kind.padEnd(4)} ${e.text}`).join("\n");
         const a = document.createElement("a");
         a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
-        a.download = `apothecary-${(state.port || "printer").replace(/[^A-Za-z0-9]+/g, "_")}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.log`;
+        a.download = `apothecary-${(state.port || "board").replace(/[^A-Za-z0-9]+/g, "_")}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.log`;
         a.click(); URL.revokeObjectURL(a.href);
     };
 
     // --- control latch + pad ---------------------------------------------------------------
-    const ctl = { armed: false, until: 0, step: 10, timer: null };
+    // An answer carries the latch as it was when it was asked for. `askedAt` is the
+    // model's number for the latest arm or disarm, `pending` the ones in flight: an
+    // answer asked before the latest, or while one is in flight, is stale.
+    const ctl = { armed: false, until: 0, step: 10, timer: null, askedAt: 0, pending: 0 };
+    const latchFresh = (asked) => asked > ctl.askedAt && ctl.pending === 0;
     function renderControl() {
         const left = Math.max(0, Math.round((ctl.until - Date.now()) / 1000));
         if (ctl.armed && left <= 0) { ctl.armed = false; }
@@ -514,9 +622,11 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
     }
     async function arm(on) {
         if (!state.port) { $("ctl").checked = false; return; }
+        ctl.askedAt = model.tick(); ctl.pending++;
         try { applyControlState(await post("/firmware/printers/control", { port: state.port, armed: on })); }
-        catch (e) { logLine("sys", "control: " + e.message); applyControlState(null); }
-        await pullLog().catch(() => {});
+        catch (e) { refuse("control: " + e.message); applyControlState(null); }
+        finally { ctl.pending--; }
+        await model.pullLog(state.port);
     }
     function fillTemplate(cmd) {
         return cmd.replace(/\{([a-z-]+)\}/g, (_, id) => $(id).value);
@@ -526,7 +636,7 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
     // which would turn the second into an absolute move.
     let ctlChain = Promise.resolve();
     function setBusy(on) {
-        for (const b of $("control").querySelectorAll("button")) b.disabled = on;
+        for (const btn of $("control").querySelectorAll("button")) btn.disabled = on;
         $("estop").disabled = false;  // never
     }
     async function sendLines(lines) {
@@ -534,16 +644,19 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
         for (const command of lines) {
             sent.textContent = "> " + command; sent.classList.remove("bad");
             try {
+                const asked = model.tick();
                 const r = await post("/firmware/printers/command", { port: state.port, command });
-                applyControlState(r.control);
+                if (latchFresh(asked)) applyControlState(r.control);
             } catch (e) {
                 sent.textContent = `${command}: ${e.message}`; sent.classList.add("bad");
+                refuse(`${command}: ${e.message}`);
                 if (/not armed/.test(e.message)) applyControlState(null);
                 return false;
             }
         }
         return true;
     }
+    const pollNow = () => (state.port ? model.poll(state.port).catch(() => null) : Promise.resolve(null));
     function sendControl(command, confirmText) {
         if (!state.port) return Promise.resolve();
         if (confirmText && !confirm(confirmText)) return Promise.resolve();
@@ -552,9 +665,9 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
     function enqueue(lines) {
         ctlChain = ctlChain.then(async () => {
             setBusy(true);
-            try { await sendLines(lines); await pollOnce(); }  // the effect shows in the cards right away
+            try { await sendLines(lines); await pollNow(); }  // the effect shows in the cards right away
             finally { setBusy(false); }
-            await pullLog();
+            await model.pullLog(state.port);
         }).catch(() => setBusy(false));
         return ctlChain;
     }
@@ -563,7 +676,8 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
         const f = Number($("h-feed").value) || 3000;
         // Relative move as three lines, sent back to back, restoring absolute mode afterwards.
         // The nozzle marker moves ahead of the poll that confirms it.
-        const p = state.status && state.status.position ? { ...state.status.position } : { x: 0, y: 0, z: 0 };
+        const st = state.status;
+        const p = st && st.position ? { ...st.position } : { x: 0, y: 0, z: 0 };
         p[axis.toLowerCase()] = (p[axis.toLowerCase()] || 0) + Number(d);
         emit("apothecary:position", { position: p, source: "jog", port: state.port });
         return enqueue(["G91", `G1 ${axis}${d} F${f}`, "G90"]);
@@ -573,7 +687,7 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
     async function estop() {
         if (!state.port || !confirm(`EMERGENCY STOP ${state.port}?\nHeaters and motors off; the board halts until it is reset.`)) return;
         await sendLines(["M112"]);  // straight through, never queued behind a jog
-        await pollOnce(); await pullLog();
+        await pollNow(); await model.pullLog(state.port);
     }
     $("estop").onclick = estop;
     $("h-fan").addEventListener("input", () => { $("h-fan-v").textContent = $("h-fan").value; });
@@ -581,16 +695,13 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
         const btn = ev.target.closest("button"); if (!btn) return;
         if (btn.dataset.step) {
             ctl.step = Number(btn.dataset.step);
-            for (const b of $("control").querySelectorAll(".steps button")) b.classList.toggle("on", b === btn);
+            for (const s of $("control").querySelectorAll(".steps button")) s.classList.toggle("on", s === btn);
         } else if (btn.dataset.jog) {
             jog(btn.dataset.jog[0], btn.dataset.jog[1]);
         } else if (btn.dataset.cmd) {
             sendControl(fillTemplate(btn.dataset.cmd), btn.dataset.confirm);
         }
     });
-    const onUnload = () => { state.gen++; clearTimeout(state.timer); };
-    window.addEventListener("beforeunload", onUnload);
-    onWindow.push(["beforeunload", onUnload]);
 
     // --- bed level: probe or read, show the mesh, keep the records -----------------------
     const level = { records: [], shown: null, timer: null, volume: [220, 220, 250] };
@@ -609,8 +720,8 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
         // Blue below the mean, amber above: the same two hues as the chart, so a
         // low corner reads as "bed" and a high one as "hotend" without a key.
         const t = hi > lo ? (v - lo) / (hi - lo) : 0.5;
-        const a = [0x6f, 0xb3, 0xe8], b = [0xe8, 0xb0, 0x4a];
-        return `rgb(${a.map((c, i) => Math.round(c + (b[i] - c) * t)).join(",")})`;
+        const a = [0x6f, 0xb3, 0xe8], c2 = [0xe8, 0xb0, 0x4a];
+        return `rgb(${a.map((c, i) => Math.round(c + (c2[i] - c) * t)).join(",")})`;
     }
     function renderLevel() {
         const rec = level.shown;
@@ -637,7 +748,7 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
             : "";
     }
     async function loadLevel() {
-        if (!state.port) { level.records = []; level.shown = null; renderLevel(); return; }
+        if (!state.port || state.kind !== "printer") { level.records = []; level.shown = null; renderLevel(); return; }
         try {
             level.records = await api(`/firmware/printers/leveling?port=${encodeURIComponent(state.port)}`);
             if (!level.shown || !level.records.some((r) => r.id === level.shown.id)) level.shown = level.records[0] || null;
@@ -650,19 +761,20 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
             const job = await api(`/firmware/printers/level?port=${encodeURIComponent(state.port)}`);
             $("level-job").textContent = job.running ? `${job.stage}…` : (job.error ? `failed: ${job.error}` : "");
             if (job.running) { level.timer = setTimeout(watchLevelJob, 1000); return; }
+            level.timer = null;
             if (job.record_id) { await loadLevel(); level.shown = level.records.find((r) => r.id === job.record_id) || level.shown; renderLevel(); }
-            await pollOnce();
+            await pollNow();
         } catch (e) { $("level-job").textContent = e.message; }
     }
     async function startLevel(probe) {
         if (!state.port) return;
-        if (probe && !ctl.armed) { logLine("sys", "probing moves the machine: arm control first"); return; }
+        if (probe && !ctl.armed) { refuse("probing moves the machine: arm control first"); return; }
         if (probe && !confirm(`Home and probe the bed on ${state.port}?\nThe nozzle will travel the whole bed.`)) return;
         try {
             const job = await post("/firmware/printers/level", { port: state.port, probe });
             $("level-job").textContent = `${job.stage}…`;
             level.timer = setTimeout(watchLevelJob, 800);
-        } catch (e) { logLine("sys", "bed reading: " + e.message); $("level-job").textContent = e.message; }
+        } catch (e) { refuse("bed reading: " + e.message); $("level-job").textContent = e.message; }
     }
     $("level-probe").onclick = () => startLevel(true);
     $("level-read").onclick = () => startLevel(false);
@@ -671,9 +783,9 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
         level.shown = level.records.find((r) => r.id === pick.dataset.id) || level.shown; renderLevel();
     });
     $("level-card").addEventListener("click", (ev) => {
-        const b = ev.target.closest("button[data-corner]"); if (!b) return;
-        if (!ctl.armed) { logLine("sys", "a corner move needs control armed"); return; }
-        enqueue(cornerLines(b.dataset.corner));
+        const btn = ev.target.closest("button[data-corner]"); if (!btn) return;
+        if (!ctl.armed) { refuse("a corner move needs control armed"); return; }
+        enqueue(cornerLines(btn.dataset.corner));
     });
     // A reading or a print that holds the port, as a poll reports it, is followed.
     function followJob(st) {
@@ -682,8 +794,11 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
         if (job && job.kind === "print") { prt.job = job; renderPrint(); if (!prt.timer) prt.timer = setTimeout(watchPrint, 1000); }
     }
 
-    // --- print from here: a kept file streamed over the link -------------------------
-    const prt = { files: [], records: [], job: null, timer: null };
+    // --- print from here: a kept file streamed over the link, as a print job ----------
+    // `jobs` is the printer's print jobs, running first then newest (GET /jobs): the
+    // history. `choices` is what a job here can name (GET /jobs/choices): the parts
+    // and pieces of the site the printer is pinned in.
+    const prt = { files: [], jobs: [], job: null, timer: null, choices: null };
     function renderPrint() {
         const job = prt.job, running = !!(job && job.running);
         const paused = running && job.stage === "paused";
@@ -701,7 +816,17 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
             $("print-progress").className = "empty"; $("print-progress").textContent = "nothing printing from here"; $("b-print").style.width = "0";
         }
         $("print-job").textContent = running ? `${job.stage}…` : "";
-        $("print-history").innerHTML = prt.records.map((r) => `<div><span class="${esc(r.outcome)}">${new Date(r.at).toLocaleString()} · ${esc(r.name)} · ${esc(r.outcome)} · ${r.sent}/${r.total} lines</span><a href="${BASE}/firmware/printers/print/records/${encodeURIComponent(r.id)}" download="${esc(r.id)}.json" title="The record as JSON, with the tail of what the firmware said">⤓ log</a></div>`).join("");
+        $("print-history").innerHTML = prt.jobs.map(jobRow).join("");
+    }
+    // One job of the history: when it started and finished, its kind, the file it ran
+    // and the part it makes, how it ended (and why), and how far it got.
+    function jobRow(j) {
+        const d = j.detail || {};
+        const when = `${new Date(j.started_at).toLocaleString()} – ${j.finished_at ? new Date(j.finished_at).toLocaleTimeString() : "…"}`;
+        const part = j.part ? ` → ${esc(j.part.path)}` : "";
+        const lines = d.total != null ? ` · ${d.sent}/${d.total} lines` : "";
+        const why = j.reason ? ` (${esc(j.reason)})` : "";
+        return `<div><span class="${esc(j.outcome)}">${when} · ${esc(j.kind)} · ${esc(j.input.name)}${part} · ${esc(j.outcome)}${lines}${why}</span><a href="${BASE}/jobs/${encodeURIComponent(j.id)}" download="${esc(j.id)}.json" title="The job as JSON, with the tail of what the firmware said">⤓ log</a></div>`;
     }
     async function loadPrintFiles(pick) {
         try { prt.files = await api("/firmware/printers/prints"); } catch (e) { prt.files = []; }
@@ -712,20 +837,40 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
         if (had && prt.files.some((f) => f.id === had)) sel.value = had;
         renderPrint();
     }
-    async function loadPrintRecords() {
-        if (!state.port) { prt.records = []; renderPrint(); return; }
-        try { prt.records = await api(`/firmware/printers/print/records?port=${encodeURIComponent(state.port)}`); } catch (e) { prt.records = []; }
+    async function loadPrintJobs() {
+        if (!state.port || state.kind !== "printer") { prt.jobs = []; renderPrint(); return; }
+        try { prt.jobs = await api(`/jobs?kind=print&machine=${encodeURIComponent(state.port)}`); } catch (e) { prt.jobs = []; }
         renderPrint();
     }
+    // The parts a print here can name: the site's, when the printer is pinned in one.
+    async function loadChoices() {
+        const sel = $("print-part"), had = sel.value, port = state.port;
+        let c = null;
+        if (port && state.kind === "printer") { try { c = await api(`/jobs/choices?machine=${encodeURIComponent(port)}`); } catch (e) { c = null; } }
+        if (port !== state.port) return;  // another port was chosen meanwhile
+        prt.choices = c;
+        const parts = (c && c.site && c.parts) || [];
+        sel.innerHTML = c && c.site
+            ? '<option value="">— no part named —</option>' + parts.map((p) => `<option value="${esc(p.path)}">${esc(p.path)}${p.name !== p.path ? " · " + esc(p.name) : ""}</option>`).join("")
+            : '<option value="">— pinned in no site —</option>';
+        sel.disabled = !(c && c.site);
+        if (had && parts.some((p) => p.path === had)) sel.value = had;
+        $("print-where").textContent = c && c.site ? `in ${c.site}` : "";
+    }
+    // A print followed until it ends; its end is told (the printer's jobs, the site's,
+    // and a poll for the state it left), a print that was not running is only drawn.
     async function watchPrint() {
         clearTimeout(prt.timer); prt.timer = null;
-        if (!state.port) return;
+        if (!state.port || state.kind !== "printer") return;
         try {
+            const was = !!(prt.job && prt.job.running);
             prt.job = await api(`/firmware/printers/print?port=${encodeURIComponent(state.port)}`);
             renderPrint();
             if (prt.job.running) { prt.timer = setTimeout(watchPrint, 1000); return; }
-            await loadPrintRecords();
-            await pollOnce();
+            if (!was) return;
+            await loadPrintJobs();
+            emit("apothecary:jobs-changed", { port: state.port, job_id: prt.job.job_id });
+            await pollNow();
         } catch (e) { $("print-job").textContent = e.message; }
     }
     async function keepPrintFile(file) {
@@ -736,77 +881,139 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
             if (!r.ok) throw new Error(body.detail || r.statusText);
             logLine("sys", `kept ${body.name}: ${body.lines} lines` + (body.problems.length ? ` -- refused: ${body.problems.join("; ")}` : ""));
             await loadPrintFiles(body.id);
-        } catch (e) { logLine("sys", "keep file: " + e.message); }
+        } catch (e) { refuse("keep file: " + e.message); }
         $("print-file").value = "";
     }
     async function startPrint() {
         const fileId = $("print-pick").value;
-        if (!state.port || !fileId) { logLine("sys", "print: pick a port and a file first"); return; }
-        if (!ctl.armed) { logLine("sys", "a print heats and moves the machine: arm control first"); return; }
+        if (!state.port || !fileId) { refuse("print: pick a port and a file first"); return; }
+        if (!ctl.armed) { refuse("a print heats and moves the machine: arm control first"); return; }
         const f = prt.files.find((x) => x.id === fileId);
-        if (!confirm(`Print ${f ? f.name : fileId} on ${state.port}?\n${f ? f.lines + " lines" : ""} will stream from here; the printer will heat and move.`)) return;
+        const part = $("print-part").value || null;
+        if (!confirm(`Print ${f ? f.name : fileId} on ${state.port}${part ? `, making ${part}` : ""}?\n${f ? f.lines + " lines" : ""} will stream from here; the printer will heat and move.`)) return;
         try {
-            prt.job = await post("/firmware/printers/print", { port: state.port, file_id: fileId });
+            prt.job = await post("/firmware/printers/print", { port: state.port, file_id: fileId, part });
             renderPrint();
             prt.timer = setTimeout(watchPrint, 800);
-        } catch (e) { logLine("sys", "print: " + e.message); $("print-job").textContent = e.message; }
+            await loadPrintJobs();
+            emit("apothecary:jobs-changed", { port: state.port, job_id: prt.job.job_id });
+        } catch (e) { refuse("print: " + e.message); $("print-job").textContent = e.message; }
     }
     async function printVerb(verb) {
         if (!state.port) return;
         if (verb === "cancel" && !confirm("Cancel the print from here? Heaters and fan go off, motors free.")) return;
         try { prt.job = await post(`/firmware/printers/print/${verb}`, { port: state.port }); renderPrint(); if (!prt.timer) prt.timer = setTimeout(watchPrint, 500); }
-        catch (e) { logLine("sys", `print ${verb}: ` + e.message); }
+        catch (e) { refuse(`print ${verb}: ` + e.message); }
     }
     $("print-file").addEventListener("change", (ev) => keepPrintFile(ev.target.files[0]));
     $("print-pick").addEventListener("change", renderPrint);
     $("print-delete").onclick = async () => {
         const id = $("print-pick").value; if (!id) return;
         try { await api(`/firmware/printers/prints/${encodeURIComponent(id)}`, { method: "DELETE" }); await loadPrintFiles(); }
-        catch (e) { logLine("sys", "forget file: " + e.message); }
+        catch (e) { refuse("forget file: " + e.message); }
     };
     $("print-start").onclick = startPrint;
     $("print-pause").onclick = () => printVerb("pause");
     $("print-resume").onclick = () => printVerb("resume");
     $("print-cancel").onclick = () => printVerb("cancel");
 
-    // --- the ring's side: what this machine knows, and carrying a chosen verb ------------
-    function device() {
-        const printer = !!(state.info && state.info.device && state.info.device.device && state.info.device.device.printer);
-        return { port: state.port, printer, armed: ctl.armed, bound: true };
+    // --- flashing a devkit: the Bench's form and task log, for this port --------------
+    // Mounted the first time the board is shown as a devkit. The sketch it starts
+    // from is the one it should run: the last one flashed to it from here, else the
+    // one its node is bound to it by. An upload that succeeds is followed by what the
+    // board should run, read again, and Identify's listen for its hello.
+    let flash = null;
+    const flashSay = (text, kind) => (kind === "error" ? refuse(text) : logLine("sys", text));
+    function mountFlashing() {
+        if (flash || !state.port) return;
+        const port = state.port;
+        const tasks = mountTasks($("flash-task"), { base: BASE, history: false, say: flashSay });
+        const build = mountBuild($("flash-form"), {
+            base: BASE, tasks, port, say: flashSay,
+            suggest: () => {
+                const e = b().expected;
+                return (e && e.record && e.record.sketch) || (pin && pin.sketch) || null;
+            },
+            onEnd: (task, what) => flashed(port, task, what),
+        });
+        flash = { port, build, tasks };
+        build.load();
     }
+    async function flashed(port, task, what) {
+        if (state.port !== port) return;
+        logLine("sys", `${what.kind === "upload" ? "upload" : "compile"} of ${what.sketch} (${what.fqbn}): ${task.status}`);
+        if (what.kind !== "upload" || task.status !== "succeeded") return;
+        await model.loadInfo(port).catch(() => {});
+        renderDevkit();
+        await identify({ pressed: false });
+    }
+    // Device › Flash: the card in view, its sketch under the cursor.
+    function showFlashing() {
+        if (!state.port) return;
+        if (state.kind !== "devkit") { refuse("Flash: a printer keeps its own firmware; Apothecary polls it and never flashes it"); return; }
+        mountFlashing();
+        $("flash-card").scrollIntoView({ block: "nearest" });
+        const pick = $("flash-form").querySelector(".sketch-select");
+        if (pick) pick.focus({ preventScroll: true });
+    }
+
+    // --- the ring's side: what this board knows, and carrying a chosen verb ------------
+    function device() {
+        const d = state.port ? b().device : null;
+        return { port: state.port, printer: !!(d && d.printer), armed: ctl.armed, bound: !!(pin && pin.how === "manual") };
+    }
+    // A verb of this board's: false when it is not one (the host's: open, pin, unpin);
+    // else { refused }, the refusal it met or null.
     async function carry(intent) {
+        const before = refusals;
+        const done = await carryOut(intent);
+        if (!done) return false;
+        return { refused: refusals > before ? lastRefusal : null };
+    }
+    async function carryOut(intent) {
         const action = intent.action;
         const jogM = /^control:jog:([XYZ])([+-])$/.exec(action);
-        if (jogM) { jog(jogM[1], jogM[2]); return true; }
+        const printerVerb = /^(control|level|print):/.test(action);
+        if (printerVerb && state.kind !== "printer") { refuse(`${intent.label} (⌗${intent.address}): a devkit has no G-code to be driven with`); return true; }
+        if (jogM) {
+            if (!ctl.armed) { refuse(`${intent.label} (⌗${intent.address}): control is not armed`); return true; }
+            jog(jogM[1], jogM[2]); return true;
+        }
         if (action === "control:estop") { await estop(); return true; }
         if (action === "control:arm") { await arm(true); return true; }
         if (action === "control:disarm") { await arm(false); return true; }
         const corner = /^control:corner:([FB][LR])$/.exec(action);
-        if (corner) { if (!ctl.armed) { logLine("sys", "a corner move needs control armed"); return true; } enqueue(cornerLines(corner[1])); return true; }
+        if (corner) { if (!ctl.armed) { refuse(`${intent.label} (⌗${intent.address}): a corner move needs control armed`); return true; } enqueue(cornerLines(corner[1])); return true; }
         if (action === "level:probe") { await startLevel(true); return true; }
         if (action === "level:read") { await startLevel(false); return true; }
         if (action === "print:start") { await startPrint(); return true; }
         if (prt.job && prt.job.running && action in HOST_VERBS) { await printVerb(HOST_VERBS[action]); return true; }
         if (action in LINES) {
-            if (!ctl.armed) { logLine("sys", `${intent.label} (⌗${intent.address}): control is not armed`); return true; }
+            if (!ctl.armed) { refuse(`${intent.label} (⌗${intent.address}): control is not armed`); return true; }
             await sendControl(LINES[action](handle), CONFIRM[action]);
             return true;
         }
-        if (action === "device:poll") { await pollOnce(); return true; }
-        if (action === "device:query") { await $("identify").onclick(); return true; }
-        if (action === "device:rescan") { await loadPorts(); logLine("sys", "ports rescanned"); return true; }
-        if (action === "device:watch") { $("auto").checked = true; schedule(); logLine("sys", "auto-poll on"); return true; }
+        // A devkit is not polled: Poll reads again what it should run and what it is.
+        if (action === "device:poll") {
+            if (state.kind === "devkit") { await model.loadInfo(state.port).catch((e) => refuse(`poll: ${e.message}`)); renderDevkit(); return true; }
+            await $("poll").onclick(); return true;
+        }
+        if (action === "device:query") { await identify(); return true; }
+        if (action === "device:listen") { listen(); return true; }
+        if (action === "device:probe") { await probe(); return true; }
+        if (action === "device:flash") { showFlashing(); return true; }
+        if (action === "device:rescan") { await model.rescan(); logLine("sys", "ports rescanned"); return true; }
         // The link verbs are the header buttons; their handlers already confirm what needs confirming.
-        if (action === "device:reconnect") { $("reconnect").click(); return true; }
-        if (action === "device:reset") { $("reset").click(); return true; }
-        if (action === "device:release") { $("release").click(); return true; }
-        return false;  // not this machine's: the host decides (monitor, pin, unpin)
+        if (action === "device:reconnect") { await $("reconnect").onclick(); return true; }
+        if (action === "device:reset") { await $("reset").onclick(); return true; }
+        if (action === "device:release") { await $("release").onclick(); return true; }
+        return false;  // not this board's: the host decides (open, pin, unpin)
     }
     // The buttons this machine has, each by the verb it is -- for the ring's addresses.
     function pairs() {
         const out = [];
-        for (const b of $("control").querySelectorAll("button[data-cmd]")) out.push([b, BY_CMD[b.dataset.cmd] || null]);
-        for (const b of $("control").querySelectorAll("button[data-jog]")) out.push([b, `control:jog:${b.dataset.jog}`]);
+        for (const btn of $("control").querySelectorAll("button[data-cmd]")) out.push([btn, BY_CMD[btn.dataset.cmd] || null]);
+        for (const btn of $("control").querySelectorAll("button[data-jog]")) out.push([btn, `control:jog:${btn.dataset.jog}`]);
         out.push([$("ctl"), ctl.armed ? "control:disarm" : "control:arm"]);
         out.push([$("ctl-label"), ctl.armed ? "control:disarm" : "control:arm"]);
         out.push([$("ctl-disarm"), "control:disarm"]);
@@ -816,9 +1023,11 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
         out.push([$("reconnect"), "device:reconnect"]);
         out.push([$("reset"), "device:reset"]);
         out.push([$("release"), "device:release"]);
+        out.push([$("listen"), "device:listen"]);
+        out.push([$("probe"), "device:probe"]);
         out.push([$("level-probe"), "level:probe"]);
         out.push([$("level-read"), "level:read"]);
-        for (const b of $("level-card").querySelectorAll("button[data-corner]")) out.push([b, `control:corner:${b.dataset.corner}`]);
+        for (const btn of $("level-card").querySelectorAll("button[data-corner]")) out.push([btn, `control:corner:${btn.dataset.corner}`]);
         out.push([$("print-start"), "print:start"]);
         out.push([$("print-pause"), "control:sd-pause"]);
         out.push([$("print-resume"), "control:sd-resume"]);
@@ -827,22 +1036,25 @@ export function mountMachine(root, { base = "", port = "", host = "page", logRoo
     }
 
     const handle = {
-        root, host, $,
-        state, ctl, arm, jog, estop, enqueue, sendControl, fillTemplate, pollOnce, loadPorts, logLine, schedule, selectPort,
-        identify: () => $("identify").onclick(),
+        root, host, $, boards: model,
+        state, ctl, arm, jog, estop, enqueue, sendControl, fillTemplate, pollOnce: pollNow, logLine, refuse, schedule, selectPort,
+        identify, listen, probe, showFlashing,
+        flashing: () => flash,
+        kind: () => state.kind,
         device, carry, pairs,
         level: { start: startLevel, corner: (which) => enqueue(cornerLines(which)), lines: cornerLines, records: () => level.records, shown: () => level.shown, load: loadLevel },
-        print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, records: () => prt.records, load: loadPrintFiles },
+        print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, jobs: () => prt.jobs, choices: () => prt.choices, load: loadPrintFiles, loadJobs: loadPrintJobs },
         destroy() {
-            state.gen++; clearTimeout(state.timer); clearTimeout(level.timer); clearTimeout(prt.timer); clearInterval(ctl.timer);
-            document.removeEventListener("visibilitychange", onVisibility);
+            if (state.port) model.unwatch(state.port, who);
+            clearTimeout(level.timer); clearTimeout(prt.timer); clearInterval(ctl.timer);
+            if (flash) { flash.build.destroy(); flash.tasks.destroy(); flash = null; }
             for (const [event, fn] of onWindow) window.removeEventListener(event, fn);
-            root.innerHTML = ""; root.classList.remove("machine", `host-${host}`);
-            if (logRoot) { logRoot.innerHTML = ""; logRoot.classList.remove("machine-log", "right"); }
+            if (!boards) model.destroy();
+            root.innerHTML = ""; root.classList.remove("machine", `host-${host}`, "kind-printer", "kind-devkit");
         },
     };
 
-    loadPrintFiles(); loadPrintRecords(); watchPrint();
-    loadPorts().then(() => { if (state.port) selectPort(state.port); });
+    renderLevel(); renderPrint();
+    selectPort(state.port);
     return handle;
 }

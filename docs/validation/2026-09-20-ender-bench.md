@@ -30,12 +30,6 @@ have caught it; they are in the changelog under *Fixed*.
 | Firmware page | the card identifies the printer, offers Poll and ⤢ Monitor only, draws the board in `garage › printer_1` |
 | Test suites with the board plugged in | 1123 unit passed, 2 skipped; 67 e2e passed, 1 skipped -- after two audit fixes: the firmware-page test accepted only "no devices" or a devkit's *Probe* and failed on a real printer's *Monitor*; and the shared e2e server used the person's own `~/.apothecary`, so a test could have edited real pins -- it now keeps its state in a folder of its own |
 
-![The Device section, the board pinned by its serial number](screenshots/2026-09-20-ender-device-section.png)
-
-![The stored mesh as read: 2.34 mm of range, the right side high](screenshots/2026-09-20-ender-bed-reading.png)
-
-![The board in its printer, once the printer was drawn where it stands](screenshots/2026-09-20-ender-board-view.png)
-
 ## What the numbers say about the machine
 
 The stored mesh is the bed as it was last probed, and it is far from
@@ -50,10 +44,19 @@ with the probe alone; tram first, probe after.
 
 Preconditions: printer powered, bed clear, nothing printing from the card,
 filament loaded. `uv run apothecary serve` on :8000 (the `--reload` server is
-fine) and the monitor at `/firmware/monitor?port=/dev/ttyUSB0` -- use
-whatever port `apothecary firmware devices` shows; the pin follows the
-board. State `idle`, temperatures near room. Keep a hand near the printer's
-own power switch; **E-STOP** is on the page but a switch is faster.
+fine) and the printer's Machine: `/firmware/monitor?port=/dev/ttyUSB0`, where
+the monitor page was, opens the viewer with it -- use whatever port
+`apothecary firmware devices` shows; the pin follows the board -- or **Open**
+on the mainboard's line in Selected, or a click on the printer's badge.
+Right-click inside the Machine for its ring, the device ring on its port: the
+addresses below are that ring's; from the printer's node ring every one has a
+`2` in front (Device is its cell 2). State `idle`, temperatures near room.
+Keep a hand near the printer's own power switch; **E-STOP** is in the Machine
+but a switch is faster.
+
+The addresses are the ones in the table above, as they were on the day:
+Device › Open took Watch's cell (8) and Flash took Monitor's (2), so Link is
+cell 1 and Control cell 7 (the consolidation plan's Phases 4 and 5).
 
 Every line the page sends is amber in the comms log; refusals are said in
 the log too. ✔ as you go.
@@ -72,7 +75,7 @@ the log too. ✔ as you go.
 - [ ] **⚙ Control** → the overlay opens, the header counts down from 5:00,
       the ring's cell 7 › 7 reads *Disarm*.
 - [ ] Bed **45** → Set: `M140 S45` in the log, the bed card's target reads
-      `/ 45°` on the next poll, the bar fills as it warms. **Off** → target 0.
+      `/45°` on the next poll, the bar fills as it warms. **Off** → target 0.
 - [ ] Hotend **150** → Set, watch it climb, **Off**. (Below printing
       temperature on purpose; nothing extrudes.)
 - [ ] Fan slider to ~128 → Set → the part fan spins; **Off**.
@@ -87,7 +90,7 @@ the log too. ✔ as you go.
       probes at the bed centre; the position card reads X0 Y0 and a Z.
 - [ ] Step **10**, **Y+**: the bed moves 10 mm; the nozzle marker in *Board
       in its printer* moves the moment the button is pressed and the position
-      card confirms within 2 s. From the ring: `m` `7` `2` `8` (⌗728) does the
+      card confirms within 2 s. From the ring: `7` `2` `8` (⌗728) does the
       same; **Y−** twice, then **Motors off**.
 - [ ] Bed level card, **◣ FL**: four lines (`G90`, `G1 Z5`, `G1 X30 Y30`,
       `G1 Z0.2`), the nozzle parks at the front-left corner at paper height.
@@ -121,12 +124,12 @@ the log too. ✔ as you go.
       10 mm above the bed; the state card reads `printing` with the
       percentage, the card shows `sent/23` and the line in flight; the log
       shows *print started* and none of the lines.
-- [ ] **⏸ Pause** mid-square (or `m` `7` `9` `6`): the head finishes what
+- [ ] **⏸ Pause** mid-square (or `7` `9` `6` on the ring): the head finishes what
       was queued and stops; `paused` in the card; a poll still answers.
       **▶ Resume** (needs the latch).
 - [ ] **■ Cancel** → confirm: `M104 S0`, `M140 S0`, `M107`, `M84` in amber;
-      the history row reads *cancelled · N/23*; the record is under
-      `~/.apothecary/prints/records/`.
+      the history row reads *cancelled · N/23 lines*; the job is under
+      `~/.apothecary/jobs/` (`GET /jobs?machine=/dev/ttyUSB0`), cancelled.
 - [ ] Print it again to the end: *done · 23/23*, `M117 dry run done` on the
       printer's screen, the state card back to `idle`.
 - [ ] Optional: a real sliced file with your usual start G-code. Watch for
@@ -140,7 +143,7 @@ the log too. ✔ as you go.
       brings it back.
 - [ ] **Release** → the link drops, the latch with it; `apothecary firmware
       printer /dev/ttyUSB0` from a terminal answers **without a boot banner**;
-      **⇄ Reconnect** on the page holds it again, also without one.
+      **⇄ Reconnect** in the Machine holds it again, also without one.
 
 Anything refused, wrong, or slower than the bound in the table above: note
 the time and the port, and download the comms log (`⤓`) -- it is the whole

@@ -117,19 +117,22 @@ class CameraSeen(BaseModel):
 
 
 class ShapeSeen(BaseModel):
-    """One shape of a drawn look: its index, its word, and whether it is made."""
+    """One shape of a drawn view: its index, its word, and whether it is made."""
 
     index: int
     word: str = "shape"
     status: str = "found"  # found | made | already_made
 
 
-class LookSeen(BaseModel):
-    """A look at the place the ring stands on, as the page has it drawn."""
+class ViewSeen(BaseModel):
+    """A view at the place the ring stands on, as the page has it drawn.
+
+    ``finder`` is None for a view pinned and not yet searched: Find shapes is its
+    next step."""
 
     id: str
     picture: str = ""
-    finder: str = "plain"
+    finder: Optional[str] = "plain"
     sized: bool = False
     kept: bool = False  # its picture is one the browser kept, so it can be forgotten
     shapes: List[ShapeSeen] = Field(default_factory=list)
@@ -137,13 +140,13 @@ class LookSeen(BaseModel):
 
 class Place(BaseModel):
     """The place the ring stands on -- a host, or on the canvas ring the floor:
-    its camera's pin, whether that camera is live, and its looks, newest first."""
+    its camera's pin, whether that camera is live, and its views, newest first."""
 
     camera: Optional[CameraSeen] = None
     live: bool = False
-    looks: List[LookSeen] = Field(default_factory=list)
+    views: List[ViewSeen] = Field(default_factory=list)
     drawn: Optional[str] = None
-    chosen_look: Optional[str] = None
+    chosen_view: Optional[str] = None
 
 
 class PictureContext(BaseModel):
@@ -153,7 +156,7 @@ class PictureContext(BaseModel):
     the browser has been allowed to name them), ``pictures`` the ones under the
     picture root, newest first, and ``here`` the place the ring stands on. The
     intent route fills in ``made`` (the site's made pieces), ``words`` (the
-    vocabulary) and ``finders`` (those that can read the drawn look's picture)
+    vocabulary) and ``finders`` (those that can read the drawn view's picture)
     from what the server knows, so a page cannot claim them."""
 
     cameras: List[CameraSeen] = Field(default_factory=list)
@@ -180,6 +183,9 @@ class Option(BaseModel):
     action: Optional[str] = None
     enabled: bool = True
     destructive: bool = False
+    # The one of a list the page has chosen elsewhere (a picture chosen in
+    # Pictures), drawn marked; a leaf like any other.
+    marked: bool = False
     children: Optional[List["Option"]] = None
     cell: Optional[int] = None
 
@@ -367,8 +373,9 @@ def nearest(occupied: Iterable[int], from_cell: Optional[int], direction: str) -
     return best[2] if best is not None else from_cell
 
 
-def shorten(text: str) -> str:
-    """Make a label fit, without trailing it off.
+def shorten(text: str, most: int = LONGEST_LABEL) -> str:
+    """Make a label fit, without trailing it off -- in ``most`` characters, a
+    label's twelve unless a part of one is being made.
 
     **Nothing is taken away from a label that already fits**, so ``M3.5_bolt``
     and ``nozzle_0.4mm`` are never read as dotted paths and cut to ``5 bolt``
@@ -388,7 +395,7 @@ def shorten(text: str) -> str:
     can choose on purpose.
     """
     whole = text.strip()
-    if 0 < len(whole) <= LONGEST_LABEL:
+    if 0 < len(whole) <= most:
         return whole
 
     label = whole.rsplit(".", 1)[-1].replace("_", " ").replace("-", " ").replace(".", " ").strip()
@@ -398,22 +405,22 @@ def shorten(text: str) -> str:
         # Nothing but separators. Fall back to what was actually passed in, so
         # the wedge says something rather than nothing.
         stripped = "".join(ch for ch in whole if not ch.isspace())
-        return (stripped or "unnamed")[:LONGEST_LABEL]
+        return (stripped or "unnamed")[:most]
 
-    if len(label) <= LONGEST_LABEL:
+    if len(label) <= most:
         return label
 
     words = label.split()
     if len(words) == 1:
-        return label[:LONGEST_LABEL].rstrip()
+        return label[:most].rstrip()
 
     for keep in (6, 5, 4, 3):
         shortened = " ".join(word[:keep] for word in words)
-        if len(shortened) <= LONGEST_LABEL:
+        if len(shortened) <= most:
             return shortened
 
     ends = f"{words[0][:5]} {words[-1][:5]}"
-    return ends[:LONGEST_LABEL].rstrip() or words[0][:LONGEST_LABEL]
+    return ends[:most].rstrip() or words[0][:most]
 
 
 def distinct(names: Sequence[str]) -> List[str]:
@@ -543,47 +550,80 @@ def _bucket(names: Sequence[str]) -> List[Tuple[str, List[str]]]:
 # (cardinals first): what stands in front of the world, each a cell away.
 # The page registers exactly these; a test holds the two lists to each other.
 PANELS: Sequence[Tuple[str, str]] = (
-    ("contents", "Contents"),
+    # Site: the site's Contents tree, its problems at the top, its generated
+    # SCAD, every site's pins (Pinned), each taken back from its row, and the
+    # site's jobs, each row opening its machine.
+    ("site", "Site"),
     ("selected", "Selected"),
-    ("jobs", "Jobs"),
-    ("validation", "Validation"),
-    ("scad", "OpenSCAD"),
-    # Registered by the page's script rather than marked in its markup: Kept
-    # (every pin and kept picture, each taken back from its row) and what is
-    # left of the camera panel, the gathering, at start; the machine and its
-    # comms log when a printer is opened. Each pair shares one cell, since a
-    # ring holds eight.
-    ("kept", "Kept"),
-    ("camera", "Gather"),
+    # Registered by the page's script rather than marked in its markup: Pictures
+    # (every picture under the picture root, each pinned here or forgotten, and
+    # the gathering) at start; a board's Machine, its log in it, when a board is
+    # opened.
+    ("pictures", "Pictures"),
     ("machine", "Machine"),
-    ("log", "Comms log"),
+    # The Bench: the toolchain, the sketches, compile and upload, raw flash and
+    # the task log -- what the firmware page was -- a tab of the rail's strip,
+    # registered at start and shown when asked for. Its verbs are a ring of
+    # their own under its cell (_bench).
+    ("bench", "Bench"),
 )
-# The cells that hold two panels each, in the order they are seated after the
-# plain ones: (id, label, the panels behind it).
-PANEL_GROUPS: Sequence[Tuple[str, str, Tuple[str, ...]]] = (
-    ("panel:pictures-group", "Pictures", ("kept", "camera")),
-    ("panel:machine-group", "Machine", ("machine", "log")),
-)
-GROUPED_PANELS = tuple(pid for _, _, pids in PANEL_GROUPS for pid in pids)
+# The panels seated before the rail's own cell, which keeps the cell it has had
+# since Phase 3 (Panels › Rail, 99); a panel registered after them is seated
+# after it, so no learned address moves.
+_BEFORE_RAIL = ("site", "selected", "pictures", "machine")
 
 
 def _panels() -> Option:
     def toggle(pid: str, label: str) -> Option:
         return Option(id=f"panel:{pid}", label=label, action=f"panel:toggle:{pid}")
 
-    labels = dict(PANELS)
-    plain = [toggle(pid, label) for pid, label in PANELS if pid not in GROUPED_PANELS]
-    groups = [
-        Option(id=gid, label=glabel, children=[toggle(pid, labels[pid]) for pid in pids])
-        for gid, glabel, pids in PANEL_GROUPS
-    ]
     return Option(
         id="panels",
         label="Panels",
-        children=plain
-        + groups
+        children=[toggle(pid, label) for pid, label in PANELS if pid in _BEFORE_RAIL]
         # The rail itself: hidden and shown, as the tilde key does.
-        + [Option(id="panel:rail", label="Rail", action="panel:rail:toggle")],
+        + [Option(id="panel:rail", label="Rail", action="panel:rail:toggle")]
+        + [_bench(toggle("bench", "Bench"))],
+    )
+
+
+def _bench(show: Option) -> Option:
+    """The Bench's cell under Panels: the panel itself first, then its verbs.
+
+    Each verb is the Bench's button of the same name and acts on what the Bench
+    has chosen -- the sketch, the board (FQBN) and the port in its boxes, the
+    images in its raw-flash list, the libraries typed in its box -- as Control ›
+    Print › Send file prints what the Print card has chosen. Install installs or
+    updates arduino-cli; Cores installs one of the suggested cores; Cancel stops
+    the running task. Upload and Raw flash overwrite what a board runs.
+    """
+    from .firmware.toolchains import SUGGESTED_CORES
+
+    return Option(
+        id="bench",
+        label="Bench",
+        children=[
+            show,
+            Option(id="bench:install", label="Install", action="bench:install"),
+            Option(id="bench:compile", label="Compile", action="bench:compile"),
+            Option(id="bench:upload", label="Upload", action="bench:upload", destructive=True),
+            Option(id="bench:esptool", label="Raw flash", action="bench:esptool", destructive=True),
+            Option(id="bench:cancel", label="Cancel", action="bench:cancel"),
+            Option(
+                id="bench:cores",
+                label="Cores",
+                # A core by its architecture: AVR, ESP32, RP2040 ...
+                children=[
+                    Option(
+                        id=f"bench:core:{core}",
+                        label=shorten(core.rsplit(":", 1)[-1].upper()),
+                        action=f"bench:core:{core}",
+                    )
+                    for core, _ in SUGGESTED_CORES
+                ],
+            ),
+            Option(id="bench:libraries", label="Libraries", action="bench:libraries"),
+        ],
     )
 
 
@@ -595,12 +635,15 @@ def _panels() -> Option:
 # ring's Pictures › Floor, since the floor is a selection but not a node. A
 # floor verb carries the floor in its action, as ``@floor`` after its last
 # colon; a host's verb names its host by the ring's target. A verb about one
-# look names the look, which knows its own host.
+# view names the view, which knows its own host.
 
 FLOOR_MARK = "@floor"
-# A list of pictures or looks shows the seven newest; the eighth cell acts on
+# A list of pictures or views shows the seven newest; the eighth cell acts on
 # the one chosen in the panel that holds the rest, or opens that panel.
 NEWEST = MOST_OPTIONS - 1
+# Folder's eighth cell, for a picture chosen in Pictures older than the seven:
+# the verb, then as much of its name as the label has room for.
+PIN_CHOSEN = "Pin "
 
 
 def _chunks(items: Sequence, most_groups: int) -> List[List]:
@@ -659,8 +702,10 @@ def _is_host(site: Optional[Assembly], path: str, made: Sequence[str]) -> bool:
 
 def _camera_group(picture: PictureContext, floor: bool) -> Option:
     """Camera: Pin here › this browser's cameras (Allow until it has been asked),
-    Live or Still, Look, Keep, Unpin. Live, Look and Keep only when the camera
-    pinned here is one of this browser's: a pin is a device of one origin."""
+    Live or Still, Take picture, Unpin. Live and Take picture only when the camera
+    pinned here is one of this browser's: a pin is a device of one origin. Take
+    picture keeps a frame and pins it here as a view; there is no keeping a frame
+    without pinning it, and unpinning a view leaves its picture in the folder."""
     tail = f":{FLOOR_MARK}" if floor else ""
     here = picture.here
     mine = {c.id for c in picture.cameras}
@@ -678,8 +723,13 @@ def _camera_group(picture: PictureContext, floor: bool) -> Option:
             if here.live
             else Option(id=f"camera:live{tail}", label="Live", action=f"camera:live{tail}")
         )
-        options.append(Option(id=f"camera:look{tail}", label="Look", action=f"camera:look{tail}"))
-        options.append(Option(id=f"camera:keep{tail}", label="Keep", action=f"camera:keep{tail}"))
+        options.append(
+            Option(
+                id=f"camera:take-picture{tail}",
+                label="Take picture",
+                action=f"camera:take-picture{tail}",
+            )
+        )
     if here.camera is not None:
         options.append(
             Option(id=f"camera:unpin{tail}", label="Unpin", action=f"camera:unpin{tail}")
@@ -689,10 +739,17 @@ def _camera_group(picture: PictureContext, floor: bool) -> Option:
 
 def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
     """Picture at a host or the floor: Add (a host's; the floor's is Pictures ›
-    Add), Folder › the newest pictures, and with
-    a look drawn here, Looks › the newest looks, Make › Make all and each found
-    shape (once the look has a width), Size, Find › another finder, Unpin, and
-    Forget for a picture the browser kept. Eight at the most."""
+    Add), Folder › the seven newest pictures and, when there are more, Pin and
+    the short name of the one chosen in Pictures when it is older than those,
+    else More (the Pictures panel, where every picture is) -- the chosen one,
+    among the seven, is marked in its own cell; and with
+    a view drawn here, Views › the newest views, Make › Make all and each found
+    shape (once its shapes are found and it has a width), Size, Unpin, Forget for
+    a picture the browser kept, and Find shapes last: the step after a pin, with
+    the finder that can read the picture (or Find shapes › each, when several
+    can), and on a view already searched, Find shapes › the other finders. Last,
+    so Unpin and Forget keep their cells whether it is there or not. Eight at
+    the most."""
     tail = f":{FLOOR_MARK}" if floor else ""
     here = picture.here
     # The floor's Add is the canvas ring's Pictures › Add, one ring up: an action
@@ -700,46 +757,48 @@ def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
     options = [] if floor else [Option(id="picture:add", label="Add", action="picture:add")]
 
     pictures = list(picture.pictures)
+    # A picture chosen in Pictures that is no longer there is not chosen.
+    chosen = picture.chosen_picture if picture.chosen_picture in pictures else None
     if pictures:
-        leaves = [(f"picture:pin:{p}{tail}", _stem(p)) for p in pictures[:NEWEST]]
+        newest = pictures[:NEWEST]
+        leaves = [(f"picture:pin:{p}{tail}", _stem(p)) for p in newest]
         if len(pictures) > NEWEST:
-            chosen = picture.chosen_picture
-            if chosen and chosen not in pictures[:NEWEST]:
-                leaves.append((f"picture:pin:{chosen}{tail}", _stem(chosen)))
+            if chosen is not None and chosen not in newest:
+                short = shorten(_stem(chosen) or chosen, LONGEST_LABEL - len(PIN_CHOSEN))
+                leaves.append((f"picture:pin:{chosen}{tail}", f"{PIN_CHOSEN}{short}"))
             else:
-                leaves.append((f"picture:kept{tail}", "More"))
-        options.append(
-            Option(
-                id=f"picture:folder{tail}",
-                label="Folder",
-                children=_listed(f"picture:folder{tail}", leaves),
-            )
-        )
+                leaves.append((f"picture:more{tail}", "More"))
+        folder = _listed(f"picture:folder{tail}", leaves)
+        if chosen in newest:
+            for leaf in folder:
+                if leaf.action == f"picture:pin:{chosen}{tail}":
+                    leaf.marked = True
+        options.append(Option(id=f"picture:folder{tail}", label="Folder", children=folder))
 
-    drawn = next((lk for lk in here.looks if lk.id == here.drawn), None)
-    if drawn is None and here.looks:
-        drawn = here.looks[0]
+    drawn = next((vw for vw in here.views if vw.id == here.drawn), None)
+    if drawn is None and here.views:
+        drawn = here.views[0]
     if drawn is None:
         return Option(id=f"picture{tail}", label="Picture", children=options) if options else None
 
-    if len(here.looks) > 1:
+    if len(here.views) > 1:
         leaves = [
-            (f"picture:draw:{lk.id}", _stem(lk.picture) or lk.id) for lk in here.looks[:NEWEST]
+            (f"picture:draw:{vw.id}", _stem(vw.picture) or vw.id) for vw in here.views[:NEWEST]
         ]
-        if len(here.looks) > NEWEST:
-            chosen_look = next(
-                (lk for lk in here.looks[NEWEST:] if lk.id == here.chosen_look), None
+        if len(here.views) > NEWEST:
+            chosen_view = next(
+                (vw for vw in here.views[NEWEST:] if vw.id == here.chosen_view), None
             )
             leaves.append(
-                (f"picture:draw:{chosen_look.id}", _stem(chosen_look.picture) or chosen_look.id)
-                if chosen_look is not None
-                else (f"picture:looks{tail}", "In Selected")
+                (f"picture:draw:{chosen_view.id}", _stem(chosen_view.picture) or chosen_view.id)
+                if chosen_view is not None
+                else (f"picture:views{tail}", "In Selected")
             )
         options.append(
             Option(
-                id=f"picture:looks-group{tail}",
-                label="Looks",
-                children=_listed(f"picture:looks-group{tail}", leaves),
+                id=f"picture:views-group{tail}",
+                label="Views",
+                children=_listed(f"picture:views-group{tail}", leaves),
             )
         )
 
@@ -762,17 +821,6 @@ def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
             )
         )
     options.append(Option(id=f"picture:size{tail}", label="Size", action=f"picture:size{tail}"))
-    others = [f for f in picture.finders if f != drawn.finder]
-    if len(picture.finders) > 1 and others:
-        options.append(
-            Option(
-                id=f"picture:find-group{tail}",
-                label="Find",
-                children=_listed(
-                    f"picture:find-group{tail}", [(f"picture:find:{f}{tail}", f) for f in others]
-                ),
-            )
-        )
     options.append(Option(id=f"picture:unpin{tail}", label="Unpin", action=f"picture:unpin{tail}"))
     if drawn.kept:
         options.append(
@@ -783,7 +831,30 @@ def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
                 destructive=True,
             )
         )
+    find = _find_shapes(drawn, picture.finders, tail)
+    if find is not None:
+        options.append(find)
     return Option(id=f"picture{tail}", label="Picture", children=options)
+
+
+def _find_shapes(drawn: ViewSeen, finders: Sequence[str], tail: str) -> Optional[Option]:
+    """Find shapes on the drawn view: before it is searched, the one finder that can
+    read its picture as a leaf, or each of several behind it; after, only the other
+    finders, each making a view of its own; nothing when no finder has anything to
+    do here."""
+    offered = list(finders) if drawn.finder is None else [f for f in finders if f != drawn.finder]
+    if not offered:
+        return None
+    if drawn.finder is None and len(offered) == 1:
+        action = f"picture:find:{offered[0]}{tail}"
+        return Option(id=action, label="Find shapes", action=action)
+    return Option(
+        id=f"picture:find-group{tail}",
+        label="Find shapes",
+        children=_listed(
+            f"picture:find-group{tail}", [(f"picture:find:{f}{tail}", f) for f in offered]
+        ),
+    )
 
 
 def _made_picture_group(picture: PictureContext) -> Option:
@@ -927,7 +998,7 @@ def _node_ring(
         options.append(Option(id="up", label="Up", action=f"select:{parent}"))
 
     # Appended after every cell the ring had, so none of them moves: a host
-    # holds a camera and looks; a made piece has its word and can be dropped.
+    # holds a camera and views; a made piece has its word and can be dropped.
     if _is_host(site, path, picture.made):
         options.append(_camera_group(picture, floor=False))
         host_pictures = _picture_group(picture, floor=False)
@@ -965,14 +1036,20 @@ def _device_ring_on_top(context: Context, device: Optional[Device]) -> Ring:
 def _device_options(device: Device) -> List[Option]:
     """What can be done with a board. The pages' existing handlers do each one.
 
-    Pin and Unpin are one cell, since a port is either pinned to this node or
-    not. Control appears only for a printer: a board running a sketch has no
-    G-code to be driven with.
+    Open is the board's Machine, the one place for it, in the cell Watch had;
+    Watch and Monitor were two ways into two views of one board, and are that
+    one cell now. Flash is the Machine opened at its Flashing card, in the cell
+    Monitor freed, so every cell after it is where hands learned it before the
+    two became one (Control at 7). A printer keeps its own firmware and is
+    never flashed: its Flash holds the cell and cannot be chosen. Pin and Unpin
+    are one cell, since a port is either pinned to this node or not. Control
+    appears only for a printer: a board running a sketch has no G-code to be
+    driven with.
     """
     options = [
-        Option(id="device:watch", label="Watch", action="device:watch"),
+        Option(id="device:open", label="Open", action="device:open"),
         Option(id="device:poll", label="Poll", action="device:poll"),
-        Option(id="device:monitor", label="Monitor", action="device:monitor"),
+        Option(id="device:flash", label="Flash", action="device:flash", enabled=not device.printer),
         Option(id="device:query", label="Query", action="device:query"),
         (
             Option(id="device:unpin", label="Unpin", action="device:unpin")
@@ -982,7 +1059,12 @@ def _device_options(device: Device) -> List[Option]:
         Option(id="device:rescan", label="Rescan", action="device:rescan"),
         # The link itself: reopen it, reboot the board on purpose, or hand the
         # port to another program. Before Control on purpose, so its cell is
-        # the same on a devkit (no Control) and on a printer.
+        # the same on a devkit (no Control) and on a printer. A devkit's port is
+        # opened only when asked: Listen opens it and streams what the board
+        # says (opening it may reset the board), and Probe asks esptool what
+        # the chip is (it resets the board). Both appended, so every cell
+        # before them stays; a printer is polled over its held link, never
+        # streamed or probed, and has neither.
         Option(
             id="device:link",
             label="Link",
@@ -990,7 +1072,15 @@ def _device_options(device: Device) -> List[Option]:
                 Option(id="device:reconnect", label="Reconnect", action="device:reconnect"),
                 Option(id="device:reset", label="Reset", action="device:reset", destructive=True),
                 Option(id="device:release", label="Release", action="device:release"),
-            ],
+            ]
+            + (
+                []
+                if device.printer
+                else [
+                    Option(id="device:listen", label="Listen", action="device:listen"),
+                    Option(id="device:probe", label="Probe", action="device:probe"),
+                ]
+            ),
         ),
     ]
     if device.printer:
@@ -1002,7 +1092,7 @@ def control_options(device: Device) -> List[Option]:
     """The control ring: every allowlisted thing a printer can be told to do.
 
     Each leaf is one line from ``firmware.gcode.CONTROL_CODES``, sent by the
-    monitor page's control chain, which is where the latch is checked. Jog is
+    Machine's control chain, which is where the latch is checked. Jog is
     seated so the keypad is the jog pad: Y+ up, X+ right, Y- down, X- left,
     and Z+ and Z- in the right-hand corners. Stop is E-STOP and is marked
     destructive, since the board halts until it is reset.
@@ -1113,7 +1203,7 @@ CARRIED_BY: Dict[str, Carries] = {
     "fit": Carries.VIEWER,
     "zoom-in": Carries.VIEWER,
     "zoom-out": Carries.VIEWER,
-    # Choosing a piece from the ring is what a click on the Contents list is.
+    # Choosing a piece from the ring is what a click on a row of Site's tree is.
     "select": Carries.VIEWER,
     "explain": Carries.VIEWER,
     # Taking hold of a piece happens under a finger. The commit that follows it
@@ -1126,13 +1216,13 @@ CARRIED_BY: Dict[str, Carries] = {
     "group": Carries.VIEWER,
     # Discarding every edit and rebuilding from the factory.
     "reset": Carries.SERVER,
-    # A board's verbs. The pages already have a handler for each -- the Device
-    # section, the serial overlay and the monitor -- and the ring hands the
-    # choice to that handler. The server is reached through the firmware
-    # routes those handlers already call, never through the intent route.
+    # A board's verbs. The pages already have a handler for each -- Selected's
+    # Device line and the board's Machine -- and the ring hands the choice to
+    # that handler. The server is reached through the firmware routes those
+    # handlers already call, never through the intent route.
     "device": Carries.VIEWER,
     # Driving a printer. Each leaf is one allowlisted G-code line, sent by the
-    # monitor page's control chain, which is where the latch is checked and
+    # Machine's control chain, which is where the latch is checked and
     # where a refusal is shown. The intent route never opens a port.
     "control": Carries.VIEWER,
     # Reading or probing the bed: the page starts the job and shows the record.
@@ -1141,16 +1231,22 @@ CARRIED_BY: Dict[str, Carries] = {
     "print": Carries.VIEWER,
     # Opening, closing, floating what stands in front of the world (panels.js).
     "panel": Carries.VIEWER,
-    # A camera's verbs: this browser's device pinned, live, a frame kept or
-    # looked at, and the gathering's report -- all of it the page's: the pin
-    # and the picture routes are what the page calls.
+    # The Bench's verbs: its buttons, each acting on what the Bench has chosen.
+    # The tasks they start are the firmware routes' (POST /firmware/install,
+    # /cores/install, /libraries/install, /sketches/{name}/compile and /upload,
+    # /esptool/flash, /tasks/{id}/cancel), called by the page, never through
+    # the intent route.
+    "bench": Carries.VIEWER,
+    # A camera's verbs: this browser's device pinned, live, a picture taken and
+    # pinned as a view, and the gathering's report -- all of it the page's: the
+    # pin and the picture routes are what the page calls.
     "camera": Carries.VIEWER,
-    # A picture's verbs that choose, draw, find, size or pin: what is on screen,
-    # or data attached to a host that no site sees.
+    # A picture's verbs that choose, draw, find shapes, size or pin: what is on
+    # screen, or data attached to a host that no site sees.
     "picture": Carries.VIEWER,
     # Those that add, remove or rebuild a root structure change the arrangement,
     # as a reset does: the intent route carries them, calling the functions the
-    # look routes call (apothecary/vision/looks.py's make, drop and rebuild).
+    # view routes call (apothecary/vision/views.py's make, drop and rebuild).
     "picture:make": Carries.SERVER,
     "picture:make-all": Carries.SERVER,
     "picture:drop": Carries.SERVER,
@@ -1165,8 +1261,8 @@ CARRIED_BY: Dict[str, Carries] = {
 def carried_by(action: str) -> Carries:
     """Who carries out this action; ``site:garage`` is looked up as ``site``.
 
-    The longest classified prefix wins, so ``picture:make:look_1:2`` is
-    ``picture:make``'s and ``picture:draw:look_1`` is ``picture``'s.
+    The longest classified prefix wins, so ``picture:make:view_1:2`` is
+    ``picture:make``'s and ``picture:draw:view_1`` is ``picture``'s.
 
     Raises rather than guessing, so an action nobody has classified is an error
     rather than a wedge that does nothing.
@@ -1188,7 +1284,7 @@ __all__ = [
     "CARRIED_BY",
     "CameraSeen",
     "FLOOR_MARK",
-    "LookSeen",
+    "ViewSeen",
     "PictureContext",
     "Place",
     "ShapeSeen",

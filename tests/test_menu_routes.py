@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from ring_helpers import every_action
 
-from apothecary.api import _job_store, _site_store, app
+from apothecary.api import _site_store, app
 from apothecary.menu import CARRIED_BY, Carries, Context, Device, Pointing, resolve
 
 client = TestClient(app)
@@ -21,7 +21,6 @@ SITE = "garage"
 def reset_garage_site():
     """The site store keeps edits between requests, so start every test level."""
     _site_store.reset(SITE)
-    _job_store.reset(SITE)
 
 
 PRINTER = {"port": "/dev/ttyUSB0", "printer": True, "armed": False, "bound": True}
@@ -99,15 +98,18 @@ def test_a_node_with_a_printer_pinned_offers_the_device_ring_with_cells():
     assert device["cell"] == 2, "after Zoom in and Move"
     labels = {c["label"]: c["cell"] for c in device["children"]}
     assert labels == {
-        "Watch": 8,
+        "Open": 8,
         "Poll": 6,
-        "Monitor": 2,
+        "Flash": 2,
         "Query": 4,
         "Unpin": 9,
         "Rescan": 3,
         "Link": 1,
         "Control": 7,
     }
+    # A printer keeps its own firmware: Flash holds Monitor's old cell, not to be chosen.
+    flash = next(c for c in device["children"] if c["id"] == "device:flash")
+    assert flash["enabled"] is False
     control = next(c for c in device["children"] if c["id"] == "control")
     jog = next(c for c in control["children"] if c["label"] == "Jog")
     assert {c["label"]: c["cell"] for c in jog["children"]} == {
@@ -137,7 +139,7 @@ def test_a_device_ring_needs_no_arrangement():
     assert answer.status_code == 200, answer.text
     ring = answer.json()
     assert ring["title"] == "ttyUSB0"
-    assert [o["label"] for o in ring["options"]][:4] == ["Watch", "Poll", "Monitor", "Query"]
+    assert [o["label"] for o in ring["options"]][:4] == ["Open", "Poll", "Flash", "Query"]
 
 
 def test_an_unknown_pointing_is_refused():
@@ -194,7 +196,7 @@ def test_an_address_that_is_not_cells_is_refused():
 
 def test_a_device_verb_is_the_viewer_s_and_touches_no_port():
     """The intent route never opens a port; the page's own handler does the work."""
-    for action in ("device:watch", "device:poll", "control:estop", "control:arm"):
+    for action in ("device:open", "device:poll", "control:estop", "control:arm"):
         answer = client.post(
             "/menu/intent",
             json=chosen(action, targets=["printer_1"], pointing=Pointing.NODE),
@@ -242,12 +244,12 @@ def _every_ring():
     printer = Device(port="/dev/ttyUSB0", printer=True, armed=False, bound=True)
     armed = Device(port="/dev/ttyUSB0", printer=True, armed=True, bound=True)
     board = Device(port="/dev/ttyACM0", printer=False, bound=False)
-    # A camera, pictures and a sized look at the bench: every picture verb is on offer.
-    from apothecary.menu import CameraSeen, LookSeen, PictureContext, Place, ShapeSeen
+    # A camera, pictures and a sized view at the bench: every picture verb is on offer.
+    from apothecary.menu import CameraSeen, PictureContext, Place, ShapeSeen, ViewSeen
 
     cam = CameraSeen(id="bench_cam", label="bench cam")
-    look = LookSeen(
-        id="look_1", picture="a.png", sized=True, kept=True, shapes=[ShapeSeen(index=0)]
+    view = ViewSeen(
+        id="view_1", picture="a.png", sized=True, kept=True, shapes=[ShapeSeen(index=0)]
     )
     told = PictureContext(
         cameras=[cam],
@@ -256,7 +258,7 @@ def _every_ring():
         finders=["plain", "stated"],
         words=["disc", "plate"],
         made=["disc_1"],
-        here=Place(camera=cam, looks=[look, look.model_copy(update={"id": "look_2"})]),
+        here=Place(camera=cam, views=[view, view.model_copy(update={"id": "view_2"})]),
     )
     pictured = [
         resolve(Context(pointing=Pointing.CANVAS), site, picture=told),

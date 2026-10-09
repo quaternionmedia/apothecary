@@ -160,7 +160,7 @@ class Assembly(BaseModel):
         # constructed, and whatever it holds (a board inside a printer) is
         # drawn inside it. Without this a whole site of them -- which is
         # what the parts library is -- cannot render at all, and the viewer's
-        # canvas, contents and generated-OpenSCAD panel all come up empty
+        # canvas, the Site panel's tree and its generated OpenSCAD all come up empty
         # together. A node with a ``base`` keeps it: the part is then the
         # viewer's picture of it and the base is the site render's envelope.
         if self.base is None and self.part_ref is not None:
@@ -232,11 +232,17 @@ Assembly.model_rebuild()
 
 
 class LayoutViolation(BaseModel):
-    """One concrete way a set of sibling Assembly nodes fail to coexist in space."""
+    """One concrete way a set of sibling Assembly nodes fail to coexist in space.
+
+    ``structures`` names the pieces involved; ``paths`` says which they are, as
+    the dotted path from the site to each, one per name and in the same order.
+    A name alone can be any of several pieces -- every printer has a gantry --
+    and a page that marks or selects a problem's piece goes by its path."""
 
     kind: str
     message: str
     structures: List[str] = Field(default_factory=list)
+    paths: List[str] = Field(default_factory=list)
 
 
 class LayoutReport(BaseModel):
@@ -268,13 +274,19 @@ def _penetrates(a: BoundingBox3D, b: BoundingBox3D) -> bool:
     )
 
 
-def check_no_overlaps(nodes: List["Assembly"]) -> List[LayoutViolation]:
+def _path(parent: str, name: str) -> str:
+    return f"{parent}.{name}" if parent else name
+
+
+def check_no_overlaps(nodes: List["Assembly"], parent: str = "") -> List[LayoutViolation]:
     """Pairwise overlap check between every sibling node that carries a footprint.
 
     A node without a ``footprint`` is skipped, not treated as
     non-overlapping by assumption — it simply isn't checked. Nodes that
     merely touch (e.g. one resting on another's surface) are not violations;
-    see :func:`_penetrates`.
+    see :func:`_penetrates`. ``parent`` is the siblings' parent's dotted path
+    from the site ("" for the site's own pieces), so each violation names its
+    pieces by path as well as by name.
     """
     bounded = [(n, n.world_bounds()) for n in nodes]
     bounded = [(n, b) for n, b in bounded if b is not None]
@@ -287,15 +299,18 @@ def check_no_overlaps(nodes: List["Assembly"]) -> List[LayoutViolation]:
                     kind="overlap",
                     message=f"{node_a.name} and {node_b.name} overlap",
                     structures=[node_a.name, node_b.name],
+                    paths=[_path(parent, node_a.name), _path(parent, node_b.name)],
                 )
             )
     return violations
 
 
-def _validate_tree(assembly: "Assembly") -> LayoutReport:
-    violations = list(check_no_overlaps(assembly.children))
+def _validate_tree(assembly: "Assembly", path: str = "") -> LayoutReport:
+    """Every level's siblings checked; ``path`` is ``assembly``'s from the root
+    being validated ("" for the root itself)."""
+    violations = list(check_no_overlaps(assembly.children, path))
     for child in assembly.children:
-        violations.extend(_validate_tree(child).violations)
+        violations.extend(_validate_tree(child, _path(path, child.name)).violations)
     return LayoutReport(violations=violations)
 
 

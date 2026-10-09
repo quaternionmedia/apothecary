@@ -199,6 +199,7 @@ def _simulated_device_env(env: dict) -> dict:
 
     tmp = Path(tempfile.mkdtemp(prefix="apothecary-docs-"))
     env["ARDUINO_CLI"] = str(write_fake_arduino_cli(tmp / "arduino-cli"))
+    env["ESPTOOL"] = "none"
     env["APOTHECARY_TOOLS_DIR"] = str(tmp / "tools")
     env["APOTHECARY_STATE_DIR"] = str(tmp / "state")
     env["APOTHECARY_SERIAL_ENGINE"] = "simulated"

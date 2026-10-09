@@ -1,10 +1,19 @@
 # One screen: the world, and what stands in front of it
 
-*Phases 0-3 have landed: the census counts all three screens, the anchor
-layer and machine badges (`anchors.js`, `machine_marks.js`), the panel
-manager and rail (`panels.js`), and the machine as one module with two hosts
-(`widgets/machine.js`). The pages `apothecary docs generate` writes show
-them as they are. Phases 4 and 5 are open.*
+*Done. Phases 0-3 are this plan's: the anchor layer and machine badges
+(`anchors.js`, `machine_marks.js`), the panel manager and rail
+(`panels.js`), and the machine as one module (`widgets/machine.js`). Phases 4
+and 5 were built by the consolidation plan's Phases 4 and 5
+([consolidation-2026-10-03.md](consolidation-2026-10-03.md)): there is one
+page, the viewer; the firmware page is the **Bench**, a tab of the rail's
+strip, and the printer monitor is each board's **Machine**, in front of the
+world; `/firmware` and `/firmware/monitor?port=` open the viewer with them;
+the plain layouts and their templates are deleted. `uv run apothecary census`
+counts the one page, and `tests/test_census.py` holds its numbers, its
+docstring saying what was retired. Walkthrough pages 11 and 12 and the pages
+`apothecary docs generate` writes show it as it is. The draft record* One
+screen *takes its numbers from `apothecary census` on the governance branch,
+and a person ratifies it.*
 
 ## The end state
 
@@ -74,16 +83,25 @@ Rules that hold throughout:
 
 ## Left open by phases 1-3
 
-- A devkit's *hello* on its badge: the listen result is the firmware page's
-  own state until Phase 4 shares it.
-- A jog sent from the monitor page moving the world's nozzle ahead of the
-  poll when both pages are open (a cross-page event).
-- The machine popup's URL deep link (`/viewer/sites/garage?machine=<port>`).
+- A devkit's *hello* on its badge: done; one model of each board
+  (`boards.js`) holds what its Machine heard, and every drawer reads it.
+- A jog moving the world's nozzle ahead of the poll from another page: there
+  is no other page; a jog from a Machine moves the marks on its own event.
+- The machine popup's URL deep link: done, `?machine=<port>`, kept in the
+  address while a Machine is open.
 - `widgets/machine.js` is one file with sections (status, chart, log,
-  control, bed, print); split it when a host wants one part without the rest.
-- `board_view.js` stays on the monitor page until Phase 5.
+  control, bed, print, flashing); split it when a host wants one part without
+  the rest. Open.
+- `board_view.js`: deleted with the monitor page. Its check that a printer's
+  drawing encloses its board and its build volume is held against the world
+  (`tests/e2e/test_printer_ui.py`).
 
 ## Phase 4 — The bench in front of the world
+
+*Built by the consolidation's Phases 4 and 5: the Bench is a tab of the
+rail's strip, the device cards are each board's Machine, and Device › Link holds
+Listen and Probe on a devkit (identifying is Device › Query). There is no
+plain layout.*
 
 - `widgets/toolchain.js` (install, cores, libraries), `sketches.js`
   (pick, compile, upload, esptool), `tasks.js` (the running task, cancel,
@@ -99,6 +117,13 @@ Rules that hold throughout:
 - Tests: the firmware-page suite runs on both hosts.
 
 ## Phase 5 — One screen
+
+*Built by the consolidation's Phase 5, the plain layouts deleted with their
+templates. The generated docs stay two workflows, both on the one page
+(`tests/e2e/test_docs_fractal_viewer.py`, `test_docs_printer_monitor.py`).
+Re-running the bench checklist on the one screen
+([`2026-09-20-ender-bench.md`](../validation/2026-09-20-ender-bench.md)) is a
+person's, at the bench.*
 
 - `/` and `/viewer/sites/{name}` are the app. `/firmware` and
   `/firmware/monitor` redirect into the world with the right panel open;
@@ -125,11 +150,13 @@ Decided by this plan (change it here, not in the code): the three kinds of
 thing in front of the world; the world is never replaced; every action has
 a cell; the old routes live until Phase 5; the census is the meter.
 
-For a person: whether the plain layouts survive Phase 5 as kiosk views;
-whether the Bench belongs in the world at all or stays its own page (the
-plan says in the world, docked, since a devkit is a thing at a place too);
-the edit to the rad record's Link cell that Phase 4 proposes; the record's
-ratification.
+Decided by the owner (the consolidation plan): the plain layouts do not
+survive as kiosk views, and their addresses redirect into the viewer; the
+Bench is in the world, a tab of the rail's strip.
+
+For a person: the edit to the rad record's Link cell that Phase 4 proposes
+(on a devkit, Listen and Probe after Reconnect, Reset and Release, as built);
+the record's ratification.
 
 ## Not in this plan
 

@@ -1,15 +1,15 @@
-"""A look drawn where it was pinned: the picture as a mat on the bench's top or on
+"""A view drawn where it was pinned: the picture as a mat on the bench's top or on
 the floor beside the site, its shapes as outlines, a place badge over each.
 
 The fixture is a stated description of a picture 1000 by 500 pixels (the one
-tests/test_looks_api.py states), pinned at node ``workbench`` in site ``garage``
-through ``POST /sites/garage/looks`` with the page's own request context, at a
+tests/test_views_api.py states), pinned at node ``workbench`` in site ``garage``
+through ``POST /sites/garage/views`` with the page's own request context, at a
 width of 1800 mm: the bench's top is x 0..1800, y 0..600 at z 780, so the mat is
 centred at (900, 300, 780) and is 900 mm deep. Its three shapes: 0, ``block``,
 under ``printer_1``; 1, ``coin``, in front of every printer; 2, ``bar``, behind
 them. Phase 4 of the pictures plan pins it by a drop instead.
 
-Every look, camera and kept picture a test adds is taken back after it, and the
+Every view, camera and kept picture a test adds is taken back after it, and the
 bench is put back where the site's code has it, so a later test finds the server
 as it would alone.
 """
@@ -50,10 +50,10 @@ SHAPES = [
     },
 ]
 
-# Where a fraction of a drawn look's picture lands on the page, in page pixels.
-PROJECT = """([look, fx, fy]) => {
+# Where a fraction of a drawn view's picture lands on the page, in page pixels.
+PROJECT = """([view, fx, fy]) => {
     const v = window.fractalViewer;
-    const p = window.apothecaryPictures.scenePoint(look, fx, fy);
+    const p = window.apothecaryPictures.scenePoint(view, fx, fy);
     if (!p) return null;
     p.project(v.camera);
     const r = v.canvas.getBoundingClientRect();
@@ -96,16 +96,16 @@ def fixture_picture(picture_folder):
 
 @pytest.fixture
 def leaves_garage_as_found(page, base_url: str):
-    """After the test: garage's looks, cameras and kept pictures it added are taken
+    """After the test: garage's views, cameras and kept pictures it added are taken
     back, and its layout is the code's again."""
     api = page.request
-    looks = {lk["id"] for lk in api.get(f"{base_url}/sites/garage/attached").json()["looks"]}
+    views = {vw["id"] for vw in api.get(f"{base_url}/sites/garage/attached").json()["views"]}
     cameras = {c["id"] for c in api.get(f"{base_url}/cameras").json()}
     pictures = {p["path"] for p in api.get(f"{base_url}/photos/pictures").json()}
     yield
-    for look in api.get(f"{base_url}/sites/garage/attached").json()["looks"]:
-        if look["id"] not in looks:
-            api.delete(f"{base_url}/sites/garage/looks/{look['id']}")
+    for view in api.get(f"{base_url}/sites/garage/attached").json()["views"]:
+        if view["id"] not in views:
+            api.delete(f"{base_url}/sites/garage/views/{view['id']}")
     for camera in api.get(f"{base_url}/cameras").json():
         if camera["id"] not in cameras:
             api.delete(f"{base_url}/cameras/{camera['id']}")
@@ -116,12 +116,17 @@ def leaves_garage_as_found(page, base_url: str):
 
 
 def _pin(page, base_url: str, host: str, picture: str, mm_across: float | None = None) -> dict:
-    body = {"host": host, "picture": picture, "finder": "stated"}
+    """Pin the picture as a view and Find shapes in it with the stated finder."""
+    body = {"host": host, "picture": picture}
     if mm_across:
         body["mm_across"] = mm_across
-    answer = page.request.post(f"{base_url}/sites/garage/looks", data=body)
+    answer = page.request.post(f"{base_url}/sites/garage/views", data=body)
     assert answer.status == 201, answer.text()
-    return answer.json()
+    found = page.request.post(
+        f"{base_url}/sites/garage/views/{answer.json()['id']}/find", data={"finder": "stated"}
+    )
+    assert found.status == 200, found.text()
+    return found.json()
 
 
 def _open_garage(page, base_url: str) -> None:
@@ -135,9 +140,9 @@ def _drawn(page, host: str):
     return next((entry for entry in page.evaluate(STATE) if entry["host"] == host), None)
 
 
-def _at(page, look: str, fx: float, fy: float) -> dict:
-    point = page.evaluate(PROJECT, [look, fx, fy])
-    assert point, f"look {look} is not drawn"
+def _at(page, view: str, fx: float, fy: float) -> dict:
+    point = page.evaluate(PROJECT, [view, fx, fy])
+    assert point, f"view {view} is not drawn"
     return point
 
 
@@ -153,23 +158,23 @@ def _pixel(page, point) -> int:
 
 
 @pytest.mark.e2e
-def test_a_look_at_the_bench_is_a_mat_with_its_outlines(
+def test_a_view_at_the_bench_is_a_mat_with_its_outlines(
     page, base_url: str, fixture_picture, leaves_garage_as_found
 ):
-    """The mat lies on the bench's top at the look's width, one outline per shape; a
+    """The mat lies on the bench's top at the view's width, one outline per shape; a
     click on an outline chooses it, a click on printer_1 standing over one selects
     printer_1, a click on the mat outside the outlines selects the bench and clears
     the choice."""
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
-    look = _pin(page, base_url, "workbench", fixture_picture, mm_across=1800)
+    view = _pin(page, base_url, "workbench", fixture_picture, mm_across=1800)
     _open_garage(page, base_url)
     page.wait_for_function(
         "() => window.apothecaryPictures.state().some((e) => e.host === 'workbench' && e.mat)",
         timeout=5000,
     )
     drawn = _drawn(page, "workbench")
-    assert drawn["look"] == look["id"]
+    assert drawn["view"] == view["id"]
     assert drawn["mat"]["visible"] and drawn["mat"]["sized"]
     assert drawn["mat"]["centre"] == [900, 300, 780]
     assert (drawn["mat"]["width"], drawn["mat"]["depth"]) == (1800, 900)
@@ -180,25 +185,25 @@ def test_a_look_at_the_bench_is_a_mat_with_its_outlines(
     ]
     assert "px=1024" in drawn["texture"]["url"]
     badge = page.locator(".world-badge.place-mark[data-host='workbench']")
-    expect(badge).to_contain_text("look: 3 shapes")
+    expect(badge).to_contain_text("view: 3 shapes")
 
     # From above the bench, a little in front of it.
     page.evaluate(LOOK_DOWN, [900, 300, 780, 2600])
     settled(page)
 
     # An outline chooses its shape, and selects the bench.
-    coin = _at(page, look["id"], *_centre(SHAPES[1]))
+    coin = _at(page, view["id"], *_centre(SHAPES[1]))
     page.mouse.click(coin["x"], coin["y"])
     assert page.evaluate("() => window.fractalViewer.selectedName") == "workbench"
     assert page.evaluate("() => window.apothecaryPictures.chosen()") == {
-        "look": look["id"],
+        "view": view["id"],
         "index": 1,
     }
     expect(page.locator("#selected-body [data-facts='shape']")).to_contain_text("Shape 1: a disc")
     expect(page.locator("#selected-body [data-facts='host']")).to_contain_text(fixture_picture)
 
     # printer_1 stands over the block's outline: the click is the printer's.
-    block = _at(page, look["id"], *_centre(SHAPES[0]))
+    block = _at(page, view["id"], *_centre(SHAPES[0]))
     page.mouse.click(block["x"], block["y"])
     assert page.evaluate("() => window.fractalViewer.selectedName") == "printer_1"
     assert page.evaluate("() => window.apothecaryPictures.chosen()") is None
@@ -206,7 +211,7 @@ def test_a_look_at_the_bench_is_a_mat_with_its_outlines(
     # The mat past the bench's back edge, outside every outline: the bench, no choice.
     page.mouse.click(coin["x"], coin["y"])
     assert page.evaluate("() => window.apothecaryPictures.chosen()") is not None
-    bare = _at(page, look["id"], 0.9, 0.05)
+    bare = _at(page, view["id"], 0.9, 0.05)
     page.mouse.click(bare["x"], bare["y"])
     assert page.evaluate("() => window.fractalViewer.selectedName") == "workbench"
     assert page.evaluate("() => window.apothecaryPictures.chosen()") is None
@@ -224,16 +229,16 @@ def test_a_look_at_the_bench_is_a_mat_with_its_outlines(
 def test_the_mat_shows_the_picture_and_the_floor_is_a_selection(
     page, base_url: str, fixture_picture, leaves_garage_as_found
 ):
-    """A look at the floor lies beside the site; its pixels are the picture's; a
+    """A view at the floor lies beside the site; its pixels are the picture's; a
     click on it selects the floor, and its badge is not dimmed by it."""
-    look = _pin(page, base_url, "", fixture_picture, mm_across=1000)
+    view = _pin(page, base_url, "", fixture_picture, mm_across=1000)
     _open_garage(page, base_url)
     page.wait_for_function(
         "() => window.apothecaryPictures.state().some((e) => e.host === '' && e.mat)",
         timeout=5000,
     )
     drawn = _drawn(page, "")
-    anchor = look["anchor"]
+    anchor = view["anchor"]
     assert drawn["mat"]["centre"] == [anchor[0] + 500, anchor[1], 0]
     page.wait_for_function(
         "() => window.apothecaryPictures.state().find((e) => e.host === '').texture.loaded",
@@ -244,8 +249,8 @@ def test_the_mat_shows_the_picture_and_the_floor_is_a_selection(
     settled(page, frames=OCCLUSION_TESTED)
 
     # The dark rectangle drawn at the picture's top left, and its light background.
-    dark = _pixel(page, _at(page, look["id"], 0.15, 0.2))
-    light = _pixel(page, _at(page, look["id"], 0.8, 0.6))
+    dark = _pixel(page, _at(page, view["id"], 0.15, 0.2))
+    light = _pixel(page, _at(page, view["id"], 0.8, 0.6))
     assert dark < 90 < 180 < light, (dark, light)
 
     badge = page.locator(".world-badge.place-mark[data-host='']")
@@ -253,14 +258,14 @@ def test_the_mat_shows_the_picture_and_the_floor_is_a_selection(
     expect(badge).to_contain_text("floor")
     expect(badge).not_to_have_class("behind")
 
-    bare = _at(page, look["id"], 0.8, 0.6)
+    bare = _at(page, view["id"], 0.8, 0.6)
     page.mouse.click(bare["x"], bare["y"])
     assert page.evaluate("() => window.fractalViewer.selectedName") == "@floor"
     expect(page.locator("#selected-body")).to_contain_text("the floor")
     expect(page.locator("#selected-body [data-facts='floor']")).to_contain_text(fixture_picture)
 
     # An outline on the floor's mat chooses its shape, the floor selected.
-    coin = _at(page, look["id"], *_centre(SHAPES[1]))
+    coin = _at(page, view["id"], *_centre(SHAPES[1]))
     page.mouse.click(coin["x"], coin["y"])
     assert page.evaluate("() => window.fractalViewer.selectedName") == "@floor"
     assert page.evaluate("() => window.apothecaryPictures.chosen()")["index"] == 1
@@ -276,8 +281,8 @@ def test_the_mat_follows_its_bench_when_the_gizmo_moves_it(
     page, base_url: str, fixture_picture, leaves_garage_as_found
 ):
     """Moved with the gizmo and let go, the bench carries its mat, its outlines and
-    its badge: the page asks where the look lies now, once."""
-    look = _pin(page, base_url, "workbench", fixture_picture, mm_across=1800)
+    its badge: the page asks where the view lies now, once."""
+    view = _pin(page, base_url, "workbench", fixture_picture, mm_across=1800)
     _open_garage(page, base_url)
     page.wait_for_function(
         "() => window.apothecaryPictures.state().some((e) => e.host === 'workbench' && e.mat)",
@@ -309,15 +314,18 @@ def test_the_mat_follows_its_bench_when_the_gizmo_moves_it(
     settled(page)
     after = page.evaluate("() => window.fractalViewer.anchors.at('place:workbench')")
     assert after["x"] > before["x"]
-    point = page.evaluate(PROJECT, [look["id"], 0.5, 0.5])
-    assert abs(point["x"] - after["x"]) < 2  # the badge stands over the mat's middle
+    point = page.evaluate(PROJECT, [view["id"], 0.5, 0.5])
+    # An anchor's point is the canvas's (anchors.js), PROJECT's the page's: the
+    # canvas starts where Site's rail ends.
+    left = page.evaluate("() => window.fractalViewer.canvas.getBoundingClientRect().left")
+    assert abs(point["x"] - left - after["x"]) < 2  # the badge stands over the mat's middle
     assert len(asked) == 1
 
 
 @pytest.mark.e2e
-def test_a_forgotten_pictures_look_leaves_the_world(page, base_url: str, leaves_garage_as_found):
+def test_a_forgotten_pictures_view_leaves_the_world(page, base_url: str, leaves_garage_as_found):
     """A picture kept from the browser and pinned at the bench is drawn there;
-    forgotten from Kept, its look is unpinned and its mat goes."""
+    forgotten from its row in Pictures, its view is unpinned and its mat goes."""
     kept = page.request.post(
         f"{base_url}/photos/pictures?name=forget_me.png&kept=upload&site=garage&host=workbench",
         data=_picture(),
@@ -325,7 +333,7 @@ def test_a_forgotten_pictures_look_leaves_the_world(page, base_url: str, leaves_
     )
     assert kept.status == 201, kept.text()
     kept = kept.json()
-    assert kept["look"], kept
+    assert kept["view"], kept
     _open_garage(page, base_url)
     page.wait_for_function(
         "() => window.apothecaryPictures.state().some((e) => e.host === 'workbench' && e.mat)",
@@ -334,9 +342,9 @@ def test_a_forgotten_pictures_look_leaves_the_world(page, base_url: str, leaves_
     badge = page.locator(".world-badge.place-mark[data-host='workbench']")
     expect(badge).to_be_visible()
 
-    page.evaluate("() => window.apothecaryPanels.open('kept')")
-    panel = page.locator(".panel[data-panel='kept']")
-    card = panel.locator(f".kept-forget[data-path='{kept['path']}']")
+    page.evaluate("() => window.apothecaryPanels.open('pictures')")
+    panel = page.locator(".panel[data-panel='pictures']")
+    card = panel.locator(f".pictures-forget[data-path='{kept['path']}']")
     expect(card).to_be_visible(timeout=5000)
     card.click()
     page.wait_for_function(
@@ -344,5 +352,5 @@ def test_a_forgotten_pictures_look_leaves_the_world(page, base_url: str, leaves_
         timeout=5000,
     )
     expect(badge).to_have_count(0)
-    looks = page.request.get(f"{base_url}/sites/garage/attached").json()["looks"]
-    assert not [lk for lk in looks if lk["picture"] == kept["path"]]
+    views = page.request.get(f"{base_url}/sites/garage/attached").json()["views"]
+    assert not [vw for vw in views if vw["picture"] == kept["path"]]

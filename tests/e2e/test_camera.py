@@ -4,12 +4,13 @@ is to record its own surroundings.
 Runs against the shared test server (its picture folder is a temp folder the
 fixture names) in a browser of its own, launched with Chromium's fake camera
 (the `camera_page` fixture in conftest) so there is a camera to pin, to see
-live and to keep a frame from on every machine, and no real camera is ever
+live and to take a picture with on every machine, and no real camera is ever
 opened by a test. The camera's verbs are its host's ring's (Camera › Pin here,
-Live, Look, Keep, Unpin); tests/e2e/test_the_loop.py takes a look with them.
+Live, Take picture, Unpin); tests/e2e/test_the_loop.py takes pictures with them.
 
 What the browser put here, it can take back: the bench walkthrough
-(test_docs_bench_walkthrough.py) is that check.
+(test_docs_bench_walkthrough.py) is that check. The gathering is a section of
+Pictures until gathering leaves core.
 """
 
 from __future__ import annotations
@@ -67,9 +68,10 @@ def test_a_camera_is_pinned_at_the_bench_and_records_its_surroundings(
     camera_page, base_url: str, picture_folder, leaves_no_trace
 ):
     """From the bench's own ring: the browser's camera pinned there (a badge and a
-    frustum, kept for every browser), shown live on the bench's mat, a frame kept on
-    this machine under its camera's id, and unpinned again -- no panel, no site
-    switched."""
+    frustum, kept for every browser), shown live on the bench's mat, a frame taken
+    and pinned at the bench as a view under its camera's id, the view unpinned with
+    its picture left in the folder, and the camera unpinned again -- no panel, no
+    site switched."""
     page = camera_page
     before = leaves_no_trace
     errors = []
@@ -101,13 +103,18 @@ def test_a_camera_is_pinned_at_the_bench_and_records_its_surroundings(
     press("Camera")
     press("Pin here")
     press(page.evaluate(WEDGES)["8"])
-    expect(status).to_contain_text("pinned at workbench", timeout=5000)
+    expect(status).to_contain_text(
+        "pinned at workbench: Camera › Take picture keeps a frame and pins it here as a view",
+        timeout=5000,
+    )
     expect(status).not_to_have_class(re.compile(r"\berror\b"))
     expect(page.locator(".world-badge.place-mark.has-camera")).to_be_visible(timeout=5000)
     assert page.evaluate(FRUSTA) == [True]
     cameras = page.request.get(f"{base_url}/cameras?site=garage").json()
     assert [(c["id"], c["path"]) for c in cameras] == [(mine["id"], "workbench")]
-    assert page.locator(".panel[data-panel='camera']").count() == 0  # never opened
+    # Pictures is a tab of the rail's strip, never shown, so never filled.
+    assert page.evaluate("() => window.apothecaryPanels.state('pictures').shown") is False
+    assert page.locator("#pictures-list").count() == 0
 
     # Choosing pieces asks nothing about cameras: the page already knows.
     asked = []
@@ -145,11 +152,14 @@ def test_a_camera_is_pinned_at_the_bench_and_records_its_surroundings(
     page.locator("#contents-list .contents-item[data-path='printer_1']").click()
     page.wait_for_function("() => window.apothecaryPictureVerbs.live() === null", timeout=3000)
 
-    # Its own surroundings: a frame kept on this machine, named for its camera.
+    # Its own surroundings: a frame taken, named for its camera, pinned at the bench
+    # as a view; there is no Keep beside Take picture.
     ring_on("workbench")
     press("Camera")
-    press("Keep")
-    expect(status).to_contain_text("kept captures/", timeout=10000)
+    labels = page.evaluate(WEDGES).values()
+    assert "Take picture" in labels and "Keep" not in labels
+    press("Take picture")
+    expect(status).to_contain_text("pinned at workbench as a view", timeout=10000)
     kept = [
         p
         for p in page.request.get(f"{base_url}/photos/pictures").json()
@@ -157,7 +167,16 @@ def test_a_camera_is_pinned_at_the_bench_and_records_its_surroundings(
     ]
     assert len(kept) == 1 and kept[0]["name"].endswith(f"-{mine['id'][:60]}.png")
     assert (picture_folder / kept[0]["path"]).is_file()
-    assert page.request.get(f"{base_url}/sites/garage/attached").json()["looks"] == []
+    (view,) = page.request.get(f"{base_url}/sites/garage/attached").json()["views"]
+    assert view["picture"] == kept[0]["path"] and view["camera"] == mine["id"]
+
+    # Unpinned, the view goes and its picture stays in the folder.
+    ring_on("workbench")
+    press("Picture")
+    press("Unpin")
+    expect(status).to_contain_text("the picture stays in the folder", timeout=5000)
+    assert page.request.get(f"{base_url}/sites/garage/attached").json()["views"] == []
+    assert (picture_folder / kept[0]["path"]).is_file()
 
     # Unpinned from the same ring, the camera leaves the world.
     ring_on("workbench")
@@ -175,7 +194,7 @@ def test_a_place_badge_selects_its_host_and_opens_nothing(
 ):
     """A place badge is read, not operated: a click selects the host its camera is
     pinned at, whether the camera is this browser's or another's, on a page whose
-    camera panel was never mounted, and mounts nothing and goes live nowhere."""
+    Pictures panel was never mounted, and mounts nothing and goes live nowhere."""
     page = camera_page
     page.goto(f"{base_url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
@@ -208,7 +227,7 @@ def test_a_place_badge_selects_its_host_and_opens_nothing(
         "another browser's camera: a picture is taken here with one of this browser's "
         "cameras pinned in its place (⌗ Camera › Pin here)"
     )
-    assert page.evaluate("() => window.apothecaryCamera === undefined")  # never mounted
+    assert page.evaluate("() => window.apothecaryPictureList === undefined")  # never mounted
     expect(status).not_to_have_class(re.compile(r"\berror\b"))
 
 
@@ -224,8 +243,20 @@ def test_gather_says_what_it_refused_and_what_it_set_aside(
     (picture_folder / "broken.png").write_bytes(b"not a picture at all")
     page.goto(f"{base_url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
-    page.evaluate("() => window.apothecaryPanels.open('camera')")
-    panel = page.locator(".panel[data-panel='camera']")
+    # The canvas ring's Pictures › Gather opens Pictures with its gathering section
+    # unfolded and gathers what is ticked: nothing yet, which it refuses.
+    page.locator("#viewer-canvas").click(button="right", position={"x": 8, "y": 8})
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    page.keyboard.press(_cell(page, "Pictures"))
+    page.wait_for_function(
+        "() => [...document.querySelectorAll('#ring-overlay .wedge')]"
+        ".some((w) => w.getAttribute('aria-label') === 'Gather')",
+        timeout=5000,
+    )
+    page.keyboard.press(_cell(page, "Gather"))
+    panel = page.locator(".panel[data-panel='pictures']")
+    expect(panel.locator("#pictures-gather")).to_have_attribute("open", "", timeout=3000)
+    expect(page.locator("#status")).to_contain_text("tick at least two pictures to gather")
     expect(panel.locator("#pic-list .pic")).to_have_count(len(leaves_no_trace) + 42, timeout=5000)
 
     panel.locator("#pic-all").check()

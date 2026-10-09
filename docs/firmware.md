@@ -2,10 +2,11 @@
 
 Parts are not only geometry. A footpedal has an Arduino in it; an RC snowplow
 has an ESP32; the bench has a 3D printer whose mainboard already runs Marlin.
-`apothecary firmware` and the `/firmware` page install the toolchain, keep
-sketches next to the parts they belong to, compile and upload them, say what
-each connected board is running, and, for a board Apothecary does not
-program, [monitor it](#printers-boards-that-already-run-a-g-code-firmware)
+`apothecary firmware` and, in the viewer, the [Bench](#in-the-viewer-the-bench)
+and each board's [Machine](#in-the-viewer-one-machine-per-board) install the
+toolchain, keep sketches next to the parts they belong to, compile and upload
+them, say what each connected board is running, and, for a board Apothecary
+does not program, [monitor it](#printers-boards-that-already-run-a-g-code-firmware)
 and let it drive its node in the viewer.
 
 Apothecary owns only the control plane. Building, flashing and talking to
@@ -75,7 +76,7 @@ An optional `firmware.json` beside the `.ino` supplies defaults:
 | `fqbn` | default board (`vendor:arch:board[:option=value,…]`); `--fqbn` or the GUI overrides it |
 | `cores` | cores the sketch needs (informational; install with `firmware install --core`) |
 | `libraries` | libraries to install, `Name` or `Name@Version` |
-| `note` | shown in the GUI's build panel |
+| `note` | shown under the sketch in the Bench and in a board's Flashing card |
 
 A sketch that carries an arduino-cli *profile* (`sketch.yaml`, `sketch.json`)
 is not built: a profile names where arduino-cli fetches a platform from, and
@@ -98,9 +99,29 @@ apothecary firmware flash-bin /dev/ttyUSB0 0x0:build/firmware/esp32_blink/esp32_
 The port is auto-detected only when exactly one board is connected; with
 several it refuses to guess.
 
+### In the viewer: the Bench
+
+The **Bench** is the same toolchain in front of the world: a tab of the
+viewer's rail (the ring's Panels › Bench; `/firmware` opens the viewer with
+it). It holds arduino-cli and esptool as installed,
+with **Install** or **Update** (*force* downloads it again); the suggested
+cores, each with **Install**; libraries typed and installed; the sketches
+under `parts/`, each with the board its `firmware.json` names, **Compile**d,
+or compiled and uploaded to a detected port after asking (**Compile &
+upload**); **Raw flash** with esptool, one `offset path` a line, after asking;
+and the task log -- the running task's output with **Cancel**, and the recent
+tasks, each row showing its output again. Each is a task (`POST
+/firmware/install`, `/cores/install`, `/libraries/install`,
+`/sketches/{name}/compile` and `/upload`, `/esptool/flash`), and each verb is
+a cell of Panels › Bench, acting on what the Bench has chosen. Its body is
+filled the first time its tab is shown, so a page that never shows it asks
+nothing of the toolchain. A board's own flashing is in its Machine
+([below](#in-the-viewer-one-machine-per-board)); the Bench is for any sketch
+and any port.
+
 ## Knowing what a board is running
 
-`apothecary firmware devices` (and the Devices panel on `/firmware`) describe
+`apothecary firmware devices` (and each board's Machine in the viewer) describe
 each connected board from four independent sources:
 
 | View | Source | What it tells you |
@@ -171,8 +192,8 @@ The first open after a board is plugged in does reset it.
 **One holder per port.** Streaming a printer through `arduino-cli monitor`,
 probing it with esptool or listening for a hello banner opens the port
 through another process, evicts the held link and may reset the board, so
-the viewer polls a printer instead of streaming it, and a printer's card on
-`/firmware` offers only Poll and Monitor. Identifying or polling a port
+the viewer polls a printer instead of streaming it, and a printer's Machine
+offers Poll and no Listen, Probe or flashing. Identifying or polling a port
 closes any monitor on it. Uploading to a port releases only that port's
 link. `POST /firmware/printers/release` drops the link when another program
 (a slicer's USB print, OctoPrint) needs the port.
@@ -182,27 +203,70 @@ link. `POST /firmware/printers/release` drops the link when another program
 Every printer in the garage carries a `mainboard` node inside its base
 (`printer_1.frame_system.mainboard`). Pin the real printer's port there
 (`PUT /sites/{name}/nodes/{path}/device` with `{"identity": "/dev/ttyUSB1"}`,
-or the viewer's Device section) and every poll writes the printer's `state`
+or Pin in the viewer's Selected) and every poll writes the printer's `state`
 (`offline` when a poll fails) into the `status` of **the nearest ancestor
 that carries one**: the board has none, the printer above it does, so the
 printer's mesh recolours with nobody editing it. A poll's `synced` list names
 the node it drove and, when that differs from the pin, `via` names the board.
 Nodes with no status anywhere up their path are left alone, and a hand-set
 `maintenance` is never overridden by a poll. `GET /sites/{name}/devices`
-returns the last poll on each binding (`printer_status`) and never opens a
-port itself.
+returns the last poll on each binding (`printer_status`) and the ports whose
+link is held (`printers`), and never opens a port itself. A pin talks to no
+printer; the viewer polls a printer whose link is held once as it pins it, so
+the node follows from then.
 
 A pin stores the board's own identity (its MAC, else its USB bridge's serial
 number, else the port), so it still holds when the kernel numbers the port
 differently after a replug. A pin by a path that resolves to the same device
 (`/dev/serial/by-id/…`, a udev name) matches too.
 
-### In the viewer and on the monitor
+### In the viewer: one Machine per board
 
-The viewer's Device section and ⌨ Serial log, the badge a pinned board wears
-in the 3D view and the machine popup it opens, and the focused monitor at
-`/firmware/monitor?port=…` (one module, `apothecary/static/widgets/machine.js`)
-are views over these routes. `apothecary docs generate` writes them step by
+A pinned board has one surface in the viewer, its **Machine**
+(`apothecary/static/widgets/machine.js`): a popup tethered to the board's
+badge, which docks into the rail's tab strip. A printer's Machine holds its
+state cards, temperature chart, link verbs, the control latch and pad, the bed
+reading and the print from here; a devkit's holds its port and board, the
+sketch it should run against the sketch it was heard saying (its
+`apothecary <name>: hello` banner), what changed since it was flashed, and
+its **Flashing** card. Both carry the board's **one log**: a
+printer's comms log, with the one box that asks it for a report code (poll
+traffic hidden unless asked for), or a devkit's serial output. A refusal is
+said in the log and in the status bar.
+
+A devkit's port is opened only when asked. Opening its Machine shows what is
+known of it and opens no port; **Listen** streams what the board says into
+the log, and says that opening the port may reset the board; **Release**
+closes it again. **Probe** asks esptool for the chip, its MAC and its flash
+size, which resets the board. **Identify** listens a few seconds for the
+hello and, pressed with none heard, asks `M115`, so a board pinned before it
+was asked can turn out to be a printer; a printer's Identify asks `M115`.
+
+The Flashing card is the Bench's form and task log for this one port: the
+sketch it should run to start with (the last one flashed to it from here,
+else the one its node is bound by), the board's FQBN, **Compile**, and
+**Compile & upload** after asking, the task's output in the card, then
+Identify's listen for the hello -- never its `M115`, which is a person's to
+press for. A printer keeps its own firmware and has no Flashing card.
+
+Selected's Device section is one line for a pinned board -- its port and what
+it is doing -- with **Open** (its Machine) and **Unpin**; for a piece with
+nothing pinned, the detected ports to pin, Query (`M115` without pinning) and
+a box to pin by typed identity. The badge over a board in the world opens its
+Machine too.
+
+Every drawer of a board -- its badge in the world, its badge in Site's tree,
+Selected's line and its Machine -- reads one model of it
+(`apothecary/static/boards.js`), which polls a printer at the interval its
+Machine says, and only while its Machine is open with auto-poll on: one
+poller per board, whatever draws it. The model scans for boards when a site
+loads, when **Rescan** asks, and by itself when a board it watches goes quiet,
+so a replugged board is found without a reload; it never scans on a timer.
+
+`/firmware/monitor?port=…` opens the viewer on the site the port is pinned
+in with its Machine open and tethered there, or, for a port pinned nowhere,
+on the default site with its Machine floating over the world; the address carries `?machine=` while a Machine is open, so a
+reload opens it again. `apothecary docs generate` writes all of it step by
 step against the simulated printer into
 [`generated/printer-monitor/printer-monitor.md`](generated/printer-monitor/printer-monitor.md);
 [walkthrough 12](../walkthrough/12-the-bench-as-it-is.md) shows the boards
@@ -211,15 +275,23 @@ drawn where they sit.
 Every device verb is also on the ring (right-click a piece, or `m`), whose
 nine cells are numbered as a numeric keypad, so the digits pressed to reach
 an option are its address; each device button shows its address in its
-tooltip. `POST /menu/resolve` seats the options (`apothecary/menu.py`);
-`POST /menu/intent` receives the choice. A control verb from the ring goes
-through the same latch, allowlist and confirms as the button it replaces; the
-ring never opens a port.
+tooltip. Device holds Open (8), Poll (6), Flash (2), Query (4), Unpin (9),
+Rescan (3), Link (1) and, on a printer, Control (7): Open is the board's
+Machine and Flash opens it at its Flashing card -- on a printer the Flash
+cell holds its place and cannot be chosen -- and a devkit's Link ends with
+Listen and Probe. A board's verbs from the ring -- Poll, Query, Flash, the
+link's, Control's, the bed's, the print's -- go to its Machine, opened for it
+when it is not. Inside a Machine the ring is its device ring, on its port,
+and the Machine's buttons wear that ring's addresses. `POST /menu/resolve`
+seats the options
+(`apothecary/menu.py`); `POST /menu/intent` receives the choice. A control
+verb from the ring goes through the same latch, allowlist and confirms as the
+button it replaces; the ring never opens a port.
 
 ### Control, behind a latch
 
 Disarmed, the default, nothing can heat or move the machine: the API refuses
-control lines with `409`. The monitor's **⚙ Control** arms a per-port latch
+control lines with `409`. A printer's Machine's **⚙ Control** arms a per-port latch
 held on the server; it lapses after five minutes without a command (each
 accepted command renews it) and is dropped by a **Release** or a lost link.
 **E-STOP** (`M112`) is always accepted, latch or not; the board halts until
@@ -254,7 +326,7 @@ port, during which polls answer from the last poll, queries and control lines
 get `409`, and E-STOP still goes through. Readings are kept under
 `~/.apothecary/leveling/` and drawn as a heatmap with the range, the tilt
 (a least-squares plane) and each corner against the mean, and as a relief
-over the bed in the board view. The corner buttons move the nozzle to paper
+over the printer's bed in the world. The corner buttons move the nozzle to paper
 height at each corner and are controls. `firmware.gcode.parse_meshes` reads
 Marlin's printed grid and falls back to the `G29 W` points an `M503` prints.
 
@@ -270,10 +342,33 @@ or answered with an error or a resend, ends the print. While it prints,
 heaters, fan and break-wait stay available; motion, SD, homing, the bed and
 release, reconnect, reset or upload on that port are refused. **Cancel** and
 a failed line send the safe-off (`M104 S0`, `M140 S0`, `M107`, `M84`); E-STOP
-ends the job with nothing more sent. Every print is recorded under
-`~/.apothecary/prints/records/` with its outcome. It is not a queue, a
-slicer or a webcam; the *G-code printer seam* record's sixth decision draws
-that line.
+ends the job with nothing more sent. It is not a queue, a slicer or a
+webcam; the *G-code printer seam* record's sixth decision draws that line.
+
+### A print is a job
+
+Every print started from the card is a *job* (`apothecary/jobs.py`): one
+operation a machine performs on a part. The job records its kind (`print`),
+the printer (its port, the board's own identity, the node it is pinned to),
+the site, the part or piece it makes when one is chosen on the card (the
+**makes** drop-down lists the parts and pieces of the site the printer is
+pinned in), the file it ran (name, size, SHA-256), when it started and
+finished, and how it ended -- done, cancelled or failed, with the reason. A
+running job is what marks the printer's node `printing`, from the moment it
+starts; a hand-set `maintenance` is left alone. Jobs are kept under
+`~/.apothecary/jobs/`, this account's alone.
+
+The card's history is the printer's jobs (`GET /jobs?machine=PORT&kind=print`),
+each with its JSON (`GET /jobs/{id}`, with the tail of what the firmware
+said), and the viewer's **Site** lists the jobs of the site's machines, a row
+opening its machine. `GET /jobs/choices?machine=PORT` says what a job there
+would record and which parts it can name. The print records kept before jobs
+(`~/.apothecary/prints/records/`) are carried over as print jobs the first
+time jobs are read, and left where they were.
+
+A kind of job belongs to a kind of machine: a printer offers `print`
+(`jobs.PRINT`), and a mill or a laser would register its own operation with
+`jobs.register` and start its jobs from its own card in the same way.
 
 ## Serial engines
 
@@ -335,7 +430,10 @@ The G-code tests replay a transcript captured from a real Marlin board. Every
 browser-test server runs the scripted `arduino-cli` and the simulated printer,
 with its firmware state in a folder of its own, so no test opens a real port
 or edits what is pinned in `~/.apothecary`. `tests/e2e/test_printer_ui.py`
-holds the viewer and the monitor to timing bounds.
+holds the viewer and a printer's Machine to timing bounds, and the printer as
+the world draws it to enclosing its board and its build volume;
+`tests/e2e/test_bench.py` drives the Bench, and `tests/e2e/test_one_machine.py`
+a board's Machine, its flashing and its port opened only by Listen.
 [`validation/2026-09-20-ender-bench.md`](validation/2026-09-20-ender-bench.md)
 is the seam against a real Ender mainboard, with a checklist for what needs
 control armed.

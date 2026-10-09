@@ -59,11 +59,14 @@ control is deleted.
   markup is the meter.
 - The drawing library's own listeners (turning and sliding the view) are not in
   this count.
-- It is one page at a time, plus the widget modules the page imports and the
-  marks modules it imports by name (`MARKS`: what the world wears -- a
-  machine's marks, a picture's). `ring.js`, `panels.js` and `anchors.js` stay
-  off the meter as chrome with their own tests. The command line, direct
-  requests and the other pages are not in the number.
+- It is one page, the viewer -- the only page there is since the firmware
+  page and the printer monitor became the Bench and a board's Machine in front
+  of the world (the consolidation plan's Phase 5) -- plus the widget modules it
+  imports and the marks modules it imports by name (`MARKS`: what the world
+  wears -- a machine's marks, a picture's -- and the boards' model behind them).
+  `ring.js`, `panels.js` and `anchors.js` stay off the meter as chrome with
+  their own tests; `board_text.js` writes text and listens to nothing. The command line and
+  direct requests are not in the number.
 - It refuses when it finds nothing, because a page it failed to read and a page
   with no controls must not produce the same answer.
 """
@@ -77,9 +80,11 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 TEMPLATES = Path(__file__).resolve().parents[1] / "templates"
 VIEWER = TEMPLATES / "fractal_viewer.html.j2"
-MONITOR = TEMPLATES / "monitor.html.j2"
-FIRMWARE = TEMPLATES / "firmware.html.j2"
-PAGES = (VIEWER, MONITOR, FIRMWARE)
+# The pages there are to count: one, the viewer. The firmware page and the printer
+# monitor were pages of their own until the consolidation plan's Phase 5 made them
+# the Bench and a board's Machine, in front of the world; their addresses lead
+# there, and their templates are gone.
+PAGES = (VIEWER,)
 
 # --- what kind of surface -------------------------------------------------
 WIDGET = "widget"
@@ -121,12 +126,6 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "load-btn": (WIDGET, WHAT_YOU_SEE, "a button that loads the chosen arrangement"),
     "zoom-out-btn": (WIDGET, WHAT_YOU_SEE, "a button that steps back out"),
     "snap-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box for snapping to a grid"),
-    "job-form": (WIDGET, WHAT_IS_THERE, "a form for making a job"),
-    "job-name": (WIDGET, WHAT_IS_THERE, "a box for the name of a new job"),
-    "job-x": (WIDGET, WHAT_IS_THERE, "a box for where a new job goes, across"),
-    "job-y": (WIDGET, WHAT_IS_THERE, "a box for where a new job goes, along"),
-    "job-z": (WIDGET, WHAT_IS_THERE, "a box for where a new job goes, up"),
-    "job-form:submit": (WIDGET, WHAT_IS_THERE, "the button that makes the job"),
     "zoom-in-btn": (WIDGET, WHAT_YOU_SEE, "a button that goes into the chosen piece"),
     "status-select": (WIDGET, WHAT_IS_THERE, "a drop-down for the state of a piece"),
     "pos-x": (WIDGET, WHAT_IS_THERE, "a box for typing where a piece is, across"),
@@ -134,9 +133,6 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "pos-z": (WIDGET, WHAT_IS_THERE, "a box for typing where a piece is, up"),
     "part-regenerate-btn": (WIDGET, WHAT_IS_THERE, "a button that rebuilds a piece"),
     "part-scad-download": (WIDGET, NOTHING, "a link that downloads the piece's recipe"),
-    "job-printer-select": (WIDGET, WHAT_IS_THERE, "a drop-down of machines to give a job to"),
-    "job-assign-btn": (WIDGET, WHAT_IS_THERE, "a button that gives a job to a machine"),
-    "job-complete-btn": (WIDGET, WHAT_IS_THERE, "a button that finishes a job"),
     # The staged numbers of a piece: changed on the sliders, then kept or not.
     "apply-btn": (WIDGET, WHAT_IS_THERE, "a button that rebuilds a piece with its staged numbers"),
     "revert-btn": (WIDGET, WHAT_YOU_SEE, "a button that puts the staged numbers back"),
@@ -144,32 +140,11 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "detail-mode": (WIDGET, WHAT_YOU_SEE, "a drop-down for how much of each subassembly to draw"),
     "overlay-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box that outlines each subassembly's extent"),
     "detail-select": (WIDGET, WHAT_YOU_SEE, "the same drop-down, for the chosen piece only"),
-    # A board's serial log, floated over the view.
-    "serial-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box that floats a board's serial log"),
-    "serial-port": (WIDGET, WHAT_YOU_SEE, "a drop-down of connected boards"),
-    "serial-baud": (WIDGET, WHAT_YOU_SEE, "a drop-down of speeds to listen at"),
-    "serial-refresh": (WIDGET, WHAT_YOU_SEE, "a button that looks for boards again"),
-    "serial-clear": (WIDGET, WHAT_YOU_SEE, "a button that empties the log"),
-    "serial-close": (WIDGET, WHAT_YOU_SEE, "a button that puts the log away"),
-    "firmware-link": (WIDGET, NOTHING, "a link to the firmware page"),
-    "firmware-page-link": (WIDGET, NOTHING, "the same link, offered when no board is found"),
-    "monitor-link": (WIDGET, NOTHING, "a link to the printer monitor page"),
-    # The serial log's second row: identify the board, open its monitor, and
-    # ask it for a report by code.
-    "serial-identify": (WIDGET, WHAT_YOU_SEE, "a button that asks a board what it is"),
-    "serial-monitor": (WIDGET, NOTHING, "a link to the monitor for the board being watched"),
-    "serial-query-row": (WIDGET, WHAT_YOU_SEE, "a form for asking a printer for a report"),
-    "serial-query": (WIDGET, WHAT_YOU_SEE, "a box for the report code to ask for"),
-    "serial-query-row:submit": (WIDGET, WHAT_YOU_SEE, "the button that asks for the report"),
-    # Looking for boards again on a schedule.
-    "devices-auto": (WIDGET, WHAT_YOU_SEE, "a tick-box that looks for boards on a schedule"),
-    "devices-interval": (WIDGET, WHAT_YOU_SEE, "a drop-down for how often to look"),
-    # The Device section of the chosen piece: what board it is pinned to, and
-    # what can be done with that board. Drawn afresh each time the piece
-    # changes, so these are found by class rather than id.
-    "dev-watch": (WIDGET, WHAT_YOU_SEE, "a button that floats the pinned board's serial log"),
-    "dev-poll": (WIDGET, WHAT_YOU_SEE, "a button that polls the pinned printer once"),
-    "dev-monitor": (WIDGET, NOTHING, "a link to the pinned printer's monitor"),
+    # The Device section of the chosen piece: one line, the board pinned to it
+    # and what it is doing, with Open (its Machine) and the pin's take-back; or,
+    # with nothing pinned, the boards it can be pinned to. Drawn afresh each
+    # time the piece changes, so these are found by class rather than id.
+    "dev-open": (WIDGET, WHAT_YOU_SEE, "a button that opens the pinned board's Machine"),
     "dev-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins the board from the piece"),
     "dev-via": (WIDGET, WHAT_YOU_SEE, "a link to the piece inside that holds the board"),
     "dev-rescan": (WIDGET, WHAT_YOU_SEE, "a button that looks for boards again"),
@@ -186,10 +161,9 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "tree-caret": (LIST, WHAT_YOU_SEE, "the arrow that opens a branch of the list"),
     "contents-item": (LIST, WHAT_YOU_SEE, "a row of the list of pieces"),
     "breadcrumb": (LIST, WHAT_YOU_SEE, "the trail back to where you came from"),
-    # ---- the monitor page, templates/monitor.html.j2 ----------------------
-    # One printer, watched closely. The header: which port, how often to poll,
-    # and the link itself.
-    "port": (WIDGET, WHAT_YOU_SEE, "a drop-down of printer ports"),
+    # ---- a board's Machine, apothecary/static/widgets/machine.js ------------
+    # One board, close up, as the monitor page had it. The header: how often to
+    # poll, and the link itself.
     "auto": (WIDGET, WHAT_YOU_SEE, "a tick-box that polls on a schedule"),
     "interval": (WIDGET, WHAT_YOU_SEE, "a drop-down for how often to poll"),
     "poll": (WIDGET, WHAT_YOU_SEE, "a button that polls the printer once"),
@@ -197,10 +171,18 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "identify": (WIDGET, WHAT_YOU_SEE, "a button that asks the board what it is"),
     "reset": (WIDGET, WHAT_IS_THERE, "a button that reboots the board"),
     "release": (WIDGET, WHAT_YOU_SEE, "a button that lets go of the port"),
+    # A devkit's port is opened only when asked: Listen streams what it says
+    # (opening the port may reset it), Probe asks esptool what its chip is.
+    "listen": (WIDGET, WHAT_YOU_SEE, "a button that opens a devkit's port and streams it"),
+    "probe": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that asks esptool what a devkit's chip is (resets it)",
+    ),
     "ctl": (WIDGET, WHAT_YOU_SEE, "a tick-box that arms the control latch"),
     "estop": (WIDGET, WHAT_IS_THERE, "the emergency stop"),
-    "viewer-link": (WIDGET, NOTHING, "a link back to the viewer"),
-    # The comms log: a report to ask for, and what to show of the traffic.
+    # The board's one log, in its Machine: a report to ask a printer for, and
+    # what to show of the traffic.
     "qform": (WIDGET, WHAT_YOU_SEE, "a form for asking the printer for a report"),
     "q": (WIDGET, WHAT_YOU_SEE, "a box for the report code to ask for"),
     "qform:submit": (WIDGET, WHAT_YOU_SEE, "the button that asks for the report"),
@@ -262,62 +244,69 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     ),
     "corner:BL": (WIDGET, WHAT_IS_THERE, "a button that moves the nozzle to the back-left corner"),
     "corner:BR": (WIDGET, WHAT_IS_THERE, "a button that moves the nozzle to the back-right corner"),
-    # ---- the firmware page, templates/firmware.html.j2 -------------------
-    # The toolchain: install it, list what it knows, add to it.
-    "refresh-btn": (WIDGET, WHAT_YOU_SEE, "a button that asks the toolchain's state again"),
-    "boards-btn": (WIDGET, WHAT_YOU_SEE, "a button that rescans the ports"),
+    # ---- the Bench, apothecary/static/widgets/{toolchain,sketches,tasks}.js
+    # The firmware page's sections in front of the world, written once in the
+    # modules and named as the page named them (by class now, since the form and
+    # the task log are mounted by the Bench and by a board's Flashing card). The
+    # toolchain: install it, list what it knows, add to it.
     "install-btn": (WIDGET, WHAT_IS_THERE, "a button that installs or updates arduino-cli"),
     "install-force": (WIDGET, WHAT_YOU_SEE, "a tick-box that makes the install start over"),
     "lib-input": (WIDGET, WHAT_YOU_SEE, "a box for a library to install"),
     "lib-btn": (WIDGET, WHAT_IS_THERE, "a button that installs that library"),
     "core-install": (WIDGET, WHAT_IS_THERE, "a button that installs a board core"),
-    # Sketches: pick one, name the board and the port, build and send.
+    # Sketches: pick one from a drop-down (a list on the firmware page), name the
+    # board and the port, build and send.
+    "sketch-select": (WIDGET, WHAT_YOU_SEE, "a drop-down of the sketches under parts/"),
     "fqbn-input": (WIDGET, WHAT_YOU_SEE, "a box for the board to build for"),
     "port-select": (WIDGET, WHAT_YOU_SEE, "a drop-down of ports to upload to"),
     "compile-btn": (WIDGET, WHAT_IS_THERE, "a button that compiles the chosen sketch"),
     "upload-btn": (WIDGET, WHAT_IS_THERE, "a button that compiles and uploads it"),
-    # esptool: raw images onto an Espressif chip.
+    # esptool: raw images onto an Espressif chip, one offset and path a line (rows
+    # of three controls and an add button on the firmware page).
     "esp-chip": (WIDGET, WHAT_YOU_SEE, "a box for the chip to flash"),
     "esp-baud": (WIDGET, WHAT_YOU_SEE, "a box for the flashing baud rate"),
-    "esp-off": (WIDGET, WHAT_YOU_SEE, "a box for an image's flash offset"),
-    "esp-path": (WIDGET, WHAT_YOU_SEE, "a box for an image's path"),
-    "esp-rm": (WIDGET, WHAT_YOU_SEE, "a button that drops an image row"),
-    "esp-add": (WIDGET, WHAT_YOU_SEE, "a button that adds an image row"),
+    "esp-images": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a box for the images to flash, one offset and path a line",
+    ),
     "esp-erase": (WIDGET, WHAT_YOU_SEE, "a tick-box that erases the flash first"),
     "esp-flash-btn": (WIDGET, WHAT_IS_THERE, "a button that flashes the images"),
     "cancel-btn": (WIDGET, WHAT_IS_THERE, "a button that cancels the running task"),
-    # Each device card: what a board is, and the ways of asking it. (Its
-    # monitor link shares `dev-monitor` with the viewer's Device section.)
-    "dev-probe": (WIDGET, WHAT_IS_THERE, "a button that probes the chip with esptool (resets it)"),
-    "dev-identify": (WIDGET, WHAT_YOU_SEE, "a button that listens for the sketch's hello"),
-    "dev-printer": (WIDGET, WHAT_YOU_SEE, "a button that asks M115, or polls a printer once"),
-    "dev-live": (WIDGET, WHAT_YOU_SEE, "a button that streams the board's serial output"),
-    # ---- the camera panel, apothecary/static/widgets/camera.js ------------
-    # What is left of it until gathering leaves core: the pictures on this
-    # machine, gathered into a report, and what a person says about them, and
-    # a file picker that keeps pictures here pinned nowhere. The camera itself
-    # is pinned, shown live and looked with from its host's ring.
+    # ---- Pictures, apothecary/static/widgets/picture_list.js -------------
+    # Every picture under the picture root, each row chosen by a click for the
+    # ring's Picture › Folder to pin (a list, not a control), a kept one with
+    # Forget (TAKEN_BACK), Purge, a file picker that keeps pictures here pinned
+    # nowhere, and the gathering's section until gathering leaves core: the
+    # pictures ticked, gathered into a report, and what a person says about them.
+    "pictures-forget": (WIDGET, WHAT_YOU_SEE, "a button that forgets one kept picture"),
+    "pictures-purge": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button that forgets every picture the browser put here",
+    ),
+    "pic-file": (WIDGET, WHAT_YOU_SEE, "a file picker that keeps chosen pictures on this machine"),
     "pic-all": (WIDGET, WHAT_YOU_SEE, "a tick-box that ticks every picture"),
     "pic-gather": (WIDGET, WHAT_YOU_SEE, "a button that gathers the ticked pictures"),
     "gather-answers": (WIDGET, WHAT_YOU_SEE, "a box for what you know about the pictures"),
     "answer": (WIDGET, WHAT_YOU_SEE, "a button that answers one of the machine's questions"),
-    "pic-file": (WIDGET, WHAT_YOU_SEE, "a file picker that keeps chosen pictures on this machine"),
-    # ---- Kept, apothecary/static/widgets/kept.js --------------------------
-    # What a page pinned or kept, every site's, each taken back from its row
-    # (TAKEN_BACK), and Purge.
-    "kept-refresh": (WIDGET, WHAT_YOU_SEE, "a button that lists what is pinned and kept again"),
-    "kept-purge": (WIDGET, WHAT_YOU_SEE, "a button that forgets every picture the browser put here"),
-    "kept-camera-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins one camera, in any site"),
-    "kept-look-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins one look, in any site"),
-    "kept-board-unpin": (WIDGET, WHAT_IS_THERE, "a button that takes one board's pin back"),
-    "kept-forget": (WIDGET, WHAT_YOU_SEE, "a button that forgets one kept picture"),
-    # Selected: the one width a look is sized by (a chosen shape's long side
+    # ---- Site's Pinned, apothecary/static/widgets/pinned.js ---------------
+    # What a page pinned, every site's, each taken back from its row (TAKEN_BACK).
+    "pinned-camera-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins one camera, in any site"),
+    "pinned-view-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins one view, in any site"),
+    "pinned-board-unpin": (WIDGET, WHAT_IS_THERE, "a button that takes one board's pin back"),
+    # Selected: the one width a view is sized by (a chosen shape's long side
     # when one is chosen). A number the ring cannot type; Size puts the cursor in it.
-    "look-width": (WIDGET, WHAT_IS_THERE, "a box for how wide a picture is, or one shape's side"),
+    "view-width": (WIDGET, WHAT_IS_THERE, "a box for how wide a picture is, or one shape's side"),
     # printing from here: a kept file, streamed
     "print-file": (WIDGET, WHAT_YOU_SEE, "a file picker that keeps a G-code file on the host"),
     "print-pick": (WIDGET, WHAT_YOU_SEE, "a drop-down of the files kept on the host"),
     "print-delete": (WIDGET, WHAT_YOU_SEE, "a button that forgets the chosen file"),
+    "print-part": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a drop-down of the parts a print from here makes, from the printer's site",
+    ),
     "print-start": (WIDGET, WHAT_IS_THERE, "a button that streams the chosen file to the printer"),
     "print-pause": (WIDGET, WHAT_IS_THERE, "a button that stops feeding the print from here"),
     "print-resume": (WIDGET, WHAT_IS_THERE, "a button that feeds the print from here again"),
@@ -331,27 +320,21 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
 # `apothecary.menu`'s vocabulary, so a control cannot claim a backing that
 # does not exist.
 RING_BACKED: Dict[str, str] = {
-    # the viewer's Device section and serial log
-    "dev-watch": "device:watch",
-    "dev-poll": "device:poll",
-    "dev-monitor": "device:monitor",
+    # the viewer's Device section: Open is Device › Open, the board's Machine
+    "dev-open": "device:open",
     "dev-query": "device:query",
     "dev-pin": "device:pin",
     "dev-pin-manual": "device:pin",
     "dev-unpin": "device:unpin",
     "dev-rescan": "device:rescan",
-    "serial-identify": "device:query",
-    "serial-monitor": "device:monitor",
-    "serial-refresh": "device:rescan",
-    "devWatch:click:dispatchEvent": "device:watch",
-    "devPoll:click:pollNow": "device:poll",
+    "devOpen:click:openMachine": "device:open",
     "devQuery:click:queryPort": "device:query",
     "devPin:click:setNodeDevice": "device:pin",
     "devPinManual:click:pinManual": "device:pin",
     "manualIn:keydown:pinManual": "device:pin",
     "devUnpin:click:setNodeDevice": "device:unpin",
     "devRescan:click:rescanDevices": "device:rescan",
-    # the monitor's header and control overlay
+    # a board's Machine: its header and control overlay
     "poll": "device:poll",
     "identify": "device:query",
     "ctl": "control:arm",
@@ -386,19 +369,33 @@ RING_BACKED: Dict[str, str] = {
     "corner:FR": "control:corner:FR",
     "corner:BL": "control:corner:BL",
     "corner:BR": "control:corner:BR",
-    # The firmware page's device cards: a poll and the monitor link have cells;
-    # probe, identify and the live stream do not yet.
-    "dev-printer": "device:poll",
-    "dev-live": "device:watch",
-    "boards-btn": "device:rescan",
-    # Gather and Kept's Purge are cells of the canvas ring's Pictures. Kept's
-    # per-row buttons are not here: see TAKEN_BACK.
+    # The Bench's buttons are the cells of the canvas ring's Panels › Bench, each
+    # acting on what the Bench has chosen; a core's Install is Bench › Cores › its
+    # core. The form's boxes and drop-downs, the force tick-box and raw flash's
+    # boxes choose what a cell acts on, and no cell chooses them.
+    "install-btn": "bench:install",
+    "core-install": "bench:core:arduino:avr",
+    "coresEl:click:closest": "bench:core:arduino:avr",
+    "lib-btn": "bench:libraries",
+    "libEl:keydown:libraries": "bench:libraries",
+    "compile-btn": "bench:compile",
+    "upload-btn": "bench:upload",
+    "esp-flash-btn": "bench:esptool",
+    "cancel-btn": "bench:cancel",
+    # Gather and Pictures' Purge are cells of the canvas ring's Pictures. The
+    # per-row take-backs of Pinned and Pictures are not here: see TAKEN_BACK.
+    # Pictures has no Pin here: a row chosen there is told to the ring, whose
+    # Picture › Folder pins it, the seven newest by name and an older one as
+    # the eighth cell.
     "pic-gather": "camera:gather",
-    "kept-purge": "picture:purge",
+    "pictures-purge": "picture:purge",
     # A file dropped on the world, or chosen in the dialog Picture › Add opens.
     "canvas:drop:onDropFiles": "picture:add",
     "input:change:addFiles": "picture:add",
-    "row:click:drawLook": "picture:draw:look_1",
+    # A view drawn from its row in Selected, or from its place on a picture's row
+    # in Pictures, as Picture › Views draws one.
+    "row:click:drawView": "picture:draw:view_1",
+    "chip:click:showView": "picture:draw:view_1",
     # The Print cell's verbs go to whichever print is running, the card's or
     # the one from here; Send file is the one from here alone.
     "print-start": "print:start",
@@ -416,25 +413,29 @@ RING_BACKED: Dict[str, str] = {
     "reconnect": "device:reconnect",
     "reset": "device:reset",
     "release": "device:release",
+    "listen": "device:listen",
+    "probe": "device:probe",
     "ctl:change:arm": "control:arm",
 }
 
-# A control kept on purpose beside the ring: the button on a row of Kept that
-# takes back what the row names -- a camera or a look unpinned, a board's pin
-# taken back, a kept picture forgotten -- in whichever site it stands. §6 of the
-# draft record *Personal data stays on the device* asks that what a page placed
-# or pinned be listed by the same page, every site's, and taken back the same
-# way, and a ring cell reaches another site's pin only from that site. So these
-# are a lasting exception, the one the pictures plan asks the *rad host
-# integration* record's §5 to name, and are **not** ring-backed: the meter
-# counts them, and never expects them to go. Keyed like RING_BACKED, by the
-# control's name or its listening key; the value is what the row takes back.
+# A control kept on purpose beside the ring: the button on a row of Site's
+# Pinned or of Pictures that takes back what the row names -- a camera or a view
+# unpinned, a board's pin taken back, a kept picture forgotten -- in whichever
+# site it stands. §6 of the draft record *Personal data stays on the device* asks
+# that what a page placed or pinned be listed by the same page, every site's,
+# and taken back the same way, and a ring cell reaches another site's pin only
+# from that site. So these are a lasting exception, the one the pictures plan
+# asks the *rad host integration* record's §5 to name, and are **not**
+# ring-backed: the meter counts them, and never expects them to go. Keyed like
+# RING_BACKED, by the control's name or its listening key; the value is what the
+# row takes back.
 TAKEN_BACK: Dict[str, str] = {
-    "kept-camera-unpin": "a camera's pin, every site's",
-    "kept-look-unpin": "a look, every site's",
-    "kept-board-unpin": "a board's pin, every site's",
-    "kept-forget": "a picture the browser kept",
-    "kept-list:click:closest": "any of those, from its row",
+    "pinned-camera-unpin": "a camera's pin, every site's",
+    "pinned-view-unpin": "a view, every site's",
+    "pinned-board-unpin": "a board's pin, every site's",
+    "pinned-list:click:closest": "any pin, from its row",
+    "pictures-forget": "a picture the browser kept",
+    "forgetBtn:click:forget": "a picture the browser kept, from its row",
 }
 
 MARKUP = re.compile(
@@ -465,9 +466,6 @@ BY_WHAT_IT_CARRIES: Sequence[Tuple[re.Pattern, str]] = (
 # link is the thing its class says.
 BY_SHAPE: Sequence[Tuple[re.Pattern, str]] = (
     (re.compile(r"\bhref=[\"'][^\"']*/scad[\"']"), "part-scad-download"),
-    (re.compile(r"\bhref=[\"'][^\"']*/firmware/monitor[\"']"), "monitor-link"),
-    (re.compile(r"\bhref=[\"'][^\"']*/firmware[\"']"), "firmware-link"),
-    (re.compile(r"\bhref=[\"'][^\"']*/viewer[\"']"), "viewer-link"),
 )
 
 
@@ -500,15 +498,12 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "siteSelect:change:loadSite": (WIDGET, WHAT_YOU_SEE, "choosing from the drop-down"),
     "zoomOutBtn:click:zoomOut": (WIDGET, WHAT_YOU_SEE, "the step-out button"),
     "snapToggle:change:setTranslationSnap": (WIDGET, WHAT_YOU_SEE, "the snapping tick-box"),
-    "jobFormEl:submit:createJob": (WIDGET, WHAT_IS_THERE, "sending the job form"),
     "posAxis:change:recomputeWorldBounds": (WIDGET, WHAT_IS_THERE, "typing a position"),
     "statusSelect:change:submitStatus": (WIDGET, WHAT_IS_THERE, "choosing a state"),
     # The editor's Regenerate STL: the staged set applied to its target, a
     # part's STL rendered again (a made piece has no such button: Apply is its
     # rebuild).
     "regenerateBtn:click:applyEditor": (WIDGET, WHAT_IS_THERE, "the rebuild button"),
-    "jobBtn:click:assignJob": (WIDGET, WHAT_IS_THERE, "giving a job to a machine"),
-    "jobBtn:click:completeJob": (WIDGET, WHAT_IS_THERE, "finishing a job"),
     "zoomInLink:click:zoomIn": (WIDGET, WHAT_YOU_SEE, "the go-in button on the chosen piece"),
     # done to the scene itself
     "canvas:pointerdown:onPointerDown": (GESTURE, WHAT_YOU_SEE, "pointing at a piece"),
@@ -521,7 +516,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "li:click:selectChild": (LIST, WHAT_YOU_SEE, "picking a piece from the list"),
     # An anchor: a machine's badge standing over it in the world (anchors.js).
     "badge:click:selectPath": (LIST, WHAT_YOU_SEE, "picking the machine a badge stands over"),
-    # A place badge: a host's camera and look, or the floor's (picture_marks.js).
+    # A place badge: a host's camera and view, or the floor's (picture_marks.js).
     "badge:click:onSelect": (
         LIST,
         WHAT_YOU_SEE,
@@ -536,15 +531,15 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "canvas:drop:onDropFiles": (
         GESTURE,
         WHAT_IS_THERE,
-        "dropping pictures on a structure or the floor: kept, pinned there, found",
+        "dropping pictures on a structure or the floor: kept, and pinned there as views",
     ),
     "window:paste:onPaste": (
         GESTURE,
         WHAT_IS_THERE,
-        "pasting a picture: kept, pinned at the selected place, found",
+        "pasting a picture: kept, and pinned at the selected place as a view",
     ),
     "widthBox:change:setWidth": (WIDGET, WHAT_IS_THERE, "typing a picture's width, or a shape's"),
-    "row:click:drawLook": (LIST, WHAT_YOU_SEE, "a look's row in Selected, drawing that look"),
+    "row:click:drawView": (LIST, WHAT_YOU_SEE, "a view's row in Selected, drawing that view"),
     # pictures.js: the browser's cameras and the dialog Picture › Add opens.
     "mediaDevices:devicechange:listCameras": (
         AUTOMATIC,
@@ -560,23 +555,62 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "video:loadeddata:resolve": (
         AUTOMATIC,
         NOTHING,
-        "a camera's first frame arrived, so a look can keep one",
+        "a camera's first frame arrived, so a picture can be taken from it",
     ),
     "input:change:addFiles": (
         WIDGET,
         WHAT_IS_THERE,
-        "the pictures chosen in the dialog Picture › Add opens: kept and pinned there",
+        "the pictures chosen in the dialog Picture › Add opens: kept, and pinned there as views",
     ),
-    # ---- the camera panel --------------------------------------------------
+    # ---- Pictures ----------------------------------------------------------
+    # A row chosen, one at a time, and told to the ring; Escape lets it go.
+    "row:click:rowClicked": (
+        LIST,
+        WHAT_YOU_SEE,
+        "a picture's row, chosen for the ring's Picture › Folder to pin, or let go",
+    ),
+    "window:keydown:letGo": (GESTURE, WHAT_YOU_SEE, "a key that lets go of the chosen picture"),
+    "forgetBtn:click:forget": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a kept picture's Forget: the picture forgotten and its views unpinned, every site's",
+    ),
+    "chip:click:showView": (
+        LIST,
+        WHAT_YOU_SEE,
+        "a place on a picture's row where it is pinned: selected, and that view drawn",
+    ),
     "pic-all:change:(nothing)": (WIDGET, WHAT_YOU_SEE, "ticking every picture at once"),
     "gather-out:click:closest": (WIDGET, WHAT_YOU_SEE, "answering a question with a button"),
     "pic-file:change:addFiles": (WIDGET, WHAT_YOU_SEE, "adding the chosen pictures"),
-    # ---- Kept --------------------------------------------------------------
-    "kept-list:click:closest": (
+    # ---- Site --------------------------------------------------------------
+    "pinned-list:click:closest": (
         WIDGET,
         WHAT_IS_THERE,
-        "taking back what a row names -- a camera, a look, a board's pin, a kept picture -- "
+        "taking back what a row of Pinned names -- a camera, a view, a board's pin -- "
         "whatever site it is in",
+    ),
+    "pinnedEl:toggle:pinnedOpened": (
+        LIST,
+        WHAT_YOU_SEE,
+        "unfolding Site's Pinned, which lists every site's pins again",
+    ),
+    "li:click:goToProblem": (
+        LIST,
+        WHAT_YOU_SEE,
+        "a problem's row at the top of Site, selecting its piece at its level",
+    ),
+    "siteJobsListEl:click:closest": (
+        LIST,
+        WHAT_YOU_SEE,
+        "a job's row in Site's Jobs, selecting its machine at its level and opening it",
+    ),
+    # A readout that opens what it counts, as a badge selects what it stands over;
+    # a span listened to, not a control written into the markup.
+    "validityEl:click:openProblems": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "the toolbar's count of problems, opening them at the top of Site",
     ),
     "li:dblclick:zoomIn": (LIST, WHAT_YOU_SEE, "going into a piece from the list"),
     "rootCrumb:click:jumpTo": (LIST, WHAT_YOU_SEE, "the top of the trail"),
@@ -585,20 +619,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "detailModeEl:change:clear": (WIDGET, WHAT_YOU_SEE, "choosing how much to draw"),
     "overlayToggle:change:renderFocus": (WIDGET, WHAT_YOU_SEE, "the outlines tick-box"),
     "select:change:delete": (WIDGET, WHAT_YOU_SEE, "choosing how much to draw of one piece"),
-    # the serial log
-    "toggle:change:show": (WIDGET, WHAT_YOU_SEE, "the serial log tick-box"),
-    "portSel:change:renderMeta": (WIDGET, WHAT_YOU_SEE, "choosing a board"),
-    "baudSel:change:connect": (WIDGET, WHAT_YOU_SEE, "choosing a speed"),
-    "queryRow:submit:line": (WIDGET, WHAT_YOU_SEE, "asking the watched printer for a report"),
-    # looking for boards on a schedule
-    "autoEl:change:setItem": (WIDGET, WHAT_YOU_SEE, "the look-for-boards tick-box"),
-    "intervalEl:change:setItem": (WIDGET, WHAT_YOU_SEE, "choosing how often to look"),
     # the Device section of the chosen piece
-    "devWatch:click:dispatchEvent": (WIDGET, WHAT_YOU_SEE, "floating the pinned board's log"),
+    "devOpen:click:openMachine": (WIDGET, WHAT_YOU_SEE, "opening the pinned board's Machine"),
     "devUnpin:click:setNodeDevice": (WIDGET, WHAT_IS_THERE, "unpinning the board"),
     "devPin:click:setNodeDevice": (WIDGET, WHAT_IS_THERE, "pinning the chosen board"),
     "devQuery:click:queryPort": (WIDGET, WHAT_YOU_SEE, "asking the chosen board what it is"),
-    "devPoll:click:pollNow": (WIDGET, WHAT_YOU_SEE, "polling the pinned printer once"),
     "devVia:click:selectPath": (
         WIDGET,
         WHAT_YOU_SEE,
@@ -609,46 +634,34 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "manualIn:keydown:pinManual": (WIDGET, WHAT_IS_THERE, "pinning the typed board, by Enter"),
     # the page reacting to itself
     "window:resize:onResize": (AUTOMATIC, NOTHING, "the window changed size on its own"),
-    "es:open:add": (AUTOMATIC, NOTHING, "the serial stream connected, and says so"),
-    "es:close:line": (AUTOMATIC, NOTHING, "the serial stream stopped, and says so"),
-    "window:beforeunload:disconnect": (AUTOMATIC, NOTHING, "leaving the page lets go of the port"),
-    "document:visibilitychange:scheduleAutoRefresh": (
+    # boards.js: a devkit's serial stream, while its Machine listens to it
+    "es:open:opened": (AUTOMATIC, NOTHING, "a devkit's serial stream connected, and says so"),
+    "es:close:streamStopped": (
         AUTOMATIC,
         NOTHING,
-        "the page was hidden or shown, and looks for boards accordingly",
+        "a devkit's serial stream stopped (a task took the port), and is opened again",
     ),
-    # ---- the monitor page, templates/monitor.html.j2 ----------------------
-    # Most of the monitor's buttons are wired by assignment rather than by
+    # ---- a board's Machine, apothecary/static/widgets/machine.js ------------
+    # Most of the Machine's buttons are wired by assignment rather than by
     # listening, so the markup carries them; these are the ones that listen.
-    "port:change:selectPort": (WIDGET, WHAT_YOU_SEE, "choosing a printer port"),
-    "portSel:change:mountFor": (AUTOMATIC, NOTHING, "the board view following the chosen port"),
     "level-history:click:closest": (
         LIST,
         WHAT_YOU_SEE,
         "picking an earlier bed reading to look at",
     ),
     "level-card:click:closest": (WIDGET, WHAT_IS_THERE, "a corner button, moving the nozzle there"),
-    # ---- the firmware page ------------------------------------------------
-    "es:close:stopLive": (AUTOMATIC, NOTHING, "the serial stream stopped, and the card says so"),
-    "devices:click:closest": (
+    # ---- the Bench --------------------------------------------------------
+    "coresEl:click:closest": (WIDGET, WHAT_IS_THERE, "a core's Install button"),
+    "libEl:keydown:libraries": (WIDGET, WHAT_IS_THERE, "installing the typed libraries, by Enter"),
+    "sketchEl:change:choose": (
         WIDGET,
         WHAT_YOU_SEE,
-        "a device card's button: probe, identify, poll, live",
+        "choosing a sketch, which fills in the board it is built for",
     ),
-    "cores:click:closest": (WIDGET, WHAT_IS_THERE, "a core's Install button"),
-    "sketches:click:closest": (LIST, WHAT_YOU_SEE, "choosing a sketch from the list"),
-    "fqbn-input:input:updateButtons": (
-        WIDGET,
-        WHAT_YOU_SEE,
-        "typing a board, which enables the buttons",
-    ),
-    "port-select:change:updateButtons": (
-        WIDGET,
-        WHAT_YOU_SEE,
-        "choosing a port, which enables the buttons",
-    ),
-    "esp-images:click:contains": (WIDGET, WHAT_YOU_SEE, "an image row's drop button"),
-    "history:click:closest": (LIST, WHAT_YOU_SEE, "opening an earlier task's log"),
+    "fqbnEl:input:enable": (WIDGET, WHAT_YOU_SEE, "typing a board, which enables the buttons"),
+    "portEl:change:enable": (WIDGET, WHAT_YOU_SEE, "choosing a port, which enables the buttons"),
+    "historyEl:click:closest": (LIST, WHAT_YOU_SEE, "opening an earlier task's output"),
+    # ---- a board's Machine, its print card, header, log and control overlay --
     "print-file:change:keepPrintFile": (
         WIDGET,
         WHAT_YOU_SEE,
@@ -661,7 +674,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     ),
     "auto:change:schedule": (WIDGET, WHAT_YOU_SEE, "the poll-on-a-schedule tick-box"),
     "interval:change:schedule": (WIDGET, WHAT_YOU_SEE, "choosing how often to poll"),
-    "qform:submit:post": (WIDGET, WHAT_YOU_SEE, "asking the printer for a report"),
+    "qform:submit:query": (WIDGET, WHAT_YOU_SEE, "asking the printer for a report"),
     "show-polls:change:renderLog": (WIDGET, WHAT_YOU_SEE, "the poll-traffic tick-box"),
     "ctl:change:arm": (WIDGET, WHAT_YOU_SEE, "arming or disarming the control latch"),
     "h-fan:input:(nothing)": (WIDGET, WHAT_YOU_SEE, "sliding the fan speed, shown beside it"),
@@ -673,9 +686,13 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "document:visibilitychange:onVisibility": (
         AUTOMATIC,
         NOTHING,
-        "the page was hidden or shown, and polls accordingly",
+        "the page was hidden or shown, and the boards' pollers pause or go on",
     ),
-    "window:beforeunload:onUnload": (AUTOMATIC, NOTHING, "leaving the page stops the polling"),
+    "window:beforeunload:onUnload": (
+        AUTOMATIC,
+        NOTHING,
+        "leaving the page stops the polling and lets go of the serial streams",
+    ),
 }
 
 LISTENS = re.compile(r"addEventListener\s*\(\s*['\"]([\w-]+)['\"]\s*,")
@@ -685,13 +702,11 @@ LISTENS = re.compile(r"addEventListener\s*\(\s*['\"]([\w-]+)['\"]\s*,")
 # the line above cannot claim a listener that is not its own. Longer labels
 # before the ones they begin with, so `.dev-pin-manual` is not read as `.dev-pin`.
 FETCHED_BY_LABEL: Sequence[Tuple[str, str]] = (
-    (r"\.job-(assign|complete)-btn", "jobBtn"),
     (r"pos-\$\{axis\}", "posAxis"),
     (r"part-regenerate-btn", "regenerateBtn"),
     (r"\.zoom-in-btn", "zoomInLink"),
     (r"\.dev-pin-manual", "devPinManual"),
-    (r"\.dev-watch", "devWatch"),
-    (r"\.dev-poll", "devPoll"),
+    (r"\.dev-open", "devOpen"),
     (r"\.dev-unpin", "devUnpin"),
     (r"\.dev-pin", "devPin"),
     (r"\.dev-query", "devQuery"),
@@ -699,7 +714,7 @@ FETCHED_BY_LABEL: Sequence[Tuple[str, str]] = (
     (r"\.dev-rescan", "devRescan"),
 )
 
-# Fetched by id through the monitor page's one-letter helper: `$("port")`.
+# Fetched by id through a module's one-letter helper: `$("auto")`.
 FETCHED_BY_ID = re.compile(r"\$\(\s*[\"']([\w-]+)[\"']\s*\)\s*$")
 
 # The last plain word before the listening: `this.loadBtn.` gives `loadBtn`.
@@ -750,8 +765,8 @@ class Found:
     # with one of these is a control the ring has already replaced in all but
     # deletion.
     ring_action: Optional[str] = None
-    # What the control takes back, when it is one of Kept's rows' buttons
-    # (TAKEN_BACK): kept beside the ring on purpose, and never ring-backed.
+    # What the control takes back, when it is a take-back on a row of Site's Pinned
+    # or of Pictures (TAKEN_BACK): kept beside the ring on purpose, never ring-backed.
     taken_back: Optional[str] = None
     # Where the control is written: the page itself, or a widget module the
     # page mounts (apothecary/static/widgets/*.js). A widget's controls are
@@ -781,7 +796,7 @@ class Census:
         return tuple(f for f in self.controls_of_its_own() if f.ring_action)
 
     def taken_back(self) -> Tuple[Found, ...]:
-        """The part of the meter kept beside the ring on purpose: Kept's rows."""
+        """The part of the meter kept beside the ring on purpose: the rows' take-backs."""
         return tuple(f for f in self.controls_of_its_own() if f.taken_back)
 
     def sentence(self) -> str:
@@ -971,11 +986,12 @@ def widgets_of(page: Path) -> List[Path]:
 
 STATIC = TEMPLATES.parent / "apothecary" / "static"
 # The marks modules: what a thing wears in the world, drawn beside the page's own
-# scene and listening, when they listen, on what they draw. Counted with the page
-# that imports one directly, each entry saying which module it came from; a page
-# that reaches one only through another module (the monitor, through
-# board_view.js) is not counted for it.
-MARKS = ("machine_marks.js", "picture_marks.js", "pictures.js")
+# scene and listening, when they listen, on what they draw -- and the boards'
+# model (boards.js), whose poller, serial streams and page-level listeners stand
+# behind every drawer of a board. Counted with the page that imports one
+# directly, each entry saying which module it came from; one reached only
+# through another module is not counted for it.
+MARKS = ("machine_marks.js", "picture_marks.js", "pictures.js", "boards.js")
 STATIC_IMPORT = re.compile(r"from\s+[\"']/static/([\w-]+\.js)[\"']")
 
 
@@ -988,8 +1004,9 @@ def marks_of(page: Path) -> List[Path]:
 def take(page: Path | None = None) -> Census:
     """Count what a person can operate, from the page itself.
 
-    The viewer unless told otherwise; ``take(MONITOR)`` counts the monitor
-    page. One page at a time, and the numbers are never added -- except
+    The viewer unless told otherwise; ``take(path)`` counts another page (a
+    draft, or one a test writes). One page at a time, and the numbers are
+    never added -- except
     that a widget module the page mounts (``/static/widgets/*.js``, its
     markup written in the module) and a marks module it imports (``MARKS``)
     are counted as part of the page, each entry saying which module it came

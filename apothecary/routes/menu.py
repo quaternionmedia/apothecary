@@ -107,17 +107,17 @@ def _catalogue(name: Optional[str]) -> Dict[str, List[str]]:
 def _pictures_known(site: Optional[str], told: Optional[PictureContext]) -> PictureContext:
     """What the page told about pictures, with what only the server knows put in:
     the site's made pieces, the vocabulary's words, and the finders that can read
-    the drawn look's picture. A page cannot claim these, so it is never asked."""
-    from ..vision import looks as looking
+    the drawn view's picture. A page cannot claim these, so it is never asked."""
+    from ..vision import views as viewing
     from ..vocabulary import starter_words
-    from .looks import finders_for
+    from .views import finders_for
 
     known = (told or PictureContext()).model_copy(deep=True)
-    known.made = sorted(looking.made_names(site)) if site else []
+    known.made = sorted(viewing.made_names(site)) if site else []
     known.words = starter_words().names()
-    drawn = next((lk for lk in known.here.looks if lk.id == known.here.drawn), None)
-    if drawn is None and known.here.looks:
-        drawn = known.here.looks[0]
+    drawn = next((vw for vw in known.here.views if vw.id == known.here.drawn), None)
+    if drawn is None and known.here.views:
+        drawn = known.here.views[0]
     known.finders = finders_for(drawn.picture) if drawn is not None and drawn.picture else []
     return known
 
@@ -159,10 +159,10 @@ def _needs_site(chosen: Chosen) -> str:
 
 def _carry_picture(chosen: Chosen, who: Carries) -> Carried:
     """Make, Make all, Drop and a made piece's Word: a root structure added,
-    removed or rebuilt, by the functions the look routes call. Every refusal is
+    removed or rebuilt, by the functions the view routes call. Every refusal is
     a 4xx naming its reason, so no picture intent reaches the 500 below."""
     from ..api import _site_payload, _site_store
-    from ..vision import looks as looking
+    from ..vision import views as viewing
 
     action = chosen.intent.action
     name = _needs_site(chosen)
@@ -172,39 +172,39 @@ def _carry_picture(chosen: Chosen, who: Carries) -> Carried:
     piece = chosen.intent.context.targets[0] if chosen.intent.context.targets else ""
     try:
         if verb == "make":
-            look_id, _, index = rest.rpartition(":")
-            if not look_id or not index.isdigit():
+            view_id, _, index = rest.rpartition(":")
+            if not view_id or not index.isdigit():
                 raise HTTPException(
                     status_code=400,
-                    detail=f"{action!r} names no look and shape: picture:make:<look>:<index>",
+                    detail=f"{action!r} names no view and shape: picture:make:<view>:<index>",
                 )
-            made, skipped = looking.make(name, site, look_id, int(index))
+            made, skipped = viewing.make(name, site, view_id, int(index))
             did = f"made {', '.join(made) or 'nothing'}" + (
                 f"; {skipped} already made" if skipped else ""
             )
         elif verb == "make-all":
             if not rest:
                 raise HTTPException(
-                    status_code=400, detail=f"{action!r} names no look: picture:make-all:<look>"
+                    status_code=400, detail=f"{action!r} names no view: picture:make-all:<view>"
                 )
-            made, skipped = looking.make(name, site, rest, None)
+            made, skipped = viewing.make(name, site, rest, None)
             listed = f": {', '.join(made)}" if made else ""
             did = f"made {len(made)} piece(s){listed}; skipped {skipped} already made"
         elif verb == "drop":
-            record = looking.drop(name, site, piece)
-            did = f"dropped {piece}; shape {record.shape_index} of its look reads as found again"
+            record = viewing.drop(name, site, piece)
+            did = f"dropped {piece}; shape {record.shape_index} of its view reads as found again"
         elif verb == "word":
             if not rest:
                 raise HTTPException(status_code=400, detail=f"{action!r} names no word")
-            record = looking.rebuild(name, site, piece, word=rest)
+            record = viewing.rebuild(name, site, piece, word=rest)
             did = f"{piece} is a {record.word} now, rebuilt where it stands"
         else:
             raise HTTPException(status_code=400, detail=f"{action!r} is no picture verb")
-    except looking.LookNotFound as missing:
+    except viewing.ViewNotFound as missing:
         raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
-    except looking.NotMade as missing:
+    except viewing.NotMade as missing:
         raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
-    except looking.CannotMake as refused:
+    except viewing.CannotMake as refused:
         raise HTTPException(status_code=409, detail=str(refused)) from None
     except ValueError as refused:
         raise HTTPException(status_code=422, detail=str(refused)) from None
@@ -222,7 +222,7 @@ def _carry_picture(chosen: Chosen, who: Carries) -> Carried:
 @router.post("/intent", response_model=Carried)
 async def carry_out(chosen: Chosen) -> Carried:
     """Carry out a chosen option, or say that the viewer does, or refuse."""
-    from ..api import _job_store, _site_payload, _site_store
+    from ..api import _site_payload, _site_store
 
     action = chosen.intent.action
     try:
@@ -242,11 +242,10 @@ async def carry_out(chosen: Chosen) -> Carried:
         name = _needs_site(chosen)
         _site(name)  # 404s on a name that is not there, before anything is reset
         rebuilt = _site_store.reset(name)
-        _job_store.reset(name)
         return Carried(
             action=action,
             carried_by=who.value,
-            did=f"rebuilt {name} from its factory and emptied its jobs",
+            did=f"rebuilt {name} from its factory",
             site=_site_payload(rebuilt, _site_store.validator(name)(rebuilt)),
             address=chosen.intent.address,
         )

@@ -4,10 +4,12 @@ Same on-demand pattern as the rest of tests/e2e: a plain test run takes no
 screenshots; `apothecary docs generate` runs this with `--generate-docs` and
 turns the manifest into docs/generated/fractal-viewer/fractal-viewer.md.
 
-Resets the garage site's layout and job queue first so the workflow (and its
-screenshots) don't depend on whatever a previous test left behind in the
-process-lifetime SiteStore/JobStore (see apothecary/site_store.py).
+Resets the garage site's layout first so the workflow (and its screenshots)
+don't depend on whatever a previous test left behind in the process-lifetime
+SiteStore (see apothecary/site_store.py).
 """
+
+import re
 
 import pytest
 from playwright.sync_api import Page, expect
@@ -17,8 +19,7 @@ from playwright.sync_api import Page, expect
 @pytest.mark.docs
 def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     """Zoom from the garage's Structures down to a Feature, then switch to
-    the parts library and zoom to a part -- the absorbed part view -- and
-    run a job through the queue at the root.
+    the parts library and zoom to a part -- the absorbed part view.
     """
     page.request.post(f"{base_url}/sites/garage/reset")
 
@@ -81,7 +82,7 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     page.wait_for_timeout(300)
     docs.step(
         f"The digits {' '.join(address)} select printer_1 -- the same address every time "
-        "for the same level; the Contents row shows it as ⌗" + address
+        "for the same level; its row in Site shows it as ⌗" + address
     )
 
     printer_1 = page.locator("#contents-list .contents-item", has_text="printer_1")
@@ -91,36 +92,36 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     x_input.fill("650")
     x_input.press("Tab")
     expect(page.locator("#validity-indicator")).to_contain_text("violation")
-    docs.step("Select printer_1 at the root and move it to overlap printer_2 -- caught")
+    expect(page.locator("#problem-list li")).to_contain_text("printer_1 and printer_2 overlap")
+    docs.step(
+        "Select printer_1 at the root and move it to overlap printer_2 -- caught: the "
+        "problem is listed at the top of Site, both pieces are red in its tree, and a "
+        "click on the toolbar's count opens it"
+    )
 
     x_input.fill("100")
     x_input.press("Tab")
     expect(page.locator("#validity-indicator")).to_contain_text("valid")
     docs.step("Move it back -- the layout is valid again")
 
-    page.locator("#job-name").fill("small_bracket")
-    page.locator("#job-x").fill("50")
-    page.locator("#job-y").fill("50")
-    page.locator("#job-z").fill("20")
-    page.locator("#job-form button[type=submit]").click()
-    page.wait_for_timeout(400)
-    docs.step("Queue a print job -- the Jobs panel is site-wide, not tied to zoom depth")
-
-    page.locator(".job-assign-btn").first.click()
-    page.wait_for_timeout(500)
-    docs.step("Assign it to a compatible, idle printer")
-
-    page.locator(".panel[data-panel='jobs'] .panel-float").click()
-    page.locator(".panel[data-panel='validation'] .panel-close").click()
+    page.locator(".panel-rail .rail-tab[data-panel='pictures'] .rail-tab-name").click()
+    page.locator(".panel-rail .rail-tab[data-panel='pictures'] .rail-tab-float").click()
+    page.locator(".panel[data-panel='selected'] .panel-close").click()
     page.wait_for_timeout(400)
     docs.step(
-        "The side column is a rail of panels standing in front of the world: each closes "
-        "to a tab, collapses, floats free and drags, and docks back; the ring's Panels cell "
-        "reaches every one by address. Nothing docked can push the world off the screen, "
-        "and what you did to them is remembered"
+        "Panels stand in front of the world, in one rail beside it -- Site and Selected "
+        "stacked, the other panels tabs of a strip below them: each closes to a tab, "
+        "collapses, floats free and drags, and docks back; the ring's Panels cell reaches "
+        "every one by address. The rail never takes more than half the page, and what you "
+        "did to the panels is remembered"
     )
-    page.locator(".panel-free-layer .panel[data-panel='jobs'] .panel-float").click()
-    page.locator(".panel-tab[data-panel='validation']").click()
+    page.locator(".panel-free-layer .panel[data-panel='pictures'] .panel-float").click()
+    page.locator(".panel-tab[data-panel='selected']").click()
+    # Pictures, docked again, is folded away to its tab, so the rail is as it was.
+    pictures_tab = page.locator(".panel-rail .rail-tab[data-panel='pictures']")
+    pictures_tab.locator(".rail-tab-name").click()
+    expect(page.locator(".panel[data-panel='pictures']")).to_be_hidden()
+    expect(pictures_tab).not_to_have_class(re.compile(r"\bactive\b"))
     page.wait_for_timeout(200)
 
     page.goto(f"{base_url}/viewer/sites/parts_library")
@@ -129,5 +130,7 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
 
     page.locator("#contents-list .contents-item").first.click()
     page.wait_for_timeout(800)
-    expect(page.locator("#part-scad-content")).to_be_visible()
+    scad = page.locator("#part-scad-content")
+    expect(scad).to_be_visible()
+    scad.scroll_into_view_if_needed()
     docs.step("Select a part leaf -- its real SCAD source is the absorbed part view")

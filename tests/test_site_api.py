@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import apothecary.api as api
-from apothecary.api import _find_node_by_path, _job_store, _site_store, app
+from apothecary.api import _find_node_by_path, _site_store, app
 from apothecary.example_hierarchy import create_example_site
 from apothecary.firmware import devices as firmware_devices
 from apothecary.firmware import gcode as firmware_gcode
@@ -26,7 +26,6 @@ def reset_garage_site():
     """The site store keeps edits between requests: each test starts from the
     factory garage. test_reset_endpoint_discards_edits covers the route."""
     _site_store.reset("garage")
-    _job_store.reset("garage")
     yield
 
 
@@ -151,8 +150,8 @@ def test_printers_default_to_idle_with_a_build_volume():
 
 
 def test_cnc_router_has_no_build_volume():
-    """Unlike the printers, the CNC router stub isn't wired into the job
-    queue yet (see example_hierarchy.py's BENCH_MOUNTED_STRUCTURES comment).
+    """Unlike the printers, the CNC router stub has no build volume (see
+    example_hierarchy.py's BENCH_MOUNTED_STRUCTURES comment).
     """
     data = client.get("/sites/garage").json()
     router = next(s for s in data["structures"] if s["name"] == "cnc_router")
@@ -208,6 +207,24 @@ def test_layout_endpoint_detects_overlap():
     assert data["is_valid"] is False
     kinds = {v["kind"] for v in data["violations"]}
     assert "overlap" in kinds
+
+
+def test_each_violation_names_its_pieces_by_tree_path_beside_their_names():
+    """The page marks and selects a problem's pieces by path: every violation the site's
+    answer carries has one per name, the garage's own rules' included."""
+    response = client.post(
+        "/sites/garage/layout",
+        json={"positions": {"printer_1": {"x": 650, "y": 150, "z": 0}}},
+    )
+    violations = response.json()["violations"]
+    assert {v["kind"] for v in violations} >= {"overlap", "not_on_bench"}
+    overlap = next(v for v in violations if v["kind"] == "overlap" and "printer_1" in v["structures"])
+    assert overlap["paths"] == overlap["structures"]  # pieces of the site: the path is the name
+    for v in violations:
+        assert len(v["paths"]) == len(v["structures"]), v
+        assert [p.rsplit(".", 1)[-1] for p in v["paths"]] == v["structures"], v
+        for path in v["paths"]:
+            assert _find_node_by_path(_site_store.get("garage"), path) is not None, path
 
 
 def test_layout_endpoint_detects_overhang():

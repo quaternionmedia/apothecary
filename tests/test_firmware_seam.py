@@ -224,6 +224,31 @@ def test_arduino_cli_missing_raises(no_arduino_cli):
         cli.board_list()
 
 
+def test_esptool_names_the_one_to_run_and_none_means_none(tmp_path, monkeypatch):
+    """ESPTOOL names the esptool the seam runs, as ARDUINO_CLI names arduino-cli;
+    `none` means none. The suites' servers set it so they never find the one a
+    person's own Arduino install bundles under their home folder."""
+    from apothecary.firmware import toolchains
+
+    bundled = tmp_path / "arduino15" / "packages" / "esp32" / "tools" / "esptool_py" / "4.6"
+    bundled.mkdir(parents=True)
+    exe = bundled / "esptool"
+    exe.write_text("#!/bin/sh\n")
+    exe.chmod(0o755)
+    monkeypatch.setattr(toolchains, "arduino_data_dir", lambda: tmp_path / "arduino15")
+    monkeypatch.setenv("PATH", str(tmp_path / "empty-bin"))
+    monkeypatch.setitem(__import__("sys").modules, "esptool", None)
+    monkeypatch.delenv("ESPTOOL", raising=False)
+    assert Esptool.detect() == [str(exe)]  # the bundled one, as before
+    monkeypatch.setenv("ESPTOOL", "none")
+    assert Esptool.detect() is None
+    named = tmp_path / "my-esptool"
+    named.write_text("#!/bin/sh\n")
+    named.chmod(0o755)
+    monkeypatch.setenv("ESPTOOL", str(named))
+    assert Esptool.detect() == [str(named)]
+
+
 def test_esptool_argv_and_missing(tmp_path):
     tool = Esptool(argv_prefix=["/fake/esptool"])
     argv = tool.write_flash_argv(

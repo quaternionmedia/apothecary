@@ -306,6 +306,14 @@ class Esptool:
 
     @staticmethod
     def detect() -> Optional[List[str]]:
+        # ESPTOOL names the one to run, as ARDUINO_CLI does for arduino-cli;
+        # "none" means none (the suites' servers, so they never find the one a
+        # person's own Arduino install bundles).
+        env = os.environ.get("ESPTOOL", "").strip()
+        if env.lower() == "none":
+            return None
+        if env and Path(env).is_file():
+            return [env]
         for name in ("esptool", "esptool.py"):
             found = shutil.which(name)
             if found:

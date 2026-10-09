@@ -9,10 +9,17 @@ Apothecary builds 3D-printable things from Python and keeps the parts it has bui
   OpenSCAD or JSCAD, from Python or from a scene JSON file.
 - **A parts library.** Each part is a folder under `parts/`: its SCAD, the parameters and
   bounds it declares, and the STL the `openscad` CLI builds from it.
-- **A viewer.** A local FastAPI server and a three.js viewer that zooms through sites,
-  assemblies and parts at any depth.
+- **A viewer.** A local FastAPI server and one page: a three.js world that zooms through
+  sites, assemblies and parts at any depth, with one rail beside it -- **Site** (the
+  tree, its problems, its SCAD, every pin and the site's jobs) and **Selected** stacked
+  over a strip of tabs, **Pictures**, the **Bench** and a docked **Machine**. The ring
+  (`m`, or a right-click) reaches every one of them by address.
 - **Boards and printers.** Sketches kept with their parts are compiled and uploaded to
-  Arduinos and ESP32s; a Marlin printer is monitored, and drives its node in the viewer.
+  Arduinos and ESP32s, from the command line or the viewer's Bench; a Marlin printer is
+  monitored, and drives its node in the viewer. Each board pinned in the viewer has one
+  Machine -- its state, its one log, its controls, a devkit's flashing -- opened from its
+  badge, polled once whatever shows it. A print is a job, kept with the part it makes
+  and listed in the printer's site.
 - **Photographs into pieces.** A picture becomes named, placed pieces you can build.
 - **It stays on this machine.** The server answers this machine only, and the process
   connects nowhere else but to fetch its tools, the firmware toolchain and OpenSCAD
@@ -63,9 +70,12 @@ uv run apothecary photo view PICTURE.jpg --width-mm 300   # a picture's pieces, 
 
 In the viewer, a picture is taken from the ring. Select a structure (the bench, say) and
 open its ring -- `m`, or a right-click on it -- then Camera › Pin here › Allow: the browser
-asks once, and with one camera it is pinned there at once. Camera › Look then keeps a frame
-and finds its shapes, and Selected says what to do next. Picture › Add on the same ring pins
-a picture from disk instead; the floor's verbs are under the canvas ring's Pictures › Floor.
+asks once, and with one camera it is pinned there at once. Camera › Take picture then keeps
+a frame and pins it there as a view, and Picture › Find shapes finds its shapes; each step's
+message names the next. Picture › Add on the same ring pins a picture from disk instead, and
+Picture › Folder one already in the picture folder: the seven newest by name, and any other
+once it is chosen in Pictures, a tab of the rail beside the world. The floor's verbs are
+under the canvas ring's Pictures › Floor.
 
 From Python:
 

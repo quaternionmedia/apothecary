@@ -1,31 +1,32 @@
-/* What a picture wears in the world: a look drawn where it was pinned.
+/* What a picture wears in the world: a view drawn where it was pinned.
  *
- * A look is a picture pinned at a host -- a root structure of the site -- or
- * at the site's floor (host ""), with the shapes a finder saw in it
- * (GET /sites/{s}/attached; apothecary/vision/looks.py). Here it is drawn:
+ * A view is a picture pinned at a host -- a root structure of the site -- or
+ * at the site's floor (host ""), with the shapes a finder saw in it once Find
+ * shapes has run (GET /sites/{s}/attached; apothecary/vision/views.py). Here it
+ * is drawn:
  *
  * - the mat: the picture itself, lying on the host's top (or on the floor
- *   beside the site), sized by the look's scale; an unsized look is fitted to
+ *   beside the site), sized by the view's scale; an unsized view is fitted to
  *   the host's top for drawing only, and its border is dashed to say so;
  * - an outline per shape on the mat, with an invisible pick mesh the page
  *   raycasts together with the nodes' meshes, nearest first; a shape made
  *   into a piece is drawn green and not picked (its piece is), one already
- *   made from another look is drawn dashed;
+ *   made from another view is drawn dashed;
  * - a camera's frustum looking down onto its host, its base the mat;
- * - one place badge (an anchor) per host that holds a camera or a look, the
+ * - one place badge (an anchor) per host that holds a camera or a view, the
  *   floor included. A click on it selects the host.
  *
  * Mats and outlines are drawn at the site's top level only; a frustum and a
  * badge follow their host's level, as a machine's badge does. The mat's
  * texture comes from GET /photos/pictures/file?px= (answered no-store, so it
- * never enters the browser's disk cache): made once per look, reused across
- * redraws, disposed when the look goes or the site changes. Nothing here
+ * never enters the browser's disk cache): made once per view, reused across
+ * redraws, disposed when the view goes or the site changes. Nothing here
  * runs per frame; the anchors layer projects the badges.
  *
  * While a camera is live at a host (setLive), its mat shows the video instead
  * of the picture, and the outlines of a past frame are hidden over it. Why this
- * on a made piece (trace) draws the look it came from, lights its outline and
- * draws a thread from the piece to it; with the look gone, the outline is drawn
+ * on a made piece (trace) draws the view it came from, lights its outline and
+ * draws a thread from the piece to it; with the view gone, the outline is drawn
  * from the copy of the shape the piece keeps.
  *
  * mountPictureMarks({ scene, anchors, base, hostBounds, hostInView,
@@ -33,7 +34,7 @@
  *   hostBounds(host) -> {min:[x,y,z], max:[x,y,z]} in the site's frame, or null;
  *   hostInView(host) -> whether the host is at the level being looked at;
  *   atTopLevel() -> whether the site's top level is on screen;
- *   floorPoint(made) -> [x,y,z] where the floor's things stand when no look says;
+ *   floorPoint(made) -> [x,y,z] where the floor's things stand when no view says;
  *   onSelect(host) -> the page selects the host ("" is the floor);
  *   onChange(attached) -> after every fetch that answered.
  */
@@ -64,48 +65,48 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
     let attached = null;           // the last answer of GET /sites/{s}/attached
     let generation = 0;            // a site change makes answers still in flight stale
     let inflight = null, queued = null;
-    const drawnPick = new Map();   // host -> look id a person picked to draw (Phase 4)
-    let chosen = null;             // { look, index }
+    const drawnPick = new Map();   // host -> view id a person picked to draw (Phase 4)
+    let chosen = null;             // { view, index }
     let live = null;               // { host, video, texture }: a camera live on its mat
-    let traced = null;             // { piece, look, index }: Why this, from a made piece
+    let traced = null;             // { piece, view, index }: Why this, from a made piece
     let traceGroup = null;         // the thread, and the outline drawn from a piece's copy
-    const textures = new Map();    // look id -> THREE.Texture, for the page's time on the site
-    const groups = new Map();      // host -> { mats: Group, frustum: LineSegments|null, look, mat }
+    const textures = new Map();    // view id -> THREE.Texture, for the page's time on the site
+    const groups = new Map();      // host -> { mats: Group, frustum: LineSegments|null, view, mat }
     const pickables = [];
 
     // --- what is known ------------------------------------------------------------------
-    const looks = () => (attached ? attached.looks : []);
+    const views = () => (attached ? attached.views : []);
     const cameras = () => (attached ? attached.cameras : []);
-    const looksAt = (host) => looks().filter((l) => l.host === host);
+    const viewsAt = (host) => views().filter((v) => v.host === host);
     function drawnAt(host) {
-        const here = looksAt(host);
+        const here = viewsAt(host);
         if (!here.length) return null;
         const picked = drawnPick.get(host);
-        return here.find((l) => l.id === picked) || here[here.length - 1];  // the newest, oldest first
+        return here.find((v) => v.id === picked) || here[here.length - 1];  // the newest, oldest first
     }
     const cameraAt = (host) => cameras().find((c) => c.path === host && c.host_found !== false) || null;
     function hosts() {
         const set = new Set();
-        for (const l of looks()) if (l.host_found) set.add(l.host);
+        for (const v of views()) if (v.host_found) set.add(v.host);
         for (const c of cameras()) if (c.host_found) set.add(c.path);
         if (live) set.add(live.host);
         return [...set];
     }
 
-    // Where a look's mat lies and how big it is drawn: its scale's width, or
+    // Where a view's mat lies and how big it is drawn: its scale's width, or
     // fitted to the host's top (a fixed width at the floor) and said unsized.
-    function matOf(look) {
-        if (!look || !look.mat) return null;
-        const tall = look.pixel_height / look.pixel_width;
-        let [cx, cy, cz] = look.mat.centre;
-        let width = look.mat.width, sized = true;
+    function matOf(view) {
+        if (!view || !view.mat) return null;
+        const tall = view.pixel_height / view.pixel_width;
+        let [cx, cy, cz] = view.mat.centre;
+        let width = view.mat.width, sized = true;
         if (!width) {
             sized = false;
-            if (look.host === FLOOR) {
+            if (view.host === FLOOR) {
                 width = FLOOR_UNSIZED_MM;
                 cx += width / 2;  // the anchor is the near edge; unsized, the server reports it as the centre
             } else {
-                const b = hostBounds(look.host);
+                const b = hostBounds(view.host);
                 if (!b) return null;
                 const w = b.max[0] - b.min[0], d = b.max[1] - b.min[1];
                 width = Math.max(1, Math.min(w, d / tall));
@@ -113,7 +114,7 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
         }
         return { centre: [cx, cy, cz], width, depth: width * tall, sized };
     }
-    // A camera live at a host with no look: the video on a mat fitted to the
+    // A camera live at a host with no view: the video on a mat fitted to the
     // host's top (a fixed width on the floor), at the video's own shape.
     function liveMat(host) {
         const v = live && live.video;
@@ -134,10 +135,10 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
     }
 
     // --- drawing ------------------------------------------------------------------------
-    function textureFor(look) {
-        let tex = textures.get(look.id);
+    function textureFor(view) {
+        let tex = textures.get(view.id);
         if (tex) return tex;
-        const url = `${base}/photos/pictures/file?path=${encodeURIComponent(look.picture)}&px=${TEXTURE_PX}`;
+        const url = `${base}/photos/pictures/file?path=${encodeURIComponent(view.picture)}&px=${TEXTURE_PX}`;
         tex = new THREE.TextureLoader().load(
             url,
             (t) => { t.userData.loaded = true; },
@@ -146,7 +147,7 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
         );
         tex.colorSpace = THREE.SRGBColorSpace;
         tex.userData = { url, loaded: false, failed: false };
-        textures.set(look.id, tex);
+        textures.set(view.id, tex);
         return tex;
     }
 
@@ -158,17 +159,17 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
         return g;
     }
 
-    function colourOf(look, shape) {
-        if (traced && traced.look === look.id && traced.index === shape.index) return TRACE_COLOR;
-        if (chosen && chosen.look === look.id && chosen.index === shape.index) return CHOSEN_COLOR;
+    function colourOf(view, shape) {
+        if (traced && traced.view === view.id && traced.index === shape.index) return TRACE_COLOR;
+        if (chosen && chosen.view === view.id && chosen.index === shape.index) return CHOSEN_COLOR;
         if (shape.status === "made") return MADE_COLOR;
         if (shape.status === "already_made") return ALREADY_COLOR;
         return FOUND_COLOR;
     }
 
-    function drawMat(host, look, mat) {
+    function drawMat(host, view, mat) {
         const group = new THREE.Group();
-        group.name = look ? `look:${look.id}` : `live:${host}`;
+        group.name = view ? `view:${view.id}` : `live:${host}`;
         // The picture: near-left is its bottom-left (picture y runs down, world y away).
         const corners = [
             onMat(mat, 0, 1, MAT_LIFT), onMat(mat, 1, 1, MAT_LIFT),
@@ -177,9 +178,9 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
         const showingLive = live && live.host === host;
         const picture = new THREE.Mesh(
             quad(corners, [[0, 0], [1, 0], [1, 1], [0, 1]]),
-            new THREE.MeshBasicMaterial({ map: showingLive ? live.texture : textureFor(look), side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
+            new THREE.MeshBasicMaterial({ map: showingLive ? live.texture : textureFor(view), side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
         );
-        picture.userData.pick = { host, look: look ? look.id : null, index: null };
+        picture.userData.pick = { host, view: view ? view.id : null, index: null };
         picture.userData.live = !!showingLive;
         group.add(picture);
         pickables.push(picture);
@@ -193,20 +194,20 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
         if (!mat.sized) border.computeLineDistances();
         group.add(border);
         // Live, the outlines of a past frame are not drawn over the present one.
-        if (showingLive || !look) return group;
+        if (showingLive || !view) return group;
         // The outlines, and a pick mesh under each one not made into a piece.
-        for (const shape of look.shapes) {
+        for (const shape of view.shapes) {
             const pts = shape.points && shape.points.length >= 3
                 ? shape.points
                 : [[shape.min[0], shape.min[1]], [shape.max[0], shape.min[1]], [shape.max[0], shape.max[1]], [shape.min[0], shape.max[1]]];
             const world = pts.map(([fx, fy]) => onMat(mat, fx, fy, OUTLINE_LIFT));
-            const colour = colourOf(look, shape);
+            const colour = colourOf(view, shape);
             const material = shape.status === "already_made"
                 ? new THREE.LineDashedMaterial({ color: colour, dashSize: 8, gapSize: 6 })
                 : new THREE.LineBasicMaterial({ color: colour });
             const outline = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(world.map((c) => toScene(...c))), material);
             if (shape.status === "already_made") outline.computeLineDistances();
-            outline.userData.shape = { look: look.id, index: shape.index, status: shape.status };
+            outline.userData.shape = { view: view.id, index: shape.index, status: shape.status };
             group.add(outline);
             if (shape.status === "made") continue;
             const outlineShape = new THREE.Shape(world.map((c) => new THREE.Vector2(c[0], c[1])));
@@ -219,7 +220,7 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
             }
             flat.computeBoundingSphere();
             const pick = new THREE.Mesh(flat, new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide }));
-            pick.userData.pick = { host, look: look.id, index: shape.index };
+            pick.userData.pick = { host, view: view.id, index: shape.index };
             group.add(pick);
             pickables.push(pick);
         }
@@ -227,7 +228,7 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
     }
 
     // A camera looks down onto its host: from an apex over the middle to the
-    // mat's corners (the host's top, or a square on the floor, with no look).
+    // mat's corners (the host's top, or a square on the floor, with no view).
     function drawFrustum(host, mat) {
         let rect = mat;
         if (!rect) {
@@ -255,13 +256,15 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
 
     function badgeText(host) {
         const cam = cameraAt(host);
-        const look = drawnAt(host);
+        const view = drawnAt(host);
         const bits = [];
         if (host === FLOOR) bits.push("floor");
         if (cam) bits.push(`📷 ${cam.label || "camera"}`);
-        if (look) {
-            const mat = look.mat && look.mat.width;
-            bits.push(`look: ${look.shapes.length} shape${look.shapes.length === 1 ? "" : "s"}${mat ? "" : " · unsized"}`);
+        if (view) {
+            const mat = view.mat && view.mat.width;
+            // Not yet searched reads apart from searched and empty: Find shapes is next.
+            const shapes = view.finder === null ? "Find shapes next" : `${view.shapes.length} shape${view.shapes.length === 1 ? "" : "s"}`;
+            bits.push(`view: ${shapes}${mat ? "" : " · unsized"}`);
         }
         return bits.join(" · ");
     }
@@ -295,11 +298,11 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
         clearDrawn();
         const wanted = new Set();
         for (const host of hosts()) {
-            const look = drawnAt(host);
+            const view = drawnAt(host);
             const liveHere = !!(live && live.host === host);
-            const mat = matOf(look) || (liveHere ? liveMat(host) : null);
-            const entry = { mats: null, frustum: null, look, mat };
-            if (mat && (look || liveHere)) { entry.mats = drawMat(host, look, mat); scene.add(entry.mats); }
+            const mat = matOf(view) || (liveHere ? liveMat(host) : null);
+            const entry = { mats: null, frustum: null, view, mat };
+            if (mat && (view || liveHere)) { entry.mats = drawMat(host, view, mat); scene.add(entry.mats); }
             if (cameraAt(host)) { entry.frustum = drawFrustum(host, mat); if (entry.frustum) scene.add(entry.frustum); }
             groups.set(host, entry);
             const key = keyFor(host);
@@ -316,20 +319,20 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
             const cam = cameraAt(host);
             if (cam) badge.dataset.camera = cam.id; else delete badge.dataset.camera;
             badge.classList.toggle("has-camera", !!cam);
-            badge.classList.toggle("has-look", !!look);
+            badge.classList.toggle("has-view", !!view);
             badge.textContent = badgeText(host);
         }
         for (const key of anchors.keys()) if (key.startsWith("place:") && !wanted.has(key)) anchors.remove(key);
-        // A texture is kept while its look is pinned here, and no longer.
-        const pinned = new Set(looks().map((l) => l.id));
+        // A texture is kept while its view is pinned here, and no longer.
+        const pinned = new Set(views().map((v) => v.id));
         for (const [id, tex] of textures) if (!pinned.has(id)) { tex.dispose(); textures.delete(id); }
-        if (chosen && !looks().some((l) => l.id === chosen.look && l.shapes.some((s) => s.index === chosen.index && s.status !== "made"))) chosen = null;
+        if (chosen && !views().some((v) => v.id === chosen.view && v.shapes.some((s) => s.index === chosen.index && s.status !== "made"))) chosen = null;
         drawTrace();
         sync();
     }
 
     // Why this: a thread from a made piece's top to its outline, the outline lit
-    // on its look's mat, or drawn from the piece's own copy when the look is gone.
+    // on its view's mat, or drawn from the piece's own copy when the view is gone.
     function clearTrace() {
         if (!traceGroup) return;
         scene.remove(traceGroup);
@@ -345,8 +348,8 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
         const group = new THREE.Group();
         group.name = `trace:${traced.piece}`;
         const g = groups.get(record.host);
-        const shown = !!(g && g.look && g.look.id === record.look && g.mat && g.mats && g.look.shapes.some((s) => s.index === record.shape_index));
-        const shape = shown ? g.look.shapes.find((s) => s.index === record.shape_index) : record.shape;
+        const shown = !!(g && g.view && g.view.id === record.view && g.mat && g.mats && g.view.shapes.some((s) => s.index === record.shape_index));
+        const shape = shown ? g.view.shapes.find((s) => s.index === record.shape_index) : record.shape;
         const pts = shape.points && shape.points.length >= 3
             ? shape.points
             : [[shape.min[0], shape.min[1]], [shape.max[0], shape.min[1]], [shape.max[0], shape.max[1]], [shape.min[0], shape.max[1]]];
@@ -406,7 +409,7 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
                 answer = r.ok ? await r.json() : null;
             } catch (e) { answer = null; }
             if (asked === generation) {
-                attached = answer || { site: name, cameras: [], looks: [], made: {} };
+                attached = answer || { site: name, cameras: [], views: [], made: {} };
                 redraw();
                 if (onChange) onChange(attached);
             }
@@ -458,22 +461,22 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
         sync,
         /* The meshes a click can land on, to raycast with the nodes' own. */
         pickables: visiblePickables,
-        /* What a pick mesh stands for: { host, look, index } (index null: the mat). */
+        /* What a pick mesh stands for: { host, view, index } (index null: the mat). */
         picked(object) { return (object && object.userData && object.userData.pick) || null; },
-        choose(lookId, index) {
-            const look = looks().find((l) => l.id === lookId);
-            const shape = look && look.shapes.find((s) => s.index === index);
+        choose(viewId, index) {
+            const view = views().find((v) => v.id === viewId);
+            const shape = view && view.shapes.find((s) => s.index === index);
             if (!shape || shape.status === "made") return false;
-            chosen = { look: lookId, index };
+            chosen = { view: viewId, index };
             redraw();
             return true;
         },
         unchoose() { if (!chosen) return; chosen = null; redraw(); },
-        /* Draw another of a host's looks: a view change, never a site switch. */
-        draw(host, lookId) {
-            if (!looksAt(host).some((l) => l.id === lookId)) return false;
-            drawnPick.set(host, lookId);
-            if (chosen && chosen.look !== lookId) chosen = null;
+        /* Draw another of a host's views: a change of what is drawn, never a site switch. */
+        draw(host, viewId) {
+            if (!viewsAt(host).some((v) => v.id === viewId)) return false;
+            drawnPick.set(host, viewId);
+            if (chosen && chosen.view !== viewId) chosen = null;
             redraw();
             return true;
         },
@@ -488,32 +491,32 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
             redraw();
         },
         liveAt() { return live ? live.host : null; },
-        /* Why this, from a made piece: its look drawn, its outline lit, a thread to it. */
+        /* Why this, from a made piece: its view drawn, its outline lit, a thread to it. */
         trace(piece) {
             const record = attached && attached.made ? attached.made[piece] : null;
             if (!record) return null;
-            if (record.look_pinned) drawnPick.set(record.host, record.look);
-            traced = { piece, look: record.look, index: record.shape_index };
+            if (record.view_pinned) drawnPick.set(record.host, record.view);
+            traced = { piece, view: record.view, index: record.shape_index };
             redraw();
             return traced ? { ...record, shown: traced.shown, outline: traced.outline } : null;
         },
         untrace() { if (!traced) return; traced = null; clearTrace(); },
-        /* What Why this drew: the piece, the outline's centre, and whether its look is drawn. */
+        /* What Why this drew: the piece, the outline's centre, and whether its view is drawn. */
         traced() {
             if (!traced || !traceGroup) return null;
-            return { piece: traced.piece, look: traced.look, index: traced.index, shown: traced.shown, outline: traced.outline, visible: traceGroup.visible };
+            return { piece: traced.piece, view: traced.view, index: traced.index, shown: traced.shown, outline: traced.outline, visible: traceGroup.visible };
         },
         chosen() { return chosen ? { ...chosen } : null; },
         attached() { return attached; },
         cameras,
-        looksAt,
+        viewsAt,
         drawnAt,
         cameraAt,
         madeRecord(piece) { return attached && attached.made ? attached.made[piece] || null : null; },
-        /* A point of a drawn look's picture (fractions, y down) in scene coordinates. */
-        scenePoint(lookId, fx, fy) {
+        /* A point of a drawn view's picture (fractions, y down) in scene coordinates. */
+        scenePoint(viewId, fx, fy) {
             for (const g of groups.values()) {
-                if (g.look && g.look.id === lookId && g.mat) return toScene(...onMat(g.mat, fx, fy, MAT_LIFT));
+                if (g.view && g.view.id === viewId && g.mat) return toScene(...onMat(g.mat, fx, fy, MAT_LIFT));
             }
             return null;
         },
@@ -521,10 +524,10 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
         state() {
             return [...groups.entries()].map(([host, g]) => ({
                 host,
-                look: g.look ? g.look.id : null,
+                view: g.view ? g.view.id : null,
                 mat: g.mats ? { visible: g.mats.visible, centre: g.mat.centre, width: g.mat.width, depth: g.mat.depth, sized: g.mat.sized } : null,
                 outlines: g.mats ? g.mats.children.filter((o) => o.userData.shape).map((o) => ({ ...o.userData.shape, colour: o.material.color.getHex() })) : [],
-                texture: g.look && textures.get(g.look.id) ? { ...textures.get(g.look.id).userData } : null,
+                texture: g.view && textures.get(g.view.id) ? { ...textures.get(g.view.id).userData } : null,
                 live: !!(live && live.host === host),
                 frustum: g.frustum ? { visible: g.frustum.visible } : null,
                 camera: cameraAt(host) ? cameraAt(host).id : null,
