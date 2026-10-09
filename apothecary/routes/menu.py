@@ -67,7 +67,9 @@ class Carried(BaseModel):
 
     `did` is the point of this shape. A person who presses a wedge and sees
     nothing move has no way to tell "the viewer handles this" from "nothing
-    handles this", and neither does a test. This says which.
+    handles this", and neither does a test. This says which. `added` names the
+    piece the verb put in the site (Camera › Add here's camera), for the page
+    to select.
     """
 
     action: str
@@ -75,6 +77,7 @@ class Carried(BaseModel):
     did: str
     site: Optional[Dict[str, object]] = None
     address: Optional[str] = None
+    added: Optional[str] = None
 
 
 def _site(name: Optional[str]):
@@ -256,6 +259,7 @@ def _carry_camera(chosen: Chosen, who: Carries) -> Carried:
             f"added {camera.name} above {host or 'the floor'}, looking straight down: "
             "its Device says which of this browser's cameras it is"
         )
+        added = camera.name
     elif action == "camera:remove":
         site = _site(name)
         try:
@@ -263,6 +267,7 @@ def _carry_camera(chosen: Chosen, who: Carries) -> Carried:
         except cameras.CameraNotFound as missing:
             raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
         did = f"removed {target}; the pictures it took, and the pieces made from them, stay"
+        added = None
     else:
         raise HTTPException(status_code=400, detail=f"{action!r} is no camera verb")
     return Carried(
@@ -271,6 +276,7 @@ def _carry_camera(chosen: Chosen, who: Carries) -> Carried:
         did=did,
         site=_site_payload(site, _site_store.validator(name)(site)),
         address=chosen.intent.address,
+        added=added,
     )
 
 

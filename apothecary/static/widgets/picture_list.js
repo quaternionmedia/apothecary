@@ -1,8 +1,12 @@
 /* Pictures: every picture under the picture root -- the folder's own, and the
- * ones the browser kept under captures/ and uploads/ -- newest first, each with
- * the places it is pinned at as a view; Forget on a kept one, and Purge kept.
- * The gathering is a section of it until gathering leaves core (the pictures
- * plan's Phase 1).
+ * ones the browser kept under captures/ and uploads/ -- as thumbnails grouped by
+ * the camera that took each (this site's cameras first, then another site's),
+ * the pictures no camera took -- added files and the folder's own -- in a group
+ * of their own; newest first in each, each with the places it is pinned at as a
+ * view; Forget on a kept one, and Purge kept. A picture's camera is the one its
+ * kept name says (GET /photos/pictures' `camera`), else the one a view of it
+ * says. The gathering is a section of it until gathering leaves core (the
+ * pictures plan's Phase 1).
  *
  * A row is chosen by a click on it, one at a time, and let go by a click on it
  * again or by Escape. The choice is the ring's to act on: the page tells it with
@@ -119,20 +123,50 @@ export function mountPictureList(root, { base = "", world = null, log = null } =
             ? `<span class="picture-view here" data-view="${esc(v.id)}" title="Select ${esc(at(v.host))} and draw this view">${esc(at(v.host))}</span>`
             : `<span class="picture-view" title="Pinned in ${esc(v.site)}: open that site to draw it">${esc(v.site)} › ${esc(at(v.host))}</span>`)).join("");
     }
+    // The camera that took a picture -- its kept name says, else a view of it does --
+    // as a group's key; "" for a picture no camera took.
+    function cameraOf(p) {
+        if (p.camera) return `${p.camera.site}\u0000${p.camera.name}`;
+        const view = state.views.find((v) => v.picture === p.path && v.camera);
+        return view ? `${view.site}\u0000${view.camera}` : "";
+    }
+    function groupTitle(key) {
+        if (!key) return "No camera: added, and the folder's own";
+        const [site, name] = key.split("\u0000");
+        const here = world && world.siteName ? world.siteName() : "";
+        return `📷 ${name}${site === here ? "" : ` · ${site}`}`;
+    }
+    function tile(p) {
+        const views = viewsHtml(p.path);
+        const name = p.path.split("/").pop();
+        return `<div class="picture-row picture-tile" data-path="${esc(p.path)}" role="option" title="Choose ${esc(p.path)} (${Math.round(p.size / 1024)} kB), for the ring's Picture › Folder to pin">`
+            + `<img src="${base}/photos/pictures/file?path=${encodeURIComponent(p.path)}&px=256" alt="${esc(name)}" loading="lazy">`
+            + `<span class="picture-name">${esc(name)}${p.kept ? ` · ${HOW_KEPT[p.kept] || "kept"}` : ""}</span>`
+            + `<span class="picture-views">${views || '<span class="empty">pinned nowhere</span>'}</span>`
+            + (p.kept ? `<button type="button" class="pictures-forget" data-path="${esc(p.path)}" title="Forget this picture; its views are unpinned, every site's">Forget</button>` : "")
+            + "</div>";
+    }
     function render() {
         const list = $("pictures-list");
         if (!state.pictures.length) {
-            list.innerHTML = '<span class="empty">no pictures in the folder yet: take one with a pinned camera, drop one on the world, add some here, or put some in the folder</span>';
+            list.innerHTML = '<span class="empty">no pictures in the folder yet: take one with a camera, drop one on the world, add some here, or put some in the folder</span>';
         } else {
-            list.innerHTML = state.pictures.map((p) => {
-                const views = viewsHtml(p.path);
-                return `<div class="pin-row picture-row" data-path="${esc(p.path)}" role="option" title="Choose ${esc(p.path)}, for the ring's Picture › Folder to pin">`
-                    + `<img src="${base}/photos/pictures/file?path=${encodeURIComponent(p.path)}&px=64" alt="" loading="lazy">`
-                    + `<div class="picture-what"><span class="picture-name" title="${esc(p.path)} · ${Math.round(p.size / 1024)} kB">${esc(p.path)}${p.kept ? ` · ${HOW_KEPT[p.kept] || "kept"}` : ""}</span>`
-                    + `<span class="picture-views">${views || '<span class="empty">pinned nowhere</span>'}</span></div>`
-                    + (p.kept ? `<button type="button" class="pictures-forget" data-path="${esc(p.path)}" title="Forget this picture; its views are unpinned, every site's">Forget</button>` : "")
-                    + "</div>";
-            }).join("");
+            const here = world && world.siteName ? world.siteName() : "";
+            const groups = new Map();
+            for (const p of state.pictures) {
+                const key = cameraOf(p);
+                if (!groups.has(key)) groups.set(key, []);
+                groups.get(key).push(p);
+            }
+            // This site's cameras, then another site's, by name; then the pictures no camera took.
+            const order = (key) => (!key ? [2, ""] : [key.startsWith(`${here}\u0000`) ? 0 : 1, key]);
+            const keys = [...groups.keys()].sort((a, b) => {
+                const [x, y] = [order(a), order(b)];
+                return x[0] - y[0] || (x[1] < y[1] ? -1 : x[1] > y[1] ? 1 : 0);
+            });
+            list.innerHTML = keys.map((key) => `<div class="picture-group" data-camera="${esc(key.replace("\u0000", "/"))}">`
+                + `<div class="picture-group-title">${esc(groupTitle(key))} <span class="note">${groups.get(key).length}</span></div>`
+                + `<div class="picture-tiles">${groups.get(key).map(tile).join("")}</div></div>`).join("");
         }
         for (const row of root.querySelectorAll(".picture-row")) row.addEventListener("click", (ev) => rowClicked(row.dataset.path, ev));
         for (const forgetBtn of root.querySelectorAll(".pictures-forget")) forgetBtn.addEventListener("click", () => forget(forgetBtn.dataset.path).catch((e) => say(e.message, "bad")));

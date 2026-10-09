@@ -504,8 +504,11 @@ def test_add_here_and_remove_are_carried_by_the_server_and_the_ring_knows_a_came
     assert r.status_code == 200, r.text
     assert "camera_1" in r.json()["did"] and r.json()["carried_by"] == "the server carries it out"
     assert "camera_1" in {s["name"] for s in r.json()["site"]["structures"]}
+    # The answer names the camera added, for the page to select it.
+    assert r.json()["added"] == "camera_1"
     r = c.post("/menu/intent", json=_intent("camera:add-here:@floor", [], "canvas"))
     assert r.status_code == 200 and "camera_2" in r.json()["did"]
+    assert r.json()["added"] == "camera_2"
     assert c.post("/menu/intent", json=_intent("camera:add-here", ["nowhere"])).status_code == 404
     # The camera's own ring: its device is the server's to say, from its record.
     c.put("/sites/garage/cameras/camera_1/device", json={"id": "mine", "label": "desk"})
