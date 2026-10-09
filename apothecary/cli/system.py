@@ -133,6 +133,16 @@ def check():
         _safe_echo(
             "  • arduino-cli not installed (optional: apothecary firmware install)", fg="yellow"
         )
+    for module in fw.toolchains:
+        if module.id == "arduino":
+            continue
+        if module.ok:
+            tools = ", ".join(t.version for t in module.tools if t.ok)
+            _safe_echo(f"  ✓ {module.label} ({tools})")
+        else:
+            _safe_echo(
+                f"  • {module.label} not installed (optional: {module.install})", fg="yellow"
+            )
     click.echo("")
 
     # Check for parts

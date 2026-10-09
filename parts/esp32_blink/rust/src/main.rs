@@ -24,7 +24,7 @@ esp_bootloader_esp_idf::esp_app_desc!();
 
 const LED_BUILTIN: u8 = 2;
 const PERIOD_MS: u32 = 500;
-const ANNOUNCE_EVERY: u32 = 10; // beats (~5 s at PERIOD_MS 500)
+const ANNOUNCE_EVERY: u32 = 10; // beats: one each time the LED comes on, once a second
 
 fn announce() {
     println!("apothecary esp32_blink: hello");

@@ -6,9 +6,9 @@
  * part it makes, and the printer's jobs as its history). A devkit's Machine
  * is its port and what it is, the sketch it should run against what it was
  * heard saying, and its Flashing card: a sketch (what it should run, to start
- * with) built for a board and uploaded to this port, after asking, the task's
- * output, then Identify -- the Bench's form and task log (widgets/sketches.js,
- * tasks.js), for this one port. Both have the board's one log, a printer's with
+ * with) -- an Arduino one built for a board, or a Rust one for its chip --
+ * uploaded to this port, after asking, the task's output, then Identify -- the
+ * Bench's form and task log (widgets/sketches.js, tasks.js), for this one port. Both have the board's one log, a printer's with
  * the one box that asks it for a report: the comms log the server keeps for the
  * port (poll traffic hidden unless asked for), or a devkit's serial output.
  *
@@ -377,13 +377,20 @@ export function mountMachine(root, { base = "", port = "", host = "popup", board
         $("c-board").innerHTML = rows.join("<br>");
         const w = sketchWords(bd.expected, bd.observed);
         const lines = [];
-        if (w.rec) lines.push(`should run <b>${esc(w.should)}</b> · ${esc(w.rec.fqbn || "esptool")} · flashed ${esc(new Date(w.rec.flashed_at).toLocaleString())}${w.rec.build_sha256 ? " · build " + esc(w.rec.build_sha256.slice(0, 10)) : ""}`);
+        if (w.rec) lines.push(`should run <b>${esc(w.should)}</b> · ${esc(builtFor(w.rec))} · flashed ${esc(new Date(w.rec.flashed_at).toLocaleString())}${w.rec.build_sha256 ? " · build " + esc(w.rec.build_sha256.slice(0, 10)) : ""}`);
         else lines.push('<span class="warn">nothing flashed from apothecary</span>');
         for (const t of w.drift) lines.push(`<span class="warn">! ${esc(t)}</span>`);
         lines.push(w.observed
             ? `observed <b class="${w.verdict === "match" ? "ok" : (w.verdict === "mismatch" ? "bad" : "")}">${esc(w.observed)}</b>${w.verdict === "match" ? " ✓ matches" : (w.verdict === "mismatch" ? " ✗ differs" : "")}`
             : '<span class="empty">observed: no hello heard yet — Identify listens for it</span>');
         $("c-sketch").innerHTML = lines.join("<br>");
+    }
+    // What a flash record says it was built for: an Arduino sketch's board, another
+    // module's sketch its module and chip (rust-esp32 · esp32), raw images esptool.
+    function builtFor(rec) {
+        if (rec.fqbn) return rec.fqbn;
+        if (rec.toolchain && rec.toolchain !== "arduino") return [rec.toolchain, rec.target].filter(Boolean).join(" · ");
+        return "esptool";
     }
     function renderAll() { renderStatus(); renderChart(); renderLog(); }
 
@@ -934,9 +941,10 @@ export function mountMachine(root, { base = "", port = "", host = "popup", board
         const tasks = mountTasks($("flash-task"), { base: BASE, history: false, say: flashSay });
         const build = mountBuild($("flash-form"), {
             base: BASE, tasks, port, say: flashSay,
+            // By its id: the Rust esp32_blink when that is what was flashed here.
             suggest: () => {
                 const e = b().expected;
-                return (e && e.record && e.record.sketch) || (pin && pin.sketch) || null;
+                return (e && e.record && (e.record.sketch_id || e.record.sketch)) || (pin && pin.sketch) || null;
             },
             onEnd: (task, what) => flashed(port, task, what),
         });
@@ -945,7 +953,7 @@ export function mountMachine(root, { base = "", port = "", host = "popup", board
     }
     async function flashed(port, task, what) {
         if (state.port !== port) return;
-        logLine("sys", `${what.kind === "upload" ? "upload" : "compile"} of ${what.sketch} (${what.fqbn}): ${task.status}`);
+        logLine("sys", `${what.kind === "upload" ? "upload" : "compile"} of ${what.label || `${what.sketch} (${what.fqbn})`}: ${task.status}`);
         if (what.kind !== "upload" || task.status !== "succeeded") return;
         await model.loadInfo(port).catch(() => {});
         renderDevkit();

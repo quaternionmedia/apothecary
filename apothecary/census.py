@@ -254,6 +254,13 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "lib-input": (WIDGET, WHAT_YOU_SEE, "a box for a library to install"),
     "lib-btn": (WIDGET, WHAT_IS_THERE, "a button that installs that library"),
     "core-install": (WIDGET, WHAT_IS_THERE, "a button that installs a board core"),
+    # Every other toolchain module, drawn from the status beside arduino-cli: Rust
+    # for the ESP32 today, one Install each.
+    "module-install": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that installs a toolchain module's tools (Rust for the ESP32)",
+    ),
     # Sketches: pick one from a drop-down (a list on the firmware page), name the
     # board and the port, build and send.
     "sketch-select": (WIDGET, WHAT_YOU_SEE, "a drop-down of the sketches under parts/"),
@@ -671,6 +678,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "level-card:click:closest": (WIDGET, WHAT_IS_THERE, "a corner button, moving the nozzle there"),
     # ---- the Bench --------------------------------------------------------
     "coresEl:click:closest": (WIDGET, WHAT_IS_THERE, "a core's Install button"),
+    "modulesEl:click:closest": (WIDGET, WHAT_IS_THERE, "a toolchain module's Install button"),
     "libEl:keydown:libraries": (WIDGET, WHAT_IS_THERE, "installing the typed libraries, by Enter"),
     "sketchEl:change:choose": (
         WIDGET,

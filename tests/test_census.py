@@ -285,7 +285,18 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # what a crumb does now (rootCrumb:click:goUpTo, crumb:click:goUpTo), going up one
 # level as Up does and further as the trail did, so jumpTo keeps its meaning for the
 # page's own callers.
-VIEWER_CEILING = 115
+#
+# Firmware in Rust (docs/plans/rust-2026-10-08.md): one control of its own and one
+# place the page listens more, neither ring-backed (`apothecary census` counts them).
+# The Bench's toolchain card draws every toolchain module beside arduino-cli, each
+# with its own Install (module-install, and its one listener,
+# modulesEl:click:closest): Rust for the ESP32's fetches rustup, espup's Xtensa
+# toolchain and espflash and vendors the crates. Panels › Bench has no cell left
+# for it -- its eight are full -- so it is not ring-backed; whether Install should
+# become a ring of the modules is a question for the owner. The Rust sketches
+# need no control of their own: they are rows of the sketch drop-down, and
+# choosing one hides the board box it takes none of.
+VIEWER_CEILING = 116
 
 
 def test_the_viewer_stays_under_its_ceiling():

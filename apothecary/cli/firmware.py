@@ -142,7 +142,12 @@ def _print_status(status) -> None:
         click.secho(f"{module.label} ({builds})", bold=True)
         for tool in module.tools:
             if tool.ok:
-                click.echo(f"  ✓ {tool.name} {tool.version}: {tool.path}")
+                said = (
+                    tool.version
+                    if tool.version.startswith(tool.name)
+                    else f"{tool.name} {tool.version}"
+                )
+                click.echo(f"  ✓ {said}: {tool.path}")
             elif tool.path:
                 click.secho(f"  ✗ {tool.name}: {tool.path} does not run", fg="red")
             else:

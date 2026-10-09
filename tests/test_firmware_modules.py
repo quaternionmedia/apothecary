@@ -380,9 +380,25 @@ def test_the_cli_lists_compiles_and_names_the_rust_install(fake_rust, builds):
     assert refused.exit_code != 0 and "takes no FQBN" in refused.output
     validated = runner.invoke(cli, ["firmware", "validate"])
     assert "Rust for the ESP32 (rust for esp32)" in validated.output
-    assert "✓ espflash espflash 4.6.0" in validated.output
+    assert "✓ espflash 4.6.0: " in validated.output
+    assert "✓ cargo 1.99.0-nightly (fake 2026-09-30): " in validated.output
     helped = runner.invoke(cli, ["firmware", "install", "--help"])
     assert "--rust-esp32" in helped.output
+
+
+def test_check_says_each_module(fake_rust):
+    """`apothecary check` names Rust for the ESP32 beside arduino-cli, installed or not."""
+    shown = CliRunner().invoke(cli, ["check"])
+    assert "✓ arduino-cli 9.9.9" in shown.output
+    assert "✓ Rust for the ESP32 (cargo 1.99.0-nightly" in shown.output
+
+
+def test_check_names_the_rust_install_when_it_is_missing(fake_arduino_cli):
+    shown = CliRunner().invoke(cli, ["check"])
+    assert (
+        "Rust for the ESP32 not installed (optional: apothecary firmware install --rust-esp32)"
+        in shown.output
+    )
 
 
 def test_install_rust_alone_leaves_arduino_cli_be(fake_arduino_cli, monkeypatch):
