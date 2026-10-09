@@ -44,7 +44,7 @@
         .toolbar button:disabled { opacity: 0.4; cursor: not-allowed; }
         .toolbar .spacer { flex: 1 1 0; min-width: 0; }
         /* The View menu: how the world is drawn, folded behind ⚙ View as Site's
-           sections fold; each item a cell of the canvas ring's Panels › View. */
+           sections fold; each item a cell of the canvas ring's View. */
         .view-menu { position: relative; }
         .view-menu > summary { list-style: none; user-select: none; }
         .view-menu > summary::-webkit-details-marker { display: none; }
@@ -487,7 +487,7 @@
             <span id="breadcrumb" title="Where you are: a crumb goes up to its level (Backspace goes up one)"></span>
             <div class="spacer"></div>
             <details id="view-menu" class="view-menu">
-                <summary title="How the world is drawn (⌗ Panels › View)">⚙ View</summary>
+                <summary title="How the world is drawn">⚙ View</summary>
                 <div class="view-menu-body">
                     <label class="toolbar-toggle" title="Snap dragged positions to a 50mm grid -- keeps hand-placed layouts exact instead of off by a few millimeters">
                         <input type="checkbox" id="snap-toggle" checked> Snap to grid
@@ -1864,7 +1864,7 @@
                 if (this.viewMenuEl.open && !this.viewMenuEl.contains(event.target)) this.viewMenuEl.open = false;
             }
 
-            // A cell of the canvas ring's Panels › View: what its item in the View menu
+            // A cell of the canvas ring's View: what its item in the View menu
             // does, done to that item (as a person would), so the two never disagree.
             // Answers what the status line says.
             viewVerb(verb) {
@@ -4100,7 +4100,7 @@
     // The ring. Drawing and keys live in /static/ring.js; this is only the
     // wiring: what the ring opens on, what each chosen verb calls, and the
     // addresses written onto the controls the page already has.
-    import { installRing, annotate, resolveRing } from '/static/ring.js';
+    import { installRing, annotate, addressOf, resolveRing } from '/static/ring.js';
 
     (() => {
         const BASE = {{ base_url | tojson }};
@@ -4377,10 +4377,14 @@
         ];
         // The list, from the canvas ring: each row at this level is a piece the
         // ring's Pieces cell reaches, and the trail's crumb one level up is its Up;
-        // the View menu's items, Panels › View; and the Bench's buttons, its verbs
-        // under Panels › Bench.
+        // the View menu, the cell View (its items, View's cells); and the Bench's
+        // buttons, its verbs under Panels › Bench.
         function annotateList(ring) {
             if (!ring) return;
+            const viewAt = addressOf(ring, ['view']);
+            const summary = viewer.viewMenuEl.querySelector('summary');
+            summary.title = `How the world is drawn${viewAt ? ` · ⌗${viewAt}` : ''}`;
+            if (viewAt) summary.dataset.address = viewAt; else delete summary.dataset.address;
             const pairs = [];
             for (const li of viewer.contentsEl.querySelectorAll('li[data-path]')) pairs.push([li, `select:${li.dataset.path}`]);
             const crumbs = viewer.breadcrumbEl.querySelectorAll('.crumb');

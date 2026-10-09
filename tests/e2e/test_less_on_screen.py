@@ -457,7 +457,8 @@ def test_the_view_menu_holds_snap_detail_and_outlines_and_the_ring_backs_each(
 ):
     """Snap to grid, Detail and Assembly outlines are in one ⚙ View menu, folded until
     opened and folded away by a press elsewhere; each wears the address of its cell of
-    the canvas ring's Panels › View, and the cell does what the item does."""
+    the canvas ring's View (a cell of its own, in Fit's seat, with Fit first in it),
+    and the cell does what the item does."""
     _open(page, bench)
     for item in ("#snap-toggle", "#detail-mode", "#overlay-toggle"):
         expect(page.locator(item)).to_be_hidden()
@@ -465,34 +466,42 @@ def test_the_view_menu_holds_snap_detail_and_outlines_and_the_ring_backs_each(
     for item in ("#snap-toggle", "#detail-mode", "#overlay-toggle"):
         expect(page.locator(item)).to_be_visible()
     label = lambda item: page.locator(f"#view-menu label:has({item})")  # noqa: E731
-    expect(label("#snap-toggle")).to_have_attribute("data-address", "918", timeout=5000)
-    expect(label("#detail-mode")).to_have_attribute("data-address", "9168")
-    expect(label("#overlay-toggle")).to_have_attribute("data-address", "912")
+    expect(label("#snap-toggle")).to_have_attribute("data-address", "46", timeout=5000)
+    expect(label("#detail-mode")).to_have_attribute("data-address", "428")
+    expect(label("#overlay-toggle")).to_have_attribute("data-address", "44")
+    expect(label("#walls-toggle")).to_have_attribute("data-address", "49")
+    expect(page.locator("#view-menu > summary")).to_have_attribute("title", re.compile("⌗4"))
     page.locator("#snap-toggle").uncheck()
     assert page.evaluate("() => window.fractalViewer.transformControls.translationSnap") is None
     page.locator("#status").click()
     expect(page.locator("#snap-toggle")).to_be_hidden()
 
-    # Panels › View › Snap to grid: the tick-box's own work, and the tick-box follows.
+    # View › Snap to grid: the tick-box's own work, and the tick-box follows.
     _canvas_ring(page)
-    for digit in "918":
+    for digit in "46":
         page.keyboard.press(digit)
-    expect(page.locator("#status")).to_contain_text("⌗918")
+    expect(page.locator("#status")).to_contain_text("⌗46")
     assert page.evaluate("() => window.fractalViewer.transformControls.translationSnap") == 50
     expect(page.locator("#snap-toggle")).to_be_checked()
-    # Panels › View › Detail › Dot, and › Outlines.
+    # View › Detail › Dot, and › Outlines.
     _canvas_ring(page)
-    for digit in "9162":
+    for digit in "422":
         page.keyboard.press(digit)
     expect(page.locator("#detail-mode")).to_have_value("dot")
     page.wait_for_function(
         "() => Object.values(window.fractalViewer.meshByName).some((m) => m.userData.isDot)"
     )
     _canvas_ring(page)
-    for digit in "912":
+    for digit in "44":
         page.keyboard.press(digit)
     expect(page.locator("#overlay-toggle")).not_to_be_checked()
     assert page.evaluate("() => Object.keys(window.fractalViewer.compoundOverlayByKey).length") == 0
+    # View › Fit: Fit, one ring down from where it was.
+    _canvas_ring(page)
+    for digit in "48":
+        page.keyboard.press(digit)
+    expect(page.locator("#status")).to_contain_text("Framed")
+    expect(page.locator("#status")).to_contain_text("⌗48")
 
 
 # --------------------------------------------------------------------------
@@ -624,8 +633,8 @@ WALL = """() => {
 def test_a_click_passes_through_a_wall_and_the_toggle_restores_it(page: Page, bench: str):
     """The garage's walls are drawn faded, and a click on them in the world selects what
     is behind or inside; Contents still selects a wall, drawn solid then and with its
-    handles; ⚙ View › Walls selectable -- or Panels › View › Select walls on the ring --
-    lets a click pick it again."""
+    handles; ⚙ View › Walls selectable -- or View › Select walls on the ring -- lets a
+    click pick it again."""
     _open(page, bench)
     wall = page.evaluate(WALL)
     assert wall["opacity"] == pytest.approx(0.25, abs=0.01) and wall["through"], wall
@@ -650,9 +659,9 @@ def test_a_click_passes_through_a_wall_and_the_toggle_restores_it(page: Page, be
 
     # The ring's cell turns it back off: the click passes through again.
     _canvas_ring(page)
-    for digit in "914":
+    for digit in "49":
         page.keyboard.press(digit)
-    expect(page.locator("#status")).to_contain_text("⌗914")
+    expect(page.locator("#status")).to_contain_text("⌗49")
     expect(page.locator("#walls-toggle")).not_to_be_checked()
     page.mouse.click(spot["x"], spot["y"])
     assert page.evaluate("() => window.fractalViewer.selectedName") == spot["behind"]

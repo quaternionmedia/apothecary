@@ -410,7 +410,7 @@ RING_BACKED: Dict[str, str] = {
     "crumb:click:goUpTo": "zoom-out",
     "zoomInLink:click:zoomIn": "zoom-in",
     # The header's View menu: each of its items a cell of the canvas ring's
-    # Panels › View (a Detail value is View › Detail › that value).
+    # View (a Detail value is View › Detail › that value).
     "snap-toggle": "view:snap",
     "detail-mode": "view:detail:full",
     "overlay-toggle": "view:outlines",
