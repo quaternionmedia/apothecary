@@ -550,7 +550,7 @@ def _bucket(names: Sequence[str]) -> List[Tuple[str, List[str]]]:
 # (cardinals first): what stands in front of the world, each a cell away.
 # The page registers exactly these; a test holds the two lists to each other.
 PANELS: Sequence[Tuple[str, str]] = (
-    # Site: the site's Contents tree, its problems at the top, its generated
+    # Site: the site's Contents tree, its problems in one fold, its generated
     # SCAD, every site's pins (Pinned), each taken back from its row, and the
     # site's jobs, each row opening its machine.
     ("site", "Site"),

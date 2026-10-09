@@ -1102,14 +1102,14 @@ def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
     expect(machine.locator("#ident")).to_contain_text("Marlin")
     # The module the monitor page was made of: the same ids, the same latch.
     expect(machine.locator("#control")).to_be_hidden()
-    assert page.evaluate("() => window.apothecaryMachine.host") == "popup"
+    assert page.evaluate("() => window.apothecaryMachine.host") == "world"
     # Its comms log is in it, the board's one log: no panel of its own.
     expect(page.locator(".panel[data-panel='log']")).to_have_count(0)
     log = machine
     expect(log.locator("#log")).to_contain_text("M115", timeout=8000)  # polls are hidden by default
     assert page.locator(".viewer-panel").bounding_box()["width"] >= 1280 / 3 - 2
 
-    # Armed, a jog from the popup moves the world's nozzle marker ahead of the poll.
+    # Armed, a jog from the Machine moves the world's nozzle marker ahead of the poll.
     machine.locator("#ctl").check()
     expect(machine.locator("#control")).to_be_visible(timeout=5000)
     machine.locator("#control button[data-cmd='M25']").click()

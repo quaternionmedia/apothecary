@@ -12,9 +12,7 @@
  * the tilde key, and it moves -- press its swap button, or drag its grip
  * across the page -- to the other side. A docked panel's body has a height a
  * person drags; a free panel is dragged by its title bar, clamped to the page,
- * and resized from its corner. A tethered panel follows an anchor (anchors.js)
- * and draws a leader to it; its position is set every frame by update(), and
- * docked it joins the tab strip. What a person did to the panels and the rail
+ * and resized from its corner. What a person did to the panels and the rail
  * is remembered per browser; a remembered panel the page no longer registers
  * is ignored, and forgotten the next time anything is remembered, and a layout
  * remembered from before the one rail (a left and a right rail) is ignored
@@ -34,7 +32,7 @@ const SIDES = new Set(["left", "right"]);
 const STRIP_ORDER = 1000; // the tab strip, and the shown tab under it, below every stacked panel
 
 export function mountPanels({ container, overlay, storageKey = "apothecary.panels" } = {}) {
-    overlay = overlay || container;  // where free and tethered panels float: over the world
+    overlay = overlay || container;  // where free panels float: over the world
     const panels = new Map();
     // The one rail: which side it is on, the width a person dragged it to, whether
     // it is hidden, and which tab of its strip is shown (null: none).
@@ -54,9 +52,6 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
     tabBody.style.order = String(STRIP_ORDER + 1);
     const free = document.createElement("div");
     free.className = "panel-free-layer";
-    const leaders = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    leaders.setAttribute("class", "panel-leaders");
-    free.appendChild(leaders);
     const tabs = document.createElement("div");
     tabs.className = "panel-tabs";
     overlay.appendChild(free);
@@ -82,7 +77,6 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
     }
 
     const docked = (p) => p.where === "rail";
-    const tethered = (p) => typeof p.where === "object" && p.where !== null;
     const inStrip = (p) => p.open && docked(p) && p.zone === "tabs";
     // Whether a panel's body is in front of a person, the rail's hiding aside.
     function visible(p) {
@@ -150,16 +144,15 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
         // Where the panel's element lives: the rail's stack, the rail's tab body,
         // the free layer, or nowhere while closed.
         if (!p.open) { p.el.remove(); relayout(); return; }
-        if (tethered(p)) { free.appendChild(p.el); p.el.classList.add("tethered"); }
-        else if (p.where === "free") { free.appendChild(p.el); p.el.classList.remove("tethered"); p.el.style.left = `${p.x}px`; p.el.style.top = `${p.y}px`; }
-        else { insertInOrder(p.zone === "stack" ? railBody : tabBody, p); p.el.classList.remove("tethered"); p.el.style.left = ""; p.el.style.top = ""; }
+        if (p.where === "free") { free.appendChild(p.el); p.el.style.left = `${p.x}px`; p.el.style.top = `${p.y}px`; }
+        else { insertInOrder(p.zone === "stack" ? railBody : tabBody, p); p.el.style.left = ""; p.el.style.top = ""; }
         // Filled the first time its body is in front of a person.
         if (p.mount && visible(p)) { const mount = p.mount; p.mount = null; mount(p.slot); }
         p.slot.style.height = docked(p) && p.height ? `${p.height}px` : "";
         p.el.classList.toggle("sized", docked(p) && !!p.height);  // a height a person dragged it to
         p.el.querySelector(".panel-resizer").hidden = !docked(p);
         p.el.classList.toggle("free", !docked(p));
-        p.el.querySelector(".panel-title").title = p.tether ? "Drag to let go of the machine and float freely" : (p.where === "free" ? "Drag to move" : "");
+        p.el.querySelector(".panel-title").title = p.where === "free" ? "Drag to move" : "";
         p.el.classList.toggle("collapsed", p.collapsed && !(docked(p) && p.zone === "tabs"));
         p.el.querySelector(".panel-collapse").textContent = p.collapsed ? "▸" : "▾";
         p.el.querySelector(".panel-float").textContent = docked(p) ? "⧉" : "⇥";
@@ -169,11 +162,7 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
     // What follows from where every panel is: which shows, the tab strip, the
     // closed panels' tabs, the rail.
     function relayout() {
-        for (const p of panels.values()) {
-            if (!p.open) continue;
-            // A tethered panel's showing is update()'s, by whether its anchor is in view.
-            if (!tethered(p)) p.el.hidden = !visible(p);
-        }
+        for (const p of panels.values()) if (p.open) p.el.hidden = !visible(p);
         renderStrip();
         renderTabs();
         layoutRail();
@@ -223,12 +212,6 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
     }
 
     function startDrag(p, ev) {
-        if (p.tether) {
-            // Dragging a tethered panel lets go of the tether: it becomes a free panel where it was.
-            p.tether = null; p.where = "free";
-            if (p.leader) { p.leader.remove(); p.leader = null; }
-            place(p);
-        }
         if (p.where !== "free") return;
         ev.preventDefault();
         const startX = ev.clientX, startY = ev.clientY, fromX = p.x, fromY = p.y;
@@ -271,15 +254,6 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
         window.addEventListener("pointerup", up);
     }
 
-    function leaderFor(p) {
-        if (!p.leader) {
-            p.leader = document.createElementNS("http://www.w3.org/2000/svg", "line");
-            p.leader.setAttribute("class", "panel-leader");
-            leaders.appendChild(p.leader);
-        }
-        return p.leader;
-    }
-
     // A change to a panel, and what follows from it: placed again and remembered,
     // and a panel whose filled body comes back in front of a person told so
     // (onOpen) -- the first time it shows, filling it is the panel's to do.
@@ -313,7 +287,7 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
          * shown again. */
         register(id, { title, tab = null, body, zone = "tabs", where = "rail", open = true, collapsed = false, x = 40, y = 40, onClose = null, onOpen = null } = {}) {
             if (panels.has(id)) this.unregister(id);
-            const p = { id, title: title || id, tab, zone: zone === "stack" ? "stack" : "tabs", where: where === "free" ? "free" : "rail", order: order++, open, collapsed, x, y, height: null, el: null, slot: null, leader: null, tether: null, mount: null, onClose, onOpen };
+            const p = { id, title: title || id, tab, zone: zone === "stack" ? "stack" : "tabs", where: where === "free" ? "free" : "rail", order: order++, open, collapsed, x, y, height: null, el: null, slot: null, mount: null, onClose, onOpen };
             const had = remembered[id];
             if (had && typeof had === "object") {
                 if (typeof had.open === "boolean") p.open = had.open;
@@ -334,7 +308,6 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
             const p = panels.get(id);
             if (!p) return;
             p.el.remove();
-            if (p.leader) p.leader.remove();
             panels.delete(id);
             relayout();
             if (p.open && p.onClose) p.onClose();
@@ -380,59 +353,21 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
             change(p, () => {
                 p.where = "free"; p.open = true;
                 if (rail.tab === id) rail.tab = null;
-                if (p.leader) { p.leader.remove(); p.leader = null; }
-                p.tether = null;
                 p.x = Math.max(0, rect.left - base.left - 24); p.y = Math.max(0, rect.top - base.top + 8);
             });
             clampFree(p); p.el.style.left = `${p.x}px`; p.el.style.top = `${p.y}px`; remember();
             return true;
         },
         /* Docked in the rail: Site and Selected in its stack, any other panel a
-         * tab of its strip, shown. A tethered panel lets go of its anchor. */
+         * tab of its strip, shown. */
         dock(id) {
             const p = panels.get(id);
             if (!p) return false;
             change(p, () => {
                 p.where = "rail"; p.open = true; rail.hidden = false;
-                if (p.leader) { p.leader.remove(); p.leader = null; }
-                p.tether = null;
                 if (p.zone === "tabs") showTab(p);
             });
             return true;
-        },
-        /* Tie a panel to an anchor: update() places it beside the anchor's
-         * point every frame and draws a leader. */
-        tether(id, anchorKey) {
-            const p = panels.get(id);
-            if (!p) return false;
-            change(p, () => {
-                if (rail.tab === id) rail.tab = null;
-                p.tether = anchorKey; p.where = { tether: anchorKey }; p.open = true;
-            });
-            return true;
-        },
-        /* Called each frame with a function answering an anchor's canvas position. */
-        update(anchorAt) {
-            for (const p of panels.values()) {
-                if (!p.open || !p.tether) continue;
-                const at = anchorAt(p.tether);
-                const line = leaderFor(p);
-                if (!at) { p.el.hidden = true; line.setAttribute("visibility", "hidden"); continue; }
-                p.el.hidden = false;
-                const w = overlay.clientWidth, h = overlay.clientHeight;
-                const pw = p.el.offsetWidth || 320, ph = p.el.offsetHeight || 200;
-                // Beside the anchor: to its right when there is room, else to its left; when
-                // neither fits, on the far side of the page from it, so as little of what it
-                // stands over is covered as can be. Below its point.
-                const fitsRight = at.x + 24 + pw <= w, fitsLeft = at.x - 24 - pw >= 0;
-                const x = fitsRight ? at.x + 24 : (fitsLeft ? at.x - 24 - pw : (at.x > w / 2 ? 0 : Math.max(0, w - pw)));
-                const y = Math.max(0, Math.min(h - ph, at.y - 40));
-                p.x = x; p.y = y;
-                p.el.style.left = `${x}px`; p.el.style.top = `${y}px`;
-                line.setAttribute("visibility", "visible");
-                line.setAttribute("x1", at.x); line.setAttribute("y1", at.y);
-                line.setAttribute("x2", x + (x > at.x ? 0 : pw)); line.setAttribute("y2", y + 14);
-            }
         },
         /* The rail: hidden or shown (the tilde does it too), moved to a side, its width. */
         hideRail(hidden = true) { rail.hidden = !!hidden; relayout(); remember(); return rail.hidden; },

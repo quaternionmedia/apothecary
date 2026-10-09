@@ -533,13 +533,17 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "chip:click:delete": (LIST, WHAT_YOU_SEE, "a word button that folds and unfolds"),
     "caret:click:delete": (LIST, WHAT_YOU_SEE, "an arrow that opens a branch"),
     "li:click:selectChild": (LIST, WHAT_YOU_SEE, "picking a piece from the list"),
-    # An anchor: a machine's badge standing over it in the world (anchors.js).
-    "badge:click:selectPath": (LIST, WHAT_YOU_SEE, "picking the machine a badge stands over"),
+    # A board's badge, at the board in the world (anchors.js, machine_marks.js).
+    "badge:click:selectPath": (
+        LIST,
+        WHAT_YOU_SEE,
+        "picking the machine a board's badge stands for, and opening its Machine",
+    ),
     # A place badge: a host's camera and view, or the floor's (picture_marks.js).
     "badge:click:onSelect": (
         LIST,
         WHAT_YOU_SEE,
-        "picking the place a badge stands over: a structure, or the floor",
+        "picking the place a badge stands at: a structure, or the floor",
     ),
     # ---- pictures in the world: a drop, a paste, Selected's width and rows --
     "canvas:dragover:(nothing)": (
@@ -617,19 +621,19 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "li:click:goToProblem": (
         LIST,
         WHAT_YOU_SEE,
-        "a problem's row at the top of Site, selecting its piece at its level",
+        "a problem's row in Site's fold of problems, selecting its piece at its level",
     ),
     "siteJobsListEl:click:closest": (
         LIST,
         WHAT_YOU_SEE,
         "a job's row in Site's Jobs, selecting its machine at its level and opening it",
     ),
-    # A readout that opens what it counts, as a badge selects what it stands over;
+    # A readout that opens what it counts, as a badge selects what it stands for;
     # a span listened to, not a control written into the markup.
     "validityEl:click:openProblems": (
         WIDGET,
         WHAT_YOU_SEE,
-        "the toolbar's count of problems, opening them at the top of Site",
+        "the header's count of problems, unfolding them in Site",
     ),
     "li:dblclick:zoomIn": (LIST, WHAT_YOU_SEE, "going into a piece from the list"),
     "rootCrumb:click:goUpTo": (LIST, WHAT_YOU_SEE, "the top of the trail"),
