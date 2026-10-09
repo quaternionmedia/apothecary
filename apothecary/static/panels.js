@@ -184,7 +184,7 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
         strip.innerHTML = here.map((p) => {
             const on = rail.tab === p.id;
             return `<div class="rail-tab${on ? " active" : ""}" data-panel="${esc(p.id)}" role="presentation">`
-                + `<button type="button" class="rail-tab-name" role="tab" aria-selected="${on}" title="${on ? `Fold ${esc(p.title)} away` : `Show ${esc(p.title)}`}">${esc(p.title)}</button>`
+                + `<button type="button" class="rail-tab-name" role="tab" aria-selected="${on}" title="${on ? `Fold ${esc(p.title)} away` : `Show ${esc(p.title)}`}">${esc(p.tab || p.title)}</button>`
                 + `<button type="button" class="rail-tab-float" title="Float this panel"${on ? "" : " hidden"}>⧉</button>`
                 + `<button type="button" class="rail-tab-close" title="Close (reopen from its tab, or the ring's Panels)"${on ? "" : " hidden"}>✕</button></div>`;
         }).join("");
@@ -302,16 +302,18 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
         rail: railEl, free, tabs,
         /* Register a panel. `body` is an element the panel adopts (moved into
          * it) or a function given the slot to fill the first time the panel
-         * shows. `zone` is "stack" (Site, Selected: stacked at the rail's top)
+         * shows. `tab`, when given, is the short name its tab in the strip shows,
+         * the whole `title` being the tab's tooltip, so the strip stays one row.
+         * `zone` is "stack" (Site, Selected: stacked at the rail's top)
          * or "tabs" (a tab of the strip below them); `where` is "rail" or
          * "free"; `open` and `collapsed` are the defaults a browser that has not
          * seen the panel starts from. `onClose` is called when an open panel is
          * closed or unregistered; `onOpen` when a panel whose body is already
          * filled comes back in front of a person -- opened again, or its tab
          * shown again. */
-        register(id, { title, body, zone = "tabs", where = "rail", open = true, collapsed = false, x = 40, y = 40, onClose = null, onOpen = null } = {}) {
+        register(id, { title, tab = null, body, zone = "tabs", where = "rail", open = true, collapsed = false, x = 40, y = 40, onClose = null, onOpen = null } = {}) {
             if (panels.has(id)) this.unregister(id);
-            const p = { id, title: title || id, zone: zone === "stack" ? "stack" : "tabs", where: where === "free" ? "free" : "rail", order: order++, open, collapsed, x, y, height: null, el: null, slot: null, leader: null, tether: null, mount: null, onClose, onOpen };
+            const p = { id, title: title || id, tab, zone: zone === "stack" ? "stack" : "tabs", where: where === "free" ? "free" : "rail", order: order++, open, collapsed, x, y, height: null, el: null, slot: null, leader: null, tether: null, mount: null, onClose, onOpen };
             const had = remembered[id];
             if (had && typeof had === "object") {
                 if (typeof had.open === "boolean") p.open = had.open;

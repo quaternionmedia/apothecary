@@ -452,6 +452,31 @@ def test_the_header_is_one_row_at_1024_px(page: Page, bench: str):
 
 
 @pytest.mark.e2e
+def test_the_tab_strip_and_the_hint_are_one_line_at_1024_px(page: Page, bench: str):
+    """At 1024 px wide, with a Machine open, the rail's tab strip is one row -- the
+    Machine's tab names its node, the whole title with the port its tooltip -- and
+    the hint bar is one line, nothing of it cut."""
+    page.set_viewport_size({"width": 1024, "height": 700})
+    _open(page, bench)
+    cut = page.evaluate(
+        "() => { const h = document.getElementById('viewer-hint'); "
+        "return h.scrollWidth > h.clientWidth; }"
+    )
+    assert not cut
+    assert page.locator("#viewer-hint").bounding_box()["height"] < 40  # one line
+    page.locator(BOARD_BADGE).click()
+    _rail_machine(page)
+    tab = page.locator(".panel-rail .rail-tab[data-panel='machine'] .rail-tab-name")
+    expect(tab).to_have_text("printer_1")
+    expect(tab).to_have_attribute("title", re.compile(re.escape(PRINTER)))
+    tops = page.evaluate(
+        "() => [...document.querySelectorAll('.panel-rail .rail-tab')]"
+        ".map((t) => Math.round(t.getBoundingClientRect().top))"
+    )
+    assert len(tops) == 3 and len(set(tops)) == 1, tops
+
+
+@pytest.mark.e2e
 def test_the_view_menu_holds_snap_detail_and_outlines_and_the_ring_backs_each(
     page: Page, bench: str
 ):

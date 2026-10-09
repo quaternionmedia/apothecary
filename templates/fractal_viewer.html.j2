@@ -84,11 +84,14 @@
 
         .viewer-panel { flex: 2; min-width: 0; position: relative; background: #111; }
         #viewer-canvas { width: 100%; height: 100%; display: block; }
-        /* The hint bar: on a first visit, faded away after a few actions; ? shows it again. */
+        /* The hint bar: on a first visit, faded away after a few actions; ? shows it
+           again. One line: short enough for the world at 1024 px wide, and cut
+           rather than wrapped in a narrower one. */
         .viewer-hint {
-            position: absolute; bottom: 1rem; left: 1rem;
+            position: absolute; bottom: 1rem; left: 1rem; max-width: calc(100% - 2rem);
             background: rgba(0,0,0,0.7); padding: 0.5rem 0.75rem;
             border-radius: 4px; font-size: 0.75rem; color: #888;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
             pointer-events: none; transition: opacity 0.6s;
         }
         .viewer-hint.faded { opacity: 0; }
@@ -133,11 +136,13 @@
            shown under it. A tab carries its panel's name, and shown, its float
            and close; the panel's own title bar is the tab. */
         .panel-tabstrip {
-            flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 2px; padding: 0.3rem 0.4rem 0;
+            flex: 0 0 auto; display: flex; flex-wrap: nowrap; gap: 2px; padding: 0.3rem 0.4rem 0;
             background: #191919; border-top: 1px solid #333; border-bottom: 1px solid #333; margin-top: auto;
         }
         .panel-tabstrip[hidden], .panel-tabbody[hidden] { display: none; }
-        .rail-tab { display: flex; align-items: center; background: #202020; border: 1px solid #333; border-bottom: 0; border-radius: 4px 4px 0 0; margin-bottom: -1px; }
+        /* One row of tabs: a name too long for the rail is cut, never wrapped. */
+        .rail-tab { display: flex; align-items: center; min-width: 0; background: #202020; border: 1px solid #333; border-bottom: 0; border-radius: 4px 4px 0 0; margin-bottom: -1px; }
+        .rail-tab .rail-tab-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .rail-tab.active { background: #1e1e1e; border-color: #4a4a4a; }
         .rail-tab button { background: none; border: 0; color: #999; font: inherit; font-size: 0.8rem; cursor: pointer; padding: 0.3rem 0.55rem; line-height: 1; }
         .rail-tab button:hover { color: #eee; }
@@ -515,7 +520,7 @@
             <div class="viewer-panel">
                 <canvas id="viewer-canvas"></canvas>
                 <div id="minimap"></div>
-                <div class="viewer-hint" id="viewer-hint">Click to select • Double-click (or scroll past the edge) to zoom in • Drag arrows to move • Shift+drag to pan • ? shows or hides this</div>
+                <div class="viewer-hint" id="viewer-hint">Click: select • Double-click, or scroll past the edge: go in • Drag an arrow: move • Shift+drag: pan • ?: hide this</div>
             </div>
             <div class="side-panel">
                 <div class="panel-section" data-panel="site" data-zone="stack">
@@ -3346,6 +3351,9 @@
                 const inPrinter = !!(bearer && PRINTER_STATUSES.includes(bearer.status));
                 this.panels.register('machine', {
                     title: anchor ? `${anchor} · ${port}` : `${port} · pinned nowhere in ${this.siteName}`,
+                    // Its tab, beside Pictures and the Bench: the node's name (the
+                    // port's last part, pinned nowhere); the whole title its tooltip.
+                    tab: anchor ? anchor.split('.').pop() : (port.split('/').pop() || port),
                     body: (slot) => {
                         machine.handle = mountMachine(slot, {
                             base: BASE_URL, port, host: 'popup', boards: this.boards, inPrinter,
