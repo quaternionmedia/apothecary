@@ -1,24 +1,14 @@
-"""Render-related CLI commands: testrun, render, render-jscad, templategenerate, validate."""
+"""Render-related CLI commands: render, render-jscad, templategenerate, validate."""
 
 from pathlib import Path
 
 import click
 
-from ..example import create_example_scene
 from ..scene import SceneLoadError, load_scene_from_json
 from ..templates import TemplateRenderer
+from .retired import retired
 
-
-@click.command()
-@click.option(
-    "--output", "-o", type=click.Path(dir_okay=False, writable=True), default="example.scad"
-)
-def testrun(output: str):
-    """Render the built-in example scene to a file."""
-    scene = create_example_scene()
-    code = scene.render()
-    Path(output).write_text(code, encoding="utf-8")
-    click.echo(f"Wrote {output} ({len(code.splitlines())} lines)")
+testrun = retired("testrun", "use `apothecary render`, which renders the example scene")
 
 
 @click.command("render")
@@ -38,7 +28,7 @@ def render_scene(scene_file: str | None, scene_json: str | None, output: str):
             allow_example_fallback=True,
         )
     except SceneLoadError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
     code = scene.render()
     Path(output).write_text(code, encoding="utf-8")
     click.echo(f"Rendered scene '{scene.name}' -> {output}")
@@ -61,7 +51,7 @@ def render_scene_jscad(scene_file: str | None, scene_json: str | None, output: s
             allow_example_fallback=True,
         )
     except SceneLoadError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
 
     code = scene.render_jscad()
     Path(output).write_text(code, encoding="utf-8")
@@ -88,7 +78,7 @@ def template_generate(template: str, scene_file: str | None, scene_json: str | N
             allow_example_fallback=True,
         )
     except SceneLoadError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
 
     renderer = TemplateRenderer()
     code = renderer.render_scene_template(scene, template_content)
@@ -108,5 +98,5 @@ def validate(scene_file: str | None, scene_json: str | None):
             allow_example_fallback=False,
         )
     except SceneLoadError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
     click.echo(f"Valid scene '{scene.name}' with {len(scene.objects)} top-level objects")

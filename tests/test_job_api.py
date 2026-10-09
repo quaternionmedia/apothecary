@@ -130,3 +130,31 @@ def test_reset_site_clears_job_queue():
     client.post("/sites/garage/reset")
     response = client.get("/sites/garage/jobs")
     assert response.json() == []
+
+
+def _status(printer):
+    site = client.get("/sites/garage").json()
+    return next(s for s in site["structures"] if s["name"] == printer)["status"]
+
+
+def test_an_assigned_job_is_not_assigned_again():
+    """Re-assigning overwrote the job's printer and left the first one printing forever."""
+    _create_job()
+    client.post("/sites/garage/jobs/small_bracket/assign", json={"printer": "printer_1"})
+    again = client.post("/sites/garage/jobs/small_bracket/assign", json={"printer": "printer_2"})
+    assert again.status_code == 409
+    assert (_status("printer_1"), _status("printer_2")) == ("printing", "idle")
+
+
+def test_completing_a_job_twice_does_not_free_a_printer_busy_with_another():
+    _create_job("a")
+    _create_job("b")
+    client.post("/sites/garage/jobs/a/assign", json={"printer": "printer_2"})
+    client.post("/sites/garage/jobs/a/complete")
+    client.post("/sites/garage/jobs/b/assign", json={"printer": "printer_2"})
+    assert client.post("/sites/garage/jobs/a/complete").status_code == 409
+    assert _status("printer_2") == "printing"
+
+
+def test_a_job_name_is_one_path_segment():
+    assert _create_job("a/b").status_code == 422

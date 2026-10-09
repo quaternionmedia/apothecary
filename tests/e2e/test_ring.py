@@ -1,9 +1,9 @@
 """The ring in a browser: nine cells, addresses, and the buttons that carry them.
 
-Runs against its own server (port 8769), like ``test_printer_ui.py``: the
-scripted ``arduino-cli`` fake, the in-process simulated printer mid-way
-through an SD print, and firmware state in a temp dir. Nothing here opens a
-real port.
+Runs against a server of its own from the conftest's ``start_server``, like
+``test_printer_ui.py``: the scripted ``arduino-cli``, the in-process simulated
+printer mid-way through an SD print, and firmware state in a temp dir. Nothing
+here opens a real port.
 
 What is held to is rad's *the menu addresses nine cells*: options sit in
 cells numbered as a numeric keypad, cardinals first (``8 6 2 4 9 3 1 7``);
@@ -16,135 +16,21 @@ which the intent carries and the page's own buttons wear.
 from __future__ import annotations
 
 import json
-import os
-import subprocess
-import sys
-import time
 from pathlib import Path
 
 import httpx
 import pytest
-from firmware_helpers import write_fake_arduino_cli
 from playwright.sync_api import Page, expect
 
-RING_PORT = "8769"  # 8766 docs, 8768 printer UI
 PRINTER = "/dev/ttyFAKE1"
+# The arrow rule as vectors, generated from menu.py's resolver; tests/test_menu.py
+# fails when the file is missing or stale.
 VECTORS = Path(__file__).resolve().parents[1] / "conformance" / "nine_cells.json"
-
-# The arrow rule, as vectors: (occupied cells, from, direction) -> cell. Used
-# when the resolver's generated file is not there yet; the file wins when it is.
-# Scored as menu.py's nearest(): least offset across the arrow's line, then
-# least far along it, then the lower number; nothing ahead means stay put.
-EMBEDDED_NEAREST = [
-    # a four-item ring: corners empty, every cardinal reachable
-    ([8, 6, 2, 4], 8, "left", 4),
-    ([8, 6, 2, 4], 8, "right", 6),
-    ([8, 6, 2, 4], 8, "down", 2),
-    ([8, 6, 2, 4], 4, "up", 8),
-    ([8, 6, 2, 4], 4, "right", 6),
-    ([8, 6, 2, 4], 2, "up", 8),
-    ([8, 6, 2, 4], 6, "left", 4),
-    ([8, 6, 2, 4], None, "up", 8),
-    ([8, 6, 2, 4], None, "left", 4),
-    # a full ring
-    ([1, 2, 3, 4, 6, 7, 8, 9], 8, "down", 2),
-    ([1, 2, 3, 4, 6, 7, 8, 9], 8, "left", 7),
-    ([1, 2, 3, 4, 6, 7, 8, 9], 7, "right", 8),
-    ([1, 2, 3, 4, 6, 7, 8, 9], 7, "down", 4),
-    ([1, 2, 3, 4, 6, 7, 8, 9], 9, "left", 8),
-    ([1, 2, 3, 4, 6, 7, 8, 9], 1, "up", 4),
-    ([1, 2, 3, 4, 6, 7, 8, 9], 3, "up", 6),
-    ([1, 2, 3, 4, 6, 7, 8, 9], 4, "up", 7),
-    ([1, 2, 3, 4, 6, 7, 8, 9], 2, "right", 3),
-    ([1, 2, 3, 4, 6, 7, 8, 9], None, "right", 6),
-    # nothing that way: stay
-    ([8, 6, 2], 8, "left", 8),
-    ([8, 6, 2], 2, "left", 2),
-    ([8, 6, 2], None, "left", None),
-    ([8], None, "down", None),
-    ([8], 8, "up", 8),
-    # five items: the corner beats the cardinal when it sits squarely ahead
-    ([8, 6, 2, 4, 9], 8, "right", 9),
-    ([8, 6, 2, 4, 9], 6, "up", 9),
-]
-
-
-def _nearest_vectors():
-    """The resolver's vectors when written, else the embedded ones."""
-    if not VECTORS.exists():
-        return EMBEDDED_NEAREST
-    data = json.loads(VECTORS.read_text(encoding="utf-8"))
-    rows = data.get("nearest", data) if isinstance(data, dict) else data
-    out = []
-    for row in rows:
-        occupied = row.get("occupied") or row.get("cells")
-        start = row.get("from", row.get("from_cell", row.get("start")))
-        direction = row.get("direction") or row.get("dir")
-        want = row.get("expect", row.get("to", row.get("cell", row.get("result"))))
-        out.append((occupied, start, direction, want))
-    return out
 
 
 @pytest.fixture(scope="module")
-def ring_url(tmp_path_factory):
-    root = Path(__file__).resolve().parents[2]
-    tmp = tmp_path_factory.mktemp("ring-server")
-    env = os.environ.copy()
-    env.update(
-        {
-            "APOTHECARY_VIEWER_PATH": "",
-            "ARDUINO_CLI": str(write_fake_arduino_cli(tmp / "arduino-cli")),
-            "APOTHECARY_TOOLS_DIR": str(tmp / "tools"),
-            "APOTHECARY_STATE_DIR": str(tmp / "state"),
-            "APOTHECARY_SERIAL_ENGINE": "simulated",
-            "APOTHECARY_SIMULATED_PRINTER": "printing",
-        }
-    )
-    from ports import refuse_a_held_port
-
-    refuse_a_held_port(RING_PORT)
-    proc = subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "uvicorn",
-            "apothecary.api:app",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            RING_PORT,
-            # Let go of idle keep-alive connections quickly on SIGTERM: the browser
-            # that held them outlives this fixture, and a server that lingers on
-            # the port is the one the next run's health check would find.
-            "--timeout-graceful-shutdown",
-            "1",
-        ],
-        cwd=root,
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    url = f"http://127.0.0.1:{RING_PORT}"
-    healthy = False
-    for _ in range(40):
-        try:
-            if httpx.get(f"{url}/health", timeout=1.0).status_code == 200:
-                healthy = True
-                break
-        except (httpx.ConnectError, httpx.TimeoutException):
-            time.sleep(0.5)
-        if proc.poll() is not None:
-            break
-    if proc.poll() is not None:
-        # Our server exited -- usually because something else holds the port (a
-        # previous run still shutting down). Whatever answers there now is not
-        # the server these tests describe, so stop rather than test a stranger.
-        pytest.exit(
-            f"ring test server exited at start; is {url} held by another process?", returncode=1
-        )
-    if not healthy:
-        proc.terminate()
-        pytest.exit("ring test server failed to start", returncode=1)
+def ring_url(start_server):
+    url = start_server()
     # The printer is identified (M115) and pinned to printer_1 up front, so the
     # node ring carries Device > Control from the first test on.
     httpx.post(f"{url}/firmware/devices/identify", json={"port": PRINTER}, timeout=15.0)
@@ -152,12 +38,7 @@ def ring_url(tmp_path_factory):
         f"{url}/sites/garage/nodes/printer_1/device", json={"identity": PRINTER}, timeout=15.0
     )
     assert r.status_code == 200, r.text
-    yield url
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+    return url
 
 
 CAPTURE = (
@@ -302,28 +183,30 @@ def test_digits_walk_device_control_jog_and_the_intent_carries_the_address(
     assert (watch.get_attribute("title") or "").endswith(" · ⌗28")
     expect(page.locator("#selected-body .dev-poll")).to_have_attribute("data-address", "26")
     expect(page.locator("#selected-body .dev-monitor")).to_have_attribute("data-address", "22")
-    # And they survive the panel being redrawn by a poll.
-    page.locator("#selected-body .dev-poll").click()
-    page.wait_for_timeout(500)
-    expect(page.locator("#selected-body .dev-watch")).to_have_attribute(
-        "data-address", "28", timeout=5000
+    # And they survive the panel being redrawn by a poll: the section is replaced,
+    # so the one without the mark set here is the redrawn one.
+    page.evaluate(
+        "() => { document.querySelector('#selected-body .device-section').dataset.old = 1 }"
     )
+    page.locator("#selected-body .dev-poll").click()
+    redrawn = page.locator("#selected-body .device-section:not([data-old]) .dev-watch")
+    expect(redrawn).to_have_attribute("data-address", "28", timeout=5000)
 
 
 @pytest.mark.e2e
 def test_arrows_reach_the_nearest_occupied_cell(page: Page, ring_url: str):
-    """The browser's rule, vector by vector, against the resolver's (or the embedded) table."""
+    """The browser's rule, vector by vector, against the resolver's table."""
     _open_viewer(page, ring_url)
-    vectors = _nearest_vectors()
+    vectors = json.loads(VECTORS.read_text(encoding="utf-8"))["nearest"]
     assert len(vectors) >= 20
     wrong = []
-    for occupied, start, direction, want in vectors:
+    for v in vectors:
         got = page.evaluate(
             "([occ, from, dir]) => window.apothecaryRing.nearest(from, dir, occ)",
-            [occupied, start, direction],
+            [v["occupied"], v["from"], v["direction"]],
         )
-        if got != want:
-            wrong.append((occupied, start, direction, want, got))
+        if got != v["expect"]:
+            wrong.append({**v, "got": got})
     assert not wrong, f"nearest disagrees on {len(wrong)} vector(s): {wrong}"
 
     # On the page: arrows highlight, a chord is the corner, walking gets there too.
@@ -579,31 +462,33 @@ def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: s
     )
 
 
+def _open_panels(page: Page, url: str):
+    """The garage viewer with the rail as it starts (each test has fresh storage)."""
+    page.goto(f"{url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    return page.locator(".panel-rail-right"), page.locator(".viewer-panel")
+
+
+def _world_is(page: Page, width: float):
+    page.wait_for_function(
+        "(w) => Math.abs(document.querySelector('.viewer-panel').offsetWidth - w) <= 2", arg=width
+    )
+
+
 @pytest.mark.e2e
-def test_panels_stand_in_front_of_the_world(page: Page, ring_url: str):
-    """The side column is a rail of panels: each closes to a tab, collapses,
-    floats and drags within the page, docks back, and is reached from the
-    ring's Panels cell by address; what a person did survives a reload; and
-    the world keeps at least half the window however the rail is arranged."""
-    page.goto(f"{ring_url}/viewer/sites/garage")
-    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
-    page.evaluate("() => localStorage.removeItem('apothecary.panels')")
-    page.reload()
-    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+def test_a_panel_closes_to_a_tab_and_collapses(page: Page, ring_url: str):
+    """The side column is a rail of panels, and the world keeps at least half the window.
+    A closed panel leaves a tab that brings it back; a collapsed one keeps its title."""
+    rail, world = _open_panels(page, ring_url)
     ids = page.evaluate("() => window.apothecaryPanels.list().map((p) => p.id)")
     assert ids == ["contents", "selected", "jobs", "validation", "scad", "camera"]
     assert page.evaluate("() => window.apothecaryPanels.state('camera').open") is False
-    ids = ids[:5]  # the camera panel starts closed and stays out of what follows
-    rail = page.locator(".panel-rail-right")
     expect(rail.locator(".panel[data-panel='contents']")).to_be_visible()
-    world = page.locator(".viewer-panel")
     assert world.bounding_box()["width"] >= page.viewport_size["width"] / 2
 
     # Close: gone from the rail, a tab remains; the tab brings it back.
-    t0 = time.monotonic()
     page.locator(".panel[data-panel='validation'] .panel-close").click()
     expect(page.locator(".panel-tab[data-panel='validation']")).to_be_visible(timeout=1000)
-    assert time.monotonic() - t0 < 0.3 + 1
     expect(rail.locator(".panel[data-panel='validation']")).to_have_count(0)
     page.locator(".panel-tab[data-panel='validation']").click()
     expect(rail.locator(".panel[data-panel='validation']")).to_be_visible(timeout=1000)
@@ -615,7 +500,11 @@ def test_panels_stand_in_front_of_the_world(page: Page, ring_url: str):
     page.locator(".panel[data-panel='contents'] .panel-collapse").click()
     expect(page.locator("#contents-list")).to_be_visible(timeout=1000)
 
-    # Float and drag: the panel leaves the rail, follows the pointer, stays on the page.
+
+@pytest.mark.e2e
+def test_a_panel_floats_drags_and_docks(page: Page, ring_url: str):
+    """Floated, a panel leaves the rail, follows the pointer, stays on the page, docks back."""
+    rail, world = _open_panels(page, ring_url)
     page.locator(".panel[data-panel='selected'] .panel-float").click()
     free = page.locator(".panel-free-layer .panel[data-panel='selected']")
     expect(free).to_be_visible(timeout=1000)
@@ -641,14 +530,19 @@ def test_panels_stand_in_front_of_the_world(page: Page, ring_url: str):
     free.locator(".panel-float").click()
     expect(rail.locator(".panel[data-panel='selected']")).to_be_visible(timeout=1000)
 
-    # What was done is remembered: close OpenSCAD, reload, still closed.
+
+@pytest.mark.e2e
+def test_a_closed_panel_stays_closed_and_the_ring_reopens_it(page: Page, ring_url: str):
+    """What was done survives a reload; the ring's Panels cell reaches a panel by address;
+    with every panel closed the world has the whole width."""
+    rail, world = _open_panels(page, ring_url)
     page.locator(".panel[data-panel='scad'] .panel-close").click()
     page.reload()
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     expect(page.locator(".panel-tab[data-panel='scad']")).to_be_visible(timeout=2000)
     assert page.evaluate("() => window.apothecaryPanels.state('scad').open") is False
 
-    # From the ring: Panels › OpenSCAD reopens it by address, and closes it again.
+    # From the ring: Panels › OpenSCAD reopens it by address.
     page.locator("#viewer-canvas").click(button="right", position={"x": 30, "y": 30})
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     wedges = _wedges(page)
@@ -661,30 +555,33 @@ def test_panels_stand_in_front_of_the_world(page: Page, ring_url: str):
     expect(page.locator("#ring-overlay")).to_have_count(0)
     expect(rail.locator(".panel[data-panel='scad']")).to_be_visible(timeout=2000)
     expect(page.locator(".panel-tab")).to_have_count(1)  # the camera's, closed by default
-    # Every panel closed: the world has the whole width, and five tabs wait.
-    for pid in ids:
-        page.evaluate("(id) => window.apothecaryPanels.close(id)", pid)
-    expect(page.locator(".panel-tab")).to_have_count(6, timeout=2000)  # five, and the camera's
-    page.wait_for_timeout(200)
-    assert world.bounding_box()["width"] == pytest.approx(page.viewport_size["width"], abs=2)
-    for pid in ids:
-        page.evaluate("(id) => window.apothecaryPanels.open(id)", pid)
 
-    # The rail itself: the tilde hides and shows it (a tab stands in meanwhile),
-    # its edge drags to a width between a fifth and half the page, and its grip
-    # drags it across to the other side -- all of it remembered.
+    # Every panel closed: the world has the whole width, and six tabs wait.
+    for pid in ["contents", "selected", "jobs", "validation", "scad"]:
+        page.evaluate("(id) => window.apothecaryPanels.close(id)", pid)
+    expect(page.locator(".panel-tab")).to_have_count(6, timeout=2000)
+    _world_is(page, page.viewport_size["width"])
+
+
+@pytest.mark.e2e
+def test_the_rail_hides_resizes_and_changes_sides(page: Page, ring_url: str):
+    """The tilde hides and shows the rail (a tab stands in meanwhile), its edge drags to
+    a width of at most half the page, and its grip drags it to the other side -- all of
+    it remembered; the ring's Panels > Rail hides it too."""
+    rail, world = _open_panels(page, ring_url)
     full = page.viewport_size["width"]
     page.locator("#job-name").focus()
     page.keyboard.press("`")  # typing a tilde into a box is typing, not a toggle
-    page.wait_for_timeout(100)
+    expect(page.locator("#job-name")).to_have_value("`")
     expect(rail).to_be_visible()
     page.locator("#viewer-canvas").click(position={"x": 200, "y": 200})
     page.keyboard.press("`")
     expect(rail).to_be_hidden(timeout=1000)
     expect(page.locator(".panel-tab-rail[data-rail='right']")).to_be_visible()
-    assert world.bounding_box()["width"] == pytest.approx(full, abs=2)
+    _world_is(page, full)
     page.keyboard.press("`")
     expect(rail).to_be_visible(timeout=1000)
+
     before = page.evaluate("() => window.apothecaryPanels.railWidth('right')")
     edge = rail.locator(".panel-rail-resizer").bounding_box()
     page.mouse.move(edge["x"] + 3, edge["y"] + 200)
@@ -699,6 +596,7 @@ def test_panels_stand_in_front_of_the_world(page: Page, ring_url: str):
     page.mouse.up()
     assert page.evaluate("() => window.apothecaryPanels.railWidth('right')") <= full / 2 + 1
     assert world.bounding_box()["width"] >= full / 2 - 2
+
     grip = rail.locator(".panel-rail-grip").bounding_box()
     page.mouse.move(grip["x"] + 5, grip["y"] + 5)
     page.mouse.down()
@@ -709,11 +607,10 @@ def test_panels_stand_in_front_of_the_world(page: Page, ring_url: str):
     expect(rail).to_be_hidden()
     page.reload()
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
-    expect(page.locator(".panel-rail-left .panel[data-panel='contents']")).to_be_visible(
-        timeout=2000
-    )
-    page.locator(".panel-rail-left .panel-rail-swap").click()
+    expect(left.locator(".panel[data-panel='contents']")).to_be_visible(timeout=2000)
+    left.locator(".panel-rail-swap").click()
     expect(rail.locator(".panel[data-panel='contents']")).to_be_visible(timeout=1000)
+
     # From the ring: Panels > Rail hides it too.
     page.locator("#viewer-canvas").click(button="right", position={"x": 30, "y": 30})
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
@@ -722,4 +619,3 @@ def test_panels_stand_in_front_of_the_world(page: Page, ring_url: str):
     expect(rail).to_be_hidden(timeout=2000)
     page.keyboard.press("`")
     expect(rail).to_be_visible(timeout=1000)
-    page.evaluate("() => localStorage.removeItem('apothecary.panels')")

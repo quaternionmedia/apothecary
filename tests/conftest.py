@@ -25,8 +25,14 @@ def pytest_addoption(parser):
     parser.addoption(
         "--server-port",
         action="store",
-        default="8765",
-        help="Port for the test server (default: 8765)",
+        default=None,
+        help="Port for --start-server's server (default: a free one) or for yours (8765)",
+    )
+    parser.addoption(
+        "--slow",
+        action="store_true",
+        default=False,
+        help="Also run tests marked slow: full CGAL renders, accuracy benches. CI passes it.",
     )
     parser.addoption(
         "--generate-docs",
@@ -41,6 +47,15 @@ def pytest_addoption(parser):
     )
 
 
+def pytest_collection_modifyitems(config, items):
+    if config.getoption("--slow"):
+        return
+    skip = pytest.mark.skip(reason="slow: run with --slow")
+    for item in items:
+        if "slow" in item.keywords:
+            item.add_marker(skip)
+
+
 # --- firmware toolchain fakes ---------------------------------------------------
 #
 # A stand-in `arduino-cli` executable that answers the JSON queries the seam
@@ -52,6 +67,16 @@ def pytest_addoption(parser):
 
 import pytest  # noqa: E402
 from firmware_helpers import _isolate_firmware_state, write_fake_arduino_cli  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _scripted_boards_answer_at_once(monkeypatch):
+    """Every board in the unit suite is scripted and answers at once; waiting out
+    a real board's silences (1.5 s settles, 5 s timeouts) was a minute of the run."""
+    from apothecary.firmware import gcode
+
+    monkeypatch.setattr(gcode.GcodeLink, "time_scale", 0.02)
+
 
 # The guard on the process and the TestClient that says it is this machine are
 # the repository's root conftest.py, so the walkthrough's doctests get them too.

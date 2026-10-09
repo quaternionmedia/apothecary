@@ -7,22 +7,30 @@ which pictures could not be placed and what to do about each.
 
 from __future__ import annotations
 
-from typing import List
+from typing import List, Optional, Sequence
 
 from .models import ALONE, CANNOT_TELL, PARTS_OF_ONE, SAME_THING, UNRELATED, Gathering
-from .questions import worth_asking
+from .questions import Question, worth_asking
+
+SHOWN_QUESTIONS = 5
 
 
 def _rule(title: str) -> List[str]:
     return [title, "-" * len(title)]
 
 
-def as_text(gathering: Gathering, *, everything: bool = False) -> str:
+def as_text(
+    gathering: Gathering,
+    *,
+    everything: bool = False,
+    questions: Optional[Sequence[Question]] = None,
+) -> str:
     """One page about what happened to a pile of pictures.
 
     Set ``everything`` to also list every pair judged unrelated. Off by default
     because on twenty pictures that is a hundred and ninety lines saying nothing
-    happened.
+    happened. ``questions`` is a ranking the caller already has from
+    ``worth_asking``, best first, so it is not worked out again here.
     """
     total = len(gathering.readings)
     readable = gathering.readable()
@@ -85,7 +93,7 @@ def as_text(gathering: Gathering, *, everything: bool = False) -> str:
         card = gathering.scorecard()
         lines += _rule("What you told it, and how the machine did")
         lines.append(
-            "  Every answer you give is a case where the answer is known, so it " "checks the"
+            "  Every answer you give is a case where the answer is known, so it checks the"
         )
         lines.append("  machine at the same time as it improves the result.")
         lines.append("")
@@ -143,11 +151,14 @@ def as_text(gathering: Gathering, *, everything: bool = False) -> str:
         lines.append("  These groups were formed on the flimsiest evidence in the run.")
         for cluster in shaky:
             lines.append(
-                f"  {cluster.name} at {cluster.strength:.0%} — " f"{', '.join(cluster.pictures)}"
+                f"  {cluster.name} at {cluster.strength:.0%} — {', '.join(cluster.pictures)}"
             )
         lines.append("")
 
-    asking = worth_asking(gathering, most=5)
+    if questions is None:
+        asking = worth_asking(gathering, most=SHOWN_QUESTIONS)
+    else:
+        asking = list(questions)[:SHOWN_QUESTIONS]
     if asking:
         lines += _rule("What would help most")
         lines.append("  You are better at this than the machine is, and it knows which")
@@ -168,7 +179,7 @@ def as_text(gathering: Gathering, *, everything: bool = False) -> str:
         f"answer; {len(undecided)} did not."
     )
     lines.append(
-        "  Every answer comes from shapes and from how light the pictures are. " "Nothing here"
+        "  Every answer comes from shapes and from how light the pictures are. Nothing here"
     )
     lines.append("  was trained on real photographs, and it will be beaten by anything that was.")
     return "\n".join(lines).rstrip() + "\n"

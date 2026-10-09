@@ -6,9 +6,9 @@ import re
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AfterValidator, BaseModel, Field, field_validator
 
 # vendor:arch:board[:menu=value,...] -- e.g. arduino:avr:uno, esp32:esp32:esp32:FlashMode=qio
 FQBN_RE = re.compile(r"^[A-Za-z0-9_.\-]+:[A-Za-z0-9_.\-]+:[A-Za-z0-9_.\-]+(:[A-Za-z0-9_.\-=,]+)?$")
@@ -28,6 +28,10 @@ def validate_port(value: str) -> str:
     if not PORT_RE.match(value):
         raise ValueError(f"not a serial port path: {value!r}")
     return value
+
+
+# A serial port as a request field or query parameter: refused with a 422 by shape.
+Port = Annotated[str, AfterValidator(validate_port)]
 
 
 def validate_core_id(value: str) -> str:
@@ -142,6 +146,7 @@ class FirmwareTask(BaseModel):
     kind: str
     title: str
     command: List[str]
+    port: Optional[str] = None  # the serial port it writes to (upload, flash); None holds none
     status: TaskStatus = TaskStatus.running
     returncode: Optional[int] = None
     started: datetime
@@ -202,12 +207,7 @@ class CompileRequest(BaseModel):
 
 
 class UploadRequest(CompileRequest):
-    port: str
-
-    @field_validator("port")
-    @classmethod
-    def _port(cls, v: str) -> str:
-        return validate_port(v)
+    port: Port
 
 
 class FlashImage(BaseModel):
@@ -216,16 +216,11 @@ class FlashImage(BaseModel):
 
 
 class EsptoolFlashRequest(BaseModel):
-    port: str
+    port: Port
     chip: str = "auto"
     baud: int = Field(460800, ge=9600, le=2000000)
     erase: bool = False
     images: List[FlashImage] = Field(min_length=1)
-
-    @field_validator("port")
-    @classmethod
-    def _port(cls, v: str) -> str:
-        return validate_port(v)
 
     @field_validator("chip")
     @classmethod
@@ -304,12 +299,7 @@ class ListenResult(BaseModel):
 
 
 class ProbeRequest(BaseModel):
-    port: str
-
-    @field_validator("port")
-    @classmethod
-    def _port(cls, v: str) -> str:
-        return validate_port(v)
+    port: Port
 
 
 class ListenRequest(ProbeRequest):

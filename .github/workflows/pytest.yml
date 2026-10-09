@@ -60,5 +60,25 @@ jobs:
       # wired that way is one nobody runs and it stays green forever.
       run: uv run pytest walkthrough -q
 
-    - name: 🔬 Run test suite
-      run: uv run apothecary test all
+    - name: 🔬 Unit tests
+      run: uv run pytest tests -m "not e2e" -q --slow
+
+    - name: 🎭 Browser tests
+      # --start-server runs the app on state and pictures of its own (tests/e2e/conftest.py).
+      run: uv run pytest tests/e2e --start-server -q
+
+    - name: 📝 The committed walkthrough is the one this run wrote
+      # Pages 11 and 12 are written by the browser run above. A diff means the
+      # committed page describes a run that no longer happens.
+      run: git diff --exit-code -- 'walkthrough/*.md'
+
+    - name: 📦 The wheel installs and runs
+      # A consumer pins a released version; what they get is the wheel, not this checkout.
+      run: |
+        uv build --wheel -o dist
+        uv venv /tmp/wheel-venv
+        VIRTUAL_ENV=/tmp/wheel-venv uv pip install dist/*.whl
+        cd /tmp && /tmp/wheel-venv/bin/apothecary --help
+        echo '{"objects":[{"type":"cube","size":{"x":1,"y":2,"z":3}}]}' > /tmp/scene.json
+        /tmp/wheel-venv/bin/apothecary render --scene-file /tmp/scene.json -o /tmp/scene.scad
+        grep -q "cube(\[1.0, 2.0, 3.0\]" /tmp/scene.scad

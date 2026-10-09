@@ -30,7 +30,9 @@ CANCEL_GRACE_SECONDS = 5.0
 _POSIX = sys.platform != "win32"
 
 
-def _spawn(argv, env, cwd) -> subprocess.Popen:
+def _popen(argv, env, cwd, group: bool) -> subprocess.Popen:
+    """``argv`` with stdout and stderr on one line-buffered text pipe; ``group``
+    starts it in a session of its own, so a cancel can signal the whole group."""
     return subprocess.Popen(
         argv,
         stdout=subprocess.PIPE,
@@ -39,7 +41,7 @@ def _spawn(argv, env, cwd) -> subprocess.Popen:
         env=subprocess_env(env),
         cwd=cwd,
         bufsize=1,
-        start_new_session=_POSIX,
+        start_new_session=group and _POSIX,
     )
 
 
@@ -70,15 +72,7 @@ def stream(
     """
     log("$ " + " ".join(argv))
     try:
-        proc = subprocess.Popen(
-            argv,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            env=subprocess_env(env),
-            cwd=cwd,
-            bufsize=1,
-        )
+        proc = _popen(argv, env, cwd, group=False)
     except OSError as exc:
         log(f"ERROR: {exc}")
         return 127
@@ -124,70 +118,31 @@ class TaskRunner:
         env: Optional[dict] = None,
         cwd: Optional[str] = None,
         on_done: Optional[Callable[[FirmwareTask, TaskStatus], None]] = None,
+        port: Optional[str] = None,
     ) -> FirmwareTask:
-        """Start ``steps`` (argv lists) in sequence; stop at the first failure."""
+        """Start ``steps`` (argv lists) in sequence; stop at the first failure.
+        ``port`` is the serial port the steps write to, if any."""
         if not steps:
             raise ValueError("no steps to run")
-        with self._lock:
-            if self._active and self._tasks[self._active].status == TaskStatus.running:
-                raise TaskBusy(
-                    f"task {self._active} ({self._tasks[self._active].title}) is still running"
-                )
-            task = FirmwareTask(
-                id=uuid.uuid4().hex[:12],
-                kind=kind,
-                title=title,
-                command=steps[0],
-                started=datetime.now(timezone.utc),
-            )
-            self._tasks[task.id] = task
-            self._order.append(task.id)
-            self._active = task.id
-            self._evict()
-        thread = threading.Thread(
-            target=self._execute,
-            args=(task, steps, env, cwd, on_done),
-            daemon=True,
-            name=f"firmware-{task.id}",
+        return self._start(
+            kind, title, steps[0], port, lambda task: self._execute(task, steps, env, cwd, on_done)
         )
-        self._threads[task.id] = thread
-        thread.start()
-        return task
 
     def run_callable(
-        self, kind: str, title: str, fn: Callable[[Callable[[str], None]], None], on_done=None
+        self, kind: str, title: str, fn: Callable[[Callable[[str], None]], None]
     ) -> FirmwareTask:
         """Like ``run`` but for Python work (the installer) that logs via a callback."""
-        with self._lock:
-            if self._active and self._tasks[self._active].status == TaskStatus.running:
-                raise TaskBusy(
-                    f"task {self._active} ({self._tasks[self._active].title}) is still running"
-                )
-            task = FirmwareTask(
-                id=uuid.uuid4().hex[:12],
-                kind=kind,
-                title=title,
-                command=[],
-                started=datetime.now(timezone.utc),
-            )
-            self._tasks[task.id] = task
-            self._order.append(task.id)
-            self._active = task.id
-            self._evict()
 
-        def target():
+        def work(task: FirmwareTask) -> None:
             try:
                 fn(task.lines.append)
             except Exception as exc:  # noqa: BLE001 - surfaced to the log, not swallowed
                 task.lines.append(f"ERROR: {exc}")
-                self._finish(task, TaskStatus.failed, 1, on_done)
+                self._finish(task, TaskStatus.failed, 1)
             else:
-                self._finish(task, TaskStatus.succeeded, 0, on_done)
+                self._finish(task, TaskStatus.succeeded, 0)
 
-        thread = threading.Thread(target=target, daemon=True, name=f"firmware-{task.id}")
-        self._threads[task.id] = thread
-        thread.start()
-        return task
+        return self._start(kind, title, [], None, work)
 
     def cancel(self, task_id: str, grace: float = CANCEL_GRACE_SECONDS) -> bool:
         """Stop a running task: kill its current process, skip any remaining steps.
@@ -218,6 +173,39 @@ class TaskRunner:
 
     # -- internals ---------------------------------------------------------------
 
+    def _start(
+        self,
+        kind: str,
+        title: str,
+        command: List[str],
+        port: Optional[str],
+        work: Callable[[FirmwareTask], None],
+    ) -> FirmwareTask:
+        """Register a task as the active one and run ``work(task)`` on its own thread."""
+        with self._lock:
+            if self._active and self._tasks[self._active].status == TaskStatus.running:
+                raise TaskBusy(
+                    f"task {self._active} ({self._tasks[self._active].title}) is still running"
+                )
+            task = FirmwareTask(
+                id=uuid.uuid4().hex[:12],
+                kind=kind,
+                title=title,
+                command=command,
+                port=port,
+                started=datetime.now(timezone.utc),
+            )
+            self._tasks[task.id] = task
+            self._order.append(task.id)
+            self._active = task.id
+            self._evict()
+        thread = threading.Thread(
+            target=work, args=(task,), daemon=True, name=f"firmware-{task.id}"
+        )
+        self._threads[task.id] = thread
+        thread.start()
+        return task
+
     def _execute(self, task: FirmwareTask, steps, env, cwd, on_done) -> None:
         status, code = TaskStatus.succeeded, 0
         for argv in steps:
@@ -228,7 +216,7 @@ class TaskRunner:
                     status, code = TaskStatus.cancelled, None
                     break
                 try:
-                    proc = _spawn(argv, env, cwd)
+                    proc = _popen(argv, env, cwd, group=True)
                 except OSError as exc:
                     task.lines.append(f"ERROR: {exc}")
                     status, code = TaskStatus.failed, 127
@@ -280,10 +268,9 @@ class TaskRunner:
                 self._active = None
 
     def _evict(self) -> None:
+        # The active task is the newest, so it is never the one dropped.
         while len(self._order) > MAX_TASKS:
-            old = self._order.pop(0)
-            if old != self._active:
-                self._tasks.pop(old, None)
+            self._tasks.pop(self._order.pop(0), None)
 
 
 _RUNNER: Optional[TaskRunner] = None

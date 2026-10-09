@@ -1,21 +1,27 @@
-"""
-STL rendering service using OpenSCAD CLI.
-
-This module provides functionality to generate STL files from OpenSCAD source
-files using the OpenSCAD command-line interface.
-"""
+"""STL rendering through the OpenSCAD CLI, and ``build_stl``: the one way a
+part's STL is built, whichever command or route asks for it."""
 
 from __future__ import annotations
 
 import asyncio
+import json
+import os
 import shutil
 import subprocess
+import sys
+import tempfile
+import time
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import TYPE_CHECKING, List, Optional
 
-from .part_files import PartFile, PartFiles
+from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from .base import BasePart
 
 
 def scad_literal(value: object) -> str:
@@ -25,6 +31,9 @@ def scad_literal(value: object) -> str:
     as source, so an unquoted word is an identifier and almost always an
     unhelpful error rather than the string that was meant.
     """
+    # An Enum's repr (<TabStyle.LEFT: 2>) is not source; its value is.
+    if isinstance(value, Enum):
+        return scad_literal(value.value)
     # bool before int -- bool is a subclass of it, and true/false are not 1/0.
     if isinstance(value, bool):
         return "true" if value else "false"
@@ -37,6 +46,11 @@ def scad_literal(value: object) -> str:
         return f'"{escaped}"'
     if isinstance(value, (list, tuple)):
         return "[" + ", ".join(scad_literal(v) for v in value) + "]"
+    if isinstance(value, BaseModel):
+        raise TypeError(
+            f"{type(value).__name__} is a nested parameter model; -D takes numbers, strings, "
+            "booleans and lists, so pass its fields as parameters of their own"
+        )
     raise TypeError(f"no OpenSCAD literal for {type(value).__name__}: {value!r}")
 
 
@@ -65,6 +79,9 @@ class RenderResult:
     # the render succeeded as far as OpenSCAD is concerned; a caller that
     # needs the whole thing (a machine with its body) treats this as failure.
     dropped: List[str] = field(default_factory=list)
+    # Why build_stl rendered nothing: "fresh" (the STL on disk already answers
+    # the request) or "refused" (the part cannot be built on this machine).
+    skipped: Optional[str] = None
 
 
 class OpenSCADRenderer:
@@ -122,27 +139,14 @@ class OpenSCADRenderer:
         return self._detected_path
 
     def _detect_openscad(self) -> Optional[Path]:
-        """Auto-detect OpenSCAD installation."""
-        # First try 'which' / 'where' command
-        which_cmd = "where" if shutil.which("where") else "which"
-        try:
-            result = subprocess.run(
-                [which_cmd, "openscad"], capture_output=True, text=True, timeout=5
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                path = Path(result.stdout.strip().split("\n")[0])
-                if path.exists():
-                    return path
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            # Continue to next search method if command fails
-            pass
-
-        # Check common paths
+        """OpenSCAD on PATH, else at one of the usual install locations."""
+        found = shutil.which("openscad")
+        if found:
+            return Path(found)
         for path_str in self.OPENSCAD_PATHS:
             path = Path(path_str)
             if path.exists():
                 return path
-
         return None
 
     @property
@@ -203,21 +207,13 @@ class OpenSCADRenderer:
         scad_path: Path,
         stl_path: Optional[Path] = None,
         timeout: float = 120.0,
-        extra_args: Optional[list] = None,
         params: Optional[dict] = None,
     ) -> RenderResult:
-        """
-        Render a SCAD file to STL.
+        """Render a SCAD file to STL, with ``params`` passed as ``-D name=value``.
 
-        Args:
-            scad_path: Path to the source SCAD file
-            stl_path: Output STL path. If None, uses same directory as SCAD
-            timeout: Maximum render time in seconds
-            extra_args: Additional arguments to pass to OpenSCAD
-            params: Parameter overrides, passed as ``-D name=value``
-
-        Returns:
-            RenderResult with success status and file path
+        ``stl_path`` defaults to the SCAD's own name. OpenSCAD writes a temporary
+        file beside it that replaces it only on success, so a failed or killed
+        render leaves the previous STL, or none, never a partial one.
         """
         if not self.is_available:
             return RenderResult(
@@ -227,7 +223,6 @@ class OpenSCADRenderer:
         if not scad_path.exists():
             return RenderResult(success=False, error_message=f"Source file not found: {scad_path}")
 
-        # Determine output path
         if stl_path is None:
             stl_path = scad_path.with_suffix(".stl")
 
@@ -236,26 +231,22 @@ class OpenSCADRenderer:
         # it and then report the file as missing.
         scad_path = scad_path.resolve()
         stl_path = stl_path.resolve()
-
-        # Ensure output directory exists
         stl_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Build command. Definitions precede the source file, which is where
-        # OpenSCAD documents them and the only order that is safe to assume.
         try:
             definitions = scad_definitions(params)
         except (TypeError, ValueError) as exc:
             return RenderResult(success=False, error_message=str(exc))
 
-        cmd = [str(self.openscad_path), "-o", str(stl_path)]
-        cmd.extend(definitions)
-        cmd.append(str(scad_path))
+        # The .stl suffix picks OpenSCAD's export format; the leading dot and
+        # the suffix keep a file orphaned by a killed process hidden and out of git.
+        partial = stl_path.with_name(f".{stl_path.stem}.{uuid.uuid4().hex[:12]}.stl")
 
-        if extra_args:
-            cmd.extend(extra_args)
+        # Definitions precede the source file, which is where OpenSCAD
+        # documents them and the only order that is safe to assume.
+        cmd = [str(self.openscad_path), "-o", str(partial), *definitions, str(scad_path)]
 
-        # Execute render
-        start_time = datetime.now()
+        start = time.monotonic()
         try:
             result = subprocess.run(
                 cmd,
@@ -266,8 +257,7 @@ class OpenSCADRenderer:
                 # file's own directory, so this is for the process, not paths.
                 cwd=str(scad_path.parent),
             )
-
-            elapsed = (datetime.now() - start_time).total_seconds()
+            elapsed = time.monotonic() - start
 
             if result.returncode != 0:
                 return RenderResult(
@@ -278,7 +268,7 @@ class OpenSCADRenderer:
                     stderr=result.stderr,
                 )
 
-            if not stl_path.exists():
+            if not partial.exists():
                 return RenderResult(
                     success=False,
                     error_message="OpenSCAD completed but STL file was not created",
@@ -286,6 +276,8 @@ class OpenSCADRenderer:
                     stdout=result.stdout,
                     stderr=result.stderr,
                 )
+
+            os.replace(partial, stl_path)
 
             # OpenSCAD 2021.01 exits 0 after dropping an unreadable import
             # ("The given mesh is not closed", a CGAL assertion) from a
@@ -311,150 +303,32 @@ class OpenSCADRenderer:
             )
         except Exception as e:
             return RenderResult(success=False, error_message=f"Render failed: {str(e)}")
-
-    def render_stl_with_rotation(
-        self,
-        scad_path: Path,
-        stl_path: Optional[Path] = None,
-        rotation: Optional[List[float]] = None,
-        timeout: float = 120.0,
-        params: Optional[dict] = None,
-    ) -> RenderResult:
-        """
-        Render a SCAD file to STL with optional rotation applied.
-
-        This is a two-step process:
-        1. Render the original SCAD to a temporary STL
-        2. Create a wrapper that imports and rotates the STL, then render to final output
-
-        Args:
-            scad_path: Path to the source SCAD file
-            stl_path: Output STL path. If None, uses same directory as SCAD
-            rotation: [rx, ry, rz] rotation in degrees to apply
-            timeout: Maximum render time in seconds
-
-        Returns:
-            RenderResult with success status and file path
-        """
-        # If no rotation, use standard render
-        if rotation is None or rotation == [0, 0, 0]:
-            return self.render_stl(scad_path, stl_path, timeout, params=params)
-
-        if not self.is_available:
-            return RenderResult(
-                success=False, error_message="OpenSCAD not found. Please install OpenSCAD."
-            )
-
-        if not scad_path.exists():
-            return RenderResult(success=False, error_message=f"Source file not found: {scad_path}")
-
-        # Determine output path
-        if stl_path is None:
-            stl_path = scad_path.with_suffix(".stl")
-
-        # Ensure output directory exists
-        stl_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Step 1: Render original SCAD to temp STL
-        temp_stl = scad_path.parent / f"_temp_{scad_path.stem}.stl"
-
-        try:
-            # First render without rotation
-            result1 = self.render_stl(scad_path, temp_stl, timeout, params=params)
-            if not result1.success:
-                return result1
-
-            # Step 2: Create wrapper that imports and rotates the temp STL
-            wrapper_content = f"""// Auto-generated wrapper for rotation
-// Source: {scad_path.name}
-// Rotation: {rotation}
-
-rotate([{rotation[0]}, {rotation[1]}, {rotation[2]}])
-    import("{temp_stl.name}");
-"""
-            wrapper_path = scad_path.parent / f"_wrapper_{scad_path.stem}.scad"
-            wrapper_path.write_text(wrapper_content, encoding="utf-8")
-
-            try:
-                # Render the rotated version
-                result2 = self.render_stl(wrapper_path, stl_path, timeout)
-
-                # Combine timing
-                result2.render_time_seconds += result1.render_time_seconds
-
-                return result2
-
-            finally:
-                # Clean up wrapper
-                if wrapper_path.exists():
-                    wrapper_path.unlink()
-
         finally:
-            # Clean up temp STL
-            if temp_stl.exists():
-                temp_stl.unlink()
+            partial.unlink(missing_ok=True)
 
     async def render_stl_async(
         self,
         scad_path: Path,
         stl_path: Optional[Path] = None,
         timeout: float = 120.0,
-        extra_args: Optional[list] = None,
         params: Optional[dict] = None,
     ) -> RenderResult:
-        """
-        Async version of render_stl.
-
-        Runs the OpenSCAD process in a thread pool to avoid blocking.
-        """
-        loop = asyncio.get_event_loop()
+        """render_stl on a worker thread, so the event loop keeps serving."""
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
-            None, lambda: self.render_stl(scad_path, stl_path, timeout, extra_args, params)
+            None, lambda: self.render_stl(scad_path, stl_path, timeout, params)
         )
 
-    def render_part_files(
-        self,
-        part_files: PartFiles,
-        force: bool = False,
-        timeout: float = 120.0,
-        params: Optional[dict] = None,
-    ) -> Tuple[PartFiles, RenderResult]:
-        """
-        Render STL for a PartFiles instance.
 
-        Args:
-            part_files: The part files to render
-            force: If True, regenerate even if STL exists and is fresh
-            timeout: Maximum render time
+def params_sidecar_path(stl_path: Path) -> Path:
+    """Where the record of an STL's parameters sits: beside the STL."""
+    return stl_path.with_suffix(".params.json")
 
-        Returns:
-            Tuple of (updated PartFiles, RenderResult)
-        """
-        from .part_files import FileStatus
 
-        status = part_files.get_stl_status()
-
-        # Skip if already up-to-date (unless forced)
-        if status == FileStatus.PRESENT and not force:
-            return part_files, RenderResult(
-                success=True,
-                stl_path=part_files.stl_file.path if part_files.stl_file else None,
-                error_message="STL already up-to-date (use force=True to regenerate)",
-            )
-
-        # Render
-        stl_path = part_files.ensure_stl_path()
-        result = self.render_stl(part_files.scad_file.path, stl_path, timeout, params=params)
-
-        # Update part_files with new STL reference
-        if result.success and result.stl_path:
-            part_files.stl_file = PartFile(path=result.stl_path, format="stl")
-            part_files.last_stl_generation = datetime.now()
-            part_files.stl_generation_error = None
-        else:
-            part_files.stl_generation_error = result.error_message
-
-        return part_files, result
+def _recordable(value: object) -> object:
+    if isinstance(value, Enum):
+        return value.value
+    raise TypeError(f"{type(value).__name__} cannot be recorded in a params sidecar")
 
 
 def write_params_sidecar(stl_path: Path, params: dict) -> Path:
@@ -463,15 +337,13 @@ def write_params_sidecar(stl_path: Path, params: dict) -> Path:
     Without this the file on disk is indistinguishable from a default render,
     and a viewer showing a variant looks exactly like one showing the part.
     """
-    import json
-    from datetime import datetime
-
-    sidecar = stl_path.with_suffix(".params.json")
+    sidecar = params_sidecar_path(stl_path)
     sidecar.write_text(
         json.dumps(
             {"params": params, "generated": datetime.now().isoformat(timespec="seconds")},
             indent=2,
             sort_keys=True,
+            default=_recordable,
         )
         + chr(10),
         encoding="utf-8",
@@ -481,9 +353,7 @@ def write_params_sidecar(stl_path: Path, params: dict) -> Path:
 
 def read_params_sidecar(stl_path: Path) -> dict | None:
     """The parameters an existing STL was rendered with, if recorded."""
-    import json
-
-    sidecar = stl_path.with_suffix(".params.json")
+    sidecar = params_sidecar_path(stl_path)
     if not sidecar.exists():
         return None
     try:
@@ -504,11 +374,102 @@ def get_renderer() -> OpenSCADRenderer:
     return _renderer
 
 
-def render_stl(scad_path: Path, stl_path: Optional[Path] = None) -> RenderResult:
-    """Convenience function to render a SCAD file to STL."""
-    return get_renderer().render_stl(scad_path, stl_path)
+def _sources(part: BasePart) -> List[Path]:
+    """What a part's STL is built from: its SCAD, and the module (a described
+    part's part.json) that sets its rotation and output path.
+
+    The module is found as the loaded wrapper whose DEFAULT is this part.
+    """
+    sources = [part.source_file]
+    for name, module in list(sys.modules.items()):
+        if name.startswith("apothecary.projects.parts.") and (
+            getattr(module, "DEFAULT", None) is part
+        ):
+            if getattr(module, "__file__", None):
+                sources.append(Path(module.__file__))
+            break
+    return sources
 
 
-async def render_stl_async(scad_path: Path, stl_path: Optional[Path] = None) -> RenderResult:
-    """Convenience async function to render a SCAD file to STL."""
-    return await get_renderer().render_stl_async(scad_path, stl_path)
+def _is_fresh(part: BasePart, stl_path: Path, params: dict) -> bool:
+    """The STL on disk was rendered with these parameters and is newer than
+    everything it was built from."""
+    if not stl_path.exists():
+        return False
+    record = read_params_sidecar(stl_path) or {}
+    asked = json.loads(json.dumps(params, default=_recordable))
+    if record.get("params", {}) != asked:
+        return False
+    built = stl_path.stat().st_mtime
+    return all(src.stat().st_mtime <= built for src in _sources(part) if src.exists())
+
+
+def _render_rotated(
+    renderer: OpenSCADRenderer,
+    scad_path: Path,
+    stl_path: Path,
+    rotation: List[float],
+    timeout: float,
+    params: dict,
+) -> RenderResult:
+    """Render upright into a scratch directory, then turn it with a one-line wrapper.
+
+    Nothing is written beside the source, so two renders of one part cannot collide.
+    """
+    with tempfile.TemporaryDirectory(prefix="apothecary-rotate-") as tmp:
+        upright = Path(tmp) / "upright.stl"
+        first = renderer.render_stl(scad_path, upright, timeout, params=params or None)
+        if not first.success:
+            return first
+        wrapper = Path(tmp) / "rotate.scad"
+        wrapper.write_text(
+            f'rotate({scad_literal(rotation)}) import("{upright.name}");\n', encoding="utf-8"
+        )
+        second = renderer.render_stl(wrapper, stl_path, timeout)
+    second.render_time_seconds += first.render_time_seconds
+    second.dropped = first.dropped + second.dropped
+    return second
+
+
+def build_stl(
+    part: BasePart,
+    params: Optional[dict] = None,
+    force: bool = False,
+    timeout: float = 120.0,
+    renderer: Optional[OpenSCADRenderer] = None,
+) -> RenderResult:
+    """Build a part's STL at the part's own output path.
+
+    Overrides are checked against the part's ``params_model`` (ValueError on a
+    bad one). The STL on disk is kept (``skipped="fresh"``) unless ``force``, a
+    newer SCAD or wrapper, or different recorded parameters say otherwise. A
+    part that cannot be built here is refused (``skipped="refused"``). The
+    render is turned by ``display_rotation``; non-default parameters are
+    recorded in the params sidecar, and a default build removes it.
+    ``renderer`` overrides the OpenSCAD the part would choose for itself.
+    """
+    params = part.validate_overrides(params)
+    stl_path = part.get_stl_output_path()
+    if not force and _is_fresh(part, stl_path, params):
+        return RenderResult(success=True, stl_path=stl_path, skipped="fresh")
+
+    can_build, reason = part.can_generate_stl()
+    if not can_build:
+        return RenderResult(success=False, error_message=reason, skipped="refused")
+
+    if renderer is None:
+        own = part.get_openscad_path()
+        renderer = OpenSCADRenderer(str(own)) if own else get_renderer()
+
+    rotation = part.display_rotation.to_list()
+    if any(rotation):
+        result = _render_rotated(renderer, part.source_file, stl_path, rotation, timeout, params)
+    else:
+        result = renderer.render_stl(part.source_file, stl_path, timeout, params=params or None)
+
+    if result.success:
+        if params:
+            write_params_sidecar(stl_path, params)
+        else:
+            params_sidecar_path(stl_path).unlink(missing_ok=True)
+    return result

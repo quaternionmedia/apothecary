@@ -1,20 +1,4 @@
-"""How well the sorting actually does, measured rather than asserted.
-
-Slow: it draws pictures and reads them. The numbers quoted in the plan are taken
-here rather than typed into a document.
-
-**The trade being made is deliberate and it is visible in these numbers.** The
-sorting finds about a fifth of the groups that are there to find. In exchange, on
-thirty-two folders of twenty-seven drawn photographs — eight hundred and thirty
-pictures, near enough five thousand pairs — it has never built a group out of
-photographs that did not belong together. A tool that quietly invents an object
-out of two unrelated photographs is worse than a tool that shrugs, because
-nothing downstream can tell the difference.
-
-Seventeen of those folders were never used while the thresholds were being
-chosen, and are the ones that make the claim worth anything. They are the
-hold-out seeds below.
-"""
+"""The sorting on drawn folders: never joins unrelated pictures, still finds groups."""
 
 import pytest
 
@@ -56,13 +40,7 @@ def hold_out_folders():
 
 
 def test_no_group_is_ever_built_from_unrelated_photographs(hold_out_folders):
-    """The one number that has to be nothing, on folders never tuned against.
-
-    Before the arrangement check went in this was ten pairs in a single folder of
-    twenty-seven. Before the too-alike check it was nine mixed groups in fifteen
-    folders. It is nothing now, and if it stops being nothing the sentence in the
-    plan describing this work is false and has to be rewritten first.
-    """
+    """The one number that has to be nothing, on folders never tuned against."""
     for seed, score in hold_out_folders.items():
         assert score.groups_mixed == 0, f"seed {seed}: {'; '.join(score.mistakes[:3])}"
 
@@ -94,11 +72,7 @@ def test_it_still_finds_groups(hold_out_folders):
 
 
 def test_it_finds_about_a_fifth_of_what_is_there(hold_out_folders):
-    """The recall claim in the plan, stated as a band rather than a point.
-
-    If this rises, the plan understates the tool and should be corrected upward.
-    If it falls below the floor, something has broken.
-    """
+    """Recall as a band: above it the tool is better than stated, below it broke."""
     found = [score.found_rate for score in hold_out_folders.values()]
     typical = sum(found) / len(found)
     assert 0.15 <= typical <= 0.5, f"recall has moved to {typical:.0%}"

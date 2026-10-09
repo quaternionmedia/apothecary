@@ -21,7 +21,6 @@ from typing import Iterable, List, Sequence, Tuple
 
 Triangle = Tuple[Tuple[float, float, float], Tuple[float, float, float], Tuple[float, float, float]]
 
-READABLE_SUFFIXES = {".stl", ".obj"}
 # Named, not read: what would read them if it were ever wanted.
 NOT_READ = {
     ".3mf": "a 3MF is a zip of XML meshes; OpenSCAD imports it directly if built with lib3mf",

@@ -1,10 +1,4 @@
-"""Parameter overrides reaching OpenSCAD, and the bounds they are checked against.
-
-Every part carries a typed ``Params`` model and a hand-written ``get_bounds``
-beside hand-written OpenSCAD. Until these existed, neither the model nor the
-bounds were connected to the geometry at all: the model never reached the
-renderer, and nothing compared the declared envelope to the real one.
-"""
+"""Parameter overrides reaching OpenSCAD, and the bounds they are checked against."""
 
 from __future__ import annotations
 
@@ -12,9 +6,17 @@ import json
 
 import pytest
 from click.testing import CliRunner
+from rendered_parts import built_stl_fixture, registered_parts  # noqa: F401
 
 from apothecary.cli import cli
-from apothecary.projects.parts.stl_renderer import scad_definitions, scad_literal
+from apothecary.meshes import bounds, read_mesh
+from apothecary.projects.parts.stl_renderer import get_renderer, scad_definitions, scad_literal
+
+DECLARING_BOUNDS = [
+    pytest.param(part, id=name)
+    for name, part in registered_parts()
+    if part is not None and part.get_bounds() is not None
+]
 
 
 class TestScadLiteral:
@@ -66,9 +68,7 @@ class TestParameterValidation:
         assert "headroom" in result.output
 
     def test_value_outside_the_model_is_refused(self):
-        result = CliRunner().invoke(
-            cli, ["parts", "generate-stl", "datum_core", "-p", "walls=-1"]
-        )
+        result = CliRunner().invoke(cli, ["parts", "generate-stl", "datum_core", "-p", "walls=-1"])
         assert result.exit_code != 0
         assert "invalid parameters" in result.output
 
@@ -78,21 +78,25 @@ class TestParameterValidation:
         assert "name=value" in result.output
 
 
-@pytest.mark.slow
 class TestBoundsMatchGeometry:
     """The declared envelope, measured against what OpenSCAD actually emits."""
 
-    @pytest.mark.parametrize(
-        "part,height",
-        [("datum_core", 15.6), ("datum_cap", 5.0)],
-    )
-    def test_each_piece_verifies(self, part, height):
-        """One part, one envelope. These used to be `show` variants of a single
-        part, which made its bounds depend on which mode you asked for.
-        """
-        result = CliRunner().invoke(cli, ["parts", "verify", part])
+    @pytest.mark.slow
+    @pytest.mark.parametrize("part", DECLARING_BOUNDS)
+    def test_declared_bounds_are_the_rendered_ones(self, part, built_stl):
+        """`apothecary parts verify --all`, corners as well as sizes: a box of the
+        right size in the wrong place misleads a layout just as much."""
+        declared = part.get_bounds()
+        lo, hi = bounds(read_mesh(built_stl(part)))
+        assert list(lo) == pytest.approx(declared.min_point.to_list(), abs=0.5), part.name
+        assert list(hi) == pytest.approx(declared.max_point.to_list(), abs=0.5), part.name
+
+    @pytest.mark.skipif(not get_renderer().is_available, reason="OpenSCAD not installed")
+    def test_verify_measures_the_part_as_overridden(self):
+        """The command itself, on a part whose one parameter moves its box."""
+        result = CliRunner().invoke(cli, ["parts", "verify", "v_slot", "-p", "length=50"])
         assert result.exit_code == 0, result.output
-        assert f"{height:.2f}" in result.output
+        assert "50.00" in result.output
 
     def test_info_reports_the_same_bounds_it_verifies(self):
         result = CliRunner().invoke(cli, ["parts", "info", "datum_core", "--json-out"])

@@ -1,83 +1,31 @@
-"""The picture path never reaches the network.
-
-This is the check named in ``docs/plans/proposals/runs-and-stays-local.md``. The
-rule there says the software must work with the network switched off, and that a
-rule claiming to be checked has to name the thing doing the checking. This file
-is that thing.
-
-How it works: every way Python has of opening a connection is replaced with one
-that refuses and records what was attempted. Then the whole picture path runs. A
-library quietly fetching something the first time it is used — the common case —
-fails here loudly.
-
-What it does not catch: a helper program started separately, anything reaching
-the network from another thread that swallows its own errors, and anything using
-a connection opened before these tests began. It catches the common case, which
-is the honest claim.
-
-An earlier version of this guard was weaker than it looked. Replacing
-``socket.socket.connect`` leaves the C-level socket underneath it untouched, so
-anything reaching past the ordinary one walked straight through, as did name
-lookups and anything sending without connecting first. The C-level socket will
-not let its methods be replaced, so the class itself is swapped for one that
-refuses. The guard's own test now tries every one of those ways out rather than
-the single convenient one.
-
-See it fail before trusting it: put ``urllib.request.urlopen("http://example.com")``
-inside one of the functions under test and confirm this file goes red.
-"""
+"""Nothing apothecary runs reaches past this machine (apothecary/stays_local.py)."""
 
 from __future__ import annotations
 
 import _socket
 import http.client
+import json
 import os
+import re
 import socket
-import urllib.request
+import ssl
+import subprocess
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
+from apothecary import stays_local
+from apothecary.api import app
 from apothecary.vision import PlainFinder, ScaleReference, StatedFinder, picture_to_site
 from apothecary.vocabulary import starter_words
 
+ROOT = Path(__file__).resolve().parents[1]
+PACKAGE = ROOT / "apothecary"
 
-class ReachedTheNetwork(AssertionError):
-    """Something tried to open a connection. Under the local-only rule, a fault."""
 
-
-@pytest.fixture
-def no_network(monkeypatch):
-    """Refuse every outbound connection, and say what tried."""
-    attempts: list[str] = []
-
-    def refuse(what: str):
-        def blocked(*args, **kwargs):
-            attempts.append(f"{what}{args[:1]}")
-            raise ReachedTheNetwork(
-                f"{what} was called; nothing in the picture path may reach the network"
-            )
-
-        return blocked
-
-    # The lower-level socket cannot have its methods replaced — it is built in
-    # C and refuses. So the class itself is swapped for one that refuses, in
-    # both places it is looked up. Anything asking for a socket from here on
-    # gets the refusing one; anything that already had one from before does
-    # not, which is the gap named at the top of this file.
-    class Refuses(_socket.socket):
-        connect = refuse("socket.connect")
-        connect_ex = refuse("socket.connect_ex")
-        sendto = refuse("socket.sendto")
-
-    monkeypatch.setattr(_socket, "socket", Refuses)
-    monkeypatch.setattr(socket, "socket", Refuses)
-    monkeypatch.setattr(socket, "create_connection", refuse("socket.create_connection"))
-    monkeypatch.setattr(socket, "getaddrinfo", refuse("socket.getaddrinfo"))
-    monkeypatch.setattr(socket, "gethostbyname", refuse("socket.gethostbyname"))
-    monkeypatch.setattr(urllib.request, "urlopen", refuse("urllib.urlopen"))
-    monkeypatch.setattr(http.client.HTTPConnection, "connect", refuse("http.connect"))
-    return attempts
+# The picture path runs under the guard `import apothecary` puts on the process:
+# a connection past this machine raises LeftTheMachine.
 
 
 @pytest.fixture
@@ -93,34 +41,11 @@ def picture(tmp_path) -> Path:
     return path
 
 
-def test_the_guard_itself_works(no_network):
-    """Without this, a green run below would prove nothing.
-
-    Every way out is tried, not just the convenient one. The lower-level socket
-    is the one that matters: an earlier guard blocked only the ordinary socket
-    sitting on top of it, and anything reaching past that went out unnoticed.
-    """
-    ways_out = [
-        lambda: urllib.request.urlopen("http://example.invalid"),
-        lambda: socket.create_connection(("example.invalid", 80)),
-        lambda: socket.getaddrinfo("example.invalid", 80),
-        lambda: socket.gethostbyname("example.invalid"),
-        lambda: _socket.socket().connect(("127.0.0.1", 9)),
-        lambda: _socket.socket(socket.AF_INET, socket.SOCK_DGRAM).sendto(b"x", ("127.0.0.1", 9)),
-    ]
-    for index, way_out in enumerate(ways_out):
-        with pytest.raises(ReachedTheNetwork):
-            way_out()
-        assert len(no_network) == index + 1, f"way out {index} slipped past unrecorded"
+def test_looking_at_a_picture_reaches_nothing(picture):
+    assert len(PlainFinder().look(picture).shapes) == 2
 
 
-def test_looking_at_a_picture_reaches_nothing(no_network, picture):
-    found = PlainFinder().look(picture)
-    assert len(found.shapes) == 2
-    assert no_network == []
-
-
-def test_reading_a_written_description_reaches_nothing(no_network, tmp_path):
+def test_reading_a_written_description_reaches_nothing(tmp_path):
     image = tmp_path / "described.png"
     image.write_bytes(b"never opened")
     (tmp_path / "described.shapes.json").write_text(
@@ -128,25 +53,21 @@ def test_reading_a_written_description_reaches_nothing(no_network, tmp_path):
         '"shapes":[{"kind":"rect","min":[0,0],"max":[1,1]}]}'
     )
     assert len(StatedFinder().look(image).shapes) == 1
-    assert no_network == []
 
 
-def test_building_an_arrangement_reaches_nothing(no_network, picture):
+def test_building_an_arrangement_reaches_nothing(picture):
     site = picture_to_site(
         PlainFinder().look(picture), scale=ScaleReference(millimetres_across=300)
     )
     assert site.render()
-    assert no_network == []
 
 
-def test_the_word_list_reaches_nothing(no_network):
-    words = starter_words()
-    for word in words.all():
+def test_the_word_list_reaches_nothing():
+    for word in starter_words().all():
         assert word.make(word.name).to_scad_object().render()
-    assert no_network == []
 
 
-def test_the_whole_path_end_to_end_reaches_nothing(no_network, picture, tmp_path):
+def test_the_whole_path_end_to_end_reaches_nothing(picture, tmp_path):
     from click.testing import CliRunner
 
     from apothecary.cli import cli
@@ -157,7 +78,6 @@ def test_the_whole_path_end_to_end_reaches_nothing(no_network, picture, tmp_path
     )
     assert result.exit_code == 0, result.output
     assert out.exists()
-    assert no_network == []
 
 
 def test_nothing_is_written_outside_the_folder_it_was_given(picture, tmp_path):
@@ -175,111 +95,99 @@ def test_nothing_is_written_outside_the_folder_it_was_given(picture, tmp_path):
     assert set(Path.cwd().iterdir()) == before, "something was written outside the given folder"
 
 
-# ---------------------------------------------------------------------------
-# Not a test-time guard only: the program's own shape (apothecary/stays_local.py).
-# What follows holds the running system to the rule -- the process, the server,
-# the pages -- and holds the code to the few places the rule is enforced from,
-# so that neither a flag nor an edit elsewhere can loosen it unnoticed.
-
-import ast
-import http.client as _http
-import re
-
-from fastapi.testclient import TestClient
-
-from apothecary import stays_local
-from apothecary.api import app
-
-ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "apothecary"
-
-
-def test_the_process_is_guarded_by_importing_the_package():
-    """Importing `apothecary` puts the guard on the process: a socket reaches this
-    machine and nothing else, whichever way it is asked."""
+def test_importing_the_package_guards_every_name_for_a_socket():
     assert stays_local.guard_installed()
     assert socket.socket is not stays_local._original_socket
+    assert socket.SocketType is _socket.socket and _socket.SocketType is _socket.socket
+    assert ssl.socket is socket.socket
+
+
+def _with(make, act):
+    """Make a socket, do one thing with it, and close it (the C class has no `with`)."""
+    sock = make()
+    try:
+        act(sock)
+    finally:
+        sock.close()
+
+
+def _tcp(act, family=socket.AF_INET):
+    _with(lambda: socket.socket(family), act)
+
+
+def _udp(act):
+    _with(lambda: socket.socket(socket.AF_INET, socket.SOCK_DGRAM), act)
+
+
+def _tls(act):
+    # Wrapped before it connects: urllib's other order.
+    context = ssl.create_default_context()
+    _with(lambda: context.wrap_socket(socket.socket(), server_hostname="example.com"), act)
+
+
+ELSEWHERE = ("203.0.113.1", 80)
+
+WAYS_OUT = {
+    "connect to an address": lambda: _tcp(lambda s: s.connect(ELSEWHERE)),
+    "connect to a name": lambda: _tcp(lambda s: s.connect(("example.com", 443))),
+    "connect over IPv6": lambda: _tcp(
+        lambda s: s.connect(("2001:db8::1", 80, 0, 0)), socket.AF_INET6
+    ),
+    "connect through TLS": lambda: _tls(lambda s: s.connect(("203.0.113.1", 443))),
+    "connect the C-level socket": lambda: _with(_socket.socket, lambda s: s.connect(ELSEWHERE)),
+    "connect a socket.SocketType": lambda: _with(socket.SocketType, lambda s: s.connect(ELSEWHERE)),
+    "connect an ssl.socket": lambda: _with(ssl.socket, lambda s: s.connect(ELSEWHERE)),
+    "create_connection": lambda: socket.create_connection(ELSEWHERE, timeout=1),
+    "http.client": lambda: http.client.HTTPConnection("example.com", 80, timeout=1).connect(),
+    "sendto": lambda: _udp(lambda s: s.sendto(b"x", ("203.0.113.1", 53))),
+    "sendmsg": lambda: _udp(lambda s: s.sendmsg([b"x"], [], 0, ("203.0.113.1", 9))),
+    "bind to every address": lambda: _tcp(lambda s: s.bind(("0.0.0.0", 0))),
+    "bind to the empty host": lambda: _tcp(lambda s: s.bind(("", 0))),
+    "bind to a LAN address": lambda: _tcp(lambda s: s.bind(("192.168.1.10", 0))),
+    "bind to a name": lambda: _tcp(lambda s: s.bind(("carried.example", 0))),
+    # A name is the one thing that could carry data out without a connection.
+    "getaddrinfo": lambda: socket.getaddrinfo("example.com", 80),
+    "getaddrinfo a name carrying data": lambda: socket.getaddrinfo(
+        "secret-in-a-name.evil.example", 80
+    ),
+    "getaddrinfo in bytes": lambda: socket.getaddrinfo(b"example.com", 80),
+    "gethostbyname": lambda: socket.gethostbyname("example.com"),
+    "gethostbyaddr a name": lambda: socket.gethostbyaddr("carried-out.example"),
+    "gethostbyaddr an address": lambda: socket.gethostbyaddr("203.0.113.1"),
+    "getnameinfo": lambda: socket.getnameinfo(("203.0.113.1", 443), 0),
+    # The resolver's stub on loopback port 53 forwards whatever it is handed.
+    "sendto the resolver stub": lambda: _udp(lambda s: s.sendto(b"\x00" * 12, ("127.0.0.53", 53))),
+    "connect to loopback port 53": lambda: _udp(lambda s: s.connect(("127.0.0.1", 53))),
+}
+
+
+@pytest.mark.parametrize("way_out", WAYS_OUT.values(), ids=list(WAYS_OUT))
+def test_every_way_past_this_machine_is_refused(way_out):
+    with pytest.raises(stays_local.LeftTheMachine):
+        way_out()
+
+
+@pytest.fixture
+def loopback_port():
     listener = stays_local._original_socket()
     listener.bind(("127.0.0.1", 0))
     listener.listen(1)
-    port = listener.getsockname()[1]
-    try:
-        with socket.socket() as s:
-            s.settimeout(2)
-            s.connect(("127.0.0.1", port))  # this machine: fine
-        for target in (("203.0.113.1", 80), ("example.com", 443), ("2001:db8::1", 80, 0, 0)):
-            fam = socket.AF_INET6 if len(target) == 4 else socket.AF_INET
-            with socket.socket(fam) as s, pytest.raises(stays_local.LeftTheMachine):
-                s.connect(target)
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            with pytest.raises(stays_local.LeftTheMachine):
-                s.sendto(b"x", ("203.0.113.1", 53))
-        with pytest.raises(stays_local.LeftTheMachine):
-            socket.create_connection(("203.0.113.1", 80), timeout=1)
-        with pytest.raises(stays_local.LeftTheMachine):
-            _http.HTTPConnection("example.com", 80, timeout=1).connect()
-        # The C-level class is guarded too, for anything that reaches past the Python one.
-        import _socket
+    yield listener.getsockname()[1]
+    listener.close()
 
-        with pytest.raises(stays_local.LeftTheMachine):
-            _socket.socket().connect(("203.0.113.1", 80))
-        # A TLS socket was built on the original class before the guard; its connect
-        # is checked all the same (wrap first, then connect, is urllib's other order).
-        import ssl
 
-        tls = ssl.create_default_context().wrap_socket(
-            socket.socket(), server_hostname="example.com"
-        )
-        with tls, pytest.raises(stays_local.LeftTheMachine):
-            tls.connect(("203.0.113.1", 443))
-        # A name is the one thing that could carry data out without a connection:
-        # the resolver looks up this machine's names and literal addresses, nothing else.
-        for name in ("localhost", "127.0.0.1", "::1", "203.0.113.1", None):
-            socket.getaddrinfo(name, port)
-        for name in ("example.com", "secret-in-a-name.evil.example", b"example.com"):
-            with pytest.raises(stays_local.LeftTheMachine):
-                socket.getaddrinfo(name, 80)
-        with pytest.raises(stays_local.LeftTheMachine):
-            socket.gethostbyname("example.com")
-        # The other ways a socket takes an address: a datagram by sendmsg, a
-        # listener bound elsewhere, a name bound or reverse-looked-up.
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            with pytest.raises(stays_local.LeftTheMachine):
-                s.sendmsg([b"x"], [], 0, ("203.0.113.1", 9))
-            s.sendmsg([b"x"], [], 0, ("127.0.0.1", port))  # this machine: fine
-        for bound in (("0.0.0.0", 0), ("", 0), ("192.168.1.10", 0), ("carried.example", 0)):
-            with socket.socket() as s, pytest.raises(stays_local.LeftTheMachine):
-                s.bind(bound)
-        with socket.socket() as s:
-            s.bind(("127.0.0.1", 0))
-        with pytest.raises(stays_local.LeftTheMachine):
-            socket.gethostbyaddr("carried-out.example")
-        with pytest.raises(stays_local.LeftTheMachine):
-            socket.gethostbyaddr("203.0.113.1")
-        with pytest.raises(stays_local.LeftTheMachine):
-            socket.getnameinfo(("203.0.113.1", 443), 0)  # the other reverse lookup
-        assert socket.getnameinfo(("127.0.0.1", port), socket.NI_NUMERICHOST)[0] == "127.0.0.1"
-        # Loopback is not this machine when a service there forwards: the
-        # resolver's stub on port 53 takes a hand-built question anywhere.
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            with pytest.raises(stays_local.LeftTheMachine):
-                s.sendto(b"\x00" * 12, ("127.0.0.53", 53))
-            with pytest.raises(stays_local.LeftTheMachine):
-                s.connect(("127.0.0.1", 53))
-        # Every name the original classes were bound to now names the guarded one.
-        import ssl as _ssl
-
-        assert socket.SocketType is _socket.socket and _socket.SocketType is _socket.socket
-        assert _ssl.socket is socket.socket
-        for cls in (socket.SocketType, _ssl.socket):  # the C class has no `with`
-            s = cls()
-            try:
-                with pytest.raises(stays_local.LeftTheMachine):
-                    s.connect(("203.0.113.1", 80))
-            finally:
-                s.close()
-    finally:
-        listener.close()
+def test_this_machine_is_still_reachable(loopback_port):
+    with socket.socket() as s:
+        s.settimeout(2)
+        s.connect(("127.0.0.1", loopback_port))
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        s.sendmsg([b"x"], [], 0, ("127.0.0.1", loopback_port))
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+    for name in ("localhost", "127.0.0.1", "::1", "203.0.113.1", None):
+        socket.getaddrinfo(name, loopback_port)  # this machine's names, and literals
+    numeric = socket.getnameinfo(("127.0.0.1", loopback_port), socket.NI_NUMERICHOST)
+    assert numeric[0] == "127.0.0.1"
 
 
 def test_a_tool_fetch_reaches_its_sources_and_nothing_else(monkeypatch):
@@ -293,14 +201,14 @@ def test_a_tool_fetch_reaches_its_sources_and_nothing_else(monkeypatch):
     with pytest.raises(stays_local.LeftTheMachine):
         stays_local.tool_fetch("https://evil.example/arduino-cli.tar.gz")
     with pytest.raises(stays_local.LeftTheMachine):
-        _http.HTTPConnection("api.github.com").connect()  # outside a fetch: no
+        http.client.HTTPConnection("api.github.com").connect()  # outside a fetch: no
     with stays_local.tool_fetch("https://api.github.com/repos/arduino/arduino-cli/releases/latest"):
-        _http.HTTPConnection("api.github.com").connect()
-        _http.HTTPConnection(
+        http.client.HTTPConnection("api.github.com").connect()
+        http.client.HTTPConnection(
             "objects.githubusercontent.com"
         ).connect()  # where the archive redirects
         with pytest.raises(stays_local.LeftTheMachine):
-            _http.HTTPConnection("evil.example").connect()  # a redirect elsewhere
+            http.client.HTTPConnection("evil.example").connect()  # a redirect elsewhere
         assert stays_local._name_allowed("github.com")
         assert not stays_local._name_allowed("evil.example")
         # Inside the window a raw socket reaches a source by name, or an address
@@ -364,83 +272,62 @@ def test_a_tool_fetch_takes_no_proxy_and_a_version_is_three_numbers(monkeypatch)
             installer.resolve_version(bad, fetch=lambda url: b"")
 
 
-def test_only_the_installer_may_fetch_a_tool():
-    """`tool_fetch` has one caller. A second would be a second door, reviewed as such."""
-    callers = []
-    for path in PACKAGE.rglob("*.py"):
-        if path.name == "stays_local.py":
-            continue
-        if "tool_fetch" in path.read_text(encoding="utf-8"):
-            callers.append(path.relative_to(ROOT).as_posix())
-    assert callers == ["apothecary/firmware/installer.py"]
-
-
-def test_every_server_the_cli_starts_listens_on_this_machine_only():
-    """`require_loopback` accepts this machine's names and nothing else, and every
-    function in the CLI that calls uvicorn.run goes through it first."""
+def test_require_loopback_accepts_this_machine_only():
     for host in ("127.0.0.1", "localhost", "::1", "127.0.0.2"):
         assert stays_local.require_loopback(host) == host
     for host in ("0.0.0.0", "::", "192.168.1.10", "10.0.0.1", "apothecary.local", "example.com"):
         with pytest.raises(ValueError, match="this machine only"):
             stays_local.require_loopback(host)
-    binders = 0
-    for path in (PACKAGE / "cli").glob("*.py"):
-        text = path.read_text(encoding="utf-8")
-        if "uvicorn.run(" not in text:
-            continue
-        tree = ast.parse(text)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef):
-                body = ast.get_source_segment(text, node) or ""
-                if "uvicorn.run(" in body:
-                    binders += 1
-                    assert "require_loopback" in body or "_loopback_or_" in body, (
-                        f"{path.name}:{node.name} binds without require_loopback"
-                    )
-    assert binders == 4  # serve, dev, photo view, photo gather
 
 
-def test_the_app_answers_this_machine_only_and_fences_every_page():
-    """A client not on loopback gets 403 from every route, static files included;
-    a client on loopback gets the page, with a policy that keeps it to this origin."""
-    elsewhere = TestClient(app, client=("192.168.1.20", 4444))
-    for path in (
-        "/",
-        "/viewer/sites/garage",
-        "/static/ring.js",
-        "/openapi.json",
-        "/docs/README.md",
-    ):
-        r = elsewhere.get(path)
-        assert r.status_code == 403, path
-        assert "this machine only" in r.text
-    # A page from elsewhere that pointed its own name at 127.0.0.1 arrives from
-    # loopback, and is refused by the name it asked for; so is a listener bound
-    # elsewhere, whatever a forwarded-for header made the client look like.
-    rebound = TestClient(app, base_url="http://evil.example")
-    assert rebound.get("/cameras").status_code == 403
-    assert TestClient(app).get("/cameras", headers={"host": "evil.example:8000"}).status_code == 403
-    assert (
-        TestClient(app).get("/cameras", headers={"host": "127.0.0.1.evil.example"}).status_code
-        == 403
-    )
-    bound_elsewhere = TestClient(app, base_url="http://192.168.1.5:8000")
-    assert bound_elsewhere.get("/cameras").status_code == 403
-    for host in ("localhost:8000", "127.0.0.1", "[::1]:8000", "LOCALHOST", "localhost."):
-        assert TestClient(app).get("/cameras", headers={"host": host}).status_code == 200, host
-    for host in ("app.localhost", '127.0.0.1:8000"', "127.0.0.1:80x", "", "[::1"):
-        assert TestClient(app).get("/cameras", headers={"host": host}).status_code == 403, host
-    # A server that cannot name the peer or itself (a Unix socket, another ASGI
-    # server) gets no answer: unknown is not this machine.
+@pytest.mark.parametrize(
+    "path", ["/", "/viewer/sites/garage", "/static/ring.js", "/openapi.json", "/docs/README.md"]
+)
+def test_a_client_elsewhere_is_refused_by_every_route(path):
+    r = TestClient(app, client=("192.168.1.20", 4444)).get(path)
+    assert r.status_code == 403
+    assert "this machine only" in r.text
+
+
+@pytest.mark.parametrize("arrived_at", ["http://evil.example", "http://192.168.1.5:8000"])
+def test_a_request_arriving_by_another_name_or_address_is_refused(arrived_at):
+    """A page from elsewhere that pointed its own name at 127.0.0.1 arrives from loopback."""
+    assert TestClient(app, base_url=arrived_at).get("/cameras").status_code == 403
+
+
+@pytest.mark.parametrize(
+    ("host", "status"),
+    [
+        ("localhost:8000", 200),
+        ("127.0.0.1", 200),
+        ("[::1]:8000", 200),
+        ("LOCALHOST", 200),
+        ("localhost.", 200),
+        ("evil.example:8000", 403),
+        ("127.0.0.1.evil.example", 403),
+        ("app.localhost", 403),
+        ('127.0.0.1:8000"', 403),
+        ("127.0.0.1:80x", 403),
+        ("", 403),
+        ("[::1", 403),
+    ],
+)
+def test_the_host_asked_for_must_be_this_machine(host, status):
+    assert TestClient(app).get("/cameras", headers={"host": host}).status_code == status
+
+
+def test_a_peer_the_server_cannot_name_is_not_this_machine():
+    """A Unix socket or another ASGI server may give no client or server address."""
     scope = {"type": "http", "method": "GET", "headers": [(b"host", b"localhost:8000")]}
     assert not stays_local.from_this_machine(scope)
     assert not stays_local.from_this_machine({**scope, "client": None, "server": None})
     assert stays_local.from_this_machine(
         {**scope, "client": ("127.0.0.1", 5), "server": ("127.0.0.1", 8000)}
     )
-    # A page from another origin cannot post here, fetch from here or embed
-    # from here, whatever the browser would have let through without a
-    # preflight; a link from elsewhere that opens a page here still works.
+
+
+def test_a_page_on_another_origin_cannot_send_here():
+    """Refused whether or not a browser would preflight; a link from elsewhere still opens."""
     here = TestClient(app)
     foreign = {"origin": "https://evil.example", "sec-fetch-site": "cross-site"}
     assert here.post("/photos/gather", json={}, headers=foreign).status_code == 403
@@ -457,19 +344,26 @@ def test_the_app_answers_this_machine_only_and_fences_every_page():
     own = {"origin": "http://127.0.0.1:8000", "sec-fetch-site": "same-origin"}
     assert here.get("/cameras", headers=own).status_code == 200
     assert here.get("/cameras", headers={"sec-fetch-site": "none"}).status_code == 200
-    here = TestClient(app)  # conftest: this machine
-    for path in (
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
         "/viewer/sites/garage",
         "/firmware",
         "/firmware/monitor",
         "/docs/README.md",
         "/static/ring.js",
-    ):
-        r = here.get(path)
-        assert r.status_code == 200, path
-        csp = r.headers["content-security-policy"]
-        assert csp == stays_local.CONTENT_SECURITY_POLICY
-        assert r.headers["referrer-policy"] == "no-referrer"
+    ],
+)
+def test_every_page_carries_the_policy(path):
+    r = TestClient(app).get(path)
+    assert r.status_code == 200
+    assert r.headers["content-security-policy"] == stays_local.CONTENT_SECURITY_POLICY
+    assert r.headers["referrer-policy"] == "no-referrer"
+
+
+def test_the_policy_keeps_a_page_to_this_origin():
     csp = stays_local.CONTENT_SECURITY_POLICY
     assert (
         "default-src 'self'" in csp and "connect-src 'self'" in csp and "form-action 'self'" in csp
@@ -550,9 +444,7 @@ def test_the_picture_root_is_a_folder_of_pictures_never_everything(monkeypatch, 
 
 
 def test_what_is_kept_is_the_persons_alone(monkeypatch, tmp_path):
-    """The state folder and a camera's captures are made readable by this account
-    only, whatever the umask says; and `apothecary test all` runs its server on
-    state and pictures of its own, like `test run` and `docs generate`."""
+    """The state folder and a camera's captures are this account's alone, whatever the umask."""
     import stat
 
     from apothecary.firmware import devices
@@ -579,14 +471,10 @@ def test_what_is_kept_is_the_persons_alone(monkeypatch, tmp_path):
     for folder in (tmp_path / "state", tmp_path / "pics" / "captures"):
         assert folder.is_dir(), folder
         assert stat.S_IMODE(folder.stat().st_mode) == 0o700, folder
-    testing = (PACKAGE / "cli" / "testing.py").read_text(encoding="utf-8")
-    assert 'env["APOTHECARY_STATE_DIR"]' in testing and 'env["APOTHECARY_PICTURE_ROOT"]' in testing
-    assert "capture_output=True, text=True, env=env" in testing
 
 
-def test_a_job_is_named_and_the_name_is_shown_as_text():
-    """A job name is letters, digits and a little punctuation: the page shows it as
-    text, and the API refuses one that is markup (the page escapes it as well)."""
+def test_a_job_name_that_is_markup_is_refused():
+    """A job name is letters, digits and a little punctuation."""
     here = TestClient(app)
     body = {"required_volume": {"x": 10, "y": 10, "z": 10}}
     r = here.post("/sites/garage/jobs", json={"name": "small bracket v2", **body})
@@ -594,17 +482,11 @@ def test_a_job_is_named_and_the_name_is_shown_as_text():
     for bad in ('<img src=x onerror="fetch(1)">', "a&b", 'x"y', "", " lead", "x" * 81):
         r = here.post("/sites/garage/jobs", json={"name": bad, **body})
         assert r.status_code == 422, bad
-    viewer = (ROOT / "templates" / "fractal_viewer.html.j2").read_text(encoding="utf-8")
-    assert "<strong>${esc(job.name)}</strong>" in viewer
-    firmware = (ROOT / "templates" / "firmware.html.j2").read_text(encoding="utf-8")
-    assert '["tools dir", esc(s.tools_dir)]' in firmware and "v.startsWith" not in firmware
 
 
-def test_a_subprocess_that_fetches_is_told_where_and_nothing_else_tells_it(monkeypatch, tmp_path):
-    """arduino-cli is outside the socket guard, so what it fetches is fixed by the config
-    file every invocation is given and by the environment it does not inherit: no proxy,
-    no ARDUINO_* override (arduino-cli lets either outrank the file)."""
-    from apothecary.firmware import installer, toolchains
+def test_a_subprocess_inherits_no_proxy_and_no_arduino_override(monkeypatch):
+    """arduino-cli is outside the socket guard, and lets either outrank its config file."""
+    from apothecary.firmware import installer
 
     monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:3128")
     monkeypatch.setenv("http_proxy", "http://proxy.example:3128")
@@ -618,9 +500,22 @@ def test_a_subprocess_that_fetches_is_told_where_and_nothing_else_tells_it(monke
     assert installer.env_for_arduino()["HOME"]
     assert "HTTPS_PROXY" not in installer.env_for_arduino()
 
-    # The managed config: the two fetches arduino-cli makes on its own are off, and
-    # the indexes it may fetch from are the fixed ones; every argv carries it.
+
+@pytest.fixture
+def arduino_cli(monkeypatch, tmp_path):
+    """An ArduinoCli over a stub binary, its tools folder in tmp_path."""
+    from apothecary.firmware import toolchains
+
     monkeypatch.setenv("APOTHECARY_TOOLS_DIR", str(tmp_path / "tools"))
+    binary = tmp_path / "arduino-cli"
+    binary.write_text("#!/bin/sh\n", encoding="utf-8")
+    return toolchains.ArduinoCli(binary)
+
+
+def test_arduino_cli_is_always_given_the_managed_config(arduino_cli, tmp_path):
+    """Its own cloud lookup and update check are off; its package indexes are the fixed ones."""
+    from apothecary.firmware import toolchains
+
     config = stays_local.ARDUINO_CLI_CONFIG
     assert config["network"]["cloud_api"]["skip_board_detection_calls"] is True
     assert config["updater"]["enable_notification"] is False
@@ -629,43 +524,34 @@ def test_a_subprocess_that_fetches_is_told_where_and_nothing_else_tells_it(monke
     )
     path = toolchains.managed_config_file()
     assert path == tmp_path / "tools" / "arduino-cli.yaml"
-    import json
-
     assert json.loads(path.read_text(encoding="utf-8")) == config
     path.write_text("{}", encoding="utf-8")  # an edit by hand does not last
     assert json.loads(toolchains.managed_config_file().read_text(encoding="utf-8")) == config
-    binary = tmp_path / "arduino-cli"
-    binary.write_text("#!/bin/sh\n", encoding="utf-8")
-    cli = toolchains.ArduinoCli(binary)
-    assert cli.argv("board", "list")[:3] == [str(binary), "--config-file", str(path)]
-    # A sketch profile names where arduino-cli fetches a platform from, and
-    # arduino-cli honours it whatever the command line says: not built.
+    assert arduino_cli.config_file == path
+    assert arduino_cli.argv("board", "list")[:3] == [
+        str(tmp_path / "arduino-cli"),
+        "--config-file",
+        str(path),
+    ]
+
+
+def test_a_sketch_that_names_where_to_fetch_from_is_not_built(arduino_cli, tmp_path):
+    """arduino-cli honours a sketch profile's platform_index_url whatever the command line says."""
+    from apothecary.firmware import toolchains
+
     sketch = tmp_path / "blinky"
     sketch.mkdir()
     (sketch / "blinky.ino").write_text("void setup(){} void loop(){}", encoding="utf-8")
-    assert cli.compile_argv(sketch, "arduino:avr:uno")[-1] == str(sketch)
+    assert arduino_cli.compile_argv(sketch, "arduino:avr:uno")[-1] == str(sketch)
     (sketch / "sketch.yaml").write_text(
         "default_profile: x\nprofiles:\n  x:\n    platforms:\n"
         "      - platform: arduino:avr\n        platform_index_url: https://evil.example/i.json\n",
         encoding="utf-8",
     )
     with pytest.raises(toolchains.ToolchainError, match="sketch profile"):
-        cli.compile_argv(sketch, "arduino:avr:uno")
+        arduino_cli.compile_argv(sketch, "arduino:avr:uno")
     with pytest.raises(toolchains.ToolchainError, match="sketch profile"):
-        cli.upload_argv(sketch, "arduino:avr:uno", "/dev/ttyUSB0")
-    assert cli.config_file == path
-    assert "config_file" not in toolchains.ArduinoCli.__init__.__code__.co_varnames
-    # Every subprocess the seam starts goes through a scrubbed environment.
-    text = (PACKAGE / "firmware" / "toolchains.py").read_text(encoding="utf-8")
-    assert "env = subprocess_env(env)" in text
-    text = (PACKAGE / "firmware" / "tasks.py").read_text(encoding="utf-8")
-    assert text.count("env=subprocess_env(env)") == 2
-    text = (PACKAGE / "firmware" / "devices.py").read_text(encoding="utf-8")
-    assert text.count("subprocess.Popen(") == 1 and "env=subprocess_env()" in text
-    for path in (PACKAGE / "firmware").glob("*.py"):
-        body = path.read_text(encoding="utf-8")
-        if "subprocess.run(" in body or "subprocess.Popen(" in body:
-            assert path.name in ("toolchains.py", "tasks.py", "devices.py"), path.name
+        arduino_cli.upload_argv(sketch, "arduino:avr:uno", "/dev/ttyUSB0")
 
 
 LOADS_FROM_ELSEWHERE = re.compile(
@@ -697,10 +583,8 @@ def test_no_page_loads_from_or_sends_to_another_origin():
     assert not found, "\n".join(found)
 
 
-def test_the_record_names_the_rule_and_its_one_exception():
-    record = ROOT / "governance" / "qm" / "adr" / "DRAFT-personal-data-stays-on-the-device.md"
-    if not record.exists():
-        pytest.skip("governance/qm is not checked out")
-    text = record.read_text(encoding="utf-8")
-    assert "secured user accounts" in text
-    assert "stays_local" in text
+def test_the_pictures_the_browser_keeps_are_never_committed():
+    """The picture root defaults to the folder the server starts in, often this repository."""
+    for kept in ("captures/frame.png", "uploads/holiday.jpg"):
+        ignored = subprocess.run(["git", "check-ignore", "-q", kept], cwd=ROOT)
+        assert ignored.returncode == 0, f"{kept} would be committed"

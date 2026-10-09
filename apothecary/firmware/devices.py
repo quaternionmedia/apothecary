@@ -26,11 +26,21 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, Iterator, List, Optional
+
+try:  # the state file's cross-process lock
+    import fcntl
+except ImportError:  # pragma: no cover - Windows
+    fcntl = None
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None
 
 from ..projects.parts.skeleton import ROOT
 from ..stays_local import subprocess_env
@@ -48,7 +58,14 @@ from .models import (
     SketchInfo,
 )
 from .sketches import find_sketch
-from .toolchains import ArduinoCli, Esptool, ToolchainError, get_arduino_cli, get_esptool
+from .toolchains import (
+    ArduinoCli,
+    Esptool,
+    PortHeld,
+    ToolchainError,
+    get_arduino_cli,
+    get_esptool,
+)
 
 BANNER_RE = re.compile(r"apothecary\s+([A-Za-z0-9_.\-]+):\s*hello")
 CHIP_LINE_RE = re.compile(r"^chip:\s+(.+)$")
@@ -87,18 +104,64 @@ def state_file() -> Path:
     return state_dir() / "firmware-state.json"
 
 
+class _StateLock:
+    """One writer at a time across threads *and* processes: the server and a CLI
+    command (`firmware printer`, `upload`) both write the state file, and two
+    read-modify-writes interleaved used to drop each other's pins."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        self._thread = threading.Lock()
+        self._fd: Optional[int] = None
+
+    def __enter__(self):
+        self._thread.acquire()
+        try:
+            private_folder(self.path.parent)
+            self._fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o600)
+            if fcntl is not None:
+                fcntl.flock(self._fd, fcntl.LOCK_EX)
+            elif msvcrt is not None:  # pragma: no cover - Windows
+                msvcrt.locking(self._fd, msvcrt.LK_LOCK, 1)
+        except BaseException:
+            self._thread.release()
+            raise
+        return self
+
+    def __exit__(self, *exc):
+        try:
+            if self._fd is not None:
+                if fcntl is not None:
+                    fcntl.flock(self._fd, fcntl.LOCK_UN)
+                elif msvcrt is not None:  # pragma: no cover - Windows
+                    msvcrt.locking(self._fd, msvcrt.LK_UNLCK, 1)
+                os.close(self._fd)
+                self._fd = None
+        finally:
+            self._thread.release()
+
+
 class FirmwareState:
     """Flash records, cached probes and node bindings: one JSON file, read fresh on every use."""
 
     def __init__(self, path: Optional[Path] = None):
         self.path = path or state_file()
-        self._lock = threading.Lock()
+        self._lock = _StateLock(self.path.with_suffix(".lock"))
 
     def _load(self) -> dict:
         try:
             data = json.loads(self.path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            data = {}
         except (OSError, json.JSONDecodeError):
-            return {"flashes": [], "devices": {}, "bindings": []}
+            # Never written over: the next save would have erased every pin and
+            # flash record in it. Kept beside the new file for the person.
+            aside = self.path.with_name(f"{self.path.name}.unreadable-{int(time.time())}")
+            try:
+                self.path.replace(aside)
+            except OSError:
+                pass
+            data = {}
         data.setdefault("flashes", [])
         data.setdefault("devices", {})
         data.setdefault("bindings", [])
@@ -106,9 +169,10 @@ class FirmwareState:
 
     def _save(self, data: dict) -> None:
         private_folder(self.path.parent)
-        tmp = self.path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
-        tmp.replace(self.path)
+        fd, tmp = tempfile.mkstemp(dir=self.path.parent, prefix=".firmware-state.", suffix=".tmp")
+        with os.fdopen(fd, "w", encoding="utf-8") as out:
+            out.write(json.dumps(data, indent=2, default=str))
+        os.replace(tmp, self.path)
 
     def record_flash(self, record: FlashRecord) -> None:
         with self._lock:
@@ -171,9 +235,6 @@ class FirmwareState:
     def bindings(self, site: Optional[str] = None) -> List[ManualBinding]:
         rows = [ManualBinding(**b) for b in self._load()["bindings"]]
         return [b for b in rows if site is None or b.site == site]
-
-    def binding_for(self, site: str, path: str) -> Optional[ManualBinding]:
-        return next((b for b in self.bindings(site) if b.path == path), None)
 
 
 _STATE: Optional[FirmwareState] = None
@@ -387,7 +448,8 @@ def identify_printer(
     try:
         info = gcode.identify_printer(link, reset=reset)
     except ToolchainError:
-        links.close(port)
+        if link.job is None:  # a job's link is the job's to let go of
+            links.close(port)
         raise
     device = base.model_copy(update={"printer": info})
     state.remember_device(device)
@@ -481,7 +543,12 @@ def printer_status(
     except gcode.LinkBusy:
         return _last_status_with(port, _live_job(port, link.job) or job)
     except ToolchainError as exc:
-        links.close(port, force=True)  # a wedged link is worse than a reopen on the next poll
+        if link.job is not None:
+            # One lost reply mid-print is not a dead board. Closing the link
+            # here killed the print under its thread and left the heaters on;
+            # a board that really went away fails the job's own next write.
+            return _last_status_with(port, _live_job(port, link.job))
+        links.close(port)  # a wedged idle link is worse than a reopen on the next poll
         status = gcode.offline_status(port, str(exc))
     job = _live_job(port, link.job)
     if job is not None and job.get("kind") == "print":
@@ -547,9 +614,7 @@ def printer_reset(
     link = links.get(port)
     if link is None:
         raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
-    if link.job is not None:
-        raise ToolchainError(f"{port}: a {link.job.get('kind')} holds the port -- not resetting")
-    return link.reset()
+    return link.reset()  # refused by the link itself while a job holds it
 
 
 def printer_control(
@@ -600,7 +665,7 @@ def _job_allows(job: dict, cmd: str) -> None:
     if job.get("kind") == "print" and PRINT_ALLOWS.match(cmd):
         return
     what = "a print" if job.get("kind") == "print" else "a bed reading"
-    raise ToolchainError(f"{port_of(job)}: {what} holds the port ({job.get('stage')})")
+    raise PortHeld(f"{port_of(job)}: {what} holds the port ({job.get('stage')})")
 
 
 def port_of(job: dict) -> str:
@@ -747,17 +812,17 @@ def start_leveling(
 ) -> LevelingJob:
     """Begin a bed reading on ``port``; a probe needs the control latch armed.
 
-    Raises ``ControlNotArmed`` for a probe with the latch down, ``ToolchainError``
-    when the port is not a printer or a job already holds it.
+    Raises ``ControlNotArmed`` for a probe with the latch down, ``PortHeld`` when
+    a job already holds the port, ``ToolchainError`` when it is not a printer.
     """
     state = state or get_state()
     links = links or gcode.get_printer_links()
     running = _LEVELING.get(port)
     if running and running.finished is None:
-        raise ToolchainError(f"{port}: a bed reading is already {running.stage}")
+        raise PortHeld(f"{port}: a bed reading is already {running.stage}")
     printing = _PRINTS.get(port)
     if printing and printing.finished is None:
-        raise ToolchainError(f"{port}: a print holds the port ({printing.stage})")
+        raise PortHeld(f"{port}: a print holds the port ({printing.stage})")
     if probe and not links.control.armed(port):
         raise gcode.ControlNotArmed(f"{port}: probing moves the machine -- arm control first")
     if links.get(port) is None:
@@ -838,7 +903,7 @@ def delete_print_file(file_id: str) -> bool:
     """Forget a kept file; refused while a print streams it."""
     for job in _PRINTS.values():
         if job.file.id == file_id and job.finished is None:
-            raise ToolchainError(f"{file_id}: a print is streaming it")
+            raise PortHeld(f"{file_id}: a print is streaming it")
     found = False
     for path in (_print_meta_path(file_id), _print_file_path(file_id)):
         if path.is_file():
@@ -1001,12 +1066,13 @@ class PrintJob:
             self.error = str(exc)
             self.stage = "failed"
         if outcome != "done" and not self._quiet:
+            # Every line of the safe-off is tried: a hotend left on because the
+            # fan line before it timed out is the failure this exists to prevent.
             for cmd in PRINT_SAFE_OFF:
                 try:
                     tail = (tail + link.command(cmd, timeout=10.0, origin="print"))[-200:]
-                except ToolchainError as exc:  # a halted or vanished board: nothing more to do
+                except ToolchainError as exc:
                     tail.append(f"({cmd} not answered: {exc})")
-                    break
         ended = datetime.now(timezone.utc)
         cached = get_state().cached_device(self.port)
         self.record = PrintRecord(
@@ -1050,19 +1116,20 @@ def start_print(
 ) -> PrintJob:
     """Begin streaming a kept file to ``port``; needs the control latch armed.
 
-    Raises ``ControlNotArmed`` with the latch down, ``ToolchainError`` when
-    the file is unknown or refused, the port is not a printer, or a job
-    (a print, a bed reading) already holds it.
+    Raises ``ValueError`` when the file is unknown or refused,
+    ``ControlNotArmed`` with the latch down, ``PortHeld`` when a job (a print,
+    a bed reading, the card) already has the machine, and ``ToolchainError``
+    when the port is not a printer.
     """
     state = state or get_state()
     links = links or gcode.get_printer_links()
     file = print_file(file_id)
     if file is None:
-        raise ToolchainError(f"no such print file: {file_id}")
+        raise ValueError(f"no such print file: {file_id}")
     if file.problems:
-        raise ToolchainError(f"{file.name} may not be sent: " + "; ".join(file.problems[:3]))
+        raise ValueError(f"{file.name} may not be sent: " + "; ".join(file.problems[:3]))
     if file.lines == 0:
-        raise ToolchainError(f"{file.name} has nothing to send")
+        raise ValueError(f"{file.name} has nothing to send")
     if not links.control.armed(port):
         raise gcode.ControlNotArmed(
             f"{port}: a print heats and moves the machine -- arm control first"
@@ -1070,7 +1137,7 @@ def start_print(
     for running in (_PRINTS.get(port), _LEVELING.get(port)):
         if running and running.finished is None:
             what = "print" if isinstance(running, PrintJob) else "bed reading"
-            raise ToolchainError(f"{port}: a {what} already holds the port ({running.stage})")
+            raise PortHeld(f"{port}: a {what} already holds the port ({running.stage})")
     if links.get(port) is None:
         printer_status(port, state=state, links=links)
     link = links.get(port)
@@ -1078,7 +1145,7 @@ def start_print(
         raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
     last = _LAST_STATUS.get(port)
     if last is not None and last.sd_printing:
-        raise ToolchainError(f"{port}: the card is printing -- pause or abort that first")
+        raise PortHeld(f"{port}: the card is printing -- pause or abort that first")
     job = PrintJob(port, file, links)
     _PRINTS[port] = job
     link.job = job.snapshot()
@@ -1098,7 +1165,7 @@ def printer_query(
     cmd = gcode.normalise_query(command)  # ValueError for anything that is not a report
     held = links.get(port)
     if held is not None and held.job is not None and held.job.get("kind") != "print":
-        raise ToolchainError(f"{port}: a bed reading holds the port ({held.job['stage']})")
+        raise PortHeld(f"{port}: a bed reading holds the port ({held.job['stage']})")
     if links.get(port) is None:
         printer_status(port, state=state, links=links)  # identifies + opens; offline if it cannot
     link = links.get(port)
