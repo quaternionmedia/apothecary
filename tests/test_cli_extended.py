@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 from click.testing import CliRunner
 
@@ -71,23 +70,12 @@ def test_cli_templategenerate_from_file(tmp_path):
 
 
 def test_cli_parts_render_fallback_template(tmp_path):
-    # Run in isolated FS so default template path is missing, forcing fallback include
-    runner = CliRunner()
-    with runner.isolated_filesystem(temp_dir=tmp_path):
-        out = Path("p.scad")
-        r = runner.invoke(
-            cli,
-            [
-                "parts",
-                "render",
-                "parametric_star",
-                "-o",
-                str(out),
-            ],
-        )
-        assert r.exit_code == 0
-        text = out.read_text(encoding="utf-8")
-        assert text.strip().startswith("// ") and "include <" in text
+    # With no --template, the part is rendered as an include of its own SCAD.
+    out = tmp_path / "p.scad"
+    r = CliRunner().invoke(cli, ["parts", "render", "parametric_star", "-o", str(out)])
+    assert r.exit_code == 0
+    text = out.read_text(encoding="utf-8")
+    assert text.strip().startswith("// ") and "include <" in text
 
 
 def test_cli_parts_info_missing_wrapper_errors():

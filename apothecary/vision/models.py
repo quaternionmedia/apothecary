@@ -123,6 +123,19 @@ class Picture(BaseModel):
         return all(s.origin != "stated" for s in self.shapes)
 
 
+def long_side_across(shape: FoundShape, picture: Picture) -> float:
+    """A shape's long side, as a fraction of the picture's width.
+
+    Its own long side when it was measured; otherwise the longer side of its
+    upright box, the height turned from a fraction of the picture's height into
+    one of its width.
+    """
+    if shape.measured_sides:
+        return shape.long_side
+    tallness = picture.pixel_height / picture.pixel_width
+    return max(shape.width, shape.height * tallness)
+
+
 class AmbiguousReference(ValueError):
     """More than one shape carries the label a reference names."""
 
@@ -134,7 +147,10 @@ class ScaleReference(BaseModel):
 
     - ``millimetres_across`` — how wide the whole picture is in the world;
     - ``known_shape`` and ``known_width_mm`` — the label of one shape whose
-      real width is known.
+      real width is known;
+    - ``known_index`` and ``known_width_mm`` — the same, naming the shape by
+      its place in the picture's list, since labels may repeat. The width is
+      then the shape's long side.
 
     Without a reference, shapes are placed without a size and marked as such,
     so the overlap check stays quiet rather than being confidently wrong.
@@ -143,11 +159,20 @@ class ScaleReference(BaseModel):
     millimetres_across: Optional[float] = Field(None, gt=0, allow_inf_nan=False)
     known_shape: Optional[str] = None
     known_width_mm: Optional[float] = Field(None, gt=0, allow_inf_nan=False)
+    known_index: Optional[int] = Field(None, ge=0)
 
     def millimetres_per_unit(self, picture: Picture) -> Optional[float]:
         """How many millimetres one full width of the picture stands for."""
         if self.millimetres_across is not None:
             return self.millimetres_across
+        if self.known_index is not None and self.known_width_mm:
+            if self.known_index >= len(picture.shapes):
+                raise IndexError(
+                    f"the picture has {len(picture.shapes)} shape(s); "
+                    f"there is no shape {self.known_index}"
+                )
+            across = long_side_across(picture.shapes[self.known_index], picture)
+            return self.known_width_mm / across if across > 0 else None
         if self.known_shape and self.known_width_mm:
             matches = [s for s in picture.shapes if s.label == self.known_shape]
             if len(matches) > 1:

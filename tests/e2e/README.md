@@ -7,6 +7,11 @@ panel, and the two walkthrough pages. Chromium once per machine:
 uv run playwright install chromium
 ```
 
+That installs the headless shell most tests run in and, beside it, full
+Chromium: `test_first_camera.py` runs in that one (Playwright's `chromium`
+channel), where the browser's own camera prompt stands, and skips, saying so,
+when it is missing.
+
 ## Running them
 
 ```bash
@@ -31,6 +36,17 @@ Every server comes from one factory, the `start_server` fixture in
 stays off the session's server. Every other module uses that one, which lives
 for the whole run: take back what a test pins, places or adds, or the tests
 after it see it.
+
+## Running in parallel
+
+A file's tests run in order and on one server: the walkthroughs and the ring build
+on the steps before them. So parallel runs keep files whole. `-n auto --dist
+loadfile` gives each worker its own server on a free port (`--server-port` is
+refused with `-n`). `--shard K/N` runs the K-th of N shards, files placed
+heaviest first onto the lightest shard by `durations.json`; CI runs three. A
+file missing from `durations.json` counts as the average test for each of its
+tests; refresh the file from a serial run's `--durations=0` when the shards
+drift apart.
 
 ## The two recorders
 

@@ -20,6 +20,8 @@ Rendering STLs needs the `openscad` CLI on `PATH`.
 uv run pytest -q                                # unit tests and the walkthrough; browser tests skip
 uv run pytest -q --slow                         # also full renders and accuracy benches
 uv run pytest tests/e2e --start-server          # the browser tests, on a server of their own
+uv run pytest tests/e2e --start-server -n auto --dist loadfile   # the same, a worker per core, files kept whole
+uv run pytest tests/e2e --start-server --shard 2/3               # one CI shard: whole files, by tests/e2e/durations.json
 uv run apothecary test all                      # unit and walkthrough, then the browser tests
 uv run ruff check apothecary tests              # kept clean; format only the files you change
 uv run --group preflight apothecary preflight   # the CI workflows, run here, before a push
@@ -35,7 +37,7 @@ and what it cannot.
 
 | Workflow | Fails on |
 |---|---|
-| `pytest.yml` | On Python 3.11: a finding from `ruff check apothecary tests`; the walkthrough; the unit tests with `--slow`; the wheel failing to install and render a scene. In a second job, in parallel: the browser tests, and a walkthrough page they rewrote |
+| `pytest.yml` | On Python 3.11: a finding from `ruff check apothecary tests`; the walkthrough; the unit tests with `--slow`; the wheel failing to install and render a scene. In three more jobs, in parallel: the browser tests, a third each by recorded time (`--shard K/3`), and a walkthrough page they rewrote |
 | `reuse-lint.yml` | A file with no copyright or licence information (`reuse lint`) |
 | `license-check.yml` | A third-party dependency whose licence is not on the OSI/FSF allowlist, or that has a known vulnerability (`pip-audit`) |
 | `adr-lint.yml` | A record in `governance/qm/adr/`: a draft that narrates its own revisions, a numbered one not ratified, a ratified body edited outside its Amendments, or an index that disagrees with the directory |

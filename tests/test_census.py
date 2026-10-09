@@ -13,7 +13,61 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 
 # The viewer's controls of its own today. A change that adds one raises this
 # on purpose; a change that removes one may lower it.
-VIEWER_CEILING = 137
+#
+# Pictures plan Phase 3, first commit: the census also counts the marks modules
+# the page imports (census.MARKS). Before: 137 controls of its own, 65
+# ring-backed, 70 places the page listens. After: the same -- machine_marks.js
+# writes no markup and listens nowhere, so the new count it adds is nothing.
+#
+# Phase 3, the looks drawn: the camera badge's listener leaves the page for
+# picture_marks.js as the place badge's (badge:click:onSelect); no ring address
+# moved. Before and after: 137 controls of its own, 65 ring-backed, 70 places.
+#
+# Phase 4, the loop's verbs on the host. Before: 137 controls of its own, 65
+# ring-backed (47.4%), 70 places the page listens. After: 128, 61 ring-backed
+# (47.7%), 77 places. Gone with the camera panel's camera, capture, Look and
+# placement sections and Open as one: cam-pick, cam-allow, cam-refresh,
+# cam-name, cam-width, cam-capture, cam-look, cam-place, cam-unplace, pic-open,
+# and pic-refresh (the list is fetched when the panel mounts and after each
+# change). Added: Selected's width box (look-width) and a look's Unpin in the
+# pins list (look-unpin-one, ring-backed by Picture › Unpin); cam-unplace-one
+# and pic-forget are now backed by Camera › Unpin and Picture › Forget; pic-file
+# keeps a picture without pinning it, which no cell does, so it is no longer
+# backed. Ring addresses moved: Camera › Allow is Camera › Pin here › Allow on a
+# host's node ring (the floor's under Pictures › Floor); Unplace is Camera ›
+# Unpin there; Open as one is gone; the canvas ring's Camera is Pictures in the
+# same seat (Add, Floor, Purge, Gather), its Kept › Add and Purge now Pictures ›
+# Add (pinned at the floor) and Pictures › Purge.
+#
+# The Kept stub (the pictures plan's Phase 5, stubbed at the owner's word "stub
+# kept now"). Before: 128 controls of its own, 61 ring-backed (47.7%), 77 places
+# the page listens. After: 128, 58 ring-backed (45.3%), 75 places. The per-row
+# buttons of the old "Pictures & pins" panel -- forget a picture, unpin a
+# camera, unpin a look (pic-forget, cam-unplace-one, look-unpin-one) -- move to
+# Kept (kept-forget, kept-camera-unpin, kept-look-unpin) and are reclassified:
+# not ring-backed but census.TAKEN_BACK, the lasting exception for taking a
+# thing back from the list that shows it. They were counted as backed by Camera
+# › Unpin, Picture › Unpin and Picture › Forget, though a row can name another
+# site's pin, which those cells reach only from that site; §6 asks for every
+# site's to be taken back from the one list. The boards' Unpin and the list's
+# refresh move with them (pin-unpin, pin-refresh become kept-board-unpin,
+# kept-refresh), and Purge (pic-purge, kept-purge) stays backed by Pictures ›
+# Purge. The three row listeners are one on Kept's list. No ring address moved
+# but the panels': Panels › Camera is Panels › Pictures › Gather, beside Kept.
+#
+# The first-time camera flow: no control added or removed, and no ring address
+# moved. One place the page listens is added, in pictures.js: the browser's
+# camera permission changing (status:change:listCameras), automatic, since it
+# is the browser reporting a yes given in the address bar and not a control.
+# `apothecary census` before and after: the same meter and the same ring-backed
+# count; one more place the page listens.
+# The picture-to-editor seam: the part panel became one editor over a target,
+# serving a made piece too, and Part › Edit joined the node ring. Before and
+# after: 128 controls of its own, 58 ring-backed, 75 places the page listens.
+# The editor's markup is written once for either target (a made piece leaves
+# its checklist and Regenerate STL unwritten), so no control was added; the
+# Regenerate STL listener is keyed by the editor's apply (applyEditor) now.
+VIEWER_CEILING = 128
 
 
 def test_the_viewer_stays_under_its_ceiling():
@@ -255,3 +309,81 @@ def test_the_panel_module_keeps_its_chrome_to_itself():
         assert f'window.removeEventListener("{event}"' in text
     assert "/static/panels.js" in census.VIEWER.read_text(encoding="utf-8")
     assert "/static/panels.js" not in census.MONITOR.read_text(encoding="utf-8")
+
+
+# --------------------------------------------------------------------------
+# The marks modules: counted with the page that imports them
+# --------------------------------------------------------------------------
+
+
+def test_the_viewer_counts_its_marks_modules_and_the_monitor_does_not():
+    """The viewer imports machine_marks.js itself; the monitor reaches it only
+    through board_view.js, so its count does not change."""
+    assert (census.STATIC / "machine_marks.js") in census.marks_of(census.VIEWER)
+    assert census.marks_of(census.MONITOR) == []
+    assert census.marks_of(census.FIRMWARE) == []
+    for chrome in ("ring.js", "panels.js", "anchors.js"):
+        assert chrome not in census.MARKS
+
+
+def test_a_listener_in_a_marks_module_is_counted_and_named_when_unclassified(tmp_path, monkeypatch):
+    monkeypatch.setattr(census, "STATIC", tmp_path)
+    (tmp_path / "machine_marks.js").write_text(
+        "\nbadge.addEventListener('click', () => mystery(path));\n", encoding="utf-8"
+    )
+    page = tmp_path / "page.html"
+    page.write_text(
+        "import { makeMachineMarks } from '/static/machine_marks.js';\n"
+        "import { mountAnchors } from '/static/anchors.js';\n",
+        encoding="utf-8",
+    )
+    taken = census.take(page)
+    assert [(f.key, f.source, f.line) for f in taken.unclassified()] == [
+        ("badge:click:mystery", "machine_marks.js", 2)
+    ]
+
+
+def test_every_listener_in_the_viewers_marks_modules_is_classified():
+    taken = census.take()
+    marks = {m.name for m in census.marks_of(census.VIEWER)}
+    assert [f.key for f in taken.unclassified() if f.source in marks] == []
+
+
+# --------------------------------------------------------------------------
+# Kept's rows: taken back from the list that shows them, not ring-backed
+# --------------------------------------------------------------------------
+
+
+def test_kepts_take_back_buttons_are_counted_and_not_claimed_as_ring_backed():
+    """Forget a picture, unpin a camera, unpin a look: Kept's per-row buttons are
+    the lasting exception for taking a thing back from the list that shows it,
+    counted on the meter and never ring-backed, since a row can name another
+    site's pin that a ring cell reaches only from that site."""
+    taken = census.take()
+    by_name = {f.name: f for f in taken.controls_of_its_own()}
+    for name in ("kept-forget", "kept-camera-unpin", "kept-look-unpin", "kept-board-unpin"):
+        assert by_name[name].source == "kept.js"
+        assert by_name[name].ring_action is None, name
+        assert by_name[name].taken_back, name
+    assert {f.name for f in taken.taken_back()} == {
+        "kept-forget",
+        "kept-camera-unpin",
+        "kept-look-unpin",
+        "kept-board-unpin",
+    }
+    # Purge stays a cell of the canvas ring's Pictures.
+    assert by_name["kept-purge"].ring_action == "picture:purge"
+    # The old panel's rows are gone from the page, and from the tables.
+    for gone in ("pic-forget", "cam-unplace-one", "look-unpin-one", "pic-purge", "pin-unpin"):
+        assert gone not in by_name
+        assert gone not in census.CONTROLS and gone not in census.RING_BACKED
+    listening = {f.key: f for f in taken.found if f.how == "listening" and f.source == "kept.js"}
+    assert list(listening) == ["kept-list:click:closest"]
+    assert listening["kept-list:click:closest"].taken_back
+    assert "⤺ takes back a look, every site's" in census.report()
+
+
+def test_nothing_is_both_taken_back_and_ring_backed():
+    assert set(census.TAKEN_BACK) & set(census.RING_BACKED) == set()
+    for key in census.TAKEN_BACK:
+        assert key in census.CONTROLS or key in census.LISTENING, key

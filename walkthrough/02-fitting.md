@@ -54,8 +54,9 @@ after the cover moved to `datum_cap`.
 
 ## Staging, then iterating
 
-A render is thirty seconds of OpenSCAD; validation is a Pydantic call. Moving a
-slider stages a value and validates the whole staged set, which costs nothing:
+A render runs OpenSCAD (`apothecary parts generate-stl <part> --force` says how
+long); validation is a Pydantic call. Moving a slider stages a value and
+validates the whole staged set, which costs nothing:
 
     >>> from fastapi.testclient import TestClient
     >>> from apothecary.api import app

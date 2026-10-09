@@ -71,11 +71,11 @@ esp32_blink is a sketch and the board it runs on, drawn as the board: the descri
 
 ![The DevKitC standing on its pins](screenshots/12-08-the-devkitc-standing-on-its-pins.png)
 
-## 9. A camera placed at the bench is drawn there
+## 9. A camera pinned at the bench is drawn there
 
-Allowed in the Camera panel and placed at the selected piece, the camera gets a badge above the bench and a small frustum at it, kept on the server so every browser looking at this site sees it standing there.
+Pinned from the bench's own ring -- Camera, Pin here, and this browser's camera by its name -- the camera gets a place badge above the bench and a frustum looking down onto its top, kept on the server so every browser looking at this site sees it standing there.
 
-![A camera placed at the bench is drawn there](screenshots/12-09-a-camera-placed-at-the-bench-is-drawn-there.png)
+![A camera pinned at the bench is drawn there](screenshots/12-09-a-camera-pinned-at-the-bench-is-drawn-there.png)
 
 ## 10. Looking into a printer, the camera's mark stays at the bench
 
@@ -83,9 +83,9 @@ A mark is drawn at the level where its piece is. Zoomed into something else, nei
 
 ![Looking into a printer, the camera's mark stays at the bench](screenshots/12-10-looking-into-a-printer-the-camera-s-mark-stays-at-.png)
 
-## 11. Unplaced, it leaves the world
+## 11. Unpinned, it leaves the world
 
-The placement is a record on this machine and nothing more; taking it back removes the mark for every browser.
+The pin is a record on this machine and nothing more; taking it back removes the mark for every browser.
 
 ```
 GET /cameras?site=garage -> []
@@ -93,7 +93,7 @@ GET /cameras?site=garage -> []
 
 ## 12. What the browser put here, it can take back
 
-Pictures added from the file picker are kept as they were named, under the picture folder's uploads/, each with a button that forgets it; the cameras placed in the world and the boards pinned to pieces are listed, every site's, each with the button that takes it back -- a pin whose site or piece is gone is shown as such, and this is the one place it can be seen.
+Kept lists what a page pinned -- cameras, looks, boards -- every site's, and the pictures the browser kept, the ones added from the file picker kept as they were named under the picture folder's uploads/. Each row names its site and carries the button that takes it back, from here, without switching to that site; a pin whose site or piece is gone is shown as such, and this is the one place it can be seen.
 
 ![What the browser put here, it can take back](screenshots/12-12-what-the-browser-put-here-it-can-take-back.png)
 
