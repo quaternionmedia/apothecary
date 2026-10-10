@@ -11,8 +11,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import uuid
+from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -83,6 +85,90 @@ class RenderResult:
     # Why build_stl rendered nothing: "fresh" (the STL on disk already answers
     # the request) or "refused" (the part cannot be built on this machine).
     skipped: Optional[str] = None
+    # The bounding box OpenSCAD measured of what it wrote, as its summary
+    # reports it ({"min": [x, y, z], "max": ..., "size": ...}); None where the
+    # OpenSCAD has no --summary-file, or wrote none.
+    measured: Optional[Dict[str, List[float]]] = None
+    # Stopped by a Cancellation before it finished: superseded, not failed.
+    cancelled: bool = False
+
+
+class Cancellation:
+    """A render that may be stopped before it finishes.
+
+    ``cancel()`` kills the OpenSCAD the render is running and keeps it from
+    starting another (a turned part is two runs). A newer request from the
+    same page is the usual reason: its answer is the only one still wanted.
+    """
+
+    def __init__(self) -> None:
+        self._guard = threading.Lock()
+        self._running: List[subprocess.Popen] = []
+        self.cancelled = False
+
+    def cancel(self) -> None:
+        with self._guard:
+            self.cancelled = True
+            running = list(self._running)
+        for process in running:
+            _stop(process)
+
+    def _attach(self, process: subprocess.Popen) -> bool:
+        """Track ``process``; False when the render was cancelled already."""
+        with self._guard:
+            if self.cancelled:
+                return False
+            self._running.append(process)
+            return True
+
+    def _detach(self, process: subprocess.Popen) -> None:
+        with self._guard:
+            if process in self._running:
+                self._running.remove(process)
+
+
+SUPERSEDED = "Render superseded by a newer request"
+
+
+def _stop(process: subprocess.Popen) -> None:
+    """Kill an OpenSCAD run. Its own process, not a process group: a snapshot
+    AppImage's worker sets a group of its own and dies with its parent, and
+    in the server's group a Ctrl-C still reaches every render."""
+    with suppress(OSError):
+        process.kill()
+
+
+def _wait(
+    process: subprocess.Popen, timeout: float, cancel: Optional[Cancellation]
+) -> Tuple[str, str, Optional[str]]:
+    """(stdout, stderr, why it was stopped: None, "timeout" or "cancelled").
+
+    Polled, so a cancel is noticed even when a grandchild holds the pipes
+    open after its parent is killed; ``communicate`` resumed after a timeout
+    loses no output.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            out, err = process.communicate(timeout=0.1)
+            why = "cancelled" if cancel is not None and cancel.cancelled else None
+            return out or "", err or "", why
+        except subprocess.TimeoutExpired:
+            if cancel is not None and cancel.cancelled:
+                why = "cancelled"
+            elif time.monotonic() >= deadline:
+                why = "timeout"
+            else:
+                continue
+        _stop(process)
+        try:
+            out, err = process.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            out = err = ""
+            for stream in (process.stdout, process.stderr):
+                with suppress(OSError):
+                    stream.close()
+        return out or "", err or "", why
 
 
 class OpenSCADRenderer:
@@ -177,13 +263,19 @@ class OpenSCADRenderer:
         stl_path: Optional[Path] = None,
         timeout: float = 120.0,
         params: Optional[dict] = None,
+        cancel: Optional[Cancellation] = None,
     ) -> RenderResult:
         """Render a SCAD file to STL, with ``params`` passed as ``-D name=value``.
 
         ``stl_path`` defaults to the SCAD's own name. OpenSCAD writes a temporary
         file beside it that replaces it only on success, so a failed or killed
-        render leaves the previous STL, or none, never a partial one.
+        render leaves the previous STL, or none, never a partial one. Where the
+        OpenSCAD writes a summary, the bounding box it measured is ``measured``.
+        ``cancel`` stops the run from another thread (``cancelled`` is then set).
         """
+        if cancel is not None and cancel.cancelled:
+            return RenderResult(success=False, error_message=SUPERSEDED, cancelled=True)
+
         if not self.is_available:
             return RenderResult(
                 success=False, error_message="OpenSCAD not found. Please install OpenSCAD."
@@ -210,33 +302,74 @@ class OpenSCADRenderer:
         # The .stl suffix picks OpenSCAD's export format; the leading dot and
         # the suffix keep a file orphaned by a killed process hidden and out of git.
         partial = stl_path.with_name(f".{stl_path.stem}.{uuid.uuid4().hex[:12]}.stl")
+        summary = partial.with_suffix(".json")
 
         # Definitions precede the source file, which is where OpenSCAD
         # documents them and the only order that is safe to assume. Manifold
         # where the OpenSCAD has it: the same mesh, an order of magnitude sooner.
         backend = ["--backend=manifold"] if has_manifold(self.openscad_path) else []
-        cmd = [str(self.openscad_path), "-o", str(partial), *backend, *definitions, str(scad_path)]
+        summarise = (
+            ["--summary=all", f"--summary-file={summary}"]
+            if has_summary(self.openscad_path)
+            else []
+        )
+        cmd = [
+            str(self.openscad_path),
+            "-o",
+            str(partial),
+            *backend,
+            *summarise,
+            *definitions,
+            str(scad_path),
+        ]
 
         start = time.monotonic()
         try:
-            result = subprocess.run(
+            process = subprocess.Popen(
                 cmd,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=timeout,
+                encoding="utf-8",
+                errors="replace",
                 # OpenSCAD resolves a relative import() against the source
                 # file's own directory, so this is for the process, not paths.
                 cwd=str(scad_path.parent),
             )
+            if cancel is not None and not cancel._attach(process):
+                _stop(process)
+            try:
+                stdout, stderr, stopped = _wait(process, timeout, cancel)
+            finally:
+                if cancel is not None:
+                    cancel._detach(process)
             elapsed = time.monotonic() - start
 
-            if result.returncode != 0:
+            if stopped == "cancelled":
                 return RenderResult(
                     success=False,
-                    error_message=f"OpenSCAD failed with code {result.returncode}",
+                    error_message=SUPERSEDED,
                     render_time_seconds=elapsed,
-                    stdout=result.stdout,
-                    stderr=result.stderr,
+                    stdout=stdout,
+                    stderr=stderr,
+                    cancelled=True,
+                )
+            if stopped == "timeout":
+                return RenderResult(
+                    success=False,
+                    error_message=f"Render timed out after {timeout} seconds",
+                    render_time_seconds=elapsed,
+                    stdout=stdout,
+                    stderr=stderr,
+                )
+
+            if process.returncode != 0:
+                return RenderResult(
+                    success=False,
+                    error_message=f"OpenSCAD failed with code {process.returncode}",
+                    render_time_seconds=elapsed,
+                    stdout=stdout,
+                    stderr=stderr,
                 )
 
             if not partial.exists():
@@ -244,8 +377,8 @@ class OpenSCADRenderer:
                     success=False,
                     error_message="OpenSCAD completed but STL file was not created",
                     render_time_seconds=elapsed,
-                    stdout=result.stdout,
-                    stderr=result.stderr,
+                    stdout=stdout,
+                    stderr=stderr,
                 )
 
             os.replace(partial, stl_path)
@@ -255,27 +388,23 @@ class OpenSCADRenderer:
             # boolean, and writes what is left. It is reported, so a caller
             # who needs the whole thing can refuse it.
             dropped = [
-                line.strip()
-                for line in (result.stderr or "").splitlines()
-                if line.startswith("ERROR:")
+                line.strip() for line in (stderr or "").splitlines() if line.startswith("ERROR:")
             ]
             return RenderResult(
                 success=True,
                 stl_path=stl_path,
                 render_time_seconds=elapsed,
-                stdout=result.stdout,
-                stderr=result.stderr,
+                stdout=stdout,
+                stderr=stderr,
                 dropped=dropped,
+                measured=read_summary_bounds(summary),
             )
 
-        except subprocess.TimeoutExpired:
-            return RenderResult(
-                success=False, error_message=f"Render timed out after {timeout} seconds"
-            )
         except Exception as e:
             return RenderResult(success=False, error_message=f"Render failed: {str(e)}")
         finally:
             partial.unlink(missing_ok=True)
+            summary.unlink(missing_ok=True)
 
     async def render_stl_async(
         self,
@@ -410,6 +539,24 @@ def has_manifold(executable: Optional[Path]) -> bool:
     return executable is not None and reports_manifold(openscad_version(Path(executable)))
 
 
+def has_summary(executable: Optional[Path]) -> bool:
+    """Whether ``executable`` writes ``--summary-file``: asked of an OpenSCAD with
+    Manifold, every one of which has it. 2021.01 refuses the option and the
+    render with it, so an OpenSCAD that is not known to have it is not asked."""
+    return has_manifold(executable)
+
+
+def read_summary_bounds(summary: Path) -> Optional[Dict[str, List[float]]]:
+    """The bounding box in a ``--summary-file`` (``geometry.bounding_box``):
+    ``{"min", "max", "size"}``, each [x, y, z]; None when there is no file,
+    or it measured nothing."""
+    try:
+        box = json.loads(summary.read_text(encoding="utf-8"))["geometry"]["bounding_box"]
+        return {side: [float(v) for v in box[side]] for side in ("min", "max", "size")}
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
 def openscad_override() -> Optional[Path]:
     """The OpenSCAD ``APOTHECARY_OPENSCAD`` names, for a person who wants another:
     when set, it is the only one used, whether or not it is there."""
@@ -507,14 +654,65 @@ def geometry_scad(part: BasePart, params: dict) -> Optional[str]:
         return built.render() + "\n"
 
 
+# `include <f>`, `use <f>`, `import("f")` and `import(file="f")`: the files a
+# SCAD reads. Comments are taken out first, so a commented-out include is not one.
+_READS = re.compile(
+    r"""\b(?:include|use)\s*<\s*([^>]+?)\s*>|\bimport\s*\(\s*(?:file\s*=\s*)?"([^"]+)\""""
+)
+_COMMENTS = re.compile(r"/\*.*?\*/|//[^\n]*", re.S)
+
+
+def _library_dirs() -> List[Path]:
+    """Where OpenSCAD looks for an include that is not beside the file: ``OPENSCADPATH``."""
+    named = os.environ.get("OPENSCADPATH", "")
+    return [Path(entry).expanduser() for entry in named.split(os.pathsep) if entry.strip()]
+
+
+def scad_dependencies(scad: Path, text: Optional[str] = None) -> Dict[str, Optional[Path]]:
+    """Every file a SCAD includes, uses or imports, followed through each SCAD
+    it includes or uses: ``{name as written, from the file that names it:
+    path, or None when it is not there}``. A name resolves against the
+    directory of the file that names it, then ``OPENSCADPATH``, as OpenSCAD
+    resolves it. ``text`` stands in for the file's own contents (a part's
+    generated SCAD, whose imports are absolute)."""
+    found: Dict[str, Optional[Path]] = {}
+    queue: List[Tuple[Path, Optional[str]]] = [(Path(scad), text)]
+    seen = set()
+    while queue:
+        current, source = queue.pop()
+        if source is None:
+            try:
+                source = current.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+        for match in _READS.finditer(_COMMENTS.sub("", source)):
+            name = (match.group(1) or match.group(2)).strip()
+            written = Path(name)
+            candidates = (
+                [written]
+                if written.is_absolute()
+                else [current.parent / written] + [d / written for d in _library_dirs()]
+            )
+            path = next((c.resolve() for c in candidates if c.is_file()), None)
+            label = name if written.is_absolute() else f"{current.name}:{name}"
+            found[label] = path
+            if path is not None and path.suffix.lower() == ".scad" and path not in seen:
+                seen.add(path)
+                queue.append((path, None))
+    return found
+
+
 def _sources(part: BasePart) -> List[Path]:
-    """What a part's STL is built from: its SCAD, and each loaded wrapper
-    module whose DEFAULT is this part (a described part's part.json), which
-    sets its rotation and output path. A part built by Python geometry is
-    also built from its code: the module that defines its class, and every
-    module of a wrapper that is a package."""
+    """What a part's STL is built from: its SCAD and every file the SCAD
+    includes, uses or imports, and each loaded wrapper module whose DEFAULT
+    is this part (a described part's part.json), which sets its rotation and
+    output path. A part built by Python geometry is also built from its code:
+    the module that defines its class, and every module of a wrapper that is
+    a package."""
     python = part.geometry({}) is not None
     sources = [part.source_file]
+    if not python:
+        sources.extend(p for p in scad_dependencies(part.source_file).values() if p is not None)
     modules = [
         module
         for name, module in list(sys.modules.items())
@@ -559,6 +757,12 @@ def _scratch_beside(stl_path: Path) -> tempfile.TemporaryDirectory:
     )
 
 
+def _cancelling(cancel: Optional[Cancellation]) -> Dict[str, Cancellation]:
+    """``cancel=`` for a render only when there is one: a stand-in renderer
+    need not take the keyword."""
+    return {"cancel": cancel} if cancel is not None else {}
+
+
 def _render_rotated(
     renderer: OpenSCADRenderer,
     scad_path: Path,
@@ -566,24 +770,31 @@ def _render_rotated(
     rotation: List[float],
     timeout: float,
     params: dict,
+    cancel: Optional[Cancellation] = None,
 ) -> RenderResult:
     """Render upright into a scratch directory, then turn it with a one-line wrapper.
 
     Nothing is written beside the source, and each render has a scratch
-    directory of its own, so two renders of one part cannot collide.
+    directory of its own, so two renders of one part cannot collide. What
+    OpenSCAD said is both runs' stderr; what it measured is the upright run's,
+    the frame a part's declared bounds are in (``apothecary parts verify``).
     """
     with _scratch_beside(stl_path) as tmp:
         upright = Path(tmp) / "upright.stl"
-        first = renderer.render_stl(scad_path, upright, timeout, params=params or None)
+        first = renderer.render_stl(
+            scad_path, upright, timeout, params=params or None, **_cancelling(cancel)
+        )
         if not first.success:
             return first
         wrapper = Path(tmp) / "rotate.scad"
         wrapper.write_text(
             f'rotate({scad_literal(rotation)}) import("{upright.name}");\n', encoding="utf-8"
         )
-        second = renderer.render_stl(wrapper, stl_path, timeout)
+        second = renderer.render_stl(wrapper, stl_path, timeout, **_cancelling(cancel))
     second.render_time_seconds += first.render_time_seconds
     second.dropped = first.dropped + second.dropped
+    second.stderr = (first.stderr or "") + (second.stderr or "")
+    second.measured = first.measured
     return second
 
 
@@ -594,16 +805,16 @@ def render_part(
     timeout: float = 120.0,
     renderer: Optional[OpenSCADRenderer] = None,
     rotation: Optional[List[float]] = None,
+    cancel: Optional[Cancellation] = None,
 ) -> RenderResult:
     """Render a part with already-validated ``params`` to ``stl_path``, and
     nothing more: no freshness check, no sidecar. A part with Python geometry
     is rendered from that geometry's SCAD, written to a scratch file beside
     ``stl_path``; any other from its SCAD file, the params reaching it through
     ``part.scad_overrides``. ``rotation`` turns the result; ``renderer``
-    defaults to the OpenSCAD the part asks for."""
+    defaults to the OpenSCAD the part asks for; ``cancel`` can stop it."""
     if renderer is None:
-        own = part.get_openscad_path()
-        renderer = OpenSCADRenderer(str(own)) if own else get_renderer()
+        renderer = part_renderer(part)
     params = params or {}
     with _scratch_beside(stl_path) as tmp:
         text = geometry_scad(part, params)
@@ -613,8 +824,16 @@ def render_part(
             scad, definitions = Path(tmp) / part.source_file.name, {}
             scad.write_text(text, encoding="utf-8")
         if rotation and any(rotation):
-            return _render_rotated(renderer, scad, stl_path, rotation, timeout, definitions)
-        return renderer.render_stl(scad, stl_path, timeout, params=definitions or None)
+            return _render_rotated(renderer, scad, stl_path, rotation, timeout, definitions, cancel)
+        return renderer.render_stl(
+            scad, stl_path, timeout, params=definitions or None, **_cancelling(cancel)
+        )
+
+
+def part_renderer(part: BasePart) -> OpenSCADRenderer:
+    """The OpenSCAD a part asks for (``get_openscad_path``), else the default."""
+    own = part.get_openscad_path()
+    return OpenSCADRenderer(str(own)) if own else get_renderer()
 
 
 def build_stl(
