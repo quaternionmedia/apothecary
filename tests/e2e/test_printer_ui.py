@@ -6,8 +6,8 @@ unmatched), the in-process ``SimulatedPrinter`` mid-way through an SD print,
 and firmware state in a temp dir, so pins never touch ``~/.apothecary``.
 
 The printer monitor's address (``/firmware/monitor?port=``) opens the viewer
-with the board's Machine in front of the world, floating when the port is pinned
-nowhere: the tests that drove the monitor page drive that Machine, by the same ids.
+with the board's Machine in the rail's tab strip, pinned or pinned nowhere: the tests
+that drove the monitor page drive that Machine, by the same ids.
 
 Every test starts with nothing pinned, no file kept, the garage rebuilt and
 both links released (the simulator mid-print again, control disarmed), and
