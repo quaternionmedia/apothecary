@@ -136,6 +136,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # The staged numbers of a piece: changed on the sliders, then kept or not.
     "apply-btn": (WIDGET, WHAT_IS_THERE, "a button that rebuilds a piece with its staged numbers"),
     "revert-btn": (WIDGET, WHAT_YOU_SEE, "a button that puts the staged numbers back"),
+    "defaults-btn": (WIDGET, WHAT_YOU_SEE, "a button that stages a part's own numbers"),
     # How much of a subassembly to draw, and whether to outline its extent.
     "detail-mode": (WIDGET, WHAT_YOU_SEE, "a drop-down for how much of each subassembly to draw"),
     "overlay-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box that outlines each subassembly's extent"),

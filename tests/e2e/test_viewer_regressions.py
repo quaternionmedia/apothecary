@@ -71,7 +71,9 @@ def test_double_clicking_a_piece_below_the_root_zooms_into_it(page: Page, base_u
 
 @pytest.fixture
 def v_slot_as_it_was():
-    """Apply renders into parts/v_slot/; its STL and parameter record are put back."""
+    """Apply renders a variant into the cache, but opening the part draws its own STL,
+    built into parts/v_slot/ when a fresh clone lacks it; that STL and its parameter
+    record are put back."""
     stl = ROOT / "parts" / "v_slot" / "v_slot.stl"
     files = (stl, params_sidecar_path(stl))
     kept = {path: path.read_bytes() for path in files if path.exists()}

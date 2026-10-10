@@ -122,10 +122,15 @@ line put there. So two pages applying different values never share a file,
 and going back to the defaults renders nothing. An unknown or invalid
 parameter is a `422` with the reason; a render OpenSCAD refuses is a `422`
 whose `detail.messages` are its errors and warnings by file and line. The
-response carries the bounds the part declares for those parameters and,
-from an OpenSCAD that writes a summary, the bounds it measured.
-`GET /parts/{name}/state` reads the params sidecar: what the part's own STL
-was rendered with, which is where a page drawing it starts.
+response carries the bounds the part declares for those parameters and
+beside them the bounds of what was rendered, from OpenSCAD's summary where it
+writes one, else read off the STL (`measured_from` says which), and whether
+the answer is the saved part (`saved`). With `?page=<id>`, a newer request
+from the same page for the same part stops the older one's render, which
+answers `409`. `GET /parts/{name}/state` reads the params sidecar: what the
+part's own STL was rendered with, which is where a page drawing it starts;
+`GET /parts/{name}/variants/{variant}` says what made a cached variant, for a
+page that has only its key.
 
 ### Adding a parameter
 

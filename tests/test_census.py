@@ -311,7 +311,15 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # it for the camera's own ring, which is new: Device, Live (Still while live), Take
 # picture, Remove and Part › Edit after a piece's Zoom in, Move and Why this. The
 # ceiling follows the count up by one, for a button the plan asks for.
-VIEWER_CEILING = 116
+#
+# Loop 1, designing a part (docs/plans/ui-flows-2026-10-08.md). Added: the part
+# editor's Defaults (defaults-btn), beside Revert, which stages the part's own
+# numbers so that Apply draws the saved part again; the loop goes back to the
+# defaults through the page's own controls, and a slider cannot be set to a
+# default exactly. Not on the ring: a part's verbs join it in the spike's second
+# iteration. No listener was added or re-keyed. The ceiling follows the count up
+# by one; `uv run apothecary census` gives the counts.
+VIEWER_CEILING = 117
 
 
 def test_the_viewer_stays_under_its_ceiling():
