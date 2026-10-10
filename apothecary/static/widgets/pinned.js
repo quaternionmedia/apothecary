@@ -1,4 +1,4 @@
-/* Pinned: what a page placed or pinned on this machine -- cameras, views, boards
+/* Pinned: what a page added or pinned on this machine -- cameras, views, boards
  * -- every site's, each taken back from its row. A section of the Site panel, and the
  * pins half of the one list §6 of the draft record *Personal data stays on the
  * device* asks for: what a page placed or pinned is listed by the same page,

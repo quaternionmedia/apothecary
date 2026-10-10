@@ -296,8 +296,8 @@ def host_node(
         raise HostNotFound(f"Node '{host}' not found in site '{site.name}'")
     if rest:
         raise NotAHost(
-            f"{host} is inside {root_name}: pictures and cameras are pinned at a root "
-            f"structure, so pin at {root_name}"
+            f"{host} is inside {root_name}: a picture is pinned, and a camera added, at a "
+            f"root structure, so use {root_name}"
         )
     if root_name in made:
         raise NotAHost(

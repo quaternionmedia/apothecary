@@ -552,7 +552,7 @@
                         <div id="category-filters" class="category-filters"
                              title="Expand every node of a subsystem at once, at any depth beneath the current level, at the cost of render time"></div>
                         <ul id="contents-list" class="contents-list contents-tree"></ul>
-                        <details id="site-pinned" class="fold" title="Every camera, view and board a page pinned, every site's, each taken back from its row">
+                        <details id="site-pinned" class="fold" title="Every camera a page added, and every view and board it pinned, every site's, each taken back from its row">
                             <summary>Pinned · every site's</summary>
                             <div id="site-pinned-body"></div>
                         </details>
@@ -992,8 +992,8 @@
                 // move arrows -- three.js's TransformControls, translating -- drawn
                 // smaller than its default and lighter (each handle's own opacity
                 // scaled once; the one under the pointer still lights up), so they
-                // do not dominate what they move. A camera's turn ring and tilt arc
-                // (the cameras-and-clutter plan's Phase 3) join this set there.
+                // do not dominate what they move. A selected camera's turn ring and
+                // tilt arc join this set, sized beside them (showCameraHandles).
                 this.transformControls = new TransformControls(this.camera, this.renderer.domElement);
                 this.transformControls.setMode('translate');
                 this.transformControls.setSize(HANDLE_SIZE);
@@ -1100,8 +1100,8 @@
                     },
                 });
                 window.apothecaryPictureVerbs = this.pictures;
-                // Site's Pinned: every camera, view and board a page pinned, every
-                // site's, each taken back from its row without switching the site.
+                // Site's Pinned: every camera a page added, and every view and board it
+                // pinned, every site's, each taken back from its row without switching the site.
                 // Mounted the first time the section opens, and listed again each
                 // time it does.
                 this.pinnedWidget = null;

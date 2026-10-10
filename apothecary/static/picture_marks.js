@@ -26,7 +26,8 @@
  * pyramid, from its lens to where its view's corners land, only while it is
  * selected or live; its newest picture, when that one landed nowhere, drawn on
  * the camera, in front of its lens; and while it is live, its video through its
- * own projection where its next picture would lie.
+ * own projection where its next picture would lie, the drawn mat of the place it
+ * lies on put away meanwhile.
  *
  * Mats and outlines are drawn at the site's top level only; a badge and a
  * pyramid follow their thing's level. The mat's texture comes from GET
