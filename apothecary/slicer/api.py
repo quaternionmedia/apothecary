@@ -9,7 +9,8 @@ and the task carries the slice's answer once it ends:
   printers that keep a slicer profile, and the pieces a slice can be composed
   from (the start of a print, the filament, a word's print settings), each
   saying what it does and whether it is a stub.
-- ``POST /slicer/install`` ``{force}``: install the pinned OrcaSlicer (a task).
+- ``POST /slicer/install`` ``{force, slicer}``: install the pinned OrcaSlicer, or
+  the module named (a task).
 - ``POST /slicer/slice`` ``{part, port | site + printer | printer, slicer}``: slice
   a part or a made piece for a printer (a task). ``part`` is a node's path in
   the printer's site, as ``GET /jobs/choices`` lists them for the Print card --
@@ -88,6 +89,7 @@ def get_runner() -> TaskRunner:
 
 class InstallBody(BaseModel):
     force: bool = False
+    slicer: str = Field("orcaslicer", pattern=MODULE_ID)  # which slicer module
 
 
 class SliceRequest(BaseModel):
@@ -137,14 +139,15 @@ def slicer_status():
 
 @router.post("/install", status_code=202)
 def slicer_install(body: InstallBody):
-    """Install the pinned OrcaSlicer release into the tools dir (a task)."""
-    module = get_module("orcaslicer")
+    """Install a slicer module's pinned release into the tools dir (a task):
+    OrcaSlicer's, unless another module is named."""
+    module = get_module(body.slicer)
 
     def work(running: Running) -> None:
         module.install(running.log, force=body.force)
         reset_modules()
 
-    return _snapshot(get_runner().run_staged("slicer-install", "Install OrcaSlicer", work))
+    return _snapshot(get_runner().run_staged("slicer-install", f"Install {module.label}", work))
 
 
 @router.post("/slice", status_code=202)

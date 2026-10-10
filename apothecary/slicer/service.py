@@ -270,6 +270,7 @@ def slice_into(
             name=kept.name,
             at=datetime.now(timezone.utc),
             slicer=module.id,
+            slicer_label=module.label,
             slicer_version=status.tool.version,
             made=target.made,
             printer=printer.at,

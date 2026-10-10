@@ -112,6 +112,7 @@ class SliceRecord(BaseModel):
     name: str  # the kept file's name
     at: datetime
     slicer: str  # the module's id
+    slicer_label: Optional[str] = None  # what a person reads: "OrcaSlicer"
     slicer_version: Optional[str] = None
     made: Made
     printer: SlicedFor
