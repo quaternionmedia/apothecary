@@ -52,7 +52,7 @@ MACHINE = ".panel[data-panel='machine']"
 
 # The scripted slicer's layers, each move followed by a dwell of this many ms: a few
 # seconds of printing on the simulated printer, seen running before it ends.
-LAYERS, DWELL = "15", "30"
+LAYERS, DWELL = "15", "60"
 
 
 def _kept(page, url: str, piece: str) -> dict:
@@ -489,11 +489,13 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
         f"{disc}.gcode · printing", timeout=5000
     )
     assert asked and f"making {disc}" in asked[0], asked
-    _said(
-        page,
+    # What was asserted is what the page shows: a short print can end, and say so in
+    # the status line, before the line is read again.
+    started = (
         f"started {disc}.gcode on {PRINTER}, making {disc}: Print from here follows it to "
-        "its end, and Site's Jobs lists it",
+        "its end, and Site's Jobs lists it"
     )
+    _said(page, started)
     expect(machine.locator("#print-history")).to_contain_text(
         f"print · {disc}.gcode → {disc} · running", timeout=5000
     )
@@ -502,7 +504,7 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
         f"Print from here's ▶ Print asks first, naming the file, the port and {disc}; "
         "then the file streams, one line per ok, and the job is the newest of printer_1's "
         "history, running. The status line names where it is followed.",
-        shown=f"{asked[0]}\n\n{_status(page).inner_text()}",
+        shown=f"{asked[0]}\n\n{started}",
     )
 
     # 9. Watched to its end, in the Machine and in Site's Jobs.
