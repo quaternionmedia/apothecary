@@ -13,6 +13,7 @@ from .preflight import preflight
 from .release import release
 from .render import render_scene, render_scene_jscad, template_generate, testrun, validate
 from .server import dev, serve
+from .slicer import slicer
 from .spaces import problems, solutions
 from .system import check, install, submodules, system
 from .testing import test
@@ -49,6 +50,7 @@ cli.add_command(docs)
 cli.add_command(census)
 cli.add_command(firmware)
 cli.add_command(openscad)
+cli.add_command(slicer)
 
 
 def main():  # pragma: no cover - entry point

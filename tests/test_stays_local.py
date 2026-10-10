@@ -747,3 +747,65 @@ def test_the_pictures_the_browser_keeps_are_never_committed():
     for kept in ("captures/frame.png", "uploads/holiday.jpg"):
         ignored = subprocess.run(["git", "check-ignore", "-q", kept], cwd=ROOT)
         assert ignored.returncode == 0, f"{kept} would be committed"
+
+
+# Every host `apothecary slicer install` was seen to reach (strace of a real install of
+# OrcaSlicer 2.4.2 on Linux x86_64, 2026-10-10), and the step that reaches it. A slice
+# reached none: OrcaSlicer asked the resolver nothing and connected nowhere.
+SLICER_INSTALL_HOSTS = {
+    "api.github.com": "the SHA-256 GitHub publishes for the pinned release's asset",
+    "github.com": "the pinned release's asset",
+    "release-assets.githubusercontent.com": "where github.com redirects the asset",
+}
+
+
+def test_the_slicer_installer_fetches_through_the_openscad_installers_fetch():
+    """The slicer installer is not a third caller of tool_fetch: it fetches through the
+    OpenSCAD installer's, to the hosts the install was seen to reach, all tool sources."""
+    from apothecary import openscad_installer
+    from apothecary.slicer import orcaslicer_installer
+
+    assert orcaslicer_installer._fetch is openscad_installer._fetch
+    assert orcaslicer_installer._fetch_to is openscad_installer._fetch_to
+    assert set(SLICER_INSTALL_HOSTS) <= stays_local.TOOL_SOURCES
+
+
+@pytest.mark.parametrize(
+    "system, machine",
+    [("Linux", "x86_64"), ("Linux", "arm64"), ("Darwin", "arm64"), ("Windows", "x86_64")],
+)
+def test_every_url_the_slicer_installer_fetches_is_a_tool_source_by_the_pinned_version(
+    system, machine, tmp_path, monkeypatch
+):
+    """Each fetch is a GET of the pinned release's record or its asset, from a tool
+    source -- refused before anything is opened if it were not -- and an asset that is
+    not what GitHub publishes for it is never opened."""
+    from urllib.parse import urlsplit
+
+    from apothecary.slicer import orcaslicer_installer as oi
+
+    monkeypatch.setenv("APOTHECARY_TOOLS_DIR", str(tmp_path / "tools"))
+    asset = oi.asset_for(system, machine)
+    asked = []
+
+    def fetch(url):
+        stays_local.tool_fetch(url)  # the guard's own check of the host
+        asked.append(url)
+        listed = [{"name": asset.name, "digest": "sha256:" + asset.sha256}]
+        return json.dumps({"assets": listed}).encode()
+
+    def fetch_to(url, path):
+        stays_local.tool_fetch(url)
+        asked.append(url)
+        return "f" * 64  # not what GitHub publishes
+
+    installer = oi.OrcaSlicerInstaller(
+        fetch=fetch, fetch_to=fetch_to, system=system, machine=machine
+    )
+    with pytest.raises(oi.InstallError, match="checksum mismatch"):
+        installer.install()
+    assert {urlsplit(u).hostname for u in asked} == {"api.github.com", "github.com"}
+    assert all("/v2.4.2" in u for u in asked), asked
+    assert asked[-1].endswith("/" + asset.name)
+    with pytest.raises(stays_local.LeftTheMachine):
+        stays_local.tool_fetch("https://objects.example/OrcaSlicer.AppImage")
