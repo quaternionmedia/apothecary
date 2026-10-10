@@ -157,6 +157,7 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
         ordinal="15",
         slug="firmware",
         title="Firmware",
+        written_by="the browser suite (`uv run apothecary test run --e2e`)",
         intro=(
             "A sketch chosen, built, flashed to the ESP32 devkit on the bench, and heard "
             "saying its hello in the board's Machine; then changed and round again. The "
