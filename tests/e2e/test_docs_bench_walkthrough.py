@@ -359,6 +359,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     pinned.locator("summary").click()
     placed.locator(".pinned-camera-remove").click()
     expect(badge).to_have_count(0, timeout=5000)
+    expect(page.locator("#contents-list .contents-item[data-path='camera_1']")).to_have_count(0)
     expect(pinned.locator("#pinned-list")).to_contain_text("none pinned")
     assert page.request.get(f"{base_url}/sites/garage/attached").json()["cameras"] == []
     story.says(
