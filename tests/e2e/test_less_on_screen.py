@@ -313,6 +313,31 @@ def test_an_open_card_keeps_off_the_hint_bar(page: Page, bench: str):
     assert got["t"] >= world["t"] + 8 and got["b"] <= world["b"] - 8, (got, world)
 
 
+@pytest.mark.e2e
+def test_a_floated_panel_keeps_clear_of_the_closed_tabs_the_hint_and_the_ladder(
+    page: Page, bench: str
+):
+    """A panel floated from the rail's strip lands clear of the row where closed
+    panels' tabs stand -- whether a tab stands there yet or not -- and of the
+    header, the hint bar and the depth ladder, as an open card keeps clear of them,
+    and inside the world. Selected, closed after, is a tab beside it, not over it."""
+    _open(page, bench)
+    expect(page.locator("#viewer-hint")).not_to_have_class(re.compile(r"\bfaded\b"))
+    pictures_tab = page.locator(".panel-rail .rail-tab[data-panel='pictures']")
+    pictures_tab.locator(".rail-tab-name").click()
+    pictures_tab.locator(".rail-tab-float").click()
+    free = ".panel-free-layer .panel[data-panel='pictures']"
+    expect(page.locator(free)).to_be_visible(timeout=3000)
+    page.locator(".panel[data-panel='selected'] .panel-close").click()
+    expect(page.locator(".panel-tabs .panel-tab[data-panel='selected']")).to_be_visible()
+    got = _rect(page, free)
+    for other in (".panel-tabs", "#viewer-hint", "#minimap", ".toolbar"):
+        assert not _meet(got, _rect(page, other)), (other, got, _rect(page, other))
+    world = _rect(page, ".viewer-panel")
+    assert world["l"] <= got["l"] and got["r"] <= world["r"], (got, world)
+    assert world["t"] <= got["t"] and got["b"] <= world["b"], (got, world)
+
+
 # --------------------------------------------------------------------------
 # Handles: one compact set on a movable thing
 # --------------------------------------------------------------------------

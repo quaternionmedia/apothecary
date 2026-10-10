@@ -379,8 +379,9 @@ differently after a replug. A pin by a path that resolves to the same device
 ### In the viewer: one Machine per board
 
 A pinned board has one surface in the viewer, its **Machine**
-(`apothecary/static/widgets/machine.js`): a popup tethered to the board's
-badge, which docks into the rail's tab strip. A printer's Machine holds its
+(`apothecary/static/widgets/machine.js`), opened from the board's badge as a
+tab of the rail's strip beside Pictures and the Bench; it floats over the
+world only when floated from its tab. A printer's Machine holds its
 state cards, temperature chart, link verbs, the control latch and pad, the bed
 reading and the print from here; a devkit's holds its port and board, the
 sketch it should run against the sketch it was heard saying (its
@@ -421,9 +422,10 @@ loads, when **Rescan** asks, and by itself when a board it watches goes quiet,
 so a replugged board is found without a reload; it never scans on a timer.
 
 `/firmware/monitor?port=…` opens the viewer on the site the port is pinned
-in with its Machine open and tethered there, or, for a port pinned nowhere,
-on the default site with its Machine floating over the world; the address carries `?machine=` while a Machine is open, so a
-reload opens it again. `apothecary docs generate` writes all of it step by
+in with the Machine of the piece it is pinned to open, or, for a port
+pinned nowhere, on the default site with its Machine open; either way the
+Machine is a tab of the rail's strip, as every Machine is. The address
+carries `?machine=` while a Machine is open, so a reload opens it again. `apothecary docs generate` writes all of it step by
 step against the simulated printer into
 [`generated/printer-monitor/printer-monitor.md`](generated/printer-monitor/printer-monitor.md);
 [walkthrough 12](../walkthrough/12-the-bench-as-it-is.md) shows the boards

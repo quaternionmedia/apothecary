@@ -12,7 +12,9 @@
  * the tilde key, and it moves -- press its swap button, or drag its grip
  * across the page -- to the other side. A docked panel's body has a height a
  * person drags; a free panel is dragged by its title bar, clamped to the page,
- * and resized from its corner. What a person did to the panels and the rail
+ * and resized from its corner. Floated, a panel lands beside where it was docked,
+ * or the nearest place clear of the closed panels' tabs and of what the page asks
+ * to keep clear (keepClear). What a person did to the panels and the rail
  * is remembered per browser; a remembered panel the page no longer registers
  * is ignored, and forgotten the next time anything is remembered, and a layout
  * remembered from before the one rail (a left and a right rail) is ignored
@@ -30,8 +32,9 @@ const PANEL_MIN_PX = 60;
 const TILDE_KEYS = new Set(["`", "~"]);
 const SIDES = new Set(["left", "right"]);
 const STRIP_ORDER = 1000; // the tab strip, and the shown tab under it, below every stacked panel
+const FREE_EDGE_PX = 8; // a floated panel's room from the world's edges, and from what it keeps clear of
 
-export function mountPanels({ container, overlay, storageKey = "apothecary.panels" } = {}) {
+export function mountPanels({ container, overlay, storageKey = "apothecary.panels", keepClear = () => [] } = {}) {
     overlay = overlay || container;  // where free panels float: over the world
     const panels = new Map();
     // The one rail: which side it is on, the width a person dragged it to, whether
@@ -211,6 +214,68 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
         p.y = Math.max(0, Math.min(h - Math.min(ph, 40), p.y));
     }
 
+    // What a floated panel lands clear of, as boxes in the overlay's pixels: what the
+    // page asks to keep clear (keepClear: the header, the hint bar, the depth ladder),
+    // as an open card keeps clear of it -- a thing hidden or faded out is not in the
+    // way -- and the row where closed panels' tabs stand, as wide as the world and
+    // whether a tab stands there yet or not, so a panel closed after never puts its
+    // tab under a floated one. An empty row is measured with a stand-in tab.
+    function inTheWay() {
+        const base = overlay.getBoundingClientRect(), w = overlay.clientWidth;
+        const shown = (el) => el && !el.hidden && el.offsetWidth && parseFloat(getComputedStyle(el).opacity) > 0.05;
+        const boxes = keepClear().filter(shown).map((el) => {
+            const r = el.getBoundingClientRect();
+            return { l: r.left - base.left, r: r.right - base.left, t: r.top - base.top, b: r.bottom - base.top };
+        });
+        let row = tabs.getBoundingClientRect();
+        if (tabs.hidden || !row.height) {
+            const wasHidden = tabs.hidden;
+            const stand = document.createElement("button");
+            stand.className = "panel-tab";
+            stand.style.visibility = "hidden";
+            stand.textContent = "Panel";
+            tabs.appendChild(stand);
+            tabs.hidden = false;
+            row = tabs.getBoundingClientRect();
+            stand.remove();
+            tabs.hidden = wasHidden;
+        }
+        boxes.push({ l: 0, r: w, t: row.top - base.top, b: row.bottom - base.top });
+        return boxes;
+    }
+
+    // A floated panel's place: where it was put, kept FREE_EDGE_PX inside the world,
+    // else the nearest place clear of everything in the way -- beside one thing in
+    // the way, else beside that again; where nothing is clear (a panel taller than
+    // the room left), where it was put.
+    function placeClear(p) {
+        const w = overlay.clientWidth, h = overlay.clientHeight;
+        const pw = Math.min(p.el.offsetWidth || 320, w - 2 * FREE_EDGE_PX), ph = p.el.offsetHeight || 40;
+        const keep = inTheWay();
+        const inside = ({ x, y }) => ({
+            x: Math.max(FREE_EDGE_PX, Math.min(w - FREE_EDGE_PX - pw, x)),
+            y: Math.max(FREE_EDGE_PX, Math.min(h - FREE_EDGE_PX - ph, y)),
+        });
+        const clear = ({ x, y }) => !keep.some((q) => x < q.r + FREE_EDGE_PX && q.l - FREE_EDGE_PX < x + pw
+            && y < q.b + FREE_EDGE_PX && q.t - FREE_EDGE_PX < y + ph);
+        const want = inside({ x: p.x, y: p.y });
+        let tries = [want];
+        for (let round = 0; round < 3; round += 1) {
+            const ok = tries.filter(clear);
+            if (ok.length) {
+                const far = (t) => (t.x - want.x) ** 2 + (t.y - want.y) ** 2;
+                const best = ok.reduce((a, b) => (far(b) < far(a) ? b : a));
+                p.x = best.x; p.y = best.y;
+                return;
+            }
+            tries = tries.flatMap((t) => keep.flatMap((q) => [
+                { x: t.x, y: q.t - FREE_EDGE_PX - ph }, { x: t.x, y: q.b + FREE_EDGE_PX },
+                { x: q.l - FREE_EDGE_PX - pw, y: t.y }, { x: q.r + FREE_EDGE_PX, y: t.y },
+            ].map(inside)));
+        }
+        p.x = want.x; p.y = want.y;
+    }
+
     function startDrag(p, ev) {
         if (p.where !== "free") return;
         ev.preventDefault();
@@ -355,7 +420,7 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
                 if (rail.tab === id) rail.tab = null;
                 p.x = Math.max(0, rect.left - base.left - 24); p.y = Math.max(0, rect.top - base.top + 8);
             });
-            clampFree(p); p.el.style.left = `${p.x}px`; p.el.style.top = `${p.y}px`; remember();
+            placeClear(p); p.el.style.left = `${p.x}px`; p.el.style.top = `${p.y}px`; remember();
             return true;
         },
         /* Docked in the rail: Site and Selected in its stack, any other panel a
