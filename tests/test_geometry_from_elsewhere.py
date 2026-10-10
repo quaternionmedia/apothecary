@@ -207,12 +207,13 @@ def test_parts_import_brings_a_file_in_as_a_part(tmp_path):
 
 
 def test_the_garage_printers_are_ender_3s_drawn_as_they_are(monkeypatch):
-    """Each printer is the Ender 3 part with its board in the electronics box, its
+    """The printer is the Ender 3 part with its board in the electronics box, its
     build volume where the machine's bed is, its footprint the machine's; the
-    boards on the bench are the board models; the layout is still valid."""
+    boards on the bench are the board models; the layout is still valid. One
+    printer for now: the owner's decision of 2026-10-04."""
     site = create_example_site()
     printers = [s for s in site.children if s.name.startswith("printer_")]
-    assert len(printers) == 3
+    assert [p.name for p in printers] == ["printer_1"]
     for printer in printers:
         assert printer.part_ref == "ender3" and printer.base is None
         assert printer.build_volume == Vector3D(x=220, y=220, z=250)
@@ -232,7 +233,7 @@ def test_the_garage_printers_are_ender_3s_drawn_as_they_are(monkeypatch):
     monkeypatch.setattr(hierarchy, "part_stl_path", lambda ref: f"parts/{ref}.stl")
     rendered = site.render()
     for part in ("ender3", "creality_v422"):
-        assert rendered.count(f'import("parts/{part}.stl"') == 3, part
+        assert rendered.count(f'import("parts/{part}.stl"') == len(printers), part
     # The API carries the build origin to the viewers, and the printer is not a board.
     client = TestClient(app)
     tree = client.get("/sites/garage").json()["tree"]

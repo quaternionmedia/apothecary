@@ -1,33 +1,36 @@
-/* The loop's verbs at a host: a camera pinned, live, a picture taken; a picture
- * added, dropped or pasted and pinned as a view; its shapes found; the view
- * sized, drawn or unpinned; a kept picture forgotten. No markup of its own: the
- * ring is how each is asked for (apothecary/menu.py builds the cells), the world
- * is where each is seen (picture_marks.js draws it), and the status bar is where
- * each is said -- every step's message naming the step after it: a camera pinned
- * names Take picture, a view pinned names Find shapes, shapes found name Make.
+/* The loop's verbs: a camera's device chosen, live, a picture taken; a picture
+ * added, dropped or pasted and pinned at a place as a view; its shapes found;
+ * the view sized, drawn or unpinned; a kept picture forgotten. No markup of its
+ * own: the ring is how each is asked for (apothecary/menu.py builds the cells),
+ * the world is where each is seen (picture_marks.js draws it), and the status
+ * bar is where each is said -- every step's message naming the step after it: a
+ * camera's device chosen names Take picture, a picture taken or pinned names Find
+ * shapes, shapes found name Make.
  *
  * Taking and finding are two steps. Take picture, a drop, a paste, Picture ›
  * Add and Picture › Folder pin a view and find nothing; Picture › Find shapes
- * runs a finder on the view drawn at the host.
+ * runs a finder on the view drawn at a place.
  *
- * A host is a root structure with a footprint, or the floor (""). A verb on a
- * host names it by the ring's target; a floor verb carries "@floor" after its
- * last colon. A verb about one view names the view.
+ * A place is a host, a root structure with a footprint, or the floor (""). A
+ * verb on a place names it by the ring's target; a floor verb carries "@floor"
+ * after its last colon. A verb about one view names the view. A camera is a part
+ * of the site (camera_1, ...): its verbs are its own ring's, naming it by the
+ * ring's target, and Camera › Add here and Remove are the server's.
  *
- * The browser's cameras are this origin's devices: a pin in cameras.json
- * names one by its deviceId, so a pin made in another browser is shown by its
- * label and can be moved or unpinned here, never opened. The stream exists
- * only while Live is on at its host; it stops when a picture is taken, when the
- * host is no longer selected, or when the site changes. Take picture from Still
- * opens the pinned device, waits for its first frame and half a second more,
- * keeps the frame, and closes it again.
+ * A camera's device is one of this browser's cameras, by the id the browser gave
+ * it: a camera whose device another browser chose shows its label and is never
+ * opened here. The stream exists only while the camera is Live; it stops at
+ * Still, when a picture is taken (the picture is then what is shown), when the
+ * camera goes, or when the site changes. Take picture with no stream open opens
+ * the device, waits for its first frame and half a second more, keeps the frame,
+ * and closes it again. The picture lies where the camera looks.
  *
- * The first time, the browser has to be asked: Camera › Pin here offers Allow
- * until the cameras are named. Allow asks once and flows on -- one camera is
- * pinned at the host at once, several reopen the ring at Pin here to choose
- * from -- and a refusal says what to do. A yes given elsewhere (the address
- * bar) is noticed where the browser reports it, and the cameras are named again
- * as a ring opens, so Pin here lists them.
+ * The first time, the browser has to be asked: a camera's Device offers Allow
+ * until the browser's cameras are named. Allow asks once and flows on -- one
+ * camera is chosen at once, several reopen the ring at Device to choose from --
+ * and a refusal says what to do. A yes given elsewhere (the address bar) is
+ * noticed where the browser reports it, and the cameras are named again as a
+ * ring opens, so Device lists them.
  *
  * The picture chosen in Pictures (choose(path)) is told to every ring as
  * chosen_picture: Picture › Folder's eighth cell pins it when it is older than
@@ -36,10 +39,9 @@
  *
  * mountPictures({ base, marks, world, log }):
  *   marks: the handle mountPictureMarks returned;
- *   world: siteName(), select(host), stepOut(), focusWidth(), openPanel(id),
- *          frameFloor(), rendered(), reopenRing(host, into, at);
- *          frameFloor(), rendered(), applySite(site) (the site as an answer
- *          carries it, drawn again: a re-scale may have rebuilt made pieces);
+ *   world: siteName(), select(path), stepOut(), focusWidth(), openPanel(id),
+ *          frameFloor(), rendered(), reopenRing(path, into, at),
+ *          applySite(site) (the site as an answer carries it, drawn again);
  *   log(text, kind): the page's status bar; kind "bad" is a refusal.
  */
 
@@ -61,11 +63,11 @@ export function mountPictures({ base = "", marks, world, log }) {
         return body;
     }
     const where = (host) => (host === FLOOR ? "the floor" : host);
-    const tailOf = (host) => (host === FLOOR ? `:${FLOOR_MARK}` : "");
     // A verb's place on the ring, as a person reads it: the floor's are under the
     // canvas ring's Pictures › Floor.
     const ringPath = (host, verb) => `${host === FLOOR ? "Pictures › Floor › " : ""}${verb}`;
     const siteUrl = () => `/sites/${encodeURIComponent(world.siteName())}`;
+    const cameraUrl = (name) => `${siteUrl()}/cameras/${encodeURIComponent(name)}`;
 
     // --- this browser's cameras ---------------------------------------------------------
     async function listCameras() {
@@ -90,11 +92,25 @@ export function mountPictures({ base = "", marks, world, log }) {
     const ready = listCameras().catch(() => {});
     const mine = (id) => state.cameras.find((c) => c.id === id) || null;
 
+    // A camera part as the world has it, or a refusal naming what to do.
+    function cameraNamed(name) {
+        const cam = marks.camera(name);
+        if (!cam) throw new Error(`no camera ${name} in this site`);
+        return cam;
+    }
+    // A camera whose device is this browser's: the device, or a refusal that says why not.
+    function deviceOf(name) {
+        const cam = cameraNamed(name);
+        if (!cam.device) throw new Error(`${name} has no device yet: Device, on its ring, says which of this browser's cameras it is`);
+        if (!mine(cam.device.id)) throw new Error(`${name}'s device is another browser's (${cam.device.label}): choose one of this browser's under its Device`);
+        return cam.device;
+    }
+
     // Allow: the browser is asked once. It answers with its prompt, or with what
-    // the address bar holds for this site. Its yes flows on: one camera is pinned
-    // at the host at once; several reopen the ring at Camera › Pin here, where the
-    // ring stood, so the choice is made without another trip.
-    async function allow(host, at = null) {
+    // the address bar holds for this site. Its yes flows on: one camera is chosen
+    // as this camera's device at once; several reopen the ring at Device, where
+    // the ring stood, so the choice is made without another trip.
+    async function allow(name, at = null) {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("this browser has no cameras to offer");
         let probe;
         try {
@@ -102,7 +118,7 @@ export function mountPictures({ base = "", marks, world, log }) {
         } catch (e) {
             const said = e && e.message ? ` (${e.message})` : "";
             if (e && e.name === "NotAllowedError") {
-                throw new Error(`the browser refused the camera${said}: answer its prompt, or allow the camera for this site in the address bar, then ${ringPath(host, "Camera › Pin here")} again`);
+                throw new Error(`the browser refused the camera${said}: answer its prompt, or allow the camera for this site in the address bar, then ${name}'s Device again`);
             }
             throw new Error(`this browser offered no camera it could use${said || (e && e.name ? ` (${e.name})` : "")}`);
         }
@@ -110,39 +126,27 @@ export function mountPictures({ base = "", marks, world, log }) {
         await listCameras();
         const n = state.cameras.length;
         if (!n) throw new Error("the browser allowed a camera and then named none: this browser offered no camera it could use");
-        if (n === 1) { await pinCamera(host, state.cameras[0].id, { allowed: true }); return; }
-        say(`${n} cameras allowed: choose one to pin at ${where(host)}`);
-        if (world.reopenRing) world.reopenRing(host, `camera:pin${tailOf(host)}`, at);
+        if (n === 1) { await chooseDevice(name, state.cameras[0].id, { allowed: true }); return; }
+        say(`${n} cameras allowed: choose which is ${name}`);
+        if (world.reopenRing) world.reopenRing(name, "camera:device", at);
     }
 
-    async function pinCamera(host, id, { allowed = false } = {}) {
-        const cam = mine(id);
-        const answer = await api(`/cameras/${encodeURIComponent(id)}`, {
+    // Device › one of this browser's cameras: this camera is that one, and no
+    // other camera is (the server takes it off any other).
+    async function chooseDevice(name, id, { allowed = false } = {}) {
+        const device = mine(id);
+        const answer = await api(`${cameraUrl(name)}/device`, {
             method: "PUT",
-            body: JSON.stringify({ label: cam ? cam.label : "camera", site: world.siteName(), path: host }),
+            body: JSON.stringify({ id, label: device ? device.label : "camera" }),
         });
+        if (state.live && state.live.camera !== name && state.live.id === id) still();
         await marks.refresh();
-        const replaced = answer.replaced && answer.replaced.length ? `, in place of ${answer.replaced.length} pinned there before` : "";
-        say(`${cam ? cam.label : "camera"} ${allowed ? "allowed and " : ""}pinned at ${where(host)}${replaced}: ${ringPath(host, "Camera › Take picture")} keeps a frame and pins it here as a view`);
+        const from = (answer.taken_from || []).map((c) => (c.site === world.siteName() ? c.name : `${c.site}'s ${c.name}`));
+        const taken = from.length ? `, taken off ${from.join(", ")}` : "";
+        say(`${name} is ${device ? device.label : "that camera"}${allowed ? ", allowed" : ""}${taken}: Take picture (P) keeps a frame where it looks`);
     }
 
-    async function unpinCamera(host) {
-        const cam = marks.cameraAt(host);
-        if (!cam) throw new Error(`no camera is pinned at ${where(host)}`);
-        if (state.live && state.live.host === host) still();
-        await api(`/cameras/${encodeURIComponent(cam.id)}`, { method: "DELETE" });
-        await marks.refresh();
-        say(`${cam.label || "camera"} unpinned from ${where(host)}; its views stay`);
-    }
-
-    function pinnedHere(host) {
-        const cam = marks.cameraAt(host);
-        if (!cam) throw new Error(`no camera is pinned at ${where(host)}: Camera › Pin here`);
-        if (!mine(cam.id)) throw new Error(`${cam.label || "that camera"} is another browser's: pin one of this browser's here`);
-        return cam;
-    }
-
-    // --- streams: live on the mat, or opened for one frame --------------------------------
+    // --- streams: live where the camera looks, or opened for one frame -------------------
     function videoFor(stream) {
         const video = document.createElement("video");
         video.muted = true; video.playsInline = true; video.autoplay = true;
@@ -161,23 +165,25 @@ export function mountPictures({ base = "", marks, world, log }) {
         if (video) { video.srcObject = null; video.remove(); }
     }
 
-    async function goLive(host) {
-        const cam = pinnedHere(host);
+    async function goLive(name) {
+        const device = deviceOf(name);
         still();
-        const stream = await open(cam.id);
+        const stream = await open(device.id);
         const { video, loaded } = videoFor(stream);
-        state.live = { host, id: cam.id, stream, video };
+        state.live = { camera: name, id: device.id, stream, video };
         await loaded;
         if (!state.live || state.live.video !== video) return;
-        marks.setLive(host, video);
-        say(`${cam.label} is live on ${where(host)}: ${ringPath(host, "Camera › Take picture")} keeps a frame and pins it here as a view`);
+        marks.setLive(name, video);
+        if (world.rendered) world.rendered();
+        say(`${name} is live where it looks: Take picture (P) keeps a frame`);
     }
     function still() {
         if (!state.live) return false;
-        const { stream, video } = state.live;
+        const { stream, video, camera } = state.live;
         state.live = null;
         close(stream, video);
-        marks.setLive(null, null);
+        if (marks.liveAt() === camera) marks.setLive(null, null);
+        if (world.rendered) world.rendered();
         return true;
     }
 
@@ -188,9 +194,9 @@ export function mountPictures({ base = "", marks, world, log }) {
         canvas.getContext("2d").drawImage(video, 0, 0);
         return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("no frame"))), "image/png"));
     }
-    async function frame(cam) {
-        if (state.live && state.live.id === cam.id) return grab(state.live.video);
-        const stream = await open(cam.id);
+    async function frame(device) {
+        if (state.live && state.live.id === device.id) return grab(state.live.video);
+        const stream = await open(device.id);
         const { video, loaded } = videoFor(stream);
         try {
             await loaded;
@@ -201,7 +207,8 @@ export function mountPictures({ base = "", marks, world, log }) {
 
     async function keepBlob(blob, { name, kept = "capture", host = null, camera = null }) {
         const q = new URLSearchParams({ name, kept });
-        if (host !== null) { q.set("site", world.siteName()); q.set("host", host); }
+        if (host !== null || camera !== null) q.set("site", world.siteName());
+        if (host !== null) q.set("host", host);
         if (camera) q.set("camera", camera);
         const r = await fetch(`${base}/photos/pictures?${q}`, { method: "POST", body: blob, headers: { "Content-Type": blob.type || "application/octet-stream" } });
         const body = await r.json().catch(() => ({}));
@@ -212,34 +219,38 @@ export function mountPictures({ base = "", marks, world, log }) {
 
     // What a view pinned is, and the step after it: Find shapes.
     function pinned(view) {
-        return `${view.picture} pinned at ${where(view.host)} as a view: ${ringPath(view.host, "Picture › Find shapes")} finds what is in it`;
+        if (view.host === null) return `${view.picture}: ${view.camera} was looking at a wall or the sky, so it lies nowhere and is drawn on the camera; aim the camera down and Take picture again`;
+        const by = view.camera ? `${view.camera}'s picture lies on ${where(view.host)}` : `${view.picture} pinned at ${where(view.host)} as a view`;
+        return `${by}: ${ringPath(view.host, "Picture › Find shapes")} finds what is in it`;
     }
     // What Find shapes found, and the step after it: Make, once the view has a width.
     function found(view) {
         const n = view.shapes.length;
         const left = view.left_out ? ` (${view.left_out} left out)` : "";
-        if (!n) return `no shapes found in ${view.picture} at ${where(view.host)} by ${view.finder}: pin another picture here, from the camera or from disk`;
+        if (!n) return `no shapes found in ${view.picture} at ${where(view.host)} by ${view.finder}: take or pin another picture here`;
         const make = ringPath(view.host, "Picture › Make");
         const next = view.mat && view.mat.width
             ? `, ${Math.round(view.mat.width)} mm across: ${make} makes them pieces`
             : `: type the picture's width in Selected (${ringPath(view.host, "Picture › Size")}), then ${make} makes them pieces`;
         return `${n} shape${n === 1 ? "" : "s"} found at ${where(view.host)}${left}${next}`;
     }
-    async function drawNew(host, view) {
+    async function drawNew(host, view, select = true) {
         await marks.refresh();
-        marks.draw(host, view.id);
-        world.select(host);
+        if (host !== null) marks.draw(host, view.id);
+        if (select) world.select(host);
     }
 
-    // Take picture: a frame kept with its camera and host, and pinned there as a
-    // view; nothing found in it yet; Live ends.
-    async function takePicture(host) {
-        const cam = pinnedHere(host);
-        const blob = await frame(cam);
+    // Take picture: a frame from the camera's device, kept and laid where the
+    // camera looks as its view; nothing found in it yet; Live ends.
+    async function takePicture(name) {
+        const device = deviceOf(name);
+        const blob = await frame(device);
         still();
-        const kept = await keepBlob(blob, { name: cam.id, host, camera: cam.id });
+        const kept = await keepBlob(blob, { name, camera: name });
         if (!kept.view) throw new Error(`kept ${kept.path}, and not pinned: ${kept.not_pinned || "refused"}`);
-        await drawNew(host, kept.view);
+        // The camera stays selected: its picture is drawn where it landed.
+        await drawNew(kept.view.host, kept.view, false);
+        if (world.rendered) world.rendered();
         say(pinned(kept.view));
         return kept.view;
     }
@@ -334,34 +345,30 @@ export function mountPictures({ base = "", marks, world, log }) {
     }
 
     // The one width: a view's scale. With a shape chosen on the drawn view, the
-    // number is that shape's long side; otherwise the picture's width. At a host
-    // with a camera and no view, it is the camera's width for its next view.
+    // number is that shape's long side; otherwise the picture's width. On a
+    // camera's picture, the first width typed teaches the camera its lens, and its
+    // other pictures nobody sized follow it.
     async function setWidth(host, mm) {
         if (!(mm > 0)) throw new Error("a width is a number of millimetres, more than nothing");
         const drawn = marks.drawnAt(host);
-        if (!drawn) {
-            const cam = marks.cameraAt(host);
-            if (!cam) throw new Error(`nothing at ${where(host)} to size`);
-            await api(`/cameras/${encodeURIComponent(cam.id)}`, { method: "PUT", body: JSON.stringify({ label: cam.label || "camera", site: world.siteName(), path: host, mm_across: mm }) });
-            await marks.refresh();
-            say(`${cam.label || "camera"}: its next picture is ${mm} mm across; ${ringPath(host, "Camera › Take picture")} takes it`);
-            return;
-        }
+        if (!drawn) throw new Error(`nothing at ${where(host)} to size`);
         const chosen = marks.chosen();
         const byShape = chosen && chosen.view === drawn.id;
         const body = byShape ? { known_index: chosen.index, mm } : { mm_across: mm };
         const sized = await api(`${siteUrl()}/views/${encodeURIComponent(drawn.id)}/scale`, { method: "PUT", body: JSON.stringify(body) });
-        // Pieces made from the view whose sides nobody stated were rebuilt at the
-        // new width: the site is drawn as it is now (which fetches the marks too).
+        // Pieces made from the view (or, a lens taught, from its camera's other
+        // pictures) whose sides nobody stated were rebuilt: the site is drawn as it
+        // is now (which fetches the marks too).
         const rebuilt = sized.rebuilt || [];
         if (rebuilt.length && sized.site && world.applySite) await world.applySite(sized.site);
         else await marks.refresh();
         if (byShape) marks.choose(drawn.id, chosen.index);
         const followed = rebuilt.length ? `; ${rebuilt.length} made piece(s) rebuilt at that width: ${rebuilt.join(", ")}` : "";
+        const taught = sized.taught ? `; ${sized.taught} learned its lens from it, and its other pictures nobody sized follow` : "";
         const next = sized.finder === null
             ? `${ringPath(host, "Picture › Find shapes")} finds its shapes, then Make makes them pieces`
             : sized.shapes.length ? `${ringPath(host, "Picture › Make")} makes its shapes pieces` : "it holds no shapes to make";
-        say(`${drawn.picture}: ${Math.round(sized.mm_across)} mm across${byShape ? `, from shape ${chosen.index}'s long side` : ""}${followed}; ${next}`);
+        say(`${drawn.picture}: ${Math.round(sized.mm_across)} mm across${byShape ? `, from shape ${chosen.index}'s long side` : ""}${taught}${followed}; ${next}`);
     }
 
     // --- what the ring is told -------------------------------------------------------------
@@ -375,24 +382,23 @@ export function mountPictures({ base = "", marks, world, log }) {
         }
         return picturesInflight;
     }
-    // The Picture context for the place a ring stands on: a host, or "" the floor.
-    async function context(host, { fresh = false } = {}) {
+    // The Picture context for what a ring stands on: a place (a host, or "" the
+    // floor) or a camera. A camera's device is the server's to tell its ring.
+    async function context(target, { fresh = false } = {}) {
         const [pictures] = await Promise.all([picturesNow(fresh), ready]);
         // Not yet named as a ring opens: the browser may have been allowed since
         // (the address bar, or a yes it did not report), so ask it again.
         if (fresh && !state.asked) await listCameras().catch(() => {});
         const keptPaths = new Set(pictures.filter((p) => p.kept).map((p) => p.path));
-        const cam = host === null ? null : marks.cameraAt(host);
-        const views = host === null ? [] : [...marks.viewsAt(host)].reverse();
-        const drawn = host === null ? null : marks.drawnAt(host);
+        const views = target === null ? [] : [...marks.viewsAt(target)].reverse();
+        const drawn = target === null ? null : marks.drawnAt(target);
         return {
             cameras: state.cameras.map((c) => ({ id: c.id, label: c.label })),
             asked: state.asked,
             pictures: pictures.map((p) => p.path),
             chosen_picture: state.chosen,
             here: {
-                camera: cam ? { id: cam.id, label: cam.label || "camera" } : null,
-                live: !!(state.live && state.live.host === host),
+                live: !!(state.live && state.live.camera === target),
                 views: views.map((l) => ({
                     id: l.id,
                     picture: l.picture,
@@ -407,35 +413,35 @@ export function mountPictures({ base = "", marks, world, log }) {
     }
 
     // --- the ring's verbs --------------------------------------------------------------------
-    // The host a verb is about: "@floor" after its last colon, else the ring's node.
-    function hostOf(intent) {
+    // What a verb is about: "@floor" after its last colon, else the ring's node (a
+    // host or a camera).
+    function targetOf(intent) {
         if (intent.action.endsWith(`:${FLOOR_MARK}`)) return FLOOR;
         const target = intent.context && intent.context.targets && intent.context.targets[0];
         return intent.context && intent.context.pointing === "node" && target ? target : FLOOR;
     }
     const bare = (action) => action.replace(new RegExp(`:${FLOOR_MARK}$`), "");
 
-    // A camera or picture verb the page carries; false for one it does not.
+    // A camera or picture verb the page carries; false for one it does not (the
+    // server's: Add here and Remove, Make, Drop, a made piece's Word).
     async function carry(intent) {
         const action = bare(intent.action);
-        const host = hostOf(intent);
+        const target = targetOf(intent);
         if (!action.startsWith("camera:") && !action.startsWith("picture:") && action !== "fit") return false;
         // A floor verb selects the floor, so Selected shows what it acts on.
-        if (intent.action.endsWith(`:${FLOOR_MARK}`)) world.select(host);
+        if (intent.action.endsWith(`:${FLOOR_MARK}`)) world.select(target);
         const [, verb, ...rest] = action.split(":");
         const arg = rest.join(":");
         if (action === "fit") { world.frameFloor(); say("the floor, framed"); return true; }
         switch (`${action.split(":")[0]}:${verb}`) {
-            case "camera:allow": await allow(host, intent.at || null); return true;
-            case "camera:pin": await pinCamera(host, arg); return true;
-            case "camera:unpin": await unpinCamera(host); return true;
-            case "camera:live": await goLive(host); return true;
-            case "camera:still": if (still()) say(`${where(host)}: still again`); return true;
-            case "camera:take-picture": await takePicture(host); return true;
-            case "camera:gather": return false;  // Pictures' gathering section, until gathering leaves core
-            case "picture:add": pickFiles(host); say(`choose pictures to pin at ${where(host)}`); return true;
-            case "picture:pin": world.stepOut(); await pinPicture(host, arg); return true;
-            case "picture:find": await findShapes(host, arg); return true;
+            case "camera:allow": await allow(target, intent.at || null); return true;
+            case "camera:device": await chooseDevice(target, arg); return true;
+            case "camera:live": await goLive(target); return true;
+            case "camera:still": if (still()) say(`${target}: still again`); return true;
+            case "camera:take-picture": await takePicture(target); return true;
+            case "picture:add": pickFiles(target); say(`choose pictures to pin at ${where(target)}`); return true;
+            case "picture:pin": world.stepOut(); await pinPicture(target, arg); return true;
+            case "picture:find": await findShapes(target, arg); return true;
             case "picture:draw": {
                 const viewAt = marks.attached() && marks.attached().views.find((l) => l.id === arg);
                 if (!viewAt) throw new Error(`no view ${arg} in this site`);
@@ -444,12 +450,12 @@ export function mountPictures({ base = "", marks, world, log }) {
                 return true;
             }
             case "picture:size": world.focusWidth(); say("type a width in Selected, in millimetres"); return true;
-            case "picture:unpin": await unpinView(host); return true;
-            case "picture:forget": await forget(host); return true;
+            case "picture:unpin": await unpinView(target); return true;
+            case "picture:forget": await forget(target); return true;
             case "picture:purge": await purge(); return true;
             // Folder's eighth leaf: every picture is a row of Pictures; one chosen there
             // is this cell the next time, Pin and its name.
-            case "picture:more": world.openPanel("pictures"); say(`every picture is in Pictures: choose one there, and Folder's last cell pins it at ${where(host)} as a view`); return true;
+            case "picture:more": world.openPanel("pictures"); say(`every picture is in Pictures: choose one there, and Folder's last cell pins it at ${where(target)} as a view`); return true;
             case "picture:views": world.openPanel("selected"); say("every view here is a row in Selected: click one to draw it"); return true;
             default: return false;
         }
@@ -458,17 +464,17 @@ export function mountPictures({ base = "", marks, world, log }) {
     // The picture chosen in Pictures, or none (null): told to every ring after.
     function choose(path) { state.chosen = path || null; return state.chosen; }
 
-    // A selection elsewhere, a site change, a step out of the level: Live ends.
-    function selectionChanged(host) {
-        if (state.live && state.live.host !== host) still();
-    }
+    // A camera removed: its stream, if it was live, ends with it.
+    function cameraGone(name) { if (state.live && state.live.camera === name) still(); }
 
     return {
-        ready, state, listCameras, allow, pinCamera, unpinCamera, goLive, still, takePicture,
+        ready, state, listCameras, allow, chooseDevice, goLive, still, takePicture,
         findShapes, addFiles, pickFiles, paste, pinPicture, drawView, unpinView, forget, purge, setWidth,
-        context, carry, selectionChanged, picturesNow, choose,
+        context, carry, cameraGone, picturesNow, choose,
         chosen: () => state.chosen,
-        live: () => (state.live ? state.live.host : null),
+        live: () => (state.live ? state.live.camera : null),
+        liveVideo: (name) => (state.live && state.live.camera === name ? state.live.stream : null),
+        isMine: (id) => !!mine(id),
         destroy() { still(); },
     };
 }

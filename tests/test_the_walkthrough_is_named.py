@@ -30,6 +30,34 @@ def test_the_command_collects_the_run_that_writes_the_page():
         assert run in collected.stdout, f"`test run` does not collect {module.name}::{run}"
 
 
+# A loop's page is written by the browser suite alone (the loops plan, 2026-10-10), so
+# `apothecary test run` stays quick: its test is marked e2e and not walkthrough.
+LOOP_PAGES = {
+    Path(__file__).resolve().parent / "e2e" / "test_the_firmware_loop.py": (
+        "test_the_firmware_loop_goes_round_with_arduino_then_rust",
+        ROOT / "walkthrough" / "15-firmware.md",
+    ),
+}
+
+
+def test_a_loop_s_page_is_written_by_the_browser_suite_alone():
+    quick = subprocess.run(
+        testing.run_command() + ["--collect-only"], cwd=ROOT, capture_output=True, text=True
+    )
+    assert quick.returncode == 0, quick.stderr[-2000:]
+    browser = subprocess.run(
+        testing.run_command(e2e=True) + ["--collect-only"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert browser.returncode == 0, browser.stderr[-2000:]
+    for module, (run, page) in LOOP_PAGES.items():
+        assert run not in quick.stdout, f"`test run` collects {module.name}::{run}"
+        assert run in browser.stdout, f"`test run --e2e` does not collect {module.name}::{run}"
+        assert page.is_file(), f"{page.name} is not written"
+
+
 def test_the_command_supplies_what_the_demonstration_needs():
     """The demonstration drives a browser against a real server."""
     assert "--start-server" in testing.run_command()

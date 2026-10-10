@@ -70,9 +70,10 @@ uv run apothecary check             # OpenSCAD on PATH, playwright browsers, the
       boards' STLs to appear under `parts/` within a minute. (A node asked
       for before its parts are built builds them first: a fresh clone
       answers `/sites/garage/nodes/printer_1/stl` on the first request.)
-- [ ] Browser: `http://127.0.0.1:8000/viewer/sites/garage` → the garage, the
-      workbench, three printers that look like Ender 3s (spools over the top
-      bar, power supplies on the right), boards at the right end of the bench.
+- [ ] Browser: `http://127.0.0.1:8000/viewer/sites/garage` → the garage, its
+      walls faded, the workbench, one printer that looks like an Ender 3
+      (spool over the top bar, power supply on the right) at the bench's left
+      end, boards at its right end.
 - [ ] `http://127.0.0.1:8000/docs` → the docs index, with a bar that says when
       the generated walkthroughs were last refreshed (`--refresh-docs` or
       `apothecary docs generate` refreshes them).
@@ -100,9 +101,9 @@ uv run python -c "import apothecary, socket; s=socket.socket(socket.AF_INET, soc
 
 ```bash
 # the server answers this machine only: client, bound address, Host, sender
-curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/cameras                        # 200
-curl -s -o /dev/null -w "%{http_code}\n" -H "Host: evil.example" http://127.0.0.1:8000/cameras  # 403
-curl -s -o /dev/null -w "%{http_code}\n" -H "Host: $(hostname)" http://127.0.0.1:8000/cameras   # 403
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/placed                         # 200
+curl -s -o /dev/null -w "%{http_code}\n" -H "Host: evil.example" http://127.0.0.1:8000/placed   # 403
+curl -s -o /dev/null -w "%{http_code}\n" -H "Host: $(hostname)" http://127.0.0.1:8000/placed    # 403
 curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "Origin: https://evil.example" -H "Sec-Fetch-Site: cross-site" -H "Content-Type: application/json" -d '{}' http://127.0.0.1:8000/photos/gather   # 403
 curl -s -o /dev/null -w "%{http_code}\n" -H "Sec-Fetch-Site: cross-site" -H "Sec-Fetch-Mode: navigate" http://127.0.0.1:8000/viewer/sites/garage   # 200: a link from elsewhere still opens a page
 curl -sI http://127.0.0.1:8000/viewer/sites/garage | grep -i "content-security-policy\|referrer-policy"
@@ -140,16 +141,17 @@ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/api/docs         
 
 On your own server, in the garage.
 
-- [ ] Zoom the camera (scroll) onto the bench: three **Ender 3s** -- the
-      2040 frame, the bed on springs, the X gantry, the **power supply on the
-      right side behind the upright**, the LCD off the front-right corner,
-      the **spool on the bracket over the top bar**. Their cyan build-volume
-      boxes sit on the bed at 95 mm, not on the bench, and inside the frame
-      (not centred on the footprint, which the PSU skews).
+- [ ] Zoom the camera (scroll) onto the bench: an **Ender 3** at its left
+      end -- the 2040 frame, the bed on springs, the X gantry, the **power
+      supply on the right side behind the upright**, the LCD off the
+      front-right corner, the **spool on the bracket over the top bar**. Its
+      cyan build-volume box sits on the bed at 95 mm, not on the bench, and
+      inside the frame (not centred on the footprint, which the PSU skews).
 - [ ] At the bench's right end: an ESP32 devkit standing on its pins, the
       footpedal, an **Arduino Uno** (teal, USB-B and jack on its left), a
       **Raspberry Pi 4** (green, the USB stacks and Ethernet on its right), a
-      **Teensy 4.0** (small, on its pins). Site's tree lists 16 structures.
+      **Teensy 4.0** (small, on its pins). Site's tree lists the garage's
+      structures, `printer_1` the one printer among them.
 - [ ] Click `printer_1` in Site's tree → the Selected panel shows **Name,
       Position, Status** (editable: it is a structure) and then one row,
       **Part: ender3**. The tree keeps its height and scroll.
@@ -157,7 +159,8 @@ On your own server, in the garage.
       box, with the **Creality V4.2.2** board inside) and `gantry_system` (the
       uprights, the top bar, the belt tensioner boss at the Y rail's front).
       The printer's own body is not drawn at this level -- it is the picture
-      one level up, which is how the viewer treats every parent. *Zoom Out*.
+      one level up, which is how the viewer treats every parent. Back out:
+      Backspace, or the `garage` crumb of the header's trail.
 - [ ] In the parts library (`/viewer/sites/parts_library`): every part
       `apothecary parts list` names, in a grid; double-click `arduino_uno` → the breadcrumb reads
       `parts_library › arduino_uno`, the Selected panel carries the part's
@@ -226,31 +229,34 @@ On your own server, in the garage, with the page freshly loaded.
       reopens it. A shown tab's ⧉ floats Pictures the same way, and its ⇥
       docks it back into the strip. Reload → the layout is remembered.
 - [ ] Unfold Site's **SCAD** → the site's generated OpenSCAD.
-- [ ] Select `printer_1`, type 650 into its X → the toolbar says *1
-      violation*; Site lists *printer_1 and printer_2 overlap* at its top,
-      and both rows are red, saying so on hover. Double-click `workbench`,
-      then click the problem's row → the view steps back out to the root
-      and printer_1 is selected. Close Site, click the toolbar's count →
-      Site opens on its problems. Type 100 back → *Layout valid*.
+- [ ] Select `printer_1`, type 1160 into its X → the header's count says *1
+      violation*; Site shows one folded line at its top, *1 problem*, and
+      both rows are red, saying so on hover. Click the header's count → the
+      fold opens on *printer_1 and footpedal overlap*. Double-click
+      `workbench`, then click the problem's row → the view steps back out to
+      the root and printer_1 is selected. Close Site, click the header's
+      count → Site opens with its problems unfolded. Type 100 back → *Layout
+      valid*.
 - [ ] Right-click the canvas → the ring; **Panels** → a cell per panel
       (Site, Selected, Pictures, **Machine** (a board's, its log in it),
       Rail, and **Bench**, which opens on the Bench itself, then its verbs);
       a digit toggles one.
 - [ ] Select `printer_1`, press **m** → the node ring: Device, Control, Why
       this, Into, cardinals first, 5 backs out.
-- [ ] A **badge** floats above every pinned, connected board and follows it
-      as you orbit; with nothing pinned there is none. Pin something in
-      section 6 and come back: the badge appears; a click selects the node;
-      clicking a printer's badge opens the **machine popup** tethered to the
-      printer with a leader line, in front of the world; its ⇥ docks it into
-      the rail's strip as a tab, the tab's ⧉ floats it again, and its badge
-      tethers it again; drag the popup → the tether lets go; the popup's jog
-      moves the world's nozzle marker ahead of the next poll.
+- [ ] A ⚡ **badge** stands at every pinned, connected board and follows it
+      as you orbit; with nothing pinned there is none. Its words (state,
+      temperatures, the port) show on hover, or while its machine is
+      selected. Pin something in section 6 and come back: the badge appears;
+      a click selects its machine and opens its **Machine** in the rail's
+      strip, a tab beside Pictures and the Bench; the tab's ⧉ floats it over
+      the world, its ⇥ docks it back, and floated then closed it opens docked
+      again; a printer's Machine has no Flashing card; its jog moves the
+      world's nozzle marker ahead of the next poll.
 - [ ] `/firmware/monitor?port=<your port>` → the viewer, on the site the
-      port is pinned in, with its Machine open (pinned nowhere: the default
-      site, the Machine floating), the address keeping `?machine=`; and
+      port is pinned in (pinned nowhere: the default site), with its Machine
+      open in the rail's strip, the address keeping `?machine=`; and
       `/firmware` → the viewer with the **Bench** open, its toolchain naming
-      the config `~/.apothecary/tools/arduino-cli.yaml`. The toolbar has no
+      the config `~/.apothecary/tools/arduino-cli.yaml`. The header has no
       link to either: Panels › Bench and a board's Machine are the way.
 
 ## 5. The camera and the pictures
@@ -266,40 +272,48 @@ APOTHECARY_STATE_DIR=/tmp/apothecary-demo APOTHECARY_TOOLS_DIR=/tmp/apothecary-d
 uv run --project ~/Documents/apothecary apothecary serve --port 8001
 ```
 
-Open `http://127.0.0.1:8001/viewer/sites/garage`. The camera's verbs are the
-ring's, on the place it is pinned at; the pictures are listed in **Pictures**
-(its tab in the rail, or ring → Panels → Pictures), and every pin in Site's
-**Pinned**.
+Open `http://127.0.0.1:8001/viewer/sites/garage`. A camera is a part of the
+site: a place's ring adds one, and its own ring (right-click it, or select it
+and press `m`) holds its verbs; the pictures are listed in **Pictures** (its
+tab in the rail, or ring → Panels → Pictures), and every camera, view and
+board pin in Site's **Pinned**.
 
-- [ ] Right-click `workbench` in Site's tree → **Camera › Pin here ›
-      Allow** → the browser asks once; with one camera it is pinned at the
-      bench at once, with several the ring reopens at Pin here to choose
-      one. The status bar names the next step, *Camera › Take picture*; a
-      place badge and a frustum appear over the bench;
-      `curl -s http://127.0.0.1:8001/cameras?site=garage` → one camera, path
-      `workbench`, with the browser's label for it -- kept in
-      `/tmp/apothecary-demo/cameras.json` (0700), never anywhere else.
-      (Chromium's fake camera works too: launch it with
+- [ ] Right-click `workbench` in Site's tree → **Camera › Add here** →
+      `camera_1` stands above the bench looking straight down, selected and
+      in Site's tree: its body, its 📷 badge, the move arrows with a turn
+      ring and a tilt arc, and its pyramid down to the bench's top.
+      Right-click `camera_1` → **Device › Allow** → the browser asks once;
+      with one camera it is camera_1's device at once, with several the ring
+      reopens at Device to choose one. The status bar names the next step,
+      *Take picture (P)*; Selected's camera section names the device.
+      `curl -s http://127.0.0.1:8001/sites/garage/cameras/camera_1` → its
+      pose, its lens, where it lands (`workbench`) and the browser's id and
+      label for its device -- kept in `/tmp/apothecary-demo/camera_parts.json`,
+      never in the site. (Chromium's fake camera works too: launch it with
       `--use-fake-ui-for-media-stream --use-fake-device-for-media-stream`.)
-- [ ] **Camera › Live** → the camera shows on the bench's mat; select
-      something else → it stops.
-- [ ] Type a width (`800`) into Selected's *picture width, mm*, then
-      **Camera › Take picture** → the frame is kept and pinned at the bench
-      as a view, and the status bar names *Picture › Find shapes*;
+- [ ] camera_1's **Live** → *live where it looks*: its video in Selected, its
+      pyramid shown even with something else selected; **Still** → it stops.
+- [ ] **Take picture** -- camera_1's ring, Selected's button, or **P** with
+      it selected → the frame lies on the bench where the camera looks,
+      sized from its lens with no width typed, a thumbnail in Selected, and
+      the status bar names *Picture › Find shapes*;
       `ls /tmp/apothecary-pictures/captures/` → one PNG, and the folder is
-      `drwx------`. **Picture › Find shapes** → the shapes outlined on the
-      mat, and the status bar names Make.
-- [ ] The mark follows the focus: double-click `printer_1` → the badge and
-      the frustum are gone (not at the top-left corner of the canvas, not
-      anywhere); **Zoom Out** → both are back, above the bench, and the badge
-      is not dimmed when nothing stands between you and the bench top.
-- [ ] **Pictures** → every picture in the folder, newest first, each with a
-      thumbnail and where it is pinned as a view (the capture: *workbench*).
+      `drwx------`. The bench's **Picture › Find shapes** → the shapes
+      outlined on the picture, and the status bar names Make.
+- [ ] The camera stays in the garage: double-click `printer_1` → its badge
+      and body are gone (not at the top-left corner of the canvas, not
+      anywhere); Backspace, or the `garage` crumb → both are back, above the
+      bench, and the badge is not dimmed when nothing stands between you and
+      the camera; selected again, its pyramid shows.
+- [ ] **Pictures** → every picture in the folder as thumbnails, grouped by
+      the camera that took them (the capture under *camera_1*), the pictures
+      no camera took in a group of their own, last.
       **add** (its file picker) → choose two pictures of your own → the
       status bar says *added 2 picture(s)* and names choosing one and
       Picture › Folder; they are listed *· added*, *pinned nowhere*;
       `ls /tmp/apothecary-pictures/uploads/` → the two, named as you named
-      them, the folder `drwx------`. A row has no Pin here of its own.
+      them, the folder `drwx------`. A picture has no button that pins it:
+      the ring's Picture › Folder does.
 - [ ] Click one of their rows → it is chosen, highlighted, and the status
       bar names Picture › Folder; click it again, or press Escape → let go;
       click another → that one instead. Choose one, right-click `workbench`
@@ -314,8 +328,10 @@ ring's, on the place it is pinned at; the pictures are listed in **Pictures**
       *Groups*, the questions the machine thinks are worth your word
       (answered with buttons), and a `details` block.
 - [ ] Unfold Site's **Pinned** → every camera, view and board pinned, every
-      site's, each row naming its site. A camera's **Unpin** → the badge
-      leaves; `/cameras?site=garage` → `[]`. Pin a board from a piece's
+      site's, each row naming its site. A camera's **Remove** → it leaves the
+      world and Site's tree, its badge with it, and the pictures it took
+      stay; `curl -s http://127.0.0.1:8001/sites/garage/attached` → no
+      cameras. Pin a board from a piece's
       Device section (or by typed identity, `aa:bb:cc:dd:ee:ff`) → its row
       appears (fold and unfold Pinned if not); a pin whose site is gone --
       pin a node of an arrangement, then forget the arrangement -- shows
@@ -387,7 +403,7 @@ bare board):
       → `build_volume [220,220,250]`, `build_origin [90,100,95]`,
       `base_height 95`, the board inside the printer at (80, 90, 26).
 - [ ] Stop the demo server. `ls /tmp/apothecary-demo` → `firmware-state.json`,
-      `cameras.json`, `jobs/`, `leveling/`, `prints/`: everything the demo
+      `camera_parts.json`, `jobs/`, `leveling/`, `prints/`: everything the demo
       kept, in the folder you gave it, and nothing under your own
       `~/.apothecary`.
 
@@ -413,8 +429,8 @@ release), unchanged, plus these two that the bench did not have:
       census count (`apothecary census` says the same) and its screenshots
       show the one rail, Site and Selected stacked in it.
 - [ ] `/walkthrough/12-the-bench-as-it-is.md` → fourteen steps: a file from
-      elsewhere measured, the sidecar part, the Ender 3s, the mainboard, the
-      DevKitC, the camera placed at the bench and *not* following you into a
+      elsewhere measured, the sidecar part, the Ender 3, the mainboard, the
+      DevKitC, a camera added above the bench and *not* following you into a
       printer, what the browser put here taken back (added pictures, one of
       them chosen, a pin, a purge) with Pictures listing only what the page
       put in its own picture folder, the guard's refusal and the server's

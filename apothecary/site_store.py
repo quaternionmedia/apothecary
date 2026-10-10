@@ -7,7 +7,9 @@ each time, unlike /render's stateless Scene handling, which fits because a
 Scene has no state to keep between calls.
 
 Known limitations, stated rather than hidden: state is lost on server
-restart, and is not shared across multiple worker processes (each Uvicorn
+restart -- all but the cameras a person added, whose records are kept in the
+state folder and stood in the site as it is built again -- and is not shared
+across multiple worker processes (each Uvicorn
 worker would get its own store). Fine for a single-process dev server, not
 for anything beyond this prototype -- a real deployment would swap this for
 an actual persistence layer without changing the call sites below.
@@ -44,10 +46,18 @@ class SiteStore:
         return sorted(self._registry.keys())
 
     def get(self, name: str) -> Assembly:
-        """Return the persisted Site, building it from its factory on first access."""
+        """Return the persisted Site, building it from its factory on first access.
+
+        A site built is given its cameras, from their records in the state folder
+        (``apothecary/vision/cameras.py``): they are kept across a restart, and
+        stand where they stood."""
         factory, _validator = self._entry(name)
         if name not in self._sites:
-            self._sites[name] = factory()
+            from .vision.cameras import stand
+
+            site = factory()
+            stand(name, site)
+            self._sites[name] = site
         return self._sites[name]
 
     def loaded(self) -> List[str]:
@@ -55,12 +65,13 @@ class SiteStore:
         return list(self._sites)
 
     def validator(self, name: str) -> SiteValidator:
-        """The site's own check, with the overlaps that name a piece made from a picture.
+        """The site's own check, with the overlaps that name a piece made from a
+        picture or a camera.
 
         Only garage's validator runs the generic sibling overlap check; a piece
-        made from a picture stands in any site, and every caller of this --
-        the site routes, the ring's Reset, ``apothecary problems`` -- hears
-        about it overlapping, once per pair of structures."""
+        made from a picture and a camera stand in any site, and every caller of
+        this -- the site routes, the ring's Reset, ``apothecary problems`` --
+        hears about one overlapping, once per pair of structures."""
         _factory, validator = self._entry(name)
 
         def checked(site: Assembly) -> LayoutReport:
@@ -98,21 +109,28 @@ class SiteStore:
 
         Pieces made from pictures are layout edits and go with the rest, so
         their records go too and their shapes read as found again; the views
-        stay pinned (``apothecary/vision/views.py``)."""
+        stay pinned (``apothecary/vision/views.py``). A camera a person added
+        stays, stood back where it was added, as every other part is stood back
+        where the site's code puts it; its device and its lens stay, and so do
+        the pictures it took (``apothecary/vision/cameras.py``)."""
         factory, _validator = self._entry(name)
-        self._sites[name] = factory()
+        from .vision.cameras import stand
         from .vision.views import forget_made
 
+        site = factory()
         forget_made(name)
-        return self._sites[name]
+        stand(name, site, back=True)
+        self._sites[name] = site
+        return site
 
 
 def with_made_overlaps(name: str, site: Assembly, report: LayoutReport) -> LayoutReport:
-    """``report``, plus each overlap among the site's roots that names a made piece and
-    that the report does not already hold (garage's validator already holds them)."""
-    from .vision.views import made_names
+    """``report``, plus each overlap among the site's roots that names a made piece or
+    a camera and that the report does not already hold (garage's validator already
+    holds them)."""
+    from .vision.views import added_roots
 
-    made = made_names(name)
+    made = added_roots(name)
     if not made:
         return report
     held = {frozenset(v.structures) for v in report.violations if v.kind == "overlap"}

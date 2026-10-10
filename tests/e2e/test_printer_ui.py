@@ -6,8 +6,8 @@ unmatched), the in-process ``SimulatedPrinter`` mid-way through an SD print,
 and firmware state in a temp dir, so pins never touch ``~/.apothecary``.
 
 The printer monitor's address (``/firmware/monitor?port=``) opens the viewer
-with the board's Machine in front of the world, floating when the port is pinned
-nowhere: the tests that drove the monitor page drive that Machine, by the same ids.
+with the board's Machine in the rail's tab strip, pinned or pinned nowhere: the tests
+that drove the monitor page drive that Machine, by the same ids.
 
 Every test starts with nothing pinned, no file kept, the garage rebuilt and
 both links released (the simulator mid-print again, control disarmed), and
@@ -214,8 +214,8 @@ def test_pin_identify_open_poll_and_sync(page: Page, fresh_url: str):
     assert "printing" in badge.get_attribute("class")
     expect(page.locator("#status-select")).to_have_value("printing", timeout=WITHIN_A_POLL)
 
-    # The other printer is untouched, and the pinned port is no longer offered to it.
-    _select(page, "printer_2")
+    # The CNC router is untouched, and the pinned port is no longer offered to it.
+    _select(page, "cnc_router")
     expect(page.locator("#status-select")).to_have_value("idle")
     expect(page.locator("#selected-body .device-section")).not_to_contain_text("/dev/ttyFAKE1")
 
@@ -277,7 +277,7 @@ def test_query_from_panel_and_the_machine(page: Page, printer_url: str):
     _pin(printer_url, "printer_1")
     page.goto(f"{printer_url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
-    _select(page, "printer_3")
+    _select(page, "cnc_router")
     section = page.locator("#selected-body .device-section")
     # printer_1 holds /dev/ttyFAKE1; FAKE0 (the Uno) is free.
     expect(section.locator(".dev-pick")).to_be_visible(timeout=8000)
@@ -316,7 +316,7 @@ def test_manual_pin_poll_and_rescan(page: Page, printer_url: str):
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
 
     # A typed identity that nothing detects pins as "not connected" and offers Rescan.
-    _select(page, "printer_2")
+    _select(page, "cnc_router")
     section = page.locator("#selected-body .device-section")
     expect(section.locator(".dev-manual")).to_be_visible(timeout=8000)
     section.locator(".dev-manual").fill("/dev/ender")
@@ -341,7 +341,7 @@ def test_manual_pin_poll_and_rescan(page: Page, printer_url: str):
     scan_done = "() => !window.fractalViewer.bindingsInFlight"
     _hold_clock(page)
     page.wait_for_function(scan_done)
-    _select(page, "printer_2")
+    _select(page, "cnc_router")
     section.locator(".dev-rescan").click()
     expect(page.locator("#status")).to_contain_text("device(s) detected", timeout=8000)
     page.wait_for_function(scan_done)
@@ -1102,14 +1102,14 @@ def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
     expect(machine.locator("#ident")).to_contain_text("Marlin")
     # The module the monitor page was made of: the same ids, the same latch.
     expect(machine.locator("#control")).to_be_hidden()
-    assert page.evaluate("() => window.apothecaryMachine.host") == "popup"
+    assert page.evaluate("() => window.apothecaryMachine.host") == "world"
     # Its comms log is in it, the board's one log: no panel of its own.
     expect(page.locator(".panel[data-panel='log']")).to_have_count(0)
     log = machine
     expect(log.locator("#log")).to_contain_text("M115", timeout=8000)  # polls are hidden by default
     assert page.locator(".viewer-panel").bounding_box()["width"] >= 1280 / 3 - 2
 
-    # Armed, a jog from the popup moves the world's nozzle marker ahead of the poll.
+    # Armed, a jog from the Machine moves the world's nozzle marker ahead of the poll.
     machine.locator("#ctl").check()
     expect(machine.locator("#control")).to_be_visible(timeout=5000)
     machine.locator("#control button[data-cmd='M25']").click()

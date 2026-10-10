@@ -113,11 +113,11 @@ def test_expected_firmware_detects_drift(fake_arduino_cli, tmp_path, monkeypatch
     state = devices.get_state()
     sketch = find_sketch("footpedal", ROOT)
     build = tmp_path / "build"
-    (build / "footpedal").mkdir(parents=True)
-    (build / "footpedal" / "footpedal.ino.hex").write_bytes(b"v1")
-    record = devices.make_flash_record(
-        "/dev/ttyX", sketch, "arduino:avr:uno", build / "footpedal", state=state
-    )
+    # A build's folder is the sketch's id, its toolchain in it: footpedal@arduino.
+    out = build / sketch.id
+    out.mkdir(parents=True)
+    (out / "footpedal.ino.hex").write_bytes(b"v1")
+    record = devices.make_flash_record("/dev/ttyX", sketch, "arduino:avr:uno", out, state=state)
     state.record_flash(record)
     dev = DeviceInfo(port="/dev/ttyX")
 
@@ -125,8 +125,9 @@ def test_expected_firmware_detects_drift(fake_arduino_cli, tmp_path, monkeypatch
     assert (
         fresh.record.sketch == "footpedal" and not fresh.source_changed and not fresh.build_changed
     )
+    assert fresh.record.sketch_id == "footpedal@arduino" and fresh.record.toolchain == "arduino"
 
-    (build / "footpedal" / "footpedal.ino.hex").write_bytes(b"v2")
+    (out / "footpedal.ino.hex").write_bytes(b"v2")
     assert devices.expected_firmware(dev, build, state).build_changed
 
     monkeypatch.setattr(devices, "source_sha256", lambda s: "different")

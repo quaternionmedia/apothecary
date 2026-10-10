@@ -224,7 +224,8 @@ def test_the_canvas_ring_offers_the_sites_and_the_groups():
 def test_a_ring_with_nothing_to_group_simply_does_not_offer_it():
     ring = resolve(Context(pointing=Pointing.CANVAS), _photo_site())
     assert "Site" not in [option.id for option in ring.options]
-    assert "fit" in [option.id for option in ring.options]
+    view = next(option for option in ring.options if option.id == "view")
+    assert "fit" in [option.id for option in view.children]
 
 
 @pytest.mark.parametrize("how_many", [1, 8, 9, 20, 64])
@@ -970,7 +971,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         groups=["wall", "furniture"],
     )
     panels = next(o for o in root.options if o.label == "Panels")
-    assert panels.cell == 9 and panels.children is not None  # after Pieces, Site, Group, Fit
+    assert panels.cell == 9 and panels.children is not None  # after Pieces, Site, Group, View
     # The canvas ring's Camera became Pictures, in the same seat.
     pictures = next(o for o in root.options if o.label == "Pictures")
     assert pictures.cell == 3 and [(c.label, c.action, c.cell) for c in pictures.children] == [
@@ -994,7 +995,6 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Machine", "panel:toggle:machine", 4),
         ("Rail", "panel:rail:toggle", 9),
         ("Bench", None, 3),
-        ("View", None, 1),  # the header's View menu, after the Bench: nothing above moved
     ]
     assert address_of(root, "panel:site") == "98"  # by the option's id
     assert address_of(root, "panel:pictures") == "92"
@@ -1003,7 +1003,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     bench = next(c for c in panels.children if c.label == "Bench")
     assert [(c.label, c.action, c.cell) for c in bench.children] == [
         ("Bench", "panel:toggle:bench", 8),
-        ("Install", "bench:install", 6),
+        ("Install", None, 6),
         ("Compile", "bench:compile", 2),
         ("Upload", "bench:upload", 4),
         ("Raw flash", "bench:esptool", 9),
@@ -1013,6 +1013,15 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     ]
     assert address_of(root, "panel:bench") == "938"
     assert address_of(root, "bench:compile") == "932"
+    # Install is a ring of the toolchain modules, from their registry: each module's
+    # install has an address, and arduino-cli's moved one level deeper (it was 936).
+    install = bench.children[1]
+    assert [(c.label, c.action, c.cell) for c in install.children] == [
+        ("Arduino", "bench:install:arduino", 8),
+        ("Rust ESP32", "bench:install:rust-esp32", 6),
+    ]
+    assert address_of(root, "bench:install:arduino") == "9368"
+    assert address_of(root, "bench:install:rust-esp32") == "9366"
     # A core by its architecture, one leaf per suggested core.
     cores = bench.children[6]
     assert [c.label for c in cores.children] == ["AVR", "ESP32", "ESP8266", "RP2040", "SAMD"]
@@ -1021,7 +1030,8 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     for pid in ("site", "pictures", "machine", "bench"):
         assert carried_by(f"panel:toggle:{pid}").name == "VIEWER"
     for verb in (
-        "install",
+        "install:arduino",
+        "install:rust-esp32",
         "compile",
         "upload",
         "esptool",
@@ -1045,14 +1055,15 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         assert f'data-panel="{gone}"' not in page and f"register('{gone}'" not in page
 
 
-def test_the_header_s_view_menu_is_a_group_of_the_canvas_ring_under_panels():
-    """The header's ⚙ View menu is ring-backed: Snap to grid, Detail (Full, Black box,
-    Dot), Outlines and Select walls are cells of Panels › View, seated after the Bench
-    so no address learned under Panels moves, at the root and inside a piece alike
-    (inside one, the canvas ring's top already holds eight); the page carries them."""
+def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
+    """The header's ⚙ View menu is ring-backed by a cell of the canvas ring's own, in
+    the seat Fit had (the owner's choice of 2026-10-04): View › Fit first, then Snap to
+    grid, Detail (Full, Black box, Dot), Outlines and Select walls; at the root and
+    inside a piece alike, eight or fewer at the top; Panels is its six again. The
+    page carries them all."""
     from apothecary.menu import carried_by
 
-    for targets, panels_cell in (([], "9"), (["printer_1"], "3")):
+    for targets, view_cell in (([], "4"), (["printer_1"], "9")):
         root = resolve(
             Context(pointing=Pointing.CANVAS, targets=targets),
             _garage(),
@@ -1060,23 +1071,28 @@ def test_the_header_s_view_menu_is_a_group_of_the_canvas_ring_under_panels():
             groups=["wall", "furniture"],
         )
         assert len(root.options) <= 8
-        view = next(o for o in next(o for o in root.options if o.label == "Panels").children if o.label == "View")
+        assert "fit" not in [o.id for o in root.options]
+        view = next(o for o in root.options if o.label == "View")
+        assert str(view.cell) == view_cell and view.action is None
         assert [(c.label, c.action, c.cell) for c in view.children] == [
-            ("Snap to grid", "view:snap", 8),
-            ("Detail", None, 6),
-            ("Outlines", "view:outlines", 2),
-            ("Select walls", "view:walls", 4),
+            ("Fit", "fit", 8),
+            ("Snap to grid", "view:snap", 6),
+            ("Detail", None, 2),
+            ("Outlines", "view:outlines", 4),
+            ("Select walls", "view:walls", 9),
         ]
-        assert [(c.label, c.action) for c in view.children[1].children] == [
+        assert [(c.label, c.action) for c in view.children[2].children] == [
             ("Full", "view:detail:full"),
             ("Black box", "view:detail:box"),
             ("Dot", "view:detail:dot"),
         ]
-        assert address_of(root, "view:snap") == f"{panels_cell}18"
-        assert address_of(root, "view:detail:box") == f"{panels_cell}166"
-        assert address_of(root, "view:walls") == f"{panels_cell}14"
-        assert address_of(root, "panel:bench") == f"{panels_cell}38"  # the Bench stays put
-    for action in ("view:snap", "view:detail:dot", "view:outlines", "view:walls"):
+        assert address_of(root, "fit") == f"{view_cell}8"
+        assert address_of(root, "view:snap") == f"{view_cell}6"
+        assert address_of(root, "view:detail:box") == f"{view_cell}26"
+        assert address_of(root, "view:walls") == f"{view_cell}9"
+        panels = next(o for o in root.options if o.label == "Panels")
+        assert "View" not in [c.label for c in panels.children]
+    for action in ("fit", "view:snap", "view:detail:dot", "view:outlines", "view:walls"):
         assert carried_by(action).name == "VIEWER"
 
 
@@ -1148,9 +1164,9 @@ def test_a_host_appends_camera_and_picture_and_no_existing_cell_moves():
         ("Camera", 9),
         ("Picture", 3),
     ]
-    # With nothing pinned or allowed: Pin here › Allow, and Picture › Add.
-    assert _ring_labels(_group(bare, "Camera")) == [("Pin here", 8)]
-    assert _group(bare, "Camera", "Pin here", "Allow").action == "camera:allow"
+    # A camera is added above a host, and a picture added at it.
+    assert _ring_labels(_group(bare, "Camera")) == [("Add here", 8)]
+    assert _group(bare, "Camera", "Add here").action == "camera:add-here"
     assert [c.action for c in _group(bare, "Picture").children] == ["picture:add"]
     # A printer with a board pinned keeps its Device cell where it was.
     printer = resolve(
@@ -1238,7 +1254,7 @@ def test_the_floor_is_reached_from_the_canvas_ring_with_nothing_pinned():
     floor = _group(ring, "Pictures", "Floor")
     assert _ring_labels(floor) == [("Fit", 8), ("Camera", 6), ("Picture", 2)]
     assert _group(floor, "Fit").action == "fit:@floor"
-    assert _group(floor, "Camera", "Pin here", "Allow").action == "camera:allow:@floor"
+    assert _group(floor, "Camera", "Add here").action == "camera:add-here:@floor"
     assert [c.action for c in _group(floor, "Picture").children] == [None]  # Folder
     assert (
         _group(floor, "Picture", "Folder", "bench_top").action == "picture:pin:bench_top.png:@floor"
@@ -1252,35 +1268,80 @@ def test_the_floor_is_reached_from_the_canvas_ring_with_nothing_pinned():
         carried_by(action)
 
 
-def test_a_host_whose_camera_is_another_browsers_offers_pin_and_unpin_only():
+def _with_camera():
+    """The garage with a camera part standing above its bench, as Add here stands one."""
+    from apothecary.models.vectors import Vector3D
+    from apothecary.vision import cameras
+
+    garage = _garage()
+    pose = cameras.Pose(position=Vector3D(x=900.0, y=300.0, z=1380.0))
+    record = cameras.Camera(
+        site="garage", name="camera_1", pose=pose, added=pose, added_at="2026-10-04T00:00:00"
+    )
+    garage.children.append(cameras.node(record))
+    return garage
+
+
+def test_a_camera_part_has_its_own_ring_and_its_device_decides_live_and_take_picture():
+    """A camera's ring: the cells every node has, then Device › this browser's cameras
+    (Allow until the browser has been asked), Live or Still and Take picture when its
+    device is this browser's, Remove, and Part last. Never Camera › Add here or
+    Picture: a camera is no host."""
     from apothecary.menu import CameraSeen, PictureContext, Place
 
+    on_camera = Context(pointing=Pointing.NODE, targets=["camera_1"])
+    unasked = resolve(on_camera, _with_camera(), picture=PictureContext(camera_parts=["camera_1"]))
+    assert [(o.label, o.cell) for o in unasked.options] == [
+        ("Zoom in", 8),
+        ("Move", 6),
+        ("Why this", 2),
+        ("Device", 4),
+        ("Remove", 9),
+        ("Part", 3),
+    ]
+    assert _group(unasked, "Device", "Allow").action == "camera:allow"
+    assert _group(unasked, "Remove").action == "camera:remove"
+    assert _group(unasked, "Remove").destructive
+    # Another browser's device: this browser's cameras to choose, and no Live.
     theirs = CameraSeen(id="another_browsers_camera", label="their cam")
     told = PictureContext(
         cameras=[CameraSeen(id="bench_cam", label="bench cam")],
         asked=True,
+        camera_parts=["camera_1"],
         here=Place(camera=theirs),
     )
-    ring = resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=told)
-    camera = _group(ring, "Camera")
-    assert _ring_labels(camera) == [("Pin here", 8), ("Unpin", 6)]
-    assert [c.action for c in _group(camera, "Pin here").children] == ["camera:pin:bench_cam"]
-    # This browser's own: Live (or Still while live), Take picture, then Unpin.
-    mine = resolve(
-        Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=_context()
-    )
-    assert [c.action for c in _group(mine, "Camera").children] == [
-        None,
-        "camera:live",
-        "camera:take-picture",
-        "camera:unpin",
+    ring = resolve(on_camera, _with_camera(), picture=told)
+    assert [o.label for o in ring.options] == [
+        "Zoom in",
+        "Move",
+        "Why this",
+        "Device",
+        "Remove",
+        "Part",
     ]
-    live = resolve(
-        Context(pointing=Pointing.NODE, targets=["workbench"]),
-        _garage(),
-        picture=_context(live=True),
+    assert [c.action for c in _group(ring, "Device").children] == ["camera:device:bench_cam"]
+    # This browser's own, marked in Device: Live (or Still while live), Take picture.
+    mine = _context()
+    mine.camera_parts = ["camera_1"]
+    ring = resolve(on_camera, _with_camera(), picture=mine)
+    assert [(o.label, o.action, o.cell) for o in ring.options][3:] == [
+        ("Device", None, 4),
+        ("Live", "camera:live", 9),
+        ("Take picture", "camera:take-picture", 3),
+        ("Remove", "camera:remove", 1),
+        ("Part", None, 7),
+    ]
+    assert len(ring.options) == MOST_OPTIONS
+    assert [c.marked for c in _group(ring, "Device").children] == [True]
+    mine.here.live = True
+    assert _group(resolve(on_camera, _with_camera(), picture=mine), "Still").action == (
+        "camera:still"
     )
-    assert _group(live, "Camera", "Still").action == "camera:still"
+    # A camera is no host, even with a board's port told about it.
+    labels = [
+        o.label for o in resolve(on_camera, _with_camera(), device=PRINTER, picture=mine).options
+    ]
+    assert "Camera" not in labels and "Picture" not in labels and labels.count("Device") == 1
 
 
 def test_the_picture_group_offers_make_only_on_a_sized_view_and_forget_only_on_a_kept_one():
@@ -1380,34 +1441,38 @@ def test_find_shapes_is_the_step_after_a_view_is_pinned_and_appended_after_unpin
     ]
 
 
-def test_keep_is_gone_from_every_ring_and_take_picture_is_in_its_place():
-    """Camera › Keep went: Take picture always pins a view. A camera of this browser's
-    holds Pin here, Live (or Still), Take picture and Unpin, at a host and at the floor."""
+def test_pin_here_and_unpin_are_gone_and_a_host_and_the_floor_add_a_camera_here():
+    """A camera is no longer pinned at a place: a host's and the floor's Camera holds
+    Add here alone, and Take picture is a camera part's own (Keep went before)."""
     told = _context(views=[_view()], drawn="view_1")
     told.finders = ["plain", "stated"]
+    told.camera_parts = ["camera_1"]
     rings = [
-        resolve(Context(pointing=Pointing.CANVAS), _garage(), picture=told),
-        resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=told),
+        resolve(Context(pointing=Pointing.CANVAS), _with_camera(), picture=told),
+        resolve(
+            Context(pointing=Pointing.NODE, targets=["workbench"]), _with_camera(), picture=told
+        ),
         resolve(
             Context(pointing=Pointing.NODE, targets=["printer_1"]),
-            _garage(),
+            _with_camera(),
             device=PRINTER,
             picture=told,
         ),
     ]
     actions = set(every_action(rings))
-    assert not [a for a in actions if a.startswith("camera:keep")], sorted(actions)
-    assert {"camera:take-picture", "camera:take-picture:@floor"} <= actions
+    for gone in ("camera:keep", "camera:pin", "camera:unpin", "camera:take-picture"):
+        assert not [a for a in actions if a.startswith(gone)], (gone, sorted(actions))
+    assert {"camera:add-here", "camera:add-here:@floor"} <= actions
     for ring in rings:
         for address in every_address(ring):
-            assert walk(ring, address).label != "Keep", address
-    camera = _group(rings[1], "Camera")
-    assert [(c.label, c.cell) for c in camera.children] == [
-        ("Pin here", 8),
-        ("Live", 6),
-        ("Take picture", 2),
-        ("Unpin", 4),
-    ]
+            assert walk(ring, address).label not in ("Keep", "Pin here"), address
+    assert [(c.label, c.cell) for c in _group(rings[1], "Camera").children] == [("Add here", 8)]
+    floor = _group(rings[0], "Pictures", "Floor", "Camera")
+    assert [(c.label, c.cell) for c in floor.children] == [("Add here", 8)]
+    on_camera = resolve(
+        Context(pointing=Pointing.NODE, targets=["camera_1"]), _with_camera(), picture=told
+    )
+    assert "camera:take-picture" in set(every_action([on_camera]))
 
 
 @pytest.mark.parametrize("how_many", [65, 500])
@@ -1574,16 +1639,18 @@ def test_make_make_all_drop_and_a_made_pieces_word_are_the_servers_and_the_rest_
         "picture:more",
         "picture:views",
         "picture:purge",
-        "camera:pin:bench_cam",
-        "camera:allow:@floor",
+        "camera:device:bench_cam",
+        "camera:allow",
         "camera:live",
         "camera:still",
         "camera:take-picture",
-        "camera:unpin",
         "camera:gather",
         "fit:@floor",
     ):
         assert carried_by(action).name == "VIEWER", action
+    # A camera added or removed is a root structure added or taken away: the server's.
+    for action in ("camera:add-here", "camera:add-here:@floor", "camera:remove"):
+        assert carried_by(action).name == "SERVER", action
     # A picture whose name reads like a server verb is still only pinned.
     assert carried_by("picture:pin:make:3.png").name == "VIEWER"
 

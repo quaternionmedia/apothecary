@@ -285,7 +285,43 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # what a crumb does now (rootCrumb:click:goUpTo, crumb:click:goUpTo), going up one
 # level as Up does and further as the trail did, so jumpTo keeps its meaning for the
 # page's own callers.
-VIEWER_CEILING = 115
+#
+# After Phase 2, the owner's answer: View is a cell of the canvas ring's own, in the
+# seat Fit had, and Fit is its first cell. The same counts; no control or listener
+# was added or re-keyed. Ring addresses moved, at the root of a site with groups (one
+# cell on, at 9, inside a piece): Fit 4 to 48; Snap to grid 918 to 46; Detail 916 to
+# 42 (Full 9168 to 428, Black box 9166 to 426, Dot 9162 to 422); Outlines 912 to 44;
+# Select walls 914 to 49. Panels holds its six again, none of them moved.
+#
+# Cameras-and-clutter Phase 3, a camera in the world. Before: 115 controls of its
+# own, 63 ring-backed (54.8%), 78 places the page listens. After: 116, 64
+# ring-backed (55.2%), 85 places. A camera is a part of its site now, not a pin at a
+# host, and its verbs are its own ring's. Added: Selected's camera section's Take
+# picture (cam-take, and its listener takeBtn:click:takePictureWith), ring-backed by
+# the camera's Take picture, as P is (window:keydown:onPictureKey), a key as ? is;
+# its pictures, a list, one clicked drawn where it landed (thumbList:click:closest);
+# and its turn ring and tilt arc, a drag as the move arrows are -- taken hold of
+# ahead of the arrows and the orbit (canvas:pointerdown:onCameraHandleDown), aimed as
+# the pointer goes (canvas:pointermove:onCameraDragMove), the aim kept on letting go
+# (canvas:pointerup:onCameraDragEnd). A camera's 📷 badge selects it as a place's ▣
+# badge selects the place (a second badge:click:onSelect). Renamed: Pinned's camera
+# row removes the camera (pinned-camera-unpin is pinned-camera-remove), still a
+# take-back kept beside the ring. Ring addresses moved: on a host's ring, Camera
+# holds Add here alone, in the cell Pin here had; Live, Take picture and Unpin left
+# it for the camera's own ring, which is new: Device, Live (Still while live), Take
+# picture, Remove and Part › Edit after a piece's Zoom in, Move and Why this. The
+# ceiling follows the count up by one, for a button the plan asks for.
+#
+# Firmware in Rust (docs/plans/rust-2026-10-08.md): one control of its own and one
+# place the page listens more (`apothecary census` counts them). The Bench's toolchain
+# card draws every toolchain module beside arduino-cli, each with its own Install
+# (module-install, and its one listener, modulesEl:click:closest). The owner's answer
+# of 2026-10-10 made Panels › Bench › Install a ring of the modules, drawn from their
+# registry, so each module's Install is ring-backed by its cell there (Rust ESP32,
+# 9366) and arduino-cli's moved one level deeper (Arduino, 9368; it was 936); nothing
+# else moved. The Rust sketches need no control of their own: they are rows of the
+# sketch drop-down, and choosing one hides the board box it takes none of.
+VIEWER_CEILING = 117
 
 
 def test_the_viewer_stays_under_its_ceiling():
@@ -566,20 +602,21 @@ def test_every_listener_in_the_viewers_marks_modules_is_classified():
 
 
 def test_the_rows_take_backs_are_counted_and_not_claimed_as_ring_backed():
-    """Unpin a camera, a view or a board's pin from Site's Pinned, forget a kept
-    picture from Pictures: the lasting exception for taking a thing back from the
-    list that shows it, counted on the meter and never ring-backed, since a row
-    can name another site's pin that a ring cell reaches only from that site."""
+    """Remove a camera, unpin a view or a board's pin from Site's Pinned, forget a
+    kept picture from Pictures: the lasting exception for taking a thing back from
+    the list that shows it, counted on the meter and never ring-backed, since a row
+    can name another site's camera or pin that a ring cell reaches only from that
+    site."""
     taken = census.take()
     by_name = {f.name: f for f in taken.controls_of_its_own()}
-    for name in ("pinned-camera-unpin", "pinned-view-unpin", "pinned-board-unpin"):
+    for name in ("pinned-camera-remove", "pinned-view-unpin", "pinned-board-unpin"):
         assert by_name[name].source == "pinned.js"
         assert by_name[name].ring_action is None, name
         assert by_name[name].taken_back, name
     assert by_name["pictures-forget"].source == "picture_list.js"
     assert {f.name for f in taken.taken_back()} == {
         "pictures-forget",
-        "pinned-camera-unpin",
+        "pinned-camera-remove",
         "pinned-view-unpin",
         "pinned-board-unpin",
     }
@@ -600,6 +637,7 @@ def test_the_rows_take_backs_are_counted_and_not_claimed_as_ring_backed():
         "look-unpin-one",
         "pic-purge",
         "pin-unpin",
+        "pinned-camera-unpin",
     ):
         assert gone not in by_name
         assert gone not in census.CONTROLS and gone not in census.RING_BACKED
@@ -748,7 +786,7 @@ def test_one_page_is_counted_and_the_retired_pages_left_nothing_behind():
 def test_the_header_is_one_row_with_its_view_menu_on_the_ring():
     """Load and Zoom Out are gone from the header, counted nowhere; Snap to grid,
     Detail, Assembly outlines and Walls selectable are in the View menu, each backed
-    by a cell of the canvas ring's Panels › View that the ring really produces."""
+    by a cell of the canvas ring's View that the ring really produces."""
     from apothecary.menu import Context, Pointing, resolve
 
     taken = census.take()

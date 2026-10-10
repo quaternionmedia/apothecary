@@ -279,7 +279,7 @@ def test_a_devkit_has_a_machine_with_what_it_should_run_and_what_it_says(page: P
     expect(machine.locator("#c-board")).to_contain_text(UNO)
     expect(machine.locator("#c-board")).to_contain_text("Arduino Uno")
     sketch = machine.locator("#c-sketch")
-    expect(sketch).to_contain_text("should run footpedal")
+    expect(sketch).to_contain_text("should run footpedal@arduino")
     # Listen: the board's serial output, and the hello it says, in the one log.
     log = machine.locator("#log")
     machine.locator("#listen").click()
@@ -460,7 +460,7 @@ def test_device_flash_opens_the_machine_at_its_card_and_uploads_then_identifies(
     card = machine.locator("#flash-card")
     expect(card).to_be_visible(timeout=8000)
     expect(page.locator("#status")).to_contain_text("⌗22")
-    expect(card.locator(".sketch-select")).to_have_value("footpedal", timeout=10000)
+    expect(card.locator(".sketch-select")).to_have_value("footpedal@arduino", timeout=10000)
     expect(card.locator(".fqbn-input")).to_have_value("arduino:avr:uno")
     expect(card.locator(".port-select")).to_be_hidden()  # this board's port, no other
     expect(card.locator(".upload-btn")).to_be_enabled(timeout=5000)
@@ -471,9 +471,11 @@ def test_device_flash_opens_the_machine_at_its_card_and_uploads_then_identifies(
     expect(card.locator(".task-title")).to_contain_text("Upload footpedal", timeout=10000)
     expect(card.locator(".task-title")).to_contain_text("succeeded", timeout=10000)
     expect(card.locator(".task-log")).to_contain_text("fake upload")
-    assert dialogs == ['Compile and upload "footpedal" to /dev/ttyFAKE0?'], dialogs
+    assert dialogs == ['Compile and upload "footpedal@arduino" to /dev/ttyFAKE0?'], dialogs
     log = machine.locator("#log")
-    expect(log).to_contain_text("upload of footpedal (arduino:avr:uno): succeeded", timeout=5000)
+    expect(log).to_contain_text(
+        "upload of footpedal@arduino (arduino:avr:uno): succeeded", timeout=5000
+    )
     expect(log).to_contain_text("listening 6 s for the sketch's hello", timeout=5000)
     expect(log).to_contain_text("heard fake_blink say hello", timeout=20000)
     expect(machine.locator("#c-sketch")).to_contain_text("observed fake_blink")

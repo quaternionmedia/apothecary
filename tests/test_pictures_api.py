@@ -324,33 +324,53 @@ def test_a_gathering_is_at_most_forty_pictures(pictures):
     assert r.status_code == 422 and "40 is the most" in r.json()["detail"]
 
 
-def test_cameras_are_placed_in_the_world_and_kept(pictures):
-    c = TestClient(app)
-    assert c.get("/cameras").json() == []
-    r = c.put(
-        "/cameras/abc123", json={"label": "Bench webcam", "site": "garage", "path": "workbench"}
-    )
-    assert r.status_code == 200 and r.json()["path"] == "workbench"
-    assert (
-        c.put(
-            "/cameras/abc123", json={"label": "x", "site": "garage", "path": "nowhere"}
-        ).status_code
-        == 404
-    )
-    assert (
-        c.put(
-            "/cameras/bad id!", json={"label": "x", "site": "garage", "path": "workbench"}
-        ).status_code
-        == 422
-    )
-    listed = c.get("/cameras", params={"site": "garage"}).json()
-    assert [cam["id"] for cam in listed] == ["abc123"] and listed[0]["label"] == "Bench webcam"
-    assert c.get("/cameras", params={"site": "parts_library"}).json() == []
-    assert (pictures / "state" / "cameras.json").is_file()
-    assert c.delete("/cameras/abc123").json()["unplaced"] == "abc123"
-    assert c.delete("/cameras/abc123").status_code == 404
-    # Written whole through a temporary file, and none is left behind.
-    assert [p.name for p in (pictures / "state").iterdir()] == ["cameras.json"]
+def test_cameras_are_parts_kept_in_the_state_folder_and_the_old_file_is_not_read(pictures):
+    """A camera's device and label are kept on this machine, in the state folder,
+    the person's alone; the cameras file the pins were kept in is neither read nor
+    written, and the old routes are gone."""
+    import json
+    import stat
+
+    state = pictures / "state"
+    state.mkdir()
+    old = {"abc123": {"id": "abc123", "label": "Old pin", "site": "garage", "path": "workbench"}}
+    (state / "cameras.json").write_text(json.dumps(old))
+    before = (state / "cameras.json").read_bytes()
+    _site_store.reset("garage")
+    try:
+        c = TestClient(app)
+        assert c.get("/sites/garage/attached").json()["cameras"] == []
+        for retired in (
+            c.get("/cameras"),
+            c.put("/cameras/abc123", json={}),
+            c.delete("/cameras/x"),
+        ):
+            assert retired.status_code in (404, 405), retired.text
+        added = c.post("/sites/garage/cameras", json={"host": "workbench"})
+        assert added.status_code == 201, added.text
+        name = added.json()["camera"]["name"]
+        told = c.put(
+            f"/sites/garage/cameras/{name}/device",
+            json={"id": "abc123", "label": "FaceTime HD Camera (Built-in)"},
+        )
+        assert told.status_code == 200 and told.json()["device"]["label"].startswith("FaceTime")
+        refused = c.put(
+            f"/sites/garage/cameras/{name}/device", json={"id": "bad id!", "label": "x"}
+        )
+        assert refused.status_code == 422
+        kept = state / "camera_parts.json"
+        assert "FaceTime" in kept.read_text() and stat.S_IMODE(kept.stat().st_mode) == 0o600
+        # The label stays on this machine's records, and never enters the site.
+        assert "FaceTime" not in json.dumps(c.get("/sites/garage").json())
+        assert (state / "cameras.json").read_bytes() == before
+        # Written whole through a temporary file, and none is left behind.
+        assert sorted(p.name for p in state.iterdir()) == ["camera_parts.json", "cameras.json"]
+        assert c.delete(f"/sites/garage/cameras/{name}").json()["removed"] == name
+        assert c.delete(f"/sites/garage/cameras/{name}").status_code == 404
+    finally:
+        from test_views_api import forget_cameras
+
+        forget_cameras()
 
 
 def test_a_gathering_never_covers_over_a_built_in_site(pictures):

@@ -29,6 +29,7 @@ from .models import Picture, ScaleReference
 if TYPE_CHECKING:  # pragma: no cover - for readers and type checkers only
     from ..vocabulary import WordList, WordShape
     from .models import FoundShape
+    from .projection import Laid
 
 # How thick a flat shape is assumed to be, as a fraction of its shorter side.
 # A guess, and named as one everywhere it lands.
@@ -213,6 +214,7 @@ def piece_from_shape(
     finder: str,
     size: Optional["WordShape"] = None,
     words: Optional["WordList"] = None,
+    laid: Optional["Laid"] = None,
 ) -> Tuple[Assembly, Provenance]:
     """One found shape as one piece, and how it came to be.
 
@@ -220,20 +222,29 @@ def piece_from_shape(
     the picture's centre in millimetres: ``((cx - 0.5) * W, (0.5 - cy) * H)``,
     where ``W`` is ``per_unit`` and ``H`` is ``tallness * per_unit``. Without
     ``per_unit`` the numbers are fractions of the picture and the piece is
-    marked ``unsized``. ``size`` replaces the sides and thickness read from the
-    shape (a person's parameters); ``word`` and ``reason`` are the word the
-    shape is made as and why, whether the table chose it or a person did.
+    marked ``unsized``. ``laid`` -- where the shape lies on a view's surface,
+    read through the view's one mapping (``projection.lay``) -- replaces all
+    three: the piece's offset is where the shape's middle lands, its sides are
+    the shape's there, and it is turned as the shape lies. ``size`` replaces the
+    sides and thickness read from the shape (a person's parameters); ``word``
+    and ``reason`` are the word the shape is made as and why, whether the table
+    chose it or a person did.
     """
     from ..vocabulary import WordShape, starter_words
 
     vocabulary = starter_words() if words is None else words
     chosen = vocabulary.get(word)
-    sized = per_unit is not None
-    factor = per_unit if sized else 1.0
+    sized = per_unit is not None or laid is not None
+    factor = per_unit if per_unit is not None else 1.0
 
-    width, depth, thickness = built_sides(shape, per_unit, tallness, size)
+    if laid is not None and size is None:
+        width, depth = laid.width, laid.depth
+        thickness = thickness_guess(width, depth)
+    else:
+        width, depth, thickness = built_sides(shape, per_unit, tallness, size)
     if size is not None:
         sized = sized and size.sized
+    turned_degrees = laid.turned_degrees if laid is not None else shape.turned_degrees
 
     piece = chosen.make(name, WordShape(width=width, depth=depth, height=thickness, sized=sized))
 
@@ -246,24 +257,27 @@ def piece_from_shape(
         # A picture counts its angles the other way round from a build,
         # because the downward direction is flipped just below. Turning the
         # other way puts the piece back the way it looked.
-        if shape.turned_degrees:
+        if turned_degrees:
             piece.base = Rotate(
-                a=Vector3D(x=0.0, y=0.0, z=-shape.turned_degrees),
+                a=Vector3D(x=0.0, y=0.0, z=-turned_degrees),
                 children=[piece.base],
             )
 
     centre = shape.centre
-    piece.position = Vector3D(
-        x=(centre.x - 0.5) * factor,
-        # A picture counts downward from the top; a build counts away from
-        # the front. Flipping here keeps what you see and what you build the
-        # same way up.
-        y=(0.5 - centre.y) * tallness * factor,
-        z=0.0,
-    )
+    if laid is not None:
+        piece.position = Vector3D(x=laid.centre[0], y=laid.centre[1], z=0.0)
+    else:
+        piece.position = Vector3D(
+            x=(centre.x - 0.5) * factor,
+            # A picture counts downward from the top; a build counts away from
+            # the front. Flipping here keeps what you see and what you build the
+            # same way up.
+            y=(0.5 - centre.y) * tallness * factor,
+            z=0.0,
+        )
     # The piece now straddles its own position, so its extent does too, and
     # a turned piece's extent is the box of it as turned.
-    piece.footprint = turned_box(width, depth, thickness, shape.turned_degrees) if sized else None
+    piece.footprint = turned_box(width, depth, thickness, turned_degrees) if sized else None
     piece.status = None if sized else "unsized"
     # The viewer already gathers nodes by category and offers them as
     # filters. Naming the word here means grouping by word costs nothing:
@@ -287,7 +301,7 @@ def piece_from_shape(
         confidence=shape.confidence,
         origin=shape.origin,
         sized=sized,
-        turned_degrees=shape.turned_degrees,
+        turned_degrees=turned_degrees,
         thickness_guessed=guessed,
     )
     return piece, about

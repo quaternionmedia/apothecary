@@ -62,14 +62,16 @@ export function printerLine(st) {
 // view; `observed` the sketch name its hello banner gave, or null.
 export function sketchWords(expected, observed) {
     const rec = expected && expected.record;
-    const should = rec ? (rec.sketch || `raw images: ${(rec.images || []).join(", ")}`) : null;
+    // Which build the board should run, named with its toolchain (esp32_blink@rust-esp32);
+    // what it is heard saying is the sketch's name alone, which either build says.
+    const should = rec ? (rec.sketch_id || rec.sketch || `raw images: ${(rec.images || []).join(", ")}`) : null;
     const drift = [];
     if (expected && expected.source_changed) drift.push("sketch source edited since this upload");
     if (expected && expected.build_changed) drift.push("a newer build exists that was never uploaded");
     if (expected && expected.sketch_missing) drift.push("that sketch no longer exists under parts/");
     const verdict = !observed || !rec || !rec.sketch ? "unknown" : (observed === rec.sketch ? "match" : "mismatch");
     let short;
-    if (observed && should) short = verdict === "match" ? `runs ${observed} ✓` : `runs ${observed}, should run ${should}`;
+    if (observed && should) short = verdict === "match" ? `runs ${should} ✓` : `runs ${observed}, should run ${should}`;
     else if (observed) short = `runs ${observed}`;
     else if (should) short = `should run ${should}`;
     else short = "nothing flashed from apothecary";
