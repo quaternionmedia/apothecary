@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import stat
+import struct
 import sys
 import textwrap
 from pathlib import Path
@@ -200,3 +201,72 @@ def fake_calls(program: Path) -> list[list[str]]:
     if not log.exists():
         return []
     return [json.loads(line) for line in log.read_text().splitlines() if line.strip()]
+
+
+# --- a Windows program with a version resource, as bytes ------------------------------
+
+
+def _utf16z(text: str) -> bytes:
+    return (text + "\0").encode("utf-16-le")
+
+
+def _pad(data: bytes) -> bytes:
+    return data + b"\0" * (-len(data) % 4)
+
+
+def _version_node(key: str, value: bytes, text: bool, children: bytes = b"") -> bytes:
+    """One structure of a version resource: wLength, wValueLength, wType, the key, its
+    value and its children, each aligned to 32 bits from the structure's start."""
+    out = bytearray(6) + _utf16z(key)
+    out += bytes(-len(out) % 4) + value
+    if children:
+        out += bytes(-len(out) % 4) + children
+    struct.pack_into("<HHH", out, 0, len(out), len(value) // 2 if text else len(value), int(text))
+    return bytes(out)
+
+
+def version_info(strings: dict, fixed=(2, 0, 0, 0)) -> bytes:
+    """A VS_VERSIONINFO: the fixed numbers (file and product alike) and a string table."""
+    major, minor, patch, build = fixed
+    ms, ls = (major << 16) | minor, (patch << 16) | build
+    fixed_info = struct.pack(
+        "<13I", 0xFEEF04BD, 0x00010000, ms, ls, ms, ls, 0x3F, 0, 0x40004, 1, 0, 0, 0
+    )
+    entries = b"".join(
+        _pad(_version_node(k, _utf16z(v) if v else b"", True)) for k, v in strings.items()
+    )
+    table = _version_node("040904E4", b"", True, entries)
+    string_info = _version_node("StringFileInfo", b"", True, _pad(table))
+    return _version_node("VS_VERSION_INFO", fixed_info, False, _pad(string_info))
+
+
+def windows_program(strings: dict, fixed=(2, 0, 0, 0)) -> bytes:
+    """A PE32+ file whose one section, .rsrc, holds a version resource: the
+    RT_VERSION directory, its one name, its one language and the data entry, as a
+    linker lays them out."""
+    info = version_info(strings, fixed)
+    rva = 0x1000
+
+    def directory(entry_id: int, to: int) -> bytes:
+        return struct.pack("<IIHHHH", 0, 0, 0, 0, 0, 1) + struct.pack("<II", entry_id, to)
+
+    resources = (
+        directory(16, 0x80000000 | 0x18)  # RT_VERSION
+        + directory(1, 0x80000000 | 0x30)  # its name
+        + directory(0x409, 0x48)  # its language: a data entry
+        + struct.pack("<IIII", rva + 0x58, len(info), 1252, 0)
+        + info
+    )
+    optional = bytearray(240)
+    struct.pack_into("<H", optional, 0, 0x20B)  # PE32+
+    struct.pack_into("<I", optional, 108, 16)  # data directories
+    struct.pack_into("<II", optional, 112 + 2 * 8, rva, len(resources))  # the resources
+    section = struct.pack(
+        "<8sIIIIIIHHI", b".rsrc", len(resources), rva, len(resources), 0x200, 0, 0, 0, 0, 0x40000040
+    )
+    head = bytearray(0x40)
+    head[:2] = b"MZ"
+    struct.pack_into("<I", head, 0x3C, 0x40)
+    coff = struct.pack("<HHIIIHH", 0x8664, 1, 0, 0, 0, len(optional), 0x22)
+    image = bytes(head) + b"PE\0\0" + coff + bytes(optional) + section
+    return image + b"\0" * (0x200 - len(image)) + resources

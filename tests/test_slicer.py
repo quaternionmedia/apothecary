@@ -562,3 +562,51 @@ def test_a_pieces_slice_says_its_word_declares_nothing_yet(fake_orcaslicer):
     first = record.settings[0]
     assert (first.name, first.value, first.origin) == ("print settings", "none declared", "printer")
     assert first.source == "piece disc_1, made as disc" and first.note == WORD_PRINT_SETTINGS_STUB
+
+
+# --- which version a program is: --help, or a Windows program's version resource ----------
+
+
+def test_the_version_resource_of_a_windows_program_is_read(tmp_path):
+    from slicer_helpers import windows_program
+
+    from apothecary.slicer.orcaslicer_installer import version_resource
+
+    named = tmp_path / "named.exe"
+    named.write_bytes(
+        windows_program({"CompanyName": "SoftFever", "ProductVersion": "2.4.2.0"}, (2, 4, 2, 0))
+    )
+    found = version_resource(named)
+    assert found.strings == {"CompanyName": "SoftFever", "ProductVersion": "2.4.2.0"}
+    assert (found.fixed_file, found.fixed_product, found.named()) == ("2.4.2.0", "2.4.2.0", "2.4.2")
+    # As OrcaSlicer 2.4.2's orca-slicer.exe has it: both version strings empty (its build
+    # id), the fixed numbers 2.0.0.0 (SLIC3R_VERSION, never moved). Neither names it.
+    orca = tmp_path / "orca-slicer.exe"
+    orca.write_bytes(windows_program({"FileVersion": "", "ProductVersion": ""}, (2, 0, 0, 0)))
+    found = version_resource(orca)
+    assert found.strings == {"FileVersion": "", "ProductVersion": ""}
+    assert found.fixed_product == "2.0.0.0" and found.named() is None
+    for other in (b"#!/bin/sh\n", b"MZ" + b"\0" * 100, b"\x7fELF" + b"\0" * 60):
+        (tmp_path / "other").write_bytes(other)
+        assert version_resource(tmp_path / "other") is None
+    assert version_resource(tmp_path / "missing") is None
+
+
+def test_a_program_that_prints_nothing_through_a_pipe_is_known_by_its_resource_or_its_digest(
+    tmp_path,
+):
+    from slicer_helpers import windows_program
+
+    from apothecary.slicer.orcaslicer_installer import identify
+
+    assert identify(tmp_path / "x", 0, "OrcaSlicer-2.4.2:\nUsage: ...") == ("2.4.2", "--help")
+    named = tmp_path / "named.exe"
+    named.write_bytes(windows_program({"ProductVersion": "2.4.2"}, (2, 4, 2, 0)))
+    assert identify(named, 0, "") == ("2.4.2", "its version resource")
+    orca = tmp_path / "orca-slicer.exe"
+    orca.write_bytes(windows_program({"FileVersion": "", "ProductVersion": ""}))
+    version, how = identify(orca, 0, "", vouched="2.4.2")
+    assert version == "2.4.2" and how.startswith("the pinned asset's digest")
+    assert identify(orca, 0, "")[0] is None  # nothing vouches for one found elsewhere
+    assert identify(orca, 1, "", vouched="2.4.2")[0] is None  # it did not run
+    assert identify(orca, 0, "Segmentation fault", vouched="2.4.2")[0] is None

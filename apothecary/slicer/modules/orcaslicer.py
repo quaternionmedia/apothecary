@@ -154,18 +154,27 @@ def resources_beside(program: Path) -> Optional[Path]:
     return None
 
 
-_REPORTED: Dict[Tuple[str, int], Optional[str]] = {}
+_REPORTED: Dict[Tuple[str, int], Tuple[Optional[str], str]] = {}
 
 
 def reported_version(program: Path) -> Optional[str]:
-    """The version ``program --help`` names (OrcaSlicer prints it first), remembered
-    for as long as the file is the same file. It is asked in a folder of its own:
-    OrcaSlicer writes a ``result.json`` wherever it is run, even for ``--help``."""
+    """The version ``program`` is (``identified``)."""
+    return identified(program)[0]
+
+
+def identified(program: Path) -> Tuple[Optional[str], str]:
+    """Which version ``program`` is, and how that is known (``installer.identify``):
+    what its ``--help`` names (OrcaSlicer prints it first); a Windows program that
+    prints nothing through a pipe, by its version resource, or -- the release
+    apothecary installed -- by the pinned asset its digest vouched for. Remembered
+    for as long as the file is the same file. ``--help`` is asked in a folder of its
+    own: OrcaSlicer writes a ``result.json`` wherever it is run, even for that."""
     try:
         key = (str(program), program.stat().st_mtime_ns)
     except OSError:
-        return None
+        return None, "nothing: it is not there"
     if key not in _REPORTED:
+        code = -1
         try:
             with tempfile.TemporaryDirectory(prefix="apothecary-orcaslicer-") as aside:
                 done = subprocess.run(
@@ -180,9 +189,16 @@ def reported_version(program: Path) -> Optional[str]:
                     check=False,
                 )
             said = (done.stdout or "") + (done.stderr or "")
+            code = done.returncode
         except (OSError, subprocess.SubprocessError):
             said = ""
-        _REPORTED[key] = installer.reported_version(said)
+        version = installer.current_version()
+        vouched = (
+            installer.read_manifest(version).get("version")
+            if version is not None and installer.executable_for(version) == program
+            else None
+        )
+        _REPORTED[key] = installer.identify(program, code, said, vouched=vouched)
     return _REPORTED[key]
 
 
@@ -280,8 +296,10 @@ class OrcaSlicerModule(SlicerModule):
         if path is None:
             out.problems.append(f"OrcaSlicer is not installed: {self.install_command}")
             return out
-        tool.version = reported_version(path)
+        tool.version, how = identified(path)
         tool.ok = tool.version is not None
+        if tool.ok and how != "--help":
+            out.notes.append(f"OrcaSlicer {tool.version}, known by {how}")
         if not tool.ok:
             out.problems.append(f"{path} does not run, or does not say it is OrcaSlicer")
         elif tool.version != self.pinned:

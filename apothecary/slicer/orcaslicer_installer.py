@@ -27,6 +27,16 @@ what an emulated Python says it is):
 - Anything else is refused, saying what is published; ``APOTHECARY_ORCASLICER``
   names an OrcaSlicer installed another way.
 
+**Which version it is** is what ``--help`` names first (``OrcaSlicer-2.4.2:``).
+On Windows ``orca-slicer.exe`` is a GUI-subsystem program (read from its PE
+header), the only launcher the release ships, and one may print nothing through
+a pipe; when it runs (exit 0) and prints nothing, its version resource is read
+(``version_resource``) -- its ``ProductVersion`` or ``FileVersion`` string. The
+2.4.2 release leaves both empty (its build id) and its fixed version numbers say
+2.0.0.0 (``SLIC3R_VERSION``, never moved), so neither names the release: then,
+for the release this installer put in place, the version is the pinned asset's,
+which its digest vouches for (``identify``).
+
 **Checked before it is opened.** The release publishes no checksum file, so a
 download is checked against the SHA-256 GitHub publishes for the asset
 (api.github.com's release record, its ``digest``), and that digest must be the
@@ -55,6 +65,7 @@ import plistlib
 import re
 import shutil
 import stat
+import struct
 import tempfile
 import zipfile
 from dataclasses import dataclass
@@ -194,6 +205,168 @@ def reported_version(said: str) -> Optional[str]:
     """The version OrcaSlicer's ``--help`` names, or None."""
     match = REPORTED_RE.search(said or "")
     return match.group(1) if match else None
+
+
+# --- a Windows program's version resource ----------------------------------------------
+
+RT_VERSION = 16
+FIXED_SIGNATURE = 0xFEEF04BD
+_VERSION_IN = re.compile(r"(\d+)\.(\d+)\.(\d+)")
+
+
+@dataclass
+class VersionResource:
+    """What a Windows program's version resource says: its strings (``ProductVersion``,
+    ``FileVersion`` and the rest) and its fixed version numbers."""
+
+    strings: Dict[str, str]
+    fixed_file: Optional[str] = None
+    fixed_product: Optional[str] = None
+
+    def named(self) -> Optional[str]:
+        """The version its ``ProductVersion`` or ``FileVersion`` string names, X.Y.Z."""
+        for key in ("ProductVersion", "FileVersion"):
+            match = _VERSION_IN.search(self.strings.get(key, ""))
+            if match:
+                return ".".join(str(int(n)) for n in match.groups())
+        return None
+
+
+def _u16(data: bytes, at: int) -> int:
+    return struct.unpack_from("<H", data, at)[0]
+
+
+def _u32(data: bytes, at: int) -> int:
+    return struct.unpack_from("<I", data, at)[0]
+
+
+def _align(at: int) -> int:
+    return (at + 3) & ~3
+
+
+def _node(block: bytes, at: int) -> Tuple[str, bytes, int, int]:
+    """One structure of a version resource: its key, its value's bytes, where its
+    children start and where it ends."""
+    length, value_length, kind = struct.unpack_from("<HHH", block, at)
+    key_end = at + 6
+    while block[key_end : key_end + 2] != b"\x00\x00":
+        key_end += 2
+        if key_end >= len(block):
+            raise ValueError("a version resource key without its end")
+    key = block[at + 6 : key_end].decode("utf-16-le")
+    value_at = _align(key_end + 2)
+    size = value_length * 2 if kind == 1 else value_length
+    return key, block[value_at : value_at + size], _align(value_at + size), at + length
+
+
+def _version_info(block: bytes) -> VersionResource:
+    key, value, child, end = _node(block, 0)
+    if key != "VS_VERSION_INFO":
+        raise ValueError("not a version resource")
+    found = VersionResource(strings={})
+    if len(value) >= 24 and _u32(value, 0) == FIXED_SIGNATURE:
+        file_ms, file_ls, product_ms, product_ls = struct.unpack_from("<4I", value, 8)
+        found.fixed_file = f"{file_ms >> 16}.{file_ms & 0xFFFF}.{file_ls >> 16}.{file_ls & 0xFFFF}"
+        found.fixed_product = (
+            f"{product_ms >> 16}.{product_ms & 0xFFFF}.{product_ls >> 16}.{product_ls & 0xFFFF}"
+        )
+    while child < end:
+        name, _value, tables, child_end = _node(block, child)
+        if child_end <= child:
+            break
+        if name == "StringFileInfo":
+            while tables < child_end:
+                _lang, _v, entry, table_end = _node(block, tables)
+                if table_end <= tables:
+                    break
+                while entry < table_end:
+                    string_key, string_value, _c, entry_end = _node(block, entry)
+                    if entry_end <= entry:
+                        break
+                    found.strings[string_key] = string_value.decode("utf-16-le").rstrip("\x00")
+                    entry = _align(entry_end)
+                tables = _align(table_end)
+        child = _align(child_end)
+    return found
+
+
+def version_resource(path: Path) -> Optional[VersionResource]:
+    """The version resource of a Windows program (a PE file), read from its
+    resource section: the first language of the first ``RT_VERSION`` entry. None
+    for a file that is not one or has none."""
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return None
+    try:
+        if data[:2] != b"MZ":
+            return None
+        pe = _u32(data, 0x3C)
+        if data[pe : pe + 4] != b"PE\x00\x00":
+            return None
+        count, optional_size = _u16(data, pe + 6), _u16(data, pe + 20)
+        optional = pe + 24
+        directories = optional + (96 if _u16(data, optional) == 0x10B else 112)
+        resources_rva = _u32(data, directories + 2 * 8)
+        if not resources_rva:
+            return None
+        sections = []
+        for i in range(count):
+            at = optional + optional_size + 40 * i
+            virtual_size, address, raw_size, raw = struct.unpack_from("<4I", data, at + 8)
+            sections.append((address, max(virtual_size, raw_size), raw))
+
+        def offset(rva: int) -> int:
+            for address, size, raw in sections:
+                if address <= rva < address + size:
+                    return raw + rva - address
+            raise ValueError("an address outside every section")
+
+        root = offset(resources_rva)
+
+        def entries(directory: int) -> List[Tuple[int, int]]:
+            listed = _u16(data, directory + 12) + _u16(data, directory + 14)
+            return [
+                (_u32(data, directory + 16 + 8 * i), _u32(data, directory + 20 + 8 * i))
+                for i in range(listed)
+            ]
+
+        found = next(
+            (to for name, to in entries(root) if name == RT_VERSION and to & 0x80000000), None
+        )
+        if found is None:
+            return None
+        names = root + (found & 0x7FFFFFFF)
+        languages = root + (entries(names)[0][1] & 0x7FFFFFFF)
+        entry = root + (entries(languages)[0][1] & 0x7FFFFFFF)
+        start, size = offset(_u32(data, entry)), _u32(data, entry + 4)
+        return _version_info(data[start : start + size])
+    except (struct.error, ValueError, IndexError, UnicodeDecodeError, StopIteration):
+        return None
+
+
+def identify(
+    program: Path, code: int, said: str, vouched: Optional[str] = None
+) -> Tuple[Optional[str], str]:
+    """Which version ``program`` is, from what its ``--help`` printed (``code``,
+    ``said``), and how that is known: what ``--help`` names; else -- when it ran
+    and printed nothing through the pipe, as a Windows GUI program may -- what its
+    version resource names; else ``vouched``, the version of the pinned asset an
+    install verified by its digest."""
+    named = reported_version(said)
+    if named:
+        return named, "--help"
+    if code != 0 or (said or "").strip():
+        return None, "--help"
+    found = version_resource(program)
+    if found is not None and found.named():
+        return found.named(), "its version resource"
+    if vouched:
+        return vouched, (
+            "the pinned asset's digest: it ran and printed nothing through a pipe, and its "
+            "version resource names no version"
+        )
+    return None, "nothing: it printed nothing through a pipe, and its version resource names none"
 
 
 # --- where it lives ------------------------------------------------------------------
@@ -417,13 +590,14 @@ class OrcaSlicerInstaller:
             record = populate(staging)
             exe = staging / record["executable"]
             code, said = _help(exe)
-            reported = reported_version(said)
+            reported, how = identify(exe, code, said, vouched=version)
             if reported != version:
                 raise InstallError(
                     f"OrcaSlicer {version} does not run here or reports "
                     f"{reported or 'no version'} (exit {code}): {said.strip()[-400:]}"
                 )
-            self.log(f"OrcaSlicer {reported} runs")
+            self.log(f"OrcaSlicer {reported} runs" + ("" if how == "--help" else f" ({how})"))
+            record["identified_by"] = how
             if not has_profiles(staging / record["resources"]):
                 raise InstallError(f"no printer profiles in {record['resources']}")
             record.setdefault("archs", binary_archs(exe))

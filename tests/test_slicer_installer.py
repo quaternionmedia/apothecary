@@ -333,6 +333,53 @@ def test_windows_unpacks_the_portable_zip_with_its_resources_beside_the_exe(tool
     assert path == release / "orca-slicer.exe" and (release / "OrcaSlicer.dll").is_file()
     assert oi.resources_for("2.4.2") == release / "resources"
     assert github.urls == [API, DOWNLOAD + WINDOWS]
+    assert oi.read_manifest("2.4.2")["identified_by"] == "--help"
+
+
+def test_a_windows_program_that_prints_nothing_through_a_pipe_is_known_by_its_digest(
+    tools, monkeypatch
+):
+    """orca-slicer.exe is a GUI-subsystem program, and its version resource names no
+    version (OrcaSlicer leaves the strings empty and the fixed numbers at 2.0.0.0): one
+    that runs and prints nothing is the pinned release by the digest it was checked by."""
+    _platform(monkeypatch, "Windows", "AMD64")
+    body = _zip(
+        [
+            ("orca-slicer.exe", "#!/bin/sh\nexit 0\n"),  # runs, and says nothing
+            ("resources/profiles/Creality.json", "{}"),
+            ("resources/profiles/Creality/machine/fdm_machine_common.json", "{}"),
+        ]
+    )
+    _pin(monkeypatch, "Windows", "x86_64", WINDOWS, body, oi.ZIP)
+    github = GitHub({WINDOWS: body})
+    log = []
+    oi.OrcaSlicerInstaller(fetch=github.fetch, fetch_to=github.fetch_to, log=log.append).install()
+    how = oi.read_manifest("2.4.2")["identified_by"]
+    assert how.startswith("the pinned asset's digest: it ran and printed nothing")
+    assert any(line.startswith("OrcaSlicer 2.4.2 runs (the pinned asset's digest") for line in log)
+    # The module's status says how it knows, for the release it installed.
+    from apothecary.slicer.modules.orcaslicer import identified
+
+    monkeypatch.delenv("APOTHECARY_ORCASLICER", raising=False)
+    assert identified(tools / "2.4.2" / "orca-slicer.exe") == ("2.4.2", how)
+
+
+def test_a_windows_program_that_prints_nothing_and_does_not_run_installs_nothing(
+    tools, monkeypatch
+):
+    _platform(monkeypatch, "Windows", "AMD64")
+    body = _zip(
+        [
+            ("orca-slicer.exe", "#!/bin/sh\nexit 3\n"),
+            ("resources/profiles/Creality/machine/fdm_machine_common.json", "{}"),
+            ("resources/profiles/Creality.json", "{}"),
+        ]
+    )
+    _pin(monkeypatch, "Windows", "x86_64", WINDOWS, body, oi.ZIP)
+    github = GitHub({WINDOWS: body})
+    with pytest.raises(oi.InstallError, match=r"reports no version \(exit 3\)"):
+        oi.OrcaSlicerInstaller(fetch=github.fetch, fetch_to=github.fetch_to).install()
+    assert _left_in(tools) == []
 
 
 @pytest.mark.parametrize("bad", ["../evil.exe", "/abs/evil.exe", "C:/evil.exe", "a/../../evil"])
