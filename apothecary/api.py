@@ -1479,12 +1479,13 @@ def _pinned_at(port: str) -> Optional[tuple[str, Assembly, str]]:
 def _parts_of(site_name: str, site: Assembly, leave_out: str) -> List[jobs.JobPart]:
     """What a job in ``site`` can name as the part it makes, by path: every node
     built from a part (named for its ``part_ref``) and every piece made from a
-    picture (named for its word), but nothing at or under ``leave_out`` -- the
-    machine itself. Holes cut from a piece are not things made."""
+    picture (named for its word, with the picture and the camera it came from),
+    but nothing at or under ``leave_out`` -- the machine itself. Holes cut from a
+    piece are not things made."""
     from .vision import views as viewing
 
     made = viewing.store().made_at(site_name)
-    found: Dict[str, str] = {}
+    found: Dict[str, jobs.JobPart] = {}
 
     def visit(node: Assembly, prefix: str) -> None:
         for child in [*node.children, *node.additions]:
@@ -1492,13 +1493,16 @@ def _parts_of(site_name: str, site: Assembly, leave_out: str) -> List[jobs.JobPa
             if path == leave_out or path.startswith(leave_out + "."):
                 continue
             if child.part_ref:
-                found[path] = child.part_ref
+                found[path] = jobs.JobPart(path=path, name=child.part_ref)
             elif not prefix and child.name in made:
-                found[path] = made[child.name].word
+                record = made[child.name]
+                found[path] = jobs.JobPart(
+                    path=path, name=record.word, picture=record.picture, camera=record.camera
+                )
             visit(child, path)
 
     visit(site, "")
-    return [jobs.JobPart(path=path, name=name) for path, name in sorted(found.items())]
+    return [found[path] for path in sorted(found)]
 
 
 def _place_of(port: str) -> Optional[jobs.Place]:
