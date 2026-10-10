@@ -224,7 +224,8 @@ def test_the_canvas_ring_offers_the_sites_and_the_groups():
 def test_a_ring_with_nothing_to_group_simply_does_not_offer_it():
     ring = resolve(Context(pointing=Pointing.CANVAS), _photo_site())
     assert "Site" not in [option.id for option in ring.options]
-    assert "fit" in [option.id for option in ring.options]
+    view = next(option for option in ring.options if option.id == "view")
+    assert "fit" in [option.id for option in view.children]
 
 
 @pytest.mark.parametrize("how_many", [1, 8, 9, 20, 64])
@@ -970,7 +971,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         groups=["wall", "furniture"],
     )
     panels = next(o for o in root.options if o.label == "Panels")
-    assert panels.cell == 9 and panels.children is not None  # after Pieces, Site, Group, Fit
+    assert panels.cell == 9 and panels.children is not None  # after Pieces, Site, Group, View
     # The canvas ring's Camera became Pictures, in the same seat.
     pictures = next(o for o in root.options if o.label == "Pictures")
     assert pictures.cell == 3 and [(c.label, c.action, c.cell) for c in pictures.children] == [
@@ -994,7 +995,6 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Machine", "panel:toggle:machine", 4),
         ("Rail", "panel:rail:toggle", 9),
         ("Bench", None, 3),
-        ("View", None, 1),  # the header's View menu, after the Bench: nothing above moved
     ]
     assert address_of(root, "panel:site") == "98"  # by the option's id
     assert address_of(root, "panel:pictures") == "92"
@@ -1045,14 +1045,15 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         assert f'data-panel="{gone}"' not in page and f"register('{gone}'" not in page
 
 
-def test_the_header_s_view_menu_is_a_group_of_the_canvas_ring_under_panels():
-    """The header's ⚙ View menu is ring-backed: Snap to grid, Detail (Full, Black box,
-    Dot), Outlines and Select walls are cells of Panels › View, seated after the Bench
-    so no address learned under Panels moves, at the root and inside a piece alike
-    (inside one, the canvas ring's top already holds eight); the page carries them."""
+def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
+    """The header's ⚙ View menu is ring-backed by a cell of the canvas ring's own, in
+    the seat Fit had (the owner's choice of 2026-10-04): View › Fit first, then Snap to
+    grid, Detail (Full, Black box, Dot), Outlines and Select walls; at the root and
+    inside a piece alike, eight or fewer at the top; Panels is its six again. The
+    page carries them all."""
     from apothecary.menu import carried_by
 
-    for targets, panels_cell in (([], "9"), (["printer_1"], "3")):
+    for targets, view_cell in (([], "4"), (["printer_1"], "9")):
         root = resolve(
             Context(pointing=Pointing.CANVAS, targets=targets),
             _garage(),
@@ -1060,23 +1061,28 @@ def test_the_header_s_view_menu_is_a_group_of_the_canvas_ring_under_panels():
             groups=["wall", "furniture"],
         )
         assert len(root.options) <= 8
-        view = next(o for o in next(o for o in root.options if o.label == "Panels").children if o.label == "View")
+        assert "fit" not in [o.id for o in root.options]
+        view = next(o for o in root.options if o.label == "View")
+        assert str(view.cell) == view_cell and view.action is None
         assert [(c.label, c.action, c.cell) for c in view.children] == [
-            ("Snap to grid", "view:snap", 8),
-            ("Detail", None, 6),
-            ("Outlines", "view:outlines", 2),
-            ("Select walls", "view:walls", 4),
+            ("Fit", "fit", 8),
+            ("Snap to grid", "view:snap", 6),
+            ("Detail", None, 2),
+            ("Outlines", "view:outlines", 4),
+            ("Select walls", "view:walls", 9),
         ]
-        assert [(c.label, c.action) for c in view.children[1].children] == [
+        assert [(c.label, c.action) for c in view.children[2].children] == [
             ("Full", "view:detail:full"),
             ("Black box", "view:detail:box"),
             ("Dot", "view:detail:dot"),
         ]
-        assert address_of(root, "view:snap") == f"{panels_cell}18"
-        assert address_of(root, "view:detail:box") == f"{panels_cell}166"
-        assert address_of(root, "view:walls") == f"{panels_cell}14"
-        assert address_of(root, "panel:bench") == f"{panels_cell}38"  # the Bench stays put
-    for action in ("view:snap", "view:detail:dot", "view:outlines", "view:walls"):
+        assert address_of(root, "fit") == f"{view_cell}8"
+        assert address_of(root, "view:snap") == f"{view_cell}6"
+        assert address_of(root, "view:detail:box") == f"{view_cell}26"
+        assert address_of(root, "view:walls") == f"{view_cell}9"
+        panels = next(o for o in root.options if o.label == "Panels")
+        assert "View" not in [c.label for c in panels.children]
+    for action in ("fit", "view:snap", "view:detail:dot", "view:outlines", "view:walls"):
         assert carried_by(action).name == "VIEWER"
 
 

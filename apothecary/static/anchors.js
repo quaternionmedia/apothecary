@@ -14,7 +14,8 @@
  * pointer is on it or while its thing is selected. Two badges that would
  * overlap on screen step aside, side by side; three or more merge into one
  * count (×3), whose card lists each of them, until the view comes close
- * enough to part them. Open cards never overlap each other and keep
+ * enough to part them. Open cards never overlap each other, nor what the page
+ * asks to keep clear (keepClear: its hint bar, its depth ladder), and keep
  * EDGE_PX clear of the layer's edges. A badge's size is read once (and again
  * when what it says changes), an open card's each frame: there are at most a
  * few.
@@ -41,7 +42,7 @@ const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 const boxOf = (x, y, w, h) => ({ l: x - w / 2, r: x + w / 2, t: y - h, b: y });
 const meets = (a, b, gap) => a.l < b.r + gap && b.l < a.r + gap && a.t < b.b + gap && b.t < a.b + gap;
 
-export function mountAnchors({ container, canvas, camera, scene }) {
+export function mountAnchors({ container, canvas, camera, scene, keepClear = () => [] }) {
     const layer = document.createElement("div");
     layer.className = "anchor-layer";
     layer.style.cssText = "position:absolute;inset:0;overflow:hidden;pointer-events:none;";
@@ -169,11 +170,25 @@ export function mountAnchors({ container, canvas, camera, scene }) {
         if (open && rows !== c.said) { c.el.querySelector(".badge-words").innerHTML = rows; c.said = rows; }
     }
 
+    // What else stands over the world and is not to be covered (keepClear: the
+    // hint bar, the depth ladder), as boxes in the layer's pixels; a thing hidden
+    // or faded out is not in the way.
+    function furniture() {
+        if (!keepClear) return [];
+        const base = layer.getBoundingClientRect();
+        return keepClear().filter((el) => el && !el.hidden && el.offsetWidth && parseFloat(getComputedStyle(el).opacity) > 0.05).map((el) => {
+            const r = el.getBoundingClientRect();
+            return { l: r.left - base.left, r: r.right - base.left, t: r.top - base.top, b: r.bottom - base.top };
+        });
+    }
+
     // The open cards, placed one after another: above the badge, else below,
     // right or left of it, each kept EDGE_PX inside the layer; the first place
-    // that meets no card already placed, else under the lowest it meets.
+    // that meets no card already placed (nor the furniture), else above what it
+    // meets.
     function placeCards(open, w, h) {
-        const placed = [];
+        const placed = open.length ? furniture() : [];
+        const cardsFrom = placed.length;
         for (const { el, card, box, border } of open) {
             el.classList.add("open");
             card.style.maxWidth = `${Math.max(120, w - 2 * EDGE_PX)}px`;
@@ -191,14 +206,23 @@ export function mountAnchors({ container, canvas, camera, scene }) {
             ].map(clamp).map((p) => ({ l: p.l, t: p.t, r: p.l + cw, b: p.t + ch }));
             let at = tries.find((p) => !placed.some((q) => meets(p, q, CARD_GAP_PX)));
             if (!at) {
+                // Nowhere beside its badge is clear: above whatever it meets, as far
+                // up as it has to go, but never past the top edge.
                 at = tries[0];
-                for (const q of placed) if (meets(at, q, CARD_GAP_PX)) at = { ...at, t: q.b + CARD_GAP_PX, b: q.b + CARD_GAP_PX + ch };
+                for (let moved = true; moved;) {
+                    moved = false;
+                    for (const q of placed) {
+                        if (!meets(at, q, CARD_GAP_PX) || q.t - CARD_GAP_PX - ch < EDGE_PX) continue;
+                        at = { ...at, t: q.t - CARD_GAP_PX - ch, b: q.t - CARD_GAP_PX };
+                        moved = true;
+                    }
+                }
             }
             placed.push(at);
             // The card is placed inside its badge's border: from there, to where it goes.
             card.style.transform = `translate(${(at.l - box.l - border.x).toFixed(1)}px, ${(at.t - box.t - border.y).toFixed(1)}px)`;
         }
-        return placed;
+        return placed.slice(cardsFrom);
     }
 
     let lastCards = [];

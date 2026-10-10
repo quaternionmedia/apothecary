@@ -550,7 +550,7 @@ def _bucket(names: Sequence[str]) -> List[Tuple[str, List[str]]]:
 # (cardinals first): what stands in front of the world, each a cell away.
 # The page registers exactly these; a test holds the two lists to each other.
 PANELS: Sequence[Tuple[str, str]] = (
-    # Site: the site's Contents tree, its problems at the top, its generated
+    # Site: the site's Contents tree, its problems in one fold, its generated
     # SCAD, every site's pins (Pinned), each taken back from its row, and the
     # site's jobs, each row opening its machine.
     ("site", "Site"),
@@ -583,29 +583,28 @@ def _panels() -> Option:
         children=[toggle(pid, label) for pid, label in PANELS if pid in _BEFORE_RAIL]
         # The rail itself: hidden and shown, as the tilde key does.
         + [Option(id="panel:rail", label="Rail", action="panel:rail:toggle")]
-        + [_bench(toggle("bench", "Bench"))]
-        # How the world is drawn: the header's View menu. Seated after the Bench,
-        # so no address learned under Panels moves; the canvas ring's top holds
-        # eight already when it stands inside a piece.
-        + [_view()],
+        + [_bench(toggle("bench", "Bench"))],
     )
 
 
 def _view() -> Option:
-    """View, under Panels: the header's ⚙ View menu, each of its items a cell.
+    """View, a cell of the canvas ring in the seat Fit had: how the world is drawn.
 
-    Snap to grid snaps a dragged piece to the grid; Detail draws every subassembly
-    in full, as a black box or as a dot; Outlines draws each subassembly's extent;
-    Select walls (the menu's "Walls selectable") lets a click in the world pick a
-    wall, which it otherwise passes through, for the page's session. Snap, Outlines
-    and Select walls each turn what they name the other way, as their tick-boxes
-    do, and the status line says which way it went; the ring is not told how they
-    stand.
+    Fit, first, frames the pieces at this level, as it did one ring up (the owner's
+    choice of 2026-10-04: Fit's address gains a digit, and View's cells are the
+    header's ⚙ View menu's items). Snap to grid snaps a dragged piece to the grid;
+    Detail draws every subassembly in full, as a black box or as a dot; Outlines
+    draws each subassembly's extent; Select walls (the menu's "Walls selectable")
+    lets a click in the world pick a wall, which it otherwise passes through, for
+    the page's session. Snap, Outlines and Select walls each turn what they name the
+    other way, as their tick-boxes do, and the status line says which way it went;
+    the ring is not told how they stand.
     """
     return Option(
         id="view",
         label="View",
         children=[
+            Option(id="fit", label="Fit", action="fit"),
             Option(id="view:snap", label="Snap to grid", action="view:snap"),
             Option(
                 id="view:detail",
@@ -978,8 +977,8 @@ def _canvas_ring(
 
     `context.targets[0]`, when given, is the path the viewer is zoomed into;
     Pieces lists that node's children and Up steps back out. At the root
-    there is no Up, because there is nothing above. Panels opens and closes
-    what stands in front of the world, and holds View, how the world is drawn.
+    there is no Up, because there is nothing above. View is how the world is
+    drawn, Fit first in it; Panels opens and closes what stands in front of it.
     """
     focus_path = context.targets[0] if context.targets else ""
     focus = _find(site, focus_path) if site and focus_path else site
@@ -990,7 +989,7 @@ def _canvas_ring(
             Option(id="up", label="Up", action="zoom-out") if focus_path else None,
             _grouped("Site", site_names, lambda name: f"site:{name}"),
             _grouped("Group", groups, lambda name: f"group:{name}"),
-            Option(id="fit", label="Fit", action="fit"),
+            _view(),
             _panels(),
             _pictures(picture),
             Option(id="reset", label="Reset", action="reset", destructive=True),

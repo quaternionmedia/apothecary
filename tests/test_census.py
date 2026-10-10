@@ -285,6 +285,13 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # what a crumb does now (rootCrumb:click:goUpTo, crumb:click:goUpTo), going up one
 # level as Up does and further as the trail did, so jumpTo keeps its meaning for the
 # page's own callers.
+#
+# After Phase 2, the owner's answer: View is a cell of the canvas ring's own, in the
+# seat Fit had, and Fit is its first cell. The same counts; no control or listener
+# was added or re-keyed. Ring addresses moved, at the root of a site with groups (one
+# cell on, at 9, inside a piece): Fit 4 to 48; Snap to grid 918 to 46; Detail 916 to
+# 42 (Full 9168 to 428, Black box 9166 to 426, Dot 9162 to 422); Outlines 912 to 44;
+# Select walls 914 to 49. Panels holds its six again, none of them moved.
 VIEWER_CEILING = 115
 
 
@@ -748,7 +755,7 @@ def test_one_page_is_counted_and_the_retired_pages_left_nothing_behind():
 def test_the_header_is_one_row_with_its_view_menu_on_the_ring():
     """Load and Zoom Out are gone from the header, counted nowhere; Snap to grid,
     Detail, Assembly outlines and Walls selectable are in the View menu, each backed
-    by a cell of the canvas ring's Panels › View that the ring really produces."""
+    by a cell of the canvas ring's View that the ring really produces."""
     from apothecary.menu import Context, Pointing, resolve
 
     taken = census.take()

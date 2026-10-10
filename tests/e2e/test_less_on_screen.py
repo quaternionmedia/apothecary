@@ -253,6 +253,50 @@ def test_open_cards_never_overlap_and_keep_off_the_edges(page: Page, bench: str)
         assert got["t"] >= world["t"] + 8 and got["b"] <= world["b"] - 8, (edge, got, world)
 
 
+# Slide the view until printer_1's board badge stands at the world's bottom-left,
+# where the hint bar is.
+TO_THE_HINT = """async () => {
+    const v = window.fractalViewer;
+    for (let i = 0; i < 6; i++) {
+        const s = v.anchors.at('printer_1');
+        const h = v.canvas.clientHeight;
+        const dx = s.x - 60, dy = s.y - (h - 6);
+        const k = v.camera.position.distanceTo(v.orbitControls.target)
+            * 2 * Math.tan(v.camera.fov * Math.PI / 360) / h;
+        const e = v.camera.matrixWorld.elements;
+        for (const [i, key] of [[0, 'x'], [1, 'y'], [2, 'z']]) {
+            const d = e[i] * dx * k - e[4 + i] * dy * k;
+            v.camera.position[key] += d;
+            v.orbitControls.target[key] += d;
+        }
+        v.orbitControls.update();
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    }
+}"""
+
+
+@pytest.mark.e2e
+def test_an_open_card_keeps_off_the_hint_bar(page: Page, bench: str):
+    """A first visit shows the hint bar at the world's bottom-left; the selected
+    printer's board, slid down onto it, opens its card clear of the bar, and
+    inside the world."""
+    _open(page, bench)
+    _select(page, "printer_1")
+    page.evaluate(TO_THE_HINT)
+    page.evaluate(FRAMES, 3)
+    hint = _rect(page, "#viewer-hint")
+    board = _rect(page, BOARD_BADGE)
+    assert board["b"] > hint["t"], (board, hint)  # the badge is down by the bar
+    expect(page.locator("#viewer-hint")).not_to_have_class(re.compile(r"\bfaded\b"))
+    card = page.locator(".world-badge.open .badge-words")
+    expect(card).to_have_count(1)
+    expect(card).to_contain_text(PRINTER)
+    got = _rect(page, ".world-badge.open .badge-words")
+    assert not _meet(got, hint), (got, hint)
+    world = _rect(page, ".viewer-panel")
+    assert got["t"] >= world["t"] + 8 and got["b"] <= world["b"] - 8, (got, world)
+
+
 # --------------------------------------------------------------------------
 # Handles: one compact set on a movable thing
 # --------------------------------------------------------------------------
@@ -452,12 +496,38 @@ def test_the_header_is_one_row_at_1024_px(page: Page, bench: str):
 
 
 @pytest.mark.e2e
+def test_the_tab_strip_and_the_hint_are_one_line_at_1024_px(page: Page, bench: str):
+    """At 1024 px wide, with a Machine open, the rail's tab strip is one row -- the
+    Machine's tab names its node, the whole title with the port its tooltip -- and
+    the hint bar is one line, nothing of it cut."""
+    page.set_viewport_size({"width": 1024, "height": 700})
+    _open(page, bench)
+    cut = page.evaluate(
+        "() => { const h = document.getElementById('viewer-hint'); "
+        "return h.scrollWidth > h.clientWidth; }"
+    )
+    assert not cut
+    assert page.locator("#viewer-hint").bounding_box()["height"] < 40  # one line
+    page.locator(BOARD_BADGE).click()
+    _rail_machine(page)
+    tab = page.locator(".panel-rail .rail-tab[data-panel='machine'] .rail-tab-name")
+    expect(tab).to_have_text("printer_1")
+    expect(tab).to_have_attribute("title", re.compile(re.escape(PRINTER)))
+    tops = page.evaluate(
+        "() => [...document.querySelectorAll('.panel-rail .rail-tab')]"
+        ".map((t) => Math.round(t.getBoundingClientRect().top))"
+    )
+    assert len(tops) == 3 and len(set(tops)) == 1, tops
+
+
+@pytest.mark.e2e
 def test_the_view_menu_holds_snap_detail_and_outlines_and_the_ring_backs_each(
     page: Page, bench: str
 ):
     """Snap to grid, Detail and Assembly outlines are in one ⚙ View menu, folded until
     opened and folded away by a press elsewhere; each wears the address of its cell of
-    the canvas ring's Panels › View, and the cell does what the item does."""
+    the canvas ring's View (a cell of its own, in Fit's seat, with Fit first in it),
+    and the cell does what the item does."""
     _open(page, bench)
     for item in ("#snap-toggle", "#detail-mode", "#overlay-toggle"):
         expect(page.locator(item)).to_be_hidden()
@@ -465,34 +535,42 @@ def test_the_view_menu_holds_snap_detail_and_outlines_and_the_ring_backs_each(
     for item in ("#snap-toggle", "#detail-mode", "#overlay-toggle"):
         expect(page.locator(item)).to_be_visible()
     label = lambda item: page.locator(f"#view-menu label:has({item})")  # noqa: E731
-    expect(label("#snap-toggle")).to_have_attribute("data-address", "918", timeout=5000)
-    expect(label("#detail-mode")).to_have_attribute("data-address", "9168")
-    expect(label("#overlay-toggle")).to_have_attribute("data-address", "912")
+    expect(label("#snap-toggle")).to_have_attribute("data-address", "46", timeout=5000)
+    expect(label("#detail-mode")).to_have_attribute("data-address", "428")
+    expect(label("#overlay-toggle")).to_have_attribute("data-address", "44")
+    expect(label("#walls-toggle")).to_have_attribute("data-address", "49")
+    expect(page.locator("#view-menu > summary")).to_have_attribute("title", re.compile("⌗4"))
     page.locator("#snap-toggle").uncheck()
     assert page.evaluate("() => window.fractalViewer.transformControls.translationSnap") is None
     page.locator("#status").click()
     expect(page.locator("#snap-toggle")).to_be_hidden()
 
-    # Panels › View › Snap to grid: the tick-box's own work, and the tick-box follows.
+    # View › Snap to grid: the tick-box's own work, and the tick-box follows.
     _canvas_ring(page)
-    for digit in "918":
+    for digit in "46":
         page.keyboard.press(digit)
-    expect(page.locator("#status")).to_contain_text("⌗918")
+    expect(page.locator("#status")).to_contain_text("⌗46")
     assert page.evaluate("() => window.fractalViewer.transformControls.translationSnap") == 50
     expect(page.locator("#snap-toggle")).to_be_checked()
-    # Panels › View › Detail › Dot, and › Outlines.
+    # View › Detail › Dot, and › Outlines.
     _canvas_ring(page)
-    for digit in "9162":
+    for digit in "422":
         page.keyboard.press(digit)
     expect(page.locator("#detail-mode")).to_have_value("dot")
     page.wait_for_function(
         "() => Object.values(window.fractalViewer.meshByName).some((m) => m.userData.isDot)"
     )
     _canvas_ring(page)
-    for digit in "912":
+    for digit in "44":
         page.keyboard.press(digit)
     expect(page.locator("#overlay-toggle")).not_to_be_checked()
     assert page.evaluate("() => Object.keys(window.fractalViewer.compoundOverlayByKey).length") == 0
+    # View › Fit: Fit, one ring down from where it was.
+    _canvas_ring(page)
+    for digit in "48":
+        page.keyboard.press(digit)
+    expect(page.locator("#status")).to_contain_text("Framed")
+    expect(page.locator("#status")).to_contain_text("⌗48")
 
 
 # --------------------------------------------------------------------------
@@ -624,8 +702,8 @@ WALL = """() => {
 def test_a_click_passes_through_a_wall_and_the_toggle_restores_it(page: Page, bench: str):
     """The garage's walls are drawn faded, and a click on them in the world selects what
     is behind or inside; Contents still selects a wall, drawn solid then and with its
-    handles; ⚙ View › Walls selectable -- or Panels › View › Select walls on the ring --
-    lets a click pick it again."""
+    handles; ⚙ View › Walls selectable -- or View › Select walls on the ring -- lets a
+    click pick it again."""
     _open(page, bench)
     wall = page.evaluate(WALL)
     assert wall["opacity"] == pytest.approx(0.25, abs=0.01) and wall["through"], wall
@@ -650,9 +728,9 @@ def test_a_click_passes_through_a_wall_and_the_toggle_restores_it(page: Page, be
 
     # The ring's cell turns it back off: the click passes through again.
     _canvas_ring(page)
-    for digit in "914":
+    for digit in "49":
         page.keyboard.press(digit)
-    expect(page.locator("#status")).to_contain_text("⌗914")
+    expect(page.locator("#status")).to_contain_text("⌗49")
     expect(page.locator("#walls-toggle")).not_to_be_checked()
     page.mouse.click(spot["x"], spot["y"])
     assert page.evaluate("() => window.fractalViewer.selectedName") == spot["behind"]
