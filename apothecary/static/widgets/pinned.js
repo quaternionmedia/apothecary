@@ -11,10 +11,11 @@
  * whose site or piece is gone is shown as such (GET /placed says so).
  *
  * mountPinned(root, { base, world, log }) renders into root; `world` is what the
- * page offers: siteName(), changed(site) (something pinned in that site was taken
- * back), unpinned(site, path) (a board's pin). log(text, kind) is the page's
- * status bar; kind "bad" is a refusal. The list is fetched when it mounts and
- * after each take-back; load() fetches it again.
+ * page offers: siteName(), cameraRemoved(site, name, payload) (a camera removed, with
+ * the site the server answered with, or null when its site is gone), changed(site)
+ * (a view pinned in that site was taken back), unpinned(site, path) (a board's pin).
+ * log(text, kind) is the page's status bar; kind "bad" is a refusal. The list is
+ * fetched when it mounts and after each take-back; load() fetches it again.
  */
 
 const MARKUP = `
@@ -67,10 +68,12 @@ export function mountPinned(root, { base = "", world = null, log = null } = {}) 
     }
 
     // Each take-back names its own site: nothing here switches the site on screen.
+    // A camera is a part of its site: the answer carries the site without it, which the
+    // page draws as it does after the camera's own ring's Remove.
     async function removeCamera(site, name) {
-        await api(`/sites/${encodeURIComponent(site)}/cameras/${encodeURIComponent(name)}`, { method: "DELETE" });
+        const answer = await api(`/sites/${encodeURIComponent(site)}/cameras/${encodeURIComponent(name)}`, { method: "DELETE" });
         say(`${site} › ${name} removed; the pictures it took stay`);
-        if (world && world.changed) await world.changed(site);
+        if (world && world.cameraRemoved) await world.cameraRemoved(site, name, answer.site || null);
     }
     async function unpinView(site, id) {
         await api(`/sites/${encodeURIComponent(site)}/views/${encodeURIComponent(id)}`, { method: "DELETE" });
