@@ -76,6 +76,9 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     _expand_to(page, BOARD)
     section = page.locator("#selected-body .device-section")
     expect(section.locator(".dev-pick")).to_be_visible(timeout=10000)
+    # The Device section is below the board's rows and its part: scrolled into view.
+    section.evaluate("(el) => el.scrollIntoView({ block: 'center' })")
+    page.wait_for_timeout(200)
     docs.step(
         "Open printer_1 › frame_system › mainboard in Site's tree: the board's Device section "
         "offers the detected ports to pin, a Query button, and a box to pin by typed identity"
@@ -107,6 +110,16 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
         "section says which board speaks for it"
     )
 
+    # The root frames the whole building, where the printer is a few pixels: the view
+    # is framed on the bench and the printer on it, so its badge is seen at its board.
+    page.evaluate(
+        """() => {
+            const v = window.fractalViewer;
+            const on = new Set(['workbench', 'printer_1']);
+            const level = v.currentRenderNodes(v.currentFocusNode());
+            v.frameCameraForChildren(level.filter((n) => on.has(n.name)));
+        }"""
+    )
     world_badge = page.locator(".world-badge[data-path='printer_1']")
     expect(world_badge).to_contain_text("printing", timeout=10000)
     page.wait_for_timeout(600)
@@ -188,12 +201,13 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     page.locator("#q").fill("M119")
     page.locator("#qform button").click()
     expect(page.locator("#log")).to_contain_text("y_min: TRIGGERED", timeout=8000)
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
     docs.step(
         "The printer monitor's address, /firmware/monitor?port=, opens the viewer on the "
-        "site the port is pinned in with the printer's Machine open in front of the world: "
-        "status cards, temperature history, the port's comms log with its query box, and "
-        "Reconnect / Reset / Release for the link. A board pinned nowhere opens on the "
-        "default site, its Machine floating"
+        "site the port is pinned in with the printer's Machine open, a tab of the rail's "
+        "strip: status cards, temperature history, the port's comms log with its query box, "
+        "and Reconnect / Reset / Release for the link. A board pinned nowhere opens on the "
+        "default site, its Machine in the rail the same way"
     )
 
     page.locator("#ctl").check()
