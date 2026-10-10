@@ -80,6 +80,10 @@ One line per change, each with a link to where it is described. The format follo
 - `GET /jobs` by site, machine and kind, `GET /jobs/{id}`, and `GET /jobs/choices` for what a job on a machine can name. ([code](apothecary/routes/jobs.py))
 - The Print card names the part a print makes, from the site its printer is pinned in, and its history is the printer's jobs. ([doc](docs/firmware.md))
 - Site lists the jobs of the site's machines, the running ones first; a row selects its machine and opens it. ([test](tests/e2e/test_printer_ui.py))
+- `apothecary slicer install` installs a pinned OrcaSlicer from its GitHub releases, checked against the digest GitHub publishes, natively on Linux, macOS and Windows; `apothecary slicer status` says where it stands. ([doc](docs/slicer.md))
+- A slicer is a module behind one interface, OrcaSlicer's command line the first; the printer's profile names the one used. ([code](apothecary/slicer/modules/__init__.py))
+- printer_1's slicer profile is kept with the ender3 part: OrcaSlicer's Creality Ender-3 profile and what the bench measured, each value with its source. ([profile](parts/ender3/slicer.json))
+- `apothecary slicer slice` and `POST /slicer/slice` slice a part or a made piece for the pinned printer, its declared print settings winning, and keep the G-code where the Print card keeps a file, with the slice's values and sources, OrcaSlicer's estimate and its errors by line. ([doc](docs/slicer.md))
 
 ### Changed
 
