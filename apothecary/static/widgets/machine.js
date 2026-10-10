@@ -378,7 +378,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("c-board").innerHTML = rows.join("<br>");
         const w = sketchWords(bd.expected, bd.observed);
         const lines = [];
-        if (w.rec) lines.push(`should run <b>${esc(w.should)}</b> · ${esc(builtFor(w.rec))} · flashed ${esc(new Date(w.rec.flashed_at).toLocaleString())}${w.rec.build_sha256 ? " · build " + esc(w.rec.build_sha256.slice(0, 10)) : ""}`);
+        if (w.rec) lines.push(`should run <b>${esc(w.should)}</b> · ${esc(builtFor(w.rec))} · flashed <span class="when">${esc(new Date(w.rec.flashed_at).toLocaleString())}</span>${w.rec.build_sha256 ? " · build " + esc(w.rec.build_sha256.slice(0, 10)) : ""}`);
         else lines.push('<span class="warn">nothing flashed from apothecary</span>');
         for (const t of w.drift) lines.push(`<span class="warn">! ${esc(t)}</span>`);
         lines.push(w.observed

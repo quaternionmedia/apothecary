@@ -35,6 +35,7 @@ One line per change, each with a link to where it is described. The format follo
 - Rust for the ESP32 finds ports, listens to a board (pyserial, in a process of its own) and asks its chip (espflash) itself, so it works with no arduino-cli. ([doc](docs/firmware.md#rust-for-the-esp32))
 - A sketch is always named with its toolchain -- `esp32_blink@arduino`, `esp32_blink@rust-esp32` -- in the Bench, a board's Machine, the CLI and build folders. ([doc](docs/firmware.md#sketches-live-with-their-parts))
 - Panels › Bench › Install is a ring of the toolchain modules, one cell each. ([doc](docs/firmware.md#in-the-viewer-the-bench))
+- The firmware loop's page: a sketch chosen, built, flashed and heard saying its hello in the board's Machine, the Arduino esp32_blink then the Rust one, written by the browser test that goes round it. ([page](walkthrough/15-firmware.md))
 - No build path, and so no user name, is in a flashed Rust image: the build remaps every folder and its last step checks the ELF. ([doc](docs/firmware.md#rust-for-the-esp32))
 - `apothecary photo` turns a picture into named, placed pieces. ([page](walkthrough/11-photographs-into-pieces.md))
 - The Camera & pictures panel: capture, look, place a camera, gather. ([page](walkthrough/12-the-bench-as-it-is.md))

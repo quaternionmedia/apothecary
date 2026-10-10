@@ -606,7 +606,9 @@ a board's Machine, its flashing and its port opened only by Listen.
 through the page -- the Arduino `esp32_blink` from the Bench, then the Rust one
 from the board's Machine, each built, flashed and heard saying its hello --
 against the simulated devkit, and again with Rust alone and no arduino-cli;
-flashing the bench's own ESP32 is a step of the bench checklist.
+flashing the bench's own ESP32 is a step of the bench checklist. Its first test
+writes [walkthrough 15](../walkthrough/15-firmware.md), the loop as it is, with
+pictures it takes as it goes; the browser suite alone runs it.
 [`validation/2026-09-20-ender-bench.md`](validation/2026-09-20-ender-bench.md)
 is the seam against a real Ender mainboard, with a checklist for what needs
 control armed.

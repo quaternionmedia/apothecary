@@ -8,6 +8,11 @@ ring's cells, asserting what a person sees at each step -- the Flashing card's
 task, the board's one log, the sketch it should run against the sketch it was
 heard saying.
 
+This module is a walkthrough page too: `walkthrough/15-firmware.md` is what its
+first test writes, its pictures taken as it goes, so the page shows the loop as
+it is. The browser suite alone writes it -- the test is marked e2e and not
+walkthrough -- so `apothecary test run` stays quick (the loops plan, 2026-10-10).
+
 Runs against servers of their own: the scripted arduino-cli, cargo and espflash
 in one folder (tests/firmware_helpers.py), and the simulated devkit they share
 (FAKE_DEVKIT): an ESP32 on /dev/ttyFAKE2 that runs what was last flashed to it
@@ -24,6 +29,7 @@ from __future__ import annotations
 import pytest
 from firmware_helpers import write_fake_arduino_cli, write_fake_cargo, write_fake_espflash
 from playwright.sync_api import Page, expect
+from viewer_ready import settled
 
 DEVKIT = "/dev/ttyFAKE2"
 NODE = "esp32_blink"
@@ -108,8 +114,37 @@ def _canvas_ring(page: Page, *digits: str) -> None:
         page.keyboard.press(digit)
 
 
-@pytest.mark.e2e
-def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: str):
+# What differs on every run whatever the page does, blanked in the pictures: the
+# times a task started and a log line arrived, when a board was flashed, the folders
+# the scripted tools and the builds live in (a task's output names them), and the
+# tools' paths in the toolchain card.
+CHANGING = (
+    ".task-log",
+    ".task-history .meta",
+    "#log .t",
+    "#c-sketch .when",
+    ".tc-status",
+    ".tc-module .kv",
+)
+
+
+def _title(where) -> str:
+    """A task's title as the card shows it: what ran, and how it ended."""
+    return where.locator(".task-title").inner_text().strip()
+
+
+def _lines(log, *wanted: str) -> str:
+    """The lines of a log that hold each of ``wanted``, in order, without their times."""
+    rows = [row.strip() for row in log.inner_text().splitlines() if row.strip()]
+    found = []
+    for want in wanted:
+        line = next(row for row in rows if want in row)
+        found.append(line[line.index(want) :] if line.find(want) > 0 else line)
+    return "\n".join(found)
+
+
+@pytest.mark.e2e  # the browser suite's alone: not walkthrough, so `test run` stays quick
+def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: str, walkthrough):
     """Round one, from the Bench: the Arduino esp32_blink, chosen, built for its board
     and uploaded to the devkit's port by the ring's Panels › Bench cells. The
     garage's esp32_blink, bound by its sketch, now wears the board; its Machine says
@@ -117,12 +152,51 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     from the Machine's Flashing card: the Rust esp32_blink, listed beside the Arduino
     one, takes no board; built with cargo, flashed with espflash, and heard saying the
     same hello, so the Machine says it matches the sketch it should run, now the Rust
-    one. Listen hears the hello on the wire."""
+    one. Listen hears the hello on the wire. Walkthrough 15 is what it writes."""
+    story = walkthrough(
+        ordinal="15",
+        slug="firmware",
+        title="Firmware",
+        intro=(
+            "A sketch chosen, built, flashed to the ESP32 devkit on the bench, and heard "
+            "saying its hello in the board's Machine; then changed and round again. The "
+            "first time it is the Arduino esp32_blink, from the Bench; the second, the "
+            "Rust one, from the board's own Machine. Both say the same hello, so the "
+            "board runs the sketch the garage's esp32_blink expects either way, and the "
+            "Machine says which build it is. Every step is the page's own: a cell of a "
+            "ring, a button or a drop-down, and every step's words name the next one."
+        ),
+        runtime=(
+            "It drives a real browser against a real server of its own. arduino-cli, "
+            "cargo and espflash are scripted stand-ins in one folder, and the devkit is "
+            "a simulated one on /dev/ttyFAKE2 that runs whatever was last flashed to it "
+            "and says that sketch's hello. It needs no network, opens no serial port, "
+            "builds nothing for real, and refuses all three."
+        ),
+        does_not_show=[
+            "**A real board.** The devkit is a simulation that says what esp32_blink "
+            "says; flashing the bench's own ESP32 and hearing it is step G of the bench "
+            "checklist (docs/validation/2026-09-20-ender-bench.md).",
+            "**A real build.** The scripted cargo writes a stand-in image; a real one is "
+            "`apothecary firmware install --rust-esp32` and then the same Compile "
+            "(docs/firmware.md).",
+            "**Rust with no arduino-cli.** The Rust module finds the devkit and listens "
+            "to it itself when arduino-cli is not there; this module's last test goes "
+            "round that way, and writes no page.",
+            "**What changes on every run.** When each task started and each log line "
+            "arrived, when the board was flashed, and the folders the stand-in tools "
+            "and the builds live in -- which a task's output names -- are blanked in the "
+            "pictures and left out of the words, so this page changes when the loop "
+            "does, not when the clock does.",
+        ],
+        page=page,
+    )
     dialogs: list[str] = []
     page.on("dialog", lambda d: (dialogs.append(d.message), d.accept()))
     _open_viewer(page, url)
 
-    # Round one, from the Bench: Panels › Bench › Bench opens it.
+    # ---------------------------------------------------------------- round one
+    # 1. The Bench, from the canvas ring: Panels › Bench › Bench.
     _canvas_ring(page, "9", "3", "8")
     bench = page.locator(BENCH)
     expect(bench).to_be_visible(timeout=5000)
@@ -136,14 +210,45 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     select.select_option(ARDUINO)
     expect(bench.locator(".fqbn-input")).to_have_value("esp32:esp32:esp32")
     bench.locator(".port-select").select_option(DEVKIT)
-    _canvas_ring(page, "9", "3", "2")  # Panels › Bench › Compile
+    expect(bench.locator(".tc-module[data-id='rust-esp32']")).to_contain_text("installed")
+    bench.locator(".bench-build").scroll_into_view_if_needed()
+    settled(page)
+    story.shows(
+        "The Bench lists both builds of esp32_blink, each with its toolchain",
+        "Panels › Bench on the canvas ring opens the Bench: the toolchains as installed, "
+        "arduino-cli and Rust for the ESP32 beside it, and the sketches under parts/, "
+        "each named with its toolchain -- the Arduino esp32_blink and the Rust one next "
+        "to each other. The Arduino one chosen, its board filled in from its "
+        "firmware.json, and the devkit's port: Compile is next.",
+        shown="\n".join(r for r in rows if r.startswith("esp32_blink")),
+        blank=CHANGING,
+    )
+
+    # 2. Compile, from the ring: Panels › Bench › Compile.
+    _canvas_ring(page, "9", "3", "2")
     _ended(bench, f"Compile {ARDUINO} (esp32:esp32:esp32)")
     expect(bench.locator(".task-log")).to_contain_text("fake compile")
-    _canvas_ring(page, "9", "3", "4")  # Panels › Bench › Upload, after asking
+    expect(page.locator("#status")).to_contain_text("⌗932")
+    story.says(
+        "Compile builds it for its board",
+        "Panels › Bench › Compile (⌗932) builds what the Bench has chosen, as a task "
+        "whose output is in the Bench's log; nothing is sent to a board. Upload is next.",
+        shown=_title(bench),
+    )
+
+    # 3. Upload, from the ring, after asking.
+    _canvas_ring(page, "9", "3", "4")
     _ended(bench, f"Upload {ARDUINO} → {DEVKIT}")
     expect(bench.locator(".task-log")).to_contain_text("fake upload")
+    story.says(
+        "Upload writes it to the devkit, after asking",
+        "Panels › Bench › Upload (⌗934) asks first, naming the sketch with its toolchain "
+        "and the port; then it builds again and uploads that fresh build. The garage's "
+        "esp32_blink, which runs the sketch of that name, now wears the board.",
+        shown=f"{dialogs[0]}\n{_title(bench)}",
+    )
 
-    # The node its sketch draws is bound to the board that runs it: its badge, its Machine.
+    # 4. The node its sketch draws is bound to the board that runs it: its Machine.
     badge = page.locator(f".world-badge[data-path='{NODE}']")
     expect(badge).to_be_visible(timeout=15000)
     page.locator(".panel-rail .rail-tab[data-panel='bench'] .rail-tab-name").click()  # fold it
@@ -156,12 +261,30 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     # Which build it should run, its toolchain said.
     expect(sketch).to_contain_text(f"should run {ARDUINO} · esp32:esp32:esp32", timeout=8000)
     expect(machine.locator("#c-board")).to_contain_text(DEVKIT)
+
+    # 5. Query, from the ring: a few seconds' listen for the hello.
     _ring_on(page, NODE)
-    _choose(page, "Device", "Query")  # Identify: a few seconds' listen for the hello
+    _choose(page, "Device", "Query")
     expect(log).to_contain_text("heard esp32_blink say hello", timeout=20000)
     expect(sketch).to_contain_text("observed esp32_blink ✓ matches", timeout=8000)
+    sketch.scroll_into_view_if_needed()
+    settled(page)
+    story.shows(
+        "The board's Machine hears it say hello",
+        "esp32_blink's ring, Device › Open: the board's Machine, with what it should run "
+        "-- esp32_blink@arduino, for its board -- and Device › Query, which listens a few "
+        "seconds for the hello. Heard, the Machine says the board runs what it should. "
+        "Change it next: Device › Flash.",
+        shown=_lines(log, "listening 6 s", "heard esp32_blink say hello")
+        + "\n"
+        + _lines(sketch, "should run", "observed").replace(
+            sketch.locator(".when").inner_text(), "…"
+        ),
+        blank=CHANGING,
+    )
 
-    # Change it. Round two, from the Machine's Flashing card (Device › Flash).
+    # ---------------------------------------------------------------- round two
+    # 6. Change it: Device › Flash, the Machine's Flashing card, the Rust one chosen.
     _ring_on(page, NODE)
     _choose(page, "Device", "Flash")
     card = machine.locator("#flash-card")
@@ -174,10 +297,35 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     card.locator(".sketch-select").select_option(RUST)
     expect(card.locator(".sk-board-row")).to_be_hidden()
     expect(card.locator(".sk-note")).to_contain_text("built by Rust for the ESP32 for esp32")
+    card.scroll_into_view_if_needed()
+    settled(page)
+    story.shows(
+        "Device › Flash, and the Rust esp32_blink chosen",
+        "esp32_blink's ring, Device › Flash (⌗22): the Machine's Flashing card, for this "
+        "board's port alone, starting from the build it should run. The Rust "
+        "esp32_blink chosen beside it: it builds for the chip its Cargo project names, "
+        "so the board box goes. Compile is next.",
+        shown=card.locator(".sk-note").inner_text().split(" — ")[0],
+        blank=CHANGING,
+    )
+
+    # 7. Compile: cargo, offline, and the image checked for build paths.
     card.locator(".compile-btn").click()
     _ended(card, f"Compile {RUST} (esp32)")
     expect(card.locator(".task-log")).to_contain_text("Compiling esp32_blink")
     expect(card.locator(".task-log")).to_contain_text("--offline")
+    expect(card.locator(".task-log")).to_contain_text("esp32_blink: no build path in the image")
+    story.says(
+        "Compile builds it with cargo, offline",
+        "Compile runs cargo in the sketch's folder, offline, from the crates the install "
+        "vendored, and then reads the image it built: no folder it was built in, and so "
+        "no user name, may be in it. Compile & upload is next.",
+        shown=_title(card)
+        + "\n"
+        + _lines(card.locator(".task-log"), "esp32_blink: no build path in the image"),
+    )
+
+    # 8. Compile & upload: espflash, and the hello heard again.
     machine.locator("#clear").click()  # this round's hello, not the last one's
     card.locator(".upload-btn").click()
     _ended(card, f"Upload {RUST} → {DEVKIT}")
@@ -192,8 +340,24 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
         f'Compile and upload "{ARDUINO}" to {DEVKIT}?',
         f'Compile and upload "{RUST}" to {DEVKIT}?',
     ], dialogs
+    sketch.scroll_into_view_if_needed()
+    settled(page)
+    story.shows(
+        "Compile & upload flashes it with espflash, and the Machine hears the same hello",
+        "Compile & upload asks, builds again and flashes that build with espflash; the "
+        "Machine listens for the hello and hears it. It is the hello the Arduino build "
+        "said, so the board still runs what esp32_blink expects, and the Machine says it "
+        "is the Rust build now. Listen is next.",
+        shown=f"{dialogs[1]}\n"
+        + _lines(log, f"upload of {RUST}", "heard esp32_blink say hello")
+        + "\n"
+        + _lines(sketch, "should run", "observed").replace(
+            sketch.locator(".when").inner_text(), "…"
+        ),
+        blank=CHANGING,
+    )
 
-    # Its hello in the board's Machine as it says it on the wire: Listen streams it.
+    # 9. Listen: the hello on the wire.
     machine.locator("#listen").click()
     expect(log).to_contain_text("apothecary esp32_blink: hello", timeout=10000)
     expect(log).to_contain_text("chip: ESP32-D0WD-V3 rev 301, 2 core(s), 240 MHz, LED on GPIO 2")
@@ -204,13 +368,32 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     page.wait_for_function(
         f"() => !window.fractalViewer.boards.board('{DEVKIT}').stream", timeout=5000
     )
-    # Opened again, the card starts from what the board should run: the Rust one.
+    story.says(
+        "Listen hears the hello on the wire",
+        "Listen opens the port, saying it may reset the board, and streams what the board "
+        "says into the Machine's one log: the hello, the chip line and a blink count, as "
+        "esp32_blink says them in either build. Release lets the port go.",
+        shown=_lines(
+            log,
+            "apothecary esp32_blink: hello",
+            "chip: ESP32-D0WD-V3",
+            "blink 1",
+        ),
+    )
+
+    # 10. Opened again, the card starts from what the board should run: the Rust one.
     page.evaluate("() => window.fractalViewer.closeMachine()")
     expect(machine).to_have_count(0)
     _ring_on(page, NODE)
     _choose(page, "Device", "Flash")
     expect(machine.locator("#flash-card .sketch-select")).to_have_value(RUST, timeout=10000)
     expect(machine.locator("#flash-card .sk-board-row")).to_be_hidden()
+    story.says(
+        "Opened again, the Machine starts from the Rust build",
+        "Closed and opened again by Device › Flash, the Flashing card starts from the build "
+        "the board should run, esp32_blink@rust-esp32; the next round starts there.",
+        shown=machine.locator("#flash-card .sketch-select option:checked").inner_text(),
+    )
 
 
 @pytest.mark.e2e
