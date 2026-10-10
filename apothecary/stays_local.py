@@ -15,8 +15,9 @@ editing this code and having that edit reviewed:
    before any of its code runs. The one allowance is a *tool fetch*, and it
    has two callers: the firmware installer downloads arduino-cli -- and, for
    Rust on the ESP32 (apothecary/firmware/rust_installer.py, through the
-   firmware installer's own fetch), rustup-init from static.rust-lang.org and
-   espup and espflash from their GitHub releases -- and the
+   firmware installer's own fetch), rustup-init from static.rust-lang.org,
+   espflash and Espressif's Xtensa Rust, rust-src, LLVM and GCC archives from
+   their GitHub releases -- and the
    OpenSCAD installer (apothecary/openscad_installer.py) downloads a
    development snapshot from files.openscad.org -- or, on Linux arm64, where
    none is published, OpenSCAD's source from GitHub: api.github.com names the
@@ -52,15 +53,14 @@ editing this code and having that edit reviewed:
 
 4. **A subprocess that fetches is told where, and nothing else tells it.**
    arduino-cli, esptool and OpenSCAD are outside the socket guard (it is a
-   Python object), and so are rustup-init, espup and cargo. At install time
-   espup fetches the pinned Xtensa toolchain from Espressif's GitHub releases
-   (and asks crates.io whether there is a newer espup, which it cannot be told
-   not to), and ``cargo vendor`` fetches each Rust sketch's locked crates from
-   crates.io; their environment carries no proxy, no registry or source
-   override and no GitHub token (``modules/rust_esp32.NOT_INHERITED``). A Rust
-   *build* fetches nothing: ``cargo --offline`` from the vendored crates,
-   rustup told not to install a toolchain it lacks, espflash told not to
-   check for updates. Of the first three only arduino-cli reaches out, and it is a
+   Python object), and so are rustup-init and cargo. At install time
+   ``cargo vendor`` fetches each Rust sketch's locked crates from crates.io
+   (rustup-init, told to install no toolchain, fetches nothing); its
+   environment carries no proxy, no registry or source override and no
+   GitHub token (``modules/rust_esp32.NOT_INHERITED``). A Rust *build*
+   fetches nothing: ``cargo --offline`` from the vendored crates, rustup told
+   not to install a toolchain it lacks, espflash told not to check for
+   updates. Of the first three only arduino-cli reaches out, and it is a
    program that will, left to itself, ask Arduino's cloud about every USB
    device it does not recognise and check for its own updates. Every
    arduino-cli the seam starts is given ``--config-file`` naming a file this
@@ -104,10 +104,10 @@ TOOL_SOURCES = frozenset(
     {
         # arduino-cli's releases: the API that names the latest, the archive,
         # and where GitHub redirects the archive. For Rust on the ESP32, the
-        # same hosts serve espup's and espflash's releases and the SHA-256
-        # GitHub publishes for each asset (the API); espup fetches the pinned
-        # Xtensa Rust, LLVM and GCC from Espressif's releases on them, and asks
-        # the API about them.
+        # same hosts serve espflash's release and Espressif's Xtensa Rust,
+        # rust-src, LLVM and GCC archives with their checksum files, and the API
+        # the SHA-256 GitHub publishes for an asset whose release has no
+        # checksum file.
         "api.github.com",
         "github.com",
         "objects.githubusercontent.com",
@@ -122,11 +122,9 @@ TOOL_SOURCES = frozenset(
         # Rust: rustup-init at a pinned version, and the .sha256 beside it.
         "static.rust-lang.org",
         # Rust: `cargo vendor` reads crates.io's sparse index and downloads each
-        # locked crate from its static host; espup asks crates.io's API whether a
-        # newer espup is out (an update check it cannot be told not to make).
+        # locked crate from its static host.
         "index.crates.io",
         "static.crates.io",
-        "crates.io",
     }
 )
 

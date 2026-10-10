@@ -1,7 +1,10 @@
-"""`apothecary firmware install --rust-esp32`: rustup, espup's Xtensa toolchain,
-espflash and the vendored crates, into the tools dir, on each platform served.
+"""`apothecary firmware install --rust-esp32`: rustup, Espressif's Xtensa toolchain
+(Rust, rust-src, LLVM, GCC -- fetched and checked by apothecary itself, laid out
+as espup lays them out), espflash and the vendored crates, into the tools dir, on
+each platform served.
 
-Against a scripted fetch and a recording runner: nothing is downloaded or run.
+Against a scripted fetch, scripted archives and a recording runner: nothing is
+downloaded or run.
 """
 
 from __future__ import annotations
@@ -9,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import tarfile
 import zipfile
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -40,7 +44,7 @@ def test_each_platform_served_has_its_triple(system, machine, triple):
     "system, machine, why",
     [
         ("Darwin", "x86_64", "Apple Silicon only"),
-        ("Windows", "arm64", "no ARM64 Windows build"),
+        ("Windows", "arm64", "no ARM64 Windows Xtensa Rust"),
         ("Linux", "armv7l", "Linux x86_64 and arm64"),
         ("FreeBSD", "amd64", "Linux x86_64 and arm64"),
     ],
@@ -56,8 +60,12 @@ def test_published_checksums_are_read_and_a_bad_one_refused():
     assert ri.published_sha256(f"{sha} *./rustup-init\n") == sha
     with pytest.raises(ri.InstallError, match="no SHA-256"):
         ri.published_sha256("<html>not found</html>")
+    listing = f"# gcc.tar.xz: 12 bytes\n{sha} *gcc.tar.xz\n{'cd' * 32} *llvm.tar.xz\n"
+    assert ri.listed_sha256(listing, "gcc.tar.xz") == sha
+    with pytest.raises(ri.InstallError, match="no SHA-256 listed for other.tar.xz"):
+        ri.listed_sha256(listing, "other.tar.xz")
     release = json.dumps(
-        {"assets": [{"name": "espup-x86_64-unknown-linux-gnu", "digest": f"sha256:{sha}"}]}
+        {"assets": [{"name": "espflash-x86_64-unknown-linux-gnu.zip", "digest": f"sha256:{sha}"}]}
     ).encode()
     fetched = []
 
@@ -65,16 +73,36 @@ def test_published_checksums_are_read_and_a_bad_one_refused():
         fetched.append(url)
         return release
 
-    assert (
-        ri.github_digest("esp-rs/espup", "0.17.1", "espup-x86_64-unknown-linux-gnu", fetch) == sha
-    )
-    assert fetched == ["https://api.github.com/repos/esp-rs/espup/releases/tags/v0.17.1"]
+    asset = "espflash-x86_64-unknown-linux-gnu.zip"
+    assert ri.github_digest("esp-rs/espflash", "4.6.0", asset, fetch) == sha
+    assert fetched == ["https://api.github.com/repos/esp-rs/espflash/releases/tags/v4.6.0"]
     with pytest.raises(ri.InstallError, match="publishes no"):
-        ri.github_digest("esp-rs/espup", "0.17.1", "espup-other", fetch)
+        ri.github_digest("esp-rs/espflash", "4.6.0", "espflash-other.zip", fetch)
     with pytest.raises(ri.InstallError, match="not a version"):
-        ri.github_digest("esp-rs/espup", "0.17/../../x", "espup", fetch)
+        ri.github_digest("esp-rs/espflash", "4.6/../../x", "espflash", fetch)
     with pytest.raises(ri.InstallError, match="not an asset name"):
-        ri.github_digest("esp-rs/espup", "0.17.1", "../x", fetch)
+        ri.github_digest("esp-rs/espflash", "4.6.0", "../x", fetch)
+    with pytest.raises(ri.InstallError, match="not an Espressif release"):
+        ri.check_esp_version("esp-20.1.1_20250829/../../x")
+
+
+def _tar_xz(files: dict) -> bytes:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:xz") as tf:
+        for name, data in files.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            info.mode = 0o755
+            tf.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+def _zip(files: dict) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        for name, data in files.items():
+            zf.writestr(name, data)
+    return buf.getvalue()
 
 
 class Bench:
@@ -94,47 +122,92 @@ class Bench:
         self.files[base + ".sha256"] = (
             hashlib.sha256(init).hexdigest() + f" *./rustup-init{self.ext}\n"
         ).encode()
-        espup_asset = f"espup-{triple}{self.ext}"
-        espup = b"espup for " + triple.encode()
-        self.files[
-            f"{ri.GITHUB}/{ri.ESPUP_REPO}/releases/download/v{ri.ESPUP_VERSION}/{espup_asset}"
-        ] = espup
-        self.files[f"{ri.GITHUB_API}/{ri.ESPUP_REPO}/releases/tags/v{ri.ESPUP_VERSION}"] = (
-            json.dumps(
-                {
-                    "assets": [
-                        {
-                            "name": espup_asset,
-                            "digest": "sha256:" + hashlib.sha256(espup).hexdigest(),
-                        }
-                    ]
-                }
-            ).encode()
-        )
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, "w") as zf:
-            zf.writestr(f"espflash{self.ext}", b"espflash for " + triple.encode())
-        archive = buf.getvalue()
+        espflash = _zip({f"espflash{self.ext}": b"espflash for " + triple.encode()})
         espflash_asset = f"espflash-{triple}.zip"
         self.files[
             f"{ri.GITHUB}/{ri.ESPFLASH_REPO}/releases/download/v{ri.ESPFLASH_VERSION}/{espflash_asset}"
-        ] = archive
-        self.files[f"{ri.GITHUB_API}/{ri.ESPFLASH_REPO}/releases/tags/v{ri.ESPFLASH_VERSION}"] = (
-            json.dumps(
-                {
-                    "assets": [
-                        {
-                            "name": espflash_asset,
-                            "digest": "sha256:" + hashlib.sha256(archive).hexdigest(),
-                        }
-                    ]
-                }
+        ] = espflash
+        self.digests(ri.ESPFLASH_REPO, f"v{ri.ESPFLASH_VERSION}", {espflash_asset: espflash})
+        # The Xtensa toolchain, archive by archive, as Espressif publishes it.
+        installer = ri.RustEsp32Installer(triple=triple)
+        rust_build = {}
+        listed = {}
+        for archive in installer.archives():
+            data = self.archive(archive.part, windows)
+            self.files[archive.url] = data
+            if archive.github:
+                rust_build[archive.name] = data
+            else:
+                listed.setdefault(f"{archive.base}/{archive.checksums}", {})[archive.name] = data
+        self.digests(ri.RUST_BUILD_REPO, f"v{ri.XTENSA_RUST_VERSION}", rust_build)
+        for url, entries in listed.items():
+            self.files[url] = "".join(
+                f"# {name}: {len(data)} bytes\n{hashlib.sha256(data).hexdigest()} *{name}\n"
+                for name, data in entries.items()
             ).encode()
-        )
+
+    def digests(self, repo: str, tag: str, assets: dict) -> None:
+        self.files[f"{ri.GITHUB_API}/{repo}/releases/tags/{tag}"] = json.dumps(
+            {
+                "assets": [
+                    {"name": n, "digest": "sha256:" + hashlib.sha256(d).hexdigest()}
+                    for n, d in assets.items()
+                ]
+            }
+        ).encode()
+
+    def archive(self, part: str, windows: bool) -> bytes:
+        ext = self.ext
+        if part == "rust" and windows:
+            return _zip(
+                {
+                    f"esp/bin/rustc{ext}": b"rustc",
+                    f"esp/bin/cargo{ext}": b"cargo",
+                    "esp/lib/rustlib/src/rust/library/Cargo.toml": b"[workspace]\n",
+                }
+            )
+        if part == "rust":
+            root = f"rust-nightly-{self.triple}"
+            return _tar_xz(
+                {
+                    f"{root}/components": b"rustc\ncargo\nrust-docs\n",
+                    f"{root}/install.sh": b"#!/bin/sh\nexit 1  # never run\n",
+                    f"{root}/rustc/manifest.in": b"file:bin/rustc\ndir:lib/rustlib/x86\n",
+                    f"{root}/rustc/bin/rustc": b"rustc",
+                    f"{root}/rustc/lib/rustlib/x86/libstd.rlib": b"std",
+                    f"{root}/cargo/manifest.in": b"file:bin/cargo\n",
+                    f"{root}/cargo/bin/cargo": b"cargo",
+                    f"{root}/rust-docs/manifest.in": b"file:share/doc/index.html\n",
+                    f"{root}/rust-docs/share/doc/index.html": b"docs",
+                }
+            )
+        if part == "rust-src":
+            return _tar_xz(
+                {
+                    "rust-src-nightly/components": b"rust-src\n",
+                    "rust-src-nightly/rust-src/manifest.in": (
+                        b"file:lib/rustlib/src/rust/library/Cargo.toml\n"
+                    ),
+                    "rust-src-nightly/rust-src/lib/rustlib/src/rust/library/Cargo.toml": (
+                        b"[workspace]\n"
+                    ),
+                }
+            )
+        if part == "llvm":
+            lib = "esp-clang/bin/libclang.dll" if windows else "esp-clang/lib/libclang.so"
+            return _tar_xz({lib: b"libclang"})
+        gcc = {f"xtensa-esp-elf/bin/xtensa-esp32-elf-gcc{ext}": b"gcc"}
+        return _zip(gcc) if windows else _tar_xz(gcc)
 
     def fetch(self, url: str) -> bytes:
         self.fetched.append(url)
         return self.files[url]
+
+    def fetch_to(self, url: str, path: Path) -> str:
+        data = self.fetch(url)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        return hashlib.sha256(data).hexdigest()
 
     def run(self, argv, env=None, cwd=None) -> int:
         self.ran.append((list(argv), dict(env or {}), str(cwd) if cwd else None))
@@ -144,16 +217,22 @@ class Bench:
                 path = Path(env["CARGO_HOME"]) / "bin" / f"{tool}{self.ext}"
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("proxy")
-        elif name.startswith("espup"):
-            bin_ = Path(env["RUSTUP_HOME"]) / "toolchains" / "esp" / "bin"
-            bin_.mkdir(parents=True, exist_ok=True)
-            (bin_ / f"rustc{self.ext}").write_text("rustc")
-            Path(argv[argv.index("--export-file") + 1]).write_text(
-                'export PATH="/esp/xtensa-esp-elf/bin:$PATH"\n'
-            )
+        elif argv[1:3] == ["toolchain", "link"]:
+            link = Path(env["RUSTUP_HOME"]) / "toolchains" / argv[3]
+            link.parent.mkdir(parents=True, exist_ok=True)
+            link.symlink_to(argv[4])
+        elif argv[1:3] == ["toolchain", "uninstall"]:
+            import shutil
+
+            shutil.rmtree(Path(env["RUSTUP_HOME"]) / "toolchains" / argv[3])
         elif "vendor" in argv:
             Path(argv[-1]).mkdir(parents=True)
         return 0
+
+    def installer(self, **kw) -> ri.RustEsp32Installer:
+        return ri.RustEsp32Installer(
+            fetch=self.fetch, fetch_to=self.fetch_to, run=self.run, triple=self.triple, **kw
+        )
 
 
 @pytest.fixture
@@ -170,18 +249,28 @@ def tools(tmp_path, monkeypatch):
 @pytest.mark.parametrize(
     "triple", ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-pc-windows-msvc"]
 )
-def test_an_install_fetches_each_tool_once_verified_into_the_tools_dir(tools, triple):
+def test_an_install_fetches_each_thing_once_checked_into_the_tools_dir(tools, triple):
     bench = Bench(triple, tools)
     log = []
-    installer = ri.RustEsp32Installer(
-        log=log.append, fetch=bench.fetch, run=bench.run, triple=triple
-    )
-    record = installer.install()
+    record = bench.installer(log=log.append).install()
     ext = bench.ext
+    windows = "windows" in triple
+    toolchain = tools / "xtensa" / ri.XTENSA_RUST_VERSION
 
-    # Every fetch is to a tool source, and apothecary verifies each download.
+    # Every fetch is to a tool source, and every download is checked.
     assert {urlsplit(u).hostname for u in bench.fetched} <= stays_local.TOOL_SOURCES
-    assert sum("SHA-256 verified" in line for line in log) == 3
+    downloads = 2 + len(bench.installer().archives())  # rustup-init, espflash, the archives
+    assert sum("SHA-256 verified" in line for line in log) == downloads
+    # Each archive checked against what its source publishes: Espressif's own
+    # checksum files for LLVM and GCC, GitHub's digest for rust-build's.
+    assert any(u.endswith(f"libs-clang-{ri.LLVM_VERSION}-checksum.sha256") for u in bench.fetched)
+    assert any(
+        u.endswith(f"crosstool-NG-esp-{ri.GCC_VERSION}-checksum.sha256") for u in bench.fetched
+    )
+    assert f"{ri.GITHUB_API}/{ri.RUST_BUILD_REPO}/releases/tags/v{ri.XTENSA_RUST_VERSION}" in (
+        bench.fetched
+    )
+    assert not [u for u in bench.fetched if "espup" in u]  # espup is not fetched, nor run
 
     # 1. rustup, its homes in the tools dir and no toolchain of its own.
     init, env, _ = bench.ran[0]
@@ -198,22 +287,35 @@ def test_an_install_fetches_each_tool_once_verified_into_the_tools_dir(tools, tr
     assert env["RUSTUP_HOME"] == str(tools / "rustup")
     assert ".cargo" not in env["CARGO_HOME"] and ".rustup" not in env["RUSTUP_HOME"]
 
-    # 2. espup's Xtensa toolchain, pinned; its ~/.espup in the tools dir too.
-    espup, env, _ = bench.ran[1]
-    assert espup[0] == str(tools / "bin" / f"espup{ext}")
-    assert espup[1:] == [
-        "install",
-        "--targets",
-        "esp32",
-        "--name",
-        "esp",
-        "--toolchain-version",
-        ri.XTENSA_RUST_VERSION,
-        "--export-file",
-        str(tools / ("export-esp.ps1" if "windows" in triple else "export-esp.sh")),
+    # 2. The Xtensa toolchain, laid out as espup lays it out, linked as rustup's esp.
+    assert (toolchain / "bin" / f"rustc{ext}").read_bytes() == b"rustc"
+    assert (toolchain / "lib" / "rustlib" / "src" / "rust" / "library" / "Cargo.toml").is_file()
+    assert not (toolchain / "share" / "doc").exists()  # the docs are not installed
+    if windows:
+        assert (
+            toolchain / "xtensa-esp32-elf-clang" / "esp-clang" / "bin" / "libclang.dll"
+        ).is_file()
+        assert (toolchain / "xtensa-esp-elf" / "bin" / f"xtensa-esp32-elf-gcc{ext}").is_file()
+    else:
+        assert (toolchain / "lib" / "rustlib" / "x86" / "libstd.rlib").is_file()
+        assert (
+            toolchain
+            / "xtensa-esp32-elf-clang"
+            / ri.LLVM_VERSION
+            / "esp-clang"
+            / "lib"
+            / "libclang.so"
+        ).is_file()
+        gcc_bin = toolchain / "xtensa-esp-elf" / f"esp-{ri.GCC_VERSION}" / "xtensa-esp-elf" / "bin"
+        assert (gcc_bin / "xtensa-esp32-elf-gcc").is_file()
+        export = (tools / "export-esp.sh").read_text()
+        assert f'export PATH="{gcc_bin}:$PATH"' in export
+    rustup = str(tools / "cargo" / "bin" / f"rustup{ext}")
+    assert [argv for argv, _, _ in bench.ran[1:3]] == [
+        [rustup, "toolchain", "link", "esp", str(toolchain)],
+        [rustup, "default", "esp"],
     ]
-    assert env["HOME"] == str(tools / "home")
-    assert bench.ran[2][0] == [str(tools / "cargo" / "bin" / f"rustup{ext}"), "default", "esp"]
+    assert not list((tools / "downloads").glob("*.tar.xz"))  # unpacked, then let go
 
     # 3. espflash, out of its zip.
     assert (tools / "bin" / f"espflash{ext}").read_bytes() == b"espflash for " + triple.encode()
@@ -236,26 +338,57 @@ def test_an_install_fetches_each_tool_once_verified_into_the_tools_dir(tools, tr
     assert record["vendored"] == ["esp32_blink@rust-esp32"]
     manifest = json.loads((tools / "install.json").read_text())
     assert manifest["triple"] == triple
-    assert manifest["xtensa_rust"]["version"] == ri.XTENSA_RUST_VERSION
+    pins = manifest["xtensa_rust"]
+    assert (pins["version"], pins["llvm"], pins["gcc"]) == (
+        ri.XTENSA_RUST_VERSION,
+        ri.LLVM_VERSION,
+        ri.GCC_VERSION,
+    )
+    assert set(pins["archives"]) == {a.name for a in bench.installer().archives()}
     assert manifest["espflash"]["version"] == ri.ESPFLASH_VERSION
 
 
 def test_a_second_install_fetches_nothing_and_vendors_again(tools):
-    triple = "x86_64-unknown-linux-gnu"
-    bench = Bench(triple, tools)
-    ri.RustEsp32Installer(fetch=bench.fetch, run=bench.run, triple=triple).install()
+    bench = Bench("x86_64-unknown-linux-gnu", tools)
+    bench.installer().install()
     bench.fetched.clear()
     bench.ran.clear()
     log = []
-    ri.RustEsp32Installer(log=log.append, fetch=bench.fetch, run=bench.run, triple=triple).install()
+    bench.installer(log=log.append).install()
     assert bench.fetched == []
-    assert [argv[2] for argv, _, _ in bench.ran] == ["vendor"]
+    # The link stands; the crates are vendored afresh.
+    assert [argv[1:3] for argv, _, _ in bench.ran] == [["default", "esp"], ["+esp", "vendor"]]
     assert any("rustup already installed" in line for line in log)
     assert any("already installed" in line and "Xtensa" in line for line in log)
-    # Forced, the tools come again.
+    # Forced, everything comes again.
     bench.ran.clear()
-    ri.RustEsp32Installer(fetch=bench.fetch, run=bench.run, triple=triple, force=True).install()
-    assert len(bench.ran) == 4 and bench.fetched
+    bench.installer(force=True).install()
+    assert [argv[1:3] for argv, _, _ in bench.ran][1:] == [["default", "esp"], ["+esp", "vendor"]]
+    assert len(bench.fetched) > 5  # rustup-init, espflash and every archive again
+
+
+def test_an_install_over_espup_s_toolchain_uninstalls_it_and_links_its_own(tools):
+    """An esp toolchain espup installed is a folder of rustup's own: rustup uninstalls
+    it, then links the one apothecary laid out."""
+    bench = Bench("x86_64-unknown-linux-gnu", tools)
+    espup_s = tools / "rustup" / "toolchains" / "esp" / "bin"
+    espup_s.mkdir(parents=True)
+    (espup_s / "rustc").write_text("espup's")
+    bench.installer().install()
+    calls = [argv[1:3] for argv, _, _ in bench.ran]
+    assert calls.index(["toolchain", "uninstall"]) + 1 == calls.index(["toolchain", "link"])
+
+
+def test_an_archive_that_does_not_match_its_checksum_is_refused_before_it_is_opened(tools):
+    triple = "x86_64-unknown-linux-gnu"
+    bench = Bench(triple, tools)
+    gcc = next(a for a in bench.installer().archives() if a.part == "gcc")
+    bench.files[gcc.url] = b"something else"
+    with pytest.raises(ri.InstallError, match=f"checksum mismatch for {gcc.name}"):
+        bench.installer().install()
+    assert not (tools / "downloads" / gcc.name).exists()
+    assert not (tools / "xtensa" / ri.XTENSA_RUST_VERSION).exists()
+    assert not [argv for argv, _, _ in bench.ran if argv[1:3] == ["toolchain", "link"]]
 
 
 def test_a_download_that_does_not_match_its_checksum_is_refused_before_it_runs(tools):
@@ -264,9 +397,21 @@ def test_a_download_that_does_not_match_its_checksum_is_refused_before_it_runs(t
     url = f"{ri.RUSTUP_ARCHIVE}/{ri.RUSTUP_VERSION}/{triple}/rustup-init"
     bench.files[url] = b"something else"
     with pytest.raises(ri.InstallError, match="checksum mismatch for rustup-init"):
-        ri.RustEsp32Installer(fetch=bench.fetch, run=bench.run, triple=triple).install()
+        bench.installer().install()
     assert bench.ran == []
     assert not (tools / "downloads" / "rustup-init").exists()
+
+
+def test_an_archive_member_that_leaves_its_folder_is_refused(tmp_path):
+    bad = tmp_path / "bad.tar.xz"
+    bad.write_bytes(_tar_xz({"../escaped": b"x"}))
+    with pytest.raises(ri.InstallError, match="leaves its folder"):
+        ri.unpack(bad, tmp_path / "into")
+    assert not (tmp_path / "escaped").exists()
+    badzip = tmp_path / "bad.zip"
+    badzip.write_bytes(_zip({"../escaped": b"x"}))
+    with pytest.raises(ri.InstallError, match="leaves its folder"):
+        ri.unpack(badzip, tmp_path / "into")
 
 
 def test_a_machine_without_a_linker_is_refused_with_what_installs_one(tmp_path, monkeypatch):
@@ -293,7 +438,15 @@ def test_a_sketch_without_a_lockfile_is_not_vendored(tools, tmp_path, monkeypatc
     (parts / "firmware.json").write_text('{"toolchain": "rust-esp32"}')
     real = sketches.discover_sketches
     monkeypatch.setattr(sketches, "discover_sketches", lambda root=None: real(tmp_path / "repo"))
-    triple = "x86_64-unknown-linux-gnu"
-    bench = Bench(triple, tools)
+    bench = Bench("x86_64-unknown-linux-gnu", tools)
     with pytest.raises(ri.InstallError, match="no Cargo.lock for pump@rust-esp32"):
-        ri.RustEsp32Installer(fetch=bench.fetch, run=bench.run, triple=triple).install()
+        bench.installer().install()
+
+
+def test_the_pins_and_their_rule_are_written_where_they_live():
+    """A pin moves by hand, in a commit that re-runs the real install and build."""
+    assert "moves only in a" in ri.__doc__ and "re-runs a\nreal install" in ri.__doc__
+    for pin in (ri.RUSTUP_VERSION, ri.ESPFLASH_VERSION, ri.XTENSA_RUST_VERSION):
+        assert ri.check_version(pin) == pin
+    for pin in (ri.LLVM_VERSION, ri.GCC_VERSION):
+        assert ri.check_esp_version(pin) == pin

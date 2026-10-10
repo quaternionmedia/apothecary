@@ -1,29 +1,50 @@
 """Install Rust for the classic ESP32 into the tools dir, and vendor every Rust sketch's crates.
 
 ``apothecary firmware install --rust-esp32`` (and the Bench's toolchain card)
-puts four things under ``tools_dir()/rust-esp32/``, each fetched once and kept:
+puts these under ``tools_dir()/rust-esp32/``, each fetched once, checked and
+kept:
 
 1. **rustup**, from the Rust project's archive on ``static.rust-lang.org``
    (``rustup-init`` at a pinned version, checked against the ``.sha256``
    published beside it), run with ``CARGO_HOME`` and ``RUSTUP_HOME`` inside
    the tools dir -- never ``~/.cargo`` or ``~/.rustup`` -- and no toolchain
    of its own: the one it manages is the next one.
-2. **espup's Xtensa toolchain**: espup itself from its GitHub release
-   (checked against the SHA-256 digest GitHub publishes for the asset), run as
-   ``espup install --targets esp32`` at a pinned Xtensa Rust version. It puts
-   the ``esp`` toolchain (rustc, cargo, rust-src), Espressif's LLVM and the
-   Xtensa GCC linker under ``RUSTUP_HOME``, and its export file -- the
-   linker's folder -- beside them; its ``~/.espup`` is the tools dir's too
-   (``HOME`` is pointed there for it). espup's own downloads (from
-   Espressif's GitHub releases) are espup's to check; apothecary checks
-   espup.
-3. **espflash**, from its GitHub release, checked the same way.
+2. **The Xtensa toolchain**, four archives from where Espressif publishes
+   them, each checked before it is opened, laid out as espup lays them out,
+   and linked into the tools dir's rustup as the ``esp`` toolchain
+   (``rustup toolchain link``):
+
+   | Archive | From | Checked against |
+   |---|---|---|
+   | Xtensa Rust (rustc, cargo, the host's std) | esp-rs/rust-build's GitHub release ``v<XTENSA_RUST_VERSION>`` | the SHA-256 GitHub publishes for the asset (rust-build publishes no checksum file) |
+   | rust-src (what build-std builds core from) | the same release | the same |
+   | LLVM's libraries (libclang, for bindgen; a no_std build does not use them) | espressif/llvm-project's release ``<LLVM_VERSION>`` | the release's own ``libs-clang-<version>-checksum.sha256`` |
+   | GCC, the Xtensa linker | espressif/crosstool-NG's release ``esp-<GCC_VERSION>`` | the release's own ``crosstool-NG-esp-<version>-checksum.sha256`` |
+
+   The Rust archives are rust-installer dist tarballs: their components are
+   copied as each component's ``manifest.in`` lists them, as their
+   ``install.sh`` would, in Python, so no downloaded script is run. On Windows
+   the Rust archive is one zip with rust-src inside, unpacked as espup unpacks
+   it. The export file -- the linker's folder and LIBCLANG_PATH -- is written
+   beside them, as espup writes it, and nothing outside the tools dir is
+   touched: no ``~/.espup``, no variable set for the user.
+3. **espflash**, from its GitHub release, checked against the SHA-256 GitHub
+   publishes for the asset.
 4. **The crates**: ``cargo vendor`` of every Rust sketch's ``Cargo.lock``,
    with ``--sync`` of the ``esp`` toolchain's own library workspace -- what
    ``build-std`` builds ``core`` from -- into ``vendor/``, from crates.io
    (cargo checks each crate against the lockfile's checksum). From then on
    every build is ``cargo --offline`` with crates.io replaced by that folder
    (``modules/rust_esp32.py``): a build reaches no host.
+
+**The pins move by hand.** Every version below is pinned, and moves only in a
+commit that bumps it -- one or several together -- and that commit re-runs a
+real install and a real offline build of every Rust sketch in a scratch tools
+dir and says what they did in its body (the hosts they reached, the build's
+result). A sketch's ``Cargo.lock`` is resolved against the toolchain pinned
+here, so a bump of the Xtensa Rust version is a bump of the lockfiles too,
+when they need it. (The owner's decision of 2026-10-10,
+docs/plans/rust-2026-10-08.md.)
 
 The platforms are the ones Espressif publishes the Xtensa toolchain for, as
 the OpenSCAD installer does it (``openscad_installer.host()``, the
@@ -33,11 +54,11 @@ What a build needs that is not fetched -- a C compiler and linker for the
 build scripts that run on this machine -- is checked first, and refused with
 what installs it; nothing here runs sudo.
 
-Every fetch apothecary makes itself goes through the firmware installer's
-``_fetch``, a ``tool_fetch`` to the hosts in ``stays_local.TOOL_SOURCES``;
-rustup-init, espup and cargo are subprocesses, outside the socket guard,
-told where to fetch from by the pinned versions and with no proxy, no
-registry or source override and no GitHub token in their environment.
+Every fetch apothecary makes goes through the firmware installer's tool
+fetch (``_fetch``, ``_fetch_to``) to the hosts in ``stays_local.TOOL_SOURCES``;
+rustup-init and cargo are subprocesses, outside the socket guard, told where
+to fetch from by the pinned versions and with no proxy, no registry or
+source override and no GitHub token in their environment.
 """
 
 from __future__ import annotations
@@ -49,12 +70,14 @@ import os
 import re
 import shutil
 import stat
+import tarfile
 import zipfile
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
-from .installer import _fetch
+from .installer import _fetch, _fetch_to
 from .modules.rust_esp32 import (
     CARGO,
     RUST_ESP32,
@@ -72,20 +95,28 @@ from .tasks import stream
 from .toolchains import ToolchainError
 
 # Pinned: a sketch's Cargo.lock is resolved against these, and an install is
-# the same install wherever it runs. Raised together, by hand.
-RUSTUP_VERSION = "1.29.1"
-ESPUP_VERSION = "0.17.1"
-ESPFLASH_VERSION = "4.6.0"
-XTENSA_RUST_VERSION = "1.99.0.0"
+# the same install wherever it runs. They move only by hand, in a commit that
+# re-runs a real install and an offline build and says so (the docstring).
+RUSTUP_VERSION = "1.29.1"  # static.rust-lang.org/rustup/archive/<this>/
+ESPFLASH_VERSION = "4.6.0"  # esp-rs/espflash release v<this>
+XTENSA_RUST_VERSION = "1.99.0.0"  # esp-rs/rust-build release v<this>
+# The LLVM and GCC espup 0.17.1 pairs with Xtensa Rust 1.99 (its llvm.rs and gcc.rs).
+LLVM_VERSION = "esp-20.1.1_20250829"  # espressif/llvm-project release <this>
+GCC_VERSION = "15.2.0_20250920"  # espressif/crosstool-NG release esp-<this>
 
 RUSTUP_ARCHIVE = "https://static.rust-lang.org/rustup/archive"
 GITHUB_API = "https://api.github.com/repos"
 GITHUB = "https://github.com"
-ESPUP_REPO = "esp-rs/espup"
 ESPFLASH_REPO = "esp-rs/espflash"
+RUST_BUILD_REPO = "esp-rs/rust-build"
+LLVM_REPO = "espressif/llvm-project"
+GCC_REPO = "espressif/crosstool-NG"
+CLANG_NAME = "xtensa-esp32-elf-clang"  # espup's names for where LLVM and GCC go
+XTENSA_GCC = "xtensa-esp-elf"
 MANIFEST = "install.json"
 
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(\.\d+)?$")
+ESP_VERSION_RE = re.compile(r"^(esp-)?\d+\.\d+\.\d+_\d{8}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 ASSET_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
@@ -99,7 +130,7 @@ class InstallError(ToolchainError):
 
 # --- this machine ------------------------------------------------------------------
 
-# (system, machine) -> the Rust host triple espup, espflash and rustup publish for.
+# (system, machine) -> the Rust host triple rust-build, espflash and rustup publish for.
 TRIPLES = {
     ("Linux", "x86_64"): "x86_64-unknown-linux-gnu",
     ("Linux", "arm64"): "aarch64-unknown-linux-gnu",
@@ -112,9 +143,18 @@ REFUSED = {
         "Silicon only, so there is nothing to install on this Mac"
     ),
     ("Windows", "arm64"): (
-        "Windows on ARM: espup and espflash publish no ARM64 Windows build, so "
+        "Windows on ARM: Espressif publishes no ARM64 Windows Xtensa Rust, nor espflash a build, so "
         "there is nothing to install on this PC"
     ),
+}
+
+
+# Espressif's name for each host, in its LLVM and GCC archives.
+ESPRESSIF_ARCHES = {
+    "x86_64-unknown-linux-gnu": "x86_64-linux-gnu",
+    "aarch64-unknown-linux-gnu": "aarch64-linux-gnu",
+    "aarch64-apple-darwin": "aarch64-apple-darwin",
+    "x86_64-pc-windows-msvc": "x86_64-w64-mingw32",
 }
 
 
@@ -166,6 +206,13 @@ def check_version(text: str) -> str:
     return text
 
 
+def check_esp_version(text: str) -> str:
+    """An Espressif release (``esp-20.1.1_20250829``, ``15.2.0_20250920``), or InstallError."""
+    if not isinstance(text, str) or not ESP_VERSION_RE.match(text):
+        raise InstallError(f"not an Espressif release: {text!r}")
+    return text
+
+
 def linker_problem(triple: str) -> Optional[str]:
     """What the build scripts need to link on this machine, if it is missing.
 
@@ -199,21 +246,36 @@ def published_sha256(text: str) -> str:
     return first
 
 
-def github_digest(repo: str, version: str, asset: str, fetch: Fetch) -> str:
-    """The SHA-256 GitHub publishes for one asset of a tagged release."""
+def listed_sha256(text: str, name: str) -> str:
+    """The SHA-256 a checksum file lists for ``name`` (``<hex> *<name>`` lines;
+    ``#`` lines are comments), or InstallError."""
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and not line.startswith("#") and parts[1].lstrip("*") == name:
+            if SHA256_RE.match(parts[0].lower()):
+                return parts[0].lower()
+    raise InstallError(f"no SHA-256 listed for {name}")
+
+
+def github_digest(
+    repo: str, version: str, asset: str, fetch: Fetch, tag: Optional[str] = None
+) -> str:
+    """The SHA-256 GitHub publishes for one asset of a tagged release (``v<version>``,
+    or ``tag`` as given)."""
     if not ASSET_RE.match(asset):
         raise InstallError(f"not an asset name: {asset!r}")
-    data = json.loads(
-        fetch(f"{GITHUB_API}/{repo}/releases/tags/v{check_version(version)}").decode("utf-8")
-    )
+    tag = tag if tag is not None else f"v{check_version(version)}"
+    if not ASSET_RE.match(tag):
+        raise InstallError(f"not a release tag: {tag!r}")
+    data = json.loads(fetch(f"{GITHUB_API}/{repo}/releases/tags/{tag}").decode("utf-8"))
     for item in data.get("assets") or []:
         if item.get("name") == asset:
             digest = str(item.get("digest") or "")
             algo, _, value = digest.partition(":")
             if algo == "sha256" and SHA256_RE.match(value.lower()):
                 return value.lower()
-            raise InstallError(f"{repo} v{version}: no SHA-256 published for {asset}")
-    raise InstallError(f"{repo} v{version} publishes no {asset}")
+            raise InstallError(f"{repo} {tag}: no SHA-256 published for {asset}")
+    raise InstallError(f"{repo} {tag} publishes no {asset}")
 
 
 def verified(data: bytes, want: str, what: str, log: Log) -> bytes:
@@ -245,6 +307,98 @@ def from_zip(archive: bytes, name: str) -> bytes:
 # --- the install ---------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class Archive:
+    """One archive of the Xtensa toolchain: where it is, and what checks it."""
+
+    part: str  # rust, rust-src, llvm, gcc
+    name: str  # the release asset's file name
+    base: str  # the release's download URL, the folder the asset is in
+    github: Optional[Tuple[str, str]] = None  # (repo, tag): GitHub's published digest
+    checksums: Optional[str] = None  # a checksum file the release itself publishes
+
+    @property
+    def url(self) -> str:
+        return f"{self.base}/{self.name}"
+
+
+def _plain_member(name: str) -> bool:
+    parts = Path(name).parts
+    return bool(parts) and not Path(name).is_absolute() and ".." not in parts
+
+
+def unpack(archive: Path, into: Path, strip: int = 0) -> None:
+    """A .tar.xz or .zip, unpacked into ``into``; ``strip`` leading folders dropped,
+    as espup drops them. A member that would land outside ``into`` is refused."""
+    into.mkdir(parents=True, exist_ok=True)
+    if archive.name.endswith(".zip"):
+        with zipfile.ZipFile(archive) as zf:
+            for info in zf.infolist():
+                if not _plain_member(info.filename):
+                    raise InstallError(f"{archive.name}: {info.filename!r} leaves its folder")
+                rel = Path(*Path(info.filename).parts[strip:]) if strip else Path(info.filename)
+                if not rel.parts:
+                    continue
+                target = into / rel
+                if info.is_dir():
+                    target.mkdir(parents=True, exist_ok=True)
+                    continue
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with zf.open(info) as src, open(target, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                mode = info.external_attr >> 16
+                if mode & stat.S_IXUSR:
+                    target.chmod(target.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        return
+    with tarfile.open(archive, mode="r:*") as tf:
+        members = []
+        for member in tf.getmembers():
+            if not _plain_member(member.name):
+                raise InstallError(f"{archive.name}: {member.name!r} leaves its folder")
+            if strip:
+                parts = Path(member.name).parts[strip:]
+                if not parts:
+                    continue
+                member.name = str(Path(*parts))
+            members.append(member)
+        if hasattr(tarfile, "data_filter"):
+            tf.extractall(into, members=members, filter="data")
+        else:  # pragma: no cover - Python before 3.11.4
+            tf.extractall(into, members=members)
+
+
+def install_components(root: Path, dest: Path) -> List[str]:
+    """What a rust-installer dist's ``install.sh --prefix=''`` does, without running it:
+    each component in ``components`` (but the docs) moved into ``dest`` as its
+    ``manifest.in`` lists it -- ``file:`` a file, ``dir:`` a folder."""
+    names = [c.strip() for c in (root / "components").read_text("utf-8").splitlines()]
+    done = []
+    for component in (c for c in names if c and not c.startswith("rust-docs")):
+        if not _plain_member(component):
+            raise InstallError(f"not a component: {component!r}")
+        for line in (root / component / "manifest.in").read_text("utf-8").splitlines():
+            kind, _, rel = line.strip().partition(":")
+            if not rel:
+                continue
+            if kind not in ("file", "dir") or not _plain_member(rel):
+                raise InstallError(f"{component}: cannot install {line!r}")
+            src, dst = root / component / rel, dest / rel
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            if kind == "file":
+                os.replace(src, dst)
+            elif dst.exists():
+                shutil.copytree(src, dst, symlinks=True, dirs_exist_ok=True)
+            else:
+                shutil.move(str(src), str(dst))
+        done.append(component)
+    rustlib = dest / "lib" / "rustlib"
+    rustlib.mkdir(parents=True, exist_ok=True)
+    listed = rustlib / "components"
+    before = listed.read_text("utf-8").split() if listed.is_file() else []
+    listed.write_text("\n".join(dict.fromkeys([*before, *done])) + "\n", encoding="utf-8")
+    return done
+
+
 class RustEsp32Installer:
     """Drives one install: check the machine, then rustup, the Xtensa toolchain,
     espflash and the crates, each skipped when it is already in place (``force``
@@ -257,10 +411,12 @@ class RustEsp32Installer:
         fetch: Fetch = _fetch,
         run: Optional[Callable[..., int]] = None,
         triple: Optional[str] = None,
+        fetch_to: Callable[[str, Path], str] = _fetch_to,
     ):
         self.log = log or (lambda _line: None)
         self.force = force
         self.fetch = fetch
+        self.fetch_to = fetch_to
         self.run = run or (lambda argv, env=None, cwd=None: stream(argv, self.log, env, cwd))
         self._triple = triple
         self.module = RustEsp32Module()
@@ -279,8 +435,8 @@ class RustEsp32Installer:
         return cargo_home() / "bin" / _exe(name, self.triple)
 
     def env(self) -> Dict[str, str]:
-        """The installers' environment: the build's (no fetch redirects, no wrapper,
-        homes in the tools dir), espup's ``~/.espup`` in the tools dir too."""
+        """The installers' environment: the build's -- no fetch redirects, no
+        wrapper, homes in the tools dir."""
         env = self.module.env(cargo=CARGO.managed_path())
         env["CARGO_HOME"] = str(cargo_home())
         env["RUSTUP_HOME"] = str(rustup_home())
@@ -351,49 +507,180 @@ class RustEsp32Installer:
         )
         return {"version": RUSTUP_VERSION, "sha256": want}
 
-    # 2. espup, and the Xtensa toolchain it installs
-    def install_toolchain(self, had: Optional[dict]) -> dict:
-        rustc = rustup_home() / "toolchains" / TOOLCHAIN / "bin" / _exe("rustc", self.triple)
-        same = bool(had) and had.get("version") == XTENSA_RUST_VERSION
-        if rustc.is_file() and same and not self.force:
-            self.log(f"Xtensa Rust {XTENSA_RUST_VERSION} already installed ({rustc.parent.parent})")
-            return had
-        espup = self.fetch_release_binary(
-            ESPUP_REPO, ESPUP_VERSION, _exe(f"espup-{self.triple}", self.triple), "espup"
-        )
-        env = self.env()
-        # espup keeps a link to its LLVM in ~/.espup: the tools dir's, not the person's.
-        env["HOME"] = str(home() / "home")
-        (home() / "home").mkdir(parents=True, exist_ok=True)
-        self._check(
-            self.run(
-                [
-                    str(espup),
-                    "install",
-                    "--targets",
-                    "esp32",
-                    "--name",
-                    TOOLCHAIN,
-                    "--toolchain-version",
-                    check_version(XTENSA_RUST_VERSION),
-                    "--export-file",
-                    str(export_file(_windows(self.triple))),
-                ],
-                env=env,
-            ),
-            "espup install",
-        )
-        rustup = self.cargo_bin("rustup")
-        # The toolchain rustup hands a bare `cargo` from the tools dir: nothing to fetch.
-        self._check(self.run([str(rustup), "default", TOOLCHAIN], env=self.env()), "rustup default")
-        return {"version": XTENSA_RUST_VERSION, "espup": ESPUP_VERSION}
+    # 2. the Xtensa toolchain: four archives, checked, laid out as espup lays them out
+    def toolchain_dir(self) -> Path:
+        """Where this pin of the Xtensa toolchain lives; rustup's ``esp`` links to it."""
+        return home() / "xtensa" / check_version(XTENSA_RUST_VERSION)
 
-    def fetch_release_binary(self, repo: str, version: str, asset: str, name: str) -> Path:
-        """A release asset that is the binary itself, verified, at ``bin/<name>``."""
-        url = f"{GITHUB}/{repo}/releases/download/v{check_version(version)}/{asset}"
-        want = github_digest(repo, version, asset, self.fetch)
-        self.log(f"Downloading {url}")
-        return _put(self.bin(name), verified(self.fetch(url), want, asset, self.log))
+    def archives(self) -> List[Archive]:
+        """The archives this machine needs, each with what checks it."""
+        triple, windows = self.triple, _windows(self.triple)
+        arch = ESPRESSIF_ARCHES[triple]
+        rust = check_version(XTENSA_RUST_VERSION)
+        llvm, gcc = check_esp_version(LLVM_VERSION), check_esp_version(GCC_VERSION)
+        rust_build = f"{GITHUB}/{RUST_BUILD_REPO}/releases/download/v{rust}"
+        out = [
+            Archive(
+                "rust",
+                f"rust-{rust}-{triple}.{'zip' if windows else 'tar.xz'}",
+                rust_build,
+                github=(RUST_BUILD_REPO, f"v{rust}"),
+            )
+        ]
+        if not windows:  # Windows' zip carries rust-src inside it
+            out.append(
+                Archive(
+                    "rust-src",
+                    f"rust-src-{rust}.tar.xz",
+                    rust_build,
+                    github=(RUST_BUILD_REPO, f"v{rust}"),
+                )
+            )
+        out.append(
+            Archive(
+                "llvm",
+                f"libs-clang-{llvm}-{arch}.tar.xz",
+                f"{GITHUB}/{LLVM_REPO}/releases/download/{llvm}",
+                checksums=f"libs-clang-{llvm}-checksum.sha256",
+            )
+        )
+        out.append(
+            Archive(
+                "gcc",
+                f"{XTENSA_GCC}-{gcc.removeprefix('esp-')}-{arch}.{'zip' if windows else 'tar.xz'}",
+                f"{GITHUB}/{GCC_REPO}/releases/download/esp-{gcc.removeprefix('esp-')}",
+                checksums=f"crosstool-NG-esp-{gcc.removeprefix('esp-')}-checksum.sha256",
+            )
+        )
+        return out
+
+    def expected(self, archive: Archive) -> str:
+        """The SHA-256 the archive's source publishes for it."""
+        if archive.checksums:
+            text = self.fetch(f"{archive.base}/{archive.checksums}").decode("utf-8")
+            return listed_sha256(text, archive.name)
+        repo, tag = archive.github
+        return github_digest(repo, "", archive.name, self.fetch, tag=tag)
+
+    def download(self, archive: Archive) -> Path:
+        """The archive, downloaded and checked; refused, and removed, if it is not
+        what its source publishes."""
+        want = self.expected(archive)
+        path = home() / "downloads" / archive.name
+        self.log(f"Downloading {archive.url}")
+        got = self.fetch_to(archive.url, path)
+        if got != want:
+            path.unlink(missing_ok=True)
+            raise InstallError(f"checksum mismatch for {archive.name}: expected {want}, got {got}")
+        self.log(f"SHA-256 verified ({want[:12]}…) {archive.name}")
+        return path
+
+    def lay_out(self, archive: Archive, path: Path, dest: Path) -> None:
+        """One archive into the toolchain's folder, where espup puts it."""
+        windows = _windows(self.triple)
+        llvm, gcc = LLVM_VERSION, GCC_VERSION.removeprefix("esp-")
+        if archive.part in ("rust", "rust-src") and not windows:
+            scratch = home() / "tmp" / archive.part
+            if scratch.exists():
+                shutil.rmtree(scratch)
+            unpack(path, scratch)
+            roots = [d for d in scratch.iterdir() if (d / "components").is_file()]
+            if len(roots) != 1:
+                raise InstallError(f"{archive.name}: not a rust-installer dist")
+            done = install_components(roots[0], dest)
+            self.log(f"Installed {', '.join(done)} into {dest}")
+            shutil.rmtree(scratch)
+        elif archive.part == "rust":  # Windows: one zip, rust-src inside, its folder dropped
+            unpack(path, dest, strip=1)
+        elif archive.part == "llvm":
+            if windows:
+                unpack(path, dest / CLANG_NAME)
+                (dest / CLANG_NAME / llvm).touch()
+            else:
+                unpack(path, dest / CLANG_NAME / llvm)
+        elif archive.part == "gcc":
+            if windows:
+                unpack(path, dest)
+                (dest / XTENSA_GCC / gcc).touch()
+            else:
+                unpack(path, dest / XTENSA_GCC / f"esp-{gcc}")
+
+    def export_lines(self, dest: Path) -> List[str]:
+        """espup's export file for this layout: the linker's folder and libclang."""
+        llvm, gcc = LLVM_VERSION, GCC_VERSION.removeprefix("esp-")
+        if _windows(self.triple):
+            clang = dest / CLANG_NAME / "esp-clang" / "bin"
+            return [
+                f'$Env:LIBCLANG_PATH = "{clang / "libclang.dll"}"',
+                f'$Env:PATH = "{clang};" + $Env:PATH',
+                f'$Env:PATH = "{dest / XTENSA_GCC / "bin"};" + $Env:PATH',
+            ]
+        return [
+            f'export LIBCLANG_PATH="{dest / CLANG_NAME / llvm / "esp-clang" / "lib"}"',
+            f'export PATH="{dest / XTENSA_GCC / f"esp-{gcc}" / XTENSA_GCC / "bin"}:$PATH"',
+        ]
+
+    def pins(self) -> dict:
+        return {"version": XTENSA_RUST_VERSION, "llvm": LLVM_VERSION, "gcc": GCC_VERSION}
+
+    def install_toolchain(self, had: Optional[dict]) -> dict:
+        dest = self.toolchain_dir()
+        rustc = dest / "bin" / _exe("rustc", self.triple)
+        rustup = self.cargo_bin("rustup")
+        if rustc.is_file() and had and had.get("archives") and not self.force:
+            if {k: had.get(k) for k in self.pins()} == self.pins():
+                self.log(f"Xtensa Rust {XTENSA_RUST_VERSION} already installed ({dest})")
+                self.link(rustup, dest)
+                return had
+        staged = dest.with_name(f".{dest.name}.new")
+        if staged.exists():
+            shutil.rmtree(staged)
+        checked = {}
+        for archive in self.archives():
+            path = self.download(archive)
+            self.lay_out(archive, path, staged)
+            checked[archive.name] = self._sha(path)
+            path.unlink(missing_ok=True)  # kept no longer than it takes to unpack
+        if dest.exists():
+            shutil.rmtree(dest)
+        os.replace(staged, dest)
+        export = export_file(_windows(self.triple))
+        export.write_text("\n".join(self.export_lines(dest)) + "\n", encoding="utf-8")
+        self.log(f"Wrote {export}")
+        self.link(rustup, dest)
+        return {**self.pins(), "archives": checked}
+
+    @staticmethod
+    def _sha(path: Path) -> str:
+        digest = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    def link(self, rustup: Path, dest: Path) -> None:
+        """The toolchain, as rustup's ``esp``: linked, and the default -- nothing fetched.
+
+        A link to another pin is let go (the folder it named is left); an ``esp``
+        that is a folder of its own -- espup's install, before there was this --
+        is uninstalled by rustup first.
+        """
+        env = self.env()
+        existing = rustup_home() / "toolchains" / TOOLCHAIN
+        linked = existing.is_symlink() and existing.resolve() == dest.resolve()
+        if existing.is_symlink() and not linked:
+            existing.unlink()
+        elif existing.exists() and not existing.is_symlink():
+            self._check(
+                self.run([str(rustup), "toolchain", "uninstall", TOOLCHAIN], env=env),
+                "rustup toolchain uninstall",
+            )
+        if not linked:
+            self._check(
+                self.run([str(rustup), "toolchain", "link", TOOLCHAIN, str(dest)], env=env),
+                "rustup toolchain link",
+            )
+        self._check(self.run([str(rustup), "default", TOOLCHAIN], env=env), "rustup default")
 
     # 3. espflash
     def install_espflash(self, had: Optional[dict]) -> dict:
@@ -485,7 +772,7 @@ def what_install_does() -> str:
     except InstallError as exc:
         return str(exc)
     return (
-        f"{triple}: rustup {RUSTUP_VERSION}, espup {ESPUP_VERSION}'s Xtensa Rust "
-        f"{XTENSA_RUST_VERSION} and espflash {ESPFLASH_VERSION} into {home()}, and every "
-        "Rust sketch's crates vendored beside them"
+        f"{triple}: rustup {RUSTUP_VERSION}, Xtensa Rust {XTENSA_RUST_VERSION} with its "
+        f"rust-src, LLVM {LLVM_VERSION} and GCC {GCC_VERSION}, and espflash "
+        f"{ESPFLASH_VERSION} into {home()}, and every Rust sketch's crates vendored beside them"
     )

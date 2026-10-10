@@ -297,7 +297,7 @@ def _callers_of_tool_fetch() -> set:
 def test_a_tool_fetch_has_two_callers_the_two_installers():
     """The record allows one kind of connection past this machine, by two callers:
     the firmware installer (arduino-cli, and for Rust on the ESP32 rustup-init,
-    espup and espflash, through the same fetch) and the OpenSCAD installer (a
+    espflash and Espressif's Xtensa archives, through the same fetch) and the OpenSCAD installer (a
     snapshot from files.openscad.org). A third is a change to the record first."""
     from apothecary.firmware import installer, rust_installer
 
@@ -315,12 +315,11 @@ def test_a_tool_fetch_has_two_callers_the_two_installers():
 # of a real install, 2026-10-09), and the step that reaches it. A build reached none.
 RUST_INSTALL_HOSTS = {
     "static.rust-lang.org": "apothecary's fetch of rustup-init and its .sha256",
-    "api.github.com": "apothecary's fetch of the SHA-256 digests GitHub publishes for "
-    "espup's and espflash's assets; espup asking about the release it installs",
-    "github.com": "apothecary's fetch of espup and espflash; espup's of the Xtensa Rust, "
-    "rust-src, LLVM and GCC archives",
+    "api.github.com": "apothecary's fetch of the SHA-256 GitHub publishes for espflash's "
+    "asset and the Xtensa Rust and rust-src archives, whose release has no checksum file",
+    "github.com": "apothecary's fetch of espflash and of Espressif's Xtensa Rust, rust-src, "
+    "LLVM and GCC archives and the checksum files their releases publish",
     "release-assets.githubusercontent.com": "where github.com redirects each release asset",
-    "crates.io": "espup's own check for a newer espup, which it cannot be told not to make",
     "index.crates.io": "cargo vendor reading the sparse index for each locked crate",
     "static.crates.io": "cargo vendor downloading each locked crate",
 }
@@ -328,6 +327,8 @@ RUST_INSTALL_HOSTS = {
 
 def test_every_host_the_rust_install_reaches_is_on_the_install_time_list():
     assert set(RUST_INSTALL_HOSTS) <= stays_local.TOOL_SOURCES
+    # espup's own update check went with espup: nothing asks crates.io's API.
+    assert "crates.io" not in stays_local.TOOL_SOURCES
 
 
 @pytest.mark.parametrize(
@@ -337,8 +338,8 @@ def test_every_url_the_rust_installer_fetches_is_a_tool_source_by_a_pinned_versi
     triple, tmp_path, monkeypatch
 ):
     """Each fetch is a GET of a pinned version's asset, from a tool source: refused
-    before anything is opened if it were not."""
-    import hashlib
+    before anything is opened if it were not. Every archive is checked before it is
+    opened, and one that is not what its source publishes is refused."""
     import json as json_
 
     from apothecary.firmware import rust_installer as ri
@@ -350,35 +351,42 @@ def test_every_url_the_rust_installer_fetches_is_a_tool_source_by_a_pinned_versi
         stays_local.tool_fetch(url)  # the guard's own check of the host
         asked.append(url)
         if url.endswith(".sha256"):
-            return (hashlib.sha256(b"x").hexdigest() + " *rustup-init").encode()
+            name = url.rsplit("/", 1)[1]
+            return "".join(f"{'0' * 64} *{a.name}\n" for a in installer.archives()).encode() + (
+                ("0" * 64 + " *rustup-init\n").encode() if name.startswith("rustup") else b""
+            )
         if "/releases/tags/" in url:
-            name = url.split("/repos/")[1].split("/")[1]
-            ext = ".exe" if "windows" in triple else ""
-            asset = f"{name}-{triple}{ext}" if name == "espup" else f"{name}-{triple}.zip"
+            assets = [a.name for a in installer.archives()] + [f"espflash-{triple}.zip"]
             return json_.dumps(
-                {"assets": [{"name": asset, "digest": "sha256:" + "0" * 64}]}
+                {"assets": [{"name": n, "digest": "sha256:" + "0" * 64} for n in assets]}
             ).encode()
         return b"x"
 
-    installer = ri.RustEsp32Installer(fetch=fetch, run=lambda *a, **k: 0, triple=triple)
-    installer.install_rustup(None)
+    def fetch_to(url, path):
+        stays_local.tool_fetch(url)
+        asked.append(url)
+        return "f" * 64  # not what any source publishes
+
+    installer = ri.RustEsp32Installer(
+        fetch=fetch, fetch_to=fetch_to, run=lambda *a, **k: 0, triple=triple
+    )
     with pytest.raises(ri.InstallError, match="checksum mismatch"):
-        installer.fetch_release_binary(
-            ri.ESPUP_REPO,
-            ri.ESPUP_VERSION,
-            f"espup-{triple}" + (".exe" if "windows" in triple else ""),
-            "espup",
-        )
+        installer.install_rustup(None)
+    for archive in installer.archives():
+        with pytest.raises(ri.InstallError, match=f"checksum mismatch for {archive.name}"):
+            installer.download(archive)
     with pytest.raises(ri.InstallError, match="checksum mismatch"):
         installer.install_espflash(None)
     hosts = {urlsplit(u).hostname for u in asked}
     assert hosts == {"static.rust-lang.org", "api.github.com", "github.com"}
-    assert all(
-        f"/{ri.RUSTUP_VERSION}/" in u
-        or f"/v{ri.ESPUP_VERSION}" in u
-        or f"/v{ri.ESPFLASH_VERSION}" in u
-        for u in asked
-    ), asked
+    pins = (
+        f"/{ri.RUSTUP_VERSION}/",
+        f"/v{ri.ESPFLASH_VERSION}",
+        f"/v{ri.XTENSA_RUST_VERSION}",
+        f"/{ri.LLVM_VERSION}/",
+        f"/esp-{ri.GCC_VERSION}/",
+    )
+    assert all(any(pin in u for pin in pins) for u in asked), asked
 
 
 def test_a_rust_build_and_flash_reach_no_host(monkeypatch, tmp_path):
@@ -410,8 +418,19 @@ def test_a_rust_build_and_flash_reach_no_host(monkeypatch, tmp_path):
         monkeypatch.setenv(key, value)
     sketch = find_sketch("esp32_blink@rust-esp32", ROOT)
     plan = RustEsp32Module().flash(sketch, None, "/dev/ttyFAKE0", tmp_path / "out")
-    build, flash = plan.steps
+    build, check, flash = plan.steps
     assert "--offline" in build
+    # No folder it was built in -- and so no user name -- is in the image: rustc is
+    # told to write each another way, and the build's last step holds it did.
+    remaps = build[build.index("--config", build.index("--offline")) + 1]
+    assert remaps.startswith("target.xtensa-esp32-none-elf.rustflags=[")
+    assert f"'--remap-path-prefix={Path.home()}=/home'" in remaps
+    assert check[1:4] == [
+        "-m",
+        "apothecary.firmware.image_paths",
+        str(tmp_path / "out" / "xtensa-esp32-none-elf" / "release" / "esp32_blink"),
+    ]
+    assert str(Path.home()) in check
     assert 'source.crates-io.replace-with="apothecary-vendored"' in build
     assert flash[1:3] == ["flash", "--skip-update-check"] and "--non-interactive" in flash
     env = plan.env
