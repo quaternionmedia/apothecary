@@ -291,13 +291,16 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "gather-answers": (WIDGET, WHAT_YOU_SEE, "a box for what you know about the pictures"),
     "answer": (WIDGET, WHAT_YOU_SEE, "a button that answers one of the machine's questions"),
     # ---- Site's Pinned, apothecary/static/widgets/pinned.js ---------------
-    # What a page pinned, every site's, each taken back from its row (TAKEN_BACK).
-    "pinned-camera-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins one camera, in any site"),
+    # What a page added or pinned, every site's, each taken back from its row
+    # (TAKEN_BACK): a camera removed, a view unpinned, a board's pin taken back.
+    "pinned-camera-remove": (WIDGET, WHAT_IS_THERE, "a button that removes one camera, in any site"),
     "pinned-view-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins one view, in any site"),
     "pinned-board-unpin": (WIDGET, WHAT_IS_THERE, "a button that takes one board's pin back"),
     # Selected: the one width a view is sized by (a chosen shape's long side
     # when one is chosen). A number the ring cannot type; Size puts the cursor in it.
     "view-width": (WIDGET, WHAT_IS_THERE, "a box for how wide a picture is, or one shape's side"),
+    # Selected's camera section: Take picture, the camera's ring's cell (RING_BACKED).
+    "cam-take": (WIDGET, WHAT_IS_THERE, "a button that takes a picture with the selected camera"),
     # printing from here: a kept file, streamed
     "print-file": (WIDGET, WHAT_YOU_SEE, "a file picker that keeps a G-code file on the host"),
     "print-pick": (WIDGET, WHAT_YOU_SEE, "a drop-down of the files kept on the host"),
@@ -425,11 +428,15 @@ RING_BACKED: Dict[str, str] = {
     "listen": "device:listen",
     "probe": "device:probe",
     "ctl:change:arm": "control:arm",
+    # a camera in Selected: Take picture is its ring's, and so is P
+    "cam-take": "camera:take-picture",
+    "takeBtn:click:takePictureWith": "camera:take-picture",
+    "window:keydown:onPictureKey": "camera:take-picture",
 }
 
 # A control kept on purpose beside the ring: the button on a row of Site's
-# Pinned or of Pictures that takes back what the row names -- a camera or a view
-# unpinned, a board's pin taken back, a kept picture forgotten -- in whichever
+# Pinned or of Pictures that takes back what the row names -- a camera removed, a
+# view unpinned, a board's pin taken back, a kept picture forgotten -- in whichever
 # site it stands. §6 of the draft record *Personal data stays on the device* asks
 # that what a page placed or pinned be listed by the same page, every site's,
 # and taken back the same way, and a ring cell reaches another site's pin only
@@ -439,7 +446,7 @@ RING_BACKED: Dict[str, str] = {
 # RING_BACKED, by the control's name or its listening key; the value is what the
 # row takes back.
 TAKEN_BACK: Dict[str, str] = {
-    "pinned-camera-unpin": "a camera's pin, every site's",
+    "pinned-camera-remove": "a camera, every site's",
     "pinned-view-unpin": "a view, every site's",
     "pinned-board-unpin": "a board's pin, every site's",
     "pinned-list:click:closest": "any pin, from its row",
@@ -502,6 +509,20 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_IS_THERE,
         "letting go keeps the move",
     ),
+    # A selected camera's turn ring and tilt arc: its press heard ahead of the
+    # move arrows and the orbit, the camera aimed as the pointer goes, and its aim
+    # kept on letting go.
+    "canvas:pointerdown:onCameraHandleDown": (
+        DRAG,
+        WHAT_YOU_SEE,
+        "taking hold of a camera's turn ring or tilt arc stops the view from turning under you",
+    ),
+    "canvas:pointermove:onCameraDragMove": (
+        DRAG,
+        WHAT_YOU_SEE,
+        "dragging a camera's turn ring or tilt arc aims it, its pyramid following",
+    ),
+    "canvas:pointerup:onCameraDragEnd": (DRAG, WHAT_IS_THERE, "letting go keeps the camera's aim"),
     # controls of its own
     "siteSelect:change:loadSite": (WIDGET, WHAT_YOU_SEE, "choosing from the drop-down, which loads it"),
     "snapToggle:change:setTranslationSnap": (WIDGET, WHAT_YOU_SEE, "the snapping tick-box"),
@@ -563,6 +584,23 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     ),
     "widthBox:change:setWidth": (WIDGET, WHAT_IS_THERE, "typing a picture's width, or a shape's"),
     "row:click:drawView": (LIST, WHAT_YOU_SEE, "a view's row in Selected, drawing that view"),
+    # A camera in Selected: Take picture, by its button or by P, and its pictures,
+    # one clicked drawn where it landed.
+    "takeBtn:click:takePictureWith": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "the selected camera's Take picture: a frame kept, lying where it looks",
+    ),
+    "window:keydown:onPictureKey": (
+        GESTURE,
+        WHAT_IS_THERE,
+        "a key (P) that takes a picture with the selected camera",
+    ),
+    "thumbList:click:closest": (
+        LIST,
+        WHAT_YOU_SEE,
+        "a camera's picture in Selected, drawn where it landed",
+    ),
     # pictures.js: the browser's cameras and the dialog Picture › Add opens.
     "mediaDevices:devicechange:listCameras": (
         AUTOMATIC,

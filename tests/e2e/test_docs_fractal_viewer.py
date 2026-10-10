@@ -92,13 +92,13 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     printer_1.click()
     x_input = page.locator("#pos-x")
     expect(x_input).to_be_visible()
-    x_input.fill("650")
+    x_input.fill("1160")
     x_input.press("Tab")
     expect(page.locator("#validity-indicator")).to_contain_text("violation")
     page.locator("#validity-indicator").click()
-    expect(page.locator("#problem-list li")).to_contain_text("printer_1 and printer_2 overlap")
+    expect(page.locator("#problem-list li")).to_contain_text("printer_1 and footpedal overlap")
     docs.step(
-        "Select printer_1 at the root and move it to overlap printer_2 -- caught: Site's "
+        "Select printer_1 at the root and move it onto the footpedal -- caught: Site's "
         "folded line says how many problems there are, both pieces are red in its tree, "
         "and a click on the header's count opens the fold"
     )

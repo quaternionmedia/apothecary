@@ -5,7 +5,9 @@ A busy bench, on a server of its own from the conftest's ``start_server``:
 printer_1's mainboard pinned to the simulated printer (``/dev/ttyFAKE1``,
 identified), the footpedal to the scripted Uno (``/dev/ttyFAKE0``), a view pinned
 at the workbench with three stated shapes (tests/e2e/test_picture_in_the_world.py's
-picture), and a camera pinned there. Nothing here opens a real port.
+picture), and a camera added above the floor beside the garage. Nothing here opens a
+real port. (A camera above the bench stands in its badges' way at the garage's top
+level, and three badges in one another's way merge into a count there.)
 
 - Badges: one small icon at its thing's own spot; its words on hover or while its
   thing is selected; badges in each other's way step aside or merge into a count;
@@ -35,6 +37,7 @@ SHAPES = [
 ]
 BOARD_BADGE = ".world-badge[data-path='printer_1']"
 PLACE_BADGE = ".world-badge.place-mark[data-host='workbench']"
+CAMERA_BADGE = ".world-badge.camera-mark[data-camera='camera_1']"
 FOOTPEDAL_BADGE = ".world-badge[data-path='footpedal']"
 
 
@@ -70,9 +73,12 @@ def bench(start_server, tmp_path_factory) -> str:
         http.post(
             f"/sites/garage/views/{view.json()['id']}/find", json={"finder": "stated"}
         ).raise_for_status()
+        camera = http.post("/sites/garage/cameras", json={"host": ""})
+        camera.raise_for_status()
+        assert camera.json()["camera"]["name"] == "camera_1"
         http.put(
-            "/cameras/bench_camera",
-            json={"label": "Bench webcam", "site": "garage", "path": "workbench"},
+            "/sites/garage/cameras/camera_1/device",
+            json={"id": "bench_camera", "label": "Bench webcam"},
         ).raise_for_status()
     return url
 
@@ -80,7 +86,7 @@ def bench(start_server, tmp_path_factory) -> str:
 def _open(page: Page, url: str) -> None:
     page.goto(f"{url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
-    for badge in (BOARD_BADGE, PLACE_BADGE, FOOTPEDAL_BADGE):
+    for badge in (BOARD_BADGE, PLACE_BADGE, FOOTPEDAL_BADGE, CAMERA_BADGE):
         expect(page.locator(badge)).to_be_visible(timeout=15000)
     settled(page, frames=OCCLUSION_TESTED)
 
@@ -129,11 +135,15 @@ def test_the_board_and_the_place_badge_at_the_garage_top_level_do_not_overlap(
     _open(page, bench)
     board, place = _rect(page, BOARD_BADGE), _rect(page, PLACE_BADGE)
     assert not _meet(board, place), (board, place)
+    # The camera above the bench wears a badge of its own, in no one's way either.
+    camera = _rect(page, CAMERA_BADGE)
+    assert not _meet(camera, board) and not _meet(camera, place), (camera, board, place)
     # Icons, their words folded away until hovered or selected.
     expect(page.locator(f"{BOARD_BADGE} .badge-icon")).to_have_text("⚡")
-    expect(page.locator(f"{PLACE_BADGE} .badge-icon")).to_have_text("📷")
+    expect(page.locator(f"{PLACE_BADGE} .badge-icon")).to_have_text("▣")
+    expect(page.locator(f"{CAMERA_BADGE} .badge-icon")).to_have_text("📷")
     expect(page.locator(f"{FOOTPEDAL_BADGE} .badge-icon")).to_have_text("⚡")
-    for badge in (BOARD_BADGE, PLACE_BADGE, FOOTPEDAL_BADGE):
+    for badge in (BOARD_BADGE, PLACE_BADGE, FOOTPEDAL_BADGE, CAMERA_BADGE):
         expect(page.locator(f"{badge} .badge-words")).to_be_hidden()
         assert page.locator(badge).bounding_box()["width"] < 40
     # The board's spot is the board's, not the printer's middle; the place's is the
@@ -158,9 +168,9 @@ def test_the_board_and_the_place_badge_at_the_garage_top_level_do_not_overlap(
 
 @pytest.mark.e2e
 def test_a_badges_words_show_on_hover_and_while_its_thing_is_selected(page: Page, bench: str):
-    """A badge's words -- the board's state, readings and port; the place's camera and
-    shape count -- are a card shown while the pointer is on the badge, or while its
-    thing is selected; a click still selects it."""
+    """A badge's words -- the board's state, readings and port; the place's picture
+    and shape count -- are a card shown while the pointer is on the badge, or while
+    its thing is selected; a click still selects it."""
     _open(page, bench)
     words = page.locator(f"{BOARD_BADGE} .badge-words")
     page.locator(BOARD_BADGE).hover()
@@ -176,7 +186,7 @@ def test_a_badges_words_show_on_hover_and_while_its_thing_is_selected(page: Page
     expect(place_words).to_be_hidden()
     _select(page, "workbench")
     expect(place_words).to_be_visible(timeout=3000)
-    expect(place_words).to_contain_text("view: 3 shapes")
+    expect(place_words).to_contain_text("3 shapes")
     expect(words).to_be_hidden(timeout=3000)
     expect(page.locator(PLACE_BADGE)).to_have_class(re.compile(r"\bselected\b"))
 
@@ -186,9 +196,10 @@ def test_a_badges_words_show_on_hover_and_while_its_thing_is_selected(page: Page
 
 @pytest.mark.e2e
 def test_badges_in_each_others_way_merge_into_a_count_until_zoomed_in(page: Page, bench: str):
-    """Pulled far back, the three badges stand in each other's way and merge into one
-    count, ×3, whose card lists each and whose rows do what each badge does; framed
-    again, they part."""
+    """Pulled far back, the four badges -- two boards, the bench's picture and the
+    camera beside the garage -- stand in each other's way and merge into one count, ×4,
+    whose card lists each and whose rows do what each badge does; framed again,
+    they part."""
     _open(page, bench)
     page.evaluate(
         """() => { const v = window.fractalViewer;
@@ -199,14 +210,19 @@ def test_badges_in_each_others_way_merge_into_a_count_until_zoomed_in(page: Page
     page.evaluate(FRAMES, 3)
     count = page.locator(".world-badge.cluster")
     expect(count).to_have_count(1, timeout=3000)
-    expect(count.locator(".badge-icon")).to_have_text("×3")
-    for badge, key in ((BOARD_BADGE, "printer_1"), (PLACE_BADGE, "place:workbench"), (FOOTPEDAL_BADGE, "footpedal")):
+    expect(count.locator(".badge-icon")).to_have_text("×4")
+    for badge, key in (
+        (BOARD_BADGE, "printer_1"),
+        (PLACE_BADGE, "place:workbench"),
+        (FOOTPEDAL_BADGE, "footpedal"),
+        (CAMERA_BADGE, "camera:camera_1"),
+    ):
         expect(page.locator(badge)).to_have_class(re.compile(r"\bmerged\b"))
-        assert page.evaluate("(k) => window.fractalViewer.anchors.drawn(k).merged", key) == 3
+        assert page.evaluate("(k) => window.fractalViewer.anchors.drawn(k).merged", key) == 4
     count.hover()
     rows = count.locator(".cluster-row")
-    expect(rows).to_have_count(3, timeout=3000)
-    rows.filter(has_text="view: 3 shapes").click()
+    expect(rows).to_have_count(4, timeout=3000)
+    rows.filter(has_text="3 shapes").click()
     assert page.evaluate("() => window.fractalViewer.selectedName") == "workbench"
 
     page.evaluate(
@@ -215,7 +231,7 @@ def test_badges_in_each_others_way_merge_into_a_count_until_zoomed_in(page: Page
     )
     page.evaluate(FRAMES, 3)
     expect(count).to_have_count(0, timeout=3000)
-    for badge in (BOARD_BADGE, PLACE_BADGE, FOOTPEDAL_BADGE):
+    for badge in (BOARD_BADGE, PLACE_BADGE, FOOTPEDAL_BADGE, CAMERA_BADGE):
         expect(page.locator(badge)).to_be_visible()
 
 
@@ -591,7 +607,7 @@ def test_problems_are_one_folded_line_in_site_and_the_headers_count_opens_it(
     problems = page.locator("#site-problems")
     expect(problems).to_be_hidden()
     _select(page, "printer_1")
-    page.locator("#pos-x").fill("650")
+    page.locator("#pos-x").fill("1160")
     page.locator("#pos-x").press("Tab")
     expect(page.locator("#validity-indicator")).to_contain_text("1 violation", timeout=5000)
     expect(problems).to_be_visible()
@@ -603,7 +619,7 @@ def test_problems_are_one_folded_line_in_site_and_the_headers_count_opens_it(
 
     page.locator("#validity-indicator").click()
     expect(rows.first).to_be_visible(timeout=2000)
-    expect(rows.first).to_have_text("printer_1 and printer_2 overlap")
+    expect(rows.first).to_have_text("printer_1 and footpedal overlap")
     _select(page, "workbench")
     rows.first.click()
     assert page.evaluate("() => window.fractalViewer.selectedName") == "printer_1"
@@ -630,10 +646,10 @@ def test_the_hint_shows_on_a_first_visit_fades_after_a_few_actions_and_question_
     faded = re.compile(r"\bfaded\b")
     expect(hint).not_to_have_class(faded)
     expect(hint).to_have_css("opacity", "1")
-    for path in ("workbench", "printer_1", "printer_2"):
+    for path in ("workbench", "printer_1", "cnc_router"):
         _select(page, path)
     expect(hint).not_to_have_class(faded)
-    page.evaluate("() => window.fractalViewer.zoomIn('printer_2')")
+    page.evaluate("() => window.fractalViewer.zoomIn('cnc_router')")
     expect(hint).to_have_class(faded)
     expect(hint).to_have_css("opacity", "0", timeout=3000)
 
@@ -645,7 +661,7 @@ def test_the_hint_shows_on_a_first_visit_fades_after_a_few_actions_and_question_
     page.keyboard.press("?")
     expect(hint).to_have_class(faded)
     page.keyboard.press("?")
-    for path in ("workbench", "printer_1", "printer_2", "printer_3"):
+    for path in ("workbench", "printer_1", "cnc_router", "storage_shelving"):
         _select(page, path)
     expect(hint).to_have_class(faded)  # and fades again after as many
 
@@ -662,7 +678,7 @@ def test_the_hint_shows_and_fades_with_no_storage(page: Page, bench: str):
     _open(page, bench)
     hint = page.locator("#viewer-hint")
     expect(hint).not_to_have_class(re.compile(r"\bfaded\b"))
-    for path in ("workbench", "printer_1", "printer_2", "printer_3"):
+    for path in ("workbench", "printer_1", "cnc_router", "storage_shelving"):
         _select(page, path)
     expect(hint).to_have_class(re.compile(r"\bfaded\b"))
     assert errors == []
@@ -720,6 +736,9 @@ def test_a_click_passes_through_a_wall_and_the_toggle_restores_it(page: Page, be
     assert page.evaluate("() => window.fractalViewer.selectedName") == spot["behind"]
     assert page.evaluate(WALL)["opacity"] == pytest.approx(0.25, abs=0.01)
 
+    # The floor selected, which wears no handles: the move arrows of the piece behind
+    # can stand at the spot, and a press on them is a drag, not a click.
+    page.evaluate("() => window.fractalViewer.selectPlace('')")
     page.locator("#view-menu > summary").click()
     page.locator("#walls-toggle").check()
     page.locator("#status").click()
@@ -742,5 +761,5 @@ def test_a_faded_wall_does_not_dim_the_badges_inside(page: Page, bench: str):
     behind something."""
     _open(page, bench)
     page.evaluate(FRAMES, OCCLUSION_TESTED)
-    for badge in (BOARD_BADGE, PLACE_BADGE, FOOTPEDAL_BADGE):
+    for badge in (BOARD_BADGE, PLACE_BADGE, FOOTPEDAL_BADGE, CAMERA_BADGE):
         expect(page.locator(badge)).not_to_have_class(re.compile(r"\bbehind\b"))

@@ -61,10 +61,10 @@ def _press(page, label: str) -> None:
 
 
 def _camera_marks_visible(page):
-    """Whether each camera's frustum is drawn (picture_marks.js), by host."""
+    """Whether each camera's pyramid is drawn (picture_marks.js), camera by camera."""
     return page.evaluate(
-        "() => window.apothecaryPictures.state().filter((e) => e.frustum)"
-        ".map((e) => e.frustum.visible)"
+        "() => window.apothecaryPictures.cameraState().filter((c) => c.pyramid)"
+        ".map((c) => c.pyramid.visible)"
     )
 
 
@@ -105,8 +105,8 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
         title="The bench as it is, and a camera looking at it",
         intro=(
             "A mesh made in another program is brought in measured, not trusted; a "
-            "part can be a folder with a sidecar and no Python; the garage's printers "
-            "are Ender 3s from published dimensions and its boards are the boards. A "
+            "part can be a folder with a sidecar and no Python; the garage's printer "
+            "is an Ender 3 from published dimensions and its boards are the boards. A "
             "camera placed at a piece is drawn there, at the level where that piece "
             "is, and nowhere else. And nothing here leaves the machine, by "
             "construction rather than by anyone's care."
@@ -121,7 +121,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
         does_not_show=[
             "**A real camera.** The camera placed here is Chromium's test pattern. "
             "Nothing of anyone's room is in these pictures.",
-            "**A printer or board that is connected.** The Ender 3s and the boards "
+            "**A printer or board that is connected.** The Ender 3 and the boards "
             "are drawn as what they are; none is pinned to a port, and the status "
             "each shows is the site's own.",
             "**The import command writing into the repository.** `apothecary parts "
@@ -203,7 +203,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     assert printer.build_origin == ender3.BUILD_ORIGIN
     assert mainboard.part_ref == "creality_v422"
     story.says(
-        "The printers are Ender 3s from published dimensions",
+        "The printer is an Ender 3 from published dimensions",
         "A printer node names the part it is, and its children live inside it: the "
         "Creality mainboard in the electronics box, the gantry at the uprights. "
         "`build_origin` puts the bed where it is, so a job's build volume and a "
@@ -220,7 +220,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     expect(page.locator(".toolbar h1")).to_contain_text("Apothecary")
     contents = page.locator("#contents-list .contents-item")
     expect(contents.first).to_be_visible(timeout=20000)
-    for name in ("workbench", "printer_1", "printer_3", "esp32_blink", "raspberry_pi_4"):
+    for name in ("workbench", "printer_1", "esp32_blink", "raspberry_pi_4"):
         expect(page.locator("#contents-list")).to_contain_text(name)
     page.evaluate("() => localStorage.removeItem('apothecary.panels')")
     # The root frames the whole building; the bench is what this page is
@@ -228,7 +228,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     page.evaluate(
         """() => {
             const v = window.fractalViewer;
-            const on = new Set(['workbench', 'printer_1', 'printer_2', 'printer_3', 'esp32_blink',
+            const on = new Set(['workbench', 'printer_1', 'esp32_blink',
                                 'footpedal', 'arduino_uno', 'raspberry_pi_4', 'teensy_40']);
             const level = v.currentRenderNodes(v.currentFocusNode());
             v.frameCameraForChildren(level.filter((n) => on.has(n.name)));
@@ -236,7 +236,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     )
     settled(page)
     story.shows(
-        "The bench at the garage's root: three Ender 3s on it, the boards at its right end",
+        "The bench at the garage's root: an Ender 3 at its left end, the boards at its right end",
         "The root shows the whole building; here the view is framed on the bench. "
         "Every machine and board is the part it names, drawn from its own STL, and "
         "the site places each by its footprint.",
@@ -280,74 +280,83 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
         "described part from the model half of this page, in the world.",
     )
 
-    # A camera, pinned at the bench from the bench's own ring and drawn there.
+    # A camera, added above the bench from the bench's own ring, and told which of
+    # this browser's cameras it is from its own.
     page.evaluate("() => window.fractalViewer.zoomOut()")
     page.evaluate("() => window.apothecaryPictureVerbs.ready")
     page.locator("#contents-list .contents-item[data-path='workbench']").click(button="right")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     _press(page, "Camera")
-    _press(page, "Pin here")
+    _press(page, "Add here")
+    expect(page.locator("#status")).to_contain_text(
+        "added camera_1 above workbench, looking straight down", timeout=5000
+    )
+    page.wait_for_function("() => window.fractalViewer.selectedName === 'camera_1'")
+    page.locator("#contents-list .contents-item[data-path='camera_1']").click(button="right")
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    _press(page, "Device")
     _press(page, _wedges(page)["8"])  # this browser's camera, by its name
     expect(page.locator("#status")).to_contain_text(
-        "pinned at workbench: Camera › Take picture keeps a frame and pins it here as a view",
-        timeout=5000,
+        "Take picture (P) keeps a frame where it looks", timeout=5000
     )
-    # Site's Pinned lists it, every site's pins listed again as the section unfolds.
+    # Site's Pinned lists it, every site's cameras and pins listed again as the
+    # section unfolds.
     pinned = page.locator(".panel[data-panel='site'] #site-pinned")
     pinned.locator("summary").click()
     placed = pinned.locator(".pin-row.camera")
     expect(placed).to_have_count(1, timeout=5000)
-    expect(placed).to_contain_text("garage › workbench")
+    expect(placed).to_contain_text("garage › camera_1")
     pinned.locator("summary").click()  # folded again, for the pictures below
-    page.evaluate("() => window.fractalViewer.zoomIn('workbench')")
-    badge = page.locator(".world-badge.place-mark.has-camera")
+    badge = page.locator(".world-badge.camera-mark[data-camera='camera_1']")
     expect(badge).to_be_visible(timeout=5000)
-    assert _camera_marks_visible(page) == [True]
+    assert _camera_marks_visible(page) == [True]  # selected: its pyramid shows
     # Nothing stands between the camera and the top of the bench, so the badge
     # is not dimmed: the transform gizmo's picking plane, a mesh the size of the
     # scene, is not something in the way.
     settled(page, frames=OCCLUSION_TESTED)
     expect(badge).not_to_have_class(re.compile(r"\bbehind\b"))
-    cameras = page.request.get(f"{base_url}/cameras?site=garage").json()
-    assert [c["path"] for c in cameras] == ["workbench"]
+    (camera,) = page.request.get(f"{base_url}/sites/garage/attached").json()["cameras"]
+    assert camera["name"] == "camera_1" and camera["lands"]["host"] == "workbench"
     story.shows(
-        "A camera pinned at the bench is drawn there",
-        "Pinned from the bench's own ring -- Camera, Pin here, and this browser's "
-        "camera by its name -- the camera gets a place badge above the bench and a "
-        "frustum looking down onto its top, kept on the server so every browser "
-        "looking at this site sees it standing there. The status bar names the next "
-        "step, Camera › Take picture, which keeps a frame and pins it at the bench as "
-        "a view.",
+        "A camera added above the bench is drawn there",
+        "Added from the bench's own ring -- Camera, Add here -- a camera part stands "
+        "above the bench looking straight down: its body, its 📷 badge and, while it "
+        "is selected, its pyramid from the lens to the bench's top, with a ring to "
+        "turn it and an arc to tilt it beside the move arrows. Its own ring's Device "
+        "says which of this browser's cameras it is. It is kept on the server, so "
+        "every browser looking at this site sees it standing there. The status bar "
+        "names the next step, Take picture (P), which keeps a frame where it looks.",
     )
 
-    page.evaluate("() => { const v = window.fractalViewer; v.zoomOut(); v.zoomIn('printer_1'); }")
+    page.evaluate("() => window.fractalViewer.zoomIn('printer_1')")
     expect(badge).to_be_hidden(timeout=5000)
     assert _camera_marks_visible(page) == [False]
     settled(page)
     story.shows(
-        "Looking into a printer, the camera's mark stays at the bench",
-        "A mark is drawn at the level where its piece is. Zoomed into something "
-        "else, neither the badge nor the frustum follows; zooming back out brings "
-        "both back.",
+        "Looking into a printer, the camera stays in the garage",
+        "A camera is a piece of the site, drawn at the level its site is. Zoomed "
+        "into something else, neither its badge nor its pyramid follows; zooming "
+        "back out brings them back.",
     )
 
     # Back to the root with nothing selected: zooming out one level would select the
     # printer it left, and its rows and gizmo would stand in the pictures below.
     page.evaluate("() => window.fractalViewer.jumpTo(0)")
     expect(badge).to_be_visible(timeout=5000)
-    assert _camera_marks_visible(page) == [True]
+    assert _camera_marks_visible(page) == [False]  # unselected: its body and its badge
     expect(page.locator("#selected-body")).to_contain_text("Click a node to select it")
-    # Taken back from its row in Site's Pinned.
+    # Removed from its row in Site's Pinned.
     pinned.locator("summary").click()
-    placed.locator(".pinned-camera-unpin").click()
+    placed.locator(".pinned-camera-remove").click()
     expect(badge).to_have_count(0, timeout=5000)
     expect(pinned.locator("#pinned-list")).to_contain_text("none pinned")
-    assert page.request.get(f"{base_url}/cameras?site=garage").json() == []
+    assert page.request.get(f"{base_url}/sites/garage/attached").json()["cameras"] == []
     story.says(
-        "Unpinned, it leaves the world",
-        "The pin is a record on this machine and nothing more; taking it back "
-        "removes the mark for every browser.",
-        shown="GET /cameras?site=garage -> []",
+        "Removed, it leaves the world",
+        "A camera is a piece of the site and a record on this machine, and nothing "
+        "more; removing it takes it out of the site for every browser. The pictures "
+        "it took stay.",
+        shown="GET /sites/garage/attached -> cameras: []",
     )
 
     # ------------------------------------------------------ kept, taken back
@@ -519,7 +528,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     with pytest.raises(LeftTheMachine) as refused:
         socket.create_connection(("example.com", 80), timeout=2)
     elsewhere = page.request.get(
-        f"{base_url}/cameras?site=garage", headers={"Origin": "http://elsewhere.test"}
+        f"{base_url}/sites/garage/attached", headers={"Origin": "http://elsewhere.test"}
     )
     assert elsewhere.status == 403, elsewhere.text()
     story.says(
@@ -527,7 +536,8 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
         "The guard is on the process, installed when the package is imported: a "
         "connection past this machine is refused before any name is looked up. The "
         "server answers this machine alone; a page from anywhere else asking it "
-        "for the cameras gets a refusal, not the list. Neither is a setting.",
+        "for a site's cameras and pictures gets a refusal, not the list. Neither is "
+        "a setting.",
         shown=(
             f"{refused.value}\n\n"
             f"Origin: http://elsewhere.test -> {elsewhere.status} {elsewhere.text()}"

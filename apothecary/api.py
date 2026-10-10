@@ -64,6 +64,7 @@ from .projects.parts.skeleton import ROOT
 from .projects.parts.stl_renderer import build_stl
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
 from .projects.registry import ProjectInfo, _sanitize_module_name, scan_projects
+from .routes.cameras import router as cameras_router
 from .routes.jobs import router as jobs_router
 from .routes.pictures import router as pictures_router
 from .routes.views import router as views_router
@@ -177,6 +178,8 @@ app.include_router(docs_router)
 app.include_router(pictures_router)
 # Views: a picture pinned at a place in a site, and the pieces made from its shapes.
 app.include_router(views_router)
+# Cameras: a camera part added to a site, aimed, told its device, removed.
+app.include_router(cameras_router)
 # Jobs: what the machines ran, of every kind; each is started by its machine's own route.
 app.include_router(jobs_router)
 THREE_DIR = STATIC_ROOT / "vendor" / "three"
@@ -1228,13 +1231,17 @@ async def update_site_layout(name: str, body: LayoutRequest):
     """Apply position overrides (persisted), re-validate, and return regenerated OpenSCAD.
 
     ``body.positions`` need only include the structures the client has
-    moved; everything else keeps its current persisted position.
+    moved; everything else keeps its current persisted position. A camera
+    moved here has its record follow, so it stands there after a restart.
     """
+    from .vision.cameras import follow
+
     site = _get_site_or_404(name)
     for structure in site.children:
         override = body.positions.get(structure.name)
         if override is not None:
             structure.position = Vector3D(x=override.x, y=override.y, z=override.z)
+    follow(name, site)
 
     validator = _site_store.validator(name)
     return _site_payload(site, validator(site))
