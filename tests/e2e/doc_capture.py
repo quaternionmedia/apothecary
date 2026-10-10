@@ -154,6 +154,12 @@ class Walkthrough:
     browser. `shows` is a step with a picture of the screen. Both are called
     from a test that has just asserted the thing the sentence claims, which is
     the only reason the sentence is worth anything.
+
+    `browser_suite_only` is a page the browser suite writes and the quick
+    `apothecary test run` does not (a loop's page: its run is unmarked
+    `walkthrough`): its header says which runs rewrite it, and its footer names
+    `module`, the test module that writes it, to run alone. The fixture sets
+    `module` and holds the flag to the run's marker, so the words stay true.
     """
 
     page: Page
@@ -164,6 +170,8 @@ class Walkthrough:
     runtime: str
     does_not_show: List[str]
     steps: List[ShownStep] = field(default_factory=list)
+    browser_suite_only: bool = False
+    module: str | None = None  # the test module that writes the page, from the repository root
 
     def says(self, heading: str, sentence: str, shown: str | None = None) -> None:
         self.steps.append(
@@ -211,8 +219,18 @@ class Walkthrough:
             "",
             "**This page is written by the run it describes.** Every sentence below",
             "was emitted by a test that had just asserted it, and the whole page is",
-            "rewritten by the ordinary test command. Editing it by hand is editing",
-            "the output of a program: the next run puts it back.",
+            *(
+                [
+                    "rewritten by every run of the browser suite, though not by the quicker",
+                    "`apothecary test run`. Editing it by hand is editing the output of a",
+                    "program: the next run puts it back.",
+                ]
+                if self.browser_suite_only
+                else [
+                    "rewritten by the ordinary test command. Editing it by hand is editing",
+                    "the output of a program: the next run puts it back.",
+                ]
+            ),
             "",
             self.intro,
             "",
@@ -243,7 +261,14 @@ class Walkthrough:
         lines.append("Run it yourself:")
         lines.append("")
         lines.append("```sh")
-        lines.append("uv run apothecary test run --e2e")
+        if self.browser_suite_only and self.module:
+            alone = f"uv run pytest {self.module} --start-server"
+            suite = "uv run apothecary test run --e2e"
+            width = max(len(alone), len(suite)) + 3
+            lines.append(f"{alone:<{width}}# this page alone")
+            lines.append(f"{suite:<{width}}# with every browser test")
+        else:
+            lines.append("uv run apothecary test run --e2e")
         lines.append("```")
         lines.append("")
 

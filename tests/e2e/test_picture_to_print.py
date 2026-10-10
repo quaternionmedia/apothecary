@@ -250,6 +250,7 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough):
             "described rather than pictured, for the same reason.",
         ],
         page=page,
+        browser_suite_only=True,
     )
     _open_garage(page, url)
     _closer_to_the_bench(page)

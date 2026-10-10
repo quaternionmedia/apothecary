@@ -2,8 +2,9 @@
 
 **This page is written by the run it describes.** Every sentence below
 was emitted by a test that had just asserted it, and the whole page is
-rewritten by the ordinary test command. Editing it by hand is editing
-the output of a program: the next run puts it back.
+rewritten by every run of the browser suite, though not by the quicker
+`apothecary test run`. Editing it by hand is editing the output of a
+program: the next run puts it back.
 
 A camera over the bench, a picture taken, its shapes found, one made a piece, the piece adjusted, and a print job for it on printer_1, watched to its end in printer_1's Machine; then round again with the camera turned, for a second piece and a second print. Every step is the page's own: a cell of a ring, a button, a key or a box, and every step's words name the next one.
 
@@ -149,5 +150,6 @@ printer_1 · print · disc_1.gcode → disc_1 · done
 Run it yourself:
 
 ```sh
-uv run apothecary test run --e2e
+uv run pytest tests/e2e/test_picture_to_print.py --start-server   # this page alone
+uv run apothecary test run --e2e                                  # with every browser test
 ```

@@ -62,7 +62,11 @@ Both are fixtures in `conftest.py`; the recorders themselves are in `doc_capture
   behind it. A screenshot is rewritten only when its pixels change; commit the
   page and pictures when they do. What changes on every run whatever the page
   does -- a time, a picture's name made of one -- is blanked (`shows`'s
-  `blank`), so a picture changes only when the page does.
+  `blank`), so a picture changes only when the page does. A page the quick
+  `apothecary test run` writes (11, 12) is the run of a test marked
+  `walkthrough`; a loop's page, which only the browser suite writes (13), is
+  unmarked and passes `browser_suite_only=True` to the fixture, and its header
+  and footer say so. The fixture fails a run whose marker and flag disagree.
 - `doc_recorder` takes screenshots for `docs/generated/`. The tests that use it
   are marked `docs` and skip unless `--generate-docs` is given;
   `apothecary docs generate` runs them that way, on a scripted server of its own.
