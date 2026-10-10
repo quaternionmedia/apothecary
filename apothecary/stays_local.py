@@ -31,7 +31,14 @@ editing this code and having that edit reviewed:
    snapshot's version is its date, three numbers too), or from a commit, 40
    hex characters; no personal data is in it, and a test holds the callers of
    ``tool_fetch`` to the two installers. (The source build that follows runs
-   cmake told to fetch nothing.)
+   cmake told to fetch nothing.) The slicer installer
+   (apothecary/slicer/orcaslicer_installer.py) fetches through the OpenSCAD
+   installer's fetch, by a pinned version: api.github.com publishes the
+   SHA-256 of an OrcaSlicer release's asset, github.com serves the asset and
+   redirects it to release-assets.githubusercontent.com. OrcaSlicer itself,
+   once installed, is a subprocess outside the guard; a slice gives it a
+   ``--datadir`` of its own, and it reaches no host (an strace of a real
+   slice).
 
 2. **The server refuses to listen anywhere but this machine, and refuses
    anyone who is not on it.** ``require_loopback()`` is what every ``--host``

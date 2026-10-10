@@ -4062,6 +4062,16 @@
                 if (!(await handle.print.choose(piece))) return { refused: `${piece} is not among the parts ${printer}'s Print from here can make` };
                 return { said: `${printer}'s Machine makes ${piece}: choose its file in Print from here, then ▶ Print` };
             }
+            // Slice, from a made piece's ring or a part's: the printer's Machine opened
+            // with it chosen under makes, as Print does, and a slice of it started
+            // there for that printer -- its log in Print from here, its G-code chosen
+            // there when it ends, so ▶ Print follows. What it says, or why it could not.
+            async slicePiece(piece, printer) {
+                if (!this.openMachine(printer)) return { refused: `${printer} has no board pinned to slice for` };
+                const handle = this.machine && this.machine.handle;
+                if (!handle || handle.kind() !== 'printer') return { refused: `${printer}'s board is no printer` };
+                return handle.print.slice(piece);
+            }
             // A board's Machine by its port, pinned in this site or nowhere here --
             // what a link to the printer monitor opens.
             openMachineFor(port) {
@@ -4146,8 +4156,9 @@
                     // refused, which the module has said.
                     async act(verb) {
                         await ready;
-                        // Install › a module: arduino-cli, or another module's tools.
+                        // Install › a module: arduino-cli, another module's tools, or a slicer.
                         if (verb === 'install' || verb === 'install:arduino') return toolchain.install();
+                        if (verb.startsWith('install:slicer:')) return toolchain.slicer(verb.slice('install:slicer:'.length));
                         if (verb.startsWith('install:')) return toolchain.module(verb.slice('install:'.length));
                         if (verb === 'compile') return build.compile();
                         if (verb === 'upload') return build.upload();
@@ -5031,6 +5042,13 @@
                     else viewer.setStatus(`${intent.label}: ${done.said}${tail}`, 'success');
                     return;
                 }
+                // Slice, on a made piece or a part, names the printer it slices for.
+                if (action.startsWith('slice:piece:')) {
+                    const done = await viewer.slicePiece(path, action.slice('slice:piece:'.length));
+                    if (done.refused) viewer.setStatus(`${intent.label}: ${done.refused}${tail}`, 'error');
+                    else viewer.setStatus(`${intent.label}: ${done.said}${tail}`, 'success');
+                    return;
+                }
                 // A board's verb goes to its Machine, the one place for the board:
                 // opened for it first when it is not open. A refusal it meets is
                 // said here as an error, as well as in its log; what it told (a
@@ -5249,6 +5267,8 @@
                 for (const el of bench.querySelectorAll('.core-install[data-id]')) pairs.push([el, `bench:core:${el.dataset.id}`]);
                 // Each toolchain module's Install: its cell of Panels › Bench › Install.
                 for (const el of bench.querySelectorAll('.module-install[data-id]')) pairs.push([el, `bench:install:${el.dataset.id}`]);
+                // Each slicer's Install: its cell of Install, after the toolchain modules'.
+                for (const el of bench.querySelectorAll('.slicer-install[data-slicer]')) pairs.push([el, `bench:install:slicer:${el.dataset.slicer}`]);
             }
             annotate(ring, pairs);
         }

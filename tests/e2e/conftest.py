@@ -107,6 +107,8 @@ def start_server(tmp_path_factory):
             {
                 "ARDUINO_CLI": str(write_fake_arduino_cli(tmp / "arduino-cli")),
                 "ESPTOOL": "none",
+                # No slicer of the person's own: the page's Slice step brings a fake.
+                "APOTHECARY_ORCASLICER": "none",
                 # Rust's tools: none, unless a test names the scripted ones (the
                 # firmware loop); never a person's own on PATH.
                 "CARGO": "none",

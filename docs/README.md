@@ -37,6 +37,7 @@ HTTP API is described at `/openapi.json`, the commands by `apothecary --help`.
 | [Geometry models](models.md) | Vectors, bounds, colors, shapes and units |
 | [Geometry made elsewhere](geometry-from-elsewhere.md) | An STL or OBJ as a part (`apothecary parts import`), and a part described by a sidecar |
 | [Firmware](firmware.md) | Programming boards from sketches kept with their parts, from the Bench or a board's Machine; monitoring a G-code printer from its scene node |
+| [The slicer](slicer.md) | OrcaSlicer installed and pinned, the printer's profile kept with its part, a part or a made piece sliced for the pinned printer and kept for the Print card |
 
 ## Plans and records
 

@@ -161,6 +161,12 @@ def test_the_bench_s_verbs_are_cells_of_panels_bench(page: Page, url: str):
     expect(bench.locator(".module-install[data-id='rust-esp32']")).to_have_attribute(
         "data-address", "9366"
     )
+    # The slicer after them: OrcaSlicer, none of the person's own found by this server,
+    # its Install the last cell of Install.
+    slicer = bench.locator(".tc-module[data-slicer='orcaslicer']")
+    expect(slicer).to_contain_text("not installed: pinned 2.4.2")
+    expect(slicer.locator(".slicer-install")).to_have_text("Install OrcaSlicer")
+    expect(slicer.locator(".slicer-install")).to_have_attribute("data-address", "9362")
     expect(bench.locator(".core-install[data-id='esp8266:esp8266']")).to_have_attribute(
         "data-address", re.compile(r"^931\d$")
     )

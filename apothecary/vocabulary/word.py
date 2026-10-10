@@ -16,9 +16,10 @@ from __future__ import annotations
 
 from typing import Callable, Dict, List, Optional, Type
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from ..hierarchy import Assembly
+from ..models import PrintSettings
 
 
 class WordShape(BaseModel):
@@ -38,6 +39,16 @@ class WordShape(BaseModel):
 Recipe = Callable[[str, WordShape], Assembly]
 
 
+# The owner's decision of 2026-10-10 (docs/plans/slicer-2026-10-10.md): a piece made
+# from a picture slices with the printer's values, and a word declaring print
+# settings for the pieces made as it is a stub -- the shape a part declares
+# (PrintSettings), refused if set until a slice uses it.
+WORD_PRINT_SETTINGS_STUB = (
+    "a word's print settings are a stub, not built yet: a piece made as a word slices "
+    "with the printer's values (docs/plans/slicer-2026-10-10.md)"
+)
+
+
 class Word(BaseModel):
     """One entry in the vocabulary."""
 
@@ -47,6 +58,16 @@ class Word(BaseModel):
     describes: str
     build: Recipe
     tags: List[str] = Field(default_factory=list)
+    print_settings: Optional[PrintSettings] = Field(
+        None, description="A stub: " + WORD_PRINT_SETTINGS_STUB
+    )
+
+    @field_validator("print_settings")
+    @classmethod
+    def _print_settings_are_a_stub(cls, value: Optional[PrintSettings]):
+        if value is not None:
+            raise ValueError(WORD_PRINT_SETTINGS_STUB)
+        return value
 
     def make(self, instance_name: str, shape: Optional[WordShape] = None) -> Assembly:
         """Build one of these, named for where it will sit."""
