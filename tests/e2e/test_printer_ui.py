@@ -866,7 +866,12 @@ def test_a_print_from_the_card_is_a_job_that_names_the_part_it_makes(page: Page,
         "dot.gcode",
         "done",
     )
-    assert newest["part"] == {"path": "footpedal", "name": "footpedal"}
+    assert newest["part"] == {
+        "path": "footpedal",
+        "name": "footpedal",
+        "picture": None,
+        "camera": None,
+    }
     assert (newest["machine"]["port"], newest["machine"]["path"]) == (PRINTER, BOARD)
     assert newest["started_at"] and newest["finished_at"]
 

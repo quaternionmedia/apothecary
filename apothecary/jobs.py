@@ -3,8 +3,9 @@
 A job is a print on a printer today; a cut on a mill or a laser would be one the
 same way. Each records its kind; the machine (its kind, its port, the board's
 own identity when it is known, and the node it is pinned to, if any); the site
-and the part it makes, when known; the input file it ran (its name, size and
-SHA-256); when it started and finished; how it ended (``running``, ``done``,
+and the part it makes, when known (a piece made from a picture with that picture
+and its camera); the input file it ran (its name, size and SHA-256); when it
+started and finished; how it ended (``running``, ``done``,
 ``cancelled`` or ``failed``, with a reason); and how far it got.
 
 **What a machine offers** is its kinds of operation. ``register`` adds one
@@ -85,10 +86,14 @@ class JobInput(BaseModel):
 
 
 class JobPart(BaseModel):
-    """The part or piece a job makes: a node of the job's site."""
+    """The part or piece a job makes: a node of the job's site. A piece made from a
+    picture also carries the picture and the camera that took it, as they were
+    when the job began: kept in the job's record, not shown in its row."""
 
     path: str
     name: str  # the part it is built from, or the piece's own name
+    picture: Optional[str] = None  # a made piece's picture, under the picture root
+    camera: Optional[str] = None  # the camera that took that picture, when one did
 
 
 class JobFacts(BaseModel):

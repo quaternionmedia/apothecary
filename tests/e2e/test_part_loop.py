@@ -465,7 +465,7 @@ def test_designing_a_part_twice_round(
         ordinal="14",
         slug="designing-a-part",
         title="Designing a part",
-        written_by="the browser suite (`uv run apothecary test run --e2e`)",
+        browser_suite_only=True,
         intro=(
             "A part chosen from its ring, a size moved and checked, Apply drawing it in "
             "this tab with what it measures beside what it declares, a reload drawing it "

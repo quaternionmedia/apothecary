@@ -2,8 +2,9 @@
 
 **This page is written by the run it describes.** Every sentence below
 was emitted by a test that had just asserted it, and the whole page is
-rewritten by the browser suite (`uv run apothecary test run --e2e`). Editing it by hand is editing
-the output of a program: the next run puts it back.
+rewritten by every run of the browser suite (`uv run apothecary test
+run --e2e`), though not by the quicker `apothecary test run`. Editing it
+by hand is editing the output of a program: the next run puts it back.
 
 A part chosen from its ring, a size moved and checked, Apply drawing it in this tab with what it measures beside what it declares, a reload drawing it again, OpenSCAD's refusal shown by line, the saved part again for nothing; then round again, and two tabs applying at once. Every step is the page's own: a cell of a ring, a slider or a button, and every step's words name the next one.
 
@@ -99,5 +100,6 @@ A second tab of the same page: this one stages 23.91 mm and the other 36.20 mm, 
 Run it yourself:
 
 ```sh
-uv run apothecary test run --e2e
+uv run pytest tests/e2e/test_part_loop.py --start-server   # this page alone
+uv run apothecary test run --e2e                           # with every browser test
 ```
