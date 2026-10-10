@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Optional
 
 import click
@@ -82,3 +83,53 @@ def slicer_install(force: bool):
 def slicer_status():
     """Each slicer: what it slices, where it is, its version, and the pinned one."""
     _status_lines()
+
+
+@slicer.command("slice")
+@click.argument("part")
+@click.option(
+    "--printer",
+    default=None,
+    help="The printer's part (default: the one that keeps a slicer profile)",
+)
+@click.option(
+    "--slicer", "slicer_id", default=None, help="The slicer module (default: the printer's)"
+)
+@click.option("--json-out/--text", default=False)
+def slicer_slice(part: str, printer: Optional[str], slicer_id: Optional[str], json_out: bool):
+    """Slice PART (a registered part's name) for a printer, and keep the G-code
+    where the Print card's file box keeps a file.
+
+    The part's declared print settings are used, the printer's profile filling
+    the rest; each value is listed with where it came from. A piece made from
+    a picture lives in the running server, and is sliced through its route
+    (POST /slicer/slice). Nothing is sent to a printer.
+    """
+    from ..slicer.modules import SlicerError
+    from ..slicer.service import Here, resolve, slice_into
+
+    log = (lambda _line: None) if json_out else click.echo
+    try:
+        target, chosen = resolve(part, printer=printer)
+        record = slice_into(target, chosen, Here(log), slicer=slicer_id)
+    except SlicerError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_out:
+        click.echo(json.dumps(record.model_dump(mode="json"), indent=2))
+        return
+    click.echo("")
+    click.secho(f"{record.name}: kept as {record.file_id}", bold=True)
+    if record.estimate:
+        e = record.estimate
+        click.echo(
+            f"  {record.slicer} estimates {e.time or '?'}, {e.filament_g or '?'} g "
+            f"({e.filament_mm or '?'} mm) of filament, {e.layers or '?'} layers"
+        )
+    if record.bounds:
+        lo, hi = record.bounds.min, record.bounds.max
+        click.echo(f"  extrudes from ({lo[0]}, {lo[1]}, {lo[2]}) to ({hi[0]}, {hi[1]}, {hi[2]})")
+    for message in record.messages:
+        where = f"line {message.line}: " if message.line else ""
+        _safe_echo(f"  • {message.level}: {where}{message.text}", fg="yellow")
+    for problem in record.problems:
+        _safe_echo(f"  ✗ the Print card would refuse it: {problem}", fg="red")
