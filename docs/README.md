@@ -24,6 +24,7 @@ HTTP API is described at `/openapi.json`, the commands by `apothecary --help`.
 | [11 — Photographs into pieces](../walkthrough/11-photographs-into-pieces.md) | A photograph becomes named, placed pieces in the viewer; written by its own run |
 | [12 — The bench as it is](../walkthrough/12-the-bench-as-it-is.md) | Geometry from elsewhere, the printer and boards drawn as they are, a camera added above the bench; written by its own run |
 | [14 — Designing a part](../walkthrough/14-designing-a-part.md) | A part's size moved, checked, applied and drawn in its tab, OpenSCAD's refusal by line, the saved part again for nothing, round twice and in two tabs; written by the browser suite |
+| [15 — Firmware](../walkthrough/15-firmware.md) | A sketch chosen, built, flashed to the ESP32 devkit and heard saying its hello in the board's Machine, the Arduino esp32_blink then the Rust one; written by its own run, in the browser suite |
 
 ## Guides
 
@@ -45,6 +46,7 @@ HTTP API is described at `/openapi.json`, the commands by `apothecary --help`.
 | [Cameras and clutter](plans/cameras-and-clutter-2026-10-04.md) | Cameras as parts, easier pictures, and less on the screen: badges as icons, the Machine in the rail, one header row, faded walls; in four phases |
 | [Cleanup, triaged](plans/cleanup-triage-2026-10-08.md) | Every open cleanup item sorted by kind and given an order: in flight, delivery, dead code, parts, tests, structure, the owner's |
 | [Rust](plans/rust-2026-10-08.md) | Firmware in Rust for the ESP32 behind modular toolchains; a Rust geometry kernel researched and compared by numbers; a Rust service and core stubbed |
+| [A Rust geometry kernel](plans/rust-geometry-kernels-2026-10-09.md) | A spike: which Rust kernel could render scenes to STL without OpenSCAD -- Manifold bindings, csgrs, boolmesh, truck, Fornjot, OCCT -- by licence, build, coverage and maturity, and which to try first |
 | [The loops through the page](plans/ui-flows-2026-10-08.md) | Designing a part, editing its SCAD, firmware, and a picture to a print: each built out and held end to end by a browser test |
 | [A managed slicer](plans/slicer-2026-10-10.md) | OrcaSlicer behind a switchable slicer interface, installed like OpenSCAD; the printer's profile kept with its part, print settings from what each part declares |
 | [Pictures in the world](plans/pictures-in-the-world-2026-09-26.md) | A picture pinned at a place as a view, its shapes made into pieces there; what is built, and what is open |

@@ -1,15 +1,22 @@
 /* The toolchain: arduino-cli and esptool as they are installed, the suggested
- * cores, and libraries -- the Bench's first section.
+ * cores, and libraries -- the Bench's first section -- and every other toolchain
+ * module beside them (Rust for the ESP32: cargo and espflash), each with its
+ * tools as found and its own Install.
  *
  * arduino-cli is downloaded from Arduino's releases (SHA-256 verified) into the
  * tools dir by POST /firmware/install; a core is POST /firmware/cores/install
  * (its board-manager index added first); libraries are POST
- * /firmware/libraries/install. Each is a task, followed in the Bench's task log
- * (`tasks`, widgets/tasks.js).
+ * /firmware/libraries/install; another module's tools are POST
+ * /firmware/toolchains/{id}/install (Rust's: rustup, espup's Xtensa toolchain and
+ * espflash, each checksum-verified, and every Rust sketch's crates vendored).
+ * Each is a task, followed in the Bench's task log (`tasks`, widgets/tasks.js).
+ * The modules are the status's `toolchains`: a module added later is drawn here
+ * without a change to this file.
  *
  * mountToolchain(root, { base, tasks, say, onStatus }) renders into `root` and
- * returns { load(), status(), install(), core(id), libraries(), destroy() }.
- * load() asks GET /firmware/status again and hands it to `onStatus` as well.
+ * returns { load(), status(), install(), core(id), libraries(), module(id),
+ * destroy() }. load() asks GET /firmware/status again and hands it to `onStatus`
+ * as well.
  */
 
 import { esc } from "/static/board_text.js";
@@ -30,7 +37,14 @@ const MARKUP = `
         <input class="lib-input grow" placeholder="e.g. FastLED, Control Surface@2.1.2" spellcheck="false" aria-label="Libraries to install">
         <button type="button" class="lib-btn" title="Install the libraries named in the box, comma-separated">Install</button>
     </div>
+    <div class="tc-modules"></div>
 </div>`;
+
+// What a module's Install fetches, said on its button; one not named here says
+// what its status's `install` command is.
+const INSTALLS = {
+    "rust-esp32": "Fetch rustup, espup's Xtensa Rust toolchain and espflash into the tools dir (each checksum-verified, each once; force fetches them again), and vendor every Rust sketch's crates, so every build after it runs offline",
+};
 
 export function mountToolchain(root, { base = "", tasks = null, say = null, onStatus = null } = {}) {
     root.innerHTML = MARKUP;
@@ -55,6 +69,9 @@ export function mountToolchain(root, { base = "", tasks = null, say = null, onSt
             ["config", esc(s.config_file || "–")],
             ["esptool", s.esptool_ok ? `<b class="ok">✓ ${esc(s.esptool_version)}</b> ${esc(s.esptool_path)}` : '<span class="warn">• not found (optional)</span>'],
         ];
+        // Arduino, as a module: installed or not, and what it can do.
+        const arduino = (s.toolchains || []).find((m) => m.id === "arduino");
+        if (arduino) rows.push(["Arduino", `${arduino.ok ? '<b class="ok">installed</b>' : '<span class="warn">not installed</span>'} · can ${esc((arduino.can || []).join(", "))}`]);
         $(".tc-status").innerHTML = rows.map(([k, v]) => `<div><span class="meta">${k}:</span> ${v}</div>`).join("")
             + (s.problems || []).map((p) => `<div class="warn">! ${esc(p)}</div>`).join("");
         $(".install-btn").textContent = s.arduino_cli_ok ? "Update arduino-cli" : "Install arduino-cli";
@@ -69,7 +86,21 @@ export function mountToolchain(root, { base = "", tasks = null, say = null, onSt
             if (!suggested.some((x) => x.id === c.id) && c.installed) items.push(`<li><span>${esc(c.name || c.id)}</span> <span class="meta">${esc(c.id)}</span><span class="grow"></span><span class="ok meta">✓ ${esc(c.installed)}</span></li>`);
         }
         $(".tc-cores").innerHTML = items.join("") || '<li class="empty">–</li>';
+        $(".tc-modules").innerHTML = (s.toolchains || []).filter((m) => m.id !== "arduino").map(renderModule).join("");
         enable();
+    }
+    // Another toolchain module: what it builds, its tools as found, its problems,
+    // and its Install, which says what it fetches.
+    function renderModule(m) {
+        const tools = (m.tools || []).map((t) => `<div><span class="meta">${esc(t.name)}:</span> ${t.ok
+            ? `<b class="ok">✓ ${esc(t.version)}</b> ${esc(t.path)}`
+            : (t.path ? `<b class="bad">✗ does not run</b> ${esc(t.path)}` : '<b class="bad">✗ not installed</b>')}</div>`).join("");
+        const problems = (m.problems || []).map((p) => `<div class="warn">! ${esc(p)}</div>`).join("");
+        const builds = `${(m.languages || []).join(", ")} for ${(m.families || []).join(", ")}`;
+        const title = INSTALLS[m.id] || `Install its tools: ${m.install || m.id}`;
+        return `<div class="tc-module" data-id="${esc(m.id)}"><div class="k">${esc(m.label)} <span class="meta">${esc(builds)}</span></div>`
+            + `<div class="kv"><div><span class="meta">${m.ok ? "installed" : "not installed"}:</span> can ${esc((m.can || []).join(", "))}</div>${tools}${problems}</div>`
+            + `<div class="row"><button type="button" class="module-install" data-id="${esc(m.id)}" title="${esc(title)}">${m.ok ? "Update" : "Install"} ${esc(m.label)}</button></div></div>`;
     }
     // What can be pressed: nothing while a task runs; cores and libraries only
     // with arduino-cli installed.
@@ -79,6 +110,10 @@ export function mountToolchain(root, { base = "", tasks = null, say = null, onSt
         $(".install-btn").disabled = busy;
         $(".lib-btn").disabled = busy || !ok;
         for (const b of root.querySelectorAll(".core-install")) b.disabled = busy || !ok;
+        for (const b of root.querySelectorAll(".module-install")) {
+            const m = ((status && status.toolchains) || []).find((t) => t.id === b.dataset.id);
+            b.disabled = busy || !(m && m.installable);
+        }
     }
 
     async function load() {
@@ -98,6 +133,8 @@ export function mountToolchain(root, { base = "", tasks = null, say = null, onSt
     }
     const install = () => run(() => post("/firmware/install", { force: $(".install-force").checked }));
     const core = (id) => run(() => post("/firmware/cores/install", { id }));
+    // Another module's tools; force, as for arduino-cli, fetches them again.
+    const installModule = (id) => run(() => post(`/firmware/toolchains/${encodeURIComponent(id)}/install`, { force: $(".install-force").checked }));
     // The names typed in the box, comma-separated; none typed, the box is where the cursor goes.
     function libraries() {
         const names = $(".lib-input").value.split(",").map((s) => s.trim()).filter(Boolean);
@@ -118,9 +155,15 @@ export function mountToolchain(root, { base = "", tasks = null, say = null, onSt
     });
     const libEl = $(".lib-input");
     libEl.addEventListener("keydown", (ev) => { if (ev.key === "Enter") libraries(); });
+    const modulesEl = $(".tc-modules");
+    modulesEl.addEventListener("click", (ev) => {
+        const btn = ev.target.closest(".module-install");
+        if (btn) installModule(btn.dataset.id);
+    });
 
     return {
         load, install, core, libraries, enable,
+        module: installModule,
         status: () => status,
         destroy() { alive = false; root.innerHTML = ""; },
     };

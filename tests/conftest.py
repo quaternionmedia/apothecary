@@ -79,7 +79,12 @@ def pytest_collection_modifyitems(config, items):
 
 
 import pytest  # noqa: E402
-from firmware_helpers import _isolate_firmware_state, write_fake_arduino_cli  # noqa: E402
+from firmware_helpers import (  # noqa: E402
+    _isolate_firmware_state,
+    write_fake_arduino_cli,
+    write_fake_cargo,
+    write_fake_espflash,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -127,6 +132,9 @@ def fake_arduino_cli(tmp_path, monkeypatch):
     monkeypatch.setenv("ARDUINO_CLI", str(script))
     monkeypatch.setenv("APOTHECARY_TOOLS_DIR", str(tmp_path / "tools"))
     monkeypatch.setenv("PATH", str(tmp_path / "empty-bin"))
+    # A person's own cargo or espflash, named in their environment, is not the test's.
+    monkeypatch.setenv("CARGO", "none")
+    monkeypatch.setenv("ESPFLASH", "none")
     from apothecary.firmware import toolchains
 
     # A host with the esp32 core installed has a bundled esptool under
@@ -147,6 +155,8 @@ def no_arduino_cli(tmp_path, monkeypatch):
     monkeypatch.delenv("ARDUINO_CLI", raising=False)
     monkeypatch.setenv("APOTHECARY_TOOLS_DIR", str(tmp_path / "tools"))
     monkeypatch.setenv("PATH", str(tmp_path / "empty-bin"))
+    monkeypatch.setenv("CARGO", "none")
+    monkeypatch.setenv("ESPFLASH", "none")
     from apothecary.firmware import toolchains
 
     monkeypatch.setattr(toolchains.Esptool, "detect", staticmethod(lambda: None))
@@ -154,6 +164,23 @@ def no_arduino_cli(tmp_path, monkeypatch):
     _isolate_firmware_state(monkeypatch, tmp_path)
     yield
     toolchains.reset_toolchains()
+
+
+@pytest.fixture
+def fake_rust(fake_arduino_cli, tmp_path, monkeypatch):
+    """The scripted cargo and espflash beside the scripted arduino-cli, one simulated
+    bench (its flashes in fake-boards.json there); yields (cargo, espflash).
+
+    Installed, the Rust module finds ports and listens itself, through the serial
+    engine: the simulated one, whose only port is a pretend devkit on
+    /dev/ttyFAKE2, so no test lists or opens a real port."""
+    cargo = write_fake_cargo(tmp_path / "cargo")
+    espflash = write_fake_espflash(tmp_path / "espflash")
+    monkeypatch.setenv("CARGO", str(cargo))
+    monkeypatch.setenv("ESPFLASH", str(espflash))
+    monkeypatch.setenv("APOTHECARY_SERIAL_ENGINE", "simulated")
+    monkeypatch.setenv("APOTHECARY_SIMULATED_DEVKIT", "/dev/ttyFAKE2")
+    yield cargo, espflash
 
 
 @pytest.fixture

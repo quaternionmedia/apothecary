@@ -312,6 +312,16 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # picture, Remove and Part › Edit after a piece's Zoom in, Move and Why this. The
 # ceiling follows the count up by one, for a button the plan asks for.
 #
+# Firmware in Rust (docs/plans/rust-2026-10-08.md): one control of its own and one
+# place the page listens more (`apothecary census` counts them). The Bench's toolchain
+# card draws every toolchain module beside arduino-cli, each with its own Install
+# (module-install, and its one listener, modulesEl:click:closest). The owner's answer
+# of 2026-10-10 made Panels › Bench › Install a ring of the modules, drawn from their
+# registry, so each module's Install is ring-backed by its cell there (Rust ESP32,
+# 9366) and arduino-cli's moved one level deeper (Arduino, 9368; it was 936); nothing
+# else moved. The Rust sketches need no control of their own: they are rows of the
+# sketch drop-down, and choosing one hides the board box it takes none of.
+#
 # Loop 1, designing a part (docs/plans/ui-flows-2026-10-08.md). Added: the part
 # editor's Defaults (defaults-btn), beside Revert, which stages the part's own
 # numbers so that Apply draws the saved part again; the loop goes back to the
@@ -324,7 +334,10 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # camera's ring and a made piece's keep Part › Edit alone). No control added, so
 # the ceiling stands; one more of them ring-backed, and the share's floor below
 # follows it up.
-VIEWER_CEILING = 117
+#
+# The two, merged (build/part-loop on build/rust-firmware): each added one control
+# of its own to the same count, so the ceiling is the count with both.
+VIEWER_CEILING = 118
 
 
 def test_the_viewer_stays_under_its_ceiling():

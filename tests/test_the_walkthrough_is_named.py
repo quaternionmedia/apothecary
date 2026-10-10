@@ -1,5 +1,5 @@
 """`apothecary test run` collects the runs that write walkthrough pages 11 and 12,
-and not the run that writes a loop's page (14), which the browser suite writes."""
+and not the runs that write a loop's page (14, 15), which the browser suite writes."""
 
 import subprocess
 import sys
@@ -31,6 +31,38 @@ def test_the_command_collects_the_run_that_writes_the_page():
         assert run in collected.stdout, f"`test run` does not collect {module.name}::{run}"
 
 
+# A loop's page is written by the browser suite alone (the loops plan, 2026-10-10), so
+# `apothecary test run` stays quick: its test is marked e2e and not walkthrough.
+LOOP_PAGES = {
+    Path(__file__).resolve().parent / "e2e" / "test_the_firmware_loop.py": (
+        "test_the_firmware_loop_goes_round_with_arduino_then_rust",
+        ROOT / "walkthrough" / "15-firmware.md",
+    ),
+    Path(__file__).resolve().parent / "e2e" / "test_part_loop.py": (
+        "test_designing_a_part_twice_round",
+        ROOT / "walkthrough" / "14-designing-a-part.md",
+    ),
+}
+
+
+def test_a_loop_s_page_is_written_by_the_browser_suite_alone():
+    quick = subprocess.run(
+        testing.run_command() + ["--collect-only"], cwd=ROOT, capture_output=True, text=True
+    )
+    assert quick.returncode == 0, quick.stderr[-2000:]
+    browser = subprocess.run(
+        testing.run_command(e2e=True) + ["--collect-only"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert browser.returncode == 0, browser.stderr[-2000:]
+    for module, (run, page) in LOOP_PAGES.items():
+        assert run not in quick.stdout, f"`test run` collects {module.name}::{run}"
+        assert run in browser.stdout, f"`test run --e2e` does not collect {module.name}::{run}"
+        assert page.is_file(), f"{page.name} is not written"
+
+
 def test_the_command_supplies_what_the_demonstration_needs():
     """The demonstration drives a browser against a real server."""
     assert "--start-server" in testing.run_command()
@@ -42,24 +74,3 @@ def test_the_demonstration_is_not_a_docs_workflow():
     collected = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True)
     assert collected.returncode == pytest.ExitCode.NO_TESTS_COLLECTED, collected.stdout[-2000:]
 
-
-# A loop's page is written by the browser suite only, so `apothecary test run`
-# stays quick (docs/plans/ui-flows-2026-10-08.md, decided with the owner): its
-# run is marked e2e and not walkthrough.
-LOOP_PAGES = {
-    Path(__file__).resolve().parent / "e2e" / "test_part_loop.py": (
-        "test_designing_a_part_twice_round"
-    ),
-}
-
-
-def test_a_loops_page_is_written_by_the_browser_suite_only():
-    def collected(argv):
-        done = subprocess.run(argv + ["--collect-only"], cwd=ROOT, capture_output=True, text=True)
-        assert done.returncode == 0, done.stderr[-2000:]
-        return done.stdout
-
-    quick, suite = collected(testing.run_command()), collected(testing.run_command(e2e=True))
-    for module, run in LOOP_PAGES.items():
-        assert run not in quick, f"`test run` collects {module.name}::{run}"
-        assert run in suite, f"the browser suite does not collect {module.name}::{run}"
