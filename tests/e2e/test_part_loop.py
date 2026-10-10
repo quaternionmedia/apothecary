@@ -2,10 +2,12 @@
 the page: the part chosen from its ring (Part › Edit), a parameter moved and
 checked once the slider rests, Apply drawing the variant with the bounds it
 measured beside the declared ones, a reload drawing what the tab had applied
-(its address keeps the variant), OpenSCAD's error shown by line, the defaults
-again for nothing (Part › Defaults), and round once more (the editor's
-Defaults); then two tabs applying different values at once, each drawing its
-own. It writes walkthrough/14-designing-a-part.md and its pictures as it goes.
+(its address keeps the variant), OpenSCAD's error shown by line and the refused
+size put back (Part › Revert), the defaults again for nothing (Part › Defaults
+and Part › Apply), and round once more (Part › Apply, then the editor's
+Defaults and Apply); then two tabs applying different values at once, each
+drawing its own. It writes walkthrough/14-designing-a-part.md and its pictures
+as it goes.
 
 The server is this module's own, with an OpenSCAD that is this machine's except
 that it refuses a cube of ``TOO_BIG`` mm or more, saying so as an assertion at
@@ -239,11 +241,23 @@ def _status(page: Page):
     return page.locator("#status")
 
 
-def _apply(page: Page):
+def _ring_on_the_part(page: Page, *labels: str) -> None:
+    """The part's ring, from its row in Site, and the cells ``labels`` name."""
+    page.locator(f"#contents-list .contents-item[data-path='{PART}']").click(button="right")
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
+    _press(page, *labels)
+
+
+def _apply(page: Page, from_the_ring: bool = False):
+    """Apply -- the editor's button, or Part › Apply on the part's ring -- and the
+    answer the page got."""
     apply = page.locator("#apply-btn")
     expect(apply).to_be_enabled(timeout=10000)
     with page.expect_response(lambda r: "/stl/generate" in r.url) as answer:
-        apply.click()
+        if from_the_ring:
+            _ring_on_the_part(page, "Part", "Apply")
+        else:
+            apply.click()
     return answer.value
 
 
@@ -298,9 +312,12 @@ def _shows_saved(page: Page) -> None:
     assert not mesh["variant"] and mesh["glow"] == 0 and mesh["edge"] != VARIANT_EDGE, mesh
 
 
-def _a_round(page: Page, values: tuple[float, ...], story=None) -> float:
-    """Move the size, see the check, Apply, see the variant drawn and measured. With
-    ``story``, the page's steps for them, each said after what it says is asserted."""
+def _a_round(
+    page: Page, values: tuple[float, ...], story=None, from_the_ring: bool = False
+) -> float:
+    """Move the size, see the check, Apply -- the editor's, or Part › Apply -- and
+    see the variant drawn and measured. With ``story``, the page's steps for them,
+    each said after what it says is asserted."""
     validations = []
     listen = lambda r: validations.append(r.url) if r.url.endswith("/validate") else None  # noqa: E731
     page.on("request", listen)
@@ -320,7 +337,7 @@ def _a_round(page: Page, values: tuple[float, ...], story=None) -> float:
             shown=summary.inner_text(),
         )
 
-    answer = _apply(page)
+    answer = _apply(page, from_the_ring)
     assert answer.ok, answer.text()
     said = f"{PART} regenerated: an applied variant, not saved"
     expect(_status(page)).to_contain_text(said, timeout=60000)
@@ -344,17 +361,15 @@ def _a_round(page: Page, values: tuple[float, ...], story=None) -> float:
 
 
 def _back_to_the_defaults(page: Page, from_the_ring: bool = False) -> str:
-    """Defaults -- Part › Defaults on the part's ring, or the editor's button --
-    then Apply: the saved part again, and nothing rendered. The status line."""
+    """Defaults then Apply -- Part › Defaults and Part › Apply on the part's ring, or
+    the editor's buttons: the saved part again, and nothing rendered. The status line."""
     if from_the_ring:
-        page.locator(f"#contents-list .contents-item[data-path='{PART}']").click(button="right")
-        expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
-        _press(page, "Part", "Defaults")
+        _ring_on_the_part(page, "Part", "Defaults")
         expect(_status(page)).to_contain_text("the part's own numbers are staged", timeout=10000)
     else:
         page.locator("#defaults-btn").click()
     expect(page.locator("#stage-summary")).to_contain_text("valid", timeout=10000)
-    answer = _apply(page)
+    answer = _apply(page, from_the_ring)
     assert answer.ok and answer.json()["regenerated"] is False, answer.text()
     said = f"{PART} from the cache, nothing rendered: drawn as saved"
     expect(_status(page)).to_contain_text(said, timeout=30000)
@@ -382,6 +397,17 @@ def _refused_by_openscad(page: Page, side_before: float) -> str:
     expect(marked).to_have_attribute("data-line", str(SIZE_LINE))
     expect(marked).to_contain_text("size =")
     assert _side(page) == pytest.approx(side_before, abs=0.05)
+    return _status(page).inner_text()
+
+
+def _reverted_from_the_ring(page: Page, side: float) -> str:
+    """Part › Revert: what was staged put back to what is drawn. The status line."""
+    _ring_on_the_part(page, "Part", "Revert")
+    expect(_status(page)).to_contain_text("put back to what is drawn", timeout=10000)
+    expect(page.locator("#stage-summary")).to_have_text("No staged changes", timeout=10000)
+    slider = page.locator("#part-params .param[data-field='size'] input[type=range]")
+    assert float(slider.input_value()) == pytest.approx(side, abs=0.5)
+    _shows_variant(page)
     return _status(page).inner_text()
 
 
@@ -541,30 +567,41 @@ def test_designing_a_part_twice_round(
         "A size of 70 mm, which this run's OpenSCAD refuses: Apply answers with "
         "OpenSCAD's own words, listed by file and line under the stage bar, the line "
         "marked in the part's source below, and carried on the status line. What is "
-        "drawn does not change. Part › Defaults is a way back.",
+        "drawn does not change, and the refused size is still staged.",
         shown=refused,
+    )
+
+    # Revert, from the part's ring: what is staged put back to what is drawn.
+    reverted = _reverted_from_the_ring(page, first)
+    story.says(
+        "Part › Revert puts back what was staged",
+        f"{PART}'s ring, Part › Revert: the refused size is put back to what is drawn, "
+        f"{first:.2f} mm, and nothing is staged. Part › Defaults is the way to the saved "
+        "part.",
+        shown=reverted,
     )
 
     # The defaults again, for nothing: from the part's ring.
     back = _back_to_the_defaults(page, from_the_ring=True)
     page.screenshot(path=str(shots / "saved-again.png"))
     story.shows(
-        "Part › Defaults, then Apply: the saved part again, for nothing",
+        "Part › Defaults, then Part › Apply: the saved part again, for nothing",
         f"{PART}'s ring, Part › Defaults: the part's own numbers staged in its editor, "
-        "and the status line names Apply. Apply renders nothing, since the cache already "
-        "holds the saved part, and draws it: the amber marks are gone, and the address "
-        "names no variant.",
+        "and the status line names Apply. Part › Apply renders nothing, since the cache "
+        "already holds the saved part, and draws it: the amber marks are gone, and the "
+        "address names no variant.",
         shown=back,
     )
 
-    # Round two, back with the editor's Defaults.
-    second = _a_round(page, (40, 45, 47))
+    # Round two: applied from the part's ring, back with the editor's buttons.
+    second = _a_round(page, (40, 45, 47), from_the_ring=True)
     back = _back_to_the_defaults(page)
     story.says(
         "Round two",
-        f"A second size, {second:.2f} mm, dragged, checked once and applied: rendered, "
-        "drawn and marked. Then the editor's own Defaults, beside Revert, and Apply: the "
-        "saved part again, nothing rendered.",
+        f"A second size, {second:.2f} mm, dragged and checked once, and applied from the "
+        "part's ring, Part › Apply, as the editor's Apply applies it: rendered, drawn and "
+        "marked. Then the editor's own Defaults and Apply: the saved part again, nothing "
+        "rendered.",
         shown=back,
     )
 

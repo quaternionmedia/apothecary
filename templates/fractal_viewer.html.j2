@@ -3148,12 +3148,55 @@
                 document.getElementById('apply-btn').onclick = () => {
                     if (this.stagedValid) this.applyEditor(target);
                 };
-                document.getElementById('revert-btn').onclick = () => {
-                    Object.assign(stage.staged, stage.committed);
-                    this.loadPartParams(target);
-                };
+                document.getElementById('revert-btn').onclick = () => this.revertStaged(target);
                 const defaults = document.getElementById('defaults-btn');
                 if (defaults) defaults.onclick = () => this.stageDefaults(target);
+            }
+
+            // What is staged put back to what is drawn: the editor's Revert, and Part › Revert.
+            revertStaged(target) {
+                const stage = this.partStages[target.key];
+                if (!stage) return false;
+                Object.assign(stage.staged, stage.committed);
+                this.editorLoading = this.loadPartParams(target);
+                return true;
+            }
+
+            // The editor for what `path` is, opened and its numbers read: what
+            // Part › Apply and Part › Revert act on, as its buttons do.
+            async editorOn(path) {
+                if (!this.openEditor(path)) return null;
+                await this.editorLoading;
+                return this.editorTarget;
+            }
+
+            // Part › Apply: what the editor has staged, checked now rather than once
+            // the controls rest, and applied as its Apply applies it (which says what
+            // it did). What it refused to do, when it did nothing.
+            async applyStagedOn(path) {
+                const target = await this.editorOn(path);
+                if (!target) return `${path} has no parameters to apply`;
+                const count = Object.keys(this.stagedDiff()).length;
+                if (!count) return `${path}: nothing is staged to apply -- move a parameter in Selected first`;
+                clearTimeout(this._validateTimer);
+                const seq = (this._stageSeq = (this._stageSeq ?? 0) + 1);
+                await this.validateStaged(target, seq, count);
+                if (!this.stagedValid) return `${path}: what is staged is not valid -- Selected says why`;
+                await this.applyEditor(target);
+                return null;
+            }
+
+            // Part › Revert: what is staged put back to what is drawn. Whether there
+            // was anything to put back, and what to say.
+            async revertStagedOn(path) {
+                const target = await this.editorOn(path);
+                if (!target) return { ok: false, said: `${path} has no parameters to put back` };
+                if (!Object.keys(this.stagedDiff()).length) {
+                    return { ok: false, said: `${path}: nothing is staged; Selected shows what is drawn` };
+                }
+                this.revertStaged(target);
+                await this.editorLoading;
+                return { ok: true, said: `${path}: what was staged is put back to what is drawn; nothing is staged` };
             }
 
             // The part's own values, staged: Apply then draws the saved part,
@@ -5012,6 +5055,17 @@
                 if (action === 'part:edit') {
                     if (viewer.openEditor(path)) viewer.setStatus(`Editing ${path}: its parameters are in Selected${tail}`, 'success');
                     else viewer.setStatus(`${path} has no parameters to edit${tail}`, 'error');
+                    return;
+                }
+                // Part › Apply and Part › Revert: what the editor has staged, as its buttons do.
+                if (action === 'part:apply') {
+                    viewer.applyStagedOn(path).then((refused) => {
+                        if (refused) viewer.setStatus(`${refused}${tail}`, 'error');
+                    });
+                    return;
+                }
+                if (action === 'part:revert') {
+                    viewer.revertStagedOn(path).then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
                     return;
                 }
                 // Part › Defaults: the part's own numbers staged in its editor, as its Defaults does.

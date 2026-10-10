@@ -1093,6 +1093,11 @@ def _node_ring(
         # made piece's are what was found and set, with no part's own to go back to.
         if node.part_ref and not camera and not made:
             verbs.append(Option(id="part:defaults", label="Defaults", action="part:defaults"))
+        # Apply and Revert act on what the editor has staged, as its buttons do,
+        # for whatever it edits: the part's ring holds the whole loop (the owner's
+        # answer, docs/plans/ui-flows-2026-10-08.md).
+        verbs.append(Option(id="part:apply", label="Apply", action="part:apply"))
+        verbs.append(Option(id="part:revert", label="Revert", action="part:revert"))
         options.append(Option(id="part", label="Part", children=verbs))
     return Ring(title=shorten(path or (node.name if node else "")), options=options)
 
@@ -1338,9 +1343,10 @@ CARRIED_BY: Dict[str, Carries] = {
     "picture:drop": Carries.SERVER,
     "picture:word": Carries.SERVER,
     # The part editor is the page's: Part › Edit opens it in Selected and puts
-    # the cursor in its first control, and Part › Defaults opens it with the
-    # part's own numbers staged. What Apply then changes goes through the part
-    # and made routes the editor already calls, never the intent route.
+    # the cursor in its first control, Part › Defaults opens it with the part's
+    # own numbers staged, and Part › Apply and Revert do what its buttons do with
+    # what is staged. What Apply changes goes through the part, made and camera
+    # routes the editor already calls, never the intent route.
     "part": Carries.VIEWER,
 }
 

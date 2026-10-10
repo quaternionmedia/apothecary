@@ -49,7 +49,7 @@ Part › Edit again: the size slider stands at 30.05 mm, the variant's, the meas
 
 ## 6. OpenSCAD's refusal, by line
 
-A size of 70 mm, which this run's OpenSCAD refuses: Apply answers with OpenSCAD's own words, listed by file and line under the stage bar, the line marked in the part's source below, and carried on the status line. What is drawn does not change. Part › Defaults is a way back.
+A size of 70 mm, which this run's OpenSCAD refuses: Apply answers with OpenSCAD's own words, listed by file and line under the stage bar, the line marked in the part's source below, and carried on the status line. What is drawn does not change, and the refused size is still staged.
 
 ![OpenSCAD's refusal, by line](screenshots/14-06-openscad-s-refusal-by-line.png)
 
@@ -57,29 +57,37 @@ A size of 70 mm, which this run's OpenSCAD refuses: Apply answers with OpenSCAD'
 Error: STL generation failed: OpenSCAD failed with code 1 (calibration_cube.scad, line 19: Assertion '(size < 60.0)' failed: "it fits the bed")
 ```
 
-## 7. Part › Defaults, then Apply: the saved part again, for nothing
+## 7. Part › Revert puts back what was staged
 
-calibration_cube's ring, Part › Defaults: the part's own numbers staged in its editor, and the status line names Apply. Apply renders nothing, since the cache already holds the saved part, and draws it: the amber marks are gone, and the address names no variant.
+calibration_cube's ring, Part › Revert: the refused size is put back to what is drawn, 30.05 mm, and nothing is staged. Part › Defaults is the way to the saved part.
 
-![Part › Defaults, then Apply: the saved part again, for nothing](screenshots/14-07-part-defaults-then-apply-the-saved-part-again-for-.png)
+```
+calibration_cube: what was staged is put back to what is drawn; nothing is staged (⌗34)
+```
+
+## 8. Part › Defaults, then Part › Apply: the saved part again, for nothing
+
+calibration_cube's ring, Part › Defaults: the part's own numbers staged in its editor, and the status line names Apply. Part › Apply renders nothing, since the cache already holds the saved part, and draws it: the amber marks are gone, and the address names no variant.
+
+![Part › Defaults, then Part › Apply: the saved part again, for nothing](screenshots/14-08-part-defaults-then-part-apply-the-saved-part-again.png)
 
 ```
 calibration_cube from the cache, nothing rendered: drawn as saved
 ```
 
-## 8. Round two
+## 9. Round two
 
-A second size, 47.07 mm, dragged, checked once and applied: rendered, drawn and marked. Then the editor's own Defaults, beside Revert, and Apply: the saved part again, nothing rendered.
+A second size, 47.07 mm, dragged and checked once, and applied from the part's ring, Part › Apply, as the editor's Apply applies it: rendered, drawn and marked. Then the editor's own Defaults and Apply: the saved part again, nothing rendered.
 
 ```
 calibration_cube from the cache, nothing rendered: drawn as saved
 ```
 
-## 9. Two tabs apply at once, and each draws its own
+## 10. Two tabs apply at once, and each draws its own
 
 A second tab of the same page: this one stages 23.91 mm and the other 36.20 mm, and both Apply, neither waiting. Each renders into a file of its own and draws its own variant, its address naming it; each, reloaded, draws its own again. This is the first tab, reloaded.
 
-![Two tabs apply at once, and each draws its own](screenshots/14-09-two-tabs-apply-at-once-and-each-draws-its-own.png)
+![Two tabs apply at once, and each draws its own](screenshots/14-10-two-tabs-apply-at-once-and-each-draws-its-own.png)
 
 ## What this page does not show
 

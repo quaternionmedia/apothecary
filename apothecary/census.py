@@ -438,8 +438,10 @@ RING_BACKED: Dict[str, str] = {
     "listen": "device:listen",
     "probe": "device:probe",
     "ctl:change:arm": "control:arm",
-    # the part editor's Defaults is Part › Defaults on the part's ring
+    # the part editor's Defaults, Apply and Revert are Part's on its ring
     "defaults-btn": "part:defaults",
+    "apply-btn": "part:apply",
+    "revert-btn": "part:revert",
     # a camera in Selected: Take picture is its ring's, and so is P
     "cam-take": "camera:take-picture",
     "takeBtn:click:takePictureWith": "camera:take-picture",
