@@ -84,6 +84,8 @@ One line per change, each with a link to where it is described. The format follo
 - A slicer is a module behind one interface, OrcaSlicer's command line the first; the printer's profile names the one used. ([code](apothecary/slicer/modules/__init__.py))
 - printer_1's slicer profile is kept with the ender3 part: OrcaSlicer's Creality Ender-3 profile and what the bench measured, each value with its source. ([profile](parts/ender3/slicer.json))
 - `apothecary slicer slice` and `POST /slicer/slice` slice a part or a made piece for the pinned printer, its declared print settings winning, and keep the G-code where the Print card keeps a file, with the slice's values and sources, OrcaSlicer's estimate and its errors by line. ([doc](docs/slicer.md))
+- The start of a print is composed from pieces the printer's profile names: `home` today; the stored mesh, probing each print and a measured first-layer offset are stubs, as are choosing a filament and a word's print settings. ([doc](docs/slicer.md#what-a-slice-is-composed-from))
+- `apothecary slicer slice SITE/PATH` slices a made piece through the running server. ([doc](docs/slicer.md#slicing))
 
 ### Changed
 
