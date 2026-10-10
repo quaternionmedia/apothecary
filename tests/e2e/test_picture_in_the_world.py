@@ -187,7 +187,8 @@ def test_a_view_at_the_bench_is_a_mat_with_its_outlines(
     ]
     assert "px=1024" in drawn["texture"]["url"]
     badge = page.locator(".world-badge.place-mark[data-host='workbench']")
-    expect(badge).to_contain_text("view: 3 shapes")
+    # Its words: the place, the picture drawn there, and what was found in it.
+    expect(badge).to_contain_text("workbench · world_bench.png · 3 shapes")
 
     # From above the bench, a little in front of it.
     page.evaluate(LOOK_DOWN, [900, 300, 780, 2600])
