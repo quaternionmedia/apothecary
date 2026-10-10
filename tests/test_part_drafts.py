@@ -23,6 +23,7 @@ from apothecary.api import app
 from apothecary.projects import registry
 from apothecary.projects.parts import stl_renderer, variants
 from apothecary.projects.parts.base import BasePart
+from apothecary.projects.parts.customizer import lists_parameters
 from apothecary.projects.parts.drafts import (
     ReadOnly,
     check_draft,
@@ -31,7 +32,7 @@ from apothecary.projects.parts.drafts import (
 )
 from apothecary.projects.parts.rc_snowplow import DEFAULT as SNOWPLOW
 from apothecary.projects.parts.skeleton import ROOT
-from apothecary.projects.parts.stl_renderer import geometry_scad
+from apothecary.projects.parts.stl_renderer import OpenSCADRenderer, geometry_scad
 from apothecary.projects.parts.variants import make_variant, read_variant_draft, variant_paths
 
 SCAD = """// A block.
@@ -430,3 +431,39 @@ def test_the_cache_lets_go_of_a_drafts_text_with_its_mesh(tmp_path):
     os.utime(folder / "a.stl", ns=(1, 0))
     variants.trim_variants(folder, keep=1)
     assert sorted(p.name for p in folder.iterdir()) == ["b.json", "b.scad", "b.stl"]
+
+
+# --- with a real OpenSCAD that lists parameters, where this machine has one ---------------
+
+
+def _a_listing_openscad():
+    for path in stl_renderer._openscad_candidates():
+        if lists_parameters(path):
+            return path
+    return None
+
+
+LISTING = _a_listing_openscad()
+
+
+@pytest.mark.skipif(
+    LISTING is None, reason="no OpenSCAD here lists parameters (`apothecary openscad install`)"
+)
+def test_a_real_snapshot_checks_and_renders_a_draft_beside_its_part(tmp_path, monkeypatch):
+    """The draft's include resolves from beside the part, its error is on its own line
+    of the part's SCAD, and its new parameter is listed with its range."""
+    monkeypatch.setenv("APOTHECARY_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setattr(BasePart, "get_stl_output_path", lambda self: tmp_path / "block.stl")
+    part = _part(tmp_path)
+    renderer = OpenSCADRenderer(str(LISTING))
+    broken = SCAD.replace(
+        "hollow = true;", "hollow = true;\nlid = 2; // [1:5]\nassert(width < 10);"
+    )
+    check = check_draft(part, broken, renderer)
+    assert check.lists and [p["name"] for p in check.parameters] == ["width", "hollow", "lid"]
+    assert [(m.file, m.line) for m in check.messages if m.level == "error"] == [("block.scad", 6)]
+    draft = SCAD.replace("cube([width, depth, 3])", "cube([width, depth, 7])")
+    made = make_variant(part, {}, renderer=renderer, draft=draft)
+    assert made.success and made.draft == draft_digest(draft)
+    assert [round(v, 3) for v in made.measured["size"]] == [34, 20, 7]
+    assert _beside(part) == [] and not part.get_stl_output_path().exists()
