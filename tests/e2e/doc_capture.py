@@ -17,7 +17,7 @@ import re
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
+from typing import List, Sequence
 
 from playwright.sync_api import Page
 
@@ -96,6 +96,23 @@ class DocRecorder:
 # --------------------------------------------------------------------------
 
 WALKTHROUGH_ROOT = Path(__file__).resolve().parents[2] / "walkthrough"
+# What a picture paints over what changes on every run: a grey the dark page reads as
+# a blank, not as anything it draws.
+BLANK_COLOR = "#3c3c3c"
+
+
+def _blanked(selectors: Sequence[str]) -> str:
+    """The stylesheet a picture is taken under when ``selectors`` are blanked: each
+    one's words and what it holds hidden on a grey of its own size. In the page,
+    rather than painted over the picture, so what a panel has scrolled out of sight
+    stays out of sight."""
+    each = ", ".join(selectors)
+    inside = ", ".join(f"{selector} *" for selector in selectors)
+    return (
+        f"{each} {{ background: {BLANK_COLOR} !important; color: transparent !important;"
+        " text-shadow: none !important; border-radius: 3px; }\n"
+        f"{inside} {{ visibility: hidden !important; }}\n"
+    )
 
 
 def _keep_unless_changed(path: Path, png: bytes) -> None:
@@ -153,14 +170,20 @@ class Walkthrough:
             ShownStep(index=len(self.steps) + 1, heading=heading, sentence=sentence, shown=shown)
         )
 
-    def shows(self, heading: str, sentence: str, shown: str | None = None) -> None:
+    def shows(
+        self, heading: str, sentence: str, shown: str | None = None, blank: Sequence[str] = ()
+    ) -> None:
+        """``blank``: CSS selectors of what differs on every run whatever the page does
+        -- a clock's time, a name made of one -- blanked for the picture, so it changes
+        when the page does and not when the clock does."""
         index = len(self.steps) + 1
         # The pages share one folder of screenshots, so each picture carries
         # its page's ordinal ahead of its step's.
         filename = f"{self.ordinal}-{index:02d}-{_slugify(heading)}.png"
         shots = WALKTHROUGH_ROOT / "screenshots"
         shots.mkdir(parents=True, exist_ok=True)
-        _keep_unless_changed(shots / filename, self.page.screenshot())
+        png = self.page.screenshot(style=_blanked(blank)) if blank else self.page.screenshot()
+        _keep_unless_changed(shots / filename, png)
         self.steps.append(
             ShownStep(
                 index=index,
