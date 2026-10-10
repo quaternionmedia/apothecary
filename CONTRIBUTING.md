@@ -31,8 +31,8 @@ uv run ruff check apothecary tests              # kept clean; format only the fi
 uv run --group preflight apothecary preflight   # the CI workflows, run here, before a push
 ```
 
-`walkthrough/` is executable: its pages are doctests. Pages 11 and 12 are written by their
-browser tests; commit what a run rewrites. [tests/e2e/README.md](tests/e2e/README.md) has
+`walkthrough/` is executable: its pages are doctests. Pages 11, 12 and 13 are written by
+their browser tests; commit what a run rewrites. [tests/e2e/README.md](tests/e2e/README.md) has
 the browser suite's flags and recorders, and
 [walkthrough/09-preflight.md](walkthrough/09-preflight.md) says what `preflight` reproduces
 and what it cannot.
@@ -63,7 +63,7 @@ The rules are in [AGENTS.md](AGENTS.md). In short:
 
 Prose never states a number a command computes; it names the command. The viewer's
 controls: `apothecary census`. What is open: `apothecary problems`. The tests:
-`uv run pytest --co -q`. Only pages a run writes (walkthrough pages 11 and 12, and
+`uv run pytest --co -q`. Only pages a run writes (walkthrough pages 11, 12 and 13, and
 `docs/generated/`) print such numbers.
 
 ## Where things go

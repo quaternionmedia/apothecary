@@ -1,4 +1,4 @@
-"""`apothecary test run` collects the runs that write walkthrough pages 11 and 12."""
+"""`apothecary test run` collects the runs that write walkthrough pages 11, 12 and 13."""
 
 import subprocess
 import sys
@@ -16,6 +16,9 @@ DEMONSTRATION_MODULES = {
     ),
     Path(__file__).resolve().parent / "e2e" / "test_docs_bench_walkthrough.py": (
         "test_the_bench_as_it_is"
+    ),
+    Path(__file__).resolve().parent / "e2e" / "test_picture_to_print.py": (
+        "test_a_picture_to_a_print_twice"
     ),
 }
 

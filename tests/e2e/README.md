@@ -55,11 +55,14 @@ drift apart.
 
 Both are fixtures in `conftest.py`; the recorders themselves are in `doc_capture.py`.
 
-- `walkthrough` writes `walkthrough/11-*.md` and `walkthrough/12-*.md` and
-  their screenshots on every run that includes `test_docs_photo_walkthrough.py`
-  or `test_docs_bench_walkthrough.py`. Each sentence is emitted after the
-  assertion behind it. A screenshot is rewritten only when its pixels change;
-  commit the page and pictures when they do.
+- `walkthrough` writes `walkthrough/11-*.md`, `walkthrough/12-*.md` and
+  `walkthrough/13-*.md` and their screenshots on every run that includes
+  `test_docs_photo_walkthrough.py`, `test_docs_bench_walkthrough.py` or
+  `test_picture_to_print.py`. Each sentence is emitted after the assertion
+  behind it. A screenshot is rewritten only when its pixels change; commit the
+  page and pictures when they do. What changes on every run whatever the page
+  does -- a time, a picture's name made of one -- is blanked (`shows`'s
+  `blank`), so a picture changes only when the page does.
 - `doc_recorder` takes screenshots for `docs/generated/`. The tests that use it
   are marked `docs` and skip unless `--generate-docs` is given;
   `apothecary docs generate` runs them that way, on a scripted server of its own.

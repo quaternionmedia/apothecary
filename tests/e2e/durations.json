@@ -30,6 +30,7 @@
  "tests/e2e/test_picture_in_the_world.py::test_a_view_at_the_bench_is_a_mat_with_its_outlines[chromium]": 5.34,
  "tests/e2e/test_picture_in_the_world.py::test_the_mat_follows_its_bench_when_the_gizmo_moves_it[chromium]": 4.55,
  "tests/e2e/test_picture_in_the_world.py::test_the_mat_shows_the_picture_and_the_floor_is_a_selection[chromium]": 4.7,
+ "tests/e2e/test_picture_to_print.py::test_a_picture_to_a_print_twice[chromium]": 95.8,
  "tests/e2e/test_pictures_panel.py::test_folder_more_opens_pictures[chromium]": 0.77,
  "tests/e2e/test_pictures_panel.py::test_forget_and_purge_from_pictures[chromium]": 3.98,
  "tests/e2e/test_pictures_panel.py::test_pin_here_pins_a_picture_older_than_the_seventh_at_the_bench[chromium]": 6.38,
