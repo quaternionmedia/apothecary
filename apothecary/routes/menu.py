@@ -172,10 +172,19 @@ def _needs_site(chosen: Chosen) -> str:
     return chosen.site
 
 
+# What a person does with a piece once it is made, the steps after Make in the
+# loop from a picture to a print (docs/plans/ui-flows-2026-10-08.md): adjust it
+# in Selected, then print it from a printer's Machine, whose Print from here
+# lists the site's pieces under "makes".
+AFTER_MAKE = "Part › Edit adjusts it, and a printer's Machine prints it"
+AFTER_MAKE_ALL = "Part › Edit adjusts each, and a printer's Machine prints it"
+
+
 def _carry_picture(chosen: Chosen, who: Carries) -> Carried:
     """Make, Make all, Drop and a made piece's Word: a root structure added,
     removed or rebuilt, by the functions the view routes call. Every refusal is
-    a 4xx naming its reason, so no picture intent reaches the 500 below."""
+    a 4xx naming its reason, so no picture intent reaches the 500 below. What a
+    Make says ends with the steps after it, when it made something."""
     from ..api import _site_payload, _site_store
     from ..vision import views as viewing
 
@@ -197,6 +206,8 @@ def _carry_picture(chosen: Chosen, who: Carries) -> Carried:
             did = f"made {', '.join(made) or 'nothing'}" + (
                 f"; {skipped} already made" if skipped else ""
             )
+            if made:
+                did += f": {AFTER_MAKE}"
         elif verb == "make-all":
             if not rest:
                 raise HTTPException(
@@ -207,6 +218,8 @@ def _carry_picture(chosen: Chosen, who: Carries) -> Carried:
             did = f"made {len(made)} piece(s){listed}; skipped {skipped} already made" + (
                 f"; left {beyond} past the picture's horizon" if beyond else ""
             )
+            if made:
+                did += f"; {AFTER_MAKE_ALL}"
         elif verb == "drop":
             record = viewing.drop(name, site, piece)
             did = f"dropped {piece}; shape {record.shape_index} of its view reads as found again"

@@ -2762,13 +2762,16 @@
                         if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : response.statusText);
                         return body;
                     },
+                    // What it says names the step after it in the loop from a
+                    // picture to a print: a printer's Machine prints it.
                     onApplied: async (body) => {
                         await this.applySite(body.site);
                         const p = body.provenance, size = body.bounds && body.bounds.size;
                         const built = size ? ` ${mm(size.x)} × ${mm(size.y)} × ${mm(size.z)} mm` : '';
-                        if (!p || !p.found) return `${name} rebuilt${built}`;
+                        const next = ": a printer's Machine prints it";
+                        if (!p || !p.found) return `${name} rebuilt${built}${next}`;
                         const guessed = Math.abs(p.parameters.height - p.found.height) < 1e-6;
-                        return `${name} rebuilt${built}; found ${mm(p.found.width)} × ${mm(p.found.depth)}, thickness ${guessed ? 'a guess' : "a person's"}`;
+                        return `${name} rebuilt${built}; found ${mm(p.found.width)} × ${mm(p.found.depth)}, thickness ${guessed ? 'a guess' : "a person's"}${next}`;
                     },
                 };
             }

@@ -1758,7 +1758,9 @@ def test_a_shape_is_made_worded_and_dropped_through_the_ring_and_the_intent_rout
     assert answer.status_code == 200, answer.text
     body = answer.json()
     assert body["carried_by"] == "the server carries it out" and body["address"] == make
-    piece = body["did"].split("made ", 1)[1]
+    # What it made, then the steps after it: adjust it, then print it.
+    piece, after = body["did"].split("made ", 1)[1].split(": ", 1)
+    assert after == "Part › Edit adjusts it, and a printer's Machine prints it"
     assert piece in {s["name"] for s in body["site"]["structures"]}
     attached = client.get("/sites/garage/attached").json()
     assert attached["made"][piece]["shape_index"] == 1
@@ -1790,7 +1792,9 @@ def test_a_shape_is_made_worded_and_dropped_through_the_ring_and_the_intent_rout
     ).json()
     answer = _choose(client, ring, _address(ring, f"picture:make-all:{view['id']}"), ["workbench"])
     assert answer.status_code == 200, answer.text
-    assert answer.json()["did"].startswith("made 3 piece(s)")
+    did = answer.json()["did"]
+    assert did.startswith("made 3 piece(s)")
+    assert did.endswith("; Part › Edit adjusts each, and a printer's Machine prints it")
 
 
 def test_a_carried_picture_intent_is_refused_with_its_reason_and_never_a_500(carried):
@@ -1826,7 +1830,7 @@ def test_a_carried_picture_intent_is_refused_with_its_reason_and_never_a_500(car
     for action, status in cases.items():
         answer = send(action)
         assert answer.status_code == status, (action, answer.status_code, answer.text)
-    made = send(f"picture:make:{view['id']}:0").json()["did"].split("made ", 1)[1]
+    made = send(f"picture:make:{view['id']}:0").json()["did"].split("made ", 1)[1].split(":")[0]
     assert send(f"picture:make:{view['id']}:0").status_code == 409  # already made
     assert send("picture:word:no_such_word", targets=[made]).status_code == 422
     assert send("picture:drop", site=None).status_code == 400
