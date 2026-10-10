@@ -1,7 +1,6 @@
-"""`apothecary test run` collects the runs that write walkthrough pages 11 and 12; page
-13's run, the loop from a picture to a print, is the browser suite's alone, so the
-quick run stays quick (the owner's answer of 2026-10-10), and CI's browser shards
-write it and check it against what is committed."""
+"""`apothecary test run` collects the runs that write walkthrough pages 11 and 12,
+and not the runs that write a loop's page (13, 14, 15), which the browser suite
+writes: CI's browser shards write them and check them against what is committed."""
 
 import subprocess
 import sys
@@ -22,13 +21,6 @@ DEMONSTRATION_MODULES = {
     ),
 }
 
-# The runs that write pages from the browser suite only, and the test in each.
-BROWSER_SUITE_ONLY = {
-    Path(__file__).resolve().parent / "e2e" / "test_picture_to_print.py": (
-        "test_a_picture_to_a_print_twice"
-    ),
-}
-
 
 def test_the_command_collects_the_run_that_writes_the_page():
     """Collection, not the argv's text: the marker expression is what selects the run."""
@@ -38,20 +30,47 @@ def test_the_command_collects_the_run_that_writes_the_page():
     assert collected.returncode == 0, collected.stderr[-2000:]
     for module, run in DEMONSTRATION_MODULES.items():
         assert run in collected.stdout, f"`test run` does not collect {module.name}::{run}"
-    for module, run in BROWSER_SUITE_ONLY.items():
-        assert run not in collected.stdout, f"`test run` collects {module.name}::{run}"
 
 
-def test_the_browser_suite_collects_the_runs_that_write_pages_of_their_own():
-    """The browser suite (`pytest tests/e2e`, what CI's shards run before checking the
-    committed walkthrough) collects page 13's run, unmarked as a docs workflow."""
-    argv = [sys.executable, "-m", "pytest", "--collect-only", *BROWSER_SUITE_ONLY]
-    collected = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True)
-    assert collected.returncode == 0, collected.stderr[-2000:]
-    for module, run in BROWSER_SUITE_ONLY.items():
-        assert run in collected.stdout, f"the browser suite does not collect {module.name}::{run}"
-    docs = subprocess.run([*argv, "-m", "docs"], cwd=ROOT, capture_output=True, text=True)
-    assert docs.returncode == pytest.ExitCode.NO_TESTS_COLLECTED, docs.stdout[-2000:]
+# A loop's page is written by the browser suite alone (the loops plan, 2026-10-10), so
+# `apothecary test run` stays quick: its test is marked e2e and not walkthrough, and
+# passes browser_suite_only=True to the walkthrough fixture, which says so in the page.
+LOOP_PAGES = {
+    Path(__file__).resolve().parent / "e2e" / "test_picture_to_print.py": (
+        "test_a_picture_to_a_print_twice",
+        ROOT / "walkthrough" / "13-a-picture-to-a-print.md",
+    ),
+    Path(__file__).resolve().parent / "e2e" / "test_part_loop.py": (
+        "test_designing_a_part_twice_round",
+        ROOT / "walkthrough" / "14-designing-a-part.md",
+    ),
+    Path(__file__).resolve().parent / "e2e" / "test_the_firmware_loop.py": (
+        "test_the_firmware_loop_goes_round_with_arduino_then_rust",
+        ROOT / "walkthrough" / "15-firmware.md",
+    ),
+}
+
+
+def test_a_loop_s_page_is_written_by_the_browser_suite_alone():
+    quick = subprocess.run(
+        testing.run_command() + ["--collect-only"], cwd=ROOT, capture_output=True, text=True
+    )
+    assert quick.returncode == 0, quick.stderr[-2000:]
+    browser = subprocess.run(
+        testing.run_command(e2e=True) + ["--collect-only"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert browser.returncode == 0, browser.stderr[-2000:]
+    for module, (run, page) in LOOP_PAGES.items():
+        assert run not in quick.stdout, f"`test run` collects {module.name}::{run}"
+        assert run in browser.stdout, f"`test run --e2e` does not collect {module.name}::{run}"
+        assert page.is_file(), f"{page.name} is not written"
+        # The page says who writes it, and how to run it alone.
+        text = page.read_text(encoding="utf-8")
+        assert "rewritten by every run of the browser suite" in text, page.name
+        assert f"uv run pytest {module.relative_to(ROOT).as_posix()} --start-server" in text
 
 
 def test_the_command_supplies_what_the_demonstration_needs():
@@ -61,6 +80,15 @@ def test_the_command_supplies_what_the_demonstration_needs():
 
 def test_the_demonstration_is_not_a_docs_workflow():
     """`docs`-marked runs render into docs/generated/, a second page about the same path."""
-    argv = [sys.executable, "-m", "pytest", "--collect-only", "-m", "docs", *DEMONSTRATION_MODULES]
+    argv = [
+        sys.executable,
+        "-m",
+        "pytest",
+        "--collect-only",
+        "-m",
+        "docs",
+        *DEMONSTRATION_MODULES,
+        *LOOP_PAGES,
+    ]
     collected = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True)
     assert collected.returncode == pytest.ExitCode.NO_TESTS_COLLECTED, collected.stdout[-2000:]

@@ -1003,7 +1003,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     bench = next(c for c in panels.children if c.label == "Bench")
     assert [(c.label, c.action, c.cell) for c in bench.children] == [
         ("Bench", "panel:toggle:bench", 8),
-        ("Install", "bench:install", 6),
+        ("Install", None, 6),
         ("Compile", "bench:compile", 2),
         ("Upload", "bench:upload", 4),
         ("Raw flash", "bench:esptool", 9),
@@ -1013,6 +1013,15 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     ]
     assert address_of(root, "panel:bench") == "938"
     assert address_of(root, "bench:compile") == "932"
+    # Install is a ring of the toolchain modules, from their registry: each module's
+    # install has an address, and arduino-cli's moved one level deeper (it was 936).
+    install = bench.children[1]
+    assert [(c.label, c.action, c.cell) for c in install.children] == [
+        ("Arduino", "bench:install:arduino", 8),
+        ("Rust ESP32", "bench:install:rust-esp32", 6),
+    ]
+    assert address_of(root, "bench:install:arduino") == "9368"
+    assert address_of(root, "bench:install:rust-esp32") == "9366"
     # A core by its architecture, one leaf per suggested core.
     cores = bench.children[6]
     assert [c.label for c in cores.children] == ["AVR", "ESP32", "ESP8266", "RP2040", "SAMD"]
@@ -1021,7 +1030,8 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     for pid in ("site", "pictures", "machine", "bench"):
         assert carried_by(f"panel:toggle:{pid}").name == "VIEWER"
     for verb in (
-        "install",
+        "install:arduino",
+        "install:rust-esp32",
         "compile",
         "upload",
         "esptool",
@@ -1185,7 +1195,12 @@ def test_camera_and_picture_are_absent_below_the_root_and_where_nothing_can_be_p
 #
 # One editor, in Selected, for a part and for a piece made from a picture: Part ›
 # Edit opens it there. Appended after every cell the ring had, so none moves; the
-# page carries it, and Apply goes through the part and made routes.
+# page carries it, and Apply goes through the part and made routes. A part from
+# the parts folder also has Part › Defaults after Edit: its own numbers staged in
+# the editor, as the editor's Defaults does (loop 1's owner's answer). A made
+# piece's numbers are what was found, with no part's own to go back to. Then Apply
+# and Revert, on every Part, acting on what the editor has staged, as its buttons
+# do: the part's ring holds the whole loop (the owner's answer once more).
 
 
 def test_a_part_and_a_made_piece_end_with_part_edit_and_nothing_else_does():
@@ -1197,19 +1212,39 @@ def test_a_part_and_a_made_piece_end_with_part_edit_and_nothing_else_does():
         ring = resolve(Context(pointing=Pointing.NODE, targets=[path]), garage)
         part = ring.options[-1]
         assert part.label == "Part" and part.id == "part", (path, [o.label for o in ring.options])
-        assert [(c.label, c.action) for c in part.children] == [("Edit", "part:edit")]
+        assert [(c.label, c.action) for c in part.children] == [
+            ("Edit", "part:edit"),
+            ("Defaults", "part:defaults"),
+            ("Apply", "part:apply"),
+            ("Revert", "part:revert"),
+        ]
         assert len(ring.options) <= MOST_OPTIONS
-    # A made piece has Part too, after its Picture.
+    # A made piece has Part too, after its Picture: Edit, Apply and Revert, no Defaults.
     site = _garage()
     site.children.append(Assembly(name="disc_1", role="word", base=Cube(size=10.0)))
     told = PictureContext(made=["disc_1"], words=["disc", "plate"])
     made = resolve(Context(pointing=Pointing.NODE, targets=["disc_1"]), site, picture=told)
     assert [o.label for o in made.options][-2:] == ["Picture", "Part"]
-    assert _group(made, "Part", "Edit").action == "part:edit"
+    assert [c.action for c in made.options[-1].children] == [
+        "part:edit",
+        "part:apply",
+        "part:revert",
+    ]
     # A structure that is neither is left alone: the bench's ring ends as it did.
     bench = resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), garage)
     assert [o.label for o in bench.options][-2:] == ["Camera", "Picture"]
-    assert carried_by("part:edit").name == "VIEWER"
+    for action in ("part:edit", "part:defaults", "part:apply", "part:revert"):
+        assert carried_by(action).name == "VIEWER"
+
+
+def test_part_holds_the_loop_edit_keeping_its_address():
+    """Edit keeps its address; Defaults, Apply and Revert take the seats after it."""
+    ring = resolve(Context(pointing=Pointing.NODE, targets=["footpedal"]), _garage())
+    edit = address_of(ring, "part:edit")
+    for action in ("part:defaults", "part:apply", "part:revert"):
+        address = address_of(ring, action)
+        assert address[:-1] == edit[:-1]
+        assert walk(ring, address).action == action
 
 
 def test_a_made_piece_with_a_printer_pinned_in_its_site_ends_with_print():

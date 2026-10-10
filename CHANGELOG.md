@@ -29,6 +29,14 @@ One line per change, each with a link to where it is described. The format follo
 - Bed leveling: the stored mesh read or the bed probed, and each reading kept and drawn. ([doc](docs/firmware.md))
 - A printer's nozzle marker in the world, which follows each poll and moves ahead of a jog. ([doc](docs/firmware.md))
 - `parts/esp32_blink`: a sketch that blinks GPIO 2 and announces itself over serial. ([doc](docs/firmware.md))
+- Firmware toolchains are modules behind one interface: Arduino, and Rust for the classic ESP32 (cargo, espflash). ([doc](docs/firmware.md))
+- `parts/esp32_blink/rust`: the Rust esp32_blink (esp-hal, no_std), saying what the Arduino one says; the Bench and a board's Machine list it beside it. ([doc](docs/firmware.md#rust-for-the-esp32))
+- `apothecary firmware install --rust-esp32` fetches rustup, Espressif's Xtensa Rust, rust-src, LLVM and GCC archives (each checked against what its source publishes; no espup) and espflash into the tools dir, and vendors the crates, so every Rust build runs offline. ([doc](docs/firmware.md#rust-for-the-esp32))
+- Rust for the ESP32 finds ports, listens to a board (pyserial, in a process of its own) and asks its chip (espflash) itself, so it works with no arduino-cli. ([doc](docs/firmware.md#rust-for-the-esp32))
+- A sketch is always named with its toolchain -- `esp32_blink@arduino`, `esp32_blink@rust-esp32` -- in the Bench, a board's Machine, the CLI and build folders. ([doc](docs/firmware.md#sketches-live-with-their-parts))
+- Panels › Bench › Install is a ring of the toolchain modules, one cell each. ([doc](docs/firmware.md#in-the-viewer-the-bench))
+- The firmware loop's page: a sketch chosen, built, flashed and heard saying its hello in the board's Machine, the Arduino esp32_blink then the Rust one, written by the browser test that goes round it. ([page](walkthrough/15-firmware.md))
+- No build path, and so no user name, is in a flashed Rust image: the build remaps every folder and its last step checks the ELF. ([doc](docs/firmware.md#rust-for-the-esp32))
 - `apothecary photo` turns a picture into named, placed pieces. ([page](walkthrough/11-photographs-into-pieces.md))
 - The Camera & pictures panel: capture, look, place a camera, gather. ([page](walkthrough/12-the-bench-as-it-is.md))
 - Pictures added and forgotten there; pins and cameras listed and undone. ([page](walkthrough/12-the-bench-as-it-is.md))
@@ -84,6 +92,8 @@ One line per change, each with a link to where it is described. The format follo
 - `GET /jobs` by site, machine and kind, `GET /jobs/{id}`, and `GET /jobs/choices` for what a job on a machine can name. ([code](apothecary/routes/jobs.py))
 - The Print card names the part a print makes, from the site its printer is pinned in, and its history is the printer's jobs. ([doc](docs/firmware.md))
 - Site lists the jobs of the site's machines, the running ones first; a row selects its machine and opens it. ([test](tests/e2e/test_printer_ui.py))
+- A part's renders are kept in a cache of variants by what made them; Apply draws one in its own tab, whose address keeps it, marked apart from the saved part, and the defaults again render nothing. ([page](walkthrough/14-designing-a-part.md))
+- The part editor starts from what is drawn, checks a staged set once the controls rest, shows OpenSCAD's errors by line and the measured bounds beside the declared ones; Part › Defaults stages a part's own numbers. ([page](walkthrough/14-designing-a-part.md))
 
 ### Changed
 

@@ -110,12 +110,29 @@ The docs' "thirty seconds of OpenSCAD" (`tests/test_staging.py`,
   path, and the node-STL cache in `api.py` is the precedent (lock, trim).
   Apply writes a variant and points the part at it; the canonical STL is the
   default variant. Two tabs no longer race.
+  Landed: `apothecary/projects/parts/variants.py`; the generate route renders
+  into it and answers each variant's own URL, `/parts/{name}/variants/{key}/stl`,
+  which Apply draws in its own tab. Decided with the owner on 2026-10-10: the
+  tab's address keeps the variant's key, so a reload or a link draws the same
+  and other tabs are not touched; a part drawn from a variant wears a quiet
+  amber edge, in the world and in its editor, until the saved part is drawn.
 - The generate route returns stderr parsed to `{line, message}` (both the
   2021.01 and snapshot formats) and the measured bounds from
   `--summary=all`; the page shows them, and the part panel starts from the
   sidecar, not the defaults.
+  Landed: `messages` and `measured` in the answer
+  (`apothecary/projects/parts/openscad_messages.py`), the editor showing the
+  errors by line and marking the line in its source; where OpenSCAD writes no
+  summary the STL is measured, and `measured_from` says which (decided with
+  the owner on 2026-10-10). `GET /parts/{name}/state` reads the sidecar and
+  the editor starts from it, or from the variant its tab's address names.
 - Superseded renders are cancelled; validate is debounced.
+  Landed: a newer request from the same `page` stops the older OpenSCAD run
+  (409), and the check waits for the controls to rest.
+  `tests/e2e/test_part_loop.py` goes round the loop twice in the page.
 - Correct the "thirty seconds" prose to name the command that measures it.
+  Landed: the staging tests, walkthrough 02 and the validate route name
+  `apothecary parts generate-stl`, which prints each render's time.
 
 **Iteration 2: parameters from the SCAD itself.**
 - Where `--export-format=param` is available, `/parts/{name}/params` falls

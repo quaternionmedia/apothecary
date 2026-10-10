@@ -136,6 +136,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # The staged numbers of a piece: changed on the sliders, then kept or not.
     "apply-btn": (WIDGET, WHAT_IS_THERE, "a button that rebuilds a piece with its staged numbers"),
     "revert-btn": (WIDGET, WHAT_YOU_SEE, "a button that puts the staged numbers back"),
+    "defaults-btn": (WIDGET, WHAT_YOU_SEE, "a button that stages a part's own numbers"),
     # How much of a subassembly to draw, and whether to outline its extent.
     "detail-mode": (WIDGET, WHAT_YOU_SEE, "a drop-down for how much of each subassembly to draw"),
     "overlay-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box that outlines each subassembly's extent"),
@@ -254,6 +255,13 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "lib-input": (WIDGET, WHAT_YOU_SEE, "a box for a library to install"),
     "lib-btn": (WIDGET, WHAT_IS_THERE, "a button that installs that library"),
     "core-install": (WIDGET, WHAT_IS_THERE, "a button that installs a board core"),
+    # Every other toolchain module, drawn from the status beside arduino-cli: Rust
+    # for the ESP32 today, one Install each.
+    "module-install": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that installs a toolchain module's tools (Rust for the ESP32)",
+    ),
     # Sketches: pick one from a drop-down (a list on the firmware page), name the
     # board and the port, build and send.
     "sketch-select": (WIDGET, WHAT_YOU_SEE, "a drop-down of the sketches under parts/"),
@@ -376,7 +384,9 @@ RING_BACKED: Dict[str, str] = {
     # acting on what the Bench has chosen; a core's Install is Bench › Cores › its
     # core. The form's boxes and drop-downs, the force tick-box and raw flash's
     # boxes choose what a cell acts on, and no cell chooses them.
-    "install-btn": "bench:install",
+    "install-btn": "bench:install:arduino",
+    "module-install": "bench:install:rust-esp32",
+    "modulesEl:click:closest": "bench:install:rust-esp32",
     "core-install": "bench:core:arduino:avr",
     "coresEl:click:closest": "bench:core:arduino:avr",
     "lib-btn": "bench:libraries",
@@ -428,6 +438,10 @@ RING_BACKED: Dict[str, str] = {
     "listen": "device:listen",
     "probe": "device:probe",
     "ctl:change:arm": "control:arm",
+    # the part editor's Defaults, Apply and Revert are Part's on its ring
+    "defaults-btn": "part:defaults",
+    "apply-btn": "part:apply",
+    "revert-btn": "part:revert",
     # a camera in Selected: Take picture is its ring's, and so is P
     "cam-take": "camera:take-picture",
     "takeBtn:click:takePictureWith": "camera:take-picture",
@@ -713,6 +727,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "level-card:click:closest": (WIDGET, WHAT_IS_THERE, "a corner button, moving the nozzle there"),
     # ---- the Bench --------------------------------------------------------
     "coresEl:click:closest": (WIDGET, WHAT_IS_THERE, "a core's Install button"),
+    "modulesEl:click:closest": (WIDGET, WHAT_IS_THERE, "a toolchain module's Install button"),
     "libEl:keydown:libraries": (WIDGET, WHAT_IS_THERE, "installing the typed libraries, by Enter"),
     "sketchEl:change:choose": (
         WIDGET,

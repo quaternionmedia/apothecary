@@ -73,9 +73,9 @@ class Readiness:
 
 
 def _sources_newer_than(part, stl_path: Path) -> List[str]:
-    """Inputs that changed after the render, if any: the SCAD and the wrapper
-    (a Python module, or a described part's part.json) -- the same inputs
-    build_stl rebuilds from."""
+    """Inputs that changed after the render, if any: the SCAD, what it
+    includes, uses or imports, and the wrapper (a Python module, or a
+    described part's part.json) -- the same inputs build_stl rebuilds from."""
     rendered = stl_path.stat().st_mtime
     inputs = _sources(part)
     return [f.name for f in inputs if f.exists() and f.stat().st_mtime > rendered]

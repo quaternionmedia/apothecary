@@ -150,8 +150,9 @@ def test_a_nested_part_is_found_by_the_name_the_listing_gives_it():
     assert client.get("/parts/rc.snowplow/scad").status_code == 200
 
 
-# POST /parts/{name}/stl/generate goes through build_stl. calibration_cube's STL
-# is pointed at a temp file, so nothing here writes into parts/.
+# POST /parts/{name}/stl/generate goes through the variant cache
+# (tests/test_part_variants.py). calibration_cube's STL is pointed at a temp
+# file, so nothing here writes into parts/.
 
 UNIT_CUBE = (
     "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nv 0 0 1\nv 1 0 1\nv 1 1 1\nv 0 1 1\n"

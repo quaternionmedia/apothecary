@@ -6,6 +6,8 @@ The Machine's case runs against a server of its own (the conftest's ``start_serv
 with the scripted arduino-cli and the simulated printer, so nothing polls a real port.
 """
 
+import re
+
 import httpx
 import pytest
 from playwright.sync_api import Page, expect
@@ -71,7 +73,9 @@ def test_double_clicking_a_piece_below_the_root_zooms_into_it(page: Page, base_u
 
 @pytest.fixture
 def v_slot_as_it_was():
-    """Apply renders into parts/v_slot/; its STL and parameter record are put back."""
+    """Apply renders a variant into the cache, but opening the part draws its own STL,
+    built into parts/v_slot/ when a fresh clone lacks it; that STL and its parameter
+    record are put back."""
     stl = ROOT / "parts" / "v_slot" / "v_slot.stl"
     files = (stl, params_sidecar_path(stl))
     kept = {path: path.read_bytes() for path in files if path.exists()}
@@ -110,7 +114,11 @@ def test_apply_draws_what_it_rendered(page: Page, base_url: str, v_slot_as_it_wa
     expect(apply).to_be_enabled(timeout=10000)
 
     apply.click()
-    expect(page.locator("#status")).to_contain_text("v_slot regenerated", timeout=60000)
+    # Rendered now, or found in the variant cache from an earlier Apply of the same length.
+    expect(page.locator("#status")).to_contain_text(
+        re.compile(r"v_slot (regenerated|from the cache, nothing rendered): an applied variant"),
+        timeout=60000,
+    )
     page.evaluate("() => window.fractalViewer.waveDone")
     after = page.evaluate(MESH_SIZE, "v_slot")
     assert max(after) == pytest.approx(max(before) + 10, abs=0.5), (before, after)

@@ -180,9 +180,11 @@ class _StandIn:
 
 @pytest.fixture
 def snowplow_stl(tmp_path, monkeypatch):
-    """Where the snowplow builds to in these tests, never parts/."""
+    """Where the snowplow builds to in these tests, never parts/; the variant
+    cache is the test's own."""
     stl = tmp_path / "snowplow.stl"
     monkeypatch.setattr(SnowplowPart, "get_stl_output_path", lambda self: stl)
+    monkeypatch.setenv("APOTHECARY_CACHE_DIR", str(tmp_path / "cache"))
     return stl
 
 
@@ -196,17 +198,21 @@ def test_a_slider_changes_the_scad_openscad_is_handed(snowplow_stl, monkeypatch)
     [(scad, definitions)] = stand_in.handed
     assert "cube([80.0, 3.0, 45.0], center=true);" in scad
     assert not definitions
-    assert read_params_sidecar(snowplow_stl)["params"] == {"blade_width": 80.0}
+    # A variant is the cache's: the snowplow's own STL stays the default one.
+    assert r.json()["params"] == {"blade_width": 80.0}
+    assert r.json()["stl_url"] == f"/parts/rc.snowplow/variants/{r.json()['variant']}/stl"
+    assert not snowplow_stl.exists() and read_params_sidecar(snowplow_stl) is None
 
 
 @pytest.mark.slow
 @needs_openscad
-def test_a_slider_changes_the_stl(snowplow_stl):
-    r = TestClient(app).post(
-        "/parts/rc.snowplow/stl/generate", json={"params": {"blade_width": 80}}
-    )
+def test_a_slider_changes_the_stl(snowplow_stl, tmp_path):
+    client = TestClient(app)
+    r = client.post("/parts/rc.snowplow/stl/generate", json={"params": {"blade_width": 80}})
     assert r.status_code == 200, r.text
-    lo, hi = bounds(read_mesh(snowplow_stl))
+    variant = tmp_path / "variant.stl"
+    variant.write_bytes(client.get(r.json()["stl_url"]).content)
+    lo, hi = bounds(read_mesh(variant))
     size = [hi[axis] - lo[axis] for axis in range(3)]
     assert size[0] == pytest.approx(80, abs=0.01)
     declared = DEFAULT.get_bounds({"blade_width": 80}).size

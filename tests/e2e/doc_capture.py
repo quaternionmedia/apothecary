@@ -156,10 +156,11 @@ class Walkthrough:
     the only reason the sentence is worth anything.
 
     `browser_suite_only` is a page the browser suite writes and the quick
-    `apothecary test run` does not (a loop's page: its run is unmarked
-    `walkthrough`): its header says which runs rewrite it, and its footer names
-    `module`, the test module that writes it, to run alone. The fixture sets
-    `module` and holds the flag to the run's marker, so the words stay true.
+    `apothecary test run` does not -- a loop's page (docs/plans/ui-flows-2026-10-08.md),
+    whose run is unmarked `walkthrough`: its header says the browser suite rewrites
+    it, and its footer names `module`, the test module that writes it, to run alone.
+    The fixture sets `module` and holds the flag to the run's marker, so the words
+    stay true. It is the one place a page says who writes it.
     """
 
     page: Page
@@ -221,9 +222,9 @@ class Walkthrough:
             "was emitted by a test that had just asserted it, and the whole page is",
             *(
                 [
-                    "rewritten by every run of the browser suite, though not by the quicker",
-                    "`apothecary test run`. Editing it by hand is editing the output of a",
-                    "program: the next run puts it back.",
+                    "rewritten by every run of the browser suite (`uv run apothecary test",
+                    "run --e2e`), though not by the quicker `apothecary test run`. Editing it",
+                    "by hand is editing the output of a program: the next run puts it back.",
                 ]
                 if self.browser_suite_only
                 else [

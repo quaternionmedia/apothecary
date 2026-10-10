@@ -33,10 +33,15 @@ EXTERNAL_PORT = 8765  # a server you started, when neither --start-server nor --
 # The app under uvicorn, with the simulated boards answering at once, as the unit
 # suite's do (tests/conftest.py): a real board's silences -- 1.5 s after every link
 # opens, 0.6 s after a reset -- would otherwise cost each browser test that opens one.
+# Its builds go to a folder of its own (argv[2]): a scripted build is not the
+# checkout's, and a real flash record must never be compared with one.
 SERVE = """
 import sys, uvicorn
+from pathlib import Path
+from apothecary.firmware import bindings, service
 from apothecary.firmware.gcode import GcodeLink
 GcodeLink.time_scale = 0.02
+service.BUILD_ROOT = bindings.BUILD_ROOT = Path(sys.argv[2])
 uvicorn.run("apothecary.api:app", host="127.0.0.1", port=int(sys.argv[1]),
             timeout_graceful_shutdown=1)  # let go of idle keep-alive connections quickly
 """
@@ -86,8 +91,9 @@ def start_server(tmp_path_factory):
     """Factory: ``start_server(env_overrides=None, port=None) -> url``.
 
     Each server runs the scripted arduino-cli (the Uno on /dev/ttyFAKE0, /dev/ttyFAKE1
-    unmatched) and the simulated printer mid-print, keeps its firmware state and pictures
-    in temp folders of its own, and listens on a free port unless one is named. So no
+    unmatched) and the simulated printer mid-print, keeps its firmware state, pictures
+    and render cache in temp folders of its own, and listens on a free port unless one
+    is named. So no
     test opens a real serial port, reads ``~/.apothecary``, or sees a real board. All of
     them stop when the session ends.
     """
@@ -101,8 +107,15 @@ def start_server(tmp_path_factory):
             {
                 "ARDUINO_CLI": str(write_fake_arduino_cli(tmp / "arduino-cli")),
                 "ESPTOOL": "none",
+                # Rust's tools: none, unless a test names the scripted ones (the
+                # firmware loop); never a person's own on PATH.
+                "CARGO": "none",
+                "ESPFLASH": "none",
                 "APOTHECARY_TOOLS_DIR": str(tmp / "tools"),
                 "APOTHECARY_STATE_DIR": str(tmp / "state"),
+                # Node renders and part variants in a cache of the server's own,
+                # never the checkout's, and none left from an earlier run.
+                "APOTHECARY_CACHE_DIR": str(tmp / "cache"),
                 "APOTHECARY_PICTURE_ROOT": str(tmp / "pictures"),
                 "APOTHECARY_SERIAL_ENGINE": "simulated",
                 "APOTHECARY_SIMULATED_PRINTER": "printing",
@@ -121,7 +134,7 @@ def start_server(tmp_path_factory):
             refuse_a_held_port(port)
         url = f"http://127.0.0.1:{port}"
         proc = subprocess.Popen(
-            [sys.executable, "-c", SERVE, str(port)],
+            [sys.executable, "-c", SERVE, str(port), str(tmp / "builds")],
             cwd=ROOT,
             env=env,
             # DEVNULL: an unread PIPE fills and blocks the server mid-run.

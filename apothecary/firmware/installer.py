@@ -83,6 +83,25 @@ def _fetch(url: str, timeout: int = 120) -> bytes:
         return resp.read()
 
 
+def _fetch_to(url: str, path: Path, timeout: int = 600) -> str:
+    """The same tool fetch, written to ``path`` as it arrives -- an archive too large
+    to hold in memory -- and the SHA-256 of what arrived."""
+    from ..stays_local import tool_fetch
+
+    req = urllib.request.Request(url, headers={"User-Agent": "apothecary-firmware-installer"})
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    digest = hashlib.sha256()
+    with tool_fetch(url), opener.open(req, timeout=timeout) as resp, open(path, "wb") as out:  # noqa: S310
+        while True:
+            chunk = resp.read(1 << 20)
+            if not chunk:
+                break
+            digest.update(chunk)
+            out.write(chunk)
+    return digest.hexdigest()
+
+
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
 
