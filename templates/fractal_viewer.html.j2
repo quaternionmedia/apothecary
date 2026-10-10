@@ -4239,7 +4239,9 @@
             }
 
             // What an intent the server carried answers with: the site as it is now,
-            // drawn without moving the camera, and the pictures fetched again.
+            // drawn without moving the camera, and the pictures fetched again. An
+            // open Machine lists the site's parts again, so a printer's Print from
+            // here offers a piece made, rebuilt or dropped while it stood open.
             applySite(payload) {
                 this.tree = payload.tree;
                 this.violations = payload.violations;
@@ -4252,6 +4254,7 @@
                 this.camera.position.copy(at); this.orbitControls.target.copy(target);
                 this.orbitControls.minDistance = near; this.orbitControls.maxDistance = far;
                 this.orbitControls.update();
+                if (this.machine && this.machine.handle) this.machine.handle.print.loadChoices();
                 return this.pictureMarks.refresh();
             }
 

@@ -26,7 +26,9 @@
  *
  * mountMachine(root, { base, port, host, boards, kind, inPrinter, pin, say })
  * renders into `root` and returns the handle the ring drives (carry, pairs,
- * device) and the tests read (state, ctl, level, print). `host` is "world": the
+ * device), the world asks to list its site's parts again when a piece is made,
+ * rebuilt or dropped (print.loadChoices), and the tests read (state, ctl, level,
+ * print). `host` is "world": the
  * world's page, a tab of its rail or floated, one board and everything inline in
  * one column (the monitor page, the other host, is a link to the world now).
  * `boards` is the page's model, made here when none is given.
@@ -848,6 +850,9 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         renderPrint();
     }
     // The parts a print here can name: the site's, when the printer is pinned in one.
+    // Asked again by the world whenever its site changes in place (a piece made,
+    // rebuilt or dropped), so a Machine left open lists the piece made meanwhile;
+    // what was chosen stays chosen while it is still there.
     async function loadChoices() {
         const sel = $("print-part"), had = sel.value, port = state.port;
         let c = null;
@@ -1048,7 +1053,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         kind: () => state.kind,
         device, carry, pairs,
         level: { start: startLevel, corner: (which) => enqueue(cornerLines(which)), lines: cornerLines, records: () => level.records, shown: () => level.shown, load: loadLevel },
-        print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, jobs: () => prt.jobs, choices: () => prt.choices, load: loadPrintFiles, loadJobs: loadPrintJobs },
+        print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, jobs: () => prt.jobs, choices: () => prt.choices, load: loadPrintFiles, loadJobs: loadPrintJobs, loadChoices },
         destroy() {
             if (state.port) model.unwatch(state.port, who);
             clearTimeout(level.timer); clearTimeout(prt.timer); clearInterval(ctl.timer);
