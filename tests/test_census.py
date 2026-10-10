@@ -321,7 +321,29 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # 9366) and arduino-cli's moved one level deeper (Arduino, 9368; it was 936); nothing
 # else moved. The Rust sketches need no control of their own: they are rows of the
 # sketch drop-down, and choosing one hides the board box it takes none of.
-VIEWER_CEILING = 117
+#
+# Loop 1, designing a part (docs/plans/ui-flows-2026-10-08.md). Added: the part
+# editor's Defaults (defaults-btn), beside Revert, which stages the part's own
+# numbers so that Apply draws the saved part again; the loop goes back to the
+# defaults through the page's own controls, and a slider cannot be set to a
+# default exactly. No listener was added or re-keyed. The ceiling follows the
+# count up by one; `uv run apothecary census` gives the counts.
+#
+# Then the owner's answer: Defaults stays, and is ring-backed by a cell of the
+# part's ring, Part › Defaults, after Edit (on a part from the parts folder; a
+# camera's ring and a made piece's keep Part › Edit alone). No control added, so
+# the ceiling stands; one more of them ring-backed, and the share's floor below
+# follows it up.
+#
+# The two, merged (build/part-loop on build/rust-firmware): each added one control
+# of its own to the same count, so the ceiling is the count with both.
+#
+# Then the owner's answer once more: the part's ring holds the whole loop, Part ›
+# Edit, Defaults, Apply and Revert. The editor's Apply and Revert (apply-btn,
+# revert-btn) are ring-backed by Part › Apply and Part › Revert, wherever Part is
+# (a part's ring, a camera's, a made piece's), acting on what the editor has
+# staged. No control added; two more ring-backed, and the share's floor follows.
+VIEWER_CEILING = 118
 
 
 def test_the_viewer_stays_under_its_ceiling():
@@ -676,10 +698,13 @@ def test_the_viewers_ring_backed_share_did_not_fall():
     serial overlay and most of Selected's Device section, ring-backed and not, and
     left it at 51 of 101. Phase 5 brought the Bench in front of the world, its verbs
     cells of Panels › Bench, and a devkit's Listen and Probe, cells of Device › Link,
-    and does not let it fall below where Phase 4 left it."""
+    and did not let it fall below where Phase 4 left it. Loop 1, designing a part,
+    put the part editor's Defaults on the ring as Part › Defaults, and then its Apply
+    and Revert as Part › Apply and Part › Revert, and on the Rust firmware's count the
+    share does not fall below where that left it, 68 of 118."""
     taken = census.take()
     own, backed = len(taken.controls_of_its_own()), len(taken.ring_backed())
-    assert backed / own >= 51 / 101, f"{backed} of {own} ring-backed"
+    assert backed / own >= 68 / 118, f"{backed} of {own} ring-backed"
 
 
 def test_the_serial_overlay_left_nothing_behind():

@@ -112,9 +112,25 @@ what the viewer serves, so a build with overrides records them in
 `apothecary parts info NAME --json-out` shows the record as `stl_params`,
 and `null` means a default render.
 
-Over HTTP, `POST /parts/{name}/stl/generate` with `{"params": {...}}` does
-the same build; an unknown or invalid parameter is a `422` with the reason,
-and the response carries the bounds the part declares for those parameters.
+Over HTTP, `POST /parts/{name}/stl/generate` with `{"params": {...}}`
+renders into a cache of variants instead (`apothecary/projects/parts/variants.py`),
+keyed by the SCAD and every file it reads, the parameters, and the OpenSCAD
+and backend that render it. Each variant is served at a URL of its own,
+`/parts/{name}/variants/{variant}/stl`; the part's own STL is only ever left
+holding the defaults from there, and never replaces a variant the command
+line put there. So two pages applying different values never share a file,
+and going back to the defaults renders nothing. An unknown or invalid
+parameter is a `422` with the reason; a render OpenSCAD refuses is a `422`
+whose `detail.messages` are its errors and warnings by file and line. The
+response carries the bounds the part declares for those parameters and
+beside them the bounds of what was rendered, from OpenSCAD's summary where it
+writes one, else read off the STL (`measured_from` says which), and whether
+the answer is the saved part (`saved`). With `?page=<id>`, a newer request
+from the same page for the same part stops the older one's render, which
+answers `409`. `GET /parts/{name}/state` reads the params sidecar: what the
+part's own STL was rendered with, which is where a page drawing it starts;
+`GET /parts/{name}/variants/{variant}` says what made a cached variant, for a
+page that has only its key.
 
 ### Adding a parameter
 

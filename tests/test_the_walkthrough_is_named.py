@@ -1,4 +1,5 @@
-"""`apothecary test run` collects the runs that write walkthrough pages 11 and 12."""
+"""`apothecary test run` collects the runs that write walkthrough pages 11 and 12,
+and not the runs that write a loop's page (14, 15), which the browser suite writes."""
 
 import subprocess
 import sys
@@ -37,6 +38,10 @@ LOOP_PAGES = {
         "test_the_firmware_loop_goes_round_with_arduino_then_rust",
         ROOT / "walkthrough" / "15-firmware.md",
     ),
+    Path(__file__).resolve().parent / "e2e" / "test_part_loop.py": (
+        "test_designing_a_part_twice_round",
+        ROOT / "walkthrough" / "14-designing-a-part.md",
+    ),
 }
 
 
@@ -68,3 +73,4 @@ def test_the_demonstration_is_not_a_docs_workflow():
     argv = [sys.executable, "-m", "pytest", "--collect-only", "-m", "docs", *DEMONSTRATION_MODULES]
     collected = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True)
     assert collected.returncode == pytest.ExitCode.NO_TESTS_COLLECTED, collected.stdout[-2000:]
+

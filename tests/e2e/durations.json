@@ -65,6 +65,7 @@
  "tests/e2e/test_one_machine.py::test_selected_says_one_line_and_open_opens_the_machine[chromium]": 3.75,
  "tests/e2e/test_one_machine.py::test_the_monitor_address_opens_the_board_s_machine_where_it_is_pinned[chromium]": 8.7,
  "tests/e2e/test_one_machine.py::test_watch_and_monitor_are_one_cell_that_opens_the_machine[chromium]": 3.94,
+ "tests/e2e/test_part_loop.py::test_designing_a_part_twice_round[chromium]": 113.78,
  "tests/e2e/test_picture_in_the_world.py::test_a_forgotten_pictures_view_leaves_the_world[chromium]": 10.25,
  "tests/e2e/test_picture_in_the_world.py::test_a_view_at_the_bench_is_a_mat_with_its_outlines[chromium]": 13.45,
  "tests/e2e/test_picture_in_the_world.py::test_the_mat_follows_its_bench_when_the_gizmo_moves_it[chromium]": 12.1,

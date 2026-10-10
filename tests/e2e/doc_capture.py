@@ -164,6 +164,9 @@ class Walkthrough:
     runtime: str
     does_not_show: List[str]
     steps: List[ShownStep] = field(default_factory=list)
+    # Who rewrites the page, as its header says: the ordinary test command, or,
+    # for a loop's page (docs/plans/ui-flows-2026-10-08.md), the browser suite.
+    written_by: str = "the ordinary test command"
 
     def says(self, heading: str, sentence: str, shown: str | None = None) -> None:
         self.steps.append(
@@ -211,7 +214,7 @@ class Walkthrough:
             "",
             "**This page is written by the run it describes.** Every sentence below",
             "was emitted by a test that had just asserted it, and the whole page is",
-            "rewritten by the ordinary test command. Editing it by hand is editing",
+            f"rewritten by {self.written_by}. Editing it by hand is editing",
             "the output of a program: the next run puts it back.",
             "",
             self.intro,

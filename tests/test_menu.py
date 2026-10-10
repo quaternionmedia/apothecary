@@ -1195,7 +1195,12 @@ def test_camera_and_picture_are_absent_below_the_root_and_where_nothing_can_be_p
 #
 # One editor, in Selected, for a part and for a piece made from a picture: Part ›
 # Edit opens it there. Appended after every cell the ring had, so none moves; the
-# page carries it, and Apply goes through the part and made routes.
+# page carries it, and Apply goes through the part and made routes. A part from
+# the parts folder also has Part › Defaults after Edit: its own numbers staged in
+# the editor, as the editor's Defaults does (loop 1's owner's answer). A made
+# piece's numbers are what was found, with no part's own to go back to. Then Apply
+# and Revert, on every Part, acting on what the editor has staged, as its buttons
+# do: the part's ring holds the whole loop (the owner's answer once more).
 
 
 def test_a_part_and_a_made_piece_end_with_part_edit_and_nothing_else_does():
@@ -1207,19 +1212,39 @@ def test_a_part_and_a_made_piece_end_with_part_edit_and_nothing_else_does():
         ring = resolve(Context(pointing=Pointing.NODE, targets=[path]), garage)
         part = ring.options[-1]
         assert part.label == "Part" and part.id == "part", (path, [o.label for o in ring.options])
-        assert [(c.label, c.action) for c in part.children] == [("Edit", "part:edit")]
+        assert [(c.label, c.action) for c in part.children] == [
+            ("Edit", "part:edit"),
+            ("Defaults", "part:defaults"),
+            ("Apply", "part:apply"),
+            ("Revert", "part:revert"),
+        ]
         assert len(ring.options) <= MOST_OPTIONS
-    # A made piece has Part too, after its Picture.
+    # A made piece has Part too, after its Picture: Edit, Apply and Revert, no Defaults.
     site = _garage()
     site.children.append(Assembly(name="disc_1", role="word", base=Cube(size=10.0)))
     told = PictureContext(made=["disc_1"], words=["disc", "plate"])
     made = resolve(Context(pointing=Pointing.NODE, targets=["disc_1"]), site, picture=told)
     assert [o.label for o in made.options][-2:] == ["Picture", "Part"]
-    assert _group(made, "Part", "Edit").action == "part:edit"
+    assert [c.action for c in made.options[-1].children] == [
+        "part:edit",
+        "part:apply",
+        "part:revert",
+    ]
     # A structure that is neither is left alone: the bench's ring ends as it did.
     bench = resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), garage)
     assert [o.label for o in bench.options][-2:] == ["Camera", "Picture"]
-    assert carried_by("part:edit").name == "VIEWER"
+    for action in ("part:edit", "part:defaults", "part:apply", "part:revert"):
+        assert carried_by(action).name == "VIEWER"
+
+
+def test_part_holds_the_loop_edit_keeping_its_address():
+    """Edit keeps its address; Defaults, Apply and Revert take the seats after it."""
+    ring = resolve(Context(pointing=Pointing.NODE, targets=["footpedal"]), _garage())
+    edit = address_of(ring, "part:edit")
+    for action in ("part:defaults", "part:apply", "part:revert"):
+        address = address_of(ring, action)
+        assert address[:-1] == edit[:-1]
+        assert walk(ring, address).action == action
 
 
 def test_a_made_piece_has_picture_with_word_and_drop_and_no_camera():

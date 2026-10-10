@@ -91,8 +91,9 @@ def start_server(tmp_path_factory):
     """Factory: ``start_server(env_overrides=None, port=None) -> url``.
 
     Each server runs the scripted arduino-cli (the Uno on /dev/ttyFAKE0, /dev/ttyFAKE1
-    unmatched) and the simulated printer mid-print, keeps its firmware state and pictures
-    in temp folders of its own, and listens on a free port unless one is named. So no
+    unmatched) and the simulated printer mid-print, keeps its firmware state, pictures
+    and render cache in temp folders of its own, and listens on a free port unless one
+    is named. So no
     test opens a real serial port, reads ``~/.apothecary``, or sees a real board. All of
     them stop when the session ends.
     """
@@ -112,6 +113,9 @@ def start_server(tmp_path_factory):
                 "ESPFLASH": "none",
                 "APOTHECARY_TOOLS_DIR": str(tmp / "tools"),
                 "APOTHECARY_STATE_DIR": str(tmp / "state"),
+                # Node renders and part variants in a cache of the server's own,
+                # never the checkout's, and none left from an earlier run.
+                "APOTHECARY_CACHE_DIR": str(tmp / "cache"),
                 "APOTHECARY_PICTURE_ROOT": str(tmp / "pictures"),
                 "APOTHECARY_SERIAL_ENGINE": "simulated",
                 "APOTHECARY_SIMULATED_PRINTER": "printing",
@@ -342,10 +346,11 @@ def walkthrough(page):
     """
     made: list[Walkthrough] = []
 
-    def _make(ordinal, slug, title, intro, runtime, does_not_show, page=page):
+    def _make(ordinal, slug, title, intro, runtime, does_not_show, page=page, written_by=None):
         # `page` may be another browser's -- the one launched with a fake
         # camera, for the page that places one -- and its screenshots are then
-        # of that browser.
+        # of that browser. `written_by` says who rewrites the page, when it is
+        # not the ordinary test command (a loop's page: the browser suite).
         recorder = Walkthrough(
             page=page,
             ordinal=ordinal,
@@ -354,6 +359,7 @@ def walkthrough(page):
             intro=intro,
             runtime=runtime,
             does_not_show=does_not_show,
+            **({"written_by": written_by} if written_by else {}),
         )
         made.append(recorder)
         return recorder
