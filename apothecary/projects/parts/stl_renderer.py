@@ -847,8 +847,8 @@ def build_stl(
 
     Overrides are checked against the part's ``params_model`` (ValueError on a
     bad one). The STL on disk is kept (``skipped="fresh"``) unless ``force``, a
-    newer SCAD, wrapper or geometry code, or different recorded parameters say
-    otherwise. A part that cannot be built here is refused
+    newer SCAD, file the SCAD reads, wrapper or geometry code, or different
+    recorded parameters say otherwise. A part that cannot be built here is refused
     (``skipped="refused"``). It is rendered as ``render_part`` renders it,
     turned by ``display_rotation``; non-default parameters are
     recorded in the params sidecar as validated, not as ``scad_overrides``
