@@ -1035,8 +1035,13 @@
                 // Selected stacked at its top, each one closable, collapsible and
                 // draggable free; what a person did to them is remembered per
                 // browser (panels.js), and a remembered layout naming a panel that
-                // is gone (Jobs), or from before the one rail, is ignored.
-                this.panels = mountPanels({ container: document.querySelector('.main-content'), overlay: this.canvas.parentElement });
+                // is gone (Jobs), or from before the one rail, is ignored. A panel
+                // floated lands clear of the header, the hint bar and the depth ladder,
+                // as a badge's words do, and of the closed panels' tabs.
+                this.panels = mountPanels({
+                    container: document.querySelector('.main-content'), overlay: this.canvas.parentElement,
+                    keepClear: () => [document.querySelector('.toolbar'), this.hintEl, this.minimapEl],
+                });
                 for (const section of document.querySelectorAll('.side-panel [data-panel]')) {
                     const id = section.dataset.panel;
                     this.panels.register(id, {
