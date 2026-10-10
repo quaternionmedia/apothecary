@@ -199,6 +199,16 @@ class TestMakingAVariant:
         assert not make_variant(part).rendered
         assert len(_renders(exe)) == 1
 
+    def test_a_value_the_model_defaults_to_is_no_override(self, tmp_path, openscad):
+        """A page sends every value its controls hold, the defaults among them."""
+        exe = openscad()
+        part = _part(tmp_path)
+        default = make_variant(part)
+        spelled_out = make_variant(part, {"x": 10.0})
+        assert spelled_out.key == default.key and spelled_out.params == {}
+        assert spelled_out.saved and not spelled_out.rendered
+        assert len(_renders(exe)) == 1
+
     def test_returning_to_the_defaults_costs_nothing(self, tmp_path, openscad):
         exe = openscad()
         part = _part(tmp_path)

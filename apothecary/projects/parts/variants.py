@@ -360,6 +360,23 @@ def _place_as_canonical(part: BasePart, stl: Path) -> None:
     params_sidecar_path(canonical).unlink(missing_ok=True)
 
 
+def without_defaults(part: BasePart, params: Mapping[str, Any]) -> Dict[str, Any]:
+    """Validated overrides less those that say what the model's default says:
+    the same render, so the same key, and the saved part when that is the
+    defaults. (A page sends every value its controls hold.) A part with no
+    model, or one whose defaults cannot be built, keeps them all."""
+    if part.params_model is None or not params:
+        return dict(params)
+    try:
+        defaults = part.params_model()
+    except Exception:
+        return dict(params)
+    missing = object()
+    return {
+        name: value for name, value in params.items() if getattr(defaults, name, missing) != value
+    }
+
+
 def make_variant(
     part: BasePart,
     params: Optional[Mapping[str, Any]] = None,
@@ -375,9 +392,10 @@ def make_variant(
     one). A cached variant answers first, then the part's own STL when it is
     fresh for these parameters; otherwise OpenSCAD renders into the cache.
     ``force`` renders even so. The defaults are also left as the part's own
-    STL, unless its params sidecar says it holds another variant.
+    STL, unless its params sidecar says it holds another variant. A value
+    equal to the model's default is no override (``without_defaults``).
     """
-    params = part.validate_overrides(params)
+    params = without_defaults(part, part.validate_overrides(params))
     chosen, renderer = renderer, renderer or part_renderer(part)
     canonical = part.get_stl_output_path()
     rotation = part.display_rotation.to_list()

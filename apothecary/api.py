@@ -513,7 +513,7 @@ def generate_part_stl(
         "variant": made.key,
         "regenerated": made.rendered,
         "render_time_seconds": made.render_time_seconds,
-        "params": jsonable_encoder(overrides),
+        "params": jsonable_encoder(made.params),
         "bounds": jsonable_encoder(part.get_bounds(overrides or None)),
         "measured": jsonable_encoder(measured_box(made.measured)),
         "measured_from": made.measured_from,
