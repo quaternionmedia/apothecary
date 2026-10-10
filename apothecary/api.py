@@ -80,6 +80,7 @@ from .stays_local import LocalOnly
 from .templates import TemplateRenderer
 from .transforms import Translate
 from .viewer import render_fractal_viewer_page
+from .vocabulary.word import WORD_PRINT_SETTINGS_STUB
 
 
 def _registered_part(item: ProjectInfo) -> BasePart:
@@ -1565,7 +1566,11 @@ def _slice_target(site_name: str, path: str) -> Optional[slicing.Target]:
         made=SlicedMade(
             kind="piece", name=node.name, site=site_name, path=path, word=made[node.name].word
         ),
-        declared=Declared.of(None, f"piece {node.name}"),
+        # A word declaring print settings is a stub: the piece slices with the printer's.
+        declared=Declared(
+            by=f"piece {node.name}, made as {made[node.name].word}",
+            note=WORD_PRINT_SETTINGS_STUB,
+        ),
         stl=stl,
     )
 

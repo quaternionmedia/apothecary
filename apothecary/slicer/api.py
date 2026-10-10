@@ -5,8 +5,10 @@ routes do; the page polls ``GET /slicer/tasks/{id}?since=N`` for new log lines,
 and the task carries the slice's answer once it ends:
 
 - ``GET /slicer/status``: each slicer module -- what it slices, its program and
-  version, the pinned release, its problems -- which one a slice uses, and the
-  printers that keep a slicer profile.
+  version, the pinned release, its problems -- which one a slice uses, the
+  printers that keep a slicer profile, and the pieces a slice can be composed
+  from (the start of a print, the filament, a word's print settings), each
+  saying what it does and whether it is a stub.
 - ``POST /slicer/install`` ``{force}``: install the pinned OrcaSlicer (a task).
 - ``POST /slicer/slice`` ``{part, port | site + printer | printer, slicer}``: slice
   a part or a made piece for a printer (a task). ``part`` is a node's path in
@@ -41,7 +43,7 @@ from pydantic import BaseModel, Field
 
 from ..firmware.models import Port
 from ..firmware.tasks import Running, TaskBusy, TaskRunner
-from . import service
+from . import compose, service
 from .models import SliceRecord, SlicerStatus
 from .modules import NotInstalled, SlicerError, chosen_id, get_module, modules, reset_modules
 from .profiles import printers
@@ -96,10 +98,18 @@ class SliceRequest(BaseModel):
     slicer: Optional[str] = Field(None, pattern=MODULE_ID)
 
 
+class Piece(BaseModel):
+    kind: str  # start, filament or declared
+    id: str
+    does: str
+    stub: bool  # exists, says what it will do, and is not chosen
+
+
 class StatusAnswer(BaseModel):
     slicers: List[SlicerStatus]
     chosen: str
     printers: List[str]
+    pieces: List[Piece]  # what a slice can be composed from (compose.py)
 
 
 def _snapshot(task, since: int = 0) -> dict:
@@ -117,7 +127,12 @@ def slicer_status():
         status = module.status()
         status.chosen = module.id == picked
         found.append(status)
-    return StatusAnswer(slicers=found, chosen=picked, printers=printers())
+    return StatusAnswer(
+        slicers=found,
+        chosen=picked,
+        printers=printers(),
+        pieces=[Piece(**p.as_json()) for p in compose.pieces()],
+    )
 
 
 @router.post("/install", status_code=202)

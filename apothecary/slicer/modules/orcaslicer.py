@@ -29,6 +29,12 @@ top, then the part's declared print settings:
 - ``tolerance`` is not passed: it is what the part's geometry already allows
   for a fit, and a slicer compensating as well would take it twice.
 
+The machine's start G-code is composed from the pieces the printer's profile
+names (``compose.py``): today ``home``, OrcaSlicer's own start for the printer,
+which homes and does no levelling; the stored mesh, probing each print and a
+measured first-layer offset are stubs. The filament is the printer's one,
+named in its profile; choosing another is a stub.
+
 The three are written as user profiles of the system ones they start from
 (``"from": "user"``, ``inherits``), so OrcaSlicer's own check that the process
 is for the machine still holds. ``--datadir`` is a folder of the slice's own,
@@ -51,6 +57,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from ...stays_local import subprocess_env
+from .. import compose
 from .. import orcaslicer_installer as installer
 from ..models import Setting, SlicerStatus, SlicerTool
 from ..profiles import Declared, PrinterProfile
@@ -309,6 +316,10 @@ class OrcaSlicerModule(SlicerModule):
 
     def settings(self, profile: PrinterProfile, declared: Declared) -> Resolved:
         section = profile.section(self.id)
+        # The pieces the printer's slices are composed from: a stub named is refused
+        # here, before any profile is read or anything built.
+        start = compose.chosen(compose.START, profile.start.modules, profile.file)
+        filament = compose.chosen(compose.FILAMENT, profile.filament.modules, profile.file)
         path, _found_by = self.program()
         version = reported_version(path) if path else None
         index = vendor_index(self._resources(), section.get("vendor"))
@@ -356,6 +367,29 @@ class OrcaSlicerModule(SlicerModule):
                     note=entry.get("note")
                     or (f"{base}'s profile agrees" if agrees else f"over {base}'s {before!r}"),
                 )
+
+        machine = configs["machine"]
+        machine["machine_start_gcode"] = compose.compose_start(
+            str(machine.get("machine_start_gcode") or ""), start
+        )
+        shown.append(
+            Setting(
+                name="start",
+                value=[p.id for p in start],
+                origin="printer",
+                source=f"{profile.file}: {profile.start.source}",
+                note=compose.describe(start),
+            )
+        )
+        shown.append(
+            Setting(
+                name="filament",
+                value=[p.id for p in filament],
+                origin="printer",
+                source=f"{profile.file}: {profile.filament.source}",
+                note=f"{compose.describe(filament)}: {section.get('filament')}",
+            )
+        )
 
         self._declare(configs, origins, declared, profile)
         settings = shown + list(origins.values())

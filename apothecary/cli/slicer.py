@@ -35,6 +35,13 @@ def _status_lines(chosen: Optional[str] = None) -> None:
             _safe_echo(f"  • {note}", fg="yellow")
         for problem in status.problems:
             _safe_echo(f"  ✗ {problem}", fg="yellow")
+    from ..slicer import compose
+
+    click.secho("A slice is composed from:", bold=True)
+    for kind in (compose.START, compose.FILAMENT, compose.DECLARED):
+        for piece in compose.pieces(kind):
+            mark = " (a stub)" if piece.stub else ""
+            _safe_echo(f"  • {kind} {piece.id}{mark}: {piece.does}")
     versions = oi.installed_versions()
     if versions:
         click.secho("Installed releases:", bold=True)

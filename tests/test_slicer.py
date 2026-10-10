@@ -6,6 +6,7 @@ Print card keeps a file -- against a scripted OrcaSlicer (tests/slicer_helpers.p
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -448,3 +449,116 @@ def test_a_part_target_builds_the_parts_own_stl(fake_orcaslicer, monkeypatch, tm
     lines: list = []
     assert target.stl(lines.append) == CUBE_STL and built == ["calibration_cube"]
     assert lines == [f"STL: {stl} (up to date)"]
+
+
+# --- what a slice is composed from: the start, the filament, a word's settings --------
+
+
+def test_the_start_is_composed_from_the_pieces_the_printer_names(fake_orcaslicer):
+    """printer_1's start is `home` -- its profile's own start, which homes and does no
+    levelling -- and its filament the printer's one; the answer says both and why."""
+    profile = load_profile("ender3")
+    assert profile.start.modules == ["home"] and "owner" in profile.start.source
+    assert profile.filament.modules == ["printer"]
+    resolved = get_module("orcaslicer").settings(profile, Declared(by="part x"))
+    shown = _by_name(resolved)
+    assert shown["start"].value == ["home"] and shown["start"].origin == "printer"
+    assert "home: the printer's own start" in shown["start"].note
+    assert "no levelling" in shown["start"].note
+    assert shown["filament"].value == ["printer"]
+    assert shown["filament"].note.endswith(": Creality Generic PLA")
+    start = resolved.configs["machine"]["machine_start_gcode"]
+    assert "G28 ; home all axis" in start and "M420" not in start and "G29" not in start
+
+
+def test_the_composed_start_reaches_the_gcode(fake_orcaslicer):
+    record, _ = _slice(_target())
+    text = Path(devices.prints_dir() / f"{record.file_id}.gcode").read_text()
+    lines = text.splitlines()
+    homes = lines.index("G28 ; home all axis")
+    first = next(i for i, line in enumerate(lines) if " E" in line and line.startswith("G1"))
+    assert homes < first and not [line for line in lines if line.startswith(("M420", "G29"))]
+
+
+@pytest.mark.parametrize(
+    "kind, named, said",
+    [
+        ("start", ["home", "stored-mesh"], "'stored-mesh' is a stub, not built yet"),
+        ("start", ["home", "probe-each-print"], "what it will do: after G28, probe the bed"),
+        ("start", ["home", "first-layer-offset"], "'first-layer-offset' is a stub"),
+        ("start", ["stored-mesh", "home"], "is a stub"),
+        ("start", [], "a start begins with 'home'"),
+        ("start", ["home", "levelling"], "no start piece 'levelling'"),
+        ("filament", ["choose"], "the filament piece 'choose' is a stub"),
+        ("filament", [], "one filament piece, not 0"),
+    ],
+)
+def test_a_profile_that_names_a_stub_or_no_such_piece_is_refused_before_anything_is_built(
+    fake_orcaslicer, kind, named, said
+):
+    profile = load_profile("ender3")
+    setattr(profile, kind, profile.start.model_copy(update={"modules": named}))
+    with pytest.raises(SlicerError, match=re.escape(said)):
+        get_module("orcaslicer").settings(profile, Declared(by="part x"))
+    assert fake_calls(fake_orcaslicer) == []  # not even OrcaSlicer's --help
+
+
+def test_a_start_that_does_not_home_is_refused(fake_orcaslicer):
+    from slicer_helpers import CREALITY
+
+    common = CREALITY["machine"]["fdm_creality_common"]
+    profiles = fake_orcaslicer.parent.parent / "resources" / "profiles" / "Creality" / "machine"
+    without = dict(common, machine_start_gcode="M140 S60\nM104 S200")
+    (profiles / "fdm_creality_common.json").write_text(json.dumps(without))
+    with pytest.raises(SlicerError, match=r"does not home \(no G28\)"):
+        get_module("orcaslicer").settings(load_profile("ender3"), Declared(by="part x"))
+
+
+def test_every_piece_says_what_it_does_and_the_stubs_are_the_ones_decided():
+    from apothecary.slicer import compose
+
+    assert [(p.kind, p.id) for p in compose.pieces() if not p.stub] == [
+        ("start", "home"),
+        ("filament", "printer"),
+    ]
+    assert {(p.kind, p.id) for p in compose.pieces() if p.stub} == {
+        ("start", "stored-mesh"),
+        ("start", "probe-each-print"),
+        ("start", "first-layer-offset"),
+        ("filament", "choose"),
+        ("declared", "word-print-settings"),
+    }
+    assert all(p.does for p in compose.pieces())
+
+
+def test_a_word_declaring_print_settings_is_a_stub_in_the_shape_a_part_declares():
+    from pydantic import ValidationError
+
+    from apothecary.vocabulary import starter_words
+    from apothecary.vocabulary.word import WORD_PRINT_SETTINGS_STUB, Word
+
+    assert Word.model_fields["print_settings"].annotation == PrintSettings | None
+    words = starter_words()
+    assert all(words.get(name).print_settings is None for name in words.names())
+    with pytest.raises(ValidationError, match="a word's print settings are a stub"):
+        Word(
+            name="bin",
+            describes="a box",
+            build=lambda name, shape: None,
+            print_settings=PrintSettings(layer_height=0.12),
+        )
+    assert "printer's values" in WORD_PRINT_SETTINGS_STUB
+
+
+def test_a_pieces_slice_says_its_word_declares_nothing_yet(fake_orcaslicer):
+    from apothecary.vocabulary.word import WORD_PRINT_SETTINGS_STUB
+
+    target = service.Target(
+        made=Made(kind="piece", name="disc_1", site="garage", path="disc_1", word="disc"),
+        declared=Declared(by="piece disc_1, made as disc", note=WORD_PRINT_SETTINGS_STUB),
+        stl=lambda log: CUBE_STL,
+    )
+    record, _ = _slice(target)
+    first = record.settings[0]
+    assert (first.name, first.value, first.origin) == ("print settings", "none declared", "printer")
+    assert first.source == "piece disc_1, made as disc" and first.note == WORD_PRINT_SETTINGS_STUB

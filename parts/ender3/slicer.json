@@ -1,6 +1,14 @@
 {
   "about": "printer_1's slicer profile: an Ender 3 (2018) with a 0.4 mm nozzle and a TH3D EZABL probe, on Marlin TH3D UFW 2.94a. It starts from OrcaSlicer's own Creality Ender-3 profiles, read from the installed release at each slice (none is copied here), and holds what the bench measured. Each value says where it came from. apothecary/slicer/profiles.py reads it.",
   "slicer": "orcaslicer",
+  "start": {
+    "modules": ["home"],
+    "source": "the owner's decision of 2026-10-10 (docs/plans/slicer-2026-10-10.md): the start of a print is composed from modules as they are wanted; homing, with no levelling, for now -- using the stored mesh, probing each print and a measured first-layer offset are stubs"
+  },
+  "filament": {
+    "modules": ["printer"],
+    "source": "the owner's decision of 2026-10-10 (docs/plans/slicer-2026-10-10.md): the printer's one filament, Creality Generic PLA, named below; choosing another is a stub"
+  },
   "orcaslicer": {
     "vendor": "Creality",
     "machine": "Creality Ender-3 0.4 nozzle",
@@ -44,13 +52,13 @@
       "value": {"x": -44.0, "y": -10.0, "z": -3.15},
       "unit": "mm",
       "source": "docs/validation/2026-09-20-ender-bench.md: M851 X-44.00 Y-10.00 Z-3.15",
-      "used": "not by the slicer: the firmware applies it when G28 homes Z with the probe; z_offset stays 0"
+      "used": "held, and nothing is applied: the firmware applies it when G28 homes Z with the probe, so z_offset stays 0; a measured first-layer offset is the start piece first-layer-offset, a stub"
     },
     "bed_mesh": {
       "value": {"range": 2.34, "tilt_x": 1.754, "tilt_y": -0.466, "points": "5 x 5", "leveling": "off"},
       "unit": "mm",
       "source": "docs/validation/2026-09-20-ender-bench.md: M420 V, the stored mesh as it was last probed",
-      "used": "not by the slicer: OrcaSlicer's start G-code does not turn the stored mesh on (M420 S1), and the bench says to tram the bed before trusting it"
+      "used": "held, and nothing is applied: the start is home alone; turning the stored mesh on (M420 S1, the start piece stored-mesh) and probing each print (probe-each-print) are stubs, and the bench says to tram the bed before trusting it"
     }
   }
 }

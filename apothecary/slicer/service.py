@@ -218,6 +218,17 @@ def slice_into(
         f"({printer.profile.file}) with {module.label} {status.tool.version}"
     )
     resolved = module.settings(printer.profile, target.declared)
+    if target.declared.note:
+        resolved.settings.insert(
+            0,
+            Setting(
+                name="print settings",
+                value="none declared",
+                origin="printer",
+                source=target.declared.by,
+                note=target.declared.note,
+            ),
+        )
     for setting in resolved.settings:
         runner.log(f"  {setting.name} = {setting.value!r}  [{setting.origin}: {setting.source}]")
     stl = target.stl(runner.log)

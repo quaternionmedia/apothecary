@@ -79,6 +79,19 @@ def test_the_status_says_each_slicer_the_one_used_and_the_printers(fake_orcaslic
     assert orca["pinned"] == "2.4.2" and orca["tool"]["version"] == "2.4.2"
     assert (orca["technology"], orca["inputs"], orca["writes"]) == ("FFF", [".stl"], [".gcode"])
     assert orca["problems"] == []
+    # What a slice can be composed from: each piece says what it does; the stubs say so.
+    pieces = {(p["kind"], p["id"]): p for p in body["pieces"]}
+    assert not pieces[("start", "home")]["stub"] and not pieces[("filament", "printer")]["stub"]
+    for stub in (
+        ("start", "stored-mesh"),
+        ("start", "probe-each-print"),
+        ("start", "first-layer-offset"),
+        ("filament", "choose"),
+        ("declared", "word-print-settings"),
+    ):
+        assert pieces[stub]["stub"] and pieces[stub]["does"], stub
+    assert "M420 S1" in pieces[("start", "stored-mesh")]["does"]
+    assert "G29" in pieces[("start", "probe-each-print")]["does"]
 
 
 def test_a_part_is_sliced_for_a_site_printer_and_kept_in_the_print_cards_file_box(
@@ -171,6 +184,9 @@ def test_a_made_piece_is_sliced_from_its_nodes_render_with_the_printers_settings
     origins = {s["name"]: s["origin"] for s in record["settings"]}
     assert "declared" not in origins.values()
     assert origins["layer_height"] == origins["wall_loops"] == "printer"
+    # The word's print settings are a stub, and the answer says so.
+    said = next(s for s in record["settings"] if s["name"] == "print settings")
+    assert said["source"] == "piece bin_1, made as bin" and "a stub" in said["note"]
     assert devices.print_file(record["file_id"]).name == "bin_1.gcode"
 
 

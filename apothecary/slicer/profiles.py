@@ -11,7 +11,11 @@
   installed release at each slice -- none of them is copied here) and, under
   ``set``, each value the printer holds over them, with its ``source``;
 - ``measured``: what the bench measured of this machine, each with its source and
-  how a slice uses it -- or why it does not.
+  how a slice uses it -- or why it does not;
+- ``start`` and ``filament``: the pieces (``compose.py``) the start of its prints
+  and its filament are composed from, each with its source. printer_1's start is
+  ``home`` -- homing, with no levelling -- and its filament ``printer``, the one
+  its profile names.
 
 **A part's print settings** are what its wrapper declares: ``print_settings``, a
 ``PrintSettings`` (apothecary/models/units.py) -- the shape the readiness check
@@ -19,7 +23,8 @@
 the fields the wrapper set are the part's (``model_fields_set``); the model's own
 defaults are not a declaration, and the printer's profile fills those, as it
 fills every value the shape has no field for. A piece made from a picture
-declares none today, so its slice is the printer's throughout.
+slices with the printer's values: a word declaring print settings for the pieces
+made as it is a stub (``Word.print_settings``, the same shape), refused if set.
 """
 
 from __future__ import annotations
@@ -46,6 +51,13 @@ class Measured(BaseModel):
     used: str
 
 
+class Chosen(BaseModel):
+    """The pieces of one kind a printer's slices are composed from, and why."""
+
+    modules: List[str]
+    source: str
+
+
 class PrinterProfile(BaseModel):
     """A printer's slicer profile, as its part keeps it."""
 
@@ -55,6 +67,12 @@ class PrinterProfile(BaseModel):
     slicer: str
     sections: Dict[str, dict] = Field(default_factory=dict)  # each module's own
     measured: Dict[str, Measured] = Field(default_factory=dict)
+    start: Chosen = Field(
+        default_factory=lambda: Chosen(modules=["home"], source="apothecary's default")
+    )
+    filament: Chosen = Field(
+        default_factory=lambda: Chosen(modules=["printer"], source="apothecary's default")
+    )
 
     def section(self, module_id: str) -> dict:
         found = self.sections.get(module_id)
@@ -90,7 +108,8 @@ def read_profile(part_name: str, path: Path) -> PrinterProfile:
         rel = path.resolve().relative_to(_root().resolve()).as_posix()
     except ValueError:
         rel = str(path)
-    known = {"about", "slicer", "measured"}
+    known = {"about", "slicer", "measured", "start", "filament"}
+    chosen = {kind: data[kind] for kind in ("start", "filament") if kind in data}
     try:
         return PrinterProfile(
             part=part_name,
@@ -99,6 +118,7 @@ def read_profile(part_name: str, path: Path) -> PrinterProfile:
             slicer=str(data.get("slicer", "")),
             sections={k: v for k, v in data.items() if k not in known and isinstance(v, dict)},
             measured=data.get("measured") or {},
+            **chosen,
         )
     except ValidationError as exc:
         raise SlicerError(f"{path}: not a slicer profile ({exc.errors()[0]['msg']})") from exc
@@ -155,6 +175,7 @@ class Declared:
 
     by: str  # in words: "part calibration_cube", "piece box_1"
     values: Dict[str, float] = field(default_factory=dict)
+    note: Optional[str] = None  # why it declares none, where that is worth saying
 
     @classmethod
     def of(cls, settings, by: str) -> "Declared":
