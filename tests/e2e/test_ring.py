@@ -687,9 +687,7 @@ def test_a_closed_panel_stays_closed_and_the_ring_reopens_it(page: Page, ring_ur
     page.keyboard.press(panels_cell)
     assert _title(page) == "Panels"
     inner = _wedges(page)
-    assert sorted(inner.values()) == [
-        "Bench", "Machine", "Pictures", "Rail", "Selected", "Site", "View",
-    ]  # fmt: skip
+    assert sorted(inner.values()) == ["Bench", "Machine", "Pictures", "Rail", "Selected", "Site"]
     site_cell = next(cell for cell, label in inner.items() if label == "Site")
     page.keyboard.press(site_cell)
     expect(page.locator("#ring-overlay")).to_have_count(0)

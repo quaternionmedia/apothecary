@@ -41,10 +41,9 @@
             background: #404040; color: #e0e0e0;
         }
         .toolbar button:hover, .view-menu > summary:hover, .view-menu[open] > summary { background: #505050; }
-        .toolbar button:disabled { opacity: 0.4; cursor: not-allowed; }
         .toolbar .spacer { flex: 1 1 0; min-width: 0; }
         /* The View menu: how the world is drawn, folded behind ⚙ View as Site's
-           sections fold; each item a cell of the canvas ring's Panels › View. */
+           sections fold; each item a cell of the canvas ring's View. */
         .view-menu { position: relative; }
         .view-menu > summary { list-style: none; user-select: none; }
         .view-menu > summary::-webkit-details-marker { display: none; }
@@ -54,9 +53,6 @@
             padding: 0.65rem 0.8rem; background: #252525; border: 1px solid #3a3a3a; border-radius: 6px;
             box-shadow: 0 8px 24px rgba(0,0,0,0.55);
         }
-        .view-menu-body select { min-width: 0; padding: 0.15rem 0.3rem; }
-        .toolbar .toolbar-link { color: #9cd2ff; font-size: 0.85rem; text-decoration: none; }
-        .toolbar .toolbar-link:hover { text-decoration: underline; }
         .validity-indicator {
             font-size: 0.85rem; padding: 0.35rem 0.75rem; border-radius: 4px;
             font-weight: 600;
@@ -64,9 +60,9 @@
         .validity-indicator.valid { background: #1e4620; color: #6fdb75; }
         .validity-indicator.invalid { background: #4a1e1e; color: #ff8080; }
 
-        /* The trail: where you are, a crumb going up to its level (Zoom Out was
-           this). The one part of the header that gives way: too long for its row,
-           its start is cut, so the level being looked at stays in view. */
+        /* The trail: where you are, a crumb going up to its level. The one part of
+           the header that gives way: too long for its row, its start is cut, so
+           the level being looked at stays in view. */
         #breadcrumb {
             flex: 0 1 auto; min-width: 3rem; overflow: hidden; text-overflow: ellipsis;
             direction: rtl; text-align: left; font-size: 0.85rem; color: #999;
@@ -74,6 +70,7 @@
         #breadcrumb .trail { direction: ltr; unicode-bidi: isolate; }
         #breadcrumb .crumb { cursor: pointer; color: #9cd2ff; }
         #breadcrumb .crumb:hover { text-decoration: underline; }
+        /* An item of the View menu: a tick-box or a drop-down, with its words. */
         .toolbar-toggle {
             display: flex; align-items: center; gap: 0.35rem;
             font-size: 0.85rem; color: #ccc; cursor: pointer; user-select: none;
@@ -84,11 +81,14 @@
 
         .viewer-panel { flex: 2; min-width: 0; position: relative; background: #111; }
         #viewer-canvas { width: 100%; height: 100%; display: block; }
-        /* The hint bar: on a first visit, faded away after a few actions; ? shows it again. */
+        /* The hint bar: on a first visit, faded away after a few actions; ? shows it
+           again. One line: short enough for the world at 1024 px wide, and cut
+           rather than wrapped in a narrower one. */
         .viewer-hint {
-            position: absolute; bottom: 1rem; left: 1rem;
+            position: absolute; bottom: 1rem; left: 1rem; max-width: calc(100% - 2rem);
             background: rgba(0,0,0,0.7); padding: 0.5rem 0.75rem;
             border-radius: 4px; font-size: 0.75rem; color: #888;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
             pointer-events: none; transition: opacity 0.6s;
         }
         .viewer-hint.faded { opacity: 0; }
@@ -133,11 +133,13 @@
            shown under it. A tab carries its panel's name, and shown, its float
            and close; the panel's own title bar is the tab. */
         .panel-tabstrip {
-            flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 2px; padding: 0.3rem 0.4rem 0;
+            flex: 0 0 auto; display: flex; flex-wrap: nowrap; gap: 2px; padding: 0.3rem 0.4rem 0;
             background: #191919; border-top: 1px solid #333; border-bottom: 1px solid #333; margin-top: auto;
         }
         .panel-tabstrip[hidden], .panel-tabbody[hidden] { display: none; }
-        .rail-tab { display: flex; align-items: center; background: #202020; border: 1px solid #333; border-bottom: 0; border-radius: 4px 4px 0 0; margin-bottom: -1px; }
+        /* One row of tabs: a name too long for the rail is cut, never wrapped. */
+        .rail-tab { display: flex; align-items: center; min-width: 0; background: #202020; border: 1px solid #333; border-bottom: 0; border-radius: 4px 4px 0 0; margin-bottom: -1px; }
+        .rail-tab .rail-tab-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .rail-tab.active { background: #1e1e1e; border-color: #4a4a4a; }
         .rail-tab button { background: none; border: 0; color: #999; font: inherit; font-size: 0.8rem; cursor: pointer; padding: 0.3rem 0.55rem; line-height: 1; }
         .rail-tab button:hover { color: #eee; }
@@ -191,8 +193,6 @@
         .panel.collapsed .panel-body-slot { display: none; }
         .panel-free-layer { position: absolute; inset: 0; pointer-events: none; }
         .panel-free-layer .panel { pointer-events: auto; }
-        .panel-leaders { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-        .panel-leader { stroke: #6fb3e8; stroke-width: 1.5; stroke-dasharray: 4 3; opacity: 0.8; }
         .panel-tabs { position: absolute; right: 0.5rem; bottom: 2.6rem; display: flex; gap: 0.3rem; pointer-events: auto; }
         .panel-tabs[hidden] { display: none; }
         .panel-tab {
@@ -511,7 +511,7 @@
             <span id="breadcrumb" title="Where you are: a crumb goes up to its level (Backspace goes up one)"></span>
             <div class="spacer"></div>
             <details id="view-menu" class="view-menu">
-                <summary title="How the world is drawn (⌗ Panels › View)">⚙ View</summary>
+                <summary title="How the world is drawn">⚙ View</summary>
                 <div class="view-menu-body">
                     <label class="toolbar-toggle" title="Snap dragged positions to a 50mm grid -- keeps hand-placed layouts exact instead of off by a few millimeters">
                         <input type="checkbox" id="snap-toggle" checked> Snap to grid
@@ -533,13 +533,13 @@
                 </div>
             </details>
             <button type="button" id="ring-open" title="Open the ring for the chosen piece (m, or right-click a piece). Digits choose cells as on a numeric keypad; 5 backs out.">⌗ Ring</button>
-            <span id="validity-indicator" class="validity-indicator valid" title="The site's problems: click to open them at the top of Site">Layout valid</span>
+            <span id="validity-indicator" class="validity-indicator valid" title="The site's problems: click to unfold them in Site">Layout valid</span>
         </div>
         <div class="main-content">
             <div class="viewer-panel">
                 <canvas id="viewer-canvas"></canvas>
                 <div id="minimap"></div>
-                <div class="viewer-hint" id="viewer-hint">Click to select • Double-click (or scroll past the edge) to zoom in • Drag arrows to move • Shift+drag to pan • ? shows or hides this</div>
+                <div class="viewer-hint" id="viewer-hint">Click: select • Double-click, or scroll past the edge: go in • Drag an arrow: move • Shift+drag: pan • ?: hide this</div>
             </div>
             <div class="side-panel">
                 <div class="panel-section" data-panel="site" data-zone="stack">
@@ -1027,7 +1027,10 @@
                 // board, and a printer's nozzle, bed and reading at its node. The
                 // badges keep out of each other's way there, every badge alike.
                 // Both survive renderFocus(), which clears only the nodes' meshes.
-                this.anchors = mountAnchors({ container: this.canvas.parentElement, canvas: this.canvas, camera: this.camera, scene: this.scene });
+                this.anchors = mountAnchors({
+                    container: this.canvas.parentElement, canvas: this.canvas, camera: this.camera, scene: this.scene,
+                    keepClear: () => [this.hintEl, this.minimapEl],  // no badge's words over these
+                });
                 // The side column's sections become panels in the one rail: Site and
                 // Selected stacked at its top, each one closable, collapsible and
                 // draggable free; what a person did to them is remembered per
@@ -1154,7 +1157,7 @@
                 this.siteSelect.addEventListener('change', () => this.loadSite(this.siteSelect.value));
                 // The View menu folds away when a press lands anywhere else, as a menu does.
                 document.addEventListener('pointerdown', (e) => this.foldViewMenu(e));
-                // The toolbar's count of problems opens them, at the top of Site.
+                // The header's count of problems unfolds them in Site.
                 this.validityEl.addEventListener('click', () => this.openProblems());
                 // A row of Site's Jobs selects its machine, at its level, and opens it.
                 this.siteJobsListEl.addEventListener('click', (e) => {
@@ -1209,7 +1212,7 @@
                 // The board model says what changed of a board, or that it scanned: every
                 // drawer of it follows from the one event.
                 window.addEventListener('apothecary:board', (ev) => this.boardChanged(ev.detail));
-                // A bed reading shown in the machine popup lands on the marks, and a
+                // A bed reading shown in a printer's Machine lands on the marks, and a
                 // jog sent from it moves the nozzle ahead of the poll that confirms it.
                 window.addEventListener('apothecary:mesh', (ev) => {
                     for (const m of Object.values(this.marks)) if (m.marks && ev.detail && ev.detail.port === m.port) m.marks.setMesh(ev.detail);
@@ -1234,7 +1237,6 @@
                 this.sizeCameraHandles();
                 for (const m of Object.values(this.marks)) if (m.marks) m.marks.tick();
                 this.anchors.update();
-                this.panels.update((key) => this.anchors.at(key));
                 this.renderer.render(this.scene, this.camera);
             }
 
@@ -1457,7 +1459,7 @@
             }
 
             // A crumb of the trail: up to its level. One level up is the "-1" control
-            // itself, Zoom Out as it was -- a crumb, Backspace and the ring's Up all
+            // itself (zoomOut) -- a crumb, Backspace and the ring's Up all
             // land on the node just left; further up, nothing is selected.
             goUpTo(depth) {
                 if (depth === this.focusPath.length - 1) this.zoomOut();
@@ -1615,7 +1617,7 @@
             // A leaf is always drawn in full -- "black box" and "dot" exist to
             // stand in for a subassembly, and a leaf has no inside to hide. So
             // the detail level only ever applies to a node with children, and
-            // a per-node override beats the toolbar default.
+            // a per-node override beats the View menu's Detail.
             effectiveDetailFor(node, key) {
                 if (!node.children || !node.children.length) return DETAIL_FULL;
                 return this.detailOverrides.get(key) || this.detailMode;
@@ -1757,7 +1759,10 @@
             // for the page's session (a wall's row in Site selects it either way).
             setWallsSelectable(on) {
                 this.wallsSelectable = !!on;
-                this.setStatus(on ? 'A click in the world picks walls, until the page is left' : 'A click in the world passes through walls', 'success');
+                this.setStatus(this.wallsSaid(), 'success');
+            }
+            wallsSaid() {
+                return this.wallsSelectable ? 'Walls selectable: a click in the world picks a wall, until the page is left' : 'Walls not selectable: a click in the world passes through them';
             }
 
             // A wireframe-only box showing the usable print area within a
@@ -1920,14 +1925,14 @@
                 if (this.viewMenuEl.open && !this.viewMenuEl.contains(event.target)) this.viewMenuEl.open = false;
             }
 
-            // A cell of the canvas ring's Panels › View: what its item in the View menu
+            // A cell of the canvas ring's View: what its item in the View menu
             // does, done to that item (as a person would), so the two never disagree.
             // Answers what the status line says.
             viewVerb(verb) {
                 const flip = (box) => { box.checked = !box.checked; box.dispatchEvent(new Event('change')); return box.checked; };
-                if (verb === 'snap') return flip(this.snapToggle) ? 'Snapping to the grid' : 'Not snapping to the grid';
-                if (verb === 'outlines') return flip(this.overlayToggle) ? 'Assembly outlines shown' : 'Assembly outlines hidden';
-                if (verb === 'walls') return flip(this.wallsToggle) ? 'A click in the world picks walls' : 'A click in the world passes through walls';
+                if (verb === 'snap') return flip(this.snapToggle) ? 'Snap to grid: on' : 'Snap to grid: off';
+                if (verb === 'outlines') return flip(this.overlayToggle) ? 'Assembly outlines: shown' : 'Assembly outlines: hidden';
+                if (verb === 'walls') { flip(this.wallsToggle); return this.wallsSaid(); }
                 if (verb.startsWith('detail:') && DETAIL_LABELS[verb.slice('detail:'.length)]) {
                     this.detailModeEl.value = verb.slice('detail:'.length);
                     this.detailModeEl.dispatchEvent(new Event('change'));
@@ -2575,7 +2580,7 @@
                     .join('');
                 return `<div class="prop-row">
                           <label>Detail</label>
-                          <select class="detail-select" title="How much of this subassembly to draw. Overrides the toolbar default for this node only.">${options}</select>
+                          <select class="detail-select" title="How much of this subassembly to draw. Overrides the View menu's Detail for this node only.">${options}</select>
                         </div>`;
             }
 
@@ -2584,7 +2589,7 @@
                 if (!select) return;
                 const key = this.selectedName;
                 select.addEventListener('change', () => {
-                    // Matching the toolbar default is stored as "no override",
+                    // Matching the View menu's Detail is stored as "no override",
                     // so a later change to the default still reaches this node
                     // instead of it being silently pinned.
                     if (select.value === this.detailMode) this.detailOverrides.delete(key);
@@ -3499,7 +3504,7 @@
                 return true;
             }
 
-            // The toolbar's count: Site opened (and the rail shown, where it is
+            // The header's count: Site opened (and the rail shown, where it is
             // docked), unfolded, its problems' fold opened, and scrolled to them.
             openProblems() {
                 this.panels.open('site');
@@ -3749,9 +3754,12 @@
                 const inPrinter = !!(bearer && PRINTER_STATUSES.includes(bearer.status));
                 this.panels.register('machine', {
                     title: anchor ? `${anchor} · ${port}` : `${port} · pinned nowhere in ${this.siteName}`,
+                    // Its tab, beside Pictures and the Bench: the node's name (the
+                    // port's last part, pinned nowhere); the whole title its tooltip.
+                    tab: anchor ? anchor.split('.').pop() : (port.split('/').pop() || port),
                     body: (slot) => {
                         machine.handle = mountMachine(slot, {
-                            base: BASE_URL, port, host: 'popup', boards: this.boards, inPrinter,
+                            base: BASE_URL, port, host: 'world', boards: this.boards, inPrinter,
                             pin: row ? { site: this.siteName, path: row.path, how: row.binding_source, sketch: row.sketch || null } : null,
                             say: (text, kind) => this.setStatus(text, kind),
                         });
@@ -4256,7 +4264,7 @@
             // the distance at either extreme, further scroll in the same
             // direction accumulates instead of doing nothing, and crossing a
             // resistance threshold triggers the same zoom-in/zoom-out a
-            // click or the toolbar button would -- continuous and discrete
+            // double-click or a crumb would -- continuous and discrete
             // navigation both drive the same two actions.
             onWheel(event) {
                 const distance = this.orbitControls.getDistance();
@@ -4506,7 +4514,7 @@
     // The ring. Drawing and keys live in /static/ring.js; this is only the
     // wiring: what the ring opens on, what each chosen verb calls, and the
     // addresses written onto the controls the page already has.
-    import { installRing, annotate, resolveRing } from '/static/ring.js';
+    import { installRing, annotate, addressOf, resolveRing } from '/static/ring.js';
 
     (() => {
         const BASE = {{ base_url | tojson }};
@@ -4789,10 +4797,14 @@
         ];
         // The list, from the canvas ring: each row at this level is a piece the
         // ring's Pieces cell reaches, and the trail's crumb one level up is its Up;
-        // the View menu's items, Panels › View; and the Bench's buttons, its verbs
-        // under Panels › Bench.
+        // the View menu, the cell View (its items, View's cells); and the Bench's
+        // buttons, its verbs under Panels › Bench.
         function annotateList(ring) {
             if (!ring) return;
+            const viewAt = addressOf(ring, ['view']);
+            const summary = viewer.viewMenuEl.querySelector('summary');
+            summary.title = `How the world is drawn${viewAt ? ` · ⌗${viewAt}` : ''}`;
+            if (viewAt) summary.dataset.address = viewAt; else delete summary.dataset.address;
             const pairs = [];
             for (const li of viewer.contentsEl.querySelectorAll('li[data-path]')) pairs.push([li, `select:${li.dataset.path}`]);
             const crumbs = viewer.breadcrumbEl.querySelectorAll('.crumb');
