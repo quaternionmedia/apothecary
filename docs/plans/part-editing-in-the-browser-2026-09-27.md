@@ -144,9 +144,10 @@ The docs' "thirty seconds of OpenSCAD" (`tests/test_staging.py`,
   parameter contract (`source: "customizer"`; booleans, strings, choices
   with their options, vectors, groups and steps); a 404's `detail` says when
   the OpenSCAD in use cannot list them (2021.01, `lists: false`). Validate
-  and generate check a staged set against the same list. A model's boolean
-  field is a `boolean` now, not a slider. The page's controls for the new
-  kinds come with the editor.
+  and generate check a staged set against the same list. The page's controls
+  for the new kinds come with the editor, and a model's boolean field becomes
+  a `boolean` with them (today the page draws it as a slider, and a field
+  typed `boolean` would lose its control until then).
 - Part verbs join the ring (Apply, Revert, Edit, Variants), per the
   one-screen plan.
 
