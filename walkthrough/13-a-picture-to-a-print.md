@@ -6,9 +6,9 @@ rewritten by every run of the browser suite (`uv run apothecary test
 run --e2e`), though not by the quicker `apothecary test run`. Editing it
 by hand is editing the output of a program: the next run puts it back.
 
-A camera over the bench, a picture taken, its shapes found, one made a piece, the piece adjusted, and a print job for it on printer_1, watched to its end in printer_1's Machine; then round again with the camera turned, for a second piece and a second print. Every step is the page's own: a cell of a ring, a button, a key or a box, and every step's words name the next one.
+A camera over the bench, a picture taken, its shapes found, one made a piece, the piece adjusted, sliced for printer_1, and a print job for it on printer_1, watched to its end in printer_1's Machine; then round again with the camera turned, for a second piece, sliced from its own ring, and a second print. Every step is the page's own: a cell of a ring, a button, a key or a box, and every step's words name the next one.
 
-**Runtime-bound.** It drives a real browser against a real server of its own. The browser's camera is Chromium's fake one, playing a drawing of three shapes, and the printer is the simulated one, pinned to printer_1's board as the bench's real board is. It needs no network, opens no serial port, and refuses both.
+**Runtime-bound.** It drives a real browser against a real server of its own. The browser's camera is Chromium's fake one, playing a drawing of three shapes, the slicer a scripted stand-in for OrcaSlicer's command line, and the printer the simulated one, pinned to printer_1's board as the bench's real board is. It needs no network, opens no serial port, and refuses both.
 
 ---
 
@@ -70,11 +70,15 @@ The piece's ring, Part › Edit: its parameters in Selected, under where it came
 disc_1 rebuilt 173.2 × 172.2 × 5.1 mm; found 173.2 × 172.2, thickness a person's: a printer's Machine prints it
 ```
 
-## 7. printer_1's Machine offers the piece to print
+## 7. Slice, in printer_1's Machine, slices the piece and chooses its G-code
 
-printer_1's ring, Device › Open: its Machine in the rail, beside Selected. Print from here keeps a file a slicer wrote for disc_1, and lists the pieces of the garage under makes; disc_1 is chosen, and control is armed.
+printer_1's ring, Device › Open: its Machine in the rail, beside Selected. Print from here lists the pieces of the garage under makes; disc_1 chosen, its Slice slices it for printer_1, the slicer's log in the card while it runs. The G-code it kept is chosen in the card's files, saying what it was sliced from and for which printer, and the card lists what the slice used -- each value from the printer's profile, a piece declaring none -- with the slicer's estimate; control is armed.
 
-![printer_1's Machine offers the piece to print](screenshots/13-07-printer-1-s-machine-offers-the-piece-to-print.png)
+![Slice, in printer_1's Machine, slices the piece and chooses its G-code](screenshots/13-07-slice-in-printer-1-s-machine-slices-the-piece-and-.png)
+
+```
+disc_1.gcode kept and chosen: sliced from disc_1 for printer_1, 1h 2m 3s, 0.79 g of filament, 15 layers; ▶ Print prints it
+```
 
 ## 8. Print starts a job that names the piece
 
@@ -82,9 +86,9 @@ Print from here's ▶ Print asks first, naming the file, the port and disc_1; th
 
 ```
 Print disc_1.gcode on /dev/ttyFAKE1, making disc_1?
-123 lines will stream from here; the printer will heat and move.
+163 lines will stream from here; the printer will heat and move.
 
-started disc_1.gcode on /dev/ttyFAKE1, making disc_1: Print from here follows it to its end, and Site's Jobs lists it
+disc_1.gcode on /dev/ttyFAKE1, making disc_1, ended: done, 163/163 lines
 ```
 
 ## 9. The job ends, and says so where it is watched
@@ -92,8 +96,8 @@ started disc_1.gcode on /dev/ttyFAKE1, making disc_1: Print from here follows it
 The status line says the print ended and how; the Machine's progress reads done, every line sent; its history keeps the job with the piece it made, and Site's Jobs lists it under printer_1. The job's record keeps the picture and the camera the piece came from, and its row does not show them.
 
 ```
-disc_1.gcode on /dev/ttyFAKE1, making disc_1, ended: done, 123/123 lines
-disc_1.gcode · done · 123/123 lines (100.0%)
+disc_1.gcode on /dev/ttyFAKE1, making disc_1, ended: done, 163/163 lines
+disc_1.gcode · done · 163/163 lines (100.0%)
 printer_1 · print · disc_1.gcode → disc_1 · done
 ```
 
@@ -118,14 +122,14 @@ Find shapes and Make on the second picture: plate_1 stands beside disc_1. Part �
 plate_1 rebuilt 38.5 × 129.9 × 19.5 mm; found 238.2 × 129.9, thickness a guess: a printer's Machine prints it
 ```
 
-## 12. Print, on the piece's ring, chooses it in printer_1's Machine
+## 12. Slice, on the piece's ring, slices it in printer_1's Machine
 
-plate_1's ring ends with Print, a printer being pinned in the garage: it brings printer_1's Machine forward with plate_1 chosen under makes -- listed there already, though the Machine stayed open while it was made -- and the status line names the next step. A file sliced for it is kept beside it.
+plate_1's ring ends with Print and Slice, a printer being pinned in the garage. Slice brings printer_1's Machine forward with plate_1 chosen under makes -- listed there already, though the Machine stayed open while it was made -- and slices it there; its G-code is chosen beside the first piece's, each saying what it was sliced from. The status line names ▶ Print.
 
-![Print, on the piece's ring, chooses it in printer_1's Machine](screenshots/13-12-print-on-the-piece-s-ring-chooses-it-in-printer-1-.png)
+![Slice, on the piece's ring, slices it in printer_1's Machine](screenshots/13-12-slice-on-the-piece-s-ring-slices-it-in-printer-1-s.png)
 
 ```
-Print: printer_1's Machine makes plate_1: choose its file in Print from here, then ▶ Print (⌗3)
+plate_1.gcode kept and chosen: sliced from plate_1 for printer_1, 1h 2m 3s, 0.79 g of filament, 15 layers; ▶ Print prints it
 ```
 
 ## 13. Send file prints the second, and both jobs name their pieces
@@ -135,16 +139,15 @@ printer_1's ring, Device › Control › Print › Send file, prints what the ca
 ![Send file prints the second, and both jobs name their pieces](screenshots/13-13-send-file-prints-the-second-and-both-jobs-name-the.png)
 
 ```
-plate_1.gcode on /dev/ttyFAKE1, making plate_1, ended: done, 123/123 lines
+plate_1.gcode on /dev/ttyFAKE1, making plate_1, ended: done, 163/163 lines
 printer_1 · print · plate_1.gcode → plate_1 · done
 printer_1 · print · disc_1.gcode → disc_1 · done
 ```
 
 ## What this page does not show
 
-- **A real camera or a real printer.** The camera plays a drawing and the printer is a simulation that answers as Marlin does; their real runs are steps of the bench checklist.
-- **Slicing.** The G-code each print streams is a short file kept through the card's own file box, as a file a slicer wrote from the piece would be. Apothecary keeps, checks and streams G-code; it does not make it.
-- **A print that heats.** The file moves the head and dwells; it sets no temperature, so the simulated hotend and bed stay cold.
+- **A real camera, a real slicer or a real printer.** The camera plays a drawing; the slicer is a script that answers as OrcaSlicer's command line does and writes a few layers of moves and dwells, whatever the piece; the printer is a simulation that answers as Marlin does. OrcaSlicer's real slices are docs/slicer.md's, and the camera's and the printer's real runs are steps of the bench checklist.
+- **A print that heats.** The start the slice writes sets the hotend and the bed, and the simulated printer is at what it is told at once; nothing warms, and the file turns both off at its end.
 - **What changes on every run.** When a print started and ended, how long it took, and the names pictures are kept under (the time each was taken) are blanked in the pictures and left out of the words, so this page changes when the loop does, not when the clock does. A running print is described rather than pictured, for the same reason.
 
 Run it yourself:
