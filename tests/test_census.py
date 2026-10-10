@@ -311,6 +311,16 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # it for the camera's own ring, which is new: Device, Live (Still while live), Take
 # picture, Remove and Part › Edit after a piece's Zoom in, Move and Why this. The
 # ceiling follows the count up by one, for a button the plan asks for.
+#
+# The loop from a picture to a print, and the owner's answers of 2026-10-10: a made
+# piece's ring ends with Print when a printer is pinned in its site, after Part, so
+# no cell above it moved; it opens the printer's Machine with the piece chosen under
+# Print from here's makes. A cell with no control of its own: `apothecary census`
+# prints the same report before and after, but for line numbers. The makes drop-down
+# (print-part) stays unbacked: Print chooses a made piece there, and makes lists the
+# site's parts as well, which no cell chooses. The Machine tells a print started and
+# a print ended in the status line, and an open Machine lists its site's parts again
+# when a piece is made, rebuilt or dropped; none of it adds a control or a listener.
 VIEWER_CEILING = 116
 
 

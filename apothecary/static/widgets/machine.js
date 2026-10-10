@@ -39,8 +39,9 @@
  * Device › Flash says why. `pin` ({ site, path, how }) is where the board is pinned, or bound
  * by its sketch when `how` is "sketch". `say(text,
  * kind)` is the host's status bar: a refusal is said there as an error as well
- * as in the log, and a print started is said there, naming where it is followed.
- * destroy() stops watching and frees what the module put on the window.
+ * as in the log; a print started is said there, naming where it is followed, and
+ * a print that ends, how it ended (failed, and why, as an error). destroy() stops
+ * watching and frees what the module put on the window.
  */
 
 import { mountBoards } from "/static/boards.js";
@@ -889,6 +890,13 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("print-card").scrollIntoView({ block: "nearest" });
         return $("print-part").value === path;
     }
+    // How a print that ran here ended, in the host's status bar: done or cancelled
+    // as said, failed as an error with its reason.
+    function toldEnded(job) {
+        const what = `${job.name} on ${state.port}${job.part ? `, making ${job.part}` : ""}`;
+        if (job.stage === "failed") { if (say) say(`${what}, failed: ${job.error || "no reason was given"}`, "error"); return; }
+        tell(`${what}, ended: ${job.stage}, ${job.sent}/${job.total} lines`);
+    }
     // A print followed until it ends; its end is told (the printer's jobs, the site's,
     // and a poll for the state it left), a print that was not running is only drawn.
     async function watchPrint() {
@@ -900,6 +908,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             renderPrint();
             if (prt.job.running) { prt.timer = setTimeout(watchPrint, 1000); return; }
             if (!was) return;
+            toldEnded(prt.job);
             await loadPrintJobs();
             emit("apothecary:jobs-changed", { port: state.port, job_id: prt.job.job_id });
             await pollNow();

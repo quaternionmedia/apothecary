@@ -354,8 +354,12 @@ operation a machine performs on a part. The job records its kind (`print`),
 the printer (its port, the board's own identity, the node it is pinned to),
 the site, the part or piece it makes when one is chosen on the card (the
 **makes** drop-down lists the parts and pieces of the site the printer is
-pinned in), the file it ran (name, size, SHA-256), when it started and
-finished, and how it ended -- done, cancelled or failed, with the reason. A
+pinned in; a piece made from a picture is chosen there by **Print** on its own
+ring, and its job keeps the picture and the camera it came from, in its record
+and not its row), the file it ran (name, size, SHA-256), when it started and
+finished, and how it ended -- done, cancelled or failed, with the reason; the
+status line says when a print starts and when it ends, or that it failed and
+why. A
 running job is what marks the printer's node `printing`, from the moment it
 starts; a hand-set `maintenance` is left alone. Jobs are kept under
 `~/.apothecary/jobs/`, this account's alone.
