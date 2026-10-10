@@ -76,6 +76,7 @@ One line per change, each with a link to where it is described. The format follo
 - A picture is drawn through its mapping: the mat laid point by point, its outlines the same way, a picture that landed nowhere on its camera, a live camera's video where it looks. ([code](apothecary/static/picture_marks.js))
 - Pictures shows thumbnails grouped by the camera that took them, the pictures no camera took last. ([test](tests/e2e/test_camera.py))
 - A picture to a print, held end to end: a browser test goes round twice through the page's own controls and ring cells -- a camera added and told its device, a picture taken, its shapes found, a piece made and adjusted, a print job for it on printer_1 watched to its end -- and writes the walkthrough page that shows it. ([page](walkthrough/13-a-picture-to-a-print.md))
+- A made piece's ring ends with Print when a printer is pinned in its site: the printer's Machine opens with the piece chosen under Print from here's *makes*. ([code](apothecary/menu.py))
 - Selected sizes the drawn look: the picture's width, or a chosen shape's long side; a look's row draws it. ([viewer](templates/fractal_viewer.html.j2))
 - A print is a job: one operation a machine performs on a part, kept in the state folder with its kind, machine, site, part, file, times and outcome; a kind of job belongs to a kind of machine, and a mill would register its own. ([code](apothecary/jobs.py))
 - `GET /jobs` by site, machine and kind, `GET /jobs/{id}`, and `GET /jobs/choices` for what a job on a machine can name. ([code](apothecary/routes/jobs.py))

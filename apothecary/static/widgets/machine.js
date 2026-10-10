@@ -27,8 +27,9 @@
  * mountMachine(root, { base, port, host, boards, kind, inPrinter, pin, say })
  * renders into `root` and returns the handle the ring drives (carry, pairs,
  * device), the world asks to list its site's parts again when a piece is made,
- * rebuilt or dropped (print.loadChoices), and the tests read (state, ctl, level,
- * print). `host` is "world": the
+ * rebuilt or dropped (print.loadChoices) and to choose the piece a made piece's
+ * Print names (print.choose), and the tests read (state, ctl, level, print).
+ * `host` is "world": the
  * world's page, a tab of its rail or floated, one board and everything inline in
  * one column (the monitor page, the other host, is a link to the world now).
  * `boards` is the page's model, made here when none is given.
@@ -812,7 +813,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // `jobs` is the printer's print jobs, running first then newest (GET /jobs): the
     // history. `choices` is what a job here can name (GET /jobs/choices): the parts
     // and pieces of the site the printer is pinned in.
-    const prt = { files: [], jobs: [], job: null, timer: null, choices: null };
+    // `wanted` is a part asked for from outside (print.choose), chosen once listed.
+    const prt = { files: [], jobs: [], job: null, timer: null, choices: null, wanted: null };
     function renderPrint() {
         const job = prt.job, running = !!(job && job.running);
         const paused = running && job.stage === "paused";
@@ -861,18 +863,31 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // rebuilt or dropped), so a Machine left open lists the piece made meanwhile;
     // what was chosen stays chosen while it is still there.
     async function loadChoices() {
-        const sel = $("print-part"), had = sel.value, port = state.port;
+        const sel = $("print-part"), port = state.port;
         let c = null;
         if (port && state.kind === "printer") { try { c = await api(`/jobs/choices?machine=${encodeURIComponent(port)}`); } catch (e) { c = null; } }
         if (port !== state.port) return;  // another port was chosen meanwhile
         prt.choices = c;
         const parts = (c && c.site && c.parts) || [];
+        // What is chosen now, read once the list is back: a choice made (or asked
+        // for) while an earlier list was on its way is not undone by its arrival.
+        const had = prt.wanted || sel.value;
+        if (prt.wanted && parts.some((p) => p.path === prt.wanted)) prt.wanted = null;
         sel.innerHTML = c && c.site
             ? '<option value="">— no part named —</option>' + parts.map((p) => `<option value="${esc(p.path)}">${esc(p.path)}${p.name !== p.path ? " · " + esc(p.name) : ""}</option>`).join("")
             : '<option value="">— pinned in no site —</option>';
         sel.disabled = !(c && c.site);
         if (had && parts.some((p) => p.path === had)) sel.value = had;
         $("print-where").textContent = c && c.site ? `in ${c.site}` : "";
+    }
+    // A made piece's Print, from its ring: the site's parts listed again and that
+    // piece chosen under makes, the card in view. True when it is among them.
+    async function choosePart(path) {
+        prt.wanted = path;
+        await loadChoices();
+        prt.wanted = null;
+        $("print-card").scrollIntoView({ block: "nearest" });
+        return $("print-part").value === path;
     }
     // A print followed until it ends; its end is told (the printer's jobs, the site's,
     // and a poll for the state it left), a print that was not running is only drawn.
@@ -1064,7 +1079,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         kind: () => state.kind,
         device, carry, pairs,
         level: { start: startLevel, corner: (which) => enqueue(cornerLines(which)), lines: cornerLines, records: () => level.records, shown: () => level.shown, load: loadLevel },
-        print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, jobs: () => prt.jobs, choices: () => prt.choices, load: loadPrintFiles, loadJobs: loadPrintJobs, loadChoices },
+        print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, jobs: () => prt.jobs, choices: () => prt.choices, load: loadPrintFiles, loadJobs: loadPrintJobs, loadChoices, choose: choosePart },
         destroy() {
             if (state.port) model.unwatch(state.port, who);
             clearTimeout(level.timer); clearTimeout(prt.timer); clearInterval(ctl.timer);

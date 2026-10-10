@@ -111,9 +111,11 @@ def _pictures_known(
     site: Optional[str], told: Optional[PictureContext], context: Optional[Context] = None
 ) -> PictureContext:
     """What the page told about pictures, with what only the server knows put in:
-    the site's made pieces and cameras, the vocabulary's words, the finders that
-    can read the drawn view's picture, and -- on a ring opened on a camera -- that
-    camera's device, from its record. A page cannot claim these, so it is never asked."""
+    the site's made pieces, cameras and pinned printers, the vocabulary's words,
+    the finders that can read the drawn view's picture, and -- on a ring opened on
+    a camera -- that camera's device, from its record. A page cannot claim these,
+    so it is never asked."""
+    from ..api import printers_in
     from ..menu import CameraSeen, Pointing
     from ..vision import cameras
     from ..vision import views as viewing
@@ -123,6 +125,7 @@ def _pictures_known(
     known = (told or PictureContext()).model_copy(deep=True)
     known.made = sorted(viewing.made_names(site)) if site else []
     known.camera_parts = sorted(cameras.names(site)) if site else []
+    known.printers = printers_in(site) if site else []
     target = context.targets[0] if context is not None and context.targets else ""
     if context is not None and context.pointing is Pointing.NODE and target in known.camera_parts:
         device = cameras.record(site, target).device

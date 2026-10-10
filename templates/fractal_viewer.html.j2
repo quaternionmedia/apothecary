@@ -3755,6 +3755,17 @@
                 const anchor = row.device.printer ? this.bearerPathFor(row.path) : row.path;
                 return this.showMachine(port, anchor, row);
             }
+            // A made piece's Print, from its ring: the printer's Machine opened (in
+            // the rail, its tab active) with the piece chosen under its Print from
+            // here's makes. Nothing is sent: the card's file and ▶ Print are the next
+            // step, and the status line names them. What it says, or why it could not.
+            async printPiece(piece, printer) {
+                if (!this.openMachine(printer)) return { refused: `${printer} has no board pinned to print with` };
+                const handle = this.machine && this.machine.handle;
+                if (!handle || handle.kind() !== 'printer') return { refused: `${printer}'s board is no printer` };
+                if (!(await handle.print.choose(piece))) return { refused: `${piece} is not among the parts ${printer}'s Print from here can make` };
+                return { said: `${printer}'s Machine makes ${piece}: choose its file in Print from here, then ▶ Print` };
+            }
             // A board's Machine by its port, pinned in this site or nowhere here --
             // what a link to the printer monitor opens.
             openMachineFor(port) {
@@ -4648,6 +4659,14 @@
                         return;
                     }
                     if (action === 'device:pin') { viewer.setStatus(`${intent.label}: choose the piece to pin ${port} to, and pin it from Selected${tail}`, 'error'); return; }
+                }
+                // A made piece's Print names the printer it prints on; the piece is the
+                // ring's target. Before the board verbs: it is the world's, not a Machine's.
+                if (action.startsWith('print:piece:')) {
+                    const done = await viewer.printPiece(path, action.slice('print:piece:'.length));
+                    if (done.refused) viewer.setStatus(`${intent.label}: ${done.refused}${tail}`, 'error');
+                    else viewer.setStatus(`${intent.label}: ${done.said}${tail}`, 'success');
+                    return;
                 }
                 // A board's verb goes to its Machine, the one place for the board:
                 // opened for it first when it is not open. A refusal it meets is

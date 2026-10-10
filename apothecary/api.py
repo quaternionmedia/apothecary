@@ -1514,6 +1514,25 @@ def _place_of(port: str) -> Optional[jobs.Place]:
 jobs.PLACES.append(_place_of)
 
 
+def printers_in(site_name: str) -> List[str]:
+    """The printers of ``site_name`` a print can go to: each node a board pinned in
+    the site drives, when that node is a printer (it carries a printer's status),
+    sorted. A made piece's Print offers them (``menu.py``)."""
+    if site_name not in _site_store.names():
+        return []
+    try:
+        site = _site_store.get(site_name)
+    except KeyError:
+        return []
+    found = set()
+    for binding in firmware_devices.get_state().bindings(site_name):
+        bearer = status_bearer_for(site, binding.path)
+        node = _find_node_by_path(site, bearer) if bearer else None
+        if node is not None and node.status in PRINTER_STATUSES:
+            found.add(bearer)
+    return sorted(found)
+
+
 @app.get("/firmware/pins", tags=["firmware"])
 def every_pin(fresh: bool = False):
     """Every pin on this machine, whatever site it names -- the management view.

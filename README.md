@@ -75,8 +75,8 @@ Device › Allow asks the browser once, and with one camera it is the camera's d
 Take picture -- on its ring, in Selected, or `P` -- keeps a frame that lies on the bench
 where the camera looks, as a view, and the bench's Picture › Find shapes finds its shapes;
 each step's message names the next. Picture › Make stands a shape up as a piece; its Part ›
-Edit adjusts it, and a printer's Machine prints it: Print from here keeps a sliced file and
-lists the site's pieces under *makes*, and the print is a job that names the piece
+Edit adjusts it, and its ring's Print opens the pinned printer's Machine with it chosen under
+*makes*: Print from here keeps a sliced file, and the print is a job that names the piece
 ([walkthrough 13](walkthrough/13-a-picture-to-a-print.md) goes round twice). The camera's
 turn ring and tilt arc aim it, and Part › Edit sets its numbers. Picture › Add on the
 bench's ring pins a picture from disk instead, and Picture › Folder one already in the
