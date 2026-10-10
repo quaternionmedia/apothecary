@@ -387,16 +387,20 @@ def test_two_tabs_applying_at_once_each_draw_their_own(page: Page, loop_url: str
     site = f"{loop_url}/viewer/sites/parts_library"
     other = page.context.new_page()
     try:
+        # A person works in the tab in front: a tab behind draws no frames.
         sides = []
         for tab, value in ((page, 24), (other, 36)):
+            tab.bring_to_front()
             _open(tab, site)
             _edit(tab)
             sides.append(_slide(tab, value))
             expect(tab.locator("#stage-summary")).to_contain_text("valid", timeout=10000)
         # Both Apply, neither waiting for the other.
         for tab in (page, other):
+            tab.bring_to_front()
             tab.locator("#apply-btn").click()
         for tab, side in zip((page, other), sides, strict=True):
+            tab.bring_to_front()
             expect(_status(tab)).to_contain_text("an applied variant, not saved", timeout=60000)
             settled(tab)
             assert _side(tab) == pytest.approx(side, abs=0.05)
@@ -404,6 +408,7 @@ def test_two_tabs_applying_at_once_each_draw_their_own(page: Page, loop_url: str
         assert _variant_in_address(page) != _variant_in_address(other)
         # Each tab, reloaded, still draws its own.
         for tab, side in zip((page, other), sides, strict=True):
+            tab.bring_to_front()
             tab.reload()
             expect(tab.locator("#status")).to_contain_text("Loaded", timeout=20000)
             _drawn(tab)
