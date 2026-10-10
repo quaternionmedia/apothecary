@@ -112,6 +112,51 @@ def _cache_outside_the_checkout(tmp_path_factory):
         os.environ["APOTHECARY_CACHE_DIR"] = previous
 
 
+_WRITES_TO_A_REPOSITORY = ("hash-object", "mktree", "commit-tree", "update-ref")
+
+
+@pytest.fixture(autouse=True)
+def _variants_are_never_saved_into_this_checkout(monkeypatch):
+    """A saved variant is a ref in the part's repository (projects/parts/saved.py).
+    A test saves into a repository of its own; git writing anything into this
+    checkout's is refused before it runs."""
+    from apothecary.projects.parts import saved
+
+    real = saved._run
+
+    def guarded(repo, args, input=None):
+        if (
+            args
+            and args[0] in _WRITES_TO_A_REPOSITORY
+            and Path(repo).resolve().is_relative_to(ROOT)
+        ):
+            raise AssertionError(
+                f"a test ran git {args[0]} in this checkout; save into a repository of its own"
+            )
+        return real(repo, args, input)
+
+    monkeypatch.setattr(saved, "_run", guarded)
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _no_variant_refs_appear_in_this_checkout():
+    """However a test got there, the run ends with this checkout's variant refs as it began."""
+    import subprocess
+
+    def refs() -> str:
+        done = subprocess.run(
+            ["git", "for-each-ref", "--format=%(refname) %(objectname)", "refs/apothecary/"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        return done.stdout
+
+    before = refs()
+    yield
+    assert refs() == before, "a test made a ref under refs/apothecary/ in this checkout"
+
+
 @pytest.fixture(autouse=True)
 def _scripted_boards_answer_at_once(monkeypatch):
     """Every board in the unit suite is scripted and answers at once; waiting out

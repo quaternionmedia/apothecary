@@ -159,7 +159,7 @@ staged set against the same list: a number as a number, a choice one of its
 options, a range or length the SCAD states kept to; a value the SCAD itself
 assigns is no override.
 
-### Editing a part's SCAD: drafts
+### Editing a part's SCAD: drafts, and saves as variants in git
 
 A draft is a part's SCAD as edited in the page. `POST
 /parts/{name}/draft/check` with `{scad, params}` writes it to a hidden file
@@ -174,9 +174,21 @@ sha256 of its text; the cache keeps the text, at
 `/parts/{name}/variants/{variant}/scad`. The part's own SCAD and STL are
 never written.
 
+Saving is a variant in git: `POST /parts/{name}/saved` with `{name, scad,
+params}` commits the SCAD, and the parameters as `<stem>.variant.json`
+beside it, to `refs/apothecary/variants/<part>/<name>` in the repository
+that tracks the part, with git's plumbing alone
+(`apothecary/projects/parts/saved.py`), so the working tree, the index and
+the checked-out branch are never touched. The commit's author is the git
+identity of the checkout, and its parent is the variant's last save or
+`HEAD`. `GET /parts/{name}/saved` lists a part's variants from those refs,
+and `GET /parts/{name}/saved/{variant}` reads one with its SCAD. Making one
+the part's source is a merge you do: `git merge
+refs/apothecary/variants/<part>/<name>`.
+
 A part built by Python geometry (the snowplow) has no SCAD of its own to
 edit: `GET /parts/{name}/scad` answers the SCAD its geometry generates
-(`X-Part-Scad: generated`), and a draft of it is a `403`.
+(`X-Part-Scad: generated`), and a draft or a save of it is a `403`.
 
 ## Hooks for a part the SCAD file does not fully describe
 

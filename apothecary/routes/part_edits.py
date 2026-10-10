@@ -1,9 +1,10 @@
-"""A part's SCAD edited from the browser: drafts checked and rendered.
+"""A part's SCAD edited from the browser: drafts checked and rendered, and
+saves as variants in git.
 
 The second and third iterations of
 docs/plans/part-editing-in-the-browser-2026-09-27.md, server side. A draft is
 the part's SCAD as the page holds it, sent whole with each request; nothing is
-kept between requests but what the variant cache keeps.
+kept between requests but what the variant cache and git keep.
 
 - ``POST /parts/{name}/draft/check`` ``{scad, params}``: the draft evaluated
   and not rendered (apothecary/projects/parts/drafts.py) -- what OpenSCAD said
@@ -18,10 +19,16 @@ kept between requests but what the variant cache keeps.
   an Apply's included. A draft the same as the part's SCAD is the part.
 - ``GET /parts/{name}/variants/{key}/scad``: the draft a cached variant was
   rendered from, for a tab reloaded on it.
+- ``GET /parts/{name}/saved``, ``POST /parts/{name}/saved`` ``{name, scad?,
+  params}``, ``GET /parts/{name}/saved/{variant}``: a part's variants saved in
+  git (apothecary/projects/parts/saved.py), listed from the part's refs, saved
+  as a commit to ``refs/apothecary/variants/<part>/<name>`` by git's plumbing,
+  and read back with their SCAD. No route here merges one or writes the
+  working tree: making a variant the part's source is a merge the person does.
 
 A part whose geometry is Python (the snowplow) is read-only: its SCAD is the
-one its geometry generates (``GET /parts/{name}/scad``), and a draft of it is
-a 403.
+one its geometry generates (``GET /parts/{name}/scad``), and a draft or a save
+of it is a 403.
 """
 
 from __future__ import annotations
@@ -50,8 +57,24 @@ from ..projects.parts.params import (
     params_spec,
     validate_staged,
 )
+from ..projects.parts.saved import (
+    GitError,
+    Moved,
+    NoSuchVariant,
+    NotInGit,
+    SavedVariant,
+    check_name,
+    list_saved,
+    read_saved,
+    save_variant,
+)
 from ..projects.parts.stl_renderer import get_renderer, part_renderer
-from ..projects.parts.variants import make_variant, read_variant_draft, same_text
+from ..projects.parts.variants import (
+    make_variant,
+    read_variant_draft,
+    same_text,
+    without_defaults,
+)
 from ..projects.parts.variants import wants as request_wants
 
 router = APIRouter(tags=["parts"])
@@ -230,6 +253,91 @@ def get_variant_draft(name: str, variant: str):
             f"part's own SCAD has none (GET /parts/{name}/scad), and the cache lets go of old ones",
         )
     return PlainTextResponse(text, headers={"X-Part-Variant": variant})
+
+
+# --- saved in git -------------------------------------------------------------------
+
+
+class SaveRequest(BaseModel):
+    """A variant to save: its name, its SCAD and its parameters."""
+
+    name: str = Field(..., max_length=64, description="The variant's name, e.g. wider")
+    scad: Optional[str] = Field(
+        None,
+        max_length=DRAFT_LIMIT,
+        description="The SCAD to save; omitted, the part's SCAD as it is on disk",
+    )
+    params: Dict[str, Any] = Field(
+        default_factory=dict, description="The parameters the variant is drawn with"
+    )
+
+
+@router.get("/parts/{name}/saved", response_model=List[SavedVariant])
+def list_saved_variants(name: str):
+    """The part's variants saved in git, newest first: each one's ref, commit,
+    who saved it and when, its parameters, and whether ``HEAD`` already holds it
+    (``merged``). Read from ``refs/apothecary/variants/<part>/`` in the
+    repository that tracks its SCAD; none for a part outside git."""
+    part = _api()._load_part_wrapper(name)
+    try:
+        return list_saved(part)
+    except NotInGit:
+        return []
+    except GitError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from None
+
+
+@router.get("/parts/{name}/saved/{variant}", response_model=SavedVariant)
+def get_saved_variant(name: str, variant: str):
+    """One saved variant, with its SCAD (``scad``) and parameters: what an editor
+    opens. 404 when the part has none by that name."""
+    part = _api()._load_part_wrapper(name)
+    try:
+        check_name(variant)
+        return read_saved(part, variant)
+    except (ValueError, NoSuchVariant, NotInGit) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    except GitError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from None
+
+
+@router.post("/parts/{name}/saved", response_model=SavedVariant, status_code=201)
+def save_part_variant(name: str, body: SaveRequest):
+    """Save: the SCAD and its parameters committed to the part's own ref,
+    ``refs/apothecary/variants/<part>/<name>``, with git's plumbing alone, so
+    the working tree, the index and the checked-out branch are never touched.
+    The commit is the person's: its author is the git identity of the checkout,
+    and its message has no trailer. Its parent is the variant's last save, else
+    ``HEAD``; saving what the variant already holds makes no commit.
+
+    ``params`` are checked as a render's are (422). A bad name is a 422; a
+    variant saved meanwhile by another tab, or a part outside git, a 409; a
+    part built by Python geometry a 403; git's own refusal (no identity
+    configured, for one) a 500 in git's words. Making a variant the part's
+    source is a merge the person does: ``git merge <ref>``."""
+    api = _api()
+    part = _editable(name)
+    try:
+        check_name(body.name)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    text = body.scad
+    if text is None:
+        text = part.source_file.read_text(encoding="utf-8")
+    listing = None
+    if part.params_model is None:
+        renderer = part_renderer(part)
+        if renderer.is_available and lists_parameters(renderer.openscad_path):
+            listing = check_draft(part, text, renderer).parameters
+    overrides = api.checked_overrides(part, body.params, listing, scad_text=text)
+    try:
+        return save_variant(part, body.name, text, without_defaults(part, overrides))
+    except (Moved, NotInGit) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+    except GitError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
 
 
 __all__ = ["router"]

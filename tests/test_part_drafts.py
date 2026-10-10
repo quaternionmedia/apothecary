@@ -409,9 +409,10 @@ class TestAPartBuiltByPython:
         [
             ("post", "/parts/snowplow/draft/check", {"scad": "cube(1);"}),
             ("post", "/parts/snowplow/draft/render", {"scad": "cube(1);"}),
+            ("post", "/parts/snowplow/saved", {"name": "wider", "scad": "cube(1);"}),
         ],
     )
-    def test_a_draft_of_it_is_refused(self, method, path, body, openscad):
+    def test_a_draft_or_a_save_of_it_is_refused(self, method, path, body, openscad):
         exe = openscad()
         r = getattr(TestClient(app), method)(path, json=body)
         assert r.status_code == 403 and "geometry is Python" in r.json()["detail"]

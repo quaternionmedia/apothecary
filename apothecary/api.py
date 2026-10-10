@@ -206,7 +206,7 @@ app.include_router(views_router)
 app.include_router(cameras_router)
 # Jobs: what the machines ran, of every kind; each is started by its machine's own route.
 app.include_router(jobs_router)
-# A part's SCAD edited: drafts checked and rendered.
+# A part's SCAD edited: drafts checked and rendered, and saves as variants in git.
 app.include_router(part_edits_router)
 THREE_DIR = STATIC_ROOT / "vendor" / "three"
 THREE_IS_VENDORED = (THREE_DIR / "three.module.js").is_file()
