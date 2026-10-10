@@ -471,6 +471,22 @@ def make_variant(
     return made
 
 
+def renamed(messages: List[OpenSCADMessage], was: Path, now: Path) -> List[OpenSCADMessage]:
+    """``messages`` with the file ``was`` named as the file ``now`` is, in their
+    traces too; each named as ``place_messages`` names a file that is there:
+    from the checkout, else by its own name."""
+    was_named, now_named = show_path(was) or was.name, show_path(now) or now.name
+    out = []
+    for message in messages:
+        trace = [
+            s.model_copy(update={"file": now_named}) if s.file == was_named else s
+            for s in message.trace
+        ]
+        file = now_named if message.file == was_named else message.file
+        out.append(message.model_copy(update={"file": file, "trace": trace}))
+    return out
+
+
 # --- whose render is whose ----------------------------------------------------------
 
 
@@ -627,6 +643,7 @@ __all__ = [
     "measured_box",
     "part_state",
     "read_variant",
+    "renamed",
     "variant_record",
     "trim_variants",
     "variant_cache_dir",

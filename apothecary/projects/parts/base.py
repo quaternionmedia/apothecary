@@ -32,9 +32,13 @@ class ContestedValue(BaseModel):
     note: str = ""
 
 
-def scad_variables(path: Path) -> Set[str]:
-    """Every top-level assignment in a SCAD file: the names `-D` can override."""
-    return set(re.findall(r"^(\w+)\s*=", Path(path).read_text(encoding="utf-8"), re.M))
+def scad_variables(path: Path, text: Optional[str] = None) -> Set[str]:
+    """Every top-level assignment in a SCAD file, or in ``text`` standing in for
+    it (a draft): the names `-D` can override, a special variable such as
+    ``$fn`` among them."""
+    if text is None:
+        text = Path(path).read_text(encoding="utf-8")
+    return set(re.findall(r"^(\$?\w+)\s*=", text, re.M))
 
 
 class BasePart(BaseModel):
@@ -123,18 +127,27 @@ class BasePart(BaseModel):
             return None
         return find_openscad(self.openscad_min_version)[0]
 
-    def validate_overrides(self, params: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
+    def validate_overrides(
+        self, params: Optional[Mapping[str, Any]], scad_text: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Parameter overrides checked against ``params_model``, as it coerced them.
 
         OpenSCAD accepts any ``-D`` name, defined or not, so a misspelled one
         would render the defaults and look like success. Raises ValueError
-        (a pydantic ValidationError for a bad value).
+        (a pydantic ValidationError for a bad value). Without a model the
+        names are checked against the SCAD's top-level variables: its file's,
+        or ``scad_text``'s when a draft of it is what renders.
         """
         if not params:
             return {}
         if self.params_model is None:
             # No Python model: the SCAD's own top-level variables are what -D reaches.
-            declared = scad_variables(self.source_file) if self.source_file.exists() else set()
+            if scad_text is not None:
+                declared = scad_variables(self.source_file, text=scad_text)
+            elif self.source_file.exists():
+                declared = scad_variables(self.source_file)
+            else:
+                declared = set()
             unknown = sorted(set(params) - declared)
             if unknown:
                 raise ValueError(

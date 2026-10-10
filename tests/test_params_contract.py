@@ -19,7 +19,19 @@ from apothecary.projects.parts.params import (
 
 client = TestClient(app)
 
-FIELD_KEYS = ["name", "type", "default", "min", "max", "pattern", "description", "contested"]
+FIELD_KEYS = [
+    "name",
+    "type",
+    "default",
+    "min",
+    "max",
+    "step",
+    "pattern",
+    "options",
+    "group",
+    "description",
+    "contested",
+]
 
 
 def _route(path: str):
@@ -29,7 +41,8 @@ def _route(path: str):
 class TestTheRoutesAreTheContract:
     def test_params_is_the_spec_of_the_part(self):
         body = client.get("/parts/datum_core/params").json()
-        assert list(body) == ["part", "description", "fields", "bounds"]
+        assert list(body) == ["part", "description", "fields", "bounds", "source", "openscad"]
+        assert (body["source"], body["openscad"]) == ("model", None)
         assert [list(f) for f in body["fields"]] == [FIELD_KEYS] * len(body["fields"])
         assert body == params_spec(CORE).model_dump(mode="json")
         assert _route("/parts/{name}/params").response_model is ParamsSpec

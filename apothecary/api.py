@@ -53,7 +53,16 @@ from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
 from .primitives import Cube, Cylinder, Sphere, absolute_imports
 from .projects.parts.base import BasePart
+from .projects.parts.customizer import (
+    Unlisted,
+    customizer_spec,
+    customizer_values,
+    lists_parameters,
+    part_check,
+    without_initial,
+)
 from .projects.parts.params import (
+    FieldError,
     NoParameters,
     ParamsSpec,
     Validation,
@@ -61,7 +70,7 @@ from .projects.parts.params import (
     validate_staged,
 )
 from .projects.parts.skeleton import ROOT
-from .projects.parts.stl_renderer import build_stl
+from .projects.parts.stl_renderer import build_stl, part_renderer
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
 from .projects.parts.variants import (
     KEY_PATTERN,
@@ -466,10 +475,7 @@ def generate_part_stl(
     part that cannot be built on this machine, is a 503.
     """
     part = _load_part_wrapper(name)
-    try:
-        overrides = part.validate_overrides(body.params if body else None)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from None
+    overrides = checked_overrides(part, body.params if body else None, _listing(part))
     if not get_stl_renderer().is_available:
         raise HTTPException(
             status_code=503, detail="OpenSCAD not installed. Cannot generate STL files."
@@ -482,7 +488,50 @@ def generate_part_stl(
         raise HTTPException(status_code=422, detail=str(exc)) from None
     finally:
         _page_renders.end(part.name, page, cancel)
+    return made_answer(name, part, made, overrides)
 
+
+def _listing(part: BasePart) -> Optional[List[Dict[str, Any]]]:
+    """What OpenSCAD's customizer lists in a part's SCAD, for a part without a
+    Python model; None for a part with one, or where the OpenSCAD lists nothing."""
+    if part.params_model is not None or part.geometry({}) is not None:
+        return None
+    renderer = part_renderer(part)
+    if not renderer.is_available or not lists_parameters(renderer.openscad_path):
+        return None
+    return part_check(part, renderer).parameters
+
+
+def checked_overrides(
+    part: BasePart,
+    params: Optional[Dict[str, Any]],
+    listing: Optional[List[Dict[str, Any]]],
+    scad_text: Optional[str] = None,
+) -> Dict[str, Any]:
+    """A request's parameters as the part takes them, or a 422 saying why not.
+
+    A part with a model has them checked by it. One without has them checked
+    against what its SCAD's customizer lists (``listing``), where OpenSCAD
+    lists it -- a number as a number, a
+    choice one of its options -- and a value the SCAD itself assigns is no
+    override; else only their names, against its top-level variables."""
+    if part.params_model is None and listing is not None and params:
+        values, errors = customizer_values(listing, params)
+        if errors:
+            raise HTTPException(
+                status_code=422, detail="; ".join(f"{e.field}: {e.message}" for e in errors)
+            )
+        params = without_initial(listing, values)
+    try:
+        return part.validate_overrides(params, scad_text=scad_text)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+
+def made_answer(name: str, part: BasePart, made, overrides: Dict[str, Any]) -> Dict[str, Any]:
+    """What a render answers, as generate answers it, or the HTTPException for
+    one that made nothing: 503 refused, 409 superseded, 422 with OpenSCAD's
+    errors by line, 500 for a failure it said nothing about."""
     messages = jsonable_encoder(made.messages)
     if made.failure == "refused":
         raise HTTPException(
@@ -596,13 +645,31 @@ def get_part_params(name: str):
     candidate -- an ambiguity a reader can turn is worth more than one they
     have to argue about. A made piece answers the same shape from
     ``GET /sites/{s}/made/{piece}/params``.
+
+    A part without a Python model answers its SCAD's own parameters, as
+    OpenSCAD's customizer lists them (``source: "customizer"``,
+    apothecary/projects/parts/customizer.py): numbers with the ranges the SCAD
+    gives, booleans, strings, choices and vectors. Where it has none to give,
+    the 404's ``detail`` says why: ``lists`` false when the OpenSCAD in use
+    (``openscad``, 2021.01) cannot list a SCAD's parameters at all, and
+    ``messages`` when it could not read the SCAD.
     """
     part = _load_part_wrapper(name)
     try:
         return params_spec(part)
     except NoParameters:
+        pass
+    try:
+        return customizer_spec(part)
+    except Unlisted as why:
         raise HTTPException(
-            status_code=404, detail=f"Part '{name}' declares no parameters"
+            status_code=404,
+            detail={
+                "message": str(why),
+                "openscad": why.openscad,
+                "lists": why.lists,
+                "messages": jsonable_encoder(why.messages),
+            },
         ) from None
 
 
@@ -653,10 +720,35 @@ def validate_part_params(name: str, body: Optional[StlGenerateRequest] = None):
     parts generate-stl` measures one): ``validate_staged`` puts the values
     through the part's own model, and the envelope they would produce comes
     back. A set that cannot be rendered is rejected here, where it costs
-    nothing.
+    nothing. A part without a model is checked against what its SCAD's
+    customizer lists, where OpenSCAD lists it, else by its names alone.
     """
     part = _load_part_wrapper(name)
-    return validate_staged(part, body.params if body else {})
+    params = body.params if body else {}
+    if part.params_model is not None:
+        return validate_staged(part, params)
+    return validate_without_model(part, params, _listing(part))
+
+
+def validate_without_model(
+    part: BasePart,
+    params: Dict[str, Any],
+    listing: Optional[List[Dict[str, Any]]],
+    scad_text: Optional[str] = None,
+) -> Validation:
+    """A staged set of a part without a model, checked against ``listing`` (what
+    the customizer lists in its SCAD) where there is one, else its names
+    against the SCAD's top-level variables."""
+    if listing is not None:
+        values, errors = customizer_values(listing, params)
+        if errors:
+            return Validation(valid=False, errors=errors)
+        return Validation(valid=True, params=values, bounds=part.get_bounds())
+    try:
+        values = part.validate_overrides(params, scad_text=scad_text)
+    except ValueError as exc:
+        return Validation(valid=False, errors=[FieldError(field="params", message=str(exc))])
+    return Validation(valid=True, params=values, bounds=part.get_bounds())
 
 
 # =============================================================================

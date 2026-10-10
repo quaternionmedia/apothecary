@@ -139,6 +139,14 @@ The docs' "thirty seconds of OpenSCAD" (`tests/test_staging.py`,
   back to the customizer schema for a part without a `Params` model, so
   every part gets controls; typed number fields beside sliders, checkboxes,
   strings.
+  Landed on the server: `apothecary/projects/parts/customizer.py` lists a
+  SCAD's parameters with the part's own OpenSCAD and maps them to the
+  parameter contract (`source: "customizer"`; booleans, strings, choices
+  with their options, vectors, groups and steps); a 404's `detail` says when
+  the OpenSCAD in use cannot list them (2021.01, `lists: false`). Validate
+  and generate check a staged set against the same list. A model's boolean
+  field is a `boolean` now, not a slider. The page's controls for the new
+  kinds come with the editor.
 - Part verbs join the ring (Apply, Revert, Edit, Variants), per the
   one-screen plan.
 

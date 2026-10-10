@@ -171,6 +171,38 @@ def _wait(
         return out or "", err or "", why
 
 
+def run_openscad(
+    executable: Path,
+    args: List[str],
+    cwd: Path,
+    timeout: float,
+    cancel: Optional[Cancellation] = None,
+) -> Tuple[Optional[int], str, str, Optional[str]]:
+    """One OpenSCAD run that renders nothing (an export of what a file lists or
+    says): ``(exit code, stdout, stderr, why it was stopped)``. It runs in
+    ``cwd``, where a relative include resolves; the code is None when it was
+    stopped, by ``"timeout"`` or by ``cancel`` (``"cancelled"``)."""
+    if cancel is not None and cancel.cancelled:
+        return None, "", "", "cancelled"
+    process = subprocess.Popen(
+        [str(executable), *args],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=str(cwd),
+    )
+    if cancel is not None and not cancel._attach(process):
+        _stop(process)
+    try:
+        stdout, stderr, stopped = _wait(process, timeout, cancel)
+    finally:
+        if cancel is not None:
+            cancel._detach(process)
+    return (None if stopped else process.returncode), stdout, stderr, stopped
+
+
 class OpenSCADRenderer:
     """
     Renders SCAD files to STL using OpenSCAD CLI.
