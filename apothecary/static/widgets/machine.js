@@ -38,8 +38,8 @@
  * Device › Flash says why. `pin` ({ site, path, how }) is where the board is pinned, or bound
  * by its sketch when `how` is "sketch". `say(text,
  * kind)` is the host's status bar: a refusal is said there as an error as well
- * as in the log. destroy() stops watching and frees what the module put on the
- * window.
+ * as in the log, and a print started is said there, naming where it is followed.
+ * destroy() stops watching and frees what the module put on the window.
  */
 
 import { mountBoards } from "/static/boards.js";
@@ -257,12 +257,19 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     const post = (path, body) => model.post(path, body);
 
     // --- refusals: in the log, and in the host's status bar as errors ------------------------
-    let refusals = 0, lastRefusal = null;
+    // A step that ends here is told in the status bar too, naming the step after it:
+    // a print started names where it is followed. A ring verb carried here hands
+    // what it told back to the ring (carry's `said`), which says it after its label.
+    let refusals = 0, lastRefusal = null, told = 0, lastTold = null;
     function logLine(kind, text) { if (state.port) model.note(state.port, text, { kind }); }
     function refuse(text) {
         refusals++; lastRefusal = text;
         logLine("sys", text);
         if (say) say(text, "error");
+    }
+    function tell(text) {
+        told++; lastTold = text;
+        if (say) say(text, "success");
     }
 
     // --- the board: which, and what kind -------------------------------------------------
@@ -903,6 +910,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (!confirm(`Print ${f ? f.name : fileId} on ${state.port}${part ? `, making ${part}` : ""}?\n${f ? f.lines + " lines" : ""} will stream from here; the printer will heat and move.`)) return;
         try {
             prt.job = await post("/firmware/printers/print", { port: state.port, file_id: fileId, part });
+            tell(`started ${f ? f.name : fileId} on ${state.port}${part ? `, making ${part}` : ""}: Print from here follows it to its end, and Site's Jobs lists it`);
             renderPrint();
             prt.timer = setTimeout(watchPrint, 800);
             await loadPrintJobs();
@@ -973,12 +981,15 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         return { port: state.port, printer: !!(d && d.printer), armed: ctl.armed, bound: !!(pin && pin.how === "manual") };
     }
     // A verb of this board's: false when it is not one (the host's: open, pin, unpin);
-    // else { refused }, the refusal it met or null.
+    // else { refused, said }: the refusal it met, and what it told, or null.
     async function carry(intent) {
-        const before = refusals;
+        const before = refusals, toldBefore = told;
         const done = await carryOut(intent);
         if (!done) return false;
-        return { refused: refusals > before ? lastRefusal : null };
+        return {
+            refused: refusals > before ? lastRefusal : null,
+            said: told > toldBefore ? lastTold : null,
+        };
     }
     async function carryOut(intent) {
         const action = intent.action;

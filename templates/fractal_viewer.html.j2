@@ -4629,13 +4629,14 @@
                 }
                 // A board's verb goes to its Machine, the one place for the board:
                 // opened for it first when it is not open. A refusal it meets is
-                // said here as an error, as well as in its log.
+                // said here as an error, as well as in its log; what it told (a
+                // print started, and where it is followed) is said after the label.
                 if (MACHINE_VERB.test(action) && (port || viewer.machine)) {
                     if (port && !(viewer.machine && viewer.machine.port === port) && !viewer.openMachine(path)) return;
                     const done = await viewer.machine.handle.carry(intent);
                     if (done) {
                         if (done.refused) viewer.setStatus(`${intent.label}: ${done.refused}${tail}`, 'error');
-                        else viewer.setStatus(`${intent.label}${tail}`, 'success');
+                        else viewer.setStatus(`${intent.label}${done.said ? `: ${done.said}` : ''}${tail}`, 'success');
                         return;
                     }
                 }
