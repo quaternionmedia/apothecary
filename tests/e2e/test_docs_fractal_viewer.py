@@ -40,7 +40,10 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     page.goto(f"{base_url}/viewer/sites/garage")
     expect(page.locator(".toolbar h1")).to_contain_text("Apothecary")
     page.wait_for_timeout(600)
-    docs.step("Open the garage site at its root -- four Structures")
+    docs.step(
+        "Open the garage site at its root -- its Structures, listed in Site and drawn in "
+        "the building, whose walls are faded so what is inside shows"
+    )
 
     page.locator("#contents-list .contents-item", has_text="printer_1").dblclick()
     page.wait_for_timeout(300)
@@ -65,7 +68,9 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
 
     # The same navigation from the ring: a right-click on empty canvas opens
     # the canvas ring; Pieces (cell 8) lists this level in groups; digits choose.
-    page.locator("#viewer-canvas").click(button="right", position={"x": 8, "y": 8})
+    # Empty floor at the world's lower left, outside the building: a ring opened at
+    # the world's corner stands over the header.
+    page.locator("#viewer-canvas").click(button="right", position={"x": 120, "y": 470})
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press("8")
     page.wait_for_timeout(300)
@@ -82,10 +87,15 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     expect(page.locator("#selected-body .prop-row", has_text="Name")).to_contain_text(
         "printer_1", timeout=5000
     )
+    expect(page.locator("#status")).to_contain_text(f"⌗{address}")
+    expect(page.locator("#contents-list li[data-path='printer_1']")).to_have_attribute(
+        "data-address", address
+    )
     page.wait_for_timeout(300)
     docs.step(
         f"The digits {' '.join(address)} select printer_1 -- the same address every time "
-        "for the same level; its row in Site shows it as ⌗" + address
+        "for the same level, as the status bar says (⌗" + address + "); its row in Site "
+        "carries it in its tooltip"
     )
 
     printer_1 = page.locator("#contents-list .contents-item", has_text="printer_1")
@@ -99,8 +109,9 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     expect(page.locator("#problem-list li")).to_contain_text("printer_1 and footpedal overlap")
     docs.step(
         "Select printer_1 at the root and move it onto the footpedal -- caught: Site's "
-        "folded line says how many problems there are, both pieces are red in its tree, "
-        "and a click on the header's count opens the fold"
+        "folded line says how many problems there are, and a click on the header's count "
+        "opens the fold, which names the pair; both pieces are red in Site's tree, printer_1 "
+        "here near its top"
     )
 
     x_input.fill("100")
@@ -136,5 +147,7 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     page.wait_for_timeout(800)
     scad = page.locator("#part-scad-content")
     expect(scad).to_be_visible()
-    scad.scroll_into_view_if_needed()
+    # Its heading in the middle of Selected, the source below it: scrolled to the
+    # source's own top, the heading would stand under the sticky Apply bar.
+    scad.evaluate("(el) => el.previousElementSibling.scrollIntoView({ block: 'center' })")
     docs.step("Select a part leaf -- its real SCAD source is the absorbed part view")

@@ -246,6 +246,56 @@ def test_a_camera_added_at_the_bench_takes_pictures_where_it_looks(
     assert errors == []
 
 
+MESH = (
+    "(n) => { const m = window.fractalViewer.meshByName[n];"
+    " return m ? { visible: m.visible, inScene: !!m.parent } : null; }"
+)
+
+
+@pytest.mark.e2e
+def test_a_camera_removed_from_sites_pinned_leaves_the_tree_and_the_world(
+    page,
+    base_url: str,
+    leaves_garage_as_found,  # noqa: F811
+):
+    """Site's Pinned takes a camera back as its own ring's Remove does: at once, and
+    without the site loaded again, its row leaves Site's tree, its body and its badge
+    leave the world, and it is no longer selected; its pictures stay. The ring's
+    Remove is held to the same by the test above."""
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    name = _add(page, base_url, "workbench")
+    _open_garage(page, base_url)
+    _select(page, name)
+    row = page.locator(f"#contents-list .contents-item[data-path='{name}']")
+    badge = page.locator(f".world-badge.camera-mark[data-camera='{name}']")
+    expect(badge).to_be_visible(timeout=5000)
+    assert page.evaluate(MESH, name) == {"visible": True, "inScene": True}
+    url = page.url
+    loads = []
+    page.on(
+        "request",
+        lambda r: loads.append(r.url) if r.url.split("?")[0].endswith("/sites/garage") else None,
+    )
+
+    pinned = page.locator(".panel[data-panel='site'] #site-pinned")
+    pinned.locator("summary").click()
+    camera_row = pinned.locator(".pin-row.camera", has_text=f"garage › {name}")
+    expect(camera_row).to_have_count(1, timeout=5000)
+    camera_row.locator(".pinned-camera-remove").click()
+    _said(page, f"garage › {name} removed; the pictures it took stay")
+
+    expect(row).to_have_count(0, timeout=5000)
+    expect(badge).to_have_count(0, timeout=5000)
+    assert page.evaluate(MESH, name) is None
+    assert page.evaluate("() => window.fractalViewer.selectedName") is None
+    expect(page.locator("#selected-body")).to_contain_text("Click a node to select it")
+    expect(pinned.locator("#pinned-list")).to_contain_text("none pinned")
+    assert page.request.get(f"{base_url}/sites/garage/cameras/{name}").status == 404
+    assert page.url == url and loads == [], loads
+    assert errors == []
+
+
 def _drag(page, kind: str, degrees: list) -> None:
     """A press on the handle at the first of ``degrees``, moved through the rest, let go."""
     points = [page.evaluate(HANDLE_AT, [kind, d]) for d in degrees]

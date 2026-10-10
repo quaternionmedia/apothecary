@@ -307,6 +307,16 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     expect(placed).to_have_count(1, timeout=5000)
     expect(placed).to_contain_text("garage › camera_1")
     pinned.locator("summary").click()  # folded again, for the pictures below
+    # The root frames the whole building, where the camera is a few pixels: the view
+    # is framed on the bench and the camera standing over it, as the bench was above.
+    page.evaluate(
+        """() => {
+            const v = window.fractalViewer;
+            const on = new Set(['workbench', 'printer_1', 'camera_1']);
+            const level = v.currentRenderNodes(v.currentFocusNode());
+            v.frameCameraForChildren(level.filter((n) => on.has(n.name)));
+        }"""
+    )
     badge = page.locator(".world-badge.camera-mark[data-camera='camera_1']")
     expect(badge).to_be_visible(timeout=5000)
     assert _camera_marks_visible(page) == [True]  # selected: its pyramid shows
@@ -349,6 +359,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     pinned.locator("summary").click()
     placed.locator(".pinned-camera-remove").click()
     expect(badge).to_have_count(0, timeout=5000)
+    expect(page.locator("#contents-list .contents-item[data-path='camera_1']")).to_have_count(0)
     expect(pinned.locator("#pinned-list")).to_contain_text("none pinned")
     assert page.request.get(f"{base_url}/sites/garage/attached").json()["cameras"] == []
     story.says(
@@ -430,6 +441,12 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
         "uploads/shelf.png",
         "a_person_put_this_here.png",
     ]
+    # Grouped by the camera that took each: the camera added above took none, so
+    # there is one group, the pictures no camera took.
+    groups = pictures.locator(".picture-group")
+    expect(groups).to_have_count(1)
+    expect(groups.first).to_have_attribute("data-camera", "")
+    expect(groups.first.locator(".picture-group-title")).to_contain_text("No camera")
     # One chosen, for the ring's Picture › Folder to pin.
     pictures.locator(".picture-row[data-path='uploads/shelf.png']").click()
     expect(pictures.locator(".picture-row.chosen")).to_have_attribute(
@@ -450,10 +467,11 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
         "site's, each row naming its site and carrying the button that takes it back, "
         "from here, without switching to that site; a pin whose site or piece is gone "
         "is shown as such, and this is the one place it can be seen. Pictures lists "
-        "every picture in the picture folder, the folder's own and the ones the "
-        "browser kept -- those added from its file picker kept as they were named "
-        "under uploads/ -- each with where it is pinned as a view, and Forget on a kept "
-        "one. A picture kept and pinned nowhere waits to be chosen: a row clicked is "
+        "every picture in the picture folder as thumbnails, grouped by the camera that "
+        "took them -- here none did -- the folder's own and the ones the browser kept "
+        "(those added from its file picker kept as they were named under uploads/), "
+        "each with where it is pinned as a view, and Forget on a kept one. A picture "
+        "kept and pinned nowhere waits to be chosen: one clicked is "
         "chosen, as shelf.png is here, and the ring's Picture › Folder pins it where "
         "the ring stands -- the seven newest by name, an older one as its last cell -- "
         "as the status bar says.",

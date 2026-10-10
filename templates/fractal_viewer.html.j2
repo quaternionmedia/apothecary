@@ -1067,8 +1067,13 @@
                 // Selected stacked at its top, each one closable, collapsible and
                 // draggable free; what a person did to them is remembered per
                 // browser (panels.js), and a remembered layout naming a panel that
-                // is gone (Jobs), or from before the one rail, is ignored.
-                this.panels = mountPanels({ container: document.querySelector('.main-content'), overlay: this.canvas.parentElement });
+                // is gone (Jobs), or from before the one rail, is ignored. A panel
+                // floated lands clear of the header, the hint bar and the depth ladder,
+                // as a badge's words do, and of the closed panels' tabs.
+                this.panels = mountPanels({
+                    container: document.querySelector('.main-content'), overlay: this.canvas.parentElement,
+                    keepClear: () => [document.querySelector('.toolbar'), this.hintEl, this.minimapEl],
+                });
                 for (const section of document.querySelectorAll('.side-panel [data-panel]')) {
                     const id = section.dataset.panel;
                     this.panels.register(id, {
@@ -3730,9 +3735,12 @@
                     log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
                     world: {
                         siteName: () => this.siteName,
-                        // Taken back in this site: the world's marks are fetched again.
-                        // Another site's row changes nothing on screen but Pictures'
-                        // list of where each picture is pinned.
+                        // A camera taken back: the one way a removed camera goes, as
+                        // its own ring's Remove.
+                        cameraRemoved: (site, name, payload) => this.cameraRemoved(site, name, payload),
+                        // A view taken back in this site: the world's marks are fetched
+                        // again. Another site's row changes nothing on screen but
+                        // Pictures' list of where each picture is pinned.
                         changed: (site) => {
                             if (site === null || site === this.siteName) return this.pictureMarks.refresh();
                             if (this.picturesWidget && this.panels.isShown('pictures')) this.picturesWidget.load();
@@ -3751,6 +3759,20 @@
             listsChanged() {
                 if (this.pinnedWidget && this.pinnedEl.open) this.pinnedWidget.load();
                 if (this.picturesWidget && this.panels.isShown('pictures')) this.picturesWidget.load();
+            }
+
+            // A camera removed, by its own ring's Remove or from Site's Pinned: one way
+            // on screen. Removed from this site, the site the server answered with is
+            // drawn -- its row, its body and its badge go, and the selection with it --
+            // and its live video ends; from another site, only the lists change. Site's
+            // Pinned and Pictures, where open, list again.
+            async cameraRemoved(site, name, payload) {
+                if (site === this.siteName) {
+                    this.pictures.cameraGone(name);
+                    if (payload) await this.applySite(payload);
+                    else await this.pictureMarks.refresh();
+                }
+                this.listsChanged();
             }
 
             // A view's place in Pictures: selected, and the view drawn there, as
@@ -5006,11 +5028,11 @@
                     });
                     viewer.setStatus(`${intent.label}: ${answer.did}${tail}`, 'success');
                     if (action === 'reset') viewer.loadSite(viewer.siteName);
+                    // A camera removed goes the way Site's Pinned takes one back.
+                    else if (action === 'camera:remove') await viewer.cameraRemoved(intent.site || viewer.siteName, path, answer.site);
                     else if (answer.site) await viewer.applySite(answer.site);
-                    // A camera added is selected, its handles and its section shown;
-                    // one removed takes its live video with it.
+                    // A camera added is selected, its handles and its section shown.
                     if (answer.added) viewer.selectPath(answer.added);
-                    if (action === 'camera:remove') viewer.pictures.cameraGone(path);
                 }
             } catch (err) {
                 viewer.setStatus(`${intent.label}: ${err.message}${tail}`, 'error');
