@@ -3,7 +3,8 @@
 A variant is a part rendered with a set of parameters. It is filed under a
 key computed from everything that decides the mesh: the SCAD and every file
 it includes, uses or imports (or, for a part built by Python geometry, the
-SCAD that geometry writes), the parameters and the ``-D`` definitions they
+SCAD that geometry writes; or a draft of the part's SCAD, its text standing
+in for the file's), the parameters and the ``-D`` definitions they
 become, the part's display rotation, the OpenSCAD that renders it (its
 version line) and the backend it uses. The same request is the same key, so
 it is rendered once; a different request is a different file, so two tabs
@@ -17,6 +18,8 @@ ignored ``.cache``)::
     <part>/<key>.json   what made it: params, OpenSCAD, backend, when, how
                         long, the bounding box OpenSCAD measured, and what
                         OpenSCAD warned about
+    <part>/<key>.scad   a draft's text, for a variant rendered from one
+                        (apothecary/projects/parts/drafts.py)
 
 The part's own STL (``get_stl_output_path``) is the default variant. A
 request for the defaults leaves it current: rendered into the cache, then
@@ -43,11 +46,12 @@ import threading
 import time
 import uuid
 import weakref
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Mapping, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -193,8 +197,15 @@ def openscad_of(renderer: OpenSCADRenderer) -> Optional[str]:
     return openscad_version(exe) if exe is not None and Path(exe).exists() else None
 
 
-def variant_key(part: BasePart, params: Mapping[str, Any], renderer: OpenSCADRenderer) -> str:
-    """The key a render of ``part`` with already-validated ``params`` is filed under."""
+def variant_key(
+    part: BasePart,
+    params: Mapping[str, Any],
+    renderer: OpenSCADRenderer,
+    draft: Optional[str] = None,
+) -> str:
+    """The key a render of ``part`` with already-validated ``params`` is filed
+    under; of ``draft`` standing in for its SCAD, when given. A draft the same
+    as the file is the same key: the same render."""
     digest = hashlib.sha256()
 
     def add(label: str, value: str) -> None:
@@ -205,9 +216,13 @@ def variant_key(part: BasePart, params: Mapping[str, Any], renderer: OpenSCADRen
     text = geometry_scad(part, dict(params))
     if text is None:
         scad = part.source_file
-        add("scad", _file_digest(scad))
+        if draft is None:
+            add("scad", _file_digest(scad))
+            reads = scad_dependencies(scad)
+        else:
+            add("scad", hashlib.sha256(draft.encode("utf-8")).hexdigest())
+            reads = scad_dependencies(scad, text=draft)
         definitions = part.scad_overrides(params)
-        reads = scad_dependencies(scad)
     else:
         add("scad", hashlib.sha256(text.encode("utf-8")).hexdigest())
         definitions = {}
@@ -254,6 +269,22 @@ def variant_paths(part: BasePart, key: str, cache: Optional[Path] = None) -> Tup
     return folder / f"{key}.stl", folder / f"{key}.json"
 
 
+def variant_draft_path(part: BasePart, key: str, cache: Optional[Path] = None) -> Path:
+    """Where the cache keeps the draft a variant ``key`` was rendered from."""
+    return (cache or variant_cache_dir()) / _folder_name(part) / f"{key}.scad"
+
+
+def read_variant_draft(part: BasePart, key: str, cache: Optional[Path] = None) -> Optional[str]:
+    """The draft text variant ``key`` was rendered from; None for a variant of
+    the part's own SCAD, or one the cache has let go."""
+    if not KEY_PATTERN.match(key):
+        return None
+    try:
+        return variant_draft_path(part, key, cache).read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
 def read_variant(part: BasePart, key: str, cache: Optional[Path] = None) -> Optional[dict]:
     """A variant's record, its STL marked served; None when there is none."""
     if not KEY_PATTERN.match(key):
@@ -291,6 +322,7 @@ def trim_variants(folder: Path, keep: int = PART_VARIANTS_KEEP) -> None:
     for _, stl in served[keep:]:
         stl.unlink(missing_ok=True)
         stl.with_suffix(".json").unlink(missing_ok=True)
+        stl.with_suffix(".scad").unlink(missing_ok=True)
 
 
 # --- making one ---------------------------------------------------------------------
@@ -322,6 +354,8 @@ class Made:
     # these parameters (the defaults, or what the command line put there).
     saved: bool = False
     messages: List[OpenSCADMessage] = field(default_factory=list)
+    # The sha256 of the draft it was rendered from; None: the part's own SCAD.
+    draft: Optional[str] = None
 
     @property
     def success(self) -> bool:
@@ -336,15 +370,22 @@ class Made:
         self.measured_from = FROM_STL if self.measured else None
 
 
-def _messages_of(part: BasePart, result: RenderResult) -> List[OpenSCADMessage]:
+def _messages_of(
+    part: BasePart, result: RenderResult, draft: Optional[Path] = None
+) -> List[OpenSCADMessage]:
     """What OpenSCAD said, its files named from the checkout. A part built by
     Python geometry renders a SCAD written to scratch under its source file's
-    name, so a relative name there is not resolved against the part's folder."""
+    name, so a relative name there is not resolved against the part's folder.
+    A draft is rendered from a file of its own beside the part's (``draft``,
+    still there): a message about it names the part's SCAD, whose edit it is."""
     if part.geometry({}) is None:
-        base, own = part.source_file.parent, part.source_file
+        base, own = part.source_file.parent, draft or part.source_file
     else:
         base, own = None, None
-    return place_messages(parse_openscad_messages(result.stderr), base, show_path, own=own)
+    placed = place_messages(parse_openscad_messages(result.stderr), base, show_path, own=own)
+    if draft is None:
+        return placed
+    return renamed(placed, draft, part.source_file)
 
 
 def _place_as_canonical(part: BasePart, stl: Path) -> None:
@@ -385,6 +426,7 @@ def make_variant(
     renderer: Optional[OpenSCADRenderer] = None,
     cancel: Optional[Cancellation] = None,
     cache: Optional[Path] = None,
+    draft: Optional[str] = None,
 ) -> Made:
     """The part rendered with ``params``, from the cache when it is there.
 
@@ -394,22 +436,35 @@ def make_variant(
     ``force`` renders even so. The defaults are also left as the part's own
     STL, unless its params sidecar says it holds another variant. A value
     equal to the model's default is no override (``without_defaults``).
+
+    ``draft`` is the part's SCAD as edited and not saved: rendered from a
+    file of its own beside the part's, into the cache alone; the part's own
+    STL neither answers it nor is touched by it. A draft the same as the
+    part's SCAD is the part. A part built by Python geometry has no SCAD to
+    draft (ValueError).
     """
-    params = without_defaults(part, part.validate_overrides(params))
+    if draft is not None:
+        if part.geometry({}) is not None:
+            raise ValueError(f"{part.name}'s geometry is Python: its SCAD is generated, not edited")
+        if same_text(part.source_file, draft):
+            draft = None
+    params = without_defaults(part, part.validate_overrides(params, scad_text=draft))
     chosen, renderer = renderer, renderer or part_renderer(part)
     canonical = part.get_stl_output_path()
     rotation = part.display_rotation.to_list()
-    holds_default = read_params_sidecar(canonical) is None
-    key = variant_key(part, params, renderer)
+    holds_default = draft is None and read_params_sidecar(canonical) is None
+    key = variant_key(part, params, renderer, draft=draft)
     stl, record_path = variant_paths(part, key, cache)
     made = Made(params=params, openscad=openscad_of(renderer), backend=backend_of(renderer))
+    if draft is not None:
+        made.draft = hashlib.sha256(draft.encode("utf-8")).hexdigest()
 
     with _LOCKS(f"{_folder_name(part)}/{key}"):
         if cancel is not None and cancel.cancelled:
             made.failure, made.error_message = "cancelled", SUPERSEDED
             return made
         record = None if force else read_variant(part, key, cache)
-        if record is None and not force and _is_fresh(part, canonical, params):
+        if record is None and not force and draft is None and _is_fresh(part, canonical, params):
             # The part's own STL answers it; it was not rendered by this cache.
             made.stl_path, made.saved = canonical, True
             made.measure(None, rotation)
@@ -422,10 +477,11 @@ def make_variant(
                 made.failure, made.error_message = "refused", reason
                 return made
             stl.parent.mkdir(parents=True, exist_ok=True)
-            result = render_part(part, stl, params, timeout, renderer, rotation, cancel)
+            with _written(part, draft) as scad:
+                result = render_part(part, stl, params, timeout, renderer, rotation, cancel, scad)
+                made.messages = _messages_of(part, result, scad)
             made.rendered, made.result = True, result
             made.render_time_seconds = result.render_time_seconds
-            made.messages = _messages_of(part, result)
             if result.cancelled:
                 made.failure, made.error_message = "cancelled", SUPERSEDED
                 return made
@@ -445,7 +501,10 @@ def make_variant(
                 "measured": made.measured,
                 "measured_from": made.measured_from,
                 "messages": [m.model_dump() for m in made.messages],
+                "draft": made.draft,
             }
+            if draft is not None:
+                _write_atomically(variant_draft_path(part, key, cache), draft.encode("utf-8"))
             _write_atomically(
                 record_path,
                 (json.dumps(record, indent=2, sort_keys=True, default=_recordable) + "\n").encode(
@@ -466,9 +525,17 @@ def make_variant(
             with _LOCKS(f"{_folder_name(part)}/canonical"):
                 if force or not _is_fresh(part, canonical, {}):
                     _place_as_canonical(part, stl)
-        made.saved = _is_fresh(part, canonical, params)
+        made.saved = draft is None and _is_fresh(part, canonical, params)
     trim_variants(stl.parent)
     return made
+
+
+def same_text(path: Path, text: str) -> bool:
+    """Whether ``text`` is what the file at ``path`` holds, byte for byte."""
+    try:
+        return path.read_bytes() == text.encode("utf-8")
+    except OSError:
+        return False
 
 
 def renamed(messages: List[OpenSCADMessage], was: Path, now: Path) -> List[OpenSCADMessage]:
@@ -485,6 +552,18 @@ def renamed(messages: List[OpenSCADMessage], was: Path, now: Path) -> List[OpenS
         file = now_named if message.file == was_named else message.file
         out.append(message.model_copy(update={"file": file, "trace": trace}))
     return out
+
+
+@contextmanager
+def _written(part: BasePart, draft: Optional[str]) -> Iterator[Optional[Path]]:
+    """The draft written beside the part for one OpenSCAD run; None for none."""
+    if draft is None:
+        yield None
+        return
+    from .drafts import written_beside
+
+    with written_beside(part, draft) as path:
+        yield path
 
 
 # --- whose render is whose ----------------------------------------------------------
@@ -597,6 +676,10 @@ class VariantRecord(BaseModel):
     measured_from: Optional[str] = Field(None, description='"summary" or "stl"')
     messages: List[OpenSCADMessage] = Field(default_factory=list)
     saved: bool = Field(description="It is what the part's own STL holds")
+    draft: Optional[str] = Field(
+        None, description="The sha256 of the draft it was rendered from; None: the part's own SCAD"
+    )
+    scad_url: Optional[str] = Field(None, description="Where that draft's text is served")
 
 
 def variant_record(
@@ -613,10 +696,12 @@ def variant_record(
         measured = measure_stl(stl, part.display_rotation.to_list())
         source = FROM_STL if measured else None
     params = dict(record.get("params") or {})
+    draft = record.get("draft")
+    base = f"/parts/{url_name or part.name}/variants/{key}"
     return VariantRecord(
         part=part.name,
         variant=key,
-        stl_url=f"/parts/{url_name or part.name}/variants/{key}/stl",
+        stl_url=f"{base}/stl",
         params=params,
         openscad=record.get("openscad"),
         backend=record.get("backend"),
@@ -625,7 +710,9 @@ def variant_record(
         measured=measured_box(measured),
         measured_from=source,
         messages=[OpenSCADMessage(**m) for m in record.get("messages", [])],
-        saved=_is_fresh(part, part.get_stl_output_path(), params),
+        saved=not draft and _is_fresh(part, part.get_stl_output_path(), params),
+        draft=draft,
+        scad_url=f"{base}/scad" if draft else None,
     )
 
 
@@ -643,7 +730,10 @@ __all__ = [
     "measured_box",
     "part_state",
     "read_variant",
+    "read_variant_draft",
     "renamed",
+    "same_text",
+    "variant_draft_path",
     "variant_record",
     "trim_variants",
     "variant_cache_dir",

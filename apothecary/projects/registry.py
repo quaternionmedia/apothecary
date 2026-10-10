@@ -22,10 +22,16 @@ class ProjectInfo:
         return d
 
 
+def _visible(paths: Iterable[Path]) -> List[Path]:
+    """``paths`` less hidden files: a dot-file is scratch (a draft being checked
+    beside its part, apothecary/projects/parts/drafts.py), never a part."""
+    return sorted(p for p in paths if not p.name.startswith("."))
+
+
 def _gather(dirpath: Path, patterns: Iterable[str]) -> List[Path]:
     files: List[Path] = []
     for pat in patterns:
-        files.extend(sorted(dirpath.glob(pat)))
+        files.extend(_visible(dirpath.glob(pat)))
     return files
 
 
@@ -139,7 +145,7 @@ def _scan(root: Path) -> List[ProjectInfo]:
         # Gather all SCAD files in both flat and folder structures
         part_files = _gather(parts_dir, ["*.scad", "*.md"])
         # Also include files in subdirectories
-        part_files.extend(sorted(parts_dir.glob("*/*.scad")))
+        part_files.extend(_visible(parts_dir.glob("*/*.scad")))
         part_files.extend(sorted(parts_dir.glob("*/*.md")))
 
         items.append(
@@ -229,7 +235,7 @@ def _discover_part_scads(parts_dir: Path) -> set[Path]:
     submodule roots are skipped: their contents are library internals,
     registered instead by ``_scan_submodule_parts`` via an explicit wrapper.
     """
-    scads: set[Path] = set(parts_dir.glob("*.scad"))
+    scads: set[Path] = set(_visible(parts_dir.glob("*.scad")))
 
     def visit(subdir: Path) -> None:
         if (subdir / ".git").exists():
@@ -244,11 +250,13 @@ def _discover_part_scads(parts_dir: Path) -> set[Path]:
                 scads.add(candidate)
                 return
         children = [child for child in sorted(subdir.iterdir()) if child.is_dir()]
-        if any(any(child.rglob("*.scad")) for child in children if not (child / ".git").exists()):
+        if any(
+            _visible(child.rglob("*.scad")) for child in children if not (child / ".git").exists()
+        ):
             for child in children:
                 visit(child)
             return
-        found = sorted(subdir.glob("*.scad"))
+        found = _visible(subdir.glob("*.scad"))
         if found:
             scads.add(found[0])
 

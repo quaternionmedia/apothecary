@@ -159,6 +159,25 @@ staged set against the same list: a number as a number, a choice one of its
 options, a range or length the SCAD states kept to; a value the SCAD itself
 assigns is no override.
 
+### Editing a part's SCAD: drafts
+
+A draft is a part's SCAD as edited in the page. `POST
+/parts/{name}/draft/check` with `{scad, params}` writes it to a hidden file
+of its own beside the part (`.<stem>.<random>.draft.scad`, ignored by git,
+never a part), so its includes resolve, has OpenSCAD evaluate it without
+rendering, and removes it: the answer is what OpenSCAD said, by line of the
+draft and naming the part's SCAD, the fields to build controls from (the
+model's, or the draft's own as OpenSCAD lists them), and the staged
+parameters checked against them. `POST /parts/{name}/draft/render` renders it
+into the cache of variants, answered as generate answers, `draft` the
+sha256 of its text; the cache keeps the text, at
+`/parts/{name}/variants/{variant}/scad`. The part's own SCAD and STL are
+never written.
+
+A part built by Python geometry (the snowplow) has no SCAD of its own to
+edit: `GET /parts/{name}/scad` answers the SCAD its geometry generates
+(`X-Part-Scad: generated`), and a draft of it is a `403`.
+
 ## Hooks for a part the SCAD file does not fully describe
 
 Most parts need none of these. Each is a `BasePart` field or method a

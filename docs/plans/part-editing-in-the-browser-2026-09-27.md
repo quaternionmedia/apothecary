@@ -157,8 +157,18 @@ The docs' "thirty seconds of OpenSCAD" (`tests/test_staging.py`,
 - A draft is written beside the part (includes still resolve) and rendered
   into the variant cache; Save writes the SCAD, and history is git's: a save
   is a commit the person makes, not one the page makes silently.
+  Landed on the server: `POST /parts/{name}/draft/check` and
+  `/draft/render` (`apothecary/routes/part_edits.py`,
+  `apothecary/projects/parts/drafts.py`) write the draft to a hidden,
+  ignored file beside the part for one OpenSCAD run; the check evaluates it
+  without rendering (the param export, or the echo export on 2021.01) and
+  answers OpenSCAD's messages by line of the draft and the fields to build
+  controls from; the render is a variant keyed by the draft's text, which
+  the cache keeps.
 - Python-geometry parts (the snowplow) show their generated SCAD read-only;
   their editing surface is their parameters.
+  Landed on the server: `GET /parts/{name}/scad` answers the SCAD its
+  geometry generates (`X-Part-Scad: generated`), and a draft of it is a 403.
 
 **Iteration 4: handles.** A three.js handle bound to one named numeric
 parameter (a length, a height), writing to the parameter, never the source;

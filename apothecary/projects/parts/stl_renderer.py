@@ -838,11 +838,13 @@ def render_part(
     renderer: Optional[OpenSCADRenderer] = None,
     rotation: Optional[List[float]] = None,
     cancel: Optional[Cancellation] = None,
+    scad: Optional[Path] = None,
 ) -> RenderResult:
     """Render a part with already-validated ``params`` to ``stl_path``, and
     nothing more: no freshness check, no sidecar. A part with Python geometry
     is rendered from that geometry's SCAD, written to a scratch file beside
-    ``stl_path``; any other from its SCAD file, the params reaching it through
+    ``stl_path``; any other from its SCAD file, or from ``scad`` standing in
+    for it (a draft written beside it), the params reaching it through
     ``part.scad_overrides``. ``rotation`` turns the result; ``renderer``
     defaults to the OpenSCAD the part asks for; ``cancel`` can stop it."""
     if renderer is None:
@@ -851,7 +853,7 @@ def render_part(
     with _scratch_beside(stl_path) as tmp:
         text = geometry_scad(part, params)
         if text is None:
-            scad, definitions = part.source_file, part.scad_overrides(params)
+            scad, definitions = scad or part.source_file, part.scad_overrides(params)
         else:
             scad, definitions = Path(tmp) / part.source_file.name, {}
             scad.write_text(text, encoding="utf-8")
