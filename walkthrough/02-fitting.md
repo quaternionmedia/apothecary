@@ -77,7 +77,13 @@ refused here:
     False
 
 In the viewer the staged changes are marked, counted and shown against their
-previous values, and **Apply** is the only thing that renders.
+previous values, checked once the controls rest, and **Apply** is the only
+thing that renders. What it renders is a variant, kept by what made it
+(`apothecary/projects/parts/variants.py`) and drawn in that tab alone; the
+tab's address names it, so a reload or a link draws it again, and a part drawn
+from one wears a quiet amber mark. The part's own STL stays the saved part:
+**Defaults**, then **Apply** -- the editor's buttons, or the same cells under
+Part on the part's ring -- go back to it without rendering anything.
 
 ## Overrides reach OpenSCAD
 

@@ -63,6 +63,19 @@ from .projects.parts.params import (
 from .projects.parts.skeleton import ROOT
 from .projects.parts.stl_renderer import build_stl
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
+from .projects.parts.variants import (
+    KEY_PATTERN,
+    PageRenders,
+    PartState,
+    VariantRecord,
+    make_variant,
+    measured_box,
+    part_state,
+    read_variant,
+    variant_paths,
+    variant_record,
+)
+from .projects.parts.variants import wants as request_wants
 from .projects.registry import ProjectInfo, _sanitize_module_name, scan_projects
 from .routes.cameras import router as cameras_router
 from .routes.jobs import router as jobs_router
@@ -422,18 +435,44 @@ class StlGenerateRequest(BaseModel):
     )
 
 
+# The render each page has in flight per part, so a newer one can stop it.
+_page_renders = PageRenders()
+
+
 @app.post("/parts/{name}/stl/generate")
 def generate_part_stl(
     name: str,
-    force: bool = Query(False),
+    force: bool = Query(False, description="Render even what the cache already has"),
+    page: Optional[str] = Query(
+        None,
+        max_length=128,
+        description="An id the page makes up once per load. A newer request from the "
+        "same page for the same part stops this one's OpenSCAD run (409).",
+    ),
     body: Optional[StlGenerateRequest] = None,
 ):
-    """Build a part's STL through build_stl, as `apothecary parts generate-stl` does.
+    """Render a part with ``params`` into the variant cache, and say what OpenSCAD said.
 
     ``params`` are checked against what the part declares (422 on an unknown
-    name or a bad value). An STL newer than its sources and rendered from the
-    same parameters is kept unless ``force`` (``regenerated: false``). No
-    OpenSCAD, or a part that cannot be built on this machine, is a 503.
+    name or a bad value). The cache is keyed by the SCAD and everything it
+    reads, the parameters, the OpenSCAD and its backend
+    (``apothecary/projects/parts/variants.py``): a request it already holds,
+    or that the part's own STL already answers, renders nothing
+    (``regenerated: false``) unless ``force``. ``stl_url`` is where the
+    answer is: ``/parts/{name}/variants/{variant}/stl``, or the part's own
+    STL. The defaults are also left as the part's own STL, unless its params
+    sidecar says it holds another variant; any other variant is the cache's
+    alone, so two pages applying different values never share a file.
+
+    ``bounds`` is the envelope the part declares; ``measured`` is the box of
+    what is served, in the same upright frame: OpenSCAD's own summary of the
+    render where it writes one (``measured_from: "summary"``, a snapshot),
+    else read off the STL (``"stl"``: 2021.01, or the part's own STL built
+    elsewhere). ``saved`` says the answer is what the part's own STL holds.
+    ``messages`` are its errors and warnings by file and line. A render
+    OpenSCAD refused is a 422 whose ``detail`` carries them; one superseded
+    by a newer request from the same ``page`` is a 409. No OpenSCAD, or a
+    part that cannot be built on this machine, is a 503.
     """
     part = _load_part_wrapper(name)
     try:
@@ -445,30 +484,114 @@ def generate_part_stl(
             status_code=503, detail="OpenSCAD not installed. Cannot generate STL files."
         )
 
-    result = build_stl(part, overrides, force=force)
-    if result.skipped == "refused":
+    cancel = _page_renders.begin(part.name, page, request_wants(overrides, force))
+    try:
+        made = make_variant(part, overrides, force=force, cancel=cancel)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    finally:
+        _page_renders.end(part.name, page, cancel)
+
+    messages = jsonable_encoder(made.messages)
+    if made.failure == "refused":
         raise HTTPException(
-            status_code=503, detail=f"Cannot generate STL for '{name}': {result.error_message}"
+            status_code=503, detail=f"Cannot generate STL for '{name}': {made.error_message}"
         )
-    if not result.success:
+    if made.failure == "cancelled":
         raise HTTPException(
-            status_code=500, detail=f"STL generation failed: {result.error_message}"
+            status_code=409, detail={"message": made.error_message, "superseded": True}
+        )
+    if made.failure is not None:
+        said = any(m.level == "error" for m in made.messages)
+        raise HTTPException(
+            status_code=422 if said else 500,
+            detail={
+                "message": f"STL generation failed: {made.error_message}",
+                "messages": messages,
+            },
         )
 
-    regenerated = result.skipped != "fresh"
     return {
         "success": True,
         "message": (
-            f"STL generated in {result.render_time_seconds:.1f}s"
-            if regenerated
+            f"STL generated in {made.render_time_seconds:.1f}s"
+            if made.rendered
             else "STL is up to date (force=true rebuilds it)"
         ),
-        "stl_url": f"/parts/{name}/stl",
-        "regenerated": regenerated,
-        "render_time_seconds": result.render_time_seconds,
-        "params": jsonable_encoder(overrides),
+        "stl_url": (f"/parts/{name}/variants/{made.key}/stl" if made.key else f"/parts/{name}/stl"),
+        "variant": made.key,
+        "regenerated": made.rendered,
+        "render_time_seconds": made.render_time_seconds,
+        "params": jsonable_encoder(made.params),
         "bounds": jsonable_encoder(part.get_bounds(overrides or None)),
+        "measured": jsonable_encoder(measured_box(made.measured)),
+        "measured_from": made.measured_from,
+        "saved": made.saved,
+        "messages": messages,
+        "openscad": made.openscad,
+        "backend": made.backend,
     }
+
+
+@app.get("/parts/{name}/variants/{variant}", response_model=VariantRecord)
+def get_part_variant(name: str, variant: str):
+    """What made one cached variant: its parameters, OpenSCAD and backend, its
+    measured bounds and what OpenSCAD said, and its ``stl_url``. A page that
+    has only the key (a reloaded tab, a link) starts its editor from these.
+    404 once the cache has let it go."""
+    part = _load_part_wrapper(name)
+    record = variant_record(part, variant, url_name=name) if KEY_PATTERN.match(variant) else None
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No variant '{variant}' of '{name}' is cached; "
+            f"POST /parts/{name}/stl/generate makes it",
+        )
+    return record
+
+
+@app.get("/parts/{name}/variants/{variant}/stl")
+def get_part_variant_stl(name: str, variant: str):
+    """One variant from the cache, by the ``variant`` key generate answered.
+
+    Its bytes never change under its key, whichever page asks: what a page
+    applied is what it draws. 404 once the cache has let it go (it keeps the
+    most recently served of each part); generating it again puts it back.
+    """
+    part = _load_part_wrapper(name)
+    if not KEY_PATTERN.match(variant) or read_variant(part, variant) is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No variant '{variant}' of '{name}' is cached; "
+            f"POST /parts/{name}/stl/generate makes it",
+        )
+    stl, _ = variant_paths(part, variant)
+    try:
+        data = stl.read_bytes()
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Variant '{variant}' was let go") from None
+    return Response(
+        content=data,
+        media_type="application/sla",
+        headers={
+            "Content-Disposition": f'attachment; filename="{name}-{variant}.stl"',
+            "X-Part-Name": name,
+            "X-Part-Variant": variant,
+        },
+    )
+
+
+@app.get("/parts/{name}/state", response_model=PartState)
+def get_part_state(name: str):
+    """What the part's own STL is, from its params sidecar.
+
+    The parameters it was rendered with (empty: the defaults), when, and
+    whether it is newer than everything it is built from: what a page drawing
+    ``/parts/{name}/stl`` starts its editor from, rather than the model's
+    defaults. ``apothecary parts generate-stl -p`` is what writes a variant
+    there; the page's own Apply only ever leaves the defaults there.
+    """
+    return part_state(_load_part_wrapper(name), url_name=name)
 
 
 @app.get("/parts/{name}/params", response_model=ParamsSpec)
@@ -1495,12 +1618,13 @@ def _pinned_at(port: str) -> Optional[tuple[str, Assembly, str]]:
 def _parts_of(site_name: str, site: Assembly, leave_out: str) -> List[jobs.JobPart]:
     """What a job in ``site`` can name as the part it makes, by path: every node
     built from a part (named for its ``part_ref``) and every piece made from a
-    picture (named for its word), but nothing at or under ``leave_out`` -- the
-    machine itself. Holes cut from a piece are not things made."""
+    picture (named for its word, with the picture and the camera it came from),
+    but nothing at or under ``leave_out`` -- the machine itself. Holes cut from a
+    piece are not things made."""
     from .vision import views as viewing
 
     made = viewing.store().made_at(site_name)
-    found: Dict[str, str] = {}
+    found: Dict[str, jobs.JobPart] = {}
 
     def visit(node: Assembly, prefix: str) -> None:
         for child in [*node.children, *node.additions]:
@@ -1508,13 +1632,16 @@ def _parts_of(site_name: str, site: Assembly, leave_out: str) -> List[jobs.JobPa
             if path == leave_out or path.startswith(leave_out + "."):
                 continue
             if child.part_ref:
-                found[path] = child.part_ref
+                found[path] = jobs.JobPart(path=path, name=child.part_ref)
             elif not prefix and child.name in made:
-                found[path] = made[child.name].word
+                record = made[child.name]
+                found[path] = jobs.JobPart(
+                    path=path, name=record.word, picture=record.picture, camera=record.camera
+                )
             visit(child, path)
 
     visit(site, "")
-    return [jobs.JobPart(path=path, name=name) for path, name in sorted(found.items())]
+    return [found[path] for path in sorted(found)]
 
 
 def _place_of(port: str) -> Optional[jobs.Place]:
@@ -1628,6 +1755,25 @@ def _the_printer_in(site_name: str, site: Assembly) -> Optional[str]:
 
 slicing.TARGETS.append(_slice_target)
 slicing.PRINTERS.append(_printer_to_slice_for)
+
+
+def printers_in(site_name: str) -> List[str]:
+    """The printers of ``site_name`` a print can go to: each node a board pinned in
+    the site drives, when that node is a printer (it carries a printer's status),
+    sorted. A made piece's Print offers them (``menu.py``)."""
+    if site_name not in _site_store.names():
+        return []
+    try:
+        site = _site_store.get(site_name)
+    except KeyError:
+        return []
+    found = set()
+    for binding in firmware_devices.get_state().bindings(site_name):
+        bearer = status_bearer_for(site, binding.path)
+        node = _find_node_by_path(site, bearer) if bearer else None
+        if node is not None and node.status in PRINTER_STATUSES:
+            found.add(bearer)
+    return sorted(found)
 
 
 @app.get("/firmware/pins", tags=["firmware"])

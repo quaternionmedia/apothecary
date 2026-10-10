@@ -106,6 +106,20 @@ class TestStagingReachesTheViewer:
         # What was sent, once the build succeeded: not what the sliders say by then.
         assert "Object.assign(stage.committed, params)" in render
 
+    def test_apply_names_its_page_and_never_forces_a_render(self):
+        """The variant cache answers what it holds (apothecary/projects/parts/variants.py);
+        force=true would render every Apply again. The page's id lets a newer Apply
+        stop an older one's render."""
+        page = client.get("/viewer/sites/parts_library").text
+        target = page[page.index("partTarget(ref) {") : page.index("pieceTarget(name")]
+        assert "stl/generate?page=${encodeURIComponent(PAGE_ID)}" in target
+        assert "force" not in target
+
+    def test_the_check_waits_for_the_controls_to_rest(self):
+        page = client.get("/viewer/sites/parts_library").text
+        stage = page[page.index("async refreshStage()") : page.index("async validateStaged(")]
+        assert "setTimeout(() => this.validateStaged(" in stage and "fetch(" not in stage
+
     def test_a_made_piece_gets_the_same_editor_under_its_provenance(self):
         """Selected appends the editor for a made piece after its picture facts,
         with the same element ids a part's editor has."""

@@ -17,7 +17,7 @@ import re
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
+from typing import List, Sequence
 
 from playwright.sync_api import Page
 
@@ -96,6 +96,23 @@ class DocRecorder:
 # --------------------------------------------------------------------------
 
 WALKTHROUGH_ROOT = Path(__file__).resolve().parents[2] / "walkthrough"
+# What a picture paints over what changes on every run: a grey the dark page reads as
+# a blank, not as anything it draws.
+BLANK_COLOR = "#3c3c3c"
+
+
+def _blanked(selectors: Sequence[str]) -> str:
+    """The stylesheet a picture is taken under when ``selectors`` are blanked: each
+    one's words and what it holds hidden on a grey of its own size. In the page,
+    rather than painted over the picture, so what a panel has scrolled out of sight
+    stays out of sight."""
+    each = ", ".join(selectors)
+    inside = ", ".join(f"{selector} *" for selector in selectors)
+    return (
+        f"{each} {{ background: {BLANK_COLOR} !important; color: transparent !important;"
+        " text-shadow: none !important; border-radius: 3px; }\n"
+        f"{inside} {{ visibility: hidden !important; }}\n"
+    )
 
 
 def _keep_unless_changed(path: Path, png: bytes) -> None:
@@ -137,6 +154,13 @@ class Walkthrough:
     browser. `shows` is a step with a picture of the screen. Both are called
     from a test that has just asserted the thing the sentence claims, which is
     the only reason the sentence is worth anything.
+
+    `browser_suite_only` is a page the browser suite writes and the quick
+    `apothecary test run` does not -- a loop's page (docs/plans/ui-flows-2026-10-08.md),
+    whose run is unmarked `walkthrough`: its header says the browser suite rewrites
+    it, and its footer names `module`, the test module that writes it, to run alone.
+    The fixture sets `module` and holds the flag to the run's marker, so the words
+    stay true. It is the one place a page says who writes it.
     """
 
     page: Page
@@ -147,20 +171,28 @@ class Walkthrough:
     runtime: str
     does_not_show: List[str]
     steps: List[ShownStep] = field(default_factory=list)
+    browser_suite_only: bool = False
+    module: str | None = None  # the test module that writes the page, from the repository root
 
     def says(self, heading: str, sentence: str, shown: str | None = None) -> None:
         self.steps.append(
             ShownStep(index=len(self.steps) + 1, heading=heading, sentence=sentence, shown=shown)
         )
 
-    def shows(self, heading: str, sentence: str, shown: str | None = None) -> None:
+    def shows(
+        self, heading: str, sentence: str, shown: str | None = None, blank: Sequence[str] = ()
+    ) -> None:
+        """``blank``: CSS selectors of what differs on every run whatever the page does
+        -- a clock's time, a name made of one -- blanked for the picture, so it changes
+        when the page does and not when the clock does."""
         index = len(self.steps) + 1
         # The pages share one folder of screenshots, so each picture carries
         # its page's ordinal ahead of its step's.
         filename = f"{self.ordinal}-{index:02d}-{_slugify(heading)}.png"
         shots = WALKTHROUGH_ROOT / "screenshots"
         shots.mkdir(parents=True, exist_ok=True)
-        _keep_unless_changed(shots / filename, self.page.screenshot())
+        png = self.page.screenshot(style=_blanked(blank)) if blank else self.page.screenshot()
+        _keep_unless_changed(shots / filename, png)
         self.steps.append(
             ShownStep(
                 index=index,
@@ -188,8 +220,18 @@ class Walkthrough:
             "",
             "**This page is written by the run it describes.** Every sentence below",
             "was emitted by a test that had just asserted it, and the whole page is",
-            "rewritten by the ordinary test command. Editing it by hand is editing",
-            "the output of a program: the next run puts it back.",
+            *(
+                [
+                    "rewritten by every run of the browser suite (`uv run apothecary test",
+                    "run --e2e`), though not by the quicker `apothecary test run`. Editing it",
+                    "by hand is editing the output of a program: the next run puts it back.",
+                ]
+                if self.browser_suite_only
+                else [
+                    "rewritten by the ordinary test command. Editing it by hand is editing",
+                    "the output of a program: the next run puts it back.",
+                ]
+            ),
             "",
             self.intro,
             "",
@@ -220,7 +262,14 @@ class Walkthrough:
         lines.append("Run it yourself:")
         lines.append("")
         lines.append("```sh")
-        lines.append("uv run apothecary test run --e2e")
+        if self.browser_suite_only and self.module:
+            alone = f"uv run pytest {self.module} --start-server"
+            suite = "uv run apothecary test run --e2e"
+            width = max(len(alone), len(suite)) + 3
+            lines.append(f"{alone:<{width}}# this page alone")
+            lines.append(f"{suite:<{width}}# with every browser test")
+        else:
+            lines.append("uv run apothecary test run --e2e")
         lines.append("```")
         lines.append("")
 

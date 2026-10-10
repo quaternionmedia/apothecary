@@ -1003,7 +1003,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     bench = next(c for c in panels.children if c.label == "Bench")
     assert [(c.label, c.action, c.cell) for c in bench.children] == [
         ("Bench", "panel:toggle:bench", 8),
-        ("Install", "bench:install", 6),
+        ("Install", None, 6),
         ("Compile", "bench:compile", 2),
         ("Upload", "bench:upload", 4),
         ("Raw flash", "bench:esptool", 9),
@@ -1013,6 +1013,15 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     ]
     assert address_of(root, "panel:bench") == "938"
     assert address_of(root, "bench:compile") == "932"
+    # Install is a ring of the toolchain modules, from their registry: each module's
+    # install has an address, and arduino-cli's moved one level deeper (it was 936).
+    install = bench.children[1]
+    assert [(c.label, c.action, c.cell) for c in install.children] == [
+        ("Arduino", "bench:install:arduino", 8),
+        ("Rust ESP32", "bench:install:rust-esp32", 6),
+    ]
+    assert address_of(root, "bench:install:arduino") == "9368"
+    assert address_of(root, "bench:install:rust-esp32") == "9366"
     # A core by its architecture, one leaf per suggested core.
     cores = bench.children[6]
     assert [c.label for c in cores.children] == ["AVR", "ESP32", "ESP8266", "RP2040", "SAMD"]
@@ -1021,7 +1030,8 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     for pid in ("site", "pictures", "machine", "bench"):
         assert carried_by(f"panel:toggle:{pid}").name == "VIEWER"
     for verb in (
-        "install",
+        "install:arduino",
+        "install:rust-esp32",
         "compile",
         "upload",
         "esptool",
@@ -1185,7 +1195,12 @@ def test_camera_and_picture_are_absent_below_the_root_and_where_nothing_can_be_p
 #
 # One editor, in Selected, for a part and for a piece made from a picture: Part ›
 # Edit opens it there. Appended after every cell the ring had, so none moves; the
-# page carries it, and Apply goes through the part and made routes.
+# page carries it, and Apply goes through the part and made routes. A part from
+# the parts folder also has Part › Defaults after Edit: its own numbers staged in
+# the editor, as the editor's Defaults does (loop 1's owner's answer). A made
+# piece's numbers are what was found, with no part's own to go back to. Then Apply
+# and Revert, on every Part, acting on what the editor has staged, as its buttons
+# do: the part's ring holds the whole loop (the owner's answer once more).
 
 
 def test_a_part_and_a_made_piece_end_with_part_edit_and_nothing_else_does():
@@ -1197,19 +1212,74 @@ def test_a_part_and_a_made_piece_end_with_part_edit_and_nothing_else_does():
         ring = resolve(Context(pointing=Pointing.NODE, targets=[path]), garage)
         part = ring.options[-1]
         assert part.label == "Part" and part.id == "part", (path, [o.label for o in ring.options])
-        assert [(c.label, c.action) for c in part.children] == [("Edit", "part:edit")]
+        assert [(c.label, c.action) for c in part.children] == [
+            ("Edit", "part:edit"),
+            ("Defaults", "part:defaults"),
+            ("Apply", "part:apply"),
+            ("Revert", "part:revert"),
+        ]
         assert len(ring.options) <= MOST_OPTIONS
-    # A made piece has Part too, after its Picture.
+    # A made piece has Part too, after its Picture: Edit, Apply and Revert, no Defaults.
     site = _garage()
     site.children.append(Assembly(name="disc_1", role="word", base=Cube(size=10.0)))
     told = PictureContext(made=["disc_1"], words=["disc", "plate"])
     made = resolve(Context(pointing=Pointing.NODE, targets=["disc_1"]), site, picture=told)
     assert [o.label for o in made.options][-2:] == ["Picture", "Part"]
-    assert _group(made, "Part", "Edit").action == "part:edit"
+    assert [c.action for c in made.options[-1].children] == [
+        "part:edit",
+        "part:apply",
+        "part:revert",
+    ]
     # A structure that is neither is left alone: the bench's ring ends as it did.
     bench = resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), garage)
     assert [o.label for o in bench.options][-2:] == ["Camera", "Picture"]
-    assert carried_by("part:edit").name == "VIEWER"
+    for action in ("part:edit", "part:defaults", "part:apply", "part:revert"):
+        assert carried_by(action).name == "VIEWER"
+
+
+def test_part_holds_the_loop_edit_keeping_its_address():
+    """Edit keeps its address; Defaults, Apply and Revert take the seats after it."""
+    ring = resolve(Context(pointing=Pointing.NODE, targets=["footpedal"]), _garage())
+    edit = address_of(ring, "part:edit")
+    for action in ("part:defaults", "part:apply", "part:revert"):
+        address = address_of(ring, action)
+        assert address[:-1] == edit[:-1]
+        assert walk(ring, address).action == action
+
+
+def test_a_made_piece_with_a_printer_pinned_in_its_site_ends_with_print():
+    """The owner's answer of 2026-10-10: a made piece's ring gets Print, which opens
+    the pinned printer's Machine with the piece chosen under makes. One printer is the
+    cell itself; several are a cell each under it; with none there is no Print.
+    Appended after Part, so no cell above it moves, and only on a made piece."""
+    from apothecary.menu import PictureContext, carried_by
+
+    site = _garage()
+    site.children.append(Assembly(name="disc_1", role="word", base=Cube(size=10.0)))
+
+    def on(path, printers):
+        told = PictureContext(made=["disc_1"], words=["disc"], printers=printers)
+        return resolve(Context(pointing=Pointing.NODE, targets=[path]), site, picture=told)
+
+    without, one = on("disc_1", []), on("disc_1", ["printer_1"])
+    assert [o.label for o in without.options][-2:] == ["Picture", "Part"]
+    seated = [(o.label, o.cell) for o in one.options]
+    assert seated[:-1] == [(o.label, o.cell) for o in without.options]
+    printing = one.options[-1]
+    assert (printing.label, printing.action, printing.children) == (
+        "Print",
+        "print:piece:printer_1",
+        None,
+    )
+    two = _group(on("disc_1", ["printer_1", "printer_2"]), "Print")
+    assert [(c.label, c.action) for c in two.children] == [
+        ("printer_1", "print:piece:printer_1"),
+        ("printer_2", "print:piece:printer_2"),
+    ]
+    # A part that is no made piece, and a host, get no Print, printers or not.
+    for path in ("footpedal", "workbench"):
+        assert "Print" not in [o.label for o in on(path, ["printer_1"]).options], path
+    assert carried_by("print:piece:printer_1").name == "VIEWER"
 
 
 def test_a_made_piece_has_picture_with_word_and_drop_and_no_camera():
@@ -1758,7 +1828,9 @@ def test_a_shape_is_made_worded_and_dropped_through_the_ring_and_the_intent_rout
     assert answer.status_code == 200, answer.text
     body = answer.json()
     assert body["carried_by"] == "the server carries it out" and body["address"] == make
-    piece = body["did"].split("made ", 1)[1]
+    # What it made, then the steps after it: adjust it, then print it.
+    piece, after = body["did"].split("made ", 1)[1].split(": ", 1)
+    assert after == "Part › Edit adjusts it, and a printer's Machine prints it"
     assert piece in {s["name"] for s in body["site"]["structures"]}
     attached = client.get("/sites/garage/attached").json()
     assert attached["made"][piece]["shape_index"] == 1
@@ -1790,7 +1862,40 @@ def test_a_shape_is_made_worded_and_dropped_through_the_ring_and_the_intent_rout
     ).json()
     answer = _choose(client, ring, _address(ring, f"picture:make-all:{view['id']}"), ["workbench"])
     assert answer.status_code == 200, answer.text
-    assert answer.json()["did"].startswith("made 3 piece(s)")
+    did = answer.json()["did"]
+    assert did.startswith("made 3 piece(s)")
+    assert did.endswith("; Part › Edit adjusts each, and a printer's Machine prints it")
+
+
+def test_the_route_tells_a_made_pieces_ring_of_the_printers_pinned_in_its_site(
+    carried, fake_arduino_cli
+):
+    """What printers a made piece's Print offers is the server's to say: the printer
+    above a board pinned in the site, and nothing once the board is unpinned."""
+    client, view = carried
+    made = client.post(f"/sites/garage/views/{view['id']}/make", json={"shape": 1})
+    assert made.status_code == 200, made.text
+    piece = made.json()["made"][0]
+    board = "printer_1.frame_system.mainboard"
+
+    def ring():
+        answer = client.post(
+            "/menu/resolve",
+            json={"context": {"pointing": "node", "targets": [piece]}, "site": "garage"},
+        )
+        assert answer.status_code == 200, answer.text
+        return answer.json()["options"]
+
+    assert "Print" not in [o["label"] for o in ring()]
+    pinned = client.put(f"/sites/garage/nodes/{board}/device", json={"identity": "/dev/ttyFAKE1"})
+    assert pinned.is_success, pinned.text
+    try:
+        options = ring()
+    finally:
+        client.delete(f"/sites/garage/nodes/{board}/device")
+    assert [o["label"] for o in options][-3:] == ["Picture", "Part", "Print"]
+    assert options[-1]["action"] == "print:piece:printer_1"
+    assert "Print" not in [o["label"] for o in ring()]
 
 
 def test_a_carried_picture_intent_is_refused_with_its_reason_and_never_a_500(carried):
@@ -1826,7 +1931,7 @@ def test_a_carried_picture_intent_is_refused_with_its_reason_and_never_a_500(car
     for action, status in cases.items():
         answer = send(action)
         assert answer.status_code == status, (action, answer.status_code, answer.text)
-    made = send(f"picture:make:{view['id']}:0").json()["did"].split("made ", 1)[1]
+    made = send(f"picture:make:{view['id']}:0").json()["did"].split("made ", 1)[1].split(":")[0]
     assert send(f"picture:make:{view['id']}:0").status_code == 409  # already made
     assert send("picture:word:no_such_word", targets=[made]).status_code == 422
     assert send("picture:drop", site=None).status_code == 400

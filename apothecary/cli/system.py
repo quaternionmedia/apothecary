@@ -142,13 +142,30 @@ def check():
     from ..firmware import service as firmware_service
 
     fw = firmware_service.toolchain_status()
+    # Each toolchain module: whether it is installed, and what it can do. An
+    # install flag installs its own module and nothing else.
+    can = {m.id: ", ".join(m.can) for m in fw.toolchains}
     if fw.arduino_cli_ok:
         cores = ", ".join(c.id for c in fw.cores if c.installed) or "no cores"
         _safe_echo(f"  ✓ arduino-cli {fw.arduino_cli_version} ({cores})")
+        _safe_echo(f"    Arduino can {can.get('arduino', '')}")
     else:
         _safe_echo(
             "  • arduino-cli not installed (optional: apothecary firmware install)", fg="yellow"
         )
+    for module in fw.toolchains:
+        if module.id == "arduino":
+            continue
+        if module.ok:
+            tools = ", ".join(t.version for t in module.tools if t.ok)
+            _safe_echo(f"  ✓ {module.label} ({tools})")
+            _safe_echo(f"    {module.label} can {can[module.id]}")
+        else:
+            _safe_echo(
+                f"  • {module.label} not installed (optional: {module.install}); "
+                f"it would {can[module.id]}",
+                fg="yellow",
+            )
     click.echo("")
 
     # Check for parts

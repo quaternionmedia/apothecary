@@ -157,9 +157,10 @@ class PictureContext(BaseModel):
     the browser has been allowed to name them), ``pictures`` the ones under the
     picture root, newest first, and ``here`` the place the ring stands on. The
     intent route fills in ``made`` (the site's made pieces), ``camera_parts``
-    (its cameras), ``words`` (the vocabulary), ``finders`` (those that can read
-    the drawn view's picture) and, on a camera part, ``here.camera`` (its device)
-    from what the server knows, so a page cannot claim them."""
+    (its cameras), ``printers`` (the site's printers with a board pinned, which a
+    made piece's Print offers), ``words`` (the vocabulary), ``finders`` (those
+    that can read the drawn view's picture) and, on a camera part, ``here.camera``
+    (its device) from what the server knows, so a page cannot claim them."""
 
     cameras: List[CameraSeen] = Field(default_factory=list)
     asked: bool = False
@@ -168,6 +169,7 @@ class PictureContext(BaseModel):
     finders: List[str] = Field(default_factory=list)
     made: List[str] = Field(default_factory=list)
     camera_parts: List[str] = Field(default_factory=list)
+    printers: List[str] = Field(default_factory=list)
     words: List[str] = Field(default_factory=list)
     here: Place = Field(default_factory=Place)
 
@@ -630,10 +632,14 @@ def _bench(show: Option) -> Option:
     Each verb is the Bench's button of the same name and acts on what the Bench
     has chosen -- the sketch, the board (FQBN) and the port in its boxes, the
     images in its raw-flash list, the libraries typed in its box -- as Control ›
-    Print › Send file prints what the Print card has chosen. Install installs or
-    updates arduino-cli; Cores installs one of the suggested cores; Cancel stops
-    the running task. Upload and Raw flash overwrite what a board runs.
+    Print › Send file prints what the Print card has chosen. Install is a ring of
+    the toolchain modules, drawn from their registry (firmware/modules): Arduino
+    installs or updates arduino-cli, Rust ESP32 fetches Rust for the ESP32, and a
+    module added later is a cell of it with no change here (the owner's decision
+    of 2026-10-10); Cores installs one of the suggested cores; Cancel stops the
+    running task. Upload and Raw flash overwrite what a board runs.
     """
+    from .firmware.modules import modules
     from .firmware.toolchains import SUGGESTED_CORES
 
     return Option(
@@ -641,7 +647,18 @@ def _bench(show: Option) -> Option:
         label="Bench",
         children=[
             show,
-            Option(id="bench:install", label="Install", action="bench:install"),
+            Option(
+                id="bench:install",
+                label="Install",
+                children=[
+                    Option(
+                        id=f"bench:install:{module.id}",
+                        label=shorten(module.ring_label),
+                        action=f"bench:install:{module.id}",
+                    )
+                    for module in modules()
+                ],
+            ),
             Option(id="bench:compile", label="Compile", action="bench:compile"),
             Option(id="bench:upload", label="Upload", action="bench:upload", destructive=True),
             Option(id="bench:esptool", label="Raw flash", action="bench:esptool", destructive=True),
@@ -909,6 +926,20 @@ def _find_shapes(drawn: ViewSeen, finders: Sequence[str], tail: str) -> Optional
     )
 
 
+def _print_option(printers: Sequence[str]) -> Option:
+    """Print on a made piece: the pinned printer's Machine opened with the piece
+    chosen under its Print from here's *makes* (the owner's answer of 2026-10-10).
+    One printer pinned in the site is the cell itself; several are a cell each
+    under Print. The page carries it."""
+    if len(printers) == 1:
+        return Option(id="print:piece", label="Print", action=f"print:piece:{printers[0]}")
+    return Option(
+        id="print:piece",
+        label="Print",
+        children=_listed("print:piece", [(f"print:piece:{p}", p) for p in printers]),
+    )
+
+
 def _made_picture_group(picture: PictureContext) -> Option:
     """Picture on a made piece: Word › the vocabulary's words, and Drop (the piece
     goes; its shape reads as found again). Both change the site, so the server
@@ -1069,16 +1100,26 @@ def _node_ring(
     # is the fullest node ring, eight, and so is a camera of this browser's. A
     # camera's editor edits its numbers -- its lens's position, its turn, tilt and
     # field of view (vision/camera_part.py, GET /sites/{s}/cameras/{name}/params).
-    if node is not None and (
-        node.part_ref or camera or (path and "." not in path and path in picture.made)
-    ):
-        options.append(
-            Option(
-                id="part",
-                label="Part",
-                children=[Option(id="part:edit", label="Edit", action="part:edit")],
-            )
-        )
+    made = bool(path and "." not in path and path in picture.made)
+    if node is not None and (node.part_ref or camera or made):
+        verbs = [Option(id="part:edit", label="Edit", action="part:edit")]
+        # A part from the parts folder: Defaults stages the part's own numbers in
+        # its editor, as the editor's Defaults does, so Apply draws the saved part
+        # again (loop 1, docs/plans/ui-flows-2026-10-08.md). A camera's numbers and a
+        # made piece's are what was found and set, with no part's own to go back to.
+        if node.part_ref and not camera and not made:
+            verbs.append(Option(id="part:defaults", label="Defaults", action="part:defaults"))
+        # Apply and Revert act on what the editor has staged, as its buttons do,
+        # for whatever it edits: the part's ring holds the whole loop (the owner's
+        # answer, docs/plans/ui-flows-2026-10-08.md).
+        verbs.append(Option(id="part:apply", label="Apply", action="part:apply"))
+        verbs.append(Option(id="part:revert", label="Revert", action="part:revert"))
+        options.append(Option(id="part", label="Part", children=verbs))
+    # A made piece with a printer pinned in its site to print it on: Print,
+    # appended after Part so no cell above moves. A piece with nowhere to be
+    # printed has no Print rather than one greyed out.
+    if made and picture.printers:
+        options.append(_print_option(picture.printers))
     return Ring(title=shorten(path or (node.name if node else "")), options=options)
 
 
@@ -1290,6 +1331,9 @@ CARRIED_BY: Dict[str, Carries] = {
     "level": Carries.VIEWER,
     # Streaming a file: the page starts the job with the file it has chosen.
     "print": Carries.VIEWER,
+    # A made piece's Print: the page opens the printer's Machine with the piece
+    # chosen under makes; nothing is sent until that card's Print.
+    "print:piece": Carries.VIEWER,
     # Opening, closing, floating what stands in front of the world (panels.js).
     "panel": Carries.VIEWER,
     # How the world is drawn: the header's View menu (snapping, detail, outlines,
@@ -1323,8 +1367,10 @@ CARRIED_BY: Dict[str, Carries] = {
     "picture:drop": Carries.SERVER,
     "picture:word": Carries.SERVER,
     # The part editor is the page's: Part › Edit opens it in Selected and puts
-    # the cursor in its first control. What Apply then changes goes through the
-    # part and made routes the editor already calls, never the intent route.
+    # the cursor in its first control, Part › Defaults opens it with the part's
+    # own numbers staged, and Part › Apply and Revert do what its buttons do with
+    # what is staged. What Apply changes goes through the part, made and camera
+    # routes the editor already calls, never the intent route.
     "part": Carries.VIEWER,
 }
 

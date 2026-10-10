@@ -142,7 +142,7 @@ def test_the_choices_say_where_a_machine_stands_and_what_its_job_can_name(
 
     garage = _site_store.get("garage")
     garage.children.append(Structure(name="bin_1"))  # as a piece made from a picture stands
-    made = {"bin_1": SimpleNamespace(word="bin")}
+    made = {"bin_1": SimpleNamespace(word="bin", picture="captures/bench.png", camera="camera_1")}
     assert client.put(f"/sites/garage/nodes/{BOARD}/device", json={"identity": PRINTER}).is_success
     try:
         with monkeypatch.context() as patched:
@@ -162,6 +162,17 @@ def test_the_choices_say_where_a_machine_stands_and_what_its_job_can_name(
     assert parts["bin_1"] == "bin"
     assert not [p for p in parts if p == "printer_1" or p.startswith("printer_1.")]
     assert list(parts) == sorted(parts)
+    # A made piece carries the picture and the camera it came from, for the job's
+    # record (the owner's answer of 2026-10-10: kept, not shown in a job's row); a
+    # part carries neither.
+    by_path = {p["path"]: p for p in here["parts"]}
+    assert by_path["bin_1"] == {
+        "path": "bin_1",
+        "name": "bin",
+        "picture": "captures/bench.png",
+        "camera": "camera_1",
+    }
+    assert by_path["footpedal"]["picture"] is None and by_path["footpedal"]["camera"] is None
 
     uno = client.get("/jobs/choices", params={"machine": UNO}).json()
     assert uno["machine"]["kind"] is None and uno["operations"] == []

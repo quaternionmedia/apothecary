@@ -6,9 +6,9 @@
  * part it makes, and the printer's jobs as its history). A devkit's Machine
  * is its port and what it is, the sketch it should run against what it was
  * heard saying, and its Flashing card: a sketch (what it should run, to start
- * with) built for a board and uploaded to this port, after asking, the task's
- * output, then Identify -- the Bench's form and task log (widgets/sketches.js,
- * tasks.js), for this one port. Both have the board's one log, a printer's with
+ * with) -- an Arduino one built for a board, or a Rust one for its chip --
+ * uploaded to this port, after asking, the task's output, then Identify -- the
+ * Bench's form and task log (widgets/sketches.js, tasks.js), for this one port. Both have the board's one log, a printer's with
  * the one box that asks it for a report: the comms log the server keeps for the
  * port (poll traffic hidden unless asked for), or a devkit's serial output.
  *
@@ -26,7 +26,10 @@
  *
  * mountMachine(root, { base, port, host, boards, kind, inPrinter, pin, say })
  * renders into `root` and returns the handle the ring drives (carry, pairs,
- * device) and the tests read (state, ctl, level, print). `host` is "world": the
+ * device), the world asks to list its site's parts again when a piece is made,
+ * rebuilt or dropped (print.loadChoices) and to choose the piece a made piece's
+ * Print names (print.choose), and the tests read (state, ctl, level, print).
+ * `host` is "world": the
  * world's page, a tab of its rail or floated, one board and everything inline in
  * one column (the monitor page, the other host, is a link to the world now).
  * `boards` is the page's model, made here when none is given.
@@ -36,8 +39,9 @@
  * Device › Flash says why. `pin` ({ site, path, how }) is where the board is pinned, or bound
  * by its sketch when `how` is "sketch". `say(text,
  * kind)` is the host's status bar: a refusal is said there as an error as well
- * as in the log. destroy() stops watching and frees what the module put on the
- * window.
+ * as in the log; a print started is said there, naming where it is followed, and
+ * a print that ends, how it ended (failed, and why, as an error). destroy() stops
+ * watching and frees what the module put on the window.
  */
 
 import { mountBoards } from "/static/boards.js";
@@ -255,12 +259,19 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     const post = (path, body) => model.post(path, body);
 
     // --- refusals: in the log, and in the host's status bar as errors ------------------------
-    let refusals = 0, lastRefusal = null;
+    // A step that ends here is told in the status bar too, naming the step after it:
+    // a print started names where it is followed. A ring verb carried here hands
+    // what it told back to the ring (carry's `said`), which says it after its label.
+    let refusals = 0, lastRefusal = null, told = 0, lastTold = null;
     function logLine(kind, text) { if (state.port) model.note(state.port, text, { kind }); }
     function refuse(text) {
         refusals++; lastRefusal = text;
         logLine("sys", text);
         if (say) say(text, "error");
+    }
+    function tell(text) {
+        told++; lastTold = text;
+        if (say) say(text, "success");
     }
 
     // --- the board: which, and what kind -------------------------------------------------
@@ -368,7 +379,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("dot").className = "dot " + (bd.live ? "on" : "");
         const rows = [];
         if (d) {
-            rows.push(`<b>${esc(d.port)}</b> vid:pid ${esc(d.vid || "?")}:${esc(d.pid || "?")}${d.board_name ? " · " + esc(d.board_name) : ""}${d.serial_number ? " · S/N " + esc(d.serial_number) : ""}`);
+            rows.push(`<b>${esc(d.port)}</b> vid:pid ${esc(d.vid || "?")}:${esc(d.pid || "?")}${d.board_name ? " · " + esc(d.board_name) : ""}${d.serial_number ? " · S/N " + esc(d.serial_number) : ""}${d.found_by ? " · found by " + esc(d.found_by) : ""}`);
             if (d.chip) rows.push(`chip <b>${esc(d.chip)}</b> rev ${esc(d.revision || "?")} · MAC ${esc(d.mac || "?")} · flash ${esc(d.flash_size || "?")}`);
         } else rows.push(`<b>${esc(state.port)}</b> — not detected`);
         if (pin) rows.push(pinRow());
@@ -378,13 +389,20 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("c-board").innerHTML = rows.join("<br>");
         const w = sketchWords(bd.expected, bd.observed);
         const lines = [];
-        if (w.rec) lines.push(`should run <b>${esc(w.should)}</b> · ${esc(w.rec.fqbn || "esptool")} · flashed ${esc(new Date(w.rec.flashed_at).toLocaleString())}${w.rec.build_sha256 ? " · build " + esc(w.rec.build_sha256.slice(0, 10)) : ""}`);
+        if (w.rec) lines.push(`should run <b>${esc(w.should)}</b> · ${esc(builtFor(w.rec))} · flashed <span class="when">${esc(new Date(w.rec.flashed_at).toLocaleString())}</span>${w.rec.build_sha256 ? " · build " + esc(w.rec.build_sha256.slice(0, 10)) : ""}`);
         else lines.push('<span class="warn">nothing flashed from apothecary</span>');
         for (const t of w.drift) lines.push(`<span class="warn">! ${esc(t)}</span>`);
         lines.push(w.observed
             ? `observed <b class="${w.verdict === "match" ? "ok" : (w.verdict === "mismatch" ? "bad" : "")}">${esc(w.observed)}</b>${w.verdict === "match" ? " ✓ matches" : (w.verdict === "mismatch" ? " ✗ differs" : "")}`
             : '<span class="empty">observed: no hello heard yet — Identify listens for it</span>');
         $("c-sketch").innerHTML = lines.join("<br>");
+    }
+    // What a flash record says it was built for: an Arduino sketch's board, another
+    // module's sketch its chip (the toolchain is in the sketch's id), raw images esptool.
+    function builtFor(rec) {
+        if (rec.fqbn) return rec.fqbn;
+        if (rec.sketch) return rec.target || "its chip";
+        return "esptool";
     }
     function renderAll() { renderStatus(); renderChart(); renderLog(); }
 
@@ -803,7 +821,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // `jobs` is the printer's print jobs, running first then newest (GET /jobs): the
     // history. `choices` is what a job here can name (GET /jobs/choices): the parts
     // and pieces of the site the printer is pinned in.
-    const prt = { files: [], jobs: [], job: null, timer: null, choices: null };
+    // `wanted` is a part asked for from outside (print.choose), chosen once listed.
+    const prt = { files: [], jobs: [], job: null, timer: null, choices: null, wanted: null };
     function renderPrint() {
         const job = prt.job, running = !!(job && job.running);
         const paused = running && job.stage === "paused";
@@ -848,19 +867,42 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         renderPrint();
     }
     // The parts a print here can name: the site's, when the printer is pinned in one.
+    // Asked again by the world whenever its site changes in place (a piece made,
+    // rebuilt or dropped), so a Machine left open lists the piece made meanwhile;
+    // what was chosen stays chosen while it is still there.
     async function loadChoices() {
-        const sel = $("print-part"), had = sel.value, port = state.port;
+        const sel = $("print-part"), port = state.port;
         let c = null;
         if (port && state.kind === "printer") { try { c = await api(`/jobs/choices?machine=${encodeURIComponent(port)}`); } catch (e) { c = null; } }
         if (port !== state.port) return;  // another port was chosen meanwhile
         prt.choices = c;
         const parts = (c && c.site && c.parts) || [];
+        // What is chosen now, read once the list is back: a choice made (or asked
+        // for) while an earlier list was on its way is not undone by its arrival.
+        const had = prt.wanted || sel.value;
+        if (prt.wanted && parts.some((p) => p.path === prt.wanted)) prt.wanted = null;
         sel.innerHTML = c && c.site
             ? '<option value="">— no part named —</option>' + parts.map((p) => `<option value="${esc(p.path)}">${esc(p.path)}${p.name !== p.path ? " · " + esc(p.name) : ""}</option>`).join("")
             : '<option value="">— pinned in no site —</option>';
         sel.disabled = !(c && c.site);
         if (had && parts.some((p) => p.path === had)) sel.value = had;
         $("print-where").textContent = c && c.site ? `in ${c.site}` : "";
+    }
+    // A made piece's Print, from its ring: the site's parts listed again and that
+    // piece chosen under makes, the card in view. True when it is among them.
+    async function choosePart(path) {
+        prt.wanted = path;
+        await loadChoices();
+        prt.wanted = null;
+        $("print-card").scrollIntoView({ block: "nearest" });
+        return $("print-part").value === path;
+    }
+    // How a print that ran here ended, in the host's status bar: done or cancelled
+    // as said, failed as an error with its reason.
+    function toldEnded(job) {
+        const what = `${job.name} on ${state.port}${job.part ? `, making ${job.part}` : ""}`;
+        if (job.stage === "failed") { if (say) say(`${what}, failed: ${job.error || "no reason was given"}`, "error"); return; }
+        tell(`${what}, ended: ${job.stage}, ${job.sent}/${job.total} lines`);
     }
     // A print followed until it ends; its end is told (the printer's jobs, the site's,
     // and a poll for the state it left), a print that was not running is only drawn.
@@ -873,6 +915,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             renderPrint();
             if (prt.job.running) { prt.timer = setTimeout(watchPrint, 1000); return; }
             if (!was) return;
+            toldEnded(prt.job);
             await loadPrintJobs();
             emit("apothecary:jobs-changed", { port: state.port, job_id: prt.job.job_id });
             await pollNow();
@@ -898,6 +941,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (!confirm(`Print ${f ? f.name : fileId} on ${state.port}${part ? `, making ${part}` : ""}?\n${f ? f.lines + " lines" : ""} will stream from here; the printer will heat and move.`)) return;
         try {
             prt.job = await post("/firmware/printers/print", { port: state.port, file_id: fileId, part });
+            tell(`started ${f ? f.name : fileId} on ${state.port}${part ? `, making ${part}` : ""}: Print from here follows it to its end, and Site's Jobs lists it`);
             renderPrint();
             prt.timer = setTimeout(watchPrint, 800);
             await loadPrintJobs();
@@ -935,9 +979,10 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const tasks = mountTasks($("flash-task"), { base: BASE, history: false, say: flashSay });
         const build = mountBuild($("flash-form"), {
             base: BASE, tasks, port, say: flashSay,
+            // By its id: the Rust esp32_blink when that is what was flashed here.
             suggest: () => {
                 const e = b().expected;
-                return (e && e.record && e.record.sketch) || (pin && pin.sketch) || null;
+                return (e && e.record && (e.record.sketch_id || e.record.sketch)) || (pin && pin.sketch) || null;
             },
             onEnd: (task, what) => flashed(port, task, what),
         });
@@ -946,7 +991,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     }
     async function flashed(port, task, what) {
         if (state.port !== port) return;
-        logLine("sys", `${what.kind === "upload" ? "upload" : "compile"} of ${what.sketch} (${what.fqbn}): ${task.status}`);
+        logLine("sys", `${what.kind === "upload" ? "upload" : "compile"} of ${what.label || `${what.sketch} (${what.fqbn})`}: ${task.status}`);
         if (what.kind !== "upload" || task.status !== "succeeded") return;
         await model.loadInfo(port).catch(() => {});
         renderDevkit();
@@ -968,12 +1013,15 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         return { port: state.port, printer: !!(d && d.printer), armed: ctl.armed, bound: !!(pin && pin.how === "manual") };
     }
     // A verb of this board's: false when it is not one (the host's: open, pin, unpin);
-    // else { refused }, the refusal it met or null.
+    // else { refused, said }: the refusal it met, and what it told, or null.
     async function carry(intent) {
-        const before = refusals;
+        const before = refusals, toldBefore = told;
         const done = await carryOut(intent);
         if (!done) return false;
-        return { refused: refusals > before ? lastRefusal : null };
+        return {
+            refused: refusals > before ? lastRefusal : null,
+            said: told > toldBefore ? lastTold : null,
+        };
     }
     async function carryOut(intent) {
         const action = intent.action;
@@ -1048,7 +1096,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         kind: () => state.kind,
         device, carry, pairs,
         level: { start: startLevel, corner: (which) => enqueue(cornerLines(which)), lines: cornerLines, records: () => level.records, shown: () => level.shown, load: loadLevel },
-        print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, jobs: () => prt.jobs, choices: () => prt.choices, load: loadPrintFiles, loadJobs: loadPrintJobs },
+        print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, jobs: () => prt.jobs, choices: () => prt.choices, load: loadPrintFiles, loadJobs: loadPrintJobs, loadChoices, choose: choosePart },
         destroy() {
             if (state.port) model.unwatch(state.port, who);
             clearTimeout(level.timer); clearTimeout(prt.timer); clearInterval(ctl.timer);
