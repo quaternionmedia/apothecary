@@ -3686,9 +3686,9 @@
                     sayBoard(this.anchors, anchorPath, boardSummary(this.boards.board(row.device.port)), { label: boardLabel(row.device), port: row.device.port });
                     if (isPrinter && row.device.port) this.ensureMarks(anchorPath, row);
                 }
-                // The machines' badges are this method's; a place badge is
-                // picture_marks.js', and stays whichever of the two runs last.
-                for (const key of this.anchors.keys()) if (!wanted.has(key) && !key.startsWith('place:')) this.anchors.remove(key);
+                // The machines' badges are this method's; a place's badge and a
+                // camera's are picture_marks.js', and stay whichever of the two runs last.
+                for (const key of this.anchors.keys()) if (!wanted.has(key) && !key.startsWith('place:') && !key.startsWith('camera:')) this.anchors.remove(key);
                 for (const [key, m] of Object.entries(this.marks)) if (!wanted.has(key)) { m.marks?.destroy(); delete this.marks[key]; }
                 // The Machine follows its board -- to the printer a board inside drives,
                 // once it is known to be one -- and goes with it: nothing is left

@@ -22,7 +22,7 @@ import pytest
 from PIL import Image, ImageDraw
 from playwright.sync_api import expect
 
-CAMERA = "pinned_panel_camera"
+CAMERA = "pinned_panel_camera"  # the device id another browser gave a camera part
 
 
 def _png(offset: int) -> bytes:
@@ -55,12 +55,16 @@ def _row(page, path: str):
 
 @pytest.fixture
 def leaves_as_found(page, base_url: str):
-    """After the test: the camera, views and kept pictures it added are taken back."""
+    """After the test: the cameras, views and kept pictures it added are taken back."""
     api = page.request
-    views = {vw["id"] for vw in api.get(f"{base_url}/placed").json()["views"]}
+    placed = api.get(f"{base_url}/placed").json()
+    views = {vw["id"] for vw in placed["views"]}
+    cameras = {(c["site"], c["name"]) for c in placed["cameras"]}
     pictures = {p["path"] for p in api.get(f"{base_url}/photos/pictures").json()}
     yield
-    api.delete(f"{base_url}/cameras/{CAMERA}")
+    for camera in api.get(f"{base_url}/placed").json()["cameras"]:
+        if (camera["site"], camera["name"]) not in cameras:
+            api.delete(f"{base_url}/sites/{camera['site']}/cameras/{camera['name']}")
     for view in api.get(f"{base_url}/placed").json()["views"]:
         if view["id"] not in views:
             api.delete(f"{base_url}/sites/{view['site']}/views/{view['id']}")
@@ -366,14 +370,18 @@ def test_sites_scad_section_shows_the_sites_scad(page, base_url: str):
 def test_pinned_takes_back_another_sites_pins_without_switching(
     page, base_url: str, leaves_as_found
 ):
-    """Site's Pinned lists every site's pins, each naming its site; another site's
-    camera and view are taken back from their rows on this site's page."""
+    """Site's Pinned lists every site's cameras and pins, each naming its site; another
+    site's camera is removed and its view unpinned from their rows on this site's
+    page."""
     api = page.request
-    placed = api.put(
-        f"{base_url}/cameras/{CAMERA}",
-        data={"label": "pinned test camera", "site": "garage", "path": "workbench"},
+    added = api.post(f"{base_url}/sites/garage/cameras", data={"host": "workbench"})
+    assert added.status == 201, added.text()
+    name = added.json()["camera"]["name"]
+    told = api.put(
+        f"{base_url}/sites/garage/cameras/{name}/device",
+        data={"id": CAMERA, "label": "pinned test camera"},
     )
-    assert placed.ok, placed.text()
+    assert told.ok, told.text()
     pinned = _keep(page, base_url, "pinned_view.png", 0, "&site=garage&host=workbench")
     view = pinned["view"]
     assert view, pinned
@@ -390,16 +398,16 @@ def test_pinned_takes_back_another_sites_pins_without_switching(
 
     # Each row names its site; garage's are not this page's.
     camera = section.locator(".pin-row.camera", has_text="pinned test camera")
-    expect(camera).to_contain_text("garage › workbench", timeout=5000)
+    expect(camera).to_contain_text(f"garage › {name}", timeout=5000)
     expect(camera).not_to_have_class(re.compile(r"\bhere\b"))
     row = section.locator(f".pin-row.view:has(.pinned-view-unpin[data-id='{view['id']}'])")
     expect(row).to_contain_text("garage › workbench")
 
-    # The camera, unpinned from its row.
-    camera.locator(".pinned-camera-unpin").click()
+    # The camera, removed from its row.
+    camera.locator(".pinned-camera-remove").click()
     expect(camera).to_have_count(0, timeout=5000)
-    assert CAMERA not in {c["id"] for c in api.get(f"{base_url}/cameras").json()}
-    expect(status).to_contain_text("camera unpinned from garage › workbench")
+    assert api.get(f"{base_url}/sites/garage/cameras/{name}").status == 404
+    expect(status).to_contain_text(f"garage › {name} removed; the pictures it took stay")
 
     # The view, unpinned from its row; its picture stays kept.
     row.locator(".pinned-view-unpin").click()
