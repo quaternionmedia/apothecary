@@ -183,8 +183,10 @@ def fake_orcaslicer(tmp_path, monkeypatch):
     monkeypatch.delenv("APOTHECARY_SLICER", raising=False)
     monkeypatch.delenv("FAKE_ORCA", raising=False)
     _isolate_firmware_state(monkeypatch, tmp_path)
+    from apothecary.slicer import api as slicer_api
     from apothecary.slicer import modules
 
+    monkeypatch.setattr(slicer_api, "_RUNNER", None)
     modules.reset_modules()
     yield program
     modules.reset_modules()

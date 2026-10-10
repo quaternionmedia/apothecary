@@ -101,6 +101,8 @@ def start_server(tmp_path_factory):
             {
                 "ARDUINO_CLI": str(write_fake_arduino_cli(tmp / "arduino-cli")),
                 "ESPTOOL": "none",
+                # No slicer of the person's own: the page's Slice step brings a fake.
+                "APOTHECARY_ORCASLICER": "none",
                 "APOTHECARY_TOOLS_DIR": str(tmp / "tools"),
                 "APOTHECARY_STATE_DIR": str(tmp / "state"),
                 "APOTHECARY_PICTURE_ROOT": str(tmp / "pictures"),
