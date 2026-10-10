@@ -57,7 +57,7 @@ jobs:
       # A consumer pins a released version; what they get is the wheel, not this checkout.
       run: |
         uv build --wheel -o dist
-        uv venv /tmp/wheel-venv
+        uv venv --clear /tmp/wheel-venv
         VIRTUAL_ENV=/tmp/wheel-venv uv pip install dist/*.whl
         cd /tmp && /tmp/wheel-venv/bin/apothecary --help
         echo '{"objects":[{"type":"cube","size":{"x":1,"y":2,"z":3}}]}' > /tmp/scene.json
