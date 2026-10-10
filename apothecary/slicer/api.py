@@ -15,8 +15,8 @@ and the task carries the slice's answer once it ends:
   the printer's site, as ``GET /jobs/choices`` lists them for the Print card --
   a part standing there or a piece made from a picture -- or a registered
   part's name. The printer is the one ``port``'s pin stands under, else
-  ``site``'s node at ``printer``, else the printer part ``printer`` names (or
-  the one that keeps a profile). What it names is checked before the task
+  ``site``'s node at ``printer`` (with none named, the site's one printer), else
+  the printer part ``printer`` names (or the one that keeps a profile). What it names is checked before the task
   starts, so a part or printer that is not one is a 422 at once, and a slicer
   that is not installed a 503.
 - ``GET /slicer/tasks/{id}?since=N``: the task, and ``slice``: null while it

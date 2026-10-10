@@ -162,19 +162,18 @@ def resolve(
     printer: Optional[str] = None,
 ) -> tuple[Target, Printer]:
     """What ``part`` names, and the printer: the one ``port``'s pin stands under,
-    else ``site``'s printer node at ``printer``, else the printer part ``printer``.
-    In a printer's site, ``part`` is a node's path there first (a part standing in
-    it, or a piece made from a picture), else a registered part's name."""
+    else ``site``'s printer node at ``printer`` -- with none named, the site's one
+    printer that keeps a profile -- else the printer part ``printer``. In a
+    printer's site, ``part`` is a node's path there first (a part standing in it,
+    or a piece made from a picture), else a registered part's name."""
     at: Optional[SlicedFor] = None
     if port or site:
-        if site and not printer and not port:
-            raise SlicerError("a site's printer is named by its node's path")
         for answer in PRINTERS:
             at = answer(port, site, printer)
             if at is not None:
                 break
         if at is None:
-            where = f"the port {port}" if port else f"{printer} in {site}"
+            where = f"the port {port}" if port else (f"{printer} in {site}" if printer else site)
             raise SlicerError(f"{where}: no printer that keeps a slicer profile")
         chosen = Printer(at=at, profile=load_profile(at.part))
     else:
@@ -186,7 +185,14 @@ def resolve(
             if target is not None:
                 break
     if target is None:
-        target = part_target(part)
+        try:
+            target = part_target(part)
+        except SlicerError:
+            if not chosen.at.site:
+                raise
+            raise SlicerError(
+                f"{part!r} is no part or piece of {chosen.at.site}, and no part's name"
+            ) from None
     return target, chosen
 
 

@@ -1580,7 +1580,8 @@ def _printer_to_slice_for(
 ) -> Optional[SlicedFor]:
     """The printer a slice is for: the one ``port``'s pin stands under (the status
     bearer above the pinned board, as a print job's machine is), else ``site``'s
-    node at ``path``; only a node built from a part."""
+    node at ``path`` -- with no path, the site's one node built from a part that
+    keeps a slicer profile; only a node built from a part."""
     if port:
         pinned = _pinned_at(port)
         if pinned is None:
@@ -1588,16 +1589,41 @@ def _printer_to_slice_for(
         site_name, site, board = pinned
         path = status_bearer_for(site, board) or board
     else:
-        if not site_name or not path:
+        if not site_name:
             return None
         try:
             site = _site_store.get(site_name)
         except KeyError:
             return None
+        if not path:
+            path = _the_printer_in(site_name, site)
+            if path is None:
+                return None
     node = _find_node_by_path(site, path)
     if node is None or not node.part_ref:
         return None
     return SlicedFor(part=node.part_ref, name=node.name, site=site_name, path=path, port=port)
+
+
+def _the_printer_in(site_name: str, site: Assembly) -> Optional[str]:
+    """The path of the one node of ``site`` built from a part that keeps a slicer
+    profile; None for none, SlicerError naming them for several."""
+    from .slicer.profiles import printers as keeping_profiles
+
+    keeping = set(keeping_profiles())
+    found: List[str] = []
+
+    def visit(node: Assembly, prefix: str) -> None:
+        for child in [*node.children, *node.additions]:
+            path = f"{prefix}.{child.name}" if prefix else child.name
+            if child.part_ref in keeping:
+                found.append(path)
+            visit(child, path)
+
+    visit(site, "")
+    if len(found) > 1:
+        raise SlicerError(f"{site_name} has printers {', '.join(found)}: name one")
+    return found[0] if found else None
 
 
 slicing.TARGETS.append(_slice_target)

@@ -225,7 +225,7 @@ def test_the_printer_of_a_port_is_the_one_its_pin_stands_under(
             {"part": "calibration_cube", "site": "garage", "printer": "esp32_blink"},
             "keeps no slicer profile",
         ),
-        ({"part": "calibration_cube", "site": "garage"}, "named by its node's path"),
+        ({"part": "calibration_cube", "site": "datum_core"}, "datum_core: no printer"),
     ],
 )
 def test_what_is_not_a_part_or_a_printer_is_refused_before_a_task_starts(
@@ -331,3 +331,87 @@ def test_a_slice_writes_files_only(fake_orcaslicer, parts_built):
     _slice({"part": "calibration_cube"})
     for argv in fake_calls(fake_orcaslicer):
         assert not [a for a in argv if a.startswith("/dev/")]
+
+
+def test_a_site_named_alone_slices_for_its_one_printer(fake_orcaslicer, parts_built):
+    done = _slice({"part": "calibration_cube", "site": "garage"})
+    assert done["status"] == "succeeded", done["lines"]
+    assert done["slice"]["record"]["printer"]["path"] == "printer_1"
+
+
+def _piece_in(garage, monkeypatch):
+    """bin_1, standing in the garage as a piece made from a picture stands; its STL a
+    stand-in. Returns the patch to hold the view store with while it is used."""
+    garage.children.append(Structure(name="bin_1"))
+    monkeypatch.setattr(api_module, "_node_stl", lambda name, path: (CUBE_STL, None))
+    return lambda patched: patched.setattr(
+        viewing,
+        "store",
+        lambda: SimpleNamespace(
+            made_at=lambda site: {"bin_1": SimpleNamespace(word="bin")} if site == "garage" else {}
+        ),
+    )
+
+
+def test_slicer_slice_reaches_a_made_piece_through_the_running_server(
+    fake_orcaslicer, garage, monkeypatch
+):
+    """`apothecary slicer slice SITE/PATH` asks the server on this machine, as the page
+    will: a made piece lives in its memory. Its log arrives as the task runs."""
+    import click
+    from click.testing import CliRunner
+
+    from apothecary.cli import slicer as cli_slicer
+    from apothecary.cli.main import cli
+
+    hold = _piece_in(garage, monkeypatch)
+    asked = []
+
+    def call(base, method, path, body=None):
+        asked.append((base, method, path.split("?")[0]))
+        r = client.request(method, path, json=body)
+        if r.status_code >= 400:
+            raise click.ClickException(f"{r.json()['detail']} ({r.status_code})")
+        return r.json()
+
+    monkeypatch.setattr(cli_slicer, "_call", call)
+    with monkeypatch.context() as patched:
+        hold(patched)
+        result = CliRunner().invoke(cli, ["slicer", "slice", "garage/bin_1"])
+    assert result.exit_code == 0, result.output
+    assert "Slicing piece bin_1 for printer_1" in result.output
+    assert "bin_1.gcode: kept as" in result.output
+    assert asked[:2] == [
+        ("http://127.0.0.1:8000", "GET", "/health"),
+        ("http://127.0.0.1:8000", "POST", "/slicer/slice"),
+    ]
+    assert {a[2] for a in asked[2:]} == {asked[2][2]} and asked[2][2].startswith("/slicer/tasks/")
+    assert [f["name"] for f in client.get("/firmware/printers/prints").json()] == ["bin_1.gcode"]
+    with monkeypatch.context() as patched:
+        hold(patched)
+        refused = CliRunner().invoke(cli, ["slicer", "slice", "garage/no_such_piece"])
+    assert (
+        refused.exit_code != 0
+        and "'no_such_piece' is no part or piece of garage, and no part's name (422)"
+        in refused.output
+    )
+
+
+def test_slicer_slice_says_when_no_server_is_running_and_listens_nowhere_else():
+    import socket
+
+    from click.testing import CliRunner
+
+    from apothecary.cli.main import cli
+
+    with socket.socket() as held:
+        held.bind(("127.0.0.1", 0))
+        free = held.getsockname()[1]
+    result = CliRunner().invoke(cli, ["slicer", "slice", "garage/bin_1", "--port", str(free)])
+    assert result.exit_code != 0
+    assert f"no apothecary server at http://127.0.0.1:{free}" in result.output
+    assert "apothecary serve" in result.output
+    elsewhere = CliRunner().invoke(cli, ["slicer", "slice", "garage/bin_1", "--host", "10.0.0.7"])
+    assert elsewhere.exit_code != 0 and "this machine only" in elsewhere.output
+    bad = CliRunner().invoke(cli, ["slicer", "slice", "garage/../etc"])
+    assert bad.exit_code != 0 and "want SITE/PATH" in bad.output
