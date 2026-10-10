@@ -262,6 +262,9 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_IS_THERE,
         "a button that installs a toolchain module's tools (Rust for the ESP32)",
     ),
+    # The slicer's modules, drawn after the toolchain's from GET /slicer/status:
+    # OrcaSlicer today, its pinned release installed by its own Install.
+    "slicer-install": (WIDGET, WHAT_IS_THERE, "a button that installs the slicer (OrcaSlicer)"),
     # Sketches: pick one from a drop-down (a list on the firmware page), name the
     # board and the port, build and send.
     "sketch-select": (WIDGET, WHAT_YOU_SEE, "a drop-down of the sketches under parts/"),
@@ -317,6 +320,11 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WIDGET,
         WHAT_YOU_SEE,
         "a drop-down of the parts a print from here makes, from the printer's site",
+    ),
+    "print-slice": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that slices what makes names for the printer, and chooses its G-code",
     ),
     "print-start": (WIDGET, WHAT_IS_THERE, "a button that streams the chosen file to the printer"),
     "print-pause": (WIDGET, WHAT_IS_THERE, "a button that stops feeding the print from here"),
@@ -387,6 +395,8 @@ RING_BACKED: Dict[str, str] = {
     "install-btn": "bench:install:arduino",
     "module-install": "bench:install:rust-esp32",
     "modulesEl:click:closest": "bench:install:rust-esp32",
+    # The slicer's Install is Bench › Install's cell for it, after the toolchain's.
+    "slicer-install": "bench:install:slicer:orcaslicer",
     "core-install": "bench:core:arduino:avr",
     "coresEl:click:closest": "bench:core:arduino:avr",
     "lib-btn": "bench:libraries",
@@ -412,6 +422,9 @@ RING_BACKED: Dict[str, str] = {
     # The Print cell's verbs go to whichever print is running, the card's or
     # the one from here; Send file is the one from here alone.
     "print-start": "print:start",
+    # Slice slices what makes names, as the Slice cell of a made piece's ring or a
+    # part's slices that piece or part, chosen under makes first.
+    "print-slice": "slice:piece:printer_1",
     "print-pause": "control:sd-pause",
     "print-resume": "control:sd-resume",
     "print-cancel": "control:sd-abort",

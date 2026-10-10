@@ -3,9 +3,9 @@
 A part, or a piece made from a picture, sliced into G-code for the pinned
 printer, and kept where the Print card keeps a file, so Print follows Slice.
 The owner decided how on 2026-10-10 ([the plan](plans/slicer-2026-10-10.md));
-this page says what was built. The page's Slice step comes later; the server
-and the command line are here now. Slicing writes files only: nothing here
-opens a serial port or sends anything to a printer.
+this page says what was built: the server, the command line, and Slice as a
+step of the page. Slicing writes files only: nothing here opens a serial port
+or sends anything to a printer.
 
 ## Installing it
 
@@ -138,6 +138,33 @@ errors and warnings, where the extruding moves reach -- is the state folder's
 `slices/<file id>.json`, and is forgotten when the Print card forgets the
 file. Slices run one at a time on a task runner of their own, so a slice and a
 flash never wait for each other.
+
+## In the page
+
+Slice is a step of the loop from a picture to a print
+([walkthrough 13](../walkthrough/13-a-picture-to-a-print.md)):
+
+- **On the ring.** A made piece's ring has **Slice** beside Print, and a part
+  from the parts folder standing in the site has it after Part, when a printer
+  is pinned in the site (a cell each, with several). It brings the printer's
+  Machine forward with the piece chosen under **makes** and slices it there. A
+  host, a camera, the printer and what is inside it have no Slice; with no
+  printer pinned there is nothing to slice for, and no Slice.
+- **In Print from here.** **Slice**, beside **makes**, slices what is chosen
+  there for this printer -- the cell does the same. While it runs the card
+  shows the slicer's log with **Cancel**; when it ends, the G-code it kept is
+  chosen in the card's files, so ▶ Print follows, and the card says what the
+  slice used: each value, with `declared` (the part's own, in bold) or
+  `printer` beside it and its source on hover, the slicer's estimate, and its
+  errors and warnings by line. A kept file a slice made says, in the card's
+  files, what it was sliced from and for which printer; choosing it says that
+  slice again under **makes**.
+- **Installing it.** The Bench's toolchain card draws the slicer after the
+  toolchain modules: what it slices, where it is, the release pinned, and its
+  own **Install** (or Update), whose log is the Bench's task log. It is
+  Panels › Bench › Install's last cell, **OrcaSlicer**, beside Arduino and Rust
+  ESP32 -- the ring of modules for installs -- since installing a tool is the
+  Bench's, and the Machine's Slice says where to install it when none is found.
 
 ## Another slicer
 

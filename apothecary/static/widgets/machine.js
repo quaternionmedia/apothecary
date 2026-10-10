@@ -27,8 +27,17 @@
  * mountMachine(root, { base, port, host, boards, kind, inPrinter, pin, say })
  * renders into `root` and returns the handle the ring drives (carry, pairs,
  * device), the world asks to list its site's parts again when a piece is made,
- * rebuilt or dropped (print.loadChoices) and to choose the piece a made piece's
- * Print names (print.choose), and the tests read (state, ctl, level, print).
+ * rebuilt or dropped (print.loadChoices), to choose the piece a made piece's
+ * Print names (print.choose) and to slice what is chosen (print.slice), and the
+ * tests read (state, ctl, level, print).
+ *
+ * A printer's Print from here slices too (docs/plans/slicer-2026-10-10.md): its
+ * Slice slices the part or piece chosen under makes for this printer (POST
+ * /slicer/slice, the slicer's task followed in the card, with Cancel); the G-code
+ * it keeps is chosen in the card's files, so ▶ Print follows Slice; then the
+ * card says what the slice used, each value with where it came from, the
+ * slicer's estimate, and its errors and warnings by line. A kept file a slice
+ * made says what it was sliced from and for which printer.
  * `host` is "world": the
  * world's page, a tab of its rail or floated, one board and everything inline in
  * one column (the monitor page, the other host, is a link to the world now).
@@ -124,7 +133,12 @@ const CARDS = `
         </div>
         <div class="row"><label for="print-part">makes</label>
             <select id="print-part" title="The part or piece this print makes, from the site the printer is pinned in: the print's job records it, and Site lists the job. The ring's Send file prints what is chosen here"><option value="">— no part named —</option></select>
+            <button type="button" id="print-slice" title="Slice what is chosen under makes for this printer: its G-code is kept here and chosen, so ▶ Print follows. Writes files only; nothing is sent to the printer. Its ring's Slice does the same">Slice</button>
             <span class="s" id="print-where"></span>
+        </div>
+        <div id="print-slice-box" class="slice-box" hidden>
+            <div class="bench-ui" id="print-slice-task"></div>
+            <div id="print-slice-said" class="slice-said"></div>
         </div>
         <div class="row"><span id="print-progress" class="empty">nothing printing from here</span><span class="grow"></span><span class="job" id="print-job"></span></div>
         <div class="bar print"><i id="b-print" style="width:0"></i></div>
@@ -292,7 +306,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("release").title = k === "printer" ? "Drop the held link so another program can open the port" : "Stop listening, so another program (an upload) can open the port";
         if (changed && state.port) {
             watchNow();
-            if (k === "printer") { loadCodes(); loadLevel(); loadPrintJobs(); loadChoices(); loadPrintFiles(); watchPrint(); }
+            if (k === "printer") { loadCodes(); loadLevel(); loadPrintJobs(); loadChoices(); loadPrintFiles(); loadSlicer(); watchPrint(); }
             else if (!inPrinter) mountFlashing();
         }
         return changed;
@@ -822,7 +836,23 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // history. `choices` is what a job here can name (GET /jobs/choices): the parts
     // and pieces of the site the printer is pinned in.
     // `wanted` is a part asked for from outside (print.choose), chosen once listed.
-    const prt = { files: [], jobs: [], job: null, timer: null, choices: null, wanted: null };
+    const prt = { files: [], jobs: [], job: null, timer: null, choices: null, wanted: null, slices: {} };
+    // Slicing: the slicer's status (whether one is installed), and the task that
+    // slices what makes names, followed by tasks.js at the slicer's own routes.
+    // `shown` is the kept file whose slice the card says, the one chosen in its files.
+    const slc = { status: null, tasks: null, running: false, shown: null };
+    // The chosen file's slice, said under makes: what it was sliced from, for which
+    // printer, what it used and the estimate. Said again only when another file is
+    // chosen, and never over a slice that runs or one that has just failed.
+    function showChosenSlice() {
+        const id = $("print-pick").value || null;
+        if (slc.running || id === slc.shown) return;
+        slc.shown = id;
+        const r = id && prt.slices[id];
+        $("print-slice-task").hidden = true;
+        $("print-slice-said").innerHTML = r ? sliceSaid(r) : "";
+        $("print-slice-box").hidden = !r;
+    }
     function renderPrint() {
         const job = prt.job, running = !!(job && job.running);
         const paused = running && job.stage === "paused";
@@ -831,6 +861,11 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("print-resume").disabled = !paused;
         $("print-cancel").disabled = !running;
         $("print-delete").disabled = !$("print-pick").value || (running && job.file_id === $("print-pick").value);
+        const slicerOk = !!(slc.status && slc.status.ok);
+        $("print-slice").disabled = slc.running || !$("print-part").value;
+        $("print-slice").title = slicerOk
+            ? "Slice what is chosen under makes for this printer: its G-code is kept here and chosen, so ▶ Print follows. Writes files only; nothing is sent to the printer. Its ring's Slice does the same"
+            : `No slicer: ${(slc.status && slc.status.why) || "asking"}. Panels › Bench › Install › OrcaSlicer installs it`;
         if (job && (running || job.stage)) {
             const pct = (job.progress * 100).toFixed(1);
             $("print-progress").className = "";
@@ -841,6 +876,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         }
         $("print-job").textContent = running ? `${job.stage}…` : "";
         $("print-history").innerHTML = prt.jobs.map(jobRow).join("");
+        showChosenSlice();
     }
     // One job of the history: when it started and finished, its kind, the file it ran
     // and the part it makes, how it ended (and why), and how far it got.
@@ -852,11 +888,17 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const why = j.reason ? ` (${esc(j.reason)})` : "";
         return `<div><span class="${esc(j.outcome)}">${when} · ${esc(j.kind)} · ${esc(j.input.name)}${part} · ${esc(j.outcome)}${lines}${why}</span><a href="${BASE}/jobs/${encodeURIComponent(j.id)}" download="${esc(j.id)}.json" title="The job as JSON, with the tail of what the firmware said">⤓ log</a></div>`;
     }
+    // A kept file a slice made says what it was sliced from, and for which printer.
+    const slicedFrom = (f) => {
+        const r = prt.slices[f.id];
+        return r ? ` · sliced from ${esc(r.made.name)} for ${esc(r.printer.name)}` : "";
+    };
     async function loadPrintFiles(pick) {
         try { prt.files = await api("/firmware/printers/prints"); } catch (e) { prt.files = []; }
+        try { prt.slices = Object.fromEntries((await api("/slicer/slices")).map((r) => [r.file_id, r])); } catch (e) { prt.slices = {}; }
         const sel = $("print-pick"), had = pick || sel.value;
         sel.innerHTML = prt.files.length
-            ? prt.files.map((f) => `<option value="${esc(f.id)}" ${f.problems.length ? 'class="bad"' : ""}>${esc(f.name)} · ${f.lines} lines${f.problems.length ? " · refused: " + esc(f.problems[0]) : ""}</option>`).join("")
+            ? prt.files.map((f) => `<option value="${esc(f.id)}" ${f.problems.length ? 'class="bad"' : ""}>${esc(f.name)} · ${f.lines} lines${slicedFrom(f)}${f.problems.length ? " · refused: " + esc(f.problems[0]) : ""}</option>`).join("")
             : '<option value="">— no files kept —</option>';
         if (had && prt.files.some((f) => f.id === had)) sel.value = had;
         renderPrint();
@@ -897,6 +939,99 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("print-card").scrollIntoView({ block: "nearest" });
         return $("print-part").value === path;
     }
+    // --- slicing what makes names, for this printer ---------------------------------
+    // Whether a slicer is installed: asked once a printer is shown, and again before
+    // a slice, so one installed meanwhile from the Bench is found.
+    async function loadSlicer() {
+        let s = null;
+        try { s = await api("/slicer/status"); } catch (e) { s = null; }
+        const chosen = s && (s.slicers || []).find((m) => m.id === s.chosen);
+        slc.status = {
+            ok: !!(chosen && chosen.tool && chosen.tool.ok && !(chosen.problems || []).length),
+            label: chosen ? chosen.label : "the slicer",
+            why: chosen ? (chosen.problems || [])[0] || "" : "the slicer cannot be asked",
+        };
+        renderPrint();
+        return slc.status;
+    }
+    function sliceTasks() {
+        if (!slc.tasks) slc.tasks = mountTasks($("print-slice-task"), { base: BASE, history: false, say: (text, kind) => (kind === "error" ? refuse(text) : logLine("sys", text)) });
+        return slc.tasks;
+    }
+    // Slice: what makes names, sliced for this printer by the slicer's task, its log
+    // in the card with Cancel. True when it started.
+    async function startSlice() {
+        const part = $("print-part").value;
+        if (!state.port) { refuse("slice: no printer chosen"); return false; }
+        if (!part) { refuse("slice: choose what it makes under makes first"); return false; }
+        if (slc.running) { refuse("slice: one is running; its log is in Print from here"); return false; }
+        const status = await loadSlicer();
+        if (!status.ok) { refuse(`slice: no slicer here (${status.why}); Panels › Bench › Install › OrcaSlicer installs it`); return false; }
+        slc.running = true; renderPrint();
+        let task;
+        try { task = await post("/slicer/slice", { port: state.port, part }); }
+        catch (e) { slc.running = false; renderPrint(); refuse(`slice: ${e.message}`); return false; }
+        $("print-slice-box").hidden = false;
+        $("print-slice-task").hidden = false;
+        $("print-slice-said").innerHTML = "";
+        const ending = sliceTasks().start(async () => task, "/slicer/tasks");
+        tell(`slicing ${part} for ${printerName()}: its log is in Print from here, and its G-code is chosen there when it ends`);
+        $("print-card").scrollIntoView({ block: "nearest" });
+        ending.then(sliced);
+        return true;
+    }
+    // The printer, as its site names it: the node above the board its port is pinned to.
+    function printerName() {
+        const path = prt.choices && prt.choices.machine && prt.choices.machine.path;
+        const parts = (path || "").split(".");
+        return parts[0] || state.port;
+    }
+    // A slice ended: its file chosen and what it used said; or why it did not.
+    async function sliced(task) {
+        slc.running = false;
+        const answer = task && task.slice;
+        if (task && task.status === "succeeded" && answer && answer.ok) {
+            const r = answer.record;
+            await loadPrintFiles(r.file_id);
+            $("print-slice-task").hidden = true;
+            $("print-slice-said").innerHTML = sliceSaid(r);
+            tell(`${r.name} kept and chosen: sliced from ${r.made.name} for ${r.printer.name}${estimateWords(r.estimate) ? `, ${estimateWords(r.estimate)}` : ""}; ▶ Print prints it`);
+            emit("apothecary:sliced", { port: state.port, file_id: r.file_id });
+        } else if (task && task.status === "cancelled") {
+            $("print-slice-said").innerHTML = '<div class="meta">The slice was cancelled; nothing was kept.</div>';
+            tell("slice cancelled: nothing was kept");
+        } else if (task) {
+            const why = (answer && answer.error) || `the slice ${task.status}`;
+            $("print-slice-said").innerHTML = `<div class="bad">${esc(why)}</div>` + messagesSaid((answer && answer.messages) || []);
+            refuse(`slice: ${why}`);
+        }
+        renderPrint();
+    }
+    function estimateWords(e) {
+        if (!e) return "";
+        return [e.time, e.filament_g != null ? `${e.filament_g} g of filament` : null, e.layers != null ? `${e.layers} layers` : null].filter(Boolean).join(", ");
+    }
+    // What a slice used, each value with where it came from -- the part's own in
+    // bold -- the slicer's estimate, and its errors and warnings by line.
+    function sliceSaid(r) {
+        const est = estimateWords(r.estimate);
+        const head = `<div class="slice-head">${esc(r.made.name)} sliced for ${esc(r.printer.name)} by ${esc(r.slicer_label || r.slicer)} ${esc(r.slicer_version || "")}${est ? ` · ${esc(est)}` : ""}</div>`;
+        const value = (v) => esc(Array.isArray(v) ? v.join(", ") : v == null ? "–" : String(v));
+        const rows = r.settings.map((s) => `<div class="${s.origin === "declared" ? "declared" : ""}" title="${esc(s.source + (s.note ? " — " + s.note : ""))}"><span>${esc(s.name)}</span> <span>${value(s.value)}</span> <span class="meta">${esc(s.origin)}</span></div>`).join("");
+        return head + `<div class="slice-settings">${rows}</div>` + messagesSaid(r.messages || []);
+    }
+    function messagesSaid(messages) {
+        return messages.map((m) => `<div class="${m.level === "error" ? "bad" : "warn"}">${m.line ? `line ${m.line}: ` : ""}${esc(m.text)}</div>`).join("");
+    }
+    // The ring's Slice on a piece or a part: chosen under makes, then sliced.
+    async function slicePart(path) {
+        if (!(await choosePart(path))) return { refused: `${path} is not among the parts this printer's Print from here can make` };
+        const before = refusals;
+        const started = await startSlice();
+        if (!started) return { refused: refusals > before ? lastRefusal : `${path} could not be sliced` };
+        return { said: lastTold };
+    }
+
     // How a print that ran here ended, in the host's status bar: done or cancelled
     // as said, failed as an error with its reason.
     function toldEnded(job) {
@@ -962,6 +1097,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         catch (e) { refuse("forget file: " + e.message); }
     };
     $("print-start").onclick = startPrint;
+    $("print-slice").onclick = () => startSlice();
+    $("print-part").onchange = renderPrint;
     $("print-pause").onclick = () => printVerb("pause");
     $("print-resume").onclick = () => printVerb("resume");
     $("print-cancel").onclick = () => printVerb("cancel");
@@ -1096,11 +1233,12 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         kind: () => state.kind,
         device, carry, pairs,
         level: { start: startLevel, corner: (which) => enqueue(cornerLines(which)), lines: cornerLines, records: () => level.records, shown: () => level.shown, load: loadLevel },
-        print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, jobs: () => prt.jobs, choices: () => prt.choices, load: loadPrintFiles, loadJobs: loadPrintJobs, loadChoices, choose: choosePart },
+        print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, jobs: () => prt.jobs, choices: () => prt.choices, load: loadPrintFiles, loadJobs: loadPrintJobs, loadChoices, choose: choosePart, slice: slicePart, slices: () => prt.slices, slicing: () => slc.running },
         destroy() {
             if (state.port) model.unwatch(state.port, who);
             clearTimeout(level.timer); clearTimeout(prt.timer); clearInterval(ctl.timer);
             if (flash) { flash.build.destroy(); flash.tasks.destroy(); flash = null; }
+            if (slc.tasks) { slc.tasks.destroy(); slc.tasks = null; }
             for (const [event, fn] of onWindow) window.removeEventListener(event, fn);
             if (!boards) model.destroy();
             root.innerHTML = ""; root.classList.remove("machine", `host-${host}`, "kind-printer", "kind-devkit", "in-printer");
