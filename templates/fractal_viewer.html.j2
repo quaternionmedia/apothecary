@@ -370,6 +370,13 @@
         .world-badge.open { z-index: 3; opacity: 1; }
         .world-badge.open .badge-words { display: block; }
         .world-badge.selected { border-color: #9cd2ff; }
+        /* A part drawn from a variant this tab applied, not the saved part: a small
+           amber dot over it, the size it is at any framing; its words on hover. */
+        .world-badge.variant-mark { min-width: 0; width: 12px; height: 12px; padding: 0; border-radius: 50%;
+            background: #d9a650; border: 2px solid rgba(20, 28, 20, 0.85); box-shadow: 0 0 6px rgba(217, 166, 80, 0.55); }
+        .world-badge.variant-mark::after { display: none; }
+        .world-badge.variant-mark .badge-icon { display: none; }
+        .world-badge.variant-mark .badge-words { color: #e8c27a; border-color: #7a5a1a; }
         .world-badge.merged { display: none; }
         .world-badge.cluster { width: 34px; font: 600 0.72rem/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: #ddd; }
         .world-badge.cluster .cluster-row { cursor: pointer; padding: 0.1rem 0.15rem; border-radius: 3px; white-space: nowrap; }
@@ -1767,6 +1774,7 @@
                 const variant = Boolean(node?.part_ref && mesh.userData.variant
                     && this.variantByPart[node.part_ref] === mesh.userData.variant);
                 mesh.userData.drawnFromVariant = variant;
+                this.markVariant(key, node, variant);
                 const edges = mesh.getObjectByName('edges');
                 if (edges) edges.material.color.set(isSelected ? SELECTED_EDGE_COLOR : variant ? VARIANT_EDGE_COLOR : 0x000000);
                 if (mesh.material.emissive && !mesh.userData.isDot) mesh.material.emissive.set(variant ? VARIANT_GLOW : 0x000000);
@@ -1778,6 +1786,29 @@
                 }
                 // A wall is drawn faded, and solid again while it is the selection.
                 this.fadeMesh(mesh, this.isWall(node) && !isSelected);
+            }
+
+            // The amber dot over a part drawn from a variant this tab applied: from
+            // the badge layer, so it is the same size at any framing and seen at a
+            // glance without selecting the part, where an edge's colour is a pixel
+            // wide. It stands on the top of the part's mesh, and goes when the mesh
+            // does or is the saved part again.
+            markVariant(key, node, variant) {
+                const mark = `variant:${key}`;
+                if (!variant) { this.anchors.remove(mark); return; }
+                if (this.anchors.has(mark)) return;
+                const top = () => {
+                    const mesh = this.meshByName[key];
+                    if (!mesh || !mesh.userData.drawnFromVariant) return null;
+                    const g = mesh.geometry;
+                    if (!g.boundingBox) g.computeBoundingBox();
+                    const b = g.boundingBox;
+                    return mesh.localToWorld(new THREE.Vector3((b.min.x + b.max.x) / 2, b.max.y, (b.min.z + b.max.z) / 2));
+                };
+                const el = this.anchors.badge(mark, top, { className: 'variant-mark', ignore: (m) => m === this.meshByName[key] });
+                el.dataset.part = node.part_ref;
+                el.dataset.path = key;
+                this.anchors.say(mark, { icon: '', words: `${esc(node.part_ref)}: an applied variant, not saved` });
             }
 
             isWall(node) { return !!node && node.category === WALL_CATEGORY; }
@@ -3945,8 +3976,10 @@
                     if (isPrinter && row.device.port) this.ensureMarks(anchorPath, row);
                 }
                 // The machines' badges are this method's; a place's badge and a
-                // camera's are picture_marks.js', and stay whichever of the two runs last.
-                for (const key of this.anchors.keys()) if (!wanted.has(key) && !key.startsWith('place:') && !key.startsWith('camera:')) this.anchors.remove(key);
+                // camera's are picture_marks.js', and stay whichever of the two runs
+                // last; a part's variant dot is markVariant's.
+                const others = ['place:', 'camera:', 'variant:'];
+                for (const key of this.anchors.keys()) if (!wanted.has(key) && !others.some((p) => key.startsWith(p))) this.anchors.remove(key);
                 for (const [key, m] of Object.entries(this.marks)) if (!wanted.has(key)) { m.marks?.destroy(); delete this.marks[key]; }
                 // The Machine follows its board -- to the printer a board inside drives,
                 // once it is known to be one -- and goes with it: nothing is left
