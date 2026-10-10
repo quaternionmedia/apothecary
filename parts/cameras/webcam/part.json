@@ -1,0 +1,32 @@
+{
+  "name": "webcam",
+  "description": "A bare webcam: a 90 x 30 x 30 mm body and its lens, looking straight down, the middle of the lens's front face at the origin. A camera added to a site is drawn as this, turned and tilted as it is aimed.",
+  "category": "camera",
+  "tags": [
+    "camera",
+    "webcam"
+  ],
+  "preview_color": [
+    0.3,
+    0.3,
+    0.3
+  ],
+  "source": {
+    "title": "webcam, a bare body and lens",
+    "author": "Quaternion Media",
+    "license": "MIT",
+    "note": "Built in OpenSCAD to a typical webcam's size; no mesh of anyone's was used."
+  },
+  "bounds": {
+    "min": [
+      -45.0,
+      -15.0,
+      0.0
+    ],
+    "max": [
+      45.0,
+      15.0,
+      34.0
+    ]
+  }
+}

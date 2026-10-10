@@ -197,3 +197,11 @@ Asked of the owner on 2026-10-04, after the screen was cleared:
   again; a board pinned inside a printer and not yet identified keeps its
   Flash cell, which says why when pressed; the ring's label for Walls
   selectable is "Select walls".
+
+## Decided after Phase 3
+
+Asked of the owner on 2026-10-10: at the garage's default view a camera over
+the bench is a third badge beside printer_1's ⚡ and the picture's ▣, and the
+three merge into ×3 until zoomed in. Kept as built: a board's badge merges
+like any other, and the count's card lists each with the board's state in
+its row.

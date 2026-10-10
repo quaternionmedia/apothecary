@@ -1,8 +1,8 @@
 """The viewer does what its controls say: a double-click on a piece zooms into it at
 any depth, Apply draws what it rendered and keeps what is staged until then, and the
-machine popup's polling ends with the popup.
+a board's Machine's polling ends with the Machine.
 
-The popup's case runs against a server of its own (the conftest's ``start_server``),
+The Machine's case runs against a server of its own (the conftest's ``start_server``),
 with the scripted arduino-cli and the simulated printer, so nothing polls a real port.
 """
 
@@ -15,7 +15,7 @@ from apothecary.projects.parts.stl_renderer import get_renderer, params_sidecar_
 
 PRINTER = "/dev/ttyFAKE1"
 BOARD = "printer_1.frame_system.mainboard"
-POLL_MS = 2000  # the popup's default interval (widgets/machine.js)
+POLL_MS = 2000  # the Machine's default interval (widgets/machine.js)
 POLLS = ("/firmware/printers/status", "/firmware/printers/log")
 
 # A point on the canvas where the first piece hit is one at this level with pieces
@@ -119,7 +119,7 @@ def test_apply_draws_what_it_rendered(page: Page, base_url: str, v_slot_as_it_wa
 
 @pytest.fixture(scope="module")
 def printer_url(start_server):
-    """A server of this module's own: its printer is identified, the popup's subject."""
+    """A server of this module's own: its printer is identified, the Machine's subject."""
     url = start_server()
     httpx.post(
         f"{url}/firmware/devices/identify", json={"port": PRINTER}, timeout=15.0

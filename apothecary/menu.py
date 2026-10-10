@@ -110,7 +110,7 @@ class Device(BaseModel):
 
 
 class CameraSeen(BaseModel):
-    """A camera as the page names it: this browser's device, or a pin's record."""
+    """A camera as the page names it: this browser's device, or a camera part's."""
 
     id: str
     label: str = "camera"
@@ -139,8 +139,9 @@ class ViewSeen(BaseModel):
 
 
 class Place(BaseModel):
-    """The place the ring stands on -- a host, or on the canvas ring the floor:
-    its camera's pin, whether that camera is live, and its views, newest first."""
+    """The place the ring stands on -- a host, on the canvas ring the floor, or a
+    camera part: its views, newest first; and on a camera part, its device (which
+    the intent route fills in from the camera's record) and whether it is live."""
 
     camera: Optional[CameraSeen] = None
     live: bool = False
@@ -155,8 +156,9 @@ class PictureContext(BaseModel):
     Told rather than looked up: ``cameras`` are this browser's (``asked`` once
     the browser has been allowed to name them), ``pictures`` the ones under the
     picture root, newest first, and ``here`` the place the ring stands on. The
-    intent route fills in ``made`` (the site's made pieces), ``words`` (the
-    vocabulary) and ``finders`` (those that can read the drawn view's picture)
+    intent route fills in ``made`` (the site's made pieces), ``camera_parts``
+    (its cameras), ``words`` (the vocabulary), ``finders`` (those that can read
+    the drawn view's picture) and, on a camera part, ``here.camera`` (its device)
     from what the server knows, so a page cannot claim them."""
 
     cameras: List[CameraSeen] = Field(default_factory=list)
@@ -165,6 +167,7 @@ class PictureContext(BaseModel):
     chosen_picture: Optional[str] = None
     finders: List[str] = Field(default_factory=list)
     made: List[str] = Field(default_factory=list)
+    camera_parts: List[str] = Field(default_factory=list)
     words: List[str] = Field(default_factory=list)
     here: Place = Field(default_factory=Place)
 
@@ -550,7 +553,7 @@ def _bucket(names: Sequence[str]) -> List[Tuple[str, List[str]]]:
 # (cardinals first): what stands in front of the world, each a cell away.
 # The page registers exactly these; a test holds the two lists to each other.
 PANELS: Sequence[Tuple[str, str]] = (
-    # Site: the site's Contents tree, its problems at the top, its generated
+    # Site: the site's Contents tree, its problems in one fold, its generated
     # SCAD, every site's pins (Pinned), each taken back from its row, and the
     # site's jobs, each row opening its machine.
     ("site", "Site"),
@@ -583,29 +586,28 @@ def _panels() -> Option:
         children=[toggle(pid, label) for pid, label in PANELS if pid in _BEFORE_RAIL]
         # The rail itself: hidden and shown, as the tilde key does.
         + [Option(id="panel:rail", label="Rail", action="panel:rail:toggle")]
-        + [_bench(toggle("bench", "Bench"))]
-        # How the world is drawn: the header's View menu. Seated after the Bench,
-        # so no address learned under Panels moves; the canvas ring's top holds
-        # eight already when it stands inside a piece.
-        + [_view()],
+        + [_bench(toggle("bench", "Bench"))],
     )
 
 
 def _view() -> Option:
-    """View, under Panels: the header's ⚙ View menu, each of its items a cell.
+    """View, a cell of the canvas ring in the seat Fit had: how the world is drawn.
 
-    Snap to grid snaps a dragged piece to the grid; Detail draws every subassembly
-    in full, as a black box or as a dot; Outlines draws each subassembly's extent;
-    Select walls (the menu's "Walls selectable") lets a click in the world pick a
-    wall, which it otherwise passes through, for the page's session. Snap, Outlines
-    and Select walls each turn what they name the other way, as their tick-boxes
-    do, and the status line says which way it went; the ring is not told how they
-    stand.
+    Fit, first, frames the pieces at this level, as it did one ring up (the owner's
+    choice of 2026-10-04: Fit's address gains a digit, and View's cells are the
+    header's ⚙ View menu's items). Snap to grid snaps a dragged piece to the grid;
+    Detail draws every subassembly in full, as a black box or as a dot; Outlines
+    draws each subassembly's extent; Select walls (the menu's "Walls selectable")
+    lets a click in the world pick a wall, which it otherwise passes through, for
+    the page's session. Snap, Outlines and Select walls each turn what they name the
+    other way, as their tick-boxes do, and the status line says which way it went;
+    the ring is not told how they stand.
     """
     return Option(
         id="view",
         label="View",
         children=[
+            Option(id="fit", label="Fit", action="fit"),
             Option(id="view:snap", label="Snap to grid", action="view:snap"),
             Option(
                 id="view:detail",
@@ -664,13 +666,15 @@ def _bench(show: Option) -> Option:
 
 # --- pictures and cameras -------------------------------------------------------------
 #
-# A camera and a picture are pinned at a *host* -- a root structure with a
-# footprint that is not a made piece -- or at the site's floor. A host's node
-# ring appends Camera and Picture; the floor's are reached from the canvas
-# ring's Pictures › Floor, since the floor is a selection but not a node. A
-# floor verb carries the floor in its action, as ``@floor`` after its last
-# colon; a host's verb names its host by the ring's target. A verb about one
-# view names the view, which knows its own host.
+# A picture is pinned at a *host* -- a root structure with a footprint that is
+# neither a made piece nor a camera -- or at the site's floor, and a camera is
+# added above one. A host's node ring appends Camera (Add here) and Picture; the
+# floor's are reached from the canvas ring's Pictures › Floor, since the floor
+# is a selection but not a node. A floor verb carries the floor in its action,
+# as ``@floor`` after its last colon; a host's verb names its host by the ring's
+# target. A verb about one view names the view, which knows its own host. A
+# camera is a part, and its verbs are its own node ring's, naming it by the
+# ring's target.
 
 FLOOR_MARK = "@floor"
 # A list of pictures or views shows the seven newest; the eighth cell acts on
@@ -727,49 +731,62 @@ def _stem(path: str) -> str:
     return name.rsplit(".", 1)[0] if "." in name else name
 
 
-def _is_host(site: Optional[Assembly], path: str, made: Sequence[str]) -> bool:
-    """A root structure with a footprint that is not a made piece."""
-    if site is None or not path or "." in path or path in made:
+def _is_host(site: Optional[Assembly], path: str, not_hosts: Sequence[str]) -> bool:
+    """A root structure with a footprint that is neither a made piece nor a camera
+    (``not_hosts``)."""
+    if site is None or not path or "." in path or path in not_hosts:
         return False
     node = next((c for c in site.children if c.name == path), None)
     return node is not None and node.world_bounds() is not None
 
 
-def _camera_group(picture: PictureContext, floor: bool) -> Option:
-    """Camera: Pin here › this browser's cameras (Allow until it has been asked),
-    Live or Still, Take picture, Unpin. Live and Take picture only when the camera
-    pinned here is one of this browser's: a pin is a device of one origin. Take
-    picture keeps a frame and pins it here as a view; there is no keeping a frame
-    without pinning it, and unpinning a view leaves its picture in the folder."""
+def _camera_group(floor: bool) -> Option:
+    """Camera at a host or the floor: Add here, a camera part standing above the
+    middle of this place, looking straight down. The server adds it."""
     tail = f":{FLOOR_MARK}" if floor else ""
+    return Option(
+        id=f"camera{tail}",
+        label="Camera",
+        children=[
+            Option(id=f"camera:add-here{tail}", label="Add here", action=f"camera:add-here{tail}")
+        ],
+    )
+
+
+def _camera_options(picture: PictureContext) -> List[Option]:
+    """A camera part's own verbs: Device › this browser's cameras (Allow until the
+    browser has been asked; the camera's own device marked), Live or Still and
+    Take picture -- only when its device is one of this browser's, since a device
+    is one origin's -- and Remove. Take picture keeps a frame and makes it this
+    camera's view, lying where the camera looks; Remove takes the camera away and
+    leaves its pictures. The server removes it; the page does the rest."""
     here = picture.here
     mine = {c.id for c in picture.cameras}
     if picture.asked and picture.cameras:
-        pin = _listed(
-            f"camera:pin{tail}",
-            [(f"camera:pin:{c.id}{tail}", c.label or "camera") for c in picture.cameras],
+        devices = _listed(
+            "camera:device",
+            [(f"camera:device:{c.id}", c.label or "camera") for c in picture.cameras],
         )
+        if here.camera is not None:
+            for leaf in [*devices, *(c for d in devices for c in d.children or [])]:
+                if leaf.action == f"camera:device:{here.camera.id}":
+                    leaf.marked = True
     else:
-        pin = [Option(id=f"camera:allow{tail}", label="Allow", action=f"camera:allow{tail}")]
-    options = [Option(id=f"camera:pin{tail}", label="Pin here", children=pin)]
+        devices = [Option(id="camera:allow", label="Allow", action="camera:allow")]
+    options = [Option(id="camera:device", label="Device", children=devices)]
     if here.camera is not None and here.camera.id in mine:
         options.append(
-            Option(id=f"camera:still{tail}", label="Still", action=f"camera:still{tail}")
+            Option(id="camera:still", label="Still", action="camera:still")
             if here.live
-            else Option(id=f"camera:live{tail}", label="Live", action=f"camera:live{tail}")
+            else Option(id="camera:live", label="Live", action="camera:live")
         )
         options.append(
-            Option(
-                id=f"camera:take-picture{tail}",
-                label="Take picture",
-                action=f"camera:take-picture{tail}",
-            )
+            Option(id="camera:take-picture", label="Take picture", action="camera:take-picture")
         )
-    if here.camera is not None:
-        options.append(
-            Option(id=f"camera:unpin{tail}", label="Unpin", action=f"camera:unpin{tail}")
-        )
-    return Option(id=f"camera{tail}", label="Camera", children=options)
+    options.append(
+        Option(id="camera:remove", label="Remove", action="camera:remove", destructive=True)
+    )
+    return options
 
 
 def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
@@ -927,7 +944,7 @@ def _pictures(picture: PictureContext) -> Option:
                     option
                     for option in (
                         Option(id="floor:fit", label="Fit", action=f"fit:{FLOOR_MARK}"),
-                        _camera_group(picture, floor=True),
+                        _camera_group(floor=True),
                         _picture_group(picture, floor=True),
                     )
                     if option is not None
@@ -978,8 +995,8 @@ def _canvas_ring(
 
     `context.targets[0]`, when given, is the path the viewer is zoomed into;
     Pieces lists that node's children and Up steps back out. At the root
-    there is no Up, because there is nothing above. Panels opens and closes
-    what stands in front of the world, and holds View, how the world is drawn.
+    there is no Up, because there is nothing above. View is how the world is
+    drawn, Fit first in it; Panels opens and closes what stands in front of it.
     """
     focus_path = context.targets[0] if context.targets else ""
     focus = _find(site, focus_path) if site and focus_path else site
@@ -990,7 +1007,7 @@ def _canvas_ring(
             Option(id="up", label="Up", action="zoom-out") if focus_path else None,
             _grouped("Site", site_names, lambda name: f"site:{name}"),
             _grouped("Group", groups, lambda name: f"group:{name}"),
-            Option(id="fit", label="Fit", action="fit"),
+            _view(),
             _panels(),
             _pictures(picture),
             Option(id="reset", label="Reset", action="reset", destructive=True),
@@ -1009,6 +1026,7 @@ def _node_ring(
 ) -> Ring:
     path = context.targets[0] if context.targets else ""
     node = _find(site, path) if site and path else None
+    camera = bool(path) and path in picture.camera_parts
 
     options: List[Option] = [
         Option(id="zoom", label="Zoom in", action="zoom-in"),
@@ -1017,8 +1035,9 @@ def _node_ring(
 
     # A node with a board pinned to it can be watched, polled and, when the
     # board is a printer, driven. A node with none gets no Device option at
-    # all rather than one greyed out.
-    if device is not None and device.bound:
+    # all rather than one greyed out. A camera's Device is which browser camera
+    # it is, among its own verbs below, and no board's.
+    if device is not None and device.bound and not camera:
         options.append(Option(id="device", label="Device", children=_device_options(device)))
 
     options.append(Option(id="why", label="Why this", action="explain"))
@@ -1033,19 +1052,26 @@ def _node_ring(
         options.append(Option(id="up", label="Up", action=f"select:{parent}"))
 
     # Appended after every cell the ring had, so none of them moves: a host
-    # holds a camera and views; a made piece has its word and can be dropped.
-    if _is_host(site, path, picture.made):
-        options.append(_camera_group(picture, floor=False))
+    # has a camera added above it and holds views; a made piece has its word and
+    # can be dropped; a camera has its own verbs, its device first.
+    if _is_host(site, path, [*picture.made, *picture.camera_parts]):
+        options.append(_camera_group(floor=False))
         host_pictures = _picture_group(picture, floor=False)
         assert host_pictures is not None  # a host's always holds Add
         options.append(host_pictures)
     elif path and "." not in path and path in picture.made:
         options.append(_made_picture_group(picture))
+    elif camera:
+        options.extend(_camera_options(picture))
     # A part, or a piece made from a picture, is edited in Selected: Part › Edit
     # opens the one editor there (the part-editing spike's decision). Appended
     # last, so no cell above moves; a host with a board, children and a part
-    # is the fullest node ring, eight.
-    if node is not None and (node.part_ref or (path and "." not in path and path in picture.made)):
+    # is the fullest node ring, eight, and so is a camera of this browser's. A
+    # camera's editor edits its numbers -- its lens's position, its turn, tilt and
+    # field of view (vision/camera_part.py, GET /sites/{s}/cameras/{name}/params).
+    if node is not None and (
+        node.part_ref or camera or (path and "." not in path and path in picture.made)
+    ):
         options.append(
             Option(
                 id="part",
@@ -1275,10 +1301,17 @@ CARRIED_BY: Dict[str, Carries] = {
     # /esptool/flash, /tasks/{id}/cancel), called by the page, never through
     # the intent route.
     "bench": Carries.VIEWER,
-    # A camera's verbs: this browser's device pinned, live, a picture taken and
-    # pinned as a view, and the gathering's report -- all of it the page's: the
-    # pin and the picture routes are what the page calls.
+    # A camera's verbs: which of this browser's cameras it is (and Allow, to name
+    # them), live, a picture taken and made its view, and the gathering's report
+    # -- the page's: only the browser can open a camera, and the device and
+    # picture routes are what the page calls.
     "camera": Carries.VIEWER,
+    # A camera added above a place, or removed: a root structure added to the
+    # arrangement or taken from it, as a make or a drop is, so the intent route
+    # carries them, calling what the camera routes call
+    # (apothecary/vision/cameras.py's add_here and remove).
+    "camera:add-here": Carries.SERVER,
+    "camera:remove": Carries.SERVER,
     # A picture's verbs that choose, draw, find shapes, size or pin: what is on
     # screen, or data attached to a host that no site sees.
     "picture": Carries.VIEWER,
