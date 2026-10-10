@@ -88,9 +88,10 @@ started disc_1.gcode on /dev/ttyFAKE1, making disc_1: Print from here follows it
 
 ## 9. The job ends, and says so where it is watched
 
-The Machine's progress reads done, every line sent; its history keeps the job with the piece it made, and Site's Jobs lists it under printer_1.
+The status line says the print ended and how; the Machine's progress reads done, every line sent; its history keeps the job with the piece it made, and Site's Jobs lists it under printer_1. The job's record keeps the picture and the camera the piece came from, and its row does not show them.
 
 ```
+disc_1.gcode on /dev/ttyFAKE1, making disc_1, ended: done, 123/123 lines
 disc_1.gcode · done · 123/123 lines (100.0%)
 printer_1 · print · disc_1.gcode → disc_1 · done
 ```
@@ -116,13 +117,24 @@ Find shapes and Make on the second picture: plate_1 stands beside disc_1. Part �
 plate_1 rebuilt 38.5 × 129.9 × 19.5 mm; found 238.2 × 129.9, thickness a guess: a printer's Machine prints it
 ```
 
-## 12. Send file prints the second, and both jobs name their pieces
+## 12. Print, on the piece's ring, chooses it in printer_1's Machine
 
-printer_1's ring, Device › Control › Print › Send file, prints what the card has chosen: plate_1, listed under makes while the Machine stayed open. Its history and Site's Jobs keep both jobs, newest first, each with the piece it made.
+plate_1's ring ends with Print, a printer being pinned in the garage: it brings printer_1's Machine forward with plate_1 chosen under makes -- listed there already, though the Machine stayed open while it was made -- and the status line names the next step. A file sliced for it is kept beside it.
 
-![Send file prints the second, and both jobs name their pieces](screenshots/13-12-send-file-prints-the-second-and-both-jobs-name-the.png)
+![Print, on the piece's ring, chooses it in printer_1's Machine](screenshots/13-12-print-on-the-piece-s-ring-chooses-it-in-printer-1-.png)
 
 ```
+Print: printer_1's Machine makes plate_1: choose its file in Print from here, then ▶ Print (⌗3)
+```
+
+## 13. Send file prints the second, and both jobs name their pieces
+
+printer_1's ring, Device › Control › Print › Send file, prints what the card has chosen: plate_1, and the status line says when it ends. The Machine's history and Site's Jobs keep both jobs, newest first, each with the piece it made.
+
+![Send file prints the second, and both jobs name their pieces](screenshots/13-13-send-file-prints-the-second-and-both-jobs-name-the.png)
+
+```
+plate_1.gcode on /dev/ttyFAKE1, making plate_1, ended: done, 123/123 lines
 printer_1 · print · plate_1.gcode → plate_1 · done
 printer_1 · print · disc_1.gcode → disc_1 · done
 ```

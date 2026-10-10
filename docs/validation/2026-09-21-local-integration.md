@@ -430,7 +430,9 @@ release), unchanged, plus these three that the bench did not have:
       the confirm names the piece, the status says where it is followed, and the
       history and Site's Jobs keep the job with the piece's name. Turn the
       camera, **P**, make a second piece with the Machine left open: *makes*
-      lists it without reopening.
+      lists it without reopening, and **Print** on the piece's own ring chooses
+      it there. When each print ends the status line says so, or that it failed
+      and why.
 
 ## 7. The docs, and the walkthrough
 

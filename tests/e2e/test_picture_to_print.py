@@ -7,13 +7,15 @@ adjusted in Selected; a print job for it started on printer_1; the job watched i
 printer_1's Machine to its end. Then round again: the camera turned by its turn
 ring, a second picture taken with P, a second piece made and adjusted, and a
 second print, started from the ring's Send file this time, while the Machine stays
-open in the rail. Every step is taken through the page's own controls and ring
-cells, and what is asserted is what a person sees: the status line, Contents, the
-camera's section, the Machine's Print from here card and Site's Jobs. Each step's
-words name the next step.
+open in the rail and the plate is chosen there by Print on its own ring. Every step
+is taken through the page's own controls and ring cells, and what is asserted is
+what a person sees: the status line, Contents, the camera's section, the Machine's
+Print from here card and Site's Jobs. Each step's words name the next step.
 
 This module is a walkthrough page too: `walkthrough/13-a-picture-to-a-print.md` is
 what it writes, its pictures taken as it goes, so the page shows the loop as it is.
+It is the browser suite's alone, unmarked `walkthrough`, so `apothecary test run`
+stays quick; CI's browser shards write it and check it against what is committed.
 
 The browser is Chromium with its fake camera playing tests/e2e/test_the_loop.py's
 drawing (a dark rectangle, disc and triangle on a light ground), so the plain finder
@@ -211,7 +213,6 @@ def _found(page, host: str = "workbench") -> None:
 
 
 @pytest.mark.e2e
-@pytest.mark.walkthrough
 def test_a_picture_to_a_print_twice(page, url, walkthrough):
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
@@ -424,19 +425,32 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough):
     expect(machine.locator("#print-history")).to_contain_text(
         f"print · {disc}.gcode → {disc} · done · {lines}/{lines} lines"
     )
+    _said(page, f"{disc}.gcode on {PRINTER}, making {disc}, ended: done, {lines}/{lines} lines")
+    ended_said = _status(page).inner_text()
     expect(machine.locator("#c-state")).to_contain_text("idle", timeout=10000)
     jobs = page.locator("#site-jobs")
     jobs.locator("summary").click()
     rows = page.locator("#site-jobs-list li[data-job]")
     expect(rows.first).to_contain_text(f"printer_1 · print · {disc}.gcode → {disc} · done")
+    # The job keeps the picture and the camera its piece came from; its row does not say them.
     (job,) = page.request.get(f"{url}/jobs?site=garage").json()
-    assert job["part"] == {"path": disc, "name": "disc"}, job
+    assert job["part"] == {
+        "path": disc,
+        "name": "disc",
+        "picture": first["picture"],
+        "camera": camera,
+    }, job
     assert job["machine"]["port"] == PRINTER and job["outcome"] == "done"
+    expect(rows.first).not_to_contain_text(first["picture"])
     story.says(
         "The job ends, and says so where it is watched",
-        "The Machine's progress reads done, every line sent; its history keeps the job "
-        "with the piece it made, and Site's Jobs lists it under printer_1.",
-        shown=f"{_undated(progress.inner_text())}\n{_undated(rows.first.inner_text())}",
+        "The status line says the print ended and how; the Machine's progress reads done, "
+        "every line sent; its history keeps the job with the piece it made, and Site's "
+        "Jobs lists it under printer_1. The job's record keeps the picture and the camera "
+        "the piece came from, and its row does not show them.",
+        shown=(
+            f"{ended_said}\n{_undated(progress.inner_text())}\n{_undated(rows.first.inner_text())}"
+        ),
     )
 
     # ---------------------------------------------------------------- round two
@@ -498,15 +512,36 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough):
         blank=CHANGING,
     )
 
-    # 14. The Machine stayed open in the rail: makes lists the new piece without its
-    # being opened again.
+    # 14. The Machine stayed open in the rail, and makes lists the new piece without its
+    # being opened again; the piece's own ring's Print chooses it there.
     expect(machine).to_be_visible()
     expect(makes.locator(f"option[value='{plate}']")).to_be_attached(timeout=10000)
+    expect(makes).to_have_value(disc)
+    _ring_on(page, plate)
+    assert _labels(page)[-3:] == ["Picture", "Part", "Print"]
+    _press(page, "Print")
+    _said(
+        page,
+        f"Print: printer_1's Machine makes {plate}: choose its file in Print from here, "
+        "then ▶ Print",
+    )
+    expect(makes).to_have_value(plate)
+    assert page.evaluate("() => window.fractalViewer.selectedName") == plate
     machine.locator("#print-file").set_input_files(
         {"name": f"{plate}.gcode", "mimeType": "text/plain", "buffer": _sliced(plate).encode()}
     )
     expect(machine.locator("#print-pick")).to_contain_text(f"{plate}.gcode", timeout=8000)
-    makes.select_option(plate)
+    expect(makes).to_have_value(plate)
+    settled(page)
+    story.shows(
+        "Print, on the piece's ring, chooses it in printer_1's Machine",
+        f"{plate}'s ring ends with Print, a printer being pinned in the garage: it brings "
+        f"printer_1's Machine forward with {plate} chosen under makes -- listed there "
+        "already, though the Machine stayed open while it was made -- and the status line "
+        "names the next step. A file sliced for it is kept beside it.",
+        shown=_status(page).inner_text(),
+        blank=CHANGING,
+    )
 
     # 15. Send file, from printer_1's ring: what the card has chosen, printed.
     _ring_on(page, "printer_1")
@@ -527,6 +562,7 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough):
     expect(machine.locator("#print-progress")).to_contain_text(
         f"{plate}.gcode · done", timeout=30000
     )
+    _said(page, f"{plate}.gcode on {PRINTER}, making {plate}, ended: done, {lines}/{lines} lines")
 
     # 16. Two jobs, each naming its piece: the Machine's history and Site's Jobs.
     history = machine.locator("#print-history > div")
@@ -537,15 +573,18 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough):
     expect(rows.nth(1)).to_contain_text(f"printer_1 · print · {disc}.gcode → {disc} · done")
     newest, older = page.request.get(f"{url}/jobs?site=garage").json()
     assert (newest["part"]["path"], older["part"]["path"]) == (plate, disc)
+    assert (newest["part"]["picture"], newest["part"]["camera"]) == (second["picture"], camera)
     machine.locator("#print-card").scroll_into_view_if_needed()
     jobs.scroll_into_view_if_needed()
     expect(jobs.locator("summary")).to_contain_text("Jobs · 2")
     story.shows(
         "Send file prints the second, and both jobs name their pieces",
         f"printer_1's ring, Device › Control › Print › Send file, prints what the card has "
-        f"chosen: {plate}, listed under makes while the Machine stayed open. Its history "
+        f"chosen: {plate}, and the status line says when it ends. The Machine's history "
         "and Site's Jobs keep both jobs, newest first, each with the piece it made.",
-        shown="\n".join(_undated(row) for row in rows.all_inner_texts()),
+        shown="\n".join(
+            [_status(page).inner_text(), *(_undated(row) for row in rows.all_inner_texts())]
+        ),
         blank=CHANGING,
     )
 
