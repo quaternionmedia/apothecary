@@ -3,8 +3,9 @@ the page: the part chosen from its ring (Part › Edit), a parameter moved and
 checked once the slider rests, Apply drawing the variant with the bounds it
 measured beside the declared ones, a reload drawing what the tab had applied
 (its address keeps the variant), OpenSCAD's error shown by line, the defaults
-again for nothing, and round once more; and two tabs applying different values
-at once, each drawing its own.
+again for nothing (Part › Defaults), and round once more (the editor's
+Defaults); then two tabs applying different values at once, each drawing its
+own. It writes walkthrough/14-designing-a-part.md and its pictures as it goes.
 
 The server is this module's own, with an OpenSCAD that is this machine's except
 that it refuses a cube of ``TOO_BIG`` mm or more, saying so as an assertion at
@@ -13,9 +14,11 @@ shape. Its variant cache is a temp folder. Opening the part draws its own STL,
 which a fresh clone does not have, so ``parts/calibration_cube/`` is put back
 as it was found.
 
-A part drawn from a variant the tab applied wears a quiet amber edge, in the
-world and in its editor; the saved part does not. The pictures of that are
-written under pytest's temp folder (``part-loop-shots``).
+A part drawn from a variant the tab applied wears a quiet amber mark -- a dot
+over it from the badge layer, an amber edge and a faint glow, an amber edge on
+its editor -- and the saved part does not. Pictures of the library at its own
+framing, at both widths, and of the part beside its saved neighbours, are
+written under pytest's temp folder (``part-loop-shots``) too.
 """
 
 from __future__ import annotations
@@ -169,12 +172,27 @@ def _drawn(page: Page) -> None:
     settled(page)
 
 
+# How long a ring may take to open: it asks the server what to offer, and on a
+# machine loaded with OpenSCAD runs that answer has been seen to take over 5 s.
+RING_MS = 15000
+
+# The widths the page is laid out for (the rail beside the world, and the narrower).
+WIDTHS = ((1024, 768), (1280, 800))
+
+
+def _reloaded(page: Page) -> None:
+    page.reload()
+    expect(page.locator("#status")).to_contain_text("Loaded", timeout=20000)
+    _drawn(page)
+    settled(page, 4)
+
+
 def _press(page: Page, *labels: str) -> None:
     for label in labels:
         page.wait_for_function(
             f"() => [...document.querySelectorAll('#ring-overlay .wedge')]"
             f".some((w) => w.getAttribute('aria-label') === {label!r})",
-            timeout=5000,
+            timeout=RING_MS,
         )
         cell = next(c for c, got in page.evaluate(WEDGES).items() if got == label)
         page.keyboard.press(cell)
@@ -183,19 +201,20 @@ def _press(page: Page, *labels: str) -> None:
 def _edit(page: Page) -> None:
     """The part's ring, from its row in Contents: Part › Edit."""
     page.locator(f"#contents-list .contents-item[data-path='{PART}']").click(button="right")
-    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
     _press(page, "Part", "Edit")
     expect(page.locator("#part-params .param[data-field='size'] input")).to_be_visible(
         timeout=10000
     )
 
 
-# A drag: the slider's value through each of ``values``, an input event a frame apart.
-DRAG = """async (el, values) => {
+# A drag: the slider's value through each of ``values``, an input event for each,
+# with no pause between them that the page could take for the slider resting (a
+# frame, on a loaded machine, can be longer than the quiet the check waits for).
+DRAG = """(el, values) => {
     for (const v of values) {
         el.value = v;
         el.dispatchEvent(new Event('input'));
-        await new Promise((next) => requestAnimationFrame(next));
     }
 }"""
 
@@ -248,10 +267,25 @@ def _declared(page: Page) -> float:
     return max(float(v) for v in found.groups())
 
 
+def _mark(page: Page):
+    """The amber dot the badge layer stands over a part drawn from a variant."""
+    return page.locator(f".world-badge.variant-mark[data-part='{PART}']")
+
+
+def _marked_at_a_glance(page: Page) -> None:
+    """The dot is drawn, inside the world's canvas, with nothing selected needed."""
+    mark = _mark(page)
+    expect(mark).to_be_visible(timeout=10000)
+    box, canvas = mark.bounding_box(), page.locator("#viewer-canvas").bounding_box()
+    assert canvas["x"] <= box["x"] and box["x"] + box["width"] <= canvas["x"] + canvas["width"]
+    assert canvas["y"] <= box["y"] and box["y"] + box["height"] <= canvas["y"] + canvas["height"]
+
+
 def _shows_variant(page: Page) -> None:
-    """Its editor edged and saying so; in the world, its glow (it is selected)."""
+    """Its editor edged and saying so; in the world, its dot and its glow."""
     expect(page.locator(".part-editor")).to_have_class(re.compile(r"\bdrawn-from-variant\b"))
     expect(page.locator("#part-drawn")).to_have_text("an applied variant, not saved")
+    _marked_at_a_glance(page)
     mesh = _mesh(page)
     assert mesh["variant"] and mesh["glow"] == VARIANT_GLOW, mesh
 
@@ -259,12 +293,14 @@ def _shows_variant(page: Page) -> None:
 def _shows_saved(page: Page) -> None:
     expect(page.locator(".part-editor")).not_to_have_class(re.compile(r"\bdrawn-from-variant\b"))
     expect(page.locator("#part-drawn")).to_be_hidden()
+    expect(_mark(page)).to_have_count(0)
     mesh = _mesh(page)
     assert not mesh["variant"] and mesh["glow"] == 0 and mesh["edge"] != VARIANT_EDGE, mesh
 
 
-def _a_round(page: Page, values: tuple[float, ...]) -> float:
-    """Move the size, see the check, Apply, see the variant drawn and measured."""
+def _a_round(page: Page, values: tuple[float, ...], story=None) -> float:
+    """Move the size, see the check, Apply, see the variant drawn and measured. With
+    ``story``, the page's steps for them, each said after what it says is asserted."""
     validations = []
     listen = lambda r: validations.append(r.url) if r.url.endswith("/validate") else None  # noqa: E731
     page.on("request", listen)
@@ -275,12 +311,19 @@ def _a_round(page: Page, values: tuple[float, ...]) -> float:
     page.remove_listener("request", listen)
     # The slider was dragged through every value; it was checked once, at rest.
     assert len(validations) == 1, validations
+    if story:
+        story.shows(
+            "A size dragged is checked once the slider rests",
+            f"The size slider dragged through {len(values)} values without a pause: one "
+            "check, once it rests, against the part's own model, and the envelope the "
+            "staged set would produce. Nothing is rendered yet; Apply is the next step.",
+            shown=summary.inner_text(),
+        )
 
     answer = _apply(page)
     assert answer.ok, answer.text()
-    expect(_status(page)).to_contain_text(
-        f"{PART} regenerated: an applied variant, not saved", timeout=60000
-    )
+    said = f"{PART} regenerated: an applied variant, not saved"
+    expect(_status(page)).to_contain_text(said, timeout=60000)
     settled(page)
     assert _side(page) == pytest.approx(side, abs=0.05)
     assert _measured(page) == pytest.approx(side, abs=0.05)
@@ -288,15 +331,24 @@ def _a_round(page: Page, values: tuple[float, ...]) -> float:
     expect(page.locator("#stage-summary")).to_have_text("No staged changes")
     assert _variant_in_address(page) == answer.json()["variant"]
     _shows_variant(page)
+    if story:
+        story.shows(
+            "Apply draws the variant, marked as not saved",
+            "Apply: rendered into the cache of variants and drawn in this tab at the size "
+            "staged, and measured beside the envelope the part declares. The editor's amber "
+            "edge and its words, and an amber dot over the part in the world, say it is an "
+            "applied variant and not the saved part; the status line says so too.",
+            shown=_status(page).inner_text(),
+        )
     return side
 
 
-def _back_to_the_defaults(page: Page, from_the_ring: bool = False) -> None:
+def _back_to_the_defaults(page: Page, from_the_ring: bool = False) -> str:
     """Defaults -- Part › Defaults on the part's ring, or the editor's button --
-    then Apply: the saved part again, and nothing rendered."""
+    then Apply: the saved part again, and nothing rendered. The status line."""
     if from_the_ring:
         page.locator(f"#contents-list .contents-item[data-path='{PART}']").click(button="right")
-        expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+        expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
         _press(page, "Part", "Defaults")
         expect(_status(page)).to_contain_text("the part's own numbers are staged", timeout=10000)
     else:
@@ -304,17 +356,18 @@ def _back_to_the_defaults(page: Page, from_the_ring: bool = False) -> None:
     expect(page.locator("#stage-summary")).to_contain_text("valid", timeout=10000)
     answer = _apply(page)
     assert answer.ok and answer.json()["regenerated"] is False, answer.text()
-    expect(_status(page)).to_contain_text(
-        f"{PART} from the cache, nothing rendered: drawn as saved", timeout=30000
-    )
+    said = f"{PART} from the cache, nothing rendered: drawn as saved"
+    expect(_status(page)).to_contain_text(said, timeout=30000)
     settled(page)
     assert _side(page) == pytest.approx(10, abs=0.05)
     assert _variant_in_address(page) is None
     _shows_saved(page)
+    return _status(page).inner_text()
 
 
-def _refused_by_openscad(page: Page, side_before: float) -> None:
-    """A size OpenSCAD refuses: its error, by line, in the editor and on the status line."""
+def _refused_by_openscad(page: Page, side_before: float) -> str:
+    """A size OpenSCAD refuses: its error, by line, in the editor and on the
+    status line, and nothing drawn changed. The status line."""
     _slide(page, 70)
     expect(page.locator("#stage-summary")).to_contain_text("valid", timeout=10000)
     answer = _apply(page)
@@ -328,81 +381,24 @@ def _refused_by_openscad(page: Page, side_before: float) -> None:
     expect(marked).to_have_count(1)
     expect(marked).to_have_attribute("data-line", str(SIZE_LINE))
     expect(marked).to_contain_text("size =")
-    # Nothing drawn changed.
     assert _side(page) == pytest.approx(side_before, abs=0.05)
+    return _status(page).inner_text()
 
 
-# --- the loop ---------------------------------------------------------------------
-
-
-@pytest.mark.e2e
-def test_designing_a_part_twice_round(page: Page, loop_url: str, cube_as_it_was, shots):
-    site = f"{loop_url}/viewer/sites/parts_library"
-    # The part's own STL is current, as the server keeps it: the defaults are saved.
-    assert page.request.post(f"{loop_url}/parts/{PART}/stl/generate").ok
-    _open(page, site)
-    _edit(page)
-    # It starts from what is drawn: the saved part, measured.
-    _shows_saved(page)
-    assert _measured(page) == pytest.approx(10, abs=0.05)
-    assert _variant_in_address(page) is None
-
-    # Round one: a size, checked, applied, drawn.
-    first = _a_round(page, (14, 22, 31, 26, 30))
-    page.locator(".part-editor").evaluate("(el) => el.scrollIntoView({ block: 'start' })")
-    page.locator(".panel[data-panel='selected']").screenshot(path=str(shots / "variant-editor.png"))
-
-    # Beside the saved parts nearest it, not selected: the amber edges and glow are its alone.
-    page.evaluate(NOTHING_SELECTED)
-    neighbours = page.evaluate(BESIDE, PART)
-    settled(page, 4)
-    mesh = _mesh(page)
-    assert mesh["variant"] and mesh["edge"] == VARIANT_EDGE and mesh["glow"] == VARIANT_GLOW
-    for name in neighbours:
-        assert page.evaluate(MESH, name)["edge"] != VARIANT_EDGE
-        assert page.evaluate(MESH, name)["glow"] == 0
-    page.screenshot(path=str(shots / "variant-beside-saved.png"))
-
-    # A reload draws what the tab had applied, and its editor starts there.
-    variant = _variant_in_address(page)
-    page.reload()
-    expect(page.locator("#status")).to_contain_text("Loaded", timeout=20000)
-    _drawn(page)
-    assert _variant_in_address(page) == variant
-    assert _side(page) == pytest.approx(first, abs=0.05)
-    _edit(page)
-    _shows_variant(page)
-    slider = page.locator("#part-params .param[data-field='size'] input[type=range]")
-    assert float(slider.input_value()) == pytest.approx(first, abs=0.5)
-    expect(page.locator("#stage-summary")).to_have_text("No staged changes")
-    assert _measured(page) == pytest.approx(first, abs=0.05)
-
-    # OpenSCAD refuses a size: its error by line; what is drawn stays.
-    _refused_by_openscad(page, first)
-
-    # The defaults again, for nothing: from the part's ring.
-    _back_to_the_defaults(page, from_the_ring=True)
-    page.screenshot(path=str(shots / "saved-again.png"))
-
-    # Round two, back with the editor's Defaults.
-    _a_round(page, (40, 45, 47))
-    _back_to_the_defaults(page)
-
-
-@pytest.mark.e2e
-def test_two_tabs_applying_at_once_each_draw_their_own(page: Page, loop_url: str, cube_as_it_was):
-    site = f"{loop_url}/viewer/sites/parts_library"
+def _two_tabs(page: Page, site: str, story) -> None:
+    """A second tab: each stages a size and Applies, neither waiting for the other,
+    and each draws, and reloaded keeps, its own."""
     other = page.context.new_page()
     try:
         # A person works in the tab in front: a tab behind draws no frames.
         sides = []
         for tab, value in ((page, 24), (other, 36)):
             tab.bring_to_front()
-            _open(tab, site)
-            _edit(tab)
+            if tab is other:
+                _open(tab, site)
+                _edit(tab)
             sides.append(_slide(tab, value))
             expect(tab.locator("#stage-summary")).to_contain_text("valid", timeout=10000)
-        # Both Apply, neither waiting for the other.
         for tab in (page, other):
             tab.bring_to_front()
             tab.locator("#apply-btn").click()
@@ -413,12 +409,164 @@ def test_two_tabs_applying_at_once_each_draw_their_own(page: Page, loop_url: str
             assert _side(tab) == pytest.approx(side, abs=0.05)
             _shows_variant(tab)
         assert _variant_in_address(page) != _variant_in_address(other)
-        # Each tab, reloaded, still draws its own.
-        for tab, side in zip((page, other), sides, strict=True):
+        for tab, side in zip((other, page), reversed(sides), strict=True):
             tab.bring_to_front()
-            tab.reload()
-            expect(tab.locator("#status")).to_contain_text("Loaded", timeout=20000)
-            _drawn(tab)
+            _reloaded(tab)
             assert _side(tab) == pytest.approx(side, abs=0.05)
+            _marked_at_a_glance(tab)
     finally:
         other.close()
+    story.shows(
+        "Two tabs apply at once, and each draws its own",
+        f"A second tab of the same page: this one stages {sides[0]:.2f} mm and the other "
+        f"{sides[1]:.2f} mm, and both Apply, neither waiting. Each renders into a file of "
+        "its own and draws its own variant, its address naming it; each, reloaded, draws "
+        "its own again. This is the first tab, reloaded.",
+    )
+
+
+# --- the loop ---------------------------------------------------------------------
+
+
+@pytest.mark.e2e
+def test_designing_a_part_twice_round(
+    page: Page, loop_url: str, cube_as_it_was, shots, walkthrough
+):
+    """The loop, twice round and in two tabs, and walkthrough page 14 written from it.
+    Marked e2e and not walkthrough: a loop's page is written by the browser suite
+    only, so `apothecary test run` stays quick (the loops plan)."""
+    story = walkthrough(
+        ordinal="14",
+        slug="designing-a-part",
+        title="Designing a part",
+        written_by="the browser suite (`uv run apothecary test run --e2e`)",
+        intro=(
+            "A part chosen from its ring, a size moved and checked, Apply drawing it in "
+            "this tab with what it measures beside what it declares, a reload drawing it "
+            "again, OpenSCAD's refusal shown by line, the saved part again for nothing; "
+            "then round again, and two tabs applying at once. Every step is the page's "
+            "own: a cell of a ring, a slider or a button, and every step's words name "
+            "the next one."
+        ),
+        runtime=(
+            "It drives a real browser against a real server of its own, whose OpenSCAD is "
+            "this machine's except that it refuses a cube of "
+            f"{TOO_BIG:.0f} mm or more, as an assertion at the SCAD's size line would, so "
+            "that the error met is OpenSCAD's own shape. Its cache of variants is a "
+            "temporary folder. It needs no network, and refuses one."
+        ),
+        does_not_show=[
+            "**Editing the SCAD.** The part's source is shown read-only, its refused line "
+            "marked; an editor in the page is the next loop's.",
+            "**A variant kept for good.** An applied variant lives in its tab's address and "
+            "the cache, which keeps the most recently drawn of each part; saving one is a "
+            "variant in git, the next loop's too.",
+            "**Which OpenSCAD measured.** The editor says whether the measured bounds are "
+            "OpenSCAD's own summary of the render or were read off the STL; which it is "
+            "depends on the machine's OpenSCAD, so the words here leave it out.",
+            "**What changes from machine to machine.** A variant's key is a hash of what "
+            "made it, its OpenSCAD among them; the address that carries it is not in the "
+            "pictures, nor in the words.",
+        ],
+    )
+    page.set_viewport_size({"width": 1280, "height": 800})
+    site = f"{loop_url}/viewer/sites/parts_library"
+    # The part's own STL is current, as the server keeps it: the defaults are saved.
+    assert page.request.post(f"{loop_url}/parts/{PART}/stl/generate").ok
+    _open(page, site)
+    _edit(page)
+    # It starts from what is drawn: the saved part, measured.
+    _shows_saved(page)
+    assert _measured(page) == pytest.approx(10, abs=0.05)
+    assert _variant_in_address(page) is None
+    story.shows(
+        "Part › Edit opens the part's editor at what is drawn",
+        f"{PART}'s row in Site, its ring, Part › Edit: its parameters in Selected. They "
+        "start from what is drawn, the part's own STL as its params sidecar records it, "
+        "and beside the envelope the part declares is what that STL measures. Nothing "
+        "marks it: it is the saved part. A slider is the next step.",
+    )
+
+    # Round one: a size, checked, applied, drawn.
+    first = _a_round(page, (14, 22, 31, 26, 30), story)
+    page.locator(".part-editor").evaluate("(el) => el.scrollIntoView({ block: 'start' })")
+    page.locator(".panel[data-panel='selected']").screenshot(path=str(shots / "variant-editor.png"))
+
+    # Beside the saved parts nearest it, not selected: the amber edges and glow are its alone.
+    page.evaluate(NOTHING_SELECTED)
+    neighbours = page.evaluate(BESIDE, PART)
+    settled(page, 4)
+    mesh = _mesh(page)
+    assert mesh["variant"] and mesh["edge"] == VARIANT_EDGE and mesh["glow"] == VARIANT_GLOW
+    _marked_at_a_glance(page)
+    for name in neighbours:
+        assert page.evaluate(MESH, name)["edge"] != VARIANT_EDGE
+        assert page.evaluate(MESH, name)["glow"] == 0
+    page.screenshot(path=str(shots / "variant-beside-saved.png"))
+
+    # A reload draws what the tab had applied: at the library's own framing, nothing
+    # selected, at either width the page is laid out for.
+    variant = _variant_in_address(page)
+    for width, height in WIDTHS:
+        page.set_viewport_size({"width": width, "height": height})
+        _reloaded(page)
+        assert page.evaluate("() => window.fractalViewer.selectedName") is None
+        _marked_at_a_glance(page)
+        page.screenshot(path=str(shots / f"library-{width}.png"))
+    assert _variant_in_address(page) == variant
+    assert _side(page) == pytest.approx(first, abs=0.05)
+    story.shows(
+        "A reload draws what the tab applied, marked at a glance",
+        "The tab's address keeps the variant, so a reload, a bookmark or a link draws it "
+        "again, and no other tab is touched. At the library's own framing, with nothing "
+        f"selected, the amber dot over {PART} says it is drawn from a variant and not the "
+        "saved part; its words, on hover, say so.",
+    )
+    _edit(page)
+    _shows_variant(page)
+    slider = page.locator("#part-params .param[data-field='size'] input[type=range]")
+    assert float(slider.input_value()) == pytest.approx(first, abs=0.5)
+    expect(page.locator("#stage-summary")).to_have_text("No staged changes")
+    assert _measured(page) == pytest.approx(first, abs=0.05)
+    story.says(
+        "Reopened, the editor starts from the variant",
+        f"Part › Edit again: the size slider stands at {first:.2f} mm, the variant's, the "
+        "measured bounds are the variant's, and nothing is staged.",
+    )
+
+    # OpenSCAD refuses a size: its error by line; what is drawn stays.
+    refused = _refused_by_openscad(page, first)
+    story.shows(
+        "OpenSCAD's refusal, by line",
+        "A size of 70 mm, which this run's OpenSCAD refuses: Apply answers with "
+        "OpenSCAD's own words, listed by file and line under the stage bar, the line "
+        "marked in the part's source below, and carried on the status line. What is "
+        "drawn does not change. Part › Defaults is a way back.",
+        shown=refused,
+    )
+
+    # The defaults again, for nothing: from the part's ring.
+    back = _back_to_the_defaults(page, from_the_ring=True)
+    page.screenshot(path=str(shots / "saved-again.png"))
+    story.shows(
+        "Part › Defaults, then Apply: the saved part again, for nothing",
+        f"{PART}'s ring, Part › Defaults: the part's own numbers staged in its editor, "
+        "and the status line names Apply. Apply renders nothing, since the cache already "
+        "holds the saved part, and draws it: the amber marks are gone, and the address "
+        "names no variant.",
+        shown=back,
+    )
+
+    # Round two, back with the editor's Defaults.
+    second = _a_round(page, (40, 45, 47))
+    back = _back_to_the_defaults(page)
+    story.says(
+        "Round two",
+        f"A second size, {second:.2f} mm, dragged, checked once and applied: rendered, "
+        "drawn and marked. Then the editor's own Defaults, beside Revert, and Apply: the "
+        "saved part again, nothing rendered.",
+        shown=back,
+    )
+
+    # Two tabs, at once.
+    _two_tabs(page, site, story)

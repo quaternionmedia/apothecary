@@ -1,7 +1,7 @@
 # Browser tests
 
 Playwright tests of the viewer -- the Bench, a board's Machine, the camera and
-the pictures -- and the two walkthrough pages. Chromium once per machine:
+the pictures -- and the walkthrough pages they write. Chromium once per machine:
 
 ```bash
 uv run playwright install chromium
@@ -59,7 +59,10 @@ Both are fixtures in `conftest.py`; the recorders themselves are in `doc_capture
   their screenshots on every run that includes `test_docs_photo_walkthrough.py`
   or `test_docs_bench_walkthrough.py`. Each sentence is emitted after the
   assertion behind it. A screenshot is rewritten only when its pixels change;
-  commit the page and pictures when they do.
+  commit the page and pictures when they do. A loop's page,
+  `walkthrough/14-designing-a-part.md`, is written the same way by
+  `test_part_loop.py`, which is marked `e2e` and not `walkthrough`: the
+  browser suite writes it, and `apothecary test run` stays quick.
 - `doc_recorder` takes screenshots for `docs/generated/`. The tests that use it
   are marked `docs` and skip unless `--generate-docs` is given;
   `apothecary docs generate` runs them that way, on a scripted server of its own.

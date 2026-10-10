@@ -1,4 +1,5 @@
-"""`apothecary test run` collects the runs that write walkthrough pages 11 and 12."""
+"""`apothecary test run` collects the runs that write walkthrough pages 11 and 12,
+and not the run that writes a loop's page (14), which the browser suite writes."""
 
 import subprocess
 import sys
@@ -40,3 +41,25 @@ def test_the_demonstration_is_not_a_docs_workflow():
     argv = [sys.executable, "-m", "pytest", "--collect-only", "-m", "docs", *DEMONSTRATION_MODULES]
     collected = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True)
     assert collected.returncode == pytest.ExitCode.NO_TESTS_COLLECTED, collected.stdout[-2000:]
+
+
+# A loop's page is written by the browser suite only, so `apothecary test run`
+# stays quick (docs/plans/ui-flows-2026-10-08.md, decided with the owner): its
+# run is marked e2e and not walkthrough.
+LOOP_PAGES = {
+    Path(__file__).resolve().parent / "e2e" / "test_part_loop.py": (
+        "test_designing_a_part_twice_round"
+    ),
+}
+
+
+def test_a_loops_page_is_written_by_the_browser_suite_only():
+    def collected(argv):
+        done = subprocess.run(argv + ["--collect-only"], cwd=ROOT, capture_output=True, text=True)
+        assert done.returncode == 0, done.stderr[-2000:]
+        return done.stdout
+
+    quick, suite = collected(testing.run_command()), collected(testing.run_command(e2e=True))
+    for module, run in LOOP_PAGES.items():
+        assert run not in quick, f"`test run` collects {module.name}::{run}"
+        assert run in suite, f"the browser suite does not collect {module.name}::{run}"
