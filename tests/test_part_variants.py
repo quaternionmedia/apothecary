@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 
 from apothecary import api
 from apothecary.api import app
-from apothecary.meshes import bounds, read_mesh
+from apothecary.meshes import bounds, read_mesh, write_stl
 from apothecary.projects.parts import stl_renderer, variants
 from apothecary.projects.parts.base import BasePart
 from apothecary.projects.parts.calibration_cube import DEFAULT as CUBE
@@ -34,6 +34,7 @@ from apothecary.projects.parts.stl_renderer import (
 from apothecary.projects.parts.variants import (
     PageRenders,
     make_variant,
+    measure_stl,
     part_state,
     trim_variants,
     variant_key,
@@ -41,12 +42,18 @@ from apothecary.projects.parts.variants import (
     wants,
 )
 
+# One facet 4 x 5 x 6, which is what the STL measures; the summary says 10 x 20 x 30.
+FACET = (
+    "facet normal 0 0 0\\nouter loop\\nvertex 0 0 0\\nvertex 4 0 0\\nvertex 0 5 6"
+    "\\nendloop\\nendfacet"
+)
+
 
 def _scripted(path: Path, version: str, body: str = "") -> Path:
     """An `openscad` that reports ``version`` and logs its arguments to
     ``<path>.calls``; a render runs ``body``, then writes an STL naming its
-    arguments (so each set of -D is a different file) and, when asked, a
-    summary measuring 10 x 20 x 30."""
+    arguments (so each set of -D is a different file) whose one facet
+    measures 4 x 5 x 6 and, when asked, a summary saying 10 x 20 x 30."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         "#!/bin/sh\n"
@@ -56,7 +63,7 @@ def _scripted(path: Path, version: str, body: str = "") -> Path:
         'for arg in "$@"; do case "$arg" in --summary-file=*)\n'
         '  printf \'{"geometry":{"bounding_box":{"min":[0,0,0],"max":[10,20,30],'
         '"size":[10,20,30]}}}\' > "${arg#--summary-file=}";; esac; done\n'
-        'printf "solid %s\\nendsolid\\n" "$*" > "$2"\n'
+        f'printf "solid %s\\n{FACET}\\nendsolid\\n" "$*" > "$2"\n'
     )
     path.chmod(path.stat().st_mode | stat.S_IEXEC)
     return path
@@ -128,6 +135,33 @@ class TestTheKey:
         assert variant_key(part, {}, new) != same
 
 
+# Two triangles spanning (0, 0, 0) to (10, 20, 30): all a bounding box needs.
+BOX = [((0, 0, 0), (10, 0, 0), (10, 20, 30)), ((0, 0, 0), (0, 20, 30), (10, 20, 30))]
+
+
+class TestMeasuringAnSTL:
+    def test_an_stl_is_measured_in_the_frame_its_bounds_are_declared_in(self, tmp_path):
+        upright = tmp_path / "upright.stl"
+        write_stl(BOX, upright)
+        assert measure_stl(upright) == {
+            "min": [0, 0, 0],
+            "max": [10, 20, 30],
+            "size": [10, 20, 30],
+        }
+        # The same box turned by rotate([90, 0, 0]), as a part's display rotation turns it:
+        # (x, y, z) -> (x, -z, y). Measured, it is turned back.
+        turned = tmp_path / "turned.stl"
+        write_stl([tuple((x, -z, y) for x, y, z in t) for t in BOX], turned)
+        assert measure_stl(turned)["size"] == [10, 30, 20]
+        assert measure_stl(turned, [90, 0, 0]) == measure_stl(upright)
+
+    def test_nothing_to_measure_is_none(self, tmp_path):
+        empty = tmp_path / "empty.stl"
+        empty.write_text("solid nothing\nendsolid nothing\n")
+        assert measure_stl(empty) is None
+        assert measure_stl(tmp_path / "missing.stl") is None
+
+
 class TestMakingAVariant:
     def test_a_variant_is_the_caches_alone(self, tmp_path, openscad):
         exe = openscad()
@@ -138,13 +172,21 @@ class TestMakingAVariant:
         assert made.stl_path == stl and stl.exists() and record.exists()
         assert b"x=12.0" in stl.read_bytes()
         assert made.measured == {"min": [0, 0, 0], "max": [10, 20, 30], "size": [10, 20, 30]}
+        assert made.measured_from == "summary"
         assert (made.openscad, made.backend) == ("OpenSCAD version 2026.09.27", "manifold")
         # The part's own STL is the default variant; this one is not it.
-        assert not part.get_stl_output_path().exists()
+        assert not part.get_stl_output_path().exists() and not made.saved
 
         again = make_variant(part, {"x": 12})
         assert (again.rendered, again.key, again.measured) == (False, made.key, made.measured)
+        assert again.measured_from == "summary"
         assert len(_renders(exe)) == 1
+
+    def test_without_a_summary_the_stl_is_measured(self, tmp_path, openscad):
+        openscad(version="2021.01")
+        made = make_variant(_part(tmp_path), {"x": 12})
+        assert made.measured == {"min": [0, 0, 0], "max": [4, 5, 6], "size": [4, 5, 6]}
+        assert made.measured_from == "stl"
 
     def test_the_defaults_are_also_the_parts_own_stl(self, tmp_path, openscad):
         exe = openscad()
@@ -153,6 +195,7 @@ class TestMakingAVariant:
         canonical = part.get_stl_output_path()
         assert canonical.read_bytes() == made.stl_path.read_bytes()
         assert read_params_sidecar(canonical) is None
+        assert made.saved
         assert not make_variant(part).rendered
         assert len(_renders(exe)) == 1
 
@@ -171,10 +214,12 @@ class TestMakingAVariant:
         exe = openscad()
         part = _part(tmp_path)
         canonical = part.get_stl_output_path()
-        canonical.write_text("solid built elsewhere\nendsolid\n")
+        write_stl(BOX, canonical)
         made = make_variant(part)
-        assert made.success and not made.rendered
-        assert (made.key, made.stl_path, made.measured) == (None, canonical, None)
+        assert made.success and not made.rendered and made.saved
+        assert (made.key, made.stl_path) == (None, canonical)
+        # Built elsewhere, so it is measured from the STL.
+        assert (made.measured["size"], made.measured_from) == ([10, 20, 30], "stl")
         assert _renders(exe) == []
 
     def test_an_edited_include_is_rendered_again(self, tmp_path, openscad):
@@ -388,7 +433,7 @@ class TestTheGenerateRoute:
         r = _generate(client, {"size": 12})
         assert r.status_code == 200, r.text
         body = r.json()
-        assert body["regenerated"] is True and body["variant"]
+        assert body["regenerated"] is True and body["variant"] and body["saved"] is False
         assert body["stl_url"] == f"/parts/calibration_cube/variants/{body['variant']}/stl"
         stl = client.get(body["stl_url"])
         assert stl.status_code == 200 and b"size=12.0" in stl.content
@@ -399,25 +444,41 @@ class TestTheGenerateRoute:
         again = _generate(client, {"size": 12}).json()
         assert again["regenerated"] is False and again["variant"] == body["variant"]
 
+    def test_a_variant_is_described_by_its_key(self, cube, openscad):
+        """What a reloaded tab, which has only the key, starts from."""
+        openscad()
+        client = TestClient(app)
+        body = _generate(client, {"size": 12}).json()
+        record = client.get(f"/parts/calibration_cube/variants/{body['variant']}")
+        assert record.status_code == 200, record.text
+        record = record.json()
+        assert record["params"] == {"size": 12.0} and record["stl_url"] == body["stl_url"]
+        assert (record["measured"], record["measured_from"]) == (body["measured"], "summary")
+        assert record["saved"] is False and record["backend"] == "manifold"
+        missing = client.get("/parts/calibration_cube/variants/0123456789abcdef01234567")
+        assert missing.status_code == 404
+
     def test_measured_bounds_come_beside_the_declared_ones(self, cube, openscad):
         openscad()
         body = _generate(TestClient(app), {"size": 12}).json()
         assert body["bounds"]["size"] == {"x": 12.0, "y": 12.0, "z": 12.0}
         assert body["measured"]["min_point"] == {"x": 0.0, "y": 0.0, "z": 0.0}
         assert body["measured"]["size"] == {"x": 10.0, "y": 20.0, "z": 30.0}
+        assert body["measured_from"] == "summary"
         assert body["openscad"] == "OpenSCAD version 2026.09.27"
         assert body["backend"] == "manifold"
 
-    def test_2021_01_measures_nothing(self, cube, openscad):
+    def test_2021_01_is_measured_from_the_stl(self, cube, openscad):
         openscad(version="2021.01")
         body = _generate(TestClient(app), {"size": 12}).json()
-        assert body["measured"] is None and body["backend"] == "cgal"
+        assert body["measured"]["size"] == {"x": 4.0, "y": 5.0, "z": 6.0}
+        assert body["measured_from"] == "stl" and body["backend"] == "cgal"
 
     def test_the_defaults_are_left_as_the_parts_own_stl(self, cube, openscad):
         openscad()
         client = TestClient(app)
         body = _generate(client).json()
-        assert body["regenerated"] is True
+        assert body["regenerated"] is True and body["saved"] is True
         assert (
             client.get("/parts/calibration_cube/stl").content == client.get(body["stl_url"]).content
         )
@@ -521,9 +582,10 @@ class TestTheStateRoute:
     def test_it_reads_the_params_sidecar(self, cube, openscad):
         client = TestClient(app)
         assert client.get("/parts/calibration_cube/state").json()["exists"] is False
-        cube.write_text("solid\nendsolid\n")
+        write_stl(BOX, cube)
         write_params_sidecar(cube, {"size": 12.0})
         state = client.get("/parts/calibration_cube/state").json()
+        assert state["measured"]["size"] == {"x": 10.0, "y": 20.0, "z": 30.0}
         assert state == {
             "part": "calibration_cube",
             "exists": True,
@@ -532,6 +594,8 @@ class TestTheStateRoute:
             "default": False,
             "generated": state["generated"],
             "fresh": True,
+            "measured": state["measured"],
+            "measured_from": "stl",
         }
 
     def test_the_pages_apply_never_changes_it(self, cube, openscad):
@@ -556,8 +620,8 @@ def test_the_installed_openscad_renders_a_variant_through_the_route(tmp_path, mo
     mesh.write_bytes(client.get(body["stl_url"]).content)
     lo, hi = bounds(read_mesh(mesh))
     assert [round(hi[a] - lo[a], 2) for a in range(3)] == [12, 12, 12]
-    if has_summary(stl_renderer.get_renderer().openscad_path):
-        assert body["measured"]["size"] == {"x": 12.0, "y": 12.0, "z": 12.0}
-    else:
-        assert body["measured"] is None
+    size = body["measured"]["size"]
+    assert [round(size[a], 2) for a in "xyz"] == [12, 12, 12]
+    summary = has_summary(stl_renderer.get_renderer().openscad_path)
+    assert body["measured_from"] == ("summary" if summary else "stl")
     assert not (tmp_path / "cube.stl").exists()

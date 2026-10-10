@@ -67,10 +67,13 @@ from .projects.parts.variants import (
     KEY_PATTERN,
     PageRenders,
     PartState,
+    VariantRecord,
     make_variant,
+    measured_box,
     part_state,
     read_variant,
     variant_paths,
+    variant_record,
 )
 from .projects.parts.variants import wants as request_wants
 from .projects.registry import ProjectInfo, _sanitize_module_name, scan_projects
@@ -427,17 +430,6 @@ class StlGenerateRequest(BaseModel):
 _page_renders = PageRenders()
 
 
-def _measured_box(measured: Optional[Dict[str, List[float]]]) -> Optional[BoundingBox3D]:
-    """OpenSCAD's measurement in the shape the declared bounds come in."""
-    if not measured:
-        return None
-    low, high = measured["min"], measured["max"]
-    return BoundingBox3D(
-        min_point=Vector3D(x=low[0], y=low[1], z=low[2]),
-        max_point=Vector3D(x=high[0], y=high[1], z=high[2]),
-    )
-
-
 @app.post("/parts/{name}/stl/generate")
 def generate_part_stl(
     name: str,
@@ -463,9 +455,11 @@ def generate_part_stl(
     sidecar says it holds another variant; any other variant is the cache's
     alone, so two pages applying different values never share a file.
 
-    ``bounds`` is the envelope the part declares; ``measured`` is the box
-    OpenSCAD measured of the upright render, where it writes a summary (a
-    snapshot; null for 2021.01, and for an answer it did not render).
+    ``bounds`` is the envelope the part declares; ``measured`` is the box of
+    what is served, in the same upright frame: OpenSCAD's own summary of the
+    render where it writes one (``measured_from: "summary"``, a snapshot),
+    else read off the STL (``"stl"``: 2021.01, or the part's own STL built
+    elsewhere). ``saved`` says the answer is what the part's own STL holds.
     ``messages`` are its errors and warnings by file and line. A render
     OpenSCAD refused is a 422 whose ``detail`` carries them; one superseded
     by a newer request from the same ``page`` is a 409. No OpenSCAD, or a
@@ -521,11 +515,30 @@ def generate_part_stl(
         "render_time_seconds": made.render_time_seconds,
         "params": jsonable_encoder(overrides),
         "bounds": jsonable_encoder(part.get_bounds(overrides or None)),
-        "measured": jsonable_encoder(_measured_box(made.measured)),
+        "measured": jsonable_encoder(measured_box(made.measured)),
+        "measured_from": made.measured_from,
+        "saved": made.saved,
         "messages": messages,
         "openscad": made.openscad,
         "backend": made.backend,
     }
+
+
+@app.get("/parts/{name}/variants/{variant}", response_model=VariantRecord)
+def get_part_variant(name: str, variant: str):
+    """What made one cached variant: its parameters, OpenSCAD and backend, its
+    measured bounds and what OpenSCAD said, and its ``stl_url``. A page that
+    has only the key (a reloaded tab, a link) starts its editor from these.
+    404 once the cache has let it go."""
+    part = _load_part_wrapper(name)
+    record = variant_record(part, variant, url_name=name) if KEY_PATTERN.match(variant) else None
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No variant '{variant}' of '{name}' is cached; "
+            f"POST /parts/{name}/stl/generate makes it",
+        )
+    return record
 
 
 @app.get("/parts/{name}/variants/{variant}/stl")
