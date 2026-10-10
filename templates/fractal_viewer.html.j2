@@ -3814,7 +3814,9 @@
                     // refused, which the module has said.
                     async act(verb) {
                         await ready;
-                        if (verb === 'install') return toolchain.install();
+                        // Install › a module: arduino-cli, or another module's tools.
+                        if (verb === 'install' || verb === 'install:arduino') return toolchain.install();
+                        if (verb.startsWith('install:')) return toolchain.module(verb.slice('install:'.length));
                         if (verb === 'compile') return build.compile();
                         if (verb === 'upload') return build.upload();
                         if (verb === 'esptool') return raw.flash();
@@ -4792,7 +4794,7 @@
         }
         // The Bench's buttons, by the verb each one is (Panels › Bench).
         const BENCH_VERBS = [
-            ['.install-btn', 'bench:install'], ['.compile-btn', 'bench:compile'], ['.upload-btn', 'bench:upload'],
+            ['.install-btn', 'bench:install:arduino'], ['.compile-btn', 'bench:compile'], ['.upload-btn', 'bench:upload'],
             ['.esp-flash-btn', 'bench:esptool'], ['.cancel-btn', 'bench:cancel'], ['.lib-btn', 'bench:libraries'],
         ];
         // The list, from the canvas ring: each row at this level is a piece the
@@ -4817,6 +4819,8 @@
             if (bench) {
                 for (const [selector, action] of BENCH_VERBS) for (const el of bench.querySelectorAll(selector)) pairs.push([el, action]);
                 for (const el of bench.querySelectorAll('.core-install[data-id]')) pairs.push([el, `bench:core:${el.dataset.id}`]);
+                // Each toolchain module's Install: its cell of Panels › Bench › Install.
+                for (const el of bench.querySelectorAll('.module-install[data-id]')) pairs.push([el, `bench:install:${el.dataset.id}`]);
             }
             annotate(ring, pairs);
         }

@@ -8,12 +8,15 @@ ring's cells, asserting what a person sees at each step -- the Flashing card's
 task, the board's one log, the sketch it should run against the sketch it was
 heard saying.
 
-Runs against a server of its own: the scripted arduino-cli, cargo and espflash in
-one folder (tests/firmware_helpers.py), and the simulated devkit they share
+Runs against servers of their own: the scripted arduino-cli, cargo and espflash
+in one folder (tests/firmware_helpers.py), and the simulated devkit they share
 (FAKE_DEVKIT): an ESP32 on /dev/ttyFAKE2 that runs what was last flashed to it
-and says that sketch's hello, as esp32_blink does. Nothing here opens a real
-port, builds for real or reaches the network; flashing the bench's own ESP32 is
-a step of the bench checklist (docs/validation/2026-09-20-ender-bench.md).
+and says that sketch's hello, as esp32_blink does. And a server with Rust alone,
+no arduino-cli anywhere, where the Rust module finds the devkit and listens to it
+itself, through the simulated serial engine (APOTHECARY_SIMULATED_DEVKIT).
+Nothing here opens a real port, builds for real or reaches the network;
+flashing the bench's own ESP32 is a step of the bench checklist
+(docs/validation/2026-09-20-ender-bench.md).
 """
 
 from __future__ import annotations
@@ -24,7 +27,7 @@ from playwright.sync_api import Page, expect
 
 DEVKIT = "/dev/ttyFAKE2"
 NODE = "esp32_blink"
-ARDUINO = "esp32_blink"
+ARDUINO = "esp32_blink@arduino"
 RUST = "esp32_blink@rust-esp32"
 MACHINE = ".panel[data-panel='machine']"
 BENCH = ".panel[data-panel='bench']"
@@ -41,6 +44,21 @@ def url(start_server, tmp_path_factory):
             "CARGO": str(write_fake_cargo(bench / "cargo")),
             "ESPFLASH": str(write_fake_espflash(bench / "espflash")),
             "FAKE_DEVKIT": "1",
+        }
+    )
+
+
+@pytest.fixture(scope="module")
+def rust_only_url(start_server, tmp_path_factory):
+    """Rust for the ESP32 and no arduino-cli anywhere: the Rust module finds the
+    simulated devkit on /dev/ttyFAKE2 and listens to it itself."""
+    bench = tmp_path_factory.mktemp("rust-bench")
+    return start_server(
+        {
+            "ARDUINO_CLI": "none",
+            "CARGO": str(write_fake_cargo(bench / "cargo")),
+            "ESPFLASH": str(write_fake_espflash(bench / "espflash")),
+            "APOTHECARY_SIMULATED_DEVKIT": DEVKIT,
         }
     )
 
@@ -111,16 +129,18 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     select = bench.locator(".sketch-select")
     expect(select.locator(f"option[value='{RUST}']")).to_have_count(1, timeout=10000)
     rows = select.locator("option").all_text_contents()
-    arduino_row, rust_row = "esp32_blink · esp32:esp32:esp32", "esp32_blink · Rust · esp32"
+    # Each sketch named with its toolchain, the board it is built for after it.
+    arduino_row = "esp32_blink@arduino · esp32:esp32:esp32"
+    rust_row = "esp32_blink@rust-esp32 · esp32"
     assert rows.index(arduino_row) + 1 == rows.index(rust_row), rows
     select.select_option(ARDUINO)
     expect(bench.locator(".fqbn-input")).to_have_value("esp32:esp32:esp32")
     bench.locator(".port-select").select_option(DEVKIT)
     _canvas_ring(page, "9", "3", "2")  # Panels › Bench › Compile
-    _ended(bench, "Compile esp32_blink (esp32:esp32:esp32)")
+    _ended(bench, f"Compile {ARDUINO} (esp32:esp32:esp32)")
     expect(bench.locator(".task-log")).to_contain_text("fake compile")
     _canvas_ring(page, "9", "3", "4")  # Panels › Bench › Upload, after asking
-    _ended(bench, f"Upload esp32_blink → {DEVKIT}")
+    _ended(bench, f"Upload {ARDUINO} → {DEVKIT}")
     expect(bench.locator(".task-log")).to_contain_text("fake upload")
 
     # The node its sketch draws is bound to the board that runs it: its badge, its Machine.
@@ -133,7 +153,8 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     machine = page.locator(MACHINE)
     sketch = machine.locator("#c-sketch")
     log = machine.locator("#log")
-    expect(sketch).to_contain_text("should run esp32_blink · esp32:esp32:esp32", timeout=8000)
+    # Which build it should run, its toolchain said.
+    expect(sketch).to_contain_text(f"should run {ARDUINO} · esp32:esp32:esp32", timeout=8000)
     expect(machine.locator("#c-board")).to_contain_text(DEVKIT)
     _ring_on(page, NODE)
     _choose(page, "Device", "Query")  # Identify: a few seconds' listen for the hello
@@ -154,21 +175,22 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     expect(card.locator(".sk-board-row")).to_be_hidden()
     expect(card.locator(".sk-note")).to_contain_text("built by Rust for the ESP32 for esp32")
     card.locator(".compile-btn").click()
-    _ended(card, "Compile esp32_blink (Rust, esp32)")
+    _ended(card, f"Compile {RUST} (esp32)")
     expect(card.locator(".task-log")).to_contain_text("Compiling esp32_blink")
     expect(card.locator(".task-log")).to_contain_text("--offline")
     machine.locator("#clear").click()  # this round's hello, not the last one's
     card.locator(".upload-btn").click()
-    _ended(card, f"Upload esp32_blink (Rust) → {DEVKIT}")
+    _ended(card, f"Upload {RUST} → {DEVKIT}")
     expect(card.locator(".task-log")).to_contain_text("Flashing has completed!")
-    expect(log).to_contain_text("upload of esp32_blink (Rust, esp32): succeeded")
+    expect(log).to_contain_text(f"upload of {RUST} (esp32): succeeded")
     expect(log).to_contain_text("listening 6 s for the sketch's hello", timeout=8000)
     expect(log).to_contain_text("heard esp32_blink say hello", timeout=20000)
-    expect(sketch).to_contain_text("should run esp32_blink · rust-esp32 · esp32", timeout=8000)
+    # The same hello as the Arduino one's, and the Machine says it is the Rust build.
+    expect(sketch).to_contain_text(f"should run {RUST} · esp32", timeout=8000)
     expect(sketch).to_contain_text("observed esp32_blink ✓ matches")
     assert dialogs == [
-        f'Compile and upload "esp32_blink" to {DEVKIT}?',
-        f'Compile and upload "esp32_blink" (Rust) to {DEVKIT}?',
+        f'Compile and upload "{ARDUINO}" to {DEVKIT}?',
+        f'Compile and upload "{RUST}" to {DEVKIT}?',
     ], dialogs
 
     # Its hello in the board's Machine as it says it on the wire: Listen streams it.
@@ -177,6 +199,7 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     expect(log).to_contain_text("chip: ESP32-D0WD-V3 rev 301, 2 core(s), 240 MHz, LED on GPIO 2")
     expect(log).to_contain_text("blink 1")
     expect(badge).to_contain_text("⚡")
+    expect(page.locator("#selected-body .device-section")).to_contain_text(f"runs {RUST} ✓")
     machine.locator("#release").click()
     page.wait_for_function(
         f"() => !window.fractalViewer.boards.board('{DEVKIT}').stream", timeout=5000
@@ -201,10 +224,12 @@ def test_the_bench_lists_the_rust_sketch_and_its_toolchain_beside_arduino(page: 
     rust = bench.locator(".tc-module[data-id='rust-esp32']")
     expect(rust).to_contain_text("Rust for the ESP32", timeout=10000)
     expect(rust).to_contain_text("rust for esp32")
+    expect(rust).to_contain_text("can build, flash, find ports, listen, probe with espflash")
     expect(rust).to_contain_text("cargo 1.99.0-nightly")
     expect(rust).to_contain_text("espflash 4.6.0")
     install = rust.locator(".module-install")
     expect(install).to_have_text("Update Rust for the ESP32")
+    expect(install).to_have_attribute("data-address", "9366")  # Panels › Bench › Install › Rust
     expect(install).to_be_enabled()
     assert "vendor every Rust sketch's crates" in (install.get_attribute("title") or "")
     expect(bench.locator(".tc-status")).to_contain_text("✓ 9.9.9")  # arduino-cli, as it was
@@ -220,6 +245,74 @@ def test_the_bench_lists_the_rust_sketch_and_its_toolchain_beside_arduino(page: 
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     for digit in ("9", "3", "2"):  # Panels › Bench › Compile
         page.keyboard.press(digit)
-    _ended(bench, "Compile esp32_blink (Rust, esp32)")
+    _ended(bench, f"Compile {RUST} (esp32)")
     expect(bench.locator(".task-log")).to_contain_text("--offline")
     expect(page.locator("#status")).to_contain_text("⌗932")
+
+
+@pytest.mark.e2e
+def test_with_rust_alone_the_loop_goes_round_with_no_arduino_cli(page: Page, rust_only_url: str):
+    """No arduino-cli anywhere. The Rust module finds the devkit itself -- the Bench's
+    port list and the board's Machine say so -- and listens to it itself: round one
+    from the Bench, the Rust esp32_blink built and flashed, the node bound to the board
+    by its sketch, its hello heard by the ring's Query; round two from the Machine's
+    card, flashed again and heard again; Listen streams it and Probe asks espflash
+    what the chip is."""
+    url = rust_only_url
+    dialogs: list[str] = []
+    page.on("dialog", lambda d: (dialogs.append(d.message), d.accept()))
+    _open_viewer(page, url)
+    _canvas_ring(page, "9", "3", "8")
+    bench = page.locator(BENCH)
+    expect(bench.locator(".tc-status")).to_contain_text("not installed", timeout=10000)
+    expect(bench.locator(".tc-module[data-id='rust-esp32']")).to_contain_text("installed: can")
+    select = bench.locator(".sketch-select")
+    expect(select.locator(f"option[value='{RUST}']")).to_have_count(1, timeout=10000)
+    select.select_option(RUST)
+    ports = bench.locator(".port-select option").all_text_contents()
+    assert any(DEVKIT in p for p in ports), ports
+    bench.locator(".port-select").select_option(DEVKIT)
+    expect(bench.locator(".compile-btn")).to_be_enabled(timeout=5000)
+    bench.locator(".compile-btn").click()
+    _ended(bench, f"Compile {RUST} (esp32)")
+    bench.locator(".upload-btn").click()
+    _ended(bench, f"Upload {RUST} → {DEVKIT}")
+    expect(bench.locator(".task-log")).to_contain_text("Flashing has completed!")
+
+    badge = page.locator(f".world-badge[data-path='{NODE}']")
+    expect(badge).to_be_visible(timeout=15000)
+    page.locator(".panel-rail .rail-tab[data-panel='bench'] .rail-tab-name").click()
+    expect(bench).to_be_hidden(timeout=5000)
+    _ring_on(page, NODE)
+    _choose(page, "Device", "Open")
+    machine = page.locator(MACHINE)
+    sketch, log = machine.locator("#c-sketch"), machine.locator("#log")
+    expect(machine.locator("#c-board")).to_contain_text("found by rust-esp32", timeout=8000)
+    expect(sketch).to_contain_text(f"should run {RUST} · esp32", timeout=8000)
+    _ring_on(page, NODE)
+    _choose(page, "Device", "Query")
+    expect(log).to_contain_text("heard esp32_blink say hello", timeout=20000)
+    expect(sketch).to_contain_text("observed esp32_blink ✓ matches", timeout=8000)
+
+    # Round two, from the Machine's card: the same sketch, flashed again, heard again.
+    _ring_on(page, NODE)
+    _choose(page, "Device", "Flash")
+    card = machine.locator("#flash-card")
+    expect(card.locator(".sketch-select")).to_have_value(RUST, timeout=10000)
+    machine.locator("#clear").click()
+    card.locator(".upload-btn").click()
+    _ended(card, f"Upload {RUST} → {DEVKIT}")
+    expect(log).to_contain_text("heard esp32_blink say hello", timeout=20000)
+    assert dialogs == [f'Compile and upload "{RUST}" to {DEVKIT}?'] * 2, dialogs
+
+    # Listen: the Rust module's own monitor, the hello on the wire.
+    machine.locator("#listen").click()
+    expect(log).to_contain_text("apothecary esp32_blink: hello", timeout=10000)
+    expect(log).to_contain_text("blink 1")
+    machine.locator("#release").click()
+    page.wait_for_function(
+        f"() => !window.fractalViewer.boards.board('{DEVKIT}').stream", timeout=5000
+    )
+    # Probe: espflash asks the chip (the scripted one answers).
+    machine.locator("#probe").click()
+    expect(machine.locator("#c-board")).to_contain_text("24:6f:28:00:00:02", timeout=15000)

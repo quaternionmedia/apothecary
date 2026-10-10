@@ -41,7 +41,8 @@ def validate_core_id(value: str) -> str:
 
 
 class BoardInfo(BaseModel):
-    """A serial port arduino-cli detected, with any board it matched to it."""
+    """A serial port a toolchain module found (arduino-cli's ``board list``, or the
+    Rust module's pyserial), with any board arduino-cli matched to it."""
 
     port: str
     protocol: str = "serial"
@@ -51,6 +52,7 @@ class BoardInfo(BaseModel):
     vid: Optional[str] = None
     pid: Optional[str] = None
     serial_number: Optional[str] = None  # USB iSerial; generic on some bridges (CP2102: "0001")
+    found_by: Optional[str] = None  # the toolchain module that found the port, and listens to it
 
 
 class KnownBoard(BaseModel):
@@ -98,15 +100,17 @@ class SketchInfo(BaseModel):
     ``name`` is what the sketch announces (``apothecary <name>: hello``) and
     what a scene node's ``sketch_ref`` names; two implementations of one
     sketch -- the Arduino ``esp32_blink`` and the Rust one -- share it. ``id``
-    tells them apart: an Arduino sketch's is its name, as it always was;
-    another module's is ``<name>@<toolchain>``.
+    is ``<name>@<toolchain>`` -- ``esp32_blink@arduino``,
+    ``esp32_blink@rust-esp32`` -- and is how the sketch is named everywhere a
+    person reads it: the Bench, a board's Machine, the CLI, build folders and
+    messages (the owner's decision of 2026-10-10).
     """
 
     name: str
     path: Path
     ino: Optional[Path] = None  # an Arduino sketch's .ino; None for another module's
     toolchain: str = "arduino"  # the module that builds it (firmware/modules)
-    id: str = ""  # unique among the sketches: the name, or <name>@<toolchain>
+    id: str = ""  # unique among the sketches: <name>@<toolchain>
     language: str = "arduino"
     target: Optional[str] = None  # what a sketch with no FQBN builds for: its chip ("esp32")
     part: Optional[str] = None
@@ -133,9 +137,9 @@ class SketchInfo(BaseModel):
 ARDUINO = "arduino"
 
 
-def sketch_id(name: str, toolchain: str) -> str:
-    """An Arduino sketch is known by its name; another module's by ``name@module``."""
-    return name if toolchain == ARDUINO else f"{name}@{toolchain}"
+def sketch_id(name: str, toolchain: Optional[str]) -> str:
+    """A sketch as a person reads it: its name, and the toolchain that builds it."""
+    return f"{name}@{toolchain or ARDUINO}"
 
 
 class ToolStatus(BaseModel):
@@ -159,6 +163,7 @@ class ModuleStatus(BaseModel):
     tools: List[ToolStatus] = Field(default_factory=list)
     problems: List[str] = Field(default_factory=list)
     install: Optional[str] = None  # the command that installs it
+    can: List[str] = Field(default_factory=list)  # what it does: build, flash, find ports ...
     needs_board: bool = False  # a build names a board (an Arduino FQBN)
     installable: bool = True  # whether that command can install it on this machine
 
@@ -310,6 +315,7 @@ class DeviceInfo(BaseModel):
     flash_manufacturer: Optional[str] = None
     probed_at: Optional[datetime] = None
     serial_number: Optional[str] = None
+    found_by: Optional[str] = None  # the toolchain module that found the port, and listens to it
     printer: Optional["PrinterInfo"] = None  # a G-code firmware answered M115 on this port
 
     @property
@@ -340,6 +346,15 @@ class FlashRecord(BaseModel):
     source_sha256: Optional[str] = None  # of the sketch sources at upload time
     flashed_at: datetime
     task_id: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _named(self) -> "FlashRecord":
+        # A record kept before a sketch was always named with its toolchain was an
+        # Arduino one's: name it as it would be named now.
+        if self.sketch and (not self.sketch_id or "@" not in self.sketch_id):
+            self.toolchain = self.toolchain or ARDUINO
+            self.sketch_id = sketch_id(self.sketch, self.toolchain)
+        return self
 
 
 class ExpectedFirmware(BaseModel):

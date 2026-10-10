@@ -69,6 +69,9 @@ export function mountToolchain(root, { base = "", tasks = null, say = null, onSt
             ["config", esc(s.config_file || "–")],
             ["esptool", s.esptool_ok ? `<b class="ok">✓ ${esc(s.esptool_version)}</b> ${esc(s.esptool_path)}` : '<span class="warn">• not found (optional)</span>'],
         ];
+        // Arduino, as a module: installed or not, and what it can do.
+        const arduino = (s.toolchains || []).find((m) => m.id === "arduino");
+        if (arduino) rows.push(["Arduino", `${arduino.ok ? '<b class="ok">installed</b>' : '<span class="warn">not installed</span>'} · can ${esc((arduino.can || []).join(", "))}`]);
         $(".tc-status").innerHTML = rows.map(([k, v]) => `<div><span class="meta">${k}:</span> ${v}</div>`).join("")
             + (s.problems || []).map((p) => `<div class="warn">! ${esc(p)}</div>`).join("");
         $(".install-btn").textContent = s.arduino_cli_ok ? "Update arduino-cli" : "Install arduino-cli";
@@ -96,7 +99,7 @@ export function mountToolchain(root, { base = "", tasks = null, say = null, onSt
         const builds = `${(m.languages || []).join(", ")} for ${(m.families || []).join(", ")}`;
         const title = INSTALLS[m.id] || `Install its tools: ${m.install || m.id}`;
         return `<div class="tc-module" data-id="${esc(m.id)}"><div class="k">${esc(m.label)} <span class="meta">${esc(builds)}</span></div>`
-            + `<div class="kv">${tools}${problems}</div>`
+            + `<div class="kv"><div><span class="meta">${m.ok ? "installed" : "not installed"}:</span> can ${esc((m.can || []).join(", "))}</div>${tools}${problems}</div>`
             + `<div class="row"><button type="button" class="module-install" data-id="${esc(m.id)}" title="${esc(title)}">${m.ok ? "Update" : "Install"} ${esc(m.label)}</button></div></div>`;
     }
     // What can be pressed: nothing while a task runs; cores and libraries only

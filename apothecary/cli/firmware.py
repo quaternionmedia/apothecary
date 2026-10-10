@@ -23,7 +23,10 @@ def _die(exc: Exception) -> None:
 
 
 def _require_sketch(name: str):
-    sketch = find_sketch(name)
+    try:
+        sketch = find_sketch(name)
+    except ValueError as exc:  # a name two sketches share
+        raise click.ClickException(str(exc)) from exc
     if sketch is None:
         raise click.ClickException(
             f"unknown sketch '{name}'. Sketches are parts/<name>/<name>.ino, or a Cargo "
@@ -140,6 +143,9 @@ def _print_status(status) -> None:
             continue
         builds = ", ".join(module.languages) + " for " + ", ".join(module.families)
         click.secho(f"{module.label} ({builds})", bold=True)
+        click.echo(
+            f"  {'installed' if module.ok else 'not installed'}: can {', '.join(module.can)}"
+        )
         for tool in module.tools:
             if tool.ok:
                 said = (
@@ -265,7 +271,7 @@ def firmware_compile(sketch: str, fqbn: Optional[str]):
     except (ToolchainError, ValueError) as exc:
         _die(exc)
     what = service.target_words(s, chosen)
-    click.secho(f"Compiled {s.name} for {what} -> {service.build_dir(s)}", fg="green")
+    click.secho(f"Compiled {s.id} for {what} -> {service.build_dir(s)}", fg="green")
 
 
 @firmware.command("upload")
@@ -289,9 +295,7 @@ def firmware_upload(sketch: str, fqbn: Optional[str], port: Optional[str]):
     except (ToolchainError, ValueError) as exc:
         _die(exc)
     service.record_upload(chosen_port, s, chosen)
-    click.secho(
-        f"Uploaded {s.name} ({service.target_words(s, chosen)}) to {chosen_port}", fg="green"
-    )
+    click.secho(f"Uploaded {s.id} ({service.target_words(s, chosen)}) to {chosen_port}", fg="green")
 
 
 @firmware.command("flash-bin")

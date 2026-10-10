@@ -15,7 +15,15 @@ from typing import List, Optional
 from pydantic import ValidationError
 
 from ..installer import ArduinoCliInstaller, InstallSpec, env_for_arduino
-from ..models import ARDUINO, DisplaySpec, ModuleStatus, SketchInfo, ToolchainStatus, ToolStatus
+from ..models import (
+    ARDUINO,
+    BoardInfo,
+    DisplaySpec,
+    ModuleStatus,
+    SketchInfo,
+    ToolchainStatus,
+    ToolStatus,
+)
 from ..tasks import stream
 from ..toolchains import (
     ArduinoCli,
@@ -60,12 +68,14 @@ def _check(rc: int, what: str) -> None:
 class ArduinoModule(ToolchainModule):
     id = ARDUINO
     label = "Arduino"
+    ring_label = "Arduino"
     short = "Arduino"
     languages = ("arduino",)
     # The families the suggested cores build for; any core arduino-cli installs adds its own.
     families = ("avr", "esp32", "esp8266", "rp2040", "samd")
     needs_board = True
     install_command = "apothecary firmware install"
+    can = ("build", "upload", "find ports", "listen", "probe with esptool")
 
     # -- sketches -----------------------------------------------------------------
 
@@ -177,6 +187,24 @@ class ArduinoModule(ToolchainModule):
 
     def env(self) -> dict:
         return env_for_arduino()
+
+    # -- ports: arduino-cli's board list and monitor, and esptool -------------------
+
+    def ports(self) -> Optional[List[BoardInfo]]:
+        # Raises when arduino-cli is not there, with the message it always had.
+        return get_arduino_cli().board_list()
+
+    def monitor_argv(self, port: str, baud: int) -> Optional[List[str]]:
+        cli = get_arduino_cli()
+        return cli.monitor_argv(port, baud) if cli.is_available else None
+
+    def probe(self, port: str) -> Optional[dict]:
+        esptool = get_esptool()
+        if not esptool.is_available:
+            return None
+        fields = esptool.probe(port)
+        fields.pop("raw", None)
+        return fields
 
     # -- build and flash ----------------------------------------------------------
 

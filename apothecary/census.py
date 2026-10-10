@@ -383,7 +383,9 @@ RING_BACKED: Dict[str, str] = {
     # acting on what the Bench has chosen; a core's Install is Bench › Cores › its
     # core. The form's boxes and drop-downs, the force tick-box and raw flash's
     # boxes choose what a cell acts on, and no cell chooses them.
-    "install-btn": "bench:install",
+    "install-btn": "bench:install:arduino",
+    "module-install": "bench:install:rust-esp32",
+    "modulesEl:click:closest": "bench:install:rust-esp32",
     "core-install": "bench:core:arduino:avr",
     "coresEl:click:closest": "bench:core:arduino:avr",
     "lib-btn": "bench:libraries",

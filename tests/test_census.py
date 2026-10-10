@@ -313,15 +313,14 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # ceiling follows the count up by one, for a button the plan asks for.
 #
 # Firmware in Rust (docs/plans/rust-2026-10-08.md): one control of its own and one
-# place the page listens more, neither ring-backed (`apothecary census` counts them).
-# The Bench's toolchain card draws every toolchain module beside arduino-cli, each
-# with its own Install (module-install, and its one listener,
-# modulesEl:click:closest): Rust for the ESP32's fetches rustup, espup's Xtensa
-# toolchain and espflash and vendors the crates. Panels › Bench has no cell left
-# for it -- its eight are full -- so it is not ring-backed; whether Install should
-# become a ring of the modules is a question for the owner. The Rust sketches
-# need no control of their own: they are rows of the sketch drop-down, and
-# choosing one hides the board box it takes none of.
+# place the page listens more (`apothecary census` counts them). The Bench's toolchain
+# card draws every toolchain module beside arduino-cli, each with its own Install
+# (module-install, and its one listener, modulesEl:click:closest). The owner's answer
+# of 2026-10-10 made Panels › Bench › Install a ring of the modules, drawn from their
+# registry, so each module's Install is ring-backed by its cell there (Rust ESP32,
+# 9366) and arduino-cli's moved one level deeper (Arduino, 9368; it was 936); nothing
+# else moved. The Rust sketches need no control of their own: they are rows of the
+# sketch drop-down, and choosing one hides the board box it takes none of.
 VIEWER_CEILING = 117
 
 

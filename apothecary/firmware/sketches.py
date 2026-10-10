@@ -69,16 +69,25 @@ def nested_sketch_folders(sketch: SketchInfo, root: Path = ROOT) -> List[Path]:
     ]
 
 
+class SketchAmbiguous(ValueError):
+    """A name two sketches share: say which, by its id."""
+
+
 def find_sketch(name: str, root: Path = ROOT) -> Optional[SketchInfo]:
-    """A discovered sketch by its id, by its name (the Arduino one first, when two
-    share it), or by a path to its folder or ``.ino``."""
+    """A discovered sketch by its id (``esp32_blink@arduino``), by its name when one
+    sketch alone has it, or by a path to its folder or ``.ino``. A name two share
+    is refused with their ids (``SketchAmbiguous``)."""
     found = discover_sketches(root)
     for sketch in found:
         if sketch.id == name:
             return sketch
-    for sketch in found:
-        if sketch.name == name:
-            return sketch
+    named = [s for s in found if s.name == name]
+    if len(named) == 1:
+        return named[0]
+    if named:
+        raise SketchAmbiguous(
+            f"{name} is {len(named)} sketches: " + ", ".join(s.id for s in named) + "; name one"
+        )
     candidate = Path(name).expanduser()
     if candidate.suffix == ".ino":
         candidate = candidate.parent

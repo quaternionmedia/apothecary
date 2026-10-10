@@ -16,6 +16,13 @@ Two modules today:
   for the classic ESP32 on Espressif's Xtensa Rust toolchain, offline, from
   crates vendored at install time; espflash flashes it.
 
+**Ports, too.** A module may find ports and listen to a board itself
+(``ports``, ``monitor_argv``, ``probe``): Arduino through arduino-cli's
+``board list`` and ``monitor`` and esptool, Rust through pyserial
+(``firmware/serial_monitor.py``) and espflash's ``board-info`` -- so Rust works
+with no arduino-cli at all. A port two modules find is the first one's, and is
+listened to by it (devices.scan_ports).
+
 **Where a new one plugs in.** A board family or a language added later -- the
 ESP32-C3 on stable Rust, AVR in Rust, the RP2040 -- is a new module, not a
 redesign: a subclass of ``ToolchainModule`` in a file of its own under this
@@ -42,7 +49,7 @@ from pathlib import Path
 from typing import Callable, ClassVar, Dict, Iterable, List, Optional, Tuple
 
 from ...stays_local import subprocess_env
-from ..models import ARDUINO, ModuleStatus, SketchInfo, ToolStatus
+from ..models import ARDUINO, BoardInfo, ModuleStatus, SketchInfo, ToolStatus
 from ..toolchains import ToolchainError, tools_dir
 
 Log = Callable[[str], None]
@@ -128,11 +135,13 @@ class ToolchainModule(ABC):
 
     id: ClassVar[str]
     label: ClassVar[str]  # what a person reads: "Arduino", "Rust for the ESP32"
+    ring_label: ClassVar[str]  # its cell of Panels › Bench › Install: twelve characters
     short: ClassVar[str]  # a word for a sketch's row: "Arduino", "Rust"
     languages: ClassVar[Tuple[str, ...]]
     families: ClassVar[Tuple[str, ...]]  # the board families it builds for
     needs_board: ClassVar[bool] = False  # a build names a board (an Arduino FQBN)
     install_command: ClassVar[str]
+    can: ClassVar[Tuple[str, ...]] = ("build", "flash")  # said by `check` and the Bench
 
     # -- sketches -----------------------------------------------------------------
 
@@ -176,6 +185,7 @@ class ToolchainModule(ABC):
             families=list(self.families),
             install=self.install_command,
             needs_board=self.needs_board,
+            can=list(self.can),
         )
 
     @staticmethod
@@ -189,6 +199,23 @@ class ToolchainModule(ABC):
         if code == 0 and lines:
             out.version, out.ok = lines[0], True
         return out
+
+    # -- ports: finding them, listening, asking the chip ----------------------------
+
+    def ports(self) -> Optional[List["BoardInfo"]]:
+        """The serial ports this module finds, none of them opened; None when it
+        finds none (it does not, or is not installed). May raise ToolchainError."""
+        return None
+
+    def monitor_argv(self, port: str, baud: int) -> Optional[List[str]]:
+        """A process that writes what the board on ``port`` says to its output until
+        stopped; None when this module does not listen."""
+        return None
+
+    def probe(self, port: str) -> Optional[dict]:
+        """The chip on ``port`` -- its type, revision, MAC, flash size -- asked of the
+        board (this resets it); None when this module does not ask."""
+        return None
 
     # -- build and flash ----------------------------------------------------------
 
@@ -204,7 +231,7 @@ class ToolchainModule(ABC):
 
     def target_words(self, sketch: SketchInfo, board: Optional[str]) -> str:
         """What a build is for, as a task's title says it: an FQBN, or a chip."""
-        return board or ", ".join(w for w in (self.short, sketch.target) if w)
+        return board or sketch.target or ""
 
     @abstractmethod
     def build(self, sketch: SketchInfo, board: Optional[str], out: Path) -> Plan:

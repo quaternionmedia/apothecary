@@ -168,6 +168,15 @@ FAKE_ESPFLASH = textwrap.dedent(r"""
         f.write(json.dumps(args) + "\n")
     if args[:1] in (["--version"], ["-V"]):
         print("espflash 4.6.0")
+    elif args[:1] == ["board-info"]:
+        port = args[args.index("--port") + 1]
+        print(f"[INFO ] Serial port: '{port}'")
+        print("[INFO ] Connecting...")
+        print("Chip type:         esp32 (revision v3.1)")
+        print("Crystal frequency: 40 MHz")
+        print("Flash size:        4MB")
+        print("Features:          WiFi, BT, Dual Core, 240MHz, Coding Scheme None")
+        print("MAC address:       24:6f:28:00:00:02")
     elif args[:1] == ["flash"]:
         port = args[args.index("--port") + 1]
         elf = args[-1]

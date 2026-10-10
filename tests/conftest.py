@@ -169,11 +169,17 @@ def no_arduino_cli(tmp_path, monkeypatch):
 @pytest.fixture
 def fake_rust(fake_arduino_cli, tmp_path, monkeypatch):
     """The scripted cargo and espflash beside the scripted arduino-cli, one simulated
-    bench (its flashes in fake-boards.json there); yields (cargo, espflash)."""
+    bench (its flashes in fake-boards.json there); yields (cargo, espflash).
+
+    Installed, the Rust module finds ports and listens itself, through the serial
+    engine: the simulated one, whose only port is a pretend devkit on
+    /dev/ttyFAKE2, so no test lists or opens a real port."""
     cargo = write_fake_cargo(tmp_path / "cargo")
     espflash = write_fake_espflash(tmp_path / "espflash")
     monkeypatch.setenv("CARGO", str(cargo))
     monkeypatch.setenv("ESPFLASH", str(espflash))
+    monkeypatch.setenv("APOTHECARY_SERIAL_ENGINE", "simulated")
+    monkeypatch.setenv("APOTHECARY_SIMULATED_DEVKIT", "/dev/ttyFAKE2")
     yield cargo, espflash
 
 

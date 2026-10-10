@@ -552,9 +552,9 @@ async def firmware_stream(
 ):
     """Server-sent events: live serial lines until the client leaves or a task takes the port."""
     _busy_guard(port)
-    cli = get_arduino_cli()
-    if not cli.is_available:
-        raise ToolchainError("arduino-cli is not installed")
+    # The module that found the port listens to it: arduino-cli's monitor, or the
+    # Rust module's own (pyserial); refused here when nothing can.
+    devices.listener_argv(port, baud)
     gcode.get_printer_links().close(port)  # one holder per port (the monitor resets it anyway)
 
     q: queue.Queue = queue.Queue()
@@ -563,7 +563,7 @@ async def firmware_stream(
 
     def reader():
         try:
-            for item in devices.stream_lines(port, baud, cli, stop=stop):
+            for item in devices.stream_lines(port, baud, stop=stop):
                 q.put(item)
         finally:
             q.put(eof)

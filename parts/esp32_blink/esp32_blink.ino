@@ -15,7 +15,7 @@
 #endif
 
 static const unsigned long PERIOD_MS = 500;
-static const unsigned long ANNOUNCE_EVERY = 10;  // beats (~5 s at PERIOD_MS 500)
+static const unsigned long ANNOUNCE_EVERY = 10;  // beats: one each time the LED comes on, once a second (~10 s)
 
 static void announce() {
   Serial.println("apothecary esp32_blink: hello");

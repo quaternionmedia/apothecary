@@ -3,13 +3,17 @@
 Three views of one board, kept deliberately separate so the GUI can show
 where they disagree:
 
-* **Detected** -- ``arduino-cli board list``: the serial port and USB bridge.
+* **Detected** -- each toolchain module's own finding (``scan_ports``):
+  ``arduino-cli board list`` for Arduino, pyserial's port list for Rust. A
+  port two find is the first one's, and is listened to by it.
 * **Probed** -- ``esptool flash_id``: chip model, revision, MAC, flash size.
   Resets the board afterwards, which is what makes the boot banner appear.
 * **Expected** -- the ``FlashRecord`` Apothecary wrote when it last uploaded
   to that MAC (or port), compared against the sketch as it is *now*.
-* **Observed** -- serial output via ``arduino-cli monitor``; a sketch that
-  prints ``apothecary <name>: hello`` at boot identifies itself.
+* **Observed** -- serial output via the monitor of the module that found the
+  port (``arduino-cli monitor``, or Apothecary's own pyserial monitor for
+  Rust, ``serial_monitor.py``); a sketch that prints ``apothecary <name>:
+  hello`` at boot identifies itself.
 * **Identified** -- for a board running a G-code firmware (a printer
   mainboard), ``M115`` over a held-open link (``gcode.py``): firmware name,
   machine type, capabilities. Cached like a probe; polled for temperatures
@@ -48,6 +52,7 @@ from ..projects.parts.skeleton import ROOT
 from ..stays_local import subprocess_env
 from . import gcode
 from .models import (
+    BoardInfo,
     DeviceInfo,
     ExpectedFirmware,
     FlashRecord,
@@ -64,7 +69,6 @@ from .toolchains import (
     Esptool,
     PortHeld,
     ToolchainError,
-    get_arduino_cli,
     get_esptool,
 )
 
@@ -340,25 +344,72 @@ SCAN_TTL = 2.0
 _SCAN: Optional[tuple] = None  # (monotonic time, cli, boards)
 
 
+def _scan_modules():
+    """Every toolchain module's ports, each port the first finder's (``found_by``).
+
+    A module that finds none (not installed, or it does not) is passed over;
+    when none finds any, the first one's refusal is the answer -- arduino-cli's
+    "not installed", as it always was, when Rust is not installed either.
+    """
+    from .modules import modules
+
+    found: Dict[str, BoardInfo] = {}
+    refusals: List[ToolchainError] = []
+    answered = False
+    for module in modules():
+        try:
+            boards = module.ports()
+        except ToolchainError as exc:
+            refusals.append(exc)
+            continue
+        if boards is None:
+            continue
+        answered = True
+        for b in boards:
+            if b.port not in found:
+                found[b.port] = b.model_copy(update={"found_by": module.id})
+    if not answered:
+        if refusals:
+            raise refusals[0]
+        raise ToolchainError(
+            "nothing finds ports: install arduino-cli (`apothecary firmware install`) or "
+            "Rust for the ESP32 (`apothecary firmware install --rust-esp32`)"
+        )
+    return sorted(found.values(), key=lambda b: b.port)
+
+
 def scan_ports(cli: Optional[ArduinoCli] = None, fresh: bool = False):
+    """The ports the toolchain modules find; with ``cli``, that arduino-cli's alone."""
     global _SCAN
-    cli = cli or get_arduino_cli()
+    key = cli if cli is not None else "modules"
     now = time.monotonic()
-    if not fresh and _SCAN and _SCAN[1] is cli and now - _SCAN[0] < SCAN_TTL:
+    if not fresh and _SCAN and _SCAN[1] is key and now - _SCAN[0] < SCAN_TTL:
         return _SCAN[2]
-    boards = cli.board_list()
-    _SCAN = (now, cli, boards)
+    if cli is not None:
+        boards = [b.model_copy(update={"found_by": "arduino"}) for b in cli.board_list()]
+    else:
+        boards = _scan_modules()
+    _SCAN = (now, key, boards)
     return boards
+
+
+def found_by(port: str) -> Optional[str]:
+    """The module that found ``port`` in the latest scan (a fresh one if there is none)."""
+    try:
+        boards = _SCAN[2] if _SCAN else scan_ports()
+    except ToolchainError:
+        return None
+    return next((b.found_by for b in boards if b.port == port), None)
 
 
 def detected_devices(
     cli: Optional[ArduinoCli] = None, state: Optional[FirmwareState] = None, fresh: bool = False
 ) -> List[DeviceInfo]:
-    """Every serial port arduino-cli sees, merged with any cached probe for it.
+    """Every serial port the toolchain modules find, merged with any cached probe for it.
 
-    ``fresh`` bypasses the short scan cache (an explicit rescan button).
+    ``fresh`` bypasses the short scan cache (an explicit rescan button); ``cli``
+    asks that arduino-cli alone.
     """
-    cli = cli or get_arduino_cli()
     state = state or get_state()
     devices: List[DeviceInfo] = []
     for b in scan_ports(cli, fresh):
@@ -370,6 +421,7 @@ def detected_devices(
             board_name=b.board_name,
             fqbn=b.fqbn,
             serial_number=b.serial_number,
+            found_by=b.found_by,
         )
         cached = state.cached_device(b.port)
         if cached and (cached.vid, cached.pid) == (b.vid, b.pid):
@@ -402,9 +454,10 @@ def probe_device(
     """Identify the chip on ``port`` with esptool and cache the answer.
 
     A board arduino-cli already matched to a non-Espressif core is returned
-    as-is: esptool would only confuse an AVR by talking to it.
+    as-is: esptool would only confuse an AVR by talking to it. With no esptool,
+    the module that found the port asks, if it can (Rust: ``espflash
+    board-info``).
     """
-    cli = cli or get_arduino_cli()
     esptool = esptool or get_esptool()
     state = state or get_state()
     base = next((d for d in detected_devices(cli, state) if d.port == port), None)
@@ -414,18 +467,29 @@ def probe_device(
         return base
     if base.printer is not None:
         return base  # a printer mainboard; esptool would only reset it
-    if not esptool.is_available:
-        raise ToolchainError(
-            "esptool is not available; install the esp32 core to get its bundled copy"
-        )
-    fields = esptool.probe(port)
-    fields.pop("raw", None)
+    if esptool.is_available:
+        fields = esptool.probe(port)
+        fields.pop("raw", None)
+    else:
+        fields = _probe_by_module(port, base.found_by)
     device = base.model_copy(update={**fields, "probed_at": datetime.now(timezone.utc)})
     state.remember_device(device)
     return device
 
 
 # --- identified: a G-code firmware ----------------------------------------------------
+
+
+def _probe_by_module(port: str, finder: Optional[str]) -> dict:
+    """The chip on ``port``, asked by the module that found it, else by any that can."""
+    from .modules import modules
+
+    ordered = sorted(modules(), key=lambda m: m.id != finder)
+    for module in ordered:
+        fields = module.probe(port)
+        if fields is not None:
+            return fields
+    raise ToolchainError("esptool is not available; install the esp32 core to get its bundled copy")
 
 
 def identify_printer(
@@ -443,7 +507,6 @@ def identify_printer(
     board deliberately to capture its boot banner -- never do that mid-print.
     Raises ``ToolchainError`` when nothing G-code answers.
     """
-    cli = cli or get_arduino_cli()
     state = state or get_state()
     links = links or gcode.get_printer_links()
     base = next((d for d in detected_devices(cli, state) if d.port == port), None)
@@ -1269,11 +1332,11 @@ class SerialStreams:
         self._lock = threading.Lock()
 
     def open(self, port: str, baud: int, cli: Optional[ArduinoCli] = None) -> subprocess.Popen:
-        cli = cli or get_arduino_cli()
+        argv = cli.monitor_argv(port, baud) if cli is not None else listener_argv(port, baud)
         with self._lock:
             self._kill(port)
             proc = subprocess.Popen(
-                cli.monitor_argv(port, baud),
+                argv,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
@@ -1307,6 +1370,23 @@ class SerialStreams:
     def open_ports(self) -> List[str]:
         with self._lock:
             return [p for p, proc in self._procs.items() if proc.poll() is None]
+
+
+def listener_argv(port: str, baud: int) -> List[str]:
+    """How ``port`` is listened to: by the module that found it, else by the first
+    that can listen at all -- arduino-cli's monitor, or Apothecary's own pyserial
+    monitor for Rust (``serial_monitor.py``)."""
+    from .modules import modules
+
+    finder = found_by(port)
+    for module in sorted(modules(), key=lambda m: m.id != finder):
+        argv = module.monitor_argv(port, baud)
+        if argv is not None:
+            return argv
+    raise ToolchainError(
+        "nothing can listen to the board: install arduino-cli (`apothecary firmware "
+        "install`) or Rust for the ESP32 (`apothecary firmware install --rust-esp32`)"
+    )
 
 
 _STREAMS: Optional[SerialStreams] = None

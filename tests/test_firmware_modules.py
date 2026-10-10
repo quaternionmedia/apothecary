@@ -35,6 +35,7 @@ from apothecary.firmware.toolchains import ToolchainError
 
 ROOT = Path(__file__).resolve().parents[1]
 RUST = "esp32_blink@rust-esp32"
+ARDUINO = "esp32_blink@arduino"
 PORT = "/dev/ttyFAKE0"
 
 
@@ -104,7 +105,7 @@ def test_the_rust_esp32_blink_lives_with_its_part_beside_the_arduino_one():
     """parts/esp32_blink/rust is a Cargo project whose firmware.json names its module;
     it is the sketch esp32_blink, as the Arduino one is, told apart by its id."""
     found = {s.id: s for s in discover_sketches(ROOT)}
-    arduino, rust = found["esp32_blink"], found[RUST]
+    arduino, rust = found[ARDUINO], found[RUST]
     assert arduino.toolchain == "arduino" and arduino.fqbn == "esp32:esp32:esp32"
     assert rust.name == "esp32_blink" and rust.toolchain == "rust-esp32"
     assert rust.path == ROOT / "parts" / "esp32_blink" / "rust"
@@ -113,11 +114,14 @@ def test_the_rust_esp32_blink_lives_with_its_part_beside_the_arduino_one():
     assert rust.ino is None and rust.to_json()["ino"] is None
     assert json.loads((rust.path / "firmware.json").read_text())["toolchain"] == "rust-esp32"
     assert (rust.path / "Cargo.lock").is_file(), "its crates are vendored from its lockfile"
-    # The Arduino one keeps its name as its id; a name alone still finds it first.
-    assert find_sketch("esp32_blink", ROOT).toolchain == "arduino"
+    # Each is named with its toolchain; the name the two share names neither.
+    assert find_sketch(ARDUINO, ROOT).toolchain == "arduino"
     assert find_sketch(RUST, ROOT).toolchain == "rust-esp32"
+    with pytest.raises(ValueError, match="esp32_blink@arduino, esp32_blink@rust-esp32"):
+        find_sketch("esp32_blink", ROOT)
+    assert find_sketch("footpedal", ROOT).id == "footpedal@arduino"  # a name one sketch has
     ids = [s.id for s in discover_sketches(ROOT)]
-    assert ids.index("esp32_blink") + 1 == ids.index(RUST)
+    assert ids.index(ARDUINO) + 1 == ids.index(RUST)
 
 
 def test_the_rust_blink_says_what_the_arduino_one_says_at_the_same_baud_and_cadence():
@@ -154,7 +158,7 @@ def test_each_implementation_hashes_its_own_sources(tmp_path, monkeypatch):
     an edit to main.rs is a change to the Rust one alone."""
     root = _copy_blink(tmp_path)
     monkeypatch.setattr(devices, "ROOT", root)
-    arduino, rust = (find_sketch(i, root) for i in ("esp32_blink", RUST))
+    arduino, rust = (find_sketch(i, root) for i in (ARDUINO, RUST))
     files = ArduinoModule().source_files(arduino, [rust.path])
     assert [f.name for f in files] == ["esp32_blink.ino"]
     before = devices.source_sha256(arduino), devices.source_sha256(rust)
@@ -176,14 +180,18 @@ def test_a_rust_build_is_offline_in_its_folder_and_flashing_builds_first(fake_ru
     sketch = find_sketch(RUST, ROOT)
     plan = service.build_plan(sketch, None)
     assert plan.cwd == sketch.path
-    [argv] = plan.steps
+    argv, check = plan.steps
     assert argv[:3] == [str(cargo), "build", "--release"]
+    elf = builds / RUST / "xtensa-esp32-none-elf" / "release" / "esp32_blink"
+    # The build's last step: no folder it was built in is in the image.
+    assert check[1:4] == ["-m", "apothecary.firmware.image_paths", str(elf)]
+    assert str(Path.home()) in check and str(sketch.path) in check
     assert "--offline" in argv
     assert argv[argv.index("--target-dir") + 1] == str(builds / RUST)
     assert plan.env["RUSTUP_AUTO_INSTALL"] == "0"
     flash = service.flash_plan(sketch, None, PORT)
-    assert flash.steps[0] == argv
-    assert flash.steps[1] == [
+    assert flash.steps[:2] == [argv, check]
+    assert flash.steps[2] == [
         str(espflash),
         "flash",
         "--skip-update-check",
@@ -199,14 +207,15 @@ def test_a_rust_build_is_offline_in_its_folder_and_flashing_builds_first(fake_ru
     with pytest.raises(ValueError, match="takes no FQBN"):
         service.resolve_board(sketch, "esp32:esp32:esp32")
     assert service.resolve_board(sketch, None) is None
-    assert service.compile_title(sketch, None) == "Compile esp32_blink (Rust, esp32)"
-    assert service.upload_title(sketch, PORT) == f"Upload esp32_blink (Rust) → {PORT}"
-    # The Arduino one is what it was.
-    arduino = find_sketch("esp32_blink", ROOT)
+    # Each named with its toolchain, in the task's words too.
+    assert service.compile_title(sketch, None) == f"Compile {RUST} (esp32)"
+    assert service.upload_title(sketch, PORT) == f"Upload {RUST} → {PORT}"
+    arduino = find_sketch(ARDUINO, ROOT)
     assert service.compile_title(arduino, "esp32:esp32:esp32") == (
-        "Compile esp32_blink (esp32:esp32:esp32)"
+        f"Compile {ARDUINO} (esp32:esp32:esp32)"
     )
-    assert service.upload_title(arduino, PORT) == f"Upload esp32_blink → {PORT}"
+    assert service.upload_title(arduino, PORT) == f"Upload {ARDUINO} → {PORT}"
+    assert service.build_dir(arduino).name == ARDUINO
 
 
 def test_the_tools_dir_cargo_runs_with_its_homes_there_and_the_vendored_crates(
@@ -284,7 +293,7 @@ def test_a_rust_sketch_compiles_and_uploads_through_the_routes(
     client = TestClient(app)
     r = client.post(f"/firmware/sketches/{RUST}/compile", json={})
     assert r.status_code == 202, r.text
-    assert r.json()["title"] == "Compile esp32_blink (Rust, esp32)"
+    assert r.json()["title"] == f"Compile {RUST} (esp32)"
     done = _wait(client, r.json()["id"])
     assert done["status"] == "succeeded", done
     assert any("Compiling esp32_blink" in line for line in done["lines"])
@@ -294,7 +303,7 @@ def test_a_rust_sketch_compiles_and_uploads_through_the_routes(
 
     r = client.post(f"/firmware/sketches/{RUST}/upload", json={"port": PORT})
     assert r.status_code == 202, r.text
-    assert r.json()["title"] == f"Upload esp32_blink (Rust) → {PORT}"
+    assert r.json()["title"] == f"Upload {RUST} → {PORT}"
     done = _wait(client, r.json()["id"])
     assert done["status"] == "succeeded", done
     assert any("Flashing has completed!" in line for line in done["lines"])
@@ -311,8 +320,11 @@ def test_a_rust_sketch_compiles_and_uploads_through_the_routes(
 
 def test_the_board_a_route_names_is_each_module_s_own(fake_rust, builds, fresh_task_runner):
     """An Arduino sketch is built for a board, and the request names it, as it always
-    did; a Rust sketch builds for its chip and takes none."""
+    did; a Rust sketch builds for its chip and takes none. A name two sketches share
+    is refused, naming both."""
     client = TestClient(app)
+    r = client.post("/firmware/sketches/esp32_blink/compile", json={})
+    assert r.status_code == 422 and "esp32_blink@arduino, esp32_blink@rust-esp32" in r.text
     r = client.post("/firmware/sketches/footpedal/compile", json={})
     assert r.status_code == 422 and "fqbn" in r.json()["detail"]
     r = client.post(f"/firmware/sketches/{RUST}/compile", json={"fqbn": "esp32:esp32:esp32"})
@@ -375,7 +387,9 @@ def test_the_cli_lists_compiles_and_names_the_rust_install(fake_rust, builds):
     assert RUST in listed.output and "toolchain=rust-esp32 target=esp32" in listed.output
     built = runner.invoke(cli, ["firmware", "compile", RUST])
     assert built.exit_code == 0, built.output
-    assert "Compiled esp32_blink for Rust, esp32" in built.output
+    assert f"Compiled {RUST} for esp32" in built.output
+    ambiguous = runner.invoke(cli, ["firmware", "compile", "esp32_blink"])
+    assert ambiguous.exit_code != 0 and "esp32_blink is 2 sketches" in ambiguous.output
     refused = runner.invoke(cli, ["firmware", "compile", RUST, "--fqbn", "esp32:esp32:esp32"])
     assert refused.exit_code != 0 and "takes no FQBN" in refused.output
     validated = runner.invoke(cli, ["firmware", "validate"])
@@ -391,6 +405,10 @@ def test_check_says_each_module(fake_rust):
     shown = CliRunner().invoke(cli, ["check"])
     assert "✓ arduino-cli 9.9.9" in shown.output
     assert "✓ Rust for the ESP32 (cargo 1.99.0-nightly" in shown.output
+    assert "Rust for the ESP32 can build, flash, find ports, listen, probe with espflash" in (
+        shown.output
+    )
+    assert "Arduino can build, upload, find ports, listen, probe with esptool" in shown.output
 
 
 def test_check_names_the_rust_install_when_it_is_missing(fake_arduino_cli):
@@ -399,6 +417,7 @@ def test_check_names_the_rust_install_when_it_is_missing(fake_arduino_cli):
         "Rust for the ESP32 not installed (optional: apothecary firmware install --rust-esp32)"
         in shown.output
     )
+    assert "it would build, flash, find ports, listen" in shown.output
 
 
 def test_install_rust_alone_leaves_arduino_cli_be(fake_arduino_cli, monkeypatch):
@@ -422,3 +441,25 @@ def test_module_for_a_sketch_is_its_toolchain():
     assert module_for(find_sketch(RUST, ROOT)).id == "rust-esp32"
     assert module_for(find_sketch("footpedal", ROOT)).id == "arduino"
     assert ESPFLASH.env == "ESPFLASH" and CARGO.env == "CARGO"
+
+
+def test_an_image_that_names_where_it_was_built_is_refused(tmp_path, capsys):
+    """The Rust build's last step: no folder it was built in -- and so no user name --
+    may be in the image, by either slash."""
+    from apothecary.firmware import image_paths
+
+    home = str(Path.home())
+    clean = tmp_path / "clean.elf"
+    clean.write_bytes(b"\x7fELF /sketch/esp32_blink/src/main.rs /rustup/lib/rustlib/src")
+    assert image_paths.main([str(clean), "--refuse", home, "--refuse", str(ROOT)]) == 0
+    assert "no build path in the image" in capsys.readouterr().out
+    named = tmp_path / "named.elf"
+    named.write_bytes(b"\x7fELF " + f"{home}/.cargo/registry/src/x.rs".encode())
+    assert image_paths.main([str(named), "--refuse", home]) == 1
+    assert f"build path in the image: {home}" in capsys.readouterr().out
+    windows = tmp_path / "windows.elf"
+    windows.write_bytes(b"\x7fELF C:/Users/pk/x.rs")
+    assert image_paths.found_in(windows.read_bytes(), ["C:\\Users\\pk"]) == {
+        "C:\\Users\\pk": [5]
+    }
+    assert image_paths.main([str(tmp_path / "missing.elf"), "--refuse", home]) == 2

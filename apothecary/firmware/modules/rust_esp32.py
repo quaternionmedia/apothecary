@@ -11,12 +11,20 @@ target and ``build-std`` -- so a build is ``cargo build --release`` in its
 folder, and names no board.
 
 **Offline.** ``apothecary firmware install --rust-esp32`` (``rust_installer``)
-puts rustup, espup's Xtensa toolchain and espflash in the tools dir and
+puts rustup, Espressif's Xtensa toolchain (Rust, rust-src, LLVM and GCC,
+fetched and checked by apothecary itself) and espflash in the tools dir and
 vendors every Rust sketch's crates, with what ``build-std`` needs, into
 ``vendor/`` there. Every build after that is ``cargo --offline`` with
 crates.io replaced by that folder, rustup told not to install a toolchain it
 lacks, and espflash told not to look for updates, so a build or a flash
 reaches no host.
+
+**No build path in the image.** rustc is told to write every folder the
+build is made in -- the person's home, the repository, the tools dir, the
+toolchain, the vendored crates, the build's own -- another way
+(``--remap-path-prefix``), and the build's last step reads the ELF and fails
+it if any of those folders is still in it (``firmware/image_paths.py``), so
+no user name reaches a board.
 
 **Its tools** are found as arduino-cli is: ``CARGO`` (or ``ESPFLASH``) naming
 the one to run (``none`` for none), then the tools dir, then ``PATH``. The
@@ -32,12 +40,13 @@ import json
 import os
 import platform
 import re
+import sys
 import tomllib
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from ...stays_local import subprocess_env
-from ..models import ModuleStatus, SketchInfo
+from ..models import BoardInfo, ModuleStatus, SketchInfo
 from ..toolchains import ToolchainError, tools_dir
 from . import Log, Plan, Tool, ToolchainModule
 from .arduino import part_of, sidecar_baud, sidecar_display
@@ -144,14 +153,41 @@ def export_paths(text: str) -> List[str]:
     return found
 
 
+def parse_board_info(text: str) -> dict:
+    """The identity fields of ``espflash board-info``'s answer, as an esptool probe's are
+    named: ``Chip type:  esp32 (revision v3.1)``, ``Crystal frequency: 40 MHz``,
+    ``Flash size: 4MB``, ``Features: ...``, ``MAC address: aa:bb:...``."""
+    info: dict = {}
+    m = re.search(r"^Chip type:\s+(\S+)(?:\s+\(revision\s+([^)]+)\))?", text, re.M)
+    if m:
+        info["chip"] = m.group(1)
+        if m.group(2):
+            info["revision"] = m.group(2).strip()
+    m = re.search(r"^Crystal frequency:\s+(.+?)\s*$", text, re.M)
+    if m:
+        info["crystal"] = m.group(1).replace(" ", "")
+    m = re.search(r"^Flash size:\s+(\S+)", text, re.M)
+    if m:
+        info["flash_size"] = m.group(1)
+    m = re.search(r"^Features:\s+(.+)$", text, re.M)
+    if m:
+        info["features"] = [f.strip() for f in m.group(1).split(",") if f.strip()]
+    m = re.search(r"^MAC address:\s+([0-9a-fA-F:]{17})", text, re.M)
+    if m:
+        info["mac"] = m.group(1).lower()
+    return info
+
+
 class RustEsp32Module(ToolchainModule):
     id = RUST_ESP32
     label = "Rust for the ESP32"
+    ring_label = "Rust ESP32"
     short = "Rust"
     languages = ("rust",)
     families = tuple(TARGETS)
     needs_board = False
     install_command = "apothecary firmware install --rust-esp32"
+    can = ("build", "flash", "find ports", "listen", "probe with espflash")
 
     # -- sketches -----------------------------------------------------------------
 
@@ -251,6 +287,50 @@ class RustEsp32Module(ToolchainModule):
         out.ok = cargo_status.ok and espflash_status.ok
         return out
 
+    # -- ports: pyserial finds and listens (serial_monitor.py), espflash asks the chip
+
+    def installed(self) -> bool:
+        return CARGO.detect() is not None or ESPFLASH.detect() is not None
+
+    def ports(self) -> Optional[List[BoardInfo]]:
+        if not self.installed():
+            return None
+        from ..serial_monitor import list_ports
+
+        return list_ports()
+
+    def monitor_argv(self, port: str, baud: int) -> Optional[List[str]]:
+        if not self.installed():
+            return None
+        from ..serial_monitor import monitor_argv
+
+        return monitor_argv(port, baud)
+
+    def probe_argv(self, port: str) -> Optional[List[str]]:
+        espflash = ESPFLASH.detect()
+        if espflash is None:
+            return None
+        return [
+            str(espflash),
+            "board-info",
+            "--skip-update-check",
+            "--non-interactive",
+            "--port",
+            port,
+        ]
+
+    def probe(self, port: str) -> Optional[dict]:
+        argv = self.probe_argv(port)
+        if argv is None:
+            return None
+        from . import run_quietly
+
+        code, text = run_quietly(argv, env=self.env(), timeout=40)
+        if code != 0:
+            tail = [ln for ln in text.splitlines() if ln.strip()][-3:]
+            raise ToolchainError("espflash could not talk to the chip: " + " | ".join(tail))
+        return parse_board_info(text)
+
     def install(self, log: Log, force: bool = False) -> ModuleStatus:
         from ..rust_installer import RustEsp32Installer
 
@@ -268,8 +348,49 @@ class RustEsp32Module(ToolchainModule):
     def triple(self, sketch: SketchInfo) -> str:
         return TARGETS[sketch.target or next(iter(TARGETS))]
 
+    def remaps(self, sketch: SketchInfo, out: Path) -> List[Tuple[str, str]]:
+        """Each folder a build is made in, and what the image says instead. rustc
+        uses the last that matches, so the most particular come last."""
+        from ...projects.parts.skeleton import ROOT
+
+        pairs = [
+            (Path.home(), "/home"),
+            (ROOT, "/apothecary"),
+            (tools_dir(), "/tools"),
+            (home(), "/tools/rust-esp32"),
+            (cargo_home(), "/cargo"),
+            (rustup_home(), "/rustup"),
+            (vendor_dir(), "/vendor"),
+            (out, "/build"),
+            (sketch.path, f"/sketch/{sketch.name}"),
+        ]
+        seen, out_pairs = set(), []
+        for folder, said in pairs:
+            for form in (str(folder), str(Path(folder).resolve())):
+                if form not in seen:
+                    seen.add(form)
+                    out_pairs.append((form, said))
+        return out_pairs
+
+    def refused(self, sketch: SketchInfo, out: Path) -> List[str]:
+        """The folders the image-path check refuses: every one remapped."""
+        return list(dict.fromkeys(folder for folder, _ in self.remaps(sketch, out)))
+
     def build_argv(self, sketch: SketchInfo, out: Path, cargo: Path) -> List[str]:
         argv = [str(cargo), "build", "--release", "--offline", "--target-dir", str(out)]
+        flags = [
+            f"--remap-path-prefix={folder}={said}" for folder, said in self.remaps(sketch, out)
+        ]
+        if any("'" in flag for flag in flags):
+            raise ToolchainError("a build folder has a quote in its name; move it")
+        literals = ", ".join("'" + flag + "'" for flag in flags)
+        # Cargo joins a target's rustflags from every config, so these go beside the
+        # project's own link arguments rather than in their place.
+        argv += [
+            "--config",
+            # TOML literal strings: a Windows path's backslashes are what they are.
+            f"target.{self.triple(sketch)}.rustflags=[{literals}]",
+        ]
         vendor = vendor_dir()
         if self.managed(cargo) and vendor.is_dir():
             # crates.io is the vendored folder; a TOML literal string, so a Windows
@@ -282,9 +403,17 @@ class RustEsp32Module(ToolchainModule):
             ]
         return argv
 
+    def check_argv(self, sketch: SketchInfo, out: Path) -> List[str]:
+        """The build's last step: no build path in the image (firmware/image_paths.py)."""
+        argv = [sys.executable, "-m", "apothecary.firmware.image_paths", str(self.elf(sketch, out))]
+        for folder in self.refused(sketch, out):
+            argv += ["--refuse", folder]
+        return argv
+
     def build(self, sketch: SketchInfo, board: Optional[str], out: Path) -> Plan:
         cargo = self._cargo()
-        return Plan([self.build_argv(sketch, out, cargo)], env=self.env(cargo), cwd=sketch.path)
+        steps = [self.build_argv(sketch, out, cargo), self.check_argv(sketch, out)]
+        return Plan(steps, env=self.env(cargo), cwd=sketch.path)
 
     def flash(self, sketch: SketchInfo, board: Optional[str], port: str, out: Path) -> Plan:
         cargo = self._cargo()
@@ -294,6 +423,7 @@ class RustEsp32Module(ToolchainModule):
         elf = self.elf(sketch, out)
         steps = [
             self.build_argv(sketch, out, cargo),
+            self.check_argv(sketch, out),
             [
                 str(espflash),
                 "flash",

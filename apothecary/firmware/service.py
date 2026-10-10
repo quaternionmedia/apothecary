@@ -118,18 +118,17 @@ def upload_steps(sketch: SketchInfo, fqbn: Optional[str], port: str) -> List[Lis
 
 
 def target_words(sketch: SketchInfo, board: Optional[str]) -> str:
-    """What a build is for, as a title says it: ``arduino:avr:uno``, ``Rust, esp32``."""
+    """What a build is for, as a title says it: ``arduino:avr:uno``, ``esp32``."""
     return module_for(sketch).target_words(sketch, board)
 
 
 def compile_title(sketch: SketchInfo, board: Optional[str]) -> str:
-    return f"Compile {sketch.name} ({target_words(sketch, board)})"
+    """``Compile esp32_blink@rust-esp32 (esp32)``: the sketch with its toolchain."""
+    return f"Compile {sketch.id} ({target_words(sketch, board)})"
 
 
 def upload_title(sketch: SketchInfo, port: str) -> str:
-    module = module_for(sketch)
-    how = "" if module.needs_board else f" ({module.short})"
-    return f"Upload {sketch.name}{how} → {port}"
+    return f"Upload {sketch.id} → {port}"
 
 
 def resolve_fqbn(sketch: SketchInfo, fqbn: Optional[str]) -> str:

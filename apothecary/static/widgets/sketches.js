@@ -6,9 +6,10 @@
  * needs and a note. Or it is another toolchain module's -- a Rust Cargo project
  * whose firmware.json names its module -- listed beside them, and choosing it
  * chooses its module: it builds for the chip its project names, so the form
- * names no board. Two implementations of one sketch (the Arduino esp32_blink and
- * the Rust one) share its name and are told apart by their ids (esp32_blink,
- * esp32_blink@rust-esp32). mountBuild() is the form that picks one, names the
+ * names no board. A sketch is always named with its toolchain -- its id,
+ * esp32_blink@arduino, esp32_blink@rust-esp32 -- in its row, the asking and the
+ * task's words, so two builds of one sketch are never mistaken for each other.
+ * mountBuild() is the form that picks one, names the
  * board where it takes one, and compiles it (POST
  * /firmware/sketches/{id}/compile) or compiles and uploads it to a port, after
  * asking (.../upload): the Bench's, with a drop-down of the detected ports, and a
@@ -61,7 +62,7 @@ export function mountBuild(root, { base = "", tasks = null, say = null, port = n
     let sketches = [], status = null, alive = true;
     if (port) $(".sk-port-row").hidden = true;
 
-    const idOf = (x) => x.id || x.name;
+    const idOf = (x) => x.id || `${x.name}@${x.toolchain || "arduino"}`;
     const sketchOf = (id) => sketches.find((x) => idOf(x) === id) || null;
     // The module that builds a sketch, from the status; Arduino's, as it was, when
     // the status names none.
@@ -71,11 +72,10 @@ export function mountBuild(root, { base = "", tasks = null, say = null, port = n
         return m || { id, label: id === "arduino" ? "Arduino" : id, ok: id === "arduino" && !!(status && status.arduino_cli_ok), needs_board: id === "arduino" };
     }
     const needsBoard = (s) => moduleOf(s).needs_board;
-    // A sketch's row: an Arduino sketch's board; another module's word and chip.
-    const language = (s) => (s.language ? s.language[0].toUpperCase() + s.language.slice(1) : s.toolchain);
+    // A sketch's row: the sketch with its toolchain, and its board or its chip.
     const rowText = (x) => (needsBoard(x)
-        ? `${x.name}${x.fqbn ? " · " + x.fqbn : " · no default board"}`
-        : `${x.name} · ${language(x)} · ${x.target || "its project's chip"}`);
+        ? `${idOf(x)}${x.fqbn ? " · " + x.fqbn : " · no default board"}`
+        : `${idOf(x)} · ${x.target || "its project's chip"}`);
 
     function choose(id) {
         const s = sketchOf(id);
@@ -99,10 +99,10 @@ export function mountBuild(root, { base = "", tasks = null, say = null, port = n
     // What a compile or an upload is of, said as the task says it.
     function what(kind) {
         const s = sketchOf(chosen()), board = needsBoard(s);
-        const target = board ? fqbn() : `${language(s)}, ${s.target || "its chip"}`;
+        const target = board ? fqbn() : (s && s.target) || "its chip";
         return {
             kind, sketch: chosen(), name: s ? s.name : chosen(), toolchain: moduleOf(s).id,
-            fqbn: board ? fqbn() : null, target, label: `${s ? s.name : chosen()} (${target})`, port: portOf(),
+            fqbn: board ? fqbn() : null, target, label: `${chosen()} (${target})`, port: portOf(),
         };
     }
 
@@ -161,8 +161,7 @@ export function mountBuild(root, { base = "", tasks = null, say = null, port = n
     function upload() {
         const to = portOf(), s = sketchOf(chosen());
         if (!s || (needsBoard(s) && !FQBN.test(fqbn())) || !to) { if (say) say("Upload: choose a sketch, a board (FQBN) and a port first", "error"); return null; }
-        const asked = needsBoard(s) ? `"${chosen()}"` : `"${s.name}" (${language(s)})`;
-        if (!confirm(`Compile and upload ${asked} to ${to}?`)) return null;
+        if (!confirm(`Compile and upload "${chosen()}" to ${to}?`)) return null;
         return run("upload", () => post(`/firmware/sketches/${encodeURIComponent(chosen())}/upload`, body(s, { port: to })));
     }
 

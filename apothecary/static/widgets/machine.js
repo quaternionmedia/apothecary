@@ -368,7 +368,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("dot").className = "dot " + (bd.live ? "on" : "");
         const rows = [];
         if (d) {
-            rows.push(`<b>${esc(d.port)}</b> vid:pid ${esc(d.vid || "?")}:${esc(d.pid || "?")}${d.board_name ? " · " + esc(d.board_name) : ""}${d.serial_number ? " · S/N " + esc(d.serial_number) : ""}`);
+            rows.push(`<b>${esc(d.port)}</b> vid:pid ${esc(d.vid || "?")}:${esc(d.pid || "?")}${d.board_name ? " · " + esc(d.board_name) : ""}${d.serial_number ? " · S/N " + esc(d.serial_number) : ""}${d.found_by ? " · found by " + esc(d.found_by) : ""}`);
             if (d.chip) rows.push(`chip <b>${esc(d.chip)}</b> rev ${esc(d.revision || "?")} · MAC ${esc(d.mac || "?")} · flash ${esc(d.flash_size || "?")}`);
         } else rows.push(`<b>${esc(state.port)}</b> — not detected`);
         if (pin) rows.push(pinRow());
@@ -387,10 +387,10 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("c-sketch").innerHTML = lines.join("<br>");
     }
     // What a flash record says it was built for: an Arduino sketch's board, another
-    // module's sketch its module and chip (rust-esp32 · esp32), raw images esptool.
+    // module's sketch its chip (the toolchain is in the sketch's id), raw images esptool.
     function builtFor(rec) {
         if (rec.fqbn) return rec.fqbn;
-        if (rec.toolchain && rec.toolchain !== "arduino") return [rec.toolchain, rec.target].filter(Boolean).join(" · ");
+        if (rec.sketch) return rec.target || "its chip";
         return "esptool";
     }
     function renderAll() { renderStatus(); renderChart(); renderLog(); }
