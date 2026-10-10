@@ -291,9 +291,16 @@ def _a_round(page: Page, values: tuple[float, ...]) -> float:
     return side
 
 
-def _back_to_the_defaults(page: Page) -> None:
-    """Defaults, then Apply: the saved part again, and nothing rendered."""
-    page.locator("#defaults-btn").click()
+def _back_to_the_defaults(page: Page, from_the_ring: bool = False) -> None:
+    """Defaults -- Part › Defaults on the part's ring, or the editor's button --
+    then Apply: the saved part again, and nothing rendered."""
+    if from_the_ring:
+        page.locator(f"#contents-list .contents-item[data-path='{PART}']").click(button="right")
+        expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+        _press(page, "Part", "Defaults")
+        expect(_status(page)).to_contain_text("the part's own numbers are staged", timeout=10000)
+    else:
+        page.locator("#defaults-btn").click()
     expect(page.locator("#stage-summary")).to_contain_text("valid", timeout=10000)
     answer = _apply(page)
     assert answer.ok and answer.json()["regenerated"] is False, answer.text()
@@ -373,11 +380,11 @@ def test_designing_a_part_twice_round(page: Page, loop_url: str, cube_as_it_was,
     # OpenSCAD refuses a size: its error by line; what is drawn stays.
     _refused_by_openscad(page, first)
 
-    # The defaults again, for nothing.
-    _back_to_the_defaults(page)
+    # The defaults again, for nothing: from the part's ring.
+    _back_to_the_defaults(page, from_the_ring=True)
     page.screenshot(path=str(shots / "saved-again.png"))
 
-    # Round two.
+    # Round two, back with the editor's Defaults.
     _a_round(page, (40, 45, 47))
     _back_to_the_defaults(page)
 

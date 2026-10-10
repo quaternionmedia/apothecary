@@ -2931,7 +2931,7 @@
                 if (target.scadUrl) this.loadPartScad(target);
                 if (target.checklistUrl) this.loadPartChecklist(target);
                 if (target.part) this.showDrawn(target.part);
-                this.loadPartParams(target);
+                this.editorLoading = this.loadPartParams(target);
                 document.getElementById('part-regenerate-btn')
                     ?.addEventListener('click', () => this.applyEditor(target));
             }
@@ -3121,15 +3121,30 @@
                     Object.assign(stage.staged, stage.committed);
                     this.loadPartParams(target);
                 };
-                // The part's own values, staged: Apply then draws the saved part,
-                // which the cache already holds, so going back renders nothing.
                 const defaults = document.getElementById('defaults-btn');
-                if (defaults) {
-                    defaults.onclick = () => {
-                        Object.assign(stage.staged, stage.defaults ?? {});
-                        this.loadPartParams(target);
-                    };
-                }
+                if (defaults) defaults.onclick = () => this.stageDefaults(target);
+            }
+
+            // The part's own values, staged: Apply then draws the saved part,
+            // which the cache already holds, so going back renders nothing. The
+            // editor's Defaults, and Part › Defaults on the part's ring.
+            stageDefaults(target) {
+                const stage = this.partStages[target.key];
+                if (!stage?.defaults) return false;
+                Object.assign(stage.staged, stage.defaults);
+                this.editorLoading = this.loadPartParams(target);
+                return true;
+            }
+
+            // Part › Defaults: the part's editor opened, its own values staged once
+            // it has read them.
+            async stageDefaultsOn(path) {
+                const node = this.renderNodeByKey[path];
+                if (!node?.part_ref || this.isCameraNode(node) || this.pictureMarks.madeRecord(path)) return false;
+                if (!this.openEditor(path)) return false;
+                await this.editorLoading;
+                const target = this.editorTarget;
+                return target?.key === `part:${node.part_ref}` && this.stageDefaults(target);
             }
 
             // The part's parameters, as controls, in the one panel that already
@@ -4962,6 +4977,14 @@
                 if (action === 'part:edit') {
                     if (viewer.openEditor(path)) viewer.setStatus(`Editing ${path}: its parameters are in Selected${tail}`, 'success');
                     else viewer.setStatus(`${path} has no parameters to edit${tail}`, 'error');
+                    return;
+                }
+                // Part › Defaults: the part's own numbers staged in its editor, as its Defaults does.
+                if (action === 'part:defaults') {
+                    viewer.stageDefaultsOn(path).then((staged) => {
+                        if (staged) viewer.setStatus(`${path}: the part's own numbers are staged in Selected; Apply draws the saved part${tail}`, 'success');
+                        else viewer.setStatus(`${path} has no part's own numbers to stage${tail}`, 'error');
+                    });
                     return;
                 }
                 if (action.startsWith('select:')) {

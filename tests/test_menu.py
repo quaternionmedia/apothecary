@@ -1185,7 +1185,10 @@ def test_camera_and_picture_are_absent_below_the_root_and_where_nothing_can_be_p
 #
 # One editor, in Selected, for a part and for a piece made from a picture: Part ›
 # Edit opens it there. Appended after every cell the ring had, so none moves; the
-# page carries it, and Apply goes through the part and made routes.
+# page carries it, and Apply goes through the part and made routes. A part from
+# the parts folder also has Part › Defaults after Edit: its own numbers staged in
+# the editor, as the editor's Defaults does (loop 1's owner's answer). A made
+# piece's numbers are what was found, with no part's own to go back to.
 
 
 def test_a_part_and_a_made_piece_end_with_part_edit_and_nothing_else_does():
@@ -1197,19 +1200,30 @@ def test_a_part_and_a_made_piece_end_with_part_edit_and_nothing_else_does():
         ring = resolve(Context(pointing=Pointing.NODE, targets=[path]), garage)
         part = ring.options[-1]
         assert part.label == "Part" and part.id == "part", (path, [o.label for o in ring.options])
-        assert [(c.label, c.action) for c in part.children] == [("Edit", "part:edit")]
+        assert [(c.label, c.action) for c in part.children] == [
+            ("Edit", "part:edit"),
+            ("Defaults", "part:defaults"),
+        ]
         assert len(ring.options) <= MOST_OPTIONS
-    # A made piece has Part too, after its Picture.
+    # A made piece has Part too, after its Picture, and Edit alone.
     site = _garage()
     site.children.append(Assembly(name="disc_1", role="word", base=Cube(size=10.0)))
     told = PictureContext(made=["disc_1"], words=["disc", "plate"])
     made = resolve(Context(pointing=Pointing.NODE, targets=["disc_1"]), site, picture=told)
     assert [o.label for o in made.options][-2:] == ["Picture", "Part"]
-    assert _group(made, "Part", "Edit").action == "part:edit"
+    assert [c.action for c in made.options[-1].children] == ["part:edit"]
     # A structure that is neither is left alone: the bench's ring ends as it did.
     bench = resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), garage)
     assert [o.label for o in bench.options][-2:] == ["Camera", "Picture"]
-    assert carried_by("part:edit").name == "VIEWER"
+    assert carried_by("part:edit").name == carried_by("part:defaults").name == "VIEWER"
+
+
+def test_part_defaults_is_the_cell_after_edit():
+    """Edit keeps its address; Defaults takes the seat after it."""
+    ring = resolve(Context(pointing=Pointing.NODE, targets=["footpedal"]), _garage())
+    edit, defaults = address_of(ring, "part:edit"), address_of(ring, "part:defaults")
+    assert edit[:-1] == defaults[:-1]
+    assert walk(ring, defaults).action == "part:defaults"
 
 
 def test_a_made_piece_has_picture_with_word_and_drop_and_no_camera():

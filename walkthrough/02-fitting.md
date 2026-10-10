@@ -81,8 +81,9 @@ previous values, checked once the controls rest, and **Apply** is the only
 thing that renders. What it renders is a variant, kept by what made it
 (`apothecary/projects/parts/variants.py`) and drawn in that tab alone; the
 tab's address names it, so a reload or a link draws it again, and a part drawn
-from one wears a quiet amber edge. The part's own STL stays the saved part:
-**Defaults**, then Apply, goes back to it without rendering anything.
+from one wears a quiet amber mark. The part's own STL stays the saved part:
+**Defaults** (the editor's, or Part › Defaults on the part's ring), then Apply,
+goes back to it without rendering anything.
 
 ## Overrides reach OpenSCAD
 

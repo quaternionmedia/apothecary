@@ -1069,16 +1069,16 @@ def _node_ring(
     # is the fullest node ring, eight, and so is a camera of this browser's. A
     # camera's editor edits its numbers -- its lens's position, its turn, tilt and
     # field of view (vision/camera_part.py, GET /sites/{s}/cameras/{name}/params).
-    if node is not None and (
-        node.part_ref or camera or (path and "." not in path and path in picture.made)
-    ):
-        options.append(
-            Option(
-                id="part",
-                label="Part",
-                children=[Option(id="part:edit", label="Edit", action="part:edit")],
-            )
-        )
+    made = bool(path and "." not in path and path in picture.made)
+    if node is not None and (node.part_ref or camera or made):
+        verbs = [Option(id="part:edit", label="Edit", action="part:edit")]
+        # A part from the parts folder: Defaults stages the part's own numbers in
+        # its editor, as the editor's Defaults does, so Apply draws the saved part
+        # again (loop 1, docs/plans/ui-flows-2026-10-08.md). A camera's numbers and a
+        # made piece's are what was found and set, with no part's own to go back to.
+        if node.part_ref and not camera and not made:
+            verbs.append(Option(id="part:defaults", label="Defaults", action="part:defaults"))
+        options.append(Option(id="part", label="Part", children=verbs))
     return Ring(title=shorten(path or (node.name if node else "")), options=options)
 
 
@@ -1323,8 +1323,9 @@ CARRIED_BY: Dict[str, Carries] = {
     "picture:drop": Carries.SERVER,
     "picture:word": Carries.SERVER,
     # The part editor is the page's: Part › Edit opens it in Selected and puts
-    # the cursor in its first control. What Apply then changes goes through the
-    # part and made routes the editor already calls, never the intent route.
+    # the cursor in its first control, and Part › Defaults opens it with the
+    # part's own numbers staged. What Apply then changes goes through the part
+    # and made routes the editor already calls, never the intent route.
     "part": Carries.VIEWER,
 }
 
