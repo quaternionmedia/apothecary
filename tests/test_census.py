@@ -292,7 +292,26 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # cell on, at 9, inside a piece): Fit 4 to 48; Snap to grid 918 to 46; Detail 916 to
 # 42 (Full 9168 to 428, Black box 9166 to 426, Dot 9162 to 422); Outlines 912 to 44;
 # Select walls 914 to 49. Panels holds its six again, none of them moved.
-VIEWER_CEILING = 115
+#
+# Cameras-and-clutter Phase 3, a camera in the world. Before: 115 controls of its
+# own, 63 ring-backed (54.8%), 78 places the page listens. After: 116, 64
+# ring-backed (55.2%), 85 places. A camera is a part of its site now, not a pin at a
+# host, and its verbs are its own ring's. Added: Selected's camera section's Take
+# picture (cam-take, and its listener takeBtn:click:takePictureWith), ring-backed by
+# the camera's Take picture, as P is (window:keydown:onPictureKey), a key as ? is;
+# its pictures, a list, one clicked drawn where it landed (thumbList:click:closest);
+# and its turn ring and tilt arc, a drag as the move arrows are -- taken hold of
+# ahead of the arrows and the orbit (canvas:pointerdown:onCameraHandleDown), aimed as
+# the pointer goes (canvas:pointermove:onCameraDragMove), the aim kept on letting go
+# (canvas:pointerup:onCameraDragEnd). A camera's 📷 badge selects it as a place's ▣
+# badge selects the place (a second badge:click:onSelect). Renamed: Pinned's camera
+# row removes the camera (pinned-camera-unpin is pinned-camera-remove), still a
+# take-back kept beside the ring. Ring addresses moved: on a host's ring, Camera
+# holds Add here alone, in the cell Pin here had; Live, Take picture and Unpin left
+# it for the camera's own ring, which is new: Device, Live (Still while live), Take
+# picture, Remove and Part › Edit after a piece's Zoom in, Move and Why this. The
+# ceiling follows the count up by one, for a button the plan asks for.
+VIEWER_CEILING = 116
 
 
 def test_the_viewer_stays_under_its_ceiling():
@@ -573,20 +592,21 @@ def test_every_listener_in_the_viewers_marks_modules_is_classified():
 
 
 def test_the_rows_take_backs_are_counted_and_not_claimed_as_ring_backed():
-    """Unpin a camera, a view or a board's pin from Site's Pinned, forget a kept
-    picture from Pictures: the lasting exception for taking a thing back from the
-    list that shows it, counted on the meter and never ring-backed, since a row
-    can name another site's pin that a ring cell reaches only from that site."""
+    """Remove a camera, unpin a view or a board's pin from Site's Pinned, forget a
+    kept picture from Pictures: the lasting exception for taking a thing back from
+    the list that shows it, counted on the meter and never ring-backed, since a row
+    can name another site's camera or pin that a ring cell reaches only from that
+    site."""
     taken = census.take()
     by_name = {f.name: f for f in taken.controls_of_its_own()}
-    for name in ("pinned-camera-unpin", "pinned-view-unpin", "pinned-board-unpin"):
+    for name in ("pinned-camera-remove", "pinned-view-unpin", "pinned-board-unpin"):
         assert by_name[name].source == "pinned.js"
         assert by_name[name].ring_action is None, name
         assert by_name[name].taken_back, name
     assert by_name["pictures-forget"].source == "picture_list.js"
     assert {f.name for f in taken.taken_back()} == {
         "pictures-forget",
-        "pinned-camera-unpin",
+        "pinned-camera-remove",
         "pinned-view-unpin",
         "pinned-board-unpin",
     }
@@ -607,6 +627,7 @@ def test_the_rows_take_backs_are_counted_and_not_claimed_as_ring_backed():
         "look-unpin-one",
         "pic-purge",
         "pin-unpin",
+        "pinned-camera-unpin",
     ):
         assert gone not in by_name
         assert gone not in census.CONTROLS and gone not in census.RING_BACKED

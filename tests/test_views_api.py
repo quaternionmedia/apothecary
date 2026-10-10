@@ -8,7 +8,7 @@ Its three shapes, read in the world at that width:
 
 - 0, ``block``: centre (333, 336), under ``printer_1`` (x 98..568, y 109..563);
 - 1, ``coin``: centre (1080, 50), in front of every printer, touching nothing;
-- 2, ``bar``: centre (590, 590), between ``printer_1`` and ``printer_2``, behind them.
+- 2, ``bar``: centre (590, 590), just past ``printer_1``'s right side, behind it.
 """
 
 from __future__ import annotations
@@ -92,6 +92,16 @@ def world(tmp_path, monkeypatch):
     for name in _site_store.names():
         _site_store.reset(name)
     yield root
+    forget_cameras()
+
+
+def forget_cameras():
+    """Every camera a test added taken away, and every site built fresh: a Reset alone
+    stands a site's cameras back in it, and the next test's state folder has none."""
+    from apothecary.vision import cameras
+
+    for camera in cameras.records():
+        cameras.remove(camera.site, None, camera.name)
     for name in _site_store.loaded():
         _site_store.reset(name)
 
@@ -158,20 +168,34 @@ def test_a_pinned_view_has_no_shapes_until_find_shapes_finds_them(world):
 
 
 def test_a_taken_picture_is_kept_and_pinned_with_no_shapes(world):
-    """What Camera › Take picture sends: a frame kept under captures/ with its camera
-    and host, pinned there as a view, and no finder run."""
+    """What a camera's Take picture sends: a frame kept under captures/ with its
+    camera, lying where the camera looks, sized by how the camera stands, and no
+    finder run. A camera added above the bench stands 600 mm above its clear
+    middle, and its picture lies on the bench's own top: the first top its centre
+    ray meets."""
+    import math
+
     c = TestClient(app)
-    c.put("/cameras/bench_cam", json={"site": "garage", "path": "workbench", "mm_across": 1800})
+    added = c.post("/sites/garage/cameras", json={"host": "workbench"})
+    assert added.status_code == 201, added.text
+    assert added.json()["camera"]["position"] == [900.0, 300.0, 780.0 + 600.0]
     r = c.post(
         "/photos/pictures",
-        params={"name": "bench_cam", "site": "garage", "host": "workbench", "camera": "bench_cam"},
+        params={"name": "camera_1", "site": "garage", "camera": "camera_1"},
         content=_png(shapes="ret"),
     )
     assert r.status_code == 201, r.text
     view = r.json()["view"]
     assert r.json()["path"].startswith("captures/") and view["picture"] == r.json()["path"]
-    assert view["camera"] == "bench_cam" and view["mm_across"] == 1800
+    assert view["camera"] == "camera_1" and view["host"] == "workbench"
+    assert view["mm_across"] == pytest.approx(2 * 600 * math.tan(math.radians(30)))
+    assert view["mat"]["centre"] == pytest.approx(list(BENCH_TOP))
     assert view["shapes"] == [] and view["finder"] is None and view["found_at"] is None
+    # A host and a camera together are refused, and a camera that is not there.
+    both = {"name": "x", "site": "garage", "camera": "camera_1", "host": "workbench"}
+    assert c.post("/photos/pictures", params=both, content=_png()).status_code == 422
+    nowhere = {"name": "x", "site": "garage", "camera": "camera_9"}
+    assert c.post("/photos/pictures", params=nowhere, content=_png()).status_code == 404
     found = c.post(f"/sites/garage/views/{view['id']}/find", json={"finder": "plain"}).json()
     assert found["finder"] == "plain" and len(found["shapes"]) == 3
 
@@ -197,7 +221,7 @@ def test_make_before_find_shapes_is_refused_and_names_find_shapes(world):
     assert r.status_code == 409 and "Find shapes" in r.json()["detail"], r.text
     # Found, and unsized: the refusal names the width and where it is typed.
     unsized = c.post(
-        "/sites/garage/views", json={"host": "printer_2", "picture": "bench_top.png"}
+        "/sites/garage/views", json={"host": "printer_1", "picture": "bench_top.png"}
     ).json()
     c.post(f"/sites/garage/views/{unsized['id']}/find", json={"finder": "stated"})
     r = c.post(f"/sites/garage/views/{unsized['id']}/make", json={"all": True})
@@ -243,7 +267,7 @@ def test_a_view_keeps_the_boxes_and_points_it_found(world):
     assert all(s["status"] == "found" for s in shapes)
     # The mat lies on the bench's top, centred, unsized until a width is given.
     assert view["mat"]["centre"] == list(BENCH_TOP) and view["mat"]["width"] is None
-    # Listed with the site's cameras in one request; GET /sites does not change.
+    # Listed with the site's camera parts in one request; GET /sites does not change.
     attached = c.get("/sites/garage/attached").json()
     assert [vw["id"] for vw in attached["views"]] == [view["id"]]
     assert attached["cameras"] == [] and attached["made"] == {}
@@ -270,7 +294,7 @@ def test_views_and_cameras_are_refused_where_they_cannot_be_pinned(world):
         )
         assert r.status_code in (404, 422), (host, r.text)
         assert says in r.json()["detail"], (host, r.json())
-        r = c.put("/cameras/cam1", json={"site": "garage", "path": host})
+        r = c.post("/sites/garage/cameras", json={"host": host})
         assert r.status_code in (404, 422) and says in r.json()["detail"], (host, r.json())
     # A made piece is not a host: its pins would go stale when it is dropped or reset.
     view = _pin(c, mm_across=1800)
@@ -278,8 +302,15 @@ def test_views_and_cameras_are_refused_where_they_cannot_be_pinned(world):
     piece = made["made"][0]
     r = c.post("/sites/garage/views", json={"host": piece, "picture": "bench_top.png"})
     assert r.status_code == 422 and "made piece" in r.json()["detail"]
-    r = c.put("/cameras/cam1", json={"site": "garage", "path": piece})
+    r = c.post("/sites/garage/cameras", json={"host": piece})
     assert r.status_code == 422 and "made piece" in r.json()["detail"]
+    # Nor is a camera: its pictures land where it looks.
+    camera = c.post("/sites/garage/cameras", json={"host": "workbench"}).json()["camera"]
+    for refused in (
+        c.post("/sites/garage/views", json={"host": camera["name"], "picture": "bench_top.png"}),
+        c.post("/sites/garage/cameras", json={"host": camera["name"]}),
+    ):
+        assert refused.status_code == 422 and "is a camera" in refused.json()["detail"]
 
 
 def test_a_path_outside_the_root_is_refused(world):
@@ -291,24 +322,27 @@ def test_a_path_outside_the_root_is_refused(world):
         assert r.status_code == 403, r.text
 
 
-def test_a_camera_at_the_floor_and_a_second_camera_at_a_host_replaces_the_first(world):
+def test_cameras_added_at_a_host_and_at_the_floor_are_listed_where_they_look(world):
     c = TestClient(app)
-    assert c.put("/cameras/first", json={"site": "garage", "path": "workbench"}).status_code == 200
-    r = c.put("/cameras/second", json={"site": "garage", "path": "workbench", "mm_across": 600})
-    assert r.status_code == 200 and r.json()["replaced"] == ["first"]
-    assert [cam["id"] for cam in c.get("/cameras").json()] == ["second"]
-    assert c.get("/cameras").json()[0]["mm_across"] == 600
-    floor = c.put("/cameras/third", json={"site": "garage", "path": ""})
-    assert floor.status_code == 200 and floor.json()["path"] == ""
-    ids = {cam["id"]: cam["path"] for cam in c.get("/sites/garage/attached").json()["cameras"]}
-    assert ids == {"second": "workbench", "third": ""}
+    bench = c.post("/sites/garage/cameras", json={"host": "workbench"}).json()["camera"]
+    floor = c.post("/sites/garage/cameras", json={"host": ""}).json()["camera"]
+    listed = c.get("/sites/garage/attached").json()["cameras"]
+    assert [(cam["name"], cam["lands"]["host"]) for cam in listed] == [
+        (bench["name"], "workbench"),
+        (floor["name"], ""),
+    ]
+    assert all(cam["device"] is None and cam["fov"] == 60 for cam in listed)
 
 
-def test_a_new_view_takes_its_cameras_width(world):
+def test_a_new_view_from_a_camera_is_sized_by_how_it_stands(world):
+    import math
+
     c = TestClient(app)
-    c.put("/cameras/bench_cam", json={"site": "garage", "path": "workbench", "mm_across": 1800})
-    view = _pin(c, camera="bench_cam")
-    assert view["camera"] == "bench_cam" and view["mm_across"] == 1800
+    c.post("/sites/garage/cameras", json={"host": "workbench"})
+    view = _pin(c, host=None, camera="camera_1")
+    assert view["camera"] == "camera_1" and view["host"] == "workbench"
+    assert view["mm_across"] == pytest.approx(1200 * math.tan(math.radians(30)))
+    assert view["scale"] is None  # no person sized it: it follows its camera's lens
 
 
 # --- making pieces ------------------------------------------------------------------
@@ -546,29 +580,38 @@ def test_a_view_is_found_once_per_picture_and_finder(world):
 # --- scale --------------------------------------------------------------------------
 
 
-def test_a_width_typed_for_a_shape_sizes_the_view_and_its_camera(world):
+def test_a_width_typed_for_a_shape_sizes_the_view_and_teaches_its_camera(world):
+    """The first width typed for a camera's picture teaches the camera its field of
+    view: its next picture is sized by it. A later width sizes its own view alone."""
+    import math
+
     c = TestClient(app)
-    c.put("/cameras/bench_cam", json={"site": "garage", "path": "workbench"})
-    first = _pin(c, camera="bench_cam")
-    # The coin's long side is 0.03 of the picture's width; say it is 54 mm.
+    c.post("/sites/garage/cameras", json={"host": "workbench"})
+    first = _pin(c, host=None, camera="camera_1")
+    # The coin's long side is 0.03 of the picture's width; say it is 54 mm. Seen
+    # from 600 mm above, 1800 mm across is a field of view of 2 * atan(900 / 600).
     r = c.put(f"/sites/garage/views/{first['id']}/scale", json={"known_index": 1, "mm": 54})
     assert r.status_code == 200, r.text
     sized = r.json()
-    assert sized["scale"] == {"known_index": 1, "mm": 54}
+    assert sized["scale"] == {"known_index": 1, "mm": 54} and sized["taught"] == "camera_1"
     assert sized["mm_across"] == pytest.approx(1800)
-    assert c.get("/cameras").json()[0]["mm_across"] == pytest.approx(1800)
-    second = _pin(c, camera="bench_cam")
+    learned = math.degrees(2 * math.atan(900 / 600))
+    camera = c.get("/sites/garage/cameras/camera_1").json()
+    assert camera["fov"] == pytest.approx(learned) and camera["fov_taught"] is True
+    second = _pin(c, host=None, camera="camera_1")
     per_pixel = [vw["mm_across"] / vw["pixel_width"] for vw in (sized, second)]
     assert per_pixel[0] == pytest.approx(per_pixel[1])
-    # A later view can still be rescaled alone.
+    # A later view can still be rescaled alone; the camera keeps what it learned.
     r = c.put(f"/sites/garage/views/{second['id']}/scale", json={"mm_across": 900})
-    assert r.json()["mm_across"] == 900
-    assert c.get("/cameras").json()[0]["mm_across"] == 900
+    assert r.json()["mm_across"] == pytest.approx(900) and r.json()["taught"] is None
+    assert c.get("/sites/garage/cameras/camera_1").json()["fov"] == pytest.approx(learned)
     views = {vw["id"]: vw for vw in c.get("/sites/garage/attached").json()["views"]}
     assert views[first["id"]]["mm_across"] == pytest.approx(1800)
-    # Nonsense is refused.
+    # Nonsense is refused, and a width no field of view reaches.
     for bad in ({}, {"mm_across": -1}, {"known_index": 9, "mm": 10}, {"known_index": 1}):
         assert c.put(f"/sites/garage/views/{first['id']}/scale", json=bad).status_code == 422, bad
+    r = c.put(f"/sites/garage/views/{first['id']}/scale", json={"mm_across": 1e9})
+    assert r.status_code == 422 and "field of view" in r.json()["detail"]
 
 
 # --- words, parameters, drop ---------------------------------------------------------
@@ -638,7 +681,7 @@ def test_names_stay_unique(world):
     made = c.post(f"/sites/garage/views/{view['id']}/make", json={"all": True}).json()["made"]
     c.delete(f"/sites/garage/made/{made[0]}")
     again = c.post(f"/sites/garage/views/{view['id']}/make", json={"shape": 0}).json()["made"]
-    second = _pin(c, host="printer_2", mm_across=1800)
+    second = _pin(c, host="printer_1", mm_across=1800)
     more = c.post(f"/sites/garage/views/{second['id']}/make", json={"all": True}).json()["made"]
     names = [s["name"] for s in c.get("/sites/garage").json()["structures"]]
     assert len(names) == len(set(names))
@@ -822,12 +865,12 @@ def test_reset_takes_made_pieces_back_and_leaves_the_views(world):
 
 def test_placed_lists_every_sites_cameras_and_views(world):
     c = TestClient(app)
-    c.put("/cameras/bench_cam", json={"site": "garage", "path": "workbench"})
+    c.post("/sites/garage/cameras", json={"host": "workbench"})
     a = _pin(c)
     b = _pin(c, site="datum_core", host="tray")
     placed = c.get("/placed").json()
-    assert [cam["id"] for cam in placed["cameras"]] == ["bench_cam"]
-    assert placed["cameras"][0]["host_found"] is True
+    assert [(cam["site"], cam["name"]) for cam in placed["cameras"]] == [("garage", "camera_1")]
+    assert placed["cameras"][0]["node_found"] is True
     views = {vw["id"]: vw for vw in placed["views"]}
     assert set(views) == {a["id"], b["id"]} and views[b["id"]]["site"] == "datum_core"
     assert all(vw["host_found"] for vw in placed["views"])

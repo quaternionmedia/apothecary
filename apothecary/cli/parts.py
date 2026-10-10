@@ -46,6 +46,19 @@ def parts():
     """Commands for part wrappers."""
 
 
+def _is_stub(item: ProjectInfo) -> bool:
+    """A described part whose sidecar tags it ``stub``: a placeholder for a part to come."""
+    from ..projects.parts.described import read_description, sidecar_for
+
+    sidecar = sidecar_for(item.path)
+    if sidecar is None:
+        return False
+    try:
+        return "stub" in read_description(sidecar).tags
+    except ValueError:
+        return False
+
+
 @parts.command("list")
 @click.option("--json-out/--text", default=False)
 def parts_list(json_out: bool):
@@ -54,7 +67,7 @@ def parts_list(json_out: bool):
         click.echo(json.dumps([p.to_json() for p in items], indent=2))
         return
     for p in items:
-        click.echo(f"{p.name} (wrapper={p.wrapper})")
+        click.echo(f"{p.name} (wrapper={p.wrapper})" + (" -- a stub" if _is_stub(p) else ""))
 
 
 FIELD_OF_USE = ("-NC", "-ND", "NonCommercial", "NoDerivatives", "personal")

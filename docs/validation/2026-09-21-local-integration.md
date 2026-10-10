@@ -226,8 +226,8 @@ On your own server, in the garage, with the page freshly loaded.
       reopens it. A shown tab's ⧉ floats Pictures the same way, and its ⇥
       docks it back into the strip. Reload → the layout is remembered.
 - [ ] Unfold Site's **SCAD** → the site's generated OpenSCAD.
-- [ ] Select `printer_1`, type 650 into its X → the toolbar says *1
-      violation*; Site lists *printer_1 and printer_2 overlap* at its top,
+- [ ] Select `printer_1`, type 1160 into its X → the toolbar says *1
+      violation*; Site lists *printer_1 and footpedal overlap* at its top,
       and both rows are red, saying so on hover. Double-click `workbench`,
       then click the problem's row → the view steps back out to the root
       and printer_1 is selected. Close Site, click the toolbar's count →

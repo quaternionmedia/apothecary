@@ -239,17 +239,41 @@
         .picture-view { padding: 0 0.3rem; border-radius: 6px; border: 1px solid #3a3a3a; color: #999; }
         .picture-view.here { border-color: #4a6fa8; color: #9cd2ff; cursor: pointer; }
         .picture-view.here:hover { background: #22324a; }
+        /* Pictures as thumbnails, grouped by the camera that took each. */
+        .picture-group { margin-bottom: 0.45rem; }
+        .picture-group-title { font-size: 0.7rem; color: #aaa; margin: 0.15rem 0 0.25rem; }
+        .picture-group-title .note { color: #666; }
+        .picture-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 0.3rem; }
+        .picture-tile { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; padding: 0.2rem; border-radius: 4px; background: #1d221d; font-size: 0.66rem; }
+        .picture-tile img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 2px; }
+        .picture-tile .picture-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .picture-tile .pictures-forget { align-self: flex-start; font-size: 0.64rem; padding: 0.05rem 0.35rem; }
+        /* A camera in Selected: what it is, what it sees, Take picture, and its pictures. */
+        .camera-section { border-top: 1px solid #2a2a2a; border-bottom: 1px solid #2a2a2a; margin: 0.4rem 0 0.5rem; padding: 0.4rem 0; font-size: 0.75rem; }
+        .camera-facts { display: grid; grid-template-columns: auto 1fr; gap: 0.1rem 0.5rem; margin: 0.25rem 0; color: #bbb; }
+        .camera-facts .k { color: #777; }
+        .camera-preview { display: block; width: 100%; max-height: 120px; object-fit: contain; background: #0c0c0c; border-radius: 4px; margin: 0.3rem 0; }
+        .camera-preview.empty { padding: 1.2rem 0; text-align: center; color: #666; }
+        .camera-actions { display: flex; align-items: center; gap: 0.5rem; margin: 0.3rem 0; }
+        .camera-actions .key { color: #777; font-size: 0.7rem; }
+        .camera-thumbs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.25rem; margin-top: 0.35rem; }
+        .camera-thumbs img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 2px; cursor: pointer; border: 1px solid transparent; }
+        .camera-thumbs img.drawn { border-color: #ffcc66; }
+        .camera-thumbs img.nowhere { opacity: 0.55; }
+        .camera-thumbs .empty { grid-column: 1 / -1; color: #666; }
         /* A section that folds away: Site's Pinned and SCAD, Pictures' gathering. */
         details.fold { border-top: 1px solid #2a2a2a; margin-top: 0.5rem; padding-top: 0.35rem; }
         details.fold > summary { cursor: pointer; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: #888; user-select: none; }
         details.fold > summary:hover { color: #ccc; }
         details.fold[open] > summary { margin-bottom: 0.35rem; }
-        /* The place badge: a host's (or the floor's) camera and view, in the
-           world (picture_marks.js). Its own class, never a panel's: a panel
-           class's `display: flex` would override the `hidden` the anchor layer
-           sets when the host is out of view. */
+        /* The place badge (▣, a picture's place) and the camera badge (📷, on the
+           camera part), in the world (picture_marks.js). Their own classes, never
+           a panel's: a panel class's `display: flex` would override the `hidden`
+           the anchor layer sets when the thing is out of view. */
         .world-badge.place-mark { border-color: #7a5a1a; color: #ffcc66; }
         .world-badge.place-mark::after { border-top-color: #7a5a1a; }
+        .world-badge.camera-mark { border-color: #3d5a7a; color: #9cd2ff; }
+        .world-badge.camera-mark::after { border-top-color: #3d5a7a; }
         .picture-facts .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: #777; margin-top: 0.3rem; }
         .picture-facts .view-row.drawn { color: #ffcc66; }
         .picture-facts .chosen-shape { color: #9cd2ff; }
@@ -528,7 +552,7 @@
                         <div id="category-filters" class="category-filters"
                              title="Expand every node of a subsystem at once, at any depth beneath the current level, at the cost of render time"></div>
                         <ul id="contents-list" class="contents-list contents-tree"></ul>
-                        <details id="site-pinned" class="fold" title="Every camera, view and board a page pinned, every site's, each taken back from its row">
+                        <details id="site-pinned" class="fold" title="Every camera a page added, and every view and board it pinned, every site's, each taken back from its row">
                             <summary>Pinned · every site's</summary>
                             <div id="site-pinned-body"></div>
                         </details>
@@ -587,7 +611,7 @@
         import { mountBuild, mountRawFlash } from '/static/widgets/sketches.js';
         import { mountTasks } from '/static/widgets/tasks.js';
         import { makeMachineMarks, makeBoardBadge, sayBoard, toScene as marksToScene } from '/static/machine_marks.js';
-        import { mountPictureMarks } from '/static/picture_marks.js';
+        import { mountPictureMarks, axes as cameraAxes } from '/static/picture_marks.js';
         import { mountPictures } from '/static/pictures.js';
 
         const BASE_URL = {{ base_url | tojson }};
@@ -674,6 +698,14 @@
         const WALL_OPACITY = 0.25;
         const HANDLE_SIZE = 0.6;      // the move arrows, against TransformControls' own 1
         const HANDLE_LIGHTNESS = 0.55; // and their opacity, against its own
+        // A point of the site's frame (z up) in three.js's (y up).
+        const sceneAt = (x, y, z) => new THREE.Vector3(x, z, y);
+        // A selected camera's turn ring and tilt arc, about its lens, in the move
+        // arrows' own units: they keep the arrows' size on screen however near the
+        // view is, the ring just past the arrows' heads.
+        const CAMERA_TURN_RADIUS = 0.75;
+        const CAMERA_TILT_RADIUS = 0.55;
+        const CAMERA_HANDLE_TUBE = 0.03;
         // The site's floor: a selection but not a node. Its key in the page; "" in every
         // view and camera route. Floor things stand this far past the site's roots in +x
         // (vision/views.py's FLOOR_MARGIN_MM).
@@ -914,6 +946,8 @@
                 this.editorFocusWanted = null;  // the target key whose first control Part › Edit focuses
                 this.nodeLoads = new Map();  // nodeKey() -> token of its newest load
                 this.waveDone = Promise.resolve();  // settles when the level's geometry has loaded
+                this.cameraHandles = null; // a selected camera's turn ring and tilt arc
+                this.cameraDrag = null;    // a turn or tilt under way: { kind, name, turn, tilt, angle, pose }
 
                 this.initThreeJS();
                 this.bindEvents();
@@ -958,8 +992,8 @@
                 // move arrows -- three.js's TransformControls, translating -- drawn
                 // smaller than its default and lighter (each handle's own opacity
                 // scaled once; the one under the pointer still lights up), so they
-                // do not dominate what they move. A camera's turn ring and tilt arc
-                // (the cameras-and-clutter plan's Phase 3) join this set there.
+                // do not dominate what they move. A selected camera's turn ring and
+                // tilt arc join this set, sized beside them (showCameraHandles).
                 this.transformControls = new TransformControls(this.camera, this.renderer.domElement);
                 this.transformControls.setMode('translate');
                 this.transformControls.setSize(HANDLE_SIZE);
@@ -1018,32 +1052,33 @@
                 this.boards = mountBoards({ base: BASE_URL, site: () => this.siteName });
                 window.apothecaryBoards = this.boards;
                 this.machine = null;
-                // What a picture wears in the world (picture_marks.js): each view
-                // as a mat on its host's top or on the floor, its shapes as
-                // outlines, a camera's frustum looking down onto it, and one place
-                // badge per host -- from one GET /sites/{s}/attached per site, asked
-                // again after anything that moves a host or pins something.
-                this.cameras = [];
+                // What pictures and cameras wear in the world (picture_marks.js): each
+                // view as a mat laid through its projection on its host's top or the
+                // floor, its shapes as outlines, one ▣ badge per place; and each
+                // camera's 📷 badge, its pyramid while it is selected or live, and its
+                // live video -- from one GET /sites/{s}/attached per site, asked again
+                // after anything that moves a host or a camera, or takes a picture.
                 this.pictureMarks = mountPictureMarks({
                     scene: this.scene, anchors: this.anchors, base: BASE_URL,
-                    hostBounds: (host) => { const node = this.tree && this.nodeByPath(host); return node ? envelopeBounds(node) : null; },
-                    hostInView: (host) => (host === '' ? this.focusPath.length === 0 : this.anchorPointFor(host) !== null),
+                    hostBounds: (path) => { const node = this.tree && this.nodeByPath(path); return node ? envelopeBounds(node) : null; },
+                    hostInView: (path) => (path === '' ? this.focusPath.length === 0 : this.anchorPointFor(path) !== null),
                     atTopLevel: () => this.focusPath.length === 0,
                     floorPoint: (made) => this.floorPoint(made),
-                    onSelect: (host) => this.selectPlace(host),
-                    isSelected: (host) => this.selectedName === (host === '' ? FLOOR_KEY : host),
-                    onChange: (attached) => {
-                        this.cameras = attached.cameras;
+                    onSelect: (path) => this.selectPlace(path),
+                    isSelected: (path) => this.selectedName === (path === '' ? FLOOR_KEY : path),
+                    onChange: () => {
                         this.listsChanged();
+                        // A camera's body is drawn aimed as its record says.
+                        this.refreshCameraMeshes();
                         // Selected is redrawn only when what it says of the pictures changed,
                         // so a position being typed is not swept away by an answer.
                         if (this.selectedName && this.pictureFactsHtml(this.selectedName) !== this.shownFacts) this.renderSelectedPanel();
                     },
                 });
                 window.apothecaryPictures = this.pictureMarks;
-                // The loop's verbs at a host (pictures.js): a camera pinned, live and
+                // The loop's verbs (pictures.js): a camera's device chosen, live and
                 // taking pictures; pictures added, dropped, pasted, pinned, found, sized;
-                // views drawn and unpinned. Each is a ring cell; none has markup.
+                // views drawn and unpinned. Each is a ring cell.
                 this.pictures = mountPictures({
                     base: BASE_URL, marks: this.pictureMarks,
                     log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
@@ -1057,16 +1092,16 @@
                         openPanel: (id) => this.panels.open(id),
                         frameFloor: () => this.frameFloor(),
                         rendered: () => this.renderSelectedPanel(),
-                        // The ring again at a host, entered to the option named: how
-                        // Allow hands over to Pin here when the browser named several cameras.
-                        reopenRing: (host, into, at) => { if (window.apothecaryRing && window.apothecaryRing.openOn) window.apothecaryRing.openOn(host, into, at); },
+                        // The ring again on a camera, entered to the option named: how
+                        // Allow hands over to Device when the browser named several cameras.
+                        reopenRing: (path, into, at) => { if (window.apothecaryRing && window.apothecaryRing.openOn) window.apothecaryRing.openOn(path, into, at); },
                         // A re-scale that rebuilt made pieces answers with the site.
                         applySite: (site) => this.applySite(site),
                     },
                 });
                 window.apothecaryPictureVerbs = this.pictures;
-                // Site's Pinned: every camera, view and board a page pinned, every
-                // site's, each taken back from its row without switching the site.
+                // Site's Pinned: every camera a page added, and every view and board it
+                // pinned, every site's, each taken back from its row without switching the site.
                 // Mounted the first time the section opens, and listed again each
                 // time it does.
                 this.pinnedWidget = null;
@@ -1149,6 +1184,13 @@
                     this.renderFocus();
                 });
                 this.canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
+                // A selected camera's turn ring or tilt arc, dragged. Its press is heard
+                // first, ahead of the move arrows and the orbit, which never hear it.
+                this.canvas.addEventListener('pointerdown', (e) => this.onCameraHandleDown(e), { capture: true });
+                this.canvas.addEventListener('pointermove', (e) => this.onCameraDragMove(e));
+                this.canvas.addEventListener('pointerup', () => this.onCameraDragEnd());
+                // With a camera selected, P takes a picture -- unless a person is typing.
+                window.addEventListener('keydown', (e) => this.onPictureKey(e));
                 this.canvas.addEventListener('dblclick', (e) => this.onDoubleClick(e));
                 this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: true });
                 // A file dropped on a structure is kept and pinned at its root (at the
@@ -1192,6 +1234,7 @@
             animate() {
                 requestAnimationFrame(() => this.animate());
                 this.orbitControls.update();
+                this.sizeCameraHandles();
                 for (const m of Object.values(this.marks)) if (m.marks) m.marks.tick();
                 this.anchors.update();
                 this.renderer.render(this.scene, this.camera);
@@ -1215,6 +1258,19 @@
                 if (shown) return;
                 try { localStorage.setItem(HINT_SEEN_KEY, 'seen'); } catch (e) { /* kept nowhere: shown again next visit */ }
             }
+            // P, with a camera selected: Take picture, as its ring's cell does.
+            onPictureKey(event) {
+                if ((event.key !== 'p' && event.key !== 'P') || event.ctrlKey || event.metaKey || event.altKey) return;
+                const t = event.target;
+                if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+                if (!this.isCameraNode(this.renderNodeByKey[this.selectedName])) return;
+                event.preventDefault();
+                this.takePictureWith(this.selectedName);
+            }
+            takePictureWith(name) {
+                return this.pictures.takePicture(name).catch((e) => this.setStatus(e.message, 'error'));
+            }
+
             // ? shows the hint bar again, or puts it away -- unless a person is typing.
             onHintKey(event) {
                 if (event.key !== '?' || event.ctrlKey || event.metaKey || event.altKey) return;
@@ -2064,16 +2120,15 @@
             selectChild(key) {
                 this.pictureMarks.unchoose();
                 if (key !== this.selectedName) this.pictureMarks.untrace();
-                this.pictures.selectionChanged(key);
                 this.selectedName = key;
                 const focus = this.currentFocusNode();
                 const node = this.renderNodeByKey[key];
                 const mesh = this.meshByName[key];
 
                 // A catalog leaf is not moved by hand (the library lays itself
-                // out); a machine that is a part with things inside it moves
-                // like any other structure.
-                if (mesh && node && this.isEditableSelection(focus, node) && !(node.part_ref && node.children.length === 0)) {
+                // out); a machine that is a part with things inside it, and a
+                // camera, move like any other structure.
+                if (mesh && node && this.isEditableSelection(focus, node) && (this.isCameraNode(node) || !(node.part_ref && node.children.length === 0))) {
                     this.showHandles(mesh);
                 } else {
                     this.hideHandles();
@@ -2082,13 +2137,225 @@
                 this.renderContentsList(focus);
                 this.renderSelectedPanel();
                 for (const k of Object.keys(this.meshByName)) this.colorMesh(k, this.renderNodeByKey[k]);
+                // A camera's pyramid shows while it is selected.
+                this.pictureMarks.sync();
                 this.acted();
             }
 
             // The handles' one set (see initThreeJS), on a movable thing's mesh or on
-            // nothing: whatever else joins the set comes and goes here with the arrows.
-            showHandles(object) { this.transformControls.attach(object); }
-            hideHandles() { this.transformControls.detach(); }
+            // nothing: the move arrows, and on a camera its turn ring and tilt arc.
+            showHandles(object) {
+                this.transformControls.attach(object);
+                this.showCameraHandles(object.userData.camera || null);
+            }
+            hideHandles() {
+                this.transformControls.detach();
+                this.showCameraHandles(null);
+            }
+
+            // ---- a camera, as a part in the world -----------------------------
+            //
+            // A camera part's node (vision/cameras.py) is drawn as the webcam it
+            // is -- a body above its lens, the size its record's `body` says --
+            // standing at its lens and aimed as its record says: tilted about its
+            // long side from straight down, then turned about the vertical. Its
+            // pose comes with the pictures' answer (GET /sites/{s}/attached), so its
+            // body stays the box of it until that answer is in.
+
+            isCameraNode(node) { return !!node && node.category === 'camera' && node.part_ref === 'webcam'; }
+
+            // A camera's rotation in three.js's frame: its right, back and up --
+            // the webcam's own across, lens-to-back and up-the-picture -- in the
+            // site's frame (projection.py's axes), axes swapped as everything is.
+            cameraQuaternion(turn, tilt) {
+                const { right, down, forward } = cameraAxes(turn, tilt);
+                const s = ([x, y, z]) => new THREE.Vector3(x, z, y);
+                const m = new THREE.Matrix4().makeBasis(s(right), s(forward.map((v) => -v)), s(down.map((v) => -v)));
+                return new THREE.Quaternion().setFromRotationMatrix(m);
+            }
+
+            buildCameraMesh(node) {
+                const cam = this.pictureMarks.camera(node.name);
+                if (!cam || !cam.body) return null;
+                const [across, up, deep] = cam.body.size;
+                const lensH = cam.body.lens_h, lensR = cam.body.lens_d / 2;
+                // In the camera's own frame (three.js's axes): its lens at the origin,
+                // looking down -y, its body above it.
+                const body = new THREE.BoxGeometry(across, deep, up);
+                body.translate(0, lensH + deep / 2, 0);
+                const mesh = new THREE.Mesh(body, new THREE.MeshPhongMaterial({ flatShading: false }));
+                const lens = new THREE.Mesh(new THREE.CylinderGeometry(lensR, lensR, lensH, 32).translate(0, lensH / 2, 0), new THREE.MeshPhongMaterial({ color: 0x111111 }));
+                lens.name = 'lens';
+                mesh.add(lens);
+                const edges = new THREE.LineSegments(new THREE.EdgesGeometry(body), new THREE.LineBasicMaterial({ color: 0x000000 }));
+                edges.name = 'edges';
+                mesh.add(edges);
+                mesh.position.copy(sceneAt(...cam.position));
+                mesh.quaternion.copy(this.cameraQuaternion(cam.turn, cam.tilt));
+                mesh.userData.camera = node.name;
+                return mesh;
+            }
+
+            // The cameras on screen drawn again from the pictures' answer, which says
+            // how each is aimed.
+            refreshCameraMeshes() {
+                for (const key of Object.keys(this.meshByName)) {
+                    const node = this.renderNodeByKey[key];
+                    if (!this.isCameraNode(node)) continue;
+                    const mesh = this.buildCameraMesh(node);
+                    if (mesh) this.upgradeMesh(node, mesh);
+                }
+            }
+
+            // The turn ring (about the vertical, through the lens) and the tilt arc
+            // (from straight down to straight up, toward the picture's top), on the
+            // camera named, or on nothing. Drawn over everything, seen through, and
+            // never in the way of a badge; sized each frame (sizeCameraHandles).
+            showCameraHandles(name) {
+                if (this.cameraHandles) {
+                    this.scene.remove(this.cameraHandles);
+                    disposeDeep(this.cameraHandles);
+                    this.cameraHandles = null;
+                }
+                const cam = name ? this.pictureMarks.camera(name) : null;
+                if (!cam) return;
+                const group = new THREE.Group();
+                group.name = `camera-handles:${name}`;
+                group.position.copy(sceneAt(...cam.position));
+                group.userData = { camera: name, turnRadius: CAMERA_TURN_RADIUS, tiltRadius: CAMERA_TILT_RADIUS };
+                const handle = (geometry, color, kind) => {
+                    const m = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.75, depthTest: false }));
+                    m.renderOrder = 10;
+                    m.userData.cameraHandle = kind;
+                    m.userData.passThrough = true;
+                    group.add(m);
+                    return m;
+                };
+                const ring = handle(new THREE.TorusGeometry(CAMERA_TURN_RADIUS, CAMERA_HANDLE_TUBE, 8, 72), 0x66ccff, 'turn');
+                ring.rotation.x = Math.PI / 2;
+                // The tilt arc lies in the plane the camera tilts in: down at 0, the
+                // picture's top at 90, up at 180. Everything about the lens, the group's middle.
+                const top = [-Math.sin(cam.turn * Math.PI / 180), Math.cos(cam.turn * Math.PI / 180)];
+                const arcAt = (deg) => {
+                    const a = deg * Math.PI / 180;
+                    return sceneAt(CAMERA_TILT_RADIUS * Math.sin(a) * top[0], CAMERA_TILT_RADIUS * Math.sin(a) * top[1], -CAMERA_TILT_RADIUS * Math.cos(a));
+                };
+                const arc = new THREE.CatmullRomCurve3(Array.from({ length: 37 }, (_, i) => arcAt(i * 5)));
+                handle(new THREE.TubeGeometry(arc, 72, CAMERA_HANDLE_TUBE, 8, false), 0xffcc66, 'tilt');
+                // Where each stands now: a knob on the ring at the picture's top, one on the arc at the tilt.
+                const knob = (at, color, kind) => handle(new THREE.SphereGeometry(CAMERA_HANDLE_TUBE * 2.6, 12, 8), color, kind).position.copy(at);
+                knob(sceneAt(CAMERA_TURN_RADIUS * top[0], CAMERA_TURN_RADIUS * top[1], 0), 0x66ccff, 'turn');
+                knob(arcAt(cam.tilt), 0xffcc66, 'tilt');
+                this.cameraHandles = group;
+                this.sizeCameraHandles();
+                this.scene.add(group);
+            }
+            // The size TransformControls gives the move arrows, from how far the view
+            // is from the lens: the ring and the arc keep theirs beside them.
+            sizeCameraHandles() {
+                const group = this.cameraHandles;
+                if (!group) return;
+                const far = group.position.distanceTo(this.camera.position);
+                const factor = far * Math.min(1.9 * Math.tan(Math.PI * this.camera.fov / 360) / this.camera.zoom, 7);
+                group.scale.setScalar(factor * HANDLE_SIZE / 4);
+            }
+
+            // A press on the turn ring or the tilt arc: the camera turned or tilted
+            // as the pointer goes, its pyramid following, and the pose kept on release.
+            cameraHandleAt(event) {
+                if (!this.cameraHandles) return null;
+                const rect = this.canvas.getBoundingClientRect();
+                this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+                this.raycaster.setFromCamera(this.pointer, this.camera);
+                const hit = this.raycaster.intersectObjects(this.cameraHandles.children, false)[0];
+                return hit ? hit.object.userData.cameraHandle : null;
+            }
+            // Where the pointer is, as a turn (the angle about the lens, seen from above)
+            // or a tilt (from straight down toward the picture's top), in degrees.
+            cameraDragAngle(kind, event, cam) {
+                const rect = this.canvas.getBoundingClientRect();
+                this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+                this.raycaster.setFromCamera(this.pointer, this.camera);
+                const lens = sceneAt(...cam.position);
+                // The tilt arc's plane holds the vertical and the picture's top: its
+                // normal is the camera's right, whatever the tilt.
+                const t = cam.turn * Math.PI / 180;
+                const normal = kind === 'turn' ? new THREE.Vector3(0, 1, 0) : sceneAt(Math.cos(t), Math.sin(t), 0);
+                const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, lens);
+                const hit = this.raycaster.ray.intersectPlane(plane, new THREE.Vector3());
+                if (!hit) return null;
+                const v = hit.sub(lens);  // three.js: (x, z up, y)
+                if (kind === 'turn') return Math.atan2(v.z, v.x) * 180 / Math.PI;
+                const along = v.x * -Math.sin(t) + v.z * Math.cos(t);
+                return Math.atan2(along, -v.y) * 180 / Math.PI;
+            }
+            onCameraHandleDown(event) {
+                if (event.button !== 0) return;
+                const kind = this.cameraHandleAt(event);
+                if (!kind || !this.startCameraDrag(kind, event)) return;
+                event.stopImmediatePropagation();
+                event.preventDefault();
+            }
+            startCameraDrag(kind, event) {
+                const name = this.selectedName;
+                const cam = this.pictureMarks.camera(name);
+                if (!cam) return false;
+                const angle = this.cameraDragAngle(kind, event, cam);
+                if (angle === null) return false;
+                this.cameraDrag = { kind, name, turn: cam.turn, tilt: cam.tilt, angle, pointer: event.pointerId };
+                this.orbitControls.enabled = false;
+                this.canvas.setPointerCapture(event.pointerId);
+                return true;
+            }
+            onCameraDragMove(event) {
+                const drag = this.cameraDrag;
+                if (!drag) return;
+                const cam = this.pictureMarks.camera(drag.name);
+                const angle = this.cameraDragAngle(drag.kind, event, { ...cam, turn: drag.turn, tilt: drag.tilt });
+                if (angle === null) return;
+                const pose = drag.kind === 'turn'
+                    ? { turn: ((drag.turn + angle - drag.angle) % 360 + 360) % 360 }
+                    : { tilt: Math.max(0, Math.min(180, angle)) };
+                drag.pose = pose;
+                this.pictureMarks.posePreview(drag.name, pose);
+                const now = this.pictureMarks.camera(drag.name);
+                const mesh = this.meshByName[drag.name];
+                if (mesh) mesh.quaternion.copy(this.cameraQuaternion(now.turn, now.tilt));
+                this.showCameraHandles(drag.name);
+            }
+            async onCameraDragEnd() {
+                const drag = this.cameraDrag;
+                if (!drag) return;
+                this.cameraDrag = null;
+                this.orbitControls.enabled = true;
+                if (!drag.pose) return;
+                const said = drag.kind === 'turn' ? `turned to ${drag.pose.turn.toFixed(0)}°` : `tilted ${drag.pose.tilt.toFixed(0)}° from straight down`;
+                try {
+                    const body = await this.setCameraPose(drag.name, drag.pose);
+                    const lands = body.camera.lands;
+                    this.setStatus(`${drag.name} ${said}: its next picture lands ${lands ? `on ${lands.host === '' ? 'the floor' : lands.host}` : 'nowhere -- aim it down'}`, 'success');
+                } catch (err) {
+                    this.pictureMarks.posePreview(drag.name, null);
+                    this.setStatus(`Error: ${err.message}`, 'error');
+                }
+                this.acted();
+            }
+            // PUT /sites/{s}/cameras/{name}/pose: the site and the pictures drawn again,
+            // the camera still selected.
+            async setCameraPose(name, pose) {
+                const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/cameras/${encodeURIComponent(name)}/pose`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pose),
+                });
+                const body = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : response.statusText);
+                // An editor open on it reads the camera as it is now.
+                delete this.partStages[`camera:${this.siteName}:${name}`];
+                if (this.partSection && this.partSection.dataset.target === `camera:${this.siteName}:${name}`) this.partSection = null;
+                await this.applySite(body.site);
+                return body;
+            }
 
             // The one place the three possible "Selected" panels are chosen:
             // a parts-library leaf always gets the absorbed part view
@@ -2118,6 +2385,17 @@
                 } else {
                     this.renderGenericPanel(selected);
                 }
+                // A camera: what it is, what it sees, Take picture and its pictures;
+                // Part › Edit opens its numbers' editor under them. Its device is a
+                // browser's camera, chosen on its ring, never a board.
+                if (this.isCameraNode(selected)) {
+                    const nameRow = this.selectedBodyEl.querySelector('.prop-row');
+                    if (nameRow) nameRow.insertAdjacentHTML('afterend', this.shownFacts);
+                    else this.selectedBodyEl.insertAdjacentHTML('beforeend', this.shownFacts);
+                    this.bindCameraSection(this.selectedName);
+                    if (this.editorOpenFor === this.selectedName) this.appendEditor(this.cameraTarget(this.selectedName));
+                    return;
+                }
                 // A leaf that is a part gets the part's whole section; a machine
                 // that is a part with things inside it gets the one row that
                 // says so, and keeps its panel the height a machine's panel is.
@@ -2133,6 +2411,74 @@
                 if (made) this.appendEditor(this.pieceTarget(this.selectedName, made));
             }
 
+            // A camera in Selected, under its name: its device, its lens and where its
+            // next picture lands; Take picture (P), its ring's cell; what it sees (its
+            // video while it is live, else its newest picture); and its pictures,
+            // newest first, a click on one drawing it where it landed.
+            cameraSectionHtml(name) {
+                const cam = this.pictureMarks.camera(name);
+                if (!cam) return `<div class="camera-section" data-camera="${esc(name)}"><div class="device-title">Camera</div><div class="device-empty">reading the camera…</div></div>`;
+                const theirs = cam.device && !this.pictures.isMine(cam.device.id);
+                const device = cam.device
+                    ? `${esc(cam.device.label)}${theirs ? " (another browser's: ⌗ Device chooses one of this browser's)" : ''}`
+                    : "none yet: ⌗ Device, on its ring, says which of this browser's cameras it is";
+                const lens = `${Number(cam.fov).toFixed(1)}° across, ${cam.fov_taught ? 'taught' : 'as it started'}`;
+                const lensTitle = cam.fov_taught
+                    ? 'Taught by a width typed for one of its pictures; Part › Edit sets it'
+                    : 'The first width typed for one of its pictures (Picture › Size) teaches it';
+                const lands = cam.lands ? `on ${esc(cam.lands.host === '' ? 'the floor' : cam.lands.host)}` : 'nowhere: aim it down';
+                const pictures = [...this.pictureMarks.viewsBy(name)].reverse();
+                const newest = pictures[0];
+                const file = (view, px) => `${BASE_URL}/photos/pictures/file?path=${encodeURIComponent(view.picture)}&px=${px}`;
+                const preview = this.pictures.live() === name
+                    ? '<video class="camera-preview" autoplay muted playsinline></video>'
+                    : newest ? `<img class="camera-preview" src="${file(newest, 512)}" alt="${esc(name)}'s newest picture" title="${esc(name)}'s newest picture; Live shows what it sees now">`
+                    : '<div class="camera-preview empty">no picture yet</div>';
+                const thumbs = pictures.slice(0, 8).map((view) => {
+                    const drawn = view.host !== null && (this.pictureMarks.drawnAt(view.host) || {}).id === view.id;
+                    const where = view.host === null ? 'landed nowhere' : `lies on ${view.host === '' ? 'the floor' : view.host}`;
+                    return `<img class="cam-thumb${drawn ? ' drawn' : ''}${view.host === null ? ' nowhere' : ''}" data-view="${esc(view.id)}" src="${file(view, 256)}" alt="" title="${esc(view.picture)}: ${esc(where)}${view.host === null ? '' : '; click to draw it there'}">`;
+                }).join('');
+                return `<div class="camera-section" data-camera="${esc(name)}">
+                    <div class="device-title">Camera</div>
+                    <div class="camera-facts">
+                        <span class="k">device</span><span data-facts="device">${device}</span>
+                        <span class="k">lens</span><span data-facts="lens" title="${esc(lensTitle)}">${lens}</span>
+                        <span class="k">next picture</span><span data-facts="lands">lands ${lands}</span>
+                    </div>
+                    <div class="camera-actions"><button type="button" class="cam-take" title="Keep a frame from this camera's device: it lies where the camera looks, as a view">Take picture</button><span class="key">P</span></div>
+                    ${preview}
+                    <div class="camera-thumbs">${thumbs || '<span class="empty">its pictures appear here</span>'}</div>
+                </div>`;
+            }
+
+            bindCameraSection(name) {
+                const section = this.selectedBodyEl.querySelector('.camera-section');
+                if (!section) return;
+                const video = section.querySelector('video.camera-preview');
+                if (video) { video.srcObject = this.pictures.liveVideo(name); video.play().catch(() => {}); }
+                const takeBtn = section.querySelector('.cam-take');
+                takeBtn.addEventListener('click', () => this.takePictureWith(name));
+                const thumbList = section.querySelector('.camera-thumbs');
+                thumbList.addEventListener('click', (e) => {
+                    const thumb = e.target.closest('.cam-thumb');
+                    if (thumb) this.drawCameraPicture(name, thumb.dataset.view);
+                });
+            }
+
+            // A camera's picture, clicked in Selected: drawn where it landed, the
+            // camera still selected.
+            drawCameraPicture(name, id) {
+                const view = this.pictureMarks.viewsBy(name).find((v) => v.id === id);
+                if (!view) return false;
+                if (view.host === null) { this.setStatus(`${view.picture} landed nowhere: ${name} was looking at a wall or the sky`, 'error'); return false; }
+                if (this.focusPath.length) this.jumpTo(0);
+                this.pictureMarks.draw(view.host, id);
+                this.renderSelectedPanel();
+                this.setStatus(`drawing ${view.picture} where it landed, on ${view.host === '' ? 'the floor' : view.host}`, 'success');
+                return true;
+            }
+
             // The width box sets the drawn view's scale (a chosen shape's long side
             // when one is chosen); a view's row draws that view.
             bindPictureFacts() {
@@ -2144,12 +2490,14 @@
                 }
             }
 
-            // What the pictures know about the selection, as facts (no verb:
-            // verbs are the ring's): a host's or the floor's camera and views,
-            // the shape chosen on its mat, a made piece's provenance.
+            // What the pictures know about the selection, as facts (no verb but
+            // Take picture: the verbs are the ring's): a camera's section; a host's
+            // or the floor's views, the shape chosen on its mat; a made piece's
+            // provenance.
             pictureFactsHtml(selection) {
                 const pm = this.pictureMarks;
                 const host = selection === FLOOR_KEY ? '' : selection;
+                if (this.isCameraNode(this.renderNodeByKey[host])) return this.cameraSectionHtml(host);
                 const made = pm.madeRecord(host);
                 const where = (h) => (h === '' ? 'the floor' : h);
                 if (made) {
@@ -2172,24 +2520,15 @@
                         Size: ${size}
                     </div>`;
                 }
-                const cam = pm.cameraAt(host);
                 const views = pm.viewsAt(host);
                 // A verb's place on the ring, named as text: the floor's verbs are under
                 // the canvas ring's Pictures › Floor, and its Add is Pictures › Add.
                 const ring = (verb) => `⌗ ${host === '' ? 'Pictures › Floor › ' : ''}${verb}`;
                 // Nothing here yet: the way in, so the durable hint is where the person
                 // looks. The verbs stay the ring's.
-                if (!cam && !views.length) return `<div class="prop-readonly picture-facts" data-facts="${host === '' ? 'floor' : 'host'}"><div class="k">Pictures at ${esc(where(host))}</div><div data-facts="way-in">${ring('Camera › Pin here')} puts this browser's camera at ${esc(where(host))}; ${host === '' ? '⌗ Pictures › Add' : '⌗ Picture › Add'} pins a picture from disk, and ${host === '' ? '⌗ Pictures › Floor › Picture › Folder' : '⌗ Picture › Folder'} one already in the folder, any chosen in Pictures; m, or right-click, opens the ring</div></div>`;
+                if (!views.length) return `<div class="prop-readonly picture-facts" data-facts="${host === '' ? 'floor' : 'host'}"><div class="k">Pictures at ${esc(where(host))}</div><div data-facts="way-in">${ring('Camera › Add here')} stands a camera above ${esc(where(host))}, looking down; ${host === '' ? '⌗ Pictures › Add' : '⌗ Picture › Add'} pins a picture from disk, and ${host === '' ? '⌗ Pictures › Floor › Picture › Folder' : '⌗ Picture › Folder'} one already in the folder, any chosen in Pictures; m, or right-click, opens the ring</div></div>`;
                 const drawn = pm.drawnAt(host);
                 const rows = [];
-                if (cam) {
-                    rows.push(`<div data-facts="camera">📷 ${esc(cam.label || 'camera')}${cam.mm_across ? ` · ${Number(cam.mm_across).toFixed(0)} mm across, from the last width typed` : ''}</div>`);
-                    // Whose camera it is decides what can be done with it from here.
-                    const mine = !!(this.pictures && this.pictures.state.cameras.some((c) => c.id === cam.id));
-                    rows.push(`<div data-facts="camera-verbs">${mine
-                        ? `${ring('Camera › Take picture')} keeps a frame and pins it here as a view; ${ring('Picture › Find shapes')} then finds its shapes; Live shows the camera on the mat`
-                        : `another browser's camera: a picture is taken here with one of this browser's cameras pinned in its place (${ring('Camera › Pin here')})`}</div>`);
-                }
                 for (const view of [...views].reverse()) {
                     const size = view.mat && view.mat.width ? `${Number(view.mat.width).toFixed(0)} mm across` : 'unsized';
                     const madeCount = Object.keys(view.made || {}).length;
@@ -2197,24 +2536,24 @@
                     const shapes = view.finder === null
                         ? `shapes not found yet: ${ring('Picture › Find shapes')}`
                         : `${esc(view.finder)} · ${view.shapes.length} shape(s)${view.left_out ? ` (+${view.left_out} left out)` : ''}`;
-                    rows.push(`<div class="view-row${view === drawn ? ' drawn' : ''}" data-host="${esc(host)}" data-view="${esc(view.id)}" title="Draw this view">${view === drawn ? '▸ ' : ''}${esc(view.picture)} · ${shapes} · ${size}${madeCount ? ` · ${madeCount} made` : ''}</div>`);
+                    const by = view.camera ? ` · by ${esc(view.camera)}` : '';
+                    rows.push(`<div class="view-row${view === drawn ? ' drawn' : ''}" data-host="${esc(host)}" data-view="${esc(view.id)}" title="Draw this view">${view === drawn ? '▸ ' : ''}${esc(view.picture)}${by} · ${shapes} · ${size}${madeCount ? ` · ${madeCount} made` : ''}</div>`);
                 }
                 const chosen = pm.chosen();
                 const view = chosen && views.find((v) => v.id === chosen.view);
                 const shape = view && view.shapes.find((sh) => sh.index === chosen.index);
+                // A shape's long side, laid through its view's mapping.
+                const longSide = shape ? pm.longSide(view.id, shape.index) : null;
                 if (shape) {
-                    const tall = view.pixel_height / view.pixel_width;
-                    const across = shape.long_side > 0 && shape.short_side > 0 ? shape.long_side : Math.max(shape.max[0] - shape.min[0], (shape.max[1] - shape.min[1]) * tall);
-                    const long = view.mat && view.mat.width ? `${(across * view.mat.width).toFixed(0)} mm` : 'no size yet';
+                    const long = longSide ? `${longSide.toFixed(0)} mm` : 'no size yet';
                     const status = shape.status === 'made' ? `made: ${esc(shape.piece)}` : shape.status === 'already_made' ? `already made (${esc(shape.piece)})` : 'found';
                     rows.push(`<div class="chosen-shape" data-facts="shape">Shape ${shape.index}: a ${esc(shape.word)} (${esc(shape.kind)}) because ${esc(shape.reason)}${shape.word_stated ? ' (a person said so)' : ''}; confidence ${Number(shape.confidence).toFixed(2)}; long side ${long}; ${status}</div>`);
                 }
-                // The one width: the drawn view's (or, with no view, its camera's
-                // next), or with a shape chosen, that shape's long side.
+                // The one width: the drawn view's, or with a shape chosen, that shape's long side.
                 const bySide = shape && drawn && view === drawn;
                 const width = bySide
-                    ? (view.mat && view.mat.width ? Math.round((shape.long_side > 0 ? shape.long_side : shape.max[0] - shape.min[0]) * view.mat.width) : '')
-                    : (drawn ? (drawn.mat && drawn.mat.width ? Math.round(drawn.mat.width) : '') : (cam && cam.mm_across ? Math.round(cam.mm_across) : ''));
+                    ? (longSide ? Math.round(longSide) : '')
+                    : (drawn.mat && drawn.mat.width ? Math.round(drawn.mat.width) : '');
                 rows.push(`<div class="prop-row" data-facts="width"><label>${bySide ? "this shape's long side, mm" : 'picture width, mm'}</label><input type="number" class="view-width" min="1" step="1" value="${width}" title="${bySide ? 'How long this shape is in the world, in millimetres: the view is sized by it' : 'How wide the whole picture is in the world, in millimetres'}"></div>`);
                 return `<div class="prop-readonly picture-facts" data-facts="${host === '' ? 'floor' : 'host'}"><div class="k">Pictures at ${esc(where(host))}</div>${rows.join('')}</div>`;
             }
@@ -2314,12 +2653,10 @@
                          </select>
                        </div>`
                     : node.status ? `<div class="prop-row"><label>Status</label><span>${esc(node.status)}</span></div>` : '';
-                this.selectedBodyEl.innerHTML = `
-                    <div class="prop-row"><label>Name</label><span>${esc(node.name)}</span></div>
-                    ${statusRow}
-                    <div class="prop-row"><label>X (mm)</label><input type="number" id="pos-x" step="10" value="${node.position.x}"></div>
-                    <div class="prop-row"><label>Y (mm)</label><input type="number" id="pos-y" step="10" value="${node.position.y}"></div>
-                    <div class="prop-row"><label>Z (mm)</label><input type="number" id="pos-z" step="10" value="${node.position.z}"></div>
+                // A camera is its name and where its lens is; what else it is -- its
+                // device, its lens, its aim, its pictures -- is its own section below.
+                const camera = this.isCameraNode(node);
+                const facts = camera ? '' : `
                     <div class="prop-readonly">
                         Material: ${esc(node.material ?? '—')}<br>
                         ${node.comment ? `Comment: ${esc(node.comment)}<br>` : ''}
@@ -2328,7 +2665,15 @@
                             ? node.build_volume.map((v) => v.toFixed(0)).join(' × ') + ' mm '
                               + `<span style="display:inline-block;width:8px;height:8px;border:1px solid #${BUILD_VOLUME_COLOR.toString(16).padStart(6, '0')};vertical-align:middle;"></span>`
                             : '—'}
-                    </div>
+                    </div>`;
+                const at = camera ? ' title="Where its lens is"' : '';
+                this.selectedBodyEl.innerHTML = `
+                    <div class="prop-row"><label>Name</label><span>${esc(node.name)}</span></div>
+                    ${statusRow}
+                    <div class="prop-row"><label${at}>X (mm)</label><input type="number" id="pos-x" step="10" value="${node.position.x}"></div>
+                    <div class="prop-row"><label${at}>Y (mm)</label><input type="number" id="pos-y" step="10" value="${node.position.y}"></div>
+                    <div class="prop-row"><label${at}>Z (mm)</label><input type="number" id="pos-z" step="10" value="${node.position.z}"></div>
+                    ${facts}
                     ${this.detailAffordanceHtml(node)}
                     ${this.zoomInAffordanceHtml(node)}
                 `;
@@ -2428,6 +2773,39 @@
                 };
             }
 
+            // A camera's numbers: where its lens is, its turn and tilt and its field
+            // of view, read and validated at its own routes, applied by PUT {params}.
+            // A field of view applied teaches its lens, and its pictures nobody sized
+            // follow it (the answer's `rebuilt`: pieces made from them, re-sized).
+            // It has no SCAD and no checklist: it is never printed.
+            cameraTarget(name) {
+                const base = `${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/cameras/${encodeURIComponent(name)}`;
+                return {
+                    key: `camera:${this.siteName}:${name}`, label: name, part: null,
+                    paramsUrl: `${base}/params`, validateUrl: `${base}/validate`,
+                    scadUrl: null, checklistUrl: null,
+                    apply: async (params) => {
+                        const response = await fetch(base, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ params }),
+                        });
+                        const body = await response.json().catch(() => ({}));
+                        if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : response.statusText);
+                        return body;
+                    },
+                    onApplied: async (body) => {
+                        // What the editor reads next is the camera as it is now.
+                        delete this.partStages[`camera:${this.siteName}:${name}`];
+                        await this.applySite(body.site);
+                        const lands = body.camera.lands;
+                        const where = lands ? `its next picture lands on ${lands.host === '' ? 'the floor' : lands.host}` : 'its next picture lands nowhere: aim it down';
+                        const rebuilt = body.rebuilt && body.rebuilt.length ? `; ${body.rebuilt.join(', ')} re-sized to its lens` : '';
+                        return `${name} set: ${where}${rebuilt}`;
+                    },
+                };
+            }
+
             appendPartPanel(node, full = true) {
                 if (!full) {
                     this.selectedBodyEl.insertAdjacentHTML('beforeend', `
@@ -2457,7 +2835,7 @@
                     <div class="envelope" id="part-envelope"></div>
                     <div class="part-actions">
                         ${target.checklistUrl ? `<button type="button" id="part-regenerate-btn">⚙️ Regenerate STL</button>` : ''}
-                        <a class="part-scad-download" href="${target.scadUrl}">💾 Download SCAD</a>
+                        ${target.scadUrl ? `<a class="part-scad-download" href="${target.scadUrl}">💾 Download SCAD</a>` : ''}
                     </div>
                     ${target.checklistUrl ? `<div class="code-header">Build readiness</div>
                     <div id="part-checklist">Loading…</div>` : ''}
@@ -2470,10 +2848,10 @@
                       </div>
                     </div>
                     <div id="part-params">Loading…</div>
-                    <div class="code-header">${target.part ? 'SCAD Source (the absorbed part view)' : 'SCAD (a few lines, from its shape)'}</div>
-                    <div id="part-scad-content" class="code-content">Loading…</div>
+                    ${target.scadUrl ? `<div class="code-header">${target.part ? 'SCAD Source (the absorbed part view)' : 'SCAD (a few lines, from its shape)'}</div>
+                    <div id="part-scad-content" class="code-content">Loading…</div>` : ''}
                 `;
-                this.loadPartScad(target);
+                if (target.scadUrl) this.loadPartScad(target);
                 if (target.checklistUrl) this.loadPartChecklist(target);
                 this.loadPartParams(target);
                 document.getElementById('part-regenerate-btn')
@@ -2488,7 +2866,8 @@
                 const made = this.pictureMarks.madeRecord(path);
                 if (!node || !(node.part_ref || made)) return false;
                 this.editorOpenFor = path;
-                this.editorFocusWanted = made ? `made:${this.siteName}:${path}` : `part:${node.part_ref}`;
+                this.editorFocusWanted = this.isCameraNode(node) ? `camera:${this.siteName}:${path}`
+                    : made ? `made:${this.siteName}:${path}` : `part:${node.part_ref}`;
                 if (this.selectedName !== path) this.selectPath(path); else this.renderSelectedPanel();
                 this.panels.open('selected');
                 this.focusEditor();
@@ -2836,6 +3215,12 @@
                 const key = nodeKey(node);
                 const mesh = this.meshByName[key];
                 if (!mesh) return;
+                // A camera's mesh stands at its lens, which is its node's position.
+                if (mesh.userData.camera) {
+                    mesh.position.copy(sceneAt(node.position.x, node.position.y, node.position.z));
+                    if (this.selectedName === key) this.showHandles(mesh);
+                    return;
+                }
                 const bounds = this.boundsFor(node, 0);
                 const { size, center } = this.boxFromBounds(bounds);
                 // Only a still-placeholder box (a unit BoxGeometry stretched
@@ -2897,6 +3282,19 @@
                 const node = this.renderNodeByKey[this.selectedName];
                 const mesh = this.meshByName[this.selectedName];
                 if (!node || !mesh || !node.footprint) return;
+                // A camera is dragged by its lens, which its mesh stands at: its
+                // pyramid, its live video and its handles follow as it goes.
+                if (mesh.userData.camera) {
+                    Object.assign(node.position, { x: mesh.position.x, y: mesh.position.z, z: mesh.position.y });
+                    this.recomputeWorldBounds(node);
+                    this.pictureMarks.posePreview(mesh.userData.camera, { position: [node.position.x, node.position.y, node.position.z] });
+                    this.showCameraHandles(mesh.userData.camera);
+                    for (const axis of ['x', 'y', 'z']) {
+                        const input = document.getElementById(`pos-${axis}`);
+                        if (input) input.value = node.position[axis];
+                    }
+                    return;
+                }
 
                 const halfExtentApX = (node.footprint.max[0] - node.footprint.min[0]) / 2;
                 const halfExtentApY = (node.footprint.max[1] - node.footprint.min[1]) / 2;
@@ -2923,6 +3321,11 @@
             }
 
             commitCurrentDrag() {
+                // A camera moved: an editor open on it reads it as it is now.
+                if (this.isCameraNode(this.renderNodeByKey[this.selectedName])) {
+                    delete this.partStages[`camera:${this.siteName}:${this.selectedName}`];
+                    if (this.partSection && this.partSection.dataset.target === `camera:${this.siteName}:${this.selectedName}`) this.partSection = null;
+                }
                 if (this.selectedName && this.focusPath.length === 0) this.submitLayout();
                 this.acted();
             }
@@ -3299,9 +3702,9 @@
                     sayBoard(this.anchors, anchorPath, boardSummary(this.boards.board(row.device.port)), { label: boardLabel(row.device), port: row.device.port });
                     if (isPrinter && row.device.port) this.ensureMarks(anchorPath, row);
                 }
-                // The machines' badges are this method's; a place badge is
-                // picture_marks.js', and stays whichever of the two runs last.
-                for (const key of this.anchors.keys()) if (!wanted.has(key) && !key.startsWith('place:')) this.anchors.remove(key);
+                // The machines' badges are this method's; a place's badge and a
+                // camera's are picture_marks.js', and stay whichever of the two runs last.
+                for (const key of this.anchors.keys()) if (!wanted.has(key) && !key.startsWith('place:') && !key.startsWith('camera:')) this.anchors.remove(key);
                 for (const [key, m] of Object.entries(this.marks)) if (!wanted.has(key)) { m.marks?.destroy(); delete this.marks[key]; }
                 // The Machine follows its board -- to the printer a board inside drives,
                 // once it is known to be one -- and goes with it: nothing is left
@@ -3573,22 +3976,22 @@
             }
 
             // The floor is selected as a node is, without being one: nothing to
-            // move, no row in Contents; Selected shows its camera and views.
+            // move, no row in Contents; Selected shows its views.
             selectFloor() {
                 this.pictureMarks.unchoose();
                 this.pictureMarks.untrace();
-                this.pictures.selectionChanged('');
                 this.selectedName = FLOOR_KEY;
                 this.hideHandles();
                 this.renderContentsList(this.currentFocusNode());
                 this.renderSelectedPanel();
                 for (const k of Object.keys(this.meshByName)) this.colorMesh(k, this.renderNodeByKey[k]);
+                this.pictureMarks.sync();
                 this.acted();
             }
-            // A place a picture or camera is pinned at: a host by its path, "" the floor.
-            selectPlace(host) {
-                if (host === '') { this.selectFloor(); return true; }
-                return this.selectPath(host);
+            // A place a picture lies on, or a camera: a host or a camera by its path, "" the floor.
+            selectPlace(path) {
+                if (path === '') { this.selectFloor(); return true; }
+                return this.selectPath(path);
             }
 
             // Re-render only what shows device state: the tree badges and
@@ -3795,7 +4198,7 @@
             // chooses the shape; on a mat outside the outlines, the host (or the
             // floor), clearing the choice.
             onPointerDown(event) {
-                if (this.transformControls.dragging) return;
+                if (this.transformControls.dragging || this.cameraDrag) return;
                 const hit = this.raycastPick(event);
                 if (!hit) return;
                 if (!hit.pick) { this.selectChild(hit.key); return; }
@@ -3932,6 +4335,9 @@
             // second, bespoke geometry engine on the client.
 
             async loadNodeGeometry(node) {
+                // A camera is drawn aimed, from the pictures' answer; until that is in,
+                // its box stands for it, and refreshCameraMeshes draws it after.
+                if (this.isCameraNode(node)) return this.buildCameraMesh(node);
                 if (node.part_ref) return this.loadPartMesh(node);
                 if (node.children.length === 0 && node.primitive) return this.buildPrimitiveMesh(node);
                 return this.loadCompositeMesh(node);
@@ -4331,6 +4737,10 @@
                     viewer.setStatus(`${intent.label}: ${answer.did}${tail}`, 'success');
                     if (action === 'reset') viewer.loadSite(viewer.siteName);
                     else if (answer.site) await viewer.applySite(answer.site);
+                    // A camera added is selected, its handles and its section shown;
+                    // one removed takes its live video with it.
+                    if (answer.added) viewer.selectPath(answer.added);
+                    if (action === 'camera:remove') viewer.pictures.cameraGone(path);
                 }
             } catch (err) {
                 viewer.setStatus(`${intent.label}: ${err.message}${tail}`, 'error');
@@ -4376,6 +4786,8 @@
             for (const el of viewer.selectedBodyEl.querySelectorAll('.view-row')) pairs.push([el, `picture:draw:${el.dataset.view}`]);
             const floor = viewer.selectedName === '@floor' ? ':@floor' : '';
             for (const el of viewer.selectedBodyEl.querySelectorAll('.view-width')) pairs.push([el, `picture:size${floor}`]);
+            // A camera's Take picture is its ring's.
+            for (const el of viewer.selectedBodyEl.querySelectorAll('.cam-take')) pairs.push([el, 'camera:take-picture']);
             annotate(ring, pairs);
         }
         // The Bench's buttons, by the verb each one is (Panels › Bench).
@@ -4456,10 +4868,10 @@
         window.apothecaryRing.lastRing = () => lastRing;
         window.apothecaryRing.refreshAddresses = refreshAddresses;
         window.apothecaryRing.annotateMachine = annotateMachine;
-        // The ring again on a host, or on the floor through the canvas ring's
+        // The ring again on a piece, or on the floor through the canvas ring's
         // Pictures › Floor, entered down to the option `into` names (an id), where
-        // the last ring stood: Allow hands over to Camera › Pin here this way when
-        // the browser named several cameras.
+        // the last ring stood: a camera's Allow hands over to its Device this way
+        // when the browser named several cameras.
         window.apothecaryRing.openOn = (host, into, at = null) =>
             window.apothecaryRing.open({ ...(host === '' ? canvasSpec(at) : nodeSpec(host, at)), into }, at);
     })();
