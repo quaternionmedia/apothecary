@@ -64,6 +64,8 @@ them in.*
 | A generated JSCAD module loaded against the real package in a test | Next round | `todo.md` |
 | The unit suite under pytest-xdist | Next round | `todo.md` |
 | A run that goes green because tests were skipped says what did not run | A person (governance) | `todo.md`'s *For governance/qm* |
+| Walkthrough pictures that change on every run though the page does not: pages 12 and 14's 3D views differ by a few pixels, and a blanked region keeps its words' width, so a time of another length draws another box (CI checks only the `.md` pages, so nothing fails) | This round | `tests/e2e/doc_capture.py`, on the picture-to-print branch |
+| The shards' recorded times do not know the firmware loop's test, so the sharder counts it as an average one | Now, with the next durations refresh | `tests/e2e/durations.json` |
 
 ## Structure
 
