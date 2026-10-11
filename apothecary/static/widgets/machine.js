@@ -245,6 +245,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         get status() { return state.port ? b().status : null; },
         get info() { return state.port ? b().info : null; },
         get timer() { return state.port ? b().timer : null; },
+        get polling() { return state.port ? !!b().polling : false; },  // a poll asked and not yet answered
         get entries() { return state.port ? b().log : []; },
     };
     const onWindow = [];  // [event, handler] pairs the module put on the window, taken off by destroy()
