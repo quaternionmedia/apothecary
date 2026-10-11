@@ -1524,9 +1524,9 @@ def test_a_pin_by_port_is_kept_as_the_board_and_survives_renumbering(
     assert row["identity"] == "FAKESERIAL1" and row["binding_source"] == "manual"
     assert row["device"]["port"] == "/dev/ttyFAKE1"
     # A port with no serial number stays a port.
-    row = c.put("/sites/garage/nodes/printer_2/device", json={"identity": "/dev/ttyFAKE0"}).json()
+    row = c.put("/sites/garage/nodes/cnc_router/device", json={"identity": "/dev/ttyFAKE0"}).json()
     assert row["identity"] == "/dev/ttyFAKE0"
-    c.delete("/sites/garage/nodes/printer_2/device")
+    c.delete("/sites/garage/nodes/cnc_router/device")
     # The board view and the status sync find the pin by the port it is on now.
     assert (
         c.get("/firmware/printers/where", params={"port": "/dev/ttyFAKE1"}).json()["board"]["path"]

@@ -260,10 +260,13 @@ def _every_ring():
         made=["disc_1"],
         here=Place(camera=cam, views=[view, view.model_copy(update={"id": "view_2"})]),
     )
+    # And a camera part, which has a ring of its own.
+    on_camera = told.model_copy(update={"camera_parts": ["camera_1"]})
     pictured = [
         resolve(Context(pointing=Pointing.CANVAS), site, picture=told),
         resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), site, picture=told),
         resolve(Context(pointing=Pointing.NODE, targets=["disc_1"]), site, picture=told),
+        resolve(Context(pointing=Pointing.NODE, targets=["camera_1"]), site, picture=on_camera),
     ]
     return pictured + [
         resolve(

@@ -99,16 +99,18 @@ def leaves_garage_as_found(page, base_url: str):
     """After the test: garage's views, cameras and kept pictures it added are taken
     back, and its layout is the code's again."""
     api = page.request
-    views = {vw["id"] for vw in api.get(f"{base_url}/sites/garage/attached").json()["views"]}
-    cameras = {c["id"] for c in api.get(f"{base_url}/cameras").json()}
+    attached = api.get(f"{base_url}/sites/garage/attached").json()
+    views = {vw["id"] for vw in attached["views"]}
+    cameras = {c["name"] for c in attached["cameras"]}
     pictures = {p["path"] for p in api.get(f"{base_url}/photos/pictures").json()}
     yield
-    for view in api.get(f"{base_url}/sites/garage/attached").json()["views"]:
+    attached = api.get(f"{base_url}/sites/garage/attached").json()
+    for view in attached["views"]:
         if view["id"] not in views:
             api.delete(f"{base_url}/sites/garage/views/{view['id']}")
-    for camera in api.get(f"{base_url}/cameras").json():
-        if camera["id"] not in cameras:
-            api.delete(f"{base_url}/cameras/{camera['id']}")
+    for camera in attached["cameras"]:
+        if camera["name"] not in cameras:
+            api.delete(f"{base_url}/sites/garage/cameras/{camera['name']}")
     for picture in api.get(f"{base_url}/photos/pictures").json():
         if picture["path"] not in pictures and picture["kept"]:
             api.delete(f"{base_url}/photos/pictures/{picture['path']}")
@@ -185,7 +187,8 @@ def test_a_view_at_the_bench_is_a_mat_with_its_outlines(
     ]
     assert "px=1024" in drawn["texture"]["url"]
     badge = page.locator(".world-badge.place-mark[data-host='workbench']")
-    expect(badge).to_contain_text("view: 3 shapes")
+    # Its words: the place, the picture drawn there, and what was found in it.
+    expect(badge).to_contain_text("workbench · world_bench.png · 3 shapes")
 
     # From above the bench, a little in front of it.
     page.evaluate(LOOK_DOWN, [900, 300, 780, 2600])

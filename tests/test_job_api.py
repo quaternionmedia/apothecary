@@ -158,7 +158,7 @@ def test_the_choices_say_where_a_machine_stands_and_what_its_job_can_name(
     parts = {p["path"]: p["name"] for p in here["parts"]}
     assert parts["footpedal"] == "footpedal"
     assert parts["esp32_blink"] == "esp32_devkitc"
-    assert parts["printer_2"] == "ender3"
+    assert parts["arduino_uno"] == "arduino_uno"
     assert parts["bin_1"] == "bin"
     assert not [p for p in parts if p == "printer_1" or p.startswith("printer_1.")]
     assert list(parts) == sorted(parts)

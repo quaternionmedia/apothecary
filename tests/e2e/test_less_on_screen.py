@@ -5,7 +5,9 @@ A busy bench, on a server of its own from the conftest's ``start_server``:
 printer_1's mainboard pinned to the simulated printer (``/dev/ttyFAKE1``,
 identified), the footpedal to the scripted Uno (``/dev/ttyFAKE0``), a view pinned
 at the workbench with three stated shapes (tests/e2e/test_picture_in_the_world.py's
-picture), and a camera pinned there. Nothing here opens a real port.
+picture), and a camera added above the floor beside the garage. Nothing here opens a
+real port. (A camera above the bench stands in its badges' way at the garage's top
+level, and three badges in one another's way merge into a count there.)
 
 - Badges: one small icon at its thing's own spot; its words on hover or while its
   thing is selected; badges in each other's way step aside or merge into a count;
@@ -35,6 +37,7 @@ SHAPES = [
 ]
 BOARD_BADGE = ".world-badge[data-path='printer_1']"
 PLACE_BADGE = ".world-badge.place-mark[data-host='workbench']"
+CAMERA_BADGE = ".world-badge.camera-mark[data-camera='camera_1']"
 FOOTPEDAL_BADGE = ".world-badge[data-path='footpedal']"
 
 
@@ -70,9 +73,12 @@ def bench(start_server, tmp_path_factory) -> str:
         http.post(
             f"/sites/garage/views/{view.json()['id']}/find", json={"finder": "stated"}
         ).raise_for_status()
+        camera = http.post("/sites/garage/cameras", json={"host": ""})
+        camera.raise_for_status()
+        assert camera.json()["camera"]["name"] == "camera_1"
         http.put(
-            "/cameras/bench_camera",
-            json={"label": "Bench webcam", "site": "garage", "path": "workbench"},
+            "/sites/garage/cameras/camera_1/device",
+            json={"id": "bench_camera", "label": "Bench webcam"},
         ).raise_for_status()
     return url
 
@@ -80,7 +86,7 @@ def bench(start_server, tmp_path_factory) -> str:
 def _open(page: Page, url: str) -> None:
     page.goto(f"{url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
-    for badge in (BOARD_BADGE, PLACE_BADGE, FOOTPEDAL_BADGE):
+    for badge in (BOARD_BADGE, PLACE_BADGE, FOOTPEDAL_BADGE, CAMERA_BADGE):
         expect(page.locator(badge)).to_be_visible(timeout=15000)
     settled(page, frames=OCCLUSION_TESTED)
 
@@ -129,11 +135,15 @@ def test_the_board_and_the_place_badge_at_the_garage_top_level_do_not_overlap(
     _open(page, bench)
     board, place = _rect(page, BOARD_BADGE), _rect(page, PLACE_BADGE)
     assert not _meet(board, place), (board, place)
+    # The camera above the bench wears a badge of its own, in no one's way either.
+    camera = _rect(page, CAMERA_BADGE)
+    assert not _meet(camera, board) and not _meet(camera, place), (camera, board, place)
     # Icons, their words folded away until hovered or selected.
     expect(page.locator(f"{BOARD_BADGE} .badge-icon")).to_have_text("⚡")
-    expect(page.locator(f"{PLACE_BADGE} .badge-icon")).to_have_text("📷")
+    expect(page.locator(f"{PLACE_BADGE} .badge-icon")).to_have_text("▣")
+    expect(page.locator(f"{CAMERA_BADGE} .badge-icon")).to_have_text("📷")
     expect(page.locator(f"{FOOTPEDAL_BADGE} .badge-icon")).to_have_text("⚡")
-    for badge in (BOARD_BADGE, PLACE_BADGE, FOOTPEDAL_BADGE):
+    for badge in (BOARD_BADGE, PLACE_BADGE, FOOTPEDAL_BADGE, CAMERA_BADGE):
         expect(page.locator(f"{badge} .badge-words")).to_be_hidden()
         assert page.locator(badge).bounding_box()["width"] < 40
     # The board's spot is the board's, not the printer's middle; the place's is the
@@ -158,9 +168,9 @@ def test_the_board_and_the_place_badge_at_the_garage_top_level_do_not_overlap(
 
 @pytest.mark.e2e
 def test_a_badges_words_show_on_hover_and_while_its_thing_is_selected(page: Page, bench: str):
-    """A badge's words -- the board's state, readings and port; the place's camera and
-    shape count -- are a card shown while the pointer is on the badge, or while its
-    thing is selected; a click still selects it."""
+    """A badge's words -- the board's state, readings and port; the place's picture
+    and shape count -- are a card shown while the pointer is on the badge, or while
+    its thing is selected; a click still selects it."""
     _open(page, bench)
     words = page.locator(f"{BOARD_BADGE} .badge-words")
     page.locator(BOARD_BADGE).hover()
@@ -176,7 +186,7 @@ def test_a_badges_words_show_on_hover_and_while_its_thing_is_selected(page: Page
     expect(place_words).to_be_hidden()
     _select(page, "workbench")
     expect(place_words).to_be_visible(timeout=3000)
-    expect(place_words).to_contain_text("view: 3 shapes")
+    expect(place_words).to_contain_text("3 shapes")
     expect(words).to_be_hidden(timeout=3000)
     expect(page.locator(PLACE_BADGE)).to_have_class(re.compile(r"\bselected\b"))
 
@@ -186,9 +196,10 @@ def test_a_badges_words_show_on_hover_and_while_its_thing_is_selected(page: Page
 
 @pytest.mark.e2e
 def test_badges_in_each_others_way_merge_into_a_count_until_zoomed_in(page: Page, bench: str):
-    """Pulled far back, the three badges stand in each other's way and merge into one
-    count, ×3, whose card lists each and whose rows do what each badge does; framed
-    again, they part."""
+    """Pulled far back, the four badges -- two boards, the bench's picture and the
+    camera beside the garage -- stand in each other's way and merge into one count, ×4,
+    whose card lists each and whose rows do what each badge does; framed again,
+    they part."""
     _open(page, bench)
     page.evaluate(
         """() => { const v = window.fractalViewer;
@@ -199,14 +210,19 @@ def test_badges_in_each_others_way_merge_into_a_count_until_zoomed_in(page: Page
     page.evaluate(FRAMES, 3)
     count = page.locator(".world-badge.cluster")
     expect(count).to_have_count(1, timeout=3000)
-    expect(count.locator(".badge-icon")).to_have_text("×3")
-    for badge, key in ((BOARD_BADGE, "printer_1"), (PLACE_BADGE, "place:workbench"), (FOOTPEDAL_BADGE, "footpedal")):
+    expect(count.locator(".badge-icon")).to_have_text("×4")
+    for badge, key in (
+        (BOARD_BADGE, "printer_1"),
+        (PLACE_BADGE, "place:workbench"),
+        (FOOTPEDAL_BADGE, "footpedal"),
+        (CAMERA_BADGE, "camera:camera_1"),
+    ):
         expect(page.locator(badge)).to_have_class(re.compile(r"\bmerged\b"))
-        assert page.evaluate("(k) => window.fractalViewer.anchors.drawn(k).merged", key) == 3
+        assert page.evaluate("(k) => window.fractalViewer.anchors.drawn(k).merged", key) == 4
     count.hover()
     rows = count.locator(".cluster-row")
-    expect(rows).to_have_count(3, timeout=3000)
-    rows.filter(has_text="view: 3 shapes").click()
+    expect(rows).to_have_count(4, timeout=3000)
+    rows.filter(has_text="3 shapes").click()
     assert page.evaluate("() => window.fractalViewer.selectedName") == "workbench"
 
     page.evaluate(
@@ -215,7 +231,7 @@ def test_badges_in_each_others_way_merge_into_a_count_until_zoomed_in(page: Page
     )
     page.evaluate(FRAMES, 3)
     expect(count).to_have_count(0, timeout=3000)
-    for badge in (BOARD_BADGE, PLACE_BADGE, FOOTPEDAL_BADGE):
+    for badge in (BOARD_BADGE, PLACE_BADGE, FOOTPEDAL_BADGE, CAMERA_BADGE):
         expect(page.locator(badge)).to_be_visible()
 
 
@@ -251,6 +267,75 @@ def test_open_cards_never_overlap_and_keep_off_the_edges(page: Page, bench: str)
         got = _rect(page, ".world-badge.open .badge-words")
         assert got["l"] >= world["l"] + 8 and got["r"] <= world["r"] - 8, (edge, got, world)
         assert got["t"] >= world["t"] + 8 and got["b"] <= world["b"] - 8, (edge, got, world)
+
+
+# Slide the view until printer_1's board badge stands at the world's bottom-left,
+# where the hint bar is.
+TO_THE_HINT = """async () => {
+    const v = window.fractalViewer;
+    for (let i = 0; i < 6; i++) {
+        const s = v.anchors.at('printer_1');
+        const h = v.canvas.clientHeight;
+        const dx = s.x - 60, dy = s.y - (h - 6);
+        const k = v.camera.position.distanceTo(v.orbitControls.target)
+            * 2 * Math.tan(v.camera.fov * Math.PI / 360) / h;
+        const e = v.camera.matrixWorld.elements;
+        for (const [i, key] of [[0, 'x'], [1, 'y'], [2, 'z']]) {
+            const d = e[i] * dx * k - e[4 + i] * dy * k;
+            v.camera.position[key] += d;
+            v.orbitControls.target[key] += d;
+        }
+        v.orbitControls.update();
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    }
+}"""
+
+
+@pytest.mark.e2e
+def test_an_open_card_keeps_off_the_hint_bar(page: Page, bench: str):
+    """A first visit shows the hint bar at the world's bottom-left; the selected
+    printer's board, slid down onto it, opens its card clear of the bar, and
+    inside the world."""
+    _open(page, bench)
+    _select(page, "printer_1")
+    page.evaluate(TO_THE_HINT)
+    page.evaluate(FRAMES, 3)
+    hint = _rect(page, "#viewer-hint")
+    board = _rect(page, BOARD_BADGE)
+    assert board["b"] > hint["t"], (board, hint)  # the badge is down by the bar
+    expect(page.locator("#viewer-hint")).not_to_have_class(re.compile(r"\bfaded\b"))
+    card = page.locator(".world-badge.open .badge-words")
+    expect(card).to_have_count(1)
+    expect(card).to_contain_text(PRINTER)
+    got = _rect(page, ".world-badge.open .badge-words")
+    assert not _meet(got, hint), (got, hint)
+    world = _rect(page, ".viewer-panel")
+    assert got["t"] >= world["t"] + 8 and got["b"] <= world["b"] - 8, (got, world)
+
+
+@pytest.mark.e2e
+def test_a_floated_panel_keeps_clear_of_the_closed_tabs_the_hint_and_the_ladder(
+    page: Page, bench: str
+):
+    """A panel floated from the rail's strip lands clear of the row where closed
+    panels' tabs stand -- whether a tab stands there yet or not -- and of the
+    header, the hint bar and the depth ladder, as an open card keeps clear of them,
+    and inside the world. Selected, closed after, is a tab beside it, not over it."""
+    _open(page, bench)
+    expect(page.locator("#viewer-hint")).not_to_have_class(re.compile(r"\bfaded\b"))
+    pictures_tab = page.locator(".panel-rail .rail-tab[data-panel='pictures']")
+    pictures_tab.locator(".rail-tab-name").click()
+    pictures_tab.locator(".rail-tab-float").click()
+    free = ".panel-free-layer .panel[data-panel='pictures']"
+    expect(page.locator(free)).to_be_visible(timeout=3000)
+    page.locator(".panel[data-panel='selected'] .panel-close").click()
+    expect(page.locator(".panel-tabs .panel-tab[data-panel='selected']")).to_be_visible()
+    got = _rect(page, free)
+    for other in (".panel-tabs", "#viewer-hint", "#minimap", ".toolbar"):
+        assert not _meet(got, _rect(page, other)), (other, got, _rect(page, other))
+    world = _rect(page, ".viewer-panel")
+    assert world["l"] <= got["l"] and got["r"] <= world["r"], (got, world)
+    assert world["t"] <= got["t"] and got["b"] <= world["b"], (got, world)
 
 
 # --------------------------------------------------------------------------
@@ -452,12 +537,38 @@ def test_the_header_is_one_row_at_1024_px(page: Page, bench: str):
 
 
 @pytest.mark.e2e
+def test_the_tab_strip_and_the_hint_are_one_line_at_1024_px(page: Page, bench: str):
+    """At 1024 px wide, with a Machine open, the rail's tab strip is one row -- the
+    Machine's tab names its node, the whole title with the port its tooltip -- and
+    the hint bar is one line, nothing of it cut."""
+    page.set_viewport_size({"width": 1024, "height": 700})
+    _open(page, bench)
+    cut = page.evaluate(
+        "() => { const h = document.getElementById('viewer-hint'); "
+        "return h.scrollWidth > h.clientWidth; }"
+    )
+    assert not cut
+    assert page.locator("#viewer-hint").bounding_box()["height"] < 40  # one line
+    page.locator(BOARD_BADGE).click()
+    _rail_machine(page)
+    tab = page.locator(".panel-rail .rail-tab[data-panel='machine'] .rail-tab-name")
+    expect(tab).to_have_text("printer_1")
+    expect(tab).to_have_attribute("title", re.compile(re.escape(PRINTER)))
+    tops = page.evaluate(
+        "() => [...document.querySelectorAll('.panel-rail .rail-tab')]"
+        ".map((t) => Math.round(t.getBoundingClientRect().top))"
+    )
+    assert len(tops) == 3 and len(set(tops)) == 1, tops
+
+
+@pytest.mark.e2e
 def test_the_view_menu_holds_snap_detail_and_outlines_and_the_ring_backs_each(
     page: Page, bench: str
 ):
     """Snap to grid, Detail and Assembly outlines are in one ⚙ View menu, folded until
     opened and folded away by a press elsewhere; each wears the address of its cell of
-    the canvas ring's Panels › View, and the cell does what the item does."""
+    the canvas ring's View (a cell of its own, in Fit's seat, with Fit first in it),
+    and the cell does what the item does."""
     _open(page, bench)
     for item in ("#snap-toggle", "#detail-mode", "#overlay-toggle"):
         expect(page.locator(item)).to_be_hidden()
@@ -465,34 +576,42 @@ def test_the_view_menu_holds_snap_detail_and_outlines_and_the_ring_backs_each(
     for item in ("#snap-toggle", "#detail-mode", "#overlay-toggle"):
         expect(page.locator(item)).to_be_visible()
     label = lambda item: page.locator(f"#view-menu label:has({item})")  # noqa: E731
-    expect(label("#snap-toggle")).to_have_attribute("data-address", "918", timeout=5000)
-    expect(label("#detail-mode")).to_have_attribute("data-address", "9168")
-    expect(label("#overlay-toggle")).to_have_attribute("data-address", "912")
+    expect(label("#snap-toggle")).to_have_attribute("data-address", "46", timeout=5000)
+    expect(label("#detail-mode")).to_have_attribute("data-address", "428")
+    expect(label("#overlay-toggle")).to_have_attribute("data-address", "44")
+    expect(label("#walls-toggle")).to_have_attribute("data-address", "49")
+    expect(page.locator("#view-menu > summary")).to_have_attribute("title", re.compile("⌗4"))
     page.locator("#snap-toggle").uncheck()
     assert page.evaluate("() => window.fractalViewer.transformControls.translationSnap") is None
     page.locator("#status").click()
     expect(page.locator("#snap-toggle")).to_be_hidden()
 
-    # Panels › View › Snap to grid: the tick-box's own work, and the tick-box follows.
+    # View › Snap to grid: the tick-box's own work, and the tick-box follows.
     _canvas_ring(page)
-    for digit in "918":
+    for digit in "46":
         page.keyboard.press(digit)
-    expect(page.locator("#status")).to_contain_text("⌗918")
+    expect(page.locator("#status")).to_contain_text("⌗46")
     assert page.evaluate("() => window.fractalViewer.transformControls.translationSnap") == 50
     expect(page.locator("#snap-toggle")).to_be_checked()
-    # Panels › View › Detail › Dot, and › Outlines.
+    # View › Detail › Dot, and › Outlines.
     _canvas_ring(page)
-    for digit in "9162":
+    for digit in "422":
         page.keyboard.press(digit)
     expect(page.locator("#detail-mode")).to_have_value("dot")
     page.wait_for_function(
         "() => Object.values(window.fractalViewer.meshByName).some((m) => m.userData.isDot)"
     )
     _canvas_ring(page)
-    for digit in "912":
+    for digit in "44":
         page.keyboard.press(digit)
     expect(page.locator("#overlay-toggle")).not_to_be_checked()
     assert page.evaluate("() => Object.keys(window.fractalViewer.compoundOverlayByKey).length") == 0
+    # View › Fit: Fit, one ring down from where it was.
+    _canvas_ring(page)
+    for digit in "48":
+        page.keyboard.press(digit)
+    expect(page.locator("#status")).to_contain_text("Framed")
+    expect(page.locator("#status")).to_contain_text("⌗48")
 
 
 # --------------------------------------------------------------------------
@@ -513,7 +632,7 @@ def test_problems_are_one_folded_line_in_site_and_the_headers_count_opens_it(
     problems = page.locator("#site-problems")
     expect(problems).to_be_hidden()
     _select(page, "printer_1")
-    page.locator("#pos-x").fill("650")
+    page.locator("#pos-x").fill("1160")
     page.locator("#pos-x").press("Tab")
     expect(page.locator("#validity-indicator")).to_contain_text("1 violation", timeout=5000)
     expect(problems).to_be_visible()
@@ -525,7 +644,7 @@ def test_problems_are_one_folded_line_in_site_and_the_headers_count_opens_it(
 
     page.locator("#validity-indicator").click()
     expect(rows.first).to_be_visible(timeout=2000)
-    expect(rows.first).to_have_text("printer_1 and printer_2 overlap")
+    expect(rows.first).to_have_text("printer_1 and footpedal overlap")
     _select(page, "workbench")
     rows.first.click()
     assert page.evaluate("() => window.fractalViewer.selectedName") == "printer_1"
@@ -552,10 +671,10 @@ def test_the_hint_shows_on_a_first_visit_fades_after_a_few_actions_and_question_
     faded = re.compile(r"\bfaded\b")
     expect(hint).not_to_have_class(faded)
     expect(hint).to_have_css("opacity", "1")
-    for path in ("workbench", "printer_1", "printer_2"):
+    for path in ("workbench", "printer_1", "cnc_router"):
         _select(page, path)
     expect(hint).not_to_have_class(faded)
-    page.evaluate("() => window.fractalViewer.zoomIn('printer_2')")
+    page.evaluate("() => window.fractalViewer.zoomIn('cnc_router')")
     expect(hint).to_have_class(faded)
     expect(hint).to_have_css("opacity", "0", timeout=3000)
 
@@ -567,7 +686,7 @@ def test_the_hint_shows_on_a_first_visit_fades_after_a_few_actions_and_question_
     page.keyboard.press("?")
     expect(hint).to_have_class(faded)
     page.keyboard.press("?")
-    for path in ("workbench", "printer_1", "printer_2", "printer_3"):
+    for path in ("workbench", "printer_1", "cnc_router", "storage_shelving"):
         _select(page, path)
     expect(hint).to_have_class(faded)  # and fades again after as many
 
@@ -584,7 +703,7 @@ def test_the_hint_shows_and_fades_with_no_storage(page: Page, bench: str):
     _open(page, bench)
     hint = page.locator("#viewer-hint")
     expect(hint).not_to_have_class(re.compile(r"\bfaded\b"))
-    for path in ("workbench", "printer_1", "printer_2", "printer_3"):
+    for path in ("workbench", "printer_1", "cnc_router", "storage_shelving"):
         _select(page, path)
     expect(hint).to_have_class(re.compile(r"\bfaded\b"))
     assert errors == []
@@ -624,8 +743,8 @@ WALL = """() => {
 def test_a_click_passes_through_a_wall_and_the_toggle_restores_it(page: Page, bench: str):
     """The garage's walls are drawn faded, and a click on them in the world selects what
     is behind or inside; Contents still selects a wall, drawn solid then and with its
-    handles; ⚙ View › Walls selectable -- or Panels › View › Select walls on the ring --
-    lets a click pick it again."""
+    handles; ⚙ View › Walls selectable -- or View › Select walls on the ring -- lets a
+    click pick it again."""
     _open(page, bench)
     wall = page.evaluate(WALL)
     assert wall["opacity"] == pytest.approx(0.25, abs=0.01) and wall["through"], wall
@@ -642,6 +761,9 @@ def test_a_click_passes_through_a_wall_and_the_toggle_restores_it(page: Page, be
     assert page.evaluate("() => window.fractalViewer.selectedName") == spot["behind"]
     assert page.evaluate(WALL)["opacity"] == pytest.approx(0.25, abs=0.01)
 
+    # The floor selected, which wears no handles: the move arrows of the piece behind
+    # can stand at the spot, and a press on them is a drag, not a click.
+    page.evaluate("() => window.fractalViewer.selectPlace('')")
     page.locator("#view-menu > summary").click()
     page.locator("#walls-toggle").check()
     page.locator("#status").click()
@@ -650,9 +772,9 @@ def test_a_click_passes_through_a_wall_and_the_toggle_restores_it(page: Page, be
 
     # The ring's cell turns it back off: the click passes through again.
     _canvas_ring(page)
-    for digit in "914":
+    for digit in "49":
         page.keyboard.press(digit)
-    expect(page.locator("#status")).to_contain_text("⌗914")
+    expect(page.locator("#status")).to_contain_text("⌗49")
     expect(page.locator("#walls-toggle")).not_to_be_checked()
     page.mouse.click(spot["x"], spot["y"])
     assert page.evaluate("() => window.fractalViewer.selectedName") == spot["behind"]
@@ -664,5 +786,5 @@ def test_a_faded_wall_does_not_dim_the_badges_inside(page: Page, bench: str):
     behind something."""
     _open(page, bench)
     page.evaluate(FRAMES, OCCLUSION_TESTED)
-    for badge in (BOARD_BADGE, PLACE_BADGE, FOOTPEDAL_BADGE):
+    for badge in (BOARD_BADGE, PLACE_BADGE, FOOTPEDAL_BADGE, CAMERA_BADGE):
         expect(page.locator(badge)).not_to_have_class(re.compile(r"\bbehind\b"))

@@ -28,7 +28,7 @@ them in.*
 
 | Item | Order | Where |
 |---|---|---|
-| The review pull request split into a stack, each a run of the review branch's own history, none rewritten: #21 at the bottom, then the 09-26 review's workstreams, pictures in the world, the installers, the consolidation, and cameras and clutter on top. #22 is closed with a pointer to the stack (decided 2026-10-08) | Now | this page |
+| The review pull request split into a stack, each a run of the review branch's own history, none rewritten: #21 at the bottom, then the 09-26 review's workstreams, pictures in the world, the installers, the consolidation, and cameras and clutter on top. #22 is closed with a pointer to the stack (decided 2026-10-08). *Done 2026-10-09: #24 to #29 above #21, and #30 holds the review branch.* | Now | GitHub |
 | The Rust work and the UI flows each a pull request of its own, stacked on the cameras-and-clutter one | This round | the Rust and flows plans |
 | The dependency bumps Dependabot opened, closed or rebased once the stack lands | A person, after the stack | GitHub |
 | Merged worktree branches left by finished agent runs (`worktree-*`), deleted | Now | local only |
@@ -64,6 +64,8 @@ them in.*
 | A generated JSCAD module loaded against the real package in a test | Next round | `todo.md` |
 | The unit suite under pytest-xdist | Next round | `todo.md` |
 | A run that goes green because tests were skipped says what did not run | A person (governance) | `todo.md`'s *For governance/qm* |
+| Walkthrough pictures that change on every run though the page does not: pages 12 and 14's 3D views differ by a few pixels, and a blanked region keeps its words' width, so a time of another length draws another box (CI checks only the `.md` pages, so nothing fails) | This round | `tests/e2e/doc_capture.py`, on the picture-to-print branch |
+| The shards' recorded times do not know the firmware loop's test, so the sharder counts it as an average one | Now, with the next durations refresh | `tests/e2e/durations.json` |
 
 ## Structure
 

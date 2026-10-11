@@ -1,0 +1,34 @@
+{
+  "name": "webcam_clamp_arm",
+  "description": "A stub, for later: a webcam on a clamp arm -- a clamp for a bench's edge and a jointed arm, the webcam at its end, aimed where the arm is bent. Only the bare webcam is drawn for now.",
+  "category": "camera",
+  "tags": [
+    "camera",
+    "webcam",
+    "clamp",
+    "stub"
+  ],
+  "preview_color": [
+    0.3,
+    0.3,
+    0.3
+  ],
+  "source": {
+    "title": "webcam on a clamp arm, a stub",
+    "author": "Quaternion Media",
+    "license": "MIT",
+    "note": "A placeholder that draws the library's bare webcam; the clamp and arm are to come."
+  },
+  "bounds": {
+    "min": [
+      -45.0,
+      -15.0,
+      0.0
+    ],
+    "max": [
+      45.0,
+      15.0,
+      34.0
+    ]
+  }
+}

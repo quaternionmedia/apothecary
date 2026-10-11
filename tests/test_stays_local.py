@@ -367,7 +367,7 @@ def test_a_client_elsewhere_is_refused_by_every_route(path):
 @pytest.mark.parametrize("arrived_at", ["http://evil.example", "http://192.168.1.5:8000"])
 def test_a_request_arriving_by_another_name_or_address_is_refused(arrived_at):
     """A page from elsewhere that pointed its own name at 127.0.0.1 arrives from loopback."""
-    assert TestClient(app, base_url=arrived_at).get("/cameras").status_code == 403
+    assert TestClient(app, base_url=arrived_at).get("/placed").status_code == 403
 
 
 @pytest.mark.parametrize(
@@ -388,7 +388,7 @@ def test_a_request_arriving_by_another_name_or_address_is_refused(arrived_at):
     ],
 )
 def test_the_host_asked_for_must_be_this_machine(host, status):
-    assert TestClient(app).get("/cameras", headers={"host": host}).status_code == status
+    assert TestClient(app).get("/placed", headers={"host": host}).status_code == status
 
 
 def test_a_peer_the_server_cannot_name_is_not_this_machine():
@@ -406,9 +406,9 @@ def test_a_page_on_another_origin_cannot_send_here():
     here = TestClient(app)
     foreign = {"origin": "https://evil.example", "sec-fetch-site": "cross-site"}
     assert here.post("/photos/gather", json={}, headers=foreign).status_code == 403
-    assert here.get("/cameras", headers=foreign).status_code == 403
-    assert here.get("/cameras", headers={"sec-fetch-site": "same-site"}).status_code == 403
-    assert here.get("/cameras", headers={"origin": "null"}).status_code == 403
+    assert here.get("/placed", headers=foreign).status_code == 403
+    assert here.get("/placed", headers={"sec-fetch-site": "same-site"}).status_code == 403
+    assert here.get("/placed", headers={"origin": "null"}).status_code == 403
     link = {
         "sec-fetch-site": "cross-site",
         "sec-fetch-mode": "navigate",
@@ -417,8 +417,8 @@ def test_a_page_on_another_origin_cannot_send_here():
     assert here.get("/viewer/sites/garage", headers=link).status_code == 200
     assert here.post("/photos/gather", json={}, headers=link).status_code == 403
     own = {"origin": "http://127.0.0.1:8000", "sec-fetch-site": "same-origin"}
-    assert here.get("/cameras", headers=own).status_code == 200
-    assert here.get("/cameras", headers={"sec-fetch-site": "none"}).status_code == 200
+    assert here.get("/placed", headers=own).status_code == 200
+    assert here.get("/placed", headers={"sec-fetch-site": "none"}).status_code == 200
 
 
 @pytest.mark.parametrize(
@@ -521,10 +521,11 @@ def test_the_picture_root_is_a_folder_of_pictures_never_everything(monkeypatch, 
 def test_views_write_nothing_outside_the_root_its_two_folders_and_the_state_folder(
     monkeypatch, tmp_path
 ):
-    """Pinning, finding, sizing, making, dropping and forgetting a view keeps nothing anywhere
-    but the picture root's own two folders and the state folder (cameras.json): views,
-    made pieces and the finder cache are held in memory. And no picture the server
-    answers with -- whole, or at a size for a mat -- may enter the browser's disk cache."""
+    """Adding a camera, pinning, finding, sizing, making, dropping and forgetting a view
+    keeps nothing anywhere but the picture root's own two folders and the state folder
+    (the camera records): views, made pieces and the finder cache are held in memory.
+    And no picture the server answers with -- whole, or at a size for a mat -- may
+    enter the browser's disk cache."""
     import io
 
     from PIL import Image, ImageDraw
@@ -551,15 +552,19 @@ def test_views_write_nothing_outside_the_root_its_two_folders_and_the_state_fold
     before = everything()
     here = TestClient(app)
     try:
-        here.put("/cameras/cam1", json={"site": "garage", "path": "workbench"})
+        _site_store.reset("garage")
+        camera = here.post("/sites/garage/cameras", json={"host": "workbench"}).json()
+        here.put(
+            f"/sites/garage/cameras/{camera['camera']['name']}/device",
+            json={"id": "cam1", "label": "desk webcam"},
+        )
         kept = here.post(
             "/photos/pictures",
             params={
                 "name": "desk",
                 "kept": "upload",
                 "site": "garage",
-                "host": "workbench",
-                "camera": "cam1",
+                "camera": camera["camera"]["name"],
             },
             content=buf.getvalue(),
         ).json()
@@ -583,7 +588,9 @@ def test_views_write_nothing_outside_the_root_its_two_folders_and_the_state_fold
         here.delete(f"/photos/pictures/{kept['path']}")
         here.delete("/photos/pictures")
     finally:
-        _site_store.reset("garage")
+        from test_views_api import forget_cameras
+
+        forget_cameras()
     written = everything() - before
     allowed = (root / "captures", root / "uploads", state)
     stray = [p for p in written if not any(p == a or a in p.parents for a in allowed)]
@@ -603,9 +610,7 @@ def test_what_is_kept_is_the_persons_alone(monkeypatch, tmp_path):
     old_umask = os.umask(0o000)  # the loosest umask there is
     try:
         here = TestClient(app)
-        assert here.put(
-            "/cameras/abc123", json={"site": "garage", "path": "workbench"}
-        ).status_code in (200, 201)
+        assert here.post("/sites/garage/cameras", json={"host": "workbench"}).status_code == 201
         import io
 
         from PIL import Image
@@ -615,9 +620,14 @@ def test_what_is_kept_is_the_persons_alone(monkeypatch, tmp_path):
         assert here.post("/photos/pictures?name=x", content=buf.getvalue()).status_code == 201
     finally:
         os.umask(old_umask)
+        from test_views_api import forget_cameras
+
+        kept = (tmp_path / "state" / "camera_parts.json").stat()
+        forget_cameras()
     for folder in (tmp_path / "state", tmp_path / "pics" / "captures"):
         assert folder.is_dir(), folder
         assert stat.S_IMODE(folder.stat().st_mode) == 0o700, folder
+    assert stat.S_IMODE(kept.st_mode) == 0o600
 
 
 def test_a_part_named_for_a_print_that_is_markup_is_refused():

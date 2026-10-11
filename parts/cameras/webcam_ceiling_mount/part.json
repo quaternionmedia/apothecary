@@ -1,0 +1,34 @@
+{
+  "name": "webcam_ceiling_mount",
+  "description": "A stub, for later: a webcam on a ceiling mount -- a plate screwed to the ceiling and a drop rod, the webcam hanging below it looking down at the room. Only the bare webcam is drawn for now.",
+  "category": "camera",
+  "tags": [
+    "camera",
+    "webcam",
+    "ceiling",
+    "stub"
+  ],
+  "preview_color": [
+    0.3,
+    0.3,
+    0.3
+  ],
+  "source": {
+    "title": "webcam on a ceiling mount, a stub",
+    "author": "Quaternion Media",
+    "license": "MIT",
+    "note": "A placeholder that draws the library's bare webcam; the mount and rod are to come."
+  },
+  "bounds": {
+    "min": [
+      -45.0,
+      -15.0,
+      0.0
+    ],
+    "max": [
+      45.0,
+      15.0,
+      34.0
+    ]
+  }
+}

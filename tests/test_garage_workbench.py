@@ -26,10 +26,13 @@ def _printer_structures(site):
     return [s for s in site.children if s.name in BENCH_MOUNTED_STRUCTURES]
 
 
-def test_site_has_the_bench_printers_and_the_expanded_garage_systems():
+def test_site_has_the_bench_printer_and_the_expanded_garage_systems():
+    """One printer for now (the owner's decision of 2026-10-04): printer_1, which the
+    real board is pinned to, at the bench's left end, the bench's middle clear."""
     site = create_example_site()
     names = {s.name for s in site.children}
-    assert {"workbench", "printer_1", "printer_2", "printer_3"} <= names
+    assert {"workbench", "printer_1"} <= names
+    assert not {"printer_2", "printer_3"} & names
     assert {
         "garage_building",
         "lighting",
@@ -77,13 +80,12 @@ def test_bench_and_printers_render_with_expected_systems():
     assert "Structure: workbench (Steel frame, pine top)" in rendered
     assert "Substructure: frame_system" in rendered
     assert "Substructure: gantry_system" in rendered
-    for i in (1, 2, 3):
-        assert f"Structure: printer_{i} (Aluminum extrusion + PETG)" in rendered
+    assert "Structure: printer_1 (Aluminum extrusion + PETG)" in rendered
     assert rendered.count("Feature: leg_") == 4
     assert "Feature: cable_pass_through" in rendered
-    assert rendered.count("Feature: left_post") == 3
-    assert rendered.count("Feature: right_post") == 3
-    assert rendered.count("Feature: gantry_bar") == 3
+    assert rendered.count("Feature: left_post") == 1
+    assert rendered.count("Feature: right_post") == 1
+    assert rendered.count("Feature: gantry_bar") == 1
 
 
 def test_garage_shell_fixtures_storage_and_cnc_router_render():
@@ -134,8 +136,9 @@ def test_validate_garage_layout_is_clean_by_default():
 
 def test_validate_garage_layout_catches_overlap():
     site = create_example_site()
-    printer_1, printer_2 = site.children[1], site.children[2]
-    printer_2.position = Vector3D(x=printer_1.position.x, y=printer_1.position.y, z=printer_1.position.z)
+    printer_1 = site.children[1]
+    uno = next(s for s in site.children if s.name == "arduino_uno")
+    uno.position = Vector3D(x=printer_1.position.x, y=printer_1.position.y, z=uno.position.z)
 
     report = validate_garage_layout(site)
     assert not report.is_valid

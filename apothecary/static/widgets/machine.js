@@ -24,11 +24,12 @@
  * query, reconnect, reset and release. Everything else that draws the board
  * reads the same model, so nothing polls it a second time.
  *
- * mountMachine(root, { base, port, host, boards, kind, pin, say }) renders into
- * `root` and returns the handle the ring drives (carry, pairs, device) and the
- * tests read (state, ctl, level, print). `host` is "popup": the world's, one
- * board and everything inline (the monitor page, the other host, is a link to
- * the world now). `boards` is the page's model, made here when none is given.
+ * mountMachine(root, { base, port, host, boards, kind, inPrinter, pin, say })
+ * renders into `root` and returns the handle the ring drives (carry, pairs,
+ * device) and the tests read (state, ctl, level, print). `host` is "world": the
+ * world's page, a tab of its rail or floated, one board and everything inline in
+ * one column (the monitor page, the other host, is a link to the world now).
+ * `boards` is the page's model, made here when none is given.
  * `kind` is "printer" or "devkit"; left out, it is whatever the board is. `inPrinter`
  * says the board is pinned inside a printer: a printer's board, never flashed,
  * whatever it has been identified as so far, so its Flashing card folds away and
@@ -228,7 +229,7 @@ const BY_CMD = {
 };
 
 
-export function mountMachine(root, { base = "", port = "", host = "popup", boards = null, kind = null, inPrinter = false, pin = null, say = null } = {}) {
+export function mountMachine(root, { base = "", port = "", host = "world", boards = null, kind = null, inPrinter = false, pin = null, say = null } = {}) {
     const BASE = base;
     const model = boards || mountBoards({ base });
     root.classList.add("machine", `host-${host}`);
@@ -244,6 +245,7 @@ export function mountMachine(root, { base = "", port = "", host = "popup", board
         get status() { return state.port ? b().status : null; },
         get info() { return state.port ? b().info : null; },
         get timer() { return state.port ? b().timer : null; },
+        get polling() { return state.port ? !!b().polling : false; },  // a poll asked and not yet answered
         get entries() { return state.port ? b().log : []; },
     };
     const onWindow = [];  // [event, handler] pairs the module put on the window, taken off by destroy()

@@ -117,9 +117,9 @@ def test_the_toolbar_button_and_right_click_open_it_too(page: Page, ring_url: st
     page.keyboard.press("Escape")
     expect(page.locator("#ring-overlay")).to_have_count(0)
     # Right-click on another row opens that row's ring, and selects the row.
-    page.locator("#contents-list .contents-item[data-path='printer_2']").click(button="right")
+    page.locator("#contents-list .contents-item[data-path='cnc_router']").click(button="right")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    assert _title(page) == "printer_2"
+    assert _title(page) == "cnc_router"
     # Nothing pinned: no Device option at all, not a greyed one, so Why this moves up a cell.
     assert _wedges(page) == {
         "8": "Zoom in",
@@ -128,9 +128,8 @@ def test_the_toolbar_button_and_right_click_open_it_too(page: Page, ring_url: st
         "4": "Into",
         "9": "Camera",
         "3": "Picture",
-        "1": "Part",
     }
-    expect(page.locator("#contents-list .contents-item[data-path='printer_2']")).to_have_class(
+    expect(page.locator("#contents-list .contents-item[data-path='cnc_router']")).to_have_class(
         "contents-item selected"
     )
     page.keyboard.press("Escape")
@@ -298,13 +297,13 @@ def test_the_pointer_uses_the_same_cells(page: Page, ring_url: str):
     expect(page.locator("#ring-overlay")).to_have_attribute("aria-activedescendant", "ring-cell-6")
     expect(page.locator("#ring-cell-6")).to_have_attribute("data-cell", "6")
     # Over an empty cell the pointer highlights nothing. printer_1's ring is
-    # full (its eighth cell is Part), so that is shown on printer_2's, which
-    # has no board pinned and leaves cell 7 empty.
+    # full (its eighth cell is Part), so that is shown on the CNC router's, which
+    # has no board pinned and no part, and leaves cell 7 empty.
     page.keyboard.press("Escape")
     expect(page.locator("#ring-overlay")).to_have_count(0)
-    page.locator("#contents-list .contents-item[data-path='printer_2']").click(button="right")
+    page.locator("#contents-list .contents-item[data-path='cnc_router']").click(button="right")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    assert _title(page) == "printer_2"
+    assert _title(page) == "cnc_router"
     box = page.locator("#ring-svg").bounding_box()
     cx, cy = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
     page.mouse.move(cx - 51, cy - 51)  # up-left: cell 7, empty on this ring, so nothing
@@ -688,9 +687,7 @@ def test_a_closed_panel_stays_closed_and_the_ring_reopens_it(page: Page, ring_ur
     page.keyboard.press(panels_cell)
     assert _title(page) == "Panels"
     inner = _wedges(page)
-    assert sorted(inner.values()) == [
-        "Bench", "Machine", "Pictures", "Rail", "Selected", "Site", "View",
-    ]  # fmt: skip
+    assert sorted(inner.values()) == ["Bench", "Machine", "Pictures", "Rail", "Selected", "Site"]
     site_cell = next(cell for cell, label in inner.items() if label == "Site")
     page.keyboard.press(site_cell)
     expect(page.locator("#ring-overlay")).to_have_count(0)
