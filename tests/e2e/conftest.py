@@ -22,6 +22,7 @@ import apothecary  # noqa: F401  -- the guard, before base_url connects anywhere
 # tests/ itself, for helpers shared with the unit tests (firmware_helpers).
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from browsers import launch, launched  # noqa: E402
 from doc_capture import GENERATED_DOCS_ROOT, DocRecorder, Walkthrough  # noqa: E402
 from firmware_helpers import write_fake_arduino_cli  # noqa: E402
 from ports import refuse_a_held_port  # noqa: E402
@@ -313,8 +314,15 @@ FAKE_CAMERA = ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-st
 
 
 @pytest.fixture(scope="session")
+def launch_browser(launch_browser):
+    """pytest-playwright's, which `browser` and so `page` launch through, saying in one
+    line when Chromium is not installed."""
+    return lambda **options: launched(lambda: launch_browser(**options))
+
+
+@pytest.fixture(scope="session")
 def _camera_browser(browser_type):
-    browser = browser_type.launch(args=FAKE_CAMERA)
+    browser = launch(browser_type, args=FAKE_CAMERA)
     yield browser
     browser.close()
 

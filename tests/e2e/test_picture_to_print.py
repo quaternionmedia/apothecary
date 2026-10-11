@@ -39,6 +39,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from browsers import launch
 from playwright.sync_api import expect
 from slicer_helpers import write_fake_orcaslicer
 from test_camera import _drag
@@ -144,12 +145,13 @@ def _drawing_camera_browser(browser_type):
     os.close(fd)
     _y4m(part)
     os.replace(part, DRAWING)
-    browser = browser_type.launch(
+    browser = launch(
+        browser_type,
         args=[
             "--use-fake-ui-for-media-stream",
             "--use-fake-device-for-media-stream",
             f"--use-file-for-fake-video-capture={DRAWING}",
-        ]
+        ],
     )
     yield browser
     browser.close()
