@@ -6,6 +6,7 @@ from click.testing import CliRunner
 
 from apothecary.cli import cli
 from apothecary.cli.main import REPOSITORY_COMMANDS
+from apothecary.projects.parts.skeleton import ROOT
 
 
 def _sections(text: str) -> dict:
@@ -39,6 +40,7 @@ def test_the_help_ends_with_the_three_steps_and_the_page_that_says_them():
     steps.append(tail.index("apothecary serve --demo"))
     assert steps == sorted(steps)
     assert "walkthrough/00-getting-started.md" in tail
+    assert (ROOT / "walkthrough" / "00-getting-started.md").is_file()
 
 
 def test_check_ends_with_the_next_step(monkeypatch):

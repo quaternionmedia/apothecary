@@ -7,10 +7,11 @@ HTTP API is described at `/openapi.json`, the commands by `apothecary --help`.
 ## The walkthrough
 
 `walkthrough/` is the executable path through this repository, run by
-`pytest walkthrough`. Start there.
+`pytest walkthrough`. Start there, at page 00.
 
 | Page | |
 |---|---|
+| [00 — Getting started](../walkthrough/00-getting-started.md) | Install, `apothecary check`, `apothecary openscad install`, `apothecary serve --demo`; the four loops and what each needs; the optional installs |
 | [01 — The parts registry](../walkthrough/01-a-part.md) | What a part is, and how its envelope is checked |
 | [02 — Which numbers are whose](../walkthrough/02-fitting.md) | The seam, and driving it with overrides |
 | [03 — Navigating a sub-assembly](../walkthrough/03-an-assembly.md) | datum_core as an addressable tree |
