@@ -3028,6 +3028,7 @@
                     ${target.checklistUrl ? `<div class="code-header">Build readiness</div>
                     <div id="part-checklist">Loading…</div>` : ''}
                     <div class="code-header">Parameters</div>
+                    <div class="part-stage">
                     <div id="stage-bar">
                       <div id="stage-summary" class="clean">No staged changes</div>
                       <div class="stage-actions">
@@ -3038,7 +3039,8 @@
                       <ul id="part-messages" class="scad-messages"></ul>
                     </div>
                     <div id="part-params">Loading…</div>
-                    ${target.part ? `<div class="code-header">Saved variants</div>
+                    </div>
+                    ${target.part ? `<div class="code-header saved-header">Saved variants</div>
                     <div id="part-saved" class="saved-list"></div>` : ''}
                     ${target.scadUrl ? `<div class="code-header">${target.part ? 'SCAD' : 'SCAD (a few lines, from its shape)'}</div>
                     <div id="part-scad" class="scad-slot">Loading…</div>` : ''}
@@ -3617,6 +3619,10 @@
                     }
                     if (scad.text === null) scad.text = own;
                     const editable = Boolean(target.part) && target.editable !== false;
+                    if (!editable) {
+                        this.partSection.querySelector('.saved-header')?.remove();
+                        this.partSection.querySelector('#part-saved')?.remove();
+                    }
                     this.releaseScadEditor();
                     const editor = await mountScadEditor(slot, {
                         text: scad.text,
@@ -3634,7 +3640,7 @@
                     this.scadEditor = editor;
                     this.scadTarget = target;
                     if (!editable) editor.say(target.part ? "Its geometry is Python: this is the SCAD it generates, read-only. Its parameters are what to edit." : 'Read-only: the few lines its shape is made from.');
-                    else editor.say(scad.text === own ? "The part's own SCAD: edit it here; it is checked once typing stops and rendered after a second of quiet." : 'The edited SCAD this tab drew, not saved: Save keeps it in git.');
+                    else editor.say(scad.text === own ? "The part's own SCAD: edit it here; it is checked once typing stops and rendered after a second of quiet." : 'Edited, not saved: Save keeps it in git.');
                     if (editable) await this.loadSavedVariants(target);
                 } catch (err) {
                     console.error(err);

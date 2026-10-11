@@ -146,7 +146,7 @@ def test_selecting_a_parts_library_leaf_shows_the_absorbed_part_view(page: Page,
 
     page.locator("#contents-list .contents-item").first.click()
 
-    scad_content = page.locator("#part-scad-content")
+    scad_content = page.locator("#part-scad .cm-content")
     expect(scad_content).to_be_visible()
     expect(scad_content).not_to_have_text("Loading…")
     text = scad_content.text_content()

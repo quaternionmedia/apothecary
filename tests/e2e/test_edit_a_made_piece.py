@@ -120,7 +120,8 @@ def test_a_made_piece_is_edited_from_its_ring_and_the_found_candidate_returns_it
     # A made piece has no checklist and no Regenerate STL: Apply is its rebuild.
     expect(page.locator("#part-checklist")).to_have_count(0)
     expect(page.locator("#part-regenerate-btn")).to_have_count(0)
-    expect(page.locator("#part-scad-content")).to_contain_text("cylinder", timeout=10000)
+    # Its few lines of SCAD, read-only, in the editor where a part's SCAD is edited.
+    expect(page.locator("#part-scad .cm-content")).to_contain_text("cylinder", timeout=10000)
 
     # Two sliders staged: validated, the envelope said, nothing built yet.
     w = _slide(page, "width", 40)
