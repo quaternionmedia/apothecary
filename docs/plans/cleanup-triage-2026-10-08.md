@@ -19,17 +19,17 @@ them in.*
 
 | Item | Order | Where |
 |---|---|---|
-| View at the top of the canvas ring with Fit inside it; the Machine's tab title and the hint bar on one row at 1024 px | Now | `build/less-on-screen`; the cameras plan, *Decided after Phase 2* |
-| Cameras in the world (Phase 3): the part drawn, aimed, its ring, Selected's camera, P, the mat through the projection, Pictures by camera | Now | `build/camera-parts`; [cameras-and-clutter-2026-10-04.md](cameras-and-clutter-2026-10-04.md) |
-| The browser tests for a garage with one printer | Now | `build/camera-parts` |
-| Pictures of it (Phase 4): the walkthrough and generated docs regenerated, the census's numbers in the records | Now, after both merge | the cameras plan |
+| View at the top of the canvas ring with Fit inside it; the Machine's tab title and the hint bar on one row at 1024 px | *Done (#30)* | `build/less-on-screen`; the cameras plan, *Decided after Phase 2* |
+| Cameras in the world (Phase 3): the part drawn, aimed, its ring, Selected's camera, P, the mat through the projection, Pictures by camera | *Done (#30)* | `build/camera-parts`; [cameras-and-clutter-2026-10-04.md](cameras-and-clutter-2026-10-04.md) |
+| The browser tests for a garage with one printer | *Done (#30)* | `build/camera-parts` |
+| Pictures of it (Phase 4): the walkthrough and generated docs regenerated, the census's numbers in the records | *Done (#30); the one-screen record's numbers are refreshed when the stack merges* | the cameras plan |
 
 ## Delivery
 
 | Item | Order | Where |
 |---|---|---|
 | The review pull request split into a stack, each a run of the review branch's own history, none rewritten: #21 at the bottom, then the 09-26 review's workstreams, pictures in the world, the installers, the consolidation, and cameras and clutter on top. #22 is closed with a pointer to the stack (decided 2026-10-08). *Done 2026-10-09: #24 to #29 above #21, and #30 holds the review branch.* | Now | GitHub |
-| The Rust work and the UI flows each a pull request of its own, stacked on the cameras-and-clutter one | This round | the Rust and flows plans |
+| The Rust work and the UI flows each a pull request of its own, stacked on the cameras-and-clutter one | *Done: #31 (Rust research), #32 (Rust firmware), #33 (designing a part), #34 (a picture to a print), #35 (the slicer), #36 (editing a part's SCAD), each on the one below* | the Rust and flows plans |
 | The dependency bumps Dependabot opened, closed or rebased once the stack lands | A person, after the stack | GitHub |
 | Merged worktree branches left by finished agent runs (`worktree-*`), deleted | Now | local only |
 
@@ -60,7 +60,7 @@ them in.*
 | Item | Order | Where |
 |---|---|---|
 | The shards' recorded times refreshed after the new browser test files land | Now, with Phase 4 | `tests/e2e/durations.json` |
-| Every flow of the UI held end to end by a browser test | This round | [ui-flows-2026-10-08.md](ui-flows-2026-10-08.md) |
+| Every flow of the UI held end to end by a browser test | *Done: the four loops, walkthrough pages 13 to 16 (#33 to #36, #32 for firmware)* | [ui-flows-2026-10-08.md](ui-flows-2026-10-08.md) |
 | A generated JSCAD module loaded against the real package in a test | Next round | `todo.md` |
 | The unit suite under pytest-xdist | Next round | `todo.md` |
 | A run that goes green because tests were skipped says what did not run | A person (governance) | `todo.md`'s *For governance/qm* |
