@@ -70,7 +70,7 @@ class Carried(BaseModel):
     nothing move has no way to tell "the viewer handles this" from "nothing
     handles this", and neither does a test. This says which. `added` names the
     piece the verb put in the site (Camera › Add here's camera), for the page
-    to select.
+    to select, and the piece a Make made (Make all's first).
     """
 
     action: str
@@ -209,7 +209,9 @@ def _carry_picture(chosen: Chosen, who: Carries) -> Carried:
     """Make, Make all, Drop and a made piece's Word: a root structure added,
     removed or rebuilt, by the functions the view routes call. Every refusal is
     a 4xx naming its reason, so no picture intent reaches the 500 below. What a
-    Make says ends with the steps after it, when it made something."""
+    Make says ends with the steps after it, when it made something, and the piece
+    it made -- Make all's first -- is ``added``, which the page selects, as it
+    selects the camera Add here added: the steps it names are that piece's."""
     from ..api import _site_payload, _site_store
     from ..vision import views as viewing
 
@@ -219,6 +221,7 @@ def _carry_picture(chosen: Chosen, who: Carries) -> Carried:
     verb, _, rest = action.partition(":")[2].partition(":")
     rest = rest.removesuffix(f":{FLOOR_MARK}")
     piece = chosen.intent.context.targets[0] if chosen.intent.context.targets else ""
+    added = None  # the piece Make made, or Make all's first: the page selects it
     try:
         if verb == "make":
             view_id, _, index = rest.rpartition(":")
@@ -233,6 +236,7 @@ def _carry_picture(chosen: Chosen, who: Carries) -> Carried:
             )
             if made:
                 did += f": {AFTER_MAKE}"
+                added = made[0]
         elif verb == "make-all":
             if not rest:
                 raise HTTPException(
@@ -245,6 +249,7 @@ def _carry_picture(chosen: Chosen, who: Carries) -> Carried:
             )
             if made:
                 did += f"; {AFTER_MAKE_ALL}"
+                added = made[0]
         elif verb == "drop":
             record = viewing.drop(name, site, piece)
             did = f"dropped {piece}; shape {record.shape_index} of its view reads as found again"
@@ -269,6 +274,7 @@ def _carry_picture(chosen: Chosen, who: Carries) -> Carried:
         did=did,
         site=_site_payload(site, _site_store.validator(name)(site)),
         address=chosen.intent.address,
+        added=added,
     )
 
 

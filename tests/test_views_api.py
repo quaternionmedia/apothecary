@@ -463,6 +463,33 @@ def test_make_all_skips_what_is_made_and_a_second_view_does_not_remake_it(world)
     assert len(c.get("/sites/garage/attached").json()["made"]) == 3
 
 
+def test_make_by_the_ring_names_the_piece_it_made_for_the_page_to_select(world):
+    """Make answers the piece it made as ``added``, and Make all its first, as Add here
+    answers the camera it added: the page selects it, so the steps the status line
+    names next -- Part › Edit, a printer's Machine -- are the selected piece's."""
+    c = TestClient(app)
+    view = _pin(c, mm_across=1800)
+
+    def make(action: str) -> dict:
+        intent = {
+            "action": action,
+            "option_id": action.rsplit(":", 1)[0],
+            "context": {"pointing": "node", "targets": ["workbench"]},
+        }
+        r = c.post("/menu/intent", json={"intent": intent, "site": "garage"})
+        assert r.status_code == 200, r.text
+        return r.json()
+
+    one = make(f"picture:make:{view['id']}:1")
+    assert one["added"] in c.get("/sites/garage/attached").json()["made"]
+    assert one["did"].startswith(f"made {one['added']}: Part › Edit adjusts it")
+    rest = make(f"picture:make-all:{view['id']}")
+    made = rest["did"].split(": ", 1)[1].split(";", 1)[0].split(", ")
+    assert rest["added"] == made[0] and one["added"] not in made
+    # Nothing made, nothing to select.
+    assert make(f"picture:make-all:{view['id']}")["added"] is None
+
+
 def test_a_moved_piece_is_neither_made_twice_nor_hides_the_outline_it_stands_over(world):
     c = TestClient(app)
     first = _pin(c, mm_across=1800)
