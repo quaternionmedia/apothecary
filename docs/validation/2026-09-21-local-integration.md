@@ -59,7 +59,7 @@ cd ~/Documents/apothecary
 git status -sb                      # ## review/2026-09-26
 git submodule status                # governance/qm at 20e00bd (the pin), or the adr/ branch if you were drafting
 uv sync
-uv run apothecary check             # OpenSCAD on PATH, playwright browsers, the parts count
+uv run apothecary check             # OpenSCAD and each part's, the slicer, the firmware toolchains, the parts
 ```
 
 - [ ] `apothecary check` → OpenSCAD found, every part with a wrapper or a
@@ -134,8 +134,9 @@ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/api/docs         
       there on this tip (a pin, a reading: the folder is made the account's
       alone on every write); so is `captures/` under any picture root, once a
       frame is kept.
-- [ ] `uv run pytest -q tests/test_stays_local.py` → 20 passed. This file is
-      the review: loosening any door is an edit here and to the record.
+- [ ] `uv run pytest -q tests/test_stays_local.py` → every test passes
+      (`uv run pytest --co -q tests/test_stays_local.py` says how many). This
+      file is the review: loosening any door is an edit here and to the record.
 
 ## 3. Geometry from elsewhere, and the bench drawn as it is
 
@@ -164,8 +165,10 @@ On your own server, in the garage.
 - [ ] In the parts library (`/viewer/sites/parts_library`): every part
       `apothecary parts list` names, in a grid; double-click `arduino_uno` → the breadcrumb reads
       `parts_library › arduino_uno`, the Selected panel carries the part's
-      section (SCAD source, readiness, no parameters -- it is described by
-      its sidecar, not a wrapper). `ender3` has parameters: `z_axis`,
+      section (SCAD source, readiness, and the parameters its SCAD declares --
+      it is described by its sidecar, not a wrapper, so OpenSCAD's customizer
+      lists them: `size`, with a snapshot from `apothecary openscad install`;
+      with 2021.01, which cannot list them, none). `ender3` has parameters: `z_axis`,
       `x_axis`, `y_axis`, `with_spool`, `with_lcd`.
 
 Bring a file in:
@@ -241,8 +244,9 @@ On your own server, in the garage, with the page freshly loaded.
       (Site, Selected, Pictures, **Machine** (a board's, its log in it),
       Rail, and **Bench**, which opens on the Bench itself, then its verbs);
       a digit toggles one.
-- [ ] Select `printer_1`, press **m** → the node ring: Device, Control, Why
-      this, Into, cardinals first, 5 backs out.
+- [ ] Select `printer_1`, press **m** → the node ring: Zoom in, Move, Device
+      (once its board is pinned; Control is under it, ⌗27), Why this, Into,
+      Camera, Picture, Part, seated cardinals first; 5 backs out.
 - [ ] A ⚡ **badge** stands at every pinned, connected board and follows it
       as you orbit; with nothing pinned there is none. Its words (state,
       temperatures, the port) show on hover, or while its machine is
