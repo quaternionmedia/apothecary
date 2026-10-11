@@ -62,7 +62,7 @@ and every render uses it from then on. Installing it before the first
     True
 
 `apothecary openscad status` says what is installed and which one renders
-use; [the README](../README.md#install) says what the install does on each
+use; the README's *Install* says what the install does on each
 platform. STLs an older OpenSCAD already built are kept: `apothecary parts
 generate-stl --all --force` builds them again.
 
@@ -88,6 +88,7 @@ holds Site (the tree, its problems, its SCAD, its pins and jobs) and Selected,
 over a strip of tabs: Pictures, the Bench, a board's Machine. The ring, `m`
 or a right-click, holds every verb of what it opens on; each cell has a digit,
 and the digits pressed are the address the status line shows as ⌗.
+[The viewer](../docs/viewer.md) describes each of its controls.
 
 ## 5. The four loops
 
@@ -118,7 +119,7 @@ Where each starts:
 - **A picture to a print** starts at the bench in the garage: its ring,
   Camera › Add here, then the camera's Device. With no camera, the bench's
   Picture › Add pins a picture from disk instead;
-  [`examples/shapes.png`](../examples/shapes.png) is three shapes the finder
+  `examples/shapes.png` is three shapes the finder
   reads. Each step's message names the next one.
 - **Firmware** starts at the Bench, a tab of the rail, or the canvas ring's
   Panels › Bench › Bench: the sketches under `parts/`, each named with its
@@ -138,7 +139,7 @@ Each tool goes under the tools folder, `~/.apothecary/tools` unless
 `APOTHECARY_TOOLS_DIR` names another, fetched from its publisher and checked
 against what the publisher says it is; `apothecary check` reports it after.
 Those fetches are the only connections the process makes
-([`apothecary/stays_local.py`](../apothecary/stays_local.py)).
+(`apothecary/stays_local.py`).
 
     >>> for argv in (["slicer", "install"], ["firmware", "install"]):
     ...     assert CliRunner().invoke(cli, [*argv, "--help"]).exit_code == 0, argv
@@ -148,7 +149,7 @@ Those fetches are the only connections the process makes
 
 The tests: `uv run apothecary test run` is the ordinary command, the unit
 tests and this walkthrough, whose demonstration drives Chromium.
-[CONTRIBUTING](../CONTRIBUTING.md) has the rest of the loop.
+`CONTRIBUTING.md` has the rest of the loop.
 
 ## 7. Where next
 

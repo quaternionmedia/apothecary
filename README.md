@@ -10,8 +10,8 @@ Apothecary builds 3D-printable things from Python and keeps the parts it has bui
 - **A parts library.** Each part is a folder under `parts/`: its SCAD, the parameters and
   bounds it declares, and the STL the `openscad` CLI builds from it.
 - **A viewer.** A local FastAPI server and one page: a three.js world that zooms through
-  sites, assemblies and parts at any depth, its walls fading where they would hide what is
-  inside, with one rail beside it -- **Site** (the tree, its problems, its SCAD, every pin
+  sites, assemblies and parts at any depth, its walls drawn faded so a click passes through
+  them to what is inside, with one rail beside it -- **Site** (the tree, its problems, its SCAD, every pin
   and the site's jobs) and **Selected** stacked over a strip of tabs, **Pictures**, the
   **Bench** and a docked **Machine**. The ring (`m`, or a right-click) reaches every one of
   them by address, and the header's **⚙ View** menu says how the world is drawn. A part's
