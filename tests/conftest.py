@@ -26,7 +26,7 @@ def pytest_addoption(parser):
         "--server-port",
         action="store",
         default=None,
-        help="Port for --start-server's server (default: a free one) or for yours (8765)",
+        help="Port for --start-server's server (default: a free one)",
     )
     parser.addoption(
         "--shard",
