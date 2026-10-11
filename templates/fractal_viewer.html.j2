@@ -42,6 +42,12 @@
         }
         .toolbar button:hover, .view-menu > summary:hover, .view-menu[open] > summary { background: #505050; }
         .toolbar .spacer { flex: 1 1 0; min-width: 0; }
+        /* apothecary serve --demo: one quiet line above the header. */
+        .demo-banner {
+            padding: 0.2rem 0.75rem; font-size: 0.78rem; color: #9fb0c4; background: #1b2028;
+            border-bottom: 1px solid #2a2f38; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .demo-banner code { color: #c8d6e8; font-size: 0.95em; }
         /* The View menu: how the world is drawn, folded behind ⚙ View as Site's
            sections fold; each item a cell of the canvas ring's View. */
         .view-menu { position: relative; }
@@ -558,6 +564,9 @@
 </head>
 <body>
     <div class="app-container">
+        {% if demo %}
+        <div id="demo-banner" class="demo-banner" role="note" title="apothecary serve --demo: printer_1's mainboard is pinned to a simulated Ender, an ESP32 devkit is simulated, arduino-cli, cargo and espflash are scripted, and no real serial port is opened. Its state is {{ demo }}, kept between runs; your own ~/.apothecary and pins are not touched.">The demo: a simulated printer and ESP32, scripted firmware tools, its own state in {{ demo }}. To leave it, stop the server and run <code>apothecary serve</code> without --demo.</div>
+        {% endif %}
         <div class="toolbar">
             <h1>🧪 Apothecary</h1>
             <span class="badge" title="FRACTAL VIEWER — unratified prototype">prototype</span>

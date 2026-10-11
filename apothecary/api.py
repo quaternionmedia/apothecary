@@ -2168,8 +2168,17 @@ def site_viewer(name: str, request: Request, focus: str = Query(default="")):
             default_site=name,
             focus_path=focus,
             three_is_vendored=THREE_IS_VENDORED,
+            demo=_demo_folder(),
         )
     )
+
+
+def _demo_folder() -> Optional[str]:
+    """The demo's folder as the page's banner names it, when this is the demo."""
+    from .demo import running, shown
+
+    root = running()
+    return shown(root) if root is not None else None
 
 
 @app.get("/viewer/parts/{name}")
