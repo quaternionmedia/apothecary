@@ -343,7 +343,34 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # revert-btn) are ring-backed by Part › Apply and Part › Revert, wherever Part is
 # (a part's ring, a camera's, a made piece's), acting on what the editor has
 # staged. No control added; two more ring-backed, and the share's floor follows.
-VIEWER_CEILING = 118
+#
+# The loop from a picture to a print, and the owner's answers of 2026-10-10: a made
+# piece's ring ends with Print when a printer is pinned in its site, after Part (its
+# Edit, Apply and Revert), so no cell above it moved; it opens the printer's Machine with the piece chosen under
+# Print from here's makes. A cell with no control of its own: `apothecary census`
+# prints the same report before and after, but for line numbers. The makes drop-down
+# (print-part) stays unbacked: Print chooses a made piece there, and makes lists the
+# site's parts as well, which no cell chooses. The Machine tells a print started and
+# a print ended in the status line, and an open Machine lists its site's parts again
+# when a piece is made, rebuilt or dropped; none of it adds a control or a listener.
+# Merged onto the part loop: the ceiling and the share's floor are the part loop's,
+# since Print adds no control and backs none.
+#
+# The managed slicer (docs/plans/slicer-2026-10-10.md): Slice is a step of the page.
+# Two controls of its own, both ring-backed, and no place the page listens more
+# (`apothecary census` gives the counts). Print from here's Slice (print-slice), in
+# the makes row, slices what makes names for the printer and chooses its G-code in
+# the card's files; it is ring-backed by Slice, a new cell of a made piece's ring and
+# of a part's from the parts folder, appended after Print (and after Part, where
+# there is no Print), so no cell above it moves; with no printer pinned in the site
+# there is no Slice, as there is no Print. The slice's log and its Cancel are the
+# task log the Flashing card mounts (tasks.js), counted once already; what the slice
+# used, its estimate and its errors are words, not controls. The Bench's toolchain
+# card draws the slicer after the toolchain modules with its own Install
+# (slicer-install, under the modules' one listener), ring-backed by a new last cell
+# of Panels › Bench › Install, OrcaSlicer (9362); Arduino and Rust ESP32 did not
+# move. The ceiling follows the count up by two, and the share's floor up with it.
+VIEWER_CEILING = 120
 
 
 def test_the_viewer_stays_under_its_ceiling():
@@ -701,10 +728,11 @@ def test_the_viewers_ring_backed_share_did_not_fall():
     and did not let it fall below where Phase 4 left it. Loop 1, designing a part,
     put the part editor's Defaults on the ring as Part › Defaults, and then its Apply
     and Revert as Part › Apply and Part › Revert, and on the Rust firmware's count the
-    share does not fall below where that left it, 68 of 118."""
+    share does not fall below where that left it, 68 of 118. The slicer's two controls,
+    Slice and the slicer's Install, came ring-backed: 70 of 120."""
     taken = census.take()
     own, backed = len(taken.controls_of_its_own()), len(taken.ring_backed())
-    assert backed / own >= 68 / 118, f"{backed} of {own} ring-backed"
+    assert backed / own >= 70 / 120, f"{backed} of {own} ring-backed"
 
 
 def test_the_serial_overlay_left_nothing_behind():

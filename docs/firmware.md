@@ -495,14 +495,18 @@ Marlin's printed grid and falls back to the `G29 W` points an `M503` prints.
 (`~/.apothecary/prints/`) and checks it before anything is sent: a file that
 saves settings (`M500`), factory-resets (`M502`), updates firmware (`M997`),
 kills or restarts the board, or exceeds the heater caps is refused with the
-reason. **Print** needs the latch and starts a job that sends one line per
+reason. **Slice**, beside **makes**, slices the part or piece chosen there for
+the printer and chooses the G-code it keeps, so Print follows Slice; a file a
+slice made says what it was sliced from and for which printer ([the
+slicer](slicer.md#in-the-page)). **Print** needs the latch and starts a job that sends one line per
 `ok`; a line unanswered for thirty seconds (heat-and-wait and home excepted),
 or answered with an error or a resend, ends the print. While it prints,
 heaters, fan and break-wait stay available; motion, SD, homing, the bed and
 release, reconnect, reset or upload on that port are refused. **Cancel** and
 a failed line send the safe-off (`M104 S0`, `M140 S0`, `M107`, `M84`); E-STOP
-ends the job with nothing more sent. It is not a queue, a slicer or a
-webcam; the *G-code printer seam* record's sixth decision draws that line.
+ends the job with nothing more sent. It is not a queue or a webcam, and the
+slicing is OrcaSlicer's, behind the slicer's own seam; the *G-code printer
+seam* record's sixth decision draws that line.
 
 ### A print is a job
 
@@ -511,8 +515,12 @@ operation a machine performs on a part. The job records its kind (`print`),
 the printer (its port, the board's own identity, the node it is pinned to),
 the site, the part or piece it makes when one is chosen on the card (the
 **makes** drop-down lists the parts and pieces of the site the printer is
-pinned in), the file it ran (name, size, SHA-256), when it started and
-finished, and how it ended -- done, cancelled or failed, with the reason. A
+pinned in; a piece made from a picture is chosen there by **Print** on its own
+ring, and its job keeps the picture and the camera it came from, in its record
+and not its row), the file it ran (name, size, SHA-256), when it started and
+finished, and how it ended -- done, cancelled or failed, with the reason; the
+status line says when a print starts and when it ends, or that it failed and
+why. A
 running job is what marks the printer's node `printing`, from the moment it
 starts; a hand-set `maintenance` is left alone. Jobs are kept under
 `~/.apothecary/jobs/`, this account's alone.

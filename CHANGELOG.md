@@ -83,11 +83,22 @@ One line per change, each with a link to where it is described. The format follo
 - Selected shows a camera's device, lens and where its next picture lands, Take picture (also `P`, and its ring's cell), what it sees, and its pictures, one clicked drawn where it landed. ([test](tests/e2e/test_camera.py))
 - A picture is drawn through its mapping: the mat laid point by point, its outlines the same way, a picture that landed nowhere on its camera, a live camera's video where it looks. ([code](apothecary/static/picture_marks.js))
 - Pictures shows thumbnails grouped by the camera that took them, the pictures no camera took last. ([test](tests/e2e/test_camera.py))
+- A picture to a print, held end to end: a browser test goes round twice through the page's own controls and ring cells -- a camera added and told its device, a picture taken, its shapes found, a piece made and adjusted, a print job for it on printer_1 watched to its end -- and, run by the browser suite, writes the walkthrough page that shows it. ([page](walkthrough/13-a-picture-to-a-print.md))
+- A made piece's ring ends with Print when a printer is pinned in its site: the printer's Machine opens with the piece chosen under Print from here's *makes*. ([code](apothecary/menu.py))
+- A print job keeps the picture and the camera its piece came from, in its record; its row stays as it was. ([code](apothecary/jobs.py))
+- When a print ends, the status line says so, or that it failed and why. ([code](apothecary/static/widgets/machine.js))
 - Selected sizes the drawn look: the picture's width, or a chosen shape's long side; a look's row draws it. ([viewer](templates/fractal_viewer.html.j2))
 - A print is a job: one operation a machine performs on a part, kept in the state folder with its kind, machine, site, part, file, times and outcome; a kind of job belongs to a kind of machine, and a mill would register its own. ([code](apothecary/jobs.py))
 - `GET /jobs` by site, machine and kind, `GET /jobs/{id}`, and `GET /jobs/choices` for what a job on a machine can name. ([code](apothecary/routes/jobs.py))
 - The Print card names the part a print makes, from the site its printer is pinned in, and its history is the printer's jobs. ([doc](docs/firmware.md))
 - Site lists the jobs of the site's machines, the running ones first; a row selects its machine and opens it. ([test](tests/e2e/test_printer_ui.py))
+- `apothecary slicer install` installs a pinned OrcaSlicer from its GitHub releases, checked against the digest GitHub publishes, natively on Linux, macOS and Windows; `apothecary slicer status` says where it stands. ([doc](docs/slicer.md))
+- A slicer is a module behind one interface, OrcaSlicer's command line the first; the printer's profile names the one used. ([code](apothecary/slicer/modules/__init__.py))
+- printer_1's slicer profile is kept with the ender3 part: OrcaSlicer's Creality Ender-3 profile and what the bench measured, each value with its source. ([profile](parts/ender3/slicer.json))
+- `apothecary slicer slice` and `POST /slicer/slice` slice a part or a made piece for the pinned printer, its declared print settings winning, and keep the G-code where the Print card keeps a file, with the slice's values and sources, OrcaSlicer's estimate and its errors by line. ([doc](docs/slicer.md))
+- The start of a print is composed from pieces the printer's profile names: `home` today; the stored mesh, probing each print and a measured first-layer offset are stubs, as are choosing a filament and a word's print settings. ([doc](docs/slicer.md#what-a-slice-is-composed-from))
+- `apothecary slicer slice SITE/PATH` slices a made piece through the running server. ([doc](docs/slicer.md#slicing))
+- Slice is a step of the page: a cell of a made piece's ring and a part's, and a button of Print from here, which slices what makes names for the printer, shows the slicer's log with Cancel, then chooses the G-code it kept and says what the slice used, each value with its source, the estimate and the errors by line; the Bench installs the slicer. ([doc](docs/slicer.md#in-the-page))
 - A part's renders are kept in a cache of variants by what made them; Apply draws one in its own tab, whose address keeps it, marked apart from the saved part, and the defaults again render nothing. ([page](walkthrough/14-designing-a-part.md))
 - The part editor starts from what is drawn, checks a staged set once the controls rest, shows OpenSCAD's errors by line and the measured bounds beside the declared ones; Part › Defaults stages a part's own numbers. ([page](walkthrough/14-designing-a-part.md))
 
@@ -109,6 +120,7 @@ One line per change, each with a link to where it is described. The format follo
 - Taking and finding are two steps: Take picture, a drop, a paste, Picture › Add and Folder pin a view and find nothing; Picture › Find shapes (`POST /sites/{s}/views/{id}/find`) finds its shapes, with a finder to choose where several can read the picture. ([code](apothecary/routes/views.py))
 - Make and Make all refuse a view whose shapes are not found or that has no width, naming the step that comes first. ([code](apothecary/vision/views.py))
 - Every step's message names the next one: a camera pinned names Take picture, a view pinned names Find shapes, shapes found name Make. ([code](apothecary/static/pictures.js))
+- Make names the steps after it, Part › Edit and a printer's Machine; a made piece's Apply names the Machine; a print started, from Print from here or the ring's Send file, says where it is followed. ([page](walkthrough/13-a-picture-to-a-print.md))
 - A camera is pinned at a root structure with a footprint, or the floor, one per host. ([code](apothecary/routes/pictures.py))
 - The garage has one printer, printer_1, at the bench's left end, the bench's middle clear; printer_2 and printer_3 are gone. ([plan](docs/plans/cameras-and-clutter-2026-10-04.md))
 - A camera's badge is the place badge: a click selects the structure or the floor, and shows no camera live. ([test](tests/e2e/test_camera.py))
@@ -173,6 +185,7 @@ One line per change, each with a link to where it is described. The format follo
 
 ### Fixed
 
+- A printer's Machine left open lists a piece made, rebuilt or dropped meanwhile under Print from here's *makes*. ([test](tests/e2e/test_picture_to_print.py))
 - A wedge is drawn in the viewer as the triangle it is built as, not a round cone. ([test](tests/test_photo_in_the_viewer.py))
 - Camera › Pin here › Allow pins the one camera the browser names at once and names Look; with several it reopens the ring at Pin here; a refusal says what to do. ([test](tests/e2e/test_first_camera.py))
 - A camera allowed for the site in the address bar is named under Pin here without a reload. ([code](apothecary/static/pictures.js))

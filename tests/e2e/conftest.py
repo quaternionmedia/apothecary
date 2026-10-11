@@ -107,6 +107,8 @@ def start_server(tmp_path_factory):
             {
                 "ARDUINO_CLI": str(write_fake_arduino_cli(tmp / "arduino-cli")),
                 "ESPTOOL": "none",
+                # No slicer of the person's own: the page's Slice step brings a fake.
+                "APOTHECARY_ORCASLICER": "none",
                 # Rust's tools: none, unless a test names the scripted ones (the
                 # firmware loop); never a person's own on PATH.
                 "CARGO": "none",
@@ -339,18 +341,32 @@ def unasked_page(_unasked_browser, base_url):
 
 
 @pytest.fixture
-def walkthrough(page):
+def walkthrough(page, request):
     """The walkthrough's recorder, written out however the test ends.
 
     Not gated on --generate-docs: every run of a walkthrough test writes its page.
+    A page the quick `apothecary test run` writes is the run of a test marked
+    `walkthrough`; a page only the browser suite writes passes
+    ``browser_suite_only=True`` and is unmarked. The two are held together here,
+    since the page's header and footer say which it is.
     """
     made: list[Walkthrough] = []
 
-    def _make(ordinal, slug, title, intro, runtime, does_not_show, page=page, written_by=None):
+    def _make(
+        ordinal, slug, title, intro, runtime, does_not_show, page=page, browser_suite_only=False
+    ):
         # `page` may be another browser's -- the one launched with a fake
         # camera, for the page that places one -- and its screenshots are then
-        # of that browser. `written_by` says who rewrites the page, when it is
-        # not the ordinary test command (a loop's page: the browser suite).
+        # of that browser.
+        marked = request.node.get_closest_marker("walkthrough") is not None
+        if marked == browser_suite_only:
+            pytest.fail(
+                f"walkthrough page {ordinal}: a page the quick `apothecary test run` writes "
+                "is the run of a test marked `walkthrough`; a page only the browser suite "
+                "writes passes browser_suite_only=True and is not marked. This run is "
+                f"{'' if marked else 'not '}marked and passes "
+                f"browser_suite_only={browser_suite_only}."
+            )
         recorder = Walkthrough(
             page=page,
             ordinal=ordinal,
@@ -359,7 +375,8 @@ def walkthrough(page):
             intro=intro,
             runtime=runtime,
             does_not_show=does_not_show,
-            **({"written_by": written_by} if written_by else {}),
+            browser_suite_only=browser_suite_only,
+            module=request.node.path.relative_to(ROOT).as_posix(),
         )
         made.append(recorder)
         return recorder

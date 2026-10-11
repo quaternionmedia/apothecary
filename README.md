@@ -74,11 +74,15 @@ camera stands above the bench, looking straight down, selected. On the camera's 
 Device › Allow asks the browser once, and with one camera it is the camera's device at once.
 Take picture -- on its ring, in Selected, or `P` -- keeps a frame that lies on the bench
 where the camera looks, as a view, and the bench's Picture › Find shapes finds its shapes;
-each step's message names the next. The camera's turn ring and tilt arc aim it, and Part ›
-Edit sets its numbers. Picture › Add on the bench's ring pins a picture from disk instead,
-and Picture › Folder one already in the picture folder: the seven newest by name, and any
-other once it is chosen in Pictures, a tab of the rail beside the world. The floor's verbs
-are under the canvas ring's Pictures › Floor.
+each step's message names the next. Picture › Make stands a shape up as a piece; its Part ›
+Edit adjusts it, and its ring's Print opens the pinned printer's Machine with it chosen under
+*makes*: Print from here keeps a sliced file, and the print is a job that names the piece
+([walkthrough 13](walkthrough/13-a-picture-to-a-print.md) goes round twice). The camera's
+turn ring and tilt arc aim it, and Part › Edit sets its numbers. Picture › Add on the
+bench's ring pins a picture from disk instead, and Picture › Folder one already in the
+picture folder: the seven newest by name, and any other once it is chosen in Pictures, a
+tab of the rail beside the world. The floor's verbs are under the canvas ring's Pictures ›
+Floor.
 
 From Python:
 

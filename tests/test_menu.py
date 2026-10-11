@@ -1019,9 +1019,12 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert [(c.label, c.action, c.cell) for c in install.children] == [
         ("Arduino", "bench:install:arduino", 8),
         ("Rust ESP32", "bench:install:rust-esp32", 6),
+        # The slicer's modules after the toolchain's, from their own registry.
+        ("OrcaSlicer", "bench:install:slicer:orcaslicer", 2),
     ]
     assert address_of(root, "bench:install:arduino") == "9368"
     assert address_of(root, "bench:install:rust-esp32") == "9366"
+    assert address_of(root, "bench:install:slicer:orcaslicer") == "9362"
     # A core by its architecture, one leaf per suggested core.
     cores = bench.children[6]
     assert [c.label for c in cores.children] == ["AVR", "ESP32", "ESP8266", "RP2040", "SAMD"]
@@ -1245,6 +1248,90 @@ def test_part_holds_the_loop_edit_keeping_its_address():
         address = address_of(ring, action)
         assert address[:-1] == edit[:-1]
         assert walk(ring, address).action == action
+
+
+def test_a_made_piece_with_a_printer_pinned_in_its_site_ends_with_print():
+    """The owner's answer of 2026-10-10: a made piece's ring gets Print, which opens
+    the pinned printer's Machine with the piece chosen under makes. One printer is the
+    cell itself; several are a cell each under it; with none there is no Print.
+    Appended after Part, so no cell above it moves, and only on a made piece."""
+    from apothecary.menu import PictureContext, carried_by
+
+    site = _garage()
+    site.children.append(Assembly(name="disc_1", role="word", base=Cube(size=10.0)))
+
+    def on(path, printers):
+        told = PictureContext(made=["disc_1"], words=["disc"], printers=printers)
+        return resolve(Context(pointing=Pointing.NODE, targets=[path]), site, picture=told)
+
+    without, one = on("disc_1", []), on("disc_1", ["printer_1"])
+    assert [o.label for o in without.options][-2:] == ["Picture", "Part"]
+    seated = [(o.label, o.cell) for o in one.options]
+    # Print, then Slice beside it: neither moves a cell above them.
+    assert seated[:-2] == [(o.label, o.cell) for o in without.options]
+    printing = one.options[-2]
+    assert (printing.label, printing.action, printing.children) == (
+        "Print",
+        "print:piece:printer_1",
+        None,
+    )
+    two = _group(on("disc_1", ["printer_1", "printer_2"]), "Print")
+    assert [(c.label, c.action) for c in two.children] == [
+        ("printer_1", "print:piece:printer_1"),
+        ("printer_2", "print:piece:printer_2"),
+    ]
+    # A part that is no made piece, and a host, get no Print, printers or not.
+    for path in ("footpedal", "workbench"):
+        assert "Print" not in [o.label for o in on(path, ["printer_1"]).options], path
+    assert carried_by("print:piece:printer_1").name == "VIEWER"
+
+
+def test_a_made_piece_and_a_part_slice_for_a_printer_pinned_in_their_site():
+    """Slice is a step of the page (docs/plans/slicer-2026-10-10.md): a made piece's
+    ring has it beside Print, and a part from the parts folder standing in the site has
+    it after Part; it opens the printer's Machine with the piece chosen under makes and
+    slices it there. One printer is the cell itself, several a cell each; with none
+    pinned in the site there is no Slice; a host, a camera and a printer, or anything
+    inside one, have none. Appended last, so no cell above it moves."""
+    from apothecary.menu import PictureContext, carried_by
+
+    site = _garage()
+    site.children.append(Assembly(name="disc_1", role="word", base=Cube(size=10.0)))
+
+    def on(path, printers, cameras=()):
+        told = PictureContext(
+            made=["disc_1"], words=["disc"], printers=printers, camera_parts=list(cameras)
+        )
+        return resolve(Context(pointing=Pointing.NODE, targets=[path]), site, picture=told)
+
+    piece = on("disc_1", ["printer_1"])
+    assert [(o.label, o.action) for o in piece.options][-2:] == [
+        ("Print", "print:piece:printer_1"),
+        ("Slice", "slice:piece:printer_1"),
+    ]
+    part, bare = on("footpedal", ["printer_1"]), on("footpedal", [])
+    assert [o.label for o in bare.options][-1] == "Part" and "Slice" not in [
+        o.label for o in bare.options
+    ]
+    assert [(o.label, o.cell) for o in part.options][:-1] == [
+        (o.label, o.cell) for o in bare.options
+    ]
+    assert (part.options[-1].label, part.options[-1].action) == ("Slice", "slice:piece:printer_1")
+    two = _group(on("footpedal", ["printer_1", "printer_2"]), "Slice")
+    assert [(c.label, c.action) for c in two.children] == [
+        ("printer_1", "slice:piece:printer_1"),
+        ("printer_2", "slice:piece:printer_2"),
+    ]
+    # A host, the printer, a board inside it and a camera have no Slice.
+    for path, cameras in (
+        ("workbench", ()),
+        ("printer_1", ()),
+        ("printer_1.frame_system.mainboard", ()),
+        ("footpedal", ("footpedal",)),
+    ):
+        labels = [o.label for o in on(path, ["printer_1"], cameras).options]
+        assert "Slice" not in labels, path
+    assert carried_by("slice:piece:printer_1").name == "VIEWER"
 
 
 def test_a_made_piece_has_picture_with_word_and_drop_and_no_camera():
@@ -1793,7 +1880,9 @@ def test_a_shape_is_made_worded_and_dropped_through_the_ring_and_the_intent_rout
     assert answer.status_code == 200, answer.text
     body = answer.json()
     assert body["carried_by"] == "the server carries it out" and body["address"] == make
-    piece = body["did"].split("made ", 1)[1]
+    # What it made, then the steps after it: adjust it, then print it.
+    piece, after = body["did"].split("made ", 1)[1].split(": ", 1)
+    assert after == "Part › Edit adjusts it, and a printer's Machine prints it"
     assert piece in {s["name"] for s in body["site"]["structures"]}
     attached = client.get("/sites/garage/attached").json()
     assert attached["made"][piece]["shape_index"] == 1
@@ -1825,7 +1914,41 @@ def test_a_shape_is_made_worded_and_dropped_through_the_ring_and_the_intent_rout
     ).json()
     answer = _choose(client, ring, _address(ring, f"picture:make-all:{view['id']}"), ["workbench"])
     assert answer.status_code == 200, answer.text
-    assert answer.json()["did"].startswith("made 3 piece(s)")
+    did = answer.json()["did"]
+    assert did.startswith("made 3 piece(s)")
+    assert did.endswith("; Part › Edit adjusts each, and a printer's Machine prints it")
+
+
+def test_the_route_tells_a_made_pieces_ring_of_the_printers_pinned_in_its_site(
+    carried, fake_arduino_cli
+):
+    """What printers a made piece's Print offers is the server's to say: the printer
+    above a board pinned in the site, and nothing once the board is unpinned."""
+    client, view = carried
+    made = client.post(f"/sites/garage/views/{view['id']}/make", json={"shape": 1})
+    assert made.status_code == 200, made.text
+    piece = made.json()["made"][0]
+    board = "printer_1.frame_system.mainboard"
+
+    def ring():
+        answer = client.post(
+            "/menu/resolve",
+            json={"context": {"pointing": "node", "targets": [piece]}, "site": "garage"},
+        )
+        assert answer.status_code == 200, answer.text
+        return answer.json()["options"]
+
+    assert "Print" not in [o["label"] for o in ring()]
+    pinned = client.put(f"/sites/garage/nodes/{board}/device", json={"identity": "/dev/ttyFAKE1"})
+    assert pinned.is_success, pinned.text
+    try:
+        options = ring()
+    finally:
+        client.delete(f"/sites/garage/nodes/{board}/device")
+    assert [o["label"] for o in options][-4:] == ["Picture", "Part", "Print", "Slice"]
+    assert options[-2]["action"] == "print:piece:printer_1"
+    assert options[-1]["action"] == "slice:piece:printer_1"
+    assert not {"Print", "Slice"} & {o["label"] for o in ring()}
 
 
 def test_a_carried_picture_intent_is_refused_with_its_reason_and_never_a_500(carried):
@@ -1861,7 +1984,7 @@ def test_a_carried_picture_intent_is_refused_with_its_reason_and_never_a_500(car
     for action, status in cases.items():
         answer = send(action)
         assert answer.status_code == status, (action, answer.status_code, answer.text)
-    made = send(f"picture:make:{view['id']}:0").json()["did"].split("made ", 1)[1]
+    made = send(f"picture:make:{view['id']}:0").json()["did"].split("made ", 1)[1].split(":")[0]
     assert send(f"picture:make:{view['id']}:0").status_code == 409  # already made
     assert send("picture:word:no_such_word", targets=[made]).status_code == 422
     assert send("picture:drop", site=None).status_code == 400

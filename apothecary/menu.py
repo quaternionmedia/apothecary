@@ -157,9 +157,10 @@ class PictureContext(BaseModel):
     the browser has been allowed to name them), ``pictures`` the ones under the
     picture root, newest first, and ``here`` the place the ring stands on. The
     intent route fills in ``made`` (the site's made pieces), ``camera_parts``
-    (its cameras), ``words`` (the vocabulary), ``finders`` (those that can read
-    the drawn view's picture) and, on a camera part, ``here.camera`` (its device)
-    from what the server knows, so a page cannot claim them."""
+    (its cameras), ``printers`` (the site's printers with a board pinned, which a
+    made piece's Print offers), ``words`` (the vocabulary), ``finders`` (those
+    that can read the drawn view's picture) and, on a camera part, ``here.camera``
+    (its device) from what the server knows, so a page cannot claim them."""
 
     cameras: List[CameraSeen] = Field(default_factory=list)
     asked: bool = False
@@ -168,6 +169,7 @@ class PictureContext(BaseModel):
     finders: List[str] = Field(default_factory=list)
     made: List[str] = Field(default_factory=list)
     camera_parts: List[str] = Field(default_factory=list)
+    printers: List[str] = Field(default_factory=list)
     words: List[str] = Field(default_factory=list)
     here: Place = Field(default_factory=Place)
 
@@ -635,10 +637,14 @@ def _bench(show: Option) -> Option:
     installs or updates arduino-cli, Rust ESP32 fetches Rust for the ESP32, and a
     module added later is a cell of it with no change here (the owner's decision
     of 2026-10-10); Cores installs one of the suggested cores; Cancel stops the
-    running task. Upload and Raw flash overwrite what a board runs.
+    running task. Upload and Raw flash overwrite what a board runs. The slicer's
+    modules follow the toolchain modules in Install, from their own registry
+    (apothecary/slicer/modules): OrcaSlicer installs the pinned release, as the
+    Bench's toolchain card's button for it does; appended, so no cell before it moves.
     """
     from .firmware.modules import modules
     from .firmware.toolchains import SUGGESTED_CORES
+    from .slicer.modules import modules as slicers
 
     return Option(
         id="bench",
@@ -655,6 +661,14 @@ def _bench(show: Option) -> Option:
                         action=f"bench:install:{module.id}",
                     )
                     for module in modules()
+                ]
+                + [
+                    Option(
+                        id=f"bench:install:slicer:{slicer.id}",
+                        label=shorten(slicer.label),
+                        action=f"bench:install:slicer:{slicer.id}",
+                    )
+                    for slicer in slicers()
                 ],
             ),
             Option(id="bench:compile", label="Compile", action="bench:compile"),
@@ -924,6 +938,36 @@ def _find_shapes(drawn: ViewSeen, finders: Sequence[str], tail: str) -> Optional
     )
 
 
+def _slice_option(printers: Sequence[str]) -> Option:
+    """Slice on a made piece or a part from the parts folder: the pinned printer's
+    Machine opened with it chosen under its Print from here's *makes*, and a slice of
+    it started there for that printer (docs/plans/slicer-2026-10-10.md): its log in
+    the card, and the G-code chosen in the card's files when it ends, so Print
+    follows. One printer pinned in the site is the cell itself; several are a cell
+    each under Slice, as Print's are. The page carries it."""
+    if len(printers) == 1:
+        return Option(id="slice:piece", label="Slice", action=f"slice:piece:{printers[0]}")
+    return Option(
+        id="slice:piece",
+        label="Slice",
+        children=_listed("slice:piece", [(f"slice:piece:{p}", p) for p in printers]),
+    )
+
+
+def _print_option(printers: Sequence[str]) -> Option:
+    """Print on a made piece: the pinned printer's Machine opened with the piece
+    chosen under its Print from here's *makes* (the owner's answer of 2026-10-10).
+    One printer pinned in the site is the cell itself; several are a cell each
+    under Print. The page carries it."""
+    if len(printers) == 1:
+        return Option(id="print:piece", label="Print", action=f"print:piece:{printers[0]}")
+    return Option(
+        id="print:piece",
+        label="Print",
+        children=_listed("print:piece", [(f"print:piece:{p}", p) for p in printers]),
+    )
+
+
 def _made_picture_group(picture: PictureContext) -> Option:
     """Picture on a made piece: Word › the vocabulary's words, and Drop (the piece
     goes; its shape reads as found again). Both change the site, so the server
@@ -1099,6 +1143,19 @@ def _node_ring(
         verbs.append(Option(id="part:apply", label="Apply", action="part:apply"))
         verbs.append(Option(id="part:revert", label="Revert", action="part:revert"))
         options.append(Option(id="part", label="Part", children=verbs))
+    # A made piece with a printer pinned in its site to print it on: Print,
+    # appended after Part so no cell above moves. A piece with nowhere to be
+    # printed has no Print rather than one greyed out.
+    if made and picture.printers:
+        options.append(_print_option(picture.printers))
+    # Slice, beside Print: a made piece, or a part from the parts folder standing in
+    # the site -- not a camera, nor a printer or anything inside one -- sliced for a
+    # printer pinned there. Appended last, so no cell above moves; with no printer
+    # pinned in the site there is nothing to slice for, and no Slice.
+    in_a_printer = any(path == p or path.startswith(p + ".") for p in picture.printers)
+    part = bool(node is not None and node.part_ref and not camera)
+    if (made or part) and picture.printers and not in_a_printer:
+        options.append(_slice_option(picture.printers))
     return Ring(title=shorten(path or (node.name if node else "")), options=options)
 
 
@@ -1310,6 +1367,13 @@ CARRIED_BY: Dict[str, Carries] = {
     "level": Carries.VIEWER,
     # Streaming a file: the page starts the job with the file it has chosen.
     "print": Carries.VIEWER,
+    # A made piece's Print: the page opens the printer's Machine with the piece
+    # chosen under makes; nothing is sent until that card's Print.
+    "print:piece": Carries.VIEWER,
+    # Slice, on a made piece or a part: the page opens the printer's Machine with it
+    # chosen under makes and starts the slice there (POST /slicer/slice), a task the
+    # card follows; nothing is sent to the printer.
+    "slice": Carries.VIEWER,
     # Opening, closing, floating what stands in front of the world (panels.js).
     "panel": Carries.VIEWER,
     # How the world is drawn: the header's View menu (snapping, detail, outlines,

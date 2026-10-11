@@ -1745,7 +1745,12 @@ def test_a_print_started_from_the_card_is_a_job_with_its_file_machine_part_and_o
         "identity": "FAKESERIAL1",
         "path": BOARD,
     }
-    assert job.part.model_dump() == {"path": "footpedal", "name": "footpedal"}
+    assert job.part.model_dump() == {
+        "path": "footpedal",
+        "name": "footpedal",
+        "picture": None,
+        "camera": None,
+    }
     assert job.input.model_dump() == {
         "name": "bracket.gcode",
         "size": len(SMALL_PRINT),

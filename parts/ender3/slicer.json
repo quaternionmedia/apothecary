@@ -1,0 +1,64 @@
+{
+  "about": "printer_1's slicer profile: an Ender 3 (2018) with a 0.4 mm nozzle and a TH3D EZABL probe, on Marlin TH3D UFW 2.94a. It starts from OrcaSlicer's own Creality Ender-3 profiles, read from the installed release at each slice (none is copied here), and holds what the bench measured. Each value says where it came from. apothecary/slicer/profiles.py reads it.",
+  "slicer": "orcaslicer",
+  "start": {
+    "modules": ["home"],
+    "source": "the owner's decision of 2026-10-10 (docs/plans/slicer-2026-10-10.md): the start of a print is composed from modules as they are wanted; homing, with no levelling, for now -- using the stored mesh, probing each print and a measured first-layer offset are stubs"
+  },
+  "filament": {
+    "modules": ["printer"],
+    "source": "the owner's decision of 2026-10-10 (docs/plans/slicer-2026-10-10.md): the printer's one filament, Creality Generic PLA, named below; choosing another is a stub"
+  },
+  "orcaslicer": {
+    "vendor": "Creality",
+    "machine": "Creality Ender-3 0.4 nozzle",
+    "process": "0.20mm Standard @Creality Ender3",
+    "filament": "Creality Generic PLA",
+    "set": {
+      "machine": {
+        "printable_area": {
+          "value": ["0x0", "220x0", "220x220", "0x220"],
+          "source": "the build volume: 220 x 220 mm, Creality's published figure (parts/ender3/ender3.scad, the part's BUILD) and the bench's pinned printer_1 (docs/validation/2026-09-20-ender-bench.md: GET /firmware/printers/where, volume 220 x 220 x 250)"
+        },
+        "printable_height": {
+          "value": "250",
+          "source": "the build volume: 250 mm high, from the same two"
+        },
+        "gcode_flavor": {
+          "value": "marlin",
+          "source": "the firmware the bench identified: Marlin TH3D UFW 2.94a (docs/validation/2026-09-20-ender-bench.md, M115)"
+        },
+        "z_offset": {
+          "value": "0",
+          "source": "the bed's offset the bench measured, M851 Z-3.15 with X-44 Y-10 (docs/validation/2026-09-20-ender-bench.md), is the probe's, kept in the board's EEPROM and applied by the firmware itself when the start G-code's G28 homes Z with the probe",
+          "note": "the slicer adds nothing: adding -3.15 here would apply it a second time and drive the nozzle into the bed"
+        }
+      }
+    }
+  },
+  "measured": {
+    "firmware": {
+      "value": "Marlin TH3D UFW 2.94a, MACHINE_TYPE TH3D EZABL, one extruder",
+      "source": "docs/validation/2026-09-20-ender-bench.md: the boot banner and M115",
+      "used": "gcode_flavor marlin; the G-code is checked against the Print card's refused codes as an upload is"
+    },
+    "build_volume": {
+      "value": [220, 220, 250],
+      "unit": "mm",
+      "source": "Creality's published figure (parts/ender3, BUILD) and the bench's pin of printer_1 (GET /firmware/printers/where)",
+      "used": "printable_area and printable_height"
+    },
+    "probe_offset": {
+      "value": {"x": -44.0, "y": -10.0, "z": -3.15},
+      "unit": "mm",
+      "source": "docs/validation/2026-09-20-ender-bench.md: M851 X-44.00 Y-10.00 Z-3.15",
+      "used": "held, and nothing is applied: the firmware applies it when G28 homes Z with the probe, so z_offset stays 0; a measured first-layer offset is the start piece first-layer-offset, a stub"
+    },
+    "bed_mesh": {
+      "value": {"range": 2.34, "tilt_x": 1.754, "tilt_y": -0.466, "points": "5 x 5", "leveling": "off"},
+      "unit": "mm",
+      "source": "docs/validation/2026-09-20-ender-bench.md: M420 V, the stored mesh as it was last probed",
+      "used": "held, and nothing is applied: the start is home alone; turning the stored mesh on (M420 S1, the start piece stored-mesh) and probing each print (probe-each-print) are stubs, and the bench says to tram the bed before trusting it"
+    }
+  }
+}
