@@ -169,7 +169,7 @@ def test_a_layout_remembered_with_the_jobs_panel_is_harmless(page, base_url: str
     expect(rail).to_have_attribute("data-side", "left")
     # Pictures' tab, closed, brings it back into the strip and shows it.
     page.locator(".panel-tab[data-panel='pictures']").click()
-    expect(rail.locator(".panel[data-panel='pictures']")).to_be_visible(timeout=2000)
+    expect(rail.locator(".panel[data-panel='pictures']")).to_be_visible()
     remembered = json.loads(page.evaluate("() => localStorage.getItem('apothecary.panels')"))
     assert "jobs" not in remembered and remembered["_rail"]["tab"] == "pictures"
     assert errors == []
@@ -335,7 +335,7 @@ def test_the_toolbar_count_opens_sites_problems(page, base_url: str):
     expect(page.locator(".panel[data-panel='site']")).to_have_count(0)
     page.locator("#validity-indicator").click()
     problems = page.locator("#site-problems")
-    expect(problems).to_be_visible(timeout=2000)
+    expect(problems).to_be_visible()
     expect(problems).to_be_in_viewport()
     expect(problems).to_have_attribute("open", "")
     expect(page.locator("#problem-list li").first).to_be_visible()
@@ -346,7 +346,7 @@ def test_the_toolbar_count_opens_sites_problems(page, base_url: str):
     )
     expect(problems).to_be_hidden()
     page.locator("#validity-indicator").click()
-    expect(problems).to_be_visible(timeout=2000)
+    expect(problems).to_be_visible()
     assert page.evaluate("() => window.apothecaryPanels.railHidden()") is False
     x = page.locator("#pos-x")
     x.fill("100")

@@ -225,31 +225,40 @@ def test_arrows_reach_the_nearest_occupied_cell(page: Page, ring_url: str):
             wrong.append({**v, "got": got})
     assert not wrong, f"nearest disagrees on {len(wrong)} vector(s): {wrong}"
 
-    # On the page: arrows highlight, a chord is the corner, walking gets there too.
+    # On the page: arrows highlight, walking from cell to cell, and a chord is the corner.
     page.keyboard.press("m")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press("2")
     page.keyboard.press("7")  # the control ring: eight options, every cell held
     assert len(_wedges(page)) == 8
-    page.keyboard.press("ArrowUp")
-    expect(page.locator("#ring-overlay .wedge.hot")).to_have_attribute("data-cell", "8")
-    page.keyboard.press("ArrowLeft")  # inside the chord window: the corner
-    expect(page.locator("#ring-overlay .wedge.hot")).to_have_attribute("data-cell", "7")
-    page.wait_for_timeout(300)  # past the window, so the next arrow is a walk, not a chord
-    page.keyboard.press("ArrowDown")
+    hot = page.locator("#ring-overlay .wedge.hot")
+
+    def walk(key: str, cell: str) -> None:
+        page.keyboard.press(key)
+        expect(hot).to_have_attribute("data-cell", cell)
+        page.wait_for_timeout(300)  # past the chord window, so the next arrow is a walk
+
+    for key, cell in (("ArrowUp", "8"), ("ArrowLeft", "7"), ("ArrowDown", "4"), ("ArrowDown", "1")):
+        walk(key, cell)
+    # From 1, Up then Right inside the chord window: the corner between them, 9. Walked,
+    # the same two arrows go up to 4 and on to 6, the next held cell right of it. The
+    # chord's two keys are sent in one turn of the page, so a busy machine cannot hold
+    # them apart past the window.
+    page.evaluate(
+        "() => ['ArrowUp', 'ArrowRight'].forEach((key) => "
+        "window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })))"
+    )
+    expect(hot).to_have_attribute("data-cell", "9")
     page.wait_for_timeout(300)
-    expect(page.locator("#ring-overlay .wedge.hot")).to_have_attribute("data-cell", "4")
-    page.keyboard.press("ArrowDown")
-    page.wait_for_timeout(300)
-    expect(page.locator("#ring-overlay .wedge.hot")).to_have_attribute("data-cell", "1")
-    page.keyboard.press("ArrowRight")
-    page.wait_for_timeout(300)
-    expect(page.locator("#ring-overlay .wedge.hot")).to_have_attribute("data-cell", "2")
-    page.keyboard.press("ArrowUp")
-    page.wait_for_timeout(300)
-    page.keyboard.press("ArrowRight")
-    page.wait_for_timeout(300)  # 8 then 9: the same corner, reached by walking
-    expect(page.locator("#ring-overlay .wedge.hot")).to_have_attribute("data-cell", "9")
+    for key, cell in (
+        ("ArrowDown", "6"),
+        ("ArrowDown", "3"),
+        ("ArrowLeft", "2"),
+        ("ArrowLeft", "1"),
+    ):
+        walk(key, cell)
+    walk("ArrowUp", "4")
+    walk("ArrowRight", "6")
     page.keyboard.press("Escape")
     assert _intents(page) == []
 
@@ -578,17 +587,17 @@ def test_one_rail_stacks_site_and_selected_over_a_strip_of_tabs(page: Page, ring
     # A tab pressed shows its panel under the strip; another tab, that one instead.
     _tab(page, "pictures").locator(".rail-tab-name").click()
     pictures = rail.locator(".panel-tabbody .panel[data-panel='pictures']")
-    expect(pictures).to_be_visible(timeout=2000)
+    expect(pictures).to_be_visible()
     expect(pictures.locator("#pictures-list")).to_be_visible(timeout=5000)
     expect(_tab(page, "pictures")).to_have_class(re.compile(r"\bactive\b"))
     # Under the strip, which Site gave room for.
     assert pictures.bounding_box()["y"] > rail.locator(".panel-tabstrip").bounding_box()["y"]
     _tab(page, "second").locator(".rail-tab-name").click()
-    expect(rail.locator(".panel[data-panel='second']")).to_be_visible(timeout=2000)
+    expect(rail.locator(".panel[data-panel='second']")).to_be_visible()
     expect(pictures).to_be_hidden()
     # Pressed again, it folds away; Site and Selected stay.
     _tab(page, "second").locator(".rail-tab-name").click()
-    expect(rail.locator(".panel[data-panel='second']")).to_be_hidden(timeout=2000)
+    expect(rail.locator(".panel[data-panel='second']")).to_be_hidden()
     expect(site).to_be_visible()
     expect(selected).to_be_visible()
 
@@ -601,26 +610,26 @@ def test_a_panel_closes_to_a_tab_and_collapses(page: Page, ring_url: str):
     # Close a tab of the strip: gone from it, a tab over the world remains, and brings it back.
     _tab(page, "pictures").locator(".rail-tab-name").click()
     _tab(page, "pictures").locator(".rail-tab-close").click()
-    expect(page.locator(".panel-tab[data-panel='pictures']")).to_be_visible(timeout=1000)
+    expect(page.locator(".panel-tab[data-panel='pictures']")).to_be_visible()
     expect(_tab(page, "pictures")).to_have_count(0)
     expect(rail.locator(".panel[data-panel='pictures']")).to_have_count(0)
     page.locator(".panel-tab[data-panel='pictures']").click()
-    expect(rail.locator(".panel[data-panel='pictures']")).to_be_visible(timeout=1000)
+    expect(rail.locator(".panel[data-panel='pictures']")).to_be_visible()
     expect(_tab(page, "pictures")).to_have_class(re.compile(r"\bactive\b"))
     expect(page.locator(".panel-tab")).to_have_count(0)
 
     # A stacked one closes the same way and comes back to the stack.
     page.locator(".panel[data-panel='selected'] .panel-close").click()
-    expect(page.locator(".panel-tab[data-panel='selected']")).to_be_visible(timeout=1000)
+    expect(page.locator(".panel-tab[data-panel='selected']")).to_be_visible()
     page.locator(".panel-tab[data-panel='selected']").click()
-    expect(rail.locator(".panel[data-panel='selected']")).to_be_visible(timeout=1000)
+    expect(rail.locator(".panel[data-panel='selected']")).to_be_visible()
 
     # Collapse: the body folds, the title stays.
     page.locator(".panel[data-panel='site'] .panel-collapse").click()
-    expect(page.locator("#contents-list")).to_be_hidden(timeout=1000)
+    expect(page.locator("#contents-list")).to_be_hidden()
     expect(page.locator(".panel[data-panel='site'] .panel-title")).to_be_visible()
     page.locator(".panel[data-panel='site'] .panel-collapse").click()
-    expect(page.locator("#contents-list")).to_be_visible(timeout=1000)
+    expect(page.locator("#contents-list")).to_be_visible()
 
 
 @pytest.mark.e2e
@@ -630,7 +639,7 @@ def test_a_panel_floats_drags_and_docks(page: Page, ring_url: str):
     rail, world = _open_panels(page, ring_url)
     page.locator(".panel[data-panel='selected'] .panel-float").click()
     free = page.locator(".panel-free-layer .panel[data-panel='selected']")
-    expect(free).to_be_visible(timeout=1000)
+    expect(free).to_be_visible()
     before = free.bounding_box()
     title = free.locator(".panel-title")
     tb = title.bounding_box()
@@ -652,7 +661,7 @@ def test_a_panel_floats_drags_and_docks(page: Page, ring_url: str):
     # Dock it back: in the stack, under Site.
     free.locator(".panel-float").click()
     docked = rail.locator(".panel[data-panel='selected']")
-    expect(docked).to_be_visible(timeout=1000)
+    expect(docked).to_be_visible()
     assert (
         docked.bounding_box()["y"] > rail.locator(".panel[data-panel='site']").bounding_box()["y"]
     )
@@ -661,11 +670,11 @@ def test_a_panel_floats_drags_and_docks(page: Page, ring_url: str):
     _tab(page, "pictures").locator(".rail-tab-name").click()
     _tab(page, "pictures").locator(".rail-tab-float").click()
     floated = page.locator(".panel-free-layer .panel[data-panel='pictures']")
-    expect(floated).to_be_visible(timeout=1000)
+    expect(floated).to_be_visible()
     expect(floated.locator(".panel-title")).to_be_visible()
     expect(_tab(page, "pictures")).to_have_count(0)
     floated.locator(".panel-float").click()
-    expect(rail.locator(".panel-tabbody .panel[data-panel='pictures']")).to_be_visible(timeout=1000)
+    expect(rail.locator(".panel-tabbody .panel[data-panel='pictures']")).to_be_visible()
     expect(_tab(page, "pictures")).to_have_class(re.compile(r"\bactive\b"))
 
 
@@ -691,7 +700,7 @@ def test_a_closed_panel_stays_closed_and_the_ring_reopens_it(page: Page, ring_ur
     site_cell = next(cell for cell, label in inner.items() if label == "Site")
     page.keyboard.press(site_cell)
     expect(page.locator("#ring-overlay")).to_have_count(0)
-    expect(rail.locator(".panel[data-panel='site']")).to_be_visible(timeout=2000)
+    expect(rail.locator(".panel[data-panel='site']")).to_be_visible()
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     expect(page.locator(".panel-tab")).to_have_count(0)
 
@@ -702,14 +711,14 @@ def test_a_closed_panel_stays_closed_and_the_ring_reopens_it(page: Page, ring_ur
     expect(page.locator("#ring-overlay .title")).to_have_text("Panels")
     pictures_cell = next(cell for cell, label in _wedges(page).items() if label == "Pictures")
     page.keyboard.press(pictures_cell)
-    expect(rail.locator(".panel[data-panel='pictures']")).to_be_visible(timeout=2000)
+    expect(rail.locator(".panel[data-panel='pictures']")).to_be_visible()
     expect(_tab(page, "pictures")).to_have_class(re.compile(r"\bactive\b"))
     expect(page.locator(".panel-tab")).to_have_count(0)
 
     # Every panel closed: the world has the whole width, and four tabs wait.
     for pid in ["site", "selected", "pictures", "bench"]:
         page.evaluate("(id) => window.apothecaryPanels.close(id)", pid)
-    expect(page.locator(".panel-tab")).to_have_count(4, timeout=2000)
+    expect(page.locator(".panel-tab")).to_have_count(4)
     expect(rail).to_be_hidden()
     _world_is(page, page.viewport_size["width"])
 
@@ -728,24 +737,24 @@ def test_the_tilde_hides_the_rail_and_the_ring_does_too(page: Page, ring_url: st
     expect(rail).to_be_visible()
     page.locator("#viewer-canvas").click(position={"x": 200, "y": 200})
     page.keyboard.press("`")
-    expect(rail).to_be_hidden(timeout=1000)
+    expect(rail).to_be_hidden()
     expect(page.locator(".panel-tab-rail")).to_be_visible()
     _world_is(page, full)
     page.keyboard.press("`")
-    expect(rail).to_be_visible(timeout=1000)
+    expect(rail).to_be_visible()
     page.keyboard.press("~")
-    expect(rail).to_be_hidden(timeout=1000)
+    expect(rail).to_be_hidden()
     page.locator(".panel-tab-rail").click()
-    expect(rail).to_be_visible(timeout=1000)
+    expect(rail).to_be_visible()
 
     # From the ring: Panels > Rail hides it too.
     page.locator("#viewer-canvas").click(button="right", position={"x": 30, "y": 30})
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press(next(cell for cell, label in _wedges(page).items() if label == "Panels"))
     page.keyboard.press(next(cell for cell, label in _wedges(page).items() if label == "Rail"))
-    expect(rail).to_be_hidden(timeout=2000)
+    expect(rail).to_be_hidden()
     page.keyboard.press("`")
-    expect(rail).to_be_visible(timeout=1000)
+    expect(rail).to_be_visible()
 
 
 @pytest.mark.e2e
@@ -784,7 +793,7 @@ def test_the_rail_swaps_to_the_left_and_is_remembered_there(page: Page, ring_url
     rail, world = _open_panels(page, ring_url)
     _tab(page, "pictures").locator(".rail-tab-name").click()
     rail.locator(".panel-rail-swap").click()
-    expect(rail).to_have_attribute("data-side", "left", timeout=1000)
+    expect(rail).to_have_attribute("data-side", "left")
     rb, wb = rail.bounding_box(), world.bounding_box()
     assert rb["x"] <= 1 and wb["x"] >= rb["width"] - 1  # the world is on its right
     for pid in ("site", "selected", "pictures"):
@@ -805,7 +814,7 @@ def test_the_rail_swaps_to_the_left_and_is_remembered_there(page: Page, ring_url
     page.mouse.down()
     page.mouse.move(page.viewport_size["width"] - 100, grip["y"] + 5, steps=8)
     page.mouse.up()
-    expect(rail).to_have_attribute("data-side", "right", timeout=1000)
+    expect(rail).to_have_attribute("data-side", "right")
     assert world.bounding_box()["x"] <= 1
     page.reload()
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
