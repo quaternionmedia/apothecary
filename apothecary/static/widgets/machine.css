@@ -128,12 +128,14 @@
 #control .sent.bad { color: var(--bad); }
 /* A printer's controls and cards, or a devkit's: the root's kind shows one set. */
 .machine.kind-devkit .printer-only, .machine.kind-printer .devkit-only { display: none !important; }
+/* A board pinned inside a printer is never flashed: its Flashing folds away. */
+.machine.in-printer #flash-card { display: none !important; }
 #c-sketch .ok { color: var(--ok); } #c-sketch .bad { color: var(--bad); } #c-sketch .warn { color: var(--warn); }
-/* In a popup over the world: one column, the log under the cards, the control pad inline. */
-.machine.host-popup .machine-head { padding: 0.4rem 0.5rem; gap: 0.4rem; border-bottom: 0; }
-.machine.host-popup .machine-main { display: block; padding: 0.4rem 0.5rem; height: auto; }
-.machine.host-popup .cards { grid-template-columns: repeat(2, 1fr); }
-.machine.host-popup #control { position: static; width: auto; margin: 0.5rem 0.5rem 0; box-shadow: none; }
-.machine.host-popup .chart svg { height: 110px; }
-.machine.host-popup .right { margin-top: 0.5rem; }
-.machine.host-popup #log { min-height: 140px; max-height: 40vh; }
+/* In the world's page -- a tab of the rail, or floated: one column, the log under the cards, the control pad inline. */
+.machine.host-world .machine-head { padding: 0.4rem 0.5rem; gap: 0.4rem; border-bottom: 0; }
+.machine.host-world .machine-main { display: block; padding: 0.4rem 0.5rem; height: auto; }
+.machine.host-world .cards { grid-template-columns: repeat(2, 1fr); }
+.machine.host-world #control { position: static; width: auto; margin: 0.5rem 0.5rem 0; box-shadow: none; }
+.machine.host-world .chart svg { height: 110px; }
+.machine.host-world .right { margin-top: 0.5rem; }
+.machine.host-world #log { min-height: 140px; max-height: 40vh; }

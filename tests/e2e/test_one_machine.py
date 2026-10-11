@@ -93,7 +93,7 @@ MACHINE = ".panel[data-panel='machine']"
 @pytest.mark.e2e
 def test_watch_and_monitor_are_one_cell_that_opens_the_machine(page: Page, url: str):
     """The Device ring holds one cell for a board's Machine, where Watch was; Monitor is
-    gone. Chosen, the Machine opens in front of the world, tethered to the printer."""
+    gone. Chosen, the Machine opens in the rail's tab strip, the printer's."""
     _open_viewer(page, url)
     _ring_on(page, "printer_1")
     _choose(page, "Device")
@@ -106,9 +106,8 @@ def test_watch_and_monitor_are_one_cell_that_opens_the_machine(page: Page, url: 
     machine = page.locator(MACHINE)
     expect(machine).to_be_visible(timeout=5000)
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == {
-        "tether": "printer_1"
-    }
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
+    expect(machine.locator(".panel-name")).to_contain_text("printer_1")
     expect(page.locator("#status")).to_contain_text("Opened printer_1")
 
 
@@ -275,9 +274,8 @@ def test_a_devkit_has_a_machine_with_what_it_should_run_and_what_it_says(page: P
     badge.click()
     machine = page.locator(MACHINE)
     expect(machine).to_be_visible(timeout=5000)
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == {
-        "tether": "footpedal"
-    }
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
+    expect(machine.locator(".panel-name")).to_contain_text("footpedal")
     expect(machine.locator("#c-board")).to_contain_text(UNO)
     expect(machine.locator("#c-board")).to_contain_text("Arduino Uno")
     sketch = machine.locator("#c-sketch")
@@ -486,15 +484,14 @@ def test_device_flash_opens_the_machine_at_its_card_and_uploads_then_identifies(
 @pytest.mark.e2e
 def test_the_monitor_address_opens_the_board_s_machine_where_it_is_pinned(page: Page, url: str):
     """/firmware/monitor?port=, the printer monitor's address, is the viewer on the site
-    the port is pinned in, with its Machine open and tethered to the printer -- on a fresh
+    the port is pinned in, with its Machine open in the rail, the printer's -- on a fresh
     load, the port kept in the address, so a reload opens it again."""
     page.goto(f"{url}/firmware/monitor?port={PRINTER}")
     expect(page).to_have_url(re.compile(r"/viewer/sites/garage\?machine=%2Fdev%2FttyFAKE1$"))
     machine = page.locator(MACHINE)
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=15000)
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == {
-        "tether": "printer_1"
-    }
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
+    expect(machine.locator(".panel-name")).to_contain_text("printer_1")
     page.reload()
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=15000)
     # Closed, the address lets go of it; a port of the wrong shape opens nothing.
@@ -507,9 +504,9 @@ def test_the_monitor_address_opens_the_board_s_machine_where_it_is_pinned(page: 
 
 
 @pytest.mark.e2e
-def test_a_board_pinned_nowhere_floats_on_the_default_site(page: Page, start_server):
+def test_a_board_pinned_nowhere_opens_in_the_rail_on_the_default_site(page: Page, start_server):
     """The monitor's address for a board pinned nowhere: the default site, its Machine
-    floating over the world. The Uno, never asked, is a devkit's Machine -- Probe and
+    in the rail as every Machine is. The Uno, never asked, is a devkit's Machine -- Probe and
     Listen, no Poll, its port closed -- and the printer, asked M115, a printer's: Poll,
     and nothing that would take its port. (The firmware page's device cards, each a
     board's Machine now.)"""
@@ -523,7 +520,7 @@ def test_a_board_pinned_nowhere_floats_on_the_default_site(page: Page, start_ser
     expect(page).to_have_url(re.compile(r"/viewer/sites/garage\?machine=%2Fdev%2FttyFAKE0$"))
     machine = page.locator(MACHINE)
     expect(machine.locator("#c-board")).to_contain_text("Arduino Uno", timeout=15000)
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "free"
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
     expect(machine.locator(".panel-name")).to_contain_text("pinned nowhere in garage")
     for shown in ("#probe", "#listen", "#identify", "#flash-card"):
         expect(machine.locator(shown)).to_be_visible()

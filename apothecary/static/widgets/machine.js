@@ -24,12 +24,16 @@
  * query, reconnect, reset and release. Everything else that draws the board
  * reads the same model, so nothing polls it a second time.
  *
- * mountMachine(root, { base, port, host, boards, kind, pin, say }) renders into
- * `root` and returns the handle the ring drives (carry, pairs, device) and the
- * tests read (state, ctl, level, print). `host` is "popup": the world's, one
- * board and everything inline (the monitor page, the other host, is a link to
- * the world now). `boards` is the page's model, made here when none is given.
- * `kind` is "printer" or "devkit"; left out, it is whatever the board is. `pin` ({ site, path, how }) is where the board is pinned, or bound
+ * mountMachine(root, { base, port, host, boards, kind, inPrinter, pin, say })
+ * renders into `root` and returns the handle the ring drives (carry, pairs,
+ * device) and the tests read (state, ctl, level, print). `host` is "world": the
+ * world's page, a tab of its rail or floated, one board and everything inline in
+ * one column (the monitor page, the other host, is a link to the world now).
+ * `boards` is the page's model, made here when none is given.
+ * `kind` is "printer" or "devkit"; left out, it is whatever the board is. `inPrinter`
+ * says the board is pinned inside a printer: a printer's board, never flashed,
+ * whatever it has been identified as so far, so its Flashing card folds away and
+ * Device › Flash says why. `pin` ({ site, path, how }) is where the board is pinned, or bound
  * by its sketch when `how` is "sketch". `say(text,
  * kind)` is the host's status bar: a refusal is said there as an error as well
  * as in the log. destroy() stops watching and frees what the module put on the
@@ -225,10 +229,11 @@ const BY_CMD = {
 };
 
 
-export function mountMachine(root, { base = "", port = "", host = "popup", boards = null, kind = null, pin = null, say = null } = {}) {
+export function mountMachine(root, { base = "", port = "", host = "world", boards = null, kind = null, inPrinter = false, pin = null, say = null } = {}) {
     const BASE = base;
     const model = boards || mountBoards({ base });
     root.classList.add("machine", `host-${host}`);
+    root.classList.toggle("in-printer", !!inPrinter);
     root.innerHTML = HEAD + `<div class="machine-main"><section class="left">${CARDS}</section><section class="right">${LOG}</section></div>` + CONTROL;
     const $ = (id) => root.querySelector(`#${CSS.escape(id)}`);
     const who = {};  // this Machine, as the model's watcher of its board
@@ -277,7 +282,7 @@ export function mountMachine(root, { base = "", port = "", host = "popup", board
         if (changed && state.port) {
             watchNow();
             if (k === "printer") { loadCodes(); loadLevel(); loadPrintJobs(); loadChoices(); loadPrintFiles(); watchPrint(); }
-            else mountFlashing();
+            else if (!inPrinter) mountFlashing();
         }
         return changed;
     }
@@ -950,7 +955,7 @@ export function mountMachine(root, { base = "", port = "", host = "popup", board
     // Device › Flash: the card in view, its sketch under the cursor.
     function showFlashing() {
         if (!state.port) return;
-        if (state.kind !== "devkit") { refuse("Flash: a printer keeps its own firmware; Apothecary polls it and never flashes it"); return; }
+        if (state.kind !== "devkit" || inPrinter) { refuse("Flash: a printer keeps its own firmware; Apothecary polls it and never flashes it"); return; }
         mountFlashing();
         $("flash-card").scrollIntoView({ block: "nearest" });
         const pick = $("flash-form").querySelector(".sketch-select");
@@ -1050,7 +1055,7 @@ export function mountMachine(root, { base = "", port = "", host = "popup", board
             if (flash) { flash.build.destroy(); flash.tasks.destroy(); flash = null; }
             for (const [event, fn] of onWindow) window.removeEventListener(event, fn);
             if (!boards) model.destroy();
-            root.innerHTML = ""; root.classList.remove("machine", `host-${host}`, "kind-printer", "kind-devkit");
+            root.innerHTML = ""; root.classList.remove("machine", `host-${host}`, "kind-printer", "kind-devkit", "in-printer");
         },
     };
 

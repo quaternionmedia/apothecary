@@ -1,11 +1,11 @@
-"""Worked example: a garage workbench with a fleet of 3D printers, inside its
+"""Worked example: a garage workbench with a 3D printer on it, inside its
 own building shell, alongside abstract utility fixtures, storage, and a
 subtractive-manufacturing stub.
 
 PROTOTYPE — demonstrates apothecary/hierarchy.py's fractal Assembly against a
 concrete, spatially verifiable scene rather than an eyeballed one: one Site
 ("Garage") containing multiple independently-sourced Structures -- the
-workbench, a printer per 3D printer sitting on top of it, the garage
+workbench, the 3D printer sitting on top of it, the boards beside it, the garage
 building itself (walls with a door and a window cut into them), one
 Structure per abstract utility fixture (lighting, HVAC, electrical, fluids),
 a storage shelving unit, and a floor-standing CNC router standing in for
@@ -22,11 +22,11 @@ spigot, a shelf) -- left for further development, not modeled in functional
 detail. The building shell's door and window are openings only, no panel or
 pane.
 
-"Verifiable" means more than "it renders": every printer Structure carries a
+"Verifiable" means more than "it renders": the printer and every board carry a
 ``footprint`` (see ``Structure.world_bounds()`` in ``hierarchy.py``), so
-``tests/test_garage_workbench.py`` checks, in code, that every printer sits
-exactly on the bench's top surface, stays within the bench's footprint, and
-doesn't overlap its neighbors -- and that the newer additions (the building,
+``tests/test_garage_workbench.py`` checks, in code, that each sits exactly on
+the bench's top surface, stays within the bench's footprint, and doesn't
+overlap its neighbours -- and that the newer additions (the building,
 fixtures, storage, CNC router) don't overlap anything either, without being
 held to that same bench-specific rule (see ``BENCH_MOUNTED_STRUCTURES`` and
 ``validate_garage_layout``) -- not just that the generated .scad "looks about
@@ -66,7 +66,7 @@ BENCH_TOP_Z = LEG_HEIGHT + TABLETOP_THICKNESS  # world Z of the bench's usable s
 LEG_SIZE = 40.0
 LEG_INSET = 50.0
 
-# The printers are Ender 3s, drawn as the machine is (parts/ender3, from
+# A printer is an Ender 3, drawn as the machine is (parts/ender3, from
 # published dimensions): the frame's footprint, with the LCD hung off the
 # front, the power supply on the right and the spool over it, is what the
 # part's wrapper says it is. The posts and top bar below are the same
@@ -81,11 +81,12 @@ UPRIGHT_Y = 150.0  # where the Z uprights stand along Y, the model's upright_y
 UPRIGHT_HEIGHT = 420.0
 TOP_BAR_Z = 440.0
 
-# Where each printer sits on the bench (world X, world Y), all at BENCH_TOP_Z.
-# Three 470 mm machines on an 1800 mm bench with the boards at the right end
-# leaves 50 mm between them -- a real bench, not a showroom -- see
-# tests/test_garage_workbench.py for the checks this satisfies.
-PRINTER_X_POSITIONS = [100.0, 620.0, 1140.0]
+# Where each printer sits on the bench (world X, world Y), at BENCH_TOP_Z: one
+# 470 mm machine at the left end, the boards at the right end, and the bench's
+# middle clear between them, so a camera added above the bench looks down at
+# the bench (the owner's decision of 2026-10-04: one printer in the garage for
+# now) -- see tests/test_garage_workbench.py for the checks this satisfies.
+PRINTER_X_POSITIONS = [100.0]
 PRINTER_Y_POSITION = 150.0
 
 # Every printer Structure.status is one of these; enforced at the API layer
@@ -103,8 +104,6 @@ PRINTER_STATUSES = ["idle", "printing", "offline", "maintenance"]
 # this bench-specific rule.
 BENCH_MOUNTED_STRUCTURES = {
     "printer_1",
-    "printer_2",
-    "printer_3",
     "esp32_blink",
     "footpedal",
     "arduino_uno",
@@ -112,8 +111,7 @@ BENCH_MOUNTED_STRUCTURES = {
     "teensy_40",
 }
 
-# The boards on the bench east of printer_3 (which ends at x 1610), so the
-# firmware seam has scene nodes to bind real devices to: an ESP32 devkit
+# The boards at the bench's right end, from x 1620 on, so the firmware seam has scene nodes to bind real devices to: an ESP32 devkit
 # running parts/esp32_blink/, drawn as the board it is (parts/boards/
 # esp32_devkitc), the footpedal part (parts/footpedal/, which carries its
 # own sketch), and an Arduino Uno, a Raspberry Pi 4 and a Teensy 4.0 lying
@@ -651,7 +649,7 @@ def _build_footpedal() -> Assembly:
 
 
 def create_example_site() -> Assembly:
-    """A garage: a workbench with a fleet of printers on top of it, inside its
+    """A garage: a workbench with a printer on top of it, inside its
     own building shell, alongside abstract utility fixtures, storage, a
     subtractive-manufacturing stub, and two boards the firmware seam can
     talk to -- see this module's docstring.

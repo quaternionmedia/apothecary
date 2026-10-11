@@ -96,7 +96,7 @@ and `surface_area`, are computed fields, so they are part of the box's JSON.
 `intersects` counts touching as overlapping: two boxes that share a face
 intersect. A layout that must leave a gap between two things checks
 `not a.intersects(b)`, as `tests/test_garage_workbench.py` does for the
-printers on the bench.
+printer and the boards on the bench.
 
 ```pycon
 >>> side_by_side = BoundingBox3D(

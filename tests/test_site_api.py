@@ -48,7 +48,7 @@ def test_get_garage_site_default_layout_is_valid():
     assert data["is_valid"] is True
     assert data["violations"] == []
     names = {s["name"] for s in data["structures"]}
-    assert {"workbench", "printer_1", "printer_2", "printer_3"} <= names
+    assert {"workbench", "printer_1"} <= names
     assert {
         "garage_building",
         "lighting",
@@ -143,7 +143,7 @@ def test_workbench_has_no_status_or_build_volume():
 def test_printers_default_to_idle_with_a_build_volume():
     data = client.get("/sites/garage").json()
     printers = [s for s in data["structures"] if s["name"].startswith("printer_")]
-    assert len(printers) == 3
+    assert [p["name"] for p in printers] == ["printer_1"]  # one printer, for now
     for printer in printers:
         assert printer["status"] == "idle"
         assert printer["build_volume"] == [220.0, 220.0, 250.0]
@@ -199,14 +199,17 @@ def test_layout_endpoint_with_no_overrides_matches_default():
 
 
 def test_layout_endpoint_detects_overlap():
+    # Moved along the bench until it reaches the footpedal at its right end, and no
+    # further: the one violation docs/validation/2026-09-21-local-integration.md's
+    # rail-and-Site checklist asks a person to see.
     response = client.post(
         "/sites/garage/layout",
-        json={"positions": {"printer_1": {"x": 650, "y": 150, "z": 780}}},
+        json={"positions": {"printer_1": {"x": 1160, "y": 150, "z": 780}}},
     )
     data = response.json()
     assert data["is_valid"] is False
-    kinds = {v["kind"] for v in data["violations"]}
-    assert "overlap" in kinds
+    assert [sorted(v["structures"]) for v in data["violations"]] == [["footpedal", "printer_1"]]
+    assert data["violations"][0]["kind"] == "overlap"
 
 
 def test_each_violation_names_its_pieces_by_tree_path_beside_their_names():
@@ -250,7 +253,7 @@ def test_layout_endpoint_detects_wrong_height():
 
 
 def test_layout_endpoint_valid_move_updates_world_bounds_and_scad():
-    # A 470 mm Ender 3 nudged 20 mm right still clears printer_2; its world
+    # A 470 mm Ender 3 nudged 20 mm right stays on the bench; its world
     # bounds start where its LCD hangs off the front (y -41) and its frame
     # begins (x -2), which is what the footprint says.
     response = client.post(

@@ -1,0 +1,34 @@
+{
+  "name": "webcam_desk_stand",
+  "description": "A stub, for later: a webcam on a desk stand -- a weighted foot and an upright, the webcam on a hinge at its top, looking down at the desk. Only the bare webcam is drawn for now.",
+  "category": "camera",
+  "tags": [
+    "camera",
+    "webcam",
+    "stand",
+    "stub"
+  ],
+  "preview_color": [
+    0.3,
+    0.3,
+    0.3
+  ],
+  "source": {
+    "title": "webcam on a desk stand, a stub",
+    "author": "Quaternion Media",
+    "license": "MIT",
+    "note": "A placeholder that draws the library's bare webcam; the stand is to come."
+  },
+  "bounds": {
+    "min": [
+      -45.0,
+      -15.0,
+      0.0
+    ],
+    "max": [
+      45.0,
+      15.0,
+      34.0
+    ]
+  }
+}

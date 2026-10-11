@@ -22,7 +22,7 @@ import pytest
 from PIL import Image, ImageDraw
 from playwright.sync_api import expect
 
-CAMERA = "pinned_panel_camera"
+CAMERA = "pinned_panel_camera"  # the device id another browser gave a camera part
 
 
 def _png(offset: int) -> bytes:
@@ -55,12 +55,16 @@ def _row(page, path: str):
 
 @pytest.fixture
 def leaves_as_found(page, base_url: str):
-    """After the test: the camera, views and kept pictures it added are taken back."""
+    """After the test: the cameras, views and kept pictures it added are taken back."""
     api = page.request
-    views = {vw["id"] for vw in api.get(f"{base_url}/placed").json()["views"]}
+    placed = api.get(f"{base_url}/placed").json()
+    views = {vw["id"] for vw in placed["views"]}
+    cameras = {(c["site"], c["name"]) for c in placed["cameras"]}
     pictures = {p["path"] for p in api.get(f"{base_url}/photos/pictures").json()}
     yield
-    api.delete(f"{base_url}/cameras/{CAMERA}")
+    for camera in api.get(f"{base_url}/placed").json()["cameras"]:
+        if (camera["site"], camera["name"]) not in cameras:
+            api.delete(f"{base_url}/sites/{camera['site']}/cameras/{camera['name']}")
     for view in api.get(f"{base_url}/placed").json()["views"]:
         if view["id"] not in views:
             api.delete(f"{base_url}/sites/{view['site']}/views/{view['id']}")
@@ -173,8 +177,9 @@ def test_a_layout_remembered_with_the_jobs_panel_is_harmless(page, base_url: str
 
 @pytest.mark.e2e
 def test_a_problem_marks_its_pieces_and_its_row_selects_one_at_its_level(page, base_url: str):
-    """printer_1 moved onto printer_2: both rows red, saying why on hover; the problem
-    listed at Site's top selects printer_1 from a level below, stepping out to it."""
+    """printer_1 moved onto the footpedal: both rows red, saying why on hover; Site's one
+    folded line says so, and unfolded, the problem selects printer_1 from a level
+    below, stepping out to it."""
     _open(page, base_url)
     status = page.locator("#status")
     problems = page.locator("#site-problems")
@@ -182,19 +187,22 @@ def test_a_problem_marks_its_pieces_and_its_row_selects_one_at_its_level(page, b
     _row(page, "printer_1").click()
     x = page.locator("#pos-x")
     expect(x).to_be_visible()
-    x.fill("650")
+    x.fill("1160")
     x.press("Tab")
     expect(page.locator("#validity-indicator")).to_contain_text("violation", timeout=5000)
     rows = page.locator("#problem-list li")
     expect(rows).to_have_count(1)
-    expect(rows.first).to_have_text("printer_1 and printer_2 overlap")
+    expect(rows.first).to_have_text("printer_1 and footpedal overlap")
     expect(page.locator("#site-problems-count")).to_have_text("1 problem")
-    for name in ("printer_1", "printer_2"):
+    expect(rows.first).to_be_hidden()  # folded until asked for
+    page.locator("#site-problems > summary").click()
+    expect(rows.first).to_be_visible()
+    for name in ("printer_1", "footpedal"):
         expect(_row(page, name)).to_have_class(re.compile(r"\binvalid\b"))
         expect(_row(page, name)).to_have_attribute(
-            "title", re.compile("printer_1 and printer_2 overlap")
+            "title", re.compile("printer_1 and footpedal overlap")
         )
-    expect(_row(page, "printer_3")).not_to_have_class(re.compile(r"\binvalid"))
+    expect(_row(page, "esp32_blink")).not_to_have_class(re.compile(r"\binvalid"))
 
     # From inside the bench, the row steps back out to the root and selects printer_1.
     page.evaluate("() => window.fractalViewer.zoomIn('workbench')")
@@ -254,9 +262,10 @@ def test_a_problem_deep_in_the_tree_marks_every_piece_above_it(page, base_url: s
     expect(printer).to_have_class(re.compile(r"\binvalid-inside\b"))
     expect(printer).to_have_attribute("title", re.compile("something inside is invalid"))
     expect(printer.locator(".problem-mark")).to_be_visible()
-    expect(_row(page, "printer_2")).not_to_have_class(re.compile(r"\binvalid"))
+    expect(_row(page, "cnc_router")).not_to_have_class(re.compile(r"\binvalid"))
     expect(page.locator("#validity-indicator")).to_have_text("1 violation")
 
+    page.locator("#validity-indicator").click()  # opens the problems' fold
     page.locator("#problem-list li", has_text="left_post and right_post overlap").click()
     assert page.evaluate("() => window.fractalViewer.focusPath") == ["printer_1", "gantry_system"]
     selected = "printer_1.gantry_system.left_post"
@@ -272,43 +281,54 @@ def test_a_problem_deep_in_the_tree_marks_every_piece_above_it(page, base_url: s
 
 @pytest.mark.e2e
 def test_a_problem_selects_the_right_one_of_two_pieces_of_the_same_name(page, base_url: str):
-    """Every printer's gantry has a left and a right post. A problem with printer_2's
-    posts marks printer_2's and its row selects printer_2's left post -- by the path
-    the problem carries, not the first piece of that name, which is printer_1's."""
-    page.route(
-        lambda url: urlparse(url).path == "/sites/garage", _with_posts_overlapping("printer_2")
-    )
+    """The bench, printer_1 and the CNC router each have a frame_system. A problem
+    with the router's marks the router's and its row selects the router's -- by the
+    path the problem carries, not the first piece of that name, which is the bench's."""
+
+    def route_it(route):
+        answer = route.fetch()
+        body = answer.json()
+        body["violations"] = [
+            *body["violations"],
+            {
+                "kind": "overlap",
+                "message": "frame_system and storage_shelving overlap",
+                "structures": ["frame_system", "storage_shelving"],
+                "paths": ["cnc_router.frame_system", "storage_shelving"],
+            },
+        ]
+        body["is_valid"] = False
+        route.fulfill(response=answer, json=body)
+
+    page.route(lambda url: urlparse(url).path == "/sites/garage", route_it)
     _open(page, base_url)
-    expect(_row(page, "printer_2")).to_have_class(re.compile(r"\binvalid-inside\b"))
-    expect(_row(page, "printer_1")).not_to_have_class(re.compile(r"\binvalid"))
+    expect(_row(page, "cnc_router")).to_have_class(re.compile(r"\binvalid-inside\b"))
+    expect(_row(page, "workbench")).not_to_have_class(re.compile(r"\binvalid"))
     expect(page.locator("#problem-list li")).to_have_attribute(
-        "data-path", "printer_2.gantry_system.left_post"
+        "data-path", "cnc_router.frame_system"
     )
 
-    page.locator("#problem-list li", has_text="left_post and right_post overlap").click()
-    assert page.evaluate("() => window.fractalViewer.focusPath") == ["printer_2", "gantry_system"]
-    selected = "printer_2.gantry_system.left_post"
+    page.locator("#validity-indicator").click()  # opens the problems' fold
+    page.locator("#problem-list li", has_text="frame_system and storage_shelving").click()
+    assert page.evaluate("() => window.fractalViewer.focusPath") == ["cnc_router"]
+    selected = "cnc_router.frame_system"
     assert page.evaluate("() => window.fractalViewer.selectedName") == selected
     expect(_row(page, selected)).to_have_class(re.compile(r"\bselected\b"))
-    for path in (selected, "printer_2.gantry_system.right_post"):
-        expect(_row(page, path)).to_have_class(re.compile(r"\binvalid\b"))
-    # printer_1's posts, of the same names, are not in it.
-    page.evaluate(
-        "() => { const v = window.fractalViewer; v.jumpTo(0); v.zoomIn('printer_1'); v.zoomIn('gantry_system'); }"
-    )
-    expect(_row(page, "printer_1.gantry_system.left_post")).to_be_visible(timeout=5000)
-    for path in ("printer_1.gantry_system.left_post", "printer_1.gantry_system.right_post"):
-        expect(_row(page, path)).not_to_have_class(re.compile(r"\binvalid"))
+    expect(_row(page, selected)).to_have_class(re.compile(r"\binvalid\b"))
+    # The bench's frame_system, of the same name, is not in it.
+    page.evaluate("() => { const v = window.fractalViewer; v.jumpTo(0); v.zoomIn('workbench'); }")
+    expect(_row(page, "workbench.frame_system")).to_be_visible(timeout=5000)
+    expect(_row(page, "workbench.frame_system")).not_to_have_class(re.compile(r"\binvalid"))
 
 
 @pytest.mark.e2e
 def test_the_toolbar_count_opens_sites_problems(page, base_url: str):
     """Site closed, or the rail hidden: the toolbar's count opens Site, shows the rail and
-    brings the problems into view at its top."""
+    brings the problems into view at its top, their fold opened."""
     _open(page, base_url)
     _row(page, "printer_1").click()
     x = page.locator("#pos-x")
-    x.fill("650")
+    x.fill("1160")
     x.press("Tab")
     expect(page.locator("#validity-indicator")).to_contain_text("violation", timeout=5000)
     page.evaluate("() => { window.apothecaryPanels.close('site'); }")
@@ -317,6 +337,8 @@ def test_the_toolbar_count_opens_sites_problems(page, base_url: str):
     problems = page.locator("#site-problems")
     expect(problems).to_be_visible(timeout=2000)
     expect(problems).to_be_in_viewport()
+    expect(problems).to_have_attribute("open", "")
+    expect(page.locator("#problem-list li").first).to_be_visible()
     assert page.evaluate("() => window.apothecaryPanels.state('site').open") is True
 
     page.evaluate(
@@ -348,14 +370,18 @@ def test_sites_scad_section_shows_the_sites_scad(page, base_url: str):
 def test_pinned_takes_back_another_sites_pins_without_switching(
     page, base_url: str, leaves_as_found
 ):
-    """Site's Pinned lists every site's pins, each naming its site; another site's
-    camera and view are taken back from their rows on this site's page."""
+    """Site's Pinned lists every site's cameras and pins, each naming its site; another
+    site's camera is removed and its view unpinned from their rows on this site's
+    page."""
     api = page.request
-    placed = api.put(
-        f"{base_url}/cameras/{CAMERA}",
-        data={"label": "pinned test camera", "site": "garage", "path": "workbench"},
+    added = api.post(f"{base_url}/sites/garage/cameras", data={"host": "workbench"})
+    assert added.status == 201, added.text()
+    name = added.json()["camera"]["name"]
+    told = api.put(
+        f"{base_url}/sites/garage/cameras/{name}/device",
+        data={"id": CAMERA, "label": "pinned test camera"},
     )
-    assert placed.ok, placed.text()
+    assert told.ok, told.text()
     pinned = _keep(page, base_url, "pinned_view.png", 0, "&site=garage&host=workbench")
     view = pinned["view"]
     assert view, pinned
@@ -372,16 +398,16 @@ def test_pinned_takes_back_another_sites_pins_without_switching(
 
     # Each row names its site; garage's are not this page's.
     camera = section.locator(".pin-row.camera", has_text="pinned test camera")
-    expect(camera).to_contain_text("garage › workbench", timeout=5000)
+    expect(camera).to_contain_text(f"garage › {name}", timeout=5000)
     expect(camera).not_to_have_class(re.compile(r"\bhere\b"))
     row = section.locator(f".pin-row.view:has(.pinned-view-unpin[data-id='{view['id']}'])")
     expect(row).to_contain_text("garage › workbench")
 
-    # The camera, unpinned from its row.
-    camera.locator(".pinned-camera-unpin").click()
+    # The camera, removed from its row.
+    camera.locator(".pinned-camera-remove").click()
     expect(camera).to_have_count(0, timeout=5000)
-    assert CAMERA not in {c["id"] for c in api.get(f"{base_url}/cameras").json()}
-    expect(status).to_contain_text("camera unpinned from garage › workbench")
+    assert api.get(f"{base_url}/sites/garage/cameras/{name}").status == 404
+    expect(status).to_contain_text(f"garage › {name} removed; the pictures it took stay")
 
     # The view, unpinned from its row; its picture stays kept.
     row.locator(".pinned-view-unpin").click()
