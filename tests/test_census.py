@@ -370,7 +370,20 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # (slicer-install, under the modules' one listener), ring-backed by a new last cell
 # of Panels › Bench › Install, OrcaSlicer (9362); Arduino and Rust ESP32 did not
 # move. The ceiling follows the count up by two, and the share's floor up with it.
-VIEWER_CEILING = 120
+# Loop 2, editing a part's SCAD: five controls of its own, four of them ring-backed,
+# and no place the page listens more. The SCAD editor (widgets/scad_editor.js), where
+# the part's read-only source stood in Selected, has Save (scad-save), Float
+# (scad-float) and Fullscreen (scad-fullscreen), backed by Part › Save, Part › Float
+# and Part › Fullscreen, new cells of a part's ring from the parts folder after
+# Revert, so no cell above them moves; and a saved variant chosen from a list
+# (saved-variant, one markup for the short list under the part's parameters and the
+# editor's own), backed by Part › Variants › its name, the last cell, which the first
+# save brings. The name a variant is saved under (scad-name) is typed, and no cell
+# types. Its listening is .onclick, as the part editor's buttons are; the page's
+# Backspace stepping out now asks whether a person is typing (`typing`, plumbing),
+# so typing in the editor does not step out. The ceiling follows the count up by
+# five, and the share's floor up with it.
+VIEWER_CEILING = 125
 
 
 def test_the_viewer_stays_under_its_ceiling():
@@ -729,10 +742,12 @@ def test_the_viewers_ring_backed_share_did_not_fall():
     put the part editor's Defaults on the ring as Part › Defaults, and then its Apply
     and Revert as Part › Apply and Part › Revert, and on the Rust firmware's count the
     share does not fall below where that left it, 68 of 118. The slicer's two controls,
-    Slice and the slicer's Install, came ring-backed: 70 of 120."""
+    Slice and the slicer's Install, came ring-backed: 70 of 120. Loop 2's SCAD editor
+    brought five, four of them ring-backed (Save, Float, Fullscreen, a saved variant
+    chosen; not the name it is saved under): 74 of 125."""
     taken = census.take()
     own, backed = len(taken.controls_of_its_own()), len(taken.ring_backed())
-    assert backed / own >= 70 / 120, f"{backed} of {own} ring-backed"
+    assert backed / own >= 74 / 125, f"{backed} of {own} ring-backed"
 
 
 def test_the_serial_overlay_left_nothing_behind():

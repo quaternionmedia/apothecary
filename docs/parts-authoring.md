@@ -181,10 +181,22 @@ that tracks the part, with git's plumbing alone
 (`apothecary/projects/parts/saved.py`), so the working tree, the index and
 the checked-out branch are never touched. The commit's author is the git
 identity of the checkout, and its parent is the variant's last save or
-`HEAD`. `GET /parts/{name}/saved` lists a part's variants from those refs,
-and `GET /parts/{name}/saved/{variant}` reads one with its SCAD. Making one
-the part's source is a merge you do: `git merge
-refs/apothecary/variants/<part>/<name>`.
+`HEAD`. `GET /parts/{name}/saved` lists a part's variants from those refs
+(`?diff=true`: with what each changes against the part's SCAD), and `GET
+/parts/{name}/saved/{variant}` reads one with its SCAD. Making one the
+part's source is a merge you do: `git merge
+refs/apothecary/variants/<part>/<name>`. Keeping a variant's parameters in
+the part's own description instead (`params_in: "part-description"`) is the
+aim, and a stub until then: a save that asks for it is refused, saying what it
+will do. `APOTHECARY_VARIANTS_REPO` names another repository to save into, a
+clone of the checkout; the browser suite's servers save into one of their own.
+
+In the viewer, the part's editor in Selected holds its SCAD, where the
+read-only source stood: checked once typing stops, rendered after a second
+of quiet, saved with Save (or Part › Save) under the name beside it, its
+saved variants listed under its parameters and, with what each changes, in
+the editor; floated over the world or made fullscreen (Part › Float, Part ›
+Fullscreen). Walkthrough 16 goes round it.
 
 A part built by Python geometry (the snowplow) has no SCAD of its own to
 edit: `GET /parts/{name}/scad` answers the SCAD its geometry generates

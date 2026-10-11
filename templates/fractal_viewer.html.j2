@@ -476,7 +476,47 @@
         .scad-messages li.error { color: #ff9b9b; }
         .scad-messages li.warning { color: #e0cf8e; }
         .scad-messages .where { color: #8a929e; font-variant-numeric: tabular-nums; }
-        .scad-line.error-line { background: #4a1f1f; color: #ffd0d0; }
+        /* The SCAD editor (widgets/scad_editor.js): in Selected where the read-only
+           source stood, floated over the world, or over the whole page. */
+        .scad-editor { display: flex; flex-direction: column; gap: 4px; outline: none; }
+        .scad-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 11px; }
+        .scad-bar .scad-spacer { flex: 1; }
+        .scad-said { color: #8a929e; min-height: 1.3em; flex-basis: 100%; }
+        .scad-said.error { color: #ff9b9b; }
+        .scad-said.valid { color: #5ec27e; }
+        .scad-said.loading { color: #ffc107; }
+        .scad-bar button { padding: 3px 8px; border: 0; border-radius: 4px; background: #2a2f38;
+                           color: #d7dae0; cursor: pointer; font: inherit; }
+        .scad-bar #scad-save { background: #4a9eff; color: #0b0d10; font-weight: 700; }
+        .scad-name-label input { width: 9em; background: #14161a; color: #d7dae0;
+                                 border: 1px solid #2a2f38; padding: 2px 4px; font: inherit; }
+        .scad-code { height: 260px; border: 1px solid #2a2f38; border-radius: 4px; overflow: hidden; }
+        .scad-code .cm-editor { height: 100%; }
+        .panel[data-panel="scad-editor"].free { width: min(560px, calc(100% - 16px)); }
+        .panel[data-panel="scad-editor"] .scad-code { height: min(42vh, 420px); }
+        .panel[data-panel="scad-editor"] .scad-saved { max-height: 22vh; overflow: auto; }
+        .scad-editor.fullscreen { position: fixed; inset: 0; z-index: 900; background: #1b1e24;
+                                  padding: 10px 14px; }
+        .scad-editor.fullscreen .scad-code { flex: 1; height: auto; min-height: 0; }
+        .scad-editor.fullscreen .scad-saved { max-height: 28vh; overflow: auto; }
+        .saved-row { padding: 4px 0; border-bottom: 1px solid #23272e; font-size: 11px; }
+        .saved-row .saved-variant { background: none; border: 0; padding: 0; color: #4a9eff;
+                                    cursor: pointer; font: inherit; font-weight: 600; }
+        .saved-row.chosen .saved-variant { color: #d9a650; }
+        .saved-when, .saved-numbers { color: #8a929e; }
+        .saved-when { margin-left: 6px; }
+        .in-head { color: #5ec27e; margin-left: 6px; }
+        .not-in-head { color: #c9a25c; margin-left: 6px; }
+        .variant-diff summary { cursor: pointer; color: #8a929e; }
+        .variant-diff pre { max-height: 200px; overflow: auto; font-size: 11px; background: #14161a;
+                            padding: 4px; margin: 4px 0; white-space: pre; }
+        .saved-list .empty, .scad-saved .empty, .scad-away { color: #8a929e; font-size: 11px; }
+        .param input[type=checkbox] { margin-top: 4px; accent-color: #4a9eff; }
+        .param input.text, .param .vector input { background: #14161a; color: #d7dae0;
+                                                  border: 1px solid #2a2f38; padding: 2px 4px; font: inherit; }
+        .param input.text { width: 100%; margin-top: 4px; box-sizing: border-box; }
+        .param .vector { display: flex; gap: 4px; margin-top: 4px; }
+        .param .vector input { width: 0; flex: 1; min-width: 0; }
         .param { margin: 10px 0 12px; }
         .param.is-contested { border-left: 3px solid #e0a33e; padding-left: 9px; }
         .param .head { display: flex; justify-content: space-between; align-items: baseline; }
@@ -611,7 +651,19 @@
     {
         "imports": {
             "three": "/static/vendor/three/three.module.js",
-            "three/addons/": "/static/vendor/three/addons/"
+            "three/addons/": "/static/vendor/three/addons/",
+            "@codemirror/state": "/static/vendor/codemirror/state/index.js",
+            "@codemirror/view": "/static/vendor/codemirror/view/index.js",
+            "@codemirror/language": "/static/vendor/codemirror/language/index.js",
+            "@codemirror/commands": "/static/vendor/codemirror/commands/index.js",
+            "@codemirror/lint": "/static/vendor/codemirror/lint/index.js",
+            "@codemirror/streamparser": "/static/vendor/codemirror/streamparser/index.js",
+            "@lezer/common": "/static/vendor/codemirror/lezer-common/index.js",
+            "@lezer/highlight": "/static/vendor/codemirror/lezer-highlight/index.js",
+            "@marijn/find-cluster-break": "/static/vendor/codemirror/find-cluster-break/index.js",
+            "crelt": "/static/vendor/codemirror/crelt/index.js",
+            "style-mod": "/static/vendor/codemirror/style-mod/index.js",
+            "w3c-keyname": "/static/vendor/codemirror/w3c-keyname/index.js"
         }
     }
     </script>
@@ -630,6 +682,7 @@
         import { mountToolchain } from '/static/widgets/toolchain.js';
         import { mountBuild, mountRawFlash } from '/static/widgets/sketches.js';
         import { mountTasks } from '/static/widgets/tasks.js';
+        import { mountScadEditor, variantChoices } from '/static/widgets/scad_editor.js';
         import { makeMachineMarks, makeBoardBadge, sayBoard, toScene as marksToScene } from '/static/machine_marks.js';
         import { mountPictureMarks, axes as cameraAxes } from '/static/picture_marks.js';
         import { mountPictures } from '/static/pictures.js';
@@ -710,6 +763,15 @@
             ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
         // How long the controls rest before a staged set is checked.
         const VALIDATE_QUIET_MS = 250;
+        // The SCAD editor: a check (evaluated, not rendered) once typing has stopped
+        // this long, and a render after a second of quiet (the spike's timings).
+        const SCAD_CHECK_MS = 300;
+        const SCAD_RENDER_MS = 1000;
+        // The newest of a part's saved variants listed under its parameters; the
+        // editor lists them all.
+        const SAVED_SHORT_LIST = 5;
+        // Whether a key pressed is a person typing: in a box, or in the SCAD editor.
+        const typing = (el) => !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
 
         // Mirrors example_hierarchy.PRINTER_STATUSES -- this prototype has no
         // endpoint that reports the allowed set, so it's duplicated here.
@@ -980,6 +1042,15 @@
                 this.variantRecords = {};
                 this.variantsRead = this.readVariantsFromAddress();
                 this.partSection = null;   // the Selected panel's section for the part being edited
+                // The SCAD editor (widgets/scad_editor.js), for the part being edited: what
+                // its text is, per target key (the part's own, the draft, the variant it
+                // came from, the name Save keeps it under, its saved variants), and the one
+                // mounted, floated out of Selected or not.
+                this.scadStages = {};
+                this.scadEditor = null;
+                this.scadTarget = null;
+                this.scadFloated = false;
+                this.scadLoading = Promise.resolve();
                 this.editorTarget = null;  // what the editor edits: a part, or a piece made from a picture
                 this.editorOpenFor = null; // a machine drawn as a part whose editor Part › Edit opened
                 this.editorFocusWanted = null;  // the target key whose first control Part › Edit focuses
@@ -1243,7 +1314,7 @@
                 this.canvas.addEventListener('drop', (e) => this.onDropFiles(e));
                 window.addEventListener('paste', (e) => this.onPaste(e));
                 window.addEventListener('keydown', (e) => {
-                    if (e.key === 'Backspace' && document.activeElement.tagName !== 'INPUT') {
+                    if (e.key === 'Backspace' && !typing(document.activeElement)) {
                         e.preventDefault();
                         this.zoomOut();
                     }
@@ -2804,10 +2875,17 @@
                     },
                     apply: async (params) => {
                         // This page's id: a newer Apply from it stops this one's render.
-                        const response = await fetch(`${base}/stl/generate?page=${encodeURIComponent(PAGE_ID)}`, {
+                        // With the SCAD edited, the draft is what renders (beside the part,
+                        // into the cache), the part's own SCAD untouched.
+                        const scad = this.scadStages[`part:${ref}`];
+                        const draft = scad && scad.text !== null && scad.text !== scad.own ? scad.text : null;
+                        const url = draft === null
+                            ? `${base}/stl/generate?page=${encodeURIComponent(PAGE_ID)}`
+                            : `${base}/draft/render?page=${encodeURIComponent(PAGE_ID)}`;
+                        const response = await fetch(url, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ params }),
+                            body: JSON.stringify(draft === null ? { params } : { scad: draft, params }),
                         });
                         const body = await response.json().catch(() => ({}));
                         if (response.status === 409) throw new Superseded();
@@ -2841,6 +2919,7 @@
                         this.showMeasured(body.measured, body.measured_from);
                         this.showDrawn(ref);
                         const how = body.regenerated ? `${ref} regenerated` : `${ref} from the cache, nothing rendered`;
+                        if (body.draft) return `${how} from its edited SCAD: an applied variant, not saved; Part › Save keeps it in git`;
                         return variant ? `${how}: an applied variant, not saved` : `${how}: drawn as saved`;
                     },
                 };
@@ -2959,10 +3038,19 @@
                       <ul id="part-messages" class="scad-messages"></ul>
                     </div>
                     <div id="part-params">Loading…</div>
-                    ${target.scadUrl ? `<div class="code-header">${target.part ? 'SCAD Source (the absorbed part view)' : 'SCAD (a few lines, from its shape)'}</div>
-                    <div id="part-scad-content" class="code-content">Loading…</div>` : ''}
+                    ${target.part ? `<div class="code-header">Saved variants</div>
+                    <div id="part-saved" class="saved-list"></div>` : ''}
+                    ${target.scadUrl ? `<div class="code-header">${target.part ? 'SCAD' : 'SCAD (a few lines, from its shape)'}</div>
+                    <div id="part-scad" class="scad-slot">Loading…</div>` : ''}
                 `;
-                if (target.scadUrl) this.loadPartScad(target);
+                const shortList = this.partSection.querySelector('#part-saved');
+                if (shortList) {
+                    shortList.onclick = (ev) => {
+                        const chosen = ev.target.closest('.saved-variant');
+                        if (chosen) this.chooseSavedVariant(target, chosen.dataset.variant);
+                    };
+                }
+                if (target.scadUrl) this.scadLoading = this.loadPartScad(target);
                 if (target.checklistUrl) this.loadPartChecklist(target);
                 if (target.part) this.showDrawn(target.part);
                 this.editorLoading = this.loadPartParams(target);
@@ -3048,9 +3136,11 @@
                 const diff = {};
                 for (const [name, value] of Object.entries(this.partParams ?? {})) {
                     const was = this.committedParams?.[name];
-                    if (Number(value) !== Number(was) && value !== was) {
-                        diff[name] = { from: was, to: value };
-                    }
+                    // A list (a vector) is the same when its numbers are.
+                    const same = Array.isArray(value) || Array.isArray(was)
+                        ? JSON.stringify(value) === JSON.stringify(was)
+                        : Number(value) === Number(was) || value === was;
+                    if (!same) diff[name] = { from: was, to: value };
                 }
                 return diff;
             }
@@ -3249,8 +3339,12 @@
                         fresh && target.drawn ? target.drawn().catch(() => null) : null,
                     ]);
                     if (this.editorTarget?.key !== target.key) return;  // another target was chosen meanwhile
-                    if (!response.ok) { host.textContent = 'No parameters declared.'; return; }
-                    const spec = await response.json();
+                    // A part with no model whose SCAD is being edited: its controls are
+                    // what the draft declares, as the newest check listed them.
+                    const scad = this.scadStages[target.key];
+                    const declared = scad?.check?.edited && scad.check.source === 'customizer' ? scad.check : null;
+                    if (!response.ok && !declared) { host.textContent = 'No parameters declared.'; return; }
+                    const spec = declared ? { fields: declared.fields, bounds: null } : await response.json();
                     if (drawn) {
                         Object.assign(stage.committed, drawn.params ?? {});
                         stage.measured = { box: drawn.measured, from: drawn.measuredFrom };
@@ -3351,10 +3445,8 @@
                         if (at.line && own && at.file === own) lines.add(at.line);
                     }
                 }
-                for (const line of document.querySelectorAll('#part-scad-content .scad-line')) {
-                    line.classList.toggle('error-line', lines.has(Number(line.dataset.line)));
-                }
-                document.querySelector('#part-scad-content .error-line')?.scrollIntoView({ block: 'nearest' });
+                // Marked on their lines in the SCAD editor, as its lint marks them.
+                if (this.scadEditor && this.scadTarget?.key === target.key) this.scadEditor.mark(messages ?? []);
             }
 
             buildParamControl(field, value) {
@@ -3378,20 +3470,72 @@
                 wrap.appendChild(head);
 
                 if (field.type === 'enum') {
+                    // Its options when it names them (a SCAD's choices: a value, typed, and
+                    // what it is called), else the words of its pattern.
+                    const options = field.options?.length
+                        ? field.options.map((o) => ({ value: o.value, label: o.label }))
+                        : (field.pattern.match(/\w+/g) || []).map((w) => ({ value: w, label: w }));
                     const select = document.createElement('select');
-                    for (const option of (field.pattern.match(/\w+/g) || [])) {
+                    options.forEach((option, i) => {
                         const el = document.createElement('option');
-                        el.value = el.textContent = option;
-                        if (option === value) el.selected = true;
+                        el.value = String(i);
+                        el.textContent = option.label;
+                        if (String(option.value) === String(value)) el.selected = true;
                         select.appendChild(el);
-                    }
-                    val.textContent = value;
+                    });
+                    val.textContent = options.find((o) => String(o.value) === String(value))?.label ?? value;
                     select.onchange = () => {
-                        this.partParams[field.name] = select.value;
-                        val.textContent = select.value;
+                        const chosen = options[Number(select.value)];
+                        this.partParams[field.name] = chosen.value;
+                        val.textContent = chosen.label;
                         this.refreshStage();
                     };
                     wrap.appendChild(select);
+                } else if (field.type === 'boolean') {
+                    const tick = document.createElement('input');
+                    tick.type = 'checkbox';
+                    tick.checked = Boolean(value);
+                    val.textContent = tick.checked ? 'yes' : 'no';
+                    tick.onchange = () => {
+                        this.partParams[field.name] = tick.checked;
+                        val.textContent = tick.checked ? 'yes' : 'no';
+                        this.refreshStage();
+                    };
+                    wrap.appendChild(tick);
+                    wrap._input = tick;
+                } else if (field.type === 'text') {
+                    const box = document.createElement('input');
+                    box.type = 'text';
+                    box.className = 'text';
+                    box.value = value ?? '';
+                    box.oninput = () => {
+                        this.partParams[field.name] = box.value;
+                        this.refreshStage();
+                    };
+                    wrap.appendChild(box);
+                    wrap._input = box;
+                } else if (field.type === 'vector') {
+                    // One number box for each of its numbers, as long as its default.
+                    const row = document.createElement('div');
+                    row.className = 'vector';
+                    const numbers = Array.isArray(value) ? [...value] : [...(field.default ?? [])];
+                    numbers.forEach((n, i) => {
+                        const box = document.createElement('input');
+                        box.type = 'number';
+                        box.value = n;
+                        if (field.min !== null && field.min !== undefined) box.min = field.min;
+                        if (field.max !== null && field.max !== undefined) box.max = field.max;
+                        if (field.step) box.step = field.step; else box.step = 'any';
+                        box.oninput = () => {
+                            const next = [...(this.partParams[field.name] ?? numbers)];
+                            next[i] = Number(box.value);
+                            this.partParams[field.name] = next;
+                            this.refreshStage();
+                        };
+                        row.appendChild(box);
+                    });
+                    wrap.appendChild(row);
+                    wrap._input = row.firstChild;
                 } else if (field.type === 'number') {
                     const input = document.createElement('input');
                     input.type = 'range';
@@ -3438,30 +3582,314 @@
                 }
             }
 
-            // The source a line at a time, so a line OpenSCAD names can be marked;
-            // for a part, also its file's name as the API gives it (source_file),
-            // which OpenSCAD's messages name it by.
+            // ---- the SCAD editor ----------------------------------------
+            //
+            // Where the read-only source stood (loop 2, the owner's answer of
+            // 2026-10-10): the target's SCAD in CodeMirror (widgets/scad_editor.js),
+            // its file's name as the API gives it (source_file), which OpenSCAD's
+            // messages name it by. A part's own SCAD is edited; a part built by
+            // Python, and a made piece, are read. Typing is checked once it stops
+            // (evaluated, not rendered: POST .../draft/check) and rendered after a
+            // second of quiet, as Apply renders, the draft beside the part. Save
+            // keeps it, and the numbers staged, as a variant in git. It floats out
+            // of Selected (a panel of its own, put back by its Dock) and covers the
+            // page (Esc or its button puts it back).
             async loadPartScad(target) {
+                const slot = this.partSection?.querySelector('#part-scad');
                 try {
                     const [response, meta] = await Promise.all([
                         fetch(target.scadUrl),
                         target.part ? fetch(`${BASE_URL}/parts/${encodeURIComponent(target.part)}`).then((r) => (r.ok ? r.json() : null)).catch(() => null) : null,
                     ]);
-                    if (meta) target.sourceFile = meta.source_file;
-                    const text = response.ok ? await response.text() : `(no SCAD source: ${response.status})`;
-                    const el = document.getElementById('part-scad-content');
-                    if (!el || this.editorTarget?.key !== target.key) return;
-                    el.innerHTML = '';
-                    text.split('\n').forEach((line, i) => {
-                        const span = document.createElement('span');
-                        span.className = 'scad-line';
-                        span.dataset.line = String(i + 1);
-                        span.textContent = line + '\n';
-                        el.appendChild(span);
+                    if (meta) {
+                        target.sourceFile = meta.source_file;
+                        target.editable = meta.files?.scad?.editable !== false;
+                    }
+                    const own = response.ok ? await response.text() : `// no SCAD source: ${response.status}\n`;
+                    if (!slot || this.partSection?.dataset.target !== target.key) return;
+                    const scad = (this.scadStages[target.key] ??= { own, text: null, name: '', from: null, saved: [], seq: 0, check: null });
+                    scad.own = own;
+                    // A draft this tab rendered, which its address names: what is drawn, so shown.
+                    const record = target.part ? this.variantRecords[target.part] : null;
+                    if (scad.text === null && record?.scad_url) {
+                        const drawn = await fetch(record.scad_url).catch(() => null);
+                        if (drawn?.ok) scad.text = await drawn.text();
+                    }
+                    if (scad.text === null) scad.text = own;
+                    const editable = Boolean(target.part) && target.editable !== false;
+                    this.releaseScadEditor();
+                    const editor = await mountScadEditor(slot, {
+                        text: scad.text,
+                        readOnly: !editable,
+                        editable,
+                        name: scad.name,
+                        shownAs: target.sourceFile ?? null,
+                        onChange: (text) => this.scadChanged(target, text),
+                        onSave: () => this.saveScad(target),
+                        onFloat: () => this.toggleScadFloat(),
+                        onFullscreen: () => this.toggleScadFullscreen(),
+                        onChoose: (name) => this.chooseSavedVariant(target, name),
                     });
+                    if (this.partSection?.dataset.target !== target.key) { editor.destroy(); return; }
+                    this.scadEditor = editor;
+                    this.scadTarget = target;
+                    if (!editable) editor.say(target.part ? "Its geometry is Python: this is the SCAD it generates, read-only. Its parameters are what to edit." : 'Read-only: the few lines its shape is made from.');
+                    else editor.say(scad.text === own ? "The part's own SCAD: edit it here; it is checked once typing stops and rendered after a second of quiet." : 'The edited SCAD this tab drew, not saved: Save keeps it in git.');
+                    if (editable) await this.loadSavedVariants(target);
                 } catch (err) {
                     console.error(err);
+                    if (slot) slot.textContent = `Could not open the SCAD: ${err.message}`;
                 }
+            }
+
+            // The editor let go of: back in Selected and not over the page, its view gone.
+            releaseScadEditor() {
+                if (!this.scadEditor) return;
+                if (this.scadFloated) this.dockScad();
+                this.scadEditor.destroy();
+                this.scadEditor = null;
+                this.scadTarget = null;
+            }
+
+            // Typing: the check once it stops, the render after a second of quiet.
+            scadChanged(target, text) {
+                const scad = this.scadStages[target.key];
+                if (!scad) return;
+                scad.text = text;
+                clearTimeout(scad.checkTimer);
+                clearTimeout(scad.renderTimer);
+                const seq = (scad.seq += 1);
+                this.scadEditor?.say('Edited: checked once typing stops, rendered after a second of quiet', 'loading');
+                scad.checking = new Promise((resolve) => {
+                    scad.checkTimer = setTimeout(() => this.checkScad(target, seq).then(resolve, () => resolve(null)), SCAD_CHECK_MS);
+                });
+                scad.renderTimer = setTimeout(() => this.renderScad(target, seq), SCAD_RENDER_MS);
+            }
+
+            // The check: OpenSCAD evaluates the draft beside the part and renders
+            // nothing; what it said is marked on its lines, and a part without a model
+            // takes its controls from what the draft declares.
+            async checkScad(target, seq) {
+                const scad = this.scadStages[target.key];
+                const stage = this.partStages[target.key];
+                const base = `${BASE_URL}/parts/${encodeURIComponent(target.part)}`;
+                const response = await fetch(`${base}/draft/check?page=${encodeURIComponent(PAGE_ID)}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ scad: scad.text, params: { ...(stage?.staged ?? {}) } }),
+                });
+                if (response.status === 409) return null;  // a newer check from this page took over
+                const body = await response.json().catch(() => null);
+                if (!response.ok || !body) {
+                    if (seq === scad.seq) this.scadEditor?.say(`Could not check it: ${body?.detail ?? response.statusText}`, 'error');
+                    return null;
+                }
+                if (seq !== scad.seq) return body;  // typed on since: an older text's
+                const before = JSON.stringify((scad.check?.fields ?? []).map((f) => [f.name, f.type]));
+                scad.check = body;
+                this.showMessages(target, body.messages);
+                const error = body.messages.find((m) => m.level === 'error');
+                if (error) {
+                    this.scadEditor?.say(`OpenSCAD: ${error.message}${error.line ? ` (line ${error.line})` : ''}. Not rendered until it reads.`, 'error');
+                } else if (body.errors.length) {
+                    this.scadEditor?.say(`${body.errors.map((e) => `${e.field}: ${e.message}`).join('; ')}. Not rendered until the numbers fit.`, 'error');
+                } else {
+                    const warned = body.messages.length ? `; ${body.messages.length === 1 ? 'a warning' : 'warnings'}, marked` : '';
+                    this.scadEditor?.say(body.edited ? `Checked: it reads${warned}. Rendered after a second of quiet.` : `Checked: the part's own SCAD${warned}.`, 'valid');
+                }
+                if (body.note) console.info(body.note);
+                const after = JSON.stringify((body.fields ?? []).map((f) => [f.name, f.type]));
+                if (body.source === 'customizer' && after !== before && this.editorTarget?.key === target.key) this.editorLoading = this.loadPartParams(target);
+                return body;
+            }
+
+            // The render: once the check has said the draft reads, as Apply renders.
+            async renderScad(target, seq) {
+                const scad = this.scadStages[target.key];
+                if (!scad || seq !== scad.seq) return;
+                const check = await scad.checking;
+                if (seq !== scad.seq || !check || !check.valid) return;
+                await this.applyEditor(target);
+            }
+
+            // The part's variants saved in git: a short list under its parameters,
+            // all of them in the editor, each with what it changes.
+            async loadSavedVariants(target, chosen = null) {
+                const scad = this.scadStages[target.key];
+                if (!scad || !target.part) return;
+                try {
+                    const response = await fetch(`${BASE_URL}/parts/${encodeURIComponent(target.part)}/saved?diff=true`);
+                    scad.saved = response.ok ? await response.json() : [];
+                } catch (err) {
+                    scad.saved = [];
+                }
+                const mark = chosen ?? scad.from;
+                const names = new Set(scad.saved.map((v) => v.name));
+                if (!scad.name || (!names.has(scad.name) && /^variant-\d+$/.test(scad.name))) {
+                    let n = 1;
+                    while (names.has(`variant-${n}`)) n += 1;
+                    scad.name = scad.from ?? `variant-${n}`;
+                    this.scadEditor?.setName(scad.name);
+                }
+                const short = this.partSection?.querySelector('#part-saved');
+                if (short && this.partSection.dataset.target === target.key) {
+                    short.innerHTML = variantChoices(scad.saved.slice(0, SAVED_SHORT_LIST), { chosen: mark })
+                        + (scad.saved.length > SAVED_SHORT_LIST ? `<div class="saved-numbers">and ${scad.saved.length - SAVED_SHORT_LIST} more in the editor</div>` : '');
+                }
+                if (this.scadTarget?.key === target.key) this.scadEditor?.showVariants(scad.saved, mark);
+            }
+
+            // Save: the SCAD as the editor has it and the numbers staged, a variant in
+            // git under the editor's name. Whether it was saved, and what to say.
+            async saveScad(target) {
+                const scad = this.scadStages[target.key];
+                const editor = this.scadEditor;
+                if (!scad || !editor || this.scadTarget?.key !== target.key || !target.part) {
+                    return { ok: false, said: `${target.label}: its SCAD editor is not open` };
+                }
+                const name = editor.name();
+                const stage = this.partStages[target.key];
+                this.setStatus(`Saving ${target.part} as ${name}...`, 'loading');
+                const response = await fetch(`${BASE_URL}/parts/${encodeURIComponent(target.part)}/saved`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, scad: editor.text(), params: { ...(stage?.staged ?? {}) } }),
+                });
+                const body = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    const said = `${target.part} not saved: ${typeof body.detail === 'string' ? body.detail : response.statusText}`;
+                    editor.say(said, 'error');
+                    this.setStatus(said, 'error');
+                    return { ok: false, said };
+                }
+                scad.from = scad.name = name;
+                await this.loadSavedVariants(target, name);
+                editor.say(`Saved as ${name}: a commit on ${body.ref}. Nothing in the checkout changed.`, 'valid');
+                const said = `${target.part} saved as the variant ${name}, a commit on ${body.ref}; nothing in the checkout changed, and git merge ${body.ref} makes it the part's source`;
+                this.setStatus(said, 'success');
+                return { ok: true, said };
+            }
+
+            // A saved variant chosen: its SCAD in the editor, its numbers staged, and
+            // drawn, as a draft is. What to say.
+            async openSavedVariant(target, name) {
+                const scad = this.scadStages[target.key];
+                const editor = this.scadEditor;
+                if (!scad || !editor || this.scadTarget?.key !== target.key) return { ok: false, said: `${target.label}: its SCAD editor is not open` };
+                const response = await fetch(`${BASE_URL}/parts/${encodeURIComponent(target.part)}/saved/${encodeURIComponent(name)}`);
+                const variant = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    const said = `${target.part}: no saved variant ${name} (${variant.detail ?? response.statusText})`;
+                    this.setStatus(said, 'error');
+                    return { ok: false, said };
+                }
+                scad.from = scad.name = name;
+                editor.setName(name);
+                const stage = this.partStages[target.key];
+                if (stage) {
+                    for (const key of Object.keys(stage.staged)) stage.staged[key] = stage.defaults?.[key] ?? stage.staged[key];
+                    Object.assign(stage.staged, variant.params ?? {});
+                }
+                editor.setText(variant.scad ?? scad.own);
+                // Checked and rendered now, not after the quiet a person typing gets.
+                clearTimeout(scad.checkTimer);
+                clearTimeout(scad.renderTimer);
+                scad.text = editor.text();
+                const seq = (scad.seq += 1);
+                scad.checking = this.checkScad(target, seq).catch(() => null);
+                await this.loadSavedVariants(target, name);
+                await this.renderScad(target, seq);
+                const said = `${target.part}: the variant ${name} is drawn, its SCAD in the editor and its numbers staged; Save keeps a change to it`;
+                return { ok: true, said };
+            }
+
+            // A saved variant chosen from a list, said on the status line as its cell says it.
+            async chooseSavedVariant(target, name) {
+                const { ok, said } = await this.openSavedVariant(target, name);
+                this.setStatus(said, ok ? 'success' : 'error');
+            }
+
+            // Float: the editor out of Selected, a panel of its own over the world;
+            // again (or its Dock, or its ✕), back in Selected where it was.
+            toggleScadFloat() {
+                const editor = this.scadEditor;
+                if (!editor) return null;
+                if (this.scadFloated) { this.dockScad(); return 'docked'; }
+                if (editor.isFullscreen()) editor.fullscreen(false);
+                this.scadHome = editor.root.parentElement;
+                const at = editor.root.getBoundingClientRect(), base = this.canvas.parentElement.getBoundingClientRect();
+                this.scadFloated = true;
+                this.panels.register('scad-editor', {
+                    title: `SCAD · ${this.scadTarget?.label ?? ''}`,
+                    body: editor.root,
+                    where: 'free',
+                    x: Math.max(0, at.left - base.left - 24),
+                    y: Math.max(0, at.top - base.top),
+                    onDock: () => this.dockScad(),
+                    onClose: () => this.dockScad(),
+                });
+                this.panels.float('scad-editor');
+                editor.floated(true);
+                // Where it stood says where it is.
+                const note = document.createElement('div');
+                note.className = 'scad-away';
+                note.textContent = 'The SCAD editor floats over the world: its Dock, or Part › Float, puts it back here.';
+                this.scadHome?.appendChild(note);
+                return 'floated';
+            }
+
+            dockScad() {
+                if (!this.scadFloated) return;
+                this.scadFloated = false;
+                const editor = this.scadEditor;
+                this.scadHome?.querySelector('.scad-away')?.remove();
+                if (editor && this.scadHome) this.scadHome.appendChild(editor.root);
+                this.panels.unregister('scad-editor');
+                editor?.floated(false);
+            }
+
+            // Fullscreen: the editor over the whole page; again, or Esc, puts it back.
+            toggleScadFullscreen() {
+                const editor = this.scadEditor;
+                if (!editor) return null;
+                const on = !editor.isFullscreen();
+                editor.fullscreen(on);
+                return on;
+            }
+
+            // The ring's Part › Save, Variants, Float and Fullscreen: the part's editor
+            // opened, its SCAD loaded, then what its buttons do.
+            async scadOn(path) {
+                const target = await this.editorOn(path);
+                if (!target || !target.scadUrl) return null;
+                await this.scadLoading;
+                return this.scadTarget?.key === target.key ? target : null;
+            }
+
+            async saveScadOn(path) {
+                const target = await this.scadOn(path);
+                if (!target) return { ok: false, said: `${path} has no SCAD to save` };
+                return this.saveScad(target);
+            }
+
+            async openSavedVariantOn(path, name) {
+                const target = await this.scadOn(path);
+                if (!target) return { ok: false, said: `${path} has no SCAD to draw a variant of` };
+                return this.openSavedVariant(target, name);
+            }
+
+            async floatScadOn(path) {
+                const target = await this.scadOn(path);
+                if (!target) return { ok: false, said: `${path} has no SCAD editor to float` };
+                const how = this.toggleScadFloat();
+                return { ok: true, said: how === 'floated' ? `${target.label}'s SCAD editor floats over the world; Part › Float again, or its Dock, puts it back in Selected` : `${target.label}'s SCAD editor is back in Selected` };
+            }
+
+            async fullscreenScadOn(path) {
+                const target = await this.scadOn(path);
+                if (!target) return { ok: false, said: `${path} has no SCAD editor` };
+                const on = this.toggleScadFullscreen();
+                return { ok: true, said: on ? `${target.label}'s SCAD editor covers the page; Esc, its button or Part › Fullscreen puts it back` : `${target.label}'s SCAD editor is back where it was` };
             }
 
             // Apply: the staged set goes to the target -- a part's STL rendered
@@ -5110,6 +5538,24 @@
                 }
                 if (action === 'part:revert') {
                     viewer.revertStagedOn(path).then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
+                    return;
+                }
+                // Part › Save, Variants, Float and Fullscreen: what the SCAD editor's own do.
+                if (action === 'part:save') {
+                    viewer.saveScadOn(path).then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
+                    return;
+                }
+                if (action.startsWith('part:variant:')) {
+                    viewer.openSavedVariantOn(path, action.slice('part:variant:'.length))
+                        .then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
+                    return;
+                }
+                if (action === 'part:float') {
+                    viewer.floatScadOn(path).then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
+                    return;
+                }
+                if (action === 'part:fullscreen') {
+                    viewer.fullscreenScadOn(path).then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
                     return;
                 }
                 // Part › Defaults: the part's own numbers staged in its editor, as its Defaults does.

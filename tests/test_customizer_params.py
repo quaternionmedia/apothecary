@@ -294,11 +294,10 @@ class TestTheParamsRoute:
         assert body["source"] == "model" and body == params_spec(CUBE).model_dump(mode="json")
         assert calls(exe) == []
 
-    def test_a_models_tick_box_is_left_as_the_page_draws_it_today(self):
-        """A model's boolean stays a number until the page has a tick-box to draw
-        it with: a "boolean" there now would take its control away."""
+    def test_a_models_tick_box_is_a_boolean_not_a_slider(self):
         fields = {f.name: f for f in params_spec(CUBE).fields}
-        assert fields["show_axes"].type == "number"
+        assert fields["show_axes"].type == "boolean"
+        assert fields["show_axes"].min is None and fields["show_axes"].max is None
 
 
 class TestTheCheckAndTheRender:

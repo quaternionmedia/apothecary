@@ -1052,6 +1052,10 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     page = VIEWER.read_text(encoding="utf-8")
     marked = re.findall(r'class="panel-section"[^>]*data-panel="([\w-]+)"', page)
     registered = re.findall(r"panels\.register\('([\w-]+)'", page)
+    # The SCAD editor floated out of Selected is a panel only while it floats, and
+    # Part › Float's rather than one of Panels: it is Selected's, put back there.
+    assert "scad-editor" in registered
+    registered = [pid for pid in registered if pid != "scad-editor"]
     assert marked == [pid for pid, _ in PANELS[: len(marked)]]
     assert sorted(registered) == sorted(pid for pid, _ in PANELS[len(marked) :])
     for gone in ("contents", "validation", "scad", "kept", "camera", "jobs", "log"):
@@ -1248,6 +1252,84 @@ def test_part_holds_the_loop_edit_keeping_its_address():
         address = address_of(ring, action)
         assert address[:-1] == edit[:-1]
         assert walk(ring, address).action == action
+
+
+# --- the SCAD editor on the ring (loop 2, the owner's answer of 2026-10-10) -------------
+#
+# A part from the parts folder, told by the server what its SCAD is (``picture.part``):
+# Save, Float and Fullscreen after Revert, so the loop's cells keep their seats, and
+# Variants last, the saved ones, which the first save brings and so moves nothing. A
+# part built by Python reads its generated SCAD: Float and Fullscreen, no Save and no
+# Variants. A made piece and a camera have none of them.
+
+
+def test_a_part_s_ring_holds_its_scad_editor_too():
+    from apothecary.menu import PartSeen, PictureContext, carried_by
+
+    garage = _garage()
+    on = Context(pointing=Pointing.NODE, targets=["footpedal"])
+    told = PictureContext(part=PartSeen(editable=True, variants=["taller", "wider"]))
+    part = resolve(on, garage, picture=told).options[-1]
+    assert [(c.label, c.action) for c in part.children][:7] == [
+        ("Edit", "part:edit"),
+        ("Defaults", "part:defaults"),
+        ("Apply", "part:apply"),
+        ("Revert", "part:revert"),
+        ("Save", "part:save"),
+        ("Float", "part:float"),
+        ("Fullscreen", "part:fullscreen"),
+    ]
+    variants = part.children[-1]
+    assert (variants.label, variants.id) == ("Variants", "part:variants")
+    assert [(c.label, c.action) for c in variants.children] == [
+        ("taller", "part:variant:taller"),
+        ("wider", "part:variant:wider"),
+    ]
+    assert len(part.children) <= MOST_OPTIONS
+    for action in ("part:save", "part:float", "part:fullscreen", "part:variant:wider"):
+        assert carried_by(action).name == "VIEWER"
+    # None saved yet: no Variants, and nothing before it moved.
+    bare = resolve(on, garage, picture=PictureContext(part=PartSeen(editable=True)))
+    first = resolve(on, garage, picture=told)
+    for action in ("part:edit", "part:save", "part:float", "part:fullscreen"):
+        assert address_of(bare, action) == address_of(first, action)
+    assert "part:variants" not in [c.id for c in bare.options[-1].children]
+    # Built by Python: its SCAD is read, so Float and Fullscreen and nothing to save.
+    python = resolve(on, garage, picture=PictureContext(part=PartSeen(editable=False)))
+    assert [c.action for c in python.options[-1].children][4:] == ["part:float", "part:fullscreen"]
+    # Untold, the ring is the part loop's.
+    assert [c.action for c in resolve(on, garage).options[-1].children] == [
+        "part:edit",
+        "part:defaults",
+        "part:apply",
+        "part:revert",
+    ]
+
+
+def test_the_server_tells_the_ring_what_a_part_s_scad_is(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from apothecary.api import app
+    from apothecary.projects.parts import saved
+
+    monkeypatch.setattr(saved, "saved_names", lambda part: ["wider"])
+    client = TestClient(app)
+
+    def part_cells(target):
+        ring = client.post(
+            "/menu/resolve",
+            json={"context": {"pointing": "node", "targets": [target]}, "site": "parts_library"},
+        ).json()
+        part = next(o for o in ring["options"] if o["label"] == "Part")
+        return [c.get("action") or c["id"] for c in part["children"]]
+
+    assert part_cells("calibration_cube")[4:] == [
+        "part:save",
+        "part:float",
+        "part:fullscreen",
+        "part:variants",
+    ]
+    assert part_cells("snowplow")[4:] == ["part:float", "part:fullscreen"]
 
 
 def test_a_made_piece_with_a_printer_pinned_in_its_site_ends_with_print():

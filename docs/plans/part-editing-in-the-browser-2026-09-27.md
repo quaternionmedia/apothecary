@@ -144,17 +144,29 @@ The docs' "thirty seconds of OpenSCAD" (`tests/test_staging.py`,
   parameter contract (`source: "customizer"`; booleans, strings, choices
   with their options, vectors, groups and steps); a 404's `detail` says when
   the OpenSCAD in use cannot list them (2021.01, `lists: false`). Validate
-  and generate check a staged set against the same list. The page's controls
-  for the new kinds come with the editor, and a model's boolean field becomes
-  a `boolean` with them (today the page draws it as a slider, and a field
-  typed `boolean` would lose its control until then).
+  and generate check a staged set against the same list.
+  Landed in the page: a boolean is a tick-box (a model's boolean field is a
+  `boolean` too, not a slider), a string a text box, a choice its options
+  by name, a vector a number box for each of its numbers; a part without a
+  model whose SCAD is being edited takes its controls from what the draft
+  declares.
 - Part verbs join the ring (Apply, Revert, Edit, Variants), per the
   one-screen plan.
+  Landed: Part › Edit, Defaults, Apply and Revert (loop 1), then Save, Float,
+  Fullscreen and Variants (loop 2; `apothecary/menu.py`).
 
 **Iteration 3: editing SCAD (D).**
 - A vendored CodeMirror 6 with a small OpenSCAD mode in a panel tethered to
   the part; a parameter check 300 ms after typing stops, a render after a
   second of quiet, errors as inline markers.
+  Landed, where the owner put it on 2026-10-10 (docs/plans/ui-flows-2026-10-08.md):
+  in Selected, where the read-only source stood, floated over the world or
+  made fullscreen (`apothecary/static/widgets/scad_editor.js`; CodeMirror,
+  MIT, under `apothecary/static/vendor/codemirror/`, whose README says what
+  it is and how to update it). The check and the render are those timings;
+  OpenSCAD's messages are marked on their lines as the editor's lint marks
+  one. `tests/e2e/test_scad_loop.py` goes round twice and writes
+  walkthrough 16.
 - A draft is written beside the part (includes still resolve) and rendered
   into the variant cache; Save writes the SCAD, and history is git's: a save
   is a commit the person makes, not one the page makes silently.
@@ -171,7 +183,16 @@ The docs' "thirty seconds of OpenSCAD" (`tests/test_staging.py`,
   `commit-tree` and `update-ref`, its author the checkout's git identity, its
   parameters in `<stem>.variant.json` beside the SCAD;
   `tests/test_saved_variants.py` holds `git status` and `HEAD` unchanged by a
-  save. `GET /parts/{name}/saved` lists a part's variants from its refs.
+  save. `GET /parts/{name}/saved` lists a part's variants from its refs,
+  with `?diff=true` what each changes against the part's SCAD; the page
+  lists them in both places the owner asked for, a short list under the
+  part's parameters and the full one in the editor.
+  Where a variant's parameters are kept, decided with the owner on
+  2026-10-10: in `<stem>.variant.json` for now. The aim is the part's own
+  description -- its Params model or its part.json -- with the SCAD
+  regenerated from it when it is needed; until then that is a stub
+  (`saved.KEPT_IN`'s `part-description`), and a save that names it is
+  refused, saying what it will do.
 - Python-geometry parts (the snowplow) show their generated SCAD read-only;
   their editing surface is their parameters.
   Landed on the server: `GET /parts/{name}/scad` answers the SCAD its

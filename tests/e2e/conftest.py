@@ -102,6 +102,26 @@ def start_server(tmp_path_factory):
     def _start(env_overrides: dict | None = None, port: int | str | None = None) -> str:
         tmp = tmp_path_factory.mktemp("server")
         (tmp / "pictures").mkdir()
+        # A variant saved from the page is a ref in git (projects/parts/saved.py):
+        # each server saves into a clone of this checkout of its own, sharing its
+        # objects and never writing its refs (tests/conftest.py checks the refs).
+        variants = tmp / "variants.git"
+        cloned = subprocess.run(
+            ["git", "clone", "-q", "--bare", "--shared", str(ROOT), str(variants)],
+            capture_output=True,
+        )
+        if cloned.returncode != 0:
+            # A checkout git will not clone (a shallow one, say): an empty repository,
+            # whose first save has no parent.
+            subprocess.run(["git", "init", "-q", "--bare", str(variants)], check=True)
+        # Its own identity, so a save is made whoever runs the suite (CI has none),
+        # and nothing of the person's configuration signs or hooks it.
+        for key, value in (
+            ("user.name", "Apothecary browser test"),
+            ("user.email", "browser-test@apothecary.invalid"),
+            ("commit.gpgsign", "false"),
+        ):
+            subprocess.run(["git", "config", key, value], cwd=variants, check=True)
         env = os.environ.copy()
         env.update(
             {
@@ -121,6 +141,7 @@ def start_server(tmp_path_factory):
                 "APOTHECARY_PICTURE_ROOT": str(tmp / "pictures"),
                 "APOTHECARY_SERIAL_ENGINE": "simulated",
                 "APOTHECARY_SIMULATED_PRINTER": "printing",
+                "APOTHECARY_VARIANTS_REPO": str(variants),
                 **(env_overrides or {}),
             }
         )

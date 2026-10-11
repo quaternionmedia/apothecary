@@ -128,7 +128,8 @@ def params_spec(part: BasePart) -> ParamsSpec:
         # contract exists to prevent.
         exclusive_low = spec.get("exclusiveMinimum")
         high = spec.get("maximum")
-        if not isinstance(default, (int, float)):
+        if isinstance(default, bool) or not isinstance(default, (int, float)):
+            # A tick is not a number, though Python counts True as one.
             low = high = None
         else:
             if low is None:
@@ -142,10 +143,16 @@ def params_spec(part: BasePart) -> ParamsSpec:
                 # One slider step above the bound it may not touch.
                 low = float(exclusive_low) + (high - float(exclusive_low)) / 200
 
+        if spec.get("pattern"):
+            kind = "enum"
+        elif isinstance(default, bool):
+            kind = "boolean"
+        else:
+            kind = "number" if high else "text"
         fields.append(
             ParamField(
                 name=field_name,
-                type="enum" if spec.get("pattern") else ("number" if high else "text"),
+                type=kind,
                 default=to_jsonable_python(default),
                 min=low,
                 max=high,

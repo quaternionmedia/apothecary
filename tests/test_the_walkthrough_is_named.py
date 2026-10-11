@@ -1,5 +1,5 @@
 """`apothecary test run` collects the runs that write walkthrough pages 11 and 12,
-and not the runs that write a loop's page (13, 14, 15), which the browser suite
+and not the runs that write a loop's page (13, 14, 15, 16), which the browser suite
 writes: CI's browser shards write them and check them against what is committed."""
 
 import subprocess
@@ -47,6 +47,10 @@ LOOP_PAGES = {
     Path(__file__).resolve().parent / "e2e" / "test_the_firmware_loop.py": (
         "test_the_firmware_loop_goes_round_with_arduino_then_rust",
         ROOT / "walkthrough" / "15-firmware.md",
+    ),
+    Path(__file__).resolve().parent / "e2e" / "test_scad_loop.py": (
+        "test_editing_a_parts_scad_twice_round",
+        ROOT / "walkthrough" / "16-editing-a-parts-scad.md",
     ),
 }
 
