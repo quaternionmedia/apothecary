@@ -38,7 +38,7 @@ stays-on-the-device record in `governance/qm/adr/`.
 - [ ] `uv run apothecary render --scene-file examples/scene.json -o /tmp/s.scad`
       → a cube in `/tmp/s.scad` (it raised NotImplementedError before); an
       object without a `type` is refused, not guessed.
-- [ ] `uv run pytest -q` → the unit suite and the walkthrough in well under a
+- [ ] `uv run pytest` → the unit suite and the walkthrough in well under a
       minute; browser tests skip with a reason unless `--start-server`.
 - [ ] `uv run apothecary serve` starts only the server: the docs refresh is
       `--refresh-docs` now.
@@ -134,7 +134,7 @@ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/api/docs         
       there on this tip (a pin, a reading: the folder is made the account's
       alone on every write); so is `captures/` under any picture root, once a
       frame is kept.
-- [ ] `uv run pytest -q tests/test_stays_local.py` → every test passes
+- [ ] `uv run pytest tests/test_stays_local.py` → every test passes
       (`uv run pytest --co -q tests/test_stays_local.py` says how many). This
       file is the review: loosening any door is an edit here and to the record.
 
@@ -468,7 +468,7 @@ release), unchanged, plus these three that the bench did not have:
 ## 8. The suites and the gates
 
 ```bash
-uv run pytest -q                             # unit + walkthrough doctests
+uv run pytest                                # unit + walkthrough doctests
 uv run pytest tests/e2e --start-server -q    # the browser suite, on a scripted machine
 uv run apothecary test all                   # both, exiting with pytest's own code
 uv run ruff check apothecary tests
@@ -513,7 +513,7 @@ whether it runs natively, and whether it has Manifold.
       (28U8KJ6T2P)". Write down what `spctl -a -vv` says; the first run shows
       no Gatekeeper prompt.
 - [ ] Status → `OpenSCAD.app from the disk image · native (universal) ·
-      Manifold`; `uv run pytest -q --slow` renders with it, and Activity
+      Manifold`; `uv run pytest --slow` renders with it, and Activity
       Monitor shows OpenSCAD's Kind as Apple.
 - [ ] From an x86_64 Python (`uv run --python cpython-3.12-macos-x86_64-none
       apothecary openscad status`) → "emulated: x86_64 under Rosetta 2", and
@@ -528,7 +528,7 @@ whether it runs natively, and whether it has Manifold.
       "reports no version", write it down (the fix is to ask `openscad.com`).
 - [ ] Status → `portable zip, unpacked · native · Manifold`, not "unknown
       version" (a first scan by Defender can outlast the 10 s version check);
-      `uv run pytest -q --slow` renders; note any SmartScreen or Defender
+      `uv run pytest --slow` renders; note any SmartScreen or Defender
       prompt.
 - [ ] `install --snapshot <date> --force` replaces it in place, with no
       `.tmp` folders left.
