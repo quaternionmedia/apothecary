@@ -41,11 +41,14 @@ def _status_lines(chosen: Optional[str] = None) -> None:
             _safe_echo(f"  ✗ {problem}", fg="yellow")
     from ..slicer import compose
 
-    click.secho("A slice is composed from:", bold=True)
-    for kind in (compose.START, compose.FILAMENT, compose.DECLARED):
-        for piece in compose.pieces(kind):
-            mark = " (a stub)" if piece.stub else ""
-            _safe_echo(f"  • {kind} {piece.id}{mark}: {piece.does}")
+    kinds = (compose.START, compose.FILAMENT, compose.DECLARED)
+    every = [piece for kind in kinds for piece in compose.pieces(kind)]
+    for title, planned in (("A slice is composed from:", False), ("Planned, not built:", True)):
+        shown = [piece for piece in every if piece.stub is planned]
+        if shown:
+            click.secho(title, bold=True)
+        for piece in shown:
+            _safe_echo(f"  • {piece.kind} {piece.id}: {piece.does}")
     versions = oi.installed_versions()
     if versions:
         click.secho("Installed releases:", bold=True)
@@ -57,7 +60,7 @@ def _status_lines(chosen: Optional[str] = None) -> None:
             _safe_echo(f"      {found.platform} · {found.how} · {found.runs}")
 
 
-@click.group()
+@click.group(short_help="Install OrcaSlicer; slice a part or a made piece for a printer.")
 def slicer():
     """Install the slicer and slice a part or a made piece for a printer."""
 
