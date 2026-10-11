@@ -371,6 +371,9 @@ def test_focused_monitor_page(page: Page, fresh_url: str):
     # the next one scheduled, which is when the timer changes -- never two.
     _hold_clock(page)
     page.evaluate("() => window.apothecaryMachine.schedule()")
+    # A poll asked before the clock was held may still be answering: its answer
+    # adds to the history, so the count starts once it has landed.
+    page.wait_for_function(f"() => !{MONITOR}.polling")
     polls = page.evaluate(f"() => {MONITOR}.history.length")
     for n in (1, 2, 3):
         timer = page.evaluate(f"() => {MONITOR}.timer")
