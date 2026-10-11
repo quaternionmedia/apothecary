@@ -2,14 +2,24 @@
 
 **Hermetic.**
 
-A part is a folder, a SCAD file named after it, and a Python wrapper that says
-what it is and how big.
+A part is a folder, a SCAD file named after it, and a wrapper that says what
+it is and how big: a Python module, or a `part.json` beside the SCAD for a
+part that needs no Python.
 
-    parts/<name>/<name>.scad          the geometry
+    parts/<name>/<name>.scad              the geometry
     apothecary/projects/parts/<name>.py   the wrapper, underscored
+    parts/<name>/part.json                or a sidecar, read as the wrapper
 
+A folder whose subfolders hold parts is a category, searched the same way:
+`parts/boards/arduino_uno/arduino_uno.scad` is the part `arduino_uno`.
 Nothing registers a part but that naming. `scan_projects` finds the folder;
-`_locate_wrapper_for_part` finds the wrapper by sanitising the name.
+`_locate_wrapper_for_part` finds the wrapper by sanitising the name, and
+falls back to the sidecar.
+
+    >>> from apothecary.projects.registry import _locate_wrapper_for_part
+    >>> from apothecary.projects.parts.skeleton import ROOT
+    >>> _locate_wrapper_for_part(ROOT / "parts" / "boards" / "arduino_uno" / "arduino_uno.scad")
+    'apothecary.projects.parts.described.arduino_uno'
 
     >>> from apothecary.projects.registry import scan_projects, _sanitize_module_name
     >>> _sanitize_module_name("datum_core")

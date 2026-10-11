@@ -192,7 +192,7 @@ Two shapes, and the first needs no new idea.
 
 1. **A command that reads the scene's JSON and writes an STL.** A Rust binary,
    `apothecary-render scene.json -o out.stl`, taking the same JSON as
-   `apothecary render-scene` and the Scene JSON format already documents. The
+   `apothecary render` and the Scene JSON format already documents. The
    Python side calls it with `subprocess`, as `OpenSCADRenderer` calls OpenSCAD,
    and gets a `RenderResult`. This keeps the Rust out of the wheel, lets the
    binary be fetched at install time as OpenSCAD is, and makes the kernel an
