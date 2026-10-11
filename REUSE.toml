@@ -27,3 +27,11 @@ path = "apothecary/static/vendor/three/**"
 precedence = "override"
 SPDX-FileCopyrightText = "Copyright (c) 2010-2023 three.js authors"
 SPDX-License-Identifier = "MIT"
+
+# CodeMirror 6 and the packages it imports, likewise (its README says which and
+# how to update them). The README and packages.json there are this project's.
+[[annotations]]
+path = ["apothecary/static/vendor/codemirror/*/index.js", "apothecary/static/vendor/codemirror/*/LICENSE"]
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright (C) 2016-2024 Marijn Haverbeke and others"
+SPDX-License-Identifier = "MIT"
