@@ -10,9 +10,9 @@ parts/
 │   └── couch_block.stl     built by apothecary parts generate-stl, git-ignored
 ├── boards/                 a category
 │   └── arduino_uno/        arduino_uno.scad and part.json: a part with no Python
-├── cameras/                a category: the library's webcam, and three mounts for it
+├── cameras/                a category: the library's webcam, and mounts for it
 │   ├── webcam/             webcam.scad and part.json
-│   └── webcam_desk_stand/  part.json tags it a stub, as are the clamp arm and ceiling mount
+│   └── webcam_desk_stand/  part.json tags it a stub, as it does the clamp arm and the ceiling mount
 ├── ender3/
 │   ├── ender3.scad         the printer, drawn as it is
 │   └── slicer.json         printer_1's slicer profile, kept with its part

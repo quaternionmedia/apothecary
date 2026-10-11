@@ -64,8 +64,8 @@ edges and an amber dot: an applied variant, not saved.
 
 ## How the world is drawn
 
-⚙ View folds out four controls. Each is also a cell of the canvas ring's
-View, which adds **Fit**: frame the pieces at this level.
+⚙ View folds out the controls below. Each is also a cell of the canvas
+ring's View, which adds **Fit**: frame the pieces at this level.
 
 | ⚙ View | The ring's View | Does |
 |---|---|---|

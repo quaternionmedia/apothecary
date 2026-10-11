@@ -377,7 +377,7 @@ def refresh_note() -> Tuple[str, str, str]:
     return (
         "",
         "generated docs: not refreshed yet",
-        "run apothecary docs generate, or restart apothecary serve",
+        "run apothecary docs generate, or start apothecary serve with --refresh-docs",
     )
 
 
