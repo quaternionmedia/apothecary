@@ -25,13 +25,17 @@ from apothecary.api import app
 from apothecary.projects.parts import saved, stl_renderer
 from apothecary.projects.parts.base import BasePart
 from apothecary.projects.parts.saved import (
+    KEPT_IN,
     GitError,
     Moved,
+    NotBuilt,
     NotInGit,
     check_name,
+    keeping,
     list_saved,
     read_saved,
     save_variant,
+    saved_names,
 )
 
 SCAD = "include <dims.scad>\nwidth = 34; // [10:100]\ncube([width, depth, 3]);\n"
@@ -291,6 +295,77 @@ class TestTheRoutes:
         client = TestClient(app)
         assert client.get("/parts/loose/saved").json() == []
         assert client.post("/parts/loose/saved", json={"name": "x"}).status_code == 409
+
+
+class TestWhatEachChanges:
+    def test_a_variant_is_listed_with_its_diff_against_the_parts_scad(self, checkout, block):
+        save_variant(block, "wider", EDITED, {"width": 50})
+        plain = list_saved(block)[0]
+        assert plain.diff is None
+        listed = list_saved(block, with_diff=True)[0]
+        assert "-cube([width, depth, 3]);" in listed.diff
+        assert "+cube([width, depth, 9]);" in listed.diff
+        assert listed.diff.startswith("--- a/parts/block/block.scad\n+++ b/parts/block/block.scad")
+        r = TestClient(app).get("/parts/block/saved", params={"diff": "true"}).json()
+        assert r[0]["diff"] == listed.diff
+
+    def test_the_same_scad_changes_nothing(self, checkout, block):
+        save_variant(block, "as-is", block.source_file.read_text())
+        assert list_saved(block, with_diff=True)[0].diff == ""
+
+    def test_the_names_a_ring_offers_newest_first(self, checkout, block):
+        assert saved_names(block) == []
+        save_variant(block, "wider", EDITED)
+        save_variant(block, "thin", SCAD.replace("3]", "1]"))
+        assert set(saved_names(block)) == {"wider", "thin"} and saved_names(block)[0] == "thin"
+
+
+class TestWhereItsParametersAreKept:
+    """Beside its SCAD for now; the part's own description is the aim, a stub until then."""
+
+    def test_beside_its_scad_is_built_and_the_description_is_a_stub(self):
+        assert [(k.id, k.stub) for k in KEPT_IN] == [
+            ("variant-file", False),
+            ("part-description", True),
+        ]
+        assert keeping("variant-file").id == "variant-file"
+        with pytest.raises(NotBuilt, match="stub, not built yet .what it will do: .*part.json"):
+            keeping("part-description")
+        with pytest.raises(ValueError, match="no place"):
+            keeping("somewhere")
+
+    def test_saving_into_the_stub_is_refused_saying_what_it_will_do(self, checkout, block):
+        with pytest.raises(NotBuilt):
+            save_variant(block, "wider", EDITED, kept_in="part-description")
+        assert git(checkout, "for-each-ref", "refs/apothecary/") == ""
+        r = TestClient(app).post(
+            "/parts/block/saved",
+            json={"name": "wider", "scad": EDITED, "params_in": "part-description"},
+        )
+        assert r.status_code == 422 and "what it will do" in r.json()["detail"]
+        assert git(checkout, "for-each-ref", "refs/apothecary/") == ""
+
+
+class TestAnotherRepositoryToSaveInto:
+    """APOTHECARY_VARIANTS_REPO: a clone to save into -- a test server's, which must
+    never write the checkout's refs. The paths in it are still the part's."""
+
+    def test_a_save_goes_to_the_clone_and_the_checkout_is_as_it_was(
+        self, checkout, block, tmp_path, monkeypatch
+    ):
+        clone = tmp_path / "variants.git"
+        git(tmp_path, "clone", "-q", "--bare", "--shared", str(checkout), str(clone))
+        git(clone, "config", "user.name", PERSON[0])
+        git(clone, "config", "user.email", PERSON[1])
+        before = _as_it_stands(checkout)
+        monkeypatch.setenv("APOTHECARY_VARIANTS_REPO", str(clone))
+        variant = save_variant(block, "wider", EDITED, {"width": 50})
+        assert _as_it_stands(checkout) == before
+        assert git(checkout, "for-each-ref", "refs/apothecary/") == ""
+        assert git(clone, "show", f"{variant.ref}:parts/block/block.scad") == EDITED
+        assert variant.parent == git(checkout, "rev-parse", "HEAD").strip()
+        assert [v.name for v in list_saved(block)] == ["wider"]
+        assert saved_names(block) == ["wider"]
 
 
 def test_git_is_told_to_fetch_nothing_and_to_prompt_for_nothing(monkeypatch):

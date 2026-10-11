@@ -58,6 +58,7 @@ from ..projects.parts.params import (
     validate_staged,
 )
 from ..projects.parts.saved import (
+    KEEP_DEFAULT,
     GitError,
     Moved,
     NoSuchVariant,
@@ -270,17 +271,27 @@ class SaveRequest(BaseModel):
     params: Dict[str, Any] = Field(
         default_factory=dict, description="The parameters the variant is drawn with"
     )
+    params_in: str = Field(
+        KEEP_DEFAULT,
+        description="Where its parameters are kept: 'variant-file' (beside its SCAD); "
+        "'part-description' is a stub, refused, saying what it will do",
+    )
 
 
 @router.get("/parts/{name}/saved", response_model=List[SavedVariant])
-def list_saved_variants(name: str):
+def list_saved_variants(
+    name: str,
+    diff: bool = Query(False, description="With what each changes against the part's SCAD"),
+):
     """The part's variants saved in git, newest first: each one's ref, commit,
-    who saved it and when, its parameters, and whether ``HEAD`` already holds it
-    (``merged``). Read from ``refs/apothecary/variants/<part>/`` in the
-    repository that tracks its SCAD; none for a part outside git."""
+    who saved it and when, its parameters, whether ``HEAD`` already holds it
+    (``merged``) and, with ``diff``, what it changes: a unified diff of its
+    SCAD against the part's SCAD as it is on disk. Read from
+    ``refs/apothecary/variants/<part>/`` in the repository that tracks its SCAD;
+    none for a part outside git."""
     part = _api()._load_part_wrapper(name)
     try:
-        return list_saved(part)
+        return list_saved(part, with_diff=diff)
     except NotInGit:
         return []
     except GitError as exc:
@@ -331,7 +342,9 @@ def save_part_variant(name: str, body: SaveRequest):
             listing = check_draft(part, text, renderer).parameters
     overrides = api.checked_overrides(part, body.params, listing, scad_text=text)
     try:
-        return save_variant(part, body.name, text, without_defaults(part, overrides))
+        return save_variant(
+            part, body.name, text, without_defaults(part, overrides), kept_in=body.params_in
+        )
     except (Moved, NotInGit) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from None
     except GitError as exc:

@@ -26,7 +26,19 @@ parameters. So ``git diff HEAD <ref>`` is the edit, ``git log <ref>`` its
 history, and pushing the ref shares it. Making a variant the part's source is
 a merge the person does (``git merge <ref>``); nothing here writes the working
 tree. Listing a part's variants reads its refs (``git for-each-ref``), each
-with whether ``HEAD`` already holds it.
+with whether ``HEAD`` already holds it and, asked for, what it changes: a diff
+of its SCAD against the part's SCAD as it is on disk.
+
+Where a variant's parameters are kept is a choice with one built answer and
+one stub (``KEPT_IN``): beside the SCAD in ``<stem>.variant.json`` for now;
+the aim (the owner's, 2026-10-10) is the part's own description -- its Params
+model or its part.json -- with the SCAD regenerated from it when it is
+needed. Naming the stub is refused, saying what it will do.
+
+``APOTHECARY_VARIANTS_REPO`` names another repository to save into -- a clone
+of the checkout, for a test's server, which must never write this checkout's
+refs. The paths in its commits are still the part's, from the top of the
+checkout that holds it.
 
 Every git here is told to fetch nothing: a partial clone would otherwise
 fetch an object it lacks (``GIT_NO_LAZY_FETCH``), and nothing may prompt.
@@ -34,9 +46,12 @@ fetch an object it lacks (``GIT_NO_LAZY_FETCH``), and nothing may prompt.
 
 from __future__ import annotations
 
+import difflib
 import json
+import os
 import re
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Dict, List, Mapping, NamedTuple, Optional
 
@@ -70,6 +85,61 @@ class Moved(GitError):
 
 class NoSuchVariant(LookupError):
     """No saved variant by that name."""
+
+
+class NotBuilt(ValueError):
+    """A stub was named: it says what it will do, and does not do it yet."""
+
+
+@dataclass(frozen=True)
+class Keeping:
+    """Where a saved variant's parameters are kept, or will be."""
+
+    id: str
+    does: str
+    stub: bool = False
+
+
+# Where a saved variant's parameters are kept (the owner's answer of 2026-10-10,
+# docs/plans/ui-flows-2026-10-08.md): beside its SCAD for now, its own
+# description the aim. Building the stub is writing its parameters there and
+# taking ``stub`` off.
+KEPT_IN = (
+    Keeping(
+        "variant-file",
+        "the parameters in <stem>.variant.json, beside the part's SCAD in the variant's commit",
+    ),
+    Keeping(
+        "part-description",
+        "the parameters written into the part's own description -- its Params model's "
+        "defaults, or its part.json -- in the variant's commit, and the SCAD regenerated "
+        "from that description when it is needed",
+        stub=True,
+    ),
+)
+KEEP_DEFAULT = "variant-file"
+
+
+def keeping(kept_in: str) -> Keeping:
+    """Where parameters are to be kept; a stub is refused, saying what it will do."""
+    for k in KEPT_IN:
+        if k.id == kept_in:
+            if k.stub:
+                raise NotBuilt(
+                    f"keeping a variant's parameters in {k.id!r} is a stub, not built yet "
+                    f"(what it will do: {k.does})"
+                )
+            return k
+    raise ValueError(
+        f"no place {kept_in!r} to keep a variant's parameters "
+        f"(there are: {', '.join(k.id for k in KEPT_IN)})"
+    )
+
+
+def variants_repository() -> Optional[Path]:
+    """``APOTHECARY_VARIANTS_REPO``: another repository to save variants into."""
+    named = os.environ.get("APOTHECARY_VARIANTS_REPO", "").strip()
+    return Path(named).expanduser().resolve() if named else None
 
 
 def _environment() -> Dict[str, str]:
@@ -170,11 +240,16 @@ class SavedVariant(BaseModel):
     params: Dict[str, Any] = Field(default_factory=dict)
     merged: bool = Field(description="HEAD already holds it")
     scad: Optional[str] = Field(None, description="Its SCAD, when one variant is read")
+    diff: Optional[str] = Field(
+        None,
+        description="What it changes: a unified diff of its SCAD against the part's SCAD "
+        "as it is on disk, when asked for (empty: the same)",
+    )
 
 
 class _Where(NamedTuple):
-    repo: Path
-    scad: PurePosixPath  # the part's SCAD from the top of the repository
+    repo: Path  # where git runs: the checkout's repository, or APOTHECARY_VARIANTS_REPO
+    scad: PurePosixPath  # the part's SCAD from the top of its checkout
 
     @property
     def params(self) -> PurePosixPath:
@@ -182,12 +257,14 @@ class _Where(NamedTuple):
 
 
 def _where(part: BasePart, repo: Optional[Path] = None) -> _Where:
-    repo = Path(repo).resolve() if repo is not None else repository_of(part.source_file)
+    """Where git runs for a part's variants, and its SCAD's path in the tree.
+    ``repo``: the checkout holding the part, when the caller knows it."""
+    top = Path(repo).resolve() if repo is not None else repository_of(part.source_file)
     try:
-        rel = part.source_file.resolve().relative_to(repo.resolve())
+        rel = part.source_file.resolve().relative_to(top.resolve())
     except ValueError:
-        raise NotInGit(f"{part.name}'s SCAD is not in the repository at {repo}") from None
-    return _Where(repo, PurePosixPath(rel.as_posix()))
+        raise NotInGit(f"{part.name}'s SCAD is not in the repository at {top}") from None
+    return _Where(variants_repository() or top, PurePosixPath(rel.as_posix()))
 
 
 # --- writing a tree with mktree -----------------------------------------------------
@@ -260,14 +337,17 @@ def save_variant(
     scad: str,
     params: Optional[Mapping[str, Any]] = None,
     repo: Optional[Path] = None,
+    kept_in: str = KEEP_DEFAULT,
 ) -> SavedVariant:
     """Commit ``scad`` as the part's SCAD and ``params`` beside it to the part's
     variant ``name``, with git's plumbing only. Its parent is the variant's last
     save, else ``HEAD``. Saving what the variant already holds makes no commit.
-    ValueError for a bad name or a part whose SCAD is generated; ``Moved`` when
-    the variant was saved meanwhile; ``GitError`` with git's own words else (no
+    ValueError for a bad name, a part whose SCAD is generated, or a place to
+    keep its parameters that is a stub (``NotBuilt``); ``Moved`` when the
+    variant was saved meanwhile; ``GitError`` with git's own words else (no
     identity configured, for one)."""
     refuse_read_only(part)
+    keeping(kept_in)
     ref = ref_for(part, name)
     where = _where(part, repo)
     repo = where.repo
@@ -290,7 +370,7 @@ def save_variant(
         {where.scad.name: scad_blob, where.params.name: params_blob},
     )
     if old is not None and tree == base:
-        return read_saved(part, name, repo=repo, with_scad=False)
+        return _variants(part, where, ref, with_scad=False)[0]
 
     args = ["commit-tree", tree, "-F", "-"]
     if parent:
@@ -303,7 +383,7 @@ def save_variant(
         if _verify(repo, f"{ref}^{{commit}}") != old:
             raise Moved(f"{ref} was saved meanwhile: read it, and save again") from None
         raise
-    return read_saved(part, name, repo=repo, with_scad=False)
+    return _variants(part, where, ref, with_scad=False)[0]
 
 
 # --- reading ------------------------------------------------------------------------
@@ -326,7 +406,25 @@ def _blob(repo: Path, commit: str, path: PurePosixPath) -> Optional[str]:
     return out if out else None
 
 
-def _variants(part: BasePart, where: _Where, pattern: str, with_scad: bool) -> List[SavedVariant]:
+def _diff(part: BasePart, where: _Where, scad: Optional[str]) -> str:
+    """A variant's SCAD against the part's as it is on disk, as ``git diff`` shows one."""
+    try:
+        own = part.source_file.read_text(encoding="utf-8")
+    except OSError:
+        own = ""
+    return "".join(
+        difflib.unified_diff(
+            own.splitlines(keepends=True),
+            (scad or "").splitlines(keepends=True),
+            fromfile=f"a/{where.scad}",
+            tofile=f"b/{where.scad}",
+        )
+    )
+
+
+def _variants(
+    part: BasePart, where: _Where, pattern: str, with_scad: bool, with_diff: bool = False
+) -> List[SavedVariant]:
     repo = where.repo
     head = _verify(repo, "HEAD^{commit}")
     lines = _git(
@@ -344,6 +442,7 @@ def _variants(part: BasePart, where: _Where, pattern: str, with_scad: bool) -> L
             head is not None
             and _run(repo, ["merge-base", "--is-ancestor", commit, head]).returncode == 0
         )
+        scad = _blob(repo, commit, where.scad) if (with_scad or with_diff) else None
         found.append(
             SavedVariant(
                 part=part.name,
@@ -358,16 +457,38 @@ def _variants(part: BasePart, where: _Where, pattern: str, with_scad: bool) -> L
                 scad_path=str(where.scad),
                 params=dict(record.get("params") or {}),
                 merged=merged,
-                scad=_blob(repo, commit, where.scad) if with_scad else None,
+                scad=scad if with_scad else None,
+                diff=_diff(part, where, scad) if with_diff else None,
             )
         )
     return found
 
 
-def list_saved(part: BasePart, repo: Optional[Path] = None) -> List[SavedVariant]:
-    """The part's saved variants, newest first, from its refs."""
+def list_saved(
+    part: BasePart, repo: Optional[Path] = None, with_diff: bool = False
+) -> List[SavedVariant]:
+    """The part's saved variants, newest first, from its refs; with what each
+    changes, when ``with_diff``."""
     where = _where(part, repo)
-    return _variants(part, where, part_refs(part) + "/", with_scad=False)
+    return _variants(part, where, part_refs(part) + "/", with_scad=False, with_diff=with_diff)
+
+
+def saved_names(part: BasePart) -> List[str]:
+    """The names of a part's saved variants, newest first: what a ring offers to
+    choose from. None outside git."""
+    try:
+        where = _where(part)
+        out = _git(
+            where.repo,
+            "for-each-ref",
+            "--sort=-creatordate",
+            "--format=%(refname)",
+            part_refs(part) + "/",
+        )
+    except GitError:
+        return []
+    prefix = part_refs(part) + "/"
+    return [line[len(prefix) :] for line in out.splitlines() if line.startswith(prefix)]
 
 
 def read_saved(
@@ -384,16 +505,23 @@ def read_saved(
 
 __all__ = [
     "GitError",
+    "KEEP_DEFAULT",
+    "KEPT_IN",
+    "Keeping",
     "Moved",
     "NoSuchVariant",
+    "NotBuilt",
     "NotInGit",
     "PARAMS_SUFFIX",
     "REF_ROOT",
     "SavedVariant",
     "check_name",
+    "keeping",
     "list_saved",
     "read_saved",
     "ref_for",
     "repository_of",
     "save_variant",
+    "saved_names",
+    "variants_repository",
 ]
