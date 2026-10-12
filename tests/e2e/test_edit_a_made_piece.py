@@ -117,7 +117,7 @@ def test_a_made_piece_is_edited_from_its_ring_and_the_found_candidate_returns_it
         facts.evaluate("(el) => el.compareDocumentPosition(document.getElementById('part-params'))")
         & 4
     )
-    # A made piece has no checklist and no Regenerate STL: Apply is its rebuild.
+    # A made piece has no checklist, and no Regenerate STL: Apply is its rebuild.
     expect(page.locator("#part-checklist")).to_have_count(0)
     expect(page.locator("#part-regenerate-btn")).to_have_count(0)
     # Its few lines of SCAD, read-only, in the editor where a part's SCAD is edited.
@@ -135,6 +135,10 @@ def test_a_made_piece_is_edited_from_its_ring_and_the_found_candidate_returns_it
     expect(apply).to_have_text("Apply 2 changes")
 
     # Apply: rebuilt where it stands, and the status says what was built and found.
+    # The piece alone is drawn again: no other piece of the garage is fetched.
+    fetched = []
+    listen = lambda r: fetched.append(r.url) if "/stl" in r.url else None  # noqa: E731
+    page.on("request", listen)
     apply.click()
     _said(page, f"{piece} rebuilt {_mm(w)} × {_mm(d)} × 8.1 mm; found 54 × 54, thickness a guess")
     assert _footprint_size(page, piece) == pytest.approx([w, d, 8.1])
@@ -148,6 +152,8 @@ def test_a_made_piece_is_edited_from_its_ring_and_the_found_candidate_returns_it
     )
     mesh = page.evaluate(MESH, piece)
     assert max(mesh["size"]) == pytest.approx(max(w, d), abs=0.5), mesh
+    page.remove_listener("request", listen)
+    assert all(f"/nodes/{piece}/stl" in url for url in fetched), fetched
     # Its outline and its thread stay, and so does the selection.
     drawn = next(
         e
@@ -188,8 +194,9 @@ def test_a_part_in_the_library_gets_the_same_editor_from_the_same_cell(page, bas
     _press(page, "Part", "Edit")
     _said(page, "Editing v_slot")
     expect(page.locator("#part-params input[type=range]").first).to_be_focused(timeout=10000)
-    # A part has what a made piece lacks: its checklist and Regenerate STL.
+    # A part has what a made piece lacks: its checklist. Regenerate STL, which was
+    # Apply again, is gone from both.
     expect(page.locator("#part-checklist")).to_be_visible()
-    expect(page.locator("#part-regenerate-btn")).to_be_visible()
+    expect(page.locator("#part-regenerate-btn")).to_have_count(0)
     expect(page.locator("#stage-summary")).to_have_text("No staged changes")
     assert errors == []
