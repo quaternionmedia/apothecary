@@ -74,6 +74,7 @@ from ..projects.parts.saved import (
     NoSuchVariant,
     NotInGit,
     SavedVariant,
+    UpstreamEdit,
     check_name,
     list_saved,
     read_saved,
@@ -412,7 +413,16 @@ def save_part_variant(name: str, body: SaveRequest):
     variant saved meanwhile by another tab, or a part outside git, a 409; a
     part built by Python geometry a 403; git's own refusal (no identity
     configured, for one) a 500 in git's words. Making a variant the part's
-    source is a merge the person does: ``git merge <ref>``."""
+    source is a merge the person does: the answer's ``repository`` names where
+    the ref lives and ``merge`` what it takes (a fetch first, where the ref is
+    in another repository) and that a merge does not apply the variant's
+    parameters.
+
+    A part whose SCAD is in a submodule is saved as an overlay in the
+    checkout's ref (``kind: "overlay"``): ``<stem>.overlay.scad`` beside the
+    submodule, which includes the upstream SCAD and sets the values; the
+    submodule is never touched. An edit of the upstream SCAD itself is a 403
+    saying so."""
     api = _api()
     part = _editable(name)
     try:
@@ -433,6 +443,8 @@ def save_part_variant(name: str, body: SaveRequest):
         return save_variant(
             part, body.name, text, without_defaults(part, overrides), kept_in=body.params_in
         )
+    except UpstreamEdit as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from None
     except (Moved, NotInGit) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from None
     except GitError as exc:

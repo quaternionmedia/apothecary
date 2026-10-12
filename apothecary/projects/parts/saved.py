@@ -40,6 +40,19 @@ of the checkout, for a test's server, which must never write this checkout's
 refs. The paths in its commits are still the part's, from the top of the
 checkout that holds it.
 
+**A part inside a submodule** (gridfinity's SCAD is in
+``parts/gridfinity/gridfinity-rebuilt-openscad``) is saved as an **overlay**
+in the superproject: ``<stem>.overlay.scad`` beside the submodule, a small
+SCAD that includes the upstream file and sets the variant's values, with its
+``<stem>.variant.json`` beside it, committed to the superproject's ref. The
+submodule is never touched -- its repository, its tree, its refs -- and an
+edit of the upstream file itself is refused (``UpstreamEdit``), saying so.
+
+**Where the ref is, and what a merge does** (``MergeAdvice``): a save's answer
+names the repository the ref lives in, the commands that make it the part's
+source, and says plainly that a merge does not apply the variant's
+parameters: they come along in the ``.variant.json`` nobody reads.
+
 Every git here is told to fetch nothing: a partial clone would otherwise
 fetch an object it lacks (``GIT_NO_LAZY_FETCH``), and nothing may prompt.
 """
@@ -49,6 +62,7 @@ from __future__ import annotations
 import difflib
 import json
 import os
+import posixpath
 import re
 import subprocess
 from dataclasses import dataclass
@@ -67,6 +81,12 @@ REF_ROOT = "refs/apothecary/variants"
 NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}[A-Za-z0-9_]$|^[A-Za-z0-9]$")
 
 PARAMS_SUFFIX = ".variant.json"
+OVERLAY_SUFFIX = ".overlay.scad"
+
+# What a saved variant is: the part's SCAD as edited, or, for a part in a
+# submodule, an overlay that includes the upstream SCAD and sets its values.
+KIND_SCAD = "scad"
+KIND_OVERLAY = "overlay"
 
 GIT_TIMEOUT = 30.0
 
@@ -89,6 +109,11 @@ class NoSuchVariant(LookupError):
 
 class NotBuilt(ValueError):
     """A stub was named: it says what it will do, and does not do it yet."""
+
+
+class UpstreamEdit(ValueError):
+    """An edit of a SCAD that lives in a submodule: never saved, the submodule
+    being upstream's. Its values are saved as an overlay instead."""
 
 
 @dataclass(frozen=True)
@@ -224,6 +249,23 @@ def ref_for(part: BasePart, name: str) -> str:
     return f"{part_refs(part)}/{check_name(name)}"
 
 
+class MergeAdvice(BaseModel):
+    """What making a saved variant the part's source takes, said truly."""
+
+    repository: str = Field(description="Where the ref lives: '.' for this checkout, else its path")
+    checkout: str = Field(description="Where the person merges: '.' for this checkout")
+    commands: List[str] = Field(
+        description="What to run in the checkout, in order: a fetch first where the ref "
+        "lives in another repository"
+    )
+    applies_params: bool = Field(
+        False,
+        description="Whether a merge applies the variant's parameters: never; they come "
+        "along in its .variant.json, which nothing reads",
+    )
+    advice: str = Field(description="All of it in a sentence or two, for a status line")
+
+
 class SavedVariant(BaseModel):
     """A part's variant saved in git: what a page lists, and opens."""
 
@@ -236,7 +278,18 @@ class SavedVariant(BaseModel):
     author_email: str
     date: str = Field(description="When, ISO 8601")
     subject: str
-    scad_path: str = Field(description="The part's SCAD, from the top of its repository")
+    scad_path: str = Field(
+        description="The SCAD saved, from the top of the checkout: the part's own, or for "
+        "a part in a submodule its overlay"
+    )
+    kind: str = Field(
+        KIND_SCAD,
+        description='"scad": the part\'s SCAD as edited; "overlay": a part in a submodule, '
+        "saved as a SCAD that includes the upstream file and sets the variant's values",
+    )
+    upstream: Optional[str] = Field(
+        None, description="An overlay's upstream SCAD, from the top of the checkout"
+    )
     params: Dict[str, Any] = Field(default_factory=dict)
     merged: bool = Field(description="HEAD already holds it")
     scad: Optional[str] = Field(None, description="Its SCAD, when one variant is read")
@@ -245,26 +298,134 @@ class SavedVariant(BaseModel):
         description="What it changes: a unified diff of its SCAD against the part's SCAD "
         "as it is on disk, when asked for (empty: the same)",
     )
+    repository: str = Field(
+        ".", description="Where its ref lives: '.' for this checkout, else that repository's path"
+    )
+    merge: Optional[MergeAdvice] = Field(
+        None, description="What making it the part's source takes, and what it does not do"
+    )
 
 
 class _Where(NamedTuple):
     repo: Path  # where git runs: the checkout's repository, or APOTHECARY_VARIANTS_REPO
-    scad: PurePosixPath  # the part's SCAD from the top of its checkout
+    scad: PurePosixPath  # the SCAD saved, from the top of the checkout
+    checkout: Path  # the checkout the part is in: a submodule's superproject
+    kind: str = KIND_SCAD
+    upstream: Optional[PurePosixPath] = None  # an overlay's upstream SCAD
 
     @property
     def params(self) -> PurePosixPath:
-        return self.scad.with_name(f"{self.scad.stem}{PARAMS_SUFFIX}")
+        stem = self.scad.name[: -len(OVERLAY_SUFFIX)] if self.overlay else self.scad.stem
+        return self.scad.with_name(f"{stem}{PARAMS_SUFFIX}")
+
+    @property
+    def overlay(self) -> bool:
+        return self.kind == KIND_OVERLAY
+
+
+def superproject_of(top: Path) -> Optional[Path]:
+    """The checkout the repository at ``top`` is a submodule of, or None."""
+    try:
+        out = _git(top, "rev-parse", "--show-superproject-working-tree").strip()
+    except GitError:
+        return None
+    return Path(out).resolve() if out else None
 
 
 def _where(part: BasePart, repo: Optional[Path] = None) -> _Where:
-    """Where git runs for a part's variants, and its SCAD's path in the tree.
-    ``repo``: the checkout holding the part, when the caller knows it."""
+    """Where git runs for a part's variants, and the path of what is saved in
+    the tree. ``repo``: the checkout holding the part, when the caller knows it.
+    A part whose SCAD is in a submodule is saved in the outermost checkout, as
+    an overlay beside the submodule."""
     top = Path(repo).resolve() if repo is not None else repository_of(part.source_file)
+    # The repository the SCAD is in, then each it is a submodule of, outward.
+    chain = [top]
+    while repo is None:
+        above = superproject_of(chain[-1])
+        if above is None or above in chain:
+            break
+        chain.append(above)
+    outer = chain[-1]
     try:
-        rel = part.source_file.resolve().relative_to(top.resolve())
+        rel = part.source_file.resolve().relative_to(outer.resolve())
     except ValueError:
-        raise NotInGit(f"{part.name}'s SCAD is not in the repository at {top}") from None
-    return _Where(variants_repository() or top, PurePosixPath(rel.as_posix()))
+        raise NotInGit(f"{part.name}'s SCAD is not in the repository at {outer}") from None
+    scad = PurePosixPath(rel.as_posix())
+    if len(chain) == 1:
+        return _Where(variants_repository() or top, scad, top)
+    # Beside the submodule of the outermost checkout that the SCAD is in.
+    module = PurePosixPath(chain[-2].relative_to(outer).as_posix())
+    overlay = module.parent / f"{part.source_file.stem}{OVERLAY_SUFFIX}"
+    return _Where(variants_repository() or outer, overlay, outer, KIND_OVERLAY, scad)
+
+
+def overlay_text(part: BasePart, where: _Where, name: str, params: Mapping[str, Any]) -> str:
+    """The overlay a variant of a part in a submodule is saved as: the upstream
+    SCAD included from beside the submodule, and the variant's values set after
+    it (in OpenSCAD the last assignment of a name is its value, as ``-D``'s is)."""
+    from .stl_renderer import scad_literal
+
+    include = posixpath.relpath(str(where.upstream), str(where.scad.parent))
+    lines = [
+        f"// {part.name}'s variant {name}: {where.upstream.name} with the values below.",
+        f"// The upstream SCAD is in a submodule, which is not changed: {where.upstream}",
+        f"include <{include}>",
+        "",
+    ]
+    for key, value in part.scad_overrides(dict(params)).items():
+        lines.append(f"{key} = {scad_literal(value)};")
+    return "\n".join(lines) + "\n"
+
+
+def shown_repository(path: Path) -> str:
+    """A repository as an answer names it: '.' for this checkout, its path from
+    here for one inside it, else its own path."""
+    from .skeleton import ROOT
+
+    here = ROOT.resolve()
+    path = Path(path).resolve()
+    if path == here:
+        return "."
+    try:
+        return path.relative_to(here).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def merge_advice(part: BasePart, where: _Where, ref: str) -> MergeAdvice:
+    """What making the variant at ``ref`` the part's source takes, and what it
+    does not do: where the ref lives, the commands, and that the parameters
+    are not applied."""
+    repository, checkout = shown_repository(where.repo), shown_repository(where.checkout)
+    here = "this checkout" if checkout == "." else checkout
+    commands = []
+    if where.repo.resolve() != where.checkout.resolve():
+        commands.append(f"git fetch {where.repo} {ref}:{ref}")
+    commands.append(f"git merge {ref}")
+    elsewhere = (
+        f"The ref is in {repository}, not {here}: `{commands[0]}` there brings it, then "
+        if len(commands) > 1
+        else f"In {here}, "
+    )
+    if where.overlay:
+        does = (
+            f"`git merge {ref}` adds {where.scad}, which includes {where.upstream} and sets "
+            f"the variant's values; the submodule and the part {part.name} are not changed, "
+            "and the part is still drawn from its own SCAD with its own defaults."
+        )
+    else:
+        does = (
+            f"`git merge {ref}` makes the variant's SCAD the part's. It does not apply the "
+            f"variant's parameters: they come along in {where.params.name}, which nothing "
+            "reads, so the part is drawn with its own defaults until they are set."
+        )
+    return MergeAdvice(
+        repository=repository,
+        checkout=checkout,
+        commands=commands,
+        applies_params=False,
+        advice=elsewhere + does,
+    )
 
 
 # --- writing a tree with mktree -----------------------------------------------------
@@ -324,6 +485,13 @@ def _with_files(
 
 def _message(part: BasePart, name: str, where: _Where) -> str:
     """The commit's message: what is now true, and what it holds. No trailer."""
+    if where.overlay:
+        return (
+            f"{part.name} is saved as the variant {name}\n\n"
+            f"An overlay ({where.scad}) that includes the part's SCAD in its\n"
+            f"submodule ({where.upstream}) and sets the variant's values, and\n"
+            f"those values in {where.params.name} beside it. The submodule is not changed.\n"
+        )
     return (
         f"{part.name} is saved as the variant {name}\n\n"
         f"The part's SCAD as edited in the viewer ({where.scad}), and the\n"
@@ -345,11 +513,27 @@ def save_variant(
     ValueError for a bad name, a part whose SCAD is generated, or a place to
     keep its parameters that is a stub (``NotBuilt``); ``Moved`` when the
     variant was saved meanwhile; ``GitError`` with git's own words else (no
-    identity configured, for one)."""
+    identity configured, for one).
+
+    A part in a submodule is saved as an overlay (``overlay_text``) in the
+    outermost checkout; ``scad`` must then be the upstream file as it is, and
+    an edit of it is ``UpstreamEdit``."""
     refuse_read_only(part)
     keeping(kept_in)
     ref = ref_for(part, name)
     where = _where(part, repo)
+    if where.overlay:
+        try:
+            upstream = part.source_file.read_bytes()
+        except OSError:
+            upstream = None
+        if upstream != scad.encode("utf-8"):
+            raise UpstreamEdit(
+                f"{part.name}'s SCAD, {where.upstream}, is in a submodule: it is upstream's, "
+                "and nothing here changes it. Its values are saved as an overlay beside it; "
+                "an edit of the file itself is to be made upstream."
+            )
+        scad = overlay_text(part, where, name, params or {})
     repo = where.repo
     old = _verify(repo, f"{ref}^{{commit}}")
     parent = old or _verify(repo, "HEAD^{commit}")
@@ -407,9 +591,11 @@ def _blob(repo: Path, commit: str, path: PurePosixPath) -> Optional[str]:
 
 
 def _diff(part: BasePart, where: _Where, scad: Optional[str]) -> str:
-    """A variant's SCAD against the part's as it is on disk, as ``git diff`` shows one."""
+    """A variant's SCAD against the part's as it is on disk, as ``git diff`` shows
+    one; an overlay against the file at its path, which is none until merged."""
+    on_disk = where.checkout / where.scad if where.overlay else part.source_file
     try:
-        own = part.source_file.read_text(encoding="utf-8")
+        own = on_disk.read_text(encoding="utf-8")
     except OSError:
         own = ""
     return "".join(
@@ -455,10 +641,14 @@ def _variants(
                 date=date,
                 subject=subject,
                 scad_path=str(where.scad),
+                kind=where.kind,
+                upstream=str(where.upstream) if where.upstream else None,
                 params=dict(record.get("params") or {}),
                 merged=merged,
                 scad=scad if with_scad else None,
                 diff=_diff(part, where, scad) if with_diff else None,
+                repository=shown_repository(where.repo),
+                merge=merge_advice(part, where, ref),
             )
         )
     return found
@@ -507,21 +697,30 @@ __all__ = [
     "GitError",
     "KEEP_DEFAULT",
     "KEPT_IN",
+    "KIND_OVERLAY",
+    "KIND_SCAD",
     "Keeping",
+    "MergeAdvice",
     "Moved",
     "NoSuchVariant",
     "NotBuilt",
     "NotInGit",
+    "OVERLAY_SUFFIX",
     "PARAMS_SUFFIX",
     "REF_ROOT",
     "SavedVariant",
+    "UpstreamEdit",
     "check_name",
     "keeping",
     "list_saved",
+    "merge_advice",
+    "overlay_text",
     "read_saved",
     "ref_for",
     "repository_of",
     "save_variant",
     "saved_names",
+    "shown_repository",
+    "superproject_of",
     "variants_repository",
 ]

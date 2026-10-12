@@ -5,6 +5,9 @@ beside the part's SCAD, so that ``include <../board_common.scad>`` resolves
 from it as it does from the part: ``.<stem>.<random>.draft.scad``, hidden,
 ignored by git (.gitignore), never taken for a part by the registry, removed
 when the one OpenSCAD run is done, and never written over the part's own file.
+Beside a part in a submodule (gridfinity's), where the checkout's .gitignore
+does not reach, the submodule's own ``info/exclude`` ignores it
+(``ignored_in_its_submodule``): local to this clone, never a tracked file.
 
 - **The check** evaluates the draft and renders nothing
   (``customizer.check_scad``): OpenSCAD's errors and warnings by line and,
@@ -48,6 +51,8 @@ from .variants import same_text
 DRAFT_LIMIT = 1_000_000
 
 DRAFT_SUFFIX = ".draft.scad"
+# How a submodule's info/exclude names every draft beside its files.
+DRAFT_PATTERN = f".*{DRAFT_SUFFIX}"
 
 
 class ReadOnly(ValueError):
@@ -77,11 +82,51 @@ def draft_name(part: BasePart) -> str:
     return f".{part.source_file.stem}.{uuid.uuid4().hex[:12]}{DRAFT_SUFFIX}"
 
 
+_EXCLUDED: set = set()
+_EXCLUDED_GUARD = threading.Lock()
+
+
+def ignored_in_its_submodule(folder: Path) -> Optional[Path]:
+    """Drafts beside a file in ``folder`` ignored by the submodule it is in, if
+    it is in one: ``DRAFT_PATTERN`` added once to that submodule's own
+    ``info/exclude`` (in its git directory: not a tracked file, nothing to
+    commit). The exclude file written, or None (not a submodule, not in git, or
+    already done). Asked once per folder."""
+    from .saved import GitError, _git, repository_of, superproject_of
+
+    key = str(Path(folder).resolve())
+    with _EXCLUDED_GUARD:
+        if key in _EXCLUDED:
+            return None
+        _EXCLUDED.add(key)
+    try:
+        top = repository_of(Path(folder))
+        if superproject_of(top) is None:
+            return None
+        named = _git(top, "rev-parse", "--git-path", "info/exclude").strip()
+        exclude = Path(named) if Path(named).is_absolute() else top / named
+        have = exclude.read_text(encoding="utf-8") if exclude.exists() else ""
+        if DRAFT_PATTERN in have.splitlines():
+            return None
+        exclude.parent.mkdir(parents=True, exist_ok=True)
+        lead = "" if not have or have.endswith("\n") else "\n"
+        with open(exclude, "a", encoding="utf-8") as out:
+            out.write(
+                f"{lead}# apothecary: a draft written beside a part for one OpenSCAD run\n"
+                f"{DRAFT_PATTERN}\n"
+            )
+        return exclude
+    except (GitError, OSError):
+        return None
+
+
 @contextmanager
 def written_beside(part: BasePart, text: str) -> Iterator[Path]:
     """``text`` in a file of its own beside the part's SCAD, for as long as the
-    block runs; removed after, whatever happened. Never the part's own file."""
+    block runs; removed after, whatever happened. Never the part's own file.
+    Beside a part in a submodule, the submodule ignores it."""
     refuse_read_only(part)
+    ignored_in_its_submodule(part.source_file.parent)
     path = part.source_file.with_name(draft_name(part))
     # "x": a new file or nothing, so no run ever writes over another's.
     with open(path, "x", encoding="utf-8", newline="") as handle:
@@ -163,6 +208,7 @@ def check_and_compile(
 
 __all__ = [
     "DRAFT_LIMIT",
+    "DRAFT_PATTERN",
     "DRAFT_SUFFIX",
     "ReadOnly",
     "check_and_compile",
@@ -170,6 +216,7 @@ __all__ = [
     "compile_draft",
     "draft_digest",
     "editable",
+    "ignored_in_its_submodule",
     "refuse_read_only",
     "written_beside",
 ]
