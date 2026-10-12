@@ -21,6 +21,12 @@ the OpenSCAD in use cannot give one.
 ``GET /parts/{name}/params`` falls back to this listing for a part without a
 Python model; ``customizer_values`` checks a staged set against it, as a
 model's own validation does for a part with one.
+
+The parameter export leaves a value ``-D`` sets out of what it lists, so the
+staged values are evaluated by a second run: the CSG export with them as
+``-D`` (``compile_scad``), which says any error only those values reach and
+writes the tree OpenSCAD compiled: the same for two texts that differ only in
+their comments.
 """
 
 from __future__ import annotations
@@ -52,6 +58,7 @@ from .stl_renderer import (
     openscad_version,
     part_renderer,
     run_openscad,
+    scad_definitions,
     scad_dependencies,
 )
 from .variants import renamed, show_path
@@ -251,6 +258,157 @@ def part_check(part: BasePart, renderer: Optional[OpenSCADRenderer] = None) -> C
     return remembered_check(scad, text, renderer, lambda: check_scad(scad, renderer))
 
 
+# --- compiled: evaluated with the staged values -------------------------------------
+
+
+@dataclass
+class Compiled:
+    """A SCAD evaluated with ``-D`` values and exported as CSG: what OpenSCAD
+    said of it with those values, and the digest of the tree it compiled
+    (None where it compiled nothing to key on: it failed, said an error, or
+    wrote no tree)."""
+
+    ok: bool
+    openscad: Optional[str] = None
+    messages: List[OpenSCADMessage] = field(default_factory=list)
+    digest: Optional[str] = None
+    cancelled: bool = False
+    timed_out: bool = False
+    error_message: Optional[str] = None
+
+    @property
+    def errors(self) -> List[OpenSCADMessage]:
+        return [m for m in self.messages if m.level == "error"]
+
+
+def compile_scad(
+    scad: Path,
+    renderer: OpenSCADRenderer,
+    definitions: Optional[Mapping[str, Any]] = None,
+    cancel: Optional[Cancellation] = None,
+    timeout: float = CHECK_TIMEOUT,
+    shown_as: Optional[Path] = None,
+) -> Compiled:
+    """``scad`` evaluated with ``definitions`` as ``-D`` and exported as CSG,
+    rendering nothing. Unlike the parameter export, which leaves a ``-D``
+    value out of the parameters it lists, this keeps them: an error only some
+    values reach is said here. The CSG is the tree OpenSCAD compiled -- every
+    include in it, every comment gone -- so its digest is what a render of
+    these values would build from (``variants.py`` files renders under it).
+    Messages name ``shown_as`` for ``scad``, as ``check_scad``'s do."""
+    exe = renderer.openscad_path
+    version = openscad_version(exe) if exe is not None and Path(exe).exists() else None
+    if version is None:
+        return Compiled(ok=False, error_message="OpenSCAD not found")
+    try:
+        defs = scad_definitions(dict(definitions or {}))
+    except (TypeError, ValueError) as exc:
+        return Compiled(ok=False, openscad=version, error_message=str(exc))
+    code, out, err, stopped = run_openscad(
+        exe,
+        ["-o", "-", "--export-format=csg", *defs, str(scad)],
+        scad.parent,
+        timeout,
+        cancel,
+    )
+    messages = place_messages(parse_openscad_messages(err), scad.parent, show_path, own=scad)
+    if shown_as is not None:
+        messages = renamed(messages, scad, shown_as)
+    compiled = Compiled(ok=code == 0, openscad=version, messages=messages)
+    if stopped == "cancelled":
+        compiled.cancelled, compiled.error_message = True, "Check superseded by a newer request"
+        return compiled
+    if stopped == "timeout":
+        compiled.timed_out = True
+        compiled.error_message = f"Check timed out after {timeout} seconds"
+        return compiled
+    if code != 0:
+        compiled.error_message = f"OpenSCAD could not read it (exit code {code})"
+        return compiled
+    tree = out.strip()
+    if tree and not compiled.errors:
+        compiled.digest = hashlib.sha256(tree.encode("utf-8")).hexdigest()
+    return compiled
+
+
+_COMPILED: "OrderedDict[str, Compiled]" = OrderedDict()
+_COMPILED_GUARD = threading.Lock()
+
+
+def _compile_key(
+    scad: Path, text: str, definitions: Mapping[str, Any], renderer: OpenSCADRenderer
+) -> str:
+    try:
+        defs = "\0".join(scad_definitions(dict(definitions)))
+    except (TypeError, ValueError) as exc:
+        defs = f"unwritable: {exc}"
+    return hashlib.sha256(f"{_check_key(scad, text, renderer)}\0{defs}".encode("utf-8")).hexdigest()
+
+
+def known_compile(
+    scad: Path, text: str, definitions: Mapping[str, Any], renderer: OpenSCADRenderer
+) -> Optional[Compiled]:
+    """The compile of ``text`` with ``definitions``, when it was made before."""
+    key = _compile_key(scad, text, definitions, renderer)
+    with _COMPILED_GUARD:
+        known = _COMPILED.get(key)
+        if known is not None:
+            _COMPILED.move_to_end(key)
+        return known
+
+
+def remembered_compile(
+    scad: Path,
+    text: str,
+    definitions: Mapping[str, Any],
+    renderer: OpenSCADRenderer,
+    run,
+) -> Compiled:
+    """As ``remembered_check``, for a compile with ``definitions``."""
+    key = _compile_key(scad, text, definitions, renderer)
+    with _COMPILED_GUARD:
+        known = _COMPILED.get(key)
+        if known is not None:
+            _COMPILED.move_to_end(key)
+            return known
+    compiled = run()
+    if compiled.openscad is not None and not (compiled.cancelled or compiled.timed_out):
+        with _COMPILED_GUARD:
+            _COMPILED[key] = compiled
+            while len(_COMPILED) > CHECKS_KEPT:
+                _COMPILED.popitem(last=False)
+    return compiled
+
+
+def part_compile(
+    part: BasePart,
+    definitions: Optional[Mapping[str, Any]] = None,
+    renderer: Optional[OpenSCADRenderer] = None,
+    cancel: Optional[Cancellation] = None,
+) -> Compiled:
+    """A part's own SCAD compiled with ``definitions`` (what ``-D`` gets)."""
+    renderer = renderer or part_renderer(part)
+    scad = part.source_file
+    text = scad.read_text(encoding="utf-8", errors="replace")
+    defs = dict(definitions or {})
+    return remembered_compile(
+        scad, text, defs, renderer, lambda: compile_scad(scad, renderer, defs, cancel)
+    )
+
+
+def merged(*lists: List[OpenSCADMessage]) -> List[OpenSCADMessage]:
+    """Messages from several runs over one text, each said once, in order."""
+    seen = set()
+    out: List[OpenSCADMessage] = []
+    for messages in lists:
+        for message in messages:
+            mark = (message.level, message.message, message.file, message.line)
+            if mark not in seen:
+                seen.add(mark)
+                out.append(message)
+    return out
+
+
 # --- what the customizer lists, as fields -------------------------------------------
 
 
@@ -273,14 +431,69 @@ def _span(initial: float, step: Optional[float]) -> Tuple[float, float]:
     return -reach, reach
 
 
-def scad_fields(parameters: List[Dict[str, Any]]) -> List[ParamField]:
+# A unit, in either of the two places a customizer comment can carry one:
+#
+# - the caption, the comment on the line above the parameter, ending in the
+#   unit in square brackets: ``// Width [mm]`` above ``width = 34; // [10:100]``
+#   is in mm, and its caption is "Width";
+# - the parameter's own comment when it is one word and nothing else:
+#   ``height = 10; // mm``.
+#
+# A unit is one to twelve characters with no space, bracket, colon or comma in
+# it, and not a number, so a range (``[10:100]``) or a list of choices is never
+# one. A word after a range (``width = 34; // [10:100] mm``) is not read: it
+# stops OpenSCAD reading the range itself. Only a number or a vector has one.
+_UNIT = r"[^\s\[\]:,]{1,12}"
+_CAPTION_UNIT = re.compile(r"^(?P<text>.*?)\s*\[(?P<unit>" + _UNIT + r")\]\s*$")
+_NUMBER = re.compile(r"^[-+]?(\d+\.?\d*|\.\d+)$")
+
+
+def _a_unit(word: str) -> bool:
+    return not _NUMBER.match(word)
+
+
+def unit_of(
+    entry: Mapping[str, Any], text: Optional[str] = None
+) -> Tuple[Optional[str], Optional[str]]:
+    """(unit, caption) of a listed parameter: the unit its caption ends with in
+    square brackets, and the caption without it; else the one word of its own
+    comment in ``text`` (the SCAD it is listed from). (None, caption) where it
+    declares none."""
+    caption = entry.get("caption")
+    if isinstance(caption, str):
+        found = _CAPTION_UNIT.match(caption)
+        if found and _a_unit(found.group("unit")):
+            return found.group("unit"), found.group("text").strip() or None
+    if text:
+        own = re.search(
+            r"^[ \t]*"
+            + re.escape(str(entry.get("name", "")))
+            + r"[ \t]*=[^;\n]*;[ \t]*//[ \t]*(?P<unit>"
+            + _UNIT
+            + r")[ \t]*$",
+            text,
+            re.M,
+        )
+        if own and _a_unit(own.group("unit")):
+            return own.group("unit"), caption
+    return None, caption
+
+
+def _whole(*values: Any) -> bool:
+    return all(isinstance(v, (int, float)) and float(v).is_integer() for v in values)
+
+
+def scad_fields(parameters: List[Dict[str, Any]], text: Optional[str] = None) -> List[ParamField]:
     """The customizer's parameters as the fields a control surface builds from.
 
     A number gets the range its SCAD states, else one spanned around its value
-    for a slider (which the check does not hold it to); choices are an
-    ``enum`` with their options (and, for a page that reads words, a pattern
-    of them); a boolean is ``boolean``, a string ``text``, a vector
-    ``vector``."""
+    for a slider (which the check does not hold it to), and the step OpenSCAD
+    gives it; one whose range, step and value are whole numbers is ``integer``,
+    as OpenSCAD's own slider steps it. Choices are an ``enum`` with their
+    options (and, for a page that reads words, a pattern of them); a boolean
+    is ``boolean``, a string ``text``, a vector ``vector``. A number's or a
+    vector's ``unit`` is read from its comment (``unit_of``: ``text`` is the
+    SCAD it is listed from)."""
     fields = []
     for entry in parameters:
         initial, kind = entry.get("initial"), entry.get("type")
@@ -306,14 +519,22 @@ def scad_fields(parameters: List[Dict[str, Any]]) -> List[ParamField]:
         elif kind == "string":
             fields.append(ParamField(type="text", **common))
         elif isinstance(initial, list):
+            unit, common["description"] = unit_of(entry, text)
             fields.append(
-                ParamField(type="vector", min=entry.get("min"), max=entry.get("max"), **common)
+                ParamField(
+                    type="vector", min=entry.get("min"), max=entry.get("max"), unit=unit, **common
+                )
             )
         elif kind == "number" and isinstance(initial, (int, float)):
+            unit, common["description"] = unit_of(entry, text)
             low, high = entry.get("min"), entry.get("max")
-            if low is None or high is None:
+            stated = low is not None and high is not None
+            if not stated:
                 low, high = _span(float(initial), entry.get("step"))
-            fields.append(ParamField(type="number", min=low, max=high, **common))
+            integer = stated and _whole(initial, low, high, entry.get("step") or 1)
+            fields.append(
+                ParamField(type="number", min=low, max=high, unit=unit, integer=integer, **common)
+            )
         else:
             fields.append(ParamField(type="text", **common))
     return fields
@@ -359,7 +580,9 @@ def customizer_spec(part: BasePart, renderer: Optional[OpenSCADRenderer] = None)
     return ParamsSpec(
         part=part.name,
         description=part.description,
-        fields=scad_fields(check.parameters),
+        fields=scad_fields(
+            check.parameters, text=part.source_file.read_text(encoding="utf-8", errors="replace")
+        ),
         bounds=part.get_bounds(),
         source=FROM_CUSTOMIZER,
         openscad=check.openscad,
@@ -466,8 +689,14 @@ __all__ = [
     "BY_ECHO",
     "BY_PARAM",
     "Check",
+    "Compiled",
     "Unlisted",
     "check_scad",
+    "compile_scad",
+    "known_compile",
+    "merged",
+    "part_compile",
+    "remembered_compile",
     "customizer_spec",
     "customizer_values",
     "lists_parameters",

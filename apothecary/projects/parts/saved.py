@@ -40,6 +40,29 @@ of the checkout, for a test's server, which must never write this checkout's
 refs. The paths in its commits are still the part's, from the top of the
 checkout that holds it.
 
+**A part inside a submodule** (gridfinity's SCAD is in
+``parts/gridfinity/gridfinity-rebuilt-openscad``) is saved as an **overlay**
+in the superproject: ``<stem>.overlay.scad`` beside the submodule, a small
+SCAD that includes the upstream file and sets the variant's values, with its
+``<stem>.variant.json`` beside it, committed to the superproject's ref. The
+submodule is never touched -- its repository, its tree, its refs -- and an
+edit of the upstream file itself is refused (``UpstreamEdit``), saying so.
+
+**Managing them** is git's plumbing too, and touches the working tree, the
+index and ``HEAD`` no more than a save does: a rename or a duplicate moves or
+copies the ref (``update-ref --stdin``, one transaction); a variant's history
+is its ref's own commits, from its first save on (``<stem>.variant.json``
+keeps the commit it was first saved on, ``base``); a restore is a new commit
+on the ref with an earlier commit's tree; a delete moves the ref to
+``refs/apothecary/trash/<part>/<name>``, where it is listed and can be restored
+from, and only emptying the trash deletes it. A name taken -- a live variant's,
+or a deleted one's in the trash -- is refused (``Taken``), never overwritten.
+
+**Where the ref is, and what a merge does** (``MergeAdvice``): a save's answer
+names the repository the ref lives in, the commands that make it the part's
+source, and says plainly that a merge does not apply the variant's
+parameters: they come along in the ``.variant.json`` nobody reads.
+
 Every git here is told to fetch nothing: a partial clone would otherwise
 fetch an object it lacks (``GIT_NO_LAZY_FETCH``), and nothing may prompt.
 """
@@ -49,6 +72,7 @@ from __future__ import annotations
 import difflib
 import json
 import os
+import posixpath
 import re
 import subprocess
 from dataclasses import dataclass
@@ -62,11 +86,19 @@ from .base import BasePart
 from .drafts import refuse_read_only
 
 REF_ROOT = "refs/apothecary/variants"
+# Where a deleted variant's ref goes: listed, restorable, gone only when emptied.
+TRASH_ROOT = "refs/apothecary/trash"
 
 # A variant's name: what a person would type, and a valid ref component.
 NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}[A-Za-z0-9_]$|^[A-Za-z0-9]$")
 
 PARAMS_SUFFIX = ".variant.json"
+OVERLAY_SUFFIX = ".overlay.scad"
+
+# What a saved variant is: the part's SCAD as edited, or, for a part in a
+# submodule, an overlay that includes the upstream SCAD and sets its values.
+KIND_SCAD = "scad"
+KIND_OVERLAY = "overlay"
 
 GIT_TIMEOUT = 30.0
 
@@ -87,8 +119,18 @@ class NoSuchVariant(LookupError):
     """No saved variant by that name."""
 
 
+class Taken(GitError):
+    """A ref by that name is there already: a variant's, or a deleted one's in
+    the trash. Nothing is overwritten."""
+
+
 class NotBuilt(ValueError):
     """A stub was named: it says what it will do, and does not do it yet."""
+
+
+class UpstreamEdit(ValueError):
+    """An edit of a SCAD that lives in a submodule: never saved, the submodule
+    being upstream's. Its values are saved as an overlay instead."""
 
 
 @dataclass(frozen=True)
@@ -224,6 +266,23 @@ def ref_for(part: BasePart, name: str) -> str:
     return f"{part_refs(part)}/{check_name(name)}"
 
 
+class MergeAdvice(BaseModel):
+    """What making a saved variant the part's source takes, said truly."""
+
+    repository: str = Field(description="Where the ref lives: '.' for this checkout, else its path")
+    checkout: str = Field(description="Where the person merges: '.' for this checkout")
+    commands: List[str] = Field(
+        description="What to run in the checkout, in order: a fetch first where the ref "
+        "lives in another repository"
+    )
+    applies_params: bool = Field(
+        False,
+        description="Whether a merge applies the variant's parameters: never; they come "
+        "along in its .variant.json, which nothing reads",
+    )
+    advice: str = Field(description="All of it in a sentence or two, for a status line")
+
+
 class SavedVariant(BaseModel):
     """A part's variant saved in git: what a page lists, and opens."""
 
@@ -236,7 +295,18 @@ class SavedVariant(BaseModel):
     author_email: str
     date: str = Field(description="When, ISO 8601")
     subject: str
-    scad_path: str = Field(description="The part's SCAD, from the top of its repository")
+    scad_path: str = Field(
+        description="The SCAD saved, from the top of the checkout: the part's own, or for "
+        "a part in a submodule its overlay"
+    )
+    kind: str = Field(
+        KIND_SCAD,
+        description='"scad": the part\'s SCAD as edited; "overlay": a part in a submodule, '
+        "saved as a SCAD that includes the upstream file and sets the variant's values",
+    )
+    upstream: Optional[str] = Field(
+        None, description="An overlay's upstream SCAD, from the top of the checkout"
+    )
     params: Dict[str, Any] = Field(default_factory=dict)
     merged: bool = Field(description="HEAD already holds it")
     scad: Optional[str] = Field(None, description="Its SCAD, when one variant is read")
@@ -245,26 +315,137 @@ class SavedVariant(BaseModel):
         description="What it changes: a unified diff of its SCAD against the part's SCAD "
         "as it is on disk, when asked for (empty: the same)",
     )
+    repository: str = Field(
+        ".", description="Where its ref lives: '.' for this checkout, else that repository's path"
+    )
+    deleted: bool = Field(
+        False, description="It is in the trash (refs/apothecary/trash/), restorable"
+    )
+    merge: Optional[MergeAdvice] = Field(
+        None, description="What making it the part's source takes, and what it does not do"
+    )
 
 
 class _Where(NamedTuple):
     repo: Path  # where git runs: the checkout's repository, or APOTHECARY_VARIANTS_REPO
-    scad: PurePosixPath  # the part's SCAD from the top of its checkout
+    scad: PurePosixPath  # the SCAD saved, from the top of the checkout
+    checkout: Path  # the checkout the part is in: a submodule's superproject
+    kind: str = KIND_SCAD
+    upstream: Optional[PurePosixPath] = None  # an overlay's upstream SCAD
 
     @property
     def params(self) -> PurePosixPath:
-        return self.scad.with_name(f"{self.scad.stem}{PARAMS_SUFFIX}")
+        stem = self.scad.name[: -len(OVERLAY_SUFFIX)] if self.overlay else self.scad.stem
+        return self.scad.with_name(f"{stem}{PARAMS_SUFFIX}")
+
+    @property
+    def overlay(self) -> bool:
+        return self.kind == KIND_OVERLAY
+
+
+def superproject_of(top: Path) -> Optional[Path]:
+    """The checkout the repository at ``top`` is a submodule of, or None."""
+    try:
+        out = _git(top, "rev-parse", "--show-superproject-working-tree").strip()
+    except GitError:
+        return None
+    return Path(out).resolve() if out else None
 
 
 def _where(part: BasePart, repo: Optional[Path] = None) -> _Where:
-    """Where git runs for a part's variants, and its SCAD's path in the tree.
-    ``repo``: the checkout holding the part, when the caller knows it."""
+    """Where git runs for a part's variants, and the path of what is saved in
+    the tree. ``repo``: the checkout holding the part, when the caller knows it.
+    A part whose SCAD is in a submodule is saved in the outermost checkout, as
+    an overlay beside the submodule."""
     top = Path(repo).resolve() if repo is not None else repository_of(part.source_file)
+    # The repository the SCAD is in, then each it is a submodule of, outward.
+    chain = [top]
+    while repo is None:
+        above = superproject_of(chain[-1])
+        if above is None or above in chain:
+            break
+        chain.append(above)
+    outer = chain[-1]
     try:
-        rel = part.source_file.resolve().relative_to(top.resolve())
+        rel = part.source_file.resolve().relative_to(outer.resolve())
     except ValueError:
-        raise NotInGit(f"{part.name}'s SCAD is not in the repository at {top}") from None
-    return _Where(variants_repository() or top, PurePosixPath(rel.as_posix()))
+        raise NotInGit(f"{part.name}'s SCAD is not in the repository at {outer}") from None
+    scad = PurePosixPath(rel.as_posix())
+    if len(chain) == 1:
+        return _Where(variants_repository() or top, scad, top)
+    # Beside the submodule of the outermost checkout that the SCAD is in.
+    module = PurePosixPath(chain[-2].relative_to(outer).as_posix())
+    overlay = module.parent / f"{part.source_file.stem}{OVERLAY_SUFFIX}"
+    return _Where(variants_repository() or outer, overlay, outer, KIND_OVERLAY, scad)
+
+
+def overlay_text(part: BasePart, where: _Where, name: str, params: Mapping[str, Any]) -> str:
+    """The overlay a variant of a part in a submodule is saved as: the upstream
+    SCAD included from beside the submodule, and the variant's values set after
+    it (in OpenSCAD the last assignment of a name is its value, as ``-D``'s is)."""
+    from .stl_renderer import scad_literal
+
+    include = posixpath.relpath(str(where.upstream), str(where.scad.parent))
+    lines = [
+        f"// {part.name}'s variant {name}: {where.upstream.name} with the values below.",
+        f"// The upstream SCAD is in a submodule, which is not changed: {where.upstream}",
+        f"include <{include}>",
+        "",
+    ]
+    for key, value in part.scad_overrides(dict(params)).items():
+        lines.append(f"{key} = {scad_literal(value)};")
+    return "\n".join(lines) + "\n"
+
+
+def shown_repository(path: Path) -> str:
+    """A repository as an answer names it: '.' for this checkout, its path from
+    here for one inside it, else its own path."""
+    from .skeleton import ROOT
+
+    here = ROOT.resolve()
+    path = Path(path).resolve()
+    if path == here:
+        return "."
+    try:
+        return path.relative_to(here).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def merge_advice(part: BasePart, where: _Where, ref: str) -> MergeAdvice:
+    """What making the variant at ``ref`` the part's source takes, and what it
+    does not do: where the ref lives, the commands, and that the parameters
+    are not applied."""
+    repository, checkout = shown_repository(where.repo), shown_repository(where.checkout)
+    here = "this checkout" if checkout == "." else checkout
+    commands = []
+    if where.repo.resolve() != where.checkout.resolve():
+        commands.append(f"git fetch {where.repo} {ref}:{ref}")
+    commands.append(f"git merge {ref}")
+    elsewhere = (
+        f"The ref is in {repository}, not {here}: `{commands[0]}` there brings it, then "
+        if len(commands) > 1
+        else f"In {here}, "
+    )
+    if where.overlay:
+        does = (
+            f"`git merge {ref}` adds {where.scad}, which includes {where.upstream} and sets "
+            f"the variant's values; the submodule and the part {part.name} are not changed, "
+            "and the part is still drawn from its own SCAD with its own defaults."
+        )
+    else:
+        does = (
+            f"`git merge {ref}` makes the variant's SCAD the part's. It does not apply the "
+            f"variant's parameters: they come along in {where.params.name}, which nothing "
+            "reads, so the part is drawn with its own defaults until they are set."
+        )
+    return MergeAdvice(
+        repository=repository,
+        checkout=checkout,
+        commands=commands,
+        applies_params=False,
+        advice=elsewhere + does,
+    )
 
 
 # --- writing a tree with mktree -----------------------------------------------------
@@ -324,6 +505,13 @@ def _with_files(
 
 def _message(part: BasePart, name: str, where: _Where) -> str:
     """The commit's message: what is now true, and what it holds. No trailer."""
+    if where.overlay:
+        return (
+            f"{part.name} is saved as the variant {name}\n\n"
+            f"An overlay ({where.scad}) that includes the part's SCAD in its\n"
+            f"submodule ({where.upstream}) and sets the variant's values, and\n"
+            f"those values in {where.params.name} beside it. The submodule is not changed.\n"
+        )
     return (
         f"{part.name} is saved as the variant {name}\n\n"
         f"The part's SCAD as edited in the viewer ({where.scad}), and the\n"
@@ -345,11 +533,27 @@ def save_variant(
     ValueError for a bad name, a part whose SCAD is generated, or a place to
     keep its parameters that is a stub (``NotBuilt``); ``Moved`` when the
     variant was saved meanwhile; ``GitError`` with git's own words else (no
-    identity configured, for one)."""
+    identity configured, for one).
+
+    A part in a submodule is saved as an overlay (``overlay_text``) in the
+    outermost checkout; ``scad`` must then be the upstream file as it is, and
+    an edit of it is ``UpstreamEdit``."""
     refuse_read_only(part)
     keeping(kept_in)
     ref = ref_for(part, name)
     where = _where(part, repo)
+    if where.overlay:
+        try:
+            upstream = part.source_file.read_bytes()
+        except OSError:
+            upstream = None
+        if upstream != scad.encode("utf-8"):
+            raise UpstreamEdit(
+                f"{part.name}'s SCAD, {where.upstream}, is in a submodule: it is upstream's, "
+                "and nothing here changes it. Its values are saved as an overlay beside it; "
+                "an edit of the file itself is to be made upstream."
+            )
+        scad = overlay_text(part, where, name, params or {})
     repo = where.repo
     old = _verify(repo, f"{ref}^{{commit}}")
     parent = old or _verify(repo, "HEAD^{commit}")
@@ -360,6 +564,10 @@ def save_variant(
         "variant": name,
         "params": to_jsonable_python(dict(params or {})),
     }
+    # The commit the variant was first saved on, which its history runs back to.
+    first = _base_of(repo, where, old) if old else parent
+    if first:
+        record["base"] = first
     text = json.dumps(record, indent=2, sort_keys=True) + "\n"
     scad_blob = _git(repo, "hash-object", "-w", "--stdin", input=scad).strip()
     params_blob = _git(repo, "hash-object", "-w", "--stdin", input=text).strip()
@@ -407,9 +615,11 @@ def _blob(repo: Path, commit: str, path: PurePosixPath) -> Optional[str]:
 
 
 def _diff(part: BasePart, where: _Where, scad: Optional[str]) -> str:
-    """A variant's SCAD against the part's as it is on disk, as ``git diff`` shows one."""
+    """A variant's SCAD against the part's as it is on disk, as ``git diff`` shows
+    one; an overlay against the file at its path, which is none until merged."""
+    on_disk = where.checkout / where.scad if where.overlay else part.source_file
     try:
-        own = part.source_file.read_text(encoding="utf-8")
+        own = on_disk.read_text(encoding="utf-8")
     except OSError:
         own = ""
     return "".join(
@@ -423,17 +633,25 @@ def _diff(part: BasePart, where: _Where, scad: Optional[str]) -> str:
 
 
 def _variants(
-    part: BasePart, where: _Where, pattern: str, with_scad: bool, with_diff: bool = False
+    part: BasePart,
+    where: _Where,
+    pattern: str,
+    with_scad: bool,
+    with_diff: bool = False,
+    root: str = REF_ROOT,
 ) -> List[SavedVariant]:
     repo = where.repo
     head = _verify(repo, "HEAD^{commit}")
     lines = _git(
         repo, "for-each-ref", "--sort=-creatordate", f"--format={_FORMAT}", pattern
     ).splitlines()
+    prefix = f"{root}/{_segment(part.name)}/"
     found = []
     for line in lines:
         ref, commit, parent, author, email, date, subject = line.split("\0")
-        name = ref[len(part_refs(part)) + 1 :]
+        if not ref.startswith(prefix):
+            continue
+        name = ref[len(prefix) :]
         try:
             record = json.loads(_blob(repo, commit, where.params) or "{}")
         except ValueError:
@@ -455,10 +673,15 @@ def _variants(
                 date=date,
                 subject=subject,
                 scad_path=str(where.scad),
+                kind=where.kind,
+                upstream=str(where.upstream) if where.upstream else None,
                 params=dict(record.get("params") or {}),
                 merged=merged,
                 scad=scad if with_scad else None,
                 diff=_diff(part, where, scad) if with_diff else None,
+                repository=shown_repository(where.repo),
+                merge=merge_advice(part, where, ref) if root == REF_ROOT else None,
+                deleted=root == TRASH_ROOT,
             )
         )
     return found
@@ -503,25 +726,305 @@ def read_saved(
     return found[0]
 
 
+# --- managing them: rename, duplicate, history, restore, the trash --------------------
+
+
+def trash_refs(part: BasePart) -> str:
+    """Where a part's deleted variants are: ``refs/apothecary/trash/<part>``."""
+    return f"{TRASH_ROOT}/{_segment(part.name)}"
+
+
+def trash_ref_for(part: BasePart, name: str) -> str:
+    return f"{trash_refs(part)}/{check_name(name)}"
+
+
+def _base_of(repo: Path, where: _Where, commit: Optional[str]) -> Optional[str]:
+    """The commit a variant was first saved on, as its record at ``commit`` keeps it."""
+    if not commit:
+        return None
+    try:
+        base = json.loads(_blob(repo, commit, where.params) or "{}").get("base")
+    except ValueError:
+        return None
+    return base if isinstance(base, str) and re.match(r"^[0-9a-f]{40,64}$", base) else None
+
+
+def _transaction(repo: Path, lines: List[str], taken: str) -> None:
+    """``lines`` as one ``update-ref --stdin`` transaction: all of it, or none.
+    A ref that is there already where one is created is ``Taken`` (``taken``
+    says what); one that moved meanwhile is ``Moved``."""
+    done = _run(repo, ["update-ref", "--stdin"], "\n".join(lines) + "\n")
+    if done.returncode == 0:
+        return
+    said = done.stderr.decode("utf-8", errors="replace").strip()
+    if "exists" in said:
+        raise Taken(taken)
+    if "unable to resolve" in said or "but expected" in said or "is at" in said:
+        raise Moved(f"it was changed meanwhile: read it again ({said})")
+    raise GitError(f"git update-ref: {said}")
+
+
+def _tip(repo: Path, ref: str, name: str, part: BasePart) -> str:
+    tip = _verify(repo, f"{ref}^{{commit}}")
+    if tip is None:
+        raise NoSuchVariant(f"{part.name} has no saved variant {name!r}")
+    return tip
+
+
+def rename_variant(part: BasePart, name: str, to: str, repo: Optional[Path] = None) -> SavedVariant:
+    """The variant ``name`` called ``to``: its ref moved, its commits as they
+    are (the name inside its record is the one it was saved under). ``Taken``
+    when a variant is called ``to`` already."""
+    where = _where(part, repo)
+    old, new = ref_for(part, name), ref_for(part, to)
+    tip = _tip(where.repo, old, name, part)
+    _transaction(
+        where.repo,
+        [f"create {new} {tip}", f"delete {old} {tip}"],
+        f"{part.name} has a variant {to!r} already: choose another name",
+    )
+    return read_saved(part, to, repo, with_scad=False)
+
+
+def duplicate_variant(
+    part: BasePart, name: str, to: str, repo: Optional[Path] = None
+) -> SavedVariant:
+    """A second variant ``to`` where ``name`` is: a ref of its own on the same
+    commit, which then goes its own way. ``Taken`` when ``to`` is a variant."""
+    where = _where(part, repo)
+    tip = _tip(where.repo, ref_for(part, name), name, part)
+    _transaction(
+        where.repo,
+        [f"create {ref_for(part, to)} {tip}"],
+        f"{part.name} has a variant {to!r} already: choose another name",
+    )
+    return read_saved(part, to, repo, with_scad=False)
+
+
+class VariantCommit(BaseModel):
+    """One save of a variant, as its history lists it."""
+
+    commit: str
+    parent: Optional[str] = None
+    author: str
+    author_email: str
+    date: str = Field(description="When, ISO 8601")
+    subject: str
+    params: Dict[str, Any] = Field(default_factory=dict)
+    current: bool = Field(description="The variant is this commit now")
+
+
+_LOG_FORMAT = "%x00".join(["%H", "%P", "%an", "%ae", "%aI", "%s"])
+
+
+def _own_commits(repo: Path, where: _Where, part: BasePart, tip: str) -> List[str]:
+    """The variant's own commits, newest first: from ``tip`` back along first
+    parents to the commit it was first saved on, not included. A variant saved
+    before its record kept that commit is followed while its commits are saves
+    of the part's variants (their subjects say so)."""
+    base = _base_of(repo, where, tip)
+    if base and _verify(repo, f"{base}^{{commit}}"):
+        out = _git(repo, "rev-list", "--first-parent", tip, f"^{base}")
+        return [line for line in out.splitlines() if line]
+    found, current = [], tip
+    while current:
+        subject = _git(repo, "log", "-1", "--format=%s", current).strip()
+        if not subject.startswith(f"{part.name} is saved as the variant ") and not (
+            subject.startswith(f"{part.name}'s variant ")
+        ):
+            break
+        found.append(current)
+        current = _verify(repo, f"{current}^1^{{commit}}")
+    return found
+
+
+def variant_history(
+    part: BasePart, name: str, repo: Optional[Path] = None, deleted: bool = False
+) -> List[VariantCommit]:
+    """The commits of the variant ``name`` (in the trash, with ``deleted``),
+    newest first, each with the parameters it was saved with."""
+    where = _where(part, repo)
+    ref = trash_ref_for(part, name) if deleted else ref_for(part, name)
+    tip = _tip(where.repo, ref, name, part)
+    history = []
+    for commit in _own_commits(where.repo, where, part, tip):
+        line = _git(where.repo, "log", "-1", f"--format={_LOG_FORMAT}", commit).rstrip("\n")
+        sha, parents, author, email, date, subject = line.split("\0")
+        try:
+            record = json.loads(_blob(where.repo, sha, where.params) or "{}")
+        except ValueError:
+            record = {}
+        history.append(
+            VariantCommit(
+                commit=sha,
+                parent=parents.split(" ")[0] or None,
+                author=author,
+                author_email=email,
+                date=date,
+                subject=subject,
+                params=dict(record.get("params") or {}),
+                current=sha == tip,
+            )
+        )
+    return history
+
+
+def restore_variant(
+    part: BasePart, name: str, commit: str, repo: Optional[Path] = None
+) -> SavedVariant:
+    """The variant ``name`` as it was at ``commit``, one of its own: a new commit
+    on its ref with that commit's tree, so its history keeps what it was in
+    between. Restoring what it holds makes no commit. ``NoSuchVariant`` for a
+    commit that is not one of its own."""
+    where = _where(part, repo)
+    ref = ref_for(part, name)
+    tip = _tip(where.repo, ref, name, part)
+    own = _own_commits(where.repo, where, part, tip)
+    chosen = next(
+        (c for c in own if c == commit or (len(commit) >= 7 and c.startswith(commit))), None
+    )
+    if chosen is None:
+        raise NoSuchVariant(
+            f"{commit!r} is not one of the commits of {part.name}'s variant {name!r}"
+        )
+    tree = _verify(where.repo, f"{chosen}^{{tree}}")
+    if tree == _verify(where.repo, f"{tip}^{{tree}}"):
+        return read_saved(part, name, repo, with_scad=False)
+    when = _git(where.repo, "log", "-1", "--format=%aI", chosen).strip()
+    message = (
+        f"{part.name}'s variant {name} is restored to {chosen[:12]}\n\n"
+        f"Its SCAD and parameters as they were saved in {chosen[:12]} ({when}).\n"
+    )
+    new = _git(where.repo, "commit-tree", tree, "-p", tip, "-F", "-", input=message).strip()
+    try:
+        _git(where.repo, "update-ref", "-m", f"apothecary: restore {name}", ref, new, tip)
+    except GitError:
+        if _verify(where.repo, f"{ref}^{{commit}}") != tip:
+            raise Moved(f"{ref} was saved meanwhile: read it, and restore again") from None
+        raise
+    return read_saved(part, name, repo, with_scad=False)
+
+
+def delete_variant(part: BasePart, name: str, repo: Optional[Path] = None) -> SavedVariant:
+    """The variant ``name`` moved to the trash, ``refs/apothecary/trash/<part>/<name>``:
+    its commits kept, listed with ``list_trash``, restorable. ``Taken`` while a
+    deleted variant of that name is in the trash already (restore it, or empty
+    the trash, first): the trash keeps each one until it is emptied."""
+    where = _where(part, repo)
+    live, trash = ref_for(part, name), trash_ref_for(part, name)
+    tip = _tip(where.repo, live, name, part)
+    _transaction(
+        where.repo,
+        [f"create {trash} {tip}", f"delete {live} {tip}"],
+        f"a deleted variant {name!r} of {part.name} is in the trash already: restore it, "
+        "or empty the trash, first",
+    )
+    return _read_trash(part, name, repo)
+
+
+def _read_trash(part: BasePart, name: str, repo: Optional[Path] = None) -> SavedVariant:
+    where = _where(part, repo)
+    ref = trash_ref_for(part, name)
+    found = [
+        v for v in _variants(part, where, ref, with_scad=False, root=TRASH_ROOT) if v.ref == ref
+    ]
+    if not found:
+        raise NoSuchVariant(f"{part.name} has no deleted variant {name!r} in the trash")
+    return found[0]
+
+
+def list_trash(part: BasePart, repo: Optional[Path] = None) -> List[SavedVariant]:
+    """The part's deleted variants, newest save first: the trash."""
+    where = _where(part, repo)
+    return _variants(part, where, trash_refs(part) + "/", with_scad=False, root=TRASH_ROOT)
+
+
+def restore_from_trash(
+    part: BasePart, name: str, to: Optional[str] = None, repo: Optional[Path] = None
+) -> SavedVariant:
+    """The deleted variant ``name`` back among the part's variants, as ``to`` or
+    its own name; ``Taken`` while a variant is called that."""
+    where = _where(part, repo)
+    trash = trash_ref_for(part, name)
+    tip = _verify(where.repo, f"{trash}^{{commit}}")
+    if tip is None:
+        raise NoSuchVariant(f"{part.name} has no deleted variant {name!r} in the trash")
+    back = to or name
+    _transaction(
+        where.repo,
+        [f"create {ref_for(part, back)} {tip}", f"delete {trash} {tip}"],
+        f"{part.name} has a variant {back!r}: restore the deleted one under another name",
+    )
+    return read_saved(part, back, repo, with_scad=False)
+
+
+def empty_trash(
+    part: BasePart, name: Optional[str] = None, repo: Optional[Path] = None
+) -> List[str]:
+    """The trash emptied -- every deleted variant of the part, or ``name``'s --
+    its refs deleted: the names emptied. What only they kept, git collects in
+    its own time."""
+    where = _where(part, repo)
+    if name is not None:
+        refs = [trash_ref_for(part, name)]
+        if _verify(where.repo, f"{refs[0]}^{{commit}}") is None:
+            raise NoSuchVariant(f"{part.name} has no deleted variant {name!r} in the trash")
+    else:
+        out = _git(where.repo, "for-each-ref", "--format=%(refname)", trash_refs(part) + "/")
+        refs = [line for line in out.splitlines() if line]
+    if not refs:
+        return []
+    tips = [_verify(where.repo, f"{ref}^{{commit}}") for ref in refs]
+    _transaction(
+        where.repo,
+        [f"delete {ref} {tip}" for ref, tip in zip(refs, tips, strict=True)],
+        "the trash changed meanwhile",
+    )
+    prefix = trash_refs(part) + "/"
+    return [ref[len(prefix) :] for ref in refs]
+
+
 __all__ = [
     "GitError",
     "KEEP_DEFAULT",
     "KEPT_IN",
+    "KIND_OVERLAY",
+    "KIND_SCAD",
     "Keeping",
+    "MergeAdvice",
     "Moved",
     "NoSuchVariant",
     "NotBuilt",
     "NotInGit",
+    "OVERLAY_SUFFIX",
     "PARAMS_SUFFIX",
     "REF_ROOT",
     "SavedVariant",
+    "TRASH_ROOT",
+    "Taken",
+    "UpstreamEdit",
+    "VariantCommit",
     "check_name",
     "keeping",
+    "delete_variant",
+    "duplicate_variant",
+    "empty_trash",
     "list_saved",
+    "list_trash",
+    "merge_advice",
+    "overlay_text",
     "read_saved",
+    "rename_variant",
+    "restore_from_trash",
+    "restore_variant",
     "ref_for",
     "repository_of",
     "save_variant",
     "saved_names",
+    "shown_repository",
+    "superproject_of",
+    "trash_ref_for",
+    "trash_refs",
+    "variant_history",
     "variants_repository",
 ]

@@ -51,19 +51,24 @@ FACET = (
 
 def _scripted(path: Path, version: str, body: str = "") -> Path:
     """An `openscad` that reports ``version`` and logs its arguments to
-    ``<path>.calls``; a render runs ``body``, then writes an STL naming its
-    arguments (so each set of -D is a different file) whose one facet
-    measures 4 x 5 x 6 and, when asked, a summary saying 10 x 20 x 30."""
+    ``<path>.calls``; a render runs ``body``, then writes an ASCII STL named for
+    its -D definitions (so each set is a different file; the cache keeps the
+    name in its binary STL's header) whose one facet measures 4 x 5 x 6 and,
+    when asked, a summary saying 10 x 20 x 30. It exports no CSG, so a render
+    is never matched to another by what it compiles."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         "#!/bin/sh\n"
         f'echo "$@" >> "{path}.calls"\n'
         f'[ "$1" = --version ] && echo "OpenSCAD version {version}" >&2 && exit 0\n'
+        'case " $* " in *" --export-format=csg "*) exit 1;; esac\n'
         f"{body}\n"
+        'defs=""; prev=""\n'
+        'for arg in "$@"; do [ "$prev" = -D ] && defs="$defs $arg"; prev="$arg"; done\n'
         'for arg in "$@"; do case "$arg" in --summary-file=*)\n'
         '  printf \'{"geometry":{"bounding_box":{"min":[0,0,0],"max":[10,20,30],'
         '"size":[10,20,30]}}}\' > "${arg#--summary-file=}";; esac; done\n'
-        f'printf "solid %s\\n{FACET}\\nendsolid\\n" "$*" > "$2"\n'
+        f'printf "solid%s\\n{FACET}\\nendsolid\\n" "$defs" > "$2"\n'
     )
     path.chmod(path.stat().st_mode | stat.S_IEXEC)
     return path
@@ -606,6 +611,8 @@ class TestTheStateRoute:
             "fresh": True,
             "measured": state["measured"],
             "measured_from": "stl",
+            "can_build": True,
+            "build_note": None,
         }
 
     def test_the_pages_apply_never_changes_it(self, cube, openscad):

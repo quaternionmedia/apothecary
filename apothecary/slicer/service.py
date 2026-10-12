@@ -121,9 +121,18 @@ PRINTERS: List[Callable[[Optional[str], Optional[str], Optional[str]], Optional[
 # --- what is sliced, and for which printer ---------------------------------------------
 
 
-def part_target(name: str, site: Optional[str] = None, path: Optional[str] = None) -> Target:
-    """A registered part, built at its defaults as its own STL is."""
+def part_target(
+    name: str,
+    site: Optional[str] = None,
+    path: Optional[str] = None,
+    variant: Optional[str] = None,
+) -> Target:
+    """A registered part, built at its defaults as its own STL is; or, named by
+    ``variant``, one of its variants from the variant cache, as a page drew it
+    (SlicerError when the cache does not have it)."""
     part = load_part(name)
+    if variant is not None:
+        return _variant_target(part, name, site, path, variant)
 
     def stl(log: Log) -> bytes:
         from ..projects.parts.stl_renderer import build_stl
@@ -136,6 +145,41 @@ def part_target(name: str, site: Optional[str] = None, path: Optional[str] = Non
 
     return Target(
         made=Made(kind="part", name=name, site=site, path=path),
+        declared=Declared.of(getattr(part, "print_settings", None), f"part {name}"),
+        stl=stl,
+    )
+
+
+def _variant_target(part, name: str, site, path, key: str) -> Target:
+    from ..projects.parts.variants import KEY_PATTERN, read_variant, variant_paths
+
+    record = read_variant(part, key) if KEY_PATTERN.match(key) else None
+    if record is None:
+        raise SlicerError(
+            f"no variant {key!r} of the part {name} is cached: Apply it again, then slice"
+        )
+    found, _ = variant_paths(part, key)
+
+    def stl(log: Log) -> bytes:
+        try:
+            data = found.read_bytes()
+        except OSError:
+            raise SlicerError(
+                f"the variant {key} of {name} was let go of: Apply it again"
+            ) from None
+        log(f"STL: the variant {key} of {name}, from the variant cache")
+        return data
+
+    return Target(
+        made=Made(
+            kind="part",
+            name=name,
+            site=site,
+            path=path,
+            variant=key,
+            params=dict(record.get("params") or {}),
+            draft=record.get("draft"),
+        ),
         declared=Declared.of(getattr(part, "print_settings", None), f"part {name}"),
         stl=stl,
     )
@@ -160,12 +204,15 @@ def resolve(
     port: Optional[str] = None,
     site: Optional[str] = None,
     printer: Optional[str] = None,
+    variant: Optional[str] = None,
 ) -> tuple[Target, Printer]:
     """What ``part`` names, and the printer: the one ``port``'s pin stands under,
     else ``site``'s printer node at ``printer`` -- with none named, the site's one
     printer that keeps a profile -- else the printer part ``printer``. In a
     printer's site, ``part`` is a node's path there first (a part standing in it,
-    or a piece made from a picture), else a registered part's name."""
+    or a piece made from a picture), else a registered part's name. ``variant``
+    is a cached variant of that part, which is what is sliced: the variant a
+    page draws (a piece has none)."""
     at: Optional[SlicedFor] = None
     if port or site:
         for answer in PRINTERS:
@@ -193,6 +240,12 @@ def resolve(
             raise SlicerError(
                 f"{part!r} is no part or piece of {chosen.at.site}, and no part's name"
             ) from None
+    if variant is not None:
+        if target.made.kind != "part":
+            raise SlicerError(
+                f"{target.made.name} is a piece made from a picture: it has no variants to slice"
+            )
+        target = part_target(target.made.name, target.made.site, target.made.path, variant)
     return target, chosen
 
 

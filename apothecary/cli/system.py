@@ -1,6 +1,7 @@
 """`apothecary check`, and the retired system, install and submodules."""
 
 import importlib.metadata
+import os
 import sys
 from importlib import import_module
 
@@ -113,6 +114,8 @@ def check():
                 "`apothecary openscad install` fetches a snapshot that has it",
                 fg="yellow",
             )
+        for line in _appimage_start(renderer.openscad_path):
+            _safe_echo(line, fg="yellow")
     else:
         _safe_echo("  ✗ OpenSCAD not found", fg="yellow")
         click.echo("     STL rendering endpoints and commands will be unavailable")
@@ -190,6 +193,37 @@ def check():
         )
     click.echo("")
     click.echo(_next_step(renderer))
+
+
+def _appimage_start(exe) -> list:
+    """What starting the OpenSCAD in use costs each run, when it is an AppImage:
+    measured now, through the image and from its files, and how to extract it."""
+    from .. import openscad_installer as oi
+    from ..projects.parts.stl_renderer import managed_openscad
+
+    if exe is None or not oi.is_appimage(exe):
+        return []
+    measured = oi.appimage_start(exe)
+    if measured is None:
+        return []
+    managed = managed_openscad()
+    how = (
+        "`apothecary openscad install --extract` extracts it"
+        if managed is not None and os.path.samefile(managed, exe)
+        else f"`{exe} --appimage-extract` extracts it; APOTHECARY_OPENSCAD names "
+        "squashfs-root/AppRun then"
+    )
+    if measured.extracted is None:
+        return [
+            f"  • An AppImage: each run first mounts it, {measured.appimage:.2f} s to start "
+            f"(median of {measured.runs}, measured now); {how}"
+        ]
+    return [
+        f"  • An AppImage: each run first mounts it. Measured now (median of {measured.runs}): "
+        f"{measured.appimage:.2f} s to start through the AppImage, {measured.extracted:.2f} s "
+        f"from its files, so extracting it would make each run {measured.saved:.2f} s faster; "
+        f"{how}"
+    ]
 
 
 def _next_step(renderer: OpenSCADRenderer) -> str:

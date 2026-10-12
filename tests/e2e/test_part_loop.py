@@ -12,7 +12,9 @@ as it goes.
 The server is this module's own, with an OpenSCAD that is this machine's except
 that it refuses a cube of ``TOO_BIG`` mm or more, saying so as an assertion at
 the SCAD's ``size`` line would: the error a person meets is OpenSCAD's own
-shape. Its variant cache is a temp folder. Opening the part draws its own STL,
+shape, and, as a snapshot does, it still writes the geometry and exits 0, which
+the server answers as a failed render with that geometry as its ``partial``.
+Its variant cache is a temp folder. Opening the part draws its own STL,
 which a fresh clone does not have, so ``parts/calibration_cube/`` is put back
 as it was found.
 
@@ -51,18 +53,19 @@ VARIANT_GLOW = 0x261B08
 
 REFUSING_OPENSCAD = '''#!{python}
 """This machine's OpenSCAD, except that a cube of {too_big} mm or more is refused
-as an assertion at the SCAD's size line would refuse it."""
-import os, sys
+as an assertion at the SCAD's size line would refuse it -- the way a snapshot
+refuses one: it says the error, writes the geometry it built, and exits 0."""
+import os, subprocess, sys
 args = sys.argv[1:]
 for i, arg in enumerate(args[:-1]):
     if arg == "-D" and args[i + 1].startswith("size=") and float(args[i + 1][5:]) >= {too_big}:
+        done = subprocess.run([{real!r}, *args])
         sys.stderr.write(
             "ERROR: Assertion '(size < {too_big})' failed: \\"it fits the bed\\" "
             "in file {scad}, line {line}\\n"
             "TRACE: called by 'assert' in file {scad}, line {line}\\n"
-            "Current top level object is empty.\\n"
         )
-        sys.exit(1)
+        sys.exit(done.returncode)
 os.execv({real!r}, [{real!r}, *args])
 '''
 
@@ -406,6 +409,10 @@ def _refused_by_openscad(page: Page, side_before: float) -> str:
     expect(page.locator("#stage-summary")).to_contain_text("valid", timeout=10000)
     answer = _apply(page)
     assert answer.status == 422, answer.text()
+    # A failed render, though OpenSCAD wrote geometry and exited 0: never a variant,
+    # and the geometry it wrote named, flagged with the failing line.
+    partial = answer.json()["detail"]["partial"]
+    assert partial["line"] == SIZE_LINE and "/partials/" in partial["stl_url"]
     error = page.locator("#part-messages li.error").first
     expect(error).to_contain_text(f"{CUBE.source_file.name}, line {SIZE_LINE}")
     expect(error).to_contain_text("it fits the bed")
