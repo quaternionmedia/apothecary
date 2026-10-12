@@ -568,7 +568,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     ),
     "canvas:pointerup:onCameraDragEnd": (DRAG, WHAT_IS_THERE, "letting go keeps the camera's aim"),
     # controls of its own
-    "siteSelect:change:loadSite": (WIDGET, WHAT_YOU_SEE, "choosing from the drop-down, which loads it"),
+    "siteSelect:change:chooseSite": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "choosing from the drop-down, which loads it and puts it in the address",
+    ),
     "snapToggle:change:setTranslationSnap": (WIDGET, WHAT_YOU_SEE, "the snapping tick-box"),
     "wallsToggle:change:setWallsSelectable": (
         WIDGET,
@@ -739,6 +743,13 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "manualIn:keydown:pinManual": (WIDGET, WHAT_IS_THERE, "pinning the typed board, by Enter"),
     # the page reacting to itself
     "window:resize:onResize": (AUTOMATIC, NOTHING, "the window changed size on its own"),
+    # The browser's Back and Forward, not a control of the page's: the site the
+    # address names is loaded, as the drop-down put it there.
+    "window:popstate:followAddress": (
+        AUTOMATIC,
+        WHAT_YOU_SEE,
+        "the browser's Back or Forward, and the site the address names loaded again",
+    ),
     # boards.js: a devkit's serial stream, while its Machine listens to it
     "es:open:opened": (AUTOMATIC, NOTHING, "a devkit's serial stream connected, and says so"),
     "es:close:streamStopped": (

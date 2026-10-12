@@ -1289,8 +1289,10 @@
             }
 
             bindEvents() {
-                // Choosing a site loads it; the trail's crumbs are the way back out.
-                this.siteSelect.addEventListener('change', () => this.loadSite(this.siteSelect.value));
+                // Choosing a site loads it, and the address follows; the trail's crumbs
+                // are the way back out. Back and Forward go between the sites chosen.
+                this.siteSelect.addEventListener('change', () => this.chooseSite(this.siteSelect.value));
+                window.addEventListener('popstate', () => this.followAddress());
                 // The View menu folds away when a press lands anywhere else, as a menu does.
                 document.addEventListener('pointerdown', (e) => this.foldViewMenu(e));
                 // The header's count of problems unfolds them in Site.
@@ -1419,6 +1421,46 @@
             // ---------------------------------------------------------------
             // Loading and navigation state
             // ---------------------------------------------------------------
+
+            // A site chosen -- the header's drop-down, or the ring's Sites: the address
+            // names it (/viewer/sites/<name>), so a reload or a link lands on it and
+            // Back returns to the one before. The old site's focus, Machine and
+            // variants are its own, and stay behind in its entry of the history.
+            chooseSite(name) {
+                if (!name) return null;
+                const url = new URL(location.href);
+                url.pathname = `/viewer/sites/${encodeURIComponent(name)}`;
+                for (const key of ['focus', 'machine', 'variant']) url.searchParams.delete(key);
+                if (url.href !== location.href) history.pushState({ site: name }, '', url);
+                this.forgetVariants();
+                this.siteSelect.value = name;
+                return this.loadSite(name);
+            }
+
+            // Back or Forward: the site the address names, at its focus, with the
+            // variants and the Machine it names.
+            followAddress() {
+                const named = location.pathname.match(/\/viewer\/sites\/([^/]+)\/?$/);
+                if (!named) return;
+                const name = decodeURIComponent(named[1]);
+                if (![...this.siteSelect.options].some((o) => o.value === name)) return;
+                const params = new URLSearchParams(location.search);
+                this.forgetVariants();
+                this.siteSelect.value = name;
+                this.variantsRead = this.readVariantsFromAddress(params);
+                const port = params.get('machine');
+                this.loadSite(name, params.get('focus') || '').then(async () => {
+                    if (!port) return;
+                    await this.boards.scan();
+                    this.openMachineFor(port);
+                });
+            }
+
+            // The variants this tab applied, let go of with the site they were drawn in.
+            forgetVariants() {
+                this.variantByPart = {};
+                this.variantRecords = {};
+            }
 
             async loadSite(name, focusPathStr = '') {
                 if (!name) return;
@@ -4714,8 +4756,8 @@
             // another tab is not touched. A variant that is the saved part (the
             // defaults, or what the command line put there) is not kept.
 
-            async readVariantsFromAddress() {
-                for (const entry of DEEP_LINK.getAll('variant')) {
+            async readVariantsFromAddress(params = DEEP_LINK) {
+                for (const entry of params.getAll('variant')) {
                     const at = entry.indexOf(':');
                     if (at < 1) continue;
                     const ref = entry.slice(0, at), key = entry.slice(at + 1);
@@ -5732,9 +5774,7 @@
                     }
                     viewer.setStatus(node ? `${path}: a ${node.role}${node.category ? ' in ' + node.category : ''}${node.part_ref ? ', from part ' + node.part_ref : ''}, ${node.children.length} inside${tail}` : `${path}: not on screen${tail}`, 'success');
                 } else if (action.startsWith('site:')) {
-                    const name = action.slice(5);
-                    viewer.siteSelect.value = name;
-                    viewer.loadSite(name);
+                    viewer.chooseSite(action.slice(5));
                 } else if (action.startsWith('group:')) {
                     const group = action.slice(6);
                     if (viewer.expandedCategories.has(group)) viewer.expandedCategories.delete(group); else viewer.expandedCategories.add(group);
