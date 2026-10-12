@@ -385,6 +385,46 @@ def test_identify_and_status_routes(fake_arduino_cli, fresh_task_runner, scripte
     assert c.post("/firmware/devices/identify", json={"port": "/dev/ttyNOPE"}).status_code == 503
 
 
+def test_identify_if_idle_never_asks_a_board_known_to_be_printing(
+    fake_arduino_cli, fresh_task_runner, scripted_links, monkeypatch
+):
+    """A printer's Pin asks its board once (M115) with ``if_idle``: a board whose last
+    poll said it prints, or that a print from here is streaming to, is refused, 409,
+    saying why, and nothing is sent -- its link is not even opened. Nothing known, it
+    is asked, as Query asks."""
+    from apothecary.firmware import devices
+
+    c = TestClient(app)
+    port = "/dev/ttyFAKE1"
+    assert devices.known_printing(port) is None
+    scripted_links.factory = lambda port, baud: ScriptedTransport(port, baud, PRINTING)
+    assert c.get("/firmware/printers/status", params={"port": port}).json()["state"] == "printing"
+    assert devices.known_printing(port) == "its last poll said it is printing"
+    sent = list(ScriptedTransport.instances[0].sent)
+    r = c.post("/firmware/devices/identify", json={"port": port, "if_idle": True})
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"] == "not asked: its last poll said it is printing"
+    assert ScriptedTransport.instances[0].sent == sent  # the poll's own M115 only
+
+    # A print streamed from here is known too, before any poll says so.
+    c.post("/firmware/printers/release", json={"port": port})
+    monkeypatch.setattr(devices, "_LAST_STATUS", {})
+    streaming = type(
+        "Streaming", (), {"finished": None, "file": type("F", (), {"name": "a.gcode"})}
+    )
+    monkeypatch.setitem(devices._PRINTS, port, streaming())
+    opened = len(ScriptedTransport.instances)
+    r = c.post("/firmware/devices/identify", json={"port": port, "if_idle": True})
+    assert r.json()["detail"] == "not asked: a print of a.gcode from here is running on it"
+    assert len(ScriptedTransport.instances) == opened  # no link was opened to ask it
+
+    # Nothing known: asked.
+    monkeypatch.delitem(devices._PRINTS, port)
+    scripted_links.factory = lambda port, baud: ScriptedTransport(port, baud)
+    r = c.post("/firmware/devices/identify", json={"port": port, "if_idle": True})
+    assert r.status_code == 200 and r.json()["device"]["printer"]["machine_type"] == "TH3D EZABL"
+
+
 def test_upload_releases_only_its_own_printer_link(
     fake_arduino_cli, fresh_task_runner, scripted_links
 ):

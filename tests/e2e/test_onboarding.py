@@ -361,3 +361,79 @@ def test_with_no_arduino_cli_a_printer_says_why_and_the_bench_asks_for_nothing_m
     expect(bench.locator(".port-select")).to_contain_text("(none detected)")
     settled(page)
     assert failed == [], failed
+
+
+# --------------------------------------------------------------------------------
+# A printer's Pin asks its board once, when nothing is known to print on it
+# --------------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def printing_url(base_url, start_server):
+    """The simulated printer mid-way through an SD print, on /dev/ttyFAKE1."""
+    return start_server({"APOTHECARY_SIMULATED_PRINTER": "printing"})
+
+
+def _m115s(page: Page, url: str) -> int:
+    """How many M115s were sent on /dev/ttyFAKE1, by its comms log."""
+    log = page.request.get(f"{url}/firmware/printers/log", params={"port": PRINTER}).json()
+    return sum(1 for e in log["entries"] if e["kind"] == "tx" and e["text"] == "M115")
+
+
+def _pin_printer_1(page: Page) -> None:
+    _row(page, "printer_1").click()
+    section = page.locator("#selected-body .device-section")
+    pick = section.locator(".dev-pick")
+    expect(pick.locator(f"option[value='{PRINTER}']")).to_be_attached(timeout=15000)
+    pick.select_option(PRINTER)
+    section.locator(".dev-pin").click()
+
+
+@pytest.mark.e2e
+def test_a_printers_pin_asks_an_idle_board_once_what_it_is(page: Page, url: str):
+    """Nothing printing on it: printer_1's Pin pins its mainboard and asks it once
+    (M115), so its Machine opens as a printer's straight away; the status line says it
+    asked. printer_1's own Unpin, beside it, takes the pin back -- the ring's
+    Device › Unpin."""
+    _open(page, url)
+    before = _m115s(page, url)
+    _pin_printer_1(page)
+    _said(
+        page,
+        f"printer_1's board {BOARD} ← {PRINTER}: printer_1's Device, its Machine and Slice "
+        "find it there; asked it once what it is (M115): Marlin Apothecary Simulator 1.0 "
+        "(simulated) · Simulated Ender",
+    )
+    assert _m115s(page, url) == before + 1
+    section = page.locator("#selected-body .device-section")
+    expect(section.locator(".dev-open")).to_be_visible(timeout=10000)
+    section.locator(".dev-open").click()
+    machine = page.locator(MACHINE)
+    expect(machine.locator("#ident")).to_contain_text("Marlin Apothecary Simulator", timeout=8000)
+    page.evaluate("() => window.fractalViewer.closeMachine()")
+    unpin = section.locator(".dev-unpin")
+    expect(unpin).to_have_attribute("data-address", "29", timeout=8000)  # Device › Unpin
+    unpin.click()
+    _said(page, f"printer_1's board {BOARD}: device unpinned")
+    assert _pins(page, url) == {}
+
+
+@pytest.mark.e2e
+def test_a_printers_pin_never_asks_a_board_known_to_be_printing(page: Page, printing_url: str):
+    """Its last poll said it prints: printer_1's Pin pins its mainboard and asks it
+    nothing, and the status line says so and why; no M115 goes out."""
+    url = printing_url
+    polled = page.request.get(f"{url}/firmware/printers/status", params={"port": PRINTER})
+    assert polled.ok and polled.json()["state"] == "printing", polled.text()
+    _open(page, url)
+    before = _m115s(page, url)
+    _pin_printer_1(page)
+    _said(
+        page,
+        "not asked what it is (M115), since its last poll said it is printing: its "
+        "Machine's Identify asks once it is idle",
+    )
+    assert _m115s(page, url) == before
+    assert list(_pins(page, url)) == [BOARD]
+    page.locator("#selected-body .device-section .dev-unpin").click()
+    _said(page, f"printer_1's board {BOARD}: device unpinned")

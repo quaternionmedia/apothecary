@@ -304,8 +304,20 @@ def firmware_listen(body: ListenRequest):
 
 @router.post("/devices/identify")
 def firmware_identify(body: PrinterIdentifyRequest):
-    """Ask ``M115``: is this a printer mainboard, and which firmware? ``reset`` reboots it first."""
-    _busy_guard(body.port)
+    """Ask ``M115``: is this a printer mainboard, and which firmware? ``reset`` reboots it
+    first. ``if_idle`` asks only a board nothing here knows to be printing -- a print
+    from here, a running job, or its last poll -- and refuses one that may be busy
+    (409, saying why) without sending anything: a printer's Pin asks this way."""
+    try:
+        _busy_guard(body.port)
+    except PortHeld as held:
+        if body.if_idle:
+            raise PortHeld(f"not asked: {held}") from None
+        raise
+    if body.if_idle:
+        busy = devices.known_printing(body.port)
+        if busy is not None:
+            raise PortHeld(f"not asked: {busy}")
     return _device_view(devices.identify_printer(body.port, body.baud, reset=body.reset))
 
 
