@@ -28,12 +28,22 @@
  * rebind() points its callbacks at the page's newest. The name box names the
  * variant Save keeps; empty, Save keeps it under the name suggest() greyed in it.
  *
+ * A part whose SCAD the page edits has one draft: its text. A control moved writes
+ * its value into its assignment's line here (writeValues), as an edit undo takes
+ * back, and the page reads the text again on every change to move the controls
+ * (the part-iteration plan's "parameters and text, tied together"). Such an edit,
+ * a whole text put back (replaceText) and the page's own Undo and Redo are told to
+ * the page as staged ({ staged: true }): checked, and drawn when Apply is pressed;
+ * what a person types here is checked and drawn once it reads.
+ *
  * mountScadEditor(slot, options) renders into slot and resolves to the editor:
- *   options: { text, readOnly, editable, name, onChange(text), onSave(),
+ *   options: { text, readOnly, editable, name, onChange(text, { staged }), onSave(),
  *              onFloat(), onFullscreen(), onChoose(name), onCheck(), onApply(),
  *              onName(name), onManage(verb, name, { to, commit, button }), shownAs }
- *   editor:  { root, text(), setText(text), mark(messages), say(words, kind),
- *              name(), setName(name), suggest(name), showVariants(list, chosen, trash),
+ *   editor:  { root, text(), setText(text), writeValues(values, { join }),
+ *              replaceText(text), undo(), redo(), canUndo(), canRedo(),
+ *              mark(messages), say(words, kind), name(), setName(name),
+ *              suggest(name), showVariants(list, chosen, trash),
  *              showHistory(name, commits), fullscreen(on), isFullscreen(), focus(),
  *              measure(), rebind(callbacks), destroy() }
  * variantChoices(list) is the markup of a list of saved variants to choose one
@@ -41,13 +51,15 @@
  * parameters both draw it; the page listens on the list.
  */
 
+import { valueChanges } from "./assignments.js";
+
 const MARKUP = `
 <div class="scad-editor" tabindex="-1">
     <div class="scad-bar">
         <span class="scad-said" role="status"></span>
         <span class="scad-spacer"></span>
         <label class="scad-name-label" title="The name Save keeps this variant under, in git: letters, digits, _ . and -. Empty, the name greyed in it; a name already saved is asked about first">as <input type="text" id="scad-name" spellcheck="false" maxlength="64"></label>
-        <button type="button" id="scad-save" title="Save: this SCAD and the numbers staged in the editor, committed to this part's own ref in git under the name beside it. Nothing in the checkout changes; merging it is yours to do (Ctrl+S in the editor; Part › Save)">Save</button>
+        <button type="button" id="scad-save" title="Save: this SCAD, its values in it, committed to this part's own ref in git under the name beside it. Nothing in the checkout changes; merging it is yours to do (Ctrl+S in the editor; Part › Save)">Save</button>
         <button type="button" id="scad-float" title="Float the editor over the world, or put it back in Selected (Part › View › Float)">Float</button>
         <button type="button" id="scad-fullscreen" title="The editor over the whole page; Esc or this button puts it back (Part › View › Fullscreen)">Fullscreen</button>
     </div>
@@ -167,7 +179,8 @@ function numbers(params) {
 }
 
 // What making a variant the part's source takes, as the server says it truly: where
-// its ref lives, and that a merge does not apply its numbers.
+// its ref lives, and whether a merge brings its values (one saved before its values
+// were in its text does not, until it is saved again).
 function mergeSaid(v) {
     return v.merge?.advice || `git merge ${v.ref} makes it the part's source`;
 }
@@ -293,8 +306,18 @@ export async function mountScadEditor(slot, options = {}) {
 
     const cm = await codemirror();
     const { state, view, language, commands, lint } = cm;
+    // An edit the page made for a control, a text put back, or its own Undo and Redo.
+    const staged = state.Annotation.define();
+    let undoing = false;
+    // Which kind of edit came last: a control's moves close together are one step of
+    // undo, as typing is, but never one step with typing beside them.
+    const kindOf = (tr) => (tr.annotation(staged) ? "control" : "typed");
+    let lastKind = null;
     const listen = view.EditorView.updateListener.of((update) => {
-        if (update.docChanged && on.onChange) on.onChange(update.state.doc.toString());
+        for (const tr of update.transactions) if (tr.docChanged) lastKind = kindOf(tr);
+        if (!update.docChanged || !on.onChange) return;
+        const fromPage = undoing || update.transactions.some((tr) => tr.annotation(staged));
+        on.onChange(update.state.doc.toString(), { staged: fromPage });
     });
     // OpenSCAD's keys, ahead of the editor's own: each is taken, so F5 does not reload
     // the page nor Ctrl+S save it, while the editor has the focus.
@@ -314,7 +337,7 @@ export async function mountScadEditor(slot, options = {}) {
                 view.highlightActiveLine(),
                 view.highlightActiveLineGutter(),
                 view.drawSelection(),
-                commands.history(),
+                commands.history({ joinToEvent: (tr, adjacent) => adjacent && kindOf(tr) === lastKind }),
                 language.indentOnInput(),
                 language.bracketMatching(),
                 language.StreamLanguage.define(openscadMode()),
@@ -339,6 +362,33 @@ export async function mountScadEditor(slot, options = {}) {
             if (next === editorView.state.doc.toString()) return;
             editorView.dispatch({ changes: { from: 0, to: editorView.state.doc.length, insert: next } });
         },
+        /* Values written into their assignments, a control's move: each value's span
+         * of its name's last assignment, or a line appended (assignments.js, the
+         * server's grammar). With `join`, moves of one control close together are one
+         * step of undo, as typing is; without, a step of its own. */
+        writeValues(values, { join = true } = {}) {
+            const changes = valueChanges(editorView.state.doc.toString(), values);
+            if (!changes.length) return false;
+            editorView.dispatch({ changes, userEvent: join ? "input.type.control" : "input.control", annotations: staged.of(true) });
+            return true;
+        },
+        // The whole text put back by the page (Defaults, Revert): one step of undo.
+        replaceText(next) {
+            if (next === editorView.state.doc.toString()) return false;
+            editorView.dispatch({ changes: { from: 0, to: editorView.state.doc.length, insert: next }, userEvent: "input.control", annotations: staged.of(true) });
+            return true;
+        },
+        // The page's Undo and Redo: the one history, of the text and the controls both.
+        undo() {
+            undoing = true;
+            try { return commands.undo(editorView); } finally { undoing = false; }
+        },
+        redo() {
+            undoing = true;
+            try { return commands.redo(editorView); } finally { undoing = false; }
+        },
+        canUndo: () => commands.undoDepth(editorView.state) > 0,
+        canRedo: () => commands.redoDepth(editorView.state) > 0,
         /* What OpenSCAD said, marked on the lines it names: those of this file
          * (shownAs, the part's SCAD as the API names it) or of no file at all. */
         mark(messages) {

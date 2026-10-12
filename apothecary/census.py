@@ -191,6 +191,16 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "compare-with": (WIDGET, WHAT_YOU_SEE, "a drop-down of what a variant is compared with"),
     "compare-mode": (WIDGET, WHAT_YOU_SEE, "a drop-down: the two overlaid, or side by side"),
     "compare-close": (WIDGET, WHAT_YOU_SEE, "a button that ends a comparison"),
+    # A part's controls tied to its text (the part-iteration plan's "parameters and
+    # text, tied together"): a computed value moved asks first, whether its expression
+    # gives way to the plain value; and a part in a submodule's upstream SCAD, read only.
+    "computed-replace": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that puts a plain value in place of a computed one's expression",
+    ),
+    "computed-keep": (WIDGET, WHAT_YOU_SEE, "a button that leaves a computed value computed"),
+    "part-upstream": (WIDGET, NOTHING, "a link that opens a part's upstream SCAD, read only"),
     # The SCAD editor where the part's read-only source stood (widgets/scad_editor.js):
     # the name a save keeps a variant under, Save, Float and Fullscreen; and a saved
     # variant chosen from a list -- under the part's parameters, or in the editor.

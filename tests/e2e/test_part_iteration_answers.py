@@ -3,17 +3,16 @@ part 2's Phase B), through the page's own controls: Apply off up front where thi
 OpenSCAD cannot build a part, the server's integers, choices and groups drawn, a
 saved variant renamed, duplicated, restored from its history, deleted to the trash
 and back, and the trash emptied only when asked twice; two variants compared,
-overlaid and side by side, with what differs; a part in a submodule's overlay drawn
-as the upstream SCAD with its values; a render waiting its turn said to be queued;
-Download SCAD giving the edit; and Slice and the readiness checklist following the
-variant drawn.
+overlaid and side by side, with what differs; a render waiting its turn said to be
+queued; Download SCAD giving the edit; and Slice and the readiness checklist
+following the variant drawn. A part in a submodule, edited as its overlay, is
+tests/e2e/test_text_tied.py's.
 
 The server is this module's own: the OpenSCAD every test server runs, a variant
 cache of its own, the simulated printer idle and pinned to printer_1's mainboard,
-and the scripted OrcaSlicer of the unit tests. What no OpenSCAD here can make -- a
-part in a submodule's overlay, OpenSCAD's queue holding a render back -- is said to
-the page by answering its own requests (Playwright's route): the page draws what it
-is told.
+and the scripted OrcaSlicer of the unit tests. What no OpenSCAD here can make --
+OpenSCAD's queue holding a render back -- is said to the page by answering its own
+requests (Playwright's route): the page draws what it is told.
 """
 
 from __future__ import annotations
@@ -381,59 +380,6 @@ def test_two_variants_are_compared_overlaid_and_side_by_side_with_what_differs(
     assert page.evaluate("() => window.fractalViewer.meshByName['calibration_cube'].visible")
 
 
-@pytest.mark.e2e
-def test_an_overlay_is_drawn_as_the_upstream_scad_with_its_values(page: Page, url, cube_as_it_was):
-    """A part in a submodule saves an overlay: a small SCAD including the upstream file
-    and setting its values. Chosen, it is drawn as the part's own SCAD with those values
-    -- the overlay's text never loaded into the editor as the part's SCAD."""
-    own = CUBE.source_file.read_text()
-    overlay = {
-        "part": PART,
-        "name": "overlaid",
-        "ref": f"refs/apothecary/variants/{PART}/overlaid",
-        "commit": "0" * 40,
-        "author": "A person",
-        "author_email": "a@example.invalid",
-        "date": "2026-10-12T10:00:00+00:00",
-        "subject": "overlaid",
-        "scad_path": f"parts/{PART}/{PART}.overlay.scad",
-        "kind": "overlay",
-        "upstream": f"parts/{PART}/{PART}.scad",
-        "params": {"size": 18},
-        "merged": False,
-        "repository": ".",
-        "deleted": False,
-        "merge": None,
-        "diff": "",
-    }
-
-    def listed(route):
-        route.fulfill(status=200, content_type="application/json", body=json.dumps([overlay]))
-
-    def one(route):
-        route.fulfill(
-            status=200,
-            content_type="application/json",
-            body=json.dumps({**overlay, "scad": "include <calibration_cube.scad>\nsize = 18;\n"}),
-        )
-
-    page.route(re.compile(rf".*/parts/{PART}/saved(\?.*)?$"), listed)
-    page.route(f"**/parts/{PART}/saved/overlaid", one)
-    _open(page, url)
-    _edit(page)
-    expect(_row(page, "overlaid").locator(".saved-kind")).to_have_text("overlay")
-    with page.expect_response(lambda r: "/stl/generate" in r.url, timeout=60000):
-        _row(page, "overlaid").locator(".saved-variant").click()
-    expect(_status(page)).to_contain_text(
-        "an overlay: the upstream SCAD with its values", timeout=60000
-    )
-    assert page.evaluate("() => window.fractalViewer.scadEditor.text()") == own
-    expect(page.locator("#part-params > .param[data-field='size'] .param-number")).to_have_value(
-        "18"
-    )
-    expect(page.locator("#scad-name")).to_have_value("overlaid")
-
-
 # --- the queue, Download, Slice and the checklist ----------------------------------------
 
 
@@ -476,11 +422,11 @@ def test_a_render_waiting_its_turn_is_said_to_be_queued_and_the_page_stops_askin
     page.route("**/openscad/runs*", runs)
     _open(page, url)
     _edit(page)
-    page.on("request", lambda r: state.update(held=False) if "/stl/generate" in r.url else None)
+    page.on("request", lambda r: state.update(held=False) if "/draft/render" in r.url else None)
     page.evaluate(
         """() => { const real = window.fetch;
             window.fetch = async (u, init) => {
-                if (String(u).includes('/stl/generate')) await new Promise((ok) => setTimeout(ok, 2500));
+                if (String(u).includes('/draft/render')) await new Promise((ok) => setTimeout(ok, 2500));
                 return real(u, init);
             }; }"""
     )
@@ -532,7 +478,7 @@ def test_slice_and_the_checklist_follow_the_variant_drawn(page: Page, url):
     value = float(box.input_value())
     box.fill(f"{value + 2:g}")
     expect(page.locator("#stage-summary")).to_contain_text("1 change staged, valid", timeout=10000)
-    with page.expect_response(lambda r: "/stl/generate" in r.url, timeout=90000) as answer:
+    with page.expect_response(lambda r: "/draft/render" in r.url, timeout=90000) as answer:
         page.locator("#apply-btn").click()
     variant = answer.value.json()["variant"]
     assert variant

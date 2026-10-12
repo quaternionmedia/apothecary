@@ -353,7 +353,8 @@ def test_the_demo_goes_round_designing_a_part_and_editing_its_scad(page: Page, d
     expect(page.locator("#stage-summary")).to_contain_text("valid", timeout=10000)
     page.locator("#apply-btn").click()
     expect(_status(page)).to_contain_text(
-        "calibration_cube regenerated: an applied variant, not saved", timeout=90000
+        "calibration_cube regenerated from its edited SCAD: an applied variant, not saved",
+        timeout=90000,
     )
     assert re.search(r"[?&]variant=calibration_cube", page.url), page.url
 
@@ -373,7 +374,7 @@ def test_the_demo_goes_round_designing_a_part_and_editing_its_scad(page: Page, d
 
     _ring_on(page, "calibration_cube")
     _press(page, "Part", "Defaults")
-    _said(page, "the part's own numbers are staged")
+    _said(page, "the part's own SCAD is back in its editor")
     _ring_on(page, "calibration_cube")
     _press(page, "Part", "Apply")
     expect(_status(page)).to_contain_text("drawn as saved", timeout=90000)
