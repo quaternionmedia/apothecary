@@ -245,6 +245,69 @@ def test_a_saved_variant_is_renamed_duplicated_restored_deleted_and_the_trash_em
     expect(page.locator(".scad-saved details.variant-trash summary")).to_have_text("Deleted (0)")
 
 
+@pytest.mark.e2e
+def test_every_action_on_a_saved_variant_is_a_cell_of_part_variants(
+    page: Page, url, cube_as_it_was
+):
+    """The owner's answer of 2026-10-12: Part › Variants › a name is a ring -- Draw,
+    Rename, Duplicate, History, Compare, Delete -- and Part › Variants › Deleted holds
+    the trash, each deleted variant Restore and Forget, and Empty; what destroys is
+    chosen twice. A name no cell types: Rename and Duplicate put the cursor in the
+    variant's box, and Enter does it."""
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    own = CUBE.source_file.read_text()
+    _save(page, url, "one", own.rstrip("\n") + "\n" + TALLER + "\n", {"size": 12})
+    _open(page, url)
+    _edit(page)
+    expect(page.locator(".scad-editor .cm-content")).to_be_visible(timeout=20000)
+
+    _ring(page, PART, "Part", "Variants", "one", "Draw")
+    expect(_status(page)).to_contain_text("one", timeout=60000)
+    expect(_row(page, "one")).to_have_class(re.compile(r"\bchosen\b"), timeout=15000)
+
+    _ring(page, PART, "Part", "Variants", "one", "Duplicate")
+    box = _row(page, "one").locator(".variant-to")
+    expect(box).to_be_focused(timeout=15000)
+    expect(_status(page)).to_contain_text("type the name to copy one to")
+    page.keyboard.type("two")
+    page.keyboard.press("Enter")
+    expect(_status(page)).to_contain_text("two is a copy of one", timeout=15000)
+
+    _ring(page, PART, "Part", "Variants", "two", "Rename")
+    expect(_row(page, "two").locator(".variant-to")).to_be_focused(timeout=15000)
+    page.keyboard.type("three")
+    page.keyboard.press("Enter")
+    expect(_status(page)).to_contain_text("two is called three now", timeout=15000)
+    expect(_row(page, "three")).to_be_visible()
+
+    _ring(page, PART, "Part", "Variants", "one", "History")
+    expect(_status(page)).to_contain_text("one's 1 save", timeout=15000)
+    expect(_row(page, "one").locator(".history-row")).to_have_count(1)
+
+    _ring(page, PART, "Part", "Variants", "three", "Delete")
+    expect(_status(page)).to_contain_text("three moved to the trash", timeout=15000)
+    _ring(page, PART, "Part", "Variants", "Deleted", "three", "Restore")
+    expect(_status(page)).to_contain_text("three is back among the variants", timeout=15000)
+
+    # Forget and Empty: the first choice says what it would do, the same cell again does it.
+    _ring(page, PART, "Part", "Variants", "three", "Delete")
+    expect(_status(page)).to_contain_text("three moved to the trash", timeout=15000)
+    _ring(page, PART, "Part", "Variants", "Deleted", "three", "Forget")
+    expect(_status(page)).to_contain_text("choose the same cell again to confirm", timeout=15000)
+    assert [v["name"] for v in page.request.get(f"{url}/parts/{PART}/trash").json()] == ["three"]
+    _ring(page, PART, "Part", "Variants", "Deleted", "three", "Forget")
+    expect(_status(page)).to_contain_text("three is deleted for good", timeout=15000)
+    _ring(page, PART, "Part", "Variants", "one", "Delete")
+    expect(_status(page)).to_contain_text("one moved to the trash", timeout=15000)
+    _ring(page, PART, "Part", "Variants", "Deleted", "Empty")
+    expect(_status(page)).to_contain_text("every deleted variant would be deleted for good")
+    _ring(page, PART, "Part", "Variants", "Deleted", "Empty")
+    expect(_status(page)).to_contain_text("the trash is emptied, 1 variant", timeout=15000)
+    assert page.request.get(f"{url}/parts/{PART}/trash").json() == []
+    assert errors == []
+
+
 # Each compared mesh as the camera sees it: its bounding box's corners projected, in the
 # canvas's pixels.
 ON_SCREEN = """() => {
@@ -283,7 +346,8 @@ def test_two_variants_are_compared_overlaid_and_side_by_side_with_what_differs(
     _open(page, url)
     _edit(page)
     expect(page.locator(".scad-editor .cm-content")).to_be_visible(timeout=20000)
-    _manage(page, "tall-top").locator(".variant-compare").click()
+    # Compare is the variant's ⋯'s button and its ring cell; the cell here.
+    _ring(page, PART, "Part", "Variants", "tall-top", "Compare")
     expect(_status(page)).to_contain_text(
         "tall-top beside the part's own, overlaid: 1 number differs, and its SCAD differs",
         timeout=90000,

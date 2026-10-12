@@ -534,7 +534,18 @@ RING_BACKED: Dict[str, str] = {
     "scad-save": "part:save",
     "scad-float": "part:float",
     "scad-fullscreen": "part:fullscreen",
-    "saved-variant": "part:variant",
+    "saved-variant": "part:variant:draw",
+    # and so is what can be done to a saved variant, each a cell of Part › Variants ›
+    # its name, and the trash's, of Part › Variants › Deleted (the owner's answer of
+    # 2026-10-12)
+    "variant-rename": "part:variant:rename",
+    "variant-duplicate": "part:variant:duplicate",
+    "variant-history": "part:variant:history",
+    "variant-compare": "part:variant:compare",
+    "variant-delete": "part:variant:delete",
+    "trash-restore": "part:trash:restore",
+    "trash-forget": "part:trash:forget",
+    "trash-empty": "part:trash:empty",
     # the staged numbers' Undo and Redo, by button or key, are Part › History's; the
     # ghost is Part › View › Ghost, and f is Part › View › Fit
     "undo-btn": "part:undo",

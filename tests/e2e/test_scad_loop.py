@@ -7,7 +7,7 @@ its envelope and said so; saved from the ring (Part › Save) as a variant in gi
 listed in both places, with what it changes; the editor floated over the world (Part
 › View › Float) and made fullscreen (its own button, then Esc). Round two in the
 floated editor: a name typed, another change, saved with Ctrl+S; then the first
-variant chosen from the ring (Part › Variants) and drawn again, and the editor docked
+variant drawn from the ring (Part › Variants › its name › Draw), and the editor docked
 back. Round three: the name box letting go of the variant once the text moves on and
 taking it back on Ctrl+Z, Save asking before it replaces a variant, F5 checking and
 drawing at once a change that reaches under the floor; then a draft that does not
@@ -507,7 +507,7 @@ def test_editing_a_parts_scad_twice_round(
     )
 
     # The first variant chosen from the ring, drawn again; the editor docked back.
-    _ring(page, "Part", "Variants", "variant-1")
+    _ring(page, "Part", "Variants", "variant-1", "Draw")
     expect(_status(page)).to_contain_text("the variant variant-1 is drawn", timeout=60000)
     settled(page)
     assert _height(page) == pytest.approx(15, abs=0.05)
@@ -520,7 +520,7 @@ def test_editing_a_parts_scad_twice_round(
     by_hand(page, PART, distance=110)
     story.shows(
         "Part › Variants draws the first again, and Part › View › Float docks it",
-        f"{PART}'s ring, Part › Variants › variant-1: its SCAD back in the editor, its "
+        f"{PART}'s ring, Part › Variants › variant-1 › Draw: its SCAD back in the editor, its "
         "numbers staged and drawn, 15 mm tall again, the name it saves under its own. "
         "Part › View › Float again puts the editor back in Selected.",
         blank=BLANK,

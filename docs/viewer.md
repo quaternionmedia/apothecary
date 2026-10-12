@@ -139,7 +139,8 @@ it), Why this, Into (its children), Up (when nested), then what the piece is:
 
 then **Part** (a part, a camera or a made piece; [below](#the-part-editor): Edit,
 Defaults, Apply, Revert, Save, View › Float, Fullscreen, Ghost and Fit,
-History › Undo and Redo, and Variants), and, when a printer is pinned in the site, **Print** (a made piece) and
+History › Undo and Redo, and Variants › each saved variant › Draw, Rename,
+Duplicate, History, Compare and Delete, and Variants › Deleted), and, when a printer is pinned in the site, **Print** (a made piece) and
 **Slice** (a made piece, or a part not inside a printer and not a board: a
 devkit is flashed, never printed). Print and Slice say whether the printer
 has no board pinned or one pinned and not connected.
@@ -304,18 +305,21 @@ Outside the editor the browser's keys are the browser's.
   variant's, and is cleared once the text moves on from it, so Save keeps the
   edit under a name of its own. A name already saved is asked about first:
   Save again replaces it.
-- **Part › Variants** › a saved one loads it: its SCAD into the editor, its
-  numbers staged, checked and drawn. An overlay is drawn as the upstream SCAD
-  with its values: its own text is never put in the editor as the part's. The
-  editor lists every saved variant with what it changes, and whether it is in
-  HEAD.
-- Each variant's **⋯** in the editor's list unfolds what can be done to it:
-  **Rename** and **Duplicate** under the name typed beside them, **History**
-  (each save, newest first, an earlier one restored by its **Restore** as a new
-  save, the history keeping what came between), **Compare** and **Delete**.
-  Delete moves it to the trash (`refs/apothecary/trash/`): the **Deleted** fold
-  under the list restores one, or deletes one for good, and **Empty the trash**
-  deletes them all -- each of those two only when pressed again to confirm.
+- **Part › Variants** › a saved variant's name opens a ring of what can be done
+  to it, each a button of its row in the editor's list too (its **⋯** unfolds
+  them): **Draw** loads it -- its SCAD into the editor, its numbers staged,
+  checked and drawn; an overlay is drawn as the upstream SCAD with its values,
+  its own text never put in the editor as the part's -- **Rename** and
+  **Duplicate**, under the name typed in its row's box (the cell puts the
+  cursor there; Enter does it), **History** (each save, newest first, an
+  earlier one restored by its **Restore** as a new save, the history keeping
+  what came between), **Compare** and **Delete**. The editor's list says of
+  each what it changes, and whether it is in HEAD.
+- Delete moves a variant to the trash (`refs/apothecary/trash/`): **Part ›
+  Variants › Deleted**, and the Deleted fold under the editor's list, hold
+  it -- each deleted variant's **Restore** brings it back, its **Forget**
+  deletes it for good, and **Empty** deletes them all; Forget and Empty only
+  when chosen again to confirm.
 - **Compare** draws the variant beside another -- what is drawn, the part's
   own, or another saved one, chosen in the comparison -- where the part stands,
   overlaid (blue and orange, seen through) or side by side, framed, with each

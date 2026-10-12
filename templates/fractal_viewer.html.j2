@@ -4570,16 +4570,19 @@
                     if (!response.ok) throw new Error(typeof answer.detail === 'string' ? answer.detail : (answer.detail?.message ?? response.statusText));
                     return answer;
                 };
-                // Asked twice: the first press of a destructive button says what it would do.
+                // Asked twice: the first press -- of the button, or of the ring's cell --
+                // says what it would do; the same press again within a few seconds does it.
                 const twice = (what) => {
-                    if (button && button.dataset.asked === 'yes') return true;
+                    const asked = `${target.key}|${verb}|${name ?? ''}`;
+                    const now = performance.now();
+                    if (this.asking && this.asking.what === asked && now < this.asking.until) { this.asking = null; return true; }
+                    this.asking = { what: asked, until: now + CONFIRM_MS };
                     if (button) {
-                        button.dataset.asked = 'yes';
                         button.dataset.was = button.textContent;
                         button.textContent = 'Press again to confirm';
-                        setTimeout(() => { if (button.isConnected) { button.dataset.asked = ''; button.textContent = button.dataset.was; } }, CONFIRM_MS);
+                        setTimeout(() => { if (button.isConnected) button.textContent = button.dataset.was; }, CONFIRM_MS);
                     }
-                    throw new Asking(`${what}, which cannot be undone: press it again to confirm`);
+                    throw new Asking(`${what}, which cannot be undone: ${button ? 'press it' : 'choose the same cell'} again to confirm`);
                 };
                 try {
                     const v = name ? encodeURIComponent(name) : '';
@@ -4630,6 +4633,26 @@
                 } catch (err) {
                     return { ok: false, said: err instanceof Asking ? `${target.part}: ${err.message}` : `${target.part}: ${verb} ${name ?? ''}: ${err.message}` };
                 }
+            }
+
+            // The ring's cells for a saved variant and the trash: the part's editor opened,
+            // its SCAD loaded, then what the variant's buttons do. Rename and Duplicate need
+            // a name, which no cell types: the variant's row unfolds with the cursor in its
+            // name box, and Enter there does it. What to say.
+            async variantOn(path, where, verb, name) {
+                const target = await this.scadOn(path);
+                if (!target) return { ok: false, said: `${path} has no saved variants here` };
+                if (where === 'variant' && verb === 'draw') return this.openSavedVariant(target, name);
+                if (where === 'variant' && (verb === 'rename' || verb === 'duplicate')) {
+                    const ready = this.scadEditor?.armVariant(name, verb);
+                    if (!ready) return { ok: false, said: `${target.part}: no saved variant ${name}` };
+                    return { ok: true, said: `${target.part}: type the name to ${verb === 'rename' ? 'rename' : 'copy'} ${name} to, in its box, and press Enter` };
+                }
+                if (where === 'trash') {
+                    this.scadEditor?.openTrash();
+                    return this.manageVariant(target, { restore: 'undelete', forget: 'forget', empty: 'empty' }[verb], name);
+                }
+                return this.manageVariant(target, verb, name);
             }
 
             // ---- two variants compared --------------------------------------------
@@ -5306,12 +5329,6 @@
                 const target = await this.scadOn(path);
                 if (!target) return { ok: false, said: `${path} has no SCAD to save` };
                 return this.saveScad(target);
-            }
-
-            async openSavedVariantOn(path, name) {
-                const target = await this.scadOn(path);
-                if (!target) return { ok: false, said: `${path} has no SCAD to draw a variant of` };
-                return this.openSavedVariant(target, name);
             }
 
             async floatScadOn(path) {
@@ -7126,9 +7143,13 @@
                     viewer.saveScadOn(path).then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
                     return;
                 }
-                if (action.startsWith('part:variant:')) {
-                    viewer.openSavedVariantOn(path, action.slice('part:variant:'.length))
-                        .then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
+                // Part › Variants › a variant › Draw, Rename, Duplicate, History, Compare,
+                // Delete; and Part › Variants › Deleted › a variant › Restore, Forget, and
+                // Empty: what its row's buttons in the editor's list do.
+                const cell = /^part:(?:variant:(draw|rename|duplicate|history|compare|delete)|trash:(restore|forget)):(.+)$/.exec(action);
+                if (cell || action === 'part:trash:empty') {
+                    const [where, verb, name] = !cell ? ['trash', 'empty', null] : cell[1] ? ['variant', cell[1], cell[3]] : ['trash', cell[2], cell[3]];
+                    viewer.variantOn(path, where, verb, name).then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
                     return;
                 }
                 if (action === 'part:float') {
@@ -7291,7 +7312,15 @@
             // The part editor's buttons are the cells of Part, wherever the editor stands
             // (in Selected, floated, over the page): their tooltips teach the digits.
             for (const [selector, action] of PART_VERBS) for (const el of document.querySelectorAll(selector)) pairs.push([el, action]);
-            for (const el of document.querySelectorAll('.part-editor .saved-variant, .scad-editor .saved-variant')) pairs.push([el, `part:variant:${el.dataset.variant}`]);
+            for (const el of document.querySelectorAll('.part-editor .saved-variant, .scad-editor .saved-variant')) pairs.push([el, `part:variant:draw:${el.dataset.variant}`]);
+            // A saved variant's buttons under its ⋯, and the trash's, are its cells.
+            for (const [cls, verb] of [['variant-rename', 'rename'], ['variant-duplicate', 'duplicate'], ['variant-history', 'history'], ['variant-compare', 'compare'], ['variant-delete', 'delete']]) {
+                for (const el of document.querySelectorAll(`.scad-editor .saved-row[data-variant] .${cls}`)) pairs.push([el, `part:variant:${verb}:${el.closest('[data-variant]').dataset.variant}`]);
+            }
+            for (const [cls, verb] of [['trash-restore', 'restore'], ['trash-forget', 'forget']]) {
+                for (const el of document.querySelectorAll(`.scad-editor .trash-row[data-variant] .${cls}`)) pairs.push([el, `part:trash:${verb}:${el.closest('[data-variant]').dataset.variant}`]);
+            }
+            for (const el of document.querySelectorAll('.scad-editor .trash-empty')) pairs.push([el, 'part:trash:empty']);
             annotate(ring, pairs);
         }
         // The Bench's buttons, by the verb each one is (Panels › Bench).

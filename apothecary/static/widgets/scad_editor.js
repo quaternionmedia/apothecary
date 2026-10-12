@@ -201,7 +201,7 @@ export function variantChoices(list, { full = false, chosen = null } = {}) {
               + `<div class="variant-history-list"></div></div>`
             : "";
         return `<div class="saved-row${v.name === chosen ? " chosen" : ""}" data-variant="${esc(v.name)}">`
-            + `<button type="button" class="saved-variant" data-variant="${esc(v.name)}" title="Draw ${esc(v.name)}: its SCAD in the editor and its numbers staged, rendered (Part › Variants › ${esc(v.name)})">${esc(v.name)}</button>`
+            + `<button type="button" class="saved-variant" data-variant="${esc(v.name)}" title="Draw ${esc(v.name)}: its SCAD in the editor and its numbers staged, rendered (Part › Variants › ${esc(v.name)} › Draw)">${esc(v.name)}</button>`
             + `<span class="saved-when">${esc(when(v.date))}</span>${full ? head : ""}${overlay}${manage}`
             + `<div class="saved-numbers">${esc(numbers(v.params))}</div>${changes}</div>`;
     }).join("");
@@ -225,7 +225,7 @@ export function trashRows(list) {
     return list.map((v) => `<div class="trash-row" data-variant="${esc(v.name)}">`
         + `<span class="trash-name">${esc(v.name)}</span> <span class="saved-when">${esc(when(v.date))}</span>`
         + `<button type="button" class="trash-restore" title="Back among the variants, under its own name">Restore</button>`
-        + `<button type="button" class="trash-forget" title="Delete ${esc(v.name)} for good: asks first">Delete for good</button></div>`).join("")
+        + `<button type="button" class="trash-forget" title="Forget ${esc(v.name)}: deleted for good, once asked again">Forget</button></div>`).join("")
         + `<button type="button" class="trash-empty" title="Every deleted variant of this part deleted for good: asks first">Empty the trash</button>`;
 }
 
@@ -272,6 +272,14 @@ export async function mountScadEditor(slot, options = {}) {
         const row = button.closest("[data-variant]");
         const to = row?.querySelector(".variant-to")?.value.trim() || "";
         on.onManage(verb, row?.dataset.variant ?? null, { to, commit: button.dataset.commit ?? null, button });
+    };
+    // Enter in a variant's name box: what the ring's Rename or Duplicate readied, else Rename.
+    savedList.onkeydown = (ev) => {
+        const box = ev.target.closest(".variant-to");
+        if (!box || ev.key !== "Enter" || !on.onManage) return;
+        ev.preventDefault();
+        const row = box.closest("[data-variant]");
+        on.onManage(box.dataset.verb || "rename", row.dataset.variant, { to: box.value.trim(), button: null });
     };
     // Escape, with the editor over the page, puts it back: the editor holds the
     // focus while it is there (its root takes it when nothing in it does).
@@ -365,6 +373,23 @@ export async function mountScadEditor(slot, options = {}) {
             const open = savedList.querySelector(".variant-trash")?.open;
             const deleted = trash === null ? "" : `<details class="fold variant-trash"${open ? " open" : ""}><summary>Deleted (${trash.length})</summary>${trashRows(trash)}</details>`;
             savedList.innerHTML = `<div class="code-header">Saved variants</div>${variantChoices(list, { full: true, chosen })}${deleted}`;
+        },
+        // A variant's row unfolded, the cursor in its name box, Enter to do `verb`.
+        armVariant(name, verb) {
+            const row = [...savedList.querySelectorAll(".saved-row")].find((r) => r.dataset.variant === name);
+            if (!row) return false;
+            row.querySelector(".variant-manage").hidden = false;
+            const box = row.querySelector(".variant-to");
+            box.dataset.verb = verb;
+            box.placeholder = verb === "rename" ? `rename ${name} to…` : `copy ${name} as…`;
+            box.focus();
+            box.scrollIntoView({ block: "nearest" });
+            return true;
+        },
+        // The trash's fold opened, to see what the ring's Deleted does.
+        openTrash() {
+            const fold = savedList.querySelector(".variant-trash");
+            if (fold) fold.open = true;
         },
         // A variant's history, unfolded under its row.
         showHistory(name, commits) {

@@ -1318,13 +1318,60 @@ def test_a_part_s_ring_holds_its_scad_editor_too():
     assert address_of(ring, "part:undo")[:-1] == address_of(ring, "part:save")[:-1] + "1"
     variants = part.children[-1]
     assert (variants.label, variants.id) == ("Variants", "part:variants")
-    assert [(c.label, c.action) for c in variants.children] == [
+    # Each saved variant a ring of what can be done to it (the owner's answer of
+    # 2026-10-12): choosing one is Draw, one press deeper than choosing it was.
+    assert [(c.label, c.id) for c in variants.children] == [
         ("taller", "part:variant:taller"),
         ("wider", "part:variant:wider"),
     ]
+    assert [(c.label, c.action) for c in variants.children[1].children] == [
+        ("Draw", "part:variant:draw:wider"),
+        ("Rename", "part:variant:rename:wider"),
+        ("Duplicate", "part:variant:duplicate:wider"),
+        ("History", "part:variant:history:wider"),
+        ("Compare", "part:variant:compare:wider"),
+        ("Delete", "part:variant:delete:wider"),
+    ]
+    variants_at = address_of(ring, "part:variants")
+    assert address_of(ring, "part:variant:draw:wider") == variants_at + "68"
     assert len(part.children) <= MOST_OPTIONS
-    for action in ("part:save", "part:float", "part:fullscreen", "part:variant:wider"):
+    for action in ("part:save", "part:float", "part:fullscreen", "part:variant:draw:wider"):
         assert carried_by(action).name == "VIEWER"
+    # Something deleted: Deleted, last under Variants, holds the trash -- each deleted
+    # variant Restore and Forget -- and Empty.
+    trashed = PictureContext(part=PartSeen(editable=True, variants=["wider"], deleted=["old"]))
+    with_trash = resolve(on, garage, picture=trashed)
+    deleted = with_trash.options[-1].children[-1].children[-1]
+    assert (deleted.label, deleted.id) == ("Deleted", "part:trash")
+    assert [(c.label, c.id) for c in deleted.children] == [
+        ("old", "part:trash:old"),
+        ("Empty", "part:trash:empty"),
+    ]
+    assert [(c.label, c.action) for c in deleted.children[0].children] == [
+        ("Restore", "part:trash:restore:old"),
+        ("Forget", "part:trash:forget:old"),
+    ]
+    assert deleted.children[-1].destructive
+    for action in ("part:trash:restore:old", "part:trash:empty"):
+        assert carried_by(action).name == "VIEWER"
+    # Everything deleted: Variants holds Deleted alone.
+    only_trash = resolve(
+        on, garage, picture=PictureContext(part=PartSeen(editable=True, deleted=["old"]))
+    )
+    assert [c.id for c in only_trash.options[-1].children[-1].children] == ["part:trash"]
+    # More than a ring holds: grouped, Deleted still a cell of its own.
+    many = [f"v{i}" for i in range(12)]
+    crowded = resolve(
+        on,
+        garage,
+        picture=PictureContext(part=PartSeen(editable=True, variants=many, deleted=["x"])),
+    )
+    top = crowded.options[-1].children[-1].children
+    assert len(top) <= MOST_OPTIONS and top[-1].id == "part:trash"
+    assert (
+        walk(crowded, address_of(crowded, "part:variant:draw:v11")).action
+        == "part:variant:draw:v11"
+    )
     # None saved yet: no Variants, and nothing before it moved.
     bare = resolve(on, garage, picture=PictureContext(part=PartSeen(editable=True)))
     first = resolve(on, garage, picture=told)
