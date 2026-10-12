@@ -798,6 +798,9 @@
         // this long, and a render after a second of quiet (the spike's timings).
         const SCAD_CHECK_MS = 300;
         const SCAD_RENDER_MS = 1000;
+        // Render on demand: after a frame is drawn, the badges are placed again for
+        // this many frames more (anchors.js tests what hides them every few).
+        const ANCHOR_TAIL_FRAMES = 8;
         // The newest of a part's saved variants listed under its parameters; the
         // editor lists them all.
         const SAVED_SHORT_LIST = 5;
@@ -1089,6 +1092,14 @@
                 this.waveDone = Promise.resolve();  // settles when the level's geometry has loaded
                 this.cameraHandles = null; // a selected camera's turn ring and tilt arc
                 this.cameraDrag = null;    // a turn or tilt under way: { kind, name, turn, tilt, angle, pose }
+                // Render on demand: a frame is drawn only when something drawn changed
+                // (sceneChanged reads the scene, the camera and the canvas against the
+                // last frame), or when asked (invalidate). Counted for a reader.
+                this.frameWanted = true;
+                this.framesDrawn = 0;
+                this.drawnLast = [];
+                this.drawnNext = [];
+                this.anchorTail = 0;
 
                 this.initThreeJS();
                 this.bindEvents();
@@ -1146,6 +1157,9 @@
                     this.orbitControls.enabled = !event.value;
                 });
                 this.transformControls.addEventListener('objectChange', () => this.onGizmoDrag());
+                // The arrows light up under the pointer, which changes nothing in the
+                // scene until it is drawn: drawn again.
+                this.transformControls.addEventListener('change', () => this.invalidate());
                 this.transformControls.addEventListener('mouseUp', () => this.commitCurrentDrag());
                 this.scene.add(this.transformControls);
 
@@ -1379,13 +1393,80 @@
                 this.renderer.setSize(width, height, false);
             }
 
+            // Each frame the browser offers: the world is drawn only when something
+            // drawn changed -- the view turned or easing (the orbit's damping), a
+            // mesh, a material or the handles changed, the canvas resized, a live
+            // video's frame or a texture arrived, the nozzle moving -- or when asked
+            // (invalidate). A machine without a GPU draws a frame in a third of a
+            // second in software; drawn every frame, it had none to spare for typing.
+            // The badges are placed on each frame drawn, a few frames after (what
+            // hides one is tested every few), and whenever they have something to
+            // place of their own (a card under the pointer).
             animate() {
                 requestAnimationFrame(() => this.animate());
-                this.orbitControls.update();
+                if (this.orbitControls.update()) this.frameWanted = true;
+                for (const m of Object.values(this.marks)) if (m.marks && m.marks.tick()) this.frameWanted = true;
                 this.sizeCameraHandles();
-                for (const m of Object.values(this.marks)) if (m.marks) m.marks.tick();
-                this.anchors.update();
-                this.renderer.render(this.scene, this.camera);
+                if (this.frameWanted || this.sceneChanged()) {
+                    this.frameWanted = false;
+                    this.anchors.update();
+                    this.renderer.render(this.scene, this.camera);
+                    this.framesDrawn += 1;
+                    // Read again after drawing: what the drawing itself settles (the
+                    // arrows sized to the view) is not a change to draw again for.
+                    this.sceneChanged();
+                    this.anchorTail = ANCHOR_TAIL_FRAMES;
+                    return;
+                }
+                if (this.anchorTail > 0 || this.anchors.wants()) {
+                    this.anchorTail = Math.max(0, this.anchorTail - 1);
+                    this.anchors.update();
+                }
+            }
+
+            // The next frame is drawn, whatever sceneChanged would say.
+            invalidate() {
+                this.frameWanted = true;
+            }
+
+            // Whether anything drawn differs from the last frame: every object's place,
+            // whether it is shown, its geometry and its material (colour, opacity, its
+            // texture's version), the camera and the canvas. Read into one list of
+            // numbers, compared with the last as it is written, no allocation a frame.
+            sceneChanged() {
+                const next = this.drawnNext, last = this.drawnLast;
+                let i = 0, differs = false;
+                const put = (v) => {
+                    const n = typeof v === 'number' ? (v === v ? v : -1) : (v ? 1 : 0);
+                    if (!differs && last[i] !== n) differs = true;
+                    next[i++] = n;
+                };
+                const material = (m) => {
+                    put(m.id); put(m.version); put(m.opacity); put(m.transparent); put(m.depthWrite); put(m.visible);
+                    if (m.color) { put(m.color.r); put(m.color.g); put(m.color.b); }
+                    if (m.emissive) { put(m.emissive.r); put(m.emissive.g); put(m.emissive.b); }
+                    put(m.map ? m.map.id * 1e6 + m.map.version : -2);
+                };
+                const c = this.camera;
+                put(c.position.x); put(c.position.y); put(c.position.z);
+                put(c.quaternion.x); put(c.quaternion.y); put(c.quaternion.z); put(c.quaternion.w);
+                put(c.fov); put(c.aspect); put(c.near); put(c.far); put(c.zoom);
+                put(this.canvas.width); put(this.canvas.height);
+                this.scene.traverse((o) => {
+                    put(o.id); put(o.visible); put(o.renderOrder);
+                    put(o.position.x); put(o.position.y); put(o.position.z);
+                    put(o.quaternion.x); put(o.quaternion.y); put(o.quaternion.z); put(o.quaternion.w);
+                    put(o.scale.x); put(o.scale.y); put(o.scale.z);
+                    const g = o.geometry;
+                    if (g) { put(g.id); put(g.attributes?.position?.version ?? -2); put(g.index ? g.index.version : -2); }
+                    if (Array.isArray(o.material)) o.material.forEach(material);
+                    else if (o.material) material(o.material);
+                });
+                if (next.length !== i) { next.length = i; differs = true; }
+                if (last.length !== i) differs = true;
+                this.drawnLast = next;
+                this.drawnNext = last;
+                return differs;
             }
 
             setStatus(message, type = '') {

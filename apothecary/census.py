@@ -752,6 +752,13 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "manualIn:keydown:pinManual": (WIDGET, WHAT_IS_THERE, "pinning the typed board, by Enter"),
     # the page reacting to itself
     "window:resize:onResize": (AUTOMATIC, NOTHING, "the window changed size on its own"),
+    # Render on demand: the move arrows lighting up under the pointer change nothing
+    # in the scene until it is drawn, so they ask for a frame.
+    "transformControls:change:invalidate": (
+        AUTOMATIC,
+        NOTHING,
+        "the move arrows lit under the pointer, and the world drawn again",
+    ),
     # The browser's Back and Forward, not a control of the page's: the site the
     # address names is loaded, as the drop-down put it there.
     "window:popstate:followAddress": (

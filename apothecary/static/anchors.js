@@ -20,6 +20,12 @@
  * when what it says changes), an open card's each frame: there are at most a
  * few.
  *
+ * The page draws its world only when something in it changes (render on demand,
+ * the part-iteration plan of 2026-10-12), and places the badges on each frame it
+ * draws and a few after; wants() says when the layer has something to place
+ * though nothing drawn moved -- a badge added, taken away or saying something
+ * new, or one under the pointer, or a card lingering after it.
+ *
  * Written here rather than fetched: the vendored three.js carries no
  * CSS2DRenderer, and nothing is fetched from a website while a person is
  * using the tool (static/vendor/three/README.md).
@@ -53,6 +59,7 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
     const v = new THREE.Vector3();
     const dir = new THREE.Vector3();
     let frame = 0;
+    let dirty = true;  // something to place, whatever the scene does
 
     // The transform gizmo's handles and its (unrendered) picking plane are
     // meshes too, and the plane spans the whole scene: a badge would be
@@ -154,8 +161,8 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
             const a = row && anchors.get(row.dataset.anchor);
             if (a) a.el.click();
         });
-        el.addEventListener("pointerenter", () => { c.hover = true; });
-        el.addEventListener("pointerleave", () => { c.hover = false; c.hoverOff = performance.now() + LINGER_MS; });
+        el.addEventListener("pointerenter", () => { c.hover = true; dirty = true; });
+        el.addEventListener("pointerleave", () => { c.hover = false; c.hoverOff = performance.now() + LINGER_MS; dirty = true; });
         layer.appendChild(el);
         c = { el, keys, hover: false, hoverOff: 0, said: null };
         clusters.set(id, c);
@@ -228,6 +235,7 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
     let lastCards = [];
     function update() {
         frame += 1;
+        dirty = false;
         const w = canvas.clientWidth, h = canvas.clientHeight;
         if (!w || !h) return;
         const testOcclusion = frame % OCCLUSION_EVERY === 0;
@@ -284,8 +292,17 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
     }
 
     function markHover(a) {
-        a.el.addEventListener("pointerenter", () => { a.hover = true; });
-        a.el.addEventListener("pointerleave", () => { a.hover = false; a.hoverOff = performance.now() + LINGER_MS; });
+        a.el.addEventListener("pointerenter", () => { a.hover = true; dirty = true; });
+        a.el.addEventListener("pointerleave", () => { a.hover = false; a.hoverOff = performance.now() + LINGER_MS; dirty = true; });
+    }
+
+    // Whether there is something to place with nothing drawn having moved.
+    function wants() {
+        if (dirty) return true;
+        const now = performance.now();
+        for (const a of anchors.values()) if (hovered(a, now)) return true;
+        for (const c of clusters.values()) if (hovered(c, now)) return true;
+        return false;
     }
 
     return {
@@ -307,6 +324,7 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
             const a = { key, el, point, offset, occlude, selected, ignore, at: null, want: null, drawn: null, size: null, hover: false, hoverOff: 0 };
             markHover(a);
             anchors.set(key, a);
+            dirty = true;
             return el;
         },
         /* A badge: an element of class `world-badge` (and `className`) holding
@@ -324,8 +342,8 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
             const a = anchors.get(key);
             if (!a) return false;
             const iconEl = a.el.querySelector(".badge-icon"), wordsEl = a.el.querySelector(".badge-words");
-            if (iconEl && iconEl.textContent !== icon) { iconEl.textContent = icon; a.size = null; }
-            if (wordsEl && wordsEl.innerHTML !== words) wordsEl.innerHTML = words;
+            if (iconEl && iconEl.textContent !== icon) { iconEl.textContent = icon; a.size = null; dirty = true; }
+            if (wordsEl && wordsEl.innerHTML !== words) { wordsEl.innerHTML = words; dirty = true; }
             return true;
         },
         remove(key) {
@@ -333,6 +351,7 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
             if (!a) return false;
             a.el.remove();
             anchors.delete(key);
+            dirty = true;
             return true;
         },
         get(key) { return anchors.get(key) ? anchors.get(key).el : null; },
@@ -353,6 +372,10 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
         /* The open cards as last placed, in canvas pixels -- for tests. */
         cards() { return lastCards.map((c) => ({ ...c })); },
         update,
+        wants,
+        /* Something about the badges changed that the layer cannot see (what a
+         * badge's thing is, whether it is selected): placed at the next frame. */
+        touch() { dirty = true; },
         clear() { for (const key of [...anchors.keys()]) this.remove(key); },
         destroy() { this.clear(); layer.remove(); },
     };
