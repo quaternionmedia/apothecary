@@ -3187,6 +3187,15 @@
                 clearTimeout(this._validateTimer);
                 const seq = (this._stageSeq = (this._stageSeq ?? 0) + 1);
 
+                // Nothing differs from what is drawn, yet a variant is drawn with the
+                // part's own numbers -- its SCAD edited: Apply draws the saved part.
+                if (!count && this.toSaved(target)) {
+                    summary.className = 'clean';
+                    summary.textContent = "The part's own numbers, and its SCAD edited: Apply draws the saved part";
+                    apply.disabled = false;
+                    apply.textContent = 'Apply: the saved part';
+                    return;
+                }
                 if (!count) {
                     summary.className = 'clean';
                     summary.textContent = 'No staged changes';
@@ -3250,7 +3259,8 @@
             bindStageActions(target) {
                 const stage = this.partStages[target.key];
                 document.getElementById('apply-btn').onclick = () => {
-                    if (this.stagedValid) this.applyEditor(target);
+                    if (this.toSaved(target)) this.drawSaved(target);
+                    else if (this.stagedValid) this.applyEditor(target);
                 };
                 document.getElementById('revert-btn').onclick = () => this.revertStaged(target);
                 const defaults = document.getElementById('defaults-btn');
@@ -3280,6 +3290,7 @@
             async applyStagedOn(path) {
                 const target = await this.editorOn(path);
                 if (!target) return `${path} has no parameters to apply`;
+                if (this.toSaved(target)) { await this.drawSaved(target); return null; }
                 const count = Object.keys(this.stagedDiff()).length;
                 if (!count) return `${path}: nothing is staged to apply -- move a parameter in Selected first`;
                 clearTimeout(this._validateTimer);
@@ -3312,6 +3323,44 @@
                 Object.assign(stage.staged, stage.defaults);
                 this.editorLoading = this.loadPartParams(target);
                 return true;
+            }
+
+            // Whether a part is drawn from a variant this tab applied -- its numbers
+            // moved, or its SCAD edited -- rather than as saved.
+            drawnIsVariant(target) {
+                return Boolean(target.part && this.variantByPart[target.part]);
+            }
+
+            // Whether Apply draws the saved part: the part's own numbers staged (its
+            // Defaults) while a variant is drawn. After a SCAD edit the numbers staged
+            // are the drawn ones, so nothing differs, and Apply still has the saved
+            // part to go back to.
+            toSaved(target) {
+                const stage = this.partStages[target.key];
+                if (!this.drawnIsVariant(target) || !stage?.defaults) return false;
+                const same = (a, b) => (Array.isArray(a) || Array.isArray(b)
+                    ? JSON.stringify(a) === JSON.stringify(b)
+                    : Number(a) === Number(b) || a === b);
+                return Object.entries(stage.defaults).every(([name, value]) => same(stage.staged[name], value));
+            }
+
+            // The saved part drawn again: its own SCAD back in the editor (an edit
+            // there is a draft, rendered beside the part, never saved unless Saved),
+            // and its own numbers applied, which the cache already holds. The amber
+            // mark and the address's ?variant= go with the variant.
+            async drawSaved(target) {
+                const scad = this.scadStages[target.key];
+                if (scad && scad.text !== null && scad.text !== scad.own) {
+                    if (this.scadTarget?.key === target.key && this.scadEditor) this.scadEditor.setText(scad.own);
+                    clearTimeout(scad.checkTimer);
+                    clearTimeout(scad.renderTimer);
+                    scad.seq += 1;
+                    scad.text = scad.own;
+                    scad.from = null;
+                    scad.check = null;
+                    if (this.scadTarget?.key === target.key) this.scadEditor?.say("The part's own SCAD, as the saved part is drawn: edit it here; it is checked once typing stops and rendered after a second of quiet.");
+                }
+                await this.applyEditor(target);
             }
 
             // Part › Defaults: the part's editor opened, its own values staged once
