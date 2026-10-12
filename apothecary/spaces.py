@@ -50,6 +50,7 @@ MEASUREMENT = "measurement"
 KIND_OWNER = {
     "broken": APOTHECARY,
     "contested": HUMAN,
+    "disagree": APOTHECARY,
     "drift": APOTHECARY,
     "unbounded": APOTHECARY,
     "unmeasured": MEASUREMENT,
@@ -142,6 +143,8 @@ def _readiness_problems(part, report) -> List[Problem]:
                 kind = "drift"
         elif check.name == "Fitted to measured artifacts":
             kind = "unmeasured"
+        elif check.name == "Model defaults match the SCAD":
+            kind = "disagree"
         elif check.name in ("Print settings declared", "Fits the printer", "Geometry renders"):
             kind = "unprintable"
         else:
@@ -300,7 +303,13 @@ def capabilities() -> List[Capability]:
                 name="apothecary parts checklist",
                 kind="gate",
                 summary="whether a part can be printed and then checked against a real one",
-                addresses=["unbounded", "unprintable", "unmeasured", "contested"],
+                addresses=[
+                    "unbounded",
+                    "unprintable",
+                    "unmeasured",
+                    "contested",
+                    "disagree",
+                ],
             ),
             Capability(
                 name="the viewer's part panel",

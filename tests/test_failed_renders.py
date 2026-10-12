@@ -166,11 +166,19 @@ class TestTheCheckHasTheStagedValues:
         ).json()
         assert body["valid"] is False and body["with_values"]
         assert [(m["level"], m["line"]) for m in body["messages"]] == [("error", 4)]
+        # The values are written into the text, and nothing is passed with -D.
+        assert "width = 60;" in body["text"]
         compiled = [c for c in calls(exe) if c["format"] == "csg"]
-        assert ["width=60.0"] in [
-            [c["args"][i + 1] for i, a in enumerate(c["args"]) if a == "-D"] for c in compiled
-        ]
+        assert any("width = 60;" in c["text"] for c in compiled)
+        assert all("-D" not in c["args"] for c in compiled)
         assert renders(exe) == []
+
+    def test_an_error_the_texts_own_value_reaches_is_caught(self, openscad, block):
+        openscad()
+        text = SCAD.replace("width = 34;", "width = 70;")
+        body = TestClient(app).post("/parts/block/draft/check", json={"scad": text}).json()
+        assert body["valid"] is False and body["text"] is None
+        assert [(m["level"], m["line"]) for m in body["messages"]] == [("error", 4)]
 
     def test_a_part_with_a_model_is_checked_with_its_values_at_once(self, openscad, block):
         openscad()

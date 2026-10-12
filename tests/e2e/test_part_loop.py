@@ -63,18 +63,23 @@ VARIANT_GLOW = 0x261B08
 REFUSING_OPENSCAD = '''#!{python}
 """This machine's OpenSCAD, except that a cube of {too_big} mm or more is refused
 as an assertion at the SCAD's size line would refuse it -- the way a snapshot
-refuses one: it says the error, writes the geometry it built, and exits 0."""
-import os, subprocess, sys
+refuses one: it says the error, writes the geometry it built, and exits 0. The
+size is the SCAD's own (the text is the truth: Apply writes it there), or -D's."""
+import os, re, subprocess, sys
 args = sys.argv[1:]
-for i, arg in enumerate(args[:-1]):
-    if arg == "-D" and args[i + 1].startswith("size=") and float(args[i + 1][5:]) >= {too_big}:
-        done = subprocess.run([{real!r}, *args])
-        sys.stderr.write(
-            "ERROR: Assertion '(size < {too_big})' failed: \\"it fits the bed\\" "
-            "in file {scad}, line {line}\\n"
-            "TRACE: called by 'assert' in file {scad}, line {line}\\n"
-        )
-        sys.exit(done.returncode)
+sizes = [float(args[i + 1][5:]) for i, a in enumerate(args[:-1])
+         if a == "-D" and args[i + 1].startswith("size=")]
+if not sizes and args and os.path.isfile(args[-1]):
+    with open(args[-1], encoding="utf-8") as f:
+        sizes = [float(m) for m in re.findall(r"^size\\s*=\\s*([-\\d.]+)\\s*;", f.read(), re.M)]
+if sizes and sizes[-1] >= {too_big}:
+    done = subprocess.run([{real!r}, *args])
+    sys.stderr.write(
+        "ERROR: Assertion '(size < {too_big})' failed: \\"it fits the bed\\" "
+        "in file {scad}, line {line}\\n"
+        "TRACE: called by 'assert' in file {scad}, line {line}\\n"
+    )
+    sys.exit(done.returncode)
 os.execv({real!r}, [{real!r}, *args])
 '''
 
