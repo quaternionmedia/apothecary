@@ -166,23 +166,36 @@ def _by_hand(page: Page, key: str, distance: float) -> None:
             step = max(-300.0, min(300.0, across))
             _drag(page, (spot["cx"] - step / 2, spot["top"] + 30), (step, 0))
             across -= step
-    # Brought to the middle: a pan moves what is at the target's depth with the hand, so
-    # it is repeated until the piece is there.
-    for _ in range(4):
+    # Brought nearer in rounds, as an eye corrects as it closes in: the piece to the
+    # middle, then the wheel half of the way, then again. A piece a little off the line
+    # of sight far away is far off it close to.
+    per_notch = 0.95 ** (spot["zoomSpeed"] * NOTCH / 100)
+    for _ in range(8):
+        spot = _to_the_middle(page, key)
+        # The piece is on the line of sight now, nearer than the target: the wheel moves
+        # the view along it, and stops at the nearest the orbit allows.
+        wanted = max(spot["nearest"], spot["toTarget"] - (spot["toPiece"] - distance))
+        notches = round(math.log(min(wanted / spot["toTarget"], 1.0)) / math.log(per_notch))
+        if notches <= 0:
+            break
+        page.mouse.move(spot["cx"], spot["cy"])
+        for _ in range(notches if notches <= 3 else (notches + 1) // 2):
+            page.mouse.wheel(0, -NOTCH)
+        settled(page)
+
+
+def _to_the_middle(page: Page, key: str) -> dict:
+    """Shift+drag until the piece is in the middle of the world, to the pixel. A pan
+    moves what is at the target's depth with the hand, and what is nearer further, so
+    each drag is shortened by how much nearer the piece is."""
+    for _ in range(6):
         spot = page.evaluate(SIGHTED, key)
         off = (spot["cx"] - spot["x"], spot["cy"] - spot["y"])
-        if abs(off[0]) < 12 and abs(off[1]) < 12:  # a smaller drag is a click, a choice
+        if abs(off[0]) < 0.5 and abs(off[1]) < 0.5:
             break
-        _drag(page, (spot["cx"], spot["cy"]), off, shift=True)
-    # The piece is on the line of sight now, nearer than the target: the wheel moves
-    # the view along it, and stops at the nearest the orbit allows.
-    spot = page.evaluate(SIGHTED, key)
-    wanted = max(spot["nearest"], spot["toTarget"] - (spot["toPiece"] - distance))
-    per_notch = 0.95 ** (spot["zoomSpeed"] * NOTCH / 100)
-    notches = round(math.log(min(wanted / spot["toTarget"], 1.0)) / math.log(per_notch))
-    page.mouse.move(spot["cx"], spot["cy"])
-    for _ in range(notches):
-        page.mouse.wheel(0, -NOTCH)
+        nearer = spot["toPiece"] / spot["toTarget"]
+        _drag(page, (spot["cx"], spot["cy"]), (off[0] * nearer, off[1] * nearer), shift=True)
+    return page.evaluate(SIGHTED, key)
 
 
 # An element of Selected scrolled to just under the stage bar, which stands over the top

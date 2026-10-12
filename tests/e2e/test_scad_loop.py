@@ -361,7 +361,9 @@ def test_editing_a_parts_scad_twice_round(
     # The error listed in the stage bar, which stays at the top of Selected; what the
     # editor says of it just under the bar; and the code below that, scrolled so the
     # marked line is its first.
-    _said(page).evaluate(UNDER_THE_STAGE_BAR)
+    site_fold = page.locator(".panel[data-panel='site'] .panel-collapse")
+    site_fold.click()
+    page.locator("#stage-bar").evaluate("(el) => el.scrollIntoView({ block: 'start' })")
     marked.evaluate(
         "(line) => { const code = line.closest('.cm-scroller');"
         " code.scrollTop += line.getBoundingClientRect().top - code.getBoundingClientRect().top - 4; }"
@@ -371,10 +373,12 @@ def test_editing_a_parts_scad_twice_round(
         f"An assertion typed at the end that this part fails. One check, once typing "
         f"stops: OpenSCAD evaluates the edited SCAD beside the part and renders nothing, "
         f"and its error is marked on line {refused_line}, listed under the stage bar and "
-        "said above the code. Nothing is rendered while it does not read; changing the "
-        "line is the next step.",
+        "said above the code -- Site folded to its title by its ▾ here, so Selected has "
+        "the rail. Nothing is rendered while it does not read; changing the line is the "
+        "next step.",
         blank=BLANK,
     )
+    site_fold.click()
 
     # A change that reads: rendered after a second of quiet, drawn as an applied variant.
     asked["check"] = asked["render"] = 0

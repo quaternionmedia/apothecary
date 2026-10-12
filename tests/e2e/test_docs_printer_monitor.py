@@ -17,7 +17,7 @@ import re
 import time
 
 import pytest
-from doc_capture import TEMPERATURE, moments
+from doc_capture import FOLDER, TEMPERATURE, moments
 from playwright.sync_api import Page, expect
 from viewer_ready import by_hand
 
@@ -333,5 +333,9 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
         "cores, libraries, the sketches under parts/ each with its board, Compile and "
         "Compile & upload to any detected port, raw flash with esptool, and the task log. "
         "Each verb is a cell of the ring's Panels › Bench too",
-        blank=(*CHANGING, *moments(".panel[data-panel='bench']")),
+        blank=(
+            *CHANGING,
+            *moments(".panel[data-panel='bench']"),
+            (".panel[data-panel='bench'] .tc-status", FOLDER),
+        ),
     )

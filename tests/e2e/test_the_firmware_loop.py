@@ -27,6 +27,7 @@ flashing the bench's own ESP32 is a step of the bench checklist
 from __future__ import annotations
 
 import pytest
+from doc_capture import FOLDER
 from firmware_helpers import write_fake_arduino_cli, write_fake_cargo, write_fake_espflash
 from playwright.sync_api import Page, expect
 from viewer_ready import settled
@@ -125,7 +126,7 @@ CHANGING = (
     "#c-sketch .when",
     ".tc-status",
     # The stand-in tools' folders, which the toolchains' cards name.
-    (".tc-module .kv", r"(?:/[\w.@+-]+){2,}/?"),
+    (".tc-module .kv", FOLDER),
 )
 
 
@@ -218,27 +219,21 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     page.locator(".panel-rail .rail-tab[data-panel='bench'] .rail-tab-float").click()
     floated = page.locator(".panel-free-layer .panel[data-panel='bench']")
     expect(floated).to_be_visible(timeout=5000)
-    # Taller, from its corner, as far as the world goes down.
-    box = floated.bounding_box()
-    world = page.locator("#viewer-canvas").bounding_box()
-    corner = (box["x"] + box["width"] - 3, box["y"] + box["height"] - 3)
-    page.mouse.move(*corner)
-    page.mouse.down()
-    page.mouse.move(corner[0], world["y"] + world["height"] - 12, steps=8)
-    page.mouse.up()
-    floated.evaluate(
-        "(el) => { for (const s of el.querySelectorAll('*'))"
-        " if (s.scrollHeight > s.clientHeight + 1) s.scrollTop = 0; }"
+    floated.locator(".bench-build").evaluate("(el) => el.scrollIntoView({ block: 'start' })")
+    installed = floated.locator(".tc-module").evaluate_all(
+        "(ms) => ms.map((m) => `${m.dataset.id}: ${/not installed/.test(m.textContent)"
+        " ? 'not installed' : 'installed'}`)"
     )
+    assert "rust-esp32: installed" in installed, installed
     story.shows(
         "The Bench lists both builds of esp32_blink, each with its toolchain",
         "Panels › Bench › Bench on the canvas ring opens the Bench, floated here from its "
-        "tab to be seen whole: the toolchains as installed, arduino-cli and Rust for the "
-        "ESP32 beside it, and the sketches under parts/, each named with its toolchain -- "
-        "the Arduino esp32_blink and the Rust one next to each other in its drop-down, as "
-        "listed below. The Arduino one chosen, its board filled in from its "
+        "tab: the toolchains as installed, arduino-cli and Rust for the ESP32 beside it, "
+        "and the sketches under parts/, each named with its toolchain -- the Arduino "
+        "esp32_blink and the Rust one next to each other in its drop-down, as listed "
+        "below with the toolchains. The Arduino one chosen, its board filled in from its "
         "firmware.json, and the devkit's port: Compile is next.",
-        shown="\n".join(r for r in rows if r.startswith("esp32_blink")),
+        shown="\n".join([*installed, *(r for r in rows if r.startswith("esp32_blink"))]),
         blank=CHANGING,
     )
     floated.locator(".panel-float").click()  # docked again, a tab of the rail's strip

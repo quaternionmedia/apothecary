@@ -52,6 +52,10 @@ MOMENT = (
 # target from poll to poll.
 TEMPERATURE = r"\d{1,3}\.\d+(?=\s*/\s*\d)"
 
+# A folder of a temporary home -- the stand-in tools' and a server's state, made anew
+# each run -- where a card names one (``/tmp/apothecary-docs-ych6eu0lk/tools``).
+FOLDER = r"(?:/[\w.@+-]+){2,}/?"
+
 # A blank is a CSS selector, whose element is blanked whole (a chart, a log: what a
 # layout sizes, not its words), or a selector and a pattern, where only the words
 # matching it are blanked, each the same width whatever they say, so the line around
