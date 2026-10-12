@@ -790,7 +790,7 @@
         import { mountTasks } from '/static/widgets/tasks.js';
         import { mountScadEditor, variantChoices } from '/static/widgets/scad_editor.js';
         import { buildParamControl, described, sameValue, shown, focusedControl, refocus } from '/static/widgets/part_controls.js';
-        import { parseAssignments, lastOf, literalText } from '/static/widgets/assignments.js';
+        import { parseAssignments, lastOf, literalText, writeValues } from '/static/widgets/assignments.js';
         import { makeMachineMarks, makeBoardBadge, sayBoard, toScene as marksToScene } from '/static/machine_marks.js';
         import { mountPictureMarks, axes as cameraAxes } from '/static/picture_marks.js';
         import { mountPictures } from '/static/pictures.js';
@@ -3341,7 +3341,9 @@
                         const how = body.regenerated ? `${ref} regenerated`
                             : body.compiled_from ? `${ref} compiles as the variant already rendered, nothing rendered`
                             : `${ref} from the cache, nothing rendered`;
-                        if (body.draft) return `${how} from its edited SCAD: an applied variant, not saved; Part › Save keeps it in git`;
+                        // Its own text with other values in it is its numbers applied, said so.
+                        const numbers = this.partStages[target.key]?.tied && this.valuesOnly(target, body.sentScad);
+                        if (body.draft && !numbers) return `${how} from its edited SCAD: an applied variant, not saved; Part › Save keeps it in git`;
                         return variant ? `${how}: an applied variant, not saved` : `${how}: drawn as saved`;
                     },
                 };
@@ -4684,10 +4686,23 @@
                 const variant = body.saved ? null : body.variant;
                 stage.history ??= this.readHistory(target.key);
                 if (stage.history[0] && stage.history[0].variant === variant) return;
-                stage.history.unshift({ variant, params: JSON.parse(JSON.stringify(params)), draft: Boolean(body.draft), measured: body.measured ?? null, at: Date.now() });
+                // A tied part's text differing from its own in its values alone is its numbers,
+                // not an edit of its SCAD: the list says the numbers.
+                const edited = Boolean(body.draft) && !(stage.tied && this.valuesOnly(target, body.sentScad));
+                stage.history.unshift({ variant, params: JSON.parse(JSON.stringify(params)), draft: edited, measured: body.measured ?? null, at: Date.now() });
                 stage.history.length = Math.min(stage.history.length, HISTORY_KEEP);
                 // The tab's own: a reload lists them still.
                 try { sessionStorage.setItem(HISTORY_PREFIX + target.key, JSON.stringify(stage.history)); } catch (e) { /* listed until the page is left */ }
+            }
+
+            // Whether `text` is the part's own with other values in its assignments, and
+            // nothing else changed.
+            valuesOnly(target, text) {
+                const own = this.scadStages[target.key]?.own;
+                if (typeof text !== 'string' || typeof own !== 'string') return false;
+                const values = {};
+                for (const a of Object.values(lastOf(parseAssignments(text)))) if (!a.computed) values[a.name] = a.value;
+                try { return writeValues(own, values) === text; } catch (err) { return false; }
             }
 
             readHistory(key) {

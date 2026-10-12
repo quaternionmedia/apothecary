@@ -423,7 +423,8 @@ def _a_round(
 
     answer = _apply(page, from_the_ring)
     assert answer.ok, answer.text()
-    said = f"{PART} regenerated from its edited SCAD: an applied variant, not saved"
+    # Its own text with another size in it: its numbers applied, said so.
+    said = f"{PART} regenerated: an applied variant, not saved"
     expect(_status(page)).to_contain_text(said, timeout=60000)
     settled(page)
     assert _side(page) == pytest.approx(side, abs=0.05)

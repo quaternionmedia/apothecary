@@ -114,13 +114,9 @@ def test_apply_draws_what_it_rendered(page: Page, base_url: str, v_slot_as_it_wa
     expect(apply).to_be_enabled(timeout=10000)
 
     apply.click()
-    # Rendered now, or found in the variant cache from an earlier Apply of the same length:
-    # its text, the length written into it.
+    # Rendered now, or found in the variant cache from an earlier Apply of the same length.
     expect(page.locator("#status")).to_contain_text(
-        re.compile(
-            r"v_slot (regenerated|from the cache, nothing rendered) from its edited SCAD: "
-            r"an applied variant"
-        ),
+        re.compile(r"v_slot (regenerated|from the cache, nothing rendered): an applied variant"),
         timeout=60000,
     )
     page.evaluate("() => window.fractalViewer.waveDone")
