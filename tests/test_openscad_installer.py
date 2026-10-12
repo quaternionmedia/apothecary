@@ -1058,3 +1058,157 @@ def test_openscad_install_passes_jobs_through(tools, monkeypatch):
     assert seen["jobs"] == 3
     result = CliRunner().invoke(cli, ["openscad", "install", "--jobs", "0"])
     assert result.exit_code != 0
+
+
+# --- extracted for the fast start: install --extract ---------------------------------
+
+
+def _appimage_that_extracts(version: str) -> bytes:
+    """An AppImage that runs where it is (FUSE is there), extracts itself with
+    --appimage-extract, and mounts itself with --appimage-mount: it says where,
+    and waits to be stopped."""
+    return (
+        "#!/bin/sh\n"
+        'if [ "$1" = "--appimage-extract" ]; then\n'
+        "  mkdir -p squashfs-root/usr/bin\n"
+        f"  printf '#!/bin/sh\\necho \"OpenSCAD version {version}\" >&2\\n' > squashfs-root/AppRun\n"
+        "  chmod +x squashfs-root/AppRun\n"
+        "  chmod 700 squashfs-root\n"
+        "  exit 0\n"
+        "fi\n"
+        'if [ "$1" = "--appimage-mount" ]; then\n'
+        '  where=$(mktemp -d "${TMPDIR:-/tmp}/.mount_fakeXXXXXX")\n'
+        f'  printf \'#!/bin/sh\\necho "OpenSCAD version {version}" >&2\\n\' > "$where/AppRun"\n'
+        '  chmod +x "$where/AppRun"\n'
+        '  echo "$where"\n'
+        "  exec sleep 30\n"
+        "fi\n"
+        f'echo "OpenSCAD version {version}" >&2\n'
+    ).encode()
+
+
+def _host_that_extracts(dates=("2026.09.22", "2026.09.27")) -> Host:
+    host = Host(dates=dates)
+    for date in dates:
+        host.add(f"OpenSCAD-{date}-x86_64.AppImage", _appimage_that_extracts(date))
+    return host
+
+
+def test_extract_installs_the_appimage_extracted_though_it_could_mount(tools):
+    log = []
+    path = oi.SnapshotInstaller(fetch=_host_that_extracts(), log=log.append, extract=True).install()
+    home = tools / "2026.09.27"
+    assert path == home / "squashfs-root" / "AppRun" and oi.current_executable() == path
+    assert not (home / "openscad").exists()  # the image itself is not kept beside it
+    record = oi.read_manifest("2026.09.27")
+    assert (record["method"], record["extracted"]) == ("appimage-extracted", "asked")
+    assert any("--extract" in line for line in log)
+    assert _left_in(tools) == ["2026.09.27", "current"]
+
+
+def test_the_default_is_still_the_appimage(tools):
+    path = _install(_host_that_extracts())
+    assert path == tools / "2026.09.27" / "openscad"
+    assert oi.read_manifest("2026.09.27")["method"] == "appimage"
+
+
+def test_extract_extracts_an_install_already_made_fetching_nothing(tools, monkeypatch):
+    from apothecary.cli import cli
+
+    monkeypatch.delenv("APOTHECARY_OPENSCAD", raising=False)
+    monkeypatch.setattr(oi, "binary_archs", lambda path: ["x86_64"])
+    _install(_host_that_extracts(), snapshot="2026.09.27")
+    _install(_host_that_extracts(), snapshot="2026.09.22")  # current moves to the older
+    again = _host_that_extracts()
+    log = []
+    path = oi.SnapshotInstaller(
+        fetch=again, log=log.append, snapshot="2026.09.27", extract=True
+    ).install()
+    assert again.urls == []
+    home = tools / "2026.09.27"
+    assert path == home / "squashfs-root" / "AppRun" and oi.current_executable() == path
+    assert not (home / "openscad").exists()
+    record = oi.read_manifest("2026.09.27")
+    assert (record["method"], record["extracted"], record["archs"]) == (
+        "appimage-extracted",
+        "asked",
+        ["x86_64"],
+    )
+    assert _left_in(tools) == ["2026.09.22", "2026.09.27", "current"]
+    status = CliRunner().invoke(cli, ["openscad", "status"])
+    assert (
+        "AppImage extracted (--extract, for the fast start), run as squashfs-root/AppRun"
+        in status.output
+    )
+    # Asked again, there is nothing left to extract.
+    log.clear()
+    assert oi.SnapshotInstaller(log=log.append, snapshot="2026.09.27", extract=True).install() == (
+        path
+    )
+    assert any("Nothing to extract" in line for line in log)
+
+
+def test_extract_on_a_platform_that_installs_no_appimage_says_so(tools, mac):
+    host = Host()
+    host.add("OpenSCAD-2026.09.27.dmg", _disk_image("2026.09.27"))
+    log = []
+    path = oi.SnapshotInstaller(fetch=host, log=log.append, extract=True).install()
+    assert path.name == "OpenSCAD"
+    assert any("not an AppImage, so there is nothing to extract" in line for line in log)
+
+
+def test_openscad_install_passes_extract_through(tools, monkeypatch):
+    from apothecary.cli import cli
+
+    seen = {}
+
+    class Installer:
+        def __init__(self, **kwargs):
+            seen.update(kwargs)
+
+        def install(self):
+            return tools / "2026.09.27" / "squashfs-root" / "AppRun"
+
+    monkeypatch.setattr(oi, "SnapshotInstaller", Installer)
+    result = CliRunner().invoke(cli, ["openscad", "install", "--extract", "--min", "2021.01"])
+    assert result.exit_code == 0, result.output
+    assert seen["extract"] is True
+
+
+def test_an_appimage_is_known_by_its_magic(tmp_path):
+    image = tmp_path / "image"
+    image.write_bytes(b"\x7fELF\x02\x01\x01\x00AI\x02" + b"\0" * 64)
+    plain = tmp_path / "plain"
+    plain.write_bytes(b"\x7fELF\x02\x01\x01\x00" + b"\0" * 64)
+    assert oi.is_appimage(image) and not oi.is_appimage(plain)
+    assert not oi.is_appimage(tmp_path / "missing")
+
+
+def test_what_starting_an_appimage_costs_is_measured_through_its_mount(tmp_path, monkeypatch):
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    image = _script(tmp_path / "openscad", _appimage_that_extracts("2026.09.27").decode())
+    measured = oi.appimage_start(image, runs=3)
+    assert measured is not None and measured.runs == 3
+    assert measured.appimage > 0 and measured.extracted is not None and measured.extracted > 0
+    assert measured.saved == max(0.0, measured.appimage - measured.extracted)
+    gone = _script(tmp_path / "broken", "#!/bin/sh\nexit 1\n")
+    assert oi.appimage_start(gone, runs=1).extracted is None
+
+
+def test_check_says_how_much_faster_extracting_would_make_each_run(tools, monkeypatch):
+    from apothecary.cli import cli
+
+    monkeypatch.delenv("APOTHECARY_OPENSCAD", raising=False)
+    _install(_host_that_extracts())
+    monkeypatch.setattr(oi, "is_appimage", lambda path: True)
+    monkeypatch.setattr(oi, "appimage_start", lambda path, runs=3: oi.StartTimes(0.31, 0.06, runs))
+    result = CliRunner().invoke(cli, ["check"])
+    assert result.exit_code == 0, result.output
+    said = [line for line in result.output.splitlines() if "An AppImage" in line]
+    assert len(said) == 1, result.output
+    assert "0.31 s to start through the AppImage, 0.06 s from its files" in said[0]
+    assert "each run 0.25 s faster" in said[0]
+    assert "`apothecary openscad install --extract` extracts it" in said[0]
+    monkeypatch.setattr(oi, "is_appimage", lambda path: False)
+    result = CliRunner().invoke(cli, ["check"])
+    assert "An AppImage" not in result.output
