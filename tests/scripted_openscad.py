@@ -14,7 +14,9 @@ It reads the SCAD it is given, so a draft is answered by what is in it:
 - a render with a failed assertion exits 1 and writes nothing, as 2021.01
   does, or, as a snapshot does, writes its geometry and exits 0 (``partial``);
 - the CSG export (``--export-format=csg``) prints the text without its
-  comments and the ``-D`` definitions: what it compiled;
+  comments or echoes, and the ``-D`` definitions: what it compiled; an
+  ``echo("__apothecary_value__", "name", name);`` line has the name's value
+  (its expression read as Python arithmetic) echoed as OpenSCAD echoes it;
 - a render writes an ASCII STL whose name holds the sha256 of the text it
   rendered and the ``-D`` definitions, so a test can tell which text was drawn
   (``stl_names``); its help names no ``binstl``, so the cache turns it binary.
@@ -134,15 +136,45 @@ if fmt == "echo":
     for s in said:
         print(s)
     sys.exit(1 if unreadable else 0)
+def shown(value):
+    # A value as OpenSCAD's echo prints it.
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    if isinstance(value, str):
+        return '"' + value + '"'
+    if isinstance(value, list):
+        return "[" + ", ".join(shown(v) for v in value) + "]"
+    return repr(value)
+
+def evaluated(name):
+    # A top-level assignment's value: its expression, with the numbers assigned
+    # before it (and -D's), as Python reads arithmetic.
+    known = {{}}
+    for m in re.finditer(r"^(\$?\w+)\s*=\s*([^;]+);", text, re.M):
+        key, expr = m.group(1), m.group(2).strip()
+        try:
+            known[key] = value_of(key) if any(d.split("=", 1)[0] == key for d in defs) else eval(
+                expr.replace("true", "True").replace("false", "False"), {{"__builtins__": {{}}}}, dict(known)
+            )
+        except Exception:
+            known[key] = None
+    return known.get(name)
+
 if fmt == "csg":
-    # What it compiled: the text without its comments, and the -D values.
+    # What it compiled: the text without its comments or echoes, and the -D values;
+    # each echo of a value printed as OpenSCAD prints one.
     for s in said:
         print(s, file=sys.stderr)
     if unreadable:
         sys.exit(1)
+    for m in re.finditer(r'^echo\("(__apothecary_value__)", "(\$?\w+)", \$?\w+\);$', text, re.M):
+        print('ECHO: "%s", "%s", %s' % (m.group(1), m.group(2), shown(evaluated(m.group(2)))), file=sys.stderr)
     if not failed:
         bare = re.sub(r"/\*.*?\*/|//[^\n]*", "", text, flags=re.S)
-        print("\n".join(l.strip() for l in bare.splitlines() if l.strip()))
+        lines = [l.strip() for l in bare.splitlines() if l.strip()]
+        print("\n".join(l for l in lines if not l.startswith("echo(")))
         print("defined: " + json.dumps(defs))
     sys.exit(0)
 

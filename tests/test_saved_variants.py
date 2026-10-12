@@ -40,6 +40,13 @@ from apothecary.projects.parts.saved import (
 
 SCAD = "include <dims.scad>\nwidth = 34; // [10:100]\ncube([width, depth, 3]);\n"
 EDITED = SCAD.replace("cube([width, depth, 3])", "cube([width, depth, 9])")
+
+
+def wide(text: str, width) -> str:
+    """``text`` with its width set, as a save writes values into its text."""
+    return text.replace("width = 34;", f"width = {width};")
+
+
 PERSON = ("A Person", "person@example.invalid")
 
 
@@ -130,22 +137,19 @@ class TestASave:
         ref = "refs/apothecary/variants/block/wider"
         assert variant.ref == ref and git(checkout, "rev-parse", ref).strip() == variant.commit
         assert variant.parent == head == git(checkout, "rev-parse", f"{ref}^").strip()
-        assert git(checkout, "show", f"{ref}:parts/block/block.scad") == EDITED
-        record = json.loads(git(checkout, "show", f"{ref}:parts/block/block.variant.json"))
-        # And the commit it was first saved on, which its history runs back to.
-        assert record == {
-            "part": "block",
-            "variant": "wider",
-            "params": {"width": 50.0},
-            "base": head,
-        }
-        # The rest of the tree is HEAD's: the edit and its parameters are all it adds.
+        # Its values are in its text: the width sent is written into its line.
+        assert git(checkout, "show", f"{ref}:parts/block/block.scad") == wide(EDITED, 50)
+        # The rest of the tree is HEAD's: the text is all it adds, no file of parameters.
         changed = git(checkout, "diff", "--name-only", head, ref).split()
-        assert changed == ["parts/block/block.scad", "parts/block/block.variant.json"]
-        assert (variant.params, variant.merged, variant.scad_path) == (
-            {"width": 50.0},
+        assert changed == ["parts/block/block.scad"]
+        # Where its history begins, said in a sentence of its message.
+        message = git(checkout, "log", "-1", "--format=%B", variant.commit)
+        assert f"It was first saved on top of {head}." in message
+        assert (variant.params, variant.merged, variant.scad_path, variant.values_in) == (
+            {"width": 50},
             False,
             "parts/block/block.scad",
+            "text",
         )
 
     def test_its_author_is_the_checkouts_identity_and_it_has_no_trailer(self, checkout, block):
@@ -174,11 +178,11 @@ class TestASave:
         real = saved._message
         raced = []
 
-        def another_tab_saves_first(part, name, where):
+        def another_tab_saves_first(part, name, where, *rest):
             if not raced:
                 raced.append(True)
                 save_variant(block, "wider", SCAD + "// the other tab\n")
-            return real(part, name, where)
+            return real(part, name, where, *rest)
 
         monkeypatch.setattr(saved, "_message", another_tab_saves_first)
         with pytest.raises(Moved):
@@ -226,15 +230,16 @@ class TestListing:
         assert [v.name for v in found][0] == "thin" and {v.name for v in found} == {"wider", "thin"}
         assert found[0].commit == later.commit and found[0].scad is None
         one = read_saved(block, "wider")
-        assert one.scad == EDITED and one.params == {"width": 50}
+        assert one.scad == wide(EDITED, 50) and one.params == {"width": 50}
 
     def test_making_one_the_parts_source_is_a_merge_the_person_does(self, checkout, block):
         variant = save_variant(block, "wider", EDITED, {"width": 50})
         assert not read_saved(block, "wider").merged
-        # The person's own merge, with their own work put aside first.
+        # The person's own merge, with their own work put aside first: its values
+        # come with it, in its text.
         git(checkout, "stash", "-u", "-q")
         git(checkout, "merge", "-q", "--no-edit", variant.ref)
-        assert (checkout / "parts" / "block" / "block.scad").read_text() == EDITED
+        assert (checkout / "parts" / "block" / "block.scad").read_text() == wide(EDITED, 50)
         assert read_saved(block, "wider").merged
 
     def test_no_route_writes_the_working_tree(self):
@@ -260,7 +265,7 @@ class TestTheRoutes:
             ("wider", body["commit"], {"width": 50.0})
         ]
         one = client.get("/parts/block/saved/wider").json()
-        assert one["scad"] == EDITED and one["commit"] == body["commit"]
+        assert one["scad"] == wide(EDITED, 50) and one["commit"] == body["commit"]
         assert client.get("/parts/block/saved/narrower").status_code == 404
         assert client.get("/parts/block/saved/..%2Fx").status_code == 404
 
@@ -280,9 +285,9 @@ class TestTheRoutes:
     def test_a_variant_saved_meanwhile_is_a_409(self, checkout, block, monkeypatch):
         real = saved._message
 
-        def raced(part, name, where):
+        def raced(part, name, where, *rest):
             git(checkout, "update-ref", "refs/apothecary/variants/block/wider", "HEAD")
-            return real(part, name, where)
+            return real(part, name, where, *rest)
 
         monkeypatch.setattr(saved, "_message", raced)
         r = TestClient(app).post("/parts/block/saved", json={"name": "wider", "scad": EDITED})
@@ -330,18 +335,20 @@ class TestWhatEachChanges:
 
 
 class TestWhereItsParametersAreKept:
-    """Beside its SCAD for now; the part's own description is the aim, a stub until then."""
+    """In its text (decided 2026-10-12); the part's own description a stub."""
 
-    def test_beside_its_scad_is_built_and_the_description_is_a_stub(self):
+    def test_its_text_is_built_and_the_description_is_a_stub(self):
         assert [(k.id, k.stub) for k in KEPT_IN] == [
-            ("variant-file", False),
+            ("text", False),
             ("part-description", True),
         ]
-        assert keeping("variant-file").id == "variant-file"
+        assert keeping("text").id == "text"
         with pytest.raises(NotBuilt, match="stub, not built yet .what it will do: .*part.json"):
             keeping("part-description")
-        with pytest.raises(ValueError, match="no place"):
-            keeping("somewhere")
+        # The file beside its SCAD is no place to keep them any more.
+        for gone in ("somewhere", "variant-file"):
+            with pytest.raises(ValueError, match="no place"):
+                keeping(gone)
 
     def test_saving_into_the_stub_is_refused_saying_what_it_will_do(self, checkout, block):
         with pytest.raises(NotBuilt):
@@ -371,7 +378,7 @@ class TestAnotherRepositoryToSaveInto:
         variant = save_variant(block, "wider", EDITED, {"width": 50})
         assert _as_it_stands(checkout) == before
         assert git(checkout, "for-each-ref", "refs/apothecary/") == ""
-        assert git(clone, "show", f"{variant.ref}:parts/block/block.scad") == EDITED
+        assert git(clone, "show", f"{variant.ref}:parts/block/block.scad") == wide(EDITED, 50)
         assert variant.parent == git(checkout, "rev-parse", "HEAD").strip()
         assert [v.name for v in list_saved(block)] == ["wider"]
         assert saved_names(block) == ["wider"]
@@ -389,7 +396,7 @@ def test_git_is_told_to_fetch_nothing_and_to_prompt_for_nothing(monkeypatch):
 
 
 class TestTheMergeAdvice:
-    def test_it_names_the_checkout_and_says_the_parameters_are_not_applied(
+    def test_it_names_the_checkout_and_says_a_merge_applies_its_values(
         self, checkout, block, monkeypatch
     ):
         from apothecary.projects.parts import skeleton
@@ -399,11 +406,35 @@ class TestTheMergeAdvice:
         assert variant.repository == "." and variant.kind == "scad"
         merge = variant.merge
         assert merge.repository == merge.checkout == "."
-        assert merge.commands == [f"git merge {variant.ref}"] and merge.applies_params is False
-        assert "does not apply the variant's parameters" in merge.advice
-        assert "block.variant.json, which nothing reads" in merge.advice
+        assert merge.commands == [f"git merge {variant.ref}"] and merge.applies_params is True
+        assert "its values with it: they are its assignments" in merge.advice
         listed = TestClient(app).get("/parts/block/saved").json()[0]
         assert listed["merge"] == merge.model_dump() and listed["repository"] == "."
+
+    def test_one_saved_before_says_a_merge_would_not_apply_its_file(
+        self, checkout, block, monkeypatch
+    ):
+        """A variant saved before the text was the truth: its values in its
+        .variant.json. Served, they are written into its SCAD; merged, they would
+        not be, and the advice says so."""
+        from apothecary.projects.parts import skeleton
+
+        monkeypatch.setattr(skeleton, "ROOT", checkout)
+        _an_old_save(checkout, "wider", EDITED, {"width": 50})
+        old = read_saved(block, "wider")
+        assert (old.values_in, old.params, old.scad) == (
+            "variant-file",
+            {"width": 50},
+            wide(EDITED, 50),
+        )
+        assert old.merge.applies_params is False
+        assert "block.variant.json, which a merge does not apply" in old.merge.advice
+        # Saved again, its values are in its text and the file goes.
+        again = save_variant(block, "wider", old.scad)
+        assert again.values_in == "text" and again.merge.applies_params is True
+        tree = git(checkout, "ls-tree", "-r", "--name-only", again.ref)
+        assert "parts/block/block.variant.json" not in tree.split()
+        assert [c.params for c in saved.variant_history(block, "wider")] == [{"width": 50}] * 2
 
     def test_a_ref_in_another_repository_is_fetched_first_and_named(
         self, checkout, block, tmp_path, monkeypatch
@@ -425,11 +456,42 @@ class TestTheMergeAdvice:
         assert variant.merge.advice.startswith(
             f"The ref is in {clone.resolve()}, not this checkout"
         )
-        # The advice is true: fetched and merged as it says, the edit is the part's.
+        # The advice is true: fetched and merged as it says, the edit is the part's,
+        # its values with it.
         git(checkout, "stash", "-u", "-q")
         for command in variant.merge.commands:
             git(checkout, *command.split()[1:])
-        assert (checkout / "parts" / "block" / "block.scad").read_text() == EDITED
+        assert (checkout / "parts" / "block" / "block.scad").read_text() == wide(EDITED, 50)
+
+
+def _an_old_save(repo: Path, name: str, scad: str, params: dict) -> str:
+    """A variant as a save made one before the text was the truth: the SCAD as
+    given, its parameters beside it in block.variant.json. Its commit."""
+    record = json.dumps({"part": "block", "variant": name, "params": params}, indent=2) + "\n"
+    scad_blob = git(repo, "hash-object", "-w", "--stdin", input=scad).strip()
+    json_blob = git(repo, "hash-object", "-w", "--stdin", input=record).strip()
+    folder = (
+        f"100644 blob {scad_blob}\tblock.scad\n"
+        f"100644 blob {json_blob}\tblock.variant.json\n"
+        + "".join(
+            line + "\n"
+            for line in git(repo, "ls-tree", "HEAD:parts/block").splitlines()
+            if not line.endswith(("\tblock.scad", "\tblock.variant.json"))
+        )
+    )
+    sub = git(repo, "mktree", input=folder).strip()
+    parts = git(repo, "mktree", input=f"040000 tree {sub}\tblock\n").strip()
+    root = "".join(
+        line + "\n"
+        for line in git(repo, "ls-tree", "HEAD").splitlines()
+        if not line.endswith("\tparts")
+    )
+    tree = git(repo, "mktree", input=root + f"040000 tree {parts}\tparts\n").strip()
+    commit = git(
+        repo, "commit-tree", tree, "-p", "HEAD", "-m", f"block is saved as the variant {name}"
+    ).strip()
+    git(repo, "update-ref", f"refs/apothecary/variants/block/{name}", commit)
+    return commit
 
 
 # --- a part inside a submodule: an overlay in the checkout's ref -------------------------
@@ -455,6 +517,8 @@ def superproject(tmp_path) -> Path:
     git(repo, "config", "user.name", PERSON[0])
     git(repo, "config", "user.email", PERSON[1])
     (repo / "parts" / "thing" / "README.md").write_text("A thing.\n")
+    # As this checkout's own: a draft beside a part's file is never one to commit.
+    (repo / ".gitignore").write_text("parts/**/.*.draft.scad\n")
     git(
         repo,
         "-c",
@@ -497,13 +561,11 @@ class TestAPartInASubmodule:
         assert variant.upstream == "parts/thing/upstream/lib.scad"
         overlay = git(superproject, "show", f"{ref}:parts/thing/lib.overlay.scad")
         assert "include <upstream/lib.scad>\n" in overlay and overlay.endswith("size = 20;\n")
-        record = json.loads(git(superproject, "show", f"{ref}:parts/thing/lib.variant.json"))
-        assert record["params"] == {"size": 20}
-        # The commit adds the overlay and its values; the submodule's pin is HEAD's.
+        assert variant.params == {"size": 20}
+        # The commit adds the overlay, its values in it; the submodule's pin is HEAD's.
         head = before["HEAD"].strip()
         assert git(superproject, "diff", "--name-only", head, ref).split() == [
             "parts/thing/lib.overlay.scad",
-            "parts/thing/lib.variant.json",
         ]
         assert "submodule" in variant.merge.advice and "not changed" in variant.merge.advice
         assert "does not apply" not in variant.merge.advice
@@ -522,30 +584,47 @@ class TestAPartInASubmodule:
         r = client.post("/parts/thing/saved", json={"name": "big", "params": {"size": 30}})
         assert r.status_code == 201, r.text
         body = r.json()
-        assert (body["kind"], body["params"]) == ("overlay", {"size": 30.0})
+        assert (body["kind"], body["params"]) == ("overlay", {"size": 30})
         one = client.get("/parts/thing/saved/big").json()
-        assert one["scad"].endswith("size = 30.0;\n") and one["upstream"].endswith("lib.scad")
+        assert one["scad"].endswith("size = 30;\n") and one["upstream"].endswith("lib.scad")
         listed = client.get("/parts/thing/saved", params={"diff": "true"}).json()
-        assert "+size = 30.0;" in listed[0]["diff"]
+        assert "+size = 30;" in listed[0]["diff"]
 
-    def test_a_draft_beside_it_is_ignored_by_the_submodule_in_its_own_exclude(
+    def test_the_overlay_the_editor_holds_is_saved_as_it_is(self, superproject, thing):
+        from apothecary.projects.parts.texts import own_text
+
+        text = own_text(thing) + "size = 12; // the editor's line\n"
+        variant = save_variant(thing, "edited", text)
+        assert git(superproject, "show", f"{variant.ref}:{variant.scad_path}") == text
+        assert variant.params == {"size": 12}
+
+    def test_a_draft_of_it_is_written_beside_its_overlay_outside_the_submodule(
+        self, superproject, thing
+    ):
+        from apothecary.projects.parts import drafts
+
+        module = superproject / "parts" / "thing" / "upstream"
+        with drafts.written_beside(thing, "cube(1);\n") as path:
+            assert path.parent == superproject / "parts" / "thing" and path.exists()
+            assert git(module, "status", "--porcelain", "--untracked-files=all") == ""
+            assert git(superproject, "status", "--porcelain", "--untracked-files=all") == ""
+
+    def test_a_draft_beside_a_file_in_a_submodule_is_ignored_in_its_own_exclude(
         self, superproject, thing
     ):
         from apothecary.projects.parts import drafts
 
         module = superproject / "parts" / "thing" / "upstream"
         tracked = git(module, "ls-files")
-        with drafts.written_beside(thing, "cube(1);\n") as path:
-            assert path.parent == module and path.exists()
-            assert git(module, "status", "--porcelain", "--untracked-files=all") == ""
-            assert git(superproject, "status", "--porcelain", "--untracked-files=all") == ""
+        assert drafts.ignored_in_its_submodule(module) is not None
+        (module / ".lib.0123.draft.scad").write_text("cube(1);\n")
+        assert git(module, "status", "--porcelain", "--untracked-files=all") == ""
         where = git(module, "rev-parse", "--absolute-git-dir").strip()
         exclude = Path(where) / "info" / "exclude"
         assert drafts.DRAFT_PATTERN in exclude.read_text().splitlines()
         assert git(module, "ls-files") == tracked and not (module / ".gitignore").exists()
         drafts._EXCLUDED.clear()  # asked again, it is not written twice
-        with drafts.written_beside(thing, "cube(2);\n"):
-            pass
+        drafts.ignored_in_its_submodule(module)
         assert exclude.read_text().splitlines().count(drafts.DRAFT_PATTERN) == 1
 
     def test_a_part_that_is_in_no_submodule_writes_no_exclude(self, checkout, block):
@@ -787,7 +866,9 @@ class TestCompare:
             "/parts/block/compare", params={"a": "@part", "b": f"@{key}", "measure": "false"}
         ).json()
         assert (body["a"]["kind"], body["b"]["kind"]) == ("part", "cached")
-        assert body["diff"] == "" and body["params"] == [{"name": "width", "a": None, "b": 60.0}]
+        # Applied, its value is in its text: the diff is that line.
+        assert "-width = 34; // [10:100]\n+width = 60; // [10:100]" in body["diff"]
+        assert body["params"] == [{"name": "width", "a": None, "b": 60}]
         assert body["a"]["measured"] is None
         body = client.get("/parts/block/compare", params={"a": "@part", "b": "wider"}).json()
         assert "+cube([width, depth, 9]);" in body["diff"]

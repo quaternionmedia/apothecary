@@ -54,13 +54,14 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
+from ..projects.parts.assignments import Assignment, differences
 from ..projects.parts.base import BasePart
 from ..projects.parts.customizer import (
     INSTALL_HINT,
     lists_parameters,
     merged,
+    part_check,
     scad_fields,
-    without_initial,
 )
 from ..projects.parts.drafts import (
     DRAFT_LIMIT,
@@ -78,11 +79,9 @@ from ..projects.parts.params import (
     FieldError,
     ParamField,
     params_spec,
-    validate_staged,
 )
 from ..projects.parts.saved import (
     KEEP_DEFAULT,
-    KIND_OVERLAY,
     GitError,
     Moved,
     NoSuchVariant,
@@ -105,14 +104,20 @@ from ..projects.parts.saved import (
     variant_history,
 )
 from ..projects.parts.stl_renderer import SUPERSEDED, get_renderer, part_renderer, runs_for
+from ..projects.parts.texts import (
+    ValueCheck,
+    as_edited,
+    assignments_of,
+    check_values,
+    is_overlaid,
+    own_text,
+    with_params,
+)
 from ..projects.parts.variants import (
     first_error,
     make_variant,
     read_variant_draft,
-    same_text,
-    without_defaults,
 )
-from ..projects.parts.variants import wants as request_wants
 
 router = APIRouter(tags=["parts"])
 
@@ -148,11 +153,18 @@ def _openscad_or_503() -> None:
 
 
 class DraftRequest(BaseModel):
-    """A part's SCAD as the page holds it, and the parameters staged on it."""
+    """A part's text as the page holds it: its values are in it."""
 
-    scad: str = Field(..., max_length=DRAFT_LIMIT, description="The whole SCAD, as edited")
+    scad: str = Field(
+        ...,
+        max_length=DRAFT_LIMIT,
+        description="The whole text, as edited: the part's SCAD, or for a part in a "
+        "submodule its overlay",
+    )
     params: Dict[str, Any] = Field(
-        default_factory=dict, description="Parameter values staged in the editor's controls"
+        default_factory=dict,
+        description="Values on the side, from a caller before the text was the truth: "
+        "written into the text first (the answer's text says how)",
     )
     editor_version: Optional[Union[int, Annotated[str, Field(max_length=64)]]] = Field(
         None,
@@ -178,8 +190,23 @@ class DraftCheck(BaseModel):
     listed: bool = Field(description="OpenSCAD listed the parameters the draft declares")
     with_values: bool = Field(
         False,
-        description="OpenSCAD also evaluated it with the staged params as -D; their "
-        "errors are in messages",
+        description="OpenSCAD also compiled it (the CSG export), as a render would: what "
+        "it said is in messages, each computed assignment's value in assignments",
+    )
+    kind: str = Field(
+        "source", description='"source": the part\'s SCAD; "overlay": a part in a submodule'
+    )
+    assignments: List[Assignment] = Field(
+        default_factory=list,
+        description="The text's top-level assignments, with where each value stands: what "
+        "the page's controls are, and rewrite",
+    )
+    values: List[ValueCheck] = Field(
+        default_factory=list,
+        description="Each value the text gives, as the part's model (or listing) checks it",
+    )
+    text: Optional[str] = Field(
+        None, description="The text checked, where params were written into it; else null"
     )
     messages: List[OpenSCADMessage] = Field(default_factory=list)
     source: Optional[str] = Field(
@@ -194,37 +221,124 @@ class DraftCheck(BaseModel):
     )
 
 
+def the_text(
+    api, part: BasePart, scad: Optional[str], params, renderer=None, lenient: bool = False
+) -> str:
+    """The text a request means (``texts.as_edited``: a part in a submodule's is
+    its overlay, an edit of its upstream file a 403), with any ``params`` sent
+    on the side written into it -- checked as a render's are (422) -- so there
+    is one path. ``lenient`` (a check): a value its checks refuse is written in
+    as it came, for the check of the text to say why."""
+    try:
+        text = as_edited(part, scad)
+    except UpstreamEdit as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from None
+    if not params:
+        return text
+    listing = None
+    if part.params_model is None:
+        renderer = renderer or part_renderer(part)
+        if renderer.is_available and lists_parameters(renderer.openscad_path):
+            listing = _listing_for(part, text, renderer)
+    # Their names are checked against the text's -- an overlay's, its upstream's.
+    names_from = None if is_overlaid(part) else text
+    try:
+        overrides = api.checked_overrides(part, params, listing, scad_text=names_from)
+    except HTTPException:
+        if not lenient:
+            raise
+        return _written_as_they_came(part, text, params)
+    return with_params(part, text, overrides)
+
+
+def _written_as_they_came(part: BasePart, text: str, params: Dict[str, Any]) -> str:
+    """``params`` written into ``text`` unchecked: a number sent as text read as
+    one, and anything no SCAD literal carries left out."""
+    raw: Dict[str, Any] = {}
+    for key, value in params.items():
+        if isinstance(value, str):
+            try:
+                value = float(value) if "." in value or "e" in value.lower() else int(value)
+            except ValueError:
+                pass
+        raw[key] = value
+    try:
+        return with_params(part, text, raw)
+    except (TypeError, ValueError):
+        written = text
+        for key, value in raw.items():
+            try:
+                written = with_params(part, written, {key: value})
+            except (TypeError, ValueError):
+                continue
+        return written
+
+
+def _listing_for(part: BasePart, text: str, renderer, cancel=None):
+    """What the customizer lists for ``text``: for an overlay, its upstream's."""
+    if is_overlaid(part):
+        return part_check(part, renderer).parameters
+    return check_draft(part, text, renderer, cancel).parameters
+
+
+def _filled(assignments: List[Assignment], compiled) -> List[Assignment]:
+    """Each computed assignment with the value its compile evaluated it to."""
+    if compiled is None:
+        return assignments
+    out = []
+    for a in assignments:
+        if a.computed and a.name in compiled.printed:
+            a = a.model_copy(
+                update={
+                    "value": compiled.evaluated.get(a.name),
+                    "value_known": a.name in compiled.evaluated,
+                    "printed": compiled.printed[a.name],
+                }
+            )
+        out.append(a)
+    return out
+
+
 @router.post("/parts/{name}/draft/check", response_model=DraftCheck)
 def check_part_draft(name: str, body: DraftRequest, page: Optional[str] = PAGE):
-    """A draft of the part's SCAD, evaluated by OpenSCAD and not rendered.
+    """A draft of the part's text, evaluated by OpenSCAD and not rendered.
 
-    The draft is written beside the part for the one run, so its includes
-    resolve, and removed after. ``messages`` are what OpenSCAD said, by line
-    of the draft (they name the part's SCAD). ``fields`` are what an editor
-    builds its controls from: the part's model's, or, for a part without one,
-    the parameters the draft declares, where the OpenSCAD lists them
-    (``listed``; 2021.01 cannot, and ``note`` says so). ``params`` are checked
-    against them. A newer check from the same ``page`` stops this one (409).
-    A part built by Python geometry is a 403: its SCAD is generated.
+    The text is the truth: its values are what it assigns, and nothing is
+    passed on the side. ``params``, where a caller still sends them, are
+    written into it first, and ``text`` is then what was checked. Two runs at
+    once, written beside where the text stands so its includes resolve: the
+    parameter export (or the echo export, on 2021.01) and the CSG export, which
+    compiles it as a render would and echoes each computed assignment's value
+    after it. ``messages`` are what both said, by line of the text.
 
-    The staged ``params`` are evaluated too, as ``-D`` (``with_values``): the
-    parameter export leaves out what ``-D`` sets, so a second run, the CSG
-    export, has them, at the same time for a part with a model and after the
-    listing for one without. An error only those values reach is in
-    ``messages`` and makes the draft not ``valid``."""
+    ``assignments`` are its top-level assignments, each with its value (a
+    computed one's as OpenSCAD evaluated it), its line and its value's span:
+    what the page builds its controls from and rewrites (the grammar is
+    apothecary/projects/parts/assignments.py's). For a part in a submodule the
+    text is its overlay: its own assignments, then each upstream parameter it
+    does not set (``set`` false). ``values`` are those values checked by the
+    part's model -- a range, a type, a whole number -- or against what its
+    SCAD's customizer lists, each with its field and why it is refused; a
+    refused one makes the draft not ``valid``. ``fields`` are the model's, or
+    the customizer's listing. A newer check from the same ``page`` stops this
+    one (409). A part built by Python geometry is a 403: its SCAD is generated,
+    and its controls drive its model."""
     api = _api()
     part = _editable(name)
     _openscad_or_503()
     renderer = part_renderer(part)
-    digest = draft_digest(body.scad)
+    text = the_text(api, part, body.scad, body.params, renderer, lenient=True)
+    digest = draft_digest(text)
     slot = f"{page}#check" if page else None
     cancel = api._page_renders.begin(part.name, slot, digest)
     try:
         with runs_for(part.name, page):
-            check, compiled, staged = _check_with_values(api, part, body, renderer, cancel)
+            check, compiled = check_and_compile(part, text, {}, renderer, cancel)
+            overlaid = is_overlaid(part)
+            listing = part_check(part, renderer).parameters if overlaid else check.parameters
     finally:
         api._page_renders.end(part.name, slot, cancel)
-    if check.cancelled or (compiled is not None and compiled.cancelled):
+    if check.cancelled or compiled.cancelled:
         raise HTTPException(
             status_code=409,
             detail={
@@ -238,75 +352,101 @@ def check_part_draft(name: str, body: DraftRequest, page: Optional[str] = PAGE):
     if part.params_model is not None:
         fields, source = params_spec(part).fields, FROM_MODEL
     else:
-        listing = check.parameters
-        fields = scad_fields(listing, text=body.scad) if listing else []
+        shown = part.source_file.read_text(encoding="utf-8") if overlaid else text
+        fields = scad_fields(listing, text=shown) if listing else []
         source = FROM_CUSTOMIZER if listing else None
         if not check.lists:
             note = f"{check.openscad} cannot list the draft's parameters ({INSTALL_HINT})"
     if check.error_message:
         note = check.error_message if note is None else f"{check.error_message}; {note}"
-    with_values = compiled is not None and compiled.openscad is not None
+    with_values = compiled.openscad is not None
     messages = merged(check.messages, compiled.messages) if with_values else check.messages
     said_error = any(m.level == "error" for m in messages)
+    checked = check_values(
+        part, text, compiled.evaluated, listing if part.params_model is None else None
+    )
+    params = (
+        jsonable_encoder(checked.model_params)
+        if part.params_model is not None
+        else {v.name: v.value for v in checked.values if v.valid}
+    )
     return DraftCheck(
         part=part.name,
         draft=digest,
-        edited=not same_text(part.source_file, body.scad),
-        valid=check.ok and not said_error and staged.valid,
+        edited=text != own_text(part),
+        valid=check.ok and not said_error and checked.valid,
         checked_by=check.how,
         openscad=check.openscad,
-        listed=check.parameters is not None,
+        listed=listing is not None,
         with_values=with_values,
+        kind="overlay" if overlaid else "source",
+        assignments=_filled(assignments_of(part, text), compiled),
+        values=checked.values,
+        text=text if text != body.scad else None,
         messages=messages,
         source=source,
         fields=fields,
-        params=staged.params,
-        errors=staged.errors,
+        params=params,
+        errors=checked.errors,
         note=note,
         editor_version=body.editor_version,
     )
 
 
-def _check_with_values(api, part: BasePart, body: DraftRequest, renderer, cancel):
-    """(check, compile, staged): the draft's check, its compile with the staged
-    values (None where they are not valid, or the draft does not read), and the
-    staged values checked. A part with a model has the two runs at once; one
-    without has its listing first, which its values are checked against."""
-    compiled = None
-    if part.params_model is not None:
-        staged = validate_staged(part, body.params)
-        if not staged.valid:
-            return check_draft(part, body.scad, renderer, cancel), None, staged
-        definitions = model_definitions(part, body.params)
-        check, compiled = check_and_compile(part, body.scad, definitions, renderer, cancel)
-        return check, compiled, staged
-    check = check_draft(part, body.scad, renderer, cancel)
-    listing = check.parameters
-    staged = api.validate_without_model(part, body.params, listing, scad_text=body.scad)
-    if staged.valid and check.ok and not check.cancelled:
-        definitions = scad_definitions_of(part, staged.params, listing)
-        compiled = compile_draft(part, body.scad, definitions, renderer, cancel)
-    return check, compiled, staged
-
-
-def model_definitions(part: BasePart, params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """What ``-D`` gets for a staged set of a part with a model: its overrides as
-    the model takes them, less its defaults, as the SCAD names them. {} for a
-    set the model refuses (it is refused before anything runs)."""
+def render_text(
+    api,
+    name: str,
+    part: BasePart,
+    text: str,
+    force: bool,
+    page: Optional[str],
+    editor_version=None,
+    sent: Optional[str] = None,
+):
+    """A part's text rendered into the variant cache, as generate and a draft's
+    render answer it: its values checked first (a refused one is a 422 saying
+    which and why), nothing passed on the side. A newer request from the same
+    ``page`` stops this one wherever it is (409)."""
+    renderer = part_renderer(part)
+    cancel = api._page_renders.begin(part.name, page, f"{force}\0{draft_digest(text)}")
     try:
-        return part.scad_overrides(without_defaults(part, part.validate_overrides(params)))
-    except ValueError:
-        return {}
-
-
-def scad_definitions_of(
-    part: BasePart, values: Dict[str, Any], listing: Optional[List[Dict[str, Any]]]
-) -> Dict[str, Any]:
-    """What ``-D`` gets for a checked set of a part without a model: the values
-    its SCAD does not already assign."""
-    if listing is not None:
-        return without_initial(listing, values)
-    return dict(values)
+        with runs_for(part.name, page):
+            listing = None
+            if part.params_model is None and lists_parameters(renderer.openscad_path):
+                if is_overlaid(part):
+                    listing = part_check(part, renderer).parameters
+                else:
+                    listed = check_draft(part, text, renderer, cancel)
+                    if listed.cancelled:
+                        raise HTTPException(
+                            status_code=409,
+                            detail={
+                                "message": SUPERSEDED,
+                                "superseded": True,
+                                "editor_version": editor_version,
+                            },
+                        )
+                    listing = listed.parameters
+            checked = check_values(part, text, None, listing)
+            if not checked.valid:
+                raise HTTPException(
+                    status_code=422,
+                    detail="; ".join(f"{e.field}: {e.message}" for e in checked.errors),
+                )
+            made = make_variant(part, {}, force=force, cancel=cancel, draft=text)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    finally:
+        api._page_renders.end(part.name, page, cancel)
+    return api.made_answer(
+        name,
+        part,
+        made,
+        checked.model_params,
+        editor_version,
+        shown_params=differences(text, own_text(part)),
+        text=text if sent is not None and text != sent else None,
+    )
 
 
 @router.post("/parts/{name}/draft/render")
@@ -316,46 +456,24 @@ def render_part_draft(
     force: bool = Query(False, description="Render even what the cache already has"),
     page: Optional[str] = PAGE,
 ):
-    """A draft of the part's SCAD rendered into the variant cache, with ``params``.
+    """A draft of the part's text rendered into the variant cache.
 
     Answered as ``POST /parts/{name}/stl/generate`` answers, ``draft`` the
-    sha256 of the text (None when it is the part's SCAD as it is on disk, which
-    is then the part). The draft is written beside the part for the one run;
-    the part's own SCAD and STL are never touched. ``params`` are checked
-    against the part's model, or what the draft declares (422). OpenSCAD's
-    errors come back by line in a 422, as Apply's do; a newer request from
-    the same ``page`` stops this one (409). A part built by Python geometry is
-    a 403."""
+    sha256 of the text (None when it is the part's own text, which is then the
+    part). The text carries its values: nothing is passed on the side, and
+    ``params``, where a caller still sends them, are written into it first
+    (the answer's ``text`` is then what was rendered). Its values are checked
+    by the part's model, or what its customizer lists (422). The draft is
+    written beside where the text stands for the one run -- for a part in a
+    submodule, where its overlay is -- and the part's own SCAD and STL are
+    never touched. OpenSCAD's errors come back by line in a 422, as Apply's do;
+    a newer request from the same ``page`` stops this one (409). A part built
+    by Python geometry is a 403."""
     api = _api()
     part = _editable(name)
     _openscad_or_503()
-    renderer = part_renderer(part)
-    # Asked for from here on, so a newer request from the page stops this one
-    # wherever it is: listing the draft's parameters, waiting its turn, rendering.
-    wants = f"{request_wants(body.params, force)}\0{draft_digest(body.scad)}"
-    cancel = api._page_renders.begin(part.name, page, wants)
-    try:
-        with runs_for(part.name, page):
-            listing = None
-            if part.params_model is None and lists_parameters(renderer.openscad_path):
-                listed = check_draft(part, body.scad, renderer, cancel)
-                if listed.cancelled:
-                    raise HTTPException(
-                        status_code=409,
-                        detail={
-                            "message": SUPERSEDED,
-                            "superseded": True,
-                            "editor_version": body.editor_version,
-                        },
-                    )
-                listing = listed.parameters
-            overrides = api.checked_overrides(part, body.params, listing, scad_text=body.scad)
-            made = make_variant(part, overrides, force=force, cancel=cancel, draft=body.scad)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from None
-    finally:
-        api._page_renders.end(part.name, page, cancel)
-    return api.made_answer(name, part, made, overrides, body.editor_version)
+    text = the_text(api, part, body.scad, body.params)
+    return render_text(api, name, part, text, force, page, body.editor_version, sent=body.scad)
 
 
 @router.get("/parts/{name}/variants/{variant}/scad", response_class=PlainTextResponse)
@@ -406,16 +524,19 @@ def download_part_draft(name: str, body: DraftRequest):
 
 
 class SaveRequest(BaseModel):
-    """A variant to save: its name, its SCAD and its parameters."""
+    """A variant to save: its name and its text, which carries its values."""
 
     name: str = Field(..., max_length=64, description="The variant's name, e.g. wider")
     scad: Optional[str] = Field(
         None,
         max_length=DRAFT_LIMIT,
-        description="The SCAD to save; omitted, the part's SCAD as it is on disk",
+        description="The text to save -- the part's SCAD, or for a part in a submodule "
+        "its overlay; omitted, the part's own",
     )
     params: Dict[str, Any] = Field(
-        default_factory=dict, description="The parameters the variant is drawn with"
+        default_factory=dict,
+        description="Values on the side, from a caller before the text was the truth: "
+        "written into the text first",
     )
     params_in: str = Field(
         KEEP_DEFAULT,
@@ -459,10 +580,10 @@ def get_saved_variant(name: str, variant: str):
 
 
 def refuse_a_failure(part: BasePart, text: str, overrides: Dict[str, Any]) -> None:
-    """A 422 for a variant that would be a failed render: its SCAD, compiled
-    with its values as ``-D``, makes OpenSCAD say an error. ``detail`` carries
-    what it said, by line, as a render's 422 does. Nothing is refused where no
-    OpenSCAD is installed to ask."""
+    """A 422 for a variant that would be a failed render: its text, compiled
+    (with ``overrides`` as ``-D``, where a caller has any), makes OpenSCAD say
+    an error. ``detail`` carries what it said, by line, as a render's 422
+    does. Nothing is refused where no OpenSCAD is installed to ask."""
     renderer = part_renderer(part)
     if not renderer.is_available:
         return
@@ -513,20 +634,20 @@ def save_part_variant(name: str, body: SaveRequest):
         check_name(body.name)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
-    text = body.scad
-    if text is None:
-        text = part.source_file.read_text(encoding="utf-8")
+    text = the_text(api, part, body.scad, body.params)
+    renderer = part_renderer(part)
     listing = None
-    if part.params_model is None:
-        renderer = part_renderer(part)
-        if renderer.is_available and lists_parameters(renderer.openscad_path):
-            listing = check_draft(part, text, renderer).parameters
-    overrides = api.checked_overrides(part, body.params, listing, scad_text=text)
-    refuse_a_failure(part, text, without_defaults(part, overrides))
-    try:
-        return save_variant(
-            part, body.name, text, without_defaults(part, overrides), kept_in=body.params_in
+    if part.params_model is None and renderer.is_available:
+        if lists_parameters(renderer.openscad_path):
+            listing = _listing_for(part, text, renderer)
+    checked = check_values(part, text, None, listing)
+    if not checked.valid:
+        raise HTTPException(
+            status_code=422, detail="; ".join(f"{e.field}: {e.message}" for e in checked.errors)
         )
+    refuse_a_failure(part, text, {})
+    try:
+        return save_variant(part, body.name, text, kept_in=body.params_in)
     except UpstreamEdit as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from None
     except (Moved, NotInGit) as exc:
@@ -709,46 +830,46 @@ class Comparison(BaseModel):
 
 
 def _side(part: BasePart, name: str, page: Optional[str], measure: bool):
-    """A side as asked for, and its SCAD's text: (Side, text, draft or None)."""
-    from ..projects.parts.variants import KEY_PATTERN, read_variant
+    """A side as asked for, and its text, values in it: (Side, text)."""
+    from ..projects.parts.variants import KEY_PATTERN, measured_box, read_variant
 
-    own = part.source_file.read_text(encoding="utf-8")
+    own = own_text(part)
     if name == "@part":
-        side, text, draft, params = Side(name=name, kind="part"), own, None, {}
+        side, text = Side(name=name, kind="part"), own
     elif name.startswith("@"):
         key = name[1:]
         record = read_variant(part, key) if KEY_PATTERN.match(key) else None
         if record is None:
             raise HTTPException(status_code=404, detail=f"No variant '{key}' is cached")
-        draft = read_variant_draft(part, key)
-        params = dict(record.get("params") or {})
-        side = Side(name=name, kind="cached", params=params, variant=key)
-        text = draft if draft is not None else own
-    else:
-        saved = _managed(lambda: read_saved(part, check_name(name)))
-        params = dict(saved.params)
+        text = read_variant_draft(part, key) or own
+        # A render from before the text was the truth had its values on the side.
+        text = with_params(part, text, dict(record.get("params") or {}))
         side = Side(
             name=name,
-            kind="saved",
-            commit=saved.commit,
-            scad_path=saved.scad_path,
-            params=params,
+            kind="cached",
+            variant=key,
+            stl_url=f"/parts/{part.name}/variants/{key}/stl",
+            measured=jsonable_encoder(measured_box(record.get("measured"))),
+            measured_from=record.get("measured_from"),
         )
+        side.params = differences(text, own)
+        return side, text
+    else:
+        saved = _managed(lambda: read_saved(part, check_name(name)))
+        side = Side(name=name, kind="saved", commit=saved.commit, scad_path=saved.scad_path)
         text = saved.scad or ""
-        # An overlay is the part's own SCAD with its values: that is what renders.
-        draft = None if saved.kind == KIND_OVERLAY or text == own else text
+    side.params = differences(text, own)
     if measure:
-        _measure(part, side, params, draft, page)
+        _measure(part, side, None if text == own else text, page)
     return side, text
 
 
-def _measure(part: BasePart, side: Side, params, draft: Optional[str], page) -> None:
+def _measure(part: BasePart, side: Side, draft: Optional[str], page) -> None:
     api = _api()
     try:
         with runs_for(part.name, page):
-            overrides = part.validate_overrides(params, scad_text=draft)
             # Only to measure: nothing is written beside the part.
-            made = make_variant(part, without_defaults(part, overrides), draft=draft, place=False)
+            made = make_variant(part, {}, draft=draft, place=False)
     except ValueError as exc:
         side.error = str(exc)
         return
@@ -771,9 +892,11 @@ def compare_variants(
     measure: bool = Query(True, description="Render each where it is not cached, to measure it"),
     page: Optional[str] = PAGE,
 ):
-    """Two variants side by side: a unified diff of a's SCAD to b's (for a part
-    in a submodule, their overlays), every parameter whose value differs (null:
-    not set on that side, so the default), and each one's measured bounds --
+    """Two variants side by side: a unified diff of a's text to b's (for a part
+    in a submodule, their overlays; a variant from before has its values
+    written in), every value whose text differs (by the names the SCAD uses;
+    null: that side sets nothing otherwise than the part), and each one's
+    measured bounds --
     from the variant cache, rendered (through the queue) where it is not there,
     with its ``stl_url`` to draw. A side that does not render says why
     (``error``). 404 for a side that is no variant."""

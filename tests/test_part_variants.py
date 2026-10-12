@@ -51,24 +51,29 @@ FACET = (
 
 def _scripted(path: Path, version: str, body: str = "") -> Path:
     """An `openscad` that reports ``version`` and logs its arguments to
-    ``<path>.calls``; a render runs ``body``, then writes an ASCII STL named for
-    its -D definitions (so each set is a different file; the cache keeps the
-    name in its binary STL's header) whose one facet measures 4 x 5 x 6 and,
-    when asked, a summary saying 10 x 20 x 30. It exports no CSG, so a render
-    is never matched to another by what it compiles."""
+    ``<path>.calls``, with the values it was given (``$vals``: each -D
+    definition, then each top-level ``name = number`` of the SCAD it renders,
+    the text's own); a render runs ``body``, then writes an ASCII STL named for
+    those values (so each set is a different file; the cache keeps the name in
+    its binary STL's header) whose one facet measures 4 x 5 x 6 and, when asked,
+    a summary saying 10 x 20 x 30. It exports no CSG, so a render is never
+    matched to another by what it compiles."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         "#!/bin/sh\n"
-        f'echo "$@" >> "{path}.calls"\n'
+        'vals=""; prev=""; last=""\n'
+        'for arg in "$@"; do [ "$prev" = -D ] && vals="$vals $arg"; prev="$arg"; last="$arg"; done\n'
+        'if [ -f "$last" ]; then\n'
+        "  vals=\"$vals $(grep -o '^[a-z_]* *= *[0-9.]*' \"$last\" | tr -d ' ' | tr '\\n' ' ')\"\n"
+        "fi\n"
+        f'echo "$@ :$vals" >> "{path}.calls"\n'
         f'[ "$1" = --version ] && echo "OpenSCAD version {version}" >&2 && exit 0\n'
         'case " $* " in *" --export-format=csg "*) exit 1;; esac\n'
         f"{body}\n"
-        'defs=""; prev=""\n'
-        'for arg in "$@"; do [ "$prev" = -D ] && defs="$defs $arg"; prev="$arg"; done\n'
         'for arg in "$@"; do case "$arg" in --summary-file=*)\n'
         '  printf \'{"geometry":{"bounding_box":{"min":[0,0,0],"max":[10,20,30],'
         '"size":[10,20,30]}}}\' > "${arg#--summary-file=}";; esac; done\n'
-        f'printf "solid%s\\n{FACET}\\nendsolid\\n" "$defs" > "$2"\n'
+        f'printf "solid%s\\n{FACET}\\nendsolid\\n" "$vals" > "$2"\n'
     )
     path.chmod(path.stat().st_mode | stat.S_IEXEC)
     return path
@@ -223,7 +228,8 @@ class TestMakingAVariant:
         back = make_variant(part, {})
         assert not back.rendered and back.stl_path.read_bytes() == default.stl_path.read_bytes()
         assert len(_renders(exe)) == 3
-        assert b"x=" not in part.get_stl_output_path().read_bytes()
+        stl = part.get_stl_output_path().read_bytes()
+        assert b"x=12" not in stl and b"x=14" not in stl
 
     def test_a_fresh_stl_of_the_parts_own_answers_without_a_render(self, tmp_path, openscad):
         exe = openscad()
@@ -451,7 +457,7 @@ class TestTheGenerateRoute:
         assert body["regenerated"] is True and body["variant"] and body["saved"] is False
         assert body["stl_url"] == f"/parts/calibration_cube/variants/{body['variant']}/stl"
         stl = client.get(body["stl_url"])
-        assert stl.status_code == 200 and b"size=12.0" in stl.content
+        assert stl.status_code == 200 and b"size=12 " in stl.content
         assert stl.headers["x-part-variant"] == body["variant"]
         assert not cube.exists()
         assert client.get("/parts/calibration_cube/stl").status_code == 404
@@ -467,7 +473,7 @@ class TestTheGenerateRoute:
         record = client.get(f"/parts/calibration_cube/variants/{body['variant']}")
         assert record.status_code == 200, record.text
         record = record.json()
-        assert record["params"] == {"size": 12.0} and record["stl_url"] == body["stl_url"]
+        assert record["params"] == {"size": 12} and record["stl_url"] == body["stl_url"]
         assert (record["measured"], record["measured_from"]) == (body["measured"], "summary")
         assert record["saved"] is False and record["backend"] == "manifold"
         missing = client.get("/parts/calibration_cube/variants/0123456789abcdef01234567")
@@ -559,11 +565,11 @@ class TestASupersededRender:
         raise AssertionError(f"no render with {text} started")
 
     def test_the_older_request_from_the_page_is_a_409(self, cube, openscad):
-        exe = openscad('case "$*" in *size=11.0*) exec sleep 30;; esac')
+        exe = openscad('case "$vals " in *"size=11 "*) exec sleep 30;; esac')
         client = TestClient(app)
         started = time.monotonic()
         thread, older = self._start(client, {"size": 11}, "page-1")
-        self._wait_for(exe, "size=11.0")
+        self._wait_for(exe, "size=11 ")
         newer = _generate(client, {"size": 12}, "page-1")
         thread.join(15)
         assert newer.status_code == 200, newer.text
@@ -573,10 +579,10 @@ class TestASupersededRender:
         assert api._page_renders.running() == 0
 
     def test_another_pages_request_does_not_stop_it(self, cube, openscad):
-        exe = openscad('case "$*" in *size=11.0*) sleep 1;; esac')
+        exe = openscad('case "$vals " in *"size=11 "*) sleep 1;; esac')
         client = TestClient(app)
         thread, first = self._start(client, {"size": 11}, "page-1")
-        self._wait_for(exe, "size=11.0")
+        self._wait_for(exe, "size=11 ")
         other = _generate(client, {"size": 12}, "page-2")
         thread.join(15)
         assert other.status_code == 200 and first["r"].status_code == 200
@@ -589,8 +595,8 @@ class TestASupersededRender:
         one.join(15)
         two.join(15)
         assert a["r"].status_code == b["r"].status_code == 200
-        assert b"size=11.0" in client.get(a["r"].json()["stl_url"]).content
-        assert b"size=13.0" in client.get(b["r"].json()["stl_url"]).content
+        assert b"size=11 " in client.get(a["r"].json()["stl_url"]).content
+        assert b"size=13 " in client.get(b["r"].json()["stl_url"]).content
 
 
 class TestTheStateRoute:

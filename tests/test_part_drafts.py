@@ -277,14 +277,32 @@ class TestTheCheckRoute:
     def test_it_answers_what_the_draft_declares_and_what_openscad_said(self, openscad, block):
         openscad()
         draft = SCAD.replace("hollow = true;", "hollow = true;\nlid = 2; // [1:5]")
-        r = _check(TestClient(app), draft, {"lid": 4, "width": "50"})
+        r = _check(TestClient(app), draft)
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["valid"] and body["edited"] and body["listed"]
         assert (body["checked_by"], body["source"]) == ("param", "customizer")
         assert body["draft"] == draft_digest(draft) and body["messages"] == []
         assert [f["name"] for f in body["fields"]] == ["width", "hollow", "lid"]
-        assert body["params"] == {"lid": 4.0, "width": 50.0} and body["note"] is None
+        # The values are the text's own, each checked against what it lists.
+        assert body["params"] == {"width": 34, "hollow": True, "lid": 2}
+        assert body["note"] is None and body["text"] is None
+        assert [(v["name"], v["valid"]) for v in body["values"]] == [
+            ("width", True),
+            ("hollow", True),
+            ("lid", True),
+        ]
+        lid = next(a for a in body["assignments"] if a["name"] == "lid")
+        assert (lid["value"], lid["line"], lid["min"], lid["max"]) == (2, 5, 1, 5)
+        assert draft[lid["from"] : lid["to"]] == "2"
+
+    def test_values_sent_on_the_side_are_written_into_the_text(self, openscad, block):
+        openscad()
+        draft = SCAD.replace("hollow = true;", "hollow = true;\nlid = 2; // [1:5]")
+        body = _check(TestClient(app), draft, {"lid": 4, "width": "50"}).json()
+        written = draft.replace("width = 34;", "width = 50;").replace("lid = 2;", "lid = 4;")
+        assert body["text"] == written and body["draft"] == draft_digest(written)
+        assert body["valid"] and body["params"] == {"width": 50, "hollow": True, "lid": 4}
 
     def test_what_is_wrong_with_it_is_said(self, openscad, block):
         openscad()
@@ -322,13 +340,17 @@ class TestTheRenderRoute:
         r = _render(client, draft, {"width": 50, "hollow": True})
         assert r.status_code == 200, r.text
         body = r.json()
-        assert body["draft"] == draft_digest(draft) and body["saved"] is False
-        assert body["params"] == {"width": 50.0}  # hollow is what the draft assigns
+        # The values sent on the side are written into the text, which is what renders.
+        written = draft.replace("width = 34;", "width = 50;")
+        assert body["text"] == written
+        assert body["draft"] == draft_digest(written) and body["saved"] is False
+        assert body["params"] == {"width": 50}  # hollow is what the draft assigns
         assert body["stl_url"] == f"/parts/block/variants/{body['variant']}/stl"
-        assert stl_names(client.get(body["stl_url"]).content).startswith(draft_digest(draft))
+        assert stl_names(client.get(body["stl_url"]).content).startswith(draft_digest(written))
+        assert '"width=' not in stl_names(client.get(body["stl_url"]).content)  # no -D
         record = client.get(f"/parts/block/variants/{body['variant']}").json()
         assert record["draft"] == body["draft"] and record["saved"] is False
-        assert client.get(record["scad_url"]).text == draft
+        assert client.get(record["scad_url"]).text == written
         assert len(renders(exe)) == 1 and _beside(block) == []
         assert block.source_file.read_text() == SCAD
 
@@ -350,12 +372,16 @@ class TestTheRenderRoute:
         assert r.status_code == 422 and "width" in r.json()["detail"]
         assert renders(exe) == []
 
-    def test_a_variant_of_the_parts_own_scad_has_no_draft_text(self, openscad, block):
+    def test_the_parts_own_text_has_no_draft_and_applied_values_have_one(self, openscad, block):
         openscad()
         client = TestClient(app)
+        own = client.post("/parts/block/stl/generate", json={"params": {}}).json()
+        assert own["draft"] is None and own["saved"] is True
+        # Apply's values are written into the part's text: a draft, served as text.
         body = client.post("/parts/block/stl/generate", json={"params": {"width": 50}}).json()
-        assert body["draft"] is None
-        assert client.get(f"/parts/block/variants/{body['variant']}/scad").status_code == 404
+        written = SCAD.replace("width = 34;", "width = 50;")
+        assert body["draft"] == draft_digest(written) and body["params"] == {"width": 50}
+        assert client.get(f"/parts/block/variants/{body['variant']}/scad").text == written
         assert client.get("/parts/block/variants/not-a-key/scad").status_code == 404
 
     def test_a_newer_render_from_the_page_stops_the_older(self, openscad, block):
