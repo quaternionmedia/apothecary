@@ -1504,6 +1504,14 @@
                 // not rendered or not saved, asks first; what this tab keeps of it, kept.
                 window.addEventListener('beforeunload', (e) => this.onLeaving(e));
                 window.addEventListener('resize', () => this.onResize());
+                // The world is as wide as the rail leaves it: a rail dragged wider,
+                // hidden, swapped or given a docked Machine, or a header that wraps,
+                // changes the canvas while the window stays as it was, so the canvas
+                // itself is watched and the camera's aspect follows it.
+                if (window.ResizeObserver) {
+                    this.canvasObserver = new ResizeObserver(() => this.onResize());
+                    this.canvasObserver.observe(this.canvas);
+                }
                 // What a board's Query answered in Selected, before it is pinned.
                 this.queryResult = null;
                 // The board model says what changed of a board, or that it scanned: every
@@ -1523,9 +1531,13 @@
             onResize() {
                 const width = this.canvas.clientWidth;
                 const height = this.canvas.clientHeight;
+                if (!width || !height) return;  // not laid out (hidden): keep the last size
+                // A window moved to a screen of another density changes this too.
+                if (this.renderer.getPixelRatio() !== window.devicePixelRatio) this.renderer.setPixelRatio(window.devicePixelRatio);
                 this.camera.aspect = width / height;
                 this.camera.updateProjectionMatrix();
                 this.renderer.setSize(width, height, false);
+                if (this.anchors) this.anchors.update();  // badges stand where the new projection puts them
             }
 
             // Each frame the browser offers: the world is drawn only when something
