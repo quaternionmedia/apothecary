@@ -27,6 +27,7 @@ apothecary/projects/parts/saved.py.
 
 from __future__ import annotations
 
+import contextvars
 import hashlib
 import threading
 import uuid
@@ -197,7 +198,11 @@ def check_and_compile(
     def compiling() -> None:
         found["compiled"] = compile_draft(part, text, definitions, renderer, cancel)
 
-    worker = threading.Thread(target=compiling, name=f"compile {part.name}", daemon=True)
+    # In the request's context, so the queue shows the run as the request's.
+    context = contextvars.copy_context()
+    worker = threading.Thread(
+        target=context.run, args=(compiling,), name=f"compile {part.name}", daemon=True
+    )
     worker.start()
     try:
         check = check_draft(part, text, renderer, cancel)

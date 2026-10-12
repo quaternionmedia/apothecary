@@ -4,6 +4,7 @@ part's STL is built, whichever command or route asks for it."""
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import inspect
 import json
 import os
@@ -16,12 +17,12 @@ import tempfile
 import threading
 import time
 import uuid
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, Iterator, List, Optional, Tuple
 
 from pydantic import BaseModel
 
@@ -93,6 +94,8 @@ class RenderResult:
     measured: Optional[Dict[str, List[float]]] = None
     # Stopped by a Cancellation before it finished: superseded, not failed.
     cancelled: bool = False
+    # How long it waited for its turn in the queue of OpenSCAD runs (``RUNS``).
+    queued_seconds: float = 0.0
 
 
 class Cancellation:
@@ -130,6 +133,152 @@ class Cancellation:
 
 
 SUPERSEDED = "Render superseded by a newer request"
+
+
+# --- the queue: at most a few OpenSCAD runs at once ----------------------------------
+#
+# Every OpenSCAD run that evaluates or renders -- a render, a check's parameter
+# or echo export, a compile -- takes a place in one queue first, and at most
+# ``runs_limit()`` run at once; the rest wait their turn, first come first
+# served, and a page can see where its own are (``RUNS.snapshot``, the
+# ``/openscad/runs`` route). Two (one on a single core): what a person waits
+# for is their newest render, and every run beside it makes it later -- timed
+# on a four-core machine, two renders at once each took a sixth to a third
+# longer than one alone, four at once nearly twice as long -- while two still
+# let a check go beside a render, or a check's two exports go together.
+# ``APOTHECARY_OPENSCAD_RUNS`` sets another number. Asking ``--version`` or
+# ``--help`` is not a run. A run cancelled while it waits leaves the queue
+# without starting; one cancelled while it runs is stopped, as before.
+
+OPENSCAD_RUNS = 2
+
+
+def runs_limit() -> int:
+    """How many OpenSCAD runs at once: ``APOTHECARY_OPENSCAD_RUNS``, else two,
+    or one on a machine with a single core."""
+    raw = os.environ.get("APOTHECARY_OPENSCAD_RUNS", "").strip()
+    default = min(OPENSCAD_RUNS, os.cpu_count() or 1)
+    try:
+        wanted = int(raw) if raw else default
+    except ValueError:
+        wanted = default
+    return max(1, wanted)
+
+
+# Who a run is for, set by the route that asks for it: the part, and the page.
+_LABEL: contextvars.ContextVar[Optional[Dict[str, Optional[str]]]] = contextvars.ContextVar(
+    "openscad_run_for", default=None
+)
+
+
+@contextmanager
+def runs_for(part: Optional[str] = None, page: Optional[str] = None) -> Iterator[None]:
+    """Every OpenSCAD run in the block is shown in the queue as ``part``'s, for ``page``."""
+    token = _LABEL.set({"part": part, "page": page})
+    try:
+        yield
+    finally:
+        _LABEL.reset(token)
+
+
+@dataclass
+class Run:
+    """One OpenSCAD run's place in the queue."""
+
+    id: str
+    kind: str
+    part: Optional[str]
+    page: Optional[str]
+    queued: float  # time.monotonic() when it asked
+    asked: str  # when it asked, ISO 8601
+    started: Optional[float] = None
+
+    @property
+    def waited(self) -> float:
+        return (self.started if self.started is not None else time.monotonic()) - self.queued
+
+
+class RunQueue:
+    """At most ``runs_limit()`` OpenSCAD runs at once; the rest wait in order."""
+
+    def __init__(self) -> None:
+        self._cond = threading.Condition()
+        self._running: List[Run] = []
+        self._waiting: List[Run] = []
+
+    def acquire(self, kind: str, cancel: Optional[Cancellation] = None) -> Optional[Run]:
+        """A place to run, once there is one; None when ``cancel`` was set while
+        it waited (it never started)."""
+        label = _LABEL.get() or {}
+        run = Run(
+            id=uuid.uuid4().hex[:12],
+            kind=kind,
+            part=label.get("part"),
+            page=label.get("page"),
+            queued=time.monotonic(),
+            asked=datetime.now().isoformat(timespec="seconds"),
+        )
+        with self._cond:
+            self._waiting.append(run)
+            while True:
+                if cancel is not None and cancel.cancelled:
+                    self._waiting.remove(run)
+                    self._cond.notify_all()
+                    return None
+                if self._waiting[0] is run and len(self._running) < runs_limit():
+                    self._waiting.pop(0)
+                    run.started = time.monotonic()
+                    self._running.append(run)
+                    return run
+                self._cond.wait(0.05)
+
+    def release(self, run: Optional[Run]) -> None:
+        if run is None:
+            return
+        with self._cond:
+            if run in self._running:
+                self._running.remove(run)
+            self._cond.notify_all()
+
+    @contextmanager
+    def place(self, kind: str, cancel: Optional[Cancellation] = None) -> Iterator[Optional[Run]]:
+        """``acquire`` for the block, released after; None: cancelled waiting."""
+        run = self.acquire(kind, cancel)
+        try:
+            yield run
+        finally:
+            self.release(run)
+
+    def snapshot(self, page: Optional[str] = None) -> Dict[str, object]:
+        """What runs and what waits, each with its part, page and kind, a waiting
+        one with its place in the line (1: next); ``page``: that page's alone."""
+        with self._cond:
+            running, waiting = list(self._running), list(self._waiting)
+
+        def shown(run: Run, position: Optional[int] = None) -> Dict[str, object]:
+            out: Dict[str, object] = {
+                "id": run.id,
+                "kind": run.kind,
+                "part": run.part,
+                "page": run.page,
+                "asked": run.asked,
+            }
+            if position is None:
+                out["running_seconds"] = round(time.monotonic() - (run.started or run.queued), 3)
+            else:
+                out["position"] = position
+                out["waited_seconds"] = round(run.waited, 3)
+            return out
+
+        mine = (lambda run: run.page == page) if page else (lambda run: True)
+        return {
+            "limit": runs_limit(),
+            "running": [shown(r) for r in running if mine(r)],
+            "waiting": [shown(r, i + 1) for i, r in enumerate(waiting) if mine(r)],
+        }
+
+
+RUNS = RunQueue()
 
 
 def _stop(process: subprocess.Popen) -> None:
@@ -186,22 +335,26 @@ def run_openscad(
     stopped, by ``"timeout"`` or by ``cancel`` (``"cancelled"``)."""
     if cancel is not None and cancel.cancelled:
         return None, "", "", "cancelled"
-    process = subprocess.Popen(
-        [str(executable), *args],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        cwd=str(cwd),
-    )
-    if cancel is not None and not cancel._attach(process):
-        _stop(process)
-    try:
-        stdout, stderr, stopped = _wait(process, timeout, cancel)
-    finally:
-        if cancel is not None:
-            cancel._detach(process)
+    kind = next((a.split("=", 1)[1] for a in args if a.startswith("--export-format=")), "run")
+    with RUNS.place(kind, cancel) as run:
+        if run is None:
+            return None, "", "", "cancelled"
+        process = subprocess.Popen(
+            [str(executable), *args],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            cwd=str(cwd),
+        )
+        if cancel is not None and not cancel._attach(process):
+            _stop(process)
+        try:
+            stdout, stderr, stopped = _wait(process, timeout, cancel)
+        finally:
+            if cancel is not None:
+                cancel._detach(process)
     return (None if stopped else process.returncode), stdout, stderr, stopped
 
 
@@ -363,26 +516,33 @@ class OpenSCADRenderer:
             str(scad_path),
         ]
 
+        run = RUNS.acquire("render", cancel)
+        if run is None:
+            return RenderResult(success=False, error_message=SUPERSEDED, cancelled=True)
+        waited = run.waited
         start = time.monotonic()
         try:
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                # OpenSCAD resolves a relative import() against the source
-                # file's own directory, so this is for the process, not paths.
-                cwd=str(scad_path.parent),
-            )
-            if cancel is not None and not cancel._attach(process):
-                _stop(process)
             try:
-                stdout, stderr, stopped = _wait(process, timeout, cancel)
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    # OpenSCAD resolves a relative import() against the source
+                    # file's own directory, so this is for the process, not paths.
+                    cwd=str(scad_path.parent),
+                )
+                if cancel is not None and not cancel._attach(process):
+                    _stop(process)
+                try:
+                    stdout, stderr, stopped = _wait(process, timeout, cancel)
+                finally:
+                    if cancel is not None:
+                        cancel._detach(process)
             finally:
-                if cancel is not None:
-                    cancel._detach(process)
+                RUNS.release(run)
             elapsed = time.monotonic() - start
 
             if stopped == "cancelled":
@@ -393,6 +553,7 @@ class OpenSCADRenderer:
                     stdout=stdout,
                     stderr=stderr,
                     cancelled=True,
+                    queued_seconds=waited,
                 )
             if stopped == "timeout":
                 return RenderResult(
@@ -401,6 +562,7 @@ class OpenSCADRenderer:
                     render_time_seconds=elapsed,
                     stdout=stdout,
                     stderr=stderr,
+                    queued_seconds=waited,
                 )
 
             if process.returncode != 0:
@@ -410,6 +572,7 @@ class OpenSCADRenderer:
                     render_time_seconds=elapsed,
                     stdout=stdout,
                     stderr=stderr,
+                    queued_seconds=waited,
                 )
 
             if not partial.exists():
@@ -419,6 +582,7 @@ class OpenSCADRenderer:
                     render_time_seconds=elapsed,
                     stdout=stdout,
                     stderr=stderr,
+                    queued_seconds=waited,
                 )
 
             os.replace(partial, stl_path)
@@ -438,6 +602,7 @@ class OpenSCADRenderer:
                 stderr=stderr,
                 dropped=dropped,
                 measured=read_summary_bounds(summary),
+                queued_seconds=waited,
             )
 
         except Exception as e:
@@ -911,6 +1076,7 @@ def _render_rotated(
             wrapper, stl_path, timeout, **_cancelling(renderer, cancel, binary)
         )
     second.render_time_seconds += first.render_time_seconds
+    second.queued_seconds += first.queued_seconds
     second.dropped = first.dropped + second.dropped
     second.stderr = (first.stderr or "") + (second.stderr or "")
     second.measured = first.measured

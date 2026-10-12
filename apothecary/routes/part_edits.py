@@ -82,7 +82,7 @@ from ..projects.parts.saved import (
     read_saved,
     save_variant,
 )
-from ..projects.parts.stl_renderer import get_renderer, part_renderer
+from ..projects.parts.stl_renderer import SUPERSEDED, get_renderer, part_renderer, runs_for
 from ..projects.parts.variants import (
     first_error,
     make_variant,
@@ -197,22 +197,9 @@ def check_part_draft(name: str, body: DraftRequest, page: Optional[str] = PAGE):
     digest = draft_digest(body.scad)
     slot = f"{page}#check" if page else None
     cancel = api._page_renders.begin(part.name, slot, digest)
-    compiled = None
     try:
-        if part.params_model is not None:
-            staged = validate_staged(part, body.params)
-            if staged.valid:
-                definitions = model_definitions(part, body.params)
-                check, compiled = check_and_compile(part, body.scad, definitions, renderer, cancel)
-            else:
-                check = check_draft(part, body.scad, renderer, cancel)
-        else:
-            check = check_draft(part, body.scad, renderer, cancel)
-            listing = check.parameters
-            staged = api.validate_without_model(part, body.params, listing, scad_text=body.scad)
-            if staged.valid and check.ok and not check.cancelled:
-                definitions = scad_definitions_of(part, staged.params, listing)
-                compiled = compile_draft(part, body.scad, definitions, renderer, cancel)
+        with runs_for(part.name, page):
+            check, compiled, staged = _check_with_values(api, part, body, renderer, cancel)
     finally:
         api._page_renders.end(part.name, slot, cancel)
     if check.cancelled or (compiled is not None and compiled.cancelled):
@@ -258,6 +245,28 @@ def check_part_draft(name: str, body: DraftRequest, page: Optional[str] = PAGE):
     )
 
 
+def _check_with_values(api, part: BasePart, body: DraftRequest, renderer, cancel):
+    """(check, compile, staged): the draft's check, its compile with the staged
+    values (None where they are not valid, or the draft does not read), and the
+    staged values checked. A part with a model has the two runs at once; one
+    without has its listing first, which its values are checked against."""
+    compiled = None
+    if part.params_model is not None:
+        staged = validate_staged(part, body.params)
+        if not staged.valid:
+            return check_draft(part, body.scad, renderer, cancel), None, staged
+        definitions = model_definitions(part, body.params)
+        check, compiled = check_and_compile(part, body.scad, definitions, renderer, cancel)
+        return check, compiled, staged
+    check = check_draft(part, body.scad, renderer, cancel)
+    listing = check.parameters
+    staged = api.validate_without_model(part, body.params, listing, scad_text=body.scad)
+    if staged.valid and check.ok and not check.cancelled:
+        definitions = scad_definitions_of(part, staged.params, listing)
+        compiled = compile_draft(part, body.scad, definitions, renderer, cancel)
+    return check, compiled, staged
+
+
 def model_definitions(part: BasePart, params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """What ``-D`` gets for a staged set of a part with a model: its overrides as
     the model takes them, less its defaults, as the SCAD names them. {} for a
@@ -299,14 +308,27 @@ def render_part_draft(
     part = _editable(name)
     _openscad_or_503()
     renderer = part_renderer(part)
-    listing = None
-    if part.params_model is None and lists_parameters(renderer.openscad_path):
-        listing = check_draft(part, body.scad, renderer).parameters
-    overrides = api.checked_overrides(part, body.params, listing, scad_text=body.scad)
-    wants = f"{request_wants(overrides, force)}\0{draft_digest(body.scad)}"
+    # Asked for from here on, so a newer request from the page stops this one
+    # wherever it is: listing the draft's parameters, waiting its turn, rendering.
+    wants = f"{request_wants(body.params, force)}\0{draft_digest(body.scad)}"
     cancel = api._page_renders.begin(part.name, page, wants)
     try:
-        made = make_variant(part, overrides, force=force, cancel=cancel, draft=body.scad)
+        with runs_for(part.name, page):
+            listing = None
+            if part.params_model is None and lists_parameters(renderer.openscad_path):
+                listed = check_draft(part, body.scad, renderer, cancel)
+                if listed.cancelled:
+                    raise HTTPException(
+                        status_code=409,
+                        detail={
+                            "message": SUPERSEDED,
+                            "superseded": True,
+                            "editor_version": body.editor_version,
+                        },
+                    )
+                listing = listed.parameters
+            overrides = api.checked_overrides(part, body.params, listing, scad_text=body.scad)
+            made = make_variant(part, overrides, force=force, cancel=cancel, draft=body.scad)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
     finally:

@@ -446,6 +446,8 @@ class Made:
     # The variant whose render this is too: it compiled the same (an edit of
     # the comments), so nothing was rendered for it.
     compiled_from: Optional[str] = None
+    # How long its render waited for a turn in the queue of OpenSCAD runs.
+    queued_seconds: float = 0.0
 
     @property
     def success(self) -> bool:
@@ -587,6 +589,7 @@ def make_variant(
                 made.messages = _messages_of(part, result, scad)
             made.rendered, made.result = True, result
             made.render_time_seconds = result.render_time_seconds
+            made.queued_seconds = getattr(result, "queued_seconds", 0.0)
             if result.cancelled:
                 work.unlink(missing_ok=True)
                 made.failure, made.error_message = "cancelled", SUPERSEDED

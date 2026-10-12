@@ -72,7 +72,7 @@ from .projects.parts.params import (
     validate_staged,
 )
 from .projects.parts.skeleton import ROOT
-from .projects.parts.stl_renderer import build_stl, geometry_scad, part_renderer
+from .projects.parts.stl_renderer import RUNS, build_stl, geometry_scad, part_renderer, runs_for
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
 from .projects.parts.variants import (
     KEY_PATTERN,
@@ -595,7 +595,9 @@ def generate_part_stl(
     part that cannot be built on this machine, is a 503.
     """
     part = _load_part_wrapper(name)
-    overrides = checked_overrides(part, body.params if body else None, _listing(part))
+    with runs_for(part.name, page):
+        listing = _listing(part)
+    overrides = checked_overrides(part, body.params if body else None, listing)
     if not get_stl_renderer().is_available:
         raise HTTPException(
             status_code=503, detail="OpenSCAD not installed. Cannot generate STL files."
@@ -603,12 +605,30 @@ def generate_part_stl(
 
     cancel = _page_renders.begin(part.name, page, request_wants(overrides, force))
     try:
-        made = make_variant(part, overrides, force=force, cancel=cancel)
+        with runs_for(part.name, page):
+            made = make_variant(part, overrides, force=force, cancel=cancel)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
     finally:
         _page_renders.end(part.name, page, cancel)
     return made_answer(name, part, made, overrides, body.editor_version if body else None)
+
+
+@app.get("/openscad/runs", tags=["parts"])
+def openscad_runs(
+    page: Optional[str] = Query(
+        None, max_length=128, description="Only this page's runs (the id it sends with each)"
+    ),
+):
+    """The queue of OpenSCAD runs: at most ``limit`` run at once (two; see
+    apothecary/projects/parts/stl_renderer.py's ``RUNS``) and the rest wait,
+    first come first served. ``running``: each run's ``kind`` (``render``, or
+    the export a check or compile makes: ``param``, ``echo``, ``csg``), its
+    ``part`` and ``page``, how long it has run; ``waiting``: the same, with its
+    ``position`` (1: next) and how long it has waited. What a page polls while
+    its render or check is in flight, to say it is queued. A cancelled request
+    leaves the line without running."""
+    return RUNS.snapshot(page)
 
 
 def _listing(part: BasePart) -> Optional[List[Dict[str, Any]]]:
@@ -732,6 +752,8 @@ def made_answer(
         "editor_version": editor_version,
         # The variant whose render this is too: it compiled the same.
         "compiled_from": made.compiled_from,
+        # How long it waited for its turn among OpenSCAD's runs (GET /openscad/runs).
+        "queued_seconds": round(made.queued_seconds, 3),
     }
 
 
