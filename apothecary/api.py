@@ -796,25 +796,119 @@ def _parse_build_volume(raw: Optional[str]):
     return parsed
 
 
+def drawn_variant(part: BasePart, key: str):
+    """The cached variant ``key`` of ``part`` as the checklist asks about it, or
+    a 404 once the cache has let it go (or never had it)."""
+    from .projects.parts.readiness import Drawn
+
+    record = read_variant(part, key) if KEY_PATTERN.match(key or "") else None
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No variant '{key}' of '{part.name}' is cached; "
+            f"POST /parts/{part.name}/stl/generate makes it",
+        )
+    stl, _ = variant_paths(part, key)
+    measured = record.get("measured")
+    if not measured:
+        from .projects.parts.variants import measure_stl
+
+        measured = measure_stl(stl, part.display_rotation.to_list())
+    return Drawn(
+        key=key,
+        stl=stl,
+        params=dict(record.get("params") or {}),
+        measured=measured,
+        draft=record.get("draft"),
+    )
+
+
+def pinned_build_volume(site_name: str, printer: Optional[str] = None):
+    """The build volume of the printer pinned in ``site_name``: ``printer``'s,
+    the path of one of them, or the one there is. ``(size, where)``, or
+    ``(None, (detail, fix))`` saying why there is none to take."""
+    pinned = printers_in(site_name)
+    if printer is not None:
+        if printer not in pinned:
+            named = ", ".join(pinned) or "none"
+            return None, (
+                f"{printer} is no printer pinned in {site_name} (pinned: {named})",
+                f"pin {printer}'s board in {site_name}, or name a pinned printer",
+            )
+        chosen = printer
+    elif len(pinned) == 1:
+        chosen = pinned[0]
+    elif not pinned:
+        return None, (
+            f"no printer is pinned in {site_name}",
+            f"pin a printer's board in {site_name} (its Pin), or give a build volume",
+        )
+    else:
+        return None, (
+            f"{len(pinned)} printers are pinned in {site_name}: {', '.join(pinned)}",
+            "name the one to print on (printer=<path>)",
+        )
+    node = _find_node_by_path(_site_store.get(site_name), chosen)
+    volume = getattr(node, "build_volume", None) if node is not None else None
+    if volume is None:
+        return None, (
+            f"{chosen} in {site_name} declares no build volume",
+            "give its node a build_volume",
+        )
+    return (volume.x, volume.y, volume.z), f"{chosen} in {site_name}"
+
+
 @app.get("/parts/{name}/checklist")
-def get_part_checklist(name: str, build_volume: Optional[str] = Query(None)):
+def get_part_checklist(
+    name: str,
+    build_volume: Optional[str] = Query(None, description="X,Y,Z in mm"),
+    variant: Optional[str] = Query(
+        None, description="A cached variant's key: the checklist of what a page draws"
+    ),
+    site: Optional[str] = Query(
+        None, max_length=64, description="Take the build volume of the printer pinned here"
+    ),
+    printer: Optional[str] = Query(
+        None, max_length=200, description="Which pinned printer, where the site has several"
+    ),
+):
     """Whether this part is ready to print and check against a real one.
 
     The same assessment `apothecary parts checklist` prints, so the viewer and
     the command line cannot disagree about whether something is buildable.
     A question that could not be asked is reported as `unknown`, never as a
     pass.
+
+    ``variant`` asks about a variant from the cache (``/parts/{name}/variants/
+    {key}``), as a page draws it: its render, its measured size against the
+    bounds declared for its parameters, and whether that size fits (404 once
+    the cache has let it go). Without ``build_volume``, ``site`` takes the
+    build volume of the printer pinned there (``printer`` names one where
+    several are): ``build_volume`` in the answer says the size and where it
+    came from, and "Fits the printer" says why when there is none.
     """
-    from .projects.parts.readiness import assess
+    from .projects.parts.readiness import NO_VOLUME, assess
 
     part = _load_part_wrapper(name)
+    drawn = drawn_variant(part, variant) if variant else None
+    volume, source, none = _parse_build_volume(build_volume), "given", NO_VOLUME
+    if volume is None and site:
+        if site not in _site_store.names():
+            raise HTTPException(status_code=404, detail=f"Site '{site}' not found")
+        found, said = pinned_build_volume(site, printer)
+        if found is None:
+            none = said
+        else:
+            volume, source = found, said
 
-    report = assess(part, build_volume=_parse_build_volume(build_volume))
+    report = assess(part, build_volume=volume, drawn=drawn, volume_from=source, no_volume=none)
     return {
         "part": report.part,
+        "variant": drawn.key if drawn else None,
         "ready": report.ready,
         "blocked": len(report.blocked),
         "unknown": len(report.unknown),
+        "build_volume": ({"size": list(volume), "from": source} if volume is not None else None),
         "checks": [
             {"name": c.name, "state": c.state, "detail": c.detail, "fix": c.fix}
             for c in report.checks

@@ -11,7 +11,7 @@ and the task carries the slice's answer once it ends:
   saying what it does and whether it is a stub.
 - ``POST /slicer/install`` ``{force, slicer}``: install the pinned OrcaSlicer, or
   the module named (a task).
-- ``POST /slicer/slice`` ``{part, port | site + printer | printer, slicer}``: slice
+- ``POST /slicer/slice`` ``{part, port | site + printer | printer, slicer, variant}``: slice
   a part or a made piece for a printer (a task). ``part`` is a node's path in
   the printer's site, as ``GET /jobs/choices`` lists them for the Print card --
   a part standing there or a piece made from a picture -- or a registered
@@ -19,7 +19,10 @@ and the task carries the slice's answer once it ends:
   ``site``'s node at ``printer`` (with none named, the site's one printer), else
   the printer part ``printer`` names (or the one that keeps a profile). What it names is checked before the task
   starts, so a part or printer that is not one is a 422 at once, and a slicer
-  that is not installed a 503.
+  that is not installed a 503. ``variant``, a part's cached variant (the key
+  ``/parts/{name}/stl/generate`` answered), is what is sliced instead of the
+  part's own STL, and the record's ``made`` names it (``variant``, its
+  ``params``, its ``draft``); a variant the cache does not have is a 422.
 - ``GET /slicer/tasks/{id}?since=N``: the task, and ``slice``: null while it
   runs; then ``{"ok": true, "record": ...}`` -- the kept file (``file_id``, the
   Print card's), each value and where it came from, the slicer's estimate,
@@ -52,6 +55,7 @@ from .profiles import printers
 SITE_NAME = r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
 NODE_PATH = r"^[A-Za-z0-9_][A-Za-z0-9_.\-]{0,199}$"
 MODULE_ID = r"^[a-z][a-z0-9_-]{0,31}$"
+VARIANT_KEY = r"^[0-9a-f]{24}$"
 
 
 class SlicerRoute(APIRoute):
@@ -98,6 +102,9 @@ class SliceRequest(BaseModel):
     site: Optional[str] = Field(None, pattern=SITE_NAME)
     printer: Optional[str] = Field(None, pattern=NODE_PATH)
     slicer: Optional[str] = Field(None, pattern=MODULE_ID)
+    # A cached variant of the part (its key, as generate answered it): the
+    # variant a page draws is what is sliced, and the record names it.
+    variant: Optional[str] = Field(None, pattern=VARIANT_KEY)
 
 
 class Piece(BaseModel):
@@ -154,13 +161,14 @@ def slicer_install(body: InstallBody):
 def slicer_slice(body: SliceRequest):
     """Slice a part or a made piece for a printer (a task); see the module docstring."""
     target, printer = service.resolve(
-        body.part, port=body.port, site=body.site, printer=body.printer
+        body.part, port=body.port, site=body.site, printer=body.printer, variant=body.variant
     )
     module = get_module(chosen_id(body.slicer, printer.profile))
     status = module.status()
     if not status.ok:
         raise NotInstalled(f"{module.label}: " + "; ".join(status.problems))
-    title = f"Slice {target.made.name} for {printer.at.name}"
+    named = f"{target.made.name} ({target.made.variant})" if target.made.variant else None
+    title = f"Slice {named or target.made.name} for {printer.at.name}"
 
     def work(running: Running) -> None:
         try:
