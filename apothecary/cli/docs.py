@@ -190,12 +190,11 @@ def clean():
 def _simulated_device_env(env: dict) -> dict:
     """Point the doc server at scripted ports and the simulated printer.
 
-    The scripted ``arduino-cli`` is the unit tests' fake (tests/firmware_helpers.py):
-    a doc-generation command borrowing a test helper is the right layering
-    for something whose whole job is to run tests.
+    The scripted ``arduino-cli`` is the package's (apothecary/firmware/scripted.py),
+    which the unit tests and ``apothecary serve --demo`` run too: an installed
+    package has no tests/ to borrow it from.
     """
-    sys.path.insert(0, str(ROOT / "tests"))
-    from firmware_helpers import write_fake_arduino_cli  # noqa: E402
+    from ..firmware.scripted import write_fake_arduino_cli
 
     tmp = Path(tempfile.mkdtemp(prefix="apothecary-docs-"))
     env["ARDUINO_CLI"] = str(write_fake_arduino_cli(tmp / "arduino-cli"))
