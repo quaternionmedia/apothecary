@@ -81,6 +81,7 @@ from .projects.parts.variants import (
     make_variant,
     measured_box,
     part_state,
+    read_partial,
     read_variant,
     variant_paths,
     variant_record,
@@ -528,8 +529,11 @@ def generate_part_stl(
     else read off the STL (``"stl"``: 2021.01, or the part's own STL built
     elsewhere). ``saved`` says the answer is what the part's own STL holds.
     ``messages`` are its errors and warnings by file and line. A render
-    OpenSCAD refused is a 422 whose ``detail`` carries them; one superseded
-    by a newer request from the same ``page`` is a 409. No OpenSCAD, or a
+    OpenSCAD refused, or finished saying an error, is a 422 whose ``detail``
+    carries them, and ``partial``: the geometry a snapshot wrote before the
+    error (``stl_url`` under ``/parts/{name}/partials/``, the error's ``file``
+    and ``line``, its ``measured`` box), or null; it is never a variant. One
+    superseded by a newer request from the same ``page`` is a 409. No OpenSCAD, or a
     part that cannot be built on this machine, is a 503.
     """
     part = _load_part_wrapper(name)
@@ -586,10 +590,29 @@ def checked_overrides(
         raise HTTPException(status_code=422, detail=str(exc)) from None
 
 
+def partial_answer(name: str, partial) -> Optional[Dict[str, Any]]:
+    """A failed render's partial geometry as an answer names it: where it is
+    served, and the error it is flagged with. None where OpenSCAD wrote none."""
+    if partial is None:
+        return None
+    return {
+        "stl_url": f"/parts/{name}/partials/{partial.key}/stl",
+        "message": partial.message,
+        "file": partial.file,
+        "line": partial.line,
+        "measured": jsonable_encoder(measured_box(partial.measured)),
+        "measured_from": partial.measured_from,
+    }
+
+
 def made_answer(name: str, part: BasePart, made, overrides: Dict[str, Any]) -> Dict[str, Any]:
     """What a render answers, as generate answers it, or the HTTPException for
     one that made nothing: 503 refused, 409 superseded, 422 with OpenSCAD's
-    errors by line, 500 for a failure it said nothing about."""
+    errors by line, 500 for a failure it said nothing about. Any error
+    OpenSCAD said fails the render, even one it finished: a snapshot exits 0
+    after a failed ``assert`` with the geometry built before it, which the
+    422's ``partial`` names (``stl_url``, the error's ``file`` and ``line``),
+    to be drawn greyed; it is never a variant."""
     messages = jsonable_encoder(made.messages)
     if made.failure == "refused":
         raise HTTPException(
@@ -601,13 +624,12 @@ def made_answer(name: str, part: BasePart, made, overrides: Dict[str, Any]) -> D
         )
     if made.failure is not None:
         said = any(m.level == "error" for m in made.messages)
-        raise HTTPException(
-            status_code=422 if said else 500,
-            detail={
-                "message": f"STL generation failed: {made.error_message}",
-                "messages": messages,
-            },
-        )
+        detail: Dict[str, Any] = {
+            "message": f"STL generation failed: {made.error_message}",
+            "messages": messages,
+            "partial": partial_answer(name, made.partial),
+        }
+        raise HTTPException(status_code=422 if said else 500, detail=detail)
 
     return {
         "success": True,
@@ -677,6 +699,34 @@ def get_part_variant_stl(name: str, variant: str):
             "Content-Disposition": f'attachment; filename="{name}-{variant}.stl"',
             "X-Part-Name": name,
             "X-Part-Variant": variant,
+        },
+    )
+
+
+@app.get("/parts/{name}/partials/{variant}/stl")
+def get_part_partial_stl(name: str, variant: str):
+    """What a failed render wrote before its error, to be drawn greyed: the
+    ``partial.stl_url`` of a 422 from generate or a draft's render. Never a
+    variant and never cached by the browser (a render of the same request
+    that fails again writes it again); 404 once a newer failure has let it go."""
+    part = _load_part_wrapper(name)
+    path = read_partial(part, variant)
+    try:
+        data = path.read_bytes() if path is not None else None
+    except OSError:
+        data = None
+    if data is None:
+        raise HTTPException(
+            status_code=404, detail=f"No partial geometry '{variant}' of '{name}' is kept"
+        )
+    return Response(
+        content=data,
+        media_type="application/sla",
+        headers={
+            "Content-Disposition": f'attachment; filename="{name}-{variant}-failed.stl"',
+            "Cache-Control": "no-store",
+            "X-Part-Name": name,
+            "X-Part-Partial": variant,
         },
     )
 

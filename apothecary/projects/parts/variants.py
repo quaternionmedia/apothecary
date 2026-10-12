@@ -21,6 +21,14 @@ ignored ``.cache``)::
     <part>/<key>.scad   a draft's text, for a variant rendered from one
                         (apothecary/projects/parts/drafts.py)
 
+A render is written first under ``$APOTHECARY_CACHE_DIR/part_partial/<part>/``
+and moved into the cache only when OpenSCAD said no error: any message at
+error level fails it, even when OpenSCAD exits 0 (a snapshot does, after a
+failed ``assert``, having written the geometry built before it). That
+geometry stays where it was written, outside the cache, to be drawn greyed
+(``Made.partial``): never a variant, never answered for a later request, the
+``PARTIALS_KEEP`` newest of each part kept.
+
 The part's own STL (``get_stl_output_path``) is the default variant. A
 request for the defaults leaves it current: rendered into the cache, then
 placed there, unless the params sidecar says it holds something else (a
@@ -92,6 +100,16 @@ KEY_PATTERN = re.compile(r"^[0-9a-f]{24}$")
 def variant_cache_dir() -> Path:
     """``$APOTHECARY_CACHE_DIR/part_stl``, by default under the checkout's ignored ``.cache``."""
     return Path(os.environ.get("APOTHECARY_CACHE_DIR") or ROOT / ".cache") / "part_stl"
+
+
+def partial_dir() -> Path:
+    """Where a failed render's partial geometry is kept to be drawn, outside the
+    variant cache: ``$APOTHECARY_CACHE_DIR/part_partial``."""
+    return Path(os.environ.get("APOTHECARY_CACHE_DIR") or ROOT / ".cache") / "part_partial"
+
+
+# Partial geometries kept per part, for a page to draw greyed; the oldest go first.
+PARTIALS_KEEP = 8
 
 
 def _folder_name(part: BasePart) -> str:
@@ -269,6 +287,35 @@ def variant_paths(part: BasePart, key: str, cache: Optional[Path] = None) -> Tup
     return folder / f"{key}.stl", folder / f"{key}.json"
 
 
+def partial_path(part: BasePart, key: str) -> Path:
+    """Where a render of ``key`` is written before it is known to be good, and
+    where it stays, to be drawn greyed, when OpenSCAD said an error."""
+    return partial_dir() / _folder_name(part) / f"{key}.stl"
+
+
+def read_partial(part: BasePart, key: str) -> Optional[Path]:
+    """The partial geometry a failed render of ``key`` left, or None."""
+    if not KEY_PATTERN.match(key):
+        return None
+    path = partial_path(part, key)
+    return path if path.is_file() else None
+
+
+def trim_partials(folder: Path, keep: int = PARTIALS_KEEP) -> None:
+    """All but the ``keep`` newest partial geometries in ``folder`` removed."""
+    found = []
+    for stl in folder.glob("*.stl"):
+        if stl.name.startswith("."):
+            continue
+        try:
+            found.append((stl.stat().st_mtime_ns, stl))
+        except FileNotFoundError:
+            continue
+    found.sort(reverse=True)
+    for _, stl in found[keep:]:
+        stl.unlink(missing_ok=True)
+
+
 def variant_draft_path(part: BasePart, key: str, cache: Optional[Path] = None) -> Path:
     """Where the cache keeps the draft a variant ``key`` was rendered from."""
     return (cache or variant_cache_dir()) / _folder_name(part) / f"{key}.scad"
@@ -329,6 +376,29 @@ def trim_variants(folder: Path, keep: int = PART_VARIANTS_KEEP) -> None:
 
 
 @dataclass
+class Partial:
+    """What a failed render wrote before the error: OpenSCAD (a snapshot) exits
+    0 after a failed ``assert`` with the geometry built so far. Kept outside
+    the cache, never a variant, for a page to draw greyed, flagged where the
+    first error is."""
+
+    key: str
+    stl_path: Path
+    message: str
+    file: Optional[str] = None
+    line: Optional[int] = None
+    measured: Optional[Dict[str, List[float]]] = None
+    measured_from: Optional[str] = None
+
+
+def first_error(messages: List[OpenSCADMessage]) -> Optional[OpenSCADMessage]:
+    """The error a failed render is flagged with: the first that names a line,
+    else the first."""
+    errors = [m for m in messages if m.level == "error"]
+    return next((m for m in errors if m.line is not None), errors[0] if errors else None)
+
+
+@dataclass
 class Made:
     """What answers a request for a variant, and how it was come by."""
 
@@ -356,6 +426,8 @@ class Made:
     messages: List[OpenSCADMessage] = field(default_factory=list)
     # The sha256 of the draft it was rendered from; None: the part's own SCAD.
     draft: Optional[str] = None
+    # A failed render's geometry, where OpenSCAD wrote some before its error.
+    partial: Optional[Partial] = None
 
     @property
     def success(self) -> bool:
@@ -477,17 +549,42 @@ def make_variant(
                 made.failure, made.error_message = "refused", reason
                 return made
             stl.parent.mkdir(parents=True, exist_ok=True)
+            # Rendered outside the cache, and moved into it only once nothing
+            # OpenSCAD said is an error: a snapshot exits 0 after a failed
+            # assert, with the geometry built before it.
+            work = partial_path(part, key)
+            work.parent.mkdir(parents=True, exist_ok=True)
             with _written(part, draft) as scad:
-                result = render_part(part, stl, params, timeout, renderer, rotation, cancel, scad)
+                result = render_part(part, work, params, timeout, renderer, rotation, cancel, scad)
                 made.messages = _messages_of(part, result, scad)
             made.rendered, made.result = True, result
             made.render_time_seconds = result.render_time_seconds
             if result.cancelled:
+                work.unlink(missing_ok=True)
                 made.failure, made.error_message = "cancelled", SUPERSEDED
                 return made
-            if not result.success:
-                made.failure, made.error_message = "failed", result.error_message
+            error = first_error(made.messages)
+            if not result.success or error is not None:
+                made.failure = "failed"
+                made.error_message = result.error_message or _said_error(error)
+                if result.success and work.is_file():
+                    made.partial = Partial(
+                        key=key,
+                        stl_path=work,
+                        message=error.message if error else made.error_message,
+                        file=error.file if error else None,
+                        line=error.line if error else None,
+                    )
+                    measured = result.measured or measure_stl(work, rotation)
+                    made.partial.measured = measured
+                    made.partial.measured_from = (
+                        (FROM_SUMMARY if result.measured else FROM_STL) if measured else None
+                    )
+                    trim_partials(work.parent)
+                else:
+                    work.unlink(missing_ok=True)
                 return made
+            os.replace(work, stl)
             made.key, made.stl_path = key, stl
             made.measure(result.measured, rotation)
             record = {
@@ -528,6 +625,14 @@ def make_variant(
         made.saved = draft is None and _is_fresh(part, canonical, params)
     trim_variants(stl.parent)
     return made
+
+
+def _said_error(error: Optional[OpenSCADMessage]) -> str:
+    """Why a render OpenSCAD finished is a failure: the error it said."""
+    if error is None:
+        return "OpenSCAD said an error"
+    where = f" ({error.file}, line {error.line})" if error.line is not None else ""
+    return f"OpenSCAD said an error{where}: {error.message}"
 
 
 def same_text(path: Path, text: str) -> bool:
@@ -721,14 +826,20 @@ __all__ = [
     "FROM_SUMMARY",
     "KEY_PATTERN",
     "Made",
+    "PARTIALS_KEEP",
     "PART_VARIANTS_KEEP",
+    "Partial",
     "PageRenders",
     "PartState",
     "VariantRecord",
     "make_variant",
     "measure_stl",
     "measured_box",
+    "first_error",
     "part_state",
+    "partial_dir",
+    "partial_path",
+    "read_partial",
     "read_variant",
     "read_variant_draft",
     "renamed",

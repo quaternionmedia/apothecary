@@ -8,10 +8,11 @@ kept between requests but what the variant cache and git keep.
 
 - ``POST /parts/{name}/draft/check`` ``{scad, params}``: the draft evaluated
   and not rendered (apothecary/projects/parts/drafts.py) -- what OpenSCAD said
-  of it by line, naming the part's SCAD; the fields an editor builds its
-  controls from (the part's model's, or, for a part without one, what the
-  draft itself declares where OpenSCAD lists it); and the staged ``params``
-  checked against them. What a page asks once typing pauses.
+  of it by line, naming the part's SCAD, alone and with the staged values as
+  ``-D``; the fields an editor builds its controls from (the part's model's,
+  or, for a part without one, what the draft itself declares where OpenSCAD
+  lists it); and the staged ``params`` checked against them. What a page asks
+  once typing pauses.
 - ``POST /parts/{name}/draft/render`` ``{scad, params}``: the draft rendered
   into the variant cache, answered as ``POST /parts/{name}/stl/generate``
   answers (``draft`` naming the text), errors by line in a 422 as Apply's are.
@@ -36,15 +37,24 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from ..projects.parts.base import BasePart
-from ..projects.parts.customizer import INSTALL_HINT, lists_parameters, scad_fields
+from ..projects.parts.customizer import (
+    INSTALL_HINT,
+    lists_parameters,
+    merged,
+    scad_fields,
+    without_initial,
+)
 from ..projects.parts.drafts import (
     DRAFT_LIMIT,
     ReadOnly,
+    check_and_compile,
     check_draft,
+    compile_draft,
     draft_digest,
     refuse_read_only,
 )
@@ -71,6 +81,7 @@ from ..projects.parts.saved import (
 )
 from ..projects.parts.stl_renderer import get_renderer, part_renderer
 from ..projects.parts.variants import (
+    first_error,
     make_variant,
     read_variant_draft,
     same_text,
@@ -135,6 +146,11 @@ class DraftCheck(BaseModel):
     )
     openscad: Optional[str] = None
     listed: bool = Field(description="OpenSCAD listed the parameters the draft declares")
+    with_values: bool = Field(
+        False,
+        description="OpenSCAD also evaluated it with the staged params as -D; their "
+        "errors are in messages",
+    )
     messages: List[OpenSCADMessage] = Field(default_factory=list)
     source: Optional[str] = Field(
         None, description='Where ``fields`` come from: "model" or "customizer"; None for none'
@@ -156,7 +172,13 @@ def check_part_draft(name: str, body: DraftRequest, page: Optional[str] = PAGE):
     the parameters the draft declares, where the OpenSCAD lists them
     (``listed``; 2021.01 cannot, and ``note`` says so). ``params`` are checked
     against them. A newer check from the same ``page`` stops this one (409).
-    A part built by Python geometry is a 403: its SCAD is generated."""
+    A part built by Python geometry is a 403: its SCAD is generated.
+
+    The staged ``params`` are evaluated too, as ``-D`` (``with_values``): the
+    parameter export leaves out what ``-D`` sets, so a second run, the CSG
+    export, has them, at the same time for a part with a model and after the
+    listing for one without. An error only those values reach is in
+    ``messages`` and makes the draft not ``valid``."""
     api = _api()
     part = _editable(name)
     _openscad_or_503()
@@ -164,29 +186,47 @@ def check_part_draft(name: str, body: DraftRequest, page: Optional[str] = PAGE):
     digest = draft_digest(body.scad)
     slot = f"{page}#check" if page else None
     cancel = api._page_renders.begin(part.name, slot, digest)
+    compiled = None
     try:
-        check = check_draft(part, body.scad, renderer, cancel)
+        if part.params_model is not None:
+            staged = validate_staged(part, body.params)
+            if staged.valid:
+                definitions = model_definitions(part, body.params)
+                check, compiled = check_and_compile(part, body.scad, definitions, renderer, cancel)
+            else:
+                check = check_draft(part, body.scad, renderer, cancel)
+        else:
+            check = check_draft(part, body.scad, renderer, cancel)
+            listing = check.parameters
+            staged = api.validate_without_model(part, body.params, listing, scad_text=body.scad)
+            if staged.valid and check.ok and not check.cancelled:
+                definitions = scad_definitions_of(part, staged.params, listing)
+                compiled = compile_draft(part, body.scad, definitions, renderer, cancel)
     finally:
         api._page_renders.end(part.name, slot, cancel)
-    if check.cancelled:
+    if check.cancelled or (compiled is not None and compiled.cancelled):
         raise HTTPException(
-            status_code=409, detail={"message": check.error_message, "superseded": True}
+            status_code=409,
+            detail={
+                "message": check.error_message or compiled.error_message,
+                "superseded": True,
+            },
         )
 
     note = None
     if part.params_model is not None:
         fields, source = params_spec(part).fields, FROM_MODEL
-        staged = validate_staged(part, body.params)
     else:
         listing = check.parameters
         fields = scad_fields(listing) if listing else []
         source = FROM_CUSTOMIZER if listing else None
-        staged = api.validate_without_model(part, body.params, listing, scad_text=body.scad)
         if not check.lists:
             note = f"{check.openscad} cannot list the draft's parameters ({INSTALL_HINT})"
     if check.error_message:
         note = check.error_message if note is None else f"{check.error_message}; {note}"
-    said_error = any(m.level == "error" for m in check.messages)
+    with_values = compiled is not None and compiled.openscad is not None
+    messages = merged(check.messages, compiled.messages) if with_values else check.messages
+    said_error = any(m.level == "error" for m in messages)
     return DraftCheck(
         part=part.name,
         draft=digest,
@@ -195,13 +235,34 @@ def check_part_draft(name: str, body: DraftRequest, page: Optional[str] = PAGE):
         checked_by=check.how,
         openscad=check.openscad,
         listed=check.parameters is not None,
-        messages=check.messages,
+        with_values=with_values,
+        messages=messages,
         source=source,
         fields=fields,
         params=staged.params,
         errors=staged.errors,
         note=note,
     )
+
+
+def model_definitions(part: BasePart, params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """What ``-D`` gets for a staged set of a part with a model: its overrides as
+    the model takes them, less its defaults, as the SCAD names them. {} for a
+    set the model refuses (it is refused before anything runs)."""
+    try:
+        return part.scad_overrides(without_defaults(part, part.validate_overrides(params)))
+    except ValueError:
+        return {}
+
+
+def scad_definitions_of(
+    part: BasePart, values: Dict[str, Any], listing: Optional[List[Dict[str, Any]]]
+) -> Dict[str, Any]:
+    """What ``-D`` gets for a checked set of a part without a model: the values
+    its SCAD does not already assign."""
+    if listing is not None:
+        return without_initial(listing, values)
+    return dict(values)
 
 
 @router.post("/parts/{name}/draft/render")
@@ -312,6 +373,29 @@ def get_saved_variant(name: str, variant: str):
         raise HTTPException(status_code=500, detail=str(exc)) from None
 
 
+def refuse_a_failure(part: BasePart, text: str, overrides: Dict[str, Any]) -> None:
+    """A 422 for a variant that would be a failed render: its SCAD, compiled
+    with its values as ``-D``, makes OpenSCAD say an error. ``detail`` carries
+    what it said, by line, as a render's 422 does. Nothing is refused where no
+    OpenSCAD is installed to ask."""
+    renderer = part_renderer(part)
+    if not renderer.is_available:
+        return
+    compiled = compile_draft(part, text, part.scad_overrides(overrides), renderer)
+    error = first_error(compiled.messages)
+    if error is None:
+        return
+    where = f" ({error.file}, line {error.line})" if error.line is not None else ""
+    raise HTTPException(
+        status_code=422,
+        detail={
+            "message": f"Not saved: with these values OpenSCAD says an error{where}: "
+            f"{error.message}. A failed render is not saved as a variant.",
+            "messages": jsonable_encoder(compiled.messages),
+        },
+    )
+
+
 @router.post("/parts/{name}/saved", response_model=SavedVariant, status_code=201)
 def save_part_variant(name: str, body: SaveRequest):
     """Save: the SCAD and its parameters committed to the part's own ref,
@@ -321,7 +405,10 @@ def save_part_variant(name: str, body: SaveRequest):
     and its message has no trailer. Its parent is the variant's last save, else
     ``HEAD``; saving what the variant already holds makes no commit.
 
-    ``params`` are checked as a render's are (422). A bad name is a 422; a
+    ``params`` are checked as a render's are (422), and so is what they make:
+    the SCAD compiled with them as ``-D``; an error OpenSCAD says there is a
+    422 whose ``detail`` has its ``messages`` -- a failed render is never
+    saved. A bad name is a 422; a
     variant saved meanwhile by another tab, or a part outside git, a 409; a
     part built by Python geometry a 403; git's own refusal (no identity
     configured, for one) a 500 in git's words. Making a variant the part's
@@ -341,6 +428,7 @@ def save_part_variant(name: str, body: SaveRequest):
         if renderer.is_available and lists_parameters(renderer.openscad_path):
             listing = check_draft(part, text, renderer).parameters
     overrides = api.checked_overrides(part, body.params, listing, scad_text=text)
+    refuse_a_failure(part, text, without_defaults(part, overrides))
     try:
         return save_variant(
             part, body.name, text, without_defaults(part, overrides), kept_in=body.params_in
