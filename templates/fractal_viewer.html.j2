@@ -5131,6 +5131,11 @@
                 if (!scad || seq !== scad.seq || !this.canBuild(target)) return;
                 const check = await scad.checking;
                 if (seq !== scad.seq || !check || !check.valid) return;
+                // Typed back to what is drawn (Ctrl+Z, say), nothing staged: nothing to draw.
+                if (scad.text === scad.drawnText && !Object.keys(this.stagedDiff()).length) {
+                    this.scadEditor?.say('Checked: it reads, and it is what is drawn.', 'valid');
+                    return;
+                }
                 await this.applyEditor(target);
             }
 
