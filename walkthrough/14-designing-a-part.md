@@ -3,20 +3,26 @@
 **This page is written by the run it describes.** Every sentence below
 was emitted by a test that had just asserted it, and the whole page is
 rewritten by every run of the browser suite (`uv run apothecary test
-run --e2e`), though not by the quicker `apothecary test run`. Editing it
+all`), though not by the quicker `apothecary test run`. Editing it
 by hand is editing the output of a program: the next run puts it back.
 
 A part chosen from its ring, a size moved and checked, Apply drawing it in this tab with what it measures beside what it declares, a reload drawing it again, OpenSCAD's refusal shown by line, the saved part again for nothing; then round again, and two tabs applying at once. Every step is the page's own: a cell of a ring, a slider or a button, and every step's words name the next one.
 
-**Runtime-bound.** It drives a real browser against a real server of its own, whose OpenSCAD is this machine's except that it refuses a cube of 60 mm or more, as an assertion at the SCAD's size line would, so that the error met is OpenSCAD's own shape. Its cache of variants is a temporary folder. It needs no network, and refuses one.
+**Runtime-bound.** It drives a real browser against a real server of its own, whose OpenSCAD is the one every test server runs, wrapped by the test so that it refuses a cube of 60 mm or more, as an assertion at the SCAD's size line would, so that the error met is OpenSCAD's own shape. Its cache of variants is a temporary folder. It needs no network, and refuses one.
+
+Its pictures were taken once every part's STL that OpenSCAD version 2021.01, the OpenSCAD its server runs, can build was built by it; a part it cannot build is drawn from an STL already there, or as its box.
 
 ---
 
 ## 1. Part › Edit opens the part's editor at what is drawn
 
-calibration_cube's row in Site, its ring, Part › Edit: its parameters in Selected. They start from what is drawn, the part's own STL as its params sidecar records it, and beside the envelope the part declares is what that STL measures. Nothing marks it: it is the saved part. A slider is the next step.
+The parts library, /viewer/sites/parts_library (the site drop-down's parts_library): calibration_cube's row in Site, its ring, Part › Edit: its parameters in Selected. They start from what is drawn, the part's own STL as its params sidecar records it, and beside the envelope the part declares is what that STL measures. Nothing marks it: it is the saved part. The view is brought to it by hand, Shift+drag and the wheel, as the library frames a whole shelf of parts; in this page's pictures of the editor, Site is folded to its title by its ▾, so Selected has the rail. A slider is the next step.
 
 ![Part › Edit opens the part's editor at what is drawn](screenshots/14-01-part-edit-opens-the-part-s-editor-at-what-is-drawn.png)
+
+```
+envelope 10.00 × 10.00 × 10.00 mm · measured 10.00 × 10.00 × 10.00 mm (read from the STL)
+```
 
 ## 2. A size dragged is checked once the slider rests
 
@@ -36,6 +42,7 @@ Apply: rendered into the cache of variants and drawn in this tab at the size sta
 
 ```
 calibration_cube regenerated: an applied variant, not saved
+envelope 30.05 × 30.05 × 30.05 mm · measured 30.05 × 30.05 × 30.05 mm (read from the STL)
 ```
 
 ## 4. A reload draws what the tab applied, marked at a glance
@@ -50,7 +57,7 @@ Part › Edit again: the size slider stands at 30.05 mm, the variant's, the meas
 
 ## 6. OpenSCAD's refusal, by line
 
-A size of 70 mm, which this run's OpenSCAD refuses: Apply answers with OpenSCAD's own words, listed by file and line under the stage bar, the line marked in the part's source below, and carried on the status line. What is drawn does not change, and the refused size is still staged.
+A size of 70 mm, which this run's OpenSCAD refuses -- the test's stand-in, which refuses a cube of 60 mm or more where a real OpenSCAD renders it; walkthrough 16 meets a refusal of the SCAD's own. Apply answers with OpenSCAD's words, listed by file and line under the stage bar, the line marked in the part's source below, and carried on the status line. What is drawn does not change, and the refused size is still staged.
 
 ![OpenSCAD's refusal, by line](screenshots/14-06-openscad-s-refusal-by-line.png)
 
@@ -86,7 +93,7 @@ calibration_cube from the cache, nothing rendered: drawn as saved
 
 ## 10. Two tabs apply at once, and each draws its own
 
-A second tab of the same page: this one stages 23.91 mm and the other 36.20 mm, and both Apply, neither waiting. Each renders into a file of its own and draws its own variant, its address naming it; each, reloaded, draws its own again. This is the first tab, reloaded.
+A second tab of the same page: this one stages 23.91 mm and the other 36.20 mm, and both Apply, neither waiting. Each renders into a file of its own and draws its own variant, its address naming it; each, reloaded, draws its own again. This is the first tab, reloaded, its editor open and the view brought to the cube by hand.
 
 ![Two tabs apply at once, and each draws its own](screenshots/14-10-two-tabs-apply-at-once-and-each-draws-its-own.png)
 
@@ -101,5 +108,5 @@ Run it yourself:
 
 ```sh
 uv run pytest tests/e2e/test_part_loop.py --start-server   # this page alone
-uv run apothecary test run --e2e                           # with every browser test
+uv run apothecary test all                                 # with every browser test
 ```

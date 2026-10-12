@@ -468,7 +468,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
         "each with where it is pinned as a view, and Forget on a kept one. A picture "
         "kept and pinned nowhere waits to be chosen: one clicked is "
         "chosen, as shelf.png is here, and the ring's Picture › Folder pins it where "
-        "the ring stands -- the seven newest by name, an older one as its last cell -- "
+        "the ring stands -- the seven newest by modification time, an older one as its last cell -- "
         "as the status bar says.",
     )
 

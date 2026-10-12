@@ -68,6 +68,17 @@ def moments(*selectors: str) -> Tuple[Tuple[str, str], ...]:
     return tuple((selector, MOMENT) for selector in selectors)
 
 
+# All of an element's words, from the first to the last.
+ALL_WORDS = r"\S(?:.*\S)?"
+
+
+def all_words(*selectors: str) -> Tuple[Tuple[str, str], ...]:
+    """Blanks of all the words of what ``selectors`` name, one grey of one width: for an
+    element that holds a moment and nothing else, in a form MOMENT does not read (``Oct
+    12, 2026, 12:18 PM``), which blanked whole would be as wide as its words."""
+    return tuple((selector, ALL_WORDS) for selector in selectors)
+
+
 # The words a pattern matches, each wrapped in a span of a fixed width, and kept wrapped
 # while the page rewrites them (a poll redraws a list): an observer wraps again before
 # the next frame is drawn. ``window.__unblank()`` takes it all back.
