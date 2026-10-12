@@ -153,3 +153,34 @@ Two parts, on branches of their own from `build/part-iteration`:
 
 Each holds its loop with a browser test that goes round it, and walkthrough
 pages 14 and 16 are taken again when both are in.
+
+## Decided: parameters and text, tied together
+
+Asked of the owner on 2026-10-12, after the server's half was built:
+
+- **The text is the truth, both ways.** Moving a control rewrites that
+  parameter's assignment in the editor's text, keeping its line's comment
+  and range; editing an assignment in the text moves its control. Controls
+  and text are one draft, checked and rendered as one, and one undo history
+  holds both. Values are no longer passed to OpenSCAD on the side for a part
+  whose SCAD the page edits; a saved variant's SCAD carries its values, so
+  merging a variant applies them, and the variant's separate parameters
+  file goes. A variant saved before this has its parameters written into
+  its text when it is drawn.
+- **A part's default is its SCAD file as saved.** Defaults puts the part's
+  own text back. A part's Python model still checks values -- ranges, types,
+  whole numbers -- but no longer passes them on the side; where a model's
+  default and its SCAD's literal disagree, `apothecary problems` and the
+  part's checklist flag it.
+- **A computed assignment** (`wall = size * 0.1;`) gets a control that shows
+  the value it gives, marked as computed with its expression; moving it asks
+  once, then replaces the expression with the plain value in the text, an
+  edit undo takes back. Only top-level assignments get controls, as
+  OpenSCAD's customizer does.
+- **A part inside a submodule** is edited as its overlay: the editor holds
+  the include line and the assignments set, each control writing its line
+  there, with the upstream file one step away and read only; Save keeps
+  the overlay's text as the variant.
+- **A part whose SCAD is generated** (the snowplow, a made piece) stays one
+  way: its controls drive its model, and the generated text follows each
+  check, read only.
