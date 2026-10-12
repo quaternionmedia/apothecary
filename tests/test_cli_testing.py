@@ -39,8 +39,7 @@ def test_run_is_two_pytests_the_browser_part_in_its_own():
     unit, browser = testing.run_commands()
     assert _args(unit) == ["-q", "walkthrough", "tests", "--ignore=tests/e2e"]
     assert _args(browser) == ["-q", "tests/e2e", "--start-server", "-m", "walkthrough"]
-    _, every = testing.run_commands(e2e=True)
-    assert _args(every) == ["-q", "tests/e2e", "--start-server"]
+    assert _args(testing.browser_command(every=True)) == ["-q", "tests/e2e", "--start-server"]
     slow, _ = testing.run_commands(slow=True)
     assert slow[-1] == "--slow"
 
@@ -67,8 +66,16 @@ def test_all_runs_both_phases_and_exits_with_the_first_failure(pytest_exits, uni
     ]
 
 
+def test_run_e2e_names_test_all(pytest_exits):
+    ran = pytest_exits()
+    result = CliRunner().invoke(cli, ["test", "run", "--e2e"])
+    assert result.exit_code == 1
+    assert "use `apothecary test all`" in result.output
+    assert ran == []
+
+
 def test_help_says_what_run_and_all_each_do():
-    said = CliRunner().invoke(cli, ["test", "--help"]).output
+    said = " ".join(CliRunner().invoke(cli, ["test", "--help"]).output.split())
     assert "apothecary test run" in said and "apothecary test all" in said
     assert "every browser test" in said
     assert "uv run playwright install chromium" in said

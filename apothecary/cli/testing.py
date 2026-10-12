@@ -44,9 +44,9 @@ def browser_command(every: bool = False) -> list[str]:
     return argv
 
 
-def run_commands(e2e: bool = False, slow: bool = False) -> list[list[str]]:
+def run_commands(slow: bool = False) -> list[list[str]]:
     """The argvs `apothecary test run` executes, one pytest each, in order."""
-    return [unit_command(slow=slow), browser_command(every=e2e)]
+    return [unit_command(slow=slow), browser_command()]
 
 
 def _pytest(argv: list[str]) -> int:
@@ -67,46 +67,59 @@ def _first_failure(codes: list[int]) -> int:
     return next((code for code in ran if code != 0), 0)
 
 
-HELP = """Run the test suite: `run` is the ordinary command, `all` the whole of it.
+HELP = """Run the test suite, exiting as pytest does.
 
 \b
-  apothecary test run    the unit tests and the walkthrough, then the
-                         walkthrough's browser part in a pytest of its own
-  apothecary test all    the same, then every browser test
-  uv run pytest -q       the quick inner loop: unit tests and the walkthrough's
-                         pages; browser tests skip
+  apothecary test run   the ordinary command: the unit tests and the
+                        walkthrough, its browser part in a pytest of its own
+  apothecary test all   the same, then every browser test
+  uv run pytest         the quick inner loop, browser tests skipped
 
-The browser part needs Chromium: `uv run playwright install chromium`.
+The walkthrough's demonstration and every browser test drive Chromium:
+`uv run playwright install chromium` once per machine. CONTRIBUTING.md has the rest.
 """
 
 
-@click.group(help=HELP)
+@click.group(help=HELP, short_help="Run the tests: `test run` is the ordinary command.")
 def test():
     pass
 
 
-@test.command("run", context_settings={"ignore_unknown_options": True})
-@click.option("--e2e", is_flag=True, help="Run every browser test, not only the walkthrough's.")
-@click.option("--slow", is_flag=True, help="Also run tests marked slow.")
-@click.argument("pytest_args", nargs=-1, type=click.UNPROCESSED)
-def test_run(e2e: bool, slow: bool, pytest_args: tuple[str, ...]):
-    """The ordinary test command: the unit tests and the walkthrough, then the
-    walkthrough's browser part (pages 11 and 12) in a pytest of its own, on a
-    server of its own.
+def _every_browser_test_is_test_all(ctx, param, value):
+    if value:
+        raise click.ClickException(
+            "`apothecary test run --e2e` is retired; use `apothecary test all`"
+        )
+    return value
 
-    Further arguments go to both pytests. Exits with the first failing code;
-    a part that selects no test is not a failure when the other ran some.
+
+@test.command("run", context_settings={"ignore_unknown_options": True})
+@click.option(
+    "--slow", is_flag=True, help="Also run tests marked slow (full renders, accuracy benches)."
+)
+# Every browser test is `test all`'s; the flag stays, hidden, to say so.
+@click.option(
+    "--e2e", is_flag=True, hidden=True, expose_value=False, callback=_every_browser_test_is_test_all
+)
+@click.argument("pytest_args", nargs=-1, type=click.UNPROCESSED)
+def test_run(slow: bool, pytest_args: tuple[str, ...]):
+    """The ordinary command: the unit tests and the walkthrough, whose demonstration
+    drives Chromium in a pytest of its own; further arguments go to pytest.
+
+    They go to both pytests, and it exits with the first failing code; a part that
+    selects no test is not a failure when the other ran some.
     """
-    codes = [_pytest(argv + list(pytest_args)) for argv in run_commands(e2e=e2e, slow=slow)]
+    codes = [_pytest(argv + list(pytest_args)) for argv in run_commands(slow=slow)]
     raise SystemExit(_first_failure(codes))
 
 
 @test.command("all")
-@click.option("--slow", is_flag=True, help="Also run unit tests marked slow.")
+@click.option(
+    "--slow", is_flag=True, help="Also run unit tests marked slow (full renders, accuracy benches)."
+)
 def test_all(slow: bool):
-    """Everything: the unit tests and the walkthrough, then every browser test,
-    loops' pages 13 to 16 among them, in a pytest of its own. What CI runs, on
-    one machine."""
+    """The unit tests and the walkthrough, then every browser test in a pytest of its
+    own, on a server of its own (--start-server)."""
     unit_code = _pytest(unit_command(slow=slow))
     browser_code = _pytest(browser_command(every=True))
     raise SystemExit(unit_code or browser_code)

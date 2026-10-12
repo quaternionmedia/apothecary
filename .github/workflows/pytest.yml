@@ -118,7 +118,7 @@ jobs:
       run: uv run python tests/e2e/picture_drift.py
 
     - name: 📝 The committed walkthrough is the one this run wrote
-      # The browser tests write walkthrough pages 11, 12, 13, 14 and 15.
+      # The browser tests write walkthrough pages 11 to 16.
       run: git diff --exit-code -- 'walkthrough/*.md'
 
   e2e-2:

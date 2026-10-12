@@ -22,10 +22,14 @@ DEMONSTRATION_MODULES = {
 }
 
 
-def _collected(e2e: bool = False) -> str:
-    """What `apothecary test run` collects, its pytests' listings one after the other."""
+def _collected(every: bool = False) -> str:
+    """What `apothecary test run` collects (with ``every``, `test all`), its pytests'
+    listings one after the other."""
+    commands = testing.run_commands()
+    if every:
+        commands = [testing.unit_command(), testing.browser_command(every=True)]
     listings = []
-    for argv in testing.run_commands(e2e=e2e):
+    for argv in commands:
         done = subprocess.run(argv + ["--collect-only"], cwd=ROOT, capture_output=True, text=True)
         assert done.returncode == 0, done.stdout[-2000:] + done.stderr[-2000:]
         listings.append(done.stdout)
@@ -63,10 +67,10 @@ LOOP_PAGES = {
 
 
 def test_a_loop_s_page_is_written_by_the_browser_suite_alone():
-    quick, browser = _collected(), _collected(e2e=True)
+    quick, browser = _collected(), _collected(every=True)
     for module, (run, page) in LOOP_PAGES.items():
         assert run not in quick, f"`test run` collects {module.name}::{run}"
-        assert run in browser, f"`test run --e2e` does not collect {module.name}::{run}"
+        assert run in browser, f"`test all` does not collect {module.name}::{run}"
         assert page.is_file(), f"{page.name} is not written"
         # The page says who writes it, and how to run it alone.
         text = page.read_text(encoding="utf-8")
