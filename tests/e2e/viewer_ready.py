@@ -95,10 +95,30 @@ def by_hand(page: Page, key: str, distance: float) -> None:
     wheel only ever moves towards that middle), Shift+drag brings the piece to the middle
     of the world, and the wheel brings the view to about ``distance`` mm from it. No
     camera is moved behind the page's back; how far to drag and how many notches to turn
-    are worked out here, as a hand works them out by eye."""
+    are worked out here, as a hand works them out by eye.
+
+    The orbit's easing is off while it frames: it changes how the view gets there, over
+    hundreds of frames of software GL after each drag, and not where it ends."""
+    settled(page)
+    page.evaluate(EASING, False)
+    try:
+        _by_hand(page, key, distance)
+    finally:
+        page.evaluate(EASING, True)
+    settled(page)
+
+
+# The orbit's easing, off or as it was.
+EASING = """(on) => {
+    const orbit = window.fractalViewer.orbitControls;
+    if (!on) { window.__easing = orbit.enableDamping; orbit.enableDamping = false; }
+    else if (window.__easing !== undefined) { orbit.enableDamping = window.__easing; }
+}"""
+
+
+def _by_hand(page: Page, key: str, distance: float) -> None:
     import math
 
-    settled(page)
     spot = page.evaluate(SIGHTED, key)
     assert spot, f"{key} is not on screen"
     # Turned round about the vertical: OrbitControls turns 2π × rotateSpeed per canvas
@@ -130,7 +150,6 @@ def by_hand(page: Page, key: str, distance: float) -> None:
     page.mouse.move(spot["cx"], spot["cy"])
     for _ in range(notches):
         page.mouse.wheel(0, -NOTCH)
-    settled(page)
 
 
 # An element of Selected scrolled to just under the stage bar, which stands over the top
