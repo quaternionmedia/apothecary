@@ -16,7 +16,10 @@ Raw HTML in a page is shown as text, not run.
 background as it starts (``apothecary docs generate``: the doc-workflow
 browser tests against a scripted server), and the index says whether that
 run is still going or how it ended. It is off by default: a plain ``serve``
-regenerates nothing, and ``apothecary docs generate`` does it by hand.
+regenerates nothing, and ``apothecary docs generate`` does it by hand. A link
+to a generated page that is not there yet says how to make it.
+
+``/walkthrough`` is an index of the walkthrough's pages, in order.
 """
 
 from __future__ import annotations
@@ -88,8 +91,25 @@ def slug(text: str) -> str:
     return re.sub(r"\s+", "-", plain.strip())
 
 
+# A link whose words hold code (``[`generated/x.md`](generated/x.md)``): its words
+# are inline Markdown of their own, so a code span inside them is not mistaken for
+# the end of the link.
+LINK_WITH_CODE = re.compile(r"\[((?:[^\[\]`]|`[^`]*`)*`[^`]*`(?:[^\[\]`]|`[^`]*`)*)\]\(([^)\s]+)\)")
+
+
 def inline(text: str) -> str:
     """Inline Markdown to HTML, with everything else escaped."""
+    out: List[str] = []
+    pos = 0
+    for m in LINK_WITH_CODE.finditer(text):
+        out.append(_inline_code(text[pos : m.start()]))
+        out.append(_link(_inline_code(m.group(1)), html.escape(m.group(2), quote=False)))
+        pos = m.end()
+    out.append(_inline_code(text[pos:]))
+    return "".join(out)
+
+
+def _inline_code(text: str) -> str:
     out: List[str] = []
     pos = 0
     for m in INLINE_CODE.finditer(text):
@@ -330,6 +350,9 @@ li { margin: 0.2rem 0; }
 ul ul, ol ul, ul ol { margin-top: 0.2rem; }
 hr { border: 0; border-top: 1px solid #2a332a; margin: 2rem 0; }
 input[type=checkbox] { vertical-align: middle; }
+.absent { color: #e8b04a; font-size: 0.88em; }
+.pages { list-style: none; padding-left: 0; }
+.pages li { margin: 0.35rem 0; }
 """
 
 PAGE = """<!DOCTYPE html>
@@ -338,6 +361,7 @@ PAGE = """<!DOCTYPE html>
 <style>{style}</style></head>
 <body>
 <div class="bar"><a href="/viewer">🧪 Apothecary</a> <a href="/docs/README.md">docs</a>
+<a href="/walkthrough">walkthrough</a>
 <span class="crumb">{crumb}</span><span class="spacer"></span>
 <span class="refresh {refresh_class}" title="{refresh_title}">{refresh_text}</span>
 <a href="/openapi.json" title="The HTTP API, as OpenAPI">API</a></div>
@@ -381,30 +405,79 @@ def refresh_note() -> Tuple[str, str, str]:
     )
 
 
+NOT_MADE = (
+    "not made here yet: <code>apothecary docs generate</code> makes it, from the browser "
+    "tests marked docs"
+)
+
+
+def _generated(target: Path) -> bool:
+    """Whether ``target`` is under docs/generated/, which is made and not committed."""
+    return GENERATED_ROOT.resolve() in target.resolve().parents
+
+
 def _resolve(root: Path, rel: str) -> Path:
     target = (root / rel).resolve()
     if root.resolve() not in target.parents and target != root.resolve():
         raise HTTPException(status_code=404, detail="not a documentation path")
     if not target.is_file():
+        if _generated(target):
+            raise HTTPException(
+                status_code=404,
+                detail=f"no such page: {rel} -- docs/generated/ is "
+                + re.sub(r"</?code>", "", NOT_MADE),
+            )
         raise HTTPException(status_code=404, detail=f"no such page: {rel}")
     return target
+
+
+HREF = re.compile(r'<a href="([^"#?]+)([#?][^"]*)?">(.*?)</a>')
+
+
+def _mark_absent(body: str, here: Path) -> str:
+    """A link to a generated page that is not there yet says so, and how to make it:
+    docs/generated/ is not committed, so on a fresh clone it is empty."""
+
+    def mark(m: re.Match) -> str:
+        href = html.unescape(m.group(1))
+        if not _local(href):
+            return m.group(0)
+        if href.startswith("/"):
+            prefix, _, rest = href.lstrip("/").partition("/")
+            root = {"docs": DOCS_ROOT, "walkthrough": WALKTHROUGH_ROOT}.get(prefix)
+            if root is None:
+                return m.group(0)
+            target = root / rest
+        else:
+            target = here / href
+        if _generated(target) and not target.exists():
+            return f'{m.group(0)} <span class="absent">({NOT_MADE})</span>'
+        return m.group(0)
+
+    return HREF.sub(mark, body)
 
 
 def render_page(root: Path, prefix: str, rel: str) -> HTMLResponse:
     target = _resolve(root, rel)
     body, title = render_markdown(target.read_text(encoding="utf-8"))
+    return _page(
+        _mark_absent(body, target.parent), title or target.stem, f"{prefix.strip('/')}/{rel}"
+    )
+
+
+def _page(body: str, title: str, crumb: str, status_code: int = 200) -> HTMLResponse:
     cls, text, tip = refresh_note()
-    crumb = html.escape(f"{prefix.strip('/')}/{rel}")
     return HTMLResponse(
         PAGE.format(
             style=STYLE,
-            title=html.escape(title or target.stem),
-            crumb=crumb,
+            title=html.escape(title),
+            crumb=html.escape(crumb),
             body=body,
             refresh_class=cls,
             refresh_text=html.escape(text),
             refresh_title=html.escape(tip, quote=True),
-        )
+        ),
+        status_code=status_code,
     )
 
 
@@ -423,9 +496,52 @@ async def docs_page(rel: str):
     return _serve(DOCS_ROOT, "/docs", rel)
 
 
+@router.get("/walkthrough")
+async def walkthrough_index():
+    return walkthrough_index_page()
+
+
 @router.get("/walkthrough/{rel:path}")
 async def walkthrough_page(rel: str):
+    if rel in ("", "README.md") and not (WALKTHROUGH_ROOT / "README.md").is_file():
+        return walkthrough_index_page()
     return _serve(WALKTHROUGH_ROOT, "/walkthrough", rel)
+
+
+def walkthrough_pages() -> List[Tuple[str, str]]:
+    """The walkthrough's pages in order -- by their numbers, so 00, Getting started,
+    is first -- each as its file name and its title (its first heading), led by its
+    number where the heading does not say it."""
+    found: List[Tuple[str, str]] = []
+    if not WALKTHROUGH_ROOT.is_dir():
+        return found
+    for page in sorted(WALKTHROUGH_ROOT.glob("*.md")):
+        if page.name == "README.md":
+            continue
+        _body, title = render_markdown(page.read_text(encoding="utf-8"))
+        title = title or page.stem
+        number = page.name.split("-", 1)[0]
+        if number.isdigit() and not title.startswith(number):
+            title = f"{number} — {title}"
+        found.append((page.name, title))
+    return found
+
+
+def walkthrough_index_page() -> HTMLResponse:
+    """The walkthrough's pages, in order, each a link to itself."""
+    rows = "".join(
+        f'<li><a href="/walkthrough/{html.escape(name, quote=True)}">{html.escape(title)}</a></li>'
+        for name, title in walkthrough_pages()
+    )
+    body = (
+        "<h1>The walkthrough</h1>"
+        "<p>The executable path through this repository, a page at a time. Each page is "
+        "checked by the tests, or written by the run it describes, so it says what the "
+        'code does today. <a href="/docs/README.md">The documentation</a> says what each '
+        "page shows, and lists the guides beside them.</p>"
+        f'<ul class="pages">{rows}</ul>'
+    )
+    return _page(body, "The walkthrough", "walkthrough/")
 
 
 def _serve(root: Path, prefix: str, rel: str):

@@ -80,8 +80,10 @@ bench that needs no hardware: an idle simulated Ender pinned to printer_1's
 mainboard, a simulated ESP32 devkit, and scripted firmware tools. It slices
 with the real OrcaSlicer when one is installed, and says how to install it
 when not; a print goes to the simulated printer. A banner on the page says it
-is the demo, and no real board is touched. Without `--demo`, `serve` is the
-same viewer on your own state and the boards plugged into this machine.
+is the demo, and no real board is touched. Its state is `.cache/demo` in the
+checkout, kept between runs; deleting it starts the demo afresh. Without
+`--demo`, `serve` is the same viewer on your own state and the boards plugged
+into this machine.
 
 The page opens on the garage. The world fills it, and one rail beside it
 holds Site (the tree, its problems, its SCAD, its pins and jobs) and Selected,

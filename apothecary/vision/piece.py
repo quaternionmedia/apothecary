@@ -92,7 +92,10 @@ def candidates(record: Made) -> Dict[str, List[ContestedValue]]:
         "height": [
             ContestedValue(
                 value=found["height"],
-                source=f"THICKNESS_GUESS ({THICKNESS_GUESS:g}) × the shorter side, {record.finder}",
+                source=(
+                    f"a guess: {THICKNESS_GUESS:.0%} of the shorter side the {record.finder} "
+                    "finder measured"
+                ),
                 note="a picture from above cannot see thickness; the guess stands until a "
                 "person states one",
             )

@@ -195,6 +195,8 @@ def _make(page, url: str, word: str) -> str:
     )
     (piece,) = set(_attached(page, url)["made"]) - before
     expect(_row(page, piece)).to_be_visible(timeout=10000)
+    # Make selects the piece it made, as Add here selects the camera it added.
+    page.wait_for_function("(p) => window.fractalViewer.selectedName === p", arg=piece)
     return piece
 
 
@@ -389,9 +391,9 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     settled(page)
     story.shows(
         "Make stands a shape up as a piece",
-        f"The bench's ring, Picture › Make and the disc: {disc} stands on its outline, a "
-        "row of Site. The status line names the two steps after it: Part › Edit "
-        "adjusts it, and a printer's Machine prints it.",
+        f"The bench's ring, Picture › Make and the disc: {disc} stands on its outline, "
+        "selected, a row of Site. The status line names the two steps after it: "
+        "Part › Edit adjusts it, and a printer's Machine prints it.",
         shown=_status(page).inner_text(),
         blank=CHANGING,
     )

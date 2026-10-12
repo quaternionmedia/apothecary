@@ -494,3 +494,57 @@ def test_editing_a_parts_scad_twice_round(
     assert [(v["name"], v["merged"]) for v in listed] == [("taller", False), ("variant-1", False)]
     assert _variant_refs_here() == refs_before
     assert CUBE.source_file.read_text() == own
+
+
+@pytest.mark.e2e
+def test_after_a_scad_edit_defaults_then_apply_draws_the_saved_part(
+    page: Page, scad_url: str, cube_as_it_was
+):
+    """The onboarding review found the way back stuck: after a SCAD edit, Part ›
+    Defaults staged the numbers already drawn, and Part › Apply said nothing was
+    staged, the amber mark and ?variant= staying. A variant drawn with the part's own
+    numbers is Apply's to undo: it draws the saved part, the part's own SCAD back in
+    the editor, the mark and the address's variant gone -- from the ring, and with the
+    editor's own Defaults and Apply."""
+    quarter = "translate([0, 0, size]) cube(size / 4);"  # 12.5 mm tall, this test's own
+    assert page.request.post(f"{scad_url}/parts/{PART}/stl/generate").ok
+    _open(page, f"{scad_url}/viewer/sites/parts_library")
+    _ring(page, "Part", "Edit")
+    expect(_code(page)).to_be_visible(timeout=20000)
+    own = _text(page)
+
+    for from_the_ring in (True, False):
+        _code(page).click()
+        page.keyboard.press("Control+End")
+        page.keyboard.insert_text(quarter if own.endswith("\n") else "\n" + quarter)
+        expect(_status(page)).to_contain_text(
+            "from its edited SCAD: an applied variant, not saved", timeout=60000
+        )
+        settled(page)
+        assert _height(page) == pytest.approx(12.5, abs=0.05)
+        assert re.search(rf"[?&]variant={PART}", page.url), page.url
+        expect(page.locator(".part-editor")).to_have_class(re.compile(r"\bdrawn-from-variant\b"))
+        # Nothing differs from what is drawn, and still there is the saved part to go to.
+        expect(page.locator("#apply-btn")).to_have_text("Apply: the saved part")
+        expect(page.locator("#apply-btn")).to_be_enabled()
+        if from_the_ring:
+            _ring(page, "Part", "Defaults")
+            expect(_status(page)).to_contain_text(
+                "the part's own numbers are staged", timeout=10000
+            )
+            _ring(page, "Part", "Apply")
+        else:
+            page.locator("#defaults-btn").click()
+            page.locator("#apply-btn").click()
+        expect(_status(page)).to_contain_text(f"{PART} from the cache", timeout=30000)
+        expect(_status(page)).to_contain_text("drawn as saved")
+        settled(page)
+        assert _height(page) == pytest.approx(10, abs=0.05)  # the saved cube, its own size
+        assert "variant=" not in page.url, page.url
+        expect(page.locator(".part-editor")).not_to_have_class(
+            re.compile(r"\bdrawn-from-variant\b")
+        )
+        assert _text(page) == own
+        expect(_said(page)).to_contain_text("The part's own SCAD, as the saved part is drawn")
+        expect(page.locator("#stage-summary")).to_have_text("No staged changes")
+        expect(page.locator("#apply-btn")).to_be_disabled()

@@ -106,21 +106,43 @@ export function mountBuild(root, { base = "", tasks = null, say = null, port = n
         };
     }
 
+    // What each button does, said as its tooltip; disabled, why first, and what to do.
+    const COMPILE_TIP = "Build the sketch for the board; nothing is sent to a board";
+    const UPLOAD_TIP = "Build it, then write it to the board on the port (asks first)";
+    // A tooltip, keeping the ring's address the page wrote after it (` · ⌗932`).
+    function tip(el, text) {
+        el.title = el.dataset.address ? `${text} · ⌗${el.dataset.address}` : text;
+    }
     function enable() {
         const s = sketchOf(chosen());
         const ok = !!s && !!moduleOf(s).ok;
         const busy = !!(tasks && tasks.running()) || !!(status && status.active_task && status.active_task.status === "running");
         const ready = ok && (!needsBoard(s) || FQBN.test(fqbn()));
-        $(".compile-btn").disabled = !ready || busy;
-        $(".upload-btn").disabled = !ready || !portOf() || busy;
+        const why = !s ? "Disabled: choose a sketch first"
+            : !ok ? `Disabled: ${moduleOf(s).id === "arduino" ? "arduino-cli" : moduleOf(s).label} is not installed -- its Install, above, puts it in`
+            : !ready ? "Disabled: give the board to build for, its FQBN (arduino:avr:uno), first"
+            : busy ? "Disabled: a task is running -- wait for it, or Cancel it"
+            : null;
+        const noPort = !why && !portOf() ? "Disabled: choose the port to upload to first" : null;
+        $(".compile-btn").disabled = !!why;
+        tip($(".compile-btn"), why ? `${why}. ${COMPILE_TIP}` : COMPILE_TIP);
+        $(".upload-btn").disabled = !!(why || noPort);
+        tip($(".upload-btn"), why || noPort ? `${why || noPort}. ${UPLOAD_TIP}` : UPLOAD_TIP);
     }
 
     async function load(given = null) {
-        const [s, list, all, found] = await Promise.all([
+        const [s, list] = await Promise.all([
             given ? Promise.resolve(given) : api("/firmware/status").catch(() => null),
             api("/firmware/sketches").catch(() => []),
-            api("/firmware/boards/all").catch(() => []),
-            port ? Promise.resolve(null) : api("/firmware/devices").catch(() => ({ devices: [] })),
+        ]);
+        // What the status says cannot be had is not asked for: the boards arduino-cli
+        // knows need arduino-cli, and the ports need a module that finds them -- each
+        // asked of a tool that is not there was a 503 in the console.
+        const findsPorts = ((s && s.toolchains) || []).some((t) => t.ok && (t.can || []).includes("find ports"));
+        const [all, found] = await Promise.all([
+            s && s.arduino_cli_ok ? api("/firmware/boards/all").catch(() => []) : Promise.resolve([]),
+            port ? Promise.resolve(null)
+                : findsPorts || !s ? api("/firmware/devices").catch(() => ({ devices: [] })) : Promise.resolve({ devices: [] }),
         ]);
         if (!alive) return;
         status = s; sketches = list;
@@ -211,7 +233,7 @@ export function mountRawFlash(root, { base = "", tasks = null, say = null, port 
     function enable() {
         const busy = !!(tasks && tasks.running()) || !!(status && status.active_task && status.active_task.status === "running");
         $(".esp-flash-btn").disabled = !(status && status.esptool_ok) || !port() || busy;
-        $(".esp-note").textContent = status && !status.esptool_ok ? "esptool not found: pip install esptool, or install the esp32 core (it bundles one)." : "";
+        $(".esp-note").textContent = status && !status.esptool_ok ? "esptool not found: uv tool install esptool, or install the esp32 core (it bundles one)." : "";
     }
     async function flash() {
         const to = port(), list = images();
