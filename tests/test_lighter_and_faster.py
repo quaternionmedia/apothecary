@@ -296,7 +296,7 @@ class TestTheSCADOfAVariant:
         applied = client.post("/parts/block/stl/generate", json={"params": {"width": 50}}).json()
         r = client.get(f"/parts/block/scad?variant={applied['variant']}")
         written = SCAD.replace("width = 34;", "width = 50;")
-        assert (r.text, r.headers["x-part-scad"]) == (written, "draft")
+        assert (r.text, r.headers["x-part-scad"]) == (written, "values")
         own = client.post("/parts/block/stl/generate", json={"params": {}}).json()
         r = client.get(f"/parts/block/scad?variant={own['variant']}")
         assert (r.text, r.headers["x-part-scad"]) == (SCAD, "source")

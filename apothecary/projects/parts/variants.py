@@ -530,6 +530,7 @@ def make_variant(
     cache: Optional[Path] = None,
     draft: Optional[str] = None,
     place: bool = True,
+    values: Optional[Mapping[str, Any]] = None,
 ) -> Made:
     """The part rendered with ``params``, from the cache when it is there.
 
@@ -548,6 +549,12 @@ def make_variant(
     part's own text (its SCAD, or for a part in a submodule its overlay
     setting nothing: ``texts.own_text``) is the part. A part built by Python
     geometry has no SCAD to draft (ValueError).
+
+    ``values``, with ``draft``: the draft is the part's own text with these
+    values (checked, by the model's names) written into it, as Apply of a
+    part's numbers is. It renders as any draft does -- nothing on the side --
+    and is recorded as the part with those values: ``params`` them, ``draft``
+    None, so a caller that thinks in values reads what it sent.
     """
     if draft is not None:
         if part.geometry({}) is not None:
@@ -567,7 +574,10 @@ def make_variant(
     key = variant_key(part, params, renderer, draft=draft)
     stl, record_path = variant_paths(part, key, cache)
     made = Made(params=params, openscad=openscad_of(renderer), backend=backend_of(renderer))
-    if draft is not None:
+    as_part = draft is not None and values is not None
+    if as_part:
+        made.params = without_defaults(part, dict(values))
+    elif draft is not None:
         made.draft = hashlib.sha256(draft.encode("utf-8")).hexdigest()
         if not params:
             # A text carries its values: what it sets otherwise than the part's own.
@@ -660,7 +670,7 @@ def make_variant(
                 "messages": [m.model_dump() for m in made.messages],
                 "draft": made.draft,
             }
-            if draft is not None:
+            if draft is not None and not as_part:
                 _write_atomically(variant_draft_path(part, key, cache), draft.encode("utf-8"))
             _write_atomically(
                 record_path,

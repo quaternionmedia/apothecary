@@ -452,7 +452,8 @@ def get_part_scad(
     ``variant`` answers the SCAD a cached variant was rendered from: for a part
     built by Python geometry, what it generates for the variant's parameters
     (the parameters an Apply drew); for any other, the draft it was rendered
-    from (``X-Part-Scad: draft``), else its SCAD file. 404 once the cache has
+    from (``X-Part-Scad: draft``), else its own text with the values it was
+    applied with written in (``values``; none: ``source``). 404 once the cache has
     let it go.
 
     A part whose SCAD is in a submodule (gridfinity) answers the text it is
@@ -535,12 +536,16 @@ def _variant_scad(name: str, part: BasePart, key: str) -> PlainTextResponse:
     text = read_variant_draft(part, key)
     if text is not None:
         return PlainTextResponse(text, headers={**headers, "X-Part-Scad": "draft"})
-    from .projects.parts.texts import is_overlaid, own_text
+    from .projects.parts.texts import is_overlaid, own_text, with_params
 
-    return PlainTextResponse(
-        own_text(part),
-        headers={**headers, "X-Part-Scad": "overlay" if is_overlaid(part) else "source"},
-    )
+    # The part's own text with the values it was applied with written in: what rendered.
+    values = dict(record.get("params") or {})
+    try:
+        text = with_params(part, own_text(part), part.validate_overrides(values))
+    except (ValueError, TypeError):
+        text, values = own_text(part), {}
+    kind = "overlay" if is_overlaid(part) else "source"
+    return PlainTextResponse(text, headers={**headers, "X-Part-Scad": "values" if values else kind})
 
 
 @app.get("/parts/{name}/stl")
@@ -628,10 +633,8 @@ def generate_part_stl(
     For a part whose SCAD is its source, the values are written into its own
     text (its SCAD, or a part in a submodule's overlay), and that text renders,
     as a draft does (``POST /parts/{name}/draft/render``): nothing is passed to
-    OpenSCAD on the side. Its answer's ``draft`` is then that text's sha256
-    (None for the part's own text: the defaults), served at
-    ``/parts/{name}/variants/{variant}/scad``, and ``params`` what it sets
-    otherwise than the part's own text, by the names the SCAD uses. A part
+    OpenSCAD on the side. It is answered, and recorded, as the part with those
+    values: ``params`` them, ``draft`` null; its key is that text's. A part
     built by Python geometry renders what its geometry generates for them.
 
     ``bounds`` is the envelope the part declares; ``measured`` is the box of
@@ -663,7 +666,7 @@ def generate_part_stl(
 
         text = with_params(part, own_text(part), overrides)
         version = body.editor_version if body else None
-        return render_text(self_api(), name, part, text, force, page, version)
+        return render_text(self_api(), name, part, text, force, page, version, values=overrides)
 
     cancel = _page_renders.begin(part.name, page, request_wants(overrides, force))
     try:

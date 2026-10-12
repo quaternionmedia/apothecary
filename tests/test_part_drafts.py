@@ -377,11 +377,15 @@ class TestTheRenderRoute:
         client = TestClient(app)
         own = client.post("/parts/block/stl/generate", json={"params": {}}).json()
         assert own["draft"] is None and own["saved"] is True
-        # Apply's values are written into the part's text: a draft, served as text.
+        # Apply's values are written into the part's text, which is what renders; it
+        # is recorded as the part with those values, no draft of its own.
         body = client.post("/parts/block/stl/generate", json={"params": {"width": 50}}).json()
         written = SCAD.replace("width = 34;", "width = 50;")
-        assert body["draft"] == draft_digest(written) and body["params"] == {"width": 50}
-        assert client.get(f"/parts/block/variants/{body['variant']}/scad").text == written
+        assert body["draft"] is None and body["params"] == {"width": 50}
+        assert stl_names(client.get(body["stl_url"]).content).startswith(draft_digest(written))
+        assert client.get(f"/parts/block/variants/{body['variant']}/scad").status_code == 404
+        r = client.get(f"/parts/block/scad?variant={body['variant']}")
+        assert (r.text, r.headers["x-part-scad"]) == (written, "values")
         assert client.get("/parts/block/variants/not-a-key/scad").status_code == 404
 
     def test_a_newer_render_from_the_page_stops_the_older(self, openscad, block):

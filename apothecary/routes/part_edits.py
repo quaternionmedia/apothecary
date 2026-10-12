@@ -407,11 +407,14 @@ def render_text(
     page: Optional[str],
     editor_version=None,
     sent: Optional[str] = None,
+    values: Optional[Dict[str, Any]] = None,
 ):
     """A part's text rendered into the variant cache, as generate and a draft's
     render answer it: its values checked first (a refused one is a 422 saying
     which and why), nothing passed on the side. A newer request from the same
-    ``page`` stops this one wherever it is (409)."""
+    ``page`` stops this one wherever it is (409). ``values``: the text is the
+    part's own with these written in (Apply of its numbers), recorded as the
+    part with them -- ``params`` them, ``draft`` null."""
     renderer = part_renderer(part)
     cancel = api._page_renders.begin(part.name, page, f"{force}\0{draft_digest(text)}")
     try:
@@ -438,7 +441,7 @@ def render_text(
                     status_code=422,
                     detail="; ".join(f"{e.field}: {e.message}" for e in checked.errors),
                 )
-            made = make_variant(part, {}, force=force, cancel=cancel, draft=text)
+            made = make_variant(part, {}, force=force, cancel=cancel, draft=text, values=values)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
     finally:
@@ -449,7 +452,7 @@ def render_text(
         made,
         checked.model_params,
         editor_version,
-        shown_params=differences(text, own_text(part)),
+        shown_params=None if values is not None else differences(text, own_text(part)),
         text=text if sent is not None and text != sent else None,
     )
 
