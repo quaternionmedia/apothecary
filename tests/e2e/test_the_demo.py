@@ -401,10 +401,15 @@ def test_the_demo_goes_round_designing_a_part_and_editing_its_scad(page: Page, d
 
 
 @pytest.mark.e2e
-def test_the_demo_touched_no_real_port_and_left_the_persons_folders_alone(demo):
+def test_the_demo_touched_no_real_port_and_left_the_persons_folders_alone(demo, browser_name):
     """Last in the module: the guard wrote nothing down -- no serial device was opened
     and no real port listed, by the server or any tool it ran -- and the person's own
-    state and tools folders were never made. The demo's folder holds its state."""
+    state and tools folders were never made. The demo's folder holds its state.
+
+    ``browser_name`` makes it a [chromium] test like the ones before it: pytest runs a
+    test with no browser after every test with one, so in a run with another browser
+    test module after this one it ran last of all, on a second demo of its own, and
+    found none of the first one's pictures."""
     touched = Path(demo["env"]["APOTHECARY_TEST_SERIAL_GUARD"])
     assert not touched.exists(), touched.read_text()
     person = demo["folder"] / "person"
