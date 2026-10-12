@@ -1538,6 +1538,9 @@
                 this.camera.updateProjectionMatrix();
                 this.renderer.setSize(width, height, false);
                 if (this.anchors) this.anchors.update();  // badges stand where the new projection puts them
+                // Drawn again at the new size: the world is drawn only when asked, or when
+                // what is drawn changed (which a new size is, but asked plainly here).
+                this.invalidate();
             }
 
             // Each frame the browser offers: the world is drawn only when something
@@ -1559,6 +1562,7 @@
                     this.anchors.update();
                     this.renderer.render(this.scene, this.camera);
                     this.framesDrawn += 1;
+                    this.drawnAt = [this.canvas.width, this.canvas.height];  // the size the last frame was drawn at
                     // Read again after drawing: what the drawing itself settles (the
                     // arrows sized to the view) is not a change to draw again for.
                     this.sceneChanged();
