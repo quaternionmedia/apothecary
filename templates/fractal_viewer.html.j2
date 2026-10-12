@@ -752,6 +752,9 @@
         const SELECTED_EDGE_COLOR = 0xffffff;
         const VIOLATION_COLOR = 0xcc3333;
         const BUILD_VOLUME_COLOR = 0x33ffdd;
+        // A face a step behind the edges drawn on it, so an edge line wins the depth
+        // test every time, not by the order the meshes happened to load in.
+        const FACE_BEHIND_ITS_EDGES = { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 };
         // A part drawn from a variant this tab applied, rather than from the part's
         // own (saved) STL: its edges, and a faint glow, in a quiet amber, and its
         // editor edged to match. Gone when the defaults, or the saved part, are drawn.
@@ -1804,7 +1807,7 @@
                     }
 
                     const geometry = new THREE.BoxGeometry(1, 1, 1);
-                    const material = new THREE.MeshPhongMaterial({ transparent: true, opacity: 0.65 });
+                    const material = new THREE.MeshPhongMaterial({ ...FACE_BEHIND_ITS_EDGES, transparent: true, opacity: 0.65 });
                     const mesh = new THREE.Mesh(geometry, material);
                     const edges = new THREE.EdgesGeometry(geometry);
                     const wireframe = new THREE.LineSegments(
@@ -2329,7 +2332,7 @@
                 // looking down -y, its body above it.
                 const body = new THREE.BoxGeometry(across, deep, up);
                 body.translate(0, lensH + deep / 2, 0);
-                const mesh = new THREE.Mesh(body, new THREE.MeshPhongMaterial({ flatShading: false }));
+                const mesh = new THREE.Mesh(body, new THREE.MeshPhongMaterial({ ...FACE_BEHIND_ITS_EDGES, flatShading: false }));
                 const lens = new THREE.Mesh(new THREE.CylinderGeometry(lensR, lensR, lensH, 32).translate(0, lensH / 2, 0), new THREE.MeshPhongMaterial({ color: 0x111111 }));
                 lens.name = 'lens';
                 mesh.add(lens);
@@ -5210,7 +5213,7 @@
                 } else {
                     return null;
                 }
-                const mesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ flatShading: false }));
+                const mesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ ...FACE_BEHIND_ITS_EDGES, flatShading: false }));
                 mesh.position.set(center[0], center[1], center[2]);
                 const edges = new THREE.EdgesGeometry(geometry, 30);
                 const wireframe = new THREE.LineSegments(
@@ -5261,7 +5264,7 @@
                             applyScadAxisSwap(geometry);
                             geometry.computeVertexNormals();
                             geometry.center();
-                            const mesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ flatShading: false }));
+                            const mesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ ...FACE_BEHIND_ITS_EDGES, flatShading: false }));
                             // Drop the real mesh into the same world slot the
                             // placeholder box already occupied -- same fallback
                             // chain as boundsFor, so a composite node without

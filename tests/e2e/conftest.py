@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from browsers import launch, launched  # noqa: E402
 from doc_capture import GENERATED_DOCS_ROOT, DocRecorder, Walkthrough  # noqa: E402
 from firmware_helpers import write_fake_arduino_cli  # noqa: E402
+from parts_built import described  # noqa: E402
 from ports import refuse_a_held_port  # noqa: E402
 from shards import shard_of  # noqa: E402
 
@@ -87,7 +88,35 @@ def _free_port() -> int:
 
 
 @pytest.fixture(scope="session")
-def start_server(tmp_path_factory):
+def every_stl_built(tmp_path_factory):
+    """Call it: every part's STL built, once a session, by the OpenSCAD the servers run
+    (tests/e2e/parts_built.py), before the first server starts or the first picture is
+    taken; what it found -- that OpenSCAD's version and ``path``, and what a page records
+    of it, ``said``. Nothing is built until it is called, so a run with no server to
+    drive builds nothing."""
+    said: list[dict] = []
+
+    def _built() -> dict:
+        if not said:
+            env = {**os.environ, "APOTHECARY_TOOLS_DIR": str(tmp_path_factory.mktemp("tools"))}
+            done = subprocess.run(
+                [sys.executable, str(Path(__file__).with_name("parts_built.py"))],
+                cwd=ROOT,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            if done.returncode != 0:
+                pytest.exit(f"building every part's STL failed:\n{done.stderr[-3000:]}", 1)
+            found = json.loads(done.stdout.strip().splitlines()[-1])
+            said.append({**found, "said": described(found)})
+        return said[0]
+
+    return _built
+
+
+@pytest.fixture(scope="session")
+def start_server(tmp_path_factory, every_stl_built):
     """Factory: ``start_server(env_overrides=None, port=None) -> url``.
 
     Each server runs the scripted arduino-cli (the Uno on /dev/ttyFAKE0, /dev/ttyFAKE1
@@ -156,6 +185,7 @@ def start_server(tmp_path_factory):
         else:
             refuse_a_held_port(port)
         url = f"http://127.0.0.1:{port}"
+        every_stl_built()  # none to build in the background while pictures are taken
         proc = subprocess.Popen(
             [sys.executable, "-c", SERVE, str(port), str(tmp / "builds")],
             cwd=ROOT,
@@ -277,7 +307,7 @@ def _slugify_test_name(name: str) -> str:
 
 
 @pytest.fixture
-def doc_recorder(page, docs_enabled, request):
+def doc_recorder(page, docs_enabled, request, every_stl_built):
     """Factory: doc_recorder(workflow, title, intro) -> DocRecorder.
 
     Every DocRecorder created through this fixture is finalized (manifest
@@ -290,7 +320,12 @@ def doc_recorder(page, docs_enabled, request):
 
     def _make(workflow: str, title: str, intro: str) -> DocRecorder:
         recorder = DocRecorder(
-            page=page, workflow=workflow, title=title, intro=intro, enabled=docs_enabled
+            page=page,
+            workflow=workflow,
+            title=title,
+            intro=intro,
+            enabled=docs_enabled,
+            stls=every_stl_built()["said"] if docs_enabled else None,
         )
         recorders.append(recorder)
         return recorder
@@ -375,7 +410,7 @@ def unasked_page(_unasked_browser, base_url):
 
 
 @pytest.fixture
-def walkthrough(page, request):
+def walkthrough(page, request, every_stl_built):
     """The walkthrough's recorder, written out however the test ends.
 
     Not gated on --generate-docs: every run of a walkthrough test writes its page.
@@ -411,6 +446,7 @@ def walkthrough(page, request):
             does_not_show=does_not_show,
             browser_suite_only=browser_suite_only,
             module=request.node.path.relative_to(ROOT).as_posix(),
+            stls=every_stl_built()["said"],
         )
         made.append(recorder)
         return recorder

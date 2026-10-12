@@ -46,7 +46,7 @@ WORKFLOW_DOC_TEMPLATE = """# {title}
 
 {intro}
 
-{steps}
+{stls}{steps}
 ## Walkthrough GIF
 
 ![{title} walkthrough]({workflow}.gif)
@@ -204,6 +204,8 @@ def _simulated_device_env(env: dict) -> dict:
     env["APOTHECARY_STATE_DIR"] = str(tmp / "state")
     env["APOTHECARY_SERIAL_ENGINE"] = "simulated"
     env["APOTHECARY_SIMULATED_PRINTER"] = "printing"
+    # Its SD print held at one point, so its pictures are the same on every run.
+    env["APOTHECARY_SIMULATED_PROGRESS"] = "0.41"
     return env
 
 
@@ -273,6 +275,8 @@ def _render_workflow(workflow_dir: Path) -> None:
     doc = WORKFLOW_DOC_TEMPLATE.format(
         title=manifest["title"],
         intro=manifest["intro"],
+        # Which OpenSCAD built the STLs the pictures draw (tests/e2e/parts_built.py).
+        stls=f"{manifest['stls']}\n\n" if manifest.get("stls") else "",
         steps=steps_md,
         workflow=workflow,
         video_section=video_section,
