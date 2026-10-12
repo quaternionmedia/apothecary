@@ -710,6 +710,18 @@
         // A render a newer Apply from this page stopped (409): nothing to say about it.
         class Superseded extends Error {}
 
+        // Why a part's editor has no controls, from the 404 GET /parts/{name}/params
+        // answers: the OpenSCAD in use cannot list a SCAD's parameters (2021.01), it
+        // could not read the SCAD, or the part declares none.
+        async function noParameters(response) {
+            const detail = (await response.json().catch(() => null))?.detail;
+            if (detail && typeof detail === 'object') {
+                if (detail.lists === false) return `Its SCAD's parameters are not listed: this OpenSCAD (${detail.openscad || 'the one in use'}) cannot list them. apothecary openscad install fetches a snapshot that can.`;
+                if ((detail.messages || []).length) return `OpenSCAD could not read its SCAD: ${detail.messages[0].message}`;
+            }
+            return 'No parameters declared.';
+        }
+
         // Subsystem colors -- a node's own ``category`` if set, else
         // whatever the nearest ancestor's was (already resolved server-side,
         // see api.py's _assembly_tree docstring on category inheritance).
@@ -3403,7 +3415,7 @@
                     // what the draft declares, as the newest check listed them.
                     const scad = this.scadStages[target.key];
                     const declared = scad?.check?.edited && scad.check.source === 'customizer' ? scad.check : null;
-                    if (!response.ok && !declared) { host.textContent = 'No parameters declared.'; return; }
+                    if (!response.ok && !declared) { host.textContent = await noParameters(response); return; }
                     const spec = declared ? { fields: declared.fields, bounds: null } : await response.json();
                     if (drawn) {
                         Object.assign(stage.committed, drawn.params ?? {});
@@ -4988,7 +5000,7 @@
                         </div>`;
                     const q = this.queryResult ? `<div class="device-query">${esc(this.queryResult.text)}</div>` : '';
                     if (!this.bindingsLoaded) body = `<div class="device-line device-empty">scanning devices…</div>`;
-                    else if (this.devicesProblem) body = `<div class="device-line device-empty">${esc(this.devicesProblem)}</div>${manual}`;
+                    else if (this.devicesProblem) body = `<div class="device-line device-empty">${esc(this.devicesProblemAt(path))}</div>${manual}`;
                     else if (!free.length) body = `<div class="device-line device-empty">${this.siteDevices.length ? 'every detected device is already pinned' : 'no devices detected'}</div>${manual}`;
                     else body = `<div class="device-actions">
                             <select class="dev-pick">${free.map((d) => `<option value="${esc(d.port)}"${this.queryResult && this.queryResult.port === d.port ? ' selected' : ''}>${esc(d.port)} · ${esc(boardLabel(d))}</option>`).join('')}</select>
@@ -4997,6 +5009,16 @@
                         </div>${q}${manual}`;
                 }
                 return `<div class="device-section"><div class="device-title">Device</div>${body}</div>`;
+            }
+
+            // Why no boards were found, as a piece's Device section says it: on a printer,
+            // that arduino-cli is wanted there only to find its board -- a printer is
+            // never built for or flashed.
+            devicesProblemAt(path) {
+                const problem = this.devicesProblem;
+                const bearer = this.statusBearerFor(path);
+                if (!bearer || !PRINTER_STATUSES.includes(bearer.status) || !/arduino-cli is not installed/.test(problem || '')) return problem;
+                return 'arduino-cli finds the boards on this machine, and it is not installed: apothecary firmware install installs it. A printer needs it only to be found; it is never built for or flashed.';
             }
 
             bindDeviceSection(path) {
