@@ -189,3 +189,79 @@ def test_the_bar_says_what_the_last_refresh_did(tmp_path, monkeypatch):
     assert json.loads((tmp_path / ".refresh.json").read_text())["ok"] is True
     c = TestClient(app)
     assert "generated docs: refreshed" in c.get("/docs/README.md").text
+
+
+def test_a_link_whose_words_are_code_is_a_link():
+    """docs/README.md's Generated table names each page as code and links it: the
+    code span inside the link's words is not taken for the end of the link."""
+    body, _ = docs_site.render_markdown(
+        "| a | [`generated/x/x.md`](generated/x/x.md) |\n|---|---|\n\n"
+        "and [`one`](a.md) then `[not](a link)` and [plain](b.md)"
+    )
+    assert '<a href="generated/x/x.md"><code>generated/x/x.md</code></a>' in body
+    assert '<a href="a.md"><code>one</code></a>' in body
+    assert "<code>[not](a link)</code>" in body and '<a href="b.md">plain</a>' in body
+    assert "](" not in body.replace("<code>[not](a link)</code>", "")
+
+
+def test_a_generated_page_not_made_yet_says_how_to_make_it(tmp_path, monkeypatch):
+    """docs/generated/ is not committed: on a fresh clone the Generated table's links
+    say the pages are not made here yet and what makes them, and the page itself
+    answers the same."""
+    monkeypatch.setattr(docs_site, "GENERATED_ROOT", tmp_path / "generated")
+    page = tmp_path / "README.md"
+    page.write_text("[`generated/w/w.md`](generated/w/w.md) and [there](README.md)\n")
+    monkeypatch.setattr(docs_site, "DOCS_ROOT", tmp_path)
+    body = TestClient(app).get("/docs/README.md").text
+    assert (
+        '<a href="generated/w/w.md"><code>generated/w/w.md</code></a> <span class="absent">' in body
+    )
+    assert "<code>apothecary docs generate</code> makes it" in body
+    assert body.count('class="absent"') == 1  # a page that is there is not marked
+    missing = TestClient(app).get("/docs/generated/w/w.md")
+    assert missing.status_code == 404 and "apothecary docs generate makes it" in missing.text
+    (tmp_path / "generated" / "w").mkdir(parents=True)
+    (tmp_path / "generated" / "w" / "w.md").write_text("# made\n")
+    assert 'class="absent"' not in TestClient(app).get("/docs/README.md").text
+
+
+def test_the_bar_says_what_makes_the_generated_pages(tmp_path, monkeypatch):
+    """Restarting the server does not make them (--refresh-docs is off by default):
+    the tooltip names what does."""
+    monkeypatch.setattr(docs_site, "REFRESH_STATE", tmp_path / ".refresh.json")
+    _cls, _text, tip = docs_site.refresh_note()
+    assert "apothecary docs generate" in tip and "--refresh-docs" in tip
+    assert "restart" not in tip
+
+
+def test_the_walkthrough_is_an_index_of_its_pages_in_order():
+    """/walkthrough answered 404 (no README.md there): it is an index of the pages,
+    in order, page 00 (Getting started) first once it is written."""
+    c = TestClient(app)
+    for url in ("/walkthrough", "/walkthrough/"):
+        r = c.get(url, follow_redirects=False)
+        assert r.status_code == 200, (url, r.status_code)
+        assert "<h1>The walkthrough</h1>" in r.text
+    pages = sorted(p.name for p in docs_site.WALKTHROUGH_ROOT.glob("*.md"))
+    listed = re.findall(r'<li><a href="/walkthrough/([^"]+)">', c.get("/walkthrough").text)
+    assert listed == pages and listed[0].startswith(("00-", "01-"))
+    assert (
+        '<a href="/walkthrough/01-a-part.md">01 — The parts registry</a>'
+        in c.get("/walkthrough").text
+    )
+    assert 'href="/walkthrough"' in c.get("/docs/README.md").text  # the bar reaches it
+
+
+def test_page_00_leads_the_index_once_it_exists(tmp_path, monkeypatch):
+    for name, heading in (
+        ("01-a-part.md", "# 01 — The parts registry"),
+        ("00-getting-started.md", "# 00 — Getting started"),
+        ("02-fitting.md", "# 02 — Which numbers are whose"),
+    ):
+        (tmp_path / name).write_text(heading + "\n")
+    monkeypatch.setattr(docs_site, "WALKTHROUGH_ROOT", tmp_path)
+    assert docs_site.walkthrough_pages() == [
+        ("00-getting-started.md", "00 — Getting started"),
+        ("01-a-part.md", "01 — The parts registry"),
+        ("02-fitting.md", "02 — Which numbers are whose"),
+    ]

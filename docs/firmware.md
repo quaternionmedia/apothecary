@@ -556,14 +556,15 @@ port list and monitor -- is an engine slot:
 `apothecary serve --demo` is the way to try all of this with no board: an
 idle simulated Ender pinned to printer_1's mainboard, a simulated ESP32
 devkit and the scripted firmware tools, on a state folder of its own
-([walkthrough 00](../walkthrough/00-getting-started.md)). By hand,
+(`.cache/demo` in the checkout, kept between runs), with every port the
+simulated engine's ([walkthrough 00](../walkthrough/00-getting-started.md)). By hand,
 `APOTHECARY_SIMULATED_PRINTER=printing` starts the simulator mid-way through
 an SD print; the default is a cold, idle machine. A port must still be
 *detected*; on a machine with no boards the tests' scripted `arduino-cli`
 supplies two:
 
 ```bash
-ARDUINO_CLI=$(uv run python -c "import sys; sys.path.insert(0, 'tests'); from pathlib import Path; from firmware_helpers import write_fake_arduino_cli; print(write_fake_arduino_cli(Path('/tmp/fake-arduino-cli')))") \
+ARDUINO_CLI=$(uv run python -c "from pathlib import Path; from apothecary.firmware.scripted import write_fake_arduino_cli; print(write_fake_arduino_cli(Path('/tmp/fake-arduino-cli')))") \
 APOTHECARY_SERIAL_ENGINE=simulated APOTHECARY_SIMULATED_PRINTER=printing \
 APOTHECARY_STATE_DIR=/tmp/apothecary-demo uv run apothecary serve
 ```
@@ -598,8 +599,9 @@ serial ports on the host, which is why the server listens on this machine only.
 ## Testing
 
 The seam's tests run against a scripted fake `arduino-cli`, and the Rust
-module's against a scripted `cargo` and `espflash` (`tests/firmware_helpers.py`),
-so CI needs no toolchain, network or serial port. The fakes in one folder are
+module's against a scripted `cargo` and `espflash`
+(`apothecary/firmware/scripted.py`, which `serve --demo` runs too), so CI
+needs no toolchain, network or serial port. The fakes in one folder are
 one simulated bench: with `FAKE_DEVKIT` set, an ESP32 devkit on
 `/dev/ttyFAKE2` runs whatever was last uploaded or flashed to it and says that
 sketch's hello. The scripted cargo refuses a build that is not `--offline`. With

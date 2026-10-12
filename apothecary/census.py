@@ -168,6 +168,8 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "dev-pin": (WIDGET, WHAT_IS_THERE, "a button that pins the chosen board to the piece"),
     # The ring. One control, and it is the destination rather than the meter.
     "ring-open": (RING, WHAT_YOU_SEE, "the button that opens the ring"),
+    # The header's Docs: the documentation and the walkthrough, in a new tab.
+    "docs-link": (WIDGET, NOTHING, "a link that opens the documentation in a new tab"),
     # Made by the page as it goes, rather than written into it. Found by the
     # listening scan below, and named here so both scans agree on what exists.
     "category-chip": (LIST, WHAT_YOU_SEE, "a row of buttons, one per word, that fold and unfold"),
@@ -351,6 +353,8 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
 # `apothecary.menu`'s vocabulary, so a control cannot claim a backing that
 # does not exist.
 RING_BACKED: Dict[str, str] = {
+    # the header's Docs is the canvas ring's Panels › Docs
+    "docs-link": "panel:docs",
     # the viewer's Device section: Open is Device › Open, the board's Machine
     "dev-open": "device:open",
     "dev-query": "device:query",
@@ -568,7 +572,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     ),
     "canvas:pointerup:onCameraDragEnd": (DRAG, WHAT_IS_THERE, "letting go keeps the camera's aim"),
     # controls of its own
-    "siteSelect:change:loadSite": (WIDGET, WHAT_YOU_SEE, "choosing from the drop-down, which loads it"),
+    "siteSelect:change:chooseSite": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "choosing from the drop-down, which loads it and puts it in the address",
+    ),
     "snapToggle:change:setTranslationSnap": (WIDGET, WHAT_YOU_SEE, "the snapping tick-box"),
     "wallsToggle:change:setWallsSelectable": (
         WIDGET,
@@ -739,6 +747,13 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "manualIn:keydown:pinManual": (WIDGET, WHAT_IS_THERE, "pinning the typed board, by Enter"),
     # the page reacting to itself
     "window:resize:onResize": (AUTOMATIC, NOTHING, "the window changed size on its own"),
+    # The browser's Back and Forward, not a control of the page's: the site the
+    # address names is loaded, as the drop-down put it there.
+    "window:popstate:followAddress": (
+        AUTOMATIC,
+        WHAT_YOU_SEE,
+        "the browser's Back or Forward, and the site the address names loaded again",
+    ),
     # boards.js: a devkit's serial stream, while its Machine listens to it
     "es:open:opened": (AUTOMATIC, NOTHING, "a devkit's serial stream connected, and says so"),
     "es:close:streamStopped": (

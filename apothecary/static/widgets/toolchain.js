@@ -7,7 +7,7 @@
  * tools dir by POST /firmware/install; a core is POST /firmware/cores/install
  * (its board-manager index added first); libraries are POST
  * /firmware/libraries/install; another module's tools are POST
- * /firmware/toolchains/{id}/install (Rust's: rustup, espup's Xtensa toolchain and
+ * /firmware/toolchains/{id}/install (Rust's: rustup, the Xtensa toolchain and
  * espflash, each checksum-verified, and every Rust sketch's crates vendored).
  * Each is a task, followed in the Bench's task log (`tasks`, widgets/tasks.js).
  * The modules are the status's `toolchains`: a module added later is drawn here
@@ -50,7 +50,7 @@ const MARKUP = `
 // What a module's Install fetches, said on its button; one not named here says
 // what its status's `install` command is.
 const INSTALLS = {
-    "rust-esp32": "Fetch rustup, espup's Xtensa Rust toolchain and espflash into the tools dir (each checksum-verified, each once; force fetches them again), and vendor every Rust sketch's crates, so every build after it runs offline",
+    "rust-esp32": "Fetch rustup, the Xtensa Rust toolchain from Espressif's releases and espflash into the tools dir (each checksum-verified, each once; force fetches them again), and vendor every Rust sketch's crates, so every build after it runs offline",
 };
 
 export function mountToolchain(root, { base = "", tasks = null, say = null, onStatus = null } = {}) {

@@ -21,13 +21,22 @@ controls as they are. The loops through them are walkthrough pages
 
 Left to right, one row:
 
-- **The site drop-down** loads another site.
+- **The site drop-down** loads another site and puts it in the address,
+  `/viewer/sites/<name>`, so a reload or a link lands on it and Back returns
+  to the one before; the old site's focus, Machine and variants stay with it.
 - **The breadcrumb**: the site, then each piece you have gone into. A crumb
   goes up to its level; Backspace goes up one.
 - **⚙ View**: how the world is drawn ([below](#how-the-world-is-drawn)).
+- **Docs** opens the documentation in a new tab, the world left where it
+  was: the guides, and from its bar the walkthrough's index (`/walkthrough`),
+  its pages in order. The ring's Panels › Docs opens the same.
 - **⌗ Ring** opens the ring for the chosen piece, as `m` does.
 - **The validity count**, "Layout valid" or the number of violations: a click
   unfolds the site's problems in Site.
+
+Under `apothecary serve --demo`, one quiet line above the header says it is
+the demo -- a simulated printer and ESP32, scripted firmware tools, its own
+state folder -- and how to leave it: `apothecary serve` without `--demo`.
 
 The status line is the bar along the bottom: every verb says there what it
 did and what comes next, with the address of the ring cell that does it,
@@ -106,9 +115,9 @@ its chip in Site does), View, Panels, Pictures and Reset (the site rebuilt
 from its factory, as it was first built).
 
 - **Panels** › Site, Selected, Pictures, Machine (the selected board's), Rail
-  (as `~`), and Bench › Bench (show it), Install (a cell per toolchain
+  (as `~`), Bench › Bench (show it), Install (a cell per toolchain
   module, then the slicer), Compile, Upload, Raw flash, Cancel, Cores,
-  Libraries.
+  Libraries; and Docs (the documentation in a new tab, as the header's Docs).
 - **Pictures** › Add (a picture pinned at the floor), Floor (the floor's
   Fit, Camera and Picture), Purge and Gather.
 
@@ -117,15 +126,20 @@ it), Why this, Into (its children), Up (when nested), then what the piece is:
 
 - a structure that stands on its own footprint, a host: **Camera** › Add here,
   and **Picture** › Add, Folder, Views, Make, Size, Unpin, Forget, Find shapes;
+  Add here selects the camera it added, and Make the piece it made;
 - a camera: **Device**, Live or Still and **Take picture** (once its device is
   this browser's camera), and Remove;
 - a piece made from a picture: **Picture** › Word, Drop;
 
 then **Part** (a part, a camera or a made piece; [below](#the-part-editor)),
 and, when a printer is pinned in the site, **Print** (a made piece) and
-**Slice** (a made piece, or a part not inside a printer).
+**Slice** (a made piece, or a part not inside a printer and not a board: a
+devkit is flashed, never printed). Print and Slice say whether the printer
+has no board pinned or one pinned and not connected.
 
-A board's **Device** holds Open (its Machine), Poll, Flash, Query, Unpin,
+A printer's Pin, in its Device section, pins the board inside it -- printer_1's
+mainboard, where its Device, its Machine and Slice look -- and the status line
+says so. A board's **Device** holds Open (its Machine), Poll, Flash, Query, Unpin,
 Rescan, Link and, on a printer, Control; [firmware.md](firmware.md#in-the-viewer-one-machine-per-board)
 says what each does.
 
@@ -171,7 +185,9 @@ make. **Apply** renders it: when the result is not the saved part, it is
 drawn in this tab only as an applied variant -- amber, not saved -- and the
 address carries `?variant=`, so a reload or the link draws it again.
 **Revert** puts what is staged back to what is drawn; **Defaults** stages
-the part's own numbers, and Apply then draws the saved part. Beside the
+the part's own numbers, and Apply then draws the saved part -- after a SCAD
+edit too, when the numbers drawn are the part's own already: Apply, saying
+"Apply: the saved part", puts the part's own SCAD back in the editor. Beside the
 envelope the part declares is what its drawn STL measures. Each of these is
 also a cell of Part on the ring.
 

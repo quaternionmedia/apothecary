@@ -95,6 +95,8 @@ def uvicorn_runs(monkeypatch):
 
     calls = []
     monkeypatch.setattr(server.uvicorn, "run", lambda target, **kw: calls.append((target, kw)))
+    # No server is started, so whether the port is held here today is not the test's.
+    monkeypatch.setattr(server, "port_in_use", lambda host, port: False)
     return calls
 
 

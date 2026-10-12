@@ -340,6 +340,12 @@ def test_the_loop_at_the_bench_from_the_ring(page, base_url: str, leaves_garage_
     assert abs(got[0] - want[0]) < 1 and abs(got[1] - want[1]) < 1, (got, want)
     assert tree["min"][2] == pytest.approx(mat["centre"][2], abs=1)  # on the bench's top
     expect(page.locator(f"#contents-list .contents-item[data-path='{piece}']")).to_be_visible()
+    # Make selects the piece it made, as Add here selects the camera it added: the
+    # steps its words name next are the piece's.
+    page.wait_for_function("(p) => window.fractalViewer.selectedName === p", arg=piece)
+    expect(page.locator(f"#contents-list .contents-item[data-path='{piece}']")).to_have_class(
+        re.compile(r"\bselected\b")
+    )
 
     # Why this, from the piece: its view drawn, its outline lit, a thread to it; the
     # selection stays on the piece.
@@ -421,6 +427,10 @@ def test_the_floor_from_the_canvas_ring(page, base_url: str, leaves_garage_as_fo
     made = _attached(page, base_url)["made"]
     assert made and all(record["host"] == "" for record in made.values())
     _said(page, "piece(s)")
+    # Make all selects the first piece it made.
+    first = _status(page).inner_text().split(": ", 2)[2].split(";", 1)[0].split(", ")[0]
+    assert first in made, _status(page).inner_text()
+    page.wait_for_function("(p) => window.fractalViewer.selectedName === p", arg=first)
     assert errors == []
 
 

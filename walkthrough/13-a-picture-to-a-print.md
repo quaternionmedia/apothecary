@@ -52,7 +52,7 @@ The bench's ring, Picture › Find shapes: the plain finder outlines each shape 
 
 ## 5. Make stands a shape up as a piece
 
-The bench's ring, Picture › Make and the disc: disc_1 stands on its outline, a row of Contents. The status line names the two steps after it: Part › Edit adjusts it, and a printer's Machine prints it.
+The bench's ring, Picture › Make and the disc: disc_1 stands on its outline, selected, a row of Contents. The status line names the two steps after it: Part › Edit adjusts it, and a printer's Machine prints it.
 
 ![Make stands a shape up as a piece](screenshots/13-05-make-stands-a-shape-up-as-a-piece.png)
 

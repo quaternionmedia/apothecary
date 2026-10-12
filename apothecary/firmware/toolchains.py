@@ -354,7 +354,7 @@ class Esptool:
     def _base(self, port: str, chip: str, baud: Optional[int] = None) -> List[str]:
         if not self.is_available:
             raise ToolchainError(
-                "esptool is not installed (pip install esptool, or install the esp32 core)."
+                "esptool is not installed (uv tool install esptool, or install the esp32 core)."
             )
         argv = self.argv_prefix + ["--chip", chip, "--port", port]
         if baud:

@@ -42,6 +42,18 @@
         }
         .toolbar button:hover, .view-menu > summary:hover, .view-menu[open] > summary { background: #505050; }
         .toolbar .spacer { flex: 1 1 0; min-width: 0; }
+        /* Docs: the documentation and the walkthrough, a link worn as a button. */
+        .toolbar .docs-link {
+            padding: 0.45rem 0.8rem; border-radius: 4px; font-size: 0.9rem; line-height: 1.25;
+            background: #404040; color: #e0e0e0; text-decoration: none;
+        }
+        .toolbar .docs-link:hover { background: #505050; }
+        /* apothecary serve --demo: one quiet line above the header. */
+        .demo-banner {
+            padding: 0.2rem 0.75rem; font-size: 0.78rem; color: #9fb0c4; background: #1b2028;
+            border-bottom: 1px solid #2a2f38; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .demo-banner code { color: #c8d6e8; font-size: 0.95em; }
         /* The View menu: how the world is drawn, folded behind ⚙ View as Site's
            sections fold; each item a cell of the canvas ring's View. */
         .view-menu { position: relative; }
@@ -558,6 +570,9 @@
 </head>
 <body>
     <div class="app-container">
+        {% if demo %}
+        <div id="demo-banner" class="demo-banner" role="note" title="apothecary serve --demo: printer_1's mainboard is pinned to a simulated Ender, an ESP32 devkit is simulated, arduino-cli, cargo and espflash are scripted, and no real serial port is opened. Its state is {{ demo }}, kept between runs; your own ~/.apothecary and pins are not touched.">The demo: a simulated printer and ESP32, scripted firmware tools, its own state in {{ demo }}. To leave it, stop the server and run <code>apothecary serve</code> without --demo.</div>
+        {% endif %}
         <div class="toolbar">
             <h1>🧪 Apothecary</h1>
             <span class="badge" title="FRACTAL VIEWER — unratified prototype">prototype</span>
@@ -592,6 +607,7 @@
                     </label>
                 </div>
             </details>
+            <a id="docs-link" class="docs-link" href="/docs" target="_blank" rel="noopener" title="The documentation in a new tab: the guides, and the walkthrough, each of its pages a run of the tests (Panels › Docs on the ring)">Docs</a>
             <button type="button" id="ring-open" title="Open the ring for the chosen piece (m, or right-click a piece). Digits choose cells as on a numeric keypad; 5 backs out.">⌗ Ring</button>
             <span id="validity-indicator" class="validity-indicator valid" title="The site's problems: click to unfold them in Site">Layout valid</span>
         </div>
@@ -700,6 +716,18 @@
 
         // A render a newer Apply from this page stopped (409): nothing to say about it.
         class Superseded extends Error {}
+
+        // Why a part's editor has no controls, from the 404 GET /parts/{name}/params
+        // answers: the OpenSCAD in use cannot list a SCAD's parameters (2021.01), it
+        // could not read the SCAD, or the part declares none.
+        async function noParameters(response) {
+            const detail = (await response.json().catch(() => null))?.detail;
+            if (detail && typeof detail === 'object') {
+                if (detail.lists === false) return `Its SCAD's parameters are not listed: this OpenSCAD (${detail.openscad || 'the one in use'}) cannot list them. apothecary openscad install fetches a snapshot that can.`;
+                if ((detail.messages || []).length) return `OpenSCAD could not read its SCAD: ${detail.messages[0].message}`;
+            }
+            return 'No parameters declared.';
+        }
 
         // Subsystem colors -- a node's own ``category`` if set, else
         // whatever the nearest ancestor's was (already resolved server-side,
@@ -1268,8 +1296,10 @@
             }
 
             bindEvents() {
-                // Choosing a site loads it; the trail's crumbs are the way back out.
-                this.siteSelect.addEventListener('change', () => this.loadSite(this.siteSelect.value));
+                // Choosing a site loads it, and the address follows; the trail's crumbs
+                // are the way back out. Back and Forward go between the sites chosen.
+                this.siteSelect.addEventListener('change', () => this.chooseSite(this.siteSelect.value));
+                window.addEventListener('popstate', () => this.followAddress());
                 // The View menu folds away when a press lands anywhere else, as a menu does.
                 document.addEventListener('pointerdown', (e) => this.foldViewMenu(e));
                 // The header's count of problems unfolds them in Site.
@@ -1398,6 +1428,46 @@
             // ---------------------------------------------------------------
             // Loading and navigation state
             // ---------------------------------------------------------------
+
+            // A site chosen -- the header's drop-down, or the ring's Sites: the address
+            // names it (/viewer/sites/<name>), so a reload or a link lands on it and
+            // Back returns to the one before. The old site's focus, Machine and
+            // variants are its own, and stay behind in its entry of the history.
+            chooseSite(name) {
+                if (!name) return null;
+                const url = new URL(location.href);
+                url.pathname = `/viewer/sites/${encodeURIComponent(name)}`;
+                for (const key of ['focus', 'machine', 'variant']) url.searchParams.delete(key);
+                if (url.href !== location.href) history.pushState({ site: name }, '', url);
+                this.forgetVariants();
+                this.siteSelect.value = name;
+                return this.loadSite(name);
+            }
+
+            // Back or Forward: the site the address names, at its focus, with the
+            // variants and the Machine it names.
+            followAddress() {
+                const named = location.pathname.match(/\/viewer\/sites\/([^/]+)\/?$/);
+                if (!named) return;
+                const name = decodeURIComponent(named[1]);
+                if (![...this.siteSelect.options].some((o) => o.value === name)) return;
+                const params = new URLSearchParams(location.search);
+                this.forgetVariants();
+                this.siteSelect.value = name;
+                this.variantsRead = this.readVariantsFromAddress(params);
+                const port = params.get('machine');
+                this.loadSite(name, params.get('focus') || '').then(async () => {
+                    if (!port) return;
+                    await this.boards.scan();
+                    this.openMachineFor(port);
+                });
+            }
+
+            // The variants this tab applied, let go of with the site they were drawn in.
+            forgetVariants() {
+                this.variantByPart = {};
+                this.variantRecords = {};
+            }
 
             async loadSite(name, focusPathStr = '') {
                 if (!name) return;
@@ -3178,6 +3248,15 @@
                 clearTimeout(this._validateTimer);
                 const seq = (this._stageSeq = (this._stageSeq ?? 0) + 1);
 
+                // Nothing differs from what is drawn, yet a variant is drawn with the
+                // part's own numbers -- its SCAD edited: Apply draws the saved part.
+                if (!count && this.toSaved(target)) {
+                    summary.className = 'clean';
+                    summary.textContent = "The part's own numbers, and its SCAD edited: Apply draws the saved part";
+                    apply.disabled = false;
+                    apply.textContent = 'Apply: the saved part';
+                    return;
+                }
                 if (!count) {
                     summary.className = 'clean';
                     summary.textContent = 'No staged changes';
@@ -3241,7 +3320,8 @@
             bindStageActions(target) {
                 const stage = this.partStages[target.key];
                 document.getElementById('apply-btn').onclick = () => {
-                    if (this.stagedValid) this.applyEditor(target);
+                    if (this.toSaved(target)) this.drawSaved(target);
+                    else if (this.stagedValid) this.applyEditor(target);
                 };
                 document.getElementById('revert-btn').onclick = () => this.revertStaged(target);
                 const defaults = document.getElementById('defaults-btn');
@@ -3271,6 +3351,7 @@
             async applyStagedOn(path) {
                 const target = await this.editorOn(path);
                 if (!target) return `${path} has no parameters to apply`;
+                if (this.toSaved(target)) { await this.drawSaved(target); return null; }
                 const count = Object.keys(this.stagedDiff()).length;
                 if (!count) return `${path}: nothing is staged to apply -- move a parameter in Selected first`;
                 clearTimeout(this._validateTimer);
@@ -3303,6 +3384,44 @@
                 Object.assign(stage.staged, stage.defaults);
                 this.editorLoading = this.loadPartParams(target);
                 return true;
+            }
+
+            // Whether a part is drawn from a variant this tab applied -- its numbers
+            // moved, or its SCAD edited -- rather than as saved.
+            drawnIsVariant(target) {
+                return Boolean(target.part && this.variantByPart[target.part]);
+            }
+
+            // Whether Apply draws the saved part: the part's own numbers staged (its
+            // Defaults) while a variant is drawn. After a SCAD edit the numbers staged
+            // are the drawn ones, so nothing differs, and Apply still has the saved
+            // part to go back to.
+            toSaved(target) {
+                const stage = this.partStages[target.key];
+                if (!this.drawnIsVariant(target) || !stage?.defaults) return false;
+                const same = (a, b) => (Array.isArray(a) || Array.isArray(b)
+                    ? JSON.stringify(a) === JSON.stringify(b)
+                    : Number(a) === Number(b) || a === b);
+                return Object.entries(stage.defaults).every(([name, value]) => same(stage.staged[name], value));
+            }
+
+            // The saved part drawn again: its own SCAD back in the editor (an edit
+            // there is a draft, rendered beside the part, never saved unless Saved),
+            // and its own numbers applied, which the cache already holds. The amber
+            // mark and the address's ?variant= go with the variant.
+            async drawSaved(target) {
+                const scad = this.scadStages[target.key];
+                if (scad && scad.text !== null && scad.text !== scad.own) {
+                    if (this.scadTarget?.key === target.key && this.scadEditor) this.scadEditor.setText(scad.own);
+                    clearTimeout(scad.checkTimer);
+                    clearTimeout(scad.renderTimer);
+                    scad.seq += 1;
+                    scad.text = scad.own;
+                    scad.from = null;
+                    scad.check = null;
+                    if (this.scadTarget?.key === target.key) this.scadEditor?.say("The part's own SCAD, as the saved part is drawn: edit it here; it is checked once typing stops and rendered after a second of quiet.");
+                }
+                await this.applyEditor(target);
             }
 
             // Part › Defaults: the part's editor opened, its own values staged once
@@ -3345,7 +3464,7 @@
                     // what the draft declares, as the newest check listed them.
                     const scad = this.scadStages[target.key];
                     const declared = scad?.check?.edited && scad.check.source === 'customizer' ? scad.check : null;
-                    if (!response.ok && !declared) { host.textContent = 'No parameters declared.'; return; }
+                    if (!response.ok && !declared) { host.textContent = await noParameters(response); return; }
                     const spec = declared ? { fields: declared.fields, bounds: null } : await response.json();
                     if (drawn) {
                         Object.assign(stage.committed, drawn.params ?? {});
@@ -4481,18 +4600,31 @@
             openMachine(path) {
                 const { row } = this.bindingFor(path);
                 const port = row && row.device && row.device.port;
-                if (!port) { this.setStatus(`${path}: no board pinned here`, 'error'); return false; }
+                if (!port) { this.setStatus(this.noMachine(path), 'error'); return false; }
                 const anchor = row.device.printer ? this.bearerPathFor(row.path) : row.path;
                 return this.showMachine(port, anchor, row);
+            }
+            // Why a machine has no Machine to open: nothing pinned, or a pin whose board
+            // is not connected -- each said with what to do about it, and what to press
+            // again after (`doing`).
+            noMachine(path, doing = '') {
+                const { row } = this.bindingFor(path);
+                const again = doing ? `, then ${doing} again` : '';
+                if (!row) {
+                    const board = this.boardInside(path);
+                    return `${path} has no board pinned${board ? ` (its board is ${board})` : ''}: select it and Pin its port in its Device section${again}`;
+                }
+                const which = row.path !== path ? ` ${row.path}` : '';
+                return `${path}'s board${which} is pinned to ${row.identity || 'a board'}, but not connected: connect it, or ⟳ Rescan in its Device section${again}`;
             }
             // A made piece's Print, from its ring: the printer's Machine opened (in
             // the rail, its tab active) with the piece chosen under its Print from
             // here's makes. Nothing is sent: the card's file and ▶ Print are the next
             // step, and the status line names them. What it says, or why it could not.
             async printPiece(piece, printer) {
-                if (!this.openMachine(printer)) return { refused: `${printer} has no board pinned to print with` };
+                if (!this.openMachine(printer)) return { refused: this.noMachine(printer, 'Print') };
                 const handle = this.machine && this.machine.handle;
-                if (!handle || handle.kind() !== 'printer') return { refused: `${printer}'s board is no printer` };
+                if (!handle || handle.kind() !== 'printer') return { refused: `${printer}'s board has not said it is a printer: Identify in its Machine asks it (M115), then Print again` };
                 if (!(await handle.print.choose(piece))) return { refused: `${piece} is not among the parts ${printer}'s Print from here can make` };
                 return { said: `${printer}'s Machine makes ${piece}: choose its file in Print from here, then ▶ Print` };
             }
@@ -4501,9 +4633,9 @@
             // there for that printer -- its log in Print from here, its G-code chosen
             // there when it ends, so ▶ Print follows. What it says, or why it could not.
             async slicePiece(piece, printer) {
-                if (!this.openMachine(printer)) return { refused: `${printer} has no board pinned to slice for` };
+                if (!this.openMachine(printer)) return { refused: this.noMachine(printer, 'Slice') };
                 const handle = this.machine && this.machine.handle;
-                if (!handle || handle.kind() !== 'printer') return { refused: `${printer}'s board is no printer` };
+                if (!handle || handle.kind() !== 'printer') return { refused: `${printer}'s board has not said it is a printer: Identify in its Machine asks it (M115), then Slice again` };
                 return handle.print.slice(piece);
             }
             // A board's Machine by its port, pinned in this site or nowhere here --
@@ -4631,8 +4763,8 @@
             // another tab is not touched. A variant that is the saved part (the
             // defaults, or what the command line put there) is not kept.
 
-            async readVariantsFromAddress() {
-                for (const entry of DEEP_LINK.getAll('variant')) {
+            async readVariantsFromAddress(params = DEEP_LINK) {
+                for (const entry of params.getAll('variant')) {
                     const at = entry.indexOf(':');
                     if (at < 1) continue;
                     const ref = entry.slice(0, at), key = entry.slice(at + 1);
@@ -4917,7 +5049,7 @@
                         </div>`;
                     const q = this.queryResult ? `<div class="device-query">${esc(this.queryResult.text)}</div>` : '';
                     if (!this.bindingsLoaded) body = `<div class="device-line device-empty">scanning devices…</div>`;
-                    else if (this.devicesProblem) body = `<div class="device-line device-empty">${esc(this.devicesProblem)}</div>${manual}`;
+                    else if (this.devicesProblem) body = `<div class="device-line device-empty">${esc(this.devicesProblemAt(path))}</div>${manual}`;
                     else if (!free.length) body = `<div class="device-line device-empty">${this.siteDevices.length ? 'every detected device is already pinned' : 'no devices detected'}</div>${manual}`;
                     else body = `<div class="device-actions">
                             <select class="dev-pick">${free.map((d) => `<option value="${esc(d.port)}"${this.queryResult && this.queryResult.port === d.port ? ' selected' : ''}>${esc(d.port)} · ${esc(boardLabel(d))}</option>`).join('')}</select>
@@ -4926,6 +5058,16 @@
                         </div>${q}${manual}`;
                 }
                 return `<div class="device-section"><div class="device-title">Device</div>${body}</div>`;
+            }
+
+            // Why no boards were found, as a piece's Device section says it: on a printer,
+            // that arduino-cli is wanted there only to find its board -- a printer is
+            // never built for or flashed.
+            devicesProblemAt(path) {
+                const problem = this.devicesProblem;
+                const bearer = this.statusBearerFor(path);
+                if (!bearer || !PRINTER_STATUSES.includes(bearer.status) || !/arduino-cli is not installed/.test(problem || '')) return problem;
+                return 'arduino-cli finds the boards on this machine, and it is not installed: apothecary firmware install installs it. A printer needs it only to be found; it is never built for or flashed.';
             }
 
             bindDeviceSection(path) {
@@ -4954,7 +5096,31 @@
                 manualIn?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); pinManual(); } });
             }
 
-            async setNodeDevice(path, identity) {
+            // The board inside a printer, where its port belongs: the node a printer's
+            // Device, its Machine and Slice look for a pin at (its mainboard). Null for
+            // anything that is not a printer holding a board.
+            boardInside(path) {
+                const node = this.nodeByPath(path);
+                if (!node || !PRINTER_STATUSES.includes(node.status)) return null;
+                const walk = (n, at) => {
+                    for (const child of n.children || []) {
+                        const here = `${at}.${child.name}`;
+                        if (child.board) return here;
+                        const deeper = walk(child, here);
+                        if (deeper) return deeper;
+                    }
+                    return null;
+                };
+                return walk(node, path);
+            }
+
+            async setNodeDevice(asked, identity) {
+                // A printer's own Pin pins its board, where its Device, its Machine and
+                // Slice find it; Unpin on the printer takes back the pin on its board.
+                const { row: held, via } = this.bindingFor(asked);
+                const path = identity
+                    ? (this.boardInside(asked) || asked)
+                    : (via && held && held.binding_source === 'manual' ? `${asked}.${via}` : asked);
                 const url = `${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/nodes/${encodeURIComponent(path)}/device`;
                 this.setStatus(identity ? `Pinning ${identity} to ${path}...` : `Unpinning ${path}...`, 'loading');
                 try {
@@ -4972,7 +5138,12 @@
                     const polled = this.boards.setRow(path, row);
                     this.renderDeviceViews();
                     this.syncWorldMarks();
-                    this.setStatus(identity ? `${path} ← ${identity}` : `${path}: device unpinned`, 'success');
+                    const said = path === asked
+                        ? (identity ? `${path} ← ${identity}` : `${path}: device unpinned`)
+                        : (identity
+                            ? `${asked}'s board ${path} ← ${identity}: ${asked}'s Device, its Machine and Slice find it there`
+                            : `${asked}'s board ${path}: device unpinned`);
+                    this.setStatus(said, 'success');
                     await polled;
                 } catch (err) {
                     this.setStatus(`Error: ${err.message}`, 'error');
@@ -5518,6 +5689,13 @@
                     if (viewer.bench) viewer.bench.act(action.slice('bench:'.length));
                     return;
                 }
+                // Panels › Docs: the documentation in a new tab, as the header's Docs opens it.
+                if (action === 'panel:docs') {
+                    const docs = document.getElementById('docs-link');
+                    window.open(docs ? docs.href : `${BASE_URL}/docs`, '_blank', 'noopener');
+                    viewer.setStatus(`Opened the documentation in a new tab: the guides, and the walkthrough from its table${tail}`, 'success');
+                    return;
+                }
                 if (action === 'panel:rail:toggle') {
                     const hidden = viewer.panels.hideRail(!viewer.panels.railHidden());
                     viewer.setStatus(`${hidden ? 'Hid' : 'Showed'} the rail${tail}`, 'success');
@@ -5610,9 +5788,7 @@
                     }
                     viewer.setStatus(node ? `${path}: a ${node.role}${node.category ? ' in ' + node.category : ''}${node.part_ref ? ', from part ' + node.part_ref : ''}, ${node.children.length} inside${tail}` : `${path}: not on screen${tail}`, 'success');
                 } else if (action.startsWith('site:')) {
-                    const name = action.slice(5);
-                    viewer.siteSelect.value = name;
-                    viewer.loadSite(name);
+                    viewer.chooseSite(action.slice(5));
                 } else if (action.startsWith('group:')) {
                     const group = action.slice(6);
                     if (viewer.expandedCategories.has(group)) viewer.expandedCategories.delete(group); else viewer.expandedCategories.add(group);
@@ -5713,6 +5889,8 @@
             pairs.push([viewer.detailModeEl.closest('label'), `view:detail:${viewer.detailModeEl.value}`]);
             pairs.push([viewer.overlayToggle.closest('label'), 'view:outlines']);
             pairs.push([viewer.wallsToggle.closest('label'), 'view:walls']);
+            // The header's Docs: Panels › Docs.
+            pairs.push([document.getElementById('docs-link'), 'panel:docs']);
             const bench = document.querySelector(".panel[data-panel='bench']");
             if (bench) {
                 for (const [selector, action] of BENCH_VERBS) for (const el of bench.querySelectorAll(selector)) pairs.push([el, action]);

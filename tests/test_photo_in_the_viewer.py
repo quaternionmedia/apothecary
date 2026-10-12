@@ -26,10 +26,16 @@ client = TestClient(app)
 
 
 @pytest.fixture
-def picture(tmp_path, monkeypatch):
+def picture(tmp_path, monkeypatch, request):
     # The server reads pictures from one folder and refuses everywhere else, and
     # checks again every time it serves one. Say which folder.
     monkeypatch.setenv("APOTHECARY_PICTURE_ROOT", str(tmp_path))
+    if "held_port" not in request.fixturenames:
+        # uvicorn is patched where a server would start, so whether a server of the
+        # person's holds the port today is not these tests' business.
+        from apothecary.cli import server
+
+        monkeypatch.setattr(server, "port_in_use", lambda host, port: False)
     drawn = Image.new("L", (640, 480), 245)
     pen = ImageDraw.Draw(drawn)
     pen.rectangle((40, 40, 260, 160), fill=30)
@@ -219,6 +225,41 @@ def test_the_command_says_plainly_when_nothing_is_measured(picture):
         result = CliRunner().invoke(cli, ["photo", "view", str(picture), "--name", "unsized_go"])
     _site_store.remove("unsized_go")
     assert "Nothing is measured" in result.output
+
+
+@pytest.fixture
+def held_port():
+    """A port something on this machine listens on, as `apothecary serve` would."""
+    import socket
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        sock.listen()
+        yield sock.getsockname()[1]
+
+
+def test_a_held_port_is_refused_before_anything_is_built_or_printed(picture, held_port):
+    """`photo view` and `serve` both default to 8000: with a server there, the command
+    used to print three addresses of the other server and then fail. It says so first."""
+    with patch("uvicorn.run") as started:
+        said = CliRunner().invoke(
+            cli, ["photo", "view", str(picture), "--name", "held_go", "--port", str(held_port)]
+        )
+    assert said.exit_code != 0 and not started.called
+    assert (
+        f"127.0.0.1:{held_port}: port in use (is apothecary serve running?) -- pass --port"
+        in said.output
+    )
+    assert "http://" not in said.output and "piece(s)" not in said.output
+    assert "held_go" not in _site_store.names()
+
+
+def test_serve_refuses_a_held_port_too(held_port):
+    with patch("uvicorn.run") as started:
+        said = CliRunner().invoke(cli, ["serve", "--port", str(held_port)])
+    assert said.exit_code != 0 and not started.called
+    assert "port in use (is apothecary serve running?) -- pass --port" in said.output
+    assert "Viewer:" not in said.output
 
 
 def test_the_command_listens_only_to_this_machine_unless_told_otherwise(picture):

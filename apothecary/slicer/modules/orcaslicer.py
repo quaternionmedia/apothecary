@@ -133,12 +133,17 @@ def _plain(value: float) -> str:
 
 def resources_beside(program: Path) -> Optional[Path]:
     """The ``resources`` folder OrcaSlicer reads for ``program``: the installed
-    release's, as its install recorded it; else where OrcaSlicer itself looks,
-    one level up from the program (``Contents/Resources`` in a macOS app)."""
+    release's, as its install recorded it -- in this tools folder, or in another one
+    whose install is named by its path; else where OrcaSlicer itself looks, one level
+    up from the program (``Contents/Resources`` in a macOS app)."""
     version = installer.current_version()
     if version is not None and installer.executable_for(version) == program:
         found = installer.resources_for(version)
         return found if found is not None and (found / "profiles").is_dir() else None
+    # An install of apothecary's in another tools folder, named by its path.
+    found = installer.resources_of_install(program)
+    if found is not None and (found / "profiles").is_dir():
+        return found
     try:
         real = program.resolve()
     except OSError:
