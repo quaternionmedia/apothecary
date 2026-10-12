@@ -205,18 +205,13 @@ def _to_the_middle(page: Page, key: str) -> dict:
     return page.evaluate(SIGHTED, key)
 
 
-# An element of Selected scrolled to just under the stage bar, which stands over the top
-# of the panel while it scrolls: scrolled to the panel's top, the element is under it.
+# An element of Selected scrolled to the top of the panel's body. The stage bar stands
+# pinned above that body, in its own space, so nothing is under it.
 UNDER_THE_STAGE_BAR = """(el) => {
-    el.scrollIntoView({ block: 'start' });
-    const bar = document.getElementById('stage-bar');
     let slot = el.parentElement;
     while (slot && slot.scrollHeight <= slot.clientHeight) slot = slot.parentElement;
-    if (!slot) return;
-    // The bar stands over the panel's top only while what it heads is in view.
-    const shown = slot.getBoundingClientRect(), b = bar && bar.offsetParent ? bar.getBoundingClientRect() : null;
-    const under = b && b.bottom > shown.top + 1 && b.top < shown.bottom ? b.bottom : shown.top;
-    slot.scrollTop += el.getBoundingClientRect().top - under - 6;
+    if (!slot) { el.scrollIntoView({ block: 'start' }); return; }
+    slot.scrollTop += el.getBoundingClientRect().top - slot.getBoundingClientRect().top - 6;
 }"""
 
 
@@ -224,13 +219,15 @@ UNDER_THE_STAGE_BAR = """(el) => {
 SITE_FOLDED = """(folded) => document.querySelector(".panel[data-panel='site']")
     .classList.contains('collapsed') === folded"""
 
-# The part's editor from its stage bar down: the bar at the top of Selected.
+# The part's editor from its stage bar down: the bar is pinned above Selected's body,
+# and the body scrolled to the parameters it heads, the first of them at its top.
 STAGE_BAR_AT_THE_TOP = """() => {
-    const bar = document.getElementById('stage-bar');
-    // The bar is sticky: scrolled to by itself it may stand stuck over the parameters it
-    // heads, the first of them under it. Its section scrolled to the top puts the bar
-    // where it stands in the page, and the first parameter in view below it.
-    (bar.closest('.part-stage') || bar).scrollIntoView({ block: 'start' });
+    const params = document.getElementById('part-params');
+    if (!params) return;
+    let slot = params.parentElement;
+    while (slot && slot.scrollHeight <= slot.clientHeight) slot = slot.parentElement;
+    if (!slot) { params.scrollIntoView({ block: 'start' }); return; }
+    slot.scrollTop += params.getBoundingClientRect().top - slot.getBoundingClientRect().top - 4;
 }"""
 
 # A marked line of the SCAD editor made the first its code shows.

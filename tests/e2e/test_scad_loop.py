@@ -196,6 +196,12 @@ def _code(page: Page):
     return page.locator(".scad-editor .cm-content")
 
 
+def _into_code(page: Page) -> None:
+    """Into the editor as a person goes, by a click on a line of its text: the text is
+    taller than the part of Selected that shows it, so its middle may be out of view."""
+    page.locator(".scad-editor .cm-line").last.click()
+
+
 def _text(page: Page) -> str:
     return page.evaluate("() => window.fractalViewer.scadEditor.text()")
 
@@ -211,7 +217,7 @@ def _height(page: Page) -> float:
 def _replace_last_line(page: Page, text: str) -> None:
     """The cursor to the SCAD's last line, that line selected, and ``text`` put over it
     in one go, as a paste does: however loaded the machine, one pause in typing."""
-    _code(page).click()
+    _into_code(page)
     page.keyboard.press("Control+End")
     page.keyboard.press("Shift+Home")
     page.keyboard.insert_text(text)
@@ -374,7 +380,7 @@ def test_editing_a_parts_scad_twice_round(
 
     # Round one: a line OpenSCAD refuses, checked once typing stops, marked, not rendered.
     asked, stop = _counting(page)
-    _code(page).click()
+    _into_code(page)
     page.keyboard.press("Control+End")
     ends_a_line = own.endswith("\n")
     page.keyboard.insert_text(REFUSED if ends_a_line else "\n" + REFUSED)
@@ -489,7 +495,7 @@ def test_editing_a_parts_scad_twice_round(
     page.locator("#scad-name").fill("taller")
     _replace_last_line(page, BIG_TOP)
     _rendered(page, 20)
-    _code(page).click()
+    _into_code(page)
     page.keyboard.press("Control+s")
     _saved(page, "taller")
     rows = page.locator("#part-saved .saved-variant")
@@ -529,7 +535,7 @@ def test_editing_a_parts_scad_twice_round(
     # Round three. The text moved on from variant-1: its name let go of, the next free
     # one greyed in its place; Ctrl+Z, the text back, and the name with it.
     name = page.locator("#scad-name")
-    _code(page).click()
+    _into_code(page)
     page.keyboard.press("Control+End")
     page.keyboard.insert_text(" // round three")
     expect(name).to_have_value("")
@@ -548,7 +554,7 @@ def test_editing_a_parts_scad_twice_round(
 
     # A name already saved: Save asks first, and another name keeps both.
     name.fill("taller")
-    _code(page).click()
+    _into_code(page)
     page.keyboard.press("Control+s")
     expect(_status(page)).to_contain_text(
         "a variant named taller is saved already. Save again to replace it", timeout=10000
@@ -556,7 +562,7 @@ def test_editing_a_parts_scad_twice_round(
     expect(_said(page)).to_contain_text("Save again to replace it")
     asked_first = _status(page).inner_text()
     name.fill("short-top")
-    _code(page).click()
+    _into_code(page)
     page.keyboard.press("Control+s")
     _saved(page, "short-top")
     story.says(
@@ -592,7 +598,7 @@ def test_editing_a_parts_scad_twice_round(
     # A draft that does not read, kept over a reload: leaving asks first, the page names
     # the part, and its editor offers the draft back.
     drawn = _text(page)
-    _code(page).click()
+    _into_code(page)
     page.keyboard.press("Control+End")
     page.keyboard.insert_text("\n" + REFUSED)
     expect(_said(page)).to_contain_text("Not rendered until it reads", timeout=15000)
@@ -637,7 +643,7 @@ def test_editing_a_parts_scad_twice_round(
     _ring(page, "Part", "Edit")
     expect(_code(page)).to_be_visible(timeout=20000)
     assert _text(page).endswith(REFUSED)
-    _code(page).click()
+    _into_code(page)
     page.keyboard.press("Control+z")
     assert _text(page) == drawn
     story.says(
@@ -677,7 +683,7 @@ def test_after_a_scad_edit_defaults_then_apply_draws_the_saved_part(
     own = _text(page)
 
     for from_the_ring in (True, False):
-        _code(page).click()
+        _into_code(page)
         page.keyboard.press("Control+End")
         page.keyboard.insert_text(quarter if own.endswith("\n") else "\n" + quarter)
         expect(_status(page)).to_contain_text(

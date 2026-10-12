@@ -206,6 +206,12 @@ caption; a contested one comes first, with its candidates as buttons.
 Where this OpenSCAD cannot build the part at all (gridfinity on 2021.01), the
 editor says so as it opens and **Apply is off** from the start, saying why.
 
+The bar of what is staged -- Apply, Revert, Defaults, Undo, Redo, Ghost --
+stands pinned at the top of Selected, above its body, in its own space: in view
+however far the parameters are scrolled, and over none of them. Where Selected
+is squeezed short (a tab's panel open under it), the bar scrolls in itself
+rather than spill over what is below.
+
 Moving a control **stages** a value and nothing more. Once the controls rest
 the staged set is checked against the part's own model, and the bar above
 them says what is staged, whether it is valid and the envelope it would

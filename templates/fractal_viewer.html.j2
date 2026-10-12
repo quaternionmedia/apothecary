@@ -464,15 +464,27 @@
         .staged { border-left: 3px solid #4a9eff; padding-left: 9px; }
         .staged .val { color: #4a9eff; font-weight: 700; }
         .was { color: #8a929e; font-size: 11px; }
-        #stage-bar { position: sticky; top: 0; z-index: 2; background: #1b1e24;
-                     border-bottom: 1px solid #2a2f38; padding: 8px 0; margin-bottom: 6px; }
+        /* The stage bar stands pinned above Selected's body (panels.js's pinned slot): its
+           own space, never over a parameter. */
+        #stage-bar { background: #1b1e24; border-bottom: 1px solid #2a2f38; padding: 8px 0; margin-bottom: 6px; }
+        /* Never taller than its panel leaves it beside the title, the body's least and the
+           resizer: squeezed (a tab's panel open below), it scrolls in itself, and nothing
+           of Selected spills over the tab strip under it. */
+        .panel-pinned { flex: 0 0 auto; padding: 0 1rem; background: #1b1e24; max-height: calc(100% - 4rem); overflow-y: auto; }
+        .panel-pinned:empty, .panel.collapsed .panel-pinned { display: none; }
+        .panel-pinned #stage-bar { margin-bottom: 0; }
+        .panel-pinned #part-messages { max-height: 5.5em; overflow: auto; }
         #stage-summary { font-size: 12px; margin-bottom: 6px; }
         #stage-summary.clean { color: #8a929e; }
         #stage-summary.valid { color: #5ec27e; }
         #stage-summary.invalid { color: #ff9b9b; }
         .stage-actions { display: flex; gap: 6px; }
-        .stage-actions button { flex: 1; padding: 6px; border: 0; border-radius: 4px;
-                                font-weight: 700; cursor: pointer; font: inherit; }
+        /* One row, one line: Apply wider, saying what it draws, cut short rather than
+           wrapped where the rail is narrow (the summary above says it whole). */
+        .stage-actions button { flex: 1 1 0; min-width: 0; padding: 6px; border: 0; border-radius: 4px;
+                                font-weight: 700; cursor: pointer; font: inherit;
+                                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .stage-actions #apply-btn { flex-grow: 2; }
         #apply-btn { background: #4a9eff; color: #0b0d10; }
         #apply-btn:disabled { opacity: .4; cursor: default; }
         #revert-btn, #defaults-btn { background: #2a2f38; color: #d7dae0; }
@@ -2843,7 +2855,31 @@
             // works for a direct child of the root (see isEditableSelection),
             // so anything deeper -- or any leaf of an expanded category that
             // isn't itself a direct child -- gets a read-only panel.
+            // Selected drawn, and the part editor's stage bar pinned above its body: the
+            // bar -- what is staged, Apply, Revert, Defaults, Undo, Redo, Ghost -- takes its
+            // own space there, in view however far the parameters are scrolled, and covers
+            // none of them.
             renderSelectedPanel() {
+                this.drawSelectedPanel();
+                this.placeStageBar();
+            }
+
+            placeStageBar() {
+                const pinned = this.panels.pinnedSlot('selected');
+                if (!pinned) return;
+                const bar = this.partSection?.querySelector('#stage-bar') ?? pinned.querySelector('#stage-bar');
+                const shown = this.partSection && this.selectedBodyEl.contains(this.partSection);
+                if (bar && shown) {
+                    if (bar.parentElement !== pinned) { pinned.replaceChildren(bar); }
+                } else {
+                    // The editor left Selected: its bar goes back with it.
+                    const own = pinned.querySelector('#stage-bar');
+                    if (own && this.partSection) this.partSection.querySelector('.part-stage')?.prepend(own);
+                    pinned.replaceChildren();
+                }
+            }
+
+            drawSelectedPanel() {
                 this.shownFacts = this.selectedName ? this.pictureFactsHtml(this.selectedName) : '';
                 if (this.selectedName === FLOOR_KEY) {
                     this.selectedBodyEl.innerHTML = `<div class="prop-row"><label>Name</label><span>the floor</span></div>
@@ -4185,7 +4221,7 @@
             // The editor of a target that had work kept before a reload, other than what it
             // now shows: offered back, saying what it was.
             offerKeptWork(target) {
-                const offer = this.partSection?.querySelector('#kept-offer');
+                const offer = document.getElementById('kept-offer');
                 if (!offer || this.partSection.dataset.target !== target.key) return;
                 const kept = this.keptWork[target.key];
                 const stage = this.partStages[target.key], scad = this.scadStages[target.key];
@@ -4233,7 +4269,7 @@
                     this.scadEditor.setText(kept.scad);
                     text = true;
                 }
-                this.partSection?.querySelector('#kept-offer')?.setAttribute('hidden', '');
+                document.getElementById('kept-offer')?.setAttribute('hidden', '');
                 this.keepWork(target, { now: true });
                 const what = [text ? 'its edited SCAD, checked and rendered once it reads' : null, numbers.length ? `${numbers.length} number${numbers.length > 1 ? 's' : ''} staged` : null].filter(Boolean).join(' and ');
                 return { ok: true, said: `${target.label}: restored from before the reload, ${what || 'nothing that differed'}` };
@@ -4243,7 +4279,7 @@
                 delete this.keptWork[target.key];
                 const stage = this.partStages[target.key];
                 if (stage) stage.offerPending = false;
-                this.partSection?.querySelector('#kept-offer')?.setAttribute('hidden', '');
+                document.getElementById('kept-offer')?.setAttribute('hidden', '');
                 this.keepWork(target, { now: true });
                 return { ok: true, said: `${target.label}: what this tab kept from before the reload is let go; what is drawn stays` };
             }
