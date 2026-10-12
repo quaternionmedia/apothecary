@@ -9,6 +9,8 @@ A mesh made in another program is brought in measured, not trusted; a part can b
 
 **Runtime-bound.** The model half runs in this process. The browser half drives a real browser against a real server of its own, whose picture folder holds only the pictures this page puts there; the browser is launched with a fake camera so there is one to place. It needs no network, and it refuses one.
 
+Its pictures were taken once every part's STL that OpenSCAD version 2021.01, the OpenSCAD its server runs, can build was built by it; a part it cannot build is drawn from an STL already there, or as its box.
+
 ---
 
 ## 1. A file made elsewhere is measured, not trusted
@@ -47,27 +49,27 @@ printer_1: part ender3, 470 x 454 x 570 mm overall
 bed at z = 95; mainboard: part creality_v422
 ```
 
-## 5. The bench at the garage's root: an Ender 3 at its left end, the boards at its right end
+## 5. The bench at the garage's root: an Ender 3 at one end, the boards at the other
 
-The root shows the whole building; here the view is framed on the bench. Every machine and board is the part it names, drawn from its own STL, and the site places each by its footprint.
+The root shows the whole building; here the view is brought to the bench by hand, Shift+drag to the middle and the wheel nearer. Every machine and board is the part it names, drawn from its own STL, and the site places each by its footprint.
 
-![The bench at the garage's root: an Ender 3 at its left end, the boards at its right end](screenshots/12-05-the-bench-at-the-garage-s-root-an-ender-3-at-its-l.png)
+![The bench at the garage's root: an Ender 3 at one end, the boards at the other](screenshots/12-05-the-bench-at-the-garage-s-root-an-ender-3-at-one-e.png)
 
 ## 6. A printer is the part it names
 
-Selecting printer_1 shows its rows and, below them, the part its body is. The power supply stands on the right behind the upright, the spool on its bracket over the top bar, the electronics box under the bed at the front.
+Selecting printer_1 shows its rows and, below them, the part its body is; the view brought to it by hand. The power supply stands on the right behind the upright, the spool on its bracket over the top bar, the electronics box under the bed at the front.
 
 ![A printer is the part it names](screenshots/12-06-a-printer-is-the-part-it-names.png)
 
 ## 7. Inside it, the mainboard is the Creality V4.2.2
 
-Zoomed into the printer's frame, its children are drawn and the printer's body is not: the board in its box, with the pins that would be pinned to a port. Its outline, holes, headers and jacks are from the maker's drawing.
+Double-clicked into the printer, then its frame, from their rows in Site: its children are drawn and the printer's body is not -- the board in its box, with the pins that would be pinned to a port. Its outline, holes, headers and jacks are from the maker's drawing.
 
 ![Inside it, the mainboard is the Creality V4.2.2](screenshots/12-07-inside-it-the-mainboard-is-the-creality-v4-2-2.png)
 
 ## 8. The DevKitC standing on its pins
 
-esp32_blink is a sketch and the board it runs on, drawn as the board: the described part from the model half of this page, in the world.
+Backspace twice to the root, and a double-click into esp32_blink: a sketch and the board it runs on, drawn as the board -- the described part from the model half of this page, in the world.
 
 ![The DevKitC standing on its pins](screenshots/12-08-the-devkitc-standing-on-its-pins.png)
 
@@ -79,7 +81,7 @@ Added from the bench's own ring -- Camera, Add here -- a camera part stands abov
 
 ## 10. Looking into a printer, the camera stays in the garage
 
-A camera is a piece of the site, drawn at the level its site is. Zoomed into something else, neither its badge nor its pyramid follows; zooming back out brings them back.
+A camera is a piece of the site, drawn at the level its site is. Double-clicked into the printer, neither its badge nor its pyramid follows; going back out brings them back.
 
 ![Looking into a printer, the camera stays in the garage](screenshots/12-10-looking-into-a-printer-the-camera-stays-in-the-gar.png)
 
@@ -93,7 +95,7 @@ GET /sites/garage/attached -> cameras: []
 
 ## 12. What the browser put here, it can take back
 
-Site's Pinned lists what a page pinned -- cameras, views, boards -- every site's, each row naming its site and carrying the button that takes it back, from here, without switching to that site; a pin whose site or piece is gone is shown as such, and this is the one place it can be seen. Pictures lists every picture in the picture folder as thumbnails, grouped by the camera that took them -- here none did -- the folder's own and the ones the browser kept (those added from its file picker kept as they were named under uploads/), each with where it is pinned as a view, and Forget on a kept one. A picture kept and pinned nowhere waits to be chosen: one clicked is chosen, as shelf.png is here, and the ring's Picture › Folder pins it where the ring stands -- the seven newest by name, an older one as its last cell -- as the status bar says.
+Site's Pinned lists what a page pinned -- cameras, views, boards -- every site's, each row naming its site and carrying the button that takes it back, from here, without switching to that site; a pin whose site or piece is gone is shown as such, and this is the one place it can be seen. Pictures lists every picture in the picture folder as thumbnails, grouped by the camera that took them -- here none did -- the folder's own and the ones the browser kept (those added from its file picker kept as they were named under uploads/), each with where it is pinned as a view, and Forget on a kept one. A picture kept and pinned nowhere waits to be chosen: one clicked is chosen, as shelf.png is here, and the ring's Picture › Folder pins it where the ring stands -- the seven newest by modification time, an older one as its last cell -- as the status bar says.
 
 ![What the browser put here, it can take back](screenshots/12-12-what-the-browser-put-here-it-can-take-back.png)
 
@@ -127,5 +129,5 @@ Origin: http://elsewhere.test -> 403 Apothecary answers this machine only. Perso
 Run it yourself:
 
 ```sh
-uv run apothecary test run --e2e
+uv run apothecary test run
 ```
