@@ -168,6 +168,8 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "dev-pin": (WIDGET, WHAT_IS_THERE, "a button that pins the chosen board to the piece"),
     # The ring. One control, and it is the destination rather than the meter.
     "ring-open": (RING, WHAT_YOU_SEE, "the button that opens the ring"),
+    # The header's Docs: the documentation and the walkthrough, in a new tab.
+    "docs-link": (WIDGET, NOTHING, "a link that opens the documentation in a new tab"),
     # Made by the page as it goes, rather than written into it. Found by the
     # listening scan below, and named here so both scans agree on what exists.
     "category-chip": (LIST, WHAT_YOU_SEE, "a row of buttons, one per word, that fold and unfold"),
@@ -351,6 +353,8 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
 # `apothecary.menu`'s vocabulary, so a control cannot claim a backing that
 # does not exist.
 RING_BACKED: Dict[str, str] = {
+    # the header's Docs is the canvas ring's Panels › Docs
+    "docs-link": "panel:docs",
     # the viewer's Device section: Open is Device › Open, the board's Machine
     "dev-open": "device:open",
     "dev-query": "device:query",

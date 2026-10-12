@@ -987,7 +987,8 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     # Pictures (every picture, and the gathering) and a board's Machine (its log in
     # it) each a cell; then the rail, in the cell it has had since Phase 3; then the
     # Bench, the firmware page's sections, a group of its own: the panel and its
-    # verbs. A print is the job: Jobs is no panel.
+    # verbs. A print is the job: Jobs is no panel. Last, Docs: the documentation and
+    # the walkthrough in a new tab, as the header's Docs opens them; no cell moved.
     assert [(c.label, c.action, c.cell) for c in panels.children] == [
         ("Site", "panel:toggle:site", 8),
         ("Selected", "panel:toggle:selected", 6),
@@ -995,7 +996,10 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Machine", "panel:toggle:machine", 4),
         ("Rail", "panel:rail:toggle", 9),
         ("Bench", None, 3),
+        ("Docs", "panel:docs", 1),
     ]
+    assert address_of(root, "panel:docs") == "91"
+    assert carried_by("panel:docs").name == "VIEWER"
     assert address_of(root, "panel:site") == "98"  # by the option's id
     assert address_of(root, "panel:pictures") == "92"
     assert address_of(root, "panel:machine") == "94"

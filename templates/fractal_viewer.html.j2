@@ -42,6 +42,12 @@
         }
         .toolbar button:hover, .view-menu > summary:hover, .view-menu[open] > summary { background: #505050; }
         .toolbar .spacer { flex: 1 1 0; min-width: 0; }
+        /* Docs: the documentation and the walkthrough, a link worn as a button. */
+        .toolbar .docs-link {
+            padding: 0.45rem 0.8rem; border-radius: 4px; font-size: 0.9rem; line-height: 1.25;
+            background: #404040; color: #e0e0e0; text-decoration: none;
+        }
+        .toolbar .docs-link:hover { background: #505050; }
         /* apothecary serve --demo: one quiet line above the header. */
         .demo-banner {
             padding: 0.2rem 0.75rem; font-size: 0.78rem; color: #9fb0c4; background: #1b2028;
@@ -601,6 +607,7 @@
                     </label>
                 </div>
             </details>
+            <a id="docs-link" class="docs-link" href="/docs" target="_blank" rel="noopener" title="The documentation in a new tab: the guides, and the walkthrough, each of its pages a run of the tests (Panels › Docs on the ring)">Docs</a>
             <button type="button" id="ring-open" title="Open the ring for the chosen piece (m, or right-click a piece). Digits choose cells as on a numeric keypad; 5 backs out.">⌗ Ring</button>
             <span id="validity-indicator" class="validity-indicator valid" title="The site's problems: click to unfold them in Site">Layout valid</span>
         </div>
@@ -5682,6 +5689,13 @@
                     if (viewer.bench) viewer.bench.act(action.slice('bench:'.length));
                     return;
                 }
+                // Panels › Docs: the documentation in a new tab, as the header's Docs opens it.
+                if (action === 'panel:docs') {
+                    const docs = document.getElementById('docs-link');
+                    window.open(docs ? docs.href : `${BASE_URL}/docs`, '_blank', 'noopener');
+                    viewer.setStatus(`Opened the documentation in a new tab: the guides, and the walkthrough from its table${tail}`, 'success');
+                    return;
+                }
                 if (action === 'panel:rail:toggle') {
                     const hidden = viewer.panels.hideRail(!viewer.panels.railHidden());
                     viewer.setStatus(`${hidden ? 'Hid' : 'Showed'} the rail${tail}`, 'success');
@@ -5875,6 +5889,8 @@
             pairs.push([viewer.detailModeEl.closest('label'), `view:detail:${viewer.detailModeEl.value}`]);
             pairs.push([viewer.overlayToggle.closest('label'), 'view:outlines']);
             pairs.push([viewer.wallsToggle.closest('label'), 'view:walls']);
+            // The header's Docs: Panels › Docs.
+            pairs.push([document.getElementById('docs-link'), 'panel:docs']);
             const bench = document.querySelector(".panel[data-panel='bench']");
             if (bench) {
                 for (const [selector, action] of BENCH_VERBS) for (const el of bench.querySelectorAll(selector)) pairs.push([el, action]);

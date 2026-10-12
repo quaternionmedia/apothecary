@@ -383,7 +383,15 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # Backspace stepping out now asks whether a person is typing (`typing`, plumbing),
 # so typing in the editor does not step out. The ceiling follows the count up by
 # five, and the share's floor up with it.
-VIEWER_CEILING = 125
+#
+# Onboarding (docs/plans/onboarding-2026-10-11.md): the header's Docs (docs-link), a
+# link opening /docs -- the guides and the walkthrough -- in a new tab, ring-backed
+# by Panels › Docs, a new last cell of Panels, so no cell before it moves. The site
+# drop-down's listener now puts the site in the address (siteSelect:change:chooseSite,
+# renamed, not added), and the browser's Back and Forward load the site it names
+# (window:popstate:followAddress), a place the page listens that is no control of its
+# own. The ceiling follows the count up by one, and the share's floor up with it.
+VIEWER_CEILING = 126
 
 
 def test_the_viewer_stays_under_its_ceiling():
@@ -744,10 +752,23 @@ def test_the_viewers_ring_backed_share_did_not_fall():
     share does not fall below where that left it, 68 of 118. The slicer's two controls,
     Slice and the slicer's Install, came ring-backed: 70 of 120. Loop 2's SCAD editor
     brought five, four of them ring-backed (Save, Float, Fullscreen, a saved variant
-    chosen; not the name it is saved under): 74 of 125."""
+    chosen; not the name it is saved under): 74 of 125. The header's Docs came
+    ring-backed, Panels › Docs: 75 of 126."""
     taken = census.take()
     own, backed = len(taken.controls_of_its_own()), len(taken.ring_backed())
-    assert backed / own >= 74 / 125, f"{backed} of {own} ring-backed"
+    assert backed / own >= 75 / 126, f"{backed} of {own} ring-backed"
+
+
+def test_the_headers_docs_is_panels_docs_and_back_and_forward_follow_the_address():
+    """The header's Docs is a control of its own, ring-backed by Panels › Docs; Back
+    and Forward are the browser's, the page listening for them as for a resize."""
+    taken = census.take()
+    by_name = {f.name: f for f in taken.controls_of_its_own()}
+    assert by_name["docs-link"].ring_action == "panel:docs"
+    listening = {f.key: f for f in taken.found if f.how == "listening"}
+    assert listening["window:popstate:followAddress"].surface == census.AUTOMATIC
+    assert listening["siteSelect:change:chooseSite"].surface == census.WIDGET
+    assert "siteSelect:change:loadSite" not in census.LISTENING
 
 
 def test_the_serial_overlay_left_nothing_behind():

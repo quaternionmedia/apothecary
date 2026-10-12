@@ -602,7 +602,10 @@ def _panels() -> Option:
         children=[toggle(pid, label) for pid, label in PANELS if pid in _BEFORE_RAIL]
         # The rail itself: hidden and shown, as the tilde key does.
         + [Option(id="panel:rail", label="Rail", action="panel:rail:toggle")]
-        + [_bench(toggle("bench", "Bench"))],
+        + [_bench(toggle("bench", "Bench"))]
+        # The documentation and the walkthrough, in a tab of the browser's own, as
+        # the header's Docs opens them. Last, so no cell before it moves.
+        + [Option(id="panel:docs", label="Docs", action="panel:docs")],
     )
 
 
