@@ -107,9 +107,8 @@ def test_photographs_into_pieces(
             "**A real photograph.** Everything here is drawn to order, which is how "
             "the answers are known. Shadow, texture, blur and clutter are all "
             "absent, so a good showing here means it handles the easy case.",
-            "**A printable model.** Turning an arrangement into a solid needs a "
-            "program this run does not install. Nothing below the arrangement is "
-            "exercised.",
+            "**A printable model.** These pieces stay an arrangement here; a piece "
+            "made from a camera's picture is sliced and printed in walkthrough 13.",
             "**Anything about how long it takes.** No timing is asserted anywhere in this run.",
             "**Anything surviving a restart.** Nothing here is stored. The run "
             "builds what it needs and forgets it.",
@@ -269,7 +268,7 @@ def test_photographs_into_pieces(
     assert len(album["pieces"]) >= 3, album
 
     page.goto(f"{base_url}/photos/{SITE}/picture")
-    page.wait_for_timeout(300)
+    page.wait_for_function("() => document.images[0] && document.images[0].complete")
     story.shows(
         "The same path, now against a real server",
         f"This is the picture the rest of the page is about: {album['pixel_width']} "
@@ -293,7 +292,7 @@ def test_photographs_into_pieces(
 
     page.goto(f"{base_url}/viewer/sites/{SITE}")
     expect(page.locator(".toolbar h1")).to_contain_text("Apothecary")
-    page.wait_for_timeout(700)
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
     # Each piece is drawn as the word builds it: a wedge, a cylinder of three facets,
     # is a triangle in the world, as the picture's was, not a disc.
     page.evaluate("() => window.fractalViewer.waveDone")
@@ -313,10 +312,12 @@ def test_photographs_into_pieces(
     contents = page.locator("#contents-list")
     for name in list(album["pieces"])[:2]:
         expect(contents).to_contain_text(name)
-    story.shows(
+    story.says(
         "Every piece is listed, named for the word it was matched to",
-        "The names in this list are the words from the top of this page. One "
-        "vocabulary runs the whole length of the path.",
+        "Site, beside the world in the picture above, lists the pieces by name, and the "
+        "names are the words from the top of this page. One vocabulary runs the whole "
+        "length of the path.",
+        shown="\n".join(contents.locator(".contents-item").all_inner_texts()),
     )
 
     chips = page.locator("#category-filters")
@@ -325,7 +326,6 @@ def test_photographs_into_pieces(
     first_word = words[0]
     listed = contents.locator(".contents-item").count()
     chips.get_by_text(first_word, exact=False).first.click()
-    page.wait_for_timeout(400)
     expect(chips.locator(".category-chip.active")).to_have_text(first_word)
     expect(contents.locator(".contents-item")).to_have_count(listed)
     story.shows(
@@ -347,7 +347,6 @@ def test_photographs_into_pieces(
     provenance = selected.locator(".prop-readonly", has_text="thickness is a guess")
     provenance.evaluate("(el) => el.scrollIntoView({ block: 'center' })")
     expect(provenance).to_be_in_viewport(ratio=0.99)  # whole, but for a fraction of a pixel
-    page.wait_for_timeout(400)
     story.shows(
         "Choosing a piece shows where it came from",
         f"Its word and why, the finder that saw it ('{album['finder']}'), how sure "

@@ -17,10 +17,32 @@ import re
 import time
 
 import pytest
+from doc_capture import TEMPERATURE, moments
 from playwright.sync_api import Page, expect
+from viewer_ready import by_hand
 
 BOARD = "printer_1.frame_system.mainboard"
 UNO = "/dev/ttyFAKE0"
+MACHINE = ".panel[data-panel='machine']"
+
+# What differs on every run whatever the page does, blanked in the pictures: the times
+# of the log, of a poll and of a job, and how long one took; a temperature to its
+# tenth, which wobbles round its target from poll to poll (``210.2/210``), and the
+# chart of them; and how far a print streamed from here has got, which goes on while
+# the picture is taken. The simulated printer's own print is held still by the doc
+# server (APOTHECARY_SIMULATED_PROGRESS).
+STREAMED = r"\d+/\d+ lines|\(\d+(?:\.\d+)?%\)|\b\d+%|stream\w* \d+|\bG\d+(?: [A-Z][\d.-]+)*"
+WHERE_IT_SHOWS = (MACHINE, "#selected-body .device-section", ".world-badge", "#status")
+CHANGING = (
+    *moments(*WHERE_IT_SHOWS),
+    *((where, TEMPERATURE) for where in WHERE_IT_SHOWS),
+    *(
+        (f"{MACHINE} {part}", STREAMED)
+        for part in ("#print-progress", "#print-history", "#c-state-s")
+    ),
+    f"{MACHINE} #chart",
+    f"{MACHINE} #b-print",
+)
 
 
 def _select(page: Page, name: str):
@@ -78,16 +100,18 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     expect(section.locator(".dev-pick")).to_be_visible(timeout=10000)
     # The Device section is below the board's rows and its part: scrolled into view.
     section.evaluate("(el) => el.scrollIntoView({ block: 'center' })")
-    page.wait_for_timeout(200)
     docs.step(
         "Open printer_1 › frame_system › mainboard in Site's tree: the board's Device section "
-        "offers the detected ports to pin, a Query button, and a box to pin by typed identity"
+        "offers the detected ports to pin, a Query button, and a box to pin by typed identity",
+        blank=CHANGING,
     )
 
     section.locator(".dev-pick").select_option("/dev/ttyFAKE1")
     section.locator(".dev-query").click()
     expect(section.locator(".device-query")).to_contain_text("Marlin", timeout=10000)
-    docs.step("Query asks the port M115 without pinning it -- a Marlin, so a printer")
+    docs.step(
+        "Query asks the port M115 without pinning it -- a Marlin, so a printer", blank=CHANGING
+    )
 
     section.locator(".dev-pin").click()
     expect(section.locator(".dev-unpin")).to_be_visible(timeout=8000)
@@ -95,7 +119,8 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     docs.step(
         "Pin it: the section is one line -- the port and what the board is doing, its "
         "state and temperatures -- with Open, its Machine, and Unpin. Its link is held "
-        "since the Query, so it is polled once as it is pinned, and the node follows"
+        "since the Query, so it is polled once as it is pinned, and the node follows",
+        blank=CHANGING,
     )
 
     _select(page, "printer_1")
@@ -103,38 +128,32 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     badge = page.locator("#contents-list .contents-item[data-path='printer_1'] .dev-badge")
     expect(badge).to_contain_text("🖨", timeout=5000)
     expect(section).to_contain_text("via frame_system.mainboard")
-    page.wait_for_timeout(1500)  # the tree refresh re-fetches meshes; let them land before the shot
     docs.step(
         "The printer followed its board: printer_1's status is now `printing` (the mesh "
         "recolours), its row in Site carries the board's live badge, and its Device "
-        "section says which board speaks for it"
+        "section says which board speaks for it",
+        blank=CHANGING,
     )
 
-    # The root frames the whole building, where the printer is a few pixels: the view
-    # is framed on the bench and the printer on it, so its badge is seen at its board.
-    page.evaluate(
-        """() => {
-            const v = window.fractalViewer;
-            const on = new Set(['workbench', 'printer_1']);
-            const level = v.currentRenderNodes(v.currentFocusNode());
-            v.frameCameraForChildren(level.filter((n) => on.has(n.name)));
-        }"""
-    )
+    # The root frames the whole building, where the printer is a few pixels: brought
+    # closer by hand, as a person would, so its badge is seen at its board.
+    by_hand(page, "printer_1", distance=1400)
     world_badge = page.locator(".world-badge[data-path='printer_1']")
     expect(world_badge).to_contain_text("printing", timeout=10000)
-    page.wait_for_timeout(600)
     docs.step(
         "The world wears its machines: a ⚡ badge stands at the printer's board in the 3D "
-        "view, following it as the camera moves; its words -- state, hotend and bed, "
-        "progress, a job's stage, the port -- open on hover or while the printer is "
-        "selected, and a click selects it. Inside the printer the nozzle marker sits where "
-        "the board last said, and a bed reading lies over the bed"
+        "view, following it as the camera moves -- here brought closer by hand, Shift+drag "
+        "and the wheel; its words -- state, hotend and bed, progress, a job's stage, the "
+        "port -- open on hover or while the printer is selected, and a click selects it. "
+        "Inside the printer the nozzle marker sits where the board last said, and a bed "
+        "reading lies over the bed",
+        blank=CHANGING,
     )
 
     world_badge.click()
     machine = page.locator(".panel[data-panel='machine']")
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
-    page.wait_for_timeout(2500)
+    expect(machine.locator("#chart-span")).to_contain_text("poll", timeout=10000)
     docs.step(
         "Click the badge, or Open, or Device › Open on the ring, and the printer's Machine "
         "opens in the rail's tab strip, beside Pictures and the Bench: the monitor's own "
@@ -142,18 +161,19 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
         "here -- with the board's one log in it. It is the one place for the board, and "
         "the one thing that polls it: the badges and Selected's line say what its polls "
         "said. Float it from its tab to have it over the world; the ring's control verbs "
-        "go to it"
+        "go to it",
+        blank=CHANGING,
     )
 
     machine.locator("#q").fill("M119")
     machine.locator("#qform button").click()
     expect(machine.locator("#log")).to_contain_text("y_min: TRIGGERED", timeout=8000)
     machine.locator("#log").scroll_into_view_if_needed()
-    page.wait_for_timeout(300)
     docs.step(
         "The log's query box sends report-only G-code (M119 here) and the answer lands in "
         "the log; anything else is refused, in the log and in the status bar. The polls' "
-        "own traffic stays out of the log until its tick-box asks for it"
+        "own traffic stays out of the log until its tick-box asks for it",
+        blank=CHANGING,
     )
     page.evaluate("() => window.fractalViewer.closeMachine()")
 
@@ -174,7 +194,9 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     devkit = page.locator(".world-badge[data-path='footpedal']")
     expect(devkit).to_be_visible(timeout=10000)
     devkit.click()
-    expect(machine.locator("#c-sketch")).to_contain_text("should run footpedal@arduino", timeout=8000)
+    expect(machine.locator("#c-sketch")).to_contain_text(
+        "should run footpedal@arduino", timeout=8000
+    )
     expect(machine.locator("#c-board")).to_contain_text("not listening")
     machine.locator("#listen").click()
     expect(machine.locator("#log")).to_contain_text("hello", timeout=10000)
@@ -183,31 +205,39 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     page.evaluate(
         "() => document.querySelector(\"#sketch-card\").scrollIntoView({ block: 'start' })"
     )
-    page.wait_for_timeout(1500)
     docs.step(
         "A devkit has a Machine too: its port and board, the sketch it should run against "
         "what it was heard saying (here the scripted board says another sketch's hello, so "
         "they differ) and what changed since it was flashed. Opening it opens no port: "
         "Listen does, saying it may reset the board, and its serial output comes into the "
         "log. Its Flashing card builds the sketch it should run for its board and, asked, "
-        "uploads it to this port, its output in the card, then listens for the hello"
+        "uploads it to this port, its output in the card, then listens for the hello",
+        blank=CHANGING,
     )
     page.evaluate("() => window.fractalViewer.closeMachine()")
 
     page.goto(f"{base_url}/firmware/monitor?port=/dev/ttyFAKE1")
     expect(page).to_have_url(re.compile(r"/viewer/sites/garage\?machine=%2Fdev%2FttyFAKE1$"))
     expect(page.locator("#c-state")).to_contain_text("printing", timeout=15000)
-    page.wait_for_timeout(2 * 2100)  # a few polls, so the chart and log have something to show
+    # A few polls, so the chart and the log have something to show.
+    expect(page.locator("#chart-span")).to_contain_text(
+        re.compile(r"last ([3-9]|\d\d+) polls"), timeout=15000
+    )
     page.locator("#q").fill("M119")
     page.locator("#qform button").click()
     expect(page.locator("#log")).to_contain_text("y_min: TRIGGERED", timeout=8000)
     assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
+    # The status cards at the top of the Machine, which the log scrolled away.
+    page.locator("#c-state").evaluate(
+        "(el) => el.closest('.card').scrollIntoView({ block: 'start' })"
+    )
     docs.step(
         "The printer monitor's address, /firmware/monitor?port=, opens the viewer on the "
         "site the port is pinned in with the printer's Machine open, a tab of the rail's "
         "strip: status cards, temperature history, the port's comms log with its query box, "
         "and Reconnect / Reset / Release for the link. A board pinned nowhere opens on the "
-        "default site, its Machine in the rail the same way"
+        "default site, its Machine in the rail the same way",
+        blank=CHANGING,
     )
 
     page.locator("#ctl").check()
@@ -215,26 +245,27 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     page.locator("#h-bed").fill("65")
     page.locator("#control button[data-cmd='M140 S{h-bed}']").click()
     expect(page.locator("#c-bed")).to_contain_text("/65°", timeout=8000)
-    page.wait_for_timeout(600)
     docs.step(
         "⚙ Control arms a latch for five minutes of activity and opens the control overlay: "
         "heaters, fan, homing, bounded jogs, SD pause/resume/abort. Here the bed target is set "
         "to 65 °C; the card follows on the next poll and the line is in the log in amber. "
-        "Disarmed, nothing on the page can heat or move the machine; E-STOP always can"
+        "Disarmed, nothing on the page can heat or move the machine; E-STOP always can",
+        blank=CHANGING,
     )
 
     page.once("dialog", lambda d: d.accept())
     page.locator("#level-probe").click()
     expect(page.locator("#mesh .cell")).to_have_count(25, timeout=20000)
     expect(page.locator("#level-job")).to_have_text("", timeout=10000)
-    page.locator("#level-card").scroll_into_view_if_needed()
-    page.wait_for_timeout(300)
+    # The card from its top, its heatmap and history under it.
+    page.locator("#level-card").evaluate("(el) => el.scrollIntoView({ block: 'start' })")
     docs.step(
         "Bed level: Probe bed homes and probes (armed, and asked once), then reads the mesh, "
         "the probe offset and the temperatures and keeps them as a record. The heatmap is "
         "drawn as the bed lies, with its range, tilt and each corner against the mean; the "
         "history lists every reading on the port, and the corner buttons put the nozzle at "
-        "paper height for a tramming check. Read mesh does the same without moving"
+        "paper height for a tramming check. Read mesh does the same without moving",
+        blank=CHANGING,
     )
     page.wait_for_function(
         "() => { const m = window.fractalViewer.marks['printer_1'];"
@@ -248,12 +279,12 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     expect(page.locator("#contents-list .contents-item", has_text="gantry_system")).to_be_visible(
         timeout=10000
     )
-    page.wait_for_timeout(2500)
     docs.step(
         "The reading is drawn in the world too: the printer's marks lay the mesh over its "
         "bed as a relief, stretched so the tilt can be seen and coloured as the heatmap is. "
         "It follows whichever reading the card shows. Here the Machine is docked, a tab of "
-        "the rail's strip, and the world is zoomed into the printer"
+        "the rail's strip, and the world is zoomed into the printer",
+        blank=CHANGING,
     )
     page.evaluate("() => window.fractalViewer.jumpTo(0)")
     expect(page.locator("#contents-list .contents-item", has_text="workbench")).to_be_visible(
@@ -277,13 +308,13 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
         timeout=15000,
     )
     page.locator("#print-card").scroll_into_view_if_needed()
-    page.wait_for_timeout(300)
     docs.step(
         "Print from here: a sliced G-code file is kept on the host, checked (no EEPROM "
         "writes, no temperatures over the caps) and streamed to the printer one line per "
         "ok, no SD card needed. Pause stops the feed, Resume needs the latch, Cancel turns "
         "the heaters and fan off and frees the motors; the state card says how far it is, "
-        "polls keep coming between lines, and every print is recorded with how it ended"
+        "polls keep coming between lines, and every print is recorded with how it ended",
+        blank=CHANGING,
     )
     page.once("dialog", lambda d: d.accept())
     page.locator("#print-cancel").click()
@@ -296,11 +327,11 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     bench = page.locator(".panel[data-panel='bench']")
     expect(bench.locator(".tc-status")).to_contain_text("arduino-cli", timeout=15000)
     expect(bench.locator(".sketch-select option[value='footpedal@arduino']")).to_have_count(1)
-    page.wait_for_timeout(600)
     docs.step(
         "The firmware page's address, /firmware, opens the viewer with the Bench, a tab of "
         "the rail's strip: the toolchain as installed with Install / Update, the suggested "
         "cores, libraries, the sketches under parts/ each with its board, Compile and "
         "Compile & upload to any detected port, raw flash with esptool, and the task log. "
-        "Each verb is a cell of the ring's Panels › Bench too"
+        "Each verb is a cell of the ring's Panels › Bench too",
+        blank=(*CHANGING, *moments(".panel[data-panel='bench']")),
     )
