@@ -218,7 +218,7 @@ def check_part_draft(name: str, body: DraftRequest, page: Optional[str] = PAGE):
         fields, source = params_spec(part).fields, FROM_MODEL
     else:
         listing = check.parameters
-        fields = scad_fields(listing) if listing else []
+        fields = scad_fields(listing, text=body.scad) if listing else []
         source = FROM_CUSTOMIZER if listing else None
         if not check.lists:
             note = f"{check.openscad} cannot list the draft's parameters ({INSTALL_HINT})"

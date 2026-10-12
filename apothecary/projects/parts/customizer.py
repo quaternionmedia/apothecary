@@ -431,14 +431,69 @@ def _span(initial: float, step: Optional[float]) -> Tuple[float, float]:
     return -reach, reach
 
 
-def scad_fields(parameters: List[Dict[str, Any]]) -> List[ParamField]:
+# A unit, in either of the two places a customizer comment can carry one:
+#
+# - the caption, the comment on the line above the parameter, ending in the
+#   unit in square brackets: ``// Width [mm]`` above ``width = 34; // [10:100]``
+#   is in mm, and its caption is "Width";
+# - the parameter's own comment when it is one word and nothing else:
+#   ``height = 10; // mm``.
+#
+# A unit is one to twelve characters with no space, bracket, colon or comma in
+# it, and not a number, so a range (``[10:100]``) or a list of choices is never
+# one. A word after a range (``width = 34; // [10:100] mm``) is not read: it
+# stops OpenSCAD reading the range itself. Only a number or a vector has one.
+_UNIT = r"[^\s\[\]:,]{1,12}"
+_CAPTION_UNIT = re.compile(r"^(?P<text>.*?)\s*\[(?P<unit>" + _UNIT + r")\]\s*$")
+_NUMBER = re.compile(r"^[-+]?(\d+\.?\d*|\.\d+)$")
+
+
+def _a_unit(word: str) -> bool:
+    return not _NUMBER.match(word)
+
+
+def unit_of(
+    entry: Mapping[str, Any], text: Optional[str] = None
+) -> Tuple[Optional[str], Optional[str]]:
+    """(unit, caption) of a listed parameter: the unit its caption ends with in
+    square brackets, and the caption without it; else the one word of its own
+    comment in ``text`` (the SCAD it is listed from). (None, caption) where it
+    declares none."""
+    caption = entry.get("caption")
+    if isinstance(caption, str):
+        found = _CAPTION_UNIT.match(caption)
+        if found and _a_unit(found.group("unit")):
+            return found.group("unit"), found.group("text").strip() or None
+    if text:
+        own = re.search(
+            r"^[ \t]*"
+            + re.escape(str(entry.get("name", "")))
+            + r"[ \t]*=[^;\n]*;[ \t]*//[ \t]*(?P<unit>"
+            + _UNIT
+            + r")[ \t]*$",
+            text,
+            re.M,
+        )
+        if own and _a_unit(own.group("unit")):
+            return own.group("unit"), caption
+    return None, caption
+
+
+def _whole(*values: Any) -> bool:
+    return all(isinstance(v, (int, float)) and float(v).is_integer() for v in values)
+
+
+def scad_fields(parameters: List[Dict[str, Any]], text: Optional[str] = None) -> List[ParamField]:
     """The customizer's parameters as the fields a control surface builds from.
 
     A number gets the range its SCAD states, else one spanned around its value
-    for a slider (which the check does not hold it to); choices are an
-    ``enum`` with their options (and, for a page that reads words, a pattern
-    of them); a boolean is ``boolean``, a string ``text``, a vector
-    ``vector``."""
+    for a slider (which the check does not hold it to), and the step OpenSCAD
+    gives it; one whose range, step and value are whole numbers is ``integer``,
+    as OpenSCAD's own slider steps it. Choices are an ``enum`` with their
+    options (and, for a page that reads words, a pattern of them); a boolean
+    is ``boolean``, a string ``text``, a vector ``vector``. A number's or a
+    vector's ``unit`` is read from its comment (``unit_of``: ``text`` is the
+    SCAD it is listed from)."""
     fields = []
     for entry in parameters:
         initial, kind = entry.get("initial"), entry.get("type")
@@ -464,14 +519,22 @@ def scad_fields(parameters: List[Dict[str, Any]]) -> List[ParamField]:
         elif kind == "string":
             fields.append(ParamField(type="text", **common))
         elif isinstance(initial, list):
+            unit, common["description"] = unit_of(entry, text)
             fields.append(
-                ParamField(type="vector", min=entry.get("min"), max=entry.get("max"), **common)
+                ParamField(
+                    type="vector", min=entry.get("min"), max=entry.get("max"), unit=unit, **common
+                )
             )
         elif kind == "number" and isinstance(initial, (int, float)):
+            unit, common["description"] = unit_of(entry, text)
             low, high = entry.get("min"), entry.get("max")
-            if low is None or high is None:
+            stated = low is not None and high is not None
+            if not stated:
                 low, high = _span(float(initial), entry.get("step"))
-            fields.append(ParamField(type="number", min=low, max=high, **common))
+            integer = stated and _whole(initial, low, high, entry.get("step") or 1)
+            fields.append(
+                ParamField(type="number", min=low, max=high, unit=unit, integer=integer, **common)
+            )
         else:
             fields.append(ParamField(type="text", **common))
     return fields
@@ -517,7 +580,9 @@ def customizer_spec(part: BasePart, renderer: Optional[OpenSCADRenderer] = None)
     return ParamsSpec(
         part=part.name,
         description=part.description,
-        fields=scad_fields(check.parameters),
+        fields=scad_fields(
+            check.parameters, text=part.source_file.read_text(encoding="utf-8", errors="replace")
+        ),
         bounds=part.get_bounds(),
         source=FROM_CUSTOMIZER,
         openscad=check.openscad,

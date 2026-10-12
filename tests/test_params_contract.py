@@ -31,6 +31,9 @@ FIELD_KEYS = [
     "group",
     "description",
     "contested",
+    "unit",
+    "integer",
+    "fields",
 ]
 
 

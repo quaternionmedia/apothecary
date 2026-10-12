@@ -11,17 +11,20 @@ from apothecary.models import BoundingBox3D, Vector3D
 from apothecary.projects.parts.base import BasePart
 from apothecary.projects.parts.skeleton import ROOT
 
+# A length in the SCAD's own unit: what the page shows beside the number.
+MM = {"unit": "mm"}
+
 
 class Params(BaseModel):
-    blade_width: float = Field(120.0, gt=0)
-    blade_height: float = Field(45.0, gt=0)
-    blade_thickness: float = Field(3.0, gt=0)
+    blade_width: float = Field(120.0, gt=0, json_schema_extra=MM)
+    blade_height: float = Field(45.0, gt=0, json_schema_extra=MM)
+    blade_thickness: float = Field(3.0, gt=0, json_schema_extra=MM)
     blade_angle: float = Field(10.0)
-    mount_width: float = Field(40.0, gt=0)
-    mount_height: float = Field(12.0, gt=0)
-    mount_thickness: float = Field(4.0, gt=0)
-    bolt_diameter: float = Field(3.0, gt=0)
-    bolt_spacing: float = Field(24.0, gt=0)
+    mount_width: float = Field(40.0, gt=0, json_schema_extra=MM)
+    mount_height: float = Field(12.0, gt=0, json_schema_extra=MM)
+    mount_thickness: float = Field(4.0, gt=0, json_schema_extra=MM)
+    bolt_diameter: float = Field(3.0, gt=0, json_schema_extra=MM)
+    bolt_spacing: float = Field(24.0, gt=0, json_schema_extra=MM)
 
 
 class SnowplowPart(BasePart):
