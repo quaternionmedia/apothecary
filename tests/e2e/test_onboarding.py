@@ -325,3 +325,39 @@ def test_the_benchs_disabled_compile_says_why(page: Page, url: str):
     bench.locator(".fqbn-input").fill("esp32:esp32:esp32")
     expect(compile_).to_be_enabled()
     expect(compile_).to_have_attribute("title", re.compile(r"^Build the sketch for the board"))
+
+
+@pytest.fixture(scope="module")
+def bare_url(base_url, start_server):
+    """A server with nothing that finds boards: no arduino-cli, no Rust."""
+    return start_server({"ARDUINO_CLI": "none", "APOTHECARY_SIMULATED_PRINTER": "idle"})
+
+
+@pytest.mark.e2e
+def test_with_no_arduino_cli_a_printer_says_why_and_the_bench_asks_for_nothing_missing(
+    page: Page, bare_url: str
+):
+    """A printer's Device section said only "arduino-cli is not installed": it says
+    arduino-cli is wanted there only to find the board. And the Bench asked for the
+    boards arduino-cli knows and for the ports, each a 503 in the console with nothing
+    to answer; it asks for neither now."""
+    failed: list = []
+    page.on(
+        "response",
+        lambda r: failed.append(f"{r.status} {r.url}") if r.status >= 500 else None,
+    )
+    _open(page, bare_url)
+    _row(page, "printer_1").click()
+    section = page.locator("#selected-body .device-section")
+    expect(section).to_contain_text(
+        "arduino-cli finds the boards on this machine, and it is not installed", timeout=15000
+    )
+    expect(section).to_contain_text("A printer needs it only to be found")
+    _row(page, "workbench").click()
+    expect(page.locator("#selected-body .device-section")).not_to_contain_text("A printer needs it")
+    page.evaluate("() => window.apothecaryPanels.open('bench')")
+    bench = page.locator(".panel[data-panel='bench']")
+    expect(bench.locator(".tc-status")).to_contain_text("not installed", timeout=15000)
+    expect(bench.locator(".port-select")).to_contain_text("(none detected)")
+    settled(page)
+    assert failed == [], failed
