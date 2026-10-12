@@ -296,13 +296,17 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
         a.el.addEventListener("pointerleave", () => { a.hover = false; a.hoverOff = performance.now() + LINGER_MS; dirty = true; });
     }
 
-    // Whether there is something to place with nothing drawn having moved.
+    // Whether there is something to place with nothing drawn having moved: a card under
+    // the pointer or lingering, and once more when its lingering is over, to close it.
     function wants() {
         if (dirty) return true;
         const now = performance.now();
-        for (const a of anchors.values()) if (hovered(a, now)) return true;
-        for (const c of clusters.values()) if (hovered(c, now)) return true;
-        return false;
+        let more = false;
+        for (const x of [...anchors.values(), ...clusters.values()]) {
+            if (hovered(x, now)) more = true;
+            else if (x.hoverOff) { x.hoverOff = 0; more = true; }
+        }
+        return more;
     }
 
     return {
