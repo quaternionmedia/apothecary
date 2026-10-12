@@ -10,7 +10,7 @@ ring, a second picture taken with P, a second piece made and adjusted, sliced by
 Slice on its own ring this time, and a second print, started from the ring's Send
 file, while the Machine stays open in the rail. Every step
 is taken through the page's own controls and ring cells, and what is asserted is
-what a person sees: the status line, Contents, the camera's section, the Machine's
+what a person sees: the status line, Site, the camera's section, the Machine's
 Print from here card and Site's Jobs. Each step's words name the next step.
 
 This module is a walkthrough page too: `walkthrough/13-a-picture-to-a-print.md` is
@@ -34,16 +34,19 @@ running before it ends.
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 from pathlib import Path
 
 import httpx
 import pytest
+from browsers import launch
+from doc_capture import TEMPERATURE, moments
 from playwright.sync_api import expect
 from slicer_helpers import write_fake_orcaslicer
 from test_camera import _drag
 from test_the_loop import _labels, _open_garage, _press, _ring_on, _said, _status, _y4m
-from viewer_ready import settled
+from viewer_ready import UNDER_THE_STAGE_BAR, by_hand, settled
 
 PRINTER = "/dev/ttyFAKE1"
 BOARD = "printer_1.frame_system.mainboard"
@@ -144,12 +147,13 @@ def _drawing_camera_browser(browser_type):
     os.close(fd)
     _y4m(part)
     os.replace(part, DRAWING)
-    browser = browser_type.launch(
+    browser = launch(
+        browser_type,
         args=[
             "--use-fake-ui-for-media-stream",
             "--use-fake-device-for-media-stream",
             f"--use-file-for-fake-video-capture={DRAWING}",
-        ]
+        ],
     )
     yield browser
     browser.close()
@@ -166,23 +170,6 @@ def page(_drawing_camera_browser, url):
     context.close()
 
 
-# The view brought closer to the bench, from where it looked: the turn of a person's
-# wheel, so the pictures show the bench and what stands on it.
-CLOSER = """([x, y, z, distance]) => {
-    const v = window.fractalViewer;
-    const from = v.camera.position.clone().sub(v.orbitControls.target).normalize();
-    v.orbitControls.target.set(x, z, y);
-    v.camera.position.copy(v.orbitControls.target).addScaledVector(from, distance);
-    v.orbitControls.update();
-}"""
-
-
-def _closer_to_the_bench(page) -> None:
-    """The bench's top is x 0..1800, y 0..600 at z 780 in the garage's frame."""
-    page.evaluate(CLOSER, [900, 300, 780, 2600])
-    settled(page)
-
-
 def _attached(page, url: str) -> dict:
     return page.request.get(f"{url}/sites/garage/attached").json()
 
@@ -193,7 +180,7 @@ def _row(page, path: str):
 
 def _make(page, url: str, word: str) -> str:
     """Picture › Make on the bench's ring, the found shape whose label starts with
-    ``word``; the piece it made, as Contents lists it."""
+    ``word``; the piece it made, as Site lists it."""
     before = set(_attached(page, url)["made"])
     _ring_on(page, "workbench")
     _press(page, "Picture", "Make")
@@ -230,20 +217,25 @@ def _adjust(page, piece: str, field: str, value: float) -> float:
     return got
 
 
-# What differs on every run whatever the page does, blanked in the pictures: a kept
-# picture's name (the time it was taken, to the millisecond) where the place's card, a
-# made piece's facts, the editor's found sizes and a host's views say it; when a print
-# started and ended, and how long it took; and the temperature chart's count of polls.
+# What differs on every run whatever the page does, blanked in the pictures, and only
+# that: a kept picture's name (the time it was taken, to the millisecond) where the
+# place's card, a made piece's facts, the editor's found sizes and a host's views say
+# it; when a print started and ended, and how long it took; a temperature to its tenth;
+# and the temperature chart, and its count of polls. The words around each are
+# pictured, so a job's row still names its piece.
 CHANGING = (
-    ".world-badge.place-mark .badge-words",
-    "#selected-body .picture-facts[data-facts='made']",
-    "#selected-body .view-row",
-    "#part-params .cand .src",
-    f"{MACHINE} #print-progress",
-    f"{MACHINE} #print-history",
-    f"{MACHINE} #chart-span",
+    *moments(
+        ".world-badge.place-mark .badge-words",
+        "#selected-body .picture-facts[data-facts='made']",
+        "#selected-body .view-row",
+        "#part-params .cand .src",
+        f"{MACHINE} #print-progress",
+        f"{MACHINE} #print-history",
+        "#site-jobs-list",
+    ),
+    (MACHINE, TEMPERATURE),
+    (f"{MACHINE} #chart-span", r"\d+"),
     f"{MACHINE} #chart",
-    "#site-jobs-list",
 )
 
 
@@ -310,7 +302,9 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
         browser_suite_only=True,
     )
     _open_garage(page, url)
-    _closer_to_the_bench(page)
+    # The garage's root frames the whole building, where the bench is a sliver: brought
+    # closer by hand, Shift+drag and the wheel, as the first step says.
+    by_hand(page, "workbench", distance=3000)
 
     # ---------------------------------------------------------------- round one
     # 1. A camera, added at the bench from its ring.
@@ -325,9 +319,10 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     settled(page)
     story.shows(
         "Camera › Add here stands a camera over the bench",
-        f"The bench's ring, Camera › Add here: {camera} stands above the bench's middle, "
-        "looking straight down, selected, a row of Contents. The status line names the "
-        "next step: its Device.",
+        "The garage brought closer to the bench by hand -- Shift+drag brings it to the "
+        "middle, the wheel nearer -- and the bench's ring, Camera › Add here: "
+        f"{camera} stands above the bench's middle, looking straight down, selected, a "
+        "row of Site. The status line names the next step: its Device.",
         shown=_status(page).inner_text(),
         blank=CHANGING,
     )
@@ -397,7 +392,7 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     story.shows(
         "Make stands a shape up as a piece",
         f"The bench's ring, Picture › Make and the disc: {disc} stands on its outline, "
-        "selected, a row of Contents. The status line names the two steps after it: "
+        "selected, a row of Site. The status line names the two steps after it: "
         "Part › Edit adjusts it, and a printer's Machine prints it.",
         shown=_status(page).inner_text(),
         blank=CHANGING,
@@ -409,7 +404,7 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     expect(_status(page)).to_contain_text("thickness a person's: a printer's Machine prints it")
     facts = page.locator("#selected-body .picture-facts[data-facts='made']")
     expect(facts).to_contain_text(f"× {thick} mm, a person's")
-    settled(page)
+    page.locator("#part-params .param[data-field='height']").evaluate(UNDER_THE_STAGE_BAR)
     story.shows(
         "Part › Edit adjusts it in Selected",
         f"The piece's ring, Part › Edit: its parameters in Selected, under where it came "
@@ -469,6 +464,11 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     machine.locator("#ctl").check()
     expect(page.locator("#control")).to_be_visible(timeout=5000)
     expect(machine.locator("#print-start")).to_be_enabled()
+    folding = page.locator(".panel[data-panel='selected'] .panel-collapse")
+    folding.click()
+    expect(page.locator(".panel[data-panel='selected']")).to_have_class(
+        re.compile(r"\bcollapsed\b")
+    )
     machine.locator("#print-card").scroll_into_view_if_needed()
     story.shows(
         "Slice, in printer_1's Machine, slices the piece and chooses its G-code",
@@ -477,10 +477,15 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
         "slices it for printer_1, the slicer's log in the card while it runs. The G-code "
         "it kept is chosen in the card's files, saying what it was sliced from and for "
         "which printer, and the card lists what the slice used -- each value from the "
-        "printer's profile, a piece declaring none -- with the slicer's estimate; "
-        "control is armed.",
+        "printer's profile, a piece declaring none -- with the slicer's estimate. "
+        "Selected is folded to its title here, by its ▾, so Site and the Machine share "
+        "the rail.",
         shown=sliced_said,
         blank=CHANGING,
+    )
+    folding.click()
+    expect(page.locator(".panel[data-panel='selected']")).not_to_have_class(
+        re.compile(r"\bcollapsed\b")
     )
 
     # 8. ▶ Print: asked first, naming the piece; a job begins.
@@ -503,6 +508,7 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     )
     story.says(
         "Print starts a job that names the piece",
+        "The Machine's ⚙ Control armed, above the card -- the latch a print needs -- "
         f"Print from here's ▶ Print asks first, naming the file, the port and {disc}; "
         "then the file streams, one line per ok, and the job is the newest of printer_1's "
         "history, running. The status line names where it is followed.",
@@ -569,7 +575,7 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     expect(section.locator(".camera-thumbs .cam-thumb")).to_have_count(2, timeout=10000)
     second = _attached(page, url)["views"][-1]
     assert second["id"] != first["id"] and second["taken"]["turn"] == pytest.approx(turned["turn"])
-    settled(page)
+    section.locator(".camera-thumbs").evaluate("(el) => el.scrollIntoView({ block: 'center' })")
     story.shows(
         "Turned by its ring, the camera takes a second picture with P",
         f"{camera} selected wears its turn ring; dragged half a turn, its next picture "
@@ -595,11 +601,12 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     width = _mm(_adjust(page, plate, "width", 40))
     expect(_status(page)).to_contain_text(f"{plate} rebuilt {width} × ")
     expect(_status(page)).to_contain_text("a printer's Machine prints it")
-    settled(page)
+    by_hand(page, plate, distance=900)
+    page.locator("#part-params .param[data-field='width']").evaluate(UNDER_THE_STAGE_BAR)
     story.shows(
         "A second piece, made and adjusted",
-        f"Find shapes and Make on the second picture: {plate} stands beside {disc}. "
-        f"Part › Edit narrows it to {width} mm and applies it.",
+        f"Find shapes and Make on the second picture: {plate} stands beside {disc}, the "
+        f"view brought to it by hand. Part › Edit narrows it to {width} mm and applies it.",
         shown=_status(page).inner_text(),
         blank=CHANGING,
     )
@@ -677,7 +684,7 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     newest, older = page.request.get(f"{url}/jobs?site=garage").json()
     assert (newest["part"]["path"], older["part"]["path"]) == (plate, disc)
     assert (newest["part"]["picture"], newest["part"]["camera"]) == (second["picture"], camera)
-    machine.locator("#print-card").scroll_into_view_if_needed()
+    machine.locator("#print-history").evaluate("(el) => el.scrollIntoView({ block: 'end' })")
     jobs.scroll_into_view_if_needed()
     expect(jobs.locator("summary")).to_contain_text("Jobs · 2")
     story.shows(

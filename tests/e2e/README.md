@@ -17,7 +17,7 @@ when it is missing.
 ```bash
 uv run pytest tests/e2e --start-server          # the browser suite
 uv run pytest tests/e2e/test_viewer.py --start-server -k minimap
-uv run apothecary test run --e2e                 # unit, walkthrough and browser tests together
+uv run apothecary test all                       # unit, walkthrough and browser tests together
 ```
 
 A browser test runs only against a server of its own (`--start-server`) or one

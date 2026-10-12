@@ -946,6 +946,32 @@ def test_simulated_dwells_scale_with_the_speed_setting(monkeypatch):
     assert 0.3 < time.monotonic() - started < 2.0
 
 
+def test_a_simulated_bed_is_the_same_at_a_place_however_many_polls_came_before():
+    """The bed's roughness is seeded by the port and the place, not drawn from the
+    temperatures' wobble: a picture of a reading is the same on every run."""
+    first = gcode.SimulatedPrinter("/dev/ttyFAKE1", 115200)
+    probed = first._grid_lines()
+    for _ in range(7):
+        first._reply("M105")
+    assert first._grid_lines() == probed
+    assert gcode.SimulatedPrinter("/dev/ttyFAKE1", 115200)._grid_lines() == probed
+    assert gcode.SimulatedPrinter("/dev/ttyFAKE2", 115200)._grid_lines() != probed
+
+
+def test_a_simulated_print_held_at_a_fraction_stays_there(monkeypatch):
+    monkeypatch.setenv("APOTHECARY_SIMULATED_PRINTER", "printing")
+    monkeypatch.setenv("APOTHECARY_SIMULATED_PROGRESS", "0.41")
+    printer = gcode.SimulatedPrinter("/dev/ttyFAKE1", 115200)
+    printer._t0 -= 30  # half a minute of printing, which a held print does not see
+    assert printer._reply("M27") == [f"SD printing byte {int(358856 * 0.41)}/358856", "ok"]
+    assert printer._reply("M31")[0] == "echo:Print time: 0m 24s"
+    monkeypatch.delenv("APOTHECARY_SIMULATED_PROGRESS")
+    moving = gcode.SimulatedPrinter("/dev/ttyFAKE1", 115200)
+    moving._t0 -= 30
+    byte = int(moving._reply("M27")[0].split()[-1].split("/")[0])
+    assert byte == pytest.approx(358856 * 0.5, rel=0.01)
+
+
 # --- review fixes: the monitor's address never reflects a raw port; polls carry the latch -
 
 

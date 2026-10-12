@@ -132,19 +132,21 @@ def _expand_to(page: Page, path: str):
 
 @pytest.mark.e2e
 def test_panel_opens_before_devices_finish_loading(page: Page, printer_url: str):
-    """Selecting a node never waits for the device scan: the panel is up within 1 s."""
+    """Selecting a node never waits for the device scan: the scan is held unanswered,
+    and the panel, its Device section among it, is up all the same."""
+    held = []
+    page.route("**/sites/garage/devices*", lambda route: held.append(route))
     page.goto(f"{printer_url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
-    # dispatch_event, not click(): the bound must cover the viewer's own work,
-    # not Playwright's actionability wait on a page still streaming STLs
-    # through headless software GL.
-    page.locator("#contents-list .contents-item", has_text="printer_1").first.dispatch_event(
-        "click"
-    )
-    expect(page.locator("#selected-body .prop-row", has_text="Name")).to_be_visible(timeout=1000)
-    # The Device section is part of the panel from the first render, and
-    # settles (scan done) within a bounded time rather than blocking it.
-    expect(page.locator("#selected-body .device-section")).to_be_visible(timeout=1000)
+    page.locator("#contents-list .contents-item", has_text="printer_1").first.click()
+    expect(page.locator("#selected-body .prop-row", has_text="Name")).to_be_visible()
+    # The Device section is part of the panel from the first render, and settles
+    # once the scan answers rather than holding the panel up.
+    expect(page.locator("#selected-body .device-section")).to_be_visible()
+    assert held, "the device scan was never asked for"
+    for route in held:
+        route.continue_()
+    page.unroute("**/sites/garage/devices*")
     expect(page.locator("#selected-body .device-section .dev-pick")).to_be_visible(timeout=8000)
     options = page.locator("#selected-body .dev-pick option").all_text_contents()
     assert any("/dev/ttyFAKE1" in o for o in options)
@@ -563,32 +565,40 @@ def test_a_poll_answered_after_arming_does_not_disarm_the_page(page: Page, print
     expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
     page.locator("#auto").uncheck()  # only the poll this test sends
 
-    # The poll's answer is read at once (disarmed) and handed to the page late,
-    # after the arm has answered: inside the page, so the arm is not held up.
+    # The poll's answer is read at once (disarmed) and handed to the page only once
+    # the arm has answered: inside the page, so the arm is not held up.
     page.evaluate(
         """() => {
             const real = window.fetch;
+            let release;
+            const armed = new Promise((ok) => { release = ok; });
+            window.__release = release;
             window.__held = 0;
+            window.__taken = false;
             window.fetch = async (url, opts) => {
                 const r = await real(url, opts);
                 if (String(url).includes('/firmware/printers/status')) {
                     window.__held++;
-                    await new Promise((ok) => setTimeout(ok, 1500));
+                    await armed;
+                } else if (window.__held && String(url).includes('/firmware/printers/log')) {
+                    window.__taken = true;  // a poll pulls the log once its answer is taken
                 }
                 return r;
             };
         }"""
     )
     page.locator("#poll").click()
+    page.wait_for_function("() => window.__held >= 1")
     page.locator("#ctl").click()
     expect(page.locator("#control")).to_be_visible(timeout=5000)
-    page.wait_for_timeout(2500)  # the held answer has landed by now
-    assert page.evaluate("() => window.__held") >= 1, "the poll was not held"
+    page.evaluate("() => window.__release()")
+    page.wait_for_function("() => window.__taken")
     assert page.locator("#ctl").is_checked()
     expect(page.locator("#control")).to_be_visible()
     page.locator("#ctl-disarm").click()
 
 
+@pytest.mark.e2e
 def test_control_overlay_is_latched(page: Page, printer_url: str):
     """Nothing heats or moves until Control is armed; armed, the effect shows within a poll."""
     _identify(printer_url)

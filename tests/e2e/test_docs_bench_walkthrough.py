@@ -21,7 +21,7 @@ from types import SimpleNamespace
 
 import pytest
 from playwright.sync_api import expect
-from viewer_ready import OCCLUSION_TESTED, settled
+from viewer_ready import OCCLUSION_TESTED, by_hand, settled
 
 # A lid, one inch by two by half an inch, drawn Y-up as a game or web tool
 # would: the kind of file that arrives from elsewhere.
@@ -223,23 +223,15 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     for name in ("workbench", "printer_1", "esp32_blink", "raspberry_pi_4"):
         expect(page.locator("#contents-list")).to_contain_text(name)
     page.evaluate("() => localStorage.removeItem('apothecary.panels')")
-    # The root frames the whole building; the bench is what this page is
-    # about, so frame the view on it and what stands on it.
-    page.evaluate(
-        """() => {
-            const v = window.fractalViewer;
-            const on = new Set(['workbench', 'printer_1', 'esp32_blink',
-                                'footpedal', 'arduino_uno', 'raspberry_pi_4', 'teensy_40']);
-            const level = v.currentRenderNodes(v.currentFocusNode());
-            v.frameCameraForChildren(level.filter((n) => on.has(n.name)));
-        }"""
-    )
-    settled(page)
+    # The root frames the whole building; the bench is what this page is about, so the
+    # view is brought to it by hand, as a person would: Shift+drag, then the wheel.
+    by_hand(page, "workbench", distance=3000)
     story.shows(
-        "The bench at the garage's root: an Ender 3 at its left end, the boards at its right end",
-        "The root shows the whole building; here the view is framed on the bench. "
-        "Every machine and board is the part it names, drawn from its own STL, and "
-        "the site places each by its footprint.",
+        "The bench at the garage's root: an Ender 3 at one end, the boards at the other",
+        "The root shows the whole building; here the view is brought to the bench by "
+        "hand, Shift+drag to the middle and the wheel nearer. Every machine and board is "
+        "the part it names, drawn from its own STL, and the site places each by its "
+        "footprint.",
     )
 
     page.locator("#contents-list .contents-item[data-path='printer_1']").click()
@@ -248,41 +240,51 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     # is scrolled into view.
     _part_row(page).evaluate("(el) => el.scrollIntoView({ block: 'center' })")
     expect(_part_row(page)).to_be_in_viewport(ratio=0.99)  # whole, but for a fraction of a pixel
-    settled(page)
+    by_hand(page, "printer_1", distance=1400)
     story.shows(
         "A printer is the part it names",
-        "Selecting printer_1 shows its rows and, below them, the part its body is. "
-        "The power supply stands on the right behind the upright, the spool on its "
-        "bracket over the top bar, the electronics box under the bed at the front.",
+        "Selecting printer_1 shows its rows and, below them, the part its body is; the "
+        "view brought to it by hand. The power supply stands on the right behind the "
+        "upright, the spool on its bracket over the top bar, the electronics box under "
+        "the bed at the front.",
     )
 
-    page.evaluate("() => window.fractalViewer.zoomIn('printer_1')")
-    page.evaluate("() => window.fractalViewer.zoomIn('frame_system')")
+    page.locator("#contents-list .contents-item[data-path='printer_1']").dblclick()
+    frame_row = "#contents-list .contents-item[data-path='printer_1.frame_system']"
+    page.locator(frame_row).dblclick()
     mainboard_row = "#contents-list .contents-item[data-path='printer_1.frame_system.mainboard']"
     page.locator(mainboard_row).click()
     expect(_part_row(page)).to_contain_text("creality_v422", timeout=5000)
     settled(page)
     story.shows(
         "Inside it, the mainboard is the Creality V4.2.2",
-        "Zoomed into the printer's frame, its children are drawn and the printer's "
-        "body is not: the board in its box, with the pins that would be pinned to a "
-        "port. Its outline, holes, headers and jacks are from the maker's drawing.",
+        "Double-clicked into the printer, then its frame, from their rows in Site: its "
+        "children are drawn and the printer's body is not -- the board in its box, with "
+        "the pins that would be pinned to a port. Its outline, holes, headers and jacks "
+        "are from the maker's drawing.",
     )
 
-    page.evaluate("() => { const v = window.fractalViewer; v.zoomOut(); v.zoomOut(); }")
-    page.evaluate("() => window.fractalViewer.zoomIn('esp32_blink')")
+    page.locator("#viewer-canvas").focus()
+    page.keyboard.press("Backspace")
+    expect(page.locator("#minimap .minimap-tick.filled")).to_have_count(2)
+    page.keyboard.press("Backspace")
+    expect(page.locator("#minimap .minimap-tick.filled")).to_have_count(1)
+    page.locator("#contents-list .contents-item[data-path='esp32_blink']").dblclick()
     page.locator("#contents-list .contents-item[data-path='esp32_blink']").click()
     expect(_part_row(page)).to_contain_text("esp32_devkitc", timeout=5000)
     settled(page)
     story.shows(
         "The DevKitC standing on its pins",
-        "esp32_blink is a sketch and the board it runs on, drawn as the board: the "
-        "described part from the model half of this page, in the world.",
+        "Backspace twice to the root, and a double-click into esp32_blink: a sketch and "
+        "the board it runs on, drawn as the board -- the described part from the model "
+        "half of this page, in the world.",
     )
 
     # A camera, added above the bench from the bench's own ring, and told which of
     # this browser's cameras it is from its own.
-    page.evaluate("() => window.fractalViewer.zoomOut()")
+    page.locator("#viewer-canvas").focus()
+    page.keyboard.press("Backspace")
+    expect(page.locator("#minimap .minimap-tick.filled")).to_have_count(1)
     page.evaluate("() => window.apothecaryPictureVerbs.ready")
     page.locator("#contents-list .contents-item[data-path='workbench']").click(button="right")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
@@ -308,15 +310,8 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     expect(placed).to_contain_text("garage › camera_1")
     pinned.locator("summary").click()  # folded again, for the pictures below
     # The root frames the whole building, where the camera is a few pixels: the view
-    # is framed on the bench and the camera standing over it, as the bench was above.
-    page.evaluate(
-        """() => {
-            const v = window.fractalViewer;
-            const on = new Set(['workbench', 'printer_1', 'camera_1']);
-            const level = v.currentRenderNodes(v.currentFocusNode());
-            v.frameCameraForChildren(level.filter((n) => on.has(n.name)));
-        }"""
-    )
+    # brought to the bench and the camera standing over it by hand, as the bench was.
+    by_hand(page, "workbench", distance=3400)
     badge = page.locator(".world-badge.camera-mark[data-camera='camera_1']")
     expect(badge).to_be_visible(timeout=5000)
     assert _camera_marks_visible(page) == [True]  # selected: its pyramid shows
@@ -338,15 +333,15 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
         "names the next step, Take picture (P), which keeps a frame where it looks.",
     )
 
-    page.evaluate("() => window.fractalViewer.zoomIn('printer_1')")
+    page.locator("#contents-list .contents-item[data-path='printer_1']").dblclick()
     expect(badge).to_be_hidden(timeout=5000)
     assert _camera_marks_visible(page) == [False]
     settled(page)
     story.shows(
         "Looking into a printer, the camera stays in the garage",
-        "A camera is a piece of the site, drawn at the level its site is. Zoomed "
-        "into something else, neither its badge nor its pyramid follows; zooming "
-        "back out brings them back.",
+        "A camera is a piece of the site, drawn at the level its site is. Double-clicked "
+        "into the printer, neither its badge nor its pyramid follows; going back out "
+        "brings them back.",
     )
 
     # Back to the root with nothing selected: zooming out one level would select the

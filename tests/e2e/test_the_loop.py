@@ -22,6 +22,7 @@ from __future__ import annotations
 import re
 
 import pytest
+from browsers import launch
 from PIL import Image, ImageDraw
 from playwright.sync_api import expect
 from test_picture_in_the_world import leaves_garage_as_found  # noqa: F401 - a fixture
@@ -61,12 +62,13 @@ def _y4m(path) -> None:
 def _drawn_camera_browser(browser_type, tmp_path_factory):
     stream = tmp_path_factory.mktemp("fake_camera") / "drawn.y4m"
     _y4m(stream)
-    browser = browser_type.launch(
+    browser = launch(
+        browser_type,
         args=[
             "--use-fake-ui-for-media-stream",
             "--use-fake-device-for-media-stream",
             f"--use-file-for-fake-video-capture={stream}",
-        ]
+        ],
     )
     yield browser
     browser.close()
