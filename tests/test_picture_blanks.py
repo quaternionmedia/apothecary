@@ -50,3 +50,11 @@ def test_a_page_records_the_openscad_and_nothing_that_differs_between_clones():
     assert "OpenSCAD version 2021.01, the OpenSCAD its server runs" in said
     assert described({**found, "elsewhere": [], "boxes": ["gridfinity"]}) == said
     assert "no OpenSCAD" in described({"openscad": None})
+
+
+def test_an_element_holding_only_a_moment_is_blanked_whole_at_one_width():
+    from doc_capture import ALL_WORDS, all_words
+
+    assert re.findall(ALL_WORDS, "  Oct 12, 2026, 12:18 PM ") == ["Oct 12, 2026, 12:18 PM"]
+    assert all_words(".saved-when") == ((".saved-when", ALL_WORDS),)
+    assert ".saved-when" not in _blanked(all_words(".saved-when"))  # wrapped, not blanked whole

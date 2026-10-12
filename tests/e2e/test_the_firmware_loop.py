@@ -27,7 +27,7 @@ flashing the bench's own ESP32 is a step of the bench checklist
 from __future__ import annotations
 
 import pytest
-from doc_capture import FOLDER
+from doc_capture import FOLDER, all_words
 from firmware_helpers import write_fake_arduino_cli, write_fake_cargo, write_fake_espflash
 from playwright.sync_api import Page, expect
 from viewer_ready import settled
@@ -123,7 +123,8 @@ CHANGING = (
     ".task-log",
     ".task-history .meta",
     "#log .t",
-    "#c-sketch .when",
+    # When the board was flashed, a grey of one width whatever the time.
+    *all_words("#c-sketch .when"),
     ".tc-status",
     # The stand-in tools' folders, which the toolchains' cards name.
     (".tc-module .kv", FOLDER),

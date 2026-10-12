@@ -25,6 +25,7 @@ import re
 import subprocess
 
 import pytest
+from doc_capture import all_words
 from playwright.sync_api import Page, expect
 from viewer_ready import (
     MARKED_LINE_FIRST,
@@ -43,7 +44,8 @@ PART = "calibration_cube"
 RING_MS = 15000
 WIDTHS = ((1280, 800), (1024, 768))
 # What differs on every run whatever the page does: when a variant was saved.
-BLANK = (".saved-when",)
+# When each variant was saved, a grey of one width whatever the time.
+BLANK = all_words(".saved-when")
 
 REFUSED = 'assert(size < 5, "too big to keep");'
 SMALL_TOP = "translate([0, 0, size]) cube(size / 2);"
