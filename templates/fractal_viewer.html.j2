@@ -4374,6 +4374,7 @@
                 scad.text = text;
                 scad.drawnText = text;
                 scad.check = null;
+                if (this.scadTarget?.key === target.key) this.scadEditor?.say(text === scad.own ? "The part's own SCAD, as drawn." : 'The SCAD the variant drawn was rendered from.');
             }
 
             // ---- what this OpenSCAD can build, and its queue ----------------------
@@ -4854,7 +4855,8 @@
             fitSelected() {
                 const key = this.selectedName;
                 if (!key || key === FLOOR_KEY || !this.renderNodeByKey[key]) return { ok: false, said: 'Nothing is selected to frame: View › Fit frames the level' };
-                const mesh = this.meshByName[key];
+                // What is drawn of it: a failed render's greyed geometry where there is one.
+                const mesh = Object.values(this.failures).find((f) => f.key === key)?.mesh ?? this.meshByName[key];
                 let bounds = null;
                 if (mesh) {
                     const box = new THREE.Box3().setFromObject(mesh);

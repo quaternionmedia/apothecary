@@ -786,6 +786,11 @@ def test_designing_a_part_twice_round(
     refused = _refused_by_openscad(page, first)
     # The list in the stage bar, and the marked line first in the code below it.
     marked = page.locator(".scad-editor .cm-line:has(.cm-lintRange-error)")
+    # f, the focus out of any box: the view brought to what is drawn, the greyed failure.
+    page.evaluate("() => document.activeElement && document.activeElement.blur()")
+    page.keyboard.press("f")
+    expect(_status(page)).to_contain_text(f"Framed {PART}")
+    settled(page)
     with site_folded(page):
         page.evaluate(STAGE_BAR_AT_THE_TOP)
         marked.evaluate(MARKED_LINE_FIRST)
@@ -798,8 +803,8 @@ def test_designing_a_part_twice_round(
             "Apply answers with OpenSCAD's words, listed by file and line under the stage "
             "bar, the line marked in the part's source below, and carried on the status "
             "line; what it built is drawn greyed where the part stands, a red flag over it "
-            "naming the line, the variant drawn before hidden under it. Part › Save refuses "
-            "it in the same words. The refused size is still staged.",
+            "naming the line, the variant drawn before hidden under it -- f frames it. Part › "
+            "Save refuses it in the same words. The refused size is still staged.",
             shown=refused,
         )
 
@@ -850,13 +855,17 @@ def test_designing_a_part_twice_round(
 
     # An earlier apply, drawn again from the cache.
     again = f"{_drawn_again_from_the_history(page, first)}\n{_envelope(page)}"
+    page.evaluate("() => document.activeElement && document.activeElement.blur()")
+    page.keyboard.press("f")
+    expect(_status(page)).to_contain_text(f"Framed {PART}")
+    settled(page)
     _shown_whole(
         page,
         lambda: story.shows(
             "Recent applies draws an earlier one again, from the cache",
             f"Recent applies, under the parameters, lists this tab's applies of {PART}, "
             f"newest first. The first round's, {first:.2f} mm, clicked: drawn again from "
-            "the cache of variants, nothing rendered, its numbers what is drawn.",
+            "the cache of variants, nothing rendered, its numbers what is drawn; f frames it.",
             shown=again,
         ),
     )
