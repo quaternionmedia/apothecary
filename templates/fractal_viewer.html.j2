@@ -2866,12 +2866,12 @@
                 // A machine drawn as a part shows the one row until Part › Edit asks
                 // for its editor (openEditor); a leaf that is a part has it always.
                 if (selected.part_ref) this.appendPartPanel(selected, selected.children.length === 0 || this.editorOpenFor === this.selectedName);
-                // A piece made from a picture -- a word's shape, in an arrangement or
-                // made at a place -- holds no board: no Device section, unless something
-                // pinned one to it anyway, which its Unpin then takes back.
+                // The Device section stands only where a board belongs (the owner's word):
+                // on a board, on a printer, on what names a sketch, and on anything a
+                // board is pinned to already, so its Unpin stays in reach. A plain printed
+                // part, a bin, a piece made from a picture: none.
                 const made = this.pictureMarks.madeRecord(this.selectedName);
-                const holdsNoBoard = (made || selected.role === 'word') && !this.bindingFor(this.selectedName).row;
-                if (!holdsNoBoard) {
+                if (this.holdsABoard(selected, this.selectedName)) {
                     this.selectedBodyEl.insertAdjacentHTML('beforeend', this.deviceSectionHtml(this.selectedName));
                     this.bindDeviceSection(this.selectedName);
                 }
@@ -6377,6 +6377,16 @@
                         </div>${q}${manual}`;
                 }
                 return `<div class="device-section"><div class="device-title">Device</div>${body}</div>`;
+            }
+
+            // Whether a board belongs on a piece: it is one (a part tagged a board), it is
+            // a printer (its board inside drives it), it names a sketch, or one is pinned
+            // to it already.
+            holdsABoard(node, path) {
+                if (!node) return false;
+                if (node.board || node.sketch_ref) return true;
+                if (node.build_volume || PRINTER_STATUSES.includes(node.status)) return true;
+                return Boolean(this.bindings[path]);
             }
 
             // Why no boards were found, as a piece's Device section says it: on a printer,

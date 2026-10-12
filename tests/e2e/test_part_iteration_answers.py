@@ -454,3 +454,52 @@ def test_slice_and_the_checklist_follow_the_variant_drawn(page: Page, url):
     record = page.request.get(f"{url}/slicer/slices").json()[0]
     assert record["made"]["variant"] == variant
     assert record["made"]["params"][field] == pytest.approx(value + 2)
+
+
+# --- Selected's Device section, where a board belongs ------------------------------------
+
+
+@pytest.mark.e2e
+def test_the_device_section_stands_only_where_a_board_belongs(page: Page, url):
+    """The owner's word: Selected's Device section is on a board, a printer, a piece that
+    names a sketch (footpedal) and anything a board is pinned to already, so its Unpin
+    stays in reach; a plain printed part, a bin or a structure has none."""
+    section = page.locator("#selected-body .device-section")
+
+    def chosen(path: str) -> None:
+        page.locator(f"#contents-list .contents-item[data-path='{path}']").click()
+        expect(
+            page.locator(f"#contents-list .contents-item.selected[data-path='{path}']")
+        ).to_be_visible()
+
+    _open(page, url)
+    for plain in (PART, "gridfinity", "v_slot"):
+        chosen(plain)
+        expect(section).to_have_count(0)
+    # A board of the library is one.
+    chosen("esp32_devkitc")
+    expect(section).to_be_visible()
+
+    _open(page, url, site="garage", part="footpedal")
+    chosen("printer_1")  # a printer, its board pinned inside it
+    expect(section).to_be_visible()
+    expect(section).to_contain_text(PRINTER, timeout=10000)
+    chosen("footpedal")  # names a sketch
+    expect(section).to_be_visible()
+    chosen("workbench")  # a structure: nothing to pin
+    expect(section).to_have_count(0)
+
+    # A plain part with a board pinned to it anyway keeps its Device section, its Unpin.
+    pinned = page.request.put(
+        f"{url}/sites/parts_library/nodes/{PART}/device", data={"identity": "NOTHERE456"}
+    )
+    assert pinned.ok, pinned.text()
+    try:
+        _open(page, url)
+        page.evaluate("() => window.fractalViewer.boards.scan()")
+        page.wait_for_function(f"() => !!window.fractalViewer.bindings['{PART}']", timeout=10000)
+        chosen(PART)
+        expect(section).to_be_visible()
+        expect(section.locator(".dev-unpin")).to_be_visible()
+    finally:
+        page.request.delete(f"{url}/sites/parts_library/nodes/{PART}/device")

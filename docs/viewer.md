@@ -169,9 +169,11 @@ across the page) moves it; its edge sets its width, up to half the page. ✕,
   the tree.
 - **Selected**: the selected piece -- its name, place and footprint, a
   compound piece's Detail, "⤵ Zoom into" for one with children -- then its
-  part editor, its Device line (a pinned board's port and state, with Open
-  and Unpin; for a piece with none, the detected ports to pin), and what a
-  camera or a picture's piece knows.
+  part editor, its Device line where a board belongs -- on a board, a printer,
+  a piece that names a sketch, or anything a board is pinned to already (a
+  pinned board's port and state, with Open and Unpin; for one with none, the
+  detected ports to pin) -- and what a camera or a picture's piece knows. A
+  plain printed part, a bin, a piece made from a picture has no Device line.
 - **The strip of tabs** below them, one shown at a time: **Pictures**, the
   **Bench**, and a **Machine** for each board opened. A tab pressed again
   folds away.
