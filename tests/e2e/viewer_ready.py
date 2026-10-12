@@ -77,7 +77,40 @@ SIGHTED = """(key) => {
 NOTCH = 120
 
 
-def _drag(page: Page, start: tuple, by: tuple, shift: bool = False) -> None:
+# The page selects what a press lands on, a press on a selected camera's ring turns the
+# camera, and one on a selected piece's arrows moves it: a hand framing the view presses
+# where none of that is -- on the floor, a wall or the sky, clear of the selection's
+# arrows and of anything standing over the world -- nearest the point it aimed for.
+FREE_SPOT = """([x0, y0]) => {
+    const v = window.fractalViewer, r = v.canvas.getBoundingClientRect();
+    let near = null;
+    const chosen = v.selectedName && v.meshByName[v.selectedName];
+    if (chosen) {
+        const p = v.camera.position.clone();
+        chosen.getWorldPosition(p);
+        p.project(v.camera);
+        near = { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height };
+    }
+    const free = (x, y) => {
+        if (x < r.left + 12 || x > r.right - 12 || y < r.top + 12 || y > r.bottom - 12) return false;
+        if (document.elementFromPoint(x, y) !== v.canvas) return false;
+        if (near && Math.hypot(x - near.x, y - near.y) < 140) return false;
+        const at = { clientX: x, clientY: y, button: 0 };
+        return !v.raycastPick(at) && !v.cameraHandleAt(at);
+    };
+    for (let d = 0; d < 1200; d += 12) {
+        for (let a = 0; a < 24; a++) {
+            const x = x0 + d * Math.cos(a * Math.PI / 12), y = y0 + d * Math.sin(a * Math.PI / 12);
+            if (free(x, y)) return [x, y];
+        }
+    }
+    return null;
+}"""
+
+
+def _drag(page: Page, aim: tuple, by: tuple, shift: bool = False) -> None:
+    start = page.evaluate(FREE_SPOT, list(aim))
+    assert start, "nowhere in the world to press that is not a piece"
     page.mouse.move(*start)
     if shift:
         page.keyboard.down("Shift")
@@ -159,6 +192,9 @@ UNDER_THE_STAGE_BAR = """(el) => {
     const bar = document.getElementById('stage-bar');
     let slot = el.parentElement;
     while (slot && slot.scrollHeight <= slot.clientHeight) slot = slot.parentElement;
-    if (!slot || !bar || !bar.offsetParent) return;
-    slot.scrollTop += el.getBoundingClientRect().top - bar.getBoundingClientRect().bottom - 6;
+    if (!slot) return;
+    // The bar stands over the panel's top only while what it heads is in view.
+    const shown = slot.getBoundingClientRect(), b = bar && bar.offsetParent ? bar.getBoundingClientRect() : null;
+    const under = b && b.bottom > shown.top + 1 && b.top < shown.bottom ? b.bottom : shown.top;
+    slot.scrollTop += el.getBoundingClientRect().top - under - 6;
 }"""

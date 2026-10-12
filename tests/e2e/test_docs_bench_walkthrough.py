@@ -346,7 +346,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
 
     # Back to the root with nothing selected: zooming out one level would select the
     # printer it left, and its rows and gizmo would stand in the pictures below.
-    page.locator("#breadcrumb .crumb").first.click()
+    page.evaluate("() => window.fractalViewer.jumpTo(0)")
     expect(badge).to_be_visible(timeout=5000)
     assert _camera_marks_visible(page) == [False]  # unselected: its body and its badge
     expect(page.locator("#selected-body")).to_contain_text("Click a node to select it")

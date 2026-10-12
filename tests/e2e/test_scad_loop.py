@@ -358,11 +358,14 @@ def test_editing_a_parts_scad_twice_round(
     marked = page.locator(".scad-editor .cm-line:has(.cm-lintRange-error)")
     expect(marked).to_have_count(1)
     expect(marked).to_contain_text("too big to keep")
+    # The error listed in the stage bar, which stays at the top of Selected; what the
+    # editor says of it just under the bar; and the code below that, scrolled so the
+    # marked line is its first.
+    _said(page).evaluate(UNDER_THE_STAGE_BAR)
     marked.evaluate(
         "(line) => { const code = line.closest('.cm-scroller');"
         " code.scrollTop += line.getBoundingClientRect().top - code.getBoundingClientRect().top - 4; }"
     )
-    page.locator("#part-messages").evaluate(UNDER_THE_STAGE_BAR)
     story.shows(
         "A failing line is checked once typing stops, and marked where it is",
         f"An assertion typed at the end that this part fails. One check, once typing "

@@ -241,7 +241,7 @@ NEAR = 110
 
 SIZES_AND_MEASURED = """() => {
     const envelope = document.getElementById('part-envelope');
-    if (envelope) envelope.scrollIntoView({ block: 'end' });
+    if (envelope) envelope.scrollIntoView({ block: 'start' });
 }"""
 
 
