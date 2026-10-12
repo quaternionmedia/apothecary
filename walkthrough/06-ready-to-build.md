@@ -10,7 +10,13 @@ not from a document somebody keeps by hand.
     >>> from apothecary.projects.parts.datum_core import DEFAULT
     >>> report = assess(DEFAULT, build_volume=(220.0, 220.0, 250.0))
     >>> [c.name for c in report.checks]
-    ['Source geometry exists', 'Geometry renders', 'Declared bounds match geometry', 'Print settings declared', 'No disputed dimensions', 'Fits the printer', 'Fitted to measured artifacts']
+    ['Source geometry exists', 'Geometry renders', 'Declared bounds match geometry', 'Print settings declared', 'Model defaults match the SCAD', 'No disputed dimensions', 'Fits the printer', 'Fitted to measured artifacts']
+
+A part's default is its SCAD as saved, so where its Python model says
+another default, that is asked too; `datum_core`'s agree:
+
+    >>> next(c for c in report.checks if c.name == "Model defaults match the SCAD").state
+    'pass'
 
 ## An unanswered question is not a pass
 

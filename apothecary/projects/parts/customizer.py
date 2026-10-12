@@ -275,10 +275,44 @@ class Compiled:
     cancelled: bool = False
     timed_out: bool = False
     error_message: Optional[str] = None
+    # Each computed assignment asked for (``evaluation``), as OpenSCAD printed
+    # its value; ``evaluated`` holds those that read as a literal.
+    printed: Dict[str, str] = field(default_factory=dict)
+    evaluated: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def errors(self) -> List[OpenSCADMessage]:
         return [m for m in self.messages if m.level == "error"]
+
+
+# What a computed assignment's value is echoed under, after the text: a name no
+# SCAD uses, so its lines are told from the SCAD's own echoes.
+EVALUATED = "__apothecary_value__"
+_ECHOED = re.compile(r'^ECHO: "' + EVALUATED + r'", "(\$?[A-Za-z_][A-Za-z0-9_]*)", (.*)$')
+
+
+def evaluation(names: List[str]) -> str:
+    """What is appended to a text to have OpenSCAD print ``names``' values: an
+    ``echo`` each, after a line break, so no line of the text moves. An echo
+    adds nothing to the tree OpenSCAD compiles: the CSG is the same."""
+    if not names:
+        return ""
+    return "\n" + "".join(f'echo("{EVALUATED}", "{n}", {n});\n' for n in names)
+
+
+def _read_evaluated(said: str, compiled: "Compiled") -> None:
+    from .assignments import Unparsed, literal_value
+
+    for line in said.splitlines():
+        found = _ECHOED.match(line.strip())
+        if found is None:
+            continue
+        name, printed = found.group(1), found.group(2).strip()
+        compiled.printed[name] = printed
+        try:
+            compiled.evaluated[name] = literal_value(printed)
+        except (Unparsed, ValueError):
+            pass
 
 
 def compile_scad(
@@ -295,7 +329,9 @@ def compile_scad(
     values reach is said here. The CSG is the tree OpenSCAD compiled -- every
     include in it, every comment gone -- so its digest is what a render of
     these values would build from (``variants.py`` files renders under it).
-    Messages name ``shown_as`` for ``scad``, as ``check_scad``'s do."""
+    Messages name ``shown_as`` for ``scad``, as ``check_scad``'s do. Where
+    the file ends with an ``evaluation`` of names, their values are read off
+    what OpenSCAD echoed (``printed``, ``evaluated``)."""
     exe = renderer.openscad_path
     version = openscad_version(exe) if exe is not None and Path(exe).exists() else None
     if version is None:
@@ -315,6 +351,7 @@ def compile_scad(
     if shown_as is not None:
         messages = renamed(messages, scad, shown_as)
     compiled = Compiled(ok=code == 0, openscad=version, messages=messages)
+    _read_evaluated(err, compiled)
     if stopped == "cancelled":
         compiled.cancelled, compiled.error_message = True, "Check superseded by a newer request"
         return compiled
@@ -386,14 +423,12 @@ def part_compile(
     renderer: Optional[OpenSCADRenderer] = None,
     cancel: Optional[Cancellation] = None,
 ) -> Compiled:
-    """A part's own SCAD compiled with ``definitions`` (what ``-D`` gets)."""
-    renderer = renderer or part_renderer(part)
-    scad = part.source_file
-    text = scad.read_text(encoding="utf-8", errors="replace")
-    defs = dict(definitions or {})
-    return remembered_compile(
-        scad, text, defs, renderer, lambda: compile_scad(scad, renderer, defs, cancel)
-    )
+    """A part's own text compiled with ``definitions`` (what ``-D`` gets): its
+    SCAD, or for a part in a submodule its overlay (``texts.own_text``)."""
+    from .drafts import compile_draft
+    from .texts import own_text
+
+    return compile_draft(part, own_text(part), definitions, renderer, cancel)
 
 
 def merged(*lists: List[OpenSCADMessage]) -> List[OpenSCADMessage]:
@@ -690,6 +725,7 @@ __all__ = [
     "BY_PARAM",
     "Check",
     "Compiled",
+    "EVALUATED",
     "Unlisted",
     "check_scad",
     "compile_scad",
@@ -699,6 +735,7 @@ __all__ = [
     "remembered_compile",
     "customizer_spec",
     "customizer_values",
+    "evaluation",
     "lists_parameters",
     "part_check",
     "remembered_check",

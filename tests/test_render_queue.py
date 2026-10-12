@@ -188,9 +188,10 @@ class TestThroughTheRoutes:
             )
         )
         check.start()
-        now = _until(client, lambda now: len(now["waiting"]) == 1)
-        assert now["waiting"][0]["kind"] in ("param", "csg")
-        assert now["waiting"][0]["page"] == "page-c"
+        # The check is two runs, the listing and the compile: both wait their turn.
+        now = _until(client, lambda now: len(now["waiting"]) == 2)
+        assert {r["kind"] for r in now["waiting"]} == {"param", "csg"}
+        assert {r["page"] for r in now["waiting"]} == {"page-c"}
         client.post(
             "/parts/block/draft/render",
             params={"page": "page-a"},

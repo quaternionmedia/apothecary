@@ -354,6 +354,9 @@ def _part_metadata(part) -> Dict[str, object]:
 
     stl_can_generate, stl_note = part.can_generate_stl()
     own = editable(part)
+    from .projects.parts.texts import is_overlaid
+
+    overlaid = own and is_overlaid(part)
     metadata["files"] = {
         "scad": {
             "exists": part.source_file.exists(),
@@ -362,6 +365,9 @@ def _part_metadata(part) -> Dict[str, object]:
             # generates, read-only; any other's SCAD is its source, to edit.
             "editable": own,
             "generated": not own,
+            # A part in a submodule is edited as its overlay; its upstream read only.
+            "overlay": overlaid,
+            "upstream_url": f"/parts/{part.name}/upstream" if overlaid else None,
         },
         "stl": {
             "exists": part.stl_file is not None,
@@ -446,11 +452,28 @@ def get_part_scad(
     ``variant`` answers the SCAD a cached variant was rendered from: for a part
     built by Python geometry, what it generates for the variant's parameters
     (the parameters an Apply drew); for any other, the draft it was rendered
-    from (``X-Part-Scad: draft``), else its SCAD file. 404 once the cache has
-    let it go."""
+    from (``X-Part-Scad: draft``), else its own text with the values it was
+    applied with written in (``values``; none: ``source``). 404 once the cache has
+    let it go.
+
+    A part whose SCAD is in a submodule (gridfinity) answers the text it is
+    edited as: its overlay setting nothing, an include of the upstream file
+    (``X-Part-Scad: overlay``, ``X-Part-Upstream`` naming that file, which
+    ``GET /parts/{name}/upstream`` serves read only)."""
     part = _load_part_wrapper(name)
     if variant is not None:
         return _variant_scad(name, part, variant)
+    if editable(part) and not params:
+        from .projects.parts.texts import is_overlaid, own_text, upstream_path
+
+        if is_overlaid(part):
+            return PlainTextResponse(
+                own_text(part),
+                headers={
+                    "X-Part-Scad": "overlay",
+                    "X-Part-Upstream": upstream_path(part),
+                },
+            )
     if not editable(part):
         overrides: Dict[str, Any] = {}
         if params:
@@ -474,6 +497,25 @@ def get_part_scad(
         raise HTTPException(status_code=500, detail=f"Failed to read SCAD: {exc}") from exc
 
 
+@app.get("/parts/{name}/upstream", response_class=PlainTextResponse)
+def get_part_upstream(name: str):
+    """A part in a submodule: its upstream SCAD, read only (``X-Part-Scad:
+    upstream``), which its overlay includes and sets values after. 404 for a
+    part in no submodule: its SCAD is ``GET /parts/{name}/scad``."""
+    from .projects.parts.texts import is_overlaid
+
+    part = _load_part_wrapper(name)
+    if not editable(part) or not is_overlaid(part):
+        raise HTTPException(
+            status_code=404,
+            detail=f"{name} is in no submodule: its SCAD is GET /parts/{name}/scad",
+        )
+    return PlainTextResponse(
+        part.source_file.read_text(encoding="utf-8"),
+        headers={"X-Part-Scad": "upstream", "Cache-Control": "no-cache"},
+    )
+
+
 def _variant_scad(name: str, part: BasePart, key: str) -> PlainTextResponse:
     record = read_variant(part, key) if KEY_PATTERN.match(key) else None
     if record is None:
@@ -494,9 +536,16 @@ def _variant_scad(name: str, part: BasePart, key: str) -> PlainTextResponse:
     text = read_variant_draft(part, key)
     if text is not None:
         return PlainTextResponse(text, headers={**headers, "X-Part-Scad": "draft"})
-    return PlainTextResponse(
-        part.source_file.read_text(encoding="utf-8"), headers={**headers, "X-Part-Scad": "source"}
-    )
+    from .projects.parts.texts import is_overlaid, own_text, with_params
+
+    # The part's own text with the values it was applied with written in: what rendered.
+    values = dict(record.get("params") or {})
+    try:
+        text = with_params(part, own_text(part), part.validate_overrides(values))
+    except (ValueError, TypeError):
+        text, values = own_text(part), {}
+    kind = "overlay" if is_overlaid(part) else "source"
+    return PlainTextResponse(text, headers={**headers, "X-Part-Scad": "values" if values else kind})
 
 
 @app.get("/parts/{name}/stl")
@@ -581,6 +630,13 @@ def generate_part_stl(
     sidecar says it holds another variant; any other variant is the cache's
     alone, so two pages applying different values never share a file.
 
+    For a part whose SCAD is its source, the values are written into its own
+    text (its SCAD, or a part in a submodule's overlay), and that text renders,
+    as a draft does (``POST /parts/{name}/draft/render``): nothing is passed to
+    OpenSCAD on the side. It is answered, and recorded, as the part with those
+    values: ``params`` them, ``draft`` null; its key is that text's. A part
+    built by Python geometry renders what its geometry generates for them.
+
     ``bounds`` is the envelope the part declares; ``measured`` is the box of
     what is served, in the same upright frame: OpenSCAD's own summary of the
     render where it writes one (``measured_from: "summary"``, a snapshot),
@@ -602,6 +658,15 @@ def generate_part_stl(
         raise HTTPException(
             status_code=503, detail="OpenSCAD not installed. Cannot generate STL files."
         )
+    if editable(part):
+        # The text is the truth: the values are written into the part's own
+        # text, which is what renders -- one path with a draft's render.
+        from .projects.parts.texts import own_text, with_params
+        from .routes.part_edits import render_text
+
+        text = with_params(part, own_text(part), overrides)
+        version = body.editor_version if body else None
+        return render_text(self_api(), name, part, text, force, page, version, values=overrides)
 
     cancel = _page_renders.begin(part.name, page, request_wants(overrides, force))
     try:
@@ -629,6 +694,13 @@ def openscad_runs(
     its render or check is in flight, to say it is queued. A cancelled request
     leaves the line without running."""
     return RUNS.snapshot(page)
+
+
+def self_api():
+    """This module, for a route elsewhere that answers as it does."""
+    import sys
+
+    return sys.modules[__name__]
 
 
 def _listing(part: BasePart) -> Optional[List[Dict[str, Any]]]:
@@ -689,6 +761,8 @@ def made_answer(
     made,
     overrides: Dict[str, Any],
     editor_version: Optional[Union[int, str]] = None,
+    shown_params: Optional[Dict[str, Any]] = None,
+    text: Optional[str] = None,
 ) -> Dict[str, Any]:
     """What a render answers, as generate answers it, or the HTTPException for
     one that made nothing: 503 refused, 409 superseded, 422 with OpenSCAD's
@@ -738,7 +812,7 @@ def made_answer(
         "variant": made.key,
         "regenerated": made.rendered,
         "render_time_seconds": made.render_time_seconds,
-        "params": jsonable_encoder(made.params),
+        "params": jsonable_encoder(made.params if shown_params is None else shown_params),
         "bounds": jsonable_encoder(part.get_bounds(overrides or None)),
         "measured": jsonable_encoder(measured_box(made.measured)),
         "measured_from": made.measured_from,
@@ -754,6 +828,8 @@ def made_answer(
         "compiled_from": made.compiled_from,
         # How long it waited for its turn among OpenSCAD's runs (GET /openscad/runs).
         "queued_seconds": round(made.queued_seconds, 3),
+        # The text rendered, where values sent on the side were written into it.
+        "text": text,
     }
 
 

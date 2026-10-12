@@ -248,8 +248,11 @@ def variant_key(
             add("scad", _file_digest(scad))
             reads = scad_dependencies(scad)
         else:
+            from .texts import edit_file
+
             add("scad", hashlib.sha256(draft.encode("utf-8")).hexdigest())
-            reads = scad_dependencies(scad, text=draft)
+            # Its includes resolve from where it stands: the part's SCAD, or its overlay.
+            reads = scad_dependencies(edit_file(part), text=draft)
         definitions = part.scad_overrides(params)
     else:
         add("scad", hashlib.sha256(text.encode("utf-8")).hexdigest())
@@ -471,16 +474,20 @@ def _messages_of(
     """What OpenSCAD said, its files named from the checkout. A part built by
     Python geometry renders a SCAD written to scratch under its source file's
     name, so a relative name there is not resolved against the part's folder.
-    A draft is rendered from a file of its own beside the part's (``draft``,
-    still there): a message about it names the part's SCAD, whose edit it is."""
+    A draft is rendered from a file of its own beside the one it stands in for
+    (``draft``, still there: the part's SCAD, or its overlay): a message about
+    it names that file, whose edit it is."""
     if part.geometry({}) is None:
-        base, own = part.source_file.parent, draft or part.source_file
+        base = draft.parent if draft is not None else part.source_file.parent
+        own = draft or part.source_file
     else:
         base, own = None, None
     placed = place_messages(parse_openscad_messages(result.stderr), base, show_path, own=own)
     if draft is None:
         return placed
-    return renamed(placed, draft, part.source_file)
+    from .texts import edit_file
+
+    return renamed(placed, draft, edit_file(part))
 
 
 def _place_as_canonical(part: BasePart, stl: Path) -> None:
@@ -523,6 +530,7 @@ def make_variant(
     cache: Optional[Path] = None,
     draft: Optional[str] = None,
     place: bool = True,
+    values: Optional[Mapping[str, Any]] = None,
 ) -> Made:
     """The part rendered with ``params``, from the cache when it is there.
 
@@ -538,14 +546,26 @@ def make_variant(
     ``draft`` is the part's SCAD as edited and not saved: rendered from a
     file of its own beside the part's, into the cache alone; the part's own
     STL neither answers it nor is touched by it. A draft the same as the
-    part's SCAD is the part. A part built by Python geometry has no SCAD to
-    draft (ValueError).
+    part's own text (its SCAD, or for a part in a submodule its overlay
+    setting nothing: ``texts.own_text``) is the part. A part built by Python
+    geometry has no SCAD to draft (ValueError).
+
+    ``values``, with ``draft``: the draft is the part's own text with these
+    values (checked, by the model's names) written into it, as Apply of a
+    part's numbers is. It renders as any draft does -- nothing on the side --
+    and is recorded as the part with those values: ``params`` them, ``draft``
+    None, so a caller that thinks in values reads what it sent.
     """
     if draft is not None:
         if part.geometry({}) is not None:
             raise ValueError(f"{part.name}'s geometry is Python: its SCAD is generated, not edited")
-        if same_text(part.source_file, draft):
-            draft = None
+        from .texts import own_text
+
+        try:
+            if draft == own_text(part):
+                draft = None
+        except OSError:
+            pass
     params = without_defaults(part, part.validate_overrides(params, scad_text=draft))
     chosen, renderer = renderer, renderer or part_renderer(part)
     canonical = part.get_stl_output_path()
@@ -554,8 +574,17 @@ def make_variant(
     key = variant_key(part, params, renderer, draft=draft)
     stl, record_path = variant_paths(part, key, cache)
     made = Made(params=params, openscad=openscad_of(renderer), backend=backend_of(renderer))
-    if draft is not None:
+    as_part = draft is not None and values is not None
+    if as_part:
+        made.params = without_defaults(part, dict(values))
+    elif draft is not None:
         made.draft = hashlib.sha256(draft.encode("utf-8")).hexdigest()
+        if not params:
+            # A text carries its values: what it sets otherwise than the part's own.
+            from .assignments import differences
+            from .texts import own_text
+
+            made.params = differences(draft, own_text(part))
 
     with _LOCKS(f"{_folder_name(part)}/{key}"):
         if cancel is not None and cancel.cancelled:
@@ -631,7 +660,7 @@ def make_variant(
             record = {
                 "part": part.name,
                 "key": key,
-                "params": params,
+                "params": made.params,
                 "openscad": made.openscad,
                 "backend": made.backend,
                 "rendered": datetime.now().isoformat(timespec="seconds"),
@@ -641,7 +670,7 @@ def make_variant(
                 "messages": [m.model_dump() for m in made.messages],
                 "draft": made.draft,
             }
-            if draft is not None:
+            if draft is not None and not as_part:
                 _write_atomically(variant_draft_path(part, key, cache), draft.encode("utf-8"))
             _write_atomically(
                 record_path,
@@ -701,13 +730,14 @@ def compiled_for(part: BasePart, params, renderer, draft: Optional[str], cancel=
         return None
     from .customizer import known_compile, part_compile
     from .drafts import compile_draft
+    from .texts import edit_file, own_text
 
     definitions = part.scad_overrides(params)
     try:
-        text = draft if draft is not None else part.source_file.read_text(encoding="utf-8")
+        text = draft if draft is not None else own_text(part)
     except OSError:
         return None
-    known = known_compile(part.source_file, text, definitions, renderer)
+    known = known_compile(edit_file(part), text, definitions, renderer)
     if known is not None or backend_of(renderer) == "manifold":
         return known
     if draft is not None:

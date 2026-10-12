@@ -292,7 +292,12 @@ class TestTheSCADOfAVariant:
         drafted = _render(client, RECOMMENTED).json()["variant"]
         r = client.get(f"/parts/block/scad?variant={drafted}")
         assert (r.text, r.headers["x-part-scad"]) == (RECOMMENTED, "draft")
-        own = client.post("/parts/block/stl/generate", json={"params": {"width": 50}}).json()
+        # Apply's values are written into the part's text: that is the variant's SCAD.
+        applied = client.post("/parts/block/stl/generate", json={"params": {"width": 50}}).json()
+        r = client.get(f"/parts/block/scad?variant={applied['variant']}")
+        written = SCAD.replace("width = 34;", "width = 50;")
+        assert (r.text, r.headers["x-part-scad"]) == (written, "values")
+        own = client.post("/parts/block/stl/generate", json={"params": {}}).json()
         r = client.get(f"/parts/block/scad?variant={own['variant']}")
         assert (r.text, r.headers["x-part-scad"]) == (SCAD, "source")
 
