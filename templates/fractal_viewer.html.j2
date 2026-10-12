@@ -2618,12 +2618,18 @@
                 // A machine drawn as a part shows the one row until Part › Edit asks
                 // for its editor (openEditor); a leaf that is a part has it always.
                 if (selected.part_ref) this.appendPartPanel(selected, selected.children.length === 0 || this.editorOpenFor === this.selectedName);
-                this.selectedBodyEl.insertAdjacentHTML('beforeend', this.deviceSectionHtml(this.selectedName));
-                this.bindDeviceSection(this.selectedName);
+                // A piece made from a picture -- a word's shape, in an arrangement or
+                // made at a place -- holds no board: no Device section, unless something
+                // pinned one to it anyway, which its Unpin then takes back.
+                const made = this.pictureMarks.madeRecord(this.selectedName);
+                const holdsNoBoard = (made || selected.role === 'word') && !this.bindingFor(this.selectedName).row;
+                if (!holdsNoBoard) {
+                    this.selectedBodyEl.insertAdjacentHTML('beforeend', this.deviceSectionHtml(this.selectedName));
+                    this.bindDeviceSection(this.selectedName);
+                }
                 this.selectedBodyEl.insertAdjacentHTML('beforeend', this.shownFacts);
                 this.bindPictureFacts();
                 // A piece made from a picture is a part: its editor, under its provenance.
-                const made = this.pictureMarks.madeRecord(this.selectedName);
                 if (made) this.appendEditor(this.pieceTarget(this.selectedName, made));
             }
 

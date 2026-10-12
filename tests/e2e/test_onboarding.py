@@ -18,6 +18,11 @@ import re
 import pytest
 from playwright.sync_api import Page, expect
 from slicer_helpers import write_fake_orcaslicer
+from test_picture_in_the_world import (  # noqa: F401 - fixtures, and a pin of a picture
+    _pin,
+    fixture_picture,
+    leaves_garage_as_found,
+)
 from viewer_ready import settled
 
 PRINTER = "/dev/ttyFAKE1"
@@ -437,3 +442,52 @@ def test_a_printers_pin_never_asks_a_board_known_to_be_printing(page: Page, prin
     assert list(_pins(page, url)) == [BOARD]
     page.locator("#selected-body .device-section .dev-unpin").click()
     _said(page, f"printer_1's board {BOARD}: device unpinned")
+
+
+# --------------------------------------------------------------------------------
+# A piece made from a picture holds no board
+# --------------------------------------------------------------------------------
+
+
+@pytest.mark.e2e
+def test_a_piece_made_from_a_picture_has_no_device_section(
+    page: Page,
+    base_url: str,
+    picture_folder,
+    fixture_picture,  # noqa: F811 - the fixture's value, the picture's name
+    leaves_garage_as_found,  # noqa: F811
+):
+    """Walkthrough 11's last picture showed a Device row -- Query and Pin -- on a word
+    piece of an arrangement built from a picture. A piece made from a picture holds no
+    board: neither it nor a piece made at a place has a Device section; a structure
+    still has one."""
+    answer = page.request.post(
+        f"{base_url}/photos",
+        data={
+            "picture": str(picture_folder / fixture_picture),
+            "name": "onb_words",
+            "finder": "stated",
+        },
+    )
+    assert answer.ok, answer.text()
+    try:
+        _open(page, base_url, site="onb_words")
+        page.locator("#contents-list .contents-item").first.click()
+        expect(page.locator("#selected-body .prop-row", has_text="Name")).to_be_visible()
+        settled(page)
+        expect(page.locator("#selected-body .device-section")).to_have_count(0)
+    finally:
+        page.request.delete(f"{base_url}/photos/onb_words")
+
+    view = _pin(page, base_url, "workbench", fixture_picture, mm_across=1800)
+    made = page.request.post(f"{base_url}/sites/garage/views/{view['id']}/make", data={"shape": 1})
+    assert made.ok, made.text()
+    (piece,) = made.json()["made"]
+    _open(page, base_url)
+    _row(page, piece).click()
+    expect(page.locator("#selected-body .picture-facts[data-facts='made']")).to_be_visible(
+        timeout=10000
+    )
+    expect(page.locator("#selected-body .device-section")).to_have_count(0)
+    _row(page, "workbench").click()
+    expect(page.locator("#selected-body .device-section")).to_be_visible(timeout=10000)
