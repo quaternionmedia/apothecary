@@ -19,12 +19,23 @@
  * already holds it. A part whose SCAD is not its own source (its geometry is
  * Python, or a made piece's few lines) is read-only, and has no name and no Save.
  *
+ * OpenSCAD's own keys work inside it, and only there: F5 checks and draws
+ * (onCheck), F6 and Ctrl+Enter render and draw (onApply), Ctrl+S saves a variant
+ * (onSave). Outside it the browser's keys are the browser's.
+ *
+ * The page keeps a part's editor while another part is selected, so its text and
+ * its undo come back with it: its root is taken out of the page and put back, and
+ * rebind() points its callbacks at the page's newest. The name box names the
+ * variant Save keeps; empty, Save keeps it under the name suggest() greyed in it.
+ *
  * mountScadEditor(slot, options) renders into slot and resolves to the editor:
  *   options: { text, readOnly, editable, name, onChange(text), onSave(),
- *              onFloat(), onFullscreen(), onChoose(name), shownAs }
+ *              onFloat(), onFullscreen(), onChoose(name), onCheck(), onApply(),
+ *              onName(name), shownAs }
  *   editor:  { root, text(), setText(text), mark(messages), say(words, kind),
- *              name(), setName(name), showVariants(list), fullscreen(on),
- *              isFullscreen(), focus(), measure(), destroy() }
+ *              name(), setName(name), suggest(name), showVariants(list),
+ *              fullscreen(on), isFullscreen(), focus(), measure(), rebind(callbacks),
+ *              destroy() }
  * variantChoices(list) is the markup of a list of saved variants to choose one
  * from, as the editor's own list and the page's short list under a part's
  * parameters both draw it; the page listens on the list.
@@ -35,10 +46,10 @@ const MARKUP = `
     <div class="scad-bar">
         <span class="scad-said" role="status"></span>
         <span class="scad-spacer"></span>
-        <label class="scad-name-label" title="The name Save keeps this variant under, in git: letters, digits, _ . and -">as <input type="text" id="scad-name" spellcheck="false" maxlength="64"></label>
-        <button type="button" id="scad-save" title="Save: this SCAD and the numbers staged in the editor, committed to this part's own ref in git under the name beside it. Nothing in the checkout changes; merging it is yours to do (Part › Save)">Save</button>
-        <button type="button" id="scad-float" title="Float the editor over the world, or put it back in Selected (Part › Float)">Float</button>
-        <button type="button" id="scad-fullscreen" title="The editor over the whole page; Esc or this button puts it back (Part › Fullscreen)">Fullscreen</button>
+        <label class="scad-name-label" title="The name Save keeps this variant under, in git: letters, digits, _ . and -. Empty, the name greyed in it; a name already saved is asked about first">as <input type="text" id="scad-name" spellcheck="false" maxlength="64"></label>
+        <button type="button" id="scad-save" title="Save: this SCAD and the numbers staged in the editor, committed to this part's own ref in git under the name beside it. Nothing in the checkout changes; merging it is yours to do (Ctrl+S in the editor; Part › Save)">Save</button>
+        <button type="button" id="scad-float" title="Float the editor over the world, or put it back in Selected (Part › View › Float)">Float</button>
+        <button type="button" id="scad-fullscreen" title="The editor over the whole page; Esc or this button puts it back (Part › View › Fullscreen)">Fullscreen</button>
     </div>
     <div class="scad-code"></div>
     <div class="scad-saved"></div>
@@ -175,7 +186,10 @@ export function variantChoices(list, { full = false, chosen = null } = {}) {
 // --- the editor --------------------------------------------------------------------
 
 export async function mountScadEditor(slot, options = {}) {
-    const { text = "", readOnly = false, editable = !readOnly, name = "", onChange, onSave, onFloat, onFullscreen, onChoose, shownAs = null } = options;
+    const { text = "", readOnly = false, editable = !readOnly, name = "", shownAs = null } = options;
+    // What the page is told, through one object it can point elsewhere (rebind).
+    const on = {};
+    for (const key of ["onChange", "onSave", "onFloat", "onFullscreen", "onChoose", "onCheck", "onApply", "onName"]) on[key] = options[key];
     slot.innerHTML = MARKUP;
     const root = slot.querySelector(".scad-editor");
     const said = root.querySelector(".scad-said");
@@ -187,12 +201,13 @@ export async function mountScadEditor(slot, options = {}) {
     nameBox.value = name;
     for (const el of [nameBox.parentElement, saveBtn]) el.hidden = !editable;
     savedList.hidden = !editable;
-    saveBtn.onclick = () => onSave && onSave();
-    floatBtn.onclick = () => onFloat && onFloat();
-    fullBtn.onclick = () => onFullscreen && onFullscreen();
+    saveBtn.onclick = () => on.onSave && on.onSave();
+    floatBtn.onclick = () => on.onFloat && on.onFloat();
+    fullBtn.onclick = () => on.onFullscreen && on.onFullscreen();
+    nameBox.oninput = () => on.onName && on.onName(nameBox.value);
     savedList.onclick = (ev) => {
         const b = ev.target.closest(".saved-variant");
-        if (b && onChoose) onChoose(b.dataset.variant);
+        if (b && on.onChoose) on.onChoose(b.dataset.variant);
     };
     // Escape, with the editor over the page, puts it back: the editor holds the
     // focus while it is there (its root takes it when nothing in it does).
@@ -200,15 +215,24 @@ export async function mountScadEditor(slot, options = {}) {
         if (ev.key === "Escape" && root.classList.contains("fullscreen")) {
             ev.preventDefault();
             ev.stopPropagation();
-            if (onFullscreen) onFullscreen();
+            if (on.onFullscreen) on.onFullscreen();
         }
     };
 
     const cm = await codemirror();
     const { state, view, language, commands, lint } = cm;
     const listen = view.EditorView.updateListener.of((update) => {
-        if (update.docChanged && onChange) onChange(update.state.doc.toString());
+        if (update.docChanged && on.onChange) on.onChange(update.state.doc.toString());
     });
+    // OpenSCAD's keys, ahead of the editor's own: each is taken, so F5 does not reload
+    // the page nor Ctrl+S save it, while the editor has the focus.
+    const take = (call) => () => { if (on[call]) on[call](); return true; };
+    const openscadKeys = view.keymap.of([
+        { key: "F5", run: take("onCheck"), preventDefault: true },
+        { key: "F6", run: take("onApply"), preventDefault: true },
+        { key: "Mod-Enter", run: take("onApply"), preventDefault: true },
+        { key: "Mod-s", run: take("onSave"), preventDefault: true },
+    ]);
     const editorView = new view.EditorView({
         parent: root.querySelector(".scad-code"),
         state: state.EditorState.create({
@@ -223,6 +247,7 @@ export async function mountScadEditor(slot, options = {}) {
                 language.bracketMatching(),
                 language.StreamLanguage.define(openscadMode()),
                 lint.lintGutter(),
+                openscadKeys,
                 view.keymap.of([...commands.defaultKeymap, ...commands.historyKeymap, commands.indentWithTab]),
                 state.EditorState.readOnly.of(readOnly),
                 view.EditorView.editable.of(!readOnly),
@@ -270,6 +295,7 @@ export async function mountScadEditor(slot, options = {}) {
         },
         name: () => nameBox.value.trim(),
         setName(next) { nameBox.value = next; },
+        suggest(next) { nameBox.placeholder = next || ""; },
         showVariants(list, chosen = null) { savedList.innerHTML = `<div class="code-header">Saved variants</div>${variantChoices(list, { full: true, chosen })}`; },
         fullscreen(on) {
             root.classList.toggle("fullscreen", on);
@@ -281,7 +307,8 @@ export async function mountScadEditor(slot, options = {}) {
         floated(on) { floatBtn.textContent = on ? "Dock" : "Float"; editorView.requestMeasure(); },
         focus() { editorView.focus(); },
         measure() { editorView.requestMeasure(); },
-        destroy() { editorView.destroy(); slot.innerHTML = ""; },
+        rebind(callbacks) { Object.assign(on, callbacks); },
+        destroy() { editorView.destroy(); root.remove(); },
     };
     return editor;
 }

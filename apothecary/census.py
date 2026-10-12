@@ -57,6 +57,9 @@ control is deleted.
 - It sees listening done with `addEventListener`, not a handler assigned to
   `.onclick`. Such a control is still counted from the markup, which is why the
   markup is the meter.
+- Nor the SCAD editor's own keys, which its CodeMirror keymap holds (F5, F6,
+  Ctrl+Enter and Ctrl+S, `widgets/scad_editor.js`): they work inside the editor
+  only, as its typing does, and are written in the viewer's documentation.
 - The drawing library's own listeners (turning and sliding the view) are not in
   this count.
 - It is one page, the viewer -- the only page there is since the firmware
@@ -131,12 +134,40 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "pos-x": (WIDGET, WHAT_IS_THERE, "a box for typing where a piece is, across"),
     "pos-y": (WIDGET, WHAT_IS_THERE, "a box for typing where a piece is, along"),
     "pos-z": (WIDGET, WHAT_IS_THERE, "a box for typing where a piece is, up"),
-    "part-regenerate-btn": (WIDGET, WHAT_IS_THERE, "a button that rebuilds a piece"),
     "part-scad-download": (WIDGET, NOTHING, "a link that downloads the piece's recipe"),
     # The staged numbers of a piece: changed on the sliders, then kept or not.
     "apply-btn": (WIDGET, WHAT_IS_THERE, "a button that rebuilds a piece with its staged numbers"),
     "revert-btn": (WIDGET, WHAT_YOU_SEE, "a button that puts the staged numbers back"),
     "defaults-btn": (WIDGET, WHAT_YOU_SEE, "a button that stages a part's own numbers"),
+    # The staged numbers' undo and redo, and the ghost of what was drawn before
+    # (the part-iteration plan of 2026-10-12): Part › History and Part › View.
+    "undo-btn": (WIDGET, WHAT_YOU_SEE, "a button that undoes the last change to the staged numbers"),
+    "redo-btn": (WIDGET, WHAT_YOU_SEE, "a button that redoes the change undone"),
+    "ghost-toggle": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a tick-box that shows a ghost of what was drawn before the newest Apply",
+    ),
+    # What a tab kept of a part's work before it was reloaded, offered back.
+    "kept-restore": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button that puts back the work the tab kept from before a reload",
+    ),
+    "kept-discard": (WIDGET, WHAT_YOU_SEE, "a button that lets go of that kept work"),
+    # One control per parameter (widgets/part_controls.js), written there as markup
+    # since the part-iteration plan: built by the page before it, they were not counted.
+    "param-slider": (WIDGET, WHAT_YOU_SEE, "a slider that stages one of a part's numbers"),
+    "param-number": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a box that stages one of a part's numbers exactly, in step with its slider",
+    ),
+    "param-choice": (WIDGET, WHAT_YOU_SEE, "a drop-down that stages one of a part's choices"),
+    "param-tick": (WIDGET, WHAT_YOU_SEE, "a tick-box that stages a part's yes or no"),
+    "param-text": (WIDGET, WHAT_YOU_SEE, "a box that stages a part's words"),
+    "param-coord": (WIDGET, WHAT_YOU_SEE, "a box that stages one number of a vector, captioned"),
+    "cand": (WIDGET, WHAT_YOU_SEE, "a button that stages a contested number's candidate"),
     # The SCAD editor where the part's read-only source stood (widgets/scad_editor.js):
     # the name a save keeps a variant under, Save, Float and Fullscreen; and a saved
     # variant chosen from a list -- under the part's parameters, or in the editor.
@@ -481,6 +512,13 @@ RING_BACKED: Dict[str, str] = {
     "scad-float": "part:float",
     "scad-fullscreen": "part:fullscreen",
     "saved-variant": "part:variant",
+    # the staged numbers' Undo and Redo, by button or key, are Part › History's; the
+    # ghost is Part › View › Ghost, and f is Part › View › Fit
+    "undo-btn": "part:undo",
+    "redo-btn": "part:redo",
+    "ghost-toggle": "part:ghost",
+    "window:keydown:onUndoKey": "part:undo",
+    "window:keydown:onFitKey": "part:fit",
     # a camera in Selected: Take picture is its ring's, and so is P
     "cam-take": "camera:take-picture",
     "takeBtn:click:takePictureWith": "camera:take-picture",
@@ -596,10 +634,6 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     ),
     "posAxis:change:recomputeWorldBounds": (WIDGET, WHAT_IS_THERE, "typing a position"),
     "statusSelect:change:submitStatus": (WIDGET, WHAT_IS_THERE, "choosing a state"),
-    # The editor's Regenerate STL: the staged set applied to its target, a
-    # part's STL rendered again (a made piece has no such button: Apply is its
-    # rebuild).
-    "regenerateBtn:click:applyEditor": (WIDGET, WHAT_IS_THERE, "the rebuild button"),
     "zoomInLink:click:zoomIn": (WIDGET, WHAT_YOU_SEE, "the go-in button on the chosen piece"),
     # done to the scene itself
     "canvas:pointerdown:onPointerDown": (GESTURE, WHAT_YOU_SEE, "pointing at a piece"),
@@ -607,6 +641,22 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "canvas:wheel:onWheel": (GESTURE, WHAT_YOU_SEE, "the wheel, with a counter of its own"),
     "window:keydown:zoomOut": (GESTURE, WHAT_YOU_SEE, "a key that steps back out"),
     "window:keydown:onHintKey": (GESTURE, WHAT_YOU_SEE, "a key (?) that brings the hint bar back"),
+    "window:keydown:onFitKey": (
+        GESTURE,
+        WHAT_YOU_SEE,
+        "a key (f) that frames the selected piece, Selected and its editor kept open",
+    ),
+    "window:keydown:onUndoKey": (
+        GESTURE,
+        WHAT_YOU_SEE,
+        "keys (Ctrl+Z, Ctrl+Shift+Z) that undo and redo the staged numbers",
+    ),
+    # A part's recent applies in its editor, one clicked drawn again from the cache.
+    "historyList:click:closest": (
+        LIST,
+        WHAT_YOU_SEE,
+        "a recent apply's row in a part's editor, drawing it again from the cache",
+    ),
     # the trails, trees and rows beside the scene
     "chip:click:delete": (LIST, WHAT_YOU_SEE, "a word button that folds and unfolds"),
     "caret:click:delete": (LIST, WHAT_YOU_SEE, "an arrow that opens a branch"),
@@ -759,6 +809,12 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         NOTHING,
         "the move arrows lit under the pointer, and the world drawn again",
     ),
+    "window:beforeunload:onLeaving": (
+        AUTOMATIC,
+        NOTHING,
+        "leaving with a part's numbers not applied or its SCAD not rendered or saved, "
+        "which asks first; what the tab keeps of it is written",
+    ),
     # The browser's Back and Forward, not a control of the page's: the site the
     # address names is loaded, as the drop-down put it there.
     "window:popstate:followAddress": (
@@ -836,7 +892,6 @@ LISTENS = re.compile(r"addEventListener\s*\(\s*['\"]([\w-]+)['\"]\s*,")
 # before the ones they begin with, so `.dev-pin-manual` is not read as `.dev-pin`.
 FETCHED_BY_LABEL: Sequence[Tuple[str, str]] = (
     (r"pos-\$\{axis\}", "posAxis"),
-    (r"part-regenerate-btn", "regenerateBtn"),
     (r"\.zoom-in-btn", "zoomInLink"),
     (r"\.dev-pin-manual", "devPinManual"),
     (r"\.dev-open", "devOpen"),

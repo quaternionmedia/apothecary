@@ -85,6 +85,12 @@ ring's View, which adds **Fit**: frame the pieces at this level.
 
 None of them is remembered: a reload starts from the defaults.
 
+The world is drawn only when something in it changes -- the view turned or
+easing to a stop, a piece or its colour, the handles, the window's size, a live
+camera's video, a texture arriving, a printer's nozzle moving -- so a machine
+drawing in software, without a GPU, idles between them and answers typing at
+once.
+
 ## The ring
 
 `m` opens the ring at the middle of the screen, a right-click at the pointer,
@@ -131,8 +137,9 @@ it), Why this, Into (its children), Up (when nested), then what the piece is:
   this browser's camera), and Remove;
 - a piece made from a picture: **Picture** › Word, Drop;
 
-then **Part** (a part, a camera or a made piece; [below](#the-part-editor)),
-and, when a printer is pinned in the site, **Print** (a made piece) and
+then **Part** (a part, a camera or a made piece; [below](#the-part-editor): Edit,
+Defaults, Apply, Revert, Save, View › Float, Fullscreen, Ghost and Fit,
+History › Undo and Redo, and Variants), and, when a printer is pinned in the site, **Print** (a made piece) and
 **Slice** (a made piece, or a part not inside a printer and not a board: a
 devkit is flashed, never printed). Print and Slice say whether the printer
 has no board pinned or one pinned and not connected.
@@ -179,46 +186,105 @@ and each panel's place and state, are remembered by this browser.
 
 **Part › Edit** on a piece's ring opens its editor in Selected: the part's
 readiness to build, its **Parameters**, its saved variants and its SCAD. Each
-parameter is a control -- a slider, a choice, a tick or a box -- starting
-from what is drawn; a contested one comes first, with its candidates as
-buttons.
+parameter is a control starting from what is drawn, its description as its
+caption; a contested one comes first, with its candidates as buttons.
+
+- **A number** is a slider and a box beside it, kept in step: the slider for
+  the reach, the box for the exact value, which takes any number typed. Each
+  steps on round numbers: the step the field states (a SCAD customizer's
+  `[1:0.5:20]`), one for a field that says it is an integer, else a power of
+  ten that crosses the range in a hundred to a thousand steps.
+- **A choice** is a drop-down; **a yes or no** a tick-box; **words** a box.
+- **A vector** is a box for each of its numbers, each captioned (x, y, z).
+- **A nested model** is a group of its own fields, under its name.
+- A field that declares a **unit** shows it beside its number; one that
+  declares none shows nothing.
 
 Moving a control **stages** a value and nothing more. Once the controls rest
 the staged set is checked against the part's own model, and the bar above
 them says what is staged, whether it is valid and the envelope it would
 make. **Apply** renders it: when the result is not the saved part, it is
 drawn in this tab only as an applied variant -- amber, not saved -- and the
-address carries `?variant=`, so a reload or the link draws it again.
-**Revert** puts what is staged back to what is drawn; **Defaults** stages
-the part's own numbers, and Apply then draws the saved part -- after a SCAD
-edit too, when the numbers drawn are the part's own already: Apply, saying
-"Apply: the saved part", puts the part's own SCAD back in the editor. Beside the
-envelope the part declares is what its drawn STL measures. Each of these is
-also a cell of Part on the ring.
+address carries `?variant=`, so a reload or the link draws it again. The
+focus stays where it was: in the box or the slider last moved, or in the SCAD
+editor. **Revert** puts what is staged back to what is drawn; **Defaults**
+stages the part's own numbers, and Apply then draws the saved part -- after a
+SCAD edit too, when the numbers drawn are the part's own already: Apply,
+saying "Apply: the saved part", puts the part's own SCAD back in the editor.
+Each of these is also a cell of Part on the ring.
+
+**Undo** and **Redo** under them, Ctrl+Z and Ctrl+Shift+Z (or Ctrl+Y) outside
+a box being typed in, and Part › History › Undo and Redo step the staged
+numbers back and forward: a slider dragged is one step, and Revert, Defaults
+and a variant chosen are a step each. **Recent applies**, a fold under the
+parameters, lists this tab's applies of the part, newest first, a reload of
+the tab included; one clicked is drawn again from the cache of variants, its
+numbers and its SCAD with it.
+
+**A variant is drawn where it stands**: placed by the bounds its render
+measured, at its piece, so a part grown is drawn where it grew, standing on
+what it stood on. Beside the envelope the part declares is what its drawn STL
+measures; when the two differ the line turns amber and says by how much, and a
+part reaching below the floor says how far. Selected's Footprint is what the
+variant drawn measures, the declared one beside it.
+
+**Ghost**, the tick-box beside Undo and Part › View › Ghost, shows what was
+drawn before the newest Apply -- the saved part, or the variant before -- faint
+behind what is drawn now, its edges seen through it, and the editor says how
+much the size changed. **Part › View › Fit**, and `f`, frames the selected
+piece as drawn, from where the view looks, and leaves Selected and its editor
+open.
+
+**Work is kept, per tab.** A part's numbers staged and not applied, and its
+SCAD edited, are kept in the tab's own storage as they change; after a reload
+the status line says which parts have work kept, and each one's editor offers
+it back: **Restore** puts it back, **Discard** lets it go. A browser that keeps
+nothing for the page offers nothing. Leaving the page with numbers staged and
+not applied, or SCAD edited and not rendered or not saved, asks first. Each
+part keeps its editor -- the SCAD's text, its undo and where it was scrolled --
+while another part is selected.
 
 A piece made from a picture and a camera have the same editor, for their own
-numbers: Edit, Apply and Revert.
+numbers: Edit, Apply, Revert, Undo and Redo, and Fit. A made piece's Apply
+draws the piece again and nothing else.
 
 ## The SCAD editor
 
 Below the parameters is the part's SCAD, in an editor. Typing in it is
-checked once typing stops: a line OpenSCAD refuses is marked where it is,
-with its message, and nothing is rendered until it reads. After a second of
-quiet an edit that reads is rendered as Apply renders, from the edited SCAD
-written beside the part, and drawn as an applied variant; the part's own
-file is not touched.
+checked 300 ms after typing stops: a line OpenSCAD refuses is marked where it
+is, with its message, and nothing is rendered until it reads. About 300 ms
+after a check that passes, the edit is rendered as Apply renders, from the
+edited SCAD written beside the part, and drawn as an applied variant; a newer
+edit cancels a render waiting, and a render that lands for older text than
+the editor holds says so and is not taken for the newer. The part's own file
+is not touched.
+
+OpenSCAD's keys work inside the editor, and only there:
+
+| Key | Does |
+|---|---|
+| F5 | Checks the SCAD now, and draws it as soon as it reads |
+| F6, or Ctrl+Enter | Renders and draws: Apply |
+| Ctrl+S | Saves a variant: Save |
+
+Outside the editor the browser's keys are the browser's.
 
 - **Part › Save** keeps the edit and the staged numbers as a variant in git,
-  under the name in the editor's *as* box: a commit on
+  under the name in the editor's *as* box -- empty, the next free name greyed
+  in it: a commit on
   `refs/apothecary/variants/<part>/<name>`, written without touching the
   checkout, HEAD or the working tree; `git merge` of that ref makes it the
   part's source. `APOTHECARY_VARIANTS_REPO` names another repository to keep
   them in.
+- The *as* box names the variant the text came from while the text is that
+  variant's, and is cleared once the text moves on from it, so Save keeps the
+  edit under a name of its own. A name already saved is asked about first:
+  Save again replaces it.
 - **Part › Variants** › a saved one loads it: its SCAD into the editor, its
   numbers staged, checked and drawn. The editor lists every saved variant
   with what it changes, and whether it is in HEAD.
-- **Part › Float** floats the editor over the world (its Dock puts it back);
-  **Part › Fullscreen** gives it the page (Escape gives it back).
+- **Part › View › Float** floats the editor over the world (its Dock puts it
+  back); **Part › View › Fullscreen** gives it the page (Escape gives it back).
 
 A part built by Python geometry shows the SCAD its geometry generates, read
 only, and has no Save; a made piece shows its few lines, read only; a camera
@@ -235,6 +301,10 @@ has none. The routes are `/parts/{name}/draft/check`, `/draft/render` and
 | `?` | Shows or hides the hint bar |
 | Backspace | Goes up one level |
 | Escape | Closes the ring; lets go of the picture chosen in Pictures; leaves the SCAD editor's fullscreen |
+| `f` | Frames the selected piece, as drawn, Selected and its editor kept open (Part › View › Fit) |
+| Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y | Undoes and redoes the part editor's staged numbers (Part › History) |
 | In the ring: 1-9, arrows, Enter, Space, Backspace | As [above](#the-ring) |
+| In the SCAD editor: F5, F6, Ctrl+Enter, Ctrl+S | As [above](#the-scad-editor) |
 
-None of them acts while you are typing in a box.
+None of them acts while you are typing in a box; Ctrl+Z in a box, or in the
+SCAD editor, is that box's own undo.

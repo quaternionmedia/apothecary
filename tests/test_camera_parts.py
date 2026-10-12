@@ -534,11 +534,17 @@ def test_add_here_and_remove_are_carried_by_the_server_and_the_ring_knows_a_came
         "Part",
     ]
     part = next(o for o in ring["options"] if o["label"] == "Part")
-    assert [(o["label"], o["action"]) for o in part["children"]] == [
+    assert [(o["label"], o["action"] or o["id"]) for o in part["children"]] == [
         ("Edit", "part:edit"),
         ("Apply", "part:apply"),
         ("Revert", "part:revert"),
+        ("View", "part:view"),
+        ("History", "part:history"),
     ]
+    # A camera is framed, and its numbers undone, as a part's are; it has no ghost.
+    view, history = part["children"][3:]
+    assert [o["action"] for o in view["children"]] == ["part:fit"]
+    assert [o["action"] for o in history["children"]] == ["part:undo", "part:redo"]
     device = next(o for o in ring["options"] if o["label"] == "Device")
     assert [(o["action"], o["marked"]) for o in device["children"]] == [
         ("camera:device:mine", True)
@@ -565,6 +571,9 @@ def test_add_here_and_remove_are_carried_by_the_server_and_the_ring_knows_a_came
         "part:edit",
         "part:apply",
         "part:revert",
+        "part:fit",
+        "part:undo",
+        "part:redo",
     ):
         r = c.post("/menu/intent", json=_intent(action, ["camera_2"]))
         assert r.status_code == 200 and r.json()["carried_by"] == "the viewer carries it out"
