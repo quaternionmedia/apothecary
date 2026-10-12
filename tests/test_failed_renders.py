@@ -87,7 +87,9 @@ class TestAFailedRender:
         exe = openscad()
         made = make_variant(block, {"width": 60})
         assert made.failure == "failed" and made.rendered and made.key is None
-        assert "line 4" in made.error_message and "width < 50" in made.error_message
+        # Said as an exit code would be: the error itself is in its messages, by line.
+        assert made.error_message == "OpenSCAD said an error after writing part of it"
+        assert "width < 50" in made.messages[0].message
         partial = made.partial
         assert partial is not None and partial.line == 4 and partial.file == "block.scad"
         assert partial.stl_path.is_file() and partial.stl_path.is_relative_to(partial_dir())

@@ -115,6 +115,9 @@ def partial_dir() -> Path:
     return Path(os.environ.get("APOTHECARY_CACHE_DIR") or ROOT / ".cache") / "part_partial"
 
 
+# Why a render OpenSCAD finished is a failure all the same.
+SAID_AN_ERROR = "OpenSCAD said an error after writing part of it"
+
 # Partial geometries kept per part, for a page to draw greyed; the oldest go first.
 PARTIALS_KEEP = 8
 
@@ -600,7 +603,9 @@ def make_variant(
             error = first_error(made.messages)
             if not result.success or error is not None:
                 made.failure = "failed"
-                made.error_message = result.error_message or _said_error(error)
+                # As an exit code would say it; the error itself is in messages,
+                # which a page shows by file and line beside this.
+                made.error_message = result.error_message or SAID_AN_ERROR
                 if result.success and work.is_file():
                     made.partial = Partial(
                         key=key,
@@ -799,14 +804,6 @@ def _same_render(
         (json.dumps(mine, indent=2, sort_keys=True, default=_recordable) + "\n").encode("utf-8"),
     )
     return True
-
-
-def _said_error(error: Optional[OpenSCADMessage]) -> str:
-    """Why a render OpenSCAD finished is a failure: the error it said."""
-    if error is None:
-        return "OpenSCAD said an error"
-    where = f" ({error.file}, line {error.line})" if error.line is not None else ""
-    return f"OpenSCAD said an error{where}: {error.message}"
 
 
 def same_text(path: Path, text: str) -> bool:
