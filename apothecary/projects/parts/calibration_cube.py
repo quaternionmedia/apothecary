@@ -26,6 +26,9 @@ from apothecary.models import (
 from .base import BasePart
 from .skeleton import ROOT
 
+# A length in the SCAD's own unit: what the page shows beside the number.
+MM = {"unit": "mm"}
+
 
 class Params(BaseModel):
     """
@@ -46,10 +49,12 @@ class Params(BaseModel):
         -Z (bottom): flat (print bed surface)
     """
 
-    size: float = Field(10.0, gt=5, le=100, description="Cube size in mm")
+    size: float = Field(10.0, gt=5, le=100, description="Cube size", json_schema_extra=MM)
     show_axes: bool = Field(True, description="Show XYZ axis indicators (preview only)")
     show_dimensions: bool = Field(True, description="Show dimension markers")
-    wall_thickness: float = Field(2.0, gt=0, le=10, description="Wall thickness")
+    wall_thickness: float = Field(
+        2.0, gt=0, le=10, description="Wall thickness", json_schema_extra=MM
+    )
 
 
 class CalibrationCubePart(BasePart):

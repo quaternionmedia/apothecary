@@ -15,7 +15,9 @@ as it goes (the part-iteration plan, docs/plans/part-iteration-2026-10-12.md).
 The server is this module's own, with an OpenSCAD that is this machine's except
 that it refuses a cube of ``TOO_BIG`` mm or more, saying so as an assertion at
 the SCAD's ``size`` line would: the error a person meets is OpenSCAD's own
-shape. Its variant cache is a temp folder. Opening the part draws its own STL,
+shape, and, as a snapshot does, it still writes the geometry and exits 0, which
+the server answers as a failed render with that geometry as its ``partial``.
+Its variant cache is a temp folder. Opening the part draws its own STL,
 which a fresh clone does not have, so ``parts/calibration_cube/`` is put back
 as it was found.
 
@@ -34,7 +36,13 @@ import sys
 
 import pytest
 from playwright.sync_api import Page, expect
-from viewer_ready import by_hand, settled
+from viewer_ready import (
+    MARKED_LINE_FIRST,
+    STAGE_BAR_AT_THE_TOP,
+    by_hand,
+    settled,
+    site_folded,
+)
 
 from apothecary.projects.parts.calibration_cube import DEFAULT as CUBE
 from apothecary.projects.parts.stl_renderer import params_sidecar_path
@@ -54,18 +62,19 @@ VARIANT_GLOW = 0x261B08
 
 REFUSING_OPENSCAD = '''#!{python}
 """This machine's OpenSCAD, except that a cube of {too_big} mm or more is refused
-as an assertion at the SCAD's size line would refuse it."""
-import os, sys
+as an assertion at the SCAD's size line would refuse it -- the way a snapshot
+refuses one: it says the error, writes the geometry it built, and exits 0."""
+import os, subprocess, sys
 args = sys.argv[1:]
 for i, arg in enumerate(args[:-1]):
     if arg == "-D" and args[i + 1].startswith("size=") and float(args[i + 1][5:]) >= {too_big}:
+        done = subprocess.run([{real!r}, *args])
         sys.stderr.write(
             "ERROR: Assertion '(size < {too_big})' failed: \\"it fits the bed\\" "
             "in file {scad}, line {line}\\n"
             "TRACE: called by 'assert' in file {scad}, line {line}\\n"
-            "Current top level object is empty.\\n"
         )
-        sys.exit(1)
+        sys.exit(done.returncode)
 os.execv({real!r}, [{real!r}, *args])
 '''
 
@@ -257,20 +266,28 @@ def _mesh(page: Page) -> dict:
 
 
 # What the cube's pictures are framed by: the view brought to it by hand, Shift+drag and
-# the wheel, to about this far from its middle (mm), and the editor scrolled so that its
-# sizes and what the STL measures beside the declared envelope are in view.
+# the wheel, to about this far from its middle (mm).
 NEAR = 110
-
-SIZES_AND_MEASURED = """() => {
-    const envelope = document.getElementById('part-envelope');
-    if (envelope) envelope.scrollIntoView({ block: 'start' });
-}"""
 
 
 def _framed_on_the_cube(page: Page) -> None:
     by_hand(page, PART, distance=NEAR)
-    page.evaluate(SIZES_AND_MEASURED)
-    settled(page)
+
+
+def _envelope(page: Page) -> str:
+    """What the editor says of the part's size: the envelope it declares, and what is
+    drawn measures. It stands below the SCAD, out of a picture of the sizes, so a step
+    that names it carries its words."""
+    return " ".join(page.locator("#part-envelope").inner_text().split())
+
+
+def _shown_whole(page: Page, show) -> None:
+    """``show()``, the picture taken with Site folded to its title by its ▾, so Selected
+    has the rail: the editor from its stage bar down, its sizes and, under them, what
+    the STL measures beside what the part declares."""
+    with site_folded(page):
+        page.evaluate(STAGE_BAR_AT_THE_TOP)
+        show()
 
 
 def _side(page: Page) -> float:
@@ -375,12 +392,16 @@ def _a_round(
     # time; it was checked once, at rest.
     assert len(validations) == 1, validations
     if story:
-        story.shows(
-            "A size dragged is checked once the slider rests",
-            f"The size slider dragged through {len(values)} values without a pause: one "
-            "check, once it rests, against the part's own model, and the envelope the "
-            "staged set would produce. Nothing is rendered yet; Apply is the next step.",
-            shown=summary.inner_text(),
+        said = summary.inner_text()
+        _shown_whole(
+            page,
+            lambda: story.shows(
+                "A size dragged is checked once the slider rests",
+                f"The size slider dragged through {len(values)} values without a pause: one "
+                "check, once it rests, against the part's own model, and the envelope the "
+                "staged set would produce. Nothing is rendered yet; Apply is the next step.",
+                shown=said,
+            ),
         )
 
     answer = _apply(page, from_the_ring)
@@ -403,16 +424,19 @@ def _a_round(
     assert _variant_in_address(page) == answer.json()["variant"]
     _shows_variant(page)
     if story:
-        page.evaluate(SIZES_AND_MEASURED)
-        story.shows(
-            "Apply draws the variant, marked as not saved",
-            "Apply: rendered into the cache of variants and drawn in this tab at the size "
-            "staged, grown from where the part stood on the floor rather than centred on the "
-            "envelope it had, and measured beside the envelope the part declares, Selected's "
-            "Footprint following it. The editor's amber "
-            "edge and its words, and an amber dot over the part in the world, say it is an "
-            "applied variant and not the saved part; the status line says so too.",
-            shown=_status(page).inner_text(),
+        said = f"{_status(page).inner_text()}\n{_envelope(page)}"
+        _shown_whole(
+            page,
+            lambda: story.shows(
+                "Apply draws the variant, marked as not saved",
+                "Apply: rendered into the cache of variants and drawn in this tab at the "
+                "size staged, grown from where the part stood on the floor rather than "
+                "centred on the envelope it had, and measured beside the envelope the part "
+                "declares, Selected's Footprint following it. The editor's amber edge and "
+                "its words, and an amber dot over the part in the world, say it is an "
+                "applied variant and not the saved part; the status line says so too.",
+                shown=said,
+            ),
         )
     return side
 
@@ -444,6 +468,10 @@ def _refused_by_openscad(page: Page, side_before: float) -> str:
     expect(page.locator("#stage-summary")).to_contain_text("valid", timeout=10000)
     answer = _apply(page)
     assert answer.status == 422, answer.text()
+    # A failed render, though OpenSCAD wrote geometry and exited 0: never a variant,
+    # and the geometry it wrote named, flagged with the failing line.
+    partial = answer.json()["detail"]["partial"]
+    assert partial["line"] == SIZE_LINE and "/partials/" in partial["stl_url"]
     error = page.locator("#part-messages li.error").first
     expect(error).to_contain_text(f"{CUBE.source_file.name}, line {SIZE_LINE}")
     expect(error).to_contain_text("it fits the bed")
@@ -587,13 +615,16 @@ def _two_tabs(page: Page, site: str, story) -> None:
         other.close()
     _edit(page)
     _framed_on_the_cube(page)
-    story.shows(
-        "Two tabs apply at once, and each draws its own",
-        f"A second tab of the same page: this one stages {sides[0]:.2f} mm and the other "
-        f"{sides[1]:.2f} mm, and both Apply, neither waiting. Each renders into a file of "
-        "its own and draws its own variant, its address naming it; each, reloaded, draws "
-        "its own again. This is the first tab, reloaded, its editor open and the view "
-        "brought to the cube by hand.",
+    _shown_whole(
+        page,
+        lambda: story.shows(
+            "Two tabs apply at once, and each draws its own",
+            f"A second tab of the same page: this one stages {sides[0]:.2f} mm and the other "
+            f"{sides[1]:.2f} mm, and both Apply, neither waiting. Each renders into a file "
+            "of its own and draws its own variant, its address naming it; each, reloaded, "
+            "draws its own again. This is the first tab, reloaded, its editor open and the "
+            "view brought to the cube by hand.",
+        ),
     )
 
 
@@ -654,16 +685,21 @@ def test_designing_a_part_twice_round(
     assert _measured(page) == pytest.approx(10, abs=0.05)
     assert _variant_in_address(page) is None
     _framed_on_the_cube(page)
-    story.shows(
-        "Part › Edit opens the part's editor at what is drawn",
-        "The parts library, /viewer/sites/parts_library (the site drop-down's "
-        f"parts_library): {PART}'s row in Site, its ring, Part › Edit: its parameters in "
-        "Selected. They "
-        "start from what is drawn, the part's own STL as its params sidecar records it, "
-        "and beside the envelope the part declares is what that STL measures. Nothing "
-        "marks it: it is the saved part. The view is brought to it by hand, Shift+drag "
-        "and the wheel, as the library frames a whole shelf of parts. A slider is the "
-        "next step.",
+    _shown_whole(
+        page,
+        lambda: story.shows(
+            "Part › Edit opens the part's editor at what is drawn",
+            "The parts library, /viewer/sites/parts_library (the site drop-down's "
+            f"parts_library): {PART}'s row in Site, its ring, Part › Edit: its parameters in "
+            "Selected. They "
+            "start from what is drawn, the part's own STL as its params sidecar records it, "
+            "and beside the envelope the part declares is what that STL measures. Nothing "
+            "marks it: it is the saved part. The view is brought to it by hand, Shift+drag "
+            "and the wheel, as the library frames a whole shelf of parts; in this page's "
+            "pictures of the editor, Site is folded to its title by its ▾, so Selected has "
+            "the rail. A slider is the next step.",
+            shown=_envelope(page),
+        ),
     )
 
     # Round one: a size, checked, applied, drawn.
@@ -715,16 +751,21 @@ def test_designing_a_part_twice_round(
 
     # OpenSCAD refuses a size: its error by line; what is drawn stays.
     refused = _refused_by_openscad(page, first)
-    story.shows(
-        "OpenSCAD's refusal, by line",
-        "A size of 70 mm, which this run's OpenSCAD refuses -- the test's stand-in, which "
-        f"refuses a cube of {TOO_BIG:.0f} mm or more where a real OpenSCAD renders it; "
-        "walkthrough 16 meets a refusal of the SCAD's own. Apply answers with OpenSCAD's "
-        "words, listed by file and line under the stage bar, the line marked in the "
-        "part's source below, and carried on the status line. What is drawn does not "
-        "change, and the refused size is still staged.",
-        shown=refused,
-    )
+    # The list in the stage bar, and the marked line first in the code below it.
+    marked = page.locator(".scad-editor .cm-line:has(.cm-lintRange-error)")
+    with site_folded(page):
+        page.evaluate(STAGE_BAR_AT_THE_TOP)
+        marked.evaluate(MARKED_LINE_FIRST)
+        story.shows(
+            "OpenSCAD's refusal, by line",
+            "A size of 70 mm, which this run's OpenSCAD refuses -- the test's stand-in, which "
+            f"refuses a cube of {TOO_BIG:.0f} mm or more where a real OpenSCAD renders it; "
+            "walkthrough 16 meets a refusal of the SCAD's own. Apply answers with OpenSCAD's "
+            "words, listed by file and line under the stage bar, the line marked in the "
+            "part's source below, and carried on the status line. What is drawn does not "
+            "change, and the refused size is still staged.",
+            shown=refused,
+        )
 
     # Revert, from the part's ring: what is staged put back to what is drawn.
     reverted = _reverted_from_the_ring(page, first)
@@ -772,14 +813,16 @@ def test_designing_a_part_twice_round(
     )
 
     # An earlier apply, drawn again from the cache.
-    again = _drawn_again_from_the_history(page, first)
-    page.evaluate(SIZES_AND_MEASURED)
-    story.shows(
-        "Recent applies draws an earlier one again, from the cache",
-        f"Recent applies, under the parameters, lists this tab's applies of {PART}, "
-        f"newest first. The first round's, {first:.2f} mm, clicked: drawn again from the "
-        "cache of variants, nothing rendered, its numbers what is drawn.",
-        shown=again,
+    again = f"{_drawn_again_from_the_history(page, first)}\n{_envelope(page)}"
+    _shown_whole(
+        page,
+        lambda: story.shows(
+            "Recent applies draws an earlier one again, from the cache",
+            f"Recent applies, under the parameters, lists this tab's applies of {PART}, "
+            f"newest first. The first round's, {first:.2f} mm, clicked: drawn again from "
+            "the cache of variants, nothing rendered, its numbers what is drawn.",
+            shown=again,
+        ),
     )
 
     # Numbers staged and not applied, kept over a reload and restored.

@@ -1,5 +1,7 @@
 """When the viewer has drawn what it was asked to show, for a check or a screenshot."""
 
+from contextlib import contextmanager
+
 from playwright.sync_api import Page
 
 FRAMES = """(n) => new Promise((done) => {
@@ -178,7 +180,12 @@ def _by_hand(page: Page, key: str, distance: float) -> None:
         notches = round(math.log(min(wanted / spot["toTarget"], 1.0)) / math.log(per_notch))
         if notches <= 0:
             break
-        page.mouse.move(spot["cx"], spot["cy"])
+        # Over the world, not over what stands in front of it: a piece's badge stands at
+        # its middle, which is the middle of the world now, and takes the wheel there.
+        # The orbit moves towards its middle wherever the pointer is.
+        over = page.evaluate(FREE_SPOT, [spot["cx"], spot["cy"]])
+        assert over, "nowhere over the world to turn the wheel"
+        page.mouse.move(*over)
         for _ in range(notches if notches <= 3 else (notches + 1) // 2):
             page.mouse.wheel(0, -NOTCH)
         settled(page)
@@ -211,3 +218,33 @@ UNDER_THE_STAGE_BAR = """(el) => {
     const under = b && b.bottom > shown.top + 1 && b.top < shown.bottom ? b.bottom : shown.top;
     slot.scrollTop += el.getBoundingClientRect().top - under - 6;
 }"""
+
+
+# Whether Site is folded to its title.
+SITE_FOLDED = """(folded) => document.querySelector(".panel[data-panel='site']")
+    .classList.contains('collapsed') === folded"""
+
+# The part's editor from its stage bar down: the bar at the top of Selected.
+STAGE_BAR_AT_THE_TOP = (
+    "() => document.getElementById('stage-bar').scrollIntoView({ block: 'start' })"
+)
+
+# A marked line of the SCAD editor made the first its code shows.
+MARKED_LINE_FIRST = """(line) => {
+    const code = line.closest('.cm-scroller');
+    code.scrollTop += line.getBoundingClientRect().top - code.getBoundingClientRect().top - 4;
+}"""
+
+
+@contextmanager
+def site_folded(page: Page):
+    """Site folded to its title by its ▾ while a picture is taken, as a person folds it
+    to give Selected the rail; unfolded again after, so its rows are there to press."""
+    fold = page.locator(".panel[data-panel='site'] .panel-collapse")
+    fold.click()
+    page.wait_for_function(SITE_FOLDED, arg=True)
+    try:
+        yield
+    finally:
+        fold.click()
+        page.wait_for_function(SITE_FOLDED, arg=False)

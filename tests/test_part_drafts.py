@@ -215,7 +215,7 @@ class TestTheRender:
         assert made.success and made.rendered and made.key
         assert made.draft == draft_digest(draft) and not made.saved
         stl, record = variant_paths(part, made.key)
-        assert stl_names(stl.read_bytes()).endswith(draft_digest(draft))
+        assert stl_names(stl.read_bytes()).startswith(draft_digest(draft))
         assert read_variant_draft(part, made.key) == draft
         # The part's own SCAD and STL are untouched; nothing is left beside it.
         assert part.source_file.read_text() == SCAD
@@ -325,7 +325,7 @@ class TestTheRenderRoute:
         assert body["draft"] == draft_digest(draft) and body["saved"] is False
         assert body["params"] == {"width": 50.0}  # hollow is what the draft assigns
         assert body["stl_url"] == f"/parts/block/variants/{body['variant']}/stl"
-        assert stl_names(client.get(body["stl_url"]).content).endswith(draft_digest(draft))
+        assert stl_names(client.get(body["stl_url"]).content).startswith(draft_digest(draft))
         record = client.get(f"/parts/block/variants/{body['variant']}").json()
         assert record["draft"] == body["draft"] and record["saved"] is False
         assert client.get(record["scad_url"]).text == draft

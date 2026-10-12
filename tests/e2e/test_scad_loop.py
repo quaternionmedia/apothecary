@@ -30,8 +30,16 @@ import re
 import subprocess
 
 import pytest
+from doc_capture import all_words
 from playwright.sync_api import Page, expect
-from viewer_ready import UNDER_THE_STAGE_BAR, by_hand, settled
+from viewer_ready import (
+    MARKED_LINE_FIRST,
+    STAGE_BAR_AT_THE_TOP,
+    UNDER_THE_STAGE_BAR,
+    by_hand,
+    settled,
+    site_folded,
+)
 
 from apothecary.projects.parts.calibration_cube import DEFAULT as CUBE
 from apothecary.projects.parts.skeleton import ROOT
@@ -41,7 +49,8 @@ PART = "calibration_cube"
 RING_MS = 15000
 WIDTHS = ((1280, 800), (1024, 768))
 # What differs on every run whatever the page does: when a variant was saved.
-BLANK = (".saved-when",)
+# When each variant was saved, a grey of one width whatever the time.
+BLANK = all_words(".saved-when")
 
 REFUSED = 'assert(size < 5, "too big to keep");'
 SMALL_TOP = "translate([0, 0, size]) cube(size / 2);"
@@ -353,13 +362,15 @@ def test_editing_a_parts_scad_twice_round(
     expect(page.locator("#scad-name")).to_have_attribute("placeholder", "variant-1")
     own = _text(page)
     assert own == CUBE.source_file.read_text()
-    page.locator(".scad-editor .scad-bar").scroll_into_view_if_needed()
-    story.shows(
-        "Part › Edit opens the SCAD where its source stood",
-        f"{PART}'s ring, Part › Edit: its parameters in Selected and, below them and the "
-        "short list of its saved variants (none yet), its SCAD in an editor. Typing in it "
-        "is the next step.",
-    )
+    with site_folded(page):
+        page.evaluate(STAGE_BAR_AT_THE_TOP)
+        story.shows(
+            "Part › Edit opens the SCAD where its source stood",
+            f"{PART}'s ring, Part › Edit: its parameters in Selected and, below them and "
+            "the short list of its saved variants (none yet), its SCAD in an editor -- "
+            "Site folded to its title by its ▾ here, so Selected has the rail. Typing in "
+            "it is the next step.",
+        )
 
     # Round one: a line OpenSCAD refuses, checked once typing stops, marked, not rendered.
     asked, stop = _counting(page)
@@ -383,24 +394,19 @@ def test_editing_a_parts_scad_twice_round(
     # The error listed in the stage bar, which stays at the top of Selected; what the
     # editor says of it just under the bar; and the code below that, scrolled so the
     # marked line is its first.
-    site_fold = page.locator(".panel[data-panel='site'] .panel-collapse")
-    site_fold.click()
-    page.locator("#stage-bar").evaluate("(el) => el.scrollIntoView({ block: 'start' })")
-    marked.evaluate(
-        "(line) => { const code = line.closest('.cm-scroller');"
-        " code.scrollTop += line.getBoundingClientRect().top - code.getBoundingClientRect().top - 4; }"
-    )
-    story.shows(
-        "A failing line is checked once typing stops, and marked where it is",
-        f"An assertion typed at the end that this part fails. One check, once typing "
-        f"stops: OpenSCAD evaluates the edited SCAD beside the part and renders nothing, "
-        f"and its error is marked on line {refused_line}, listed under the stage bar and "
-        "said above the code -- Site folded to its title by its ▾ here, so Selected has "
-        "the rail. Nothing is rendered while it does not read; changing the line is the "
-        "next step.",
-        blank=BLANK,
-    )
-    site_fold.click()
+    with site_folded(page):
+        page.evaluate(STAGE_BAR_AT_THE_TOP)
+        marked.evaluate(MARKED_LINE_FIRST)
+        story.shows(
+            "A failing line is checked once typing stops, and marked where it is",
+            f"An assertion typed at the end that this part fails. One check, once typing "
+            f"stops: OpenSCAD evaluates the edited SCAD beside the part and renders nothing, "
+            f"and its error is marked on line {refused_line}, listed under the stage bar and "
+            "said above the code -- Site folded to its title by its ▾ here, so Selected has "
+            "the rail. Nothing is rendered while it does not read; changing the line is the "
+            "next step.",
+            blank=BLANK,
+        )
 
     # A change that reads: rendered soon after its check, drawn as an applied variant.
     asked["check"] = asked["render"] = 0
