@@ -184,3 +184,7 @@ Asked of the owner on 2026-10-12, after the server's half was built:
 - **A part whose SCAD is generated** (the snowplow, a made piece) stays one
   way: its controls drive its model, and the generated text follows each
   check, read only.
+- **Every variant action has a cell.** Part › Variants › a variant's name
+  opens a ring of what can be done to it -- draw, rename, duplicate,
+  history, compare, delete -- and Part › Variants › Deleted holds the trash;
+  choosing a variant moves one level deeper than it was.
