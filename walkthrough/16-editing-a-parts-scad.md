@@ -38,12 +38,12 @@ calibration_cube regenerated from its edited SCAD: an applied variant, not saved
 
 ## 4. Part › Save keeps it as a variant in git
 
-calibration_cube's ring, Part › Save: the edited SCAD and the numbers staged, committed to refs/apothecary/variants/calibration_cube/variant-1, the name the editor offered. Nothing in the checkout changes; merging is yours to do. It is listed under the part's parameters and, in the editor, with what it changes against the part's SCAD and that HEAD does not hold it. Floating the editor is the next step.
+calibration_cube's ring, Part › Save: the edited SCAD, its values in it, committed to refs/apothecary/variants/calibration_cube/variant-1, the name the editor offered. Nothing in the checkout changes; a merge would bring it, its values with it, and merging is yours to do. It is listed under the part's parameters and, in the editor, with what it changes against the part's SCAD and that HEAD does not hold it. Floating the editor is the next step.
 
 ![Part › Save keeps it as a variant in git](screenshots/16-04-part-save-keeps-it-as-a-variant-in-git.png)
 
 ```
-calibration_cube saved as the variant variant-1, a commit on refs/apothecary/variants/calibration_cube/variant-1; nothing in the checkout changed. The ref is in /tmp/piP/w2/server2/variants.git, not this checkout: `git fetch /tmp/piP/w2/server2/variants.git refs/apothecary/variants/calibration_cube/variant-1:refs/apothecary/variants/calibration_cube/variant-1` there brings it, then `git merge refs/apothecary/variants/calibration_cube/variant-1` makes the variant's SCAD the part's. It does not apply the variant's parameters: they come along in calibration_cube.variant.json, which nothing reads, so the part is drawn with its own defaults until they are set. (⌗39)
+calibration_cube saved as the variant variant-1, a commit on refs/apothecary/variants/calibration_cube/variant-1; nothing in the checkout changed. The ref is in /tmp/piP/w3/server2/variants.git, not this checkout: `git fetch /tmp/piP/w3/server2/variants.git refs/apothecary/variants/calibration_cube/variant-1:refs/apothecary/variants/calibration_cube/variant-1` there brings it, then `git merge refs/apothecary/variants/calibration_cube/variant-1` makes the variant's SCAD the part's, its values with it: they are its assignments, so the part is drawn with them. (⌗39)
 ```
 
 ## 5. Part › View › Float puts the editor over the world
@@ -65,12 +65,12 @@ In the floated editor: a name typed, taller, and the top made as big as the cube
 ![Round two: a name, a change and Save](screenshots/16-07-round-two-a-name-a-change-and-save.png)
 
 ```
-calibration_cube saved as the variant taller, a commit on refs/apothecary/variants/calibration_cube/taller; nothing in the checkout changed. The ref is in /tmp/piP/w2/server2/variants.git, not this checkout: `git fetch /tmp/piP/w2/server2/variants.git refs/apothecary/variants/calibration_cube/taller:refs/apothecary/variants/calibration_cube/taller` there brings it, then `git merge refs/apothecary/variants/calibration_cube/taller` makes the variant's SCAD the part's. It does not apply the variant's parameters: they come along in calibration_cube.variant.json, which nothing reads, so the part is drawn with its own defaults until they are set.
+calibration_cube saved as the variant taller, a commit on refs/apothecary/variants/calibration_cube/taller; nothing in the checkout changed. The ref is in /tmp/piP/w3/server2/variants.git, not this checkout: `git fetch /tmp/piP/w3/server2/variants.git refs/apothecary/variants/calibration_cube/taller:refs/apothecary/variants/calibration_cube/taller` there brings it, then `git merge refs/apothecary/variants/calibration_cube/taller` makes the variant's SCAD the part's, its values with it: they are its assignments, so the part is drawn with them.
 ```
 
 ## 8. Part › Variants draws the first again, and Part › View › Float docks it
 
-calibration_cube's ring, Part › Variants › variant-1: its SCAD back in the editor, its numbers staged and drawn, 15 mm tall again, the name it saves under its own. Part › View › Float again puts the editor back in Selected.
+calibration_cube's ring, Part › Variants › variant-1 › Draw: its SCAD back in the editor, its values in it and the controls on them, drawn, 15 mm tall again, the name it saves under its own. Part › View › Float again puts the editor back in Selected.
 
 ![Part › Variants draws the first again, and Part › View › Float docks it](screenshots/16-08-part-variants-draws-the-first-again-and-part-view-.png)
 

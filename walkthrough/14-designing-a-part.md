@@ -6,7 +6,7 @@ rewritten by every run of the browser suite (`uv run apothecary test
 all`), though not by the quicker `apothecary test run`. Editing it
 by hand is editing the output of a program: the next run puts it back.
 
-A part chosen from its ring, a size moved and checked, its box beside the slider in step, Apply drawing it in this tab where it stands, with what it measures beside what it declares, a reload drawing it again, OpenSCAD's refusal shown by line, put back, undone and redone, the saved part again for nothing; then round again, the size typed, an earlier apply drawn again from the cache, numbers staged kept over a reload, and two tabs applying at once. Every step is the page's own: a cell of a ring, a slider, a box, a key or a button, and every step's words name the next one.
+A part chosen from its ring, a size moved and checked, its box beside the slider in step, Apply drawing it in this tab where it stands, with what it measures beside what it declares, a reload drawing it again, OpenSCAD's refusal shown by line, put back, undone and redone, the saved part again for nothing; then round again, the size typed, an earlier apply drawn again from the cache, a size staged kept over a reload, and two tabs applying at once. The parameters and the part's SCAD are one draft: a control rewrites its line, and Apply renders the text. Every step is the page's own: a cell of a ring, a slider, a box, a key or a button, and every step's words name the next one.
 
 **Runtime-bound.** It drives a real browser against a real server of its own, whose OpenSCAD is the one every test server runs, wrapped by the test so that it refuses a cube of 60 mm or more, as an assertion at the SCAD's size line would, so that the error met is OpenSCAD's own shape. Its cache of variants is a temporary folder. It needs no network, and refuses one.
 
@@ -26,17 +26,18 @@ envelope 10.00 × 10.00 × 10.00 mm · measured 10.00 × 10.00 × 10.00 mm (read
 
 ## 2. A size dragged is checked once the slider rests
 
-The size slider dragged through 5 values without a pause: one check, once it rests, against the part's own model, and the envelope the staged set would produce. Nothing is rendered yet; Apply is the next step.
+The size slider dragged through 5 values without a pause: its line in the part's SCAD, in the editor below, rewritten as it moved, its comment kept -- the text and the controls are one draft. One check, once it rests, against the part's own model, and the envelope it would produce. Nothing is rendered yet; Apply is the next step.
 
 ![A size dragged is checked once the slider rests](screenshots/14-02-a-size-dragged-is-checked-once-the-slider-rests.png)
 
 ```
 1 change staged, valid → 30.00 × 30.00 × 30.00 mm
+size = 30;              // [10:1:50] Cube size in mm
 ```
 
 ## 3. Apply draws the variant, marked as not saved
 
-Apply: rendered into the cache of variants and drawn in this tab at the size staged, grown from where the part stood on the floor rather than centred on the envelope it had, and measured beside the envelope the part declares, Selected's Footprint following it. The editor's amber edge and its words, and an amber dot over the part in the world, say it is an applied variant and not the saved part; the status line says so too.
+Apply: the text rendered, its size in it and nothing passed beside it, into the cache of variants, and drawn in this tab at that size, grown from where the part stood on the floor rather than centred on the envelope it had, and measured beside the envelope the part declares, Selected's Footprint following it. The editor's amber edge and its words, and an amber dot over the part in the world, say it is an applied variant and not the saved part; the status line says so too.
 
 ![Apply draws the variant, marked as not saved](screenshots/14-03-apply-draws-the-variant-marked-as-not-saved.png)
 
@@ -73,17 +74,17 @@ calibration_cube's ring, Part › Revert: the refused size is put back to what i
 calibration_cube: what was staged is put back to what is drawn; nothing is staged (⌗34)
 ```
 
-## 8. Ctrl+Z and Redo step the staged numbers back and forward
+## 8. Ctrl+Z and Redo step the draft back and forward
 
-Ctrl+Z, the slider holding the focus: the Revert undone, 70 mm staged again, its box saying so. The editor's Redo, under Apply: the Revert again, and nothing staged. Part › History holds the same two.
+Ctrl+Z, the slider holding the focus: the Revert undone, 70 mm staged again, its box and its line saying so -- the SCAD editor's own history, the text and the controls going back together. The editor's Redo, under Apply: the Revert again, and nothing staged. Part › History holds the same two.
 
 ```
-calibration_cube: the staged numbers one step forward again, nothing staged against what is drawn
+calibration_cube: its draft one step forward again, nothing staged against what is drawn
 ```
 
 ## 9. Part › Defaults, then Part › Apply: the saved part again, for nothing
 
-calibration_cube's ring, Part › Defaults: the part's own numbers staged in its editor, and the status line names Apply. Part › Apply renders nothing, since the cache already holds the saved part, and draws it: the amber marks are gone, and the address names no variant.
+calibration_cube's ring, Part › Defaults: the part's own SCAD back in its editor -- its defaults are its SCAD as saved -- its numbers with it, and the status line names Apply. Part › Apply renders nothing, since the cache already holds the saved part, and draws it: the amber marks are gone, and the address names no variant.
 
 ![Part › Defaults, then Part › Apply: the saved part again, for nothing](screenshots/14-09-part-defaults-then-part-apply-the-saved-part-again.png)
 
@@ -101,7 +102,7 @@ calibration_cube from the cache, nothing rendered: drawn as saved
 
 ## 11. Recent applies draws an earlier one again, from the cache
 
-Recent applies, under the parameters, lists this tab's applies of calibration_cube, newest first. The first round's, 30.00 mm, clicked: drawn again from the cache of variants, nothing rendered, its numbers what is drawn; f frames it.
+Recent applies, under the parameters, lists this tab's applies of calibration_cube, newest first. The first round's, 30.00 mm, clicked: drawn again from the cache of variants, nothing rendered, its text and its numbers what is drawn; f frames it.
 
 ![Recent applies draws an earlier one again, from the cache](screenshots/14-11-recent-applies-draws-an-earlier-one-again-from-the.png)
 
@@ -110,12 +111,12 @@ calibration_cube: drawn again from the cache, the variant applied then; nothing 
 envelope 30.00 × 30.00 × 30.00 mm · measured 30.00 × 30.00 × 30.00 mm (read from the STL)
 ```
 
-## 12. Numbers staged and not applied are kept over a reload
+## 12. A size staged and not applied is kept over a reload
 
-A size of 20 mm staged and not applied, and the page reloaded: the browser asks before leaving, the status line names the part with work kept, and Part › Edit offers it back. Restore stages it again; Discard would let it go.
+A size of 20 mm staged and not applied, and the page reloaded: the browser asks before leaving, the status line names the part with work kept -- its SCAD as edited, the size in it -- and Part › Edit offers it back. Restore stages it again, its line and its control both; Discard would let it go.
 
 ```
-Kept in this tab from before it was reloaded: size 20 staged. Restore puts it back; Discard lets it go.
+Kept in this tab from before it was reloaded: its SCAD edited, size 20. Restore puts it back; Discard lets it go.
 ```
 
 ## 13. Two tabs apply at once, and each draws its own
