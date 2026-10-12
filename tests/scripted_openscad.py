@@ -146,7 +146,7 @@ def shown(value):
         return '"' + value + '"'
     if isinstance(value, list):
         return "[" + ", ".join(shown(v) for v in value) + "]"
-    return repr(value)
+    return format(value, ".6g") if isinstance(value, float) else repr(value)
 
 def evaluated(name):
     # A top-level assignment's value: its expression, with the numbers assigned

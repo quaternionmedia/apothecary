@@ -463,14 +463,14 @@ def get_part_scad(
     if variant is not None:
         return _variant_scad(name, part, variant)
     if editable(part) and not params:
-        from .projects.parts.texts import is_overlaid, own_text
+        from .projects.parts.texts import is_overlaid, own_text, upstream_path
 
         if is_overlaid(part):
             return PlainTextResponse(
                 own_text(part),
                 headers={
                     "X-Part-Scad": "overlay",
-                    "X-Part-Upstream": _repo_relative_path(part.source_file),
+                    "X-Part-Upstream": upstream_path(part),
                 },
             )
     if not editable(part):

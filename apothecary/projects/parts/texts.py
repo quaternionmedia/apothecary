@@ -66,6 +66,13 @@ def _overlay_of(source: str) -> Optional[Tuple[Path, str]]:
     return where.checkout / where.scad, str(where.upstream)
 
 
+def upstream_path(part: BasePart) -> Optional[str]:
+    """A part in a submodule: its upstream SCAD, from the top of the checkout
+    that holds the submodule; None for any other part."""
+    found = _overlay_of(str(Path(part.source_file).resolve()))
+    return found[1] if found else None
+
+
 def overlay_path(part: BasePart) -> Optional[Path]:
     """Where a part in a submodule is edited and saved as its overlay; None for
     any other part."""

@@ -22,6 +22,10 @@ kept between requests but what the variant cache and git keep.
   rendered from, for a tab reloaded on it (``?download=true``: as a file).
 - ``POST /parts/{name}/draft/scad`` ``{scad}``: the draft handed back as a file
   to save, named as the part's SCAD: Download of the edit.
+- ``GET /parts/{name}/assignments``, ``POST /parts/{name}/assignments``
+  ``{scad}``: a text's top-level assignments with their spans, read without
+  OpenSCAD (the page's first load); the check answers them too, computed
+  values evaluated.
 - ``GET /parts/{name}/saved``, ``POST /parts/{name}/saved`` ``{name, scad?,
   params}``, ``GET /parts/{name}/saved/{variant}``: a part's variants saved in
   git (apothecary/projects/parts/saved.py), listed from the part's refs, saved
@@ -111,6 +115,7 @@ from ..projects.parts.texts import (
     check_values,
     is_overlaid,
     own_text,
+    upstream_path,
     with_params,
 )
 from ..projects.parts.variants import (
@@ -498,6 +503,69 @@ def get_variant_draft(
     if download:
         headers["Content-Disposition"] = f'attachment; filename="{part.source_file.name}"'
     return PlainTextResponse(text, headers=headers)
+
+
+class TextRequest(BaseModel):
+    """A part's text as the page holds it."""
+
+    scad: str = Field(..., max_length=DRAFT_LIMIT, description="The whole text, as edited")
+
+
+class AssignmentsAnswer(BaseModel):
+    """A text's top-level assignments, read without OpenSCAD."""
+
+    part: str
+    kind: str = Field(description='"source": the part\'s SCAD; "overlay": a part in a submodule')
+    draft: str = Field(description="The sha256 of the text read")
+    upstream: Optional[str] = Field(
+        None, description="An overlay's upstream SCAD (GET /parts/{name}/upstream serves it)"
+    )
+    assignments: List[Assignment] = Field(default_factory=list)
+
+
+def _assignments_answer(part: BasePart, text: str) -> AssignmentsAnswer:
+    """``text``'s assignments, computed values filled in where a check of the
+    same text remembers them; no OpenSCAD runs."""
+    from ..projects.parts.customizer import known_compile
+    from ..projects.parts.texts import edit_file
+
+    renderer = part_renderer(part)
+    known = known_compile(edit_file(part), text, {}, renderer) if renderer.is_available else None
+    overlaid = is_overlaid(part)
+    return AssignmentsAnswer(
+        part=part.name,
+        kind="overlay" if overlaid else "source",
+        draft=draft_digest(text),
+        upstream=upstream_path(part) if overlaid else None,
+        assignments=_filled(assignments_of(part, text), known),
+    )
+
+
+@router.get("/parts/{name}/assignments", response_model=AssignmentsAnswer)
+def part_assignments(name: str):
+    """The top-level assignments of the part's own text -- its SCAD as saved, or
+    for a part in a submodule its overlay -- for a page's first load: each
+    with its value (a literal's; a computed one's where a check of this text
+    remembers it, ``value_known``), its line and its value's span, its comment
+    and what the comment tells (range, step, options, unit), its caption and
+    group, and whether it is a ``parameter`` (what gets a control). Read in
+    Python, no OpenSCAD run: light. The grammar is
+    apothecary/projects/parts/assignments.py's. A part built by Python
+    geometry is a 403: its controls drive its model, its text follows."""
+    part = _editable(name)
+    return _assignments_answer(part, own_text(part))
+
+
+@router.post("/parts/{name}/assignments", response_model=AssignmentsAnswer)
+def text_assignments(name: str, body: TextRequest):
+    """The same, of the text the page holds: no OpenSCAD run. For a part in a
+    submodule a text that is no overlay is a 403 (an edit of its upstream)."""
+    part = _editable(name)
+    try:
+        text = as_edited(part, body.scad)
+    except UpstreamEdit as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from None
+    return _assignments_answer(part, text)
 
 
 @router.post("/parts/{name}/draft/scad", response_class=PlainTextResponse)
