@@ -28,6 +28,17 @@ kept between requests but what the variant cache and git keep.
   as a commit to ``refs/apothecary/variants/<part>/<name>`` by git's plumbing,
   and read back with their SCAD. No route here merges one or writes the
   working tree: making a variant the part's source is a merge the person does.
+- Managing them, by git's plumbing alone: ``POST .../saved/{variant}/rename``
+  and ``/duplicate`` ``{to}``; ``GET .../saved/{variant}/history`` and ``POST
+  .../saved/{variant}/restore`` ``{commit}``; ``DELETE .../saved/{variant}``,
+  which moves it to the trash (``refs/apothecary/trash/<part>/<name>``), ``GET
+  /parts/{name}/trash``, ``POST .../trash/{variant}/restore`` ``{to?}``, and
+  emptying it, a separate route that asks ``confirm=true``: ``DELETE
+  /parts/{name}/trash`` (all) or ``DELETE /parts/{name}/trash/{variant}``.
+- ``GET /parts/{name}/compare?a=&b=``: two variants side by side -- saved ones
+  by name, ``@part`` for the part's own SCAD at its defaults, ``@<key>`` for a
+  cached render -- their SCAD's diff, the parameters that differ, and each
+  one's measured bounds (rendered, through the queue, where not cached).
 
 A part whose geometry is Python (the snowplow) is read-only: its SCAD is the
 one its geometry generates (``GET /parts/{name}/scad``), and a draft or a save
@@ -71,16 +82,27 @@ from ..projects.parts.params import (
 )
 from ..projects.parts.saved import (
     KEEP_DEFAULT,
+    KIND_OVERLAY,
     GitError,
     Moved,
     NoSuchVariant,
     NotInGit,
     SavedVariant,
+    Taken,
     UpstreamEdit,
+    VariantCommit,
     check_name,
+    delete_variant,
+    duplicate_variant,
+    empty_trash,
     list_saved,
+    list_trash,
     read_saved,
+    rename_variant,
+    restore_from_trash,
+    restore_variant,
     save_variant,
+    variant_history,
 )
 from ..projects.parts.stl_renderer import SUPERSEDED, get_renderer, part_renderer, runs_for
 from ..projects.parts.variants import (
@@ -513,6 +535,268 @@ def save_part_variant(name: str, body: SaveRequest):
         raise HTTPException(status_code=500, detail=str(exc)) from None
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
+
+
+# --- managing saved variants ------------------------------------------------------------
+
+
+def _managed(call):
+    """``call()``, git's and the plumbing's refusals as answers: no such variant
+    (or outside git) 404, a bad name 422, a name taken or a ref moved 409,
+    anything else git said 500 in its words."""
+    try:
+        return call()
+    except (NoSuchVariant, NotInGit) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    except (Taken, Moved) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+    except GitError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+
+class NameRequest(BaseModel):
+    """The name a variant goes by after a rename, or its copy's."""
+
+    to: str = Field(..., max_length=64, description="The new name, e.g. wider-2")
+
+
+class RestoreRequest(BaseModel):
+    """One of a variant's own commits, by its hash (a prefix of seven or more)."""
+
+    commit: str = Field(..., pattern=r"^[0-9a-f]{7,64}$")
+
+
+class TrashRestoreRequest(BaseModel):
+    """Where a deleted variant goes back to: its own name, or ``to``."""
+
+    to: Optional[str] = Field(None, max_length=64)
+
+
+@router.post("/parts/{name}/saved/{variant}/rename", response_model=SavedVariant)
+def rename_saved_variant(name: str, variant: str, body: NameRequest):
+    """The variant called ``to``: its ref moved in one transaction, its commits
+    as they are. 409 when a variant is called that already (nothing is
+    overwritten), 404 when there is no ``variant``, 422 for a bad name."""
+    part = _editable(name)
+    return _managed(lambda: rename_variant(part, check_name(variant), check_name(body.to)))
+
+
+@router.post(
+    "/parts/{name}/saved/{variant}/duplicate", response_model=SavedVariant, status_code=201
+)
+def duplicate_saved_variant(name: str, variant: str, body: NameRequest):
+    """A copy of the variant called ``to``: a ref of its own on the same commit,
+    sharing its history until it is saved again. 409 when ``to`` is taken."""
+    part = _editable(name)
+    return _managed(lambda: duplicate_variant(part, check_name(variant), check_name(body.to)))
+
+
+@router.get("/parts/{name}/saved/{variant}/history", response_model=List[VariantCommit])
+def saved_variant_history(name: str, variant: str):
+    """The variant's own commits, newest first, back to its first save: each one's
+    author, date, subject and parameters, and which it is now (``current``)."""
+    part = _api()._load_part_wrapper(name)
+    return _managed(lambda: variant_history(part, check_name(variant)))
+
+
+@router.post("/parts/{name}/saved/{variant}/restore", response_model=SavedVariant)
+def restore_saved_variant(name: str, variant: str, body: RestoreRequest):
+    """The variant as it was at ``commit``, one of its own (404 otherwise): a new
+    commit on its ref with that commit's SCAD and parameters, so its history
+    keeps what came between. Restoring what it holds makes no commit."""
+    part = _editable(name)
+    return _managed(lambda: restore_variant(part, check_name(variant), body.commit))
+
+
+@router.delete("/parts/{name}/saved/{variant}", response_model=SavedVariant)
+def delete_saved_variant(name: str, variant: str):
+    """The variant moved to the trash, ``refs/apothecary/trash/<part>/<name>``,
+    and answered as it is there (``deleted``): restorable, gone only when the
+    trash is emptied. 409 while a deleted variant of that name is in the trash
+    already: restore it or empty the trash first, as nothing in it is
+    overwritten."""
+    part = _editable(name)
+    return _managed(lambda: delete_variant(part, check_name(variant)))
+
+
+@router.get("/parts/{name}/trash", response_model=List[SavedVariant])
+def list_deleted_variants(name: str):
+    """The part's deleted variants, as the variants are listed (``deleted``)."""
+    part = _api()._load_part_wrapper(name)
+    try:
+        return list_trash(part)
+    except NotInGit:
+        return []
+    except GitError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from None
+
+
+@router.post("/parts/{name}/trash/{variant}/restore", response_model=SavedVariant)
+def restore_deleted_variant(name: str, variant: str, body: Optional[TrashRestoreRequest] = None):
+    """A deleted variant back among the part's variants, under its own name or
+    ``to``. 409 when a variant is called that: restore it under another."""
+    part = _editable(name)
+    to = body.to if body is not None and body.to else None
+    return _managed(
+        lambda: restore_from_trash(part, check_name(variant), check_name(to) if to else None)
+    )
+
+
+CONFIRM = Query(
+    False, description="Emptying the trash deletes for good: it is done only when this is true"
+)
+
+
+def _confirmed(confirm: bool) -> None:
+    if not confirm:
+        raise HTTPException(
+            status_code=422,
+            detail="Emptying the trash deletes its variants for good: ask again with confirm=true",
+        )
+
+
+@router.delete("/parts/{name}/trash")
+def empty_the_trash(name: str, confirm: bool = CONFIRM):
+    """Every deleted variant of the part deleted for good, its refs gone:
+    ``{"emptied": [names]}``. Only with ``confirm=true`` (422 without)."""
+    part = _editable(name)
+    _confirmed(confirm)
+    return {"emptied": _managed(lambda: empty_trash(part))}
+
+
+@router.delete("/parts/{name}/trash/{variant}")
+def empty_one_from_the_trash(name: str, variant: str, confirm: bool = CONFIRM):
+    """One deleted variant deleted for good: ``{"emptied": [name]}``. Only with
+    ``confirm=true``; 404 when it is not in the trash."""
+    part = _editable(name)
+    _confirmed(confirm)
+    return {"emptied": _managed(lambda: empty_trash(part, check_name(variant)))}
+
+
+# --- comparing two -----------------------------------------------------------------------
+
+
+class Side(BaseModel):
+    """One side of a comparison: what it is, its SCAD and parameters, and the
+    bounds its render measured."""
+
+    name: str = Field(description="As asked: a saved variant's name, @part, or @<key>")
+    kind: str = Field(description='"saved", "part" or "cached"')
+    commit: Optional[str] = None
+    scad_path: Optional[str] = None
+    params: Dict[str, Any] = Field(default_factory=dict)
+    variant: Optional[str] = Field(None, description="Its render's key in the variant cache")
+    stl_url: Optional[str] = None
+    measured: Optional[Dict[str, Any]] = None
+    measured_from: Optional[str] = None
+    error: Optional[str] = Field(None, description="Why it has no measured bounds")
+
+
+class ParamDifference(BaseModel):
+    name: str
+    a: Any = Field(None, description="Its value on side a; null: not set, the default")
+    b: Any = None
+
+
+class Comparison(BaseModel):
+    part: str
+    a: Side
+    b: Side
+    diff: str = Field(description="A unified diff of a's SCAD to b's (empty: the same)")
+    params: List[ParamDifference] = Field(default_factory=list)
+
+
+def _side(part: BasePart, name: str, page: Optional[str], measure: bool):
+    """A side as asked for, and its SCAD's text: (Side, text, draft or None)."""
+    from ..projects.parts.variants import KEY_PATTERN, read_variant
+
+    own = part.source_file.read_text(encoding="utf-8")
+    if name == "@part":
+        side, text, draft, params = Side(name=name, kind="part"), own, None, {}
+    elif name.startswith("@"):
+        key = name[1:]
+        record = read_variant(part, key) if KEY_PATTERN.match(key) else None
+        if record is None:
+            raise HTTPException(status_code=404, detail=f"No variant '{key}' is cached")
+        draft = read_variant_draft(part, key)
+        params = dict(record.get("params") or {})
+        side = Side(name=name, kind="cached", params=params, variant=key)
+        text = draft if draft is not None else own
+    else:
+        saved = _managed(lambda: read_saved(part, check_name(name)))
+        params = dict(saved.params)
+        side = Side(
+            name=name,
+            kind="saved",
+            commit=saved.commit,
+            scad_path=saved.scad_path,
+            params=params,
+        )
+        text = saved.scad or ""
+        # An overlay is the part's own SCAD with its values: that is what renders.
+        draft = None if saved.kind == KIND_OVERLAY or text == own else text
+    if measure:
+        _measure(part, side, params, draft, page)
+    return side, text
+
+
+def _measure(part: BasePart, side: Side, params, draft: Optional[str], page) -> None:
+    api = _api()
+    try:
+        with runs_for(part.name, page):
+            overrides = part.validate_overrides(params, scad_text=draft)
+            # Only to measure: nothing is written beside the part.
+            made = make_variant(part, without_defaults(part, overrides), draft=draft, place=False)
+    except ValueError as exc:
+        side.error = str(exc)
+        return
+    if not made.success:
+        side.error = made.error_message
+        return
+    side.variant = made.key or side.variant
+    side.stl_url = (
+        f"/parts/{part.name}/variants/{made.key}/stl" if made.key else f"/parts/{part.name}/stl"
+    )
+    side.measured = jsonable_encoder(api.measured_box(made.measured))
+    side.measured_from = made.measured_from
+
+
+@router.get("/parts/{name}/compare", response_model=Comparison)
+def compare_variants(
+    name: str,
+    a: str = Query(..., max_length=80, description="A saved variant's name, @part, or @<key>"),
+    b: str = Query(..., max_length=80, description="The same, for the other side"),
+    measure: bool = Query(True, description="Render each where it is not cached, to measure it"),
+    page: Optional[str] = PAGE,
+):
+    """Two variants side by side: a unified diff of a's SCAD to b's (for a part
+    in a submodule, their overlays), every parameter whose value differs (null:
+    not set on that side, so the default), and each one's measured bounds --
+    from the variant cache, rendered (through the queue) where it is not there,
+    with its ``stl_url`` to draw. A side that does not render says why
+    (``error``). 404 for a side that is no variant."""
+    part = _api()._load_part_wrapper(name)
+    side_a, text_a = _side(part, a, page, measure)
+    side_b, text_b = _side(part, b, page, measure)
+    import difflib
+
+    diff = "".join(
+        difflib.unified_diff(
+            text_a.splitlines(keepends=True),
+            text_b.splitlines(keepends=True),
+            fromfile=f"a/{a}",
+            tofile=f"b/{b}",
+        )
+    )
+    names = sorted(set(side_a.params) | set(side_b.params))
+    differ = [
+        ParamDifference(name=n, a=side_a.params.get(n), b=side_b.params.get(n))
+        for n in names
+        if side_a.params.get(n) != side_b.params.get(n)
+    ]
+    return Comparison(part=part.name, a=side_a, b=side_b, diff=diff, params=differ)
 
 
 __all__ = ["router"]

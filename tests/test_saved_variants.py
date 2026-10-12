@@ -132,7 +132,13 @@ class TestASave:
         assert variant.parent == head == git(checkout, "rev-parse", f"{ref}^").strip()
         assert git(checkout, "show", f"{ref}:parts/block/block.scad") == EDITED
         record = json.loads(git(checkout, "show", f"{ref}:parts/block/block.variant.json"))
-        assert record == {"part": "block", "variant": "wider", "params": {"width": 50.0}}
+        # And the commit it was first saved on, which its history runs back to.
+        assert record == {
+            "part": "block",
+            "variant": "wider",
+            "params": {"width": 50.0},
+            "base": head,
+        }
         # The rest of the tree is HEAD's: the edit and its parameters are all it adds.
         changed = git(checkout, "diff", "--name-only", head, ref).split()
         assert changed == ["parts/block/block.scad", "parts/block/block.variant.json"]
@@ -577,3 +583,222 @@ def test_a_real_snapshot_renders_the_overlay_as_it_renders_the_values(
     as_values = renderer.render_stl(thing.source_file, tmp_path / "d.stl", params={"size": 23})
     assert as_overlay.success and as_values.success, as_overlay.stderr
     assert as_overlay.measured["size"] == as_values.measured["size"] == [23.0, 23.0, 23.0]
+
+
+# --- managing them: rename, duplicate, history, restore, the trash -------------------------
+#
+# Each by git's plumbing alone: the working tree, the index, HEAD, the branches,
+# the tags and the stash as they were (``_as_it_stands``), whatever it does to
+# the variant's refs.
+
+
+def _refs(repo: Path) -> dict:
+    out = git(repo, "for-each-ref", "--format=%(refname) %(objectname)", "refs/apothecary/")
+    return dict(line.split(" ") for line in out.splitlines())
+
+
+V = "refs/apothecary/variants/block"
+T = "refs/apothecary/trash/block"
+
+
+class TestRenameAndDuplicate:
+    def test_a_rename_moves_the_ref_and_nothing_else(self, checkout, block):
+        first = save_variant(block, "wider", EDITED, {"width": 50})
+        before = _as_it_stands(checkout)
+        renamed = saved.rename_variant(block, "wider", "wide")
+        assert _as_it_stands(checkout) == before
+        assert _refs(checkout) == {f"{V}/wide": first.commit}
+        assert (renamed.name, renamed.commit, renamed.params) == (
+            "wide",
+            first.commit,
+            {"width": 50},
+        )
+
+    def test_a_name_taken_is_refused_and_nothing_moves(self, checkout, block):
+        a = save_variant(block, "wider", EDITED)
+        b = save_variant(block, "thin", SCAD.replace("3]", "1]"))
+        with pytest.raises(saved.Taken, match="already"):
+            saved.rename_variant(block, "wider", "thin")
+        assert _refs(checkout) == {f"{V}/wider": a.commit, f"{V}/thin": b.commit}
+        with pytest.raises(saved.NoSuchVariant):
+            saved.rename_variant(block, "nope", "other")
+
+    def test_a_duplicate_is_a_ref_of_its_own_on_the_same_commit(self, checkout, block):
+        first = save_variant(block, "wider", EDITED, {"width": 50})
+        before = _as_it_stands(checkout)
+        copy = saved.duplicate_variant(block, "wider", "wider-2")
+        assert _as_it_stands(checkout) == before
+        assert _refs(checkout) == {f"{V}/wider": first.commit, f"{V}/wider-2": first.commit}
+        assert copy.commit == first.commit
+        # Then it goes its own way.
+        later = save_variant(block, "wider-2", EDITED + "// mine\n")
+        assert later.parent == first.commit and read_saved(block, "wider").commit == first.commit
+        with pytest.raises(saved.Taken):
+            saved.duplicate_variant(block, "wider", "wider-2")
+
+    def test_through_the_routes(self, checkout, block):
+        client = TestClient(app)
+        save_variant(block, "wider", EDITED)
+        r = client.post("/parts/block/saved/wider/rename", json={"to": "wide"})
+        assert r.status_code == 200 and r.json()["name"] == "wide"
+        r = client.post("/parts/block/saved/wide/duplicate", json={"to": "wide-2"})
+        assert r.status_code == 201 and r.json()["ref"] == f"{V}/wide-2"
+        assert (
+            client.post("/parts/block/saved/wide/rename", json={"to": "wide-2"}).status_code == 409
+        )
+        assert client.post("/parts/block/saved/nope/rename", json={"to": "x"}).status_code == 404
+        assert client.post("/parts/block/saved/wide/rename", json={"to": "a b"}).status_code == 422
+
+
+class TestHistoryAndRestore:
+    def test_a_variants_history_is_its_own_commits_back_to_its_first_save(self, checkout, block):
+        one = save_variant(block, "wider", EDITED, {"width": 50})
+        two = save_variant(block, "wider", EDITED + "// two\n", {"width": 60})
+        three = save_variant(block, "wider", EDITED + "// three\n", {"width": 70})
+        history = saved.variant_history(block, "wider")
+        assert [c.commit for c in history] == [three.commit, two.commit, one.commit]
+        assert [c.params for c in history] == [{"width": 70}, {"width": 60}, {"width": 50}]
+        assert [c.current for c in history] == [True, False, False]
+        assert history[-1].parent == git(checkout, "rev-parse", "HEAD").strip()
+
+    def test_merged_into_the_branch_another_variants_history_stays_its_own(self, checkout, block):
+        """A variant merged fast-forward is in HEAD; one saved after starts there,
+        and its history does not run on into the first's."""
+        first = save_variant(block, "wider", EDITED, {"width": 50})
+        git(checkout, "stash", "-u", "-q")
+        git(checkout, "merge", "-q", "--ff-only", first.ref)
+        later = save_variant(block, "thin", SCAD.replace("3]", "1]"))
+        assert [c.commit for c in saved.variant_history(block, "thin")] == [later.commit]
+
+    def test_a_restore_is_a_new_commit_with_the_old_ones_tree(self, checkout, block):
+        one = save_variant(block, "wider", EDITED, {"width": 50})
+        two = save_variant(block, "wider", EDITED + "// two\n", {"width": 60})
+        before = _as_it_stands(checkout)
+        back = saved.restore_variant(block, "wider", one.commit[:10])
+        assert _as_it_stands(checkout) == before
+        assert back.parent == two.commit and back.params == {"width": 50}
+        assert git(checkout, "rev-parse", f"{back.commit}^{{tree}}") == git(
+            checkout, "rev-parse", f"{one.commit}^{{tree}}"
+        )
+        assert back.subject.startswith("block's variant wider is restored to")
+        message = git(checkout, "log", "-1", "--format=%B", back.commit)
+        assert git(checkout, "interpret-trailers", "--parse", input=message).strip() == ""
+        history = saved.variant_history(block, "wider")
+        assert [c.commit for c in history] == [back.commit, two.commit, one.commit]
+        # Restoring what it holds makes no commit; a commit not its own is refused.
+        assert saved.restore_variant(block, "wider", one.commit).commit == back.commit
+        with pytest.raises(saved.NoSuchVariant):
+            saved.restore_variant(block, "wider", git(checkout, "rev-parse", "HEAD").strip())
+
+    def test_through_the_routes(self, checkout, block):
+        client = TestClient(app)
+        one = save_variant(block, "wider", EDITED, {"width": 50})
+        save_variant(block, "wider", EDITED + "// two\n", {"width": 60})
+        history = client.get("/parts/block/saved/wider/history").json()
+        assert [c["commit"] for c in history][-1] == one.commit
+        r = client.post("/parts/block/saved/wider/restore", json={"commit": one.commit})
+        assert r.status_code == 200 and r.json()["params"] == {"width": 50}
+        bad = client.post("/parts/block/saved/wider/restore", json={"commit": "0" * 40})
+        assert bad.status_code == 404
+        assert client.get("/parts/block/saved/nope/history").status_code == 404
+
+
+class TestTheTrash:
+    def test_delete_moves_the_ref_to_the_trash_and_nothing_else(self, checkout, block):
+        first = save_variant(block, "wider", EDITED, {"width": 50})
+        before = _as_it_stands(checkout)
+        gone = saved.delete_variant(block, "wider")
+        assert _as_it_stands(checkout) == before
+        assert _refs(checkout) == {f"{T}/wider": first.commit}
+        assert (gone.deleted, gone.ref, gone.params) == (True, f"{T}/wider", {"width": 50})
+        assert list_saved(block) == [] and saved_names(block) == []
+        assert [v.name for v in saved.list_trash(block)] == ["wider"]
+
+    def test_it_is_restored_under_its_name_or_another(self, checkout, block):
+        first = save_variant(block, "wider", EDITED)
+        saved.delete_variant(block, "wider")
+        save_variant(block, "wider", SCAD + "// a new one\n")
+        with pytest.raises(saved.Taken, match="another name"):
+            saved.restore_from_trash(block, "wider")
+        back = saved.restore_from_trash(block, "wider", "wider-old")
+        assert back.commit == first.commit and saved.list_trash(block) == []
+        assert set(_refs(checkout)) == {f"{V}/wider", f"{V}/wider-old"}
+
+    def test_a_name_already_in_the_trash_is_not_overwritten(self, checkout, block):
+        first = save_variant(block, "wider", EDITED)
+        saved.delete_variant(block, "wider")
+        second = save_variant(block, "wider", SCAD + "// again\n")
+        with pytest.raises(saved.Taken, match="in the trash already"):
+            saved.delete_variant(block, "wider")
+        assert _refs(checkout) == {f"{T}/wider": first.commit, f"{V}/wider": second.commit}
+
+    def test_only_emptying_the_trash_deletes_and_it_is_asked_for_by_itself(self, checkout, block):
+        save_variant(block, "wider", EDITED)
+        save_variant(block, "thin", SCAD.replace("3]", "1]"))
+        saved.delete_variant(block, "wider")
+        saved.delete_variant(block, "thin")
+        before = _as_it_stands(checkout)
+        assert saved.empty_trash(block, "thin") == ["thin"]
+        assert set(_refs(checkout)) == {f"{T}/wider"}
+        assert saved.empty_trash(block) == ["wider"] and _refs(checkout) == {}
+        assert _as_it_stands(checkout) == before
+        assert saved.empty_trash(block) == []
+
+    def test_through_the_routes(self, checkout, block):
+        client = TestClient(app)
+        save_variant(block, "wider", EDITED, {"width": 50})
+        r = client.delete("/parts/block/saved/wider")
+        assert r.status_code == 200 and r.json()["deleted"] is True
+        assert client.get("/parts/block/saved").json() == []
+        trash = client.get("/parts/block/trash").json()
+        assert [(v["name"], v["deleted"]) for v in trash] == [("wider", True)]
+        assert client.post("/parts/block/trash/wider/restore").json()["name"] == "wider"
+        client.delete("/parts/block/saved/wider")
+        # Emptying is its own step, and asks to be confirmed.
+        assert client.delete("/parts/block/trash").status_code == 422
+        assert _refs(checkout) == {f"{T}/wider": trash[0]["commit"]}
+        r = client.delete("/parts/block/trash", params={"confirm": "true"})
+        assert r.json() == {"emptied": ["wider"]} and _refs(checkout) == {}
+        assert client.delete("/parts/block/trash/wider?confirm=true").status_code == 404
+        assert client.delete("/parts/block/saved/wider").status_code == 404
+
+
+class TestCompare:
+    def test_two_variants_their_diff_their_parameters_and_bounds(self, checkout, block):
+        save_variant(block, "wider", EDITED, {"width": 50})
+        save_variant(block, "thin", SCAD.replace("3]", "1]"), {"width": 20})
+        r = TestClient(app).get("/parts/block/compare", params={"a": "wider", "b": "thin"})
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert "-cube([width, depth, 9]);" in body["diff"]
+        assert "+cube([width, depth, 1]);" in body["diff"]
+        assert body["params"] == [{"name": "width", "a": 50.0, "b": 20.0}]
+        for side in ("a", "b"):
+            assert body[side]["kind"] == "saved" and body[side]["measured"] is not None
+            assert body[side]["stl_url"].startswith("/parts/block/variants/")
+        assert body["a"]["variant"] != body["b"]["variant"]
+
+    def test_the_part_itself_and_a_cached_render_are_sides_too(self, checkout, block):
+        client = TestClient(app)
+        save_variant(block, "wider", EDITED, {"width": 50})
+        applied = client.post("/parts/block/stl/generate", json={"params": {"width": 60}})
+        key = applied.json()["variant"]
+        body = client.get(
+            "/parts/block/compare", params={"a": "@part", "b": f"@{key}", "measure": "false"}
+        ).json()
+        assert (body["a"]["kind"], body["b"]["kind"]) == ("part", "cached")
+        assert body["diff"] == "" and body["params"] == [{"name": "width", "a": None, "b": 60.0}]
+        assert body["a"]["measured"] is None
+        body = client.get("/parts/block/compare", params={"a": "@part", "b": "wider"}).json()
+        assert "+cube([width, depth, 9]);" in body["diff"]
+
+    def test_a_side_that_is_no_variant_is_a_404(self, checkout, block):
+        client = TestClient(app)
+        assert client.get("/parts/block/compare?a=@part&b=nope").status_code == 404
+        assert client.get("/parts/block/compare?a=@part&b=@" + "0" * 24).status_code == 404
+
+    def test_comparing_touches_nothing(self, checkout, block):
+        save_variant(block, "wider", EDITED, {"width": 50})
+        before = _as_it_stands(checkout)
+        TestClient(app).get("/parts/block/compare", params={"a": "wider", "b": "@part"})
+        assert _as_it_stands(checkout) == before

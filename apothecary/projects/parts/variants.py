@@ -519,6 +519,7 @@ def make_variant(
     cancel: Optional[Cancellation] = None,
     cache: Optional[Path] = None,
     draft: Optional[str] = None,
+    place: bool = True,
 ) -> Made:
     """The part rendered with ``params``, from the cache when it is there.
 
@@ -526,8 +527,10 @@ def make_variant(
     one). A cached variant answers first, then the part's own STL when it is
     fresh for these parameters; otherwise OpenSCAD renders into the cache.
     ``force`` renders even so. The defaults are also left as the part's own
-    STL, unless its params sidecar says it holds another variant. A value
-    equal to the model's default is no override (``without_defaults``).
+    STL, unless its params sidecar says it holds another variant, or
+    ``place`` is false (a render only to measure, which writes nothing beside
+    the part). A value equal to the model's default is no override
+    (``without_defaults``).
 
     ``draft`` is the part's SCAD as edited and not saved: rendered from a
     file of its own beside the part's, into the cache alone; the part's own
@@ -544,7 +547,7 @@ def make_variant(
     chosen, renderer = renderer, renderer or part_renderer(part)
     canonical = part.get_stl_output_path()
     rotation = part.display_rotation.to_list()
-    holds_default = draft is None and read_params_sidecar(canonical) is None
+    holds_default = place and draft is None and read_params_sidecar(canonical) is None
     key = variant_key(part, params, renderer, draft=draft)
     stl, record_path = variant_paths(part, key, cache)
     made = Made(params=params, openscad=openscad_of(renderer), backend=backend_of(renderer))
