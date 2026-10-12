@@ -68,7 +68,7 @@ STEP_TEMPLATE = """### {index}. {description}
 """
 
 
-@click.group()
+@click.group(short_help="Write docs/generated/ from the browser tests marked docs.")
 def docs():
     """Generate documentation (screenshots, GIFs, Markdown) from the E2E doc-workflow tests."""
 

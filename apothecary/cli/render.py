@@ -18,7 +18,14 @@ testrun = retired("testrun", "use `apothecary render`, which renders the example
     help="JSON file describing a Scene model",
 )
 @click.option("--scene-json", type=str, help="Inline JSON string describing a Scene model")
-@click.option("--output", "-o", type=click.Path(dir_okay=False), default="scene.scad")
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(dir_okay=False),
+    default="scene.scad",
+    show_default=True,
+    help="The OpenSCAD file to write.",
+)
 def render_scene(scene_file: str | None, scene_json: str | None, output: str):
     """Render a Scene from JSON into SCAD code."""
     try:
@@ -41,7 +48,14 @@ def render_scene(scene_file: str | None, scene_json: str | None, output: str):
     help="JSON file describing a Scene model",
 )
 @click.option("--scene-json", type=str, help="Inline JSON string describing a Scene model")
-@click.option("--output", "-o", type=click.Path(dir_okay=False), default="scene.jscad.js")
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(dir_okay=False),
+    default="scene.jscad.js",
+    show_default=True,
+    help="The JSCAD module to write.",
+)
 def render_scene_jscad(scene_file: str | None, scene_json: str | None, output: str):
     """Render a Scene from JSON into a JSCAD JS module."""
     try:
@@ -64,7 +78,14 @@ def render_scene_jscad(scene_file: str | None, scene_json: str | None, output: s
 )
 @click.option("--scene-file", type=click.Path(exists=True, dir_okay=False), help="Scene JSON file")
 @click.option("--scene-json", type=str, help="Inline JSON string describing a Scene model")
-@click.option("--output", "-o", type=click.Path(dir_okay=False), default="templated.scad")
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(dir_okay=False),
+    default="templated.scad",
+    show_default=True,
+    help="The file the template's output is written to.",
+)
 def template_generate(template: str, scene_file: str | None, scene_json: str | None, output: str):
     """Render a scene with a Jinja2 template."""
     template_content = (
@@ -87,10 +108,14 @@ def template_generate(template: str, scene_file: str | None, scene_json: str | N
 
 
 @click.command()
-@click.option("--scene-file", type=click.Path(exists=True, dir_okay=False))
+@click.option(
+    "--scene-file",
+    type=click.Path(exists=True, dir_okay=False),
+    help="JSON file describing a Scene model",
+)
 @click.option("--scene-json", type=str, help="Inline JSON string describing a Scene model")
 def validate(scene_file: str | None, scene_json: str | None):
-    """Validate a scene JSON file."""
+    """Validate a scene JSON file, or an inline one; exit 1 with what is wrong."""
     try:
         scene = load_scene_from_json(
             scene_file=Path(scene_file) if scene_file else None,
