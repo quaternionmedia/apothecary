@@ -245,6 +245,35 @@ def test_a_saved_variant_is_renamed_duplicated_restored_deleted_and_the_trash_em
     expect(page.locator(".scad-saved details.variant-trash summary")).to_have_text("Deleted (0)")
 
 
+# Each compared mesh as the camera sees it: its bounding box's corners projected, in the
+# canvas's pixels.
+ON_SCREEN = """() => {
+    const v = window.fractalViewer, r = v.canvas.getBoundingClientRect();
+    return v.compareMeshes.map((m) => {
+        m.geometry.computeBoundingBox();
+        const b = m.geometry.boundingBox, xs = [], ys = [];
+        for (const x of [b.min.x, b.max.x]) for (const y of [b.min.y, b.max.y]) for (const z of [b.min.z, b.max.z]) {
+            const p = m.localToWorld(new m.position.constructor(x, y, z)).project(v.camera);
+            xs.push((p.x + 1) / 2 * r.width); ys.push((1 - p.y) / 2 * r.height);
+        }
+        return { left: Math.min(...xs), right: Math.max(...xs), top: Math.min(...ys), bottom: Math.max(...ys),
+                 width: r.width, height: r.height };
+    });
+}"""
+
+
+def _both_in_view(page: Page) -> None:
+    """Both compared meshes framed: inside the world's view, and each big enough to see."""
+    settled(page)
+    shown = page.evaluate(ON_SCREEN)
+    assert len(shown) == 2, shown
+    for box in shown:
+        assert box["left"] >= 0 and box["right"] <= box["width"], box
+        assert box["top"] >= 0 and box["bottom"] <= box["height"], box
+        assert box["right"] - box["left"] > box["width"] / 8, box
+        assert box["bottom"] - box["top"] > box["height"] / 8, box
+
+
 @pytest.mark.e2e
 def test_two_variants_are_compared_overlaid_and_side_by_side_with_what_differs(
     page: Page, url, cube_as_it_was
@@ -273,6 +302,7 @@ def test_two_variants_are_compared_overlaid_and_side_by_side_with_what_differs(
     overlaid = page.evaluate(meshes)
     assert overlaid[0][0] == pytest.approx(overlaid[1][0], abs=4)
     assert not page.evaluate("() => window.fractalViewer.meshByName['calibration_cube'].visible")
+    _both_in_view(page)
     view.locator("select.compare-mode").select_option("side by side")
     page.wait_for_function(
         "() => { const [a, b] = window.fractalViewer.compareMeshes;"
@@ -280,6 +310,7 @@ def test_two_variants_are_compared_overlaid_and_side_by_side_with_what_differs(
         timeout=30000,
     )
     expect(_status(page)).to_contain_text("drawn side by side")
+    _both_in_view(page)
     view.locator(".compare-close").click()
     expect(view).to_be_hidden()
     assert page.evaluate("() => window.fractalViewer.compareMeshes.length") == 0
