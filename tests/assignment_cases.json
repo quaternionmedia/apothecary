@@ -1,0 +1,1043 @@
+{
+ "parse": [
+  {
+   "why": "a literal, a computed one, a module after which nothing is a parameter",
+   "text": "size = 10; // [5:100]\nwall = size * 0.1;\nmodule body() { cube(size); }\nafter = 3;\n",
+   "assignments": [
+    {
+     "name": "size",
+     "expression": "10",
+     "computed": false,
+     "value": 10,
+     "value_known": true,
+     "line": 1,
+     "from": 7,
+     "to": 9,
+     "printed": null,
+     "comment": "[5:100]",
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": 5.0,
+     "max": 100.0,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    },
+    {
+     "name": "wall",
+     "expression": "size * 0.1",
+     "computed": true,
+     "value": null,
+     "value_known": false,
+     "line": 2,
+     "from": 29,
+     "to": 39,
+     "printed": null,
+     "comment": null,
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    },
+    {
+     "name": "after",
+     "expression": "3",
+     "computed": false,
+     "value": 3,
+     "value_known": true,
+     "line": 4,
+     "from": 79,
+     "to": 80,
+     "printed": null,
+     "comment": null,
+     "caption": null,
+     "group": null,
+     "parameter": false,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    }
+   ]
+  },
+  {
+   "why": "two on a line, each its own span",
+   "text": "a = 1; b = 2;\n",
+   "assignments": [
+    {
+     "name": "a",
+     "expression": "1",
+     "computed": false,
+     "value": 1,
+     "value_known": true,
+     "line": 1,
+     "from": 4,
+     "to": 5,
+     "printed": null,
+     "comment": null,
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    },
+    {
+     "name": "b",
+     "expression": "2",
+     "computed": false,
+     "value": 2,
+     "value_known": true,
+     "line": 1,
+     "from": 11,
+     "to": 12,
+     "printed": null,
+     "comment": null,
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    }
+   ]
+  },
+  {
+   "why": "a caption above, a unit in it, a group, a hidden group",
+   "text": "/* [Size] */\n// Cube size [mm]\nsize = 12.5;\n/* [Hidden] */\nfn = 64;\n",
+   "assignments": [
+    {
+     "name": "size",
+     "expression": "12.5",
+     "computed": false,
+     "value": 12.5,
+     "value_known": true,
+     "line": 3,
+     "from": 38,
+     "to": 42,
+     "printed": null,
+     "comment": null,
+     "caption": "Cube size",
+     "group": "Size",
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": "mm",
+     "set": true
+    },
+    {
+     "name": "fn",
+     "expression": "64",
+     "computed": false,
+     "value": 64,
+     "value_known": true,
+     "line": 5,
+     "from": 64,
+     "to": 66,
+     "printed": null,
+     "comment": null,
+     "caption": null,
+     "group": "Hidden",
+     "parameter": false,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    }
+   ]
+  },
+  {
+   "why": "a one-word trailing comment is a unit; a bracket a range with its step",
+   "text": "depth = 3; // mm\nstep = 2; // [1:0.5:20]\nmost = 4; // [10]\nnext = 5; // 0.25\n",
+   "assignments": [
+    {
+     "name": "depth",
+     "expression": "3",
+     "computed": false,
+     "value": 3,
+     "value_known": true,
+     "line": 1,
+     "from": 8,
+     "to": 9,
+     "printed": null,
+     "comment": "mm",
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": "mm",
+     "set": true
+    },
+    {
+     "name": "step",
+     "expression": "2",
+     "computed": false,
+     "value": 2,
+     "value_known": true,
+     "line": 2,
+     "from": 24,
+     "to": 25,
+     "printed": null,
+     "comment": "[1:0.5:20]",
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": 1.0,
+     "max": 20.0,
+     "step": 0.5,
+     "options": [],
+     "unit": null,
+     "set": true
+    },
+    {
+     "name": "most",
+     "expression": "4",
+     "computed": false,
+     "value": 4,
+     "value_known": true,
+     "line": 3,
+     "from": 48,
+     "to": 49,
+     "printed": null,
+     "comment": "[10]",
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": 0.0,
+     "max": 10.0,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    },
+    {
+     "name": "next",
+     "expression": "5",
+     "computed": false,
+     "value": 5,
+     "value_known": true,
+     "line": 4,
+     "from": 66,
+     "to": 67,
+     "printed": null,
+     "comment": "0.25",
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": 0.25,
+     "options": [],
+     "unit": null,
+     "set": true
+    }
+   ]
+  },
+  {
+   "why": "options, numbers with labels and words",
+   "text": "mode = 0; // [0:off, 1:on, 2:both]\nlook = \"plain\"; // [plain, fancy]\nflag = true; // [true, false]\n",
+   "assignments": [
+    {
+     "name": "mode",
+     "expression": "0",
+     "computed": false,
+     "value": 0,
+     "value_known": true,
+     "line": 1,
+     "from": 7,
+     "to": 8,
+     "printed": null,
+     "comment": "[0:off, 1:on, 2:both]",
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [
+      {
+       "value": 0,
+       "label": "off"
+      },
+      {
+       "value": 1,
+       "label": "on"
+      },
+      {
+       "value": 2,
+       "label": "both"
+      }
+     ],
+     "unit": null,
+     "set": true
+    },
+    {
+     "name": "look",
+     "expression": "\"plain\"",
+     "computed": false,
+     "value": "plain",
+     "value_known": true,
+     "line": 2,
+     "from": 42,
+     "to": 49,
+     "printed": null,
+     "comment": "[plain, fancy]",
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [
+      {
+       "value": "plain",
+       "label": "plain"
+      },
+      {
+       "value": "fancy",
+       "label": "fancy"
+      }
+     ],
+     "unit": null,
+     "set": true
+    },
+    {
+     "name": "flag",
+     "expression": "true",
+     "computed": false,
+     "value": true,
+     "value_known": true,
+     "line": 3,
+     "from": 76,
+     "to": 80,
+     "printed": null,
+     "comment": "[true, false]",
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [
+      {
+       "value": true,
+       "label": "true"
+      },
+      {
+       "value": false,
+       "label": "false"
+      }
+     ],
+     "unit": null,
+     "set": true
+    }
+   ]
+  },
+  {
+   "why": "strings with escapes, a semicolon and a bracket inside them, vectors",
+   "text": "label = \"a;b [c] \\\"q\\\" \\\\ \\n\";\nat = [1, 2.5, -3];\nnested = [[1, 2], [3]];\nempty = [];\n",
+   "assignments": [
+    {
+     "name": "label",
+     "expression": "\"a;b [c] \\\"q\\\" \\\\ \\n\"",
+     "computed": false,
+     "value": "a;b [c] \"q\" \\ \n",
+     "value_known": true,
+     "line": 1,
+     "from": 8,
+     "to": 29,
+     "printed": null,
+     "comment": null,
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    },
+    {
+     "name": "at",
+     "expression": "[1, 2.5, -3]",
+     "computed": false,
+     "value": [
+      1,
+      2.5,
+      -3
+     ],
+     "value_known": true,
+     "line": 2,
+     "from": 36,
+     "to": 48,
+     "printed": null,
+     "comment": null,
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    },
+    {
+     "name": "nested",
+     "expression": "[[1, 2], [3]]",
+     "computed": false,
+     "value": [
+      [
+       1,
+       2
+      ],
+      [
+       3
+      ]
+     ],
+     "value_known": true,
+     "line": 3,
+     "from": 59,
+     "to": 72,
+     "printed": null,
+     "comment": null,
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    },
+    {
+     "name": "empty",
+     "expression": "[]",
+     "computed": false,
+     "value": [],
+     "value_known": true,
+     "line": 4,
+     "from": 82,
+     "to": 84,
+     "printed": null,
+     "comment": null,
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    }
+   ]
+  },
+  {
+   "why": "comments everywhere, a block comment with a semicolon",
+   "text": "// a line; not an assignment = 1;\n/* x = 2; */ y = 3; /* after */\nz /* between */ = 4;\n",
+   "assignments": [
+    {
+     "name": "y",
+     "expression": "3",
+     "computed": false,
+     "value": 3,
+     "value_known": true,
+     "line": 2,
+     "from": 51,
+     "to": 52,
+     "printed": null,
+     "comment": null,
+     "caption": "a line; not an assignment = 1;",
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    }
+   ]
+  },
+  {
+   "why": "include and use, a special variable, numbers in every form",
+   "text": "include <lib/thing.scad>\nuse <other.scad>\n$fn = 48;\nsmall = .5;\nbig = 1e3;\nneg = -2;\nplus = +7;\n",
+   "assignments": [
+    {
+     "name": "$fn",
+     "expression": "48",
+     "computed": false,
+     "value": 48,
+     "value_known": true,
+     "line": 3,
+     "from": 48,
+     "to": 50,
+     "printed": null,
+     "comment": null,
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    },
+    {
+     "name": "small",
+     "expression": ".5",
+     "computed": false,
+     "value": 0.5,
+     "value_known": true,
+     "line": 4,
+     "from": 60,
+     "to": 62,
+     "printed": null,
+     "comment": null,
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    },
+    {
+     "name": "big",
+     "expression": "1e3",
+     "computed": false,
+     "value": 1000.0,
+     "value_known": true,
+     "line": 5,
+     "from": 70,
+     "to": 73,
+     "printed": null,
+     "comment": null,
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    },
+    {
+     "name": "neg",
+     "expression": "-2",
+     "computed": false,
+     "value": -2,
+     "value_known": true,
+     "line": 6,
+     "from": 81,
+     "to": 83,
+     "printed": null,
+     "comment": null,
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    },
+    {
+     "name": "plus",
+     "expression": "+7",
+     "computed": false,
+     "value": 7,
+     "value_known": true,
+     "line": 7,
+     "from": 92,
+     "to": 94,
+     "printed": null,
+     "comment": null,
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    }
+   ]
+  },
+  {
+   "why": "== is not an assignment; a bracketed statement; undef; a function",
+   "text": "if (a == 1) { b = 2; }\nmaybe = undef;\nfunction f(x) = x * 2;\nlate = 9;\n",
+   "assignments": [
+    {
+     "name": "maybe",
+     "expression": "undef",
+     "computed": false,
+     "value": null,
+     "value_known": true,
+     "line": 2,
+     "from": 31,
+     "to": 36,
+     "printed": null,
+     "comment": null,
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    },
+    {
+     "name": "late",
+     "expression": "9",
+     "computed": false,
+     "value": 9,
+     "value_known": true,
+     "line": 4,
+     "from": 68,
+     "to": 69,
+     "printed": null,
+     "comment": null,
+     "caption": null,
+     "group": null,
+     "parameter": false,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    }
+   ]
+  },
+  {
+   "why": "an expression with brackets and a string, a value spread over lines",
+   "text": "pts = [for (i = [0:3]) i * 2];\nname = str(\"a\", 1);\nlong =\n    3 +\n    4;\n",
+   "assignments": [
+    {
+     "name": "pts",
+     "expression": "[for (i = [0:3]) i * 2]",
+     "computed": true,
+     "value": null,
+     "value_known": false,
+     "line": 1,
+     "from": 6,
+     "to": 29,
+     "printed": null,
+     "comment": null,
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    },
+    {
+     "name": "name",
+     "expression": "str(\"a\", 1)",
+     "computed": true,
+     "value": null,
+     "value_known": false,
+     "line": 2,
+     "from": 38,
+     "to": 49,
+     "printed": null,
+     "comment": null,
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    },
+    {
+     "name": "long",
+     "expression": "3 +\n    4",
+     "computed": true,
+     "value": null,
+     "value_known": false,
+     "line": 3,
+     "from": 62,
+     "to": 71,
+     "printed": null,
+     "comment": null,
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    }
+   ]
+  },
+  {
+   "why": "a name assigned twice, a value with spaces round it, a caption not alone",
+   "text": "x = 1;\nx   =   2   ;  // [0:9]\ny = 3; // caption-like but trailing\n// shown above\nw = 4;\n",
+   "assignments": [
+    {
+     "name": "x",
+     "expression": "1",
+     "computed": false,
+     "value": 1,
+     "value_known": true,
+     "line": 1,
+     "from": 4,
+     "to": 5,
+     "printed": null,
+     "comment": null,
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    },
+    {
+     "name": "x",
+     "expression": "2",
+     "computed": false,
+     "value": 2,
+     "value_known": true,
+     "line": 2,
+     "from": 15,
+     "to": 16,
+     "printed": null,
+     "comment": "[0:9]",
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": 0.0,
+     "max": 9.0,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    },
+    {
+     "name": "y",
+     "expression": "3",
+     "computed": false,
+     "value": 3,
+     "value_known": true,
+     "line": 3,
+     "from": 35,
+     "to": 36,
+     "printed": null,
+     "comment": "caption-like but trailing",
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    },
+    {
+     "name": "w",
+     "expression": "4",
+     "computed": false,
+     "value": 4,
+     "value_known": true,
+     "line": 5,
+     "from": 86,
+     "to": 87,
+     "printed": null,
+     "comment": null,
+     "caption": "shown above",
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    }
+   ]
+  },
+  {
+   "why": "nothing at the end of the text, no newline",
+   "text": "only = 42",
+   "assignments": []
+  },
+  {
+   "why": "a vector with a trailing comma and a word inside, an unclosed string",
+   "text": "v = [1, 2,];\nbad = [1, x];\nopen = \"never closed;\n",
+   "assignments": [
+    {
+     "name": "v",
+     "expression": "[1, 2,]",
+     "computed": false,
+     "value": [
+      1,
+      2
+     ],
+     "value_known": true,
+     "line": 1,
+     "from": 4,
+     "to": 11,
+     "printed": null,
+     "comment": null,
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    },
+    {
+     "name": "bad",
+     "expression": "[1, x]",
+     "computed": true,
+     "value": null,
+     "value_known": false,
+     "line": 2,
+     "from": 19,
+     "to": 25,
+     "printed": null,
+     "comment": null,
+     "caption": null,
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    }
+   ]
+  },
+  {
+   "why": "non-ASCII before an assignment: UTF-16 offsets",
+   "text": "// größe — 📏 width\nsize = 10;\n",
+   "assignments": [
+    {
+     "name": "size",
+     "expression": "10",
+     "computed": false,
+     "value": 10,
+     "value_known": true,
+     "line": 2,
+     "from": 27,
+     "to": 29,
+     "printed": null,
+     "comment": null,
+     "caption": "größe — 📏 width",
+     "group": null,
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    }
+   ]
+  },
+  {
+   "why": "a nested group comment, a group name with spaces, an empty bracket",
+   "text": "/* [Hole options] */\nmagnet = false;\nscrew = true; // []\n",
+   "assignments": [
+    {
+     "name": "magnet",
+     "expression": "false",
+     "computed": false,
+     "value": false,
+     "value_known": true,
+     "line": 2,
+     "from": 30,
+     "to": 35,
+     "printed": null,
+     "comment": null,
+     "caption": null,
+     "group": "Hole options",
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    },
+    {
+     "name": "screw",
+     "expression": "true",
+     "computed": false,
+     "value": true,
+     "value_known": true,
+     "line": 3,
+     "from": 45,
+     "to": 49,
+     "printed": null,
+     "comment": "[]",
+     "caption": null,
+     "group": "Hole options",
+     "parameter": true,
+     "min": null,
+     "max": null,
+     "step": null,
+     "options": [],
+     "unit": null,
+     "set": true
+    }
+   ]
+  }
+ ],
+ "write": [
+  {
+   "text": "size = 10; // [5:100]\nwall = 2;\n",
+   "values": {
+    "size": 20
+   },
+   "out": "size = 20; // [5:100]\nwall = 2;\n"
+  },
+  {
+   "text": "size = 10; // [5:100]\nwall = size * 0.1;\n",
+   "values": {
+    "wall": 1.5
+   },
+   "out": "size = 10; // [5:100]\nwall = 1.5;\n"
+  },
+  {
+   "text": "a = 1; b = 2;\n",
+   "values": {
+    "b": 3.25,
+    "a": -1
+   },
+   "out": "a = -1; b = 3.25;\n"
+  },
+  {
+   "text": "x = 1;\nx = 2;\n",
+   "values": {
+    "x": 5
+   },
+   "out": "x = 1;\nx = 5;\n"
+  },
+  {
+   "text": "only = 42",
+   "values": {
+    "added": true
+   },
+   "out": "only = 42\nadded = true;\n"
+  },
+  {
+   "text": "only = 42;\n",
+   "values": {
+    "label": "say \"hi\" \\ there",
+    "at": [
+     1,
+     2.5,
+     3
+    ]
+   },
+   "out": "only = 42;\nlabel = \"say \\\"hi\\\" \\\\ there\";\nat = [1, 2.5, 3];\n"
+  },
+  {
+   "text": "",
+   "values": {
+    "first": 1
+   },
+   "out": "first = 1;\n"
+  },
+  {
+   "text": "n = 0;\n",
+   "values": {
+    "n": 0.1
+   },
+   "out": "n = 0.1;\n"
+  },
+  {
+   "text": "n = 0;\n",
+   "values": {
+    "n": 1e-05
+   },
+   "out": "n = 1e-05;\n"
+  },
+  {
+   "text": "n = 0;\n",
+   "values": {
+    "n": 1e+16
+   },
+   "out": "n = 1e+16;\n"
+  },
+  {
+   "text": "n = 0;\n",
+   "values": {
+    "n": 1234.5678
+   },
+   "out": "n = 1234.5678;\n"
+  },
+  {
+   "text": "n = 0;\n",
+   "values": {
+    "n": 2.0
+   },
+   "out": "n = 2;\n"
+  },
+  {
+   "text": "flag = true; // [true, false]\n",
+   "values": {
+    "flag": false
+   },
+   "out": "flag = false; // [true, false]\n"
+  },
+  {
+   "text": "// größe — 📏 width\nsize = 10;\n",
+   "values": {
+    "size": 11
+   },
+   "out": "// größe — 📏 width\nsize = 11;\n"
+  }
+ ]
+}
