@@ -237,12 +237,14 @@ export function mountBoards({ base = "", site = () => null } = {}) {
     }
 
     // --- asking a board what it is ---------------------------------------------------------------
-    // M115: is this a printer, and which firmware? Opens and keeps the link.
-    async function identify(port) {
+    // M115: is this a printer, and which firmware? Opens and keeps the link. `ifIdle`
+    // asks only a board the server knows nothing printing on, and refuses (throws,
+    // saying why, nothing sent) one that may be busy: a printer's Pin asks this way.
+    async function identify(port, { ifIdle = false } = {}) {
         const b = board(port);
-        note(port, `asking ${port} M115 (no reset)`);
+        note(port, `asking ${port} M115 (no reset)${ifIdle ? ", if nothing is printing on it" : ""}`);
         try {
-            const view = await post("/firmware/devices/identify", { port });
+            const view = await post("/firmware/devices/identify", ifIdle ? { port, if_idle: true } : { port });
             takeView(b, view);
             model.links.add(port);
             for (const row of rowsOf(port)) { row.device = view.device; row.expected = view.expected; }

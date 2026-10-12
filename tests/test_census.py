@@ -391,6 +391,11 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # renamed, not added), and the browser's Back and Forward load the site it names
 # (window:popstate:followAddress), a place the page listens that is no control of its
 # own. The ceiling follows the count up by one, and the share's floor up with it.
+#
+# Then the owner's answer: a printer's Selected shows its board's pin with Unpin
+# beside it, ring-backed by the Device › Unpin its ring already had. It is the
+# Device section's Unpin (dev-unpin), drawn on the printer too: no control added and
+# none newly backed, so the ceiling and the share's floor stand.
 VIEWER_CEILING = 126
 
 

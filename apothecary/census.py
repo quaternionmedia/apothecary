@@ -158,7 +158,12 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # with nothing pinned, the boards it can be pinned to. Drawn afresh each
     # time the piece changes, so these are found by class rather than id.
     "dev-open": (WIDGET, WHAT_YOU_SEE, "a button that opens the pinned board's Machine"),
-    "dev-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins the board from the piece"),
+    # On a printer, the pin on its own board, which the printer's Pin made.
+    "dev-unpin": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that unpins the board from the piece, or a printer's from its board",
+    ),
     "dev-via": (WIDGET, WHAT_YOU_SEE, "a link to the piece inside that holds the board"),
     "dev-rescan": (WIDGET, WHAT_YOU_SEE, "a button that looks for boards again"),
     "dev-manual": (WIDGET, WHAT_IS_THERE, "a box for typing a port, S/N or address to pin"),

@@ -18,6 +18,11 @@ import re
 import pytest
 from playwright.sync_api import Page, expect
 from slicer_helpers import write_fake_orcaslicer
+from test_picture_in_the_world import (  # noqa: F401 - fixtures, and a pin of a picture
+    _pin,
+    fixture_picture,
+    leaves_garage_as_found,
+)
 from viewer_ready import settled
 
 PRINTER = "/dev/ttyFAKE1"
@@ -361,3 +366,128 @@ def test_with_no_arduino_cli_a_printer_says_why_and_the_bench_asks_for_nothing_m
     expect(bench.locator(".port-select")).to_contain_text("(none detected)")
     settled(page)
     assert failed == [], failed
+
+
+# --------------------------------------------------------------------------------
+# A printer's Pin asks its board once, when nothing is known to print on it
+# --------------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def printing_url(base_url, start_server):
+    """The simulated printer mid-way through an SD print, on /dev/ttyFAKE1."""
+    return start_server({"APOTHECARY_SIMULATED_PRINTER": "printing"})
+
+
+def _m115s(page: Page, url: str) -> int:
+    """How many M115s were sent on /dev/ttyFAKE1, by its comms log."""
+    log = page.request.get(f"{url}/firmware/printers/log", params={"port": PRINTER}).json()
+    return sum(1 for e in log["entries"] if e["kind"] == "tx" and e["text"] == "M115")
+
+
+def _pin_printer_1(page: Page) -> None:
+    _row(page, "printer_1").click()
+    section = page.locator("#selected-body .device-section")
+    pick = section.locator(".dev-pick")
+    expect(pick.locator(f"option[value='{PRINTER}']")).to_be_attached(timeout=15000)
+    pick.select_option(PRINTER)
+    section.locator(".dev-pin").click()
+
+
+@pytest.mark.e2e
+def test_a_printers_pin_asks_an_idle_board_once_what_it_is(page: Page, url: str):
+    """Nothing printing on it: printer_1's Pin pins its mainboard and asks it once
+    (M115), so its Machine opens as a printer's straight away; the status line says it
+    asked. printer_1's own Unpin, beside it, takes the pin back -- the ring's
+    Device › Unpin."""
+    _open(page, url)
+    before = _m115s(page, url)
+    _pin_printer_1(page)
+    _said(
+        page,
+        f"printer_1's board {BOARD} ← {PRINTER}: printer_1's Device, its Machine and Slice "
+        "find it there; asked it once what it is (M115): Marlin Apothecary Simulator 1.0 "
+        "(simulated) · Simulated Ender",
+    )
+    assert _m115s(page, url) == before + 1
+    section = page.locator("#selected-body .device-section")
+    expect(section.locator(".dev-open")).to_be_visible(timeout=10000)
+    section.locator(".dev-open").click()
+    machine = page.locator(MACHINE)
+    expect(machine.locator("#ident")).to_contain_text("Marlin Apothecary Simulator", timeout=8000)
+    page.evaluate("() => window.fractalViewer.closeMachine()")
+    unpin = section.locator(".dev-unpin")
+    expect(unpin).to_have_attribute("data-address", "29", timeout=8000)  # Device › Unpin
+    unpin.click()
+    _said(page, f"printer_1's board {BOARD}: device unpinned")
+    assert _pins(page, url) == {}
+
+
+@pytest.mark.e2e
+def test_a_printers_pin_never_asks_a_board_known_to_be_printing(page: Page, printing_url: str):
+    """Its last poll said it prints: printer_1's Pin pins its mainboard and asks it
+    nothing, and the status line says so and why; no M115 goes out."""
+    url = printing_url
+    polled = page.request.get(f"{url}/firmware/printers/status", params={"port": PRINTER})
+    assert polled.ok and polled.json()["state"] == "printing", polled.text()
+    _open(page, url)
+    before = _m115s(page, url)
+    _pin_printer_1(page)
+    _said(
+        page,
+        "not asked what it is (M115), since its last poll said it is printing: its "
+        "Machine's Identify asks once it is idle",
+    )
+    assert _m115s(page, url) == before
+    assert list(_pins(page, url)) == [BOARD]
+    page.locator("#selected-body .device-section .dev-unpin").click()
+    _said(page, f"printer_1's board {BOARD}: device unpinned")
+
+
+# --------------------------------------------------------------------------------
+# A piece made from a picture holds no board
+# --------------------------------------------------------------------------------
+
+
+@pytest.mark.e2e
+def test_a_piece_made_from_a_picture_has_no_device_section(
+    page: Page,
+    base_url: str,
+    picture_folder,
+    fixture_picture,  # noqa: F811 - the fixture's value, the picture's name
+    leaves_garage_as_found,  # noqa: F811
+):
+    """Walkthrough 11's last picture showed a Device row -- Query and Pin -- on a word
+    piece of an arrangement built from a picture. A piece made from a picture holds no
+    board: neither it nor a piece made at a place has a Device section; a structure
+    still has one."""
+    answer = page.request.post(
+        f"{base_url}/photos",
+        data={
+            "picture": str(picture_folder / fixture_picture),
+            "name": "onb_words",
+            "finder": "stated",
+        },
+    )
+    assert answer.ok, answer.text()
+    try:
+        _open(page, base_url, site="onb_words")
+        page.locator("#contents-list .contents-item").first.click()
+        expect(page.locator("#selected-body .prop-row", has_text="Name")).to_be_visible()
+        settled(page)
+        expect(page.locator("#selected-body .device-section")).to_have_count(0)
+    finally:
+        page.request.delete(f"{base_url}/photos/onb_words")
+
+    view = _pin(page, base_url, "workbench", fixture_picture, mm_across=1800)
+    made = page.request.post(f"{base_url}/sites/garage/views/{view['id']}/make", data={"shape": 1})
+    assert made.ok, made.text()
+    (piece,) = made.json()["made"]
+    _open(page, base_url)
+    _row(page, piece).click()
+    expect(page.locator("#selected-body .picture-facts[data-facts='made']")).to_be_visible(
+        timeout=10000
+    )
+    expect(page.locator("#selected-body .device-section")).to_have_count(0)
+    _row(page, "workbench").click()
+    expect(page.locator("#selected-body .device-section")).to_be_visible(timeout=10000)

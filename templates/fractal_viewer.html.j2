@@ -2618,12 +2618,18 @@
                 // A machine drawn as a part shows the one row until Part › Edit asks
                 // for its editor (openEditor); a leaf that is a part has it always.
                 if (selected.part_ref) this.appendPartPanel(selected, selected.children.length === 0 || this.editorOpenFor === this.selectedName);
-                this.selectedBodyEl.insertAdjacentHTML('beforeend', this.deviceSectionHtml(this.selectedName));
-                this.bindDeviceSection(this.selectedName);
+                // A piece made from a picture -- a word's shape, in an arrangement or
+                // made at a place -- holds no board: no Device section, unless something
+                // pinned one to it anyway, which its Unpin then takes back.
+                const made = this.pictureMarks.madeRecord(this.selectedName);
+                const holdsNoBoard = (made || selected.role === 'word') && !this.bindingFor(this.selectedName).row;
+                if (!holdsNoBoard) {
+                    this.selectedBodyEl.insertAdjacentHTML('beforeend', this.deviceSectionHtml(this.selectedName));
+                    this.bindDeviceSection(this.selectedName);
+                }
                 this.selectedBodyEl.insertAdjacentHTML('beforeend', this.shownFacts);
                 this.bindPictureFacts();
                 // A piece made from a picture is a part: its editor, under its provenance.
-                const made = this.pictureMarks.madeRecord(this.selectedName);
                 if (made) this.appendEditor(this.pieceTarget(this.selectedName, made));
             }
 
@@ -5026,7 +5032,12 @@
                 const viaLink = via
                     ? ` · via <a href="#" class="dev-via" data-path="${esc(path + '.' + via)}" title="The board inside: its polls drive this node's status" style="color:#9cd2ff">${esc(via)}</a>`
                     : '';
-                const unpin = row && row.binding_source === 'manual' && !via ? '<button type="button" class="dev-unpin" title="Take the pin back: the piece is pinned to nothing">Unpin</button>' : '';
+                // A printer's Selected shows its board's pin, which its Pin made, and its
+                // Unpin takes it back -- the ring's Device › Unpin on the printer.
+                const ownBoard = Boolean(via) && this.boardInside(path) === `${path}.${via}`;
+                const unpin = row && row.binding_source === 'manual' && (!via || ownBoard)
+                    ? `<button type="button" class="dev-unpin" title="${ownBoard ? `Take the pin on its board, ${esc(via)}, back: the printer is pinned to nothing` : 'Take the pin back: the piece is pinned to nothing'}">Unpin</button>`
+                    : '';
                 const rescan = '<button type="button" class="dev-rescan" title="Look for boards again: a fresh port scan">⟳ Rescan</button>';
                 let body;
                 if (row && row.device) {
@@ -5114,6 +5125,27 @@
                 return walk(node, path);
             }
 
+            // After a printer's Pin: its board asked once what it is (M115), so its
+            // Machine opens as a printer's -- only when the server knows nothing printing
+            // on it (a print from here, a running job, a poll that said so); a board that
+            // may be busy is never asked. What was done, or why not, for the status line.
+            async askThePinnedBoard(row) {
+                const d = row && row.device;
+                if (!d) return 'not asked what it is (M115): it is not connected';
+                try {
+                    const view = await this.boards.identify(d.port, { ifIdle: true });
+                    await this.boards.scan();  // the rows follow what it said
+                    this.updateDeviceViews();
+                    const pr = view.device.printer;
+                    return `asked it once what it is (M115): ${pr.firmware_name}${pr.machine_type ? ` · ${pr.machine_type}` : ''}`;
+                } catch (err) {
+                    const why = err.message.replace(/^not asked: /, '');
+                    return why !== err.message
+                        ? `not asked what it is (M115), since ${why}: its Machine's Identify asks once it is idle`
+                        : `asked what it is (M115), and it did not say: ${err.message}`;
+                }
+            }
+
             async setNodeDevice(asked, identity) {
                 // A printer's own Pin pins its board, where its Device, its Machine and
                 // Slice find it; Unpin on the printer takes back the pin on its board.
@@ -5145,6 +5177,9 @@
                             : `${asked}'s board ${path}: device unpinned`);
                     this.setStatus(said, 'success');
                     await polled;
+                    // A printer's Pin asks its board once what it is, when nothing is known
+                    // to be printing on it, so its Machine opens as a printer's.
+                    if (identity && path !== asked) this.setStatus(`${said}; ${await this.askThePinnedBoard(row)}`, 'success');
                 } catch (err) {
                     this.setStatus(`Error: ${err.message}`, 'error');
                     console.error(err);

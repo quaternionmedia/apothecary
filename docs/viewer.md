@@ -138,8 +138,13 @@ devkit is flashed, never printed). Print and Slice say whether the printer
 has no board pinned or one pinned and not connected.
 
 A printer's Pin, in its Device section, pins the board inside it -- printer_1's
-mainboard, where its Device, its Machine and Slice look -- and the status line
-says so. A board's **Device** holds Open (its Machine), Poll, Flash, Query, Unpin,
+mainboard, where its Device, its Machine and Slice look -- and asks the board
+once what it is (M115), so its Machine opens as a printer's; it asks only when
+nothing is known to be printing on that port (a print from here, a running job,
+a poll that said so), and the status line says whether it asked, and if not,
+why. The printer's Device section then shows its board's pin, with Unpin beside
+it. A piece made from a picture holds no board and has no Device section. A
+board's **Device** holds Open (its Machine), Poll, Flash, Query, Unpin,
 Rescan, Link and, on a printer, Control; [firmware.md](firmware.md#in-the-viewer-one-machine-per-board)
 says what each does.
 

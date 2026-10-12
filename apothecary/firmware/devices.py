@@ -492,6 +492,23 @@ def _probe_by_module(port: str, finder: Optional[str]) -> dict:
     raise ToolchainError("esptool is not available; install the esp32 core to get its bundled copy")
 
 
+def known_printing(port: str) -> Optional[str]:
+    """Why the board on ``port`` may be printing, from what is known here without
+    asking it: a print streamed from here still running, a job on it running, or its
+    newest poll saying it prints (an SD print). None when nothing says so -- which is
+    not the same as idle: a board nobody has polled says nothing."""
+    streaming = print_job(port)
+    if streaming is not None and streaming.finished is None:
+        return f"a print of {streaming.file.name} from here is running on it"
+    running = next((j for j in jobs.list_jobs(machine=port) if j.running), None)
+    if running is not None:
+        return f"its {running.kind} job {running.id} is running"
+    last = last_statuses().get(port)
+    if last is not None and last.state == "printing":
+        return "its last poll said it is printing"
+    return None
+
+
 def identify_printer(
     port: str,
     baud: int = 115200,
