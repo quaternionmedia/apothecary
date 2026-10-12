@@ -1223,28 +1223,45 @@ def test_a_part_and_a_made_piece_end_with_part_edit_and_nothing_else_does():
         ring = resolve(Context(pointing=Pointing.NODE, targets=[path]), garage)
         part = ring.options[-1]
         assert part.label == "Part" and part.id == "part", (path, [o.label for o in ring.options])
-        assert [(c.label, c.action) for c in part.children] == [
+        assert [(c.label, c.action or c.id) for c in part.children] == [
             ("Edit", "part:edit"),
             ("Defaults", "part:defaults"),
             ("Apply", "part:apply"),
             ("Revert", "part:revert"),
+            ("View", "part:view"),
+            ("History", "part:history"),
         ]
         assert len(ring.options) <= MOST_OPTIONS
-    # A made piece has Part too, after its Picture: Edit, Apply and Revert, no Defaults.
+    # A made piece has Part too, after its Picture: Edit, Apply and Revert, no Defaults;
+    # its View frames it, and has no ghost, which is a part's of the parts folder.
     site = _garage()
     site.children.append(Assembly(name="disc_1", role="word", base=Cube(size=10.0)))
     told = PictureContext(made=["disc_1"], words=["disc", "plate"])
     made = resolve(Context(pointing=Pointing.NODE, targets=["disc_1"]), site, picture=told)
     assert [o.label for o in made.options][-2:] == ["Picture", "Part"]
-    assert [c.action for c in made.options[-1].children] == [
+    assert [c.action or c.id for c in made.options[-1].children] == [
         "part:edit",
         "part:apply",
         "part:revert",
+        "part:view",
+        "part:history",
     ]
+    view, history = made.options[-1].children[-2:]
+    assert [c.action for c in view.children] == ["part:fit"]
+    assert [c.action for c in history.children] == ["part:undo", "part:redo"]
     # A structure that is neither is left alone: the bench's ring ends as it did.
     bench = resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), garage)
     assert [o.label for o in bench.options][-2:] == ["Camera", "Picture"]
-    for action in ("part:edit", "part:defaults", "part:apply", "part:revert"):
+    for action in (
+        "part:edit",
+        "part:defaults",
+        "part:apply",
+        "part:revert",
+        "part:fit",
+        "part:ghost",
+        "part:undo",
+        "part:redo",
+    ):
         assert carried_by(action).name == "VIEWER"
 
 
@@ -1274,15 +1291,31 @@ def test_a_part_s_ring_holds_its_scad_editor_too():
     on = Context(pointing=Pointing.NODE, targets=["footpedal"])
     told = PictureContext(part=PartSeen(editable=True, variants=["taller", "wider"]))
     part = resolve(on, garage, picture=told).options[-1]
-    assert [(c.label, c.action) for c in part.children][:7] == [
+    assert [(c.label, c.action or c.id) for c in part.children][:7] == [
         ("Edit", "part:edit"),
         ("Defaults", "part:defaults"),
         ("Apply", "part:apply"),
         ("Revert", "part:revert"),
         ("Save", "part:save"),
+        ("View", "part:view"),
+        ("History", "part:history"),
+    ]
+    # The ring was full at eight: Float and Fullscreen are View's now, in the seat
+    # Float had, beside the ghost and Fit; History, in Fullscreen's, holds Undo and Redo.
+    view, history = part.children[5:7]
+    assert [(c.label, c.action) for c in view.children] == [
         ("Float", "part:float"),
         ("Fullscreen", "part:fullscreen"),
+        ("Ghost", "part:ghost"),
+        ("Fit", "part:fit"),
     ]
+    assert [(c.label, c.action) for c in history.children] == [
+        ("Undo", "part:undo"),
+        ("Redo", "part:redo"),
+    ]
+    ring = resolve(on, garage, picture=told)
+    assert address_of(ring, "part:float")[:-1] == address_of(ring, "part:save")[:-1] + "3"
+    assert address_of(ring, "part:undo")[:-1] == address_of(ring, "part:save")[:-1] + "1"
     variants = part.children[-1]
     assert (variants.label, variants.id) == ("Variants", "part:variants")
     assert [(c.label, c.action) for c in variants.children] == [
@@ -1295,19 +1328,30 @@ def test_a_part_s_ring_holds_its_scad_editor_too():
     # None saved yet: no Variants, and nothing before it moved.
     bare = resolve(on, garage, picture=PictureContext(part=PartSeen(editable=True)))
     first = resolve(on, garage, picture=told)
-    for action in ("part:edit", "part:save", "part:float", "part:fullscreen"):
+    for action in ("part:edit", "part:save", "part:float", "part:fullscreen", "part:undo"):
         assert address_of(bare, action) == address_of(first, action)
     assert "part:variants" not in [c.id for c in bare.options[-1].children]
     # Built by Python: its SCAD is read, so Float and Fullscreen and nothing to save.
     python = resolve(on, garage, picture=PictureContext(part=PartSeen(editable=False)))
-    assert [c.action for c in python.options[-1].children][4:] == ["part:float", "part:fullscreen"]
-    # Untold, the ring is the part loop's.
-    assert [c.action for c in resolve(on, garage).options[-1].children] == [
+    assert [c.action or c.id for c in python.options[-1].children][4:] == [
+        "part:view",
+        "part:history",
+    ]
+    assert [c.action for c in python.options[-1].children[4].children][:2] == [
+        "part:float",
+        "part:fullscreen",
+    ]
+    # Untold, the ring is the part loop's, its View the ghost and Fit.
+    untold = resolve(on, garage).options[-1]
+    assert [c.action or c.id for c in untold.children] == [
         "part:edit",
         "part:defaults",
         "part:apply",
         "part:revert",
+        "part:view",
+        "part:history",
     ]
+    assert [c.action for c in untold.children[4].children] == ["part:ghost", "part:fit"]
 
 
 def test_the_server_tells_the_ring_what_a_part_s_scad_is(monkeypatch):
@@ -1329,11 +1373,11 @@ def test_the_server_tells_the_ring_what_a_part_s_scad_is(monkeypatch):
 
     assert part_cells("calibration_cube")[4:] == [
         "part:save",
-        "part:float",
-        "part:fullscreen",
+        "part:view",
+        "part:history",
         "part:variants",
     ]
-    assert part_cells("snowplow")[4:] == ["part:float", "part:fullscreen"]
+    assert part_cells("snowplow")[4:] == ["part:view", "part:history"]
 
 
 def test_a_made_piece_with_a_printer_pinned_in_its_site_ends_with_print():

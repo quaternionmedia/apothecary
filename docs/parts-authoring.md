@@ -217,11 +217,12 @@ will do. `APOTHECARY_VARIANTS_REPO` names another repository to save into, a
 clone of the checkout; the browser suite's servers save into one of their own.
 
 In the viewer, the part's editor in Selected holds its SCAD, where the
-read-only source stood: checked once typing stops, rendered after a second
-of quiet, saved with Save (or Part › Save) under the name beside it, its
-saved variants listed under its parameters and, with what each changes, in
-the editor; floated over the world or made fullscreen (Part › Float, Part ›
-Fullscreen). Walkthrough 16 goes round it.
+read-only source stood: checked once typing stops, rendered soon after a
+check that passes, saved with Save (Ctrl+S in the editor, or Part › Save)
+under the name beside it, its saved variants listed under its parameters
+and, with what each changes, in the editor; floated over the world or made
+fullscreen (Part › View › Float, Part › View › Fullscreen). Walkthrough 16
+goes round it, and [viewer.md](viewer.md#the-scad-editor) has its keys.
 
 A part built by Python geometry (the snowplow) has no SCAD of its own to
 edit: `GET /parts/{name}/scad` answers the SCAD its geometry generates

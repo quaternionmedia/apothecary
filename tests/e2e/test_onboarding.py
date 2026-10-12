@@ -358,8 +358,9 @@ def test_with_no_arduino_cli_a_printer_says_why_and_the_bench_asks_for_nothing_m
         "arduino-cli finds the boards on this machine, and it is not installed", timeout=15000
     )
     expect(section).to_contain_text("A printer needs it only to be found")
+    # A structure holds no board, and has no Device section to say it in.
     _row(page, "workbench").click()
-    expect(page.locator("#selected-body .device-section")).not_to_contain_text("A printer needs it")
+    expect(page.locator("#selected-body .device-section")).to_have_count(0)
     page.evaluate("() => window.apothecaryPanels.open('bench')")
     bench = page.locator(".panel[data-panel='bench']")
     expect(bench.locator(".tc-status")).to_contain_text("not installed", timeout=15000)
@@ -459,8 +460,8 @@ def test_a_piece_made_from_a_picture_has_no_device_section(
 ):
     """Walkthrough 11's last picture showed a Device row -- Query and Pin -- on a word
     piece of an arrangement built from a picture. A piece made from a picture holds no
-    board: neither it nor a piece made at a place has a Device section; a structure
-    still has one."""
+    board: neither it nor a piece made at a place has a Device section, nor the
+    structure it was made on; a printer has one (only where a board belongs)."""
     answer = page.request.post(
         f"{base_url}/photos",
         data={
@@ -489,5 +490,10 @@ def test_a_piece_made_from_a_picture_has_no_device_section(
         timeout=10000
     )
     expect(page.locator("#selected-body .device-section")).to_have_count(0)
+    # Only where a board belongs (the owner's word): not the workbench it was made on,
+    # a structure; a printer, yes.
     _row(page, "workbench").click()
+    expect(page.locator("#selected-body .prop-row", has_text="workbench")).to_be_visible()
+    expect(page.locator("#selected-body .device-section")).to_have_count(0)
+    _row(page, "printer_1").click()
     expect(page.locator("#selected-body .device-section")).to_be_visible(timeout=10000)

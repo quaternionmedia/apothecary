@@ -225,9 +225,13 @@ SITE_FOLDED = """(folded) => document.querySelector(".panel[data-panel='site']")
     .classList.contains('collapsed') === folded"""
 
 # The part's editor from its stage bar down: the bar at the top of Selected.
-STAGE_BAR_AT_THE_TOP = (
-    "() => document.getElementById('stage-bar').scrollIntoView({ block: 'start' })"
-)
+STAGE_BAR_AT_THE_TOP = """() => {
+    const bar = document.getElementById('stage-bar');
+    // The bar is sticky: scrolled to by itself it may stand stuck over the parameters it
+    // heads, the first of them under it. Its section scrolled to the top puts the bar
+    // where it stands in the page, and the first parameter in view below it.
+    (bar.closest('.part-stage') || bar).scrollIntoView({ block: 'start' });
+}"""
 
 # A marked line of the SCAD editor made the first its code shows.
 MARKED_LINE_FIRST = """(line) => {
