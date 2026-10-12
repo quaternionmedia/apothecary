@@ -145,7 +145,8 @@ def _pictures_known(
 
 def _part_seen(site: str, path: str) -> Optional[PartSeen]:
     """The part a node of ``site`` is drawn as, when it is one from the parts folder:
-    whether its SCAD is its own to edit, and its variants saved in git."""
+    whether its SCAD is its own to edit, its variants saved in git, and whether it
+    is a board."""
     from ..api import _load_part_wrapper
     from ..menu import _find
     from ..projects.parts.drafts import editable
@@ -159,7 +160,9 @@ def _part_seen(site: str, path: str) -> Optional[PartSeen]:
     except HTTPException:
         return None
     own = editable(part)
-    return PartSeen(editable=own, variants=saved_names(part) if own else [])
+    return PartSeen(
+        editable=own, variants=saved_names(part) if own else [], board="board" in part.tags
+    )
 
 
 @router.post("/resolve", response_model=Ring)

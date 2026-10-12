@@ -153,10 +153,12 @@ class Place(BaseModel):
 class PartSeen(BaseModel):
     """The part under a node ring, as the server knows it: whether its SCAD is its
     own source, to edit (a part built by Python geometry shows what it generates),
-    and its variants saved in git, newest first (apothecary/projects/parts/saved.py)."""
+    its variants saved in git, newest first (apothecary/projects/parts/saved.py), and
+    whether it is a board -- bought and pinned to, never printed, so never sliced."""
 
     editable: bool = True
     variants: List[str] = Field(default_factory=list)
+    board: bool = False
 
 
 class PictureContext(BaseModel):
@@ -1179,11 +1181,13 @@ def _node_ring(
     if made and picture.printers:
         options.append(_print_option(picture.printers))
     # Slice, beside Print: a made piece, or a part from the parts folder standing in
-    # the site -- not a camera, nor a printer or anything inside one -- sliced for a
-    # printer pinned there. Appended last, so no cell above moves; with no printer
-    # pinned in the site there is nothing to slice for, and no Slice.
+    # the site -- not a camera, nor a printer or anything inside one, nor a board (a
+    # devkit is bought and flashed, never printed) -- sliced for a printer pinned
+    # there. Appended last, so no cell above moves; with no printer pinned in the
+    # site there is nothing to slice for, and no Slice.
     in_a_printer = any(path == p or path.startswith(p + ".") for p in picture.printers)
-    part = bool(node is not None and node.part_ref and not camera)
+    board = bool(node is not None and (node.sketch_ref or (picture.part and picture.part.board)))
+    part = bool(node is not None and node.part_ref and not camera and not board)
     if (made or part) and picture.printers and not in_a_printer:
         options.append(_slice_option(picture.printers))
     return Ring(title=shorten(path or (node.name if node else "")), options=options)

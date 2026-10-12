@@ -1413,6 +1413,17 @@ def test_a_made_piece_and_a_part_slice_for_a_printer_pinned_in_their_site():
     ):
         labels = [o.label for o in on(path, ["printer_1"], cameras).options]
         assert "Slice" not in labels, path
+    # Nor a board on the bench: a devkit running a sketch, or a board the boards
+    # library draws (the server says which, as PartSeen.board), is bought, not printed.
+    from apothecary.menu import PartSeen
+
+    devkit = PictureContext(printers=["printer_1"], part=PartSeen(board=True))
+    for path in ("esp32_blink", "arduino_uno"):
+        ring = resolve(Context(pointing=Pointing.NODE, targets=[path]), site, picture=devkit)
+        assert "Slice" not in [o.label for o in ring.options], path
+    plain = PictureContext(printers=["printer_1"], part=PartSeen(board=False))
+    ring = resolve(Context(pointing=Pointing.NODE, targets=["esp32_blink"]), site, picture=plain)
+    assert "Slice" not in [o.label for o in ring.options]  # its sketch says it is a board
     assert carried_by("slice:piece:printer_1").name == "VIEWER"
 
 
@@ -2031,6 +2042,31 @@ def test_the_route_tells_a_made_pieces_ring_of_the_printers_pinned_in_its_site(
     assert options[-2]["action"] == "print:piece:printer_1"
     assert options[-1]["action"] == "slice:piece:printer_1"
     assert not {"Print", "Slice"} & {o["label"] for o in ring()}
+
+
+def test_a_devkits_ring_has_no_slice_while_a_printer_is_pinned(carried, fake_arduino_cli):
+    """The server knows a board from its part (the boards library tags it): the
+    devkit on the bench and the boards beside it are never sliced, while a part
+    that is printed -- the footpedal -- is, once a printer is pinned."""
+    client, _view = carried
+    board = "printer_1.frame_system.mainboard"
+
+    def labels(path):
+        answer = client.post(
+            "/menu/resolve",
+            json={"context": {"pointing": "node", "targets": [path]}, "site": "garage"},
+        )
+        assert answer.status_code == 200, answer.text
+        return [o["label"] for o in answer.json()["options"]]
+
+    pinned = client.put(f"/sites/garage/nodes/{board}/device", json={"identity": "/dev/ttyFAKE1"})
+    assert pinned.is_success, pinned.text
+    try:
+        assert "Slice" in labels("footpedal")
+        for path in ("esp32_blink", "arduino_uno", "raspberry_pi_4", "teensy_40"):
+            assert "Slice" not in labels(path), path
+    finally:
+        client.delete(f"/sites/garage/nodes/{board}/device")
 
 
 def test_a_carried_picture_intent_is_refused_with_its_reason_and_never_a_500(carried):

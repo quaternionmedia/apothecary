@@ -4490,18 +4490,31 @@
             openMachine(path) {
                 const { row } = this.bindingFor(path);
                 const port = row && row.device && row.device.port;
-                if (!port) { this.setStatus(`${path}: no board pinned here`, 'error'); return false; }
+                if (!port) { this.setStatus(this.noMachine(path), 'error'); return false; }
                 const anchor = row.device.printer ? this.bearerPathFor(row.path) : row.path;
                 return this.showMachine(port, anchor, row);
+            }
+            // Why a machine has no Machine to open: nothing pinned, or a pin whose board
+            // is not connected -- each said with what to do about it, and what to press
+            // again after (`doing`).
+            noMachine(path, doing = '') {
+                const { row } = this.bindingFor(path);
+                const again = doing ? `, then ${doing} again` : '';
+                if (!row) {
+                    const board = this.boardInside(path);
+                    return `${path} has no board pinned${board ? ` (its board is ${board})` : ''}: select it and Pin its port in its Device section${again}`;
+                }
+                const which = row.path !== path ? ` ${row.path}` : '';
+                return `${path}'s board${which} is pinned to ${row.identity || 'a board'}, but not connected: connect it, or ⟳ Rescan in its Device section${again}`;
             }
             // A made piece's Print, from its ring: the printer's Machine opened (in
             // the rail, its tab active) with the piece chosen under its Print from
             // here's makes. Nothing is sent: the card's file and ▶ Print are the next
             // step, and the status line names them. What it says, or why it could not.
             async printPiece(piece, printer) {
-                if (!this.openMachine(printer)) return { refused: `${printer} has no board pinned to print with` };
+                if (!this.openMachine(printer)) return { refused: this.noMachine(printer, 'Print') };
                 const handle = this.machine && this.machine.handle;
-                if (!handle || handle.kind() !== 'printer') return { refused: `${printer}'s board is no printer` };
+                if (!handle || handle.kind() !== 'printer') return { refused: `${printer}'s board has not said it is a printer: Identify in its Machine asks it (M115), then Print again` };
                 if (!(await handle.print.choose(piece))) return { refused: `${piece} is not among the parts ${printer}'s Print from here can make` };
                 return { said: `${printer}'s Machine makes ${piece}: choose its file in Print from here, then ▶ Print` };
             }
@@ -4510,9 +4523,9 @@
             // there for that printer -- its log in Print from here, its G-code chosen
             // there when it ends, so ▶ Print follows. What it says, or why it could not.
             async slicePiece(piece, printer) {
-                if (!this.openMachine(printer)) return { refused: `${printer} has no board pinned to slice for` };
+                if (!this.openMachine(printer)) return { refused: this.noMachine(printer, 'Slice') };
                 const handle = this.machine && this.machine.handle;
-                if (!handle || handle.kind() !== 'printer') return { refused: `${printer}'s board is no printer` };
+                if (!handle || handle.kind() !== 'printer') return { refused: `${printer}'s board has not said it is a printer: Identify in its Machine asks it (M115), then Slice again` };
                 return handle.print.slice(piece);
             }
             // A board's Machine by its port, pinned in this site or nowhere here --
@@ -4963,7 +4976,31 @@
                 manualIn?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); pinManual(); } });
             }
 
-            async setNodeDevice(path, identity) {
+            // The board inside a printer, where its port belongs: the node a printer's
+            // Device, its Machine and Slice look for a pin at (its mainboard). Null for
+            // anything that is not a printer holding a board.
+            boardInside(path) {
+                const node = this.nodeByPath(path);
+                if (!node || !PRINTER_STATUSES.includes(node.status)) return null;
+                const walk = (n, at) => {
+                    for (const child of n.children || []) {
+                        const here = `${at}.${child.name}`;
+                        if (child.board) return here;
+                        const deeper = walk(child, here);
+                        if (deeper) return deeper;
+                    }
+                    return null;
+                };
+                return walk(node, path);
+            }
+
+            async setNodeDevice(asked, identity) {
+                // A printer's own Pin pins its board, where its Device, its Machine and
+                // Slice find it; Unpin on the printer takes back the pin on its board.
+                const { row: held, via } = this.bindingFor(asked);
+                const path = identity
+                    ? (this.boardInside(asked) || asked)
+                    : (via && held && held.binding_source === 'manual' ? `${asked}.${via}` : asked);
                 const url = `${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/nodes/${encodeURIComponent(path)}/device`;
                 this.setStatus(identity ? `Pinning ${identity} to ${path}...` : `Unpinning ${path}...`, 'loading');
                 try {
@@ -4981,7 +5018,12 @@
                     const polled = this.boards.setRow(path, row);
                     this.renderDeviceViews();
                     this.syncWorldMarks();
-                    this.setStatus(identity ? `${path} ← ${identity}` : `${path}: device unpinned`, 'success');
+                    const said = path === asked
+                        ? (identity ? `${path} ← ${identity}` : `${path}: device unpinned`)
+                        : (identity
+                            ? `${asked}'s board ${path} ← ${identity}: ${asked}'s Device, its Machine and Slice find it there`
+                            : `${asked}'s board ${path}: device unpinned`);
+                    this.setStatus(said, 'success');
                     await polled;
                 } catch (err) {
                     this.setStatus(`Error: ${err.message}`, 'error');
