@@ -2149,8 +2149,9 @@ def firmware_page():
 def monitor_page(port: str = ""):
     """The printer monitor is a board's Machine: the viewer on the site the port is
     pinned in, its Machine open there -- or, pinned nowhere, on the default site with
-    its Machine floating. A port of the wrong shape is dropped, as the page dropped
-    it: the viewer opens with nothing in front of it."""
+    its Machine open; either way the Machine is a tab of the rail's strip. A port of
+    the wrong shape is dropped, as the page dropped it: the viewer opens with nothing
+    in front of it."""
     try:
         validate_port(port) if port else None
     except ValueError:

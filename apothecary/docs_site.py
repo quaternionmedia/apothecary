@@ -12,11 +12,12 @@ than a dependency: a documentation page is not a runtime path worth a
 component audit, and nothing is fetched while a person is using the tool.
 Raw HTML in a page is shown as text, not run.
 
-``apothecary docs generate`` writes the generated walkthroughs into
-``docs/generated/`` (the doc-workflow browser tests against a scripted server),
-and ``apothecary serve --refresh-docs`` runs it in the background; the bar on
-every page says whether that run is still going or how it ended. A link to a
-generated page that is not there yet says how to make it.
+``apothecary serve --refresh-docs`` regenerates ``docs/generated/`` in the
+background as it starts (``apothecary docs generate``: the doc-workflow
+browser tests against a scripted server), and the index says whether that
+run is still going or how it ended. It is off by default: a plain ``serve``
+regenerates nothing, and ``apothecary docs generate`` does it by hand. A link
+to a generated page that is not there yet says how to make it.
 
 ``/walkthrough`` is an index of the walkthrough's pages, in order.
 """
@@ -400,8 +401,7 @@ def refresh_note() -> Tuple[str, str, str]:
     return (
         "",
         "generated docs: not refreshed yet",
-        "apothecary docs generate makes them, or apothecary serve --refresh-docs in the "
-        "background as it starts",
+        "run apothecary docs generate, or start apothecary serve with --refresh-docs",
     )
 
 

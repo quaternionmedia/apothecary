@@ -20,25 +20,35 @@ uv run pytest tests/e2e/test_viewer.py --start-server -k minimap
 uv run apothecary test run --e2e                 # unit, walkthrough and browser tests together
 ```
 
-Without a server, `pytest` skips the browser tests with a note saying so.
+A browser test runs only against a server of its own (`--start-server`) or one
+named on purpose (`--base-url`). With neither, `pytest` skips the browser tests,
+saying which to pass: a server that happens to be listening -- a person's own
+`apothecary serve`, holding their state and their pinned boards -- is never
+used, and there is no port the suite falls back to. A `--base-url` that does
+not answer `/health` stops the run.
 
 | Flag | What it does |
 |---|---|
-| `--start-server` | Starts one server for the session, on `--server-port` if given, else on a free port. It runs the scripted `arduino-cli` from `tests/firmware_helpers.py` and the simulated printer, and keeps its firmware state in a temp folder, and its pictures too unless `APOTHECARY_PICTURE_ROOT` names a folder. No test opens a real serial port, reads `~/.apothecary`, or sees a real board. |
-| `--base-url URL` | Uses a server you started yourself instead. Tests that show the server a picture skip unless `APOTHECARY_PICTURE_ROOT` names the folder that server reads. The Bench's and the Machines' tests expect the scripted toolchain, so they fail against a real one. |
+| `--start-server` | Starts one server for the session, on `--server-port` if given, else on a free port. It runs the scripted `arduino-cli` from `tests/firmware_helpers.py` and the simulated printer mid-print, and none of the person's own tools: `ESPTOOL`, `CARGO`, `ESPFLASH` and `APOTHECARY_ORCASLICER` are `none` unless a module names scripted ones. Its tools dir, firmware state and render cache (`APOTHECARY_CACHE_DIR`, so a part's variants too) are temp folders of its own, and so are its pictures unless `APOTHECARY_PICTURE_ROOT` names a folder; a variant it saves goes to a bare clone of this checkout (`APOTHECARY_VARIANTS_REPO`), never the checkout's own refs. No test opens a real serial port, reads `~/.apothecary`, or sees a real board. |
+| `--base-url URL` | Uses a server you started yourself for the tests instead. Tests that show the server a picture skip unless `APOTHECARY_PICTURE_ROOT` names the folder that server reads. The Bench's and the Machines' tests expect the scripted toolchain, so they fail against a real one. |
 | `--slow` | Also runs tests marked `slow`: full renders and accuracy benches. |
 | `--generate-docs` | Runs the tests marked `docs`, which skip without it, and turns on their `doc_recorder` screenshots (below). Pass it through `apothecary docs generate`, not by hand. |
 | `--headed`, `--slowmo 500`, `--tracing on` | pytest-playwright's own flags, for debugging. Open a trace with `uv run playwright show-trace test-results/<test>/trace.zip`. |
 
 Every server comes from one factory, the `start_server` fixture in
 `conftest.py`, on a free port with state of its own. `test_printer_ui.py`,
-`test_ring.py`, `test_one_machine.py`, `test_bench.py` and
-`test_viewer_regressions.py` ask it for servers of their own, so what they pin,
-arm, flash and print stays off the session's server, and
-`test_docs_bench_walkthrough.py` for one whose picture folder holds only what
-its page puts there. Every other module uses that one, which lives for the
-whole run: take back what a test pins, places or adds, or the tests after it
-see it.
+`test_ring.py`, `test_one_machine.py`, `test_bench.py`,
+`test_viewer_regressions.py` and `test_less_on_screen.py` ask it for servers of
+their own, so what they pin, arm, flash and print stays off the session's
+server; `test_docs_bench_walkthrough.py` for one whose picture folder holds only
+what its page puts there; and each loop's module for the bench its loop needs:
+`test_picture_to_print.py` the simulated printer idle and pinned to printer_1's
+mainboard with a scripted OrcaSlicer, `test_part_loop.py` an OpenSCAD that
+refuses one size, `test_scad_loop.py` this machine's OpenSCAD, and
+`test_the_firmware_loop.py` scripted arduino-cli, cargo and espflash around one
+simulated devkit. Every other module uses the session's server, which lives
+for the whole run: take back what a test pins, places or adds, or the tests
+after it see it.
 
 ## Running in parallel
 

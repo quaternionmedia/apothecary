@@ -32,7 +32,10 @@ pip:
 sync beforehand is undone by the very next `uv run`."""
 
 
-@click.command(context_settings={"ignore_unknown_options": True})
+@click.command(
+    context_settings={"ignore_unknown_options": True},
+    short_help="Run this repository's CI workflows here, before a push.",
+)
 @click.argument("passthrough", nargs=-1, type=click.UNPROCESSED)
 def preflight(passthrough: tuple[str, ...]) -> None:
     """Run this repository's CI workflows locally, before pushing.
@@ -40,6 +43,7 @@ def preflight(passthrough: tuple[str, ...]) -> None:
     Delegates to the governance corpus's own runner rather than restating what
     the workflows do. A second list of "what CI runs" is a list that drifts.
 
+    \b
         apothecary preflight                        # a pull request into main
         apothecary preflight --event push --ref main
 

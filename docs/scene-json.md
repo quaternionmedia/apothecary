@@ -70,6 +70,30 @@ Every object says what it is with `type` -- one of `cube`, `sphere`, `cylinder`,
 
 You may also supply `r1`/`r2` instead of `r` for tapered cylinders.
 
+### Import
+
+A mesh file, rather than a shape described here:
+
+```json
+{
+  "type": "import",
+  "file": "parts/calibration_cube/calibration_cube.stl",
+  "convexity": 10,
+  "scale": 1.0,
+  "rotate": {"x": 0, "y": 0, "z": 0},
+  "translate": {"x": 0, "y": 0, "z": 0},
+  "comment": "optional comment"
+}
+```
+
+- `file` – the mesh: as given when absolute, else under the repository.
+- `convexity` – OpenSCAD's preview hint, a positive integer (default `10`).
+- `scale` – a positive number turning the file's units into millimetres (`25.4` for a
+  file in inches; default `1.0`).
+- `rotate`, `translate` – vectors (default zero): `rotate` stands a Y-up file up
+  (`{"x": 90}`), `translate` moves its origin to where it should sit. They render as
+  `translate() rotate() scale() import()`.
+
 ## Boolean operations
 
 Boolean nodes wrap other objects via a `children` array:
@@ -99,6 +123,19 @@ Boolean nodes wrap other objects via a `children` array:
 ```json
 {
   "type": "intersection",
+  "children": [ /* child objects */ ],
+  "comment": "optional comment"
+}
+```
+
+### Hull
+
+The convex hull of its children: four corner cylinders hulled together are a rounded
+rectangular prism.
+
+```json
+{
+  "type": "hull",
   "children": [ /* child objects */ ],
   "comment": "optional comment"
 }
@@ -153,5 +190,4 @@ On the CLI (`render`, `templategenerate`, `validate`):
 
 On the API (`POST /render`):
 
-- Invalid payloads are rejected by FastAPI/Pydantic with a 422 status and a validation error body.
-- If rendering fails due to ambiguous object types, the service attempts a best-effort rehydration of objects based on their shape.
+- Invalid payloads are rejected by FastAPI/Pydantic with a 422 status and a validation error body, an object with no `type` or an unknown one among them.
