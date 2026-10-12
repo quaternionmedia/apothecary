@@ -461,9 +461,21 @@ def _back_to_the_defaults(page: Page, from_the_ring: bool = False) -> str:
     return _status(page).inner_text()
 
 
+FAILED = """(part) => {
+    const v = window.fractalViewer, f = v.failures[part];
+    if (!f) return null;
+    const g = f.mesh.geometry; g.computeBoundingBox();
+    const s = g.boundingBox.max.clone().sub(g.boundingBox.min);
+    return { size: [s.x, s.y, s.z], color: f.mesh.material.color.getHex(),
+             drawnShown: v.meshByName[part].visible, inScene: !!f.mesh.parent };
+}"""
+
+
 def _refused_by_openscad(page: Page, side_before: float) -> str:
-    """A size OpenSCAD refuses: its error, by line, in the editor and on the
-    status line, and nothing drawn changed. The status line."""
+    """A size OpenSCAD refuses: its error, by line, in the editor and on the status
+    line; what it wrote before the error drawn greyed where the part stands, flagged
+    with the failing line, what was drawn hidden under it; and Save refused with the
+    same words. The status line."""
     _slide(page, 70)
     expect(page.locator("#stage-summary")).to_contain_text("valid", timeout=10000)
     answer = _apply(page)
@@ -488,8 +500,25 @@ def _refused_by_openscad(page: Page, side_before: float) -> str:
     marked = page.locator(".scad-editor .cm-line:has(.cm-lintRange-error)")
     expect(marked).to_have_count(1)
     expect(marked).to_contain_text("size =")
+    # The variant drawn before is the part's mesh still, hidden under the failure.
     assert _side(page) == pytest.approx(side_before, abs=0.05)
-    return _status(page).inner_text()
+    page.wait_for_function(f"() => !!window.fractalViewer.failures['{PART}']", timeout=20000)
+    failed = page.evaluate(FAILED, PART)
+    assert max(failed["size"]) == pytest.approx(70, abs=0.5), failed
+    assert failed["inScene"] and not failed["drawnShown"], failed
+    flag = page.locator(f".world-badge.failure-mark[data-part='{PART}']")
+    expect(flag).to_be_visible(timeout=10000)
+    expect(flag.locator(".badge-icon")).to_have_text(f"failed at line {SIZE_LINE}")
+    expect(page.locator("#part-envelope")).to_have_class(re.compile(r"\bfailed\b"))
+    said = _status(page).inner_text()
+    assert f"drawn greyed, flagged at line {SIZE_LINE}" in said, said
+    # Save refuses what would be a failed render, saying so.
+    _ring_on_the_part(page, "Part", "Save")
+    expect(_status(page)).to_contain_text(
+        "Not saved: with these values OpenSCAD says an error", timeout=30000
+    )
+    expect(_status(page)).to_contain_text("A failed render is not saved as a variant")
+    return said
 
 
 def _reverted_from_the_ring(page: Page, side: float) -> str:
@@ -500,6 +529,10 @@ def _reverted_from_the_ring(page: Page, side: float) -> str:
     slider = page.locator("#part-params .param[data-field='size'] input[type=range]")
     assert float(slider.input_value()) == pytest.approx(side, abs=0.5)
     _shows_variant(page)
+    # The failure goes with what was staged: what is drawn shows again.
+    assert page.evaluate(FAILED, PART) is None
+    assert page.evaluate(f"() => window.fractalViewer.meshByName['{PART}'].visible")
+    expect(page.locator(".world-badge.failure-mark")).to_have_count(0)
     return _status(page).inner_text()
 
 
@@ -757,13 +790,16 @@ def test_designing_a_part_twice_round(
         page.evaluate(STAGE_BAR_AT_THE_TOP)
         marked.evaluate(MARKED_LINE_FIRST)
         story.shows(
-            "OpenSCAD's refusal, by line",
+            "OpenSCAD's refusal, by line, drawn greyed",
             "A size of 70 mm, which this run's OpenSCAD refuses -- the test's stand-in, which "
             f"refuses a cube of {TOO_BIG:.0f} mm or more where a real OpenSCAD renders it; "
-            "walkthrough 16 meets a refusal of the SCAD's own. Apply answers with OpenSCAD's "
-            "words, listed by file and line under the stage bar, the line marked in the "
-            "part's source below, and carried on the status line. What is drawn does not "
-            "change, and the refused size is still staged.",
+            "walkthrough 16 meets a refusal of the SCAD's own. Like a snapshot, it says the "
+            "error and still writes the geometry it built: a failed render, never a variant. "
+            "Apply answers with OpenSCAD's words, listed by file and line under the stage "
+            "bar, the line marked in the part's source below, and carried on the status "
+            "line; what it built is drawn greyed where the part stands, a red flag over it "
+            "naming the line, the variant drawn before hidden under it. Part › Save refuses "
+            "it in the same words. The refused size is still staged.",
             shown=refused,
         )
 
@@ -772,8 +808,8 @@ def test_designing_a_part_twice_round(
     story.says(
         "Part › Revert puts back what was staged",
         f"{PART}'s ring, Part › Revert: the refused size is put back to what is drawn, "
-        f"{first:.2f} mm, and nothing is staged. Part › Defaults is the way to the saved "
-        "part.",
+        f"{first:.2f} mm, the greyed failure gone and the variant shown again, and nothing "
+        "is staged. Part › Defaults is the way to the saved part.",
         shown=reverted,
     )
 

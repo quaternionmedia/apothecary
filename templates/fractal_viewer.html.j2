@@ -586,6 +586,38 @@
         /* What is drawn measures other than the envelope declared: amber, with by how much. */
         .envelope.differs, .envelope.differs .measured { color: #d9a650; }
         .envelope .floor { color: #ff9b9b; font-weight: 600; }
+        /* A failed render, drawn greyed: said on the envelope's line, and flagged in the world. */
+        .envelope.failed::after { content: ' · ' attr(data-failed); color: #ff9b9b; }
+        .world-badge.failure-mark { color: #ff9b9b; border-color: #7a2a2a; background: rgba(40, 16, 16, 0.94); font-size: 11px; white-space: nowrap; }
+        .world-badge.failure-mark::after { border-top-color: #7a2a2a; }
+        /* Apply off, with why: this OpenSCAD cannot build the part. Queued: waiting for OpenSCAD. */
+        .build-note { margin-top: 6px; font-size: 11px; color: #e0a33e; }
+        .queue-said { margin-top: 6px; font-size: 11px; color: #ffc107; }
+        .build-note[hidden], .queue-said[hidden] { display: none; }
+        .checklist-of { font-size: 11px; color: #8a929e; margin: 0 0 4px; }
+        /* A variant's ⋯: what can be done to it; its history; the trash. */
+        .saved-row .saved-kind { margin-left: 6px; color: #9cc4e8; font-size: 10px; border: 1px solid #2f4a63; border-radius: 3px; padding: 0 3px; }
+        .saved-row .variant-more { margin-left: 6px; padding: 0 6px; border: 0; border-radius: 3px; background: #2a2f38; color: #d7dae0; cursor: pointer; font: inherit; }
+        .variant-manage { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 4px 0 2px; }
+        .variant-manage[hidden] { display: none; }
+        .variant-manage input { width: 8em; background: #14161a; color: #d7dae0; border: 1px solid #2a2f38; padding: 1px 4px; font: inherit; }
+        .variant-manage button, .trash-row button, .trash-empty, .history-row button { padding: 1px 6px; border: 0; border-radius: 3px; background: #2a2f38; color: #d7dae0; cursor: pointer; font: inherit; font-size: 11px; }
+        .variant-manage .variant-delete, .trash-forget, .trash-empty { color: #ff9b9b; }
+        .variant-history-list { flex-basis: 100%; }
+        .history-row { padding: 2px 0 2px 8px; border-left: 2px solid #2a2f38; margin: 2px 0; font-size: 11px; }
+        .history-row.current { border-left-color: #5ec27e; }
+        .history-row .history-now { color: #5ec27e; font-size: 10px; }
+        details.variant-trash { margin-top: 6px; }
+        .trash-row { display: flex; gap: 6px; align-items: center; font-size: 11px; padding: 2px 0; }
+        .trash-row .trash-name { color: #b08a8a; }
+        /* Two variants compared: a blue, b orange, as they are drawn. */
+        .compare-view { border: 1px solid #2a2f38; border-radius: 4px; padding: 6px 8px; margin: 6px 0; font-size: 11px; }
+        .compare-view[hidden] { display: none; }
+        .compare-head { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+        .compare-head select, .compare-head button { background: #14161a; color: #d7dae0; border: 1px solid #2a2f38; border-radius: 3px; font: inherit; padding: 1px 4px; }
+        .compare-a { color: #4a9eff; } .compare-b { color: #e0903e; }
+        .compare-sizes, .compare-params { margin-top: 4px; color: #c8ccd3; font-variant-numeric: tabular-nums; }
+        .compare-said.bad { color: #ff9b9b; }
         .code-content {
             font-family: 'Consolas', 'Monaco', 'Menlo', monospace;
             font-size: 0.72rem; line-height: 1.4; color: #9cdcfe;
@@ -756,6 +788,8 @@
 
         // A render a newer Apply from this page stopped (409): nothing to say about it.
         class Superseded extends Error {}
+        // A destructive press asked about first: what to say, nothing done.
+        class Asking extends Error {}
 
         // Why a part's editor has no controls, from the 404 GET /parts/{name}/params
         // answers: the OpenSCAD in use cannot list a SCAD's parameters (2021.01), it
@@ -855,6 +889,18 @@
         // The ghost: what was drawn before, faint and seen through, behind what is.
         const GHOST_COLOR = 0x9cc4e8;
         const GHOST_OPACITY = 0.18;
+        // A failed render's partial geometry: grey, its edges red.
+        const FAILED_COLOR = 0x8a8a8a;
+        const FAILED_EDGE_COLOR = 0xd04848;
+        // Two variants compared: a in blue, b in orange.
+        const COMPARE_A_COLOR = 0x4a9eff;
+        const COMPARE_B_COLOR = 0xe0903e;
+        // The queue of OpenSCAD's runs, asked about while a render or check of this page
+        // is in flight: first after this long, then this often.
+        const QUEUE_FIRST_LOOK_MS = 250;
+        const QUEUE_POLL_MS = 700;
+        // A destructive press (emptying the trash) asks again, and waits this long for it.
+        const CONFIRM_MS = 6000;
         // Render on demand: after a frame is drawn, the badges are placed again for
         // this many frames more (anchors.js tests what hides them every few).
         const ANCHOR_TAIL_FRAMES = 8;
@@ -1166,6 +1212,11 @@
                 this.ghostShown = false;
                 this.ghostBefore = {};
                 this.ghostMesh = null;
+                // A failed render's greyed partial geometry, by part; two variants compared,
+                // and their meshes.
+                this.failures = {};
+                this.comparing = null;
+                this.compareMeshes = [];
                 // Render on demand: a frame is drawn only when something drawn changed
                 // (sceneChanged reads the scene, the camera and the canvas against the
                 // last frame), or when asked (invalidate). Counted for a reader.
@@ -1928,6 +1979,8 @@
             clearScene() {
                 this.hideHandles();
                 this.dropGhostMesh();
+                for (const ref of Object.keys(this.failures)) this.clearFailure(ref);
+                if (this.comparing) this.closeComparison();
                 for (const object of [
                     ...Object.values(this.meshByName),
                     ...Object.values(this.buildVolumeMeshByName),
@@ -3148,29 +3201,37 @@
                         // This page's id: a newer Apply from it stops this one's render.
                         // With the SCAD edited, the draft is what renders (beside the part,
                         // into the cache), the part's own SCAD untouched.
+                        // The editor's version goes with it, and comes back with the answer
+                        // (editor_version): a render that lands for older text says so.
                         const scad = this.scadStages[`part:${ref}`];
                         const draft = scad && scad.text !== null && scad.text !== scad.own ? scad.text : null;
+                        const version = scad ? scad.version ?? 0 : null;
                         const url = draft === null
                             ? `${base}/stl/generate?page=${encodeURIComponent(PAGE_ID)}`
                             : `${base}/draft/render?page=${encodeURIComponent(PAGE_ID)}`;
-                        const response = await fetch(url, {
+                        const response = await this.watchingTheQueue(fetch(url, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(draft === null ? { params } : { scad: draft, params }),
-                        });
+                            body: JSON.stringify(draft === null ? { params, editor_version: version } : { scad: draft, params, editor_version: version }),
+                        }));
                         const body = await response.json().catch(() => ({}));
                         if (response.status === 409) throw new Superseded();
+                        const now = this.scadStages[`part:${ref}`];
+                        const older = (asked) => draft !== null && Boolean(now) && asked !== null && asked !== undefined && String(asked) !== String(now.version ?? 0);
                         if (!response.ok) {
+                            // A failed render: OpenSCAD's words by line, and the geometry it wrote
+                            // before the error (partial), drawn greyed and flagged -- never a variant.
                             const detail = body.detail;
                             const error = new Error(typeof detail === 'string' ? detail : (detail?.message ?? response.statusText));
                             error.messages = detail?.messages ?? [];
+                            error.partial = detail?.partial ?? null;
+                            error.older = older(detail?.editor_version);
                             throw error;
                         }
                         // What it rendered, and whether the editor holds other SCAD by the
                         // time it lands: a render of older text says so, and is not taken
                         // for what the editor says now.
-                        const now = this.scadStages[`part:${ref}`];
-                        return { ...body, sentScad: draft ?? now?.own ?? null, older: draft !== null && Boolean(now) && now.text !== draft };
+                        return { ...body, sentScad: draft ?? now?.own ?? null, older: older(body.editor_version) };
                     },
                     onApplied: async (body, params, { again = false } = {}) => {
                         // The saved part is drawn from its own STL; anything else from
@@ -3196,6 +3257,9 @@
                         const target = { key: `part:${ref}`, label: ref, part: ref };
                         const stage = this.partStages[target.key];
                         if (stage) stage.measured = { box: body.measured, from: body.measured_from };
+                        // What is drawn now is no failure; and its readiness is the variant's.
+                        this.clearFailure(ref);
+                        if (this.editorTarget?.key === target.key && this.editorTarget.checklistUrl) this.loadPartChecklist(this.editorTarget);
                         const scad = this.scadStages[target.key];
                         if (scad && body.sentScad !== undefined) scad.drawnText = body.sentScad ?? scad.own;
                         if (!again) this.noteApplied(target, body, params ?? {});
@@ -3205,7 +3269,10 @@
                         this.keepWork(target);
                         if (this.ghostShown && this.editorTarget?.part === ref) this.showGhost();
                         if (body.older) return `${ref} drawn from older SCAD than the editor holds now: what it says now is checked, and rendered once it reads`;
-                        const how = body.regenerated ? `${ref} regenerated` : `${ref} from the cache, nothing rendered`;
+                        // A comment-only edit compiles as a variant already rendered: drawn at once.
+                        const how = body.regenerated ? `${ref} regenerated`
+                            : body.compiled_from ? `${ref} compiles as the variant already rendered, nothing rendered`
+                            : `${ref} from the cache, nothing rendered`;
                         if (body.draft) return `${how} from its edited SCAD: an applied variant, not saved; Part › Save keeps it in git`;
                         return variant ? `${how}: an applied variant, not saved` : `${how}: drawn as saved`;
                     },
@@ -3328,6 +3395,8 @@
                         <button type="button" id="redo-btn" disabled title="Redo the change undone (Ctrl+Shift+Z or Ctrl+Y)">↷ Redo</button>
                         ${target.part ? `<label class="ghost-label" title="A ghost of what was drawn before the newest Apply -- the saved part, or the variant before -- with how much the size changed"><input type="checkbox" id="ghost-toggle"> Ghost</label>` : ''}
                       </div>
+                      <div id="part-build-note" class="build-note" hidden></div>
+                      <div id="part-queue" class="queue-said" hidden></div>
                       <div id="kept-offer" class="kept-offer" hidden><span class="kept-said"></span>
                         <button type="button" id="kept-restore" title="Put back what this tab had before it was reloaded">Restore</button>
                         <button type="button" id="kept-discard" title="Let it go: what is drawn stays">Discard</button></div>
@@ -3337,7 +3406,8 @@
                     ${target.part ? `<details id="part-history" class="fold part-history" hidden title="This tab's recent applies of the part, newest first: one clicked is drawn again from the cache">
                       <summary>Recent applies</summary><ul id="part-history-list" class="apply-history"></ul></details>` : ''}
                     </div>
-                    ${target.part ? `<div class="code-header saved-header">Saved variants</div>
+                    ${target.part ? `<div id="part-compare" class="compare-view" hidden></div>
+                    <div class="code-header saved-header">Saved variants</div>
                     <div id="part-saved" class="saved-list"></div>` : ''}
                     ${target.scadUrl ? `<div class="code-header">${target.part ? 'SCAD' : 'SCAD (a few lines, from its shape)'}</div>
                     <div id="part-scad" class="scad-slot">Loading…</div>` : ''}
@@ -3355,6 +3425,10 @@
                     const row = ev.target.closest('li[data-at]');
                     if (row) this.drawFromHistory(target, Number(row.dataset.at)).then(({ ok, said }) => this.setStatus(said, ok ? 'success' : 'error'));
                 });
+                // Download SCAD: the edit, when the editor holds one; the draft a variant
+                // drawn was rendered from; else the part's own.
+                const download = this.partSection.querySelector('.part-scad-download');
+                if (download && target.part) download.onclick = (ev) => this.downloadScad(target, ev);
                 if (target.scadUrl) this.scadLoading = this.loadPartScad(target);
                 if (target.checklistUrl) this.loadPartChecklist(target);
                 if (target.part) this.showDrawn(target.part);
@@ -3390,8 +3464,15 @@
             // about what is buildable.
             async loadPartChecklist(target) {
                 const host = document.getElementById('part-checklist');
+                // Of what is drawn: a variant this tab applied, its fit judged by what it
+                // measured; and in this site, against the build volume of the printer pinned.
+                const variant = target.part ? this.variantByPart[target.part] : null;
+                const asked = new URLSearchParams();
+                if (variant) asked.set('variant', variant);
+                if (this.siteName) asked.set('site', this.siteName);
                 try {
-                    const response = await fetch(target.checklistUrl);
+                    const response = await fetch(`${target.checklistUrl}${asked.size ? `?${asked}` : ''}`);
+                    if (host !== document.getElementById('part-checklist')) return;
                     if (!response.ok) { host.textContent = 'No checklist available.'; return; }
                     const report = await response.json();
                     host.innerHTML = '';
@@ -3402,6 +3483,13 @@
                         ? 'Ready to build'
                         : `Not ready — ${report.blocked} blocking, ${report.unknown} unanswered`;
                     host.appendChild(verdict);
+                    // Whose readiness it is, and the volume it was measured against.
+                    const of = document.createElement('div');
+                    of.className = 'checklist-of';
+                    const volume = report.build_volume;
+                    of.textContent = `${report.variant ? `The variant drawn (${report.variant.slice(0, 8)})` : 'The saved part'}`
+                        + (volume ? `, against a build volume of ${volume.size.map((v) => Number(v).toFixed(0)).join(' × ')} mm (${volume.from})` : '');
+                    host.appendChild(of);
 
                     for (const check of report.checks) {
                         const row = document.createElement('div');
@@ -3473,6 +3561,7 @@
                 const count = Object.keys(diff).length;
                 this.markStagedControls(diff);
                 this.refreshUndoButtons(target);
+                this.showBuildNote(target);
                 // What this tab keeps of it, should it be reloaded.
                 this.keepWork(target);
                 // Whatever check is waiting or under way is for an older set now.
@@ -3484,7 +3573,7 @@
                 if (!count && this.toSaved(target)) {
                     summary.className = 'clean';
                     summary.textContent = "The part's own numbers, and its SCAD edited: Apply draws the saved part";
-                    apply.disabled = false;
+                    apply.disabled = !this.canBuild(target);
                     apply.textContent = 'Apply: the saved part';
                     this.envelopeFor = 'drawn';
                     return;
@@ -3546,7 +3635,7 @@
                     : '';
                 summary.textContent =
                     `${count} change${count > 1 ? 's' : ''} staged, valid${envelope}`;
-                apply.disabled = false;
+                apply.disabled = !this.canBuild(target);
                 apply.textContent = `Apply ${count} change${count > 1 ? 's' : ''}`;
                 // The envelope shown is the staged set's now, not what is drawn's.
                 this.envelopeFor = 'staged';
@@ -3664,6 +3753,8 @@
                 if (!stage) return false;
                 if (Object.entries(stage.staged).some(([k, v]) => !sameValue(v, stage.committed[k]))) this.noteUndo(stage);
                 Object.assign(stage.staged, JSON.parse(JSON.stringify(stage.committed)));
+                // A failure drawn of what was staged goes with it: what is drawn shows again.
+                if (target.part) this.clearFailure(target.part);
                 this.showStaged(target);
                 this.editorLoading = Promise.resolve();
                 return true;
@@ -3693,6 +3784,7 @@
                 const scad = this.scadStages[target.key];
                 // An Apply asked for is the render; one waiting for the quiet is not needed.
                 if (scad) { clearTimeout(scad.checkTimer); clearTimeout(scad.renderTimer); scad.seq += 1; }
+                if (!this.canBuild(target)) return `${label}: ${this.partStages[target.key]?.buildNote || 'this OpenSCAD cannot build it'}`;
                 if (this.toSaved(target)) { await this.drawSaved(target); return null; }
                 const count = Object.keys(this.stagedDiff()).length;
                 const edited = Boolean(scad && scad.text !== null && scad.text !== scad.drawnText);
@@ -3763,6 +3855,7 @@
                     clearTimeout(scad.checkTimer);
                     clearTimeout(scad.renderTimer);
                     scad.seq += 1;
+                    if (scad.text !== scad.own) scad.version = (scad.version ?? 0) + 1;
                     scad.text = scad.own;
                     scad.check = null;
                     if (this.scadTarget?.key === target.key) this.scadEditor?.say("The part's own SCAD, as the saved part is drawn: edit it here; it is checked once typing stops and rendered once it reads.");
@@ -3818,6 +3911,9 @@
                         stage.measured = { box: drawn.measured, from: drawn.measuredFrom };
                     }
                     stage.defaults = Object.fromEntries(spec.fields.map((f) => [f.name, f.default]));
+                    // Whether this OpenSCAD can build it at all: when not, Apply is off from
+                    // the start, saying why, rather than a 503 after it is pressed.
+                    if ('can_build' in spec) { stage.canBuild = spec.can_build !== false; stage.buildNote = spec.build_note ?? null; }
                     // Contested first: a number the sources disagree about is the
                     // one a reader most needs to find.
                     const ordered = [...spec.fields].sort(
@@ -4258,9 +4354,383 @@
                 clearTimeout(scad.checkTimer);
                 clearTimeout(scad.renderTimer);
                 scad.seq += 1;
+                if (scad.text !== text) scad.version = (scad.version ?? 0) + 1;
                 scad.text = text;
                 scad.drawnText = text;
                 scad.check = null;
+            }
+
+            // ---- what this OpenSCAD can build, and its queue ----------------------
+            //
+            // A part this OpenSCAD cannot build (gridfinity on 2021.01) says so when its
+            // editor opens (can_build, build_note): Apply is off from the start. A render or
+            // a check this page asked for may wait its turn among OpenSCAD's runs (at most a
+            // few go at once): while one is in flight the page asks GET /openscad/runs for
+            // its own, says it is queued and how far back, and stops asking once nothing of
+            // its own is running or waiting.
+
+            canBuild(target) {
+                return this.partStages[target?.key]?.canBuild !== false;
+            }
+
+            showBuildNote(target) {
+                const note = document.getElementById('part-build-note');
+                if (!note) return;
+                const stage = this.partStages[target.key];
+                const cannot = stage?.canBuild === false;
+                note.hidden = !cannot;
+                note.textContent = cannot ? `Apply is off: ${stage.buildNote || 'this OpenSCAD cannot build it'}` : '';
+                const apply = document.getElementById('apply-btn');
+                if (apply && cannot) {
+                    apply.disabled = true;
+                    apply.title = `This OpenSCAD cannot build it: ${stage.buildNote || ''}`;
+                }
+            }
+
+            // `asked`, a fetch of a render or a check, with the queue watched while it is
+            // in flight.
+            async watchingTheQueue(asked) {
+                this.inFlight = (this.inFlight ?? 0) + 1;
+                this.watchQueue();
+                try { return await asked; } finally { this.inFlight -= 1; }
+            }
+
+            watchQueue() {
+                if (this.queueTimer) return;
+                const look = async () => {
+                    let runs = null;
+                    try {
+                        const r = await fetch(`${BASE_URL}/openscad/runs?page=${encodeURIComponent(PAGE_ID)}`);
+                        runs = r.ok ? await r.json() : null;
+                    } catch (e) { runs = null; }
+                    const mine = (runs?.waiting ?? []).filter((w) => w.page === PAGE_ID);
+                    const running = (runs?.running ?? []).filter((w) => w.page === PAGE_ID);
+                    this.showQueue(mine, runs?.limit);
+                    // Nothing of this page's waits, runs or is being asked: no more asking.
+                    if (!mine.length && !running.length && !this.inFlight) {
+                        clearTimeout(this.queueTimer);
+                        this.queueTimer = null;
+                        return;
+                    }
+                    this.queueTimer = setTimeout(look, QUEUE_POLL_MS);
+                };
+                this.queueTimer = setTimeout(look, QUEUE_FIRST_LOOK_MS);
+            }
+
+            showQueue(waiting, limit) {
+                const line = document.getElementById('part-queue');
+                if (!line) return;
+                this.queuedNow = waiting;
+                if (!waiting.length) { line.hidden = true; line.textContent = ''; return; }
+                const first = waiting.reduce((a, b) => (a.position <= b.position ? a : b));
+                const ahead = first.position - 1;
+                const what = first.kind === 'render' ? 'render' : 'check';
+                line.hidden = false;
+                line.textContent = `Queued: this ${what} of ${first.part} waits for OpenSCAD -- ${ahead ? `${ahead} ahead of it` : 'next'}, ${limit ?? 'a few'} at once -- ${Math.round(first.waited_seconds)} s so far`;
+                this.setStatus(`${first.part}: queued for OpenSCAD, ${ahead ? `${ahead} ahead` : 'next'}`, 'loading');
+            }
+
+            // ---- a failed render: drawn greyed, flagged at its line ----------------
+            //
+            // Any error OpenSCAD says fails a render. What it wrote before the error (the
+            // answer's partial) is drawn greyed where the part stands, with a red flag at
+            // the failing line; what was drawn before waits under it, hidden, until what
+            // is staged is put back or an Apply succeeds. It is never a variant, and never
+            // saved.
+
+            async showFailure(target, partial) {
+                const ref = target.part;
+                const key = this.editedKey(ref);
+                const node = key && this.renderNodeByKey[key];
+                this.clearFailure(ref);
+                if (!node || !partial?.stl_url) return false;
+                let mesh;
+                try {
+                    mesh = await this.loadSTLMesh(node, `${BASE_URL}${partial.stl_url}`, partial.measured);
+                } catch (err) {
+                    console.warn(`${ref}'s partial geometry could not be read:`, err);
+                    return false;
+                }
+                mesh.material.dispose();
+                mesh.material = new THREE.MeshPhongMaterial({ ...FACE_BEHIND_ITS_EDGES, color: FAILED_COLOR, transparent: true, opacity: 0.85 });
+                const edges = mesh.getObjectByName('edges');
+                if (edges) edges.material.color.set(FAILED_EDGE_COLOR);
+                mesh.userData.failed = ref;
+                mesh.userData.passThrough = true;
+                this.scene.add(mesh);
+                const drawn = this.meshByName[key];
+                if (drawn) drawn.visible = false;
+                this.failures[ref] = { mesh, key, partial };
+                const mark = `failed:${ref}`;
+                const top = () => {
+                    const g = mesh.geometry;
+                    if (!g.boundingBox) g.computeBoundingBox();
+                    const b = g.boundingBox;
+                    return mesh.localToWorld(new THREE.Vector3((b.min.x + b.max.x) / 2, b.max.y, (b.min.z + b.max.z) / 2));
+                };
+                const el = this.anchors.badge(mark, top, { className: 'failure-mark', ignore: (m) => m === mesh });
+                el.dataset.part = ref;
+                const where = partial.line ? `line ${partial.line}` : 'its error';
+                this.anchors.say(mark, {
+                    icon: `failed at ${where}`,
+                    words: `${esc(ref)}: a failed render, drawn greyed as far as OpenSCAD built it -- ${esc(partial.message ?? '')}${partial.file ? ` (${esc(partial.file.split('/').pop())}, ${esc(where)})` : ''}`,
+                });
+                const line = document.getElementById('part-envelope');
+                if (line && this.editorTarget?.part === ref) {
+                    line.classList.add('failed');
+                    line.dataset.failed = `failed at ${where}: what it built before the error is drawn greyed`;
+                }
+                this.invalidate();
+                return true;
+            }
+
+            clearFailure(ref) {
+                const failure = this.failures[ref];
+                if (!failure) return;
+                delete this.failures[ref];
+                this.scene.remove(failure.mesh);
+                disposeDeep(failure.mesh);
+                this.anchors.remove(`failed:${ref}`);
+                const drawn = this.meshByName[failure.key];
+                if (drawn) drawn.visible = true;
+                const line = document.getElementById('part-envelope');
+                if (line) { line.classList.remove('failed'); delete line.dataset.failed; }
+                this.invalidate();
+            }
+
+            // ---- Download SCAD: what the editor holds -----------------------------
+
+            async downloadScad(target, event) {
+                const scad = this.scadStages[target.key];
+                const base = `${BASE_URL}/parts/${encodeURIComponent(target.part)}`;
+                const variant = this.variantByPart[target.part];
+                let response;
+                if (scad && scad.text !== null && scad.text !== scad.own) {
+                    // The edit, as an attachment named as the part's SCAD is.
+                    event.preventDefault();
+                    response = await fetch(`${base}/draft/scad`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scad: scad.text }),
+                    }).catch(() => null);
+                } else if (variant) {
+                    // The draft the variant drawn was rendered from, or the part's own.
+                    event.preventDefault();
+                    response = await fetch(`${base}/variants/${encodeURIComponent(variant)}/scad?download=true`).catch(() => null);
+                } else {
+                    return;  // the part's own SCAD: the link's own address
+                }
+                if (!response?.ok) { this.setStatus(`${target.label}: its SCAD could not be downloaded (${response?.status ?? 'no answer'})`, 'error'); return; }
+                const named = /filename="?([^";]+)"?/.exec(response.headers.get('Content-Disposition') || '');
+                const name = named ? named[1] : `${target.part}.scad`;
+                const url = URL.createObjectURL(await response.blob());
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = name;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                this.setStatus(`${target.label}: ${name} downloaded, ${scad && scad.text !== scad.own ? 'the SCAD as the editor has it' : 'the SCAD the variant drawn was rendered from'}`, 'success');
+            }
+
+            // ---- a part's saved variants, managed ---------------------------------
+            //
+            // From a variant's ⋯ in the editor: renamed or duplicated under the name typed
+            // beside it, its history shown and an earlier save restored, compared with what
+            // is drawn, or deleted -- moved to the trash, which the Deleted fold lists, each
+            // restorable, and emptied (one, or all) only when asked twice. What to say.
+
+            async manageVariant(target, verb, name, { to = '', commit = null, button = null } = {}) {
+                const part = encodeURIComponent(target.part);
+                const at = `${BASE_URL}/parts/${part}`;
+                const scad = this.scadStages[target.key];
+                const ask = async (method, path, body = undefined) => {
+                    const response = await fetch(`${at}${path}`, {
+                        method,
+                        headers: body ? { 'Content-Type': 'application/json' } : {},
+                        body: body ? JSON.stringify(body) : undefined,
+                    });
+                    const answer = await response.json().catch(() => ({}));
+                    if (!response.ok) throw new Error(typeof answer.detail === 'string' ? answer.detail : (answer.detail?.message ?? response.statusText));
+                    return answer;
+                };
+                // Asked twice: the first press of a destructive button says what it would do.
+                const twice = (what) => {
+                    if (button && button.dataset.asked === 'yes') return true;
+                    if (button) {
+                        button.dataset.asked = 'yes';
+                        button.dataset.was = button.textContent;
+                        button.textContent = 'Press again to confirm';
+                        setTimeout(() => { if (button.isConnected) { button.dataset.asked = ''; button.textContent = button.dataset.was; } }, CONFIRM_MS);
+                    }
+                    throw new Asking(`${what}, which cannot be undone: press it again to confirm`);
+                };
+                try {
+                    const v = name ? encodeURIComponent(name) : '';
+                    if (verb === 'rename' || verb === 'duplicate') {
+                        if (!to) return { ok: false, said: `${target.part}: type a name beside ${name} first, then ${verb === 'rename' ? 'Rename' : 'Duplicate'}` };
+                        await ask('POST', `/saved/${v}/${verb}`, { to });
+                        if (verb === 'rename' && scad?.from === name) { scad.from = to; if (this.scadEditor?.name() === name) this.scadEditor.setName(to); }
+                        await this.loadSavedVariants(target, verb === 'rename' && scad?.from === to ? to : null);
+                        return { ok: true, said: verb === 'rename' ? `${target.part}: ${name} is called ${to} now; its saves are as they were` : `${target.part}: ${to} is a copy of ${name}, its history shared until it is saved again` };
+                    }
+                    if (verb === 'history') {
+                        const commits = await ask('GET', `/saved/${v}/history`);
+                        this.scadEditor?.showHistory(name, commits);
+                        return { ok: true, said: `${target.part}: ${name}'s ${commits.length} save${commits.length === 1 ? '' : 's'}, newest first; Restore puts it back as it was at one` };
+                    }
+                    if (verb === 'restore') {
+                        await ask('POST', `/saved/${v}/restore`, { commit });
+                        const commits = await ask('GET', `/saved/${v}/history`);
+                        await this.loadSavedVariants(target);
+                        this.scadEditor?.showHistory(name, commits);
+                        return { ok: true, said: `${target.part}: ${name} is as it was at ${commit.slice(0, 7)} again, a new save of it; its history keeps what came between. Choosing it draws it` };
+                    }
+                    if (verb === 'delete') {
+                        await ask('DELETE', `/saved/${v}`);
+                        if (scad?.from === name) scad.from = null;
+                        await this.loadSavedVariants(target);
+                        return { ok: true, said: `${target.part}: ${name} moved to the trash; Deleted, under the variants, restores it` };
+                    }
+                    if (verb === 'undelete') {
+                        await ask('POST', `/trash/${v}/restore`, {});
+                        await this.loadSavedVariants(target);
+                        return { ok: true, said: `${target.part}: ${name} is back among the variants` };
+                    }
+                    if (verb === 'forget') {
+                        twice(`${name} would be deleted for good`);
+                        await ask('DELETE', `/trash/${v}?confirm=true`);
+                        await this.loadSavedVariants(target);
+                        return { ok: true, said: `${target.part}: ${name} is deleted for good` };
+                    }
+                    if (verb === 'empty') {
+                        twice('every deleted variant would be deleted for good');
+                        const done = await ask('DELETE', '/trash?confirm=true');
+                        await this.loadSavedVariants(target);
+                        return { ok: true, said: `${target.part}: the trash is emptied, ${done.emptied.length} variant${done.emptied.length === 1 ? '' : 's'} deleted for good` };
+                    }
+                    if (verb === 'compare') return this.compareVariants(target, name);
+                    return { ok: false, said: `${target.part}: nothing does ${verb}` };
+                } catch (err) {
+                    return { ok: false, said: err instanceof Asking ? `${target.part}: ${err.message}` : `${target.part}: ${verb} ${name ?? ''}: ${err.message}` };
+                }
+            }
+
+            // ---- two variants compared --------------------------------------------
+            //
+            // A saved variant beside another -- what is drawn, the part's own, or another
+            // saved one -- from GET /parts/{name}/compare: each drawn where the part stands,
+            // overlaid (one in each colour, seen through) or side by side, with every number
+            // that differs and what the SCAD changes. Close puts the part back as drawn.
+
+            async compareVariants(target, a, b = null) {
+                const ref = target.part;
+                const drawn = this.variantByPart[ref];
+                const other = b ?? (drawn ? `@${drawn}` : '@part');
+                const view = this.partSection?.querySelector('#part-compare');
+                if (!view) return { ok: false, said: `${ref}: its editor is not open` };
+                view.hidden = false;
+                view.innerHTML = `<div class="compare-said">Comparing ${esc(a)} with ${esc(this.sideName(other))}… a side not in the cache is rendered first</div>`;
+                this.setStatus(`${ref}: comparing ${a} with ${this.sideName(other)}`, 'loading');
+                let answer;
+                try {
+                    const response = await this.watchingTheQueue(fetch(`${BASE_URL}/parts/${encodeURIComponent(ref)}/compare?a=${encodeURIComponent(a)}&b=${encodeURIComponent(other)}&measure=true&page=${encodeURIComponent(PAGE_ID)}`));
+                    answer = await response.json().catch(() => ({}));
+                    if (!response.ok) throw new Error(typeof answer.detail === 'string' ? answer.detail : response.statusText);
+                } catch (err) {
+                    view.innerHTML = `<div class="compare-said bad">${esc(a)} could not be compared: ${esc(err.message)}</div>`;
+                    return { ok: false, said: `${ref}: ${a} could not be compared: ${err.message}` };
+                }
+                this.comparing = { ref, a, b: other, answer, mode: this.comparing?.mode ?? 'overlaid' };
+                this.showComparison(target);
+                view.scrollIntoView({ block: 'nearest' });
+                const differ = answer.params.length;
+                return { ok: true, said: `${ref}: ${a} beside ${this.sideName(other)}, ${this.comparing.mode}: ${differ ? `${differ} number${differ === 1 ? ' differs' : 's differ'}` : 'the same numbers'}, and ${answer.diff ? 'its SCAD differs' : 'the same SCAD'}` };
+            }
+
+            sideName(side) {
+                if (side === '@part') return "the part's own";
+                if (side.startsWith('@')) return side.slice(1) === this.variantByPart[this.editorTarget?.part] ? 'what is drawn' : `the variant ${side.slice(1, 9)}`;
+                return side;
+            }
+
+            showComparison(target) {
+                const c = this.comparing;
+                const view = this.partSection?.querySelector('#part-compare');
+                if (!c || !view) return;
+                const { a, b, params, diff } = c.answer;
+                const scad = this.scadStages[target.key];
+                const size = (side) => (side.measured ? `${side.measured.size.x.toFixed(2)} × ${side.measured.size.y.toFixed(2)} × ${side.measured.size.z.toFixed(2)} mm` : (side.error ? `not rendered: ${side.error}` : 'not measured'));
+                const value = (v) => (v === null || v === undefined ? 'its default' : described(v));
+                const choices = [['@part', "the part's own"], ...(this.variantByPart[c.ref] ? [[`@${this.variantByPart[c.ref]}`, 'what is drawn']] : []),
+                    ...((scad?.saved ?? []).filter((v) => v.name !== c.a).map((v) => [v.name, v.name]))];
+                view.innerHTML = `
+                    <div class="compare-head"><b>${esc(c.a)}</b> <span class="compare-a">■</span> beside
+                      <select class="compare-with" aria-label="What ${esc(c.a)} is compared with" title="What ${esc(c.a)} is compared with">${choices.map(([v, label]) => `<option value="${esc(v)}"${v === c.b ? ' selected' : ''}>${esc(label)}</option>`).join('')}</select>
+                      <span class="compare-b">■</span>
+                      <select class="compare-mode" aria-label="How the two are drawn" title="How the two are drawn"><option value="overlaid"${c.mode === 'overlaid' ? ' selected' : ''}>overlaid</option><option value="side by side"${c.mode === 'side by side' ? ' selected' : ''}>side by side</option></select>
+                      <button type="button" class="compare-close" title="The part drawn as it was">Close</button></div>
+                    <div class="compare-sizes"><span class="compare-a">${esc(c.a)}</span> ${esc(size(a))} · <span class="compare-b">${esc(this.sideName(c.b))}</span> ${esc(size(b))}</div>
+                    <div class="compare-params">${params.length ? params.map((d) => `<div>${esc(d.name)}: ${esc(value(d.a))} → ${esc(value(d.b))}</div>`).join('') : '<div class="empty">the same numbers</div>'}</div>
+                    <details class="variant-diff"${diff ? ' open' : ''}><summary>what the SCAD changes</summary><pre>${diff ? esc(diff) : 'nothing: the same SCAD'}</pre></details>`;
+                view.querySelector('.compare-with').onchange = (ev) => this.compareVariants(target, c.a, ev.target.value).then(({ ok, said }) => this.setStatus(said, ok ? 'success' : 'error'));
+                view.querySelector('.compare-mode').onchange = (ev) => { c.mode = ev.target.value; this.drawComparison(); this.setStatus(`${c.ref}: ${c.a} and ${this.sideName(c.b)} drawn ${c.mode}`, 'success'); };
+                view.querySelector('.compare-close').onclick = () => { this.closeComparison(); this.setStatus(`${c.ref}: the comparison closed; drawn as it was`, 'success'); };
+                this.drawComparison();
+            }
+
+            // The two sides in the world, where the part stands: overlaid, or b beside a
+            // along x. The part's own mesh waits under them, hidden.
+            async drawComparison() {
+                const c = this.comparing;
+                if (!c) return;
+                this.dropComparisonMeshes();
+                const key = this.editedKey(c.ref);
+                const node = key && this.renderNodeByKey[key];
+                if (!node) return;
+                const token = (this.compareToken = (this.compareToken ?? 0) + 1);
+                const load = async (side, color) => {
+                    if (!side.stl_url) return null;
+                    const mesh = await this.loadSTLMesh(node, `${BASE_URL}${side.stl_url}`, side.measured);
+                    mesh.material.dispose();
+                    mesh.material = new THREE.MeshPhongMaterial({ ...FACE_BEHIND_ITS_EDGES, color, transparent: true, opacity: c.mode === 'overlaid' ? 0.55 : 0.9, depthWrite: c.mode !== 'overlaid' });
+                    mesh.getObjectByName('edges')?.material.color.set(color);
+                    mesh.userData.comparing = c.ref;
+                    mesh.userData.passThrough = true;
+                    return mesh;
+                };
+                const [ma, mb] = await Promise.all([load(c.answer.a, COMPARE_A_COLOR), load(c.answer.b, COMPARE_B_COLOR)]);
+                if (token !== this.compareToken || this.comparing !== c) { for (const m of [ma, mb]) if (m) disposeDeep(m); return; }
+                if (c.mode === 'side by side' && ma && mb) {
+                    const wa = c.answer.a.measured?.size.x ?? 0, wb = c.answer.b.measured?.size.x ?? 0;
+                    mb.position.x += (wa + wb) / 2 + Math.max(10, 0.2 * Math.max(wa, wb));
+                }
+                this.compareMeshes = [ma, mb].filter(Boolean);
+                for (const m of this.compareMeshes) this.scene.add(m);
+                if (this.meshByName[key]) this.meshByName[key].visible = false;
+                this.compareHidden = key;
+                // Both in view: the box round the two, framed.
+                if (this.compareMeshes.length) {
+                    const box = new THREE.Box3();
+                    for (const m of this.compareMeshes) box.expandByObject(m);
+                    this.frameBox({ min: [box.min.x, box.min.z, box.min.y], max: [box.max.x, box.max.z, box.max.y] });
+                }
+                this.invalidate();
+            }
+
+            dropComparisonMeshes() {
+                for (const m of this.compareMeshes ?? []) { this.scene.remove(m); disposeDeep(m); }
+                this.compareMeshes = [];
+                if (this.compareHidden && this.meshByName[this.compareHidden] && !Object.values(this.failures).some((f) => f.key === this.compareHidden)) this.meshByName[this.compareHidden].visible = true;
+                this.compareHidden = null;
+                this.invalidate();
+            }
+
+            closeComparison() {
+                this.comparing = null;
+                this.compareToken = (this.compareToken ?? 0) + 1;
+                this.dropComparisonMeshes();
+                const view = this.partSection?.querySelector('#part-compare');
+                if (view) { view.hidden = true; view.innerHTML = ''; }
             }
 
             // ---- the ghost: what was drawn before, beside what is ----------------
@@ -4376,6 +4846,13 @@
                     if (!box.isEmpty()) bounds = { min: [box.min.x, box.min.z, box.min.y], max: [box.max.x, box.max.z, box.max.y] };
                 }
                 bounds ??= this.boundsFor(this.renderNodeByKey[key], 0);
+                this.frameBox(bounds);
+                return { ok: true, said: `Framed ${key}; Selected and its editor stay open (f)` };
+            }
+
+            // The view brought to a box of the site's (x, y, z up), from the side it looks
+            // from, near enough that the whole box fits; the level's reach left as it was.
+            frameBox(bounds) {
                 const sizes = bounds.max.map((v, i) => v - bounds.min[i]);
                 const span = Math.max(20, ...sizes);
                 const centre = sceneAt(...bounds.min.map((v, i) => (v + bounds.max[i]) / 2));
@@ -4394,7 +4871,6 @@
                 if (near < this.camera.near) { this.camera.near = near; this.camera.updateProjectionMatrix(); }
                 this.orbitControls.update();
                 this.invalidate();
-                return { ok: true, said: `Framed ${key}; Selected and its editor stay open (f)` };
             }
 
             // ---- the SCAD editor ----------------------------------------
@@ -4451,6 +4927,8 @@
                         onCheck: () => this.checkAndDraw(target),
                         onApply: () => this.applyKey(target),
                         onName: () => { scad.replacing = null; },
+                        onManage: (verb, name, extra) => this.manageVariant(target, verb, name, extra)
+                            .then(({ ok, said }) => this.setStatus(said, ok ? 'success' : 'error')),
                     };
                     // This part's editor as it was left, when it was: its text, its undo.
                     let editor = this.scadEditors.get(target.key);
@@ -4502,6 +4980,7 @@
                 const scad = this.scadStages[target.key];
                 if (!scad) return;
                 scad.text = text;
+                scad.version = (scad.version ?? 0) + 1;
                 clearTimeout(scad.checkTimer);
                 clearTimeout(scad.renderTimer);
                 const seq = (scad.seq += 1);
@@ -4539,11 +5018,11 @@
                 const scad = this.scadStages[target.key];
                 const stage = this.partStages[target.key];
                 const base = `${BASE_URL}/parts/${encodeURIComponent(target.part)}`;
-                const response = await fetch(`${base}/draft/check?page=${encodeURIComponent(PAGE_ID)}`, {
+                const response = await this.watchingTheQueue(fetch(`${base}/draft/check?page=${encodeURIComponent(PAGE_ID)}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ scad: scad.text, params: { ...(stage?.staged ?? {}) } }),
-                });
+                    body: JSON.stringify({ scad: scad.text, params: { ...(stage?.staged ?? {}) }, editor_version: scad.version ?? 0 }),
+                }));
                 if (response.status === 409) return null;  // a newer check from this page took over
                 const body = await response.json().catch(() => null);
                 if (!response.ok || !body) {
@@ -4572,7 +5051,7 @@
             // The render: once the check has said the draft reads, as Apply renders.
             async renderScad(target, seq) {
                 const scad = this.scadStages[target.key];
-                if (!scad || seq !== scad.seq) return;
+                if (!scad || seq !== scad.seq || !this.canBuild(target)) return;
                 const check = await scad.checking;
                 if (seq !== scad.seq || !check || !check.valid) return;
                 await this.applyEditor(target);
@@ -4618,12 +5097,13 @@
             async loadSavedVariants(target, chosen = null) {
                 const scad = this.scadStages[target.key];
                 if (!scad || !target.part) return;
-                try {
-                    const response = await fetch(`${BASE_URL}/parts/${encodeURIComponent(target.part)}/saved?diff=true`);
-                    scad.saved = response.ok ? await response.json() : [];
-                } catch (err) {
-                    scad.saved = [];
-                }
+                const part = encodeURIComponent(target.part);
+                const [saved, trash] = await Promise.all([
+                    fetch(`${BASE_URL}/parts/${part}/saved?diff=true`).then((r) => (r.ok ? r.json() : [])).catch(() => []),
+                    fetch(`${BASE_URL}/parts/${part}/trash`).then((r) => (r.ok ? r.json() : [])).catch(() => []),
+                ]);
+                scad.saved = saved;
+                scad.trash = trash;
                 const mark = chosen ?? scad.from;
                 const names = new Set(scad.saved.map((v) => v.name));
                 let n = 1;
@@ -4638,7 +5118,7 @@
                     short.innerHTML = variantChoices(scad.saved.slice(0, SAVED_SHORT_LIST), { chosen: mark })
                         + (scad.saved.length > SAVED_SHORT_LIST ? `<div class="saved-numbers">and ${scad.saved.length - SAVED_SHORT_LIST} more in the editor</div>` : '');
                 }
-                if (this.scadTarget?.key === target.key) this.scadEditor?.showVariants(scad.saved, mark);
+                if (this.scadTarget?.key === target.key) this.scadEditor?.showVariants(scad.saved, mark, scad.trash);
             }
 
             // Save: the SCAD as the editor has it and the numbers staged, a variant in
@@ -4674,18 +5154,25 @@
                 });
                 const body = await response.json().catch(() => ({}));
                 if (!response.ok) {
-                    const said = `${target.part} not saved: ${typeof body.detail === 'string' ? body.detail : response.statusText}`;
+                    // A failed render is never saved: the server says so, with OpenSCAD's words
+                    // by line, marked; an edit of a submodule's upstream SCAD is refused too.
+                    const detail = body.detail;
+                    const why = typeof detail === 'string' ? detail : (detail?.message ?? response.statusText);
+                    if (detail?.messages) this.showMessages(target, detail.messages);
+                    const said = why.startsWith('Not saved') ? `${target.part}: ${why}` : `${target.part} not saved: ${why}`;
                     editor.say(said, 'error');
                     this.setStatus(said, 'error');
                     return { ok: false, said };
                 }
                 scad.from = name;
-                scad.savedText = asked.text;
+                scad.savedText = body.kind === 'overlay' ? scad.own : asked.text;
                 editor.setName(name);
                 this.keepWork(target, { now: true });
                 await this.loadSavedVariants(target, name);
                 editor.say(`Saved as ${name}: a commit on ${body.ref}. Nothing in the checkout changed.`, 'valid');
-                const said = `${target.part} saved as the variant ${name}${taken ? ', replacing the one saved before' : ''}, a commit on ${body.ref}; nothing in the checkout changed, and git merge ${body.ref} makes it the part's source`;
+                const what = body.kind === 'overlay' ? `an overlay of ${body.upstream ?? 'its upstream SCAD'} setting its values, ` : '';
+                const merging = body.merge?.advice ?? `git merge ${body.ref} makes it the part's source`;
+                const said = `${target.part} saved as the variant ${name}${taken ? ', replacing the one saved before' : ''}, ${what}a commit on ${body.ref}; nothing in the checkout changed. ${merging}`;
                 this.setStatus(said, 'success');
                 return { ok: true, said };
             }
@@ -4703,9 +5190,13 @@
                     this.setStatus(said, 'error');
                     return { ok: false, said };
                 }
+                // An overlay (a part in a submodule) is the upstream SCAD with its values:
+                // its own SCAD is never loaded into the editor as the part's.
+                const overlay = variant.kind === 'overlay';
+                const text = overlay ? scad.own : (variant.scad ?? scad.own);
                 // Named before the text changes, so the name box keeps it.
                 scad.from = name;
-                scad.savedText = variant.scad ?? scad.own;
+                scad.savedText = text;
                 scad.replacing = null;
                 editor.setName(name);
                 const stage = this.partStages[target.key];
@@ -4715,7 +5206,7 @@
                     Object.assign(stage.staged, variant.params ?? {});
                     this.showStaged(target);
                 }
-                editor.setText(variant.scad ?? scad.own);
+                editor.setText(text);
                 // Checked and rendered now, not after the quiet a person typing gets.
                 clearTimeout(scad.checkTimer);
                 clearTimeout(scad.renderTimer);
@@ -4724,7 +5215,9 @@
                 scad.checking = this.checkScad(target, seq).catch(() => null);
                 await this.loadSavedVariants(target, name);
                 await this.renderScad(target, seq);
-                const said = `${target.part}: the variant ${name} is drawn, its SCAD in the editor and its numbers staged; Save keeps a change to it`;
+                const said = overlay
+                    ? `${target.part}: the variant ${name} is drawn, an overlay: the upstream SCAD with its values, staged; Save keeps a change of its values`
+                    : `${target.part}: the variant ${name} is drawn, its SCAD in the editor and its numbers staged; Save keeps a change to it`;
                 return { ok: true, said };
             }
 
@@ -4857,11 +5350,19 @@
                     this.setStatus(said, 'success');
                 } catch (err) {
                     if (err instanceof Superseded || !newest()) return;
+                    // A failure of older SCAD than the editor holds: said, the newer check's
+                    // marks left where they are, nothing drawn of it.
+                    if (err.older) {
+                        this.setStatus(`${target.label}: a render of older SCAD than the editor holds now failed; what it says now is checked, and rendered once it reads`, 'error');
+                        return;
+                    }
                     // OpenSCAD's own words, by line, in the editor; the first error on the status line.
                     this.showMessages(target, err.messages);
                     const first = (err.messages ?? []).find((m) => m.level === 'error' && m.line);
                     const where = first ? ` (${(first.file ?? '').split('/').pop()}, line ${first.line}: ${first.message})` : '';
-                    this.setStatus(`Error: ${err.message}${where}`, 'error');
+                    // What OpenSCAD wrote before it failed, drawn greyed where the part stands.
+                    const greyed = target.part && err.partial ? await this.showFailure(target, err.partial) : false;
+                    this.setStatus(`Error: ${err.message}${where}${greyed ? `; what it built before the error is drawn greyed, flagged at line ${err.partial.line ?? '?'} -- a failed render, never a variant` : ''}`, 'error');
                     console.error(err);
                 }
             }
@@ -5481,6 +5982,8 @@
                             base: BASE_URL, port, host: 'world', boards: this.boards, inPrinter,
                             pin: row ? { site: this.siteName, path: row.path, how: row.binding_source, sketch: row.sketch || null } : null,
                             say: (text, kind) => this.setStatus(text, kind),
+                            // A part drawn from a variant this tab applied is sliced as drawn.
+                            variantFor: (path) => { const ref = this.nodeByPath(path)?.part_ref; return ref ? this.variantByPart[ref] ?? null : null; },
                         });
                         if (this.machine === machine) { window.apothecaryMachine = machine.handle; this.machineOpened(port); }
                     },

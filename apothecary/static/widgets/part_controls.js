@@ -8,9 +8,10 @@
  * else a power of ten that crosses the range in a hundred to a thousand steps --
  * and the box takes any number typed, which the check then holds to the model. A
  * choice is a drop-down; a yes or no a tick; words a box; a vector a box for each of
- * its numbers, each captioned; a nested model a group of its own fields. The
- * field's description is its caption, and a unit it declares is shown beside its
- * number; where it declares none, nothing is.
+ * its numbers, each captioned; a nested model a group of its own fields (its
+ * `fields`, each described as a field is). The field's description is its caption,
+ * and a unit it declares is shown beside its number; where it declares none,
+ * nothing is.
  *
  * The page does the staging: every control calls onStage(name, value) with the
  * whole value of its field (a group's whole object, a vector's whole list), and the
@@ -46,8 +47,8 @@ export function sameValue(a, b) {
     return a === b;
 }
 
-// An integer, when the field says it is one (JSON Schema's word for it).
-export const isInteger = (field) => field.type === "integer" || field.integer === true;
+// An integer, when the field says it is one (params.py's `integer`).
+export const isInteger = (field) => field.integer === true || field.type === "integer";
 
 // A step a person counts in: a power of ten that crosses `span` in a hundred to a
 // thousand steps.
@@ -84,6 +85,7 @@ function axisNames(length) {
 }
 
 const isGroup = (field, value) => {
+    if (field.type === "group") return true;
     const v = value ?? field.default;
     return v !== null && typeof v === "object" && !Array.isArray(v);
 };
@@ -163,8 +165,14 @@ export function buildParamControl(field, value, { onStage }) {
         wrap.innerHTML = `<fieldset class="param-group"><legend><span class="name">${esc(field.name)}</span><span class="val"></span></legend>${field.description ? `<div class="caption">${esc(field.description)}</div>` : ""}</fieldset>`;
         const set = wrap.querySelector("fieldset");
         const parts = {};
-        for (const [key, sub] of Object.entries(current)) {
-            parts[key] = buildParamControl(subField(key, sub), sub, {
+        // Its own fields as the server describes them (a range, a caption, a unit), or
+        // where it does not, as their values are.
+        const own = new Map((field.fields || []).map((f) => [f.name, f]));
+        const names = own.size ? [...own.keys()] : Object.keys(current);
+        for (const key of names) {
+            const sub = current[key] ?? own.get(key)?.default;
+            current[key] = sub;
+            parts[key] = buildParamControl(own.get(key) || subField(key, sub), sub, {
                 onStage: (name, next) => {
                     current[name] = next;
                     onStage(field.name, { ...current });

@@ -31,11 +31,11 @@
  * mountScadEditor(slot, options) renders into slot and resolves to the editor:
  *   options: { text, readOnly, editable, name, onChange(text), onSave(),
  *              onFloat(), onFullscreen(), onChoose(name), onCheck(), onApply(),
- *              onName(name), shownAs }
+ *              onName(name), onManage(verb, name, { to, commit, button }), shownAs }
  *   editor:  { root, text(), setText(text), mark(messages), say(words, kind),
- *              name(), setName(name), suggest(name), showVariants(list),
- *              fullscreen(on), isFullscreen(), focus(), measure(), rebind(callbacks),
- *              destroy() }
+ *              name(), setName(name), suggest(name), showVariants(list, chosen, trash),
+ *              showHistory(name, commits), fullscreen(on), isFullscreen(), focus(),
+ *              measure(), rebind(callbacks), destroy() }
  * variantChoices(list) is the markup of a list of saved variants to choose one
  * from, as the editor's own list and the page's short list under a part's
  * parameters both draw it; the page listens on the list.
@@ -166,21 +166,67 @@ function numbers(params) {
     return shown.length ? shown.join(", ") : "its own numbers";
 }
 
+// What making a variant the part's source takes, as the server says it truly: where
+// its ref lives, and that a merge does not apply its numbers.
+function mergeSaid(v) {
+    return v.merge?.advice || `git merge ${v.ref} makes it the part's source`;
+}
+
 /* A list of saved variants to choose one from: each a button naming it, when it
- * was saved and with what numbers; with `full`, also whether HEAD holds it and,
- * folded, what it changes. */
+ * was saved and with what numbers; with `full`, also whether HEAD holds it, what
+ * making it the part's source takes and, folded, what it changes; and its ⋯, which
+ * unfolds what can be done to it: renamed or duplicated under the name typed beside
+ * them, its history (each earlier save restorable), compared with what is drawn,
+ * deleted to the trash. A part in a submodule's variant is an overlay of its
+ * upstream SCAD, and says so. */
 export function variantChoices(list, { full = false, chosen = null } = {}) {
     if (!list || !list.length) return `<span class="empty">no variants saved yet: Save keeps one in git</span>`;
     return list.map((v) => {
-        const head = v.merged ? `<span class="in-head" title="HEAD already holds it: merged">in HEAD</span>` : `<span class="not-in-head" title="Not merged: git merge ${esc(v.ref)} makes it the part's source">not merged</span>`;
+        const head = v.merged
+            ? `<span class="in-head" title="HEAD already holds it: merged">in HEAD</span>`
+            : `<span class="not-in-head" title="${esc(mergeSaid(v))}">not merged</span>`;
+        const overlay = v.kind === "overlay" ? `<span class="saved-kind" title="Saved as ${esc(v.scad_path)}: it includes ${esc(v.upstream || "the upstream SCAD")} and sets its values; the submodule is never touched">overlay</span>` : "";
         const changes = full && v.diff !== null && v.diff !== undefined
             ? `<details class="variant-diff"><summary>what it changes</summary><pre>${v.diff ? esc(v.diff) : "nothing: its SCAD is the part's own"}</pre></details>`
             : "";
+        const manage = full
+            ? `<button type="button" class="variant-more" title="Rename, duplicate, its history, compare with what is drawn, delete">⋯</button>`
+              + `<div class="variant-manage" hidden>`
+              + `<input type="text" class="variant-to" maxlength="64" spellcheck="false" placeholder="a new name" aria-label="A new name for ${esc(v.name)}">`
+              + `<button type="button" class="variant-rename" title="Rename ${esc(v.name)} to the name beside it">Rename</button>`
+              + `<button type="button" class="variant-duplicate" title="A copy of ${esc(v.name)} under the name beside it">Duplicate</button>`
+              + `<button type="button" class="variant-history" title="Each save of ${esc(v.name)}, newest first; an earlier one can be restored">History</button>`
+              + `<button type="button" class="variant-compare" title="${esc(v.name)} beside what is drawn: overlaid or side by side, with what differs">Compare</button>`
+              + `<button type="button" class="variant-delete" title="Move ${esc(v.name)} to the trash: Deleted, below, restores it">Delete</button>`
+              + `<div class="variant-history-list"></div></div>`
+            : "";
         return `<div class="saved-row${v.name === chosen ? " chosen" : ""}" data-variant="${esc(v.name)}">`
             + `<button type="button" class="saved-variant" data-variant="${esc(v.name)}" title="Draw ${esc(v.name)}: its SCAD in the editor and its numbers staged, rendered (Part › Variants › ${esc(v.name)})">${esc(v.name)}</button>`
-            + `<span class="saved-when">${esc(when(v.date))}</span>${full ? head : ""}`
+            + `<span class="saved-when">${esc(when(v.date))}</span>${full ? head : ""}${overlay}${manage}`
             + `<div class="saved-numbers">${esc(numbers(v.params))}</div>${changes}</div>`;
     }).join("");
+}
+
+/* A variant's saves, newest first: when, what was said, its numbers; each but the
+ * one it is now restorable. */
+export function historyRows(name, commits) {
+    if (!commits.length) return `<span class="empty">no saves found</span>`;
+    return commits.map((c) => `<div class="history-row${c.current ? " current" : ""}" data-commit="${esc(c.commit)}">`
+        + `<span class="saved-when">${esc(when(c.date))}</span> <span class="history-subject">${esc(c.subject)}</span>`
+        + `<div class="saved-numbers">${esc(numbers(c.params))}</div>`
+        + (c.current ? `<span class="history-now">as it is now</span>` : `<button type="button" class="variant-restore" data-commit="${esc(c.commit)}" title="${esc(name)} as it was at this save: a new save of it, its history keeping what came between">Restore</button>`)
+        + `</div>`).join("");
+}
+
+/* The part's deleted variants, in their fold: each restorable, or deleted for good;
+ * and the whole trash emptied. Emptying asks first: the button asks again. */
+export function trashRows(list) {
+    if (!list.length) return `<span class="empty">nothing deleted</span>`;
+    return list.map((v) => `<div class="trash-row" data-variant="${esc(v.name)}">`
+        + `<span class="trash-name">${esc(v.name)}</span> <span class="saved-when">${esc(when(v.date))}</span>`
+        + `<button type="button" class="trash-restore" title="Back among the variants, under its own name">Restore</button>`
+        + `<button type="button" class="trash-forget" title="Delete ${esc(v.name)} for good: asks first">Delete for good</button></div>`).join("")
+        + `<button type="button" class="trash-empty" title="Every deleted variant of this part deleted for good: asks first">Empty the trash</button>`;
 }
 
 // --- the editor --------------------------------------------------------------------
@@ -189,7 +235,7 @@ export async function mountScadEditor(slot, options = {}) {
     const { text = "", readOnly = false, editable = !readOnly, name = "", shownAs = null } = options;
     // What the page is told, through one object it can point elsewhere (rebind).
     const on = {};
-    for (const key of ["onChange", "onSave", "onFloat", "onFullscreen", "onChoose", "onCheck", "onApply", "onName"]) on[key] = options[key];
+    for (const key of ["onChange", "onSave", "onFloat", "onFullscreen", "onChoose", "onCheck", "onApply", "onName", "onManage"]) on[key] = options[key];
     slot.innerHTML = MARKUP;
     const root = slot.querySelector(".scad-editor");
     const said = root.querySelector(".scad-said");
@@ -205,9 +251,27 @@ export async function mountScadEditor(slot, options = {}) {
     floatBtn.onclick = () => on.onFloat && on.onFloat();
     fullBtn.onclick = () => on.onFullscreen && on.onFullscreen();
     nameBox.oninput = () => on.onName && on.onName(nameBox.value);
+    // The list: a variant chosen draws it; its ⋯ unfolds what can be done to it, each
+    // of which the page does (onManage(verb, name, { to, commit, button })).
+    const verbs = { "variant-rename": "rename", "variant-duplicate": "duplicate", "variant-history": "history",
+        "variant-compare": "compare", "variant-delete": "delete", "variant-restore": "restore",
+        "trash-restore": "undelete", "trash-forget": "forget", "trash-empty": "empty" };
     savedList.onclick = (ev) => {
         const b = ev.target.closest(".saved-variant");
-        if (b && on.onChoose) on.onChoose(b.dataset.variant);
+        if (b && on.onChoose) { on.onChoose(b.dataset.variant); return; }
+        const more = ev.target.closest(".variant-more");
+        if (more) {
+            const box = more.parentElement.querySelector(".variant-manage");
+            box.hidden = !box.hidden;
+            if (!box.hidden) box.querySelector(".variant-to").focus();
+            return;
+        }
+        const button = ev.target.closest("button");
+        const verb = button && Object.entries(verbs).find(([cls]) => button.classList.contains(cls))?.[1];
+        if (!verb || !on.onManage) return;
+        const row = button.closest("[data-variant]");
+        const to = row?.querySelector(".variant-to")?.value.trim() || "";
+        on.onManage(verb, row?.dataset.variant ?? null, { to, commit: button.dataset.commit ?? null, button });
     };
     // Escape, with the editor over the page, puts it back: the editor holds the
     // focus while it is there (its root takes it when nothing in it does).
@@ -296,7 +360,21 @@ export async function mountScadEditor(slot, options = {}) {
         name: () => nameBox.value.trim(),
         setName(next) { nameBox.value = next; },
         suggest(next) { nameBox.placeholder = next || ""; },
-        showVariants(list, chosen = null) { savedList.innerHTML = `<div class="code-header">Saved variants</div>${variantChoices(list, { full: true, chosen })}`; },
+        // The saved variants, all of them, and under them the fold of the deleted ones.
+        showVariants(list, chosen = null, trash = null) {
+            const open = savedList.querySelector(".variant-trash")?.open;
+            const deleted = trash === null ? "" : `<details class="fold variant-trash"${open ? " open" : ""}><summary>Deleted (${trash.length})</summary>${trashRows(trash)}</details>`;
+            savedList.innerHTML = `<div class="code-header">Saved variants</div>${variantChoices(list, { full: true, chosen })}${deleted}`;
+        },
+        // A variant's history, unfolded under its row.
+        showHistory(name, commits) {
+            const row = [...savedList.querySelectorAll(".saved-row")].find((r) => r.dataset.variant === name);
+            const box = row?.querySelector(".variant-history-list");
+            if (!box) return false;
+            row.querySelector(".variant-manage").hidden = false;
+            box.innerHTML = historyRows(name, commits);
+            return true;
+        },
         fullscreen(on) {
             root.classList.toggle("fullscreen", on);
             fullBtn.textContent = on ? "Exit fullscreen" : "Fullscreen";

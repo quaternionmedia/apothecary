@@ -247,7 +247,7 @@ const BY_CMD = {
 };
 
 
-export function mountMachine(root, { base = "", port = "", host = "world", boards = null, kind = null, inPrinter = false, pin = null, say = null } = {}) {
+export function mountMachine(root, { base = "", port = "", host = "world", boards = null, kind = null, inPrinter = false, pin = null, say = null, variantFor = null } = {}) {
     const BASE = base;
     const model = boards || mountBoards({ base });
     root.classList.add("machine", `host-${host}`);
@@ -969,14 +969,17 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const status = await loadSlicer();
         if (!status.ok) { refuse(`slice: no slicer here (${status.why}); Panels › Bench › Install › OrcaSlicer installs it`); return false; }
         slc.running = true; renderPrint();
+        // A part the page draws from a variant it applied is sliced as drawn: that
+        // variant's STL, which the slice's record names (variantFor, the page's).
+        const variant = variantFor ? variantFor(part) : null;
         let task;
-        try { task = await post("/slicer/slice", { port: state.port, part }); }
+        try { task = await post("/slicer/slice", variant ? { port: state.port, part, variant } : { port: state.port, part }); }
         catch (e) { slc.running = false; renderPrint(); refuse(`slice: ${e.message}`); return false; }
         $("print-slice-box").hidden = false;
         $("print-slice-task").hidden = false;
         $("print-slice-said").innerHTML = "";
         const ending = sliceTasks().start(async () => task, "/slicer/tasks");
-        tell(`slicing ${part} for ${printerName()}: its log is in Print from here, and its G-code is chosen there when it ends`);
+        tell(`slicing ${part}${variant ? ", the variant drawn," : ""} for ${printerName()}: its log is in Print from here, and its G-code is chosen there when it ends`);
         $("print-card").scrollIntoView({ block: "nearest" });
         ending.then(sliced);
         return true;
@@ -996,7 +999,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             await loadPrintFiles(r.file_id);
             $("print-slice-task").hidden = true;
             $("print-slice-said").innerHTML = sliceSaid(r);
-            tell(`${r.name} kept and chosen: sliced from ${r.made.name} for ${r.printer.name}${estimateWords(r.estimate) ? `, ${estimateWords(r.estimate)}` : ""}; ▶ Print prints it`);
+            tell(`${r.name} kept and chosen: sliced from ${r.made.name}${r.made.variant ? `, the variant drawn (${r.made.variant.slice(0, 8)})` : ""} for ${r.printer.name}${estimateWords(r.estimate) ? `, ${estimateWords(r.estimate)}` : ""}; ▶ Print prints it`);
             emit("apothecary:sliced", { port: state.port, file_id: r.file_id });
         } else if (task && task.status === "cancelled") {
             $("print-slice-said").innerHTML = '<div class="meta">The slice was cancelled; nothing was kept.</div>';
@@ -1016,7 +1019,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // bold -- the slicer's estimate, and its errors and warnings by line.
     function sliceSaid(r) {
         const est = estimateWords(r.estimate);
-        const head = `<div class="slice-head">${esc(r.made.name)} sliced for ${esc(r.printer.name)} by ${esc(r.slicer_label || r.slicer)} ${esc(r.slicer_version || "")}${est ? ` · ${esc(est)}` : ""}</div>`;
+        const head = `<div class="slice-head">${esc(r.made.name)}${r.made.variant ? ` (the variant ${esc(r.made.variant.slice(0, 8))})` : ""} sliced for ${esc(r.printer.name)} by ${esc(r.slicer_label || r.slicer)} ${esc(r.slicer_version || "")}${est ? ` · ${esc(est)}` : ""}</div>`;
         const value = (v) => esc(Array.isArray(v) ? v.join(", ") : v == null ? "–" : String(v));
         const rows = r.settings.map((s) => `<div class="${s.origin === "declared" ? "declared" : ""}" title="${esc(s.source + (s.note ? " — " + s.note : ""))}"><span>${esc(s.name)}</span> <span>${value(s.value)}</span> <span class="meta">${esc(s.origin)}</span></div>`).join("");
         return head + `<div class="slice-settings">${rows}</div>` + messagesSaid(r.messages || []);

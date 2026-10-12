@@ -422,7 +422,20 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # Fullscreen are one press deeper, under View in the seat Float had (beside Ghost and
 # Fit), and History, with Undo and Redo, takes the seat Fullscreen had; Edit,
 # Defaults, Apply, Revert, Save and Variants keep theirs.
-VIEWER_CEILING = 137
+#
+# The part-iteration plan's page, Phase B, wiring the server's answers. Before: 137
+# controls of its own, 78 ring-backed, 91 places the page listens. After: 151, 78
+# ring-backed, 91 places. Added in the SCAD editor's list of saved variants
+# (widgets/scad_editor.js), under each variant's ⋯ (variant-more): a box for a new
+# name (variant-to), Rename, Duplicate, History, Compare and Delete (variant-rename,
+# variant-duplicate, variant-history, variant-compare, variant-delete), and in its
+# history Restore (variant-restore); in the trash's Deleted fold, a deleted variant's
+# Restore and Delete for good (trash-restore, trash-forget) and Empty the trash
+# (trash-empty), the last two asked twice. In the part's editor, a comparison's
+# drop-downs of what with and how drawn, and its Close (compare-with, compare-mode,
+# compare-close). None is ring-backed: Part › Variants › a name draws it, and no cell
+# manages one. No place the page listens is added, and no ring address moved.
+VIEWER_CEILING = 151
 
 
 def test_the_viewer_stays_under_its_ceiling():
@@ -787,10 +800,11 @@ def test_the_viewers_ring_backed_share_did_not_fall():
     ring-backed, Panels › Docs: 75 of 126. The part-iteration plan's page counts the
     parameter controls, which were there unseen and which no cell types, and the offer
     of a reload's kept work; its Undo, Redo and Ghost came ring-backed, and Regenerate
-    STL went: 78 of 137."""
+    STL went: 78 of 137. Its Phase B added the management of saved variants and their
+    comparison, none of it on the ring: 78 of 151."""
     taken = census.take()
     own, backed = len(taken.controls_of_its_own()), len(taken.ring_backed())
-    assert backed / own >= 78 / 137, f"{backed} of {own} ring-backed"
+    assert backed / own >= 78 / 151, f"{backed} of {own} ring-backed"
 
 
 def test_the_headers_docs_is_panels_docs_and_back_and_forward_follow_the_address():

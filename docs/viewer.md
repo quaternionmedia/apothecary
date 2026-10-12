@@ -200,6 +200,9 @@ caption; a contested one comes first, with its candidates as buttons.
 - A field that declares a **unit** shows it beside its number; one that
   declares none shows nothing.
 
+Where this OpenSCAD cannot build the part at all (gridfinity on 2021.01), the
+editor says so as it opens and **Apply is off** from the start, saying why.
+
 Moving a control **stages** a value and nothing more. Once the controls rest
 the staged set is checked against the part's own model, and the bar above
 them says what is staged, whether it is valid and the envelope it would
@@ -212,6 +215,13 @@ stages the part's own numbers, and Apply then draws the saved part -- after a
 SCAD edit too, when the numbers drawn are the part's own already: Apply,
 saying "Apply: the saved part", puts the part's own SCAD back in the editor.
 Each of these is also a cell of Part on the ring.
+
+**A failed render** -- any error OpenSCAD says, though it finished -- is drawn
+greyed where the part stands, as far as OpenSCAD built it, a red flag over it
+naming the failing line; what was drawn waits hidden under it until what is
+staged is put back or an Apply succeeds. It is never a variant, and Save
+refuses it. A render or a check waiting its turn among OpenSCAD's runs (a
+few go at once) is said to be **queued**, and how far back, until it runs.
 
 **Undo** and **Redo** under them, Ctrl+Z and Ctrl+Shift+Z (or Ctrl+Y) outside
 a box being typed in, and Part › History › Undo and Redo step the staged
@@ -226,7 +236,10 @@ measured, at its piece, so a part grown is drawn where it grew, standing on
 what it stood on. Beside the envelope the part declares is what its drawn STL
 measures; when the two differ the line turns amber and says by how much, and a
 part reaching below the floor says how far. Selected's Footprint is what the
-variant drawn measures, the declared one beside it.
+variant drawn measures, the declared one beside it. The readiness checklist is
+of what is drawn -- the variant, its fit judged by what it measured -- against
+the build volume of the printer pinned in the site, and **Slice** slices the
+variant drawn, its record naming it.
 
 **Ghost**, the tick-box beside Undo and Part › View › Ghost, shows what was
 drawn before the newest Apply -- the saved part, or the variant before -- faint
@@ -251,13 +264,17 @@ draws the piece again and nothing else.
 ## The SCAD editor
 
 Below the parameters is the part's SCAD, in an editor. Typing in it is
-checked 300 ms after typing stops: a line OpenSCAD refuses is marked where it
-is, with its message, and nothing is rendered until it reads. About 300 ms
-after a check that passes, the edit is rendered as Apply renders, from the
-edited SCAD written beside the part, and drawn as an applied variant; a newer
-edit cancels a render waiting, and a render that lands for older text than
-the editor holds says so and is not taken for the newer. The part's own file
-is not touched.
+checked 300 ms after typing stops, with the numbers staged: a line OpenSCAD
+refuses is marked where it is, with its message, and nothing is rendered until
+it reads. About 300 ms after a check that passes, the edit is rendered as Apply
+renders, from the edited SCAD written beside the part, and drawn as an applied
+variant; a newer edit cancels a render waiting, and a render that lands for
+older text than the editor holds says so and is not taken for the newer (each
+render carries the editor's version, and its answer hands it back). An edit
+that compiles as one already rendered, a comment's, is drawn at once. The
+part's own file is not touched. **Download SCAD** gives the SCAD as the editor
+has it, named as the part's own; with no edit, the draft the variant drawn was
+rendered from.
 
 OpenSCAD's keys work inside the editor, and only there:
 
@@ -273,16 +290,35 @@ Outside the editor the browser's keys are the browser's.
   under the name in the editor's *as* box -- empty, the next free name greyed
   in it: a commit on
   `refs/apothecary/variants/<part>/<name>`, written without touching the
-  checkout, HEAD or the working tree; `git merge` of that ref makes it the
-  part's source. `APOTHECARY_VARIANTS_REPO` names another repository to keep
-  them in.
+  checkout, HEAD or the working tree. The status line says what making it the
+  part's source takes, as the server words it: where the ref lives (a fetch
+  first, when `APOTHECARY_VARIANTS_REPO` names another repository to keep them
+  in), and that a merge does not apply its numbers. What would be a failed
+  render is not saved. A part in a submodule (gridfinity) is saved as an
+  **overlay**: a small SCAD that includes the upstream file and sets the values,
+  the submodule never touched; an edit of the upstream file itself is refused,
+  saying so.
 - The *as* box names the variant the text came from while the text is that
   variant's, and is cleared once the text moves on from it, so Save keeps the
   edit under a name of its own. A name already saved is asked about first:
   Save again replaces it.
 - **Part › Variants** › a saved one loads it: its SCAD into the editor, its
-  numbers staged, checked and drawn. The editor lists every saved variant
-  with what it changes, and whether it is in HEAD.
+  numbers staged, checked and drawn. An overlay is drawn as the upstream SCAD
+  with its values: its own text is never put in the editor as the part's. The
+  editor lists every saved variant with what it changes, and whether it is in
+  HEAD.
+- Each variant's **⋯** in the editor's list unfolds what can be done to it:
+  **Rename** and **Duplicate** under the name typed beside them, **History**
+  (each save, newest first, an earlier one restored by its **Restore** as a new
+  save, the history keeping what came between), **Compare** and **Delete**.
+  Delete moves it to the trash (`refs/apothecary/trash/`): the **Deleted** fold
+  under the list restores one, or deletes one for good, and **Empty the trash**
+  deletes them all -- each of those two only when pressed again to confirm.
+- **Compare** draws the variant beside another -- what is drawn, the part's
+  own, or another saved one, chosen in the comparison -- where the part stands,
+  overlaid (blue and orange, seen through) or side by side, framed, with each
+  one's measured size, every number that differs and what the SCAD changes.
+  Close draws the part as it was.
 - **Part › View › Float** floats the editor over the world (its Dock puts it
   back); **Part › View › Fullscreen** gives it the page (Escape gives it back).
 

@@ -157,10 +157,9 @@ def test_a_number_is_a_slider_and_a_box_in_step_on_round_steps(page: Page, url, 
     assert slider.get_attribute("step") == "0.1"
     assert slider.get_attribute("min") == "5.5" and slider.get_attribute("max") == "100"
     expect(box).to_have_value("10")
-    # The description is its caption.
-    expect(size.locator(".caption")).to_have_text("Cube size in mm")
-    # A unit nobody declared: none shown.
-    expect(size.locator(".unit")).to_have_count(0)
+    # The description is its caption, and the unit its model declares stands beside it.
+    expect(size.locator(".caption")).to_have_text("Cube size")
+    expect(size.locator(".unit")).to_have_text("mm")
     # The slider moved: the box follows.
     slider.evaluate("(el) => { el.value = 31.4; el.dispatchEvent(new Event('input')); }")
     expect(box).to_have_value("31.4")
@@ -182,16 +181,18 @@ def test_what_a_field_declares_is_drawn_and_nothing_where_it_declares_nothing(
     page: Page, url, cube_as_it_was
 ):
     """A unit, an integer, a stated step, a choice and a vector, told to the page as the
-    server would tell them."""
+    server tells them (params.py's ParamField), and a field with its unit taken away."""
 
     def change(spec):
         fields = {f["name"]: f for f in spec["fields"]}
         fields["size"]["unit"] = "mm"
         fields["wall_thickness"]["step"] = 0.25
+        fields["wall_thickness"]["unit"] = None
         spec["fields"] += [
             {
                 "name": "copies",
-                "type": "integer",
+                "type": "number",
+                "integer": True,
                 "default": 2,
                 "min": 1,
                 "max": 12,

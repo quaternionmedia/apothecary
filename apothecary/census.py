@@ -168,6 +168,29 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "param-text": (WIDGET, WHAT_YOU_SEE, "a box that stages a part's words"),
     "param-coord": (WIDGET, WHAT_YOU_SEE, "a box that stages one number of a vector, captioned"),
     "cand": (WIDGET, WHAT_YOU_SEE, "a button that stages a contested number's candidate"),
+    # A saved variant managed from its ⋯ in the SCAD editor's list (widgets/scad_editor.js):
+    # renamed or duplicated under the name typed beside it, its history and a save of it
+    # restored, compared with what is drawn, deleted to the trash; the trash's Deleted
+    # fold restores one, or deletes one or all for good, each asked twice.
+    "variant-more": (WIDGET, WHAT_YOU_SEE, "a button that unfolds what can be done to a variant"),
+    "variant-to": (WIDGET, WHAT_YOU_SEE, "a box for the name a variant is renamed or copied to"),
+    "variant-rename": (WIDGET, WHAT_IS_THERE, "a button that renames a saved variant"),
+    "variant-duplicate": (WIDGET, WHAT_IS_THERE, "a button that copies a saved variant"),
+    "variant-history": (WIDGET, WHAT_YOU_SEE, "a button that lists a variant's saves"),
+    "variant-restore": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that saves a variant again as it was at an earlier save",
+    ),
+    "variant-compare": (WIDGET, WHAT_YOU_SEE, "a button that compares a variant with what is drawn"),
+    "variant-delete": (WIDGET, WHAT_IS_THERE, "a button that moves a variant to the trash"),
+    "trash-restore": (WIDGET, WHAT_IS_THERE, "a button that brings a deleted variant back"),
+    "trash-forget": (WIDGET, WHAT_IS_THERE, "a button that deletes one variant for good, asked twice"),
+    "trash-empty": (WIDGET, WHAT_IS_THERE, "a button that empties the trash, asked twice"),
+    # Two variants compared, in the part's editor: what with, how drawn, and closed.
+    "compare-with": (WIDGET, WHAT_YOU_SEE, "a drop-down of what a variant is compared with"),
+    "compare-mode": (WIDGET, WHAT_YOU_SEE, "a drop-down: the two overlaid, or side by side"),
+    "compare-close": (WIDGET, WHAT_YOU_SEE, "a button that ends a comparison"),
     # The SCAD editor where the part's read-only source stood (widgets/scad_editor.js):
     # the name a save keeps a variant under, Save, Float and Fullscreen; and a saved
     # variant chosen from a list -- under the part's parameters, or in the editor.
