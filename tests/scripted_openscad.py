@@ -15,8 +15,9 @@ It reads the SCAD it is given, so a draft is answered by what is in it:
   does, or, as a snapshot does, writes its geometry and exits 0 (``partial``);
 - the CSG export (``--export-format=csg``) prints the text without its
   comments and the ``-D`` definitions: what it compiled;
-- a render writes an STL whose name line holds the ``-D`` definitions and the
-  sha256 of the text it rendered, so a test can tell which text was drawn.
+- a render writes an ASCII STL whose name holds the sha256 of the text it
+  rendered and the ``-D`` definitions, so a test can tell which text was drawn
+  (``stl_names``); its help names no ``binstl``, so the cache turns it binary.
 
 Every call is logged to ``<script>.calls``, one JSON object a line: its
 arguments, the folder it ran in, the SCAD it was given, that file's text and
@@ -159,7 +160,7 @@ for a in args:
 digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
 with open(out, "w") as f:
     f.write("solid %s %s\nfacet normal 0 0 0\nouter loop\nvertex 0 0 0\nvertex 4 0 0\n"
-            "vertex 0 5 6\nendloop\nendfacet\nendsolid\n" % (json.dumps(defs), digest))
+            "vertex 0 5 6\nendloop\nendfacet\nendsolid\n" % (digest, json.dumps(defs)))
 """
 
 
@@ -193,5 +194,10 @@ def renders(executable: Path) -> List[dict]:
 
 
 def stl_names(data: bytes) -> str:
-    """The name line of an STL the scripted OpenSCAD wrote: its -D and text digest."""
-    return data.decode("utf-8").splitlines()[0]
+    """The name of an STL the scripted OpenSCAD wrote: the digest of the text it
+    rendered, then its -D definitions. The variant cache keeps STLs binary, the
+    name in the header's eighty bytes (the digest first, so it is never cut)."""
+    if len(data) >= 84 and 84 + int.from_bytes(data[80:84], "little") * 50 == len(data):
+        return data[:80].rstrip(b"\0").decode("ascii", errors="replace").strip()
+    first = data.decode("utf-8").splitlines()[0]
+    return first[len("solid ") :] if first.startswith("solid ") else first

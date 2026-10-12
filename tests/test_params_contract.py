@@ -44,7 +44,16 @@ def _route(path: str):
 class TestTheRoutesAreTheContract:
     def test_params_is_the_spec_of_the_part(self):
         body = client.get("/parts/datum_core/params").json()
-        assert list(body) == ["part", "description", "fields", "bounds", "source", "openscad"]
+        assert list(body) == [
+            "part",
+            "description",
+            "fields",
+            "bounds",
+            "source",
+            "openscad",
+            "can_build",
+            "build_note",
+        ]
         assert (body["source"], body["openscad"]) == ("model", None)
         assert [list(f) for f in body["fields"]] == [FIELD_KEYS] * len(body["fields"])
         assert body == params_spec(CORE).model_dump(mode="json")

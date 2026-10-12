@@ -14,7 +14,8 @@ different key, never a stale hit.
 Layout, under ``$APOTHECARY_CACHE_DIR/part_stl`` (by default the checkout's
 ignored ``.cache``)::
 
-    <part>/<key>.stl    the mesh, display rotation applied
+    <part>/<key>.stl    the mesh, display rotation applied, binary STL
+                        (``--export-format=binstl``, else turned binary here)
     <part>/<key>.json   what made it: params, OpenSCAD, backend, when, how
                         long, the bounding box OpenSCAD measured, and what
                         OpenSCAD warned about
@@ -35,6 +36,11 @@ placed there, unless the params sidecar says it holds something else (a
 variant ``apothecary parts generate-stl -p`` made), which the page never
 overwrites. A request the part's STL already answers (it is fresh for those
 parameters) costs nothing either. Any other variant lives in the cache only.
+
+A request whose text OpenSCAD compiles the same as a variant already
+rendered -- they differ only in comments -- renders nothing: its key gets
+that render, linked (``compiled_key``; ``compiled_from`` names it). See the
+note above ``compiled_for`` for when what a request compiles is known.
 
 One render per key at a time, and the cache keeps the ``PART_VARIANTS_KEEP``
 most recently served of each part: the node-STL cache in ``api.py`` is the
@@ -77,6 +83,7 @@ from .stl_renderer import (
     RenderResult,
     _is_fresh,
     _recordable,
+    binary_stl,
     geometry_scad,
     has_manifold,
     openscad_version,
@@ -370,6 +377,14 @@ def trim_variants(folder: Path, keep: int = PART_VARIANTS_KEEP) -> None:
         stl.unlink(missing_ok=True)
         stl.with_suffix(".json").unlink(missing_ok=True)
         stl.with_suffix(".scad").unlink(missing_ok=True)
+    # What compiled to what: let go with the variant it names.
+    for entry in (folder / "compiled").glob("*") if (folder / "compiled").is_dir() else ():
+        try:
+            named = entry.read_text(encoding="ascii").strip()
+        except OSError:
+            continue
+        if not (folder / f"{named}.stl").exists():
+            entry.unlink(missing_ok=True)
 
 
 # --- making one ---------------------------------------------------------------------
@@ -428,6 +443,9 @@ class Made:
     draft: Optional[str] = None
     # A failed render's geometry, where OpenSCAD wrote some before its error.
     partial: Optional[Partial] = None
+    # The variant whose render this is too: it compiled the same (an edit of
+    # the comments), so nothing was rendered for it.
+    compiled_from: Optional[str] = None
 
     @property
     def success(self) -> bool:
@@ -549,13 +567,23 @@ def make_variant(
                 made.failure, made.error_message = "refused", reason
                 return made
             stl.parent.mkdir(parents=True, exist_ok=True)
+            # What OpenSCAD compiles, where it is known: the same as a variant
+            # already rendered (an edit of the comments) is that render again.
+            compiled = None if force else compiled_for(part, params, renderer, draft, cancel)
+            twin_key = compiled_key(part, compiled, renderer) if compiled else None
+            if twin_key is not None and _same_render(
+                part, key, twin_key, made, draft, compiled, rotation, cache
+            ):
+                return _finished(part, made, params, holds_default, force, canonical, draft, stl)
             # Rendered outside the cache, and moved into it only once nothing
             # OpenSCAD said is an error: a snapshot exits 0 after a failed
             # assert, with the geometry built before it.
             work = partial_path(part, key)
             work.parent.mkdir(parents=True, exist_ok=True)
             with _written(part, draft) as scad:
-                result = render_part(part, work, params, timeout, renderer, rotation, cancel, scad)
+                result = render_part(
+                    part, work, params, timeout, renderer, rotation, cancel, scad, binary=True
+                )
                 made.messages = _messages_of(part, result, scad)
             made.rendered, made.result = True, result
             made.render_time_seconds = result.render_time_seconds
@@ -584,6 +612,8 @@ def make_variant(
                 else:
                     work.unlink(missing_ok=True)
                 return made
+            # Binary in the cache, whatever OpenSCAD wrote: a fifth of ASCII's size.
+            binary_stl(work)
             os.replace(work, stl)
             made.key, made.stl_path = key, stl
             made.measure(result.measured, rotation)
@@ -608,23 +638,161 @@ def make_variant(
                     "utf-8"
                 ),
             )
+            if twin_key is not None:
+                _write_atomically(_compiled_path(part, twin_key, cache), key.encode("ascii"))
         else:
             made.key, made.stl_path = key, stl
             made.render_time_seconds = float(record.get("render_time_seconds") or 0.0)
             made.messages = [OpenSCADMessage(**m) for m in record.get("messages", [])]
+            made.compiled_from = record.get("compiled_from")
             if record.get("measured") and record.get("measured_from"):
                 made.measured, made.measured_from = record["measured"], record["measured_from"]
             else:
                 made.measure(None, rotation)
-        if not params and holds_default:
-            # The part's own STL is the default variant: kept current, and
-            # left alone while it is (whichever OpenSCAD made it), unless forced.
-            with _LOCKS(f"{_folder_name(part)}/canonical"):
-                if force or not _is_fresh(part, canonical, {}):
-                    _place_as_canonical(part, stl)
-        made.saved = draft is None and _is_fresh(part, canonical, params)
+        return _finished(part, made, params, holds_default, force, canonical, draft, stl)
+
+
+def _finished(part, made, params, holds_default, force, canonical, draft, stl) -> Made:
+    """A variant made or found: the defaults left as the part's own STL, unless
+    its params sidecar says it holds another (see ``make_variant``); whether
+    the answer is what that STL holds; the cache trimmed."""
+    if not params and holds_default:
+        # The part's own STL is the default variant: kept current, and
+        # left alone while it is (whichever OpenSCAD made it), unless forced.
+        with _LOCKS(f"{_folder_name(part)}/canonical"):
+            if force or not _is_fresh(part, canonical, {}):
+                _place_as_canonical(part, stl)
+    made.saved = draft is None and _is_fresh(part, canonical, params)
     trim_variants(stl.parent)
     return made
+
+
+# --- keyed on what OpenSCAD compiles -------------------------------------------------
+#
+# A variant's key is the text it was rendered from. Two texts that differ only
+# in their comments compile to the same tree (OpenSCAD's CSG export, with the
+# -D values), so the second is not rendered again: its key gets the first's
+# mesh, linked, with the messages its own compile said (its lines are its own).
+# What compiles each request is the check's compile where the page made one
+# first (a draft's check, 300 ms after typing stops), remembered; otherwise one
+# is made here only where it costs a fraction of the render it may save --
+# CGAL (2021.01), where a compile is a few hundredths of a second and a render
+# seconds. With Manifold a render costs about what a compile does (each is
+# mostly the process starting), so none is made here for it.
+
+
+def compiled_for(part: BasePart, params, renderer, draft: Optional[str], cancel=None):
+    """What OpenSCAD compiles for a render of ``part`` with ``params``: the
+    remembered compile (the check's), else one made now where the backend is
+    CGAL; None where there is none (Python geometry; Manifold with nothing
+    remembered; an OpenSCAD that cannot export CSG)."""
+    if part.geometry({}) is not None:
+        return None
+    from .customizer import known_compile, part_compile
+    from .drafts import compile_draft
+
+    definitions = part.scad_overrides(params)
+    try:
+        text = draft if draft is not None else part.source_file.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    known = known_compile(part.source_file, text, definitions, renderer)
+    if known is not None or backend_of(renderer) == "manifold":
+        return known
+    if draft is not None:
+        return compile_draft(part, draft, definitions, renderer, cancel)
+    return part_compile(part, definitions, renderer, cancel)
+
+
+def compiled_key(part: BasePart, compiled, renderer) -> Optional[str]:
+    """Where a compiled tree's render is filed: the tree, and what else decides
+    the mesh -- the OpenSCAD and backend, the display rotation, and the files
+    the SCAD imports that are not SCAD (a mesh, a drawing), by their bytes.
+    None for a compile with no tree to key on."""
+    if compiled is None or not compiled.digest:
+        return None
+    digest = hashlib.sha256()
+    for label, value in (
+        ("scheme", KEY_SCHEME + "-compiled"),
+        ("part", part.name),
+        ("csg", compiled.digest),
+        ("rotation", json.dumps(part.display_rotation.to_list())),
+        ("openscad", openscad_of(renderer) or "none"),
+        ("backend", backend_of(renderer)),
+    ):
+        digest.update(f"{label}\0{value}\0".encode("utf-8"))
+    for label, path in sorted(scad_dependencies(part.source_file).items()):
+        if path is None or path.suffix.lower() == ".scad":
+            continue
+        digest.update(f"reads\0{label}={_file_digest(path)}\0".encode("utf-8"))
+    return digest.hexdigest()[:24]
+
+
+def _compiled_path(part: BasePart, compiled: str, cache: Optional[Path] = None) -> Path:
+    folder = (cache or variant_cache_dir()) / _folder_name(part) / "compiled"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder / compiled
+
+
+def _same_render(
+    part: BasePart,
+    key: str,
+    compiled: str,
+    made: Made,
+    draft: Optional[str],
+    compile_said,
+    rotation,
+    cache: Optional[Path],
+) -> bool:
+    """Whether a variant compiled the same is in the cache; if so it is filed
+    under ``key`` too -- its mesh linked, its record with this request's
+    parameters, draft and messages -- and ``made`` says so. Nothing renders."""
+    try:
+        twin = _compiled_path(part, compiled, cache).read_text(encoding="ascii").strip()
+    except OSError:
+        return False
+    if not KEY_PATTERN.match(twin) or twin == key:
+        return False
+    record = read_variant(part, twin, cache)
+    twin_stl, _ = variant_paths(part, twin, cache)
+    if record is None or not twin_stl.is_file():
+        return False
+    stl, record_path = variant_paths(part, key, cache)
+    linked = stl.with_name(f".{stl.name}.{uuid.uuid4().hex[:12]}.tmp")
+    try:
+        try:
+            os.link(twin_stl, linked)
+        except OSError:
+            shutil.copyfile(twin_stl, linked)
+        os.replace(linked, stl)
+    except OSError:
+        return False
+    finally:
+        linked.unlink(missing_ok=True)
+    made.key, made.stl_path, made.compiled_from = key, stl, twin
+    made.messages = list(compile_said.messages)
+    made.render_time_seconds = 0.0
+    if record.get("measured") and record.get("measured_from"):
+        made.measured, made.measured_from = record["measured"], record["measured_from"]
+    else:
+        made.measure(None, rotation)
+    mine = {
+        **record,
+        "key": key,
+        "params": made.params,
+        "draft": made.draft,
+        "messages": [m.model_dump() for m in made.messages],
+        "compiled_from": twin,
+        "measured": made.measured,
+        "measured_from": made.measured_from,
+    }
+    if draft is not None:
+        _write_atomically(variant_draft_path(part, key, cache), draft.encode("utf-8"))
+    _write_atomically(
+        record_path,
+        (json.dumps(mine, indent=2, sort_keys=True, default=_recordable) + "\n").encode("utf-8"),
+    )
+    return True
 
 
 def _said_error(error: Optional[OpenSCADMessage]) -> str:
@@ -741,6 +909,8 @@ class PartState(BaseModel):
         None, description="Its bounding box, read off the STL in the declared frame"
     )
     measured_from: Optional[str] = Field(None, description='"stl" when measured')
+    can_build: bool = Field(True, description="An OpenSCAD here can build the part")
+    build_note: Optional[str] = Field(None, description="Why it cannot be built here")
 
 
 def part_state(part: BasePart, url_name: Optional[str] = None) -> PartState:
@@ -785,6 +955,11 @@ class VariantRecord(BaseModel):
         None, description="The sha256 of the draft it was rendered from; None: the part's own SCAD"
     )
     scad_url: Optional[str] = Field(None, description="Where that draft's text is served")
+    compiled_from: Optional[str] = Field(
+        None,
+        description="The variant whose render this is too: it compiled the same (its text "
+        "differs only in comments), so nothing was rendered for it",
+    )
 
 
 def variant_record(
@@ -818,6 +993,7 @@ def variant_record(
         saved=not draft and _is_fresh(part, part.get_stl_output_path(), params),
         draft=draft,
         scad_url=f"{base}/scad" if draft else None,
+        compiled_from=record.get("compiled_from"),
     )
 
 

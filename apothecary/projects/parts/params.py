@@ -95,6 +95,10 @@ class ParamsSpec(BaseModel):
     openscad: Optional[str] = Field(
         None, description="The OpenSCAD that listed them, for the customizer's"
     )
+    can_build: bool = Field(
+        True, description="An OpenSCAD here can build the part (gridfinity's cannot on 2021.01)"
+    )
+    build_note: Optional[str] = Field(None, description="Why it cannot be built here")
 
 
 class FieldError(BaseModel):

@@ -19,7 +19,9 @@ kept between requests but what the variant cache and git keep.
   A newer request from the same ``page`` stops this one's OpenSCAD run (409),
   an Apply's included. A draft the same as the part's SCAD is the part.
 - ``GET /parts/{name}/variants/{key}/scad``: the draft a cached variant was
-  rendered from, for a tab reloaded on it.
+  rendered from, for a tab reloaded on it (``?download=true``: as a file).
+- ``POST /parts/{name}/draft/scad`` ``{scad}``: the draft handed back as a file
+  to save, named as the part's SCAD: Download of the edit.
 - ``GET /parts/{name}/saved``, ``POST /parts/{name}/saved`` ``{name, scad?,
   params}``, ``GET /parts/{name}/saved/{variant}``: a part's variants saved in
   git (apothecary/projects/parts/saved.py), listed from the part's refs, saved
@@ -34,7 +36,7 @@ of it is a 403.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional, Union
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
@@ -130,6 +132,11 @@ class DraftRequest(BaseModel):
     params: Dict[str, Any] = Field(
         default_factory=dict, description="Parameter values staged in the editor's controls"
     )
+    editor_version: Optional[Union[int, Annotated[str, Field(max_length=64)]]] = Field(
+        None,
+        description="The page's own name for the state of its editor when it asked: "
+        "handed back in the answer as it came",
+    )
 
 
 class DraftCheck(BaseModel):
@@ -160,6 +167,9 @@ class DraftCheck(BaseModel):
     params: Dict[str, Any] = Field(default_factory=dict)
     errors: List[FieldError] = Field(default_factory=list)
     note: Optional[str] = Field(None, description="What could not be done, and why")
+    editor_version: Optional[Union[int, str]] = Field(
+        None, description="As the request named the state of the editor it was asked for"
+    )
 
 
 @router.post("/parts/{name}/draft/check", response_model=DraftCheck)
@@ -211,6 +221,7 @@ def check_part_draft(name: str, body: DraftRequest, page: Optional[str] = PAGE):
             detail={
                 "message": check.error_message or compiled.error_message,
                 "superseded": True,
+                "editor_version": body.editor_version,
             },
         )
 
@@ -243,6 +254,7 @@ def check_part_draft(name: str, body: DraftRequest, page: Optional[str] = PAGE):
         params=staged.params,
         errors=staged.errors,
         note=note,
+        editor_version=body.editor_version,
     )
 
 
@@ -299,14 +311,19 @@ def render_part_draft(
         raise HTTPException(status_code=422, detail=str(exc)) from None
     finally:
         api._page_renders.end(part.name, page, cancel)
-    return api.made_answer(name, part, made, overrides)
+    return api.made_answer(name, part, made, overrides, body.editor_version)
 
 
 @router.get("/parts/{name}/variants/{variant}/scad", response_class=PlainTextResponse)
-def get_variant_draft(name: str, variant: str):
+def get_variant_draft(
+    name: str,
+    variant: str,
+    download: bool = Query(False, description="As a file to save, named as the part's SCAD"),
+):
     """The draft a cached variant was rendered from: what a tab reloaded on that
-    variant shows in its editor. 404 for a variant of the part's own SCAD
-    (``GET /parts/{name}/scad`` is that), or one the cache has let go."""
+    variant shows in its editor, or, with ``download``, saves. 404 for a variant
+    of the part's own SCAD (``GET /parts/{name}/scad`` is that), or one the cache
+    has let go. Its text never changes under its key: the browser keeps it."""
     part = _api()._load_part_wrapper(name)
     text = read_variant_draft(part, variant)
     if text is None:
@@ -315,7 +332,30 @@ def get_variant_draft(name: str, variant: str):
             detail=f"No draft is cached for variant '{variant}' of '{name}': a variant of the "
             f"part's own SCAD has none (GET /parts/{name}/scad), and the cache lets go of old ones",
         )
-    return PlainTextResponse(text, headers={"X-Part-Variant": variant})
+    headers = {"X-Part-Variant": variant, "Cache-Control": _api().IMMUTABLE}
+    if download:
+        headers["Content-Disposition"] = f'attachment; filename="{part.source_file.name}"'
+    return PlainTextResponse(text, headers=headers)
+
+
+@router.post("/parts/{name}/draft/scad", response_class=PlainTextResponse)
+def download_part_draft(name: str, body: DraftRequest):
+    """The draft the page holds, handed back as a file to save: Download SCAD of
+    the edit, rendered or not. Named as the part's SCAD
+    (``Content-Disposition: attachment``), its text exactly as sent; nothing is
+    written or kept. A part built by Python geometry is a 403: its SCAD is
+    generated (``GET /parts/{name}/scad`` serves it)."""
+    part = _editable(name)
+    return PlainTextResponse(
+        body.scad,
+        media_type="application/x-openscad",
+        headers={
+            "Content-Disposition": f'attachment; filename="{part.source_file.name}"',
+            "Cache-Control": "no-store",
+            "X-Part-Scad": "draft",
+            "X-Part-Draft": draft_digest(body.scad),
+        },
+    )
 
 
 # --- saved in git -------------------------------------------------------------------

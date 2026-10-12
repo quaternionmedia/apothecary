@@ -4,10 +4,12 @@ part's STL is built, whichever command or route asks for it."""
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -296,8 +298,10 @@ class OpenSCADRenderer:
         timeout: float = 120.0,
         params: Optional[dict] = None,
         cancel: Optional[Cancellation] = None,
+        binary: bool = False,
     ) -> RenderResult:
         """Render a SCAD file to STL, with ``params`` passed as ``-D name=value``.
+        ``binary`` asks for a binary STL where the OpenSCAD writes one.
 
         ``stl_path`` defaults to the SCAD's own name. OpenSCAD writes a temporary
         file beside it that replaces it only on success, so a failed or killed
@@ -345,10 +349,14 @@ class OpenSCADRenderer:
             if has_summary(self.openscad_path)
             else []
         )
+        binstl = (
+            ["--export-format=binstl"] if binary and writes_binary_stl(self.openscad_path) else []
+        )
         cmd = [
             str(self.openscad_path),
             "-o",
             str(partial),
+            *binstl,
             *backend,
             *summarise,
             *definitions,
@@ -571,6 +579,67 @@ def has_manifold(executable: Optional[Path]) -> bool:
     return executable is not None and reports_manifold(openscad_version(Path(executable)))
 
 
+_BINARY: Dict[str, bool] = {}
+
+
+def writes_binary_stl(executable: Optional[Path]) -> bool:
+    """Whether ``executable`` writes a binary STL when asked
+    (``--export-format=binstl``): its help names ``binstl``. 2021.01 and the
+    snapshots do; asked once per executable. One that does not has its ASCII
+    STL turned binary in Python (``binary_stl``)."""
+    if executable is None:
+        return False
+    key = str(executable)
+    if key not in _BINARY:
+        try:
+            done = subprocess.run(
+                [key, "--help"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=10,
+            )
+            _BINARY[key] = "binstl" in f"{done.stdout}\n{done.stderr}"
+        except (OSError, subprocess.SubprocessError):
+            _BINARY[key] = False
+    return _BINARY[key]
+
+
+def is_binary_stl(path: Path) -> bool:
+    """Whether the STL at ``path`` is binary: its triangle count fits its size."""
+    try:
+        size = path.stat().st_size
+        with open(path, "rb") as handle:
+            head = handle.read(84)
+    except OSError:
+        return False
+    if len(head) < 84:
+        return False
+    (count,) = struct.unpack_from("<I", head, 80)
+    return 84 + count * 50 == size
+
+
+def binary_stl(path: Path) -> bool:
+    """The STL at ``path`` made binary where it is ASCII: read and written again
+    in place, its solid's name kept in the header (as far as eighty bytes go).
+    Whether it was changed."""
+    from apothecary.meshes import read_stl, write_stl
+
+    if is_binary_stl(path):
+        return False
+    data = path.read_bytes()
+    first = data.split(b"\n", 1)[0].decode("ascii", errors="replace").strip()
+    name = first[len("solid") :].strip() if first.lower().startswith("solid") else ""
+    partial = path.with_name(f".{path.name}.{uuid.uuid4().hex[:12]}.tmp")
+    try:
+        write_stl(read_stl(data), partial, name=name or "apothecary")
+        os.replace(partial, path)
+    finally:
+        partial.unlink(missing_ok=True)
+    return True
+
+
 def has_summary(executable: Optional[Path]) -> bool:
     """Whether ``executable`` writes ``--summary-file``: asked of an OpenSCAD with
     Manifold, every one of which has it. 2021.01 refuses the option and the
@@ -789,10 +858,21 @@ def _scratch_beside(stl_path: Path) -> tempfile.TemporaryDirectory:
     )
 
 
-def _cancelling(cancel: Optional[Cancellation]) -> Dict[str, Cancellation]:
-    """``cancel=`` for a render only when there is one: a stand-in renderer
-    need not take the keyword."""
-    return {"cancel": cancel} if cancel is not None else {}
+def _cancelling(
+    renderer: OpenSCADRenderer, cancel: Optional[Cancellation], binary: bool = False
+) -> Dict[str, object]:
+    """``cancel=`` for a render only when there is one, and ``binary=`` only
+    when it is asked for and the renderer takes it: a stand-in renderer need
+    not take the keywords (its STL is made binary after, as any ASCII one is)."""
+    found: Dict[str, object] = {"cancel": cancel} if cancel is not None else {}
+    if binary:
+        try:
+            takes = "binary" in inspect.signature(renderer.render_stl).parameters
+        except (TypeError, ValueError):
+            takes = False
+        if takes:
+            found["binary"] = True
+    return found
 
 
 def _render_rotated(
@@ -803,6 +883,7 @@ def _render_rotated(
     timeout: float,
     params: dict,
     cancel: Optional[Cancellation] = None,
+    binary: bool = False,
 ) -> RenderResult:
     """Render upright into a scratch directory, then turn it with a one-line wrapper.
 
@@ -814,7 +895,11 @@ def _render_rotated(
     with _scratch_beside(stl_path) as tmp:
         upright = Path(tmp) / "upright.stl"
         first = renderer.render_stl(
-            scad_path, upright, timeout, params=params or None, **_cancelling(cancel)
+            scad_path,
+            upright,
+            timeout,
+            params=params or None,
+            **_cancelling(renderer, cancel, binary),
         )
         if not first.success:
             return first
@@ -822,7 +907,9 @@ def _render_rotated(
         wrapper.write_text(
             f'rotate({scad_literal(rotation)}) import("{upright.name}");\n', encoding="utf-8"
         )
-        second = renderer.render_stl(wrapper, stl_path, timeout, **_cancelling(cancel))
+        second = renderer.render_stl(
+            wrapper, stl_path, timeout, **_cancelling(renderer, cancel, binary)
+        )
     second.render_time_seconds += first.render_time_seconds
     second.dropped = first.dropped + second.dropped
     second.stderr = (first.stderr or "") + (second.stderr or "")
@@ -839,9 +926,11 @@ def render_part(
     rotation: Optional[List[float]] = None,
     cancel: Optional[Cancellation] = None,
     scad: Optional[Path] = None,
+    binary: bool = False,
 ) -> RenderResult:
     """Render a part with already-validated ``params`` to ``stl_path``, and
-    nothing more: no freshness check, no sidecar. A part with Python geometry
+    nothing more: no freshness check, no sidecar. ``binary`` asks OpenSCAD for
+    a binary STL where it writes one. A part with Python geometry
     is rendered from that geometry's SCAD, written to a scratch file beside
     ``stl_path``; any other from its SCAD file, or from ``scad`` standing in
     for it (a draft written beside it), the params reaching it through
@@ -858,9 +947,15 @@ def render_part(
             scad, definitions = Path(tmp) / part.source_file.name, {}
             scad.write_text(text, encoding="utf-8")
         if rotation and any(rotation):
-            return _render_rotated(renderer, scad, stl_path, rotation, timeout, definitions, cancel)
+            return _render_rotated(
+                renderer, scad, stl_path, rotation, timeout, definitions, cancel, binary
+            )
         return renderer.render_stl(
-            scad, stl_path, timeout, params=definitions or None, **_cancelling(cancel)
+            scad,
+            stl_path,
+            timeout,
+            params=definitions or None,
+            **_cancelling(renderer, cancel, binary),
         )
 
 
