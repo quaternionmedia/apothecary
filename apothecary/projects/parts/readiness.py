@@ -353,6 +353,29 @@ def _drawn_bounds_check(part, drawn: Drawn, tolerance: float) -> Check:
     )
 
 
+DEFAULTS = "Model defaults match the SCAD"
+
+
+def _defaults_check(part) -> Optional[Check]:
+    """Where a part's Python model's defaults and its SCAD's own values disagree:
+    the SCAD as saved is the part's default (decided 2026-10-12), and a model
+    that says otherwise sizes it, and checks values, against something else.
+    None where there is nothing to compare (no model; a SCAD that is generated)."""
+    from apothecary.projects.parts.texts import defaults_disagree
+
+    found = defaults_disagree(part)
+    if found is None:
+        return None
+    if not found:
+        return Check(DEFAULTS, PASS, "every model default is what the SCAD assigns")
+    return Check(
+        DEFAULTS,
+        BLOCKED,
+        "; ".join(found),
+        "make the model's default the SCAD's value: the SCAD as saved is the part's default",
+    )
+
+
 def _print_settings_check(part) -> Check:
     settings = getattr(part, "print_settings", None)
     if settings is None:
@@ -498,6 +521,9 @@ def assess(
             checks.append(_bounds_check(part, stl_path, tolerance))
 
     checks.append(_print_settings_check(part))
+    defaults = _defaults_check(part)
+    if defaults is not None:
+        checks.append(defaults)
     checks.append(_contested_check(part))
     checks.append(_build_volume_check(part, build_volume, drawn, volume_from, no_volume))
     checks.append(_stub_check(part))
