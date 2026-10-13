@@ -26,7 +26,7 @@ trying it, and names the optional installs: the slicer and each firmware toolcha
 ```bash
 uv run apothecary test run                      # the ordinary command: unit tests and the walkthrough, whose demonstration drives Chromium
 uv run apothecary test all                      # the same, then every browser test
-uv run pytest                                   # the quick inner loop (-q is in addopts): unit tests and the walkthrough; browser tests skip
+uv run pytest                                   # the quick inner loop: unit tests and the walkthrough; browser tests skip
 uv run pytest --slow                            # also full renders and accuracy benches
 uv run pytest tests/e2e --start-server          # the browser tests, on a server of their own
 uv run pytest tests/e2e --start-server -n auto --dist loadfile   # the same, a worker per core, files kept whole
