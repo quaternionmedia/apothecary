@@ -238,6 +238,101 @@ def test_each_install_point_puts_the_guard_on_before_any_of_its_own_code(source)
     assert getattr(second.value.func, "id", None) == called, "the second statement is not the call"
 
 
+# What reads personal data, by the means the record names: the serial link, an
+# image library, the state folder and the picture root. Outside the install
+# points' packages none of it is done, but through one of them: the state folder
+# is apothecary.firmware's to resolve and the picture root apothecary.api's, so a
+# module that calls either has imported an install point first.
+GUARDED_SOURCES = ("api.py", "cli/", "vision/", "gathering/", "firmware/", "routes/")
+READER_MODULES = {"serial": "the serial link", "PIL": "an image library"}
+READER_VARIABLES = {"APOTHECARY_STATE_DIR", "APOTHECARY_PICTURE_ROOT"}
+RESOLVED_BY = {"state_dir": "apothecary.firmware", "_picture_root": "apothecary.api"}
+
+
+def _imported_from(node: ast.ImportFrom, package: str) -> str:
+    """The absolute module an ``ImportFrom`` names, from the package it is written in."""
+    if not node.level:
+        return node.module or ""
+    base = package.split(".")[: len(package.split(".")) - node.level + 1]
+    return ".".join(base + ([node.module] if node.module else []))
+
+
+def _personal_data_readers(text: str, package: str) -> list:
+    """What a module does that reads personal data where no install point covers it."""
+    tree = ast.parse(text)
+    found = []
+    imported = {
+        _imported_from(node, package) for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)
+    }
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                top = alias.name.split(".")[0]
+                if top in READER_MODULES:
+                    found.append(f"imports {alias.name} ({READER_MODULES[top]})")
+        elif isinstance(node, ast.ImportFrom):
+            module = _imported_from(node, package)
+            if not node.level and module.split(".")[0] in READER_MODULES:
+                found.append(f"imports from {module} ({READER_MODULES[module.split('.')[0]]})")
+        elif isinstance(node, ast.Call):
+            func = node.func
+            name = getattr(func, "id", None) or getattr(func, "attr", None)
+            if name in RESOLVED_BY:
+                owner = RESOLVED_BY[name]
+                if not any(m == owner or m.startswith(owner + ".") for m in imported):
+                    found.append(f"calls {name}() without importing it from {owner}")
+            reads_env = (
+                isinstance(func, ast.Attribute)
+                and func.attr in ("get", "getenv", "pop")
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+                and node.args[0].value in READER_VARIABLES
+            )
+            if reads_env:
+                found.append(f"reads {node.args[0].value} itself")
+        elif isinstance(node, ast.Subscript) and isinstance(node.ctx, ast.Load):
+            key = node.slice
+            if isinstance(key, ast.Constant) and key.value in READER_VARIABLES:
+                found.append(f"reads {key.value} itself")
+    return found
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "import serial",
+        "from serial.tools import list_ports",
+        "from PIL import Image",
+        "def f():\n    from .projects import x\n    return state_dir()",
+        "import os\nos.environ.get('APOTHECARY_STATE_DIR')",
+        "import os\nos.getenv('APOTHECARY_PICTURE_ROOT')",
+        "import os\nos.environ['APOTHECARY_STATE_DIR']",
+        "from .scene import Scene\n_picture_root()",
+    ],
+)
+def test_the_reader_scan_sees_each_way_of_reading_personal_data(code):
+    assert _personal_data_readers(code, "apothecary")
+
+
+def test_no_module_outside_the_install_points_reads_personal_data():
+    """A module that reads personal data where no install point covers it fails
+    here before it merges: the guard goes on by package, so a reader written
+    elsewhere would read with the network open. Reaching the state folder
+    through apothecary.firmware (jobs, the slicer's service) is under the guard
+    from that import on."""
+    readers = {}
+    for source in sorted(PACKAGE.rglob("*.py")):
+        rel = source.relative_to(PACKAGE).as_posix()
+        if rel.startswith(GUARDED_SOURCES) or rel == "stays_local.py":
+            continue
+        parts = source.relative_to(ROOT).with_suffix("").parts
+        package = ".".join(parts if source.name == "__init__.py" else parts[:-1])
+        found = _personal_data_readers(source.read_text(encoding="utf-8"), package)
+        if found:
+            readers[rel] = found
+    assert readers == {}
+
+
 def test_the_guard_rebinds_every_name_for_a_socket():
     assert stays_local.guard_installed()
     assert socket.socket is not stays_local._original_socket
