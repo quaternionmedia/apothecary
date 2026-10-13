@@ -65,7 +65,7 @@ uv run apothecary serve        # the viewer at :8000/viewer; docs at /docs, the 
 uv run apothecary serve --demo # the same on a state folder of its own, a simulated printer and devkit
 uv run apothecary check        # what is installed: packages, three.js, OpenSCAD and each part's, the slicer, the firmware toolchains
 uv run --group preflight apothecary preflight   # the CI workflows, run here before a push
-uv run apothecary openscad install --latest   # an OpenSCAD snapshot with Manifold, the fast renders
+uv run apothecary openscad install            # an OpenSCAD snapshot with Manifold, the fast renders
 uv run apothecary slicer install              # OrcaSlicer, pinned, to slice a part for printer_1
 uv run apothecary firmware install --esp32    # arduino-cli + the ESP32 core, for parts/esp32_blink (--avr: parts/footpedal)
 uv run apothecary firmware install --rust-esp32   # Rust for the ESP32, for parts/esp32_blink/rust
