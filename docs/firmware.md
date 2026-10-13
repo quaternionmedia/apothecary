@@ -437,7 +437,7 @@ step against the simulated printer into
 [walkthrough 12](../walkthrough/12-the-bench-as-it-is.md) shows the boards
 drawn where they sit.
 
-Every device verb is also on the ring (right-click a piece, or `m`), whose
+Every device verb is also on the ring (Ctrl+right-click a piece, or `m`), whose
 nine cells are numbered as a numeric keypad, so the digits pressed to reach
 an option are its address; each device button shows its address in its
 tooltip. Device holds Open (8), Poll (6), Flash (2), Query (4), Unpin (9),

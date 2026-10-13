@@ -87,9 +87,11 @@ into this machine.
 
 The page opens on the garage. The world fills it, and one rail beside it
 holds Site (the tree, its problems, its SCAD, its pins and jobs) and Selected,
-over a strip of tabs: Pictures, the Bench, a board's Machine. The ring, `m`
-or a right-click, holds every verb of what it opens on; each cell has a digit,
-and the digits pressed are the address the status line shows as ⌗.
+over a strip of tabs: Pictures, the Bench, Settings, a board's Machine. The
+ring, `m` or Ctrl+right-click, holds every verb of what it opens on; each cell
+has a digit, and the digits pressed are the address the status line shows as
+⌗. A right-click alone is the camera's: a drag pans, and a still click
+re-centres the view on what it lands on.
 [The viewer](../docs/viewer.md) describes each of its controls.
 
 ## 5. The four loops
