@@ -2,11 +2,9 @@
 
 **Hermetic.**
 
-`datum_core` is sized around a board this repository does not own. That makes
-every dimension in it one of two kinds, and the split is the whole seam:
-
-> The consumer owns requirements and interfaces.
-> Apothecary owns realization and manufacturability.
+`datum_core` is sized around a board this repository does not own, and its
+numbers are of two kinds: the printer's, which carry house defaults, and the
+board's, which a consumer's fit sets.
 
 [`docs/fitting-a-part.md`](../docs/fitting-a-part.md) describes the seam as built. This page is how you drive it.
 
