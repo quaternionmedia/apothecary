@@ -24,7 +24,7 @@
  * query, reconnect, reset and release. Everything else that draws the board
  * reads the same model, so nothing polls it a second time.
  *
- * mountMachine(root, { base, port, host, boards, kind, inPrinter, pin, say })
+ * mountMachine(root, { base, port, host, boards, kind, inPrinter, pin, say, variantFor })
  * renders into `root` and returns the handle the ring drives (carry, pairs,
  * device), the world asks to list its site's parts again when a piece is made,
  * rebuilt or dropped (print.loadChoices), to choose the piece a made piece's
@@ -49,8 +49,10 @@
  * by its sketch when `how` is "sketch". `say(text,
  * kind)` is the host's status bar: a refusal is said there as an error as well
  * as in the log; a print started is said there, naming where it is followed, and
- * a print that ends, how it ended (failed, and why, as an error). destroy() stops
- * watching and frees what the module put on the window.
+ * a print that ends, how it ended (failed, and why, as an error). `variantFor(path)`
+ * names the applied variant the page draws a part from, or null, so Slice slices
+ * the part as drawn. destroy() stops watching and frees what the module put on the
+ * window.
  */
 
 import { mountBoards } from "/static/boards.js";
