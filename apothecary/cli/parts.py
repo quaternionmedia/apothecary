@@ -491,8 +491,7 @@ def parts_render(name: str, params_json: str | None, template: str | None, outpu
         click.echo(f"Rendered parametric part '{part.name}' -> {output_path}")
         return
 
-    # Otherwise, use template rendering (legacy/generic). The stub includes the
-    # source file, so writing it over that file would destroy the part.
+    # Otherwise, the template's include stub. The stub includes the source file, so writing it over that file would destroy the part.
     if output_path.resolve() == part.source_file.resolve():
         raise click.ClickException(
             f"Refusing to overwrite the part's own source file {part.source_file}; "
