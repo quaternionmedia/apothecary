@@ -8,7 +8,7 @@ This is what the tests use. It gives the same answer every time, needs no
 picture library, and lets everything downstream be checked without depending on
 how well any real finder happens to work.
 
-PROTOTYPE — not ratified.
+A prototype: no ratified record governs it.
 """
 
 from __future__ import annotations

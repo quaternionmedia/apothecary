@@ -1,7 +1,7 @@
 """What a finder saw in a picture, kept so the same picture is not looked at twice.
 
-Keyed as the photo-finders plan keys it: the picture's hash, the finder (its
-backend), the model's digest and the prompt's version. A finder that has no
+Keyed by the picture's hash, the finder (its backend), the model's digest and
+the prompt's version. A finder that has no
 model, or no prompt, gives an empty string for either; a finder whose answer
 rests on something besides the picture's bytes names that in its digest (the
 stated finder hashes the description beside the picture). So a picture changed
@@ -13,7 +13,7 @@ counts as this machine (todo.md). The lock is held for dictionary reads and
 writes only, never while a finder looks: a slow finder does not hold up a
 reader of anything else.
 
-PROTOTYPE — not ratified.
+A prototype: no ratified record governs it.
 """
 
 from __future__ import annotations
