@@ -1,9 +1,9 @@
 /* The Machine: one board, close up, wherever it is mounted -- the one place for it.
  *
- * A printer's Machine is what the monitor page was made of -- the header's link
- * verbs and the control latch, the status cards, the temperature chart, the
- * control pad, the bed reading, the print from here (a print job, naming the
- * part it makes, and the printer's jobs as its history). A devkit's Machine
+ * A printer's Machine is the header's link verbs and the control latch, the status
+ * cards, the temperature chart, the control pad, the bed reading, the print from
+ * here (a print job, naming the part it makes, and the printer's jobs as its
+ * history). A devkit's Machine
  * is its port and what it is, the sketch it should run against what it was
  * heard saying, and its Flashing card: a sketch (what it should run, to start
  * with) -- an Arduino one built for a board, or a Rust one for its chip --
@@ -31,16 +31,16 @@
  * Print names (print.choose) and to slice what is chosen (print.slice), and the
  * tests read (state, ctl, level, print).
  *
- * A printer's Print from here slices too (docs/plans/slicer-2026-10-10.md): its
+ * A printer's Print from here slices too (docs/slicer.md): its
  * Slice slices the part or piece chosen under makes for this printer (POST
  * /slicer/slice, the slicer's task followed in the card, with Cancel); the G-code
  * it keeps is chosen in the card's files, so ▶ Print follows Slice; then the
  * card says what the slice used, each value with where it came from, the
  * slicer's estimate, and its errors and warnings by line. A kept file a slice
  * made says what it was sliced from and for which printer.
- * `host` is "world": the
- * world's page, a tab of its rail or floated, one board and everything inline in
- * one column (the monitor page, the other host, is a link to the world now).
+ * `host` is "world": the world's page, a tab of its rail or floated, one board and
+ * everything inline in one column; /firmware/monitor opens the world's page with
+ * this Machine.
  * `boards` is the page's model, made here when none is given.
  * `kind` is "printer" or "devkit"; left out, it is whatever the board is. `inPrinter`
  * says the board is pinned inside a printer: a printer's board, never flashed,
