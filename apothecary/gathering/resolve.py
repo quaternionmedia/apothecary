@@ -47,9 +47,9 @@ from .signature import signature_of, tone_alike
 # compare. One shape is not an arrangement.
 ENOUGH_SHAPES = 2
 
-# Below this, the finder is saying it does not really know. Measured: the plain
-# finder's confidence is reliably lower when it is wrong, so this is a real
-# threshold rather than a decorative one.
+# Below this, the finder is saying it does not really know. The plain finder's
+# confidence is lower when it is wrong (`apothecary photo check` measures it), so
+# this threshold separates the two.
 ENOUGH_CONFIDENCE = 0.45
 
 # --- when two shapes are the same shape -----------------------------------
@@ -108,8 +108,8 @@ def _relative_areas(marks: Sequence[ShapeMark]) -> List[float]:
         return []
     # Measured against the biggest *whole* shape. The biggest shape in a
     # close-up is very often the one hanging off the edge, and measuring
-    # everything against a shape that is only half in the picture moved every
-    # size at once and lost the real matches.
+    # everything against a shape that is only half in the picture would move
+    # every size at once and lose the real matches.
     whole = [mark.area for mark in marks if not mark.cut_off]
     biggest = max(whole) if whole else max(mark.area for mark in marks)
     if biggest <= 0:
@@ -122,7 +122,7 @@ def _covers(marks: Sequence[ShapeMark], matched: Sequence[int]) -> float:
 
     Shapes running off the edge are left out of the count. They are not whole
     shapes, so failing to find them elsewhere says nothing — and counting them
-    is what made a close-up look like a different object, because cropping turns
+    would make a close-up look like a different object, because cropping turns
     a square into a rectangle nobody else has.
     """
     whole = [index for index, mark in enumerate(marks) if not mark.cut_off]
@@ -140,19 +140,11 @@ def _covers(marks: Sequence[ShapeMark], matched: Sequence[int]) -> float:
 # may be for each one that actually fitted, before the whole match is treated as
 # too flimsy to join anything on.
 #
-# The number was measured, not chosen. Across fifteen folders of twenty-seven
-# drawn photographs:
-#
-#     none of this      67 groups found,  9 of them mixing unrelated pictures
-#     3.5               62 found,         5 mixed
-#     2.5               58 found,         3 mixed
-#     2.0               50 found,         1 mixed
-#     1.8               41 found,         0 mixed
-#
-# and on seventeen further folders never used while choosing it, 41 more groups
-# and again none mixed. It is a deliberate trade: roughly a fifth of the groups
-# that were there to find, in exchange for never having built one out of
-# photographs that did not belong together.
+# 1.8 is set so that `apothecary photo gather-check` mixes no group of drawn
+# photographs, on the folders it was chosen with and on folders kept apart; a
+# looser ratio mixes some. It is a deliberate trade: fewer of the groups there
+# are to find, in exchange for never building one out of photographs that do
+# not belong together.
 TOO_ALIKE_TO_TELL = 1.8
 
 
@@ -228,12 +220,12 @@ MOST_CANDIDATES = 60
 def _shape_pairs(left: Signature, right: Signature) -> Tuple[List[Tuple[int, int, float]], int]:
     """Every pairing of shapes that could be the same shape.
 
-    Deliberately **not** one-to-one. An earlier version picked the best partner
-    for each shape here, by how alike the two looked; when a coincidence looked
-    slightly more alike than the real match, it took the place and locked the
-    real one out, and whole overlapping pictures came back as unrelated. Which
-    pairing is real is a question about the arrangement, so it is answered where
-    the arrangement is known and not before.
+    Deliberately **not** one-to-one. Picking the best partner for each shape
+    here, by how alike the two look, would let a coincidence that looks slightly
+    more alike than the real match take its place and lock the real one out, and
+    whole overlapping pictures would come back as unrelated. Which pairing is
+    real is a question about the arrangement, so it is answered where the
+    arrangement is known and not before.
     """
     left_areas = _relative_areas(left.marks)
     right_areas = _relative_areas(right.marks)
@@ -245,10 +237,10 @@ def _shape_pairs(left: Signature, right: Signature) -> Tuple[List[Tuple[int, int
             # Proportion carries most of the weight and size carries the rest.
             # Size is the weaker signal by far: it is measured against the
             # biggest shape in its own picture, and the biggest shape is often
-            # the one that walked out of frame. Weighting the two equally lost
-            # genuine matches, which the meter showed as overlapping pictures
-            # being called unrelated. Being generous here is safe because the
-            # arrangement check downstream throws out what does not fit.
+            # the one that walked out of frame. Weighting the two equally would
+            # lose genuine matches, and overlapping pictures would be called
+            # unrelated. Being generous here is safe because the arrangement
+            # check downstream throws out what does not fit.
             score = 0.7 * _closeness(one.proportion, other.proportion) + 0.3 * _closeness(
                 left_areas[i], right_areas[j]
             )
@@ -263,7 +255,7 @@ def read_one(picture: Picture, *, path: Optional[Path] = None) -> Reading:
     """Say whether one picture, on its own, gave enough to be worth placing."""
     confidences = sorted(shape.confidence for shape in picture.shapes)
     surest = max(confidences) if confidences else 0.0
-    # A real middle, not the upper one. Picking the upper of two reported a
+    # A real middle, not the upper one. Picking the upper of two would report a
     # picture holding one certainty and one blank guess as "typically 100% sure".
     if not confidences:
         typical = 0.0
@@ -356,8 +348,8 @@ def kinship_between(left: Signature, right: Signature) -> Kinship:
         return finish(UNRELATED, min(1.0, 0.4 + 0.15 * weight))
 
     if fit.refutes:
-        # Shapes matched one at a time, and the arrangement says that was luck.
-        # This is the check that stopped two unrelated pictures being merged.
+        # Shapes matched one at a time, and the arrangement says that was luck:
+        # without this, two unrelated pictures would be merged.
         because.append(f"{len(looked_alike)} shape(s) look alike one by one, but {fit.because}")
         if alike is not None and alike >= SEAM_TONE_AT:
             # Same light, so they were probably taken together, and something
@@ -372,9 +364,7 @@ def kinship_between(left: Signature, right: Signature) -> Kinship:
         if len(looked_alike) >= ENOUGH_TO_REFUTE:
             return finish(UNRELATED, 0.75)
         # Two or three shapes failing to line up is thin. It is a reason not to
-        # join them; it is not a reason to declare them unrelated, and saying so
-        # anyway was this module's most common mistake when it was first
-        # measured.
+        # join them; it is not a reason to declare them unrelated.
         against.append(
             f"only {len(looked_alike)} shape(s) looked alike at all, which is too "
             f"few for their not lining up to settle anything"
@@ -406,13 +396,11 @@ def kinship_between(left: Signature, right: Signature) -> Kinship:
 
     lesser, greater = sorted((covers_left, covers_right))
 
-    # Three shapes lined up. Always three — there used to be an exception for
-    # "every single shape in both is accounted for", and a reviewer walked
-    # straight through it: two photographs with one uncropped shape each score
-    # 100% coverage on a single match, the arrangement check never runs at all
-    # because one point cannot be checked, and two unrelated photographs were
-    # declared the same thing at full confidence. An exception to the rule that
-    # makes the rule unreachable is not an exception.
+    # Three shapes lined up, always, with no exception for "every single shape
+    # in both is accounted for": two photographs with one uncropped shape each
+    # score 100% coverage on a single match, and the arrangement check cannot
+    # run on one point, so two unrelated photographs would be declared the same
+    # thing at full confidence.
     if lesser >= SAME_THING_AT and shared >= STEADY_FIT:
         because.append(
             f"{covers_left:.0%} of one and {covers_right:.0%} of the other are the same shapes"
@@ -437,8 +425,8 @@ def kinship_between(left: Signature, right: Signature) -> Kinship:
     if (
         # Three, not two. How much bigger one picture is than the other is worked
         # out from the shapes they share, and two shapes give a number that moves
-        # with every wobble in the finder. Trusting it at two turned one honest
-        # refusal into three confident mistakes, one of them the bad kind.
+        # with every wobble in the finder, so trusting it at two would turn honest
+        # refusals into confident mistakes.
         shared >= STEADY_FIT
         and fit.agrees
         and fit.scale is not None
@@ -574,12 +562,10 @@ def gather(
         ((p, w) for p, w, r in zip(pictures, where, readings, strict=True) if r.readable),
         key=lambda pair: pair[0].name,
     )
-    # Sorted by name, always. The answer must not depend on the order the
-    # pictures happened to arrive in — and it did: a reviewer handed the same
-    # folder in nine different orders and got five different results, some of
-    # them merging a photograph that did not belong. Every pairwise judgement is
-    # symmetric now, and comparing in a fixed order is what makes the grouping
-    # built on top of them symmetric too.
+    # Sorted by name, always: the answer must not depend on the order the
+    # pictures arrive in. Every pairwise judgement is symmetric, and comparing in
+    # a fixed order is what makes the grouping built on top of them symmetric
+    # too.
     signatures = [signature_of(p, path=w) for p, w in usable]
 
     kinships: List[Kinship] = []
@@ -629,9 +615,9 @@ def gather(
         """Does this pair genuinely contradict the group it is in?
 
         A person's word outranks the machine's, and that has to hold here or it
-        holds nowhere: this check destroys groups, and it was destroying groups a
-        person had built on the strength of a machine's guess — while the report
-        printed "your word was taken as it stands" in the same breath.
+        holds nowhere: this check destroys groups, and it must not destroy a
+        group a person built on the strength of a machine's guess while the
+        report says "your word was taken as it stands".
 
         So a machine's disagreement is only a quarrel in a group the machine
         built. If any part of this group came from a person, only another
@@ -830,9 +816,9 @@ def gather(
         )
 
     clusters.sort(key=lambda c: (c.kind == ALONE, -len(c.pictures), c.name))
-    # An answer that was never applied has to be said out loud. Every one of
-    # these was silently dropped once: a person names a picture nothing could be
-    # read from, their sentence goes nowhere, and no output mentions it at all.
+    # An answer that was never applied is said out loud: a person may name a
+    # picture nothing could be read from, and their sentence would otherwise go
+    # nowhere with no output mentioning it.
     reached = {k.key for k in kinships}
     ignored: Dict[str, str] = {}
     for key, person in told.items():
