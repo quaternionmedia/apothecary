@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import _socket
+import ast
 import http.client
 import json
 import os
@@ -10,6 +11,7 @@ import re
 import socket
 import ssl
 import subprocess
+import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -25,8 +27,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "apothecary"
 
 
-# The picture path runs under the guard `import apothecary` puts on the process:
-# a connection past this machine raises LeftTheMachine.
+# The picture path runs under the guard the root conftest.py and the vision
+# package put on the process: a connection past this machine raises LeftTheMachine.
 
 
 @pytest.fixture
@@ -96,7 +98,242 @@ def test_nothing_is_written_outside_the_folder_it_was_given(picture, tmp_path):
     assert set(Path.cwd().iterdir()) == before, "something was written outside the given folder"
 
 
-def test_importing_the_package_guards_every_name_for_a_socket():
+# Where the guard goes on: the first statement of each module through which
+# apothecary runs or reads personal data, and the tests' root conftest.py.
+INSTALL_POINTS = {
+    "apothecary.api": PACKAGE / "api.py",
+    "apothecary.cli": PACKAGE / "cli" / "__init__.py",
+    "apothecary.vision": PACKAGE / "vision" / "__init__.py",
+    "apothecary.gathering": PACKAGE / "gathering" / "__init__.py",
+    "apothecary.firmware": PACKAGE / "firmware" / "__init__.py",
+    "apothecary.routes": PACKAGE / "routes" / "__init__.py",
+}
+ROOT_CONFTEST = ROOT / "conftest.py"
+
+
+def _fresh(code: str, *args: str) -> subprocess.CompletedProcess:
+    """Run ``code`` in an interpreter of its own, so what an import does is its own."""
+    return subprocess.run(
+        [sys.executable, "-c", code, *args],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+
+# The geometry library: the package itself, its shapes, transforms, scene,
+# templates, models and meshes, and every part and assembly under
+# apothecary.projects.
+GEOMETRY_LIBRARY = (
+    "apothecary",
+    "apothecary.booleans",
+    "apothecary.core",
+    "apothecary.primitives",
+    "apothecary.transforms",
+    "apothecary.scene",
+    "apothecary.templates",
+    "apothecary.models",
+    "apothecary.meshes",
+    "apothecary.hierarchy",
+)
+
+LEAVES_THE_NETWORK_AS_IT_FOUND_IT = """
+import _socket, http.client, importlib, pkgutil, socket, ssl, sys
+
+def names():  # ids: the guard would rebind a name held for a class itself
+    return tuple(map(id, (socket.socket, socket.SocketType, _socket.socket, _socket.SocketType,
+            ssl.socket, socket.create_connection, http.client.HTTPConnection.connect,
+            socket.getaddrinfo, _socket.getaddrinfo, socket.gethostbyname,
+            socket.gethostbyaddr, socket.getnameinfo)))
+
+before = names()
+events = []
+
+def hear(event, args):
+    if event.startswith("socket."):
+        events.append(event)
+
+sys.addaudithook(hear)
+for name in sys.argv[1:]:
+    importlib.import_module(name)
+for package in ("apothecary.projects", "apothecary.models"):
+    path = importlib.import_module(package).__path__
+    for found in pkgutil.walk_packages(path, package + "."):
+        importlib.import_module(found.name)
+assert names() == before, "importing the geometry library replaced a name for a socket"
+assert not events, f"importing the geometry library made a socket call: {events}"
+guarded = ("apothecary.api", "apothecary.cli", "apothecary.vision", "apothecary.gathering",
+           "apothecary.firmware", "apothecary.routes")
+loaded = sorted(m for m in sys.modules if m in guarded or m.startswith(tuple(g + "." for g in guarded)))
+assert not loaded, f"the geometry library imported a guarded module: {loaded}"
+guard = sys.modules.get("apothecary.stays_local")
+assert guard is None or not guard.guard_installed(), "the geometry library installed the guard"
+print("left as found")
+"""
+
+
+def test_importing_the_geometry_library_leaves_the_network_as_it_found_it():
+    """A program that imports apothecary for its shapes keeps its network: the
+    import installs nothing, replaces no name for a socket, and makes no socket
+    and looks up no name while it loads (an audit hook hears no ``socket.*``)."""
+    run = _fresh(LEAVES_THE_NETWORK_AS_IT_FOUND_IT, *GEOMETRY_LIBRARY)
+    assert run.returncode == 0, run.stderr
+    assert run.stdout.strip() == "left as found"
+
+
+GUARDS_THE_PROCESS = """
+import importlib, socket, sys
+import apothecary
+from apothecary import stays_local
+assert not stays_local.guard_installed(), "import apothecary installed the guard"
+before = id(socket.socket)  # an id: the guard rebinds every name for the class itself
+importlib.import_module(sys.argv[1])
+assert stays_local.guard_installed(), f"importing {sys.argv[1]} did not install the guard"
+assert id(socket.socket) != before
+try:
+    socket.create_connection(("203.0.113.1", 80), timeout=1)
+except stays_local.LeftTheMachine:
+    print("guarded")
+"""
+
+
+@pytest.mark.parametrize("point", list(INSTALL_POINTS))
+def test_importing_an_install_point_puts_the_guard_on_the_process(point):
+    run = _fresh(GUARDS_THE_PROCESS, point)
+    assert run.returncode == 0, run.stderr
+    assert run.stdout.strip() == "guarded"
+
+
+def test_a_test_session_is_under_the_guard_before_its_first_test_is_collected():
+    """pytest loads the root conftest.py before it collects a test; loading it
+    puts the guard on."""
+    run = _fresh(
+        "import importlib.util, sys\n"
+        "spec = importlib.util.spec_from_file_location('root_conftest', sys.argv[1])\n"
+        "spec.loader.exec_module(importlib.util.module_from_spec(spec))\n"
+        "from apothecary import stays_local\n"
+        "print('guarded' if stays_local.guard_installed() else 'open')\n",
+        str(ROOT_CONFTEST),
+    )
+    assert run.returncode == 0, run.stderr
+    assert run.stdout.strip() == "guarded"
+
+
+@pytest.mark.parametrize(
+    "source", [*INSTALL_POINTS.values(), ROOT_CONFTEST], ids=[*INSTALL_POINTS, "conftest"]
+)
+def test_each_install_point_puts_the_guard_on_before_any_of_its_own_code(source):
+    """The guard's import and its call are the first two statements, after the
+    docstring: nothing of the module runs before the guard is on."""
+    body = ast.parse(source.read_text(encoding="utf-8")).body
+    if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+        body = body[1:]
+    first, second = body[0], body[1]
+    assert isinstance(first, ast.ImportFrom), "the first statement is not the guard's import"
+    assert (first.module or "").split(".")[-1] == "stays_local"
+    assert [alias.name for alias in first.names] == ["install_guard"]
+    called = first.names[0].asname or "install_guard"
+    assert isinstance(second, ast.Expr) and isinstance(second.value, ast.Call)
+    assert getattr(second.value.func, "id", None) == called, "the second statement is not the call"
+
+
+# What reads personal data, by the means the record names: the serial link, an
+# image library, the state folder and the picture root. Outside the install
+# points' packages none of it is done, but through one of them: the state folder
+# is apothecary.firmware's to resolve and the picture root apothecary.api's, so a
+# module that calls either has imported an install point first.
+GUARDED_SOURCES = ("api.py", "cli/", "vision/", "gathering/", "firmware/", "routes/")
+READER_MODULES = {"serial": "the serial link", "PIL": "an image library"}
+READER_VARIABLES = {"APOTHECARY_STATE_DIR", "APOTHECARY_PICTURE_ROOT"}
+RESOLVED_BY = {"state_dir": "apothecary.firmware", "_picture_root": "apothecary.api"}
+
+
+def _imported_from(node: ast.ImportFrom, package: str) -> str:
+    """The absolute module an ``ImportFrom`` names, from the package it is written in."""
+    if not node.level:
+        return node.module or ""
+    base = package.split(".")[: len(package.split(".")) - node.level + 1]
+    return ".".join(base + ([node.module] if node.module else []))
+
+
+def _personal_data_readers(text: str, package: str) -> list:
+    """What a module does that reads personal data where no install point covers it."""
+    tree = ast.parse(text)
+    found = []
+    imported = {
+        _imported_from(node, package) for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)
+    }
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                top = alias.name.split(".")[0]
+                if top in READER_MODULES:
+                    found.append(f"imports {alias.name} ({READER_MODULES[top]})")
+        elif isinstance(node, ast.ImportFrom):
+            module = _imported_from(node, package)
+            if not node.level and module.split(".")[0] in READER_MODULES:
+                found.append(f"imports from {module} ({READER_MODULES[module.split('.')[0]]})")
+        elif isinstance(node, ast.Call):
+            func = node.func
+            name = getattr(func, "id", None) or getattr(func, "attr", None)
+            if name in RESOLVED_BY:
+                owner = RESOLVED_BY[name]
+                if not any(m == owner or m.startswith(owner + ".") for m in imported):
+                    found.append(f"calls {name}() without importing it from {owner}")
+            reads_env = (
+                isinstance(func, ast.Attribute)
+                and func.attr in ("get", "getenv", "pop")
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+                and node.args[0].value in READER_VARIABLES
+            )
+            if reads_env:
+                found.append(f"reads {node.args[0].value} itself")
+        elif isinstance(node, ast.Subscript) and isinstance(node.ctx, ast.Load):
+            key = node.slice
+            if isinstance(key, ast.Constant) and key.value in READER_VARIABLES:
+                found.append(f"reads {key.value} itself")
+    return found
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "import serial",
+        "from serial.tools import list_ports",
+        "from PIL import Image",
+        "def f():\n    from .projects import x\n    return state_dir()",
+        "import os\nos.environ.get('APOTHECARY_STATE_DIR')",
+        "import os\nos.getenv('APOTHECARY_PICTURE_ROOT')",
+        "import os\nos.environ['APOTHECARY_STATE_DIR']",
+        "from .scene import Scene\n_picture_root()",
+    ],
+)
+def test_the_reader_scan_sees_each_way_of_reading_personal_data(code):
+    assert _personal_data_readers(code, "apothecary")
+
+
+def test_no_module_outside_the_install_points_reads_personal_data():
+    """A module that reads personal data where no install point covers it fails
+    here before it merges: the guard goes on by package, so a reader written
+    elsewhere would read with the network open. Reaching the state folder
+    through apothecary.firmware (jobs, the slicer's service) is under the guard
+    from that import on."""
+    readers = {}
+    for source in sorted(PACKAGE.rglob("*.py")):
+        rel = source.relative_to(PACKAGE).as_posix()
+        if rel.startswith(GUARDED_SOURCES) or rel == "stays_local.py":
+            continue
+        parts = source.relative_to(ROOT).with_suffix("").parts
+        package = ".".join(parts if source.name == "__init__.py" else parts[:-1])
+        found = _personal_data_readers(source.read_text(encoding="utf-8"), package)
+        if found:
+            readers[rel] = found
+    assert readers == {}
+
+
+def test_the_guard_rebinds_every_name_for_a_socket():
     assert stays_local.guard_installed()
     assert socket.socket is not stays_local._original_socket
     assert socket.SocketType is _socket.socket and _socket.SocketType is _socket.socket
@@ -275,8 +512,6 @@ def test_a_tool_fetch_takes_no_proxy_and_a_version_is_three_numbers(monkeypatch)
 
 def _callers_of_tool_fetch() -> set:
     """Every module under apothecary/ that names ``tool_fetch``, read from the source."""
-    import ast
-
     found = set()
     for source in PACKAGE.rglob("*.py"):
         if source.name == "stays_local.py" and source.parent == PACKAGE:
@@ -646,7 +881,7 @@ def test_the_picture_root_is_a_folder_of_pictures_never_everything(monkeypatch, 
     # And the file route serves a picture, judged by its bytes, and nothing else.
     pictures = tmp_path / "pics"
     pictures.mkdir()
-    (pictures / "notes.json").write_text('{"serial": "A106ZTEU"}', encoding="utf-8")
+    (pictures / "notes.json").write_text('{"serial": "A1B2C3D4"}', encoding="utf-8")
     (pictures / "fake.png").write_text("not a picture", encoding="utf-8")
     from PIL import Image
 

@@ -1,7 +1,7 @@
 # Bench validation: the Ender mainboard, 2026-09-20
 
 The printer seam, the monitor and the ring against the real board -- a
-Creality Ender mainboard (FTDI FT232R bridge, serial `A106ZTEU`) running
+Creality Ender mainboard (FTDI FT232R bridge) running
 **Marlin TH3D UFW 2.94a** with an EZABL probe -- plugged into this machine at
 09:18 and left idle and cold (bed 13 °C, hotend 15 °C). Everything below was
 done **without arming control**: identification, polling, report-only
@@ -15,7 +15,7 @@ have caught it; they are in the changelog under *Fixed*.
 
 | Step | Result |
 |---|---|
-| `apothecary firmware devices` | `/dev/ttyUSB0 vid=0x0403 pid=0x6001`, S/N `A106ZTEU`; the board had come back as `ttyUSB0` after a night as `ttyUSB1` |
+| `apothecary firmware devices` | `/dev/ttyUSB0 vid=0x0403 pid=0x6001` and the bridge's serial number; the board had come back as `ttyUSB0` after a night as `ttyUSB1` |
 | `apothecary firmware printer /dev/ttyUSB0` (first open after the plug-in) | identified in 7.9 s; the boot banner (`start / External Reset / Marlin TH3D UFW 2.94a`) landed -- the bridge comes up with DTR dropped, so the first open reboots the board, as the doc now says |
 | `POST /firmware/devices/identify` (no reset), from the server, right after the CLI closed the port | **a second banner** -- the pyserial engine had left `HUPCL` set, so the CLI's close dropped DTR and the server's open reset the board. Fixed (`gcode.keep_dtr_on_close`, cleared on open by both engines); afterwards `stty -a` reads `-hupcl` |
 | release → CLI query → server reopen, three processes in a row, after the fix | no banner; `M119` and `M851` answered over the CLI in between |
@@ -23,7 +23,7 @@ have caught it; they are in the changelog under *Fixed*.
 | Report-only queries | `M420 V` (26 lines: the 5×5 bilinear grid, the 13×13 subdivided grid, `echo:Bed Leveling OFF`), `M851` (`M851 X-44.00 Y-10.00 Z-3.15 ; (mm)`), `M503` (59 lines, with 25 `G29 W` points), `M119`, `M20` (four `.GCO` files on the card), `M31`, `M92`; `M78` and `M122` answer `Unknown command` on this firmware and are harmless |
 | `gcode.parse_meshes` / `mesh_stats` / `parse_probe_offset` / `parse_leveling_state` on the real replies | 5×5 measured and 13×13 subdivided grids; **range 2.340 mm, tilt X +1.754 mm and Y −0.466 mm across the bed, corners vs mean FL −0.856 FR +1.075 BL −1.155 BR +0.473**; leveling off; offset X−44 Y−10 Z−3.15. The `G29 W` points in `M503` gather into the same 5×5 |
 | `POST /firmware/printers/level` with `probe: false` (Read mesh) | job `reading → saved` in 0.22 s; record `20260920T132512.468-dev_ttyUSB0` under `~/.apothecary/leveling/` with the mesh, the offset, the temperatures and every line; the page's Read mesh button made a second one |
-| Pin to `printer_1.frame_system.mainboard` | stored as `A106ZTEU` (the board, not the socket); `GET /firmware/printers/where` answers the board, `printer_1`, volume 220×220×250 on a 50 mm base; each poll syncs `printer_1` *via* the board |
+| Pin to `printer_1.frame_system.mainboard` | stored as the bridge's serial number (the board, not the socket); `GET /firmware/printers/where` answers the board, `printer_1`, volume 220×220×250 on a 50 mm base; each poll syncs `printer_1` *via* the board |
 | Viewer, Device section on the mainboard | `/dev/ttyUSB0 · Marlin TH3D UFW 2.94a · TH3D EZABL (pinned)`, the last poll, Watch / Poll now / Monitor / Unpin; the printer's Contents row wears `🖨 15°/15°` |
 | Monitor page | first status in 0.56 s; cards, temperature chart after a few 2 s polls, comms log, Bed level card with the real heatmap, Print card empty, Control unchecked and the overlay absent; addresses `⌗77` Control › Arm, `⌗748` Probe, `⌗746` Read, `⌗794` Send file, `⌗71` E-STOP, `⌗18` Reconnect; the ring opens on `m` with Link / Monitor / Rescan / Query / Poll / Control / Watch / Unpin; no console errors |
 | Board in its printer | drawn -- **after a fix**: the printer's own shape had been placed a bench-width away (a node's STL arrives in its parent's frame); now the printer encloses its board and its volume, and the browser test checks the drawn bounds |
@@ -152,7 +152,7 @@ saying its hello -- the firmware loop's real run, which the suites only do
 against the simulated devkit. A person runs this; no test flashes a board.
 
 Preconditions: the devkit plugged in (its CP2102 bridge is the port that is
-*not* the printer's FTDI `A106ZTEU`: `apothecary firmware devices` says which);
+*not* the printer's FTDI: `apothecary firmware devices` says which);
 `uv run apothecary firmware install --rust-esp32` done once, with the network
 up; `uv run apothecary firmware validate` shows *Rust for the ESP32* with ✓
 cargo and ✓ espflash and no "not vendored" problem.
