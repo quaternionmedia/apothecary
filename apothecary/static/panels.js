@@ -293,6 +293,12 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
         el.dataset.order = String(p.order);
         el.style.order = String(p.order);
         el.innerHTML = `<div class="panel-title"><button type="button" class="panel-collapse" title="Collapse or expand">▾</button><span class="panel-name">${esc(p.title)}</span><span class="panel-spacer"></span><button type="button" class="panel-float" title="Float this panel">⧉</button><button type="button" class="panel-close" title="Close (reopen from its tab, or the ring's Panels)">✕</button></div>`;
+        // What stands between the title and the body and never scrolls with it: a bar
+        // that must stay in view takes its own space here, so nothing it heads slides
+        // under it (pinnedSlot).
+        const pinned = document.createElement("div");
+        pinned.className = "panel-pinned";
+        el.appendChild(pinned);
         const body = document.createElement("div");
         body.className = "panel-body-slot";
         el.appendChild(body);
@@ -452,6 +458,8 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
         shownTab() { return rail.tab; },
         isOpen(id) { const p = panels.get(id); return !!(p && p.open); },
         isShown(id) { const p = panels.get(id); return !!(p && visible(p) && !(docked(p) && rail.hidden)); },
+        /* The panel's pinned slot: above its body, out of its scrolling. */
+        pinnedSlot(id) { const p = panels.get(id); return p && p.el ? p.el.querySelector(":scope > .panel-pinned") : null; },
         state(id) { const p = panels.get(id); return p ? { id, title: p.title, zone: p.zone, open: p.open, shown: this.isShown(id), collapsed: p.collapsed, where: p.where, x: p.x, y: p.y, height: p.height } : null; },
         list() { return [...panels.keys()].map((id) => this.state(id)); },
         destroy() {

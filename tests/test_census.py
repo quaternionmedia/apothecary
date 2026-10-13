@@ -435,7 +435,30 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # drop-downs of what with and how drawn, and its Close (compare-with, compare-mode,
 # compare-close). None is ring-backed: Part › Variants › a name draws it, and no cell
 # manages one. No place the page listens is added, and no ring address moved.
-VIEWER_CEILING = 151
+#
+# Then the owner's answer of 2026-10-12: every action on a saved variant is a ring
+# cell. Before: 151 controls of its own, 78 ring-backed, 91 places the page listens.
+# After: 151, 86 ring-backed, 91 places. Part › Variants › a name is a ring of its
+# own now, Draw, Rename, Duplicate, History, Compare and Delete, and Part › Variants ›
+# Deleted, the last cell under Variants when something is deleted, holds each
+# deleted variant (Restore, Forget) and Empty. The saved variant's row is backed by
+# Draw (saved-variant), and Rename, Duplicate, History, Compare and Delete, the
+# trash's Restore and Forget and Empty by their cells; a cell asked twice is chosen
+# twice. Not backed: a version's Restore in a variant's history (variant-restore),
+# which no cell names, and the comparison's drop-downs and Close. No control or
+# listener was added. Ring addresses moved: choosing a saved variant was Part ›
+# Variants › its name, and is one press deeper, Part › Variants › its name › Draw.
+#
+# The part-iteration plan's "parameters and text, tied together": a part's controls
+# write their lines in its SCAD and follow what is typed there. Before: 151 controls
+# of its own, 86 ring-backed, 91 places the page listens. After: 154, 86 ring-backed,
+# 91 places. Added: a computed value's question when it is moved, Replace it with the
+# plain value or Keep it computed (computed-replace, computed-keep), not backed -- it
+# stands only until it is answered, as the offer of a reload's kept work does; and a
+# part in a submodule's Upstream SCAD, read only (part-upstream), a link as Download
+# SCAD is, not backed. The parameter controls are the same markup, now one for each
+# parameter its text assigns. No ring address moved. The ceiling follows the count.
+VIEWER_CEILING = 154
 
 
 def test_the_viewer_stays_under_its_ceiling():
@@ -801,10 +824,13 @@ def test_the_viewers_ring_backed_share_did_not_fall():
     parameter controls, which were there unseen and which no cell types, and the offer
     of a reload's kept work; its Undo, Redo and Ghost came ring-backed, and Regenerate
     STL went: 78 of 137. Its Phase B added the management of saved variants and their
-    comparison, none of it on the ring: 78 of 151."""
+    comparison, none of it on the ring: 78 of 151. Then every action on a saved
+    variant became a cell of Part › Variants: 86 of 151. The text tied to the controls
+    added a computed value's question and an overlay's upstream link, neither on the
+    ring: 86 of 154."""
     taken = census.take()
     own, backed = len(taken.controls_of_its_own()), len(taken.ring_backed())
-    assert backed / own >= 78 / 151, f"{backed} of {own} ring-backed"
+    assert backed / own >= 86 / 154, f"{backed} of {own} ring-backed"
 
 
 def test_the_headers_docs_is_panels_docs_and_back_and_forward_follow_the_address():

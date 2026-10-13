@@ -464,15 +464,34 @@
         .staged { border-left: 3px solid #4a9eff; padding-left: 9px; }
         .staged .val { color: #4a9eff; font-weight: 700; }
         .was { color: #8a929e; font-size: 11px; }
-        #stage-bar { position: sticky; top: 0; z-index: 2; background: #1b1e24;
-                     border-bottom: 1px solid #2a2f38; padding: 8px 0; margin-bottom: 6px; }
+        /* A tied part's controls: a computed value with its expression, an overlay's
+           upstream value not set in it, the question before an expression gives way. */
+        .computed-said, .unset-said { font-size: 11px; color: #9cc4e8; margin-top: 2px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .unset-said { color: #8a929e; font-family: inherit; font-style: italic; }
+        .param.read-only input, .param.read-only select { opacity: .6; }
+        .computed-ask { margin-top: 4px; padding: 4px 6px; font-size: 11px; color: #e0cf8e; background: #2a2616; border: 1px solid #4a4326; border-radius: 4px; }
+        .computed-ask button { padding: 1px 7px; border: 0; border-radius: 3px; background: #4a4326; color: #f0e6c0; cursor: pointer; font: inherit; }
+        /* The stage bar stands pinned above Selected's body (panels.js's pinned slot): its
+           own space, never over a parameter. */
+        #stage-bar { background: #1b1e24; border-bottom: 1px solid #2a2f38; padding: 8px 0; margin-bottom: 6px; }
+        /* Never taller than its panel leaves it beside the title, the body's least and the
+           resizer: squeezed (a tab's panel open below), it scrolls in itself, and nothing
+           of Selected spills over the tab strip under it. */
+        .panel-pinned { flex: 0 0 auto; padding: 0 1rem; background: #1b1e24; max-height: calc(100% - 4rem); overflow-y: auto; }
+        .panel-pinned:empty, .panel.collapsed .panel-pinned { display: none; }
+        .panel-pinned #stage-bar { margin-bottom: 0; }
+        .panel-pinned #part-messages { max-height: 5.5em; overflow: auto; }
         #stage-summary { font-size: 12px; margin-bottom: 6px; }
         #stage-summary.clean { color: #8a929e; }
         #stage-summary.valid { color: #5ec27e; }
         #stage-summary.invalid { color: #ff9b9b; }
         .stage-actions { display: flex; gap: 6px; }
-        .stage-actions button { flex: 1; padding: 6px; border: 0; border-radius: 4px;
-                                font-weight: 700; cursor: pointer; font: inherit; }
+        /* One row, one line: Apply wider, saying what it draws, cut short rather than
+           wrapped where the rail is narrow (the summary above says it whole). */
+        .stage-actions button { flex: 1 1 0; min-width: 0; padding: 6px; border: 0; border-radius: 4px;
+                                font-weight: 700; cursor: pointer; font: inherit;
+                                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .stage-actions #apply-btn { flex-grow: 2; }
         #apply-btn { background: #4a9eff; color: #0b0d10; }
         #apply-btn:disabled { opacity: .4; cursor: default; }
         #revert-btn, #defaults-btn { background: #2a2f38; color: #d7dae0; }
@@ -771,6 +790,7 @@
         import { mountTasks } from '/static/widgets/tasks.js';
         import { mountScadEditor, variantChoices } from '/static/widgets/scad_editor.js';
         import { buildParamControl, described, sameValue, shown, focusedControl, refocus } from '/static/widgets/part_controls.js';
+        import { parseAssignments, lastOf, literalText, writeValues } from '/static/widgets/assignments.js';
         import { makeMachineMarks, makeBoardBadge, sayBoard, toScene as marksToScene } from '/static/machine_marks.js';
         import { mountPictureMarks, axes as cameraAxes } from '/static/picture_marks.js';
         import { mountPictures } from '/static/pictures.js';
@@ -2843,7 +2863,31 @@
             // works for a direct child of the root (see isEditableSelection),
             // so anything deeper -- or any leaf of an expanded category that
             // isn't itself a direct child -- gets a read-only panel.
+            // Selected drawn, and the part editor's stage bar pinned above its body: the
+            // bar -- what is staged, Apply, Revert, Defaults, Undo, Redo, Ghost -- takes its
+            // own space there, in view however far the parameters are scrolled, and covers
+            // none of them.
             renderSelectedPanel() {
+                this.drawSelectedPanel();
+                this.placeStageBar();
+            }
+
+            placeStageBar() {
+                const pinned = this.panels.pinnedSlot('selected');
+                if (!pinned) return;
+                const bar = this.partSection?.querySelector('#stage-bar') ?? pinned.querySelector('#stage-bar');
+                const shown = this.partSection && this.selectedBodyEl.contains(this.partSection);
+                if (bar && shown) {
+                    if (bar.parentElement !== pinned) { pinned.replaceChildren(bar); }
+                } else {
+                    // The editor left Selected: its bar goes back with it.
+                    const own = pinned.querySelector('#stage-bar');
+                    if (own && this.partSection) this.partSection.querySelector('.part-stage')?.prepend(own);
+                    pinned.replaceChildren();
+                }
+            }
+
+            drawSelectedPanel() {
                 this.shownFacts = this.selectedName ? this.pictureFactsHtml(this.selectedName) : '';
                 if (this.selectedName === FLOOR_KEY) {
                     this.selectedBodyEl.innerHTML = `<div class="prop-row"><label>Name</label><span>the floor</span></div>
@@ -3219,16 +3263,22 @@
                         // into the cache), the part's own SCAD untouched.
                         // The editor's version goes with it, and comes back with the answer
                         // (editor_version): a render that lands for older text says so.
+                        // A tied part's text carries its values: it alone is sent, the
+                        // part's own text included (which the server answers as the part).
                         const scad = this.scadStages[`part:${ref}`];
-                        const draft = scad && scad.text !== null && scad.text !== scad.own ? scad.text : null;
+                        const tied = Boolean(this.partStages[`part:${ref}`]?.tied);
+                        const draft = scad && scad.text !== null && (tied || scad.text !== scad.own) ? scad.text : null;
                         const version = scad ? scad.version ?? 0 : null;
                         const url = draft === null
                             ? `${base}/stl/generate?page=${encodeURIComponent(PAGE_ID)}`
                             : `${base}/draft/render?page=${encodeURIComponent(PAGE_ID)}`;
+                        const sent = draft === null ? { params, editor_version: version }
+                            : tied ? { scad: draft, editor_version: version }
+                            : { scad: draft, params, editor_version: version };
                         const response = await this.watchingTheQueue(fetch(url, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(draft === null ? { params, editor_version: version } : { scad: draft, params, editor_version: version }),
+                            body: JSON.stringify(sent),
                         }));
                         const body = await response.json().catch(() => ({}));
                         if (response.status === 409) throw new Superseded();
@@ -3278,6 +3328,8 @@
                         if (this.editorTarget?.key === target.key && this.editorTarget.checklistUrl) this.loadPartChecklist(this.editorTarget);
                         const scad = this.scadStages[target.key];
                         if (scad && body.sentScad !== undefined) scad.drawnText = body.sentScad ?? scad.own;
+                        if (scad && scad.text === scad.drawnText) scad.typedPending = false;
+                        this.syncFromText(target);
                         if (!again) this.noteApplied(target, body, params ?? {});
                         this.showMeasured(body.measured, body.measured_from);
                         this.showDrawn(ref);
@@ -3289,7 +3341,9 @@
                         const how = body.regenerated ? `${ref} regenerated`
                             : body.compiled_from ? `${ref} compiles as the variant already rendered, nothing rendered`
                             : `${ref} from the cache, nothing rendered`;
-                        if (body.draft) return `${how} from its edited SCAD: an applied variant, not saved; Part › Save keeps it in git`;
+                        // Its own text with other values in it is its numbers applied, said so.
+                        const numbers = this.partStages[target.key]?.tied && this.valuesOnly(target, body.sentScad);
+                        if (body.draft && !numbers) return `${how} from its edited SCAD: an applied variant, not saved; Part › Save keeps it in git`;
                         return variant ? `${how}: an applied variant, not saved` : `${how}: drawn as saved`;
                     },
                 };
@@ -3407,7 +3461,7 @@
                         ${target.part ? `<button type="button" id="defaults-btn" title="Stage the part's own values">Defaults</button>` : ''}
                       </div>
                       <div class="stage-more">
-                        <button type="button" id="undo-btn" disabled title="Undo the last change to the staged numbers (Ctrl+Z, outside a box being typed in)">↶ Undo</button>
+                        <button type="button" id="undo-btn" disabled title="Undo the last change: a part's draft, its text and its controls both, a step back; a piece's or a camera's staged numbers (Ctrl+Z, outside a box being typed in)">↶ Undo</button>
                         <button type="button" id="redo-btn" disabled title="Redo the change undone (Ctrl+Shift+Z or Ctrl+Y)">↷ Redo</button>
                         ${target.part ? `<label class="ghost-label" title="A ghost of what was drawn before the newest Apply -- the saved part, or the variant before -- with how much the size changed"><input type="checkbox" id="ghost-toggle"> Ghost</label>` : ''}
                       </div>
@@ -3588,7 +3642,9 @@
                 // part's own numbers -- its SCAD edited: Apply draws the saved part.
                 if (!count && this.toSaved(target)) {
                     summary.className = 'clean';
-                    summary.textContent = "The part's own numbers, and its SCAD edited: Apply draws the saved part";
+                    summary.textContent = this.partStages[target.key]?.tied
+                        ? "The part's own SCAD, a variant drawn: Apply draws the saved part"
+                        : "The part's own numbers, and its SCAD edited: Apply draws the saved part";
                     apply.disabled = !this.canBuild(target);
                     apply.textContent = 'Apply: the saved part';
                     this.envelopeFor = 'drawn';
@@ -3601,6 +3657,7 @@
                     apply.textContent = 'Apply';
                     this.envelopeFor = 'drawn';
                     this.markEnvelope();
+                    this.followGenerated(target);
                     return;
                 }
 
@@ -3619,13 +3676,22 @@
                 if (!summary || !apply || seq !== this._stageSeq || this.editorTarget?.key !== target.key) return;
                 // The target's validateUrl: a check against its own model, no render.
                 let report;
+                const stage = this.partStages[target.key];
                 try {
-                    const response = await fetch(target.validateUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ params: this.partParams }),
-                    });
-                    report = await response.json();
+                    if (stage?.tied && !stage.spec) {
+                        // No model to ask: the text's check says what it says, in the editor.
+                        report = { valid: true, errors: [], bounds: null };
+                    } else {
+                        // A tied part's model is asked of what it names: the rest is the text's.
+                        const named = stage?.tied ? new Set(stage.spec.fields.map((f) => f.name)) : null;
+                        const params = named ? Object.fromEntries(Object.entries(this.partParams).filter(([k, v]) => named.has(k) && v !== undefined)) : this.partParams;
+                        const response = await fetch(target.validateUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ params }),
+                        });
+                        report = await response.json();
+                    }
                 } catch (err) {
                     summary.className = 'invalid';
                     summary.textContent = `Could not validate: ${err.message}`;
@@ -3656,6 +3722,19 @@
                 // The envelope shown is the staged set's now, not what is drawn's.
                 this.envelopeFor = 'staged';
                 this.showEnvelope(report.bounds);
+                this.followGenerated(target);
+            }
+
+            // A part whose SCAD its Python generates (the snowplow) stays one way: its
+            // controls drive its model, and the SCAD it generates for what is staged follows
+            // each check, read only.
+            async followGenerated(target) {
+                if (!target?.part || target.editable !== false || !target.scadUrl) return;
+                const params = JSON.stringify(this.partStages[target.key]?.staged ?? {});
+                const response = await fetch(`${target.scadUrl}?params=${encodeURIComponent(params)}`).catch(() => null);
+                if (!response?.ok || this.scadTarget?.key !== target.key) return;
+                if (JSON.stringify(this.partStages[target.key]?.staged ?? {}) !== params) return;  // moved on since
+                this.scadEditor?.setText(await response.text());
             }
 
             bindStageActions(target) {
@@ -3683,6 +3762,23 @@
             stageValue(target, name, value) {
                 const stage = this.partStages[target.key];
                 if (!stage || this.editorTarget?.key !== target.key) return;
+                if (stage.tied) {
+                    // Its value written into its line (a group's, each field that moved), the
+                    // text then read again: the text is the one draft.
+                    const field = stage.fields?.find((f) => f.name === name);
+                    if (!field || field.readOnly) return;
+                    const writes = {};
+                    if (Array.isArray(field.scad)) {
+                        for (const sub of field.scad) if (!sameValue(value?.[sub], stage.staged[name]?.[sub])) writes[sub] = value[sub];
+                    } else writes[field.scad] = value;
+                    if (!Object.keys(writes).length) return;
+                    const at = focusedControl(document.getElementById('part-params'));
+                    if (at) this.lastStaged = { key: target.key, at };
+                    if (field.computed) { this.askToPin(target, field, writes); return; }
+                    stage.offerPending = false;
+                    this.writeTied(target, writes);
+                    return;
+                }
                 this.noteUndo(stage, name);
                 stage.staged[name] = value;
                 // Something new staged: kept now in place of what the tab had before a reload.
@@ -3730,6 +3826,12 @@
             refreshUndoButtons(target) {
                 const stage = this.partStages[target?.key];
                 const undo = document.getElementById('undo-btn'), redo = document.getElementById('redo-btn');
+                if (stage?.tied) {
+                    const editor = this.tiedEditor(target);
+                    if (undo) undo.disabled = !editor?.canUndo();
+                    if (redo) redo.disabled = !editor?.canRedo();
+                    return;
+                }
                 if (undo) undo.disabled = !stage?.undo?.length;
                 if (redo) redo.disabled = !stage?.redo?.length;
             }
@@ -3743,6 +3845,12 @@
             // History: the staged numbers a step back, or forward again. What to say.
             undoStaged(target) {
                 const stage = this.partStages[target?.key];
+                if (stage?.tied) {
+                    const editor = this.tiedEditor(target);
+                    if (!editor?.canUndo()) return { ok: false, said: `${target.label}: nothing in its draft to undo` };
+                    editor.undo();
+                    return { ok: true, said: `${target.label}: its draft one step back, text and controls both, ${this.stagedSaid(target)}; Redo puts it forward again` };
+                }
                 if (!stage?.undo?.length) return { ok: false, said: `${target?.label ?? 'The editor'}: nothing staged to undo` };
                 stage.redo ??= [];
                 stage.redo.push(JSON.parse(JSON.stringify(stage.staged)));
@@ -3755,6 +3863,12 @@
 
             redoStaged(target) {
                 const stage = this.partStages[target?.key];
+                if (stage?.tied) {
+                    const editor = this.tiedEditor(target);
+                    if (!editor?.canRedo()) return { ok: false, said: `${target.label}: nothing undone to redo` };
+                    editor.redo();
+                    return { ok: true, said: `${target.label}: its draft one step forward again, ${this.stagedSaid(target)}` };
+                }
                 if (!stage?.redo?.length) return { ok: false, said: `${target?.label ?? 'The editor'}: nothing undone to redo` };
                 stage.undo.push(JSON.parse(JSON.stringify(stage.staged)));
                 this.replaceStaged(stage, stage.redo.pop());
@@ -3767,6 +3881,14 @@
             revertStaged(target) {
                 const stage = this.partStages[target.key];
                 if (!stage) return false;
+                if (stage.tied) {
+                    // The text drawn put back, as one edit Undo takes back.
+                    const scad = this.scadStages[target.key];
+                    if (target.part) this.clearFailure(target.part);
+                    this.tiedEditor(target)?.replaceText(scad.drawnText ?? scad.own);
+                    this.editorLoading = Promise.resolve();
+                    return true;
+                }
                 if (Object.entries(stage.staged).some(([k, v]) => !sameValue(v, stage.committed[k]))) this.noteUndo(stage);
                 Object.assign(stage.staged, JSON.parse(JSON.stringify(stage.committed)));
                 // A failure drawn of what was staged goes with it: what is drawn shows again.
@@ -3820,7 +3942,9 @@
             async revertStagedOn(path) {
                 const target = await this.editorOn(path);
                 if (!target) return { ok: false, said: `${path} has no parameters to put back` };
-                if (!Object.keys(this.stagedDiff()).length) {
+                const scad = this.scadStages[target.key];
+                const tied = this.partStages[target.key]?.tied;
+                if (tied ? scad.text === (scad.drawnText ?? scad.own) : !Object.keys(this.stagedDiff()).length) {
                     return { ok: false, said: `${path}: nothing is staged; Selected shows what is drawn` };
                 }
                 this.revertStaged(target);
@@ -3833,6 +3957,12 @@
             // editor's Defaults, and Part › Defaults on the part's ring.
             stageDefaults(target) {
                 const stage = this.partStages[target.key];
+                if (stage?.tied) {
+                    // The part's own text: its defaults are its SCAD as saved.
+                    this.tiedEditor(target)?.replaceText(this.scadStages[target.key].own);
+                    this.editorLoading = Promise.resolve();
+                    return 'text';
+                }
                 if (!stage?.defaults) return false;
                 if (Object.entries(stage.defaults).some(([k, v]) => !sameValue(v, stage.staged[k]))) this.noteUndo(stage);
                 Object.assign(stage.staged, JSON.parse(JSON.stringify(stage.defaults)));
@@ -3853,6 +3983,7 @@
             // part to go back to.
             toSaved(target) {
                 const stage = this.partStages[target.key];
+                if (stage?.tied) return this.drawnIsVariant(target) && this.scadStages[target.key]?.text === this.scadStages[target.key]?.own;
                 if (!this.drawnIsVariant(target) || !stage?.defaults) return false;
                 // SCAD edited since what is drawn: Apply renders the edit, not the saved part.
                 const scad = this.scadStages[target.key];
@@ -3910,14 +4041,27 @@
                 this.editorTarget = target;
                 this.stagedValid = true;
                 try {
-                    const [response, drawn] = await Promise.all([
+                    // A part whose SCAD the page edits: its text is read first, its values
+                    // being the assignments in it (tiedParams).
+                    if (target.part && target.scadUrl) {
+                        await this.scadLoading;
+                        if (this.editorTarget?.key !== target.key) return;
+                    }
+                    const scad = this.scadStages[target.key];
+                    const tied = Boolean(target.part && scad && target.editable !== false && this.scadTarget?.key === target.key);
+                    const [response, drawn, told] = await Promise.all([
                         fetch(target.paramsUrl),
                         fresh && target.drawn ? target.drawn().catch(() => null) : null,
+                        tied && !stage.told ? fetch(`${BASE_URL}/parts/${encodeURIComponent(target.part)}/assignments`).then((r) => (r.ok ? r.json() : null)).catch(() => null) : null,
                     ]);
                     if (this.editorTarget?.key !== target.key) return;  // another target was chosen meanwhile
+                    if (tied && (told || stage.told)) {
+                        if (drawn) stage.measured = { box: drawn.measured, from: drawn.measuredFrom };
+                        await this.tiedParams(target, stage, response, told);
+                        return;
+                    }
                     // A part with no model whose SCAD is being edited: its controls are
                     // what the draft declares, as the newest check listed them.
-                    const scad = this.scadStages[target.key];
                     const declared = scad?.check?.edited && scad.check.source === 'customizer' ? scad.check : null;
                     if (!response.ok && !declared) { host.textContent = await noParameters(response); return; }
                     const spec = declared ? { fields: declared.fields, bounds: null } : await response.json();
@@ -3972,11 +4116,255 @@
                 }
             }
 
+            // ---- a part's controls and its text, tied together -----------------------
+            //
+            // The part-iteration plan's "parameters and text, tied together": for a part
+            // whose SCAD the page edits, the text is the one draft. Its top-level
+            // assignments (assignments.js, the server's grammar) are its controls'
+            // values. A control moved writes its value into its line at once, an edit
+            // Undo takes back; the text typed moves its controls. What is staged is what
+            // the text says otherwise than the text drawn: Defaults puts the part's own
+            // text back, Revert the drawn one, and Apply renders the text. The part's
+            // model, where it has one, describes the values it names (their ranges,
+            // captions and groups); any other parameter of the text is described by its
+            // own line's comment. A computed one shows the value the newest check gave it,
+            // marked with its expression, and moving it asks first: Replace puts the plain
+            // value in place of the expression. A part in a submodule is edited as its
+            // overlay, which lists the upstream's parameters it does not set, each with
+            // upstream's value; moving one sets it in the overlay.
+
+            async tiedParams(target, stage, response, told) {
+                const scad = this.scadStages[target.key];
+                stage.tied = true;
+                stage.known ??= {};
+                if (told) {
+                    stage.told = { kind: told.kind, upstream: told.upstream, unset: told.assignments.filter((a) => a.set === false) };
+                    this.learnComputed(stage, told.assignments);
+                }
+                const spec = response.ok ? await response.json().catch(() => null) : null;
+                if (this.editorTarget?.key !== target.key) return;
+                stage.spec = spec && Array.isArray(spec.fields) ? spec : null;
+                if (spec && 'can_build' in spec) { stage.canBuild = spec.can_build !== false; stage.buildNote = spec.build_note ?? null; }
+                this.tiedFields(stage, scad.text);
+                stage.defaults = this.valuesOfText(stage, scad.own);
+                this.replaceStaged(stage, this.valuesOfText(stage, scad.text));
+                this.replaceCommitted(stage, this.valuesOfText(stage, scad.drawnText ?? scad.text));
+                this.buildControls(target, stage);
+                // A computed value no check has given yet: the text checked once, now, for it.
+                if (!scad.check && this.canBuild(target) && stage.fields.some((f) => f.computed && f.readOnly)) {
+                    scad.checking = this.checkScad(target, scad.seq).catch(() => null);
+                }
+                this.showMeasured(stage.measured?.box, stage.measured?.from);
+                this.showDrawn(target.part);
+                if (stage.spec) this.showCommittedEnvelope(target, stage, stage.spec);
+                this.bindStageActions(target);
+                this.refreshStage();
+                this.renderHistory(target);
+                this.offerKeptWork(target);
+                this.focusEditor();
+            }
+
+            // What a check (or the first read) said a computed assignment comes to; whether
+            // that is news.
+            learnComputed(stage, assignments) {
+                let news = false;
+                // Only a control's value is news: a computed name after the first module is none.
+                const shown = new Set((stage.fields ?? []).flatMap((f) => (Array.isArray(f.scad) ? f.scad : [f.scad])));
+                for (const a of assignments ?? []) {
+                    if (!a.computed || !a.value_known) continue;
+                    const was = stage.known[a.name];
+                    if (shown.has(a.name) && (!was || was.expression !== a.expression || !sameValue(was.value, a.value))) news = true;
+                    stage.known[a.name] = { expression: a.expression, value: a.value, printed: a.printed };
+                }
+                return news;
+            }
+
+            // The controls a text has: the model's fields, contested first, each the
+            // value of its name (a group, of each of its fields' names); then each other
+            // parameter of the text, in its order, and of an overlay's upstream.
+            tiedFields(stage, text) {
+                const own = parseAssignments(text ?? '');
+                const assigned = lastOf(own);
+                const unset = (stage.told?.unset ?? []).filter((a) => !(a.name in assigned));
+                const upstream = lastOf(unset);
+                const at = (name) => assigned[name] ?? upstream[name] ?? null;
+                const isGroup = (f) => f.type === 'group' || Boolean(f.default && typeof f.default === 'object' && !Array.isArray(f.default));
+                const covered = new Set();
+                const fields = [];
+                const model = [...(stage.spec?.fields ?? [])].sort((a, b) => (b.contested?.length ?? 0) - (a.contested?.length ?? 0));
+                for (const f of model) {
+                    const subs = isGroup(f) ? (f.fields?.length ? f.fields.map((x) => x.name) : Object.keys(f.default ?? {})) : null;
+                    covered.add(f.name);
+                    for (const name of subs ?? []) covered.add(name);
+                    const a = subs ? null : at(f.name);
+                    const unknown = Boolean(a?.computed) && stage.known[f.name]?.expression !== a.expression;
+                    fields.push({
+                        ...f,
+                        scad: subs ?? f.name,
+                        computed: a?.computed ? a.expression : null,
+                        unset: subs ? subs.every((n) => !assigned[n] && upstream[n]) : Boolean(a && !assigned[f.name]),
+                        readOnly: unknown,
+                    });
+                }
+                for (const a of [...own, ...unset]) {
+                    if (!a.parameter || covered.has(a.name)) continue;
+                    covered.add(a.name);
+                    fields.push(this.fieldOfAssignment(stage, at(a.name)));
+                }
+                stage.fields = fields;
+            }
+
+            // A parameter the model does not name, described by its own line: its comment's
+            // range, step or options, the caption above it, its unit.
+            fieldOfAssignment(stage, a) {
+                const known = a.computed ? stage.known[a.name] : null;
+                const value = a.computed ? (known?.expression === a.expression ? known.value : undefined) : a.value;
+                const numbers = Array.isArray(value) && value.length > 0 && value.every((v) => typeof v === 'number');
+                const type = a.options.length ? 'enum'
+                    : typeof value === 'boolean' ? 'boolean'
+                    : typeof value === 'number' ? 'number'
+                    : numbers ? 'vector'
+                    : 'text';
+                // A value no control here writes -- a list of lists, a computed one not
+                // checked yet -- is shown, and edited in the text.
+                const readOnly = value === undefined || (type === 'text' && typeof value !== 'string');
+                return {
+                    name: a.name, scad: a.name, type, default: value, min: a.min, max: a.max, step: a.step,
+                    options: a.options, description: a.caption, unit: a.unit, contested: [], fields: [], integer: false,
+                    computed: a.computed ? a.expression : null, unset: a.set === false, readOnly,
+                };
+            }
+
+            // Each control's value as `text` gives it; a computed one's as the newest check
+            // said, where its expression is the one checked.
+            valuesOfText(stage, text) {
+                const assigned = lastOf(parseAssignments(text ?? ''));
+                const upstream = lastOf(stage.told?.unset ?? []);
+                const valueOf = (name, fallback) => {
+                    const a = assigned[name] ?? upstream[name];
+                    if (!a) return fallback;
+                    if (!a.computed) return a.value;
+                    const known = stage.known?.[name];
+                    return known && known.expression === a.expression ? known.value : undefined;
+                };
+                const values = {};
+                for (const f of stage.fields ?? []) {
+                    values[f.name] = Array.isArray(f.scad)
+                        ? Object.fromEntries(f.scad.map((n) => [n, valueOf(n, f.default?.[n])]))
+                        : valueOf(f.scad, f.default);
+                }
+                return values;
+            }
+
+            replaceCommitted(stage, values) {
+                for (const key of Object.keys(stage.committed)) if (!(key in values)) delete stage.committed[key];
+                Object.assign(stage.committed, JSON.parse(JSON.stringify(values)));
+            }
+
+            // A value as its control shows it: one no control writes, as the text has it.
+            shownValue(field, value) {
+                if (!field.readOnly) return value;
+                if (value === undefined) return '';
+                return typeof value === 'string' ? value : literalText(value);
+            }
+
+            // The tied controls: built afresh when what they are changes (a parameter
+            // typed in, a computed one checked, one set in an overlay), else each set where
+            // it is, so the focus stays where a person left it.
+            buildControls(target, stage) {
+                const host = document.getElementById('part-params');
+                if (!host || this.editorTarget?.key !== target.key) return;
+                const fields = stage.fields ?? [];
+                const built = `${target.key}|tied|${JSON.stringify(fields.map((f) => [f.name, f.type, f.min, f.max, f.step, f.unit ?? null, f.description ?? null, (f.options || []).length, (f.contested || []).length, f.computed ?? null, f.unset ?? false, f.readOnly ?? false]))}`;
+                if (host.dataset.built === built && this.paramControls) {
+                    for (const field of fields) this.paramControls[field.name]?.setValue(this.shownValue(field, stage.staged[field.name]));
+                    return;
+                }
+                const was = focusedControl(host);
+                host.innerHTML = fields.length ? '' : `<span class="empty">no parameters: its text assigns none before its first module</span>`;
+                this.paramControls = {};
+                for (const field of fields) {
+                    const wrap = buildParamControl(field, this.shownValue(field, stage.staged[field.name]), {
+                        onStage: (name, value) => this.stageValue(target, name, value),
+                    });
+                    this.markTied(wrap, field);
+                    this.paramControls[field.name] = wrap;
+                    host.appendChild(wrap);
+                }
+                host.dataset.built = built;
+                refocus(host, was);
+            }
+
+            // What a control is beside the plain ones: computed, with its expression; an
+            // overlay's upstream value, not set in it; a value edited in the text alone.
+            markTied(wrap, field) {
+                if (field.computed) {
+                    wrap.classList.add('computed');
+                    wrap.insertAdjacentHTML('beforeend', `<div class="computed-said" title="Computed in the text: the value the newest check gave it">= ${esc(field.computed)} · ${field.readOnly ? 'computed when checked' : 'computed'}</div>`);
+                }
+                if (field.unset) {
+                    wrap.classList.add('unset');
+                    wrap.insertAdjacentHTML('beforeend', `<div class="unset-said" title="The overlay does not set it: the upstream SCAD's value stands">upstream's value: moving it sets it in the overlay</div>`);
+                }
+                if (field.readOnly) {
+                    wrap.classList.add('read-only');
+                    for (const el of wrap.querySelectorAll('input, select, button')) el.disabled = true;
+                }
+            }
+
+            // The text changed: the controls moved to what it says, what is drawn read from
+            // the text drawn, and the bar told.
+            syncFromText(target) {
+                const stage = this.partStages[target.key], scad = this.scadStages[target.key];
+                if (!stage?.tied || !scad) return;
+                this.tiedFields(stage, scad.text);
+                this.replaceStaged(stage, this.valuesOfText(stage, scad.text));
+                this.replaceCommitted(stage, this.valuesOfText(stage, scad.drawnText ?? scad.text));
+                if (this.editorTarget?.key !== target.key) return;
+                this.buildControls(target, stage);
+                this.refreshStage();
+            }
+
+            tiedEditor(target) {
+                return this.scadTarget?.key === target?.key ? this.scadEditor : null;
+            }
+
+            // A control's values written into the text, as the editor's own edit.
+            writeTied(target, writes, { join = true } = {}) {
+                const editor = this.tiedEditor(target);
+                return editor ? editor.writeValues(writes, { join }) : false;
+            }
+
+            // A computed assignment moved: asked once whether its expression gives way to the
+            // plain value. The control holds where it was moved until the answer.
+            askToPin(target, field, writes) {
+                const wrap = this.paramControls?.[field.name];
+                const [name, value] = Object.entries(writes)[0];
+                if (!wrap) return;
+                wrap.querySelector('.computed-ask')?.remove();
+                wrap.insertAdjacentHTML('beforeend', `<div class="computed-ask" role="alert">${esc(name)} is computed, = ${esc(field.computed)}. `
+                    + `<button type="button" class="computed-replace" title="The expression replaced by this plain value in the text: one edit, which Undo takes back">Replace it with ${esc(literalText(value))}</button> `
+                    + `<button type="button" class="computed-keep" title="The expression left as it is">Keep it computed</button></div>`);
+                const ask = wrap.querySelector('.computed-ask');
+                ask.querySelector('.computed-replace').onclick = () => {
+                    ask.remove();
+                    this.writeTied(target, writes, { join: false });
+                    this.setStatus(`${target.label}: ${name} is ${literalText(value)} in its text now, in place of ${field.computed}; Undo puts the expression back`, 'success');
+                };
+                ask.querySelector('.computed-keep').onclick = () => {
+                    ask.remove();
+                    wrap.setValue(this.shownValue(field, this.partStages[target.key]?.staged[field.name]));
+                    this.setStatus(`${target.label}: ${name} stays computed, = ${field.computed}`, 'success');
+                };
+                this.setStatus(`${target.label}: ${name} is computed, = ${field.computed}: Replace puts ${literalText(value)} in its place`, 'success');
+            }
+
             // The envelope the part declares for what is committed (drawn), unless a
             // staged set is being checked, which shows its own.
             async showCommittedEnvelope(target, stage, spec) {
+                const named = new Set((spec.fields ?? []).map((f) => f.name));
                 const changed = Object.fromEntries(Object.entries(stage.committed)
-                    .filter(([name, value]) => name in stage.defaults && !sameValue(value, stage.defaults[name])));
+                    .filter(([name, value]) => name in stage.defaults && named.has(name) && value !== undefined && !sameValue(value, stage.defaults[name])));
                 let bounds = spec.bounds;
                 if (Object.keys(changed).length) {
                     try {
@@ -4164,7 +4552,8 @@
                     const stage = this.partStages[target.key], scad = this.scadStages[target.key];
                     // What a reload left stays kept until it is restored or let go.
                     if (stage?.offerPending) return;
-                    const staged = stage ? Object.fromEntries(Object.entries(stage.staged).filter(([k, v]) => !sameValue(v, stage.committed[k]))) : {};
+                    // A tied part's values are its text's: the text is what is kept.
+                    const staged = stage && !stage.tied ? Object.fromEntries(Object.entries(stage.staged).filter(([k, v]) => !sameValue(v, stage.committed[k]))) : {};
                     const draft = scad && scad.text !== null && scad.text !== scad.own ? scad.text : null;
                     try {
                         const key = KEPT_PREFIX + target.key;
@@ -4185,7 +4574,7 @@
             // The editor of a target that had work kept before a reload, other than what it
             // now shows: offered back, saying what it was.
             offerKeptWork(target) {
-                const offer = this.partSection?.querySelector('#kept-offer');
+                const offer = document.getElementById('kept-offer');
                 if (!offer || this.partSection.dataset.target !== target.key) return;
                 const kept = this.keptWork[target.key];
                 const stage = this.partStages[target.key], scad = this.scadStages[target.key];
@@ -4194,7 +4583,7 @@
                     offer.hidden = true;
                     return;
                 }
-                const numbers = Object.entries(kept.staged ?? {}).filter(([k, v]) => stage && k in stage.staged && !sameValue(stage.staged[k], v));
+                const numbers = stage?.tied ? [] : Object.entries(kept.staged ?? {}).filter(([k, v]) => stage && k in stage.staged && !sameValue(stage.staged[k], v));
                 // Its SCAD not read yet: what was kept stays kept, and is asked about again once it is.
                 const waiting = Boolean(target.scadUrl && !scad);
                 const text = kept.scad && scad && kept.scad !== scad.text ? kept.scad : null;
@@ -4206,8 +4595,12 @@
                     offer.hidden = true;
                     return;
                 }
+                // A tied part's text kept: the values in it that differ from what is shown.
+                const values = text !== null && stage?.tied
+                    ? Object.entries(this.valuesOfText(stage, text)).filter(([k, v]) => v !== undefined && !sameValue(v, stage.staged[k]))
+                    : [];
                 const what = [
-                    text !== null ? `its SCAD edited${kept.from ? ` from ${kept.from}` : ''}` : null,
+                    text !== null ? `its SCAD edited${kept.from ? ` from ${kept.from}` : ''}${values.length ? `, ${values.map(([k, v]) => `${k} ${described(v)}`).join(', ')}` : ''}` : null,
                     numbers.length ? `${numbers.map(([k, v]) => `${k} ${described(v)}`).join(', ')} staged` : null,
                 ].filter(Boolean).join(', and ');
                 offer.querySelector('.kept-said').textContent = `Kept in this tab from before it was reloaded: ${what}. Restore puts it back; Discard lets it go.`;
@@ -4220,7 +4613,7 @@
                 if (!kept || !stage) return { ok: false, said: `${target.label}: nothing kept to restore` };
                 delete this.keptWork[target.key];
                 stage.offerPending = false;
-                const numbers = Object.entries(kept.staged ?? {}).filter(([k]) => k in stage.staged);
+                const numbers = stage.tied ? [] : Object.entries(kept.staged ?? {}).filter(([k]) => k in stage.staged);
                 if (numbers.length) {
                     this.noteUndo(stage);
                     for (const [k, v] of numbers) stage.staged[k] = v;
@@ -4229,13 +4622,15 @@
                 let text = false;
                 if (kept.scad && scad && kept.scad !== scad.text && this.scadTarget?.key === target.key && this.scadEditor) {
                     if (kept.from) scad.from = kept.from;
-                    // As typed: checked, and rendered once it reads.
-                    this.scadEditor.setText(kept.scad);
+                    // A tied part's: put back staged, checked, and drawn by Apply, as a
+                    // control's move is; else as typed: checked, and rendered once it reads.
+                    if (stage.tied) this.scadEditor.replaceText(kept.scad);
+                    else this.scadEditor.setText(kept.scad);
                     text = true;
                 }
-                this.partSection?.querySelector('#kept-offer')?.setAttribute('hidden', '');
+                document.getElementById('kept-offer')?.setAttribute('hidden', '');
                 this.keepWork(target, { now: true });
-                const what = [text ? 'its edited SCAD, checked and rendered once it reads' : null, numbers.length ? `${numbers.length} number${numbers.length > 1 ? 's' : ''} staged` : null].filter(Boolean).join(' and ');
+                const what = [text ? (stage.tied ? 'its edited SCAD, staged: checked, and Apply draws it' : 'its edited SCAD, checked and rendered once it reads') : null, numbers.length ? `${numbers.length} number${numbers.length > 1 ? 's' : ''} staged` : null].filter(Boolean).join(' and ');
                 return { ok: true, said: `${target.label}: restored from before the reload, ${what || 'nothing that differed'}` };
             }
 
@@ -4243,7 +4638,7 @@
                 delete this.keptWork[target.key];
                 const stage = this.partStages[target.key];
                 if (stage) stage.offerPending = false;
-                this.partSection?.querySelector('#kept-offer')?.setAttribute('hidden', '');
+                document.getElementById('kept-offer')?.setAttribute('hidden', '');
                 this.keepWork(target, { now: true });
                 return { ok: true, said: `${target.label}: what this tab kept from before the reload is let go; what is drawn stays` };
             }
@@ -4261,6 +4656,7 @@
             unfinishedWork() {
                 const found = [];
                 for (const [key, stage] of Object.entries(this.partStages)) {
+                    if (stage.tied) continue;  // its values are its text's, said below
                     if (Object.entries(stage.staged).some(([k, v]) => !sameValue(v, stage.committed[k]))) found.push(`${key}: numbers staged and not applied`);
                 }
                 for (const [key, scad] of Object.entries(this.scadStages)) {
@@ -4290,10 +4686,23 @@
                 const variant = body.saved ? null : body.variant;
                 stage.history ??= this.readHistory(target.key);
                 if (stage.history[0] && stage.history[0].variant === variant) return;
-                stage.history.unshift({ variant, params: JSON.parse(JSON.stringify(params)), draft: Boolean(body.draft), measured: body.measured ?? null, at: Date.now() });
+                // A tied part's text differing from its own in its values alone is its numbers,
+                // not an edit of its SCAD: the list says the numbers.
+                const edited = Boolean(body.draft) && !(stage.tied && this.valuesOnly(target, body.sentScad));
+                stage.history.unshift({ variant, params: JSON.parse(JSON.stringify(params)), draft: edited, measured: body.measured ?? null, at: Date.now() });
                 stage.history.length = Math.min(stage.history.length, HISTORY_KEEP);
                 // The tab's own: a reload lists them still.
                 try { sessionStorage.setItem(HISTORY_PREFIX + target.key, JSON.stringify(stage.history)); } catch (e) { /* listed until the page is left */ }
+            }
+
+            // Whether `text` is the part's own with other values in its assignments, and
+            // nothing else changed.
+            valuesOnly(target, text) {
+                const own = this.scadStages[target.key]?.own;
+                if (typeof text !== 'string' || typeof own !== 'string') return false;
+                const values = {};
+                for (const a of Object.values(lastOf(parseAssignments(text)))) if (!a.computed) values[a.name] = a.value;
+                try { return writeValues(own, values) === text; } catch (err) { return false; }
             }
 
             readHistory(key) {
@@ -4340,14 +4749,17 @@
                     const state = response?.ok ? await response.json() : {};
                     body = { saved: true, variant: null, measured: state.measured ?? entry.measured, measured_from: state.measured_from, regenerated: false };
                 }
-                this.noteUndo(stage);
-                this.replaceStaged(stage, { ...stage.staged, ...entry.params });
-                Object.assign(stage.committed, JSON.parse(JSON.stringify(entry.params)));
-                // Its SCAD, as drawn: the draft it rendered, or the part's own.
+                if (!stage.tied) {
+                    this.noteUndo(stage);
+                    this.replaceStaged(stage, { ...stage.staged, ...entry.params });
+                    Object.assign(stage.committed, JSON.parse(JSON.stringify(entry.params)));
+                }
+                // Its SCAD, as drawn: the text it rendered (a tied part's values with it), or
+                // the part's own.
                 const scad = this.scadStages[target.key];
                 if (scad) {
                     let text = scad.own;
-                    if (entry.draft && body.scad_url) {
+                    if ((entry.draft || stage.tied) && entry.variant && body.scad_url) {
                         const drawn = await fetch(body.scad_url).catch(() => null);
                         if (drawn?.ok) text = await drawn.text();
                     }
@@ -4373,7 +4785,9 @@
                 if (scad.text !== text) scad.version = (scad.version ?? 0) + 1;
                 scad.text = text;
                 scad.drawnText = text;
+                scad.typedPending = false;
                 scad.check = null;
+                this.syncFromText(target);
                 if (this.scadTarget?.key === target.key) this.scadEditor?.say(text === scad.own ? "The part's own SCAD, as drawn." : 'The SCAD the variant drawn was rendered from.');
             }
 
@@ -4570,16 +4984,19 @@
                     if (!response.ok) throw new Error(typeof answer.detail === 'string' ? answer.detail : (answer.detail?.message ?? response.statusText));
                     return answer;
                 };
-                // Asked twice: the first press of a destructive button says what it would do.
+                // Asked twice: the first press -- of the button, or of the ring's cell --
+                // says what it would do; the same press again within a few seconds does it.
                 const twice = (what) => {
-                    if (button && button.dataset.asked === 'yes') return true;
+                    const asked = `${target.key}|${verb}|${name ?? ''}`;
+                    const now = performance.now();
+                    if (this.asking && this.asking.what === asked && now < this.asking.until) { this.asking = null; return true; }
+                    this.asking = { what: asked, until: now + CONFIRM_MS };
                     if (button) {
-                        button.dataset.asked = 'yes';
                         button.dataset.was = button.textContent;
                         button.textContent = 'Press again to confirm';
-                        setTimeout(() => { if (button.isConnected) { button.dataset.asked = ''; button.textContent = button.dataset.was; } }, CONFIRM_MS);
+                        setTimeout(() => { if (button.isConnected) button.textContent = button.dataset.was; }, CONFIRM_MS);
                     }
-                    throw new Asking(`${what}, which cannot be undone: press it again to confirm`);
+                    throw new Asking(`${what}, which cannot be undone: ${button ? 'press it' : 'choose the same cell'} again to confirm`);
                 };
                 try {
                     const v = name ? encodeURIComponent(name) : '';
@@ -4630,6 +5047,26 @@
                 } catch (err) {
                     return { ok: false, said: err instanceof Asking ? `${target.part}: ${err.message}` : `${target.part}: ${verb} ${name ?? ''}: ${err.message}` };
                 }
+            }
+
+            // The ring's cells for a saved variant and the trash: the part's editor opened,
+            // its SCAD loaded, then what the variant's buttons do. Rename and Duplicate need
+            // a name, which no cell types: the variant's row unfolds with the cursor in its
+            // name box, and Enter there does it. What to say.
+            async variantOn(path, where, verb, name) {
+                const target = await this.scadOn(path);
+                if (!target) return { ok: false, said: `${path} has no saved variants here` };
+                if (where === 'variant' && verb === 'draw') return this.openSavedVariant(target, name);
+                if (where === 'variant' && (verb === 'rename' || verb === 'duplicate')) {
+                    const ready = this.scadEditor?.armVariant(name, verb);
+                    if (!ready) return { ok: false, said: `${target.part}: no saved variant ${name}` };
+                    return { ok: true, said: `${target.part}: type the name to ${verb === 'rename' ? 'rename' : 'copy'} ${name} to, in its box, and press Enter` };
+                }
+                if (where === 'trash') {
+                    this.scadEditor?.openTrash();
+                    return this.manageVariant(target, { restore: 'undelete', forget: 'forget', empty: 'empty' }[verb], name);
+                }
+                return this.manageVariant(target, verb, name);
             }
 
             // ---- two variants compared --------------------------------------------
@@ -4916,6 +5353,11 @@
                     if (meta) {
                         target.sourceFile = meta.source_file;
                         target.editable = meta.files?.scad?.editable !== false;
+                        target.upstreamUrl = meta.files?.scad?.overlay ? meta.files.scad.upstream_url : null;
+                    }
+                    const actions = this.partSection?.dataset.target === target.key ? this.partSection.querySelector('.part-actions') : null;
+                    if (actions && target.upstreamUrl && !actions.querySelector('.part-upstream')) {
+                        actions.insertAdjacentHTML('beforeend', ` <a class="part-upstream" href="${BASE_URL}${target.upstreamUrl}" target="_blank" rel="noopener" title="The upstream SCAD its overlay includes, in its submodule: read only here, edited upstream">Upstream SCAD, read only</a>`);
                     }
                     const own = response.ok ? await response.text() : `// no SCAD source: ${response.status}\n`;
                     if (!slot || this.partSection?.dataset.target !== target.key) return;
@@ -4937,7 +5379,7 @@
                     }
                     this.releaseScadEditor();
                     const handlers = {
-                        onChange: (text) => this.scadChanged(target, text),
+                        onChange: (text, how) => this.scadChanged(target, text, how),
                         onSave: () => this.saveScadKey(target),
                         onFloat: () => this.toggleScadFloat(),
                         onFullscreen: () => this.toggleScadFullscreen(),
@@ -4970,6 +5412,7 @@
                     this.scadEditor = editor;
                     this.scadTarget = target;
                     if (!editable) editor.say(target.part ? "Its geometry is Python: this is the SCAD it generates, read-only. Its parameters are what to edit." : 'Read-only: the few lines its shape is made from.');
+                    else if (scad.text === own && target.upstreamUrl) editor.say(`${target.part}'s overlay: the upstream SCAD included, its values set after it. A control sets its line here; typed, it is checked once typing stops and rendered once it reads.`);
                     else if (scad.text === own) editor.say("The part's own SCAD: edit it here; it is checked once typing stops and rendered once it reads.");
                     else editor.say(scad.text === scad.savedText && scad.from ? `The variant ${scad.from}, as saved.` : 'Edited, not saved: Save keeps it in git.');
                     if (editable) await this.loadSavedVariants(target);
@@ -4994,25 +5437,34 @@
             // Typing: the check once it stops, the render soon after a check that passes;
             // a newer edit cancels both. The variant name the text came from is let go of
             // once the text has moved on from it.
-            scadChanged(target, text) {
+            // A control's move, a text put back and the page's Undo are staged ({ staged }):
+            // checked, and drawn when Apply is pressed, as a control's move always was;
+            // what is typed is drawn once it reads. Either way the controls follow the text.
+            scadChanged(target, text, { staged = false } = {}) {
                 const scad = this.scadStages[target.key];
                 if (!scad) return;
+                // A SCAD only read (generated, a made piece's) follows its model: nothing to check.
+                if (!target.part || target.editable === false) { scad.text = text; return; }
                 scad.text = text;
                 scad.version = (scad.version ?? 0) + 1;
                 clearTimeout(scad.checkTimer);
                 clearTimeout(scad.renderTimer);
                 const seq = (scad.seq += 1);
                 scad.replacing = null;
+                // Drawn once it reads when the newest change was typed; a control's, a text
+                // put back or an Undo of the page's waits for Apply, whatever came before.
+                scad.typedPending = !staged;
                 this.nameFollowsText(target);
                 const stage = this.partStages[target.key];
                 if (stage) stage.offerPending = false;
+                this.syncFromText(target);
                 this.keepWork(target);
-                this.scadEditor?.say('Edited: checked once typing stops, rendered once it reads', 'loading');
+                this.scadEditor?.say(staged ? 'Staged: checked once the controls rest; Apply draws it' : 'Edited: checked once typing stops, rendered once it reads', 'loading');
                 scad.checking = new Promise((resolve) => {
                     scad.checkTimer = setTimeout(() => this.checkScad(target, seq).then(resolve, () => resolve(null)), SCAD_CHECK_MS);
                 });
                 scad.checking.then((check) => {
-                    if (seq !== scad.seq || !check || !check.valid) return;
+                    if (seq !== scad.seq || !check || !check.valid || !scad.typedPending) return;
                     scad.renderTimer = setTimeout(() => this.renderScad(target, seq), SCAD_RENDER_AFTER_CHECK_MS);
                 });
             }
@@ -5039,7 +5491,8 @@
                 const response = await this.watchingTheQueue(fetch(`${base}/draft/check?page=${encodeURIComponent(PAGE_ID)}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ scad: scad.text, params: { ...(stage?.staged ?? {}) }, editor_version: scad.version ?? 0 }),
+                    // A tied part's values are in its text: nothing is sent beside it.
+                    body: JSON.stringify({ scad: scad.text, params: stage?.tied ? {} : { ...(stage?.staged ?? {}) }, editor_version: scad.version ?? 0 }),
                 }));
                 if (response.status === 409) return null;  // a newer check from this page took over
                 const body = await response.json().catch(() => null);
@@ -5050,6 +5503,9 @@
                 if (seq !== scad.seq) return body;  // typed on since: an older text's
                 const before = JSON.stringify((scad.check?.fields ?? []).map((f) => [f.name, f.type]));
                 scad.check = body;
+                // What its computed assignments come to, on their controls.
+                const tiedStage = this.partStages[target.key];
+                if (tiedStage?.tied && this.learnComputed(tiedStage, body.assignments)) this.syncFromText(target);
                 this.showMessages(target, body.messages);
                 const error = body.messages.find((m) => m.level === 'error');
                 if (error) {
@@ -5058,11 +5514,12 @@
                     this.scadEditor?.say(`${body.errors.map((e) => `${e.field}: ${e.message}`).join('; ')}. Not rendered until the numbers fit.`, 'error');
                 } else {
                     const warned = body.messages.length ? `; ${body.messages.length === 1 ? 'a warning' : 'warnings'}, marked` : '';
-                    this.scadEditor?.say(body.edited ? `Checked: it reads${warned}; rendered next.` : `Checked: the part's own SCAD${warned}.`, 'valid');
+                    const next = scad.typedPending ? '; rendered next' : scad.text !== scad.drawnText ? '; Apply draws it' : '';
+                    this.scadEditor?.say(body.edited ? `Checked: it reads${warned}${next}.` : `Checked: the part's own SCAD${warned}${next}.`, 'valid');
                 }
                 if (body.note) console.info(body.note);
                 const after = JSON.stringify((body.fields ?? []).map((f) => [f.name, f.type]));
-                if (body.source === 'customizer' && after !== before && this.editorTarget?.key === target.key) this.editorLoading = this.loadPartParams(target);
+                if (body.source === 'customizer' && after !== before && this.editorTarget?.key === target.key && !tiedStage?.tied) this.editorLoading = this.loadPartParams(target);
                 return body;
             }
 
@@ -5072,6 +5529,11 @@
                 if (!scad || seq !== scad.seq || !this.canBuild(target)) return;
                 const check = await scad.checking;
                 if (seq !== scad.seq || !check || !check.valid) return;
+                // Typed back to what is drawn (Ctrl+Z, say), nothing staged: nothing to draw.
+                if (scad.text === scad.drawnText && !Object.keys(this.stagedDiff()).length) {
+                    this.scadEditor?.say('Checked: it reads, and it is what is drawn.', 'valid');
+                    return;
+                }
                 await this.applyEditor(target);
             }
 
@@ -5152,7 +5614,8 @@
                 const name = editor.name() || scad.suggested;
                 if (!name) return { ok: false, said: `${target.part}: give the variant a name to save it under` };
                 const stage = this.partStages[target.key];
-                const params = { ...(stage?.staged ?? {}) };
+                // A tied part's values are in its text: nothing is sent beside it.
+                const params = stage?.tied ? {} : { ...(stage?.staged ?? {}) };
                 const asked = { name, text: editor.text(), params: JSON.stringify(params) };
                 const taken = (scad.saved ?? []).some((v) => v.name === name);
                 const again = scad.replacing && scad.replacing.name === asked.name && scad.replacing.text === asked.text && scad.replacing.params === asked.params;
@@ -5211,14 +5674,15 @@
                 // An overlay (a part in a submodule) is the upstream SCAD with its values:
                 // its own SCAD is never loaded into the editor as the part's.
                 const overlay = variant.kind === 'overlay';
-                const text = overlay ? scad.own : (variant.scad ?? scad.own);
+                const stage = this.partStages[target.key];
+                // Its text carries its values (an overlay's, the values it sets upstream's).
+                const text = overlay && !stage?.tied ? scad.own : (variant.scad ?? scad.own);
                 // Named before the text changes, so the name box keeps it.
                 scad.from = name;
                 scad.savedText = text;
                 scad.replacing = null;
                 editor.setName(name);
-                const stage = this.partStages[target.key];
-                if (stage) {
+                if (stage && !stage.tied) {
                     this.noteUndo(stage);
                     for (const key of Object.keys(stage.staged)) stage.staged[key] = stage.defaults?.[key] ?? stage.staged[key];
                     Object.assign(stage.staged, variant.params ?? {});
@@ -5233,7 +5697,9 @@
                 scad.checking = this.checkScad(target, seq).catch(() => null);
                 await this.loadSavedVariants(target, name);
                 await this.renderScad(target, seq);
-                const said = overlay
+                const said = stage?.tied
+                    ? `${target.part}: the variant ${name} is drawn, its ${overlay ? 'overlay' : 'SCAD'} in the editor with its values in it, the controls on them; Save keeps a change to it`
+                    : overlay
                     ? `${target.part}: the variant ${name} is drawn, an overlay: the upstream SCAD with its values, staged; Save keeps a change of its values`
                     : `${target.part}: the variant ${name} is drawn, its SCAD in the editor and its numbers staged; Save keeps a change to it`;
                 return { ok: true, said };
@@ -5306,12 +5772,6 @@
                 const target = await this.scadOn(path);
                 if (!target) return { ok: false, said: `${path} has no SCAD to save` };
                 return this.saveScad(target);
-            }
-
-            async openSavedVariantOn(path, name) {
-                const target = await this.scadOn(path);
-                if (!target) return { ok: false, said: `${path} has no SCAD to draw a variant of` };
-                return this.openSavedVariant(target, name);
             }
 
             async floatScadOn(path) {
@@ -7126,9 +7586,13 @@
                     viewer.saveScadOn(path).then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
                     return;
                 }
-                if (action.startsWith('part:variant:')) {
-                    viewer.openSavedVariantOn(path, action.slice('part:variant:'.length))
-                        .then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
+                // Part › Variants › a variant › Draw, Rename, Duplicate, History, Compare,
+                // Delete; and Part › Variants › Deleted › a variant › Restore, Forget, and
+                // Empty: what its row's buttons in the editor's list do.
+                const cell = /^part:(?:variant:(draw|rename|duplicate|history|compare|delete)|trash:(restore|forget)):(.+)$/.exec(action);
+                if (cell || action === 'part:trash:empty') {
+                    const [where, verb, name] = !cell ? ['trash', 'empty', null] : cell[1] ? ['variant', cell[1], cell[3]] : ['trash', cell[2], cell[3]];
+                    viewer.variantOn(path, where, verb, name).then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
                     return;
                 }
                 if (action === 'part:float') {
@@ -7166,10 +7630,11 @@
                     viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error');
                     return;
                 }
-                // Part › Defaults: the part's own numbers staged in its editor, as its Defaults does.
+                // Part › Defaults: as its editor's Defaults does, the part's own SCAD back in its editor.
                 if (action === 'part:defaults') {
                     viewer.stageDefaultsOn(path).then((staged) => {
-                        if (staged) viewer.setStatus(`${path}: the part's own numbers are staged in Selected; Apply draws the saved part${tail}`, 'success');
+                        if (staged === 'text') viewer.setStatus(`${path}: the part's own SCAD is back in its editor, its own values with it; Apply draws the saved part${tail}`, 'success');
+                        else if (staged) viewer.setStatus(`${path}: the part's own numbers are staged in Selected; Apply draws the saved part${tail}`, 'success');
                         else viewer.setStatus(`${path} has no part's own numbers to stage${tail}`, 'error');
                     });
                     return;
@@ -7291,7 +7756,15 @@
             // The part editor's buttons are the cells of Part, wherever the editor stands
             // (in Selected, floated, over the page): their tooltips teach the digits.
             for (const [selector, action] of PART_VERBS) for (const el of document.querySelectorAll(selector)) pairs.push([el, action]);
-            for (const el of document.querySelectorAll('.part-editor .saved-variant, .scad-editor .saved-variant')) pairs.push([el, `part:variant:${el.dataset.variant}`]);
+            for (const el of document.querySelectorAll('.part-editor .saved-variant, .scad-editor .saved-variant')) pairs.push([el, `part:variant:draw:${el.dataset.variant}`]);
+            // A saved variant's buttons under its ⋯, and the trash's, are its cells.
+            for (const [cls, verb] of [['variant-rename', 'rename'], ['variant-duplicate', 'duplicate'], ['variant-history', 'history'], ['variant-compare', 'compare'], ['variant-delete', 'delete']]) {
+                for (const el of document.querySelectorAll(`.scad-editor .saved-row[data-variant] .${cls}`)) pairs.push([el, `part:variant:${verb}:${el.closest('[data-variant]').dataset.variant}`]);
+            }
+            for (const [cls, verb] of [['trash-restore', 'restore'], ['trash-forget', 'forget']]) {
+                for (const el of document.querySelectorAll(`.scad-editor .trash-row[data-variant] .${cls}`)) pairs.push([el, `part:trash:${verb}:${el.closest('[data-variant]').dataset.variant}`]);
+            }
+            for (const el of document.querySelectorAll('.scad-editor .trash-empty')) pairs.push([el, 'part:trash:empty']);
             annotate(ring, pairs);
         }
         // The Bench's buttons, by the verb each one is (Panels › Bench).

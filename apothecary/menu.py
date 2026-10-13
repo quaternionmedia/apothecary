@@ -158,6 +158,8 @@ class PartSeen(BaseModel):
 
     editable: bool = True
     variants: List[str] = Field(default_factory=list)
+    # Its deleted variants, in the trash (refs/apothecary/trash/), newest first.
+    deleted: List[str] = Field(default_factory=list)
     board: bool = False
 
 
@@ -541,6 +543,75 @@ def _grouped(
             for index, (head, members) in enumerate(_bucket(ordered))
         ],
     )
+
+
+# What can be done to a saved variant (the owner's answer of 2026-10-12): each its own
+# cell, under the variant's name. Draw is first, in the seat choosing the name had.
+VARIANT_VERBS = (
+    ("draw", "Draw"),
+    ("rename", "Rename"),
+    ("duplicate", "Duplicate"),
+    ("history", "History"),
+    ("compare", "Compare"),
+    ("delete", "Delete"),
+)
+# And to a deleted one, in the trash: back among the variants, or deleted for good.
+TRASH_VERBS = (("restore", "Restore"), ("forget", "Forget"))
+
+
+def _variants_group(names: Sequence[str], deleted: Sequence[str]) -> Optional[Option]:
+    """Part › Variants: each saved variant a ring of what can be done to it -- Draw,
+    Rename, Duplicate, History, Compare, Delete (``part:variant:<verb>:<name>``) --
+    and, when anything is deleted, Deleted last: the trash, each deleted variant a
+    ring of Restore and Forget (``part:trash:<verb>:<name>``), and Empty
+    (``part:trash:empty``), which empties it once confirmed. Nothing saved and
+    nothing deleted: no Variants. More than fit in one ring are grouped, as any
+    list is."""
+
+    def ring_of(prefix: str, verbs, name: str, label: str) -> Option:
+        return Option(
+            id=f"{prefix}:{name}",
+            label=label,
+            children=[
+                Option(id=f"{prefix}:{verb}:{name}", label=said, action=f"{prefix}:{verb}:{name}")
+                for verb, said in verbs
+            ],
+        )
+
+    def rings(prefix: str, verbs, members: Sequence[str], room: int) -> List[Option]:
+        made = [
+            ring_of(prefix, verbs, name, label)
+            for name, label in zip(members, distinct(members), strict=True)
+        ]
+        if len(made) <= room:
+            return made
+        return [
+            Option(
+                id=f"{prefix}:group{index}",
+                label=head,
+                children=[
+                    ring_of(prefix, verbs, name, label)
+                    for name, label in zip(group, distinct(group), strict=True)
+                ],
+            )
+            for index, (head, group) in enumerate(_bucket(list(members)))
+        ]
+
+    trash: Optional[Option] = None
+    if deleted:
+        kept = rings("part:trash", TRASH_VERBS, deleted, MOST_OPTIONS - 1)
+        kept.append(
+            Option(
+                id="part:trash:empty", label="Empty", action="part:trash:empty", destructive=True
+            )
+        )
+        trash = Option(id="part:trash", label="Deleted", children=kept)
+    if not names and trash is None:
+        return None
+    children = rings("part:variant", VARIANT_VERBS, names, MOST_OPTIONS - (1 if trash else 0))
+    if trash is not None:
+        children.append(trash)
+    return Option(id="part:variants", label="Variants", children=children)
 
 
 def _pieces(prefix: str, parent: str, node: Optional[Assembly]) -> Optional[Option]:
@@ -1197,9 +1268,8 @@ def _node_ring(
         )
         if seen is not None and seen.editable:
             # Last, so the first save, which brings it, moves no cell.
-            chosen = _grouped("Variants", seen.variants, lambda n: f"part:variant:{n}")
+            chosen = _variants_group(seen.variants, seen.deleted)
             if chosen is not None:
-                chosen.id = "part:variants"
                 verbs.append(chosen)
         options.append(Option(id="part", label="Part", children=verbs))
     # A made piece with a printer pinned in its site to print it on: Print,

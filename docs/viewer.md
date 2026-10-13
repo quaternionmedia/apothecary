@@ -139,7 +139,8 @@ it), Why this, Into (its children), Up (when nested), then what the piece is:
 
 then **Part** (a part, a camera or a made piece; [below](#the-part-editor): Edit,
 Defaults, Apply, Revert, Save, View › Float, Fullscreen, Ghost and Fit,
-History › Undo and Redo, and Variants), and, when a printer is pinned in the site, **Print** (a made piece) and
+History › Undo and Redo, and Variants › each saved variant › Draw, Rename,
+Duplicate, History, Compare and Delete, and Variants › Deleted), and, when a printer is pinned in the site, **Print** (a made piece) and
 **Slice** (a made piece, or a part not inside a printer and not a board: a
 devkit is flashed, never printed). Print and Slice say whether the printer
 has no board pinned or one pinned and not connected.
@@ -191,6 +192,28 @@ readiness to build, its **Parameters**, its saved variants and its SCAD. Each
 parameter is a control starting from what is drawn, its description as its
 caption; a contested one comes first, with its candidates as buttons.
 
+**The parameters and the SCAD are one draft.** A part's values are the
+top-level assignments in its SCAD (the grammar is in
+`apothecary/projects/parts/assignments.py`, and the page reads it the same
+way): moving a control rewrites its value in its line, at once, keeping the
+line's comment and range, and a value typed in the text moves its control. A
+name the text does not assign yet gets its line appended. The controls are
+the part's model's fields, where it has a model, then every other parameter
+its text assigns -- as OpenSCAD's customizer has them, before the first
+module or function and outside `/* [Hidden] */` -- each described by its own
+line's comment (`// [5:100]`, `// [0:off, 1:on]`, a unit) and the caption
+above it. **A computed one** (`wall = size * 0.1;`) shows the value the newest
+check gave it, under its expression; until a check has given one it says
+"computed when checked". Moving it asks first: **Replace** puts the plain value
+in place of the expression, as one edit Undo takes back; **Keep it computed**
+leaves it. **A part in a submodule** (gridfinity) is edited as its overlay: the
+editor holds the include of the upstream file and the values set after it;
+the upstream's parameters the overlay does not set are listed with
+upstream's value, and moving one sets it in the overlay. The upstream file is
+one step away, **Upstream SCAD, read only**, beside Download SCAD. A part whose
+SCAD its Python generates (the snowplow) and a made piece stay one way: their
+controls drive the model, and the SCAD follows, read only.
+
 - **A number** is a slider and a box beside it, kept in step: the slider for
   the reach, the box for the exact value, which takes any number typed. Each
   steps on round numbers: the step the field states (a SCAD customizer's
@@ -205,18 +228,27 @@ caption; a contested one comes first, with its candidates as buttons.
 Where this OpenSCAD cannot build the part at all (gridfinity on 2021.01), the
 editor says so as it opens and **Apply is off** from the start, saying why.
 
-Moving a control **stages** a value and nothing more. Once the controls rest
-the staged set is checked against the part's own model, and the bar above
-them says what is staged, whether it is valid and the envelope it would
-make. **Apply** renders it: when the result is not the saved part, it is
+The bar of what is staged -- Apply, Revert, Defaults, Undo, Redo, Ghost --
+stands pinned at the top of Selected, above its body, in its own space: in view
+however far the parameters are scrolled, and over none of them. Where Selected
+is squeezed short (a tab's panel open under it), the bar scrolls in itself
+rather than spill over what is below.
+
+Moving a control **stages** a value: its line is rewritten and nothing is
+drawn. Once the controls rest the text is checked, its values against the
+part's own model, and the bar above them says what is staged -- what the text
+says otherwise than the text drawn -- whether it is valid and the envelope it
+would make. What is typed in the SCAD is drawn once it reads, as before.
+**Apply** renders the text, its values in it, nothing passed on the side:
+when the result is not the saved part, it is
 drawn in this tab only as an applied variant -- amber, not saved -- and the
 address carries `?variant=`, so a reload or the link draws it again. The
 focus stays where it was: in the box or the slider last moved, or in the SCAD
-editor. **Revert** puts what is staged back to what is drawn; **Defaults**
-stages the part's own numbers, and Apply then draws the saved part -- after a
-SCAD edit too, when the numbers drawn are the part's own already: Apply,
-saying "Apply: the saved part", puts the part's own SCAD back in the editor.
-Each of these is also a cell of Part on the ring.
+editor. **Revert** puts the text drawn back; **Defaults** puts the part's
+own text back -- its defaults are its SCAD as saved -- and Apply, saying
+"Apply: the saved part", then draws the saved part. Each of these is an edit
+of the text, which Undo takes back, and each is also a cell of Part on the
+ring.
 
 **A failed render** -- any error OpenSCAD says, though it finished -- is drawn
 greyed where the part stands, as far as OpenSCAD built it, a red flag over it
@@ -226,9 +258,11 @@ refuses it. A render or a check waiting its turn among OpenSCAD's runs (a
 few go at once) is said to be **queued**, and how far back, until it runs.
 
 **Undo** and **Redo** under them, Ctrl+Z and Ctrl+Shift+Z (or Ctrl+Y) outside
-a box being typed in, and Part › History › Undo and Redo step the staged
-numbers back and forward: a slider dragged is one step, and Revert, Defaults
-and a variant chosen are a step each. **Recent applies**, a fold under the
+a box being typed in, and Part › History › Undo and Redo step the draft back
+and forward: the SCAD editor's own history, so the text and the controls go
+back together, whichever moved them. A slider dragged is one step, a control's
+moves are never one step with typing beside them, and Revert, Defaults and a
+variant chosen are a step each. **Recent applies**, a fold under the
 parameters, lists this tab's applies of the part, newest first, a reload of
 the tab included; one clicked is drawn again from the cache of variants, its
 numbers and its SCAD with it.
@@ -250,8 +284,9 @@ much the size changed. **Part › View › Fit**, and `f`, frames the selected
 piece as drawn, from where the view looks, and leaves Selected and its editor
 open.
 
-**Work is kept, per tab.** A part's numbers staged and not applied, and its
-SCAD edited, are kept in the tab's own storage as they change; after a reload
+**Work is kept, per tab.** A part's SCAD as edited -- its values with it -- and
+a made piece's or a camera's numbers staged and not applied are kept in the
+tab's own storage as they change; after a reload
 the status line says which parts have work kept, and each one's editor offers
 it back: **Restore** puts it back, **Discard** lets it go. A browser that keeps
 nothing for the page offers nothing. Leaving the page with numbers staged and
@@ -265,8 +300,9 @@ draws the piece again and nothing else.
 
 ## The SCAD editor
 
-Below the parameters is the part's SCAD, in an editor. Typing in it is
-checked 300 ms after typing stops, with the numbers staged: a line OpenSCAD
+Below the parameters is the part's SCAD, in an editor: the same draft as the
+controls above it, its values theirs. Typing in it is
+checked 300 ms after typing stops, the values in it: a line OpenSCAD
 refuses is marked where it is, with its message, and nothing is rendered until
 it reads. About 300 ms after a check that passes, the edit is rendered as Apply
 renders, from the edited SCAD written beside the part, and drawn as an applied
@@ -288,34 +324,40 @@ OpenSCAD's keys work inside the editor, and only there:
 
 Outside the editor the browser's keys are the browser's.
 
-- **Part › Save** keeps the edit and the staged numbers as a variant in git,
+- **Part › Save** keeps the text as a variant in git, its values in it,
   under the name in the editor's *as* box -- empty, the next free name greyed
   in it: a commit on
   `refs/apothecary/variants/<part>/<name>`, written without touching the
   checkout, HEAD or the working tree. The status line says what making it the
   part's source takes, as the server words it: where the ref lives (a fetch
   first, when `APOTHECARY_VARIANTS_REPO` names another repository to keep them
-  in), and that a merge does not apply its numbers. What would be a failed
-  render is not saved. A part in a submodule (gridfinity) is saved as an
-  **overlay**: a small SCAD that includes the upstream file and sets the values,
-  the submodule never touched; an edit of the upstream file itself is refused,
-  saying so.
+  in), and that a merge brings its values with it -- or, for a variant saved
+  before its values were in its text, that it does not until it is saved again.
+  What would be a failed render is not saved. A part in a submodule
+  (gridfinity) is saved as its **overlay**: the include of the upstream file
+  and the values set after it, the submodule never touched; an edit of the
+  upstream file itself is refused, saying so.
 - The *as* box names the variant the text came from while the text is that
   variant's, and is cleared once the text moves on from it, so Save keeps the
   edit under a name of its own. A name already saved is asked about first:
   Save again replaces it.
-- **Part › Variants** › a saved one loads it: its SCAD into the editor, its
-  numbers staged, checked and drawn. An overlay is drawn as the upstream SCAD
-  with its values: its own text is never put in the editor as the part's. The
-  editor lists every saved variant with what it changes, and whether it is in
-  HEAD.
-- Each variant's **⋯** in the editor's list unfolds what can be done to it:
-  **Rename** and **Duplicate** under the name typed beside them, **History**
-  (each save, newest first, an earlier one restored by its **Restore** as a new
-  save, the history keeping what came between), **Compare** and **Delete**.
-  Delete moves it to the trash (`refs/apothecary/trash/`): the **Deleted** fold
-  under the list restores one, or deletes one for good, and **Empty the trash**
-  deletes them all -- each of those two only when pressed again to confirm.
+- **Part › Variants** › a saved variant's name opens a ring of what can be done
+  to it, each a button of its row in the editor's list too (its **⋯** unfolds
+  them): **Draw** loads it -- its SCAD into the editor, its values in it and
+  the controls on them, checked and drawn; a part in a submodule's variant is
+  its overlay, the upstream file never put in the editor as the part's; one
+  saved before its values were written into its text has them written in when
+  it is read -- **Rename** and
+  **Duplicate**, under the name typed in its row's box (the cell puts the
+  cursor there; Enter does it), **History** (each save, newest first, an
+  earlier one restored by its **Restore** as a new save, the history keeping
+  what came between), **Compare** and **Delete**. The editor's list says of
+  each what it changes, and whether it is in HEAD.
+- Delete moves a variant to the trash (`refs/apothecary/trash/`): **Part ›
+  Variants › Deleted**, and the Deleted fold under the editor's list, hold
+  it -- each deleted variant's **Restore** brings it back, its **Forget**
+  deletes it for good, and **Empty** deletes them all; Forget and Empty only
+  when chosen again to confirm.
 - **Compare** draws the variant beside another -- what is drawn, the part's
   own, or another saved one, chosen in the comparison -- where the part stands,
   overlaid (blue and orange, seen through) or side by side, framed, with each

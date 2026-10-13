@@ -3,17 +3,16 @@ part 2's Phase B), through the page's own controls: Apply off up front where thi
 OpenSCAD cannot build a part, the server's integers, choices and groups drawn, a
 saved variant renamed, duplicated, restored from its history, deleted to the trash
 and back, and the trash emptied only when asked twice; two variants compared,
-overlaid and side by side, with what differs; a part in a submodule's overlay drawn
-as the upstream SCAD with its values; a render waiting its turn said to be queued;
-Download SCAD giving the edit; and Slice and the readiness checklist following the
-variant drawn.
+overlaid and side by side, with what differs; a render waiting its turn said to be
+queued; Download SCAD giving the edit; and Slice and the readiness checklist
+following the variant drawn. A part in a submodule, edited as its overlay, is
+tests/e2e/test_text_tied.py's.
 
 The server is this module's own: the OpenSCAD every test server runs, a variant
 cache of its own, the simulated printer idle and pinned to printer_1's mainboard,
-and the scripted OrcaSlicer of the unit tests. What no OpenSCAD here can make -- a
-part in a submodule's overlay, OpenSCAD's queue holding a render back -- is said to
-the page by answering its own requests (Playwright's route): the page draws what it
-is told.
+and the scripted OrcaSlicer of the unit tests. What no OpenSCAD here can make --
+OpenSCAD's queue holding a render back -- is said to the page by answering its own
+requests (Playwright's route): the page draws what it is told.
 """
 
 from __future__ import annotations
@@ -246,6 +245,98 @@ def test_a_saved_variant_is_renamed_duplicated_restored_deleted_and_the_trash_em
 
 
 @pytest.mark.e2e
+def test_every_action_on_a_saved_variant_is_a_cell_of_part_variants(
+    page: Page, url, cube_as_it_was
+):
+    """The owner's answer of 2026-10-12: Part › Variants › a name is a ring -- Draw,
+    Rename, Duplicate, History, Compare, Delete -- and Part › Variants › Deleted holds
+    the trash, each deleted variant Restore and Forget, and Empty; what destroys is
+    chosen twice. A name no cell types: Rename and Duplicate put the cursor in the
+    variant's box, and Enter does it."""
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    own = CUBE.source_file.read_text()
+    _save(page, url, "one", own.rstrip("\n") + "\n" + TALLER + "\n", {"size": 12})
+    _open(page, url)
+    _edit(page)
+    expect(page.locator(".scad-editor .cm-content")).to_be_visible(timeout=20000)
+
+    _ring(page, PART, "Part", "Variants", "one", "Draw")
+    expect(_status(page)).to_contain_text("one", timeout=60000)
+    expect(_row(page, "one")).to_have_class(re.compile(r"\bchosen\b"), timeout=15000)
+
+    _ring(page, PART, "Part", "Variants", "one", "Duplicate")
+    box = _row(page, "one").locator(".variant-to")
+    expect(box).to_be_focused(timeout=15000)
+    expect(_status(page)).to_contain_text("type the name to copy one to")
+    page.keyboard.type("two")
+    page.keyboard.press("Enter")
+    expect(_status(page)).to_contain_text("two is a copy of one", timeout=15000)
+
+    _ring(page, PART, "Part", "Variants", "two", "Rename")
+    expect(_row(page, "two").locator(".variant-to")).to_be_focused(timeout=15000)
+    page.keyboard.type("three")
+    page.keyboard.press("Enter")
+    expect(_status(page)).to_contain_text("two is called three now", timeout=15000)
+    expect(_row(page, "three")).to_be_visible()
+
+    _ring(page, PART, "Part", "Variants", "one", "History")
+    expect(_status(page)).to_contain_text("one's 1 save", timeout=15000)
+    expect(_row(page, "one").locator(".history-row")).to_have_count(1)
+
+    _ring(page, PART, "Part", "Variants", "three", "Delete")
+    expect(_status(page)).to_contain_text("three moved to the trash", timeout=15000)
+    _ring(page, PART, "Part", "Variants", "Deleted", "three", "Restore")
+    expect(_status(page)).to_contain_text("three is back among the variants", timeout=15000)
+
+    # Forget and Empty: the first choice says what it would do, the same cell again does it.
+    _ring(page, PART, "Part", "Variants", "three", "Delete")
+    expect(_status(page)).to_contain_text("three moved to the trash", timeout=15000)
+    _ring(page, PART, "Part", "Variants", "Deleted", "three", "Forget")
+    expect(_status(page)).to_contain_text("choose the same cell again to confirm", timeout=15000)
+    assert [v["name"] for v in page.request.get(f"{url}/parts/{PART}/trash").json()] == ["three"]
+    _ring(page, PART, "Part", "Variants", "Deleted", "three", "Forget")
+    expect(_status(page)).to_contain_text("three is deleted for good", timeout=15000)
+    _ring(page, PART, "Part", "Variants", "one", "Delete")
+    expect(_status(page)).to_contain_text("one moved to the trash", timeout=15000)
+    _ring(page, PART, "Part", "Variants", "Deleted", "Empty")
+    expect(_status(page)).to_contain_text("every deleted variant would be deleted for good")
+    _ring(page, PART, "Part", "Variants", "Deleted", "Empty")
+    expect(_status(page)).to_contain_text("the trash is emptied, 1 variant", timeout=15000)
+    assert page.request.get(f"{url}/parts/{PART}/trash").json() == []
+    assert errors == []
+
+
+# Each compared mesh as the camera sees it: its bounding box's corners projected, in the
+# canvas's pixels.
+ON_SCREEN = """() => {
+    const v = window.fractalViewer, r = v.canvas.getBoundingClientRect();
+    return v.compareMeshes.map((m) => {
+        m.geometry.computeBoundingBox();
+        const b = m.geometry.boundingBox, xs = [], ys = [];
+        for (const x of [b.min.x, b.max.x]) for (const y of [b.min.y, b.max.y]) for (const z of [b.min.z, b.max.z]) {
+            const p = m.localToWorld(new m.position.constructor(x, y, z)).project(v.camera);
+            xs.push((p.x + 1) / 2 * r.width); ys.push((1 - p.y) / 2 * r.height);
+        }
+        return { left: Math.min(...xs), right: Math.max(...xs), top: Math.min(...ys), bottom: Math.max(...ys),
+                 width: r.width, height: r.height };
+    });
+}"""
+
+
+def _both_in_view(page: Page) -> None:
+    """Both compared meshes framed: inside the world's view, and each big enough to see."""
+    settled(page)
+    shown = page.evaluate(ON_SCREEN)
+    assert len(shown) == 2, shown
+    for box in shown:
+        assert box["left"] >= 0 and box["right"] <= box["width"], box
+        assert box["top"] >= 0 and box["bottom"] <= box["height"], box
+        assert box["right"] - box["left"] > box["width"] / 8, box
+        assert box["bottom"] - box["top"] > box["height"] / 8, box
+
+
+@pytest.mark.e2e
 def test_two_variants_are_compared_overlaid_and_side_by_side_with_what_differs(
     page: Page, url, cube_as_it_was
 ):
@@ -254,7 +345,8 @@ def test_two_variants_are_compared_overlaid_and_side_by_side_with_what_differs(
     _open(page, url)
     _edit(page)
     expect(page.locator(".scad-editor .cm-content")).to_be_visible(timeout=20000)
-    _manage(page, "tall-top").locator(".variant-compare").click()
+    # Compare is the variant's ⋯'s button and its ring cell; the cell here.
+    _ring(page, PART, "Part", "Variants", "tall-top", "Compare")
     expect(_status(page)).to_contain_text(
         "tall-top beside the part's own, overlaid: 1 number differs, and its SCAD differs",
         timeout=90000,
@@ -273,6 +365,7 @@ def test_two_variants_are_compared_overlaid_and_side_by_side_with_what_differs(
     overlaid = page.evaluate(meshes)
     assert overlaid[0][0] == pytest.approx(overlaid[1][0], abs=4)
     assert not page.evaluate("() => window.fractalViewer.meshByName['calibration_cube'].visible")
+    _both_in_view(page)
     view.locator("select.compare-mode").select_option("side by side")
     page.wait_for_function(
         "() => { const [a, b] = window.fractalViewer.compareMeshes;"
@@ -280,63 +373,11 @@ def test_two_variants_are_compared_overlaid_and_side_by_side_with_what_differs(
         timeout=30000,
     )
     expect(_status(page)).to_contain_text("drawn side by side")
+    _both_in_view(page)
     view.locator(".compare-close").click()
     expect(view).to_be_hidden()
     assert page.evaluate("() => window.fractalViewer.compareMeshes.length") == 0
     assert page.evaluate("() => window.fractalViewer.meshByName['calibration_cube'].visible")
-
-
-@pytest.mark.e2e
-def test_an_overlay_is_drawn_as_the_upstream_scad_with_its_values(page: Page, url, cube_as_it_was):
-    """A part in a submodule saves an overlay: a small SCAD including the upstream file
-    and setting its values. Chosen, it is drawn as the part's own SCAD with those values
-    -- the overlay's text never loaded into the editor as the part's SCAD."""
-    own = CUBE.source_file.read_text()
-    overlay = {
-        "part": PART,
-        "name": "overlaid",
-        "ref": f"refs/apothecary/variants/{PART}/overlaid",
-        "commit": "0" * 40,
-        "author": "A person",
-        "author_email": "a@example.invalid",
-        "date": "2026-10-12T10:00:00+00:00",
-        "subject": "overlaid",
-        "scad_path": f"parts/{PART}/{PART}.overlay.scad",
-        "kind": "overlay",
-        "upstream": f"parts/{PART}/{PART}.scad",
-        "params": {"size": 18},
-        "merged": False,
-        "repository": ".",
-        "deleted": False,
-        "merge": None,
-        "diff": "",
-    }
-
-    def listed(route):
-        route.fulfill(status=200, content_type="application/json", body=json.dumps([overlay]))
-
-    def one(route):
-        route.fulfill(
-            status=200,
-            content_type="application/json",
-            body=json.dumps({**overlay, "scad": "include <calibration_cube.scad>\nsize = 18;\n"}),
-        )
-
-    page.route(re.compile(rf".*/parts/{PART}/saved(\?.*)?$"), listed)
-    page.route(f"**/parts/{PART}/saved/overlaid", one)
-    _open(page, url)
-    _edit(page)
-    expect(_row(page, "overlaid").locator(".saved-kind")).to_have_text("overlay")
-    with page.expect_response(lambda r: "/stl/generate" in r.url, timeout=60000):
-        _row(page, "overlaid").locator(".saved-variant").click()
-    expect(_status(page)).to_contain_text(
-        "an overlay: the upstream SCAD with its values", timeout=60000
-    )
-    assert page.evaluate("() => window.fractalViewer.scadEditor.text()") == own
-    expect(page.locator("#part-params > .param[data-field='size'] .param-number")).to_have_value(
-        "18"
-    )
-    expect(page.locator("#scad-name")).to_have_value("overlaid")
 
 
 # --- the queue, Download, Slice and the checklist ----------------------------------------
@@ -381,11 +422,11 @@ def test_a_render_waiting_its_turn_is_said_to_be_queued_and_the_page_stops_askin
     page.route("**/openscad/runs*", runs)
     _open(page, url)
     _edit(page)
-    page.on("request", lambda r: state.update(held=False) if "/stl/generate" in r.url else None)
+    page.on("request", lambda r: state.update(held=False) if "/draft/render" in r.url else None)
     page.evaluate(
         """() => { const real = window.fetch;
             window.fetch = async (u, init) => {
-                if (String(u).includes('/stl/generate')) await new Promise((ok) => setTimeout(ok, 2500));
+                if (String(u).includes('/draft/render')) await new Promise((ok) => setTimeout(ok, 2500));
                 return real(u, init);
             }; }"""
     )
@@ -437,7 +478,7 @@ def test_slice_and_the_checklist_follow_the_variant_drawn(page: Page, url):
     value = float(box.input_value())
     box.fill(f"{value + 2:g}")
     expect(page.locator("#stage-summary")).to_contain_text("1 change staged, valid", timeout=10000)
-    with page.expect_response(lambda r: "/stl/generate" in r.url, timeout=90000) as answer:
+    with page.expect_response(lambda r: "/draft/render" in r.url, timeout=90000) as answer:
         page.locator("#apply-btn").click()
     variant = answer.value.json()["variant"]
     assert variant

@@ -373,7 +373,7 @@ def test_the_demo_goes_round_designing_a_part_and_editing_its_scad(page: Page, d
 
     _ring_on(page, "calibration_cube")
     _press(page, "Part", "Defaults")
-    _said(page, "the part's own numbers are staged")
+    _said(page, "the part's own SCAD is back in its editor")
     _ring_on(page, "calibration_cube")
     _press(page, "Part", "Apply")
     expect(_status(page)).to_contain_text("drawn as saved", timeout=90000)

@@ -322,11 +322,12 @@ def test_openscad_s_keys_work_in_the_editor_and_the_browser_s_outside(
         })"""
     )
     assert taken == [False, False, False, False]
-    # Inside it: F6 applies the staged numbers, and the page stays.
+    # Inside it: F6 applies what is staged -- the text, the size written into it -- and
+    # the page stays.
     _param(page, "size").locator(".param-number").fill("12")
     expect(_summary(page)).to_contain_text("1 change staged, valid", timeout=10000)
     code.click()
-    with page.expect_response(lambda r: "/stl/generate" in r.url, timeout=60000):
+    with page.expect_response(lambda r: "/draft/render" in r.url, timeout=60000):
         page.keyboard.press("F6")
     expect(_status(page)).to_contain_text("an applied variant, not saved", timeout=60000)
     # Ctrl+Enter, with an edit: the edit is rendered, and the focus stays in the code.
