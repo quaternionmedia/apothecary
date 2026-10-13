@@ -13,18 +13,12 @@ to Marlin's documented output and note where others differ.
 
 Two things distinguish this from ``devices.SerialStreams``:
 
-* **The link is held open, and reset is explicit.** Creality boards wire
-  DTR to reset, like every Arduino. The kernel asserts DTR on open, so
-  whether an open reboots the board depends on whether the *previous*
-  holder dropped DTR on close (most programs do; this module does not) --
-  a running print dies or survives by that accident. So a port is opened
-  once and kept by ``PrinterLinks`` until released, polls reuse it, DTR is
-  left asserted on close, and the board is only ever rebooted on purpose
-  (``Transport.pulse_reset``, behind ``reset=True``). Anything else that
-  opens the port (``arduino-cli monitor``, an upload) may reset it, so one
-  holder per port is the rule: the API enforces it inside the server, and
-  the port is opened exclusively, so another program's open fails while
-  the link holds it.
+* **The link is held open, and reset is explicit.** A port is opened once,
+  exclusively, and kept by ``PrinterLinks`` until released; polls reuse it,
+  DTR is left asserted on close, and the board is rebooted only on purpose
+  (``Transport.pulse_reset``, behind ``reset=True``). One holder per port:
+  the API enforces it inside the server. docs/firmware.md ("Reset is
+  deliberate, never incidental", "One holder per port") says why.
 * **It is request/response.** A poll sends ``M105``/``M114``/``M27`` and
   reads until ``ok``; nothing streams unless the firmware autoreports
   (``M155``), and those lines are simply carried in the same reads.
@@ -609,7 +603,7 @@ class GcodeLink:
 
     # Every wait on the board -- a reply, a quiet line, a boot banner -- is
     # multiplied by this. 1 against hardware; the tests' scripted boards answer
-    # at once, and waiting out real silences cost the unit suite a minute.
+    # at once, so the tests set it near 0 rather than wait out real silences.
     time_scale: float = 1.0
 
     def _read_line(self, timeout: float) -> Optional[str]:
