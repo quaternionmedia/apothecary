@@ -458,8 +458,6 @@ def test_an_image_that_names_where_it_was_built_is_refused(tmp_path, capsys):
     assert image_paths.main([str(named), "--refuse", home]) == 1
     assert f"build path in the image: {home}" in capsys.readouterr().out
     windows = tmp_path / "windows.elf"
-    windows.write_bytes(b"\x7fELF C:/Users/pk/x.rs")
-    assert image_paths.found_in(windows.read_bytes(), ["C:\\Users\\pk"]) == {
-        "C:\\Users\\pk": [5]
-    }
+    windows.write_bytes(b"\x7fELF C:/Users/you/x.rs")
+    assert image_paths.found_in(windows.read_bytes(), ["C:\\Users\\you"]) == {"C:\\Users\\you": [5]}
     assert image_paths.main([str(tmp_path / "missing.elf"), "--refuse", home]) == 2

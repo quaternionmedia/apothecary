@@ -881,7 +881,7 @@ def test_the_picture_root_is_a_folder_of_pictures_never_everything(monkeypatch, 
     # And the file route serves a picture, judged by its bytes, and nothing else.
     pictures = tmp_path / "pics"
     pictures.mkdir()
-    (pictures / "notes.json").write_text('{"serial": "A106ZTEU"}', encoding="utf-8")
+    (pictures / "notes.json").write_text('{"serial": "A1B2C3D4"}', encoding="utf-8")
     (pictures / "fake.png").write_text("not a picture", encoding="utf-8")
     from PIL import Image
 

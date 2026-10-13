@@ -55,7 +55,7 @@ stays-on-the-device record in `governance/qm/adr/`.
 ## 1. Setup
 
 ```bash
-cd ~/Documents/apothecary
+cd <clone>                          # the folder apothecary is checked out in
 git status -sb                      # ## review/2026-09-26
 git submodule status                # governance/qm at 20e00bd (the pin), or the adr/ branch if you were drafting
 uv sync
@@ -175,7 +175,7 @@ On your own server, in the garage.
 Bring a file in:
 
 ```bash
-cd ~/Documents/apothecary
+cd <clone>
 printf 'v 0 0 0\nv 2 0 0\nv 2 1 0\nv 0 1 0\nv 0 0 3\nv 2 0 3\nv 2 1 3\nv 0 1 3\nf 1 2 3 4\nf 5 6 7 8\nf 1 2 6 5\nf 2 3 7 6\nf 3 4 8 7\nf 4 1 5 8\n' > /tmp/brick.obj
 uv run apothecary parts import /tmp/brick.obj --name demo_brick --units in --up y \
     --title "A brick" --author "You" --license CC-BY-4.0 --url https://example.org/brick
@@ -271,10 +271,10 @@ mean:
 
 ```bash
 mkdir -p /tmp/apothecary-pictures && cd /tmp/apothecary-pictures
-ARDUINO_CLI=$(uv run --project ~/Documents/apothecary python -c "import sys; sys.path.insert(0, '$HOME/Documents/apothecary/tests'); from pathlib import Path; from firmware_helpers import write_fake_arduino_cli; print(write_fake_arduino_cli(Path('/tmp/fake-arduino-cli')))") \
+ARDUINO_CLI=$(uv run --project <clone> python -c "import sys; sys.path.insert(0, '<clone>/tests'); from pathlib import Path; from firmware_helpers import write_fake_arduino_cli; print(write_fake_arduino_cli(Path('/tmp/fake-arduino-cli')))") \
 APOTHECARY_SERIAL_ENGINE=simulated APOTHECARY_SIMULATED_PRINTER=printing \
 APOTHECARY_STATE_DIR=/tmp/apothecary-demo APOTHECARY_TOOLS_DIR=/tmp/apothecary-demo/tools \
-uv run --project ~/Documents/apothecary apothecary serve --port 8001
+uv run --project <clone> apothecary serve --port 8001
 ```
 
 Open `http://127.0.0.1:8001/viewer/sites/garage`. A camera is a part of the
