@@ -9,7 +9,7 @@ program wrote (``result``). Apothecary itself slices nothing; a module only
 turns a part, a printer's profile and the part's declared print settings into
 a run of the slicer it drives.
 
-One module today:
+The modules (``_registry`` is the list):
 
 - ``orcaslicer`` (``modules/orcaslicer.py``): OrcaSlicer's command line, a
   pinned release installed by ``apothecary slicer install``.
@@ -27,8 +27,8 @@ slicer names its own base profiles.
 **Switching.** Which module a slice uses is, in order: the ``slicer`` a request
 or ``apothecary slicer slice --slicer`` names; else ``APOTHECARY_SLICER``; else
 the ``slicer`` the printer's profile names (``"orcaslicer"`` in
-``parts/ender3/slicer.json``). The owner switches by changing that one line --
-a reviewed change, kept with the printer -- or for one process by the variable.
+``parts/ender3/slicer.json``). Switching is changing that one line -- a reviewed
+change, kept with the printer -- or, for one process, the variable.
 """
 
 from __future__ import annotations
