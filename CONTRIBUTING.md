@@ -81,7 +81,8 @@ The rules are in [AGENTS.md](AGENTS.md). In short:
 ## Numbers in prose
 
 Prose never states a number a command computes; it names the command. The viewer's
-controls: `apothecary census`. What is open: `apothecary problems`. The tests:
+controls: `apothecary census` ([docs/census.md](docs/census.md) says what it counts, and
+what a change to the page keeps). What is open: `apothecary problems`. The tests:
 `uv run pytest --co -q`. Only pages a run writes (walkthrough pages 11 to 16, and
 `docs/generated/`) print such numbers.
 
