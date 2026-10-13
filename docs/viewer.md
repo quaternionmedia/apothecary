@@ -82,7 +82,10 @@ before the view so it never turns it.
 **Stepping in** goes into the piece named -- the one double-clicked, or the
 ring's -- else the selection, else what the middle of the view shows, walls
 passed through as a click passes them; as deep as it is drawn. The status line
-says which, and why. Stepping out lands on the piece left, selected.
+says which, and why. Stepping out lands on the piece left, selected. Inside a
+piece the world draws what it holds, not the piece: stepped into a printer, its
+board and its posts are drawn, and its body is the picture at the level above.
+A piece that holds nothing is drawn itself.
 
 **Automatic zoom** is the wheel's step: once the camera is as near the level's
 pieces as it may come, or as far out, more scrolling the same way adds up, and
