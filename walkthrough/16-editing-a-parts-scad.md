@@ -43,7 +43,7 @@ calibration_cube's ring, Part › Save: the edited SCAD, its values in it, commi
 ![Part › Save keeps it as a variant in git](screenshots/16-04-part-save-keeps-it-as-a-variant-in-git.png)
 
 ```
-calibration_cube saved as the variant variant-1, a commit on refs/apothecary/variants/calibration_cube/variant-1; nothing in the checkout changed. The ref is in /tmp/inp/popen-gw1/server7/variants.git, not this checkout: `git fetch /tmp/inp/popen-gw1/server7/variants.git refs/apothecary/variants/calibration_cube/variant-1:refs/apothecary/variants/calibration_cube/variant-1` there brings it, then `git merge refs/apothecary/variants/calibration_cube/variant-1` makes the variant's SCAD the part's, its values with it: they are its assignments, so the part is drawn with them. (⌗39)
+calibration_cube saved as the variant variant-1, a commit on refs/apothecary/variants/calibration_cube/variant-1; nothing in the checkout changed. The ref is in <the test server's variants repository>, not this checkout: `git fetch <the test server's variants repository> refs/apothecary/variants/calibration_cube/variant-1:refs/apothecary/variants/calibration_cube/variant-1` there brings it, then `git merge refs/apothecary/variants/calibration_cube/variant-1` makes the variant's SCAD the part's, its values with it: they are its assignments, so the part is drawn with them. (⌗39)
 ```
 
 ## 5. Part › View › Float puts the editor over the world
@@ -65,7 +65,7 @@ In the floated editor: a name typed, taller, and the top made as big as the cube
 ![Round two: a name, a change and Save](screenshots/16-07-round-two-a-name-a-change-and-save.png)
 
 ```
-calibration_cube saved as the variant taller, a commit on refs/apothecary/variants/calibration_cube/taller; nothing in the checkout changed. The ref is in /tmp/inp/popen-gw1/server7/variants.git, not this checkout: `git fetch /tmp/inp/popen-gw1/server7/variants.git refs/apothecary/variants/calibration_cube/taller:refs/apothecary/variants/calibration_cube/taller` there brings it, then `git merge refs/apothecary/variants/calibration_cube/taller` makes the variant's SCAD the part's, its values with it: they are its assignments, so the part is drawn with them.
+calibration_cube saved as the variant taller, a commit on refs/apothecary/variants/calibration_cube/taller; nothing in the checkout changed. The ref is in <the test server's variants repository>, not this checkout: `git fetch <the test server's variants repository> refs/apothecary/variants/calibration_cube/taller:refs/apothecary/variants/calibration_cube/taller` there brings it, then `git merge refs/apothecary/variants/calibration_cube/taller` makes the variant's SCAD the part's, its values with it: they are its assignments, so the part is drawn with them.
 ```
 
 ## 8. Part › Variants draws the first again, and Part › View › Float docks it

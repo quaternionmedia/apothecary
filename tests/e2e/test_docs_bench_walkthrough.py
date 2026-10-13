@@ -204,7 +204,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     assert mainboard.part_ref == "creality_v422"
     story.says(
         "The printer is an Ender 3 from published dimensions",
-        "A printer node names the part it is, and its children live inside it: the "
+        "A printer piece names the part it is, and its children live inside it: the "
         "Creality mainboard in the electronics box, the gantry at the uprights. "
         "`build_origin` puts the bed where it is, so a job's build volume and a "
         "board's marks stand on the real bed rather than on the floor.",
@@ -258,7 +258,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     settled(page)
     story.shows(
         "Inside it, the mainboard is the Creality V4.2.2",
-        "Double-clicked into the printer, then its frame, from their rows in Site: its "
+        "Stepped into the printer, then its frame, by a double-click on their rows in Site: its "
         "children are drawn and the printer's body is not -- the board in its box, with "
         "the pins that would be pinned to a port. Its outline, holes, headers and jacks "
         "are from the maker's drawing.",
@@ -275,7 +275,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     settled(page)
     story.shows(
         "The DevKitC standing on its pins",
-        "Backspace twice to the root, and a double-click into esp32_blink: a sketch and "
+        "Backspace twice, stepping out to the root, and a double-click stepping into esp32_blink: a sketch and "
         "the board it runs on, drawn as the board -- the described part from the model "
         "half of this page, in the world.",
     )
@@ -343,8 +343,8 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     settled(page)
     story.shows(
         "Looking into a printer, the camera stays in the garage",
-        "A camera is a piece of the site, drawn at the level its site is. Double-clicked "
-        "into the printer, neither its badge nor its pyramid follows; going back out "
+        "A camera is a piece of the site, drawn at the level its site is. Stepped into "
+        "the printer, neither its badge nor its pyramid follows; stepping back out "
         "brings them back.",
     )
 

@@ -31,7 +31,7 @@ x from 0.754 to 0.918, y from 0.141 to 0.362
 
 ## 3. Each shape gets a name, and says how sure it is
 
-A word is a recipe that builds an ordinary node, so a named shape is something the rest of the tool already knows how to handle. The confidence is never rounded up. It is measurably lower when the finder is wrong, which is what makes it worth reporting at all.
+A word is a recipe that builds an ordinary piece, so a named shape is something the rest of the tool already knows how to handle. The confidence is never rounded up. It is measurably lower when the finder is wrong, which is what makes it worth reporting at all.
 
 ```
 plate, 0.64 sure
@@ -124,7 +124,7 @@ slot_4 (word)
 
 ## 14. Each word is a chip above the list, and 'disc' is chosen
 
-The chips are the viewer's own, one per word the pieces carry. A chip expands every node of its word, at any depth; these pieces are flat shapes with nothing inside, so choosing one marks the chip and leaves the list and the world as they were.
+The chips are the viewer's own, one per word the pieces carry. A chip expands every piece of its word, at any depth; these pieces are flat shapes with nothing inside, so choosing one marks the chip and leaves the list and the world as they were.
 
 ![Each word is a chip above the list, and 'disc' is chosen](screenshots/11-14-each-word-is-a-chip-above-the-list-and-disc-is-cho.png)
 

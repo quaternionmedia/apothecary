@@ -152,7 +152,7 @@ def test_photographs_into_pieces(
     assert 0.0 < first.confidence < 1.0
     story.says(
         "Each shape gets a name, and says how sure it is",
-        "A word is a recipe that builds an ordinary node, so a named shape is "
+        "A word is a recipe that builds an ordinary piece, so a named shape is "
         "something the rest of the tool already knows how to handle. The confidence "
         "is never rounded up. It is measurably lower when the finder is wrong, which "
         "is what makes it worth reporting at all.",
@@ -331,7 +331,7 @@ def test_photographs_into_pieces(
     story.shows(
         f"Each word is a chip above the list, and '{first_word}' is chosen",
         "The chips are the viewer's own, one per word the pieces carry. A chip "
-        "expands every node of its word, at any depth; these pieces are flat shapes "
+        "expands every piece of its word, at any depth; these pieces are flat shapes "
         "with nothing inside, so choosing one marks the chip and leaves the list "
         "and the world as they were.",
     )
