@@ -13,7 +13,7 @@ def repo_root() -> Path:
     for parent in here.parents:
         if (parent / "pyproject.toml").exists() and (parent / "parts").exists():
             return parent
-    # Fallback: <repo>/apothecary/apothecary/projects/parts -> parents[3] == <repo>
+    # Fallback: <repo>/apothecary/projects/parts/skeleton.py -> parents[3] == <repo>
     return here.parents[3]
 
 
