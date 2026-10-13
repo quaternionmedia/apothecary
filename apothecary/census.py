@@ -758,6 +758,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "a still right click on a badge, re-centring the view on what it stands for",
     ),
+    "document:keydown:noteTab": (
+        AUTOMATIC,
+        NOTHING,
+        "Tab pressed, which can bring the focus to the world: its ring shows again",
+    ),
     "document:pointerdown:notePress": (
         AUTOMATIC,
         NOTHING,

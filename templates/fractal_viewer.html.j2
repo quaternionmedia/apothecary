@@ -95,9 +95,10 @@
 
         .viewer-panel { flex: 2; min-width: 0; position: relative; background: #111; }
         #viewer-canvas { width: 100%; height: 100%; display: block; }
-        /* The world has the keyboard's focus: a ring round it, for a keyboard's hand only. */
+        /* The world has the keyboard's focus: a ring round it when the keyboard brought it
+           there (Tab), never after a press in the world. */
         #viewer-canvas:focus { outline: none; }
-        #viewer-canvas:focus-visible { outline: 2px solid #6fb3e8; outline-offset: -2px; }
+        #viewer-canvas:focus-visible:not([data-pressed]) { outline: 2px solid #6fb3e8; outline-offset: -2px; }
         /* The hint bar: on a first visit, faded away after a few actions; ? shows it
            again. One line: short enough for the world at 1024 px wide, and cut
            rather than wrapped in a narrower one. */
@@ -1557,6 +1558,8 @@
                 // Whether the last press was in the world: Page Up and Page Down are the
                 // world's then, with nothing else focused.
                 document.addEventListener('pointerdown', (e) => this.notePress(e), { capture: true });
+                // Tab, which can bring the focus to the world: its ring shows again.
+                document.addEventListener('keydown', (e) => this.noteTab(e), { capture: true });
                 // A selected camera's turn ring or tilt arc, dragged. Its press is heard
                 // first, ahead of the move arrows and the orbit, which never hear it.
                 this.canvas.addEventListener('pointerdown', (e) => this.onCameraHandleDown(e), { capture: true });
@@ -7289,12 +7292,12 @@
             }
 
             // A press on the world (or on a badge over it), kept until it is let go: what
-            // it was is decided then. The world takes the keyboard's focus with it, so its
-            // keys -- the arrows, Page Up and Page Down -- are its. A second finger down
-            // makes it a pinch, never a click; a press the move arrows or a camera's turn
-            // ring took is theirs.
+            // it was is decided then. The world takes the keyboard's focus with the press,
+            // as the browser gives it to anything with a tabindex -- so its keys, the
+            // arrows, Page Up and Page Down, are its -- and shows its ring only to a
+            // keyboard's hand. A second finger down makes it a pinch, never a click; a press
+            // the move arrows or a camera's turn ring took is theirs.
             onPress(event) {
-                if (event.target === this.canvas) this.canvas.focus({ preventScroll: true });
                 if (this.press && this.press.id !== event.pointerId) { this.press.many = true; return; }
                 this.press = null;
                 if (event.button !== 0 && event.button !== 2) return;
@@ -7333,6 +7336,10 @@
             notePress(event) {
                 const t = event.target;
                 this.lastPressInWorld = t === this.canvas || (!!t && this.anchors.layer.contains(t));
+                if (t === this.canvas) this.canvas.dataset.pressed = '';
+            }
+            noteTab(event) {
+                if (event.key === 'Tab') delete this.canvas.dataset.pressed;
             }
             worldHasKeys() { return worldHasKeys(this.canvas, this.lastPressInWorld); }
             ringModifierHeld(event) {

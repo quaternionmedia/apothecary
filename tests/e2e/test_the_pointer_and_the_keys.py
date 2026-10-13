@@ -946,3 +946,19 @@ def test_selected_keeps_the_focus_the_status_is_announced_and_the_arrows_are_the
     page.keyboard.press("ArrowLeft")
     settled(page)
     assert not _near(_orbit(page)["target"], before, 0.01), "the arrows did not pan the world"
+
+
+@pytest.mark.e2e
+def test_the_worlds_ring_shows_when_tab_brings_the_focus_and_not_after_a_press(
+    page: Page, url: str
+):
+    _open(page, url)
+    outline = "() => getComputedStyle(document.getElementById('viewer-canvas')).outlineStyle"
+    page.locator("#ring-open").focus()
+    page.keyboard.press("Tab")
+    assert page.evaluate("() => document.activeElement.id") == "viewer-canvas"
+    assert page.evaluate(outline) == "solid"
+    empty = page.evaluate(SPOT, [None, True])
+    page.mouse.click(empty["x"], empty["y"])
+    assert page.evaluate("() => document.activeElement.id") == "viewer-canvas"
+    assert page.evaluate(outline) == "none"
