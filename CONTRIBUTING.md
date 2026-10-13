@@ -14,10 +14,9 @@ uv run apothecary openscad install   # an OpenSCAD with Manifold, for the render
 ```
 
 Rendering STLs needs OpenSCAD: `uv run apothecary openscad install` puts a development
-snapshot with Manifold in the tools dir (on Linux x86_64, macOS and Windows x64 the
-published build; on Linux arm64 a build from source; README.md says what each does), or
-the `openscad` CLI on `PATH` is used. With the snapshot installed, the `--slow` suite also
-renders the parts that need an OpenSCAD newer than 2021.01.
+snapshot with Manifold in the tools dir ([docs/openscad.md](docs/openscad.md) says what it
+installs on each platform and which OpenSCAD a render uses). With the snapshot installed,
+the `--slow` suite also renders the parts that need an OpenSCAD newer than 2021.01.
 [Walkthrough page 00](walkthrough/00-getting-started.md) is the same path for a person
 trying it, and names the optional installs: the slicer and each firmware toolchain.
 

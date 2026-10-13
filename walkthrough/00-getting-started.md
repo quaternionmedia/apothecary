@@ -62,7 +62,7 @@ and every render uses it from then on. Installing it before the first
     True
 
 `apothecary openscad status` says what is installed and which one renders
-use; the README's *Install* says what the install does on each
+use; [OpenSCAD](../docs/openscad.md) says what the install does on each
 platform. STLs an older OpenSCAD already built are kept: `apothecary parts
 generate-stl --all --force` builds them again.
 

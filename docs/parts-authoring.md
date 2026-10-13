@@ -240,13 +240,10 @@ through them.
 
 `openscad_min_version` is the oldest OpenSCAD that renders the part, as
 `openscad --version` numbers it (`"2021.08.24"`). The first OpenSCAD new
-enough is used, in this order (`stl_renderer.find_openscad`): the one
-`APOTHECARY_OPENSCAD` names, which is then the only one tried; the snapshot
-`apothecary openscad install` made current; the default install (the
-`openscad` CLI on `PATH`); then other development snapshots,
-`openscad-nightly` on `PATH` or one of the usual install locations. With
-none, `can_generate_stl()` names the version needed, every OpenSCAD it
-found, and `apothecary openscad install`.
+enough is used, in the order [openscad.md](openscad.md#which-openscad-a-render-uses)
+gives (`stl_renderer.find_openscad`). With none, `can_generate_stl()` names
+the version needed, every OpenSCAD it found, and `apothecary openscad
+install`.
 `generate-stl --all`, `verify` and server startup skip the part with that
 reason, `checklist` gives it, and a build of that part alone is refused
 with it: `generate-stl NAME` fails, and `POST /parts/{name}/stl/generate`

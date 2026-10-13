@@ -46,25 +46,10 @@ Python 3.11+ and [uv](https://docs.astral.sh/uv/); page 00's first step is the c
 gridfinity library: run `git submodule update --init --recursive`.
 
 Rendering STLs needs OpenSCAD; nothing else does. Run `uv run apothecary openscad install`
-before the first `serve`: it puts a development snapshot into `~/.apothecary/tools`, and
-renders use it, with Manifold. The OpenSCAD most package managers carry, 2021.01, renders
-slowly with CGAL and is too old for the gridfinity bins. Without the snapshot the `openscad`
-CLI on `PATH` is used; `APOTHECARY_OPENSCAD` names another. What it installs is native to
-the machine:
-
-- **Linux x86_64**: the night's AppImage from files.openscad.org; where there is no FUSE,
-  the AppImage is extracted and its `AppRun` used.
-- **macOS**, Intel and Apple Silicon: `OpenSCAD.app`, copied out of the night's disk image
-  (attached read-only with `hdiutil`, then detached). The app is universal.
-- **Windows x64**: the night's portable zip, unpacked; no installer, no admin.
-- **Linux arm64**: no current build is published, so it is built here from OpenSCAD's
-  source at the night's date (cmake, headless, with Manifold; `--jobs N`). What the build
-  needs is checked first, and anything missing is refused with the `sudo apt install` line
-  that adds it; it never runs sudo itself. The build takes long on a small board.
-- **Windows on ARM** is not supported yet; it is a planned item.
-
-`uv run apothecary openscad status` says, for each install, its platform, how it was
-installed, whether it runs natively here, and whether it has Manifold.
+before the first `serve`: it puts a development snapshot with Manifold into the tools
+folder, and renders use it. [docs/openscad.md](docs/openscad.md) says what it installs on
+each platform, which OpenSCAD a render uses, and what 2021.01, the version most package
+managers carry, cannot do.
 
 The rest is optional, each into the same tools folder: the slicer, each firmware
 toolchain and the browser the tests drive. Page 00's
