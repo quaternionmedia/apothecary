@@ -40,6 +40,7 @@ HTTP API is described at `/openapi.json`, the commands by `apothecary --help`.
 | [Fitting a part](fitting-a-part.md) | Which numbers belong to a consumer and which to this repository, and who owns each open problem |
 | [Geometry models](models.md) | Vectors, bounds, colors, shapes and units |
 | [Geometry made elsewhere](geometry-from-elsewhere.md) | An STL or OBJ as a part (`apothecary parts import`), and a part described by a sidecar |
+| [Pictures, cameras and pieces](pictures.md) | Where pictures live, a camera as a part of the site, a picture pinned as a view, its shapes made into pieces, what is taken back and how, the `photo` commands |
 | [Firmware](firmware.md) | Programming boards from sketches kept with their parts, Arduino and Rust for the ESP32, from the Bench or a board's Machine; monitoring a G-code printer from its scene node |
 | [The slicer](slicer.md) | OrcaSlicer installed and pinned, the printer's profile kept with its part, a part or a made piece sliced for the pinned printer and kept for the Print card |
 | [The bench checklist](bench-checklist.md) | The Ender 3 and an ESP32 for real: pinning, the link, heat, motion, levelling, printing from here, slicing, the emergency stop, and the Rust and Arduino blinks |

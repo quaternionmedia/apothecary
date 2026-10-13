@@ -72,27 +72,11 @@ uv run apothecary problems                          # what is open here, and who
 uv run apothecary photo view examples/shapes.png --width-mm 300 --port 8001   # a picture's pieces, in a viewer of its own
 ```
 
-In the viewer, a picture is taken by a camera, a part of the site. Select a structure (the
-bench, say) and open its ring -- `m`, or Ctrl+right-click on it -- then Camera › Add here: a
-camera stands above the bench, looking straight down, selected. On the camera's own ring,
-Device › Allow asks the browser once, and with one camera it is the camera's device at once.
-Take picture -- on its ring, in Selected, or `P` -- keeps a frame that lies on the bench
-where the camera looks, as a view, and the bench's Picture › Find shapes finds its shapes;
-each step's message names the next. Picture › Make stands a shape up as a piece; its Part ›
-Edit adjusts it. Its ring's Slice brings the pinned printer's Machine forward with the piece
-chosen under *makes* and slices it there with OrcaSlicer, choosing the G-code it kept, and
-▶ Print in Print from here prints it: the print is a job that names the piece
-([walkthrough 13](walkthrough/13-a-picture-to-a-print.md) goes round twice;
-[docs/slicer.md](docs/slicer.md) says what a slice uses). The camera's turn ring and tilt arc
-aim it, and Part › Edit sets its numbers.
-
-Pictures live in one folder: `APOTHECARY_PICTURE_ROOT`, or else the folder `serve` was
-started in, never a home folder or anything above one. A camera's frames are kept in its `captures` folder,
-and the pictures added from the browser in its `uploads` folder. Picture › Add on the bench's ring
-pins a picture from disk instead of a camera's, and Picture › Folder one already in the
-picture folder: the seven newest by modification time, and any other once it is chosen in
-Pictures, a tab of the rail beside the world. The floor's verbs are under the canvas ring's
-Pictures › Floor.
+In the viewer, a camera is a part of the site: Camera › Add here stands one above a
+structure, Take picture (`P`) pins its frame where it looks, Picture › Find shapes finds the
+shapes in it, and Picture › Make stands one up as a piece to slice and print
+([docs/pictures.md](docs/pictures.md); [walkthrough 13](walkthrough/13-a-picture-to-a-print.md)
+goes round twice).
 
 From Python:
 

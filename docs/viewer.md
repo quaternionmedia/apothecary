@@ -205,8 +205,9 @@ expand it, as its chip in Site does; 7 when stepped in, 1 at the top).
 pieces it holds: a digit selects one), then what the piece is:
 
 - a structure that stands on its own footprint, a host: **Camera** › Add here,
-  and **Picture** › Add, Folder, Views, Make, Size, Unpin, Forget, Find shapes;
-  Add here selects the camera it added, and Make the piece it made;
+  and **Picture** › Add, Folder, Views, Make, Size, Unpin, Forget, Find shapes
+  ([pictures.md](pictures.md) says what each does); Add here selects the camera
+  it added, and Make the piece it made;
 - a camera: **Device**, Live or Still and **Take picture** (once its device is
   this browser's camera), and Remove (chosen twice);
 - a piece made from a picture: **Picture** › Word, Drop (chosen twice);
