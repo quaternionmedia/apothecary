@@ -27,8 +27,8 @@ def _printer_structures(site):
 
 
 def test_site_has_the_bench_printer_and_the_expanded_garage_systems():
-    """One printer for now (the owner's decision of 2026-10-04): printer_1, which the
-    real board is pinned to, at the bench's left end, the bench's middle clear."""
+    """One printer: printer_1, which the real board is pinned to, at the bench's left
+    end, the bench's middle clear."""
     site = create_example_site()
     names = {s.name for s in site.children}
     assert {"workbench", "printer_1"} <= names

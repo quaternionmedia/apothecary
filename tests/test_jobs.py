@@ -1,7 +1,7 @@
 """Jobs: one operation a machine performs on a part, kept in the state folder.
 
 The model over machine kinds, the registry of what each kind of machine offers,
-the store, and the print records kept before jobs carried over as print jobs.
+the store, and a print record under prints/records read as a print job.
 """
 
 import json
@@ -132,7 +132,7 @@ def test_jobs_list_by_site_and_by_machine_and_a_moved_port_keeps_its_history():
     """A machine is the board's own identity when both the job and the asker know it,
     else its port: the same printer under another port number lists its jobs, and
     another board on its old port does not; a job recorded with no identity (a
-    print record from before jobs) is its port's."""
+    print record under prints/records) is its port's."""
     here = _run(
         _job(
             port="/dev/ttyUSB1",
