@@ -91,6 +91,6 @@ Both are fixtures in `conftest.py`; the recorders themselves are in `doc_capture
   are marked `docs` and skip unless `--generate-docs` is given;
   `apothecary docs generate` runs them that way, on a scripted server of its own.
 
-Before a screenshot of the viewer, `viewer_ready.settled(page)` waits until the
-level's geometry has loaded (`window.fractalViewer.waveDone`) and the canvas has
-drawn it.
+Before a screenshot of the viewer, its blanks in the page, `viewer_ready.settled(page)`
+waits until the level's geometry has loaded (`window.fractalViewer.waveDone`) and
+the canvas has drawn it, at the size the blanks leave it.

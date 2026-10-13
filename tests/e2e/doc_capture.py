@@ -150,15 +150,22 @@ def _blanked(blanks: Sequence[Blank]) -> str:
 
 def picture(page: Page, blanks: Sequence[Blank] = ()) -> bytes:
     """The page as a person sees it once it has settled (viewer_ready.settled), with
-    ``blanks`` blanked."""
+    ``blanks`` blanked. The blanks are in the page while it settles: a blanked word is
+    one width, so the line holding it can take another number of rows and the world
+    beside it another size, and a canvas given a new size is cleared until a frame is
+    drawn at it."""
     settled(page)
+    if not blanks:
+        return page.screenshot()
     words = [list(b) for b in blanks if not isinstance(b, str)]
     if words:
         page.evaluate(WRAP_WORDS, words)
-        settled(page)
+    style = page.add_style_tag(content=_blanked(blanks))
     try:
-        return page.screenshot(style=_blanked(blanks))
+        settled(page)
+        return page.screenshot()
     finally:
+        style.evaluate("(tag) => tag.remove()")
         if words:
             page.evaluate("() => window.__unblank && window.__unblank()")
 
@@ -236,23 +243,27 @@ class DocRecorder:
 WALKTHROUGH_ROOT = Path(__file__).resolve().parents[2] / "walkthrough"
 
 
-def _keep_unless_changed(path: Path, png: bytes) -> None:
-    """Write the screenshot only when its pixels differ from the committed one: a
-    re-encode of the same picture is not a change, so a run leaves an unchanged
-    screenshot as committed."""
+def same_picture(one: bytes, other: bytes) -> bool:
+    """Whether two pictures show the same: a re-encode of the same pixels is the same.
+    Software WebGL rasterises an edge a pixel differently now and then; a change is more
+    than a hundredth of a percent of the picture."""
     import io
 
     from PIL import Image, ImageChops
 
-    if path.exists():
-        old = Image.open(path).convert("RGB")
-        new = Image.open(io.BytesIO(png)).convert("RGB")
-        if old.size == new.size:
-            changed = sum(ImageChops.difference(old, new).convert("L").histogram()[1:])
-            # Software WebGL rasterises an edge a pixel differently now and then;
-            # a change is more than a hundredth of a percent of the picture.
-            if changed <= old.size[0] * old.size[1] // 10000:
-                return
+    one_image = Image.open(io.BytesIO(one)).convert("RGB")
+    other_image = Image.open(io.BytesIO(other)).convert("RGB")
+    if one_image.size != other_image.size:
+        return False
+    changed = sum(ImageChops.difference(one_image, other_image).convert("L").histogram()[1:])
+    return changed <= one_image.size[0] * one_image.size[1] // 10000
+
+
+def _keep_unless_changed(path: Path, png: bytes) -> None:
+    """Write the screenshot only when its pixels differ from the committed one, so a
+    run leaves an unchanged screenshot as committed."""
+    if path.exists() and same_picture(path.read_bytes(), png):
+        return
     path.write_bytes(png)
 
 
