@@ -25,8 +25,8 @@ falls back to the sidecar.
     >>> _sanitize_module_name("datum_core")
     'datum_core'
 
-The wrapper is what gives a part a description, a category and — the part that
-matters to anything assembling around it — an envelope.
+The wrapper is what gives a part a description, a category and an envelope,
+the box anything assembled around it relies on.
 
     >>> from apothecary.projects.parts.datum_core import DEFAULT
     >>> DEFAULT.name
@@ -44,8 +44,8 @@ capable of lying. It reports the tray at its default parameters:
     (46.8, 46.8, 15.6)
 
 `apothecary parts verify <name>` renders the part and measures the real
-bounding box against that claim. It exits non-zero on drift, so it belongs in
-CI. `apothecary problems --kind drift` lists the parts whose last render disagrees
+bounding box against that claim. It exits non-zero on drift, so it can gate a
+build. `apothecary problems --kind drift` lists the parts whose last render disagrees
 with their claim.
 
 ## Recipes

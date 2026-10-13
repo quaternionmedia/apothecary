@@ -110,12 +110,12 @@ bare word is an identifier:
 | A different printer | `apothecary parts generate-stl datum_core -p walls=2 -p tolerence=0.3` |
 | Check a variant's envelope | `apothecary parts verify datum_core -p headroom=12` |
 | What produced the STL on disk | `apothecary parts info datum_core --json-out` → `stl_params` |
-| See the change | `apothecary serve`, then select the part — page 04 |
+| See the change | `apothecary serve`, then the part's ring, Part › Edit — page 14 |
 
 The whole loop, from a cold checkout:
 
 ```bash
-uv run apothecary serve --port 8765                    # look at it
+uv run apothecary serve                                # look at it
 # edit parts/datum_core/datum_core.scad
 uv run apothecary parts generate-stl datum_core        # render
 uv run apothecary parts verify datum_core              # bounds vs real geometry
