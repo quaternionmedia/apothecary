@@ -74,7 +74,7 @@ LEG_INSET = 50.0
 # picture agree.
 PRINTER_WIDTH = ender3.OVERALL.x  # 470: the frame is 400, the PSU and the spool tube make the rest
 PRINTER_DEPTH = ender3.OVERALL.y  # 454: the frame is 410, the LCD hangs 41 off the front, at y < 0
-PRINTER_HEIGHT = ender3.OVERALL.z  # 576, with a spool on the holder
+PRINTER_HEIGHT = ender3.OVERALL.z  # with a spool on the holder
 PRINTER_FRONT = -41.0  # where the LCD's bracket ends, in the printer's frame
 POST_SIZE = 20.0  # 2020 / 2040 extrusion
 UPRIGHT_Y = 150.0  # where the Z uprights stand along Y, the model's upright_y
@@ -651,8 +651,8 @@ def _build_footpedal() -> Assembly:
 def create_example_site() -> Assembly:
     """A garage: a workbench with a printer on top of it, inside its
     own building shell, alongside abstract utility fixtures, storage, a
-    subtractive-manufacturing stub, and two boards the firmware seam can
-    talk to -- see this module's docstring.
+    subtractive-manufacturing stub, and the boards on the bench that the
+    firmware seam binds devices to -- see this module's docstring.
     """
 
     workbench = _build_workbench()
