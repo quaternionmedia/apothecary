@@ -168,8 +168,8 @@ class DraftRequest(BaseModel):
     )
     params: Dict[str, Any] = Field(
         default_factory=dict,
-        description="Values on the side, from a caller before the text was the truth: "
-        "written into the text first (the answer's text says how)",
+        description="Values sent on the side: written into the text first (the answer's "
+        "text says how)",
     )
     editor_version: Optional[Union[int, Annotated[str, Field(max_length=64)]]] = Field(
         None,
@@ -606,13 +606,12 @@ class SaveRequest(BaseModel):
     )
     params: Dict[str, Any] = Field(
         default_factory=dict,
-        description="Values on the side, from a caller before the text was the truth: "
-        "written into the text first",
+        description="Values sent on the side: written into the text first",
     )
     params_in: str = Field(
         KEEP_DEFAULT,
-        description="Where its parameters are kept: 'variant-file' (beside its SCAD); "
-        "'part-description' is a stub, refused, saying what it will do",
+        description="Where its values are kept: 'text', in its SCAD; 'part-description' "
+        "is a stub, refused, saying what it will do",
     )
 
 
