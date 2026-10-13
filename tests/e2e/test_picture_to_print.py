@@ -1,5 +1,4 @@
-"""A picture to a print, round twice through the page: the fourth loop of the loops
-plan (docs/plans/ui-flows-2026-10-08.md), held end to end.
+"""A picture to a print, round twice through the page, held end to end.
 
 A camera added above the bench and told which of this browser's cameras it is; a
 picture taken that lies on the bench; its shapes found; one made a piece; the piece
