@@ -229,7 +229,7 @@ def test_a_saved_variant_is_renamed_duplicated_restored_deleted_and_the_trash_em
     forget = trash.locator(".trash-row[data-variant='third'] .trash-forget")
     forget.click()
     expect(_status(page)).to_contain_text("third would be deleted for good, which cannot be undone")
-    expect(forget).to_have_text("Press again to confirm")
+    expect(forget).to_have_text("Again to forget")
     assert [v["name"] for v in page.request.get(f"{url}/parts/{PART}/trash").json()] == ["third"]
     forget.click()
     expect(_status(page)).to_contain_text("third is deleted for good", timeout=15000)
@@ -291,19 +291,20 @@ def test_every_action_on_a_saved_variant_is_a_cell_of_part_variants(
     _ring(page, PART, "Part", "Variants", "Deleted", "three", "Restore")
     expect(_status(page)).to_contain_text("three is back among the variants", timeout=15000)
 
-    # Forget and Empty: the first choice says what it would do, the same cell again does it.
+    # Forget and Empty cannot be undone: chosen once, the wedge itself asks "again to
+    # forget" and the ring waits; chosen again, it is done.
     _ring(page, PART, "Part", "Variants", "three", "Delete")
     expect(_status(page)).to_contain_text("three moved to the trash", timeout=15000)
     _ring(page, PART, "Part", "Variants", "Deleted", "three", "Forget")
-    expect(_status(page)).to_contain_text("choose the same cell again to confirm", timeout=15000)
+    expect(page.locator("#ring-overlay .wedge[aria-label='again to forget']")).to_have_count(1)
     assert [v["name"] for v in page.request.get(f"{url}/parts/{PART}/trash").json()] == ["three"]
-    _ring(page, PART, "Part", "Variants", "Deleted", "three", "Forget")
+    _press(page, "again to forget")
     expect(_status(page)).to_contain_text("three is deleted for good", timeout=15000)
     _ring(page, PART, "Part", "Variants", "one", "Delete")
     expect(_status(page)).to_contain_text("one moved to the trash", timeout=15000)
     _ring(page, PART, "Part", "Variants", "Deleted", "Empty")
-    expect(_status(page)).to_contain_text("every deleted variant would be deleted for good")
-    _ring(page, PART, "Part", "Variants", "Deleted", "Empty")
+    expect(page.locator("#ring-overlay .wedge[aria-label='again to empty']")).to_have_count(1)
+    _press(page, "again to empty")
     expect(_status(page)).to_contain_text("the trash is emptied, 1 variant", timeout=15000)
     assert page.request.get(f"{url}/parts/{PART}/trash").json() == []
     assert errors == []

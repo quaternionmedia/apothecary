@@ -367,7 +367,8 @@ def test_the_loop_at_the_bench_from_the_ring(page, base_url: str, leaves_garage_
     _ring_on(page, piece)
     _press(page, "Picture")
     assert _labels(page) == ["Word", "Drop"]
-    _press(page, "Drop")
+    # It cannot be undone: the wedge asks again, and the ring waits for it.
+    _press(page, "Drop", "again to drop")
     page.wait_for_function(
         "() => Object.keys(window.apothecaryPictures.attached().made || {}).length === 0",
         timeout=10000,
@@ -378,7 +379,7 @@ def test_the_loop_at_the_bench_from_the_ring(page, base_url: str, leaves_garage_
 
     # Forget: the kept frame goes, its view with it.
     _ring_on(page, "workbench")
-    _press(page, "Picture", "Forget")
+    _press(page, "Picture", "Forget", "again to forget")
     _said(page, f"forgot {view['picture']}")
     kept = {p["path"] for p in page.request.get(f"{base_url}/photos/pictures").json()}
     assert view["picture"] not in kept

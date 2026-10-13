@@ -216,7 +216,7 @@ def test_a_refusal_reaches_the_status_bar(page: Page, url: str):
     status = page.locator("#status")
     expect(status).to_contain_text("not armed", timeout=5000)
     expect(status).to_have_class(re.compile(r"\berror\b"))
-    expect(status).to_contain_text("⌗2")
+    expect(status).to_contain_text("⌗7")
     expect(machine.locator("#log .sys", has_text="not armed").last).to_be_visible()
     # A refused report code from the Machine's own box says so too.
     machine.locator("#q").fill("G28")
@@ -337,12 +337,12 @@ def test_flash_takes_monitor_s_old_cell_and_every_cell_after_it_is_back(page: Pa
         page.keyboard.press(digit)
     expect(page.locator("#ring-overlay")).to_have_count(0)
     status = page.locator("#status")
-    expect(status).to_contain_text("⌗2728", timeout=8000)
+    expect(status).to_contain_text("⌗7728", timeout=8000)
     expect(status).to_contain_text("not armed")
     # Selected's buttons wear the same cells.
     _select(page, "printer_1")
     section = page.locator("#selected-body .device-section")
-    expect(section.locator(".dev-open")).to_have_attribute("data-address", "28", timeout=5000)
+    expect(section.locator(".dev-open")).to_have_attribute("data-address", "78", timeout=5000)
 
 
 @pytest.mark.e2e
@@ -433,7 +433,7 @@ def test_a_devkit_s_machine_opens_no_port_until_listen(page: Page, start_server)
     _choose(page, "Device", "Link")
     assert _wedges(page)["Listen"] == "4" and _wedges(page)["Probe"] == "9"
     page.keyboard.press("4")
-    expect(page.locator("#status")).to_contain_text("⌗214", timeout=5000)
+    expect(page.locator("#status")).to_contain_text("⌗114", timeout=5000)
     page.wait_for_function(
         "() => !!window.fractalViewer.boards.board('/dev/ttyFAKE0').stream", timeout=5000
     )
@@ -443,7 +443,7 @@ def test_a_devkit_s_machine_opens_no_port_until_listen(page: Page, start_server)
 def test_device_flash_opens_the_machine_at_its_card_and_uploads_then_identifies(
     page: Page, start_server
 ):
-    """Device › Flash (⌗22 from the devkit's node) opens its Machine at the Flashing card,
+    """Device › Flash (⌗12 from the devkit's ring) opens its Machine at the Flashing card,
     the sketch it should run chosen and its board filled in. Compile & upload asks, then
     runs the upload as a task whose output is in the card; it ends, and Identify listens
     for the hello -- and asks no M115, which is a person's to press for."""
@@ -461,7 +461,7 @@ def test_device_flash_opens_the_machine_at_its_card_and_uploads_then_identifies(
     machine = page.locator(MACHINE)
     card = machine.locator("#flash-card")
     expect(card).to_be_visible(timeout=8000)
-    expect(page.locator("#status")).to_contain_text("⌗22")
+    expect(page.locator("#status")).to_contain_text("⌗12")
     expect(card.locator(".sketch-select")).to_have_value("footpedal@arduino", timeout=10000)
     expect(card.locator(".fqbn-input")).to_have_value("arduino:avr:uno")
     expect(card.locator(".port-select")).to_be_hidden()  # this board's port, no other

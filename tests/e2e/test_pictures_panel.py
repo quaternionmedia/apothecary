@@ -252,7 +252,10 @@ def test_forget_and_purge_from_pictures(page, base_url: str, picture_folder, lea
     expect(own).to_be_visible()
     expect(own.locator(".pictures-forget")).to_have_count(0)  # a person's: only a person removes it
 
-    kept.locator(".pictures-forget").click()
+    forget = kept.locator(".pictures-forget")
+    forget.click()
+    expect(forget).to_have_text("Again to forget")
+    forget.click()
     expect(kept).to_have_count(0, timeout=5000)
     page.wait_for_function(
         "() => !window.apothecaryPictures.state().some((e) => e.host === 'workbench')",
@@ -261,8 +264,10 @@ def test_forget_and_purge_from_pictures(page, base_url: str, picture_folder, lea
     assert not [vw for vw in _views(page, base_url) if vw["picture"] == pinned["path"]]
     expect(page.locator("#status")).to_contain_text(f"forgot {pinned['path']}")
 
-    page.once("dialog", lambda d: d.accept())
-    panel.locator("#pictures-purge").click()
+    purge = panel.locator("#pictures-purge")
+    purge.click()
+    expect(purge).to_have_text("Again to purge")
+    purge.click()
     status = page.locator("#status")
     expect(status).to_contain_text("of the folder's own stay", timeout=8000)
     expect(status).not_to_have_class(re.compile(r"\berror\b"))
@@ -273,6 +278,7 @@ def test_forget_and_purge_from_pictures(page, base_url: str, picture_folder, lea
     left = page.request.get(f"{base_url}/photos/pictures").json()
     assert all(not p["kept"] for p in left)
     assert (picture_folder / "the_folders_own.png").is_file()
-    panel.locator("#pictures-purge").click()
+    purge.click()
+    purge.click()
     expect(status).to_contain_text("nothing kept from the browser to forget", timeout=5000)
     expect(status).to_have_class(re.compile(r"\berror\b"))

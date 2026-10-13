@@ -204,6 +204,10 @@ class Option(BaseModel):
     action: Optional[str] = None
     enabled: bool = True
     destructive: bool = False
+    # Not undoable in the page (a site rebuilt, a camera removed, a picture forgotten,
+    # a board rebooted): chosen once, the wedge says "again to ..." and waits; chosen
+    # again, it is done (the input plan's "confirming by consequence").
+    twice: bool = False
     # The one of a list the page has chosen elsewhere (a picture chosen in
     # Pictures), drawn marked; a leaf like any other.
     marked: bool = False
@@ -573,7 +577,12 @@ def _variants_group(names: Sequence[str], deleted: Sequence[str]) -> Optional[Op
             id=f"{prefix}:{name}",
             label=label,
             children=[
-                Option(id=f"{prefix}:{verb}:{name}", label=said, action=f"{prefix}:{verb}:{name}")
+                Option(
+                    id=f"{prefix}:{verb}:{name}",
+                    label=said,
+                    action=f"{prefix}:{verb}:{name}",
+                    twice=(prefix, verb) == ("part:trash", "forget"),
+                )
                 for verb, said in verbs
             ],
         )
@@ -602,7 +611,11 @@ def _variants_group(names: Sequence[str], deleted: Sequence[str]) -> Optional[Op
         kept = rings("part:trash", TRASH_VERBS, deleted, MOST_OPTIONS - 1)
         kept.append(
             Option(
-                id="part:trash:empty", label="Empty", action="part:trash:empty", destructive=True
+                id="part:trash:empty",
+                label="Empty",
+                action="part:trash:empty",
+                destructive=True,
+                twice=True,
             )
         )
         trash = Option(id="part:trash", label="Deleted", children=kept)
@@ -908,7 +921,9 @@ def _camera_options(picture: PictureContext) -> List[Option]:
             Option(id="camera:take-picture", label="Take picture", action="camera:take-picture")
         )
     options.append(
-        Option(id="camera:remove", label="Remove", action="camera:remove", destructive=True)
+        Option(
+            id="camera:remove", label="Remove", action="camera:remove", destructive=True, twice=True
+        )
     )
     return options
 
@@ -1005,6 +1020,7 @@ def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
                 label="Forget",
                 action=f"picture:forget{tail}",
                 destructive=True,
+                twice=True,
             )
         )
     find = _find_shapes(drawn, picture.finders, tail)
@@ -1078,7 +1094,9 @@ def _made_picture_group(picture: PictureContext) -> Option:
                 ),
             )
         )
-    options.append(Option(id="picture:drop", label="Drop", action="picture:drop", destructive=True))
+    options.append(
+        Option(id="picture:drop", label="Drop", action="picture:drop", destructive=True, twice=True)
+    )
     return Option(id="picture", label="Picture", children=options)
 
 
@@ -1104,7 +1122,13 @@ def _pictures(picture: PictureContext) -> Option:
                     if option is not None
                 ],
             ),
-            Option(id="picture:purge", label="Purge", action="picture:purge", destructive=True),
+            Option(
+                id="picture:purge",
+                label="Purge",
+                action="picture:purge",
+                destructive=True,
+                twice=True,
+            ),
             Option(id="camera:gather", label="Gather", action="camera:gather"),
         ],
     )
@@ -1115,6 +1139,19 @@ def _canvas_pieces(
 ) -> Optional[Option]:
     """Pieces at this level. At the top, the pieces made from pictures are one
     grouped Made cell after the code's own, so they cannot crowd the ring out."""
+    if focus is not None and focus_path and not focus.children:
+        # A leaf stepped into is drawn as itself: the one piece at its level.
+        return Option(
+            id=prefix,
+            label=shorten(prefix),
+            children=[
+                Option(
+                    id=f"select:{focus_path}",
+                    label=shorten(focus.name),
+                    action=f"select:{focus_path}",
+                )
+            ],
+        )
     made_here = sorted(
         {c.name for c in focus.children if c.name in set(made)} if focus is not None else set()
     )
@@ -1145,12 +1182,20 @@ def _canvas_ring(
     groups: Sequence[str],
     picture: PictureContext,
 ) -> Ring:
-    """The ring on empty canvas: the pieces at this level, the way back up, and the rest.
+    """The ring on empty canvas: the pieces at this level, the rest, and the way out.
 
-    `context.targets[0]`, when given, is the path the viewer is zoomed into;
-    Pieces lists that node's children and Up steps back out. At the root
-    there is no Up, because there is nothing above. View is how the world is
-    drawn, Fit first in it; Panels opens and closes what stands in front of it.
+    `context.targets[0]`, when given, is the path the viewer is stepped into;
+    Pieces lists that piece's children -- at a leaf, the leaf itself, the one
+    piece drawn -- and Step out steps back out. At the root there is no Step out,
+    because there is nothing above. View is how the world is drawn, Fit first in
+    it; Panels opens and closes what stands in front of it; Rebuild builds the
+    site again from its factory, asked twice.
+
+    The cells that are always there come first and keep one address wherever the
+    ring is opened (the owner's answer after the input overview): Pieces 8, Site 6,
+    View 2, Panels 4, Pictures 9, Rebuild 3. The two that come and go are seated
+    after them: Step out (one level in or deeper), then Group (a site whose pieces
+    have categories).
     """
     focus_path = context.targets[0] if context.targets else ""
     focus = _find(site, focus_path) if site and focus_path else site
@@ -1158,13 +1203,13 @@ def _canvas_ring(
         option
         for option in (
             _canvas_pieces("Pieces", focus_path, focus, picture.made),
-            Option(id="up", label="Up", action="zoom-out") if focus_path else None,
             _grouped("Site", site_names, lambda name: f"site:{name}"),
-            _grouped("Group", groups, lambda name: f"group:{name}"),
             _view(),
             _panels(),
             _pictures(picture),
-            Option(id="reset", label="Reset", action="reset", destructive=True),
+            Option(id="reset", label="Rebuild", action="reset", destructive=True, twice=True),
+            Option(id="up", label="Step out", action="zoom-out") if focus_path else None,
+            _grouped("Group", groups, lambda name: f"group:{name}"),
         )
         if option is not None
     ]
@@ -1182,28 +1227,21 @@ def _node_ring(
     node = _find(site, path) if site and path else None
     camera = bool(path) and path in picture.camera_parts
 
+    # Step in, Move and Why this are every piece's, and keep cells 8, 6 and 2
+    # wherever the ring is opened (the owner's answer after the input overview);
+    # what comes and goes with the piece follows them, and what comes and goes with
+    # where it is -- a board pinned to it, a piece it is inside -- comes last.
     options: List[Option] = [
-        Option(id="zoom", label="Zoom in", action="zoom-in"),
+        Option(id="zoom", label="Step in", action="zoom-in"),
         Option(id="move", label="Move", action="move"),
+        Option(id="why", label="Why this", action="explain"),
     ]
 
-    # A node with a board pinned to it can be watched, polled and, when the
-    # board is a printer, driven. A node with none gets no Device option at
-    # all rather than one greyed out. A camera's Device is which browser camera
-    # it is, among its own verbs below, and no board's.
-    if device is not None and device.bound and not camera:
-        options.append(Option(id="device", label="Device", children=_device_options(device)))
-
-    options.append(Option(id="why", label="Why this", action="explain"))
-
-    # Navigation: the pieces inside this one, and the one it is inside.
-    # Selecting, not zooming -- a chosen piece becomes the ring's next subject.
-    into = _pieces("Into", path, node)
+    # The pieces inside this one, a ring of them: selecting, not stepping in --
+    # a chosen piece becomes the ring's next subject.
+    into = _pieces("Inside", path, node)
     if into is not None:
         options.append(into)
-    if "." in path:
-        parent = path.rsplit(".", 1)[0]
-        options.append(Option(id="up", label="Up", action=f"select:{parent}"))
 
     # Appended after every cell the ring had, so none of them moves: a host
     # has a camera added above it and holds views; a made piece has its word and
@@ -1294,6 +1332,16 @@ def _node_ring(
     part = bool(node is not None and node.part_ref and not camera and not board)
     if (made or part) and picture.printers and not in_a_printer:
         options.append(_slice_option(picture.printers))
+    # A piece with a board pinned to it can be watched, polled and, when the board is
+    # a printer, driven. A piece with none gets no Device option at all rather than
+    # one greyed out. A camera's Device is which browser camera it is, among its own
+    # verbs above, and no board's.
+    if device is not None and device.bound and not camera:
+        options.append(Option(id="device", label="Device", children=_device_options(device)))
+    # The piece it is inside, selected: Parent, last.
+    if "." in path:
+        parent = path.rsplit(".", 1)[0]
+        options.append(Option(id="up", label="Parent", action=f"select:{parent}"))
     return Ring(title=shorten(path or (node.name if node else "")), options=options)
 
 
@@ -1346,7 +1394,13 @@ def _device_options(device: Device) -> List[Option]:
             label="Link",
             children=[
                 Option(id="device:reconnect", label="Reconnect", action="device:reconnect"),
-                Option(id="device:reset", label="Reset", action="device:reset", destructive=True),
+                Option(
+                    id="device:reset",
+                    label="Reboot",
+                    action="device:reset",
+                    destructive=True,
+                    twice=True,
+                ),
                 Option(id="device:release", label="Release", action="device:release"),
             ]
             + (

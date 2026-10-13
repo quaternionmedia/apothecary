@@ -489,14 +489,14 @@
         "Jog",
         "Y+"
       ],
-      "address": "2728"
+      "address": "4728"
     },
     {
       "ring": "node",
       "path": [
         "Why this"
       ],
-      "address": "4"
+      "address": "2"
     }
   ],
   "every_address": {
@@ -580,48 +580,48 @@
     "node": {
       "8": "zoom-in",
       "6": "move",
-      "28": "device:open",
-      "26": "device:poll",
-      "22": "device:flash",
-      "24": "device:query",
-      "29": "device:unpin",
-      "23": "device:rescan",
-      "218": "device:reconnect",
-      "216": "device:reset",
-      "212": "device:release",
-      "2788": "control:hotend-on",
-      "2786": "control:hotend-off",
-      "2782": "control:bed-on",
-      "2784": "control:bed-off",
-      "2789": "control:fan-on",
-      "2783": "control:fan-off",
-      "2768": "control:home",
-      "2766": "control:home-xy",
-      "2762": "control:home-z",
-      "2728": "control:jog:Y+",
-      "2726": "control:jog:X+",
-      "2722": "control:jog:Y-",
-      "2724": "control:jog:X-",
-      "2729": "control:jog:Z+",
-      "2723": "control:jog:Z-",
-      "2748": "level:probe",
-      "2746": "level:read",
-      "2742": "control:mesh-on",
-      "2744": "control:mesh-off",
-      "2749": "control:corner:BR",
-      "2743": "control:corner:FR",
-      "2741": "control:corner:FL",
-      "2747": "control:corner:BL",
-      "2798": "control:sd-resume",
-      "2796": "control:sd-pause",
-      "2792": "control:sd-abort",
-      "2794": "print:start",
-      "2738": "control:motors-off",
-      "2736": "control:quickstop",
-      "2732": "control:break-wait",
-      "271": "control:estop",
-      "277": "control:arm",
-      "4": "explain"
+      "2": "explain",
+      "48": "device:open",
+      "46": "device:poll",
+      "42": "device:flash",
+      "44": "device:query",
+      "49": "device:unpin",
+      "43": "device:rescan",
+      "418": "device:reconnect",
+      "416": "device:reset",
+      "412": "device:release",
+      "4788": "control:hotend-on",
+      "4786": "control:hotend-off",
+      "4782": "control:bed-on",
+      "4784": "control:bed-off",
+      "4789": "control:fan-on",
+      "4783": "control:fan-off",
+      "4768": "control:home",
+      "4766": "control:home-xy",
+      "4762": "control:home-z",
+      "4728": "control:jog:Y+",
+      "4726": "control:jog:X+",
+      "4722": "control:jog:Y-",
+      "4724": "control:jog:X-",
+      "4729": "control:jog:Z+",
+      "4723": "control:jog:Z-",
+      "4748": "level:probe",
+      "4746": "level:read",
+      "4742": "control:mesh-on",
+      "4744": "control:mesh-off",
+      "4749": "control:corner:BR",
+      "4743": "control:corner:FR",
+      "4741": "control:corner:FL",
+      "4747": "control:corner:BL",
+      "4798": "control:sd-resume",
+      "4796": "control:sd-pause",
+      "4792": "control:sd-abort",
+      "4794": "print:start",
+      "4738": "control:motors-off",
+      "4736": "control:quickstop",
+      "4732": "control:break-wait",
+      "471": "control:estop",
+      "477": "control:arm"
     }
   },
   "rings": {
@@ -634,6 +634,7 @@
           "action": null,
           "enabled": true,
           "destructive": false,
+          "twice": false,
           "marked": false,
           "children": [
             {
@@ -642,6 +643,7 @@
               "action": "control:hotend-on",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 8
@@ -652,6 +654,7 @@
               "action": "control:hotend-off",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 6
@@ -662,6 +665,7 @@
               "action": "control:bed-on",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 2
@@ -672,6 +676,7 @@
               "action": "control:bed-off",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 4
@@ -682,6 +687,7 @@
               "action": "control:fan-on",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 9
@@ -692,6 +698,7 @@
               "action": "control:fan-off",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 3
@@ -705,6 +712,7 @@
           "action": null,
           "enabled": true,
           "destructive": false,
+          "twice": false,
           "marked": false,
           "children": [
             {
@@ -713,6 +721,7 @@
               "action": "control:home",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 8
@@ -723,6 +732,7 @@
               "action": "control:home-xy",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 6
@@ -733,6 +743,7 @@
               "action": "control:home-z",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 2
@@ -746,6 +757,7 @@
           "action": null,
           "enabled": true,
           "destructive": false,
+          "twice": false,
           "marked": false,
           "children": [
             {
@@ -754,6 +766,7 @@
               "action": "control:jog:Y+",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 8
@@ -764,6 +777,7 @@
               "action": "control:jog:X+",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 6
@@ -774,6 +788,7 @@
               "action": "control:jog:Y-",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 2
@@ -784,6 +799,7 @@
               "action": "control:jog:X-",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 4
@@ -794,6 +810,7 @@
               "action": "control:jog:Z+",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 9
@@ -804,6 +821,7 @@
               "action": "control:jog:Z-",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 3
@@ -817,6 +835,7 @@
           "action": null,
           "enabled": true,
           "destructive": false,
+          "twice": false,
           "marked": false,
           "children": [
             {
@@ -825,6 +844,7 @@
               "action": "level:probe",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 8
@@ -835,6 +855,7 @@
               "action": "level:read",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 6
@@ -845,6 +866,7 @@
               "action": "control:mesh-on",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 2
@@ -855,6 +877,7 @@
               "action": "control:mesh-off",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 4
@@ -865,6 +888,7 @@
               "action": "control:corner:BR",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 9
@@ -875,6 +899,7 @@
               "action": "control:corner:FR",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 3
@@ -885,6 +910,7 @@
               "action": "control:corner:FL",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 1
@@ -895,6 +921,7 @@
               "action": "control:corner:BL",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 7
@@ -908,6 +935,7 @@
           "action": null,
           "enabled": true,
           "destructive": false,
+          "twice": false,
           "marked": false,
           "children": [
             {
@@ -916,6 +944,7 @@
               "action": "control:sd-resume",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 8
@@ -926,6 +955,7 @@
               "action": "control:sd-pause",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 6
@@ -936,6 +966,7 @@
               "action": "control:sd-abort",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 2
@@ -946,6 +977,7 @@
               "action": "print:start",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 4
@@ -959,6 +991,7 @@
           "action": null,
           "enabled": true,
           "destructive": false,
+          "twice": false,
           "marked": false,
           "children": [
             {
@@ -967,6 +1000,7 @@
               "action": "control:motors-off",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 8
@@ -977,6 +1011,7 @@
               "action": "control:quickstop",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 6
@@ -987,6 +1022,7 @@
               "action": "control:break-wait",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 2
@@ -1000,6 +1036,7 @@
           "action": "control:estop",
           "enabled": true,
           "destructive": true,
+          "twice": false,
           "marked": false,
           "children": null,
           "cell": 1
@@ -1010,6 +1047,7 @@
           "action": "control:arm",
           "enabled": true,
           "destructive": false,
+          "twice": false,
           "marked": false,
           "children": null,
           "cell": 7
@@ -1025,6 +1063,7 @@
           "action": "device:open",
           "enabled": true,
           "destructive": false,
+          "twice": false,
           "marked": false,
           "children": null,
           "cell": 8
@@ -1035,6 +1074,7 @@
           "action": "device:poll",
           "enabled": true,
           "destructive": false,
+          "twice": false,
           "marked": false,
           "children": null,
           "cell": 6
@@ -1045,6 +1085,7 @@
           "action": "device:flash",
           "enabled": false,
           "destructive": false,
+          "twice": false,
           "marked": false,
           "children": null,
           "cell": 2
@@ -1055,6 +1096,7 @@
           "action": "device:query",
           "enabled": true,
           "destructive": false,
+          "twice": false,
           "marked": false,
           "children": null,
           "cell": 4
@@ -1065,6 +1107,7 @@
           "action": "device:unpin",
           "enabled": true,
           "destructive": false,
+          "twice": false,
           "marked": false,
           "children": null,
           "cell": 9
@@ -1075,6 +1118,7 @@
           "action": "device:rescan",
           "enabled": true,
           "destructive": false,
+          "twice": false,
           "marked": false,
           "children": null,
           "cell": 3
@@ -1085,6 +1129,7 @@
           "action": null,
           "enabled": true,
           "destructive": false,
+          "twice": false,
           "marked": false,
           "children": [
             {
@@ -1093,16 +1138,18 @@
               "action": "device:reconnect",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 8
             },
             {
               "id": "device:reset",
-              "label": "Reset",
+              "label": "Reboot",
               "action": "device:reset",
               "enabled": true,
               "destructive": true,
+              "twice": true,
               "marked": false,
               "children": null,
               "cell": 6
@@ -1113,6 +1160,7 @@
               "action": "device:release",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 2
@@ -1126,6 +1174,7 @@
           "action": null,
           "enabled": true,
           "destructive": false,
+          "twice": false,
           "marked": false,
           "children": [
             {
@@ -1134,6 +1183,7 @@
               "action": null,
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": [
                 {
@@ -1142,6 +1192,7 @@
                   "action": "control:hotend-on",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 8
@@ -1152,6 +1203,7 @@
                   "action": "control:hotend-off",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 6
@@ -1162,6 +1214,7 @@
                   "action": "control:bed-on",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 2
@@ -1172,6 +1225,7 @@
                   "action": "control:bed-off",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 4
@@ -1182,6 +1236,7 @@
                   "action": "control:fan-on",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 9
@@ -1192,6 +1247,7 @@
                   "action": "control:fan-off",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 3
@@ -1205,6 +1261,7 @@
               "action": null,
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": [
                 {
@@ -1213,6 +1270,7 @@
                   "action": "control:home",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 8
@@ -1223,6 +1281,7 @@
                   "action": "control:home-xy",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 6
@@ -1233,6 +1292,7 @@
                   "action": "control:home-z",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 2
@@ -1246,6 +1306,7 @@
               "action": null,
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": [
                 {
@@ -1254,6 +1315,7 @@
                   "action": "control:jog:Y+",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 8
@@ -1264,6 +1326,7 @@
                   "action": "control:jog:X+",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 6
@@ -1274,6 +1337,7 @@
                   "action": "control:jog:Y-",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 2
@@ -1284,6 +1348,7 @@
                   "action": "control:jog:X-",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 4
@@ -1294,6 +1359,7 @@
                   "action": "control:jog:Z+",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 9
@@ -1304,6 +1370,7 @@
                   "action": "control:jog:Z-",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 3
@@ -1317,6 +1384,7 @@
               "action": null,
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": [
                 {
@@ -1325,6 +1393,7 @@
                   "action": "level:probe",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 8
@@ -1335,6 +1404,7 @@
                   "action": "level:read",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 6
@@ -1345,6 +1415,7 @@
                   "action": "control:mesh-on",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 2
@@ -1355,6 +1426,7 @@
                   "action": "control:mesh-off",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 4
@@ -1365,6 +1437,7 @@
                   "action": "control:corner:BR",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 9
@@ -1375,6 +1448,7 @@
                   "action": "control:corner:FR",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 3
@@ -1385,6 +1459,7 @@
                   "action": "control:corner:FL",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 1
@@ -1395,6 +1470,7 @@
                   "action": "control:corner:BL",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 7
@@ -1408,6 +1484,7 @@
               "action": null,
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": [
                 {
@@ -1416,6 +1493,7 @@
                   "action": "control:sd-resume",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 8
@@ -1426,6 +1504,7 @@
                   "action": "control:sd-pause",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 6
@@ -1436,6 +1515,7 @@
                   "action": "control:sd-abort",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 2
@@ -1446,6 +1526,7 @@
                   "action": "print:start",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 4
@@ -1459,6 +1540,7 @@
               "action": null,
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": [
                 {
@@ -1467,6 +1549,7 @@
                   "action": "control:motors-off",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 8
@@ -1477,6 +1560,7 @@
                   "action": "control:quickstop",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 6
@@ -1487,6 +1571,7 @@
                   "action": "control:break-wait",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 2
@@ -1500,6 +1585,7 @@
               "action": "control:estop",
               "enabled": true,
               "destructive": true,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 1
@@ -1510,6 +1596,7 @@
               "action": "control:arm",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 7
@@ -1524,10 +1611,11 @@
       "options": [
         {
           "id": "zoom",
-          "label": "Zoom in",
+          "label": "Step in",
           "action": "zoom-in",
           "enabled": true,
           "destructive": false,
+          "twice": false,
           "marked": false,
           "children": null,
           "cell": 8
@@ -1538,9 +1626,21 @@
           "action": "move",
           "enabled": true,
           "destructive": false,
+          "twice": false,
           "marked": false,
           "children": null,
           "cell": 6
+        },
+        {
+          "id": "why",
+          "label": "Why this",
+          "action": "explain",
+          "enabled": true,
+          "destructive": false,
+          "twice": false,
+          "marked": false,
+          "children": null,
+          "cell": 2
         },
         {
           "id": "device",
@@ -1548,6 +1648,7 @@
           "action": null,
           "enabled": true,
           "destructive": false,
+          "twice": false,
           "marked": false,
           "children": [
             {
@@ -1556,6 +1657,7 @@
               "action": "device:open",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 8
@@ -1566,6 +1668,7 @@
               "action": "device:poll",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 6
@@ -1576,6 +1679,7 @@
               "action": "device:flash",
               "enabled": false,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 2
@@ -1586,6 +1690,7 @@
               "action": "device:query",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 4
@@ -1596,6 +1701,7 @@
               "action": "device:unpin",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 9
@@ -1606,6 +1712,7 @@
               "action": "device:rescan",
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": null,
               "cell": 3
@@ -1616,6 +1723,7 @@
               "action": null,
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": [
                 {
@@ -1624,16 +1732,18 @@
                   "action": "device:reconnect",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 8
                 },
                 {
                   "id": "device:reset",
-                  "label": "Reset",
+                  "label": "Reboot",
                   "action": "device:reset",
                   "enabled": true,
                   "destructive": true,
+                  "twice": true,
                   "marked": false,
                   "children": null,
                   "cell": 6
@@ -1644,6 +1754,7 @@
                   "action": "device:release",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 2
@@ -1657,6 +1768,7 @@
               "action": null,
               "enabled": true,
               "destructive": false,
+              "twice": false,
               "marked": false,
               "children": [
                 {
@@ -1665,6 +1777,7 @@
                   "action": null,
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": [
                     {
@@ -1673,6 +1786,7 @@
                       "action": "control:hotend-on",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 8
@@ -1683,6 +1797,7 @@
                       "action": "control:hotend-off",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 6
@@ -1693,6 +1808,7 @@
                       "action": "control:bed-on",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 2
@@ -1703,6 +1819,7 @@
                       "action": "control:bed-off",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 4
@@ -1713,6 +1830,7 @@
                       "action": "control:fan-on",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 9
@@ -1723,6 +1841,7 @@
                       "action": "control:fan-off",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 3
@@ -1736,6 +1855,7 @@
                   "action": null,
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": [
                     {
@@ -1744,6 +1864,7 @@
                       "action": "control:home",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 8
@@ -1754,6 +1875,7 @@
                       "action": "control:home-xy",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 6
@@ -1764,6 +1886,7 @@
                       "action": "control:home-z",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 2
@@ -1777,6 +1900,7 @@
                   "action": null,
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": [
                     {
@@ -1785,6 +1909,7 @@
                       "action": "control:jog:Y+",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 8
@@ -1795,6 +1920,7 @@
                       "action": "control:jog:X+",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 6
@@ -1805,6 +1931,7 @@
                       "action": "control:jog:Y-",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 2
@@ -1815,6 +1942,7 @@
                       "action": "control:jog:X-",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 4
@@ -1825,6 +1953,7 @@
                       "action": "control:jog:Z+",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 9
@@ -1835,6 +1964,7 @@
                       "action": "control:jog:Z-",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 3
@@ -1848,6 +1978,7 @@
                   "action": null,
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": [
                     {
@@ -1856,6 +1987,7 @@
                       "action": "level:probe",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 8
@@ -1866,6 +1998,7 @@
                       "action": "level:read",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 6
@@ -1876,6 +2009,7 @@
                       "action": "control:mesh-on",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 2
@@ -1886,6 +2020,7 @@
                       "action": "control:mesh-off",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 4
@@ -1896,6 +2031,7 @@
                       "action": "control:corner:BR",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 9
@@ -1906,6 +2042,7 @@
                       "action": "control:corner:FR",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 3
@@ -1916,6 +2053,7 @@
                       "action": "control:corner:FL",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 1
@@ -1926,6 +2064,7 @@
                       "action": "control:corner:BL",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 7
@@ -1939,6 +2078,7 @@
                   "action": null,
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": [
                     {
@@ -1947,6 +2087,7 @@
                       "action": "control:sd-resume",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 8
@@ -1957,6 +2098,7 @@
                       "action": "control:sd-pause",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 6
@@ -1967,6 +2109,7 @@
                       "action": "control:sd-abort",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 2
@@ -1977,6 +2120,7 @@
                       "action": "print:start",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 4
@@ -1990,6 +2134,7 @@
                   "action": null,
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": [
                     {
@@ -1998,6 +2143,7 @@
                       "action": "control:motors-off",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 8
@@ -2008,6 +2154,7 @@
                       "action": "control:quickstop",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 6
@@ -2018,6 +2165,7 @@
                       "action": "control:break-wait",
                       "enabled": true,
                       "destructive": false,
+                      "twice": false,
                       "marked": false,
                       "children": null,
                       "cell": 2
@@ -2031,6 +2179,7 @@
                   "action": "control:estop",
                   "enabled": true,
                   "destructive": true,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 1
@@ -2041,6 +2190,7 @@
                   "action": "control:arm",
                   "enabled": true,
                   "destructive": false,
+                  "twice": false,
                   "marked": false,
                   "children": null,
                   "cell": 7
@@ -2049,16 +2199,6 @@
               "cell": 7
             }
           ],
-          "cell": 2
-        },
-        {
-          "id": "why",
-          "label": "Why this",
-          "action": "explain",
-          "enabled": true,
-          "destructive": false,
-          "marked": false,
-          "children": null,
           "cell": 4
         }
       ]

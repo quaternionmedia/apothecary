@@ -117,6 +117,10 @@ def _drag(page: Page, aim: tuple, by: tuple, shift: bool = False) -> None:
     if shift:
         page.keyboard.down("Shift")
     page.mouse.down()
+    # Out past a still click's few pixels on the way, however short the drag: a hand's
+    # drag of a pixel or two is still a drag, and selects nothing nor lets the selection
+    # go. The view moves by `by` alone: what the detour turns it, it turns back.
+    page.mouse.move(start[0] + 8, start[1], steps=2)
     page.mouse.move(start[0] + by[0], start[1] + by[1], steps=16)
     page.mouse.up()
     if shift:

@@ -789,3 +789,84 @@ def test_ctrl_s_saves_the_variant_from_anywhere_while_the_editor_is_open(page: P
     page.locator("#part-params .param-slider").first.focus()
     page.keyboard.press("Control+s")
     expect(page.locator("#status")).to_contain_text("saved as the variant", timeout=30000)
+
+
+# --------------------------------------------------------------------------
+# Addresses that hold still; confirming by consequence
+# --------------------------------------------------------------------------
+
+WEDGES = """() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]
+    .filter((w) => !w.classList.contains('empty'))
+    .map((w) => [w.getAttribute('aria-label'), w.dataset.cell]))"""
+
+
+def _canvas_ring(page: Page) -> dict:
+    _world(page)
+    page.keyboard.press("Shift+M")
+    expect(page.locator(RING)).to_be_visible(timeout=5000)
+    page.wait_for_function("() => document.querySelectorAll('#ring-overlay .wedge').length > 0")
+    cells = page.evaluate(WEDGES)
+    page.keyboard.press("Escape")
+    expect(page.locator(RING)).to_have_count(0)
+    return cells
+
+
+@pytest.mark.e2e
+def test_the_canvas_rings_constant_cells_keep_one_address_everywhere(page: Page, url: str):
+    """Pieces 8, Site 6, View 2, Panels 4, Pictures 9 and Rebuild 3 at the garage's root,
+    stepped into a piece, at a leaf, and in a site with no groups; Step out and Group,
+    which come and go, after them."""
+    constant = {
+        "Pieces": "8",
+        "Site": "6",
+        "View": "2",
+        "Panels": "4",
+        "Pictures": "9",
+        "Rebuild": "3",
+    }
+    _open(page, url)
+    root = _canvas_ring(page)
+    assert {k: root[k] for k in constant} == constant and "Step out" not in root
+    page.locator(ROW.format("printer_1")).dblclick()
+    page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'printer_1'")
+    nested = _canvas_ring(page)
+    assert {k: nested[k] for k in constant} == constant and nested["Step out"] == "1"
+    page.goto(f"{url}/viewer/sites/parts_library")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    library = _canvas_ring(page)
+    assert {k: library[k] for k in constant} == constant and "Group" not in library
+    page.locator(ROW.format("calibration_cube")).dblclick()
+    page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'calibration_cube'")
+    leaf = _canvas_ring(page)
+    assert {k: leaf[k] for k in constant} == constant and leaf["Step out"] == "1"
+
+
+@pytest.mark.e2e
+def test_rebuild_asks_twice_on_its_wedge_and_the_emergency_stop_never_asks(page: Page, url: str):
+    """Rebuild, chosen once, says "again to rebuild" on its own wedge and does nothing;
+    let go, it is not done. The Machine's E-STOP sends M112 at once, with no dialog."""
+    sent = []
+    page.on("request", lambda r: sent.append(r.url) if "/menu/intent" in r.url else None)
+    dialogs = []
+    page.on("dialog", lambda d: (dialogs.append(d.message), d.dismiss()))
+    _open(page, url)
+    _world(page)
+    page.keyboard.press("Shift+M")
+    expect(page.locator(RING)).to_be_visible(timeout=5000)
+    page.wait_for_function("() => document.querySelectorAll('#ring-overlay .wedge').length > 0")
+    page.keyboard.press("3")
+    expect(page.locator(f"{RING} .wedge[aria-label='again to rebuild']")).to_have_count(1)
+    expect(page.locator(f"{RING} .label.armed")).to_contain_text("again to")
+    page.keyboard.press("Escape")
+    expect(page.locator(RING)).to_have_count(0)
+    page.wait_for_timeout(300)
+    assert sent == [], sent
+
+    badge = page.locator(BADGE)
+    expect(badge).to_be_visible(timeout=15000)
+    badge.click()
+    machine = page.locator(".panel[data-panel='machine']")
+    expect(machine.locator("#estop")).to_be_visible(timeout=10000)
+    machine.locator("#estop").click()
+    expect(machine.locator("#log")).to_contain_text("M112", timeout=10000)
+    assert dialogs == [], dialogs

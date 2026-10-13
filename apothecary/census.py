@@ -738,6 +738,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "a press on the world, kept to tell a still click from a turn or a pan",
     ),
+    "canvas:pointermove:onTravel": (
+        GESTURE,
+        NOTHING,
+        "how far a press has travelled, so one that wandered and came back is no click",
+    ),
     "canvas:pointerup:onRelease": (
         GESTURE,
         WHAT_YOU_SEE,

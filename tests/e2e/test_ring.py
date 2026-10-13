@@ -86,16 +86,18 @@ def test_key_m_opens_the_node_ring_in_its_cells(page: Page, ring_url: str):
     expect(ring).to_be_visible(timeout=5000)
     assert page.locator("#ring-overlay .wedge").count() == 8
     assert _wedges(page) == {
-        "8": "Zoom in",
+        # Every piece's own, in the same cells everywhere.
+        "8": "Step in",
         "6": "Move",
-        "2": "Device",
-        "4": "Why this",
-        "9": "Into",
-        # A host holds a camera and pictures: appended, so no cell above moved.
-        "3": "Camera",
-        "1": "Picture",
-        # A printer drawn as a part is edited from Part: appended last, the eighth.
-        "7": "Part",
+        "2": "Why this",
+        # What this piece is: what is inside it, a host's camera and pictures, a part's
+        # editor.
+        "4": "Inside",
+        "9": "Camera",
+        "3": "Picture",
+        "1": "Part",
+        # A board pinned to it comes and goes, so it is seated last: the eighth.
+        "7": "Device",
     }
     assert page.locator("#ring-overlay .wedge.empty").count() == 0
     assert page.locator("#ring-overlay .hub-digit").text_content() == "5"
@@ -122,12 +124,12 @@ def test_the_toolbar_button_and_ctrl_right_click_open_it_too(page: Page, ring_ur
     )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     assert _title(page) == "cnc_router"
-    # Nothing pinned: no Device option at all, not a greyed one, so Why this moves up a cell.
+    # Nothing pinned: no Device option at all, not a greyed one, and no cell moved.
     assert _wedges(page) == {
-        "8": "Zoom in",
+        "8": "Step in",
         "6": "Move",
         "2": "Why this",
-        "4": "Into",
+        "4": "Inside",
         "9": "Camera",
         "3": "Picture",
     }
@@ -141,7 +143,8 @@ def test_the_toolbar_button_and_ctrl_right_click_open_it_too(page: Page, ring_ur
 def test_digits_walk_device_control_jog_and_the_intent_carries_the_address(
     page: Page, ring_url: str
 ):
-    """2 7 2 8 reaches Jog > Y+ from the node ring; the intent says so, and so does the page."""
+    """7 7 2 8 reaches Jog > Y+ from printer_1's ring, Device seated last; the intent says so,
+    and so does the page."""
     # Device's cells: Open (the board's Machine) where Watch was, Flash where Monitor
     # was, and Control, after Link, in cell 7 -- where it was before Phase 4.
     _open_viewer(page, ring_url)
@@ -150,7 +153,7 @@ def test_digits_walk_device_control_jog_and_the_intent_carries_the_address(
     ).to_be_visible(timeout=10000)
     page.keyboard.press("m")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    page.keyboard.press("2")
+    page.keyboard.press("7")
     assert _title(page) == "Device"
     assert _wedges(page) == {
         "8": "Open",
@@ -170,7 +173,7 @@ def test_digits_walk_device_control_jog_and_the_intent_carries_the_address(
     assert _title(page) == "Jog"
     # The numpad as a jog pad: up, right, down, left, up-right, down-right.
     assert _wedges(page) == {"8": "Y+", "6": "X+", "2": "Y-", "4": "X-", "9": "Z+", "3": "Z-"}
-    assert page.locator("#ring-overlay .address").text_content() == "⌗272"
+    assert page.locator("#ring-overlay .address").text_content() == "⌗772"
     page.keyboard.press("8")
     expect(page.locator("#ring-overlay")).to_have_count(0)
     intents = _intents(page)
@@ -178,7 +181,7 @@ def test_digits_walk_device_control_jog_and_the_intent_carries_the_address(
     intent = intents[0]
     assert intent["action"] == "control:jog:Y+"
     assert intent["option_id"] == "control:jog:Y+"
-    assert intent["address"] == "2728"
+    assert intent["address"] == "7728"
     assert intent["context"] == {"pointing": "node", "targets": ["printer_1"]}
     # The same address, worked out from the ring itself two ways.
     by_path = page.evaluate(
@@ -191,16 +194,16 @@ def test_digits_walk_device_control_jog_and_the_intent_carries_the_address(
     assert by_path == by_action == intent["address"]
     # A board's verb goes to its Machine, opened for it: disarmed, the jog is refused,
     # and the status line says so as an error, with its address.
-    expect(page.locator("#status")).to_contain_text("⌗2728", timeout=5000)
+    expect(page.locator("#status")).to_contain_text("⌗7728", timeout=5000)
     expect(page.locator("#status")).to_contain_text("not armed")
     expect(page.locator("#status")).to_have_class(re.compile(r"\berror\b"))
     expect(page.locator(".panel[data-panel='machine']")).to_be_visible()
     page.evaluate("() => window.fractalViewer.closeMachine()")
     # "Appear as generated": the Device section's buttons wear their addresses.
     opener = page.locator("#selected-body .dev-open")
-    expect(opener).to_have_attribute("data-address", "28", timeout=5000)
-    assert (opener.get_attribute("title") or "").endswith(" · ⌗28")
-    expect(page.locator("#selected-body .dev-unpin")).to_have_attribute("data-address", "29")
+    expect(opener).to_have_attribute("data-address", "78", timeout=5000)
+    assert (opener.get_attribute("title") or "").endswith(" · ⌗78")
+    expect(page.locator("#selected-body .dev-unpin")).to_have_attribute("data-address", "79")
     # And they survive the panel being redrawn by a poll: the section is replaced,
     # so the one without the mark set here is the redrawn one.
     page.evaluate(
@@ -208,7 +211,7 @@ def test_digits_walk_device_control_jog_and_the_intent_carries_the_address(
     )
     page.evaluate("() => window.fractalViewer.pollNow('/dev/ttyFAKE1')")
     redrawn = page.locator("#selected-body .device-section:not([data-old]) .dev-open")
-    expect(redrawn).to_have_attribute("data-address", "28", timeout=5000)
+    expect(redrawn).to_have_attribute("data-address", "78", timeout=5000)
 
 
 @pytest.mark.e2e
@@ -230,7 +233,7 @@ def test_arrows_reach_the_nearest_occupied_cell(page: Page, ring_url: str):
     # On the page: arrows highlight, walking from cell to cell, and a chord is the corner.
     page.keyboard.press("m")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    page.keyboard.press("2")
+    page.keyboard.press("7")
     page.keyboard.press("7")  # the control ring: eight options, every cell held
     assert len(_wedges(page)) == 8
     hot = page.locator("#ring-overlay .wedge.hot")
@@ -273,7 +276,7 @@ def test_five_backs_out_and_escape_closes(page: Page, ring_url: str):
     ).to_be_visible(timeout=10000)
     page.keyboard.press("m")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    page.keyboard.press("2")
+    page.keyboard.press("7")
     page.keyboard.press("7")
     assert _title(page) == "Control"
     page.keyboard.press("5")
@@ -286,7 +289,7 @@ def test_five_backs_out_and_escape_closes(page: Page, ring_url: str):
     expect(page.locator("#ring-overlay")).to_have_count(0)
     page.keyboard.press("m")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    page.keyboard.press("2")
+    page.keyboard.press("7")
     page.keyboard.press("Escape")
     expect(page.locator("#ring-overlay")).to_have_count(0)
     assert _intents(page) == []
@@ -332,12 +335,12 @@ def test_the_pointer_uses_the_same_cells(page: Page, ring_url: str):
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     box = page.locator("#ring-svg").bounding_box()
     cx, cy = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
-    page.mouse.move(cx, cy + 72)
-    page.mouse.click(cx, cy + 72)  # down: Device, a submenu
+    page.mouse.move(cx - 51, cy - 51)
+    page.mouse.click(cx - 51, cy - 51)  # up-left: Device, seated last, a submenu
     assert _title(page) == "Device"
     page.mouse.click(cx, cy)  # the hub: back out
     assert _title(page) == "printer_1"
-    page.mouse.click(cx, cy - 72)  # up: Zoom in
+    page.mouse.click(cx, cy - 72)  # up: Step in
     expect(page.locator("#ring-overlay")).to_have_count(0)
     intents = _intents(page)
     assert [i["action"] for i in intents] == ["zoom-in"]
@@ -446,7 +449,8 @@ def test_jog_by_address_on_a_machine_s_device_ring(page: Page, ring_url: str):
 @pytest.mark.e2e
 def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: str):
     """The Contents list, from the ring: Pieces lists the level, a digit selects,
-    Into goes down a piece, Up goes back, and a zoomed level's Up steps out."""
+    Inside goes down a piece, Parent goes back, and a stepped-in level's Step out steps
+    out."""
     page.add_init_script(CAPTURE)
     page.goto(f"{ring_url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
@@ -456,7 +460,7 @@ def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: s
     page.keyboard.press("m")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     wedges = _wedges(page)
-    assert wedges["8"] == "Pieces" and "Up" not in wedges.values()
+    assert wedges["8"] == "Pieces" and "Step out" not in wedges.values()
     # Sixteen pieces: grouped in small lettered groups, each named for its
     # first piece in name order. The page knows the address; the test asks
     # rather than guesses.
@@ -479,12 +483,12 @@ def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: s
         "data-address", address, timeout=5000
     )
 
-    # Into: the node ring lists what is inside; a digit selects it and opens the branch.
+    # Inside: the node ring lists what is inside; a digit selects it and opens the branch.
     page.keyboard.press("m")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     wedges = _wedges(page)
-    into_cell = next(c for c, label in wedges.items() if label == "Into")
-    assert "Up" not in wedges.values()  # a top-level piece has nothing above it
+    into_cell = next(c for c, label in wedges.items() if label == "Inside")
+    assert "Parent" not in wedges.values()  # a top-level piece has nothing above it
     page.keyboard.press(into_cell)
     assert _wedges(page)["8"] == "frame_system"
     page.keyboard.press("8")
@@ -497,12 +501,13 @@ def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: s
     page.keyboard.press("m")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     wedges = _wedges(page)
-    up_cell = next(c for c, label in wedges.items() if label == "Up")
+    up_cell = next(c for c, label in wedges.items() if label == "Parent")
     page.keyboard.press(up_cell)
     assert _intents(page)[-1]["action"] == "select:printer_1"
     expect(page.locator("#selected-body .prop-row", has_text="Name")).to_contain_text("printer_1")
 
-    # Zoomed in, the canvas ring's Pieces are the level's two pieces and Up steps out.
+    # Stepped in, the canvas ring's Pieces are the level's two pieces and Step out, seated
+    # after every cell the canvas ring always has, steps out.
     page.locator("#contents-list .contents-item[data-path='printer_1']").dblclick()
     expect(page.locator("#contents-list .contents-item", has_text="gantry_system")).to_be_visible(
         timeout=10000
@@ -513,11 +518,11 @@ def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: s
     )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     wedges = _wedges(page)
-    assert wedges["8"] == "Pieces" and wedges["6"] == "Up"
-    # The trail's crumb one level up is Up, and wears its address.
+    assert wedges["8"] == "Pieces" and wedges["6"] == "Site" and wedges["1"] == "Step out"
+    # The trail's crumb one level up is Step out, and wears its address.
     up_crumb = page.locator("#breadcrumb .crumb").nth(-2)
-    expect(up_crumb).to_have_attribute("data-address", "6", timeout=5000)
-    page.keyboard.press("6")
+    expect(up_crumb).to_have_attribute("data-address", "1", timeout=5000)
+    page.keyboard.press("1")
     assert _intents(page)[-1]["action"] == "zoom-out"
     expect(page.locator("#contents-list .contents-item", has_text="workbench")).to_be_visible(
         timeout=10000

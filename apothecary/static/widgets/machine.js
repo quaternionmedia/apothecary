@@ -57,6 +57,7 @@ import { mountBoards } from "/static/boards.js";
 import { esc, heaterText, boardLabel, sketchWords } from "/static/board_text.js";
 import { mountBuild } from "/static/widgets/sketches.js";
 import { mountTasks } from "/static/widgets/tasks.js";
+import { again } from "/static/twice.js";
 
 const MAX_HISTORY = 300;
 
@@ -203,7 +204,7 @@ const CONTROL = `
         </div>
         <div class="grp">
             <div class="k">SD print</div>
-            <div class="row"><button type="button" data-cmd="M24">▶ Start / resume</button><button type="button" data-cmd="M25">⏸ Pause</button><button type="button" data-cmd="M524" data-confirm="Abort the SD print?">⏏ Abort</button></div>
+            <div class="row"><button type="button" data-cmd="M24">▶ Start / resume</button><button type="button" data-cmd="M25">⏸ Pause</button><button type="button" data-cmd="M524" data-twice="abort" title="Abandon the print on the card: pressed twice">⏏ Abort</button></div>
         </div>
         <div class="grp">
             <div class="k">Leveling</div>
@@ -233,7 +234,8 @@ const LINES = {
     "control:mesh-off": () => "M420 S0",
     "control:quickstop": () => "M410",
 };
-const CONFIRM = { "control:sd-abort": "Abort the SD print?" };
+// What cannot be undone is pressed twice (twice.js), its button saying "Again to ..."; the
+// ring asks twice on its own wedge, so what it carries here is confirmed already.
 // The same three verbs, carried to the print from here when one is running.
 const HOST_VERBS = { "control:sd-resume": "resume", "control:sd-pause": "pause", "control:sd-abort": "cancel" };
 // The buttons the machine has, each by the verb it is.
@@ -604,13 +606,16 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         } catch (e) { refuse(`${state.kind === "devkit" ? "listen" : "M115"}: ${e.message}`); }
     }
     $("identify").onclick = () => identify();
-    $("reset").onclick = async () => {
+    // Reboot (a DTR pulse): not undoable -- a running print is lost -- so its button is
+    // pressed twice; the ring's Reboot asked twice already.
+    async function reboot(button = null) {
         if (!state.port) return;
         if (state.kind === "devkit") { refuse("a devkit is reset by flashing it, or by Probe (Link › Probe)"); return; }
-        if (!confirm(`Reboot the board on ${state.port} (DTR pulse)?\nA running print would be lost.`)) return;
+        if (!again(button, "reboot")) { tell(`press again to reboot the board on ${state.port}: a running print would be lost`); return; }
         try { await model.reset(state.port); state.history = []; renderChart(); }
-        catch (e) { refuse("reset failed: " + e.message); }
-    };
+        catch (e) { refuse("reboot failed: " + e.message); }
+    }
+    $("reset").onclick = () => reboot($("reset"));
     $("release").onclick = async () => {
         if (!state.port) return;
         if (state.kind === "devkit") { state.listening = false; schedule(); model.note(state.port, "stopped listening — Listen opens the port again"); renderDevkit(); return; }
@@ -722,8 +727,9 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     }
     $("ctl").addEventListener("change", () => arm($("ctl").checked));
     $("ctl-disarm").onclick = () => arm(false);
+    // The emergency stop never asks: heaters and motors off, at once.
     async function estop() {
-        if (!state.port || !confirm(`EMERGENCY STOP ${state.port}?\nHeaters and motors off; the board halts until it is reset.`)) return;
+        if (!state.port) return;
         await sendLines(["M112"]);  // straight through, never queued behind a jog
         await pollNow(); await model.pullLog(state.port);
     }
@@ -737,7 +743,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         } else if (btn.dataset.jog) {
             jog(btn.dataset.jog[0], btn.dataset.jog[1]);
         } else if (btn.dataset.cmd) {
-            sendControl(fillTemplate(btn.dataset.cmd), btn.dataset.confirm);
+            if (btn.dataset.twice && !again(btn, btn.dataset.twice)) { tell(`press again to ${btn.dataset.twice}: it cannot be undone`); return; }
+            sendControl(fillTemplate(btn.dataset.cmd));
         }
     });
 
@@ -1087,9 +1094,10 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             emit("apothecary:jobs-changed", { port: state.port, job_id: prt.job.job_id });
         } catch (e) { refuse("print: " + e.message); $("print-job").textContent = e.message; }
     }
-    async function printVerb(verb) {
+    // Cancel cannot be undone: its button is pressed twice; the ring's asked twice already.
+    async function printVerb(verb, button = null) {
         if (!state.port) return;
-        if (verb === "cancel" && !confirm("Cancel the print from here? Heaters and fan go off, motors free.")) return;
+        if (verb === "cancel" && !again(button, "cancel")) { tell("press again to cancel the print from here: heaters and fan go off, motors free"); return; }
         try { prt.job = await post(`/firmware/printers/print/${verb}`, { port: state.port }); renderPrint(); if (!prt.timer) prt.timer = setTimeout(watchPrint, 500); }
         catch (e) { refuse(`print ${verb}: ` + e.message); }
     }
@@ -1105,7 +1113,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     $("print-part").onchange = renderPrint;
     $("print-pause").onclick = () => printVerb("pause");
     $("print-resume").onclick = () => printVerb("resume");
-    $("print-cancel").onclick = () => printVerb("cancel");
+    $("print-cancel").onclick = () => printVerb("cancel", $("print-cancel"));
 
     // --- flashing a devkit: the Bench's form and task log, for this port --------------
     // Mounted the first time the board is shown as a devkit. The sketch it starts
@@ -1184,7 +1192,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (prt.job && prt.job.running && action in HOST_VERBS) { await printVerb(HOST_VERBS[action]); return true; }
         if (action in LINES) {
             if (!ctl.armed) { refuse(`${intent.label} (⌗${intent.address}): control is not armed`); return true; }
-            await sendControl(LINES[action](handle), CONFIRM[action]);
+            await sendControl(LINES[action](handle));
             return true;
         }
         // A devkit is not polled: Poll reads again what it should run and what it is.
@@ -1199,7 +1207,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (action === "device:rescan") { await model.rescan(); logLine("sys", "ports rescanned"); return true; }
         // The link verbs are the header buttons; their handlers already confirm what needs confirming.
         if (action === "device:reconnect") { await $("reconnect").onclick(); return true; }
-        if (action === "device:reset") { await $("reset").onclick(); return true; }
+        if (action === "device:reset") { await reboot(); return true; }
         if (action === "device:release") { await $("release").onclick(); return true; }
         return false;  // not this board's: the host decides (open, pin, unpin)
     }

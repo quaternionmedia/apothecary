@@ -199,6 +199,8 @@ const STYLE = `
 .apothecary-ring .wedge.destructive.hot { fill: #7a2a2a; }
 .apothecary-ring .wedge.marked { fill: #23384a; stroke: #6fb3e8; }
 .apothecary-ring .wedge.marked.hot { fill: #33557a; }
+.apothecary-ring .wedge.armed, .apothecary-ring .wedge.armed.hot { fill: #8a3a1a; stroke: #ffb27a; }
+.apothecary-ring .label.armed { fill: #ffe0c8; font-weight: 600; }
 .apothecary-ring .hub { fill: #141614; stroke: #3a443a; stroke-width: 1.5; cursor: pointer; }
 .apothecary-ring text { fill: #d8e0d8; pointer-events: none; user-select: none; }
 .apothecary-ring .label { font-size: 12px; text-anchor: middle; }
@@ -277,6 +279,7 @@ class RingInstance {
         this.address = "";
         this.highlight = null;
         this.lastArrow = null;
+        this.armed = null; // a cell chosen once that asks to be chosen again
         this.previousFocus = document.activeElement;
         this.done = false;
     }
@@ -339,14 +342,20 @@ class RingInstance {
                 if (option.destructive) cls.push("destructive");
                 if (option.marked) cls.push("marked");  // the one chosen elsewhere (a picture chosen in Pictures)
                 if (this.highlight === cell) cls.push("hot");
+                if (this.armed === cell) cls.push("armed");
             }
+            const armed = option && this.armed === cell;
             const label = option ? (option.marked ? "• " : "") + esc(option.label) + (option.children ? " ›" : "") : "";
+            // A cell that cannot be undone, chosen once, says what choosing it again does.
+            const words = armed
+                ? `<text class="label armed" x="${lx.toFixed(1)}" y="${(ly - 2).toFixed(1)}">again to<tspan x="${lx.toFixed(1)}" dy="13">${esc(option.label.toLowerCase())}</tspan></text>`
+                : `<text class="label" x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}">${label}</text>`;
             parts.push(
                 `<path id="ring-cell-${cell}" class="${cls.join(" ")}" data-cell="${cell}" role="menuitem"`
-                + ` aria-label="${option ? esc(option.label) : "empty"}"`
+                + ` aria-label="${option ? esc(armed ? `again to ${option.label.toLowerCase()}` : option.label) : "empty"}"`
                 + (option && option.marked ? ' aria-current="true"' : "")
                 + `${option ? "" : ' aria-disabled="true"'} d="${wedgePath(slot, r0, r1)}"></path>`
-                + (option ? `<text class="label" x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}">${label}</text>` : "")
+                + (option ? words : "")
                 + `<text class="digit${option ? "" : " empty-digit"}" x="${dx.toFixed(1)}" y="${(dy + 3).toFixed(1)}">${cell}</text>`
             );
         }
@@ -438,6 +447,15 @@ class RingInstance {
     commit(cell) {
         const option = this.byCell[cell];
         if (!option || option.enabled === false) return;
+        // Not undoable: chosen once it asks, its wedge saying "again to ..."; chosen
+        // again, it is done. Choosing any other cell lets the question go.
+        if (option.twice && this.armed !== cell) {
+            this.armed = cell;
+            this.highlight = cell;
+            this.draw();
+            return;
+        }
+        this.armed = null;
         this.address += String(cell);
         if (option.children) {
             this.stack.push({ ring: { title: option.label, options: option.children }, digit: String(cell) });
@@ -452,6 +470,7 @@ class RingInstance {
             address: this.address,
             context: this.context,
             label: option.label,
+            confirmed: !!option.twice, // asked twice, in the ring itself
             site: this.site,
             device: this.device,
             at: { x: this.cx, y: this.cy }, // where the ring stood, for one that follows from it
@@ -486,6 +505,7 @@ class RingInstance {
     // One level out; at the top, away.
     back() {
         if (this.stack.length <= 1) { this.close(false); return; }
+        this.armed = null;
         this.stack.pop();
         this.address = this.address.slice(0, -1);
         this.highlight = null;
@@ -585,7 +605,8 @@ export function installRing({ base = "", whatFor, onIntent, onResolved, onError,
         return null;
     }
     let pressed = null;
-    const moved = (e, p) => Math.hypot(e.clientX - p.x, e.clientY - p.y) > STILL_PX;
+    // How far a press has gone: one that wandered and came back is a drag, not a click.
+    const moved = (e, p) => Math.max(p.far || 0, Math.hypot(e.clientX - p.x, e.clientY - p.y)) > STILL_PX;
     const letGo = () => { if (pressed && pressed.timer) clearTimeout(pressed.timer); pressed = null; };
     document.addEventListener("pointerdown", (e) => {
         letGo();
@@ -613,7 +634,9 @@ export function installRing({ base = "", whatFor, onIntent, onResolved, onError,
         pressed = { kind, id: e.pointerId, x: e.clientX, y: e.clientY, event: e };
     }, true);
     document.addEventListener("pointermove", (e) => {
-        if (pressed && pressed.kind === "touch" && e.pointerId === pressed.id && !pressed.fired && moved(e, pressed)) letGo();
+        if (!pressed || e.pointerId !== pressed.id) return;
+        pressed.far = Math.max(pressed.far || 0, Math.hypot(e.clientX - pressed.x, e.clientY - pressed.y));
+        if (pressed.kind === "touch" && !pressed.fired && moved(e, pressed)) letGo();
     }, true);
     document.addEventListener("pointerup", (e) => {
         if (!pressed || e.pointerId !== pressed.id) return;

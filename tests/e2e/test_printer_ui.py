@@ -416,7 +416,9 @@ def test_focused_monitor_page(page: Page, fresh_url: str):
     expect(page.locator("#log .sys", has_text="closed /dev/ttyFAKE1")).to_be_visible(timeout=6000)
     expect(page.locator("#log .sys", has_text="opened /dev/ttyFAKE1").last).to_be_visible()
     expect(page.locator("#log")).to_contain_text("y_min: TRIGGERED")  # earlier entries survived
-    page.once("dialog", lambda d: d.accept())
+    # A reboot cannot be undone: pressed twice, the button saying so between.
+    page.locator("#reset").click()
+    expect(page.locator("#reset")).to_have_text("Again to reboot")
     page.locator("#reset").click()
     expect(page.locator("#log .boot", has_text="start")).to_be_visible(timeout=8000)
 
@@ -458,7 +460,7 @@ def test_board_inside_the_printer_drives_it(page: Page, printer_url: str):
     # Device › Unpin on the printer.
     unpin = section.locator(".dev-unpin")
     expect(unpin).to_have_attribute("title", re.compile(r"^Take the pin on its board"))
-    expect(unpin).to_have_attribute("data-address", "29", timeout=8000)
+    expect(unpin).to_have_attribute("data-address", "79", timeout=8000)
     section.locator(".dev-open").click()
     expect(page.locator(MACHINE)).to_be_visible(timeout=5000)
     # The poll's sync lands on the tree even though an earlier request had already
@@ -834,7 +836,8 @@ def test_a_print_from_here_pauses_from_the_ring_and_cancels(page: Page, printer_
     page.wait_for_function(
         "(n) => window.apothecaryMachine.print.job().sent > n + 2", arg=sent, timeout=8000
     )
-    page.once("dialog", lambda d: d.accept())
+    page.locator("#print-cancel").click()
+    expect(page.locator("#print-cancel")).to_have_text("Again to cancel")
     page.locator("#print-cancel").click()
     expect(page.locator("#print-progress")).to_contain_text("· cancelled ·", timeout=8000)
     expect(page.locator("#print-history")).to_contain_text(
@@ -1174,7 +1177,7 @@ def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
         button="right", modifiers=["Control"]
     )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    page.keyboard.press("2")  # Device
+    page.keyboard.press("7")  # Device, seated last
     page.keyboard.press("7")  # Control
     page.keyboard.press("2")  # Jog
     page.keyboard.press("8")  # Y+

@@ -177,7 +177,7 @@ def test_a_camera_added_at_the_bench_takes_pictures_where_it_looks(
     # Take picture, three ways: its ring's cell, Selected's button, and P.
     _ring_on(page, name)
     assert _labels(page) == [
-        "Zoom in",
+        "Step in",
         "Move",
         "Why this",
         "Device",
@@ -236,7 +236,7 @@ def test_a_camera_added_at_the_bench_takes_pictures_where_it_looks(
 
     # Remove: the camera goes, its pictures stay, and so does the page.
     _ring_on(page, name)
-    _press(page, "Remove")
+    _press(page, "Remove", "again to remove")
     _said(page, f"removed {name}; the pictures it took, and the pieces made from them, stay")
     expect(badge).to_have_count(0, timeout=5000)
     expect(page.locator(f"#contents-list .contents-item[data-path='{name}']")).to_have_count(0)

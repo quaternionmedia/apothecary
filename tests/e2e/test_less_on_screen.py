@@ -416,7 +416,7 @@ def test_the_machine_opens_in_the_rail_and_floats_only_when_floated(page: Page, 
         button="right", modifiers=["Control"]
     )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    page.keyboard.press("2")  # Device
+    page.keyboard.press("7")  # Device, seated last
     page.keyboard.press("8")  # Open
     _rail_machine(page)
 
@@ -459,7 +459,7 @@ def test_a_printers_machine_has_no_flashing(page: Page, start_server):
         button="right", modifiers=["Control"]
     )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    page.keyboard.press("2")  # Device
+    page.keyboard.press("7")  # Device, seated last
     page.keyboard.press("2")  # Flash
     expect(page.locator("#status")).to_contain_text(
         "a printer keeps its own firmware", timeout=5000
@@ -575,7 +575,7 @@ def test_the_tab_strip_and_the_hint_are_one_line_at_1024_px(page: Page, bench: s
 def test_the_view_menu_holds_snap_detail_and_outlines_and_the_ring_backs_each(
     page: Page, bench: str
 ):
-    """Snap to grid, Detail and Assembly outlines are in one ⚙ View menu, folded until
+    """Snap to grid, Detail and Outlines are in one ⚙ View menu, folded until
     opened and folded away by a press elsewhere; each wears the address of its cell of
     the canvas ring's View (a cell of its own, in Fit's seat, with Fit first in it),
     and the cell does what the item does."""
@@ -586,11 +586,11 @@ def test_the_view_menu_holds_snap_detail_and_outlines_and_the_ring_backs_each(
     for item in ("#snap-toggle", "#detail-mode", "#overlay-toggle"):
         expect(page.locator(item)).to_be_visible()
     label = lambda item: page.locator(f"#view-menu label:has({item})")  # noqa: E731
-    expect(label("#snap-toggle")).to_have_attribute("data-address", "46", timeout=5000)
-    expect(label("#detail-mode")).to_have_attribute("data-address", "428")
-    expect(label("#overlay-toggle")).to_have_attribute("data-address", "44")
-    expect(label("#walls-toggle")).to_have_attribute("data-address", "49")
-    expect(page.locator("#view-menu > summary")).to_have_attribute("title", re.compile("⌗4"))
+    expect(label("#snap-toggle")).to_have_attribute("data-address", "26", timeout=5000)
+    expect(label("#detail-mode")).to_have_attribute("data-address", "228")
+    expect(label("#overlay-toggle")).to_have_attribute("data-address", "24")
+    expect(label("#walls-toggle")).to_have_attribute("data-address", "29")
+    expect(page.locator("#view-menu > summary")).to_have_attribute("title", re.compile("⌗2"))
     page.locator("#snap-toggle").uncheck()
     assert page.evaluate("() => window.fractalViewer.transformControls.translationSnap") is None
     page.locator("#status").click()
@@ -598,30 +598,30 @@ def test_the_view_menu_holds_snap_detail_and_outlines_and_the_ring_backs_each(
 
     # View › Snap to grid: the tick-box's own work, and the tick-box follows.
     _canvas_ring(page)
-    for digit in "46":
+    for digit in "26":
         page.keyboard.press(digit)
-    expect(page.locator("#status")).to_contain_text("⌗46")
+    expect(page.locator("#status")).to_contain_text("⌗26")
     assert page.evaluate("() => window.fractalViewer.transformControls.translationSnap") == 50
     expect(page.locator("#snap-toggle")).to_be_checked()
     # View › Detail › Dot, and › Outlines.
     _canvas_ring(page)
-    for digit in "422":
+    for digit in "222":
         page.keyboard.press(digit)
     expect(page.locator("#detail-mode")).to_have_value("dot")
     page.wait_for_function(
         "() => Object.values(window.fractalViewer.meshByName).some((m) => m.userData.isDot)"
     )
     _canvas_ring(page)
-    for digit in "44":
+    for digit in "24":
         page.keyboard.press(digit)
     expect(page.locator("#overlay-toggle")).not_to_be_checked()
     assert page.evaluate("() => Object.keys(window.fractalViewer.compoundOverlayByKey).length") == 0
     # View › Fit: Fit, one ring down from where it was.
     _canvas_ring(page)
-    for digit in "48":
+    for digit in "28":
         page.keyboard.press(digit)
     expect(page.locator("#status")).to_contain_text("Framed")
-    expect(page.locator("#status")).to_contain_text("⌗48")
+    expect(page.locator("#status")).to_contain_text("⌗28")
 
 
 # --------------------------------------------------------------------------
@@ -763,7 +763,7 @@ WALL = """() => {
 def test_a_click_passes_through_a_wall_and_the_toggle_restores_it(page: Page, bench: str):
     """The garage's walls are drawn faded, and a click on them in the world selects what
     is behind or inside; Contents still selects a wall, drawn solid then and with its
-    handles; ⚙ View › Walls selectable -- or View › Select walls on the ring -- lets a
+    handles; ⚙ View › Select walls -- or View › Select walls on the ring -- lets a
     click pick it again."""
     _open(page, bench)
     wall = page.evaluate(WALL)
@@ -796,9 +796,9 @@ def test_a_click_passes_through_a_wall_and_the_toggle_restores_it(page: Page, be
 
     # The ring's cell turns it back off: the click passes through again.
     _canvas_ring(page)
-    for digit in "49":
+    for digit in "29":
         page.keyboard.press(digit)
-    expect(page.locator("#status")).to_contain_text("⌗49")
+    expect(page.locator("#status")).to_contain_text("⌗29")
     expect(page.locator("#walls-toggle")).not_to_be_checked()
     page.mouse.click(spot["x"], spot["y"])
     assert page.evaluate("() => window.fractalViewer.selectedName") == spot["behind"]

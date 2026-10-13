@@ -678,7 +678,7 @@
                 <option value="" disabled>No sites found</option>
                 {% endfor %}
             </select>
-            <span id="breadcrumb" title="Where you are: a crumb goes up to its level (Backspace goes up one)"></span>
+            <span id="breadcrumb" title="Where you are: a crumb steps out to its level (Page Up or Backspace steps out one)"></span>
             <div class="spacer"></div>
             <details id="view-menu" class="view-menu">
                 <summary title="How the world is drawn">⚙ View</summary>
@@ -686,7 +686,7 @@
                     <label class="toolbar-toggle" title="Snap dragged positions to a 50mm grid -- keeps hand-placed layouts exact instead of off by a few millimeters">
                         <input type="checkbox" id="snap-toggle" checked> Snap to grid
                     </label>
-                    <label class="toolbar-toggle" title="How much of each compound node to draw. Full renders its real geometry; Black box draws only its bounding extent; Dot collapses it to a marker. Leaves always render in full -- they have no subassembly to stand in for. Set per node from the Selected panel.">
+                    <label class="toolbar-toggle" title="How much of each compound piece to draw. Full renders its real geometry; Black box draws only its bounding extent; Dot collapses it to a marker. Leaves always render in full -- they have no subassembly to stand in for. Set per piece from Selected.">
                         Detail
                         <select id="detail-mode">
                             <option value="full">Full</option>
@@ -694,13 +694,13 @@
                             <option value="dot">Dot</option>
                         </select>
                     </label>
-                    <label class="toolbar-toggle" title="Outline each compound node's full assembly extent, so a subassembly reads as one thing even when its parts are drawn separately">
-                        <input type="checkbox" id="overlay-toggle" checked> Assembly outlines
+                    <label class="toolbar-toggle" title="Outline each compound piece's whole extent, so a subassembly reads as one thing even when its parts are drawn separately">
+                        <input type="checkbox" id="overlay-toggle" checked> Outlines
                     </label>
                     <label class="toolbar-toggle" title="Walls are drawn faded and a click in the world passes through them to what is behind or inside; ticked, a click picks a wall again, until the page is left. A wall's row in Site selects it either way">
-                        <input type="checkbox" id="walls-toggle"> Walls selectable
+                        <input type="checkbox" id="walls-toggle"> Select walls
                     </label>
-                    <button type="button" id="settings-open" class="view-menu-item" title="The shortcuts and automatic zoom, each with its default and a reset, kept by this browser: a tab of the rail">Settings…</button>
+                    <button type="button" id="settings-open" class="view-menu-item" title="The shortcuts and automatic zoom, each with its default and a reset, kept by this browser: a tab of the rail">Settings</button>
                 </div>
             </details>
             <a id="docs-link" class="docs-link" href="/docs" target="_blank" rel="noopener" title="The documentation in a new tab: the guides, and the walkthrough, each of its pages a run of the tests (Panels › Docs on the ring)">Docs</a>
@@ -722,7 +722,7 @@
                             <ul id="problem-list" class="problem-list"></ul>
                         </details>
                         <div id="category-filters" class="category-filters"
-                             title="Expand every node of a subsystem at once, at any depth beneath the current level, at the cost of render time"></div>
+                             title="Expand every piece of a subsystem at once, at any depth beneath the current level, at the cost of render time"></div>
                         <ul id="contents-list" class="contents-list contents-tree"></ul>
                         <details id="site-pinned" class="fold" title="Every camera a page added, and every view and board it pinned, every site's, each taken back from its row">
                             <summary>Pinned · every site's</summary>
@@ -803,6 +803,7 @@
         import { makeSettings, mountSettings, keyLabel, modifierLabel } from '/static/widgets/settings.js';
         import { MODIFIERS } from '/static/ring.js';
         import { comboOf, matches, mayAct, worldHasKeys } from '/static/keys.js';
+        import { again } from '/static/twice.js';
 
         const BASE_URL = {{ base_url | tojson }};
         const DEFAULT_SITE = {{ default_site | tojson }};
@@ -1548,6 +1549,7 @@
                 // selects nothing. The middle button is the view's alone. Held with
                 // Settings' modifier, the right button is the ring's (ring.js hears it first).
                 this.canvas.addEventListener('pointerdown', (e) => this.onPress(e));
+                this.canvas.addEventListener('pointermove', (e) => this.onTravel(e));
                 this.canvas.addEventListener('pointerup', (e) => this.onRelease(e));
                 // A badge passes the right button to what it stands for.
                 this.anchors.layer.addEventListener('pointerdown', (e) => this.onPress(e));
@@ -2408,14 +2410,14 @@
                 mesh.userData.passThrough = faded;
             }
 
-            // ⚙ View › Walls selectable: whether a click in the world picks a wall,
+            // ⚙ View › Select walls: whether a click in the world picks a wall,
             // for the page's session (a wall's row in Site selects it either way).
             setWallsSelectable(on) {
                 this.wallsSelectable = !!on;
                 this.setStatus(this.wallsSaid(), 'success');
             }
             wallsSaid() {
-                return this.wallsSelectable ? 'Walls selectable: a click in the world picks a wall, until the page is left' : 'Walls not selectable: a click in the world passes through them';
+                return this.wallsSelectable ? 'Select walls: on, a click in the world picks a wall, until the page is left' : 'Select walls: off, a click in the world passes through them';
             }
 
             // A wireframe-only box showing the usable print area within a
@@ -2599,7 +2601,7 @@
             viewVerb(verb) {
                 const flip = (box) => { box.checked = !box.checked; box.dispatchEvent(new Event('change')); return box.checked; };
                 if (verb === 'snap') return flip(this.snapToggle) ? 'Snap to grid: on' : 'Snap to grid: off';
-                if (verb === 'outlines') return flip(this.overlayToggle) ? 'Assembly outlines: shown' : 'Assembly outlines: hidden';
+                if (verb === 'outlines') return flip(this.overlayToggle) ? 'Outlines: shown' : 'Outlines: hidden';
                 if (verb === 'walls') { flip(this.wallsToggle); return this.wallsSaid(); }
                 if (verb.startsWith('detail:') && DETAIL_LABELS[verb.slice('detail:'.length)]) {
                     this.detailModeEl.value = verb.slice('detail:'.length);
@@ -2693,7 +2695,7 @@
                     const chip = document.createElement('span');
                     const active = this.expandedCategories.has(category);
                     chip.className = 'category-chip' + (active ? ' active' : '');
-                    chip.title = `Expand every ${category} node at any depth beneath this level`;
+                    chip.title = `Expand every ${category} piece at any depth beneath this level`;
 
                     const swatch = document.createElement('span');
                     swatch.className = 'chip-swatch';
@@ -3321,7 +3323,7 @@
                     .join('');
                 return `<div class="prop-row">
                           <label>Detail</label>
-                          <select class="detail-select" title="How much of this subassembly to draw. Overrides the View menu's Detail for this node only.">${options}</select>
+                          <select class="detail-select" title="How much of this subassembly to draw. Overrides the View menu's Detail for this piece only.">${options}</select>
                         </div>`;
             }
 
@@ -5182,7 +5184,7 @@
             // is drawn, or deleted -- moved to the trash, which the Deleted fold lists, each
             // restorable, and emptied (one, or all) only when asked twice. What to say.
 
-            async manageVariant(target, verb, name, { to = '', commit = null, button = null } = {}) {
+            async manageVariant(target, verb, name, { to = '', commit = null, button = null, confirmed = false } = {}) {
                 const part = encodeURIComponent(target.part);
                 const at = `${BASE_URL}/parts/${part}`;
                 const scad = this.scadStages[target.key];
@@ -5196,19 +5198,20 @@
                     if (!response.ok) throw new Error(typeof answer.detail === 'string' ? answer.detail : (answer.detail?.message ?? response.statusText));
                     return answer;
                 };
-                // Asked twice: the first press -- of the button, or of the ring's cell --
-                // says what it would do; the same press again within a few seconds does it.
-                const twice = (what) => {
+                // Asked twice: the ring's wedge asked already (confirmed); a button's first
+                // press turns its words to "Again to forget", and the same press again
+                // within a few seconds does it.
+                const twice = (what, word) => {
+                    if (confirmed) return true;
+                    if (button) {
+                        if (again(button, word, CONFIRM_MS)) return true;
+                        throw new Asking(`${what}, which cannot be undone: press it again to ${word}`);
+                    }
                     const asked = `${target.key}|${verb}|${name ?? ''}`;
                     const now = performance.now();
                     if (this.asking && this.asking.what === asked && now < this.asking.until) { this.asking = null; return true; }
                     this.asking = { what: asked, until: now + CONFIRM_MS };
-                    if (button) {
-                        button.dataset.was = button.textContent;
-                        button.textContent = 'Press again to confirm';
-                        setTimeout(() => { if (button.isConnected) button.textContent = button.dataset.was; }, CONFIRM_MS);
-                    }
-                    throw new Asking(`${what}, which cannot be undone: ${button ? 'press it' : 'choose the same cell'} again to confirm`);
+                    throw new Asking(`${what}, which cannot be undone: choose it again to ${word}`);
                 };
                 try {
                     const v = name ? encodeURIComponent(name) : '';
@@ -5243,13 +5246,13 @@
                         return { ok: true, said: `${target.part}: ${name} is back among the variants` };
                     }
                     if (verb === 'forget') {
-                        twice(`${name} would be deleted for good`);
+                        twice(`${name} would be deleted for good`, 'forget');
                         await ask('DELETE', `/trash/${v}?confirm=true`);
                         await this.loadSavedVariants(target);
                         return { ok: true, said: `${target.part}: ${name} is deleted for good` };
                     }
                     if (verb === 'empty') {
-                        twice('every deleted variant would be deleted for good');
+                        twice('every deleted variant would be deleted for good', 'empty');
                         const done = await ask('DELETE', '/trash?confirm=true');
                         await this.loadSavedVariants(target);
                         return { ok: true, said: `${target.part}: the trash is emptied, ${done.emptied.length} variant${done.emptied.length === 1 ? '' : 's'} deleted for good` };
@@ -5265,7 +5268,7 @@
             // its SCAD loaded, then what the variant's buttons do. Rename and Duplicate need
             // a name, which no cell types: the variant's row unfolds with the cursor in its
             // name box, and Enter there does it. What to say.
-            async variantOn(path, where, verb, name) {
+            async variantOn(path, where, verb, name, confirmed = false) {
                 const target = await this.scadOn(path);
                 if (!target) return { ok: false, said: `${path} has no saved variants here` };
                 if (where === 'variant' && verb === 'draw') return this.openSavedVariant(target, name);
@@ -5276,7 +5279,7 @@
                 }
                 if (where === 'trash') {
                     this.scadEditor?.openTrash();
-                    return this.manageVariant(target, { restore: 'undelete', forget: 'forget', empty: 'empty' }[verb], name);
+                    return this.manageVariant(target, { restore: 'undelete', forget: 'forget', empty: 'empty' }[verb], name, { confirmed });
                 }
                 return this.manageVariant(target, verb, name);
             }
@@ -7041,7 +7044,7 @@
             deviceSectionHtml(path) {
                 const { row, via } = this.bindingFor(path);
                 const viaLink = via
-                    ? ` · via <a href="#" class="dev-via" data-path="${esc(path + '.' + via)}" title="The board inside: its polls drive this node's status" style="color:#9cd2ff">${esc(via)}</a>`
+                    ? ` · via <a href="#" class="dev-via" data-path="${esc(path + '.' + via)}" title="The board inside: its polls drive this piece's status" style="color:#9cd2ff">${esc(via)}</a>`
                     : '';
                 // A printer's Selected shows its board's pin, which its Pin made, and its
                 // Unpin takes it back -- the ring's Device › Unpin on the printer.
@@ -7260,11 +7263,17 @@
                 this.press = null;
                 if (event.button !== 0 && event.button !== 2) return;
                 this.press = {
-                    id: event.pointerId, button: event.button, x: event.clientX, y: event.clientY, target: event.target,
+                    id: event.pointerId, button: event.button, x: event.clientX, y: event.clientY, target: event.target, far: 0,
                     handles: event.button === 0 && (this.transformControls.dragging || !!this.cameraDrag),
                 };
             }
-            // Let go where it was pressed (within STILL_PX): a left click selects what it
+            // How far a press has travelled: one that wandered and came back is a drag.
+            onTravel(event) {
+                const press = this.press;
+                if (!press || event.pointerId !== press.id) return;
+                press.far = Math.max(press.far, Math.hypot(event.clientX - press.x, event.clientY - press.y));
+            }
+            // Let go having travelled no further than STILL_PX: a left click selects what it
             // lands on, or on empty space clears the selection; a right click re-centres
             // the view on the surface under the pointer -- the orbit's pivot moves there,
             // the camera keeping its offset, so the next turn turns about that point -- or,
@@ -7275,7 +7284,7 @@
                 if (!press || event.pointerId !== press.id) return;
                 this.press = null;
                 if (press.many || press.handles || this.cameraDrag || event.button !== press.button) return;
-                if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > STILL_PX) return;
+                if (Math.max(press.far, Math.hypot(event.clientX - press.x, event.clientY - press.y)) > STILL_PX) return;
                 if (press.button === 2) {
                     const badge = press.target.closest && press.target.closest('.world-badge');
                     if (badge) { const point = this.anchors.pointOf(badge); if (point) this.glideTo(point); return; }
@@ -7953,7 +7962,7 @@
                 const cell = /^part:(?:variant:(draw|rename|duplicate|history|compare|delete)|trash:(restore|forget)):(.+)$/.exec(action);
                 if (cell || action === 'part:trash:empty') {
                     const [where, verb, name] = !cell ? ['trash', 'empty', null] : cell[1] ? ['variant', cell[1], cell[3]] : ['trash', cell[2], cell[3]];
-                    viewer.variantOn(path, where, verb, name).then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
+                    viewer.variantOn(path, where, verb, name, !!intent.confirmed).then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
                     return;
                 }
                 if (action === 'part:float') {

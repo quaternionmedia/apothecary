@@ -477,8 +477,11 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     )
 
     page.evaluate("() => window.apothecaryPanels.dock('pictures', 'right')")
-    # Forgotten from its row.
-    pictures.locator(".pictures-forget[data-path='uploads/shelf_again.png']").click()
+    # Forgotten from its row, pressed twice: it cannot be undone.
+    forget = pictures.locator(".pictures-forget[data-path='uploads/shelf_again.png']")
+    forget.click()
+    expect(forget).to_have_text("Again to forget")
+    forget.click()
     expect(kept_pictures).to_have_count(kept_before + 1, timeout=5000)
     assert not (picture_folder / "uploads" / "shelf_again.png").exists()
     # A pin whose site is gone is listed as such, and taken back from its row.
@@ -515,13 +518,16 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     expect(pinned.locator("#pinned-list")).to_contain_text("none pinned", timeout=5000)
     expect(page.locator("#selected-body .dev-pin-manual")).to_be_visible(timeout=3000)
     expect(page.locator("#selected-body .dev-unpin")).to_have_count(0)
-    page.once("dialog", lambda d: d.accept())
-    pictures.locator("#pictures-purge").click()
+    purge = pictures.locator("#pictures-purge")
+    purge.click()
+    expect(purge).to_have_text("Again to purge")
+    purge.click()
     status = page.locator("#status")
     expect(status).to_contain_text("of the folder's own stay", timeout=8000)
     expect(status).not_to_have_class(re.compile(r"\berror\b"))
     # A second purge has nothing to forget, and says so as a refusal.
-    pictures.locator("#pictures-purge").click()
+    purge.click()
+    purge.click()
     expect(status).to_contain_text("nothing kept from the browser to forget", timeout=5000)
     expect(status).to_have_class(re.compile(r"\berror\b"))
     left = page.request.get(f"{base_url}/photos/pictures").json()
