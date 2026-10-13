@@ -1,9 +1,10 @@
 /* Settings: every shortcut and navigation setting of the page, in one panel, kept
  * per browser (docs/plans/input-2026-10-12.md).
  *
- * The shortcuts: the key that opens the ring on the selection (m), the modifier a
- * right-click is held with to open it at the pointer (Ctrl; a plain right-click is
- * the camera's), and the keys that step a level in and out (Page Down, Page Up).
+ * The shortcuts: the key that opens the ring on the selection (m), the key that
+ * opens the canvas ring whatever is selected (Shift+M), the modifier a right-click
+ * is held with to open it at the pointer (Ctrl; a plain right-click is the
+ * camera's), and the keys that step a level in and out (Page Down, Page Up).
  * The navigation: automatic zoom -- the wheel, pushed on past the dolly's limit,
  * stepping a level in or out -- on or off, each way on or off, how much scroll past
  * the limit it takes, and where the limit sits: how near a level's pieces the camera
@@ -23,7 +24,8 @@
  * Escape lets go of it.
  */
 
-import { comboOf, MODIFIERS } from "/static/ring.js";
+import { MODIFIERS } from "/static/ring.js";
+import { comboOf } from "/static/keys.js";
 
 export const SETTINGS_KEY = "apothecary.settings";
 
@@ -32,6 +34,8 @@ export const SETTINGS_KEY = "apothecary.settings";
 export const SETTINGS = [
     { id: "ringKey", kind: "key", group: "Shortcuts", label: "Open the ring", def: "m",
       title: "The key that opens the ring on the selection, at the middle of the screen" },
+    { id: "canvasRingKey", kind: "key", group: "Shortcuts", label: "Open the canvas ring", def: "Shift+m",
+      title: "The key that opens the canvas ring -- the level's pieces, View, Panels, Pictures -- whatever is selected" },
     { id: "ringModifier", kind: "modifier", group: "Shortcuts", label: "Ring: right-click with", def: "ctrl",
       title: "Held with a right-click, the ring opens at the pointer; a right-click alone is the camera's (on macOS, Ctrl+click is a right-click)" },
     { id: "zoomInKey", kind: "key", group: "Shortcuts", label: "Step in", def: "PageDown",
@@ -58,19 +62,20 @@ export const MODIFIER_LABELS = { ctrl: "Ctrl", alt: "Alt", shift: "Shift", meta:
 
 // The keys the page holds whatever the settings say, and what each does: a shortcut is
 // never given one of them, so no key does two things.
-const UNDO = Object.fromEntries(["Ctrl", "Meta"].flatMap((m) => [
-    [`${m}+z`, "Undo"], [`${m}+Z`, "Redo"], [`${m}+y`, "Redo"], [`${m}+Y`, "Redo"],
-]));
+const EACH = (mods, rest) => Object.fromEntries(mods.flatMap((m) => Object.entries(rest).map(([k, v]) => [`${m}+${k}`, v])));
 export const FIXED = {
-    Backspace: "Up one level",
+    Backspace: "Step out",
     "?": "Show or hide the hint bar",
-    f: "Fit", F: "Fit",
-    p: "Take picture", P: "Take picture",
+    f: "Fit the selection", "Shift+f": "Fit the level",
+    p: "Take picture", "Shift+p": "Take picture",
     "~": "Hide or show the rail", "`": "Hide or show the rail",
-    Escape: "Close",
-    ...UNDO,
-    F5: "the SCAD editor's Check", F6: "the SCAD editor's Render",
-    "Ctrl+Enter": "the SCAD editor's Render", "Ctrl+s": "the SCAD editor's Save",
+    Escape: "Escape: close, put back, let go",
+    ArrowUp: "Pan the view", ArrowDown: "Pan the view", ArrowLeft: "Pan the view", ArrowRight: "Pan the view",
+    ...EACH(["Shift"], { ArrowUp: "Turn the view", ArrowDown: "Turn the view", ArrowLeft: "Turn the view", ArrowRight: "Turn the view" }),
+    // As keys.js names them: Ctrl, Alt, Shift, Meta, in that order.
+    "Ctrl+z": "Undo", "Ctrl+Shift+z": "Redo", "Ctrl+y": "Redo", "Ctrl+s": "Save the variant",
+    "Meta+z": "Undo", "Shift+Meta+z": "Redo", "Meta+y": "Redo", "Meta+s": "Save the variant",
+    F5: "the SCAD editor's Check", F6: "the SCAD editor's Render", "Ctrl+Enter": "the SCAD editor's Render",
 };
 
 const KEY_WORDS = {

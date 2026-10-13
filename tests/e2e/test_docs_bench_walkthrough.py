@@ -353,7 +353,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     page.evaluate("() => window.fractalViewer.jumpTo(0)")
     expect(badge).to_be_visible(timeout=5000)
     assert _camera_marks_visible(page) == [False]  # unselected: its body and its badge
-    expect(page.locator("#selected-body")).to_contain_text("Click a node to select it")
+    expect(page.locator("#selected-body")).to_contain_text("Click a piece to select it")
     # Removed from its row in Site's Pinned.
     pinned.locator("summary").click()
     placed.locator(".pinned-camera-remove").click()

@@ -114,6 +114,8 @@ export function mountPictureList(root, { base = "", world = null, log = null } =
         if (ev.key !== "Escape" || !state.chosen) return;
         const t = ev.target;
         if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+        // Taken: the page's Escape lets go of the selection only on the press after.
+        ev.preventDefault();
         choose(null);
     }
     window.addEventListener("keydown", letGo);

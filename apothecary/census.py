@@ -67,8 +67,9 @@ control is deleted.
   of the world (the consolidation plan's Phase 5) -- plus the widget modules it
   imports and the marks modules it imports by name (`MARKS`: what the world
   wears -- a machine's marks, a picture's -- and the boards' model behind them).
-  `ring.js`, `panels.js` and `anchors.js` stay off the meter as chrome with
-  their own tests; `board_text.js` writes text and listens to nothing. The command line and
+  `ring.js`, `panels.js`, `anchors.js` and `keys.js` (how a key is named, and
+  when a shortcut may act) stay off the meter as chrome with their own tests;
+  `board_text.js` writes text and listens to nothing. The command line and
   direct requests are not in the number.
 - It refuses when it finds nothing, because a page it failed to read and a page
   with no controls must not produce the same answer.
@@ -555,7 +556,7 @@ RING_BACKED: Dict[str, str] = {
     "li:click:selectChild": "select:printer_1",
     "badge:click:selectPath": "select:printer_1",
     "crumb:click:goUpTo": "zoom-out",
-    "zoomInLink:click:zoomIn": "zoom-in",
+    "zoomInLink:click:stepIn": "zoom-in",
     # The header's View menu: each of its items a cell of the canvas ring's
     # View (a Detail value is View › Detail › that value).
     "snap-toggle": "view:snap",
@@ -602,6 +603,7 @@ RING_BACKED: Dict[str, str] = {
     "ghost-toggle": "part:ghost",
     "window:keydown:onUndoKey": "part:undo",
     "window:keydown:onFitKey": "part:fit",
+    "window:keydown:onSaveKey": "part:save",
     # a camera in Selected: Take picture is its ring's, and so is P
     "cam-take": "camera:take-picture",
     "takeBtn:click:takePictureWith": "camera:take-picture",
@@ -668,10 +670,10 @@ BY_SHAPE: Sequence[Tuple[re.Pattern, str]] = (
 # list are one entry, and a new control can be added to that row unnoticed.
 LISTENING: Dict[str, Tuple[str, str, str]] = {
     # taking hold of the thing itself
-    "transformControls:dragging-changed:(nothing)": (  # noqa: E501 - see NO_CALL
+    "transformControls:dragging-changed:noteDragStart": (
         DRAG,
         WHAT_YOU_SEE,
-        "taking hold stops the view from turning under you",
+        "taking hold notes where the piece was, for Escape, and stops the view turning under you",
     ),
     "transformControls:objectChange:onGizmoDrag": (
         DRAG,
@@ -722,35 +724,60 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     ),
     "posAxis:change:recomputeWorldBounds": (WIDGET, WHAT_IS_THERE, "typing a position"),
     "statusSelect:change:submitStatus": (WIDGET, WHAT_IS_THERE, "choosing a state"),
-    "zoomInLink:click:zoomIn": (WIDGET, WHAT_YOU_SEE, "the go-in button on the chosen piece"),
+    "zoomInLink:click:stepIn": (WIDGET, WHAT_YOU_SEE, "the step-in button on the chosen piece"),
     # done to the scene itself
-    "canvas:pointerdown:onPointerDown": (GESTURE, WHAT_YOU_SEE, "pointing at a piece"),
-    "canvas:dblclick:onDoubleClick": (GESTURE, WHAT_YOU_SEE, "double-tapping to go in"),
+    "canvas:dblclick:onDoubleClick": (GESTURE, WHAT_YOU_SEE, "double-tapping to step in"),
     "canvas:wheel:onWheel": (GESTURE, WHAT_YOU_SEE, "the wheel, with a counter of its own"),
-    "window:keydown:zoomOut": (GESTURE, WHAT_YOU_SEE, "a key that steps back out"),
-    # The right button is the camera's (the input plan of 2026-10-12): a drag pans, as
-    # the orbit's own, and a still click re-centres; held with Settings' modifier, it
-    # is the ring's, counted with the ring.
-    "canvas:pointerdown:onRightPress": (
+    # The pointer in the world, decided at the release (the input plan of 2026-10-12):
+    # a still left click selects, or clears the selection on empty space; a still
+    # right click re-centres; a drag is the view's. Held with Settings' modifier, the
+    # right button is the ring's, counted with the ring. A badge passes the right
+    # button to what it stands for.
+    "canvas:pointerdown:onPress": (
         GESTURE,
         WHAT_YOU_SEE,
-        "a right press on the world, kept to tell a still click from a pan",
+        "a press on the world, kept to tell a still click from a turn or a pan",
     ),
-    "canvas:pointerup:onRightRelease": (
+    "canvas:pointerup:onRelease": (
         GESTURE,
         WHAT_YOU_SEE,
-        "a still right-click, re-centring the view on the surface under the pointer",
+        "a still click: a piece selected, the selection let go, or the view re-centred",
+    ),
+    "layer:pointerdown:onPress": (
+        GESTURE,
+        WHAT_YOU_SEE,
+        "a press on a badge, kept to tell a still right click on it",
+    ),
+    "layer:pointerup:onRelease": (
+        GESTURE,
+        WHAT_YOU_SEE,
+        "a still right click on a badge, re-centring the view on what it stands for",
+    ),
+    "document:pointerdown:notePress": (
+        AUTOMATIC,
+        NOTHING,
+        "where the last press landed, so Page Up and Page Down are the world's after one there",
     ),
     "window:keydown:onZoomKey": (
         GESTURE,
         WHAT_YOU_SEE,
-        "keys (Page Down, Page Up, or what Settings gives) that step a level in and out",
+        "keys (Page Down and Page Up while the world has the keys, Backspace) that step in and out",
+    ),
+    "window:keydown:onEscapeKey": (
+        GESTURE,
+        WHAT_YOU_SEE,
+        "Escape: the View menu folded, a drag put back unsaved, then the selection let go",
+    ),
+    "window:keydown:onSaveKey": (
+        GESTURE,
+        WHAT_IS_THERE,
+        "Ctrl+S, while a part's editor is open: its variant saved, from anywhere on the page",
     ),
     "window:keydown:onHintKey": (GESTURE, WHAT_YOU_SEE, "a key (?) that brings the hint bar back"),
     "window:keydown:onFitKey": (
         GESTURE,
         WHAT_YOU_SEE,
-        "a key (f) that frames the selected piece, Selected and its editor kept open",
+        "keys (f, Shift+F) that frame the selected piece, else the level, and the level",
     ),
     "window:keydown:onUndoKey": (
         GESTURE,
@@ -886,7 +913,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "the header's count of problems, unfolding them in Site",
     ),
-    "li:dblclick:zoomIn": (LIST, WHAT_YOU_SEE, "going into a piece from the list"),
+    "li:dblclick:stepIn": (LIST, WHAT_YOU_SEE, "stepping into a piece from the list"),
     "rootCrumb:click:goUpTo": (LIST, WHAT_YOU_SEE, "the top of the trail"),
     "crumb:click:goUpTo": (LIST, WHAT_YOU_SEE, "a step on the trail"),
     # how much to draw

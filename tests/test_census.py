@@ -686,12 +686,22 @@ def _on_the_page(text: str) -> list:
 
 
 def test_the_ring_module_opens_three_ways_and_the_pages_import_it():
-    """ring.js installs its key (`m` unless Settings gives another) on the window,
-    a right-click held with its modifier on the document and a click on
-    `#ring-open`, and nothing else on either; everything else it listens to is on
-    the ring's own element while the ring is open."""
+    """ring.js installs its keys (`m` and Shift+M unless Settings gives others) on the
+    window; on the document, the press and release of a right-click held with its
+    modifier, a touch held still, and the browser's menu kept away where the ring is
+    asked for; and a click on `#ring-open`, and nothing else on either. Everything else
+    it listens to is on the ring's own element while the ring is open. keys.js, which
+    names a key and says when a shortcut may act, listens to nothing."""
     text = (STATIC / "ring.js").read_text(encoding="utf-8")
-    assert _on_the_page(text) == [("document", "contextmenu"), ("window", "keydown")]
+    assert _on_the_page(text) == [
+        ("document", "contextmenu"),
+        ("document", "pointercancel"),
+        ("document", "pointerdown"),
+        ("document", "pointermove"),
+        ("document", "pointerup"),
+        ("window", "keydown"),
+    ]
+    assert "addEventListener" not in (STATIC / "keys.js").read_text(encoding="utf-8")
     assert 'button = "#ring-open"' in text
     assert census.PAGES == (census.VIEWER,)
     assert "/static/ring.js" in census.VIEWER.read_text(encoding="utf-8")
@@ -1022,9 +1032,11 @@ def test_settings_rows_are_counted_and_unbacked_and_its_view_item_is_view_settin
     assert "view:settings" in [c.action for c in view.children]
     listening = {f.key: f for f in taken.found if f.how == "listening"}
     for key in (
-        "canvas:pointerdown:onRightPress",
-        "canvas:pointerup:onRightRelease",
+        "canvas:pointerdown:onPress",
+        "canvas:pointerup:onRelease",
+        "layer:pointerup:onRelease",
         "window:keydown:onZoomKey",
+        "window:keydown:onEscapeKey",
     ):
         assert listening[key].surface == census.GESTURE, key
     assert listening["settingsOpenBtn:click:openSettings"].ring_action == "view:settings"

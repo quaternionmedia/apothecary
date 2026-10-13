@@ -26,6 +26,8 @@
  * which is on the window so it works wherever the pointer is.
  */
 
+import { mayAct } from "./keys.js";
+
 const RAIL_MAX_FRACTION = 1 / 2;
 const RAIL_MIN_PX = 220;
 const PANEL_MIN_PX = 60;
@@ -125,10 +127,11 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
         window.addEventListener("pointerup", up);
     }
     // The tilde: the rail hides and shows, as a console does -- unless a person is typing.
+    // Matched by the key's place as well (Backquote, left of 1), so a layout where that
+    // key prints something else, or is a dead key, still reaches it.
     const onKey = (ev) => {
-        if (!TILDE_KEYS.has(ev.key) || ev.ctrlKey || ev.metaKey || ev.altKey) return;
-        const t = ev.target;
-        if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+        if (!(TILDE_KEYS.has(ev.key) || ev.code === "Backquote") || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+        if (!mayAct(ev)) return;
         ev.preventDefault();
         api.hideRail(!rail.hidden);
     };

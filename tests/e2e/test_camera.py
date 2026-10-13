@@ -289,7 +289,7 @@ def test_a_camera_removed_from_sites_pinned_leaves_the_tree_and_the_world(
     expect(badge).to_have_count(0, timeout=5000)
     assert page.evaluate(MESH, name) is None
     assert page.evaluate("() => window.fractalViewer.selectedName") is None
-    expect(page.locator("#selected-body")).to_contain_text("Click a node to select it")
+    expect(page.locator("#selected-body")).to_contain_text("Click a piece to select it")
     expect(pinned.locator("#pinned-list")).to_contain_text("none pinned")
     assert page.request.get(f"{base_url}/sites/garage/cameras/{name}").status == 404
     assert page.url == url and loads == [], loads

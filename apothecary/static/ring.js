@@ -22,11 +22,14 @@
  * same digits onto the buttons it already has, so the numbering is visible
  * where the control is.
  *
- * Plain ES module, no build step, no dependencies. The pure parts (angle to
+ * Plain ES module, no build step; its one import is keys.js, how a key is named
+ * and when a shortcut may act. The pure parts (angle to
  * slot, nearest cell in a direction, addresses) are exported so a test can
  * compare them with the Python resolver's; the same four are on
  * window.apothecaryRing.
  */
+
+import { comboOf, matches, mayAct, typing } from "./keys.js";
 
 export const PLACEMENT = [8, 6, 2, 4, 9, 3, 1, 7];
 export const COMPASS = [8, 9, 6, 3, 2, 1, 4, 7]; // compass slot (up, clockwise) -> cell
@@ -505,48 +508,40 @@ class RingInstance {
 }
 
 // ---------------------------------------------------------------------------
-// The invokers: a modifier and the right button, a key, and a button
+// The invokers: the right button with a modifier, a long press, two keys, a button
 // ---------------------------------------------------------------------------
-
-const TYPING = (el) => !!el && (el.matches("input, textarea, select, [contenteditable]"));
 
 // The modifiers a right-click can be held with to open the ring, by the name a
 // person chooses them by, and the event's flag for each.
 export const MODIFIERS = { ctrl: "ctrlKey", alt: "altKey", shift: "shiftKey", meta: "metaKey" };
-const MODIFIER_KEYS = new Set(["Control", "Alt", "AltGraph", "Shift", "Meta", "OS", "CapsLock", "Dead", "Unidentified"]);
+export { comboOf };
 
-/* A key pressed, as a shortcut names it: "m", "PageDown", "Ctrl+m", "Shift+F2".
- * Ctrl, Alt and Meta are named when held; Shift only before a named key, since a
- * printed character carries its Shift in itself ("M", "?"). Space is "Space". A
- * modifier pressed alone is no shortcut: null.
- */
-export function comboOf(e) {
-    const key = e && e.key;
-    if (!key || MODIFIER_KEYS.has(key)) return null;
-    const named = key.length > 1;
-    const parts = [];
-    if (e.ctrlKey) parts.push("Ctrl");
-    if (e.altKey) parts.push("Alt");
-    if (named && e.shiftKey) parts.push("Shift");
-    if (e.metaKey) parts.push("Meta");
-    parts.push(key === " " ? "Space" : key);
-    return parts.join("+");
-}
+const STILL_PX = 4;       // a press let go within this of where it was pressed is still
+const LONG_PRESS_MS = 500; // a still touch held this long is the ring
+const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "");
 
-/* Bind the three ways in. `whatFor(event, { opening })` is the page's: given a
- * contextmenu event (or null for the key and the button) it says what the ring
- * opens on -- {context, site, device, at} -- or null to leave the browser's own
- * menu alone. The ring opens at the pointer only with `modifier` held (ctrl,
- * alt, shift or meta); without it, whatFor is asked with `opening` false only
- * whether the spot is the page's -- where it is, the browser's menu never shows
- * and nothing opens, a plain right-click being the page's own (the camera's, on
- * the canvas). `key` is the shortcut, as comboOf names one, that opens the ring
- * on the selection.
- * `onResolved(ring, spec)` fires after every resolve, for annotating the page.
- * The key and the modifier change at once with `configure({ key, modifier })`.
+/* Bind the ways in. `whatFor(event, { opening, canvas })` is the page's: given a
+ * pointer event (or null for a key and the button) it says what the ring opens on
+ * -- {context, site, device, at} -- or null where the spot is the browser's.
+ * Asked with `opening` false it only says whose the spot is: "world" (the canvas,
+ * a badge: the browser's menu never shows there, and a plain right-click is the
+ * camera's), "page" (a Contents row, a Machine: a plain right-click is the
+ * browser's), or null. With `canvas` it answers the canvas ring, whatever is
+ * selected.
+ *
+ * The ring opens at the pointer on a still press and release of the right button
+ * held with `modifier` (ctrl, alt, shift or meta; on macOS Ctrl+click is a
+ * right-click), heard before anything under it -- the view's controls never see
+ * the press, so it never turns the view -- and by touch on a still long press, in
+ * the world and on a row. Pressed elsewhere, or moved, it opens nothing. `key`
+ * opens the ring on the selection and `canvasKey` the canvas ring, each a shortcut
+ * as keys.js names one, matched by the key or its position, and never while the
+ * focus takes the key (keys.js's mayAct). `onResolved(ring, spec)` fires after
+ * every resolve, for annotating the page. The keys and the modifier change at once
+ * with `configure({ key, canvasKey, modifier })`.
  */
-export function installRing({ base = "", whatFor, onIntent, onResolved, onError, button = "#ring-open", key = "m", modifier = "ctrl" }) {
-    const bound = { key, modifier: MODIFIERS[modifier] ? modifier : "ctrl" };
+export function installRing({ base = "", whatFor, onIntent, onResolved, onError, button = "#ring-open", key = "m", canvasKey = "Shift+m", modifier = "ctrl" }) {
+    const bound = { key, canvasKey, modifier: MODIFIERS[modifier] ? modifier : "ctrl" };
     const open = async (spec, at) => {
         if (!spec) return null;
         try {
@@ -568,30 +563,91 @@ export function installRing({ base = "", whatFor, onIntent, onResolved, onError,
             return null;
         }
     };
-    const fromKeyboard = () => open(whatFor(null), { x: window.innerWidth / 2, y: window.innerHeight / 2 });
+    const middle = () => ({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+    const fromKeyboard = () => open(whatFor(null), middle());
 
     window.addEventListener("keydown", (e) => {
-        if (comboOf(e) !== bound.key || isOpen()) return;
-        if (TYPING(document.activeElement)) return;
+        if (isOpen() || !mayAct(e)) return;
+        const canvas = matches(e, bound.canvasKey);
+        if (!canvas && !matches(e, bound.key)) return;
         e.preventDefault();
-        fromKeyboard();
+        open(whatFor(null, { canvas }), middle());
     });
-    document.addEventListener("contextmenu", (e) => {
-        if (isOpen() || TYPING(e.target)) return;
-        const held = !!e[MODIFIERS[bound.modifier]];
-        const spec = whatFor(e, { opening: held });
-        if (!spec) return;
+
+    // The ring's press: the right button held with the modifier (or, on macOS, Ctrl
+    // and the left button), on a spot of the page's; a touch, in the world or on a row.
+    const held = (e) => !!e[MODIFIERS[bound.modifier]];
+    function ringPress(e) {
+        if (e.pointerType === "touch") return e.isPrimary ? "touch" : null;
+        if (!held(e)) return null;
+        if (e.button === 2) return "click";
+        if (e.button === 0 && MAC && bound.modifier === "ctrl") return "click";
+        return null;
+    }
+    let pressed = null;
+    const moved = (e, p) => Math.hypot(e.clientX - p.x, e.clientY - p.y) > STILL_PX;
+    const letGo = () => { if (pressed && pressed.timer) clearTimeout(pressed.timer); pressed = null; };
+    document.addEventListener("pointerdown", (e) => {
+        letGo();
+        if (isOpen()) return;
+        const kind = ringPress(e);
+        if (!kind) return;
+        const spot = whatFor(e, { opening: false });
+        if (!spot) return;
+        if (kind === "touch") {
+            // A touch is the view's until it has stood still long enough; a Machine's
+            // text is the browser's to select.
+            if (spot !== "world" && !e.target.closest(".contents-item")) return;
+            pressed = { kind, id: e.pointerId, x: e.clientX, y: e.clientY, event: e, fired: false };
+            const p = pressed;
+            p.timer = setTimeout(() => {
+                if (pressed !== p) return;
+                p.fired = true;
+                open(whatFor(p.event), { x: p.x, y: p.y });
+            }, LONG_PRESS_MS);
+            return;
+        }
+        // Heard first, so the view's controls never take it for a turn.
         e.preventDefault();
-        if (held) open(spec, { x: e.clientX, y: e.clientY });
+        e.stopImmediatePropagation();
+        pressed = { kind, id: e.pointerId, x: e.clientX, y: e.clientY, event: e };
+    }, true);
+    document.addEventListener("pointermove", (e) => {
+        if (pressed && pressed.kind === "touch" && e.pointerId === pressed.id && !pressed.fired && moved(e, pressed)) letGo();
+    }, true);
+    document.addEventListener("pointerup", (e) => {
+        if (!pressed || e.pointerId !== pressed.id) return;
+        const p = pressed;
+        pressed = null;
+        if (p.timer) clearTimeout(p.timer);
+        if (p.kind === "touch") {
+            // The ring opened under the finger: lifting it is no tap.
+            if (p.fired) { e.preventDefault(); e.stopImmediatePropagation(); }
+            return;
+        }
+        e.stopImmediatePropagation();
+        if (moved(e, p)) return;
+        open(whatFor(p.event), { x: p.x, y: p.y });
+    }, true);
+    document.addEventListener("pointercancel", () => letGo(), true);
+    // The browser's own menu: never over the world, nor where the ring was asked for
+    // (the modifier held, or a long press under way); anywhere else it is the browser's.
+    document.addEventListener("contextmenu", (e) => {
+        if (isOpen()) { e.preventDefault(); return; }
+        if (typing(e.target)) return;
+        const spot = whatFor(e, { opening: false });
+        if (!spot) return;
+        if (spot === "world" || held(e) || (MAC && bound.modifier === "ctrl" && e.ctrlKey) || (pressed && pressed.kind === "touch")) e.preventDefault();
     });
     const btn = typeof button === "string" ? document.querySelector(button) : button;
     if (btn) btn.addEventListener("click", () => { if (isOpen()) close(); else fromKeyboard(); });
 
     const api = {
         open: (spec, at) => open(spec, at),
-        /* The key and the modifier, changed: at once, for the next press. */
-        configure({ key: nextKey, modifier: nextModifier } = {}) {
+        /* The keys and the modifier, changed: at once, for the next press. */
+        configure({ key: nextKey, canvasKey: nextCanvasKey, modifier: nextModifier } = {}) {
             if (typeof nextKey === "string" && nextKey) bound.key = nextKey;
+            if (typeof nextCanvasKey === "string" && nextCanvasKey) bound.canvasKey = nextCanvasKey;
             if (MODIFIERS[nextModifier]) bound.modifier = nextModifier;
             return { ...bound };
         },

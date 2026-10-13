@@ -95,6 +95,9 @@
 
         .viewer-panel { flex: 2; min-width: 0; position: relative; background: #111; }
         #viewer-canvas { width: 100%; height: 100%; display: block; }
+        /* The world has the keyboard's focus: a ring round it, for a keyboard's hand only. */
+        #viewer-canvas:focus { outline: none; }
+        #viewer-canvas:focus-visible { outline: 2px solid #6fb3e8; outline-offset: -2px; }
         /* The hint bar: on a first visit, faded away after a few actions; ? shows it
            again. One line: short enough for the world at 1024 px wide, and cut
            rather than wrapped in a narrower one. */
@@ -706,7 +709,7 @@
         </div>
         <div class="main-content">
             <div class="viewer-panel">
-                <canvas id="viewer-canvas"></canvas>
+                <canvas id="viewer-canvas" tabindex="0" aria-label="The world: a click selects; the arrows pan and Shift+arrows turn the view while it has the focus; Page Down steps in, Page Up steps out"></canvas>
                 <div id="minimap"></div>
                 <div class="viewer-hint" id="viewer-hint">Click: select • Double-click or Page Down: go in • Right-drag: pan • Ctrl+right-click: ring • ?: hide this</div>
             </div>
@@ -738,12 +741,12 @@
                 <div class="panel-section" data-panel="selected" data-zone="stack">
                     <div class="panel-header">Selected</div>
                     <div class="panel-body" id="selected-body">
-                        <div class="no-selection">Click a node to select it</div>
+                        <div class="no-selection">Click a piece to select it</div>
                     </div>
                 </div>
             </div>
         </div>
-        <div id="status" class="status">Loading site…</div>
+        <div id="status" class="status" role="status" aria-live="polite">Loading site…</div>
     </div>
 
     {% if not three_is_vendored %}
@@ -798,7 +801,8 @@
         import { mountPictureMarks, axes as cameraAxes } from '/static/picture_marks.js';
         import { mountPictures } from '/static/pictures.js';
         import { makeSettings, mountSettings, keyLabel, modifierLabel } from '/static/widgets/settings.js';
-        import { comboOf, MODIFIERS } from '/static/ring.js';
+        import { MODIFIERS } from '/static/ring.js';
+        import { comboOf, matches, mayAct, worldHasKeys } from '/static/keys.js';
 
         const BASE_URL = {{ base_url | tojson }};
         const DEFAULT_SITE = {{ default_site | tojson }};
@@ -985,11 +989,19 @@
         // is also where the "scroll past the edge" step fires (see onWheel), because
         // the step triggers at the clamp -- so raising Farthest buys viewing range and
         // moves the step's edge outward by the same amount, deliberately.
-        // A right-click is still -- re-centring the view, not panning it -- while the
-        // pointer moves no further than this between its press and its release, and
-        // the view glides to the point over this long.
-        const RECENTRE_SLOP_PX = 4;
+        // A click is still -- selecting, or re-centring the view, not turning or panning
+        // it -- while the pointer moves no further than this between its press and its
+        // release; a re-centre glides to its point over this long.
+        const STILL_PX = 4;
         const RECENTRE_MS = 250;
+        // A trackpad's momentum is not a push past the dolly's limit: what scrolled past
+        // it is forgotten after this long without a turn of the wheel, and nothing steps
+        // for this long after a step.
+        const WHEEL_QUIET_MS = 250;
+        const STEP_QUIET_MS = 400;
+        // The keys the page would scroll with: they step a level only while the world has
+        // the keys.
+        const SCROLL_KEYS = new Set(['PageUp', 'PageDown', 'Home', 'End', ' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
         // The far plane has to clear the furthest the camera can dolly plus the
         // scene's own extent behind the target, or the world is clipped away
         // exactly when you pull back to look at the largest scale. This used to
@@ -1183,7 +1195,6 @@
                 this.sayInputs();
                 this.reach = null;            // the level's size and framing distance, for the dolly's limits
                 this.glide = null;            // a re-centre under way
-                this.rightPress = null;       // a right button held on the world
 
                 this.tree = null;            // full recursive tree for the loaded site
                 this.siteName = null;
@@ -1212,6 +1223,10 @@
                 this.invalidPaths = new Map();
                 this.invalidInside = new Map();
                 this.wheelPastLimit = 0;
+                this.wheelAt = 0;              // the last turn of the wheel
+                this.stepQuietUntil = 0;       // no step by the wheel before this
+                this.press = null;             // a button held on the world, until it is let go
+                this.lastPressInWorld = true;  // nothing pressed yet: the keys are the world's
                 this.stlLoader = new STLLoader();
                 this.loadGeneration = 0;  // guards against a slow real-geometry
                                           // fetch upgrading a mesh after the
@@ -1302,6 +1317,9 @@
                 this.orbitControls.enableDamping = true;
                 this.orbitControls.dampingFactor = 0.05;
                 this.orbitControls.zoomSpeed = 0.6;
+                // The arrows pan the view, and Shift+arrows turn it, while the world has the
+                // keyboard's focus, and only then.
+                this.orbitControls.listenToKeyEvents(this.renderer.domElement);
 
                 // The handles a selected movable thing wears: one compact set, shown
                 // and hidden by showHandles and hideHandles alone. Today that is the
@@ -1318,6 +1336,8 @@
                 for (const material of handleMaterials) material.opacity *= HANDLE_LIGHTNESS;
                 this.transformControls.setTranslationSnap(SNAP_INCREMENT);
                 this.transformControls.addEventListener('dragging-changed', (event) => {
+                    // Where the drag began, for Escape to put it back.
+                    if (event.value) this.noteDragStart();
                     this.orbitControls.enabled = !event.value;
                 });
                 this.transformControls.addEventListener('objectChange', () => this.onGizmoDrag());
@@ -1522,18 +1542,25 @@
                     this.showCompoundOverlays = this.overlayToggle.checked;
                     this.renderFocus();
                 });
-                this.canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
-                // The right button is the camera's: a drag pans (the orbit's own), and a
-                // still click re-centres the view on the surface under the pointer. Held
-                // with Settings' modifier, it opens the ring instead (ring.js).
-                this.canvas.addEventListener('pointerdown', (e) => this.onRightPress(e));
-                this.canvas.addEventListener('pointerup', (e) => this.onRightRelease(e));
+                // The pointer in the world, decided at the release: a still left click
+                // selects what it lands on, or on empty space clears the selection; a still
+                // right click re-centres the view; a drag of either is the view's, and
+                // selects nothing. The middle button is the view's alone. Held with
+                // Settings' modifier, the right button is the ring's (ring.js hears it first).
+                this.canvas.addEventListener('pointerdown', (e) => this.onPress(e));
+                this.canvas.addEventListener('pointerup', (e) => this.onRelease(e));
+                // A badge passes the right button to what it stands for.
+                this.anchors.layer.addEventListener('pointerdown', (e) => this.onPress(e));
+                this.anchors.layer.addEventListener('pointerup', (e) => this.onRelease(e));
+                // Whether the last press was in the world: Page Up and Page Down are the
+                // world's then, with nothing else focused.
+                document.addEventListener('pointerdown', (e) => this.notePress(e), { capture: true });
                 // A selected camera's turn ring or tilt arc, dragged. Its press is heard
                 // first, ahead of the move arrows and the orbit, which never hear it.
                 this.canvas.addEventListener('pointerdown', (e) => this.onCameraHandleDown(e), { capture: true });
                 this.canvas.addEventListener('pointermove', (e) => this.onCameraDragMove(e));
                 this.canvas.addEventListener('pointerup', () => this.onCameraDragEnd());
-                // With a camera selected, P takes a picture -- unless a person is typing.
+                // With a camera selected, P takes a picture.
                 window.addEventListener('keydown', (e) => this.onPictureKey(e));
                 this.canvas.addEventListener('dblclick', (e) => this.onDoubleClick(e));
                 this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: true });
@@ -1542,21 +1569,21 @@
                 this.canvas.addEventListener('dragover', (e) => e.preventDefault());
                 this.canvas.addEventListener('drop', (e) => this.onDropFiles(e));
                 window.addEventListener('paste', (e) => this.onPaste(e));
-                window.addEventListener('keydown', (e) => {
-                    if (e.key === 'Backspace' && !typing(document.activeElement)) {
-                        e.preventDefault();
-                        this.zoomOut();
-                    }
-                });
-                // Page Down and Page Up, or the keys Settings gives them: a level in -- the
-                // selected piece, or the one nearest the middle of the view -- and out.
+                // Page Down and Page Up, or the keys Settings gives them, step a level in
+                // and out while the world has the keys; Backspace steps out.
                 window.addEventListener('keydown', (e) => this.onZoomKey(e));
+                // Escape: a menu folded, then a drag in progress put back, then the
+                // selection let go (the ring, a fullscreen editor and the picture chosen
+                // in Pictures take theirs first).
+                window.addEventListener('keydown', (e) => this.onEscapeKey(e));
+                // Ctrl+S, while a part's editor is open, saves its variant from anywhere.
+                window.addEventListener('keydown', (e) => this.onSaveKey(e));
                 // ⚙ View › Settings: the Settings panel, in the rail.
                 this.settingsOpenBtn.addEventListener('click', () => this.openSettings());
                 // ? brings the hint bar back (and puts it away again).
                 window.addEventListener('keydown', (e) => this.onHintKey(e));
                 // f frames the selected piece, Selected and its editor kept open, as the
-                // ring's Part › View › Fit does -- unless a person is typing.
+                // ring's Part › View › Fit does, else the level; Shift+F the level.
                 window.addEventListener('keydown', (e) => this.onFitKey(e));
                 // Ctrl+Z and Ctrl+Shift+Z (or Ctrl+Y) undo and redo the staged numbers, as
                 // Part › History does -- unless a box or the SCAD editor has the focus,
@@ -1703,9 +1730,7 @@
             }
             // P, with a camera selected: Take picture, as its ring's cell does.
             onPictureKey(event) {
-                if ((event.key !== 'p' && event.key !== 'P') || event.ctrlKey || event.metaKey || event.altKey) return;
-                const t = event.target;
-                if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+                if (!(matches(event, 'p') || matches(event, 'Shift+p')) || !mayAct(event)) return;
                 if (!this.isCameraNode(this.renderNodeByKey[this.selectedName])) return;
                 event.preventDefault();
                 this.takePictureWith(this.selectedName);
@@ -1714,13 +1739,24 @@
                 return this.pictures.takePicture(name).catch((e) => this.setStatus(e.message, 'error'));
             }
 
-            // f: the selected piece framed, as Part › View › Fit frames it.
+            // f: the selected piece framed, as Part › View › Fit frames it; with nothing
+            // selected, the level, as the canvas ring's View › Fit frames it. Shift+F
+            // frames the level whatever is selected.
             onFitKey(event) {
-                if ((event.key !== 'f' && event.key !== 'F') || event.ctrlKey || event.metaKey || event.altKey) return;
-                if (ownsItsKeys(event.target)) return;
+                const level = matches(event, 'Shift+f');
+                if (!(level || matches(event, 'f')) || !mayAct(event)) return;
                 event.preventDefault();
-                const said = this.fitSelected();
+                const key = this.selectedName;
+                const said = level || !key || key === FLOOR_KEY || !this.renderNodeByKey[key] ? this.fitLevel() : this.fitSelected();
                 this.setStatus(said.said, said.ok ? 'success' : 'error');
+            }
+
+            // The pieces at this level framed, and the level's reach as it was framed.
+            fitLevel() {
+                const nodes = this.currentRenderNodes(this.currentFocusNode());
+                this.frameCameraForChildren(nodes);
+                this.invalidate();
+                return { ok: true, said: `Framed the level: ${nodes.length} piece${nodes.length === 1 ? '' : 's'} (Shift+F; f frames the selection)` };
             }
 
             // Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y: the editor's staged numbers, as its Undo and
@@ -1730,7 +1766,7 @@
                 const key = event.key.toLowerCase();
                 const redo = key === 'y' || (key === 'z' && event.shiftKey);
                 if (key !== 'z' && key !== 'y') return;
-                if (ownsItsKeys(event.target) || !this.editorTarget || !this.partSection?.isConnected) return;
+                if (!mayAct(event) || !this.editorTarget || !this.partSection?.isConnected) return;
                 event.preventDefault();
                 const done = redo ? this.redoStaged(this.editorTarget) : this.undoStaged(this.editorTarget);
                 this.setStatus(done.said, done.ok ? 'success' : 'error');
@@ -1738,11 +1774,85 @@
 
             // ? shows the hint bar again, or puts it away -- unless a person is typing.
             onHintKey(event) {
-                if (event.key !== '?' || event.ctrlKey || event.metaKey || event.altKey) return;
-                const t = event.target;
-                if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+                if (!matches(event, '?') || !mayAct(event)) return;
                 event.preventDefault();
                 this.showHint(this.hintEl.classList.contains('faded'));
+            }
+
+            // Escape, one rung at a time: the View menu folded; a drag in progress put back
+            // where it began, nothing saved; then the selection let go. The ring, a
+            // fullscreen editor and the picture chosen in Pictures take theirs before it,
+            // and a box typed in keeps its own.
+            onEscapeKey(event) {
+                if (event.key !== 'Escape' || event.defaultPrevented || !mayAct(event)) return;
+                if (this.viewMenuEl.open) { this.viewMenuEl.open = false; event.preventDefault(); return; }
+                if (this.cancelDrag()) { event.preventDefault(); return; }
+                // After every other listener has had it: Pictures' lets go of its picture first.
+                setTimeout(() => {
+                    if (event.defaultPrevented || !this.selectedName) return;
+                    const was = this.selectedName === FLOOR_KEY ? 'the floor' : this.selectedName;
+                    this.deselect();
+                    this.setStatus(`Let go of ${was}: nothing is selected (Escape)`, 'success');
+                }, 0);
+            }
+
+            // Nothing selected: no arrows, Selected says how to choose, and the keys and
+            // the ring's ⌗ Ring open the canvas ring.
+            deselect() {
+                if (!this.selectedName) return false;
+                this.selectChild(null);
+                return true;
+            }
+
+            // A drag of the move arrows, or of a selected camera's turn ring or tilt arc,
+            // put back where it began: nothing is saved, and the pointer, still down,
+            // drags nothing more. False when nothing is being dragged.
+            cancelDrag() {
+                const camera = this.cameraDrag;
+                if (camera) {
+                    this.cameraDrag = null;
+                    this.orbitControls.enabled = true;
+                    this.pictureMarks.posePreview(camera.name, null);
+                    const cam = this.pictureMarks.camera(camera.name);
+                    const mesh = this.meshByName[camera.name];
+                    if (cam && mesh) mesh.quaternion.copy(this.cameraQuaternion(cam.turn, cam.tilt));
+                    this.showCameraHandles(camera.name);
+                    this.invalidate();
+                    this.setStatus(`${camera.name}: the ${camera.kind} put back as it was; nothing saved (Escape)`, 'success');
+                    return true;
+                }
+                const start = this.dragStart;
+                if (!this.transformControls.dragging || !start) return false;
+                this.dragCancelled = true;
+                const mesh = this.meshByName[start.key];
+                const node = this.renderNodeByKey[start.key];
+                if (mesh) mesh.position.copy(start.mesh);
+                if (node) {
+                    Object.assign(node.position, start.node);
+                    this.recomputeWorldBounds(node);
+                    for (const axis of ['x', 'y', 'z']) {
+                        const input = document.getElementById(`pos-${axis}`);
+                        if (input) input.value = node.position[axis];
+                    }
+                    if (mesh && mesh.userData.camera) this.pictureMarks.posePreview(mesh.userData.camera, null);
+                }
+                // The arrows let go as a release lets go of them, said to commitCurrentDrag
+                // as cancelled.
+                this.transformControls.pointerUp({ button: 0 });
+                this.invalidate();
+                this.setStatus(`${start.key}: put back where it was; nothing saved (Escape)`, 'success');
+                return true;
+            }
+
+            // Ctrl+S (Cmd+S), while a part's editor is open: its Save, from anywhere on the
+            // page, never the browser's Save Page. Inside the SCAD editor its own keymap
+            // takes it first.
+            onSaveKey(event) {
+                if (!(matches(event, 'Ctrl+s') || matches(event, 'Meta+s')) || event.defaultPrevented) return;
+                if (!this.editorTarget || !this.partSection?.isConnected) return;
+                event.preventDefault();
+                const target = this.scadTarget && this.scadTarget.key === this.editorTarget.key ? this.scadTarget : this.editorTarget;
+                this.saveScadKey(target);
             }
 
             // ---------------------------------------------------------------
@@ -2692,7 +2802,7 @@
                 // down) -- two different identities for two different
                 // purposes, not an inconsistency.
                 li.addEventListener('click', () => this.selectChild(path));
-                li.addEventListener('dblclick', () => this.zoomIn(node.name));
+                li.addEventListener('dblclick', () => this.stepIn(path, 'double-clicked'));
 
                 fragment.appendChild(li);
                 if (hasChildren && isExpanded) {
@@ -2998,7 +3108,7 @@
                 const focus = this.currentFocusNode();
                 const selected = this.renderNodeByKey[this.selectedName];
                 if (!selected) {
-                    this.selectedBodyEl.innerHTML = '<div class="no-selection">Click a node to select it</div>';
+                    this.selectedBodyEl.innerHTML = '<div class="no-selection">Click a piece to select it</div>';
                     return;
                 }
                 // A node is a node first (its name, its place, its status); a
@@ -3190,12 +3300,13 @@
 
             zoomInAffordanceHtml(node) {
                 if (!node.children.length) return '';
-                return `<button type="button" class="zoom-in-btn">⤵ Zoom into ${esc(node.name)} (${node.children.length})</button>`;
+                return `<button type="button" class="zoom-in-btn" title="Step into ${esc(node.name)}: its pieces become the level (Page Down, or a double-click)">⤵ Step into ${esc(node.name)} (${node.children.length})</button>`;
             }
 
             bindZoomInAffordance(node) {
+                const path = this.selectedName;
                 this.selectedBodyEl.querySelector('.zoom-in-btn')
-                    ?.addEventListener('click', () => this.zoomIn(node.name));
+                    ?.addEventListener('click', () => this.stepIn(path || node.name, '⤵ Step into'));
             }
 
             // Per-node detail, offered only where it means something: a leaf
@@ -5001,6 +5112,7 @@
                 };
                 const el = this.anchors.badge(mark, top, { className: 'failure-mark', ignore: (m) => m === mesh });
                 el.dataset.part = ref;
+                el.dataset.path = key;
                 const where = partial.line ? `line ${partial.line}` : 'its error';
                 this.anchors.say(mark, {
                     icon: `failed at ${where}`,
@@ -6066,7 +6178,19 @@
                 }
             }
 
+            // Where a drag of the move arrows began: the piece's place, drawn and in the tree.
+            noteDragStart() {
+                const key = this.selectedName;
+                const mesh = key && this.meshByName[key];
+                const node = key && this.renderNodeByKey[key];
+                this.dragCancelled = false;
+                this.dragStart = mesh && node ? { key, mesh: mesh.position.clone(), node: { ...node.position } } : null;
+            }
+
             commitCurrentDrag() {
+                // A drag Escape put back is not kept.
+                if (this.dragCancelled) { this.dragCancelled = false; this.dragStart = null; return; }
+                this.dragStart = null;
                 // A camera moved: an editor open on it reads it as it is now.
                 if (this.isCameraNode(this.renderNodeByKey[this.selectedName])) {
                     delete this.partStages[`camera:${this.siteName}:${this.selectedName}`];
@@ -7125,35 +7249,62 @@
                     .filter((hit) => this.wallsSelectable || !this.isWall(this.renderNodeByKey[hit.object.userData.key]));
             }
 
-            // A right press on the world, kept until it is let go: a still one re-centres.
-            onRightPress(event) {
-                if (event.button !== 2) return;
-                this.rightPress = { x: event.clientX, y: event.clientY, ring: this.ringModifierHeld(event) };
+            // A press on the world (or on a badge over it), kept until it is let go: what
+            // it was is decided then. The world takes the keyboard's focus with it, so its
+            // keys -- the arrows, Page Up and Page Down -- are its. A second finger down
+            // makes it a pinch, never a click; a press the move arrows or a camera's turn
+            // ring took is theirs.
+            onPress(event) {
+                if (event.target === this.canvas) this.canvas.focus({ preventScroll: true });
+                if (this.press && this.press.id !== event.pointerId) { this.press.many = true; return; }
+                this.press = null;
+                if (event.button !== 0 && event.button !== 2) return;
+                this.press = {
+                    id: event.pointerId, button: event.button, x: event.clientX, y: event.clientY, target: event.target,
+                    handles: event.button === 0 && (this.transformControls.dragging || !!this.cameraDrag),
+                };
             }
-            // Let go where it was pressed (within RECENTRE_SLOP_PX), and without the
-            // ring's modifier: the orbit's pivot moves to the surface under the
-            // pointer, the camera keeping its offset from it, so the next turn turns
-            // about that point. On empty space, nothing. Moved further, it was a pan.
-            onRightRelease(event) {
-                const press = this.rightPress;
-                if (event.button !== 2 || !press) return;
-                this.rightPress = null;
-                if (press.ring || this.ringModifierHeld(event)) return;
-                if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > RECENTRE_SLOP_PX) return;
-                this.recentreAt(event);
+            // Let go where it was pressed (within STILL_PX): a left click selects what it
+            // lands on, or on empty space clears the selection; a right click re-centres
+            // the view on the surface under the pointer -- the orbit's pivot moves there,
+            // the camera keeping its offset, so the next turn turns about that point -- or,
+            // on a badge, on what the badge stands for; on empty space, nothing. Moved
+            // further, it was the view's: a turn, a pan, a dolly.
+            onRelease(event) {
+                const press = this.press;
+                if (!press || event.pointerId !== press.id) return;
+                this.press = null;
+                if (press.many || press.handles || this.cameraDrag || event.button !== press.button) return;
+                if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > STILL_PX) return;
+                if (press.button === 2) {
+                    const badge = press.target.closest && press.target.closest('.world-badge');
+                    if (badge) { const point = this.anchors.pointOf(badge); if (point) this.glideTo(point); return; }
+                    if (press.target === this.canvas) this.recentreAt(event);
+                    return;
+                }
+                if (press.target === this.canvas) this.clickAt(event);
             }
+            // Whether the last press landed in the world: the canvas, or a badge over it.
+            notePress(event) {
+                const t = event.target;
+                this.lastPressInWorld = t === this.canvas || (!!t && this.anchors.layer.contains(t));
+            }
+            worldHasKeys() { return worldHasKeys(this.canvas, this.lastPressInWorld); }
             ringModifierHeld(event) {
                 return !!event[MODIFIERS[this.settings.get('ringModifier')]];
             }
-            // The view re-centred on the surface point under the pointer, eased over
-            // RECENTRE_MS: the pivot and the camera glide together, so the distance
-            // and the angle stay as they were. False on empty space.
+            // The view re-centred on the surface point under the pointer. False on empty space.
             recentreAt(event) {
                 const hit = this.raycastHits(event)[0];
                 if (!hit) return false;
-                this.glide = { from: this.orbitControls.target.clone(), to: hit.point.clone(), start: performance.now() };
-                this.invalidate();
+                this.glideTo(hit.point);
                 return true;
+            }
+            // Eased over RECENTRE_MS: the pivot and the camera glide together, so the
+            // distance and the angle stay as they were.
+            glideTo(point) {
+                this.glide = { from: this.orbitControls.target.clone(), to: point.clone(), start: performance.now() };
+                this.invalidate();
             }
             // One frame of a re-centre: the pivot and the camera moved by the same step.
             stepGlide() {
@@ -7176,14 +7327,12 @@
                 return hit.key;
             }
 
-            // A click on a node selects it. On an outline it selects the host and
-            // chooses the shape; on a mat outside the outlines, the host (or the
-            // floor), clearing the choice. The primary button's: the others are the
-            // camera's.
-            onPointerDown(event) {
-                if (event.button !== 0 || this.transformControls.dragging || this.cameraDrag) return;
+            // A still left click: on a piece it selects it. On an outline it selects the
+            // host and chooses the shape; on a mat outside the outlines, the host (or the
+            // floor), clearing the choice. On empty space it lets the selection go.
+            clickAt(event) {
                 const hit = this.raycastPick(event);
-                if (!hit) return;
+                if (!hit) { this.deselect(); return; }
                 if (!hit.pick) { this.selectChild(hit.key); return; }
                 const { host, view, index } = hit.pick;
                 this.selectPlace(host);
@@ -7257,12 +7406,12 @@
                 return this.pictureMarks.refresh();
             }
 
-            // A mesh is keyed by its full path and zoomIn takes a bare name:
-            // only a direct child of the focus is one step in.
+            // A double-click steps into the piece under it, as deep as it is drawn; on
+            // empty space it says there is nothing there.
             onDoubleClick(event) {
                 const key = this.raycastChild(event);
-                const node = key && this.renderNodeByKey[key];
-                if (node && key === pathForChild(this.focusPath.join('.'), node.name)) this.zoomIn(node.name);
+                if (!key) { this.setStatus('Nothing here to step into: double-click a piece', 'error'); return; }
+                this.stepIn(key, 'double-clicked');
             }
 
             // Scroll dollies the camera as usual; once OrbitControls clamps
@@ -7273,8 +7422,15 @@
             // navigation both drive the same two actions. Automatic zoom, each way
             // of it, and the resistance are Settings'; a change holds from the next
             // turn of the wheel.
+            // A trackpad's momentum is no push past the limit: what scrolled past it is
+            // forgotten after WHEEL_QUIET_MS without a turn, and nothing steps for
+            // STEP_QUIET_MS after a step.
             onWheel(event) {
                 const { autoZoom, autoZoomIn, autoZoomOut, wheelResistance } = this.settings.values();
+                const now = performance.now();
+                if (now - this.wheelAt > WHEEL_QUIET_MS) this.wheelPastLimit = 0;
+                this.wheelAt = now;
+                if (now < this.stepQuietUntil) { this.wheelPastLimit = 0; return; }
                 const distance = this.orbitControls.getDistance();
                 const atMin = distance <= this.orbitControls.minDistance * 1.05;
                 const atMax = distance >= this.orbitControls.maxDistance * 0.95;
@@ -7285,50 +7441,63 @@
                     this.wheelPastLimit += Math.abs(event.deltaY);
                     if (this.wheelPastLimit > wheelResistance) {
                         this.wheelPastLimit = 0;
-                        if (zoomingIn) this.zoomInFromWheel();
-                        else this.zoomOut();
+                        this.stepQuietUntil = now + STEP_QUIET_MS;
+                        if (zoomingIn) this.stepIn(null, 'the wheel');
+                        else this.stepOut('the wheel');
                     }
                 } else {
                     this.wheelPastLimit = 0;
                 }
             }
 
-            // Page Down and Page Up, or the keys Settings gives them: a level in, as
-            // the wheel steps in, and out, as Backspace steps out -- unless a person is
-            // typing in a box or the SCAD editor, whose keys they are there.
+            // Page Down and Page Up, or the keys Settings gives them, step a level in and
+            // out; Backspace steps out. A key the page would scroll with (Page Up, Page
+            // Down, Home, End, Space, an arrow) steps only while the world has the keys,
+            // and scrolls anywhere else.
             onZoomKey(event) {
-                const combo = comboOf(event);
-                if (!combo || typing(document.activeElement)) return;
+                if (!mayAct(event)) return;
                 const { zoomInKey, zoomOutKey } = this.settings.values();
-                if (combo === zoomInKey) { event.preventDefault(); this.zoomInFromWheel(); }
-                else if (combo === zoomOutKey) { event.preventDefault(); this.zoomOut(); }
+                const stepIn = matches(event, zoomInKey), stepOut = matches(event, zoomOutKey) || matches(event, 'Backspace');
+                if (!stepIn && !stepOut) return;
+                if (SCROLL_KEYS.has(event.key) && !this.worldHasKeys()) return;
+                event.preventDefault();
+                const how = event.key === 'Backspace' ? 'Backspace' : keyLabel(stepIn ? zoomInKey : zoomOutKey);
+                if (stepIn) this.stepIn(null, how); else this.stepOut(how);
             }
 
-            // A level in, from the wheel or Page Down. No continuous hover-tracking
-            // is wired (would need per-frame raycasting for marginal benefit) --
-            // prefer the already-selected child, else whichever child sits
-            // closest to the camera's current look-at point, as a reasonable
-            // proxy for "what the user is looking at."
-            zoomInFromWheel() {
-                const focus = this.currentFocusNode();
-                if (!focus.children.length) return;
-                const selected = this.selectedName ? this.renderNodeByKey[this.selectedName] : null;
-                if (selected && focus.children.some((c) => c.name === selected.name)) {
-                    this.zoomIn(selected.name);
-                    return;
+            // One way in, for the wheel, Page Down, a double-click and the ring's Step in:
+            // the piece named (double-clicked, or the ring's), else the selection, else what
+            // the middle of the view shows -- walls passed through, as a click passes them
+            // -- as deep as it is drawn. The status line says what it did, and why that one.
+            stepIn(target = null, how = '') {
+                let path = target, why = how;
+                if (!path && this.selectedName && this.selectedName !== FLOOR_KEY) { path = this.selectedName; why = `${how ? `${how}, ` : ''}the selection`; }
+                if (!path) {
+                    const r = this.canvas.getBoundingClientRect();
+                    path = this.raycastChild({ clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 });
+                    why = `${how ? `${how}, ` : ''}the middle of the view`;
                 }
-                const target = this.orbitControls.target;
-                let closest = null;
-                let closestDist = Infinity;
-                focus.children.forEach((child, index) => {
-                    const { center } = this.boxFromBounds(this.boundsFor(child, index));
-                    const dist = Math.hypot(center[0] - target.x, center[1] - target.y, center[2] - target.z);
-                    if (dist < closestDist) {
-                        closestDist = dist;
-                        closest = child.name;
-                    }
-                });
-                if (closest) this.zoomIn(closest);
+                if (!path) { this.setStatus('Nothing to step into: select a piece, or bring one to the middle of the view', 'error'); return false; }
+                const focus = this.focusPath.join('.');
+                if ((focus && !path.startsWith(`${focus}.`)) || !this.nodeByPath(path)) {
+                    this.setStatus(`${path} is not inside ${focus || this.siteName}: nothing to step into`, 'error');
+                    return false;
+                }
+                this.focusPath = path.split('.');
+                this.selectedName = null;
+                this.renderFocus();
+                this.acted();
+                this.setStatus(`Stepped into ${path}${why ? ` (${why})` : ''}`, 'success');
+                return true;
+            }
+
+            // One level out, the piece left selected, said.
+            stepOut(how = '') {
+                if (!this.focusPath.length) { this.setStatus(`Already at the top of ${this.siteName}: nothing to step out of`, 'error'); return false; }
+                const left = this.focusPath.join('.');
+                this.zoomOut();
+                this.setStatus(`Stepped out of ${left}${how ? ` (${how})` : ''}`, 'success');
+                return true;
             }
 
             // ---------------------------------------------------------------
@@ -7605,39 +7774,59 @@
             context: { pointing: 'device', targets: [viewer.machine.port] },
             device: viewer.machine.handle.device(), at,
         });
-        // Ctrl+right-click (Settings' modifier) on a Contents row or on a piece in
-        // the 3D view opens the node ring for that piece (and selects it, so the
-        // panel agrees); on empty canvas the canvas ring; inside a board's
-        // Machine, its device ring. A plain right-click on any of them opens
-        // nothing and no menu of the browser's: on the world it is the camera's.
-        // The key and the button open the ring for whatever is selected,
-        // at the centre of the screen -- with nothing selected and a Machine
-        // open for a board pinned nowhere, that Machine's. Asked of a right-click
-        // without the modifier (`opening` false), it only says whether the spot is
-        // the page's (true) or the browser's (null), and selects nothing.
-        function whatFor(event, { opening = true } = {}) {
+        // Ctrl+right-click (Settings' modifier), or a long press by touch: on a piece
+        // in the world, a badge or a Contents row, the node ring for that piece (and
+        // it is selected, so the panel agrees); a badge's is what it stands for, and
+        // the floor's badge, like empty canvas, gives the canvas ring; inside a
+        // board's Machine, its device ring. Asked whose a spot is (`opening` false):
+        // the world's -- the canvas and its badges, where a plain right-click is the
+        // camera's and the browser's menu never shows -- the page's (a row, a
+        // Machine: a plain right-click there is the browser's), or nobody's; nothing
+        // is selected by asking. With no event (a key, the ⌗ Ring button) the ring is
+        // the selection's, or with `canvas` (Shift+M) the canvas ring, at the centre
+        // of the screen -- with nothing selected and a Machine open for a board
+        // pinned nowhere, that Machine's.
+        function whatFor(event, { opening = true, canvas = false } = {}) {
             if (!viewer.siteName) return null;
             const machineOpen = !!(viewer.machine && viewer.machine.handle);
             // The floor has no ring of its own: the canvas ring's Pictures › Floor is its.
             if (!event) {
+                if (canvas) return canvasSpec(null);
                 if (!viewer.selectedName && machineOpen && !viewer.machine.path) return machineSpec(null);
                 return viewer.selectedName && viewer.selectedName !== '@floor' ? nodeSpec(viewer.selectedName, null) : canvasSpec(null);
             }
             const at = { x: event.clientX, y: event.clientY };
-            if (machineOpen && event.target.closest && event.target.closest(".panel[data-panel='machine']")) return opening ? machineSpec(at) : true;
-            const row = event.target.closest('#contents-list .contents-item');
+            const target = event.target && event.target.closest ? event.target : null;
+            if (!target) return null;
+            if (machineOpen && target.closest(".panel[data-panel='machine']")) return opening ? machineSpec(at) : 'page';
+            const row = target.closest('#contents-list .contents-item');
             if (row) {
-                if (!opening) return true;
+                if (!opening) return 'page';
                 if (viewer.renderNodeByKey[row.dataset.path]) viewer.selectChild(row.dataset.path);
                 return nodeSpec(row.dataset.path, at);
             }
-            if (event.target === viewer.canvas) {
-                if (!opening) return true;
+            const badge = target.closest('.world-badge');
+            if (badge) {
+                if (!opening) return 'world';
+                const thing = badgeThing(badge);
+                if (!thing) return canvasSpec(at);
+                if (viewer.renderNodeByKey[thing]) viewer.selectChild(thing);
+                return nodeSpec(thing, at);
+            }
+            if (target === viewer.canvas) {
+                if (!opening) return 'world';
                 const key = viewer.raycastChild(event);
                 if (key) { viewer.selectChild(key); return nodeSpec(key, at); }
                 return canvasSpec(at);
             }
             return null;
+        }
+        // What a badge stands for, as a ring stands on it: a place's host, a camera, a
+        // board's machine, a part's piece; the floor, and a count of several, none.
+        function badgeThing(badge) {
+            const d = badge.dataset;
+            const thing = d.host !== undefined ? d.host : (d.camera || d.path || '');
+            return thing && thing !== '@floor' ? thing : null;
         }
 
         async function post(path, body) {
@@ -7815,14 +8004,11 @@
                     const target = action.slice('select:'.length);
                     if (viewer.selectPath(target)) viewer.setStatus(`Selected ${target}${tail}`, 'success');
                     else viewer.setStatus(`${target} is not at this level${tail}`, 'error');
-                } else if (action === 'zoom-out') {
-                    viewer.zoomOut();
-                    viewer.setStatus(`Up${tail}`, 'success');
-                } else if (action === 'zoom-in') {
-                    const name = path.split('.').pop();
-                    if (viewer.currentFocusNode().children.some((c) => c.name === name)) viewer.zoomIn(name);
-                    else if (viewer.renderNodeByKey[path]) viewer.selectChild(path);
-                    viewer.setStatus(`Zoomed into ${name}${tail}`, 'success');
+                } else if (action === 'zoom-out' || action === 'zoom-in') {
+                    // Step out, and a piece's Step in: the page's one way out and in, saying
+                    // what it did.
+                    const ok = action === 'zoom-out' ? viewer.stepOut(intent.label) : viewer.stepIn(path, intent.label);
+                    viewer.setStatus(`${viewer.statusEl.textContent}${tail}`, ok ? 'success' : 'error');
                 } else if (action === 'move') {
                     if (viewer.renderNodeByKey[path]) viewer.selectChild(path);
                     viewer.setStatus(viewer.transformControls.object ? `Drag the handle to move ${path}${tail}` : `${path} cannot be moved from here: only a direct child of the site can${tail}`, 'success');
@@ -7835,9 +8021,8 @@
                     const open = viewer.panels.toggle(id) && viewer.panels.isOpen(id);
                     viewer.setStatus(`${open ? 'Opened' : 'Closed'} the ${id} panel${tail}`, 'success');
                 } else if (action === 'fit') {
-                    const nodes = viewer.currentRenderNodes(viewer.currentFocusNode());
-                    viewer.frameCameraForChildren(nodes);
-                    viewer.setStatus(`Framed ${nodes.length} piece(s)${tail}`, 'success');
+                    const { said } = viewer.fitLevel();
+                    viewer.setStatus(`${said}${tail}`, 'success');
                 } else if (action === 'explain') {
                     const node = viewer.renderNodeByKey[path] || viewer.nodeByPath(path);
                     // A piece made from a picture is followed back to its outline.
@@ -8010,7 +8195,7 @@
             }
         }
 
-        const ringKeys = () => ({ key: viewer.settings.get('ringKey'), modifier: viewer.settings.get('ringModifier') });
+        const ringKeys = () => ({ key: viewer.settings.get('ringKey'), canvasKey: viewer.settings.get('canvasRingKey'), modifier: viewer.settings.get('ringModifier') });
         const ringApi = installRing({
             base: BASE,
             ...ringKeys(),
