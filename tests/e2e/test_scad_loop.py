@@ -48,9 +48,14 @@ from apothecary.projects.parts.stl_renderer import params_sidecar_path
 PART = "calibration_cube"
 RING_MS = 15000
 WIDTHS = ((1280, 800), (1024, 768))
-# What differs on every run whatever the page does: when a variant was saved.
-# When each variant was saved, a grey of one width whatever the time.
-BLANK = all_words(".saved-when")
+# Where this run's server keeps its variants: a folder of the run's own, which the
+# server's words name and a page written from them must not -- another run, CI's among
+# them, names another (tests/e2e/conftest.py's start_server).
+RUN_CLONE = re.compile(r"/[^\s`'\"]*?/server\d*/variants\.git")
+# What differs on every run whatever the page does, blanked in the pictures: when each
+# variant was saved, a grey of one width whatever the time, and the run's own folder
+# where the status line names it.
+BLANK = (*all_words(".saved-when"), ("#status", RUN_CLONE.pattern))
 
 REFUSED = 'assert(size < 5, "too big to keep");'
 SMALL_TOP = "translate([0, 0, size]) cube(size / 2);"
@@ -182,6 +187,11 @@ def _ring(page: Page, *labels: str) -> None:
     page.locator(f"#contents-list .contents-item[data-path='{PART}']").click(button="right")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
     _press(page, *labels)
+
+
+def _said_on_the_page(page: Page) -> str:
+    """The status line, as the walkthrough shows it: the run's own folder named as such."""
+    return RUN_CLONE.sub("<the test server's clone>", _status(page).inner_text())
 
 
 def _status(page: Page):
@@ -435,7 +445,7 @@ def test_editing_a_parts_scad_twice_round(
         "Taller than the envelope its numbers declare, the envelope's line turns amber and "
         "says by how much. The part's own SCAD is not touched. Part › Save is the next "
         "step.",
-        shown=_status(page).inner_text(),
+        shown=_said_on_the_page(page),
         blank=BLANK,
     )
 
@@ -454,7 +464,7 @@ def test_editing_a_parts_scad_twice_round(
         "merging is yours to do. It is listed under the "
         "part's parameters and, in the editor, with what it changes against the part's "
         "SCAD and that HEAD does not hold it. Floating the editor is the next step.",
-        shown=_status(page).inner_text(),
+        shown=_said_on_the_page(page),
         blank=BLANK,
     )
 
@@ -509,7 +519,7 @@ def test_editing_a_parts_scad_twice_round(
         "cube, rendered once it reads, 20 mm tall; then Ctrl+S in the editor, OpenSCAD's "
         "key, which saves as its Save does. Both variants are listed, newest first. "
         "Drawing the first again is the next step.",
-        shown=_status(page).inner_text(),
+        shown=_said_on_the_page(page),
         blank=BLANK,
     )
 
@@ -593,7 +603,7 @@ def test_editing_a_parts_scad_twice_round(
         "reloaded. Drawn where it stands, it reaches under the floor, and the envelope's "
         "line says by how far beside what it measures against what it declares. F6 or "
         "Ctrl+Enter would render it as Apply does.",
-        shown=_status(page).inner_text(),
+        shown=_said_on_the_page(page),
         blank=BLANK,
     )
 
