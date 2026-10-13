@@ -44,8 +44,7 @@ editing this code and having that edit reviewed:
    SHA-256 of an OrcaSlicer release's asset, github.com serves the asset and
    redirects it to release-assets.githubusercontent.com. OrcaSlicer itself,
    once installed, is a subprocess outside the guard; a slice gives it a
-   ``--datadir`` of its own, and it reaches no host (an strace of a real
-   slice).
+   ``--datadir`` of its own, and it reaches no host.
 
 2. **The server refuses to listen anywhere but this machine, and refuses
    anyone who is not on it.** ``require_loopback()`` is what every ``--host``
@@ -86,12 +85,12 @@ editing this code and having that edit reviewed:
    that file -- is a tool fetch in all but mechanism, and nothing personal is
    in it.
 
-**The named exception, not yet built:** *secured user accounts*. A future
-record may let data leave this machine for an account the person holds and
-has authenticated, with consent given per account and revocable. Until such
-a record is Accepted there is no code path for it, and this module is what
-would have to change. See the draft *Personal data stays on the device* in
-``governance/qm/adr/``.
+**The named exception:** *secured user accounts*. A record may let data leave
+this machine for an account the person holds and has authenticated, with
+consent given per account and revocable. Until such a record is Accepted there
+is no code path for it, and this module is what would have to change. See the
+draft *Personal data stays on the device*, proposed for ``governance/qm/adr/``
+in qm#121.
 """
 
 from __future__ import annotations
