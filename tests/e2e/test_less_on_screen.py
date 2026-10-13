@@ -743,6 +743,16 @@ THROUGH_THE_WALL = """() => {
     return null;
 }"""
 
+# The move arrows asked, as a press asks them, at a point: whether they would take it.
+# ``select``: a piece selected first, in the same task -- no frame drawn between, as
+# under load, or a click right after a selection.
+ARROWS_AT = """([x, y, select]) => {
+    const v = window.fractalViewer, tc = v.transformControls, r = v.canvas.getBoundingClientRect();
+    if (select) v.selectChild(select);
+    tc.pointerHover({ x: ((x - r.left) / r.width) * 2 - 1, y: -((y - r.top) / r.height) * 2 + 1, button: 0 });
+    return tc.axis;
+}"""
+
 WALL = """() => {
     const m = window.fractalViewer.meshByName['garage_building'];
     return { opacity: m.material.opacity, through: !!m.userData.passThrough };
@@ -763,6 +773,10 @@ def test_a_click_passes_through_a_wall_and_the_toggle_restores_it(page: Page, be
     page.mouse.click(spot["x"], spot["y"])
     assert page.evaluate("() => window.fractalViewer.selectedName") == spot["behind"]
 
+    # The arrows stand on the piece they move as soon as they move to it, before any
+    # frame is drawn: under load a click there came before the frame, and the arrows,
+    # still where the piece behind had them, took it as a drag.
+    assert page.evaluate(ARROWS_AT, [spot["x"], spot["y"], "garage_building"]) is None
     _select(page, "garage_building")
     wall = page.evaluate(WALL)
     assert wall["opacity"] > 0.5 and not wall["through"], wall

@@ -2742,6 +2742,10 @@
             // nothing: the move arrows, and on a camera its turn ring and tilt arc.
             showHandles(object) {
                 this.transformControls.attach(object);
+                // Where they stand now, not at the next frame: a press asks the arrows where
+                // they were last drawn, and drawn only when the world changes, a click right
+                // after a selection found them still on the piece selected before.
+                this.transformControls.updateMatrixWorld();
                 this.showCameraHandles(object.userData.camera || null);
             }
             hideHandles() {
