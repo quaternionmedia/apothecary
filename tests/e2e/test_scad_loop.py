@@ -191,7 +191,7 @@ def _ring(page: Page, *labels: str) -> None:
 
 def _said_on_the_page(page: Page) -> str:
     """The status line, as the walkthrough shows it: the run's own folder named as such."""
-    return RUN_CLONE.sub("<the test server's clone>", _status(page).inner_text())
+    return RUN_CLONE.sub("<the test server's variants repository>", _status(page).inner_text())
 
 
 def _status(page: Page):
@@ -207,9 +207,10 @@ def _code(page: Page):
 
 
 def _into_code(page: Page) -> None:
-    """Into the editor as a person goes, by a click on a line of its text: the text is
-    taller than the part of Selected that shows it, so its middle may be out of view."""
-    page.locator(".scad-editor .cm-line").last.click()
+    """Into the editor as a person goes, by a click on a line of its text, at its start:
+    the text is taller than the part of Selected that shows it, so its middle may be out
+    of view, and a line's middle may be past its right edge."""
+    page.locator(".scad-editor .cm-line").last.click(position={"x": 4, "y": 4})
 
 
 def _text(page: Page) -> str:
