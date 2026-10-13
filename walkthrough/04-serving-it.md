@@ -15,8 +15,7 @@ it is, and `parts_library` the catalog every registered part appears in.
     ['datum_core', 'garage', 'parts_library']
 
 Every site read carries its generated OpenSCAD, so the SCAD section of the
-viewer's Site panel fills on load rather than waiting for someone to drag
-something:
+viewer's Site panel fills on load:
 
     >>> body = client.get("/sites/datum_core").json()
     >>> body["is_valid"], "hull()" in body["scad"]
@@ -24,10 +23,8 @@ something:
 
 ## The viewer serves its own 3D library
 
-Loading three.js from a CDN meant the page worked only for a browser that could
-reach that CDN. When it could not, the module never executed and the canvas,
-the Site panel's tree and its SCAD came up empty together — while the static
-markup still read "Layout valid".
+The page loads three.js from this server, not from a CDN, so it draws with no
+network:
 
     >>> page = client.get("/viewer/sites/datum_core").text
     >>> "jsdelivr" in page
@@ -40,13 +37,18 @@ clone serves it with no install step; the README beside it says how to update it
 
 ## One page
 
-The viewer is the only page. The firmware page's address opens it with the
-Bench in front of the world, and the printer monitor's with that board's
-Machine:
+The viewer is the only page. `/firmware` opens it with the Bench in front of
+the world, and `/firmware/monitor?port=…` with that board's Machine:
 
     >>> r = client.get("/firmware", follow_redirects=False)
     >>> r.status_code, r.headers["location"]
     (307, '/viewer/sites/garage?panel=bench')
+
+A part's address opens the catalog, focused on the part:
+
+    >>> r = client.get("/viewer/parts/datum_core", follow_redirects=False)
+    >>> r.status_code, r.headers["location"]
+    (307, '/viewer/sites/parts_library?focus=datum_core')
 
 ## Recipes
 
