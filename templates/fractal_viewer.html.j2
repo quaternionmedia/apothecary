@@ -704,14 +704,14 @@
                 </div>
             </details>
             <a id="docs-link" class="docs-link" href="/docs" target="_blank" rel="noopener" title="The documentation in a new tab: the guides, and the walkthrough, each of its pages a run of the tests (Panels › Docs on the ring)">Docs</a>
-            <button type="button" id="ring-open" title="Open the ring for the chosen piece (m, or Ctrl+right-click a piece). Digits choose cells as on a numeric keypad; 5 backs out.">⌗ Ring</button>
+            <button type="button" id="ring-open" title="Open the ring for the chosen piece (m, or Ctrl+right-click a piece); Shift+M opens the canvas ring. Digits choose cells as on a numeric keypad; 5 backs out.">⌗ Ring</button>
             <span id="validity-indicator" class="validity-indicator valid" title="The site's problems: click to unfold them in Site">Layout valid</span>
         </div>
         <div class="main-content">
             <div class="viewer-panel">
                 <canvas id="viewer-canvas" tabindex="0" aria-label="The world: a click selects; the arrows pan and Shift+arrows turn the view while it has the focus; Page Down steps in, Page Up steps out"></canvas>
                 <div id="minimap"></div>
-                <div class="viewer-hint" id="viewer-hint">Click: select • Double-click or Page Down: go in • Right-drag: pan • Ctrl+right-click: ring • ?: hide this</div>
+                <div class="viewer-hint" id="viewer-hint">Click: select • Double-click: step in • Page Up: step out • Right-drag: pan • Ctrl+right-click: ring • ?: hide</div>
             </div>
             <div class="side-panel">
                 <div class="panel-section" data-panel="site" data-zone="stack">
@@ -2642,11 +2642,12 @@
                 return `${keyLabel(v.ringKey)}, or ${modifierLabel(v.ringModifier)}+right-click`;
             }
             // The words that teach the pointer and the keys -- the hint bar, ⌗ Ring's
-            // tooltip -- as Settings has them.
+            // tooltip -- as Settings has them. The hint names the essentials only, in one
+            // line at 1024 px; Settings is the reference for every binding.
             sayInputs() {
                 const v = this.settings.values();
-                this.hintEl.textContent = `Click: select • Double-click or ${keyLabel(v.zoomInKey)}: go in • Right-drag: pan • ${modifierLabel(v.ringModifier)}+right-click: ring • ?: hide this`;
-                this.ringOpenBtn.title = `Open the ring for the chosen piece (${keyLabel(v.ringKey)}, or ${modifierLabel(v.ringModifier)}+right-click a piece). Digits choose cells as on a numeric keypad; 5 backs out.`;
+                this.hintEl.textContent = `Click: select • Double-click: step in • ${keyLabel(v.zoomOutKey)}: step out • Right-drag: pan • ${modifierLabel(v.ringModifier)}+right-click: ring • ?: hide`;
+                this.ringOpenBtn.title = `Open the ring for the chosen piece (${keyLabel(v.ringKey)}, or ${modifierLabel(v.ringModifier)}+right-click a piece); ${keyLabel(v.canvasRingKey)} opens the canvas ring. Digits choose cells as on a numeric keypad; 5 backs out.`;
             }
 
             // Deliberately a depth ladder, not a node-link graph: one tick
@@ -3075,21 +3076,53 @@
             // works for a direct child of the root (see isEditableSelection),
             // so anything deeper -- or any leaf of an expanded category that
             // isn't itself a direct child -- gets a read-only panel.
-            // Selected drawn, and the part editor's stage bar pinned above its body: the
-            // bar -- what is staged, Apply, Revert, Defaults, Undo, Redo, Ghost -- takes its
-            // own space there, in view however far the parameters are scrolled, and covers
-            // none of them.
+            // Selected drawn, and the part editor's stage bar pinned above its body while
+            // the piece is being edited: the bar -- what is staged, Apply, Revert,
+            // Defaults, Undo, Redo, Ghost -- takes its own space there, in view however far
+            // the parameters are scrolled, and covers none of them. The control that had
+            // the focus has it again after the panel is drawn anew.
             renderSelectedPanel() {
+                const focused = this.focusKey();
                 this.drawSelectedPanel();
                 this.placeStageBar();
+                this.refocus(focused);
+            }
+
+            // What has the focus in Selected -- its body, or its pinned bar -- as a selector
+            // that finds the same control once the panel is drawn again; null when the
+            // focus is elsewhere.
+            focusKey() {
+                const el = document.activeElement;
+                const pinned = this.panels.pinnedSlot('selected');
+                if (!el || el === document.body || !(this.selectedBodyEl.contains(el) || pinned?.contains(el))) return null;
+                if (el.id) return `#${CSS.escape(el.id)}`;
+                const data = ['field', 'path', 'view', 'variant', 'axis', 'verb', 'camera']
+                    .filter((d) => el.dataset[d] !== undefined)
+                    .map((d) => `[data-${d}="${CSS.escape(el.dataset[d])}"]`).join('');
+                const classes = [...el.classList].map((c) => `.${CSS.escape(c)}`).join('');
+                return `${el.tagName.toLowerCase()}${classes}${data}`;
+            }
+            refocus(key) {
+                if (!key) return;
+                const pinned = this.panels.pinnedSlot('selected');
+                const again = this.selectedBodyEl.querySelector(key) || pinned?.querySelector(key);
+                if (again && document.activeElement !== again) again.focus({ preventScroll: true });
+            }
+
+            // Whether the piece in Selected is being edited: Part › Edit asked for its
+            // editor, or something is staged in it. Only then is its stage bar pinned
+            // above Selected's body; otherwise the bar stands in the part's section, and
+            // Selected shows the piece's name, place and facts first.
+            editingNow() {
+                if (!this.partSection || !this.selectedBodyEl.contains(this.partSection)) return false;
+                return this.editorOpenFor === this.selectedName || !!this.stageBusy;
             }
 
             placeStageBar() {
                 const pinned = this.panels.pinnedSlot('selected');
                 if (!pinned) return;
                 const bar = this.partSection?.querySelector('#stage-bar') ?? pinned.querySelector('#stage-bar');
-                const shown = this.partSection && this.selectedBodyEl.contains(this.partSection);
-                if (bar && shown) {
+                if (bar && this.editingNow()) {
                     if (bar.parentElement !== pinned) { pinned.replaceChildren(bar); }
                 } else {
                     // The editor left Selected: its bar goes back with it.
@@ -3842,6 +3875,9 @@
 
                 const diff = this.stagedDiff();
                 const count = Object.keys(diff).length;
+                // Something staged: the piece is being edited, and its bar stands pinned.
+                const busy = count > 0 || !!this.toSaved(target);
+                if (busy !== !!this.stageBusy) { this.stageBusy = busy; this.placeStageBar(); }
                 this.markStagedControls(diff);
                 this.refreshUndoButtons(target);
                 this.showBuildNote(target);

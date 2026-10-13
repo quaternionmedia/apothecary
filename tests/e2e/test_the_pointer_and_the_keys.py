@@ -312,7 +312,7 @@ def test_page_down_and_page_up_step_in_and_out_and_a_rebound_key_works(page: Pag
     page.keyboard.press("j")
     expect(field).to_have_text("j")
     expect(field).to_have_attribute("aria-pressed", "false")
-    expect(page.locator("#viewer-hint")).to_contain_text("Double-click or j: go in")
+    expect(page.locator("#viewer-hint")).to_contain_text("Page Up: step out")
 
     page.locator(".setting-number[data-setting='wheelResistance']").focus()
     page.keyboard.press("j")
@@ -870,3 +870,79 @@ def test_rebuild_asks_twice_on_its_wedge_and_the_emergency_stop_never_asks(page:
     machine.locator("#estop").click()
     expect(machine.locator("#log")).to_contain_text("M112", timeout=10000)
     assert dialogs == [], dialogs
+
+
+# --------------------------------------------------------------------------
+# Selected: the stage bar, the focus; the status line; the world's keys
+# --------------------------------------------------------------------------
+
+PINNED = ".panel[data-panel='selected'] .panel-pinned"
+
+
+def _ring_labels(page: Page, *labels: str) -> None:
+    for label in labels:
+        page.wait_for_function(
+            "(l) => [...document.querySelectorAll('#ring-overlay .wedge')]"
+            ".some((w) => w.getAttribute('aria-label') === l)",
+            arg=label,
+            timeout=5000,
+        )
+        page.keyboard.press(page.evaluate(WEDGES)[label])
+
+
+@pytest.mark.e2e
+def test_the_stage_bar_is_pinned_only_while_editing(page: Page, url: str):
+    """calibration_cube chosen from Site: its editor in Selected, its bar in the part's
+    section, nothing pinned above the body, and Selected's name first. A value staged:
+    the bar pinned. Put back: in its section again. Part › Edit: pinned, nothing staged."""
+    page.goto(f"{url}/viewer/sites/parts_library")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    page.locator(ROW.format("calibration_cube")).click()
+    expect(page.locator("#part-params .param-number").first).to_be_visible(timeout=20000)
+    expect(page.locator(f"{PINNED} #stage-bar")).to_have_count(0)
+    expect(page.locator("#selected-body .part-editor #stage-bar")).to_have_count(1)
+    expect(page.locator("#selected-body > .prop-row").first).to_contain_text("Name")
+
+    box = page.locator("#part-params .param-number").first
+    box.fill(str(float(box.input_value()) + 2))
+    box.press("Tab")
+    expect(page.locator(f"{PINNED} #stage-bar")).to_have_count(1, timeout=10000)
+    page.locator("#revert-btn").click()
+    expect(page.locator("#stage-summary")).to_have_text("No staged changes", timeout=10000)
+    expect(page.locator(f"{PINNED} #stage-bar")).to_have_count(0)
+
+    page.locator(ROW.format("calibration_cube")).click(button="right", modifiers=["Control"])
+    expect(page.locator(RING)).to_be_visible(timeout=5000)
+    _ring_labels(page, "Part", "Edit")
+    expect(page.locator(f"{PINNED} #stage-bar")).to_have_count(1, timeout=10000)
+    expect(page.locator("#stage-summary")).to_have_text("No staged changes")
+
+
+@pytest.mark.e2e
+def test_selected_keeps_the_focus_the_status_is_announced_and_the_arrows_are_the_worlds(
+    page: Page, url: str
+):
+    """A box focused in Selected has the focus again after the panel is drawn anew; the
+    status line is a polite live region; the world takes the focus, and the arrows pan
+    the view only while it has it."""
+    _open(page, url)
+    page.locator(ROW.format("printer_1")).click()
+    expect(page.locator("#pos-x")).to_be_visible(timeout=5000)
+    page.locator("#pos-x").focus()
+    page.evaluate("() => window.fractalViewer.renderSelectedPanel()")
+    assert page.evaluate("() => document.activeElement.id") == "pos-x"
+    status = page.locator("#status")
+    expect(status).to_have_attribute("role", "status")
+    expect(status).to_have_attribute("aria-live", "polite")
+
+    canvas = page.locator("#viewer-canvas")
+    expect(canvas).to_have_attribute("tabindex", "0")
+    _unfocus(page)
+    before = _orbit(page)["target"]
+    page.keyboard.press("ArrowLeft")
+    settled(page)
+    assert _near(_orbit(page)["target"], before, 0.01), "the arrows panned a world without focus"
+    _world(page)
+    page.keyboard.press("ArrowLeft")
+    settled(page)
+    assert not _near(_orbit(page)["target"], before, 0.01), "the arrows did not pan the world"
