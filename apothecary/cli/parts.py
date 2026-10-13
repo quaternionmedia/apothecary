@@ -630,8 +630,8 @@ def parts_elephant_walk(output: Path | None, gap: int, ensure_stl: bool):
     in a single row along the X axis, using bounding boxes to prevent
     parts from overlapping.
 
-    Note: This imports STL files, not SCAD modules, for reliable rendering
-    regardless of how individual parts define their modules.
+    It imports STL files, not SCAD modules, so it renders however each part
+    defines its modules.
 
     \b
     Examples:
