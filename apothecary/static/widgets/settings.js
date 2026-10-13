@@ -205,7 +205,7 @@ const STYLE = `
 .settings-ui .setting-default { font-size: 0.68rem; color: #777; }
 .settings-ui .setting-key { min-width: 6.5rem; text-align: center; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .settings-ui .setting-key[aria-pressed="true"] { border-color: #e0b84a; color: #e0b84a; }
-.settings-ui .setting-number { width: 4.5rem; }
+.settings-ui .setting-number { width: 6.5rem; }
 .settings-ui .setting-choice { font: inherit; font-size: 0.78rem; background: #232823; color: #ddd; border: 1px solid #3a443a; border-radius: 4px; padding: 0.15rem 0.3rem; }
 .settings-ui .setting-unit { font-size: 0.68rem; color: #777; white-space: nowrap; }
 .settings-ui .setting-control { display: flex; align-items: center; gap: 0.3rem; justify-self: end; }
@@ -235,7 +235,7 @@ function control(store, s, capturing) {
     if (s.kind === "tick") {
         return `<input type="checkbox" class="setting-tick" data-setting="${s.id}"${value ? " checked" : ""} title="${esc(s.title)}">`;
     }
-    return `<input type="number" class="setting-number" data-setting="${s.id}" value="${value}" min="${s.min}" max="${s.max}" step="${s.step}" title="${esc(s.title)}"><span class="setting-unit">${esc(s.unit)}</span>`;
+    return `<input type="number" class="setting-number" data-setting="${s.id}" value="${value}" min="${s.min}" max="${s.max}" step="${s.step}" title="${esc(s.title)}">`;
 }
 
 export function mountSettings(settingsEl, store, { log = null } = {}) {
@@ -258,7 +258,7 @@ export function mountSettings(settingsEl, store, { log = null } = {}) {
                 // Stepping in and out mean nothing while automatic zoom is off.
                 const off = (s.id === "autoZoomIn" || s.id === "autoZoomOut") && !values.autoZoom;
                 const said = state.said[s.id];
-                return `<div class="setting-name${off ? " off" : ""}" data-row="${s.id}" title="${esc(s.title)}"><span>${esc(s.label)}</span><span class="setting-default">default: ${esc(store.describe(s.id, s.def))}</span>${
+                return `<div class="setting-name${off ? " off" : ""}" data-row="${s.id}" title="${esc(s.title)}"><span>${esc(s.label)}${s.unit ? ` <span class="setting-unit">${esc(s.unit)}</span>` : ""}</span><span class="setting-default">default: ${esc(store.describe(s.id, s.def))}</span>${
                     said ? `<span class="setting-said${said.bad ? " bad" : ""}">${esc(said.text)}</span>` : ""}</div>`
                     + `<div class="setting-control">${control(store, s, state.capturing === s.id)}</div>`
                     + `<button type="button" class="setting-reset" data-setting="${s.id}" title="Back to its default, ${esc(store.describe(s.id, s.def))}"${at ? " disabled" : ""}>↺</button>`;
