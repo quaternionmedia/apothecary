@@ -32,8 +32,8 @@
             min-width: 160px; padding: 0.5rem; border-radius: 4px;
             border: 1px solid #444; background: #333; color: #e0e0e0;
         }
-        /* As wide as the name of a site can be, not as the longest one there is
-           today: a site made from a picture no longer shifts the whole toolbar. */
+        /* As wide as the name of a site can be, not as the longest one there is, so a
+           site made from a picture never shifts the whole toolbar. */
         #site-select { width: 11rem; }
         .toolbar button, .view-menu > summary {
             padding: 0.45rem 0.8rem; border-radius: 4px; cursor: pointer;
@@ -317,8 +317,7 @@
         .category-chip .chip-swatch { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
         /* The hierarchy tree: a flat list of indented rows (depth encoded as
-           left-padding) rather than nested <ul>s -- same DOM shape as the
-           old one-level Contents list, just deeper. tree-caret expands/
+           left-padding) rather than nested <ul>s. tree-caret expands/
            collapses a row for browsing only, independent of whether that
            subtree is actually instantiated in the 3D view (render-dot). */
         .contents-tree .contents-item { gap: 0.35rem; }
@@ -840,7 +839,7 @@
         // Distinct from PART_COLOR/SUBTRACTION_COLOR/STATUS_COLORS/
         // BUILD_VOLUME_COLOR below, which all still take priority over this
         // (see colorMesh) -- category is what everything *else* falls back
-        // to instead of the flat DEFAULT_COLOR every node used to share.
+        // to, before DEFAULT_COLOR.
         const CATEGORY_COLORS = {
             wall: 0x9c8f7a,
             furniture: 0x8a5a3c,
@@ -852,12 +851,10 @@
 
         // A colour for a group nobody wrote down in advance.
         //
-        // CATEGORY_COLORS above is a fixed list, which was fine while every
-        // group was written into the program. It stopped being fine when groups
-        // started coming from a picture: a word is whatever the vocabulary
-        // holds, and the vocabulary is meant to grow. A group not on the list
-        // got no colour and, worse, no filter chip at all — so it was invisible
-        // rather than merely plain.
+        // CATEGORY_COLORS above is a fixed list, and groups also come from a
+        // picture: a word is whatever the vocabulary holds, and the vocabulary
+        // grows. A group not on the list takes a colour from its name, so it is
+        // drawn, and filtered, like any other.
         //
         // Same name, same colour, every time, so a group does not change colour
         // between one look and the next.
@@ -901,7 +898,7 @@
         const VALIDATE_QUIET_MS = 250;
         // The SCAD editor: a check (evaluated, not rendered) once typing has stopped
         // this long, and a render this long after a check that passes, a newer edit
-        // cancelling it (the part-iteration plan's timings).
+        // cancelling it (docs/viewer.md, "The SCAD editor").
         const SCAD_CHECK_MS = 300;
         const SCAD_RENDER_AFTER_CHECK_MS = 300;
         // The staged numbers' undo: changes to one field this close together are one
@@ -946,8 +943,8 @@
         const ownsItsKeys = (el) => !!el && (el.isContentEditable || /^(TEXTAREA|SELECT)$/.test(el.tagName)
             || (el.tagName === 'INPUT' && !/^(range|checkbox|radio|button|submit|reset|color|file)$/.test(el.type)));
 
-        // Mirrors example_hierarchy.PRINTER_STATUSES -- this prototype has no
-        // endpoint that reports the allowed set, so it's duplicated here.
+        // Mirrors example_hierarchy.PRINTER_STATUSES: no endpoint reports the
+        // allowed set, so it is repeated here.
         const PRINTER_STATUSES = ['idle', 'printing', 'offline', 'maintenance'];
         const STATUS_COLORS = {
             idle: 0x4488cc,
@@ -1006,8 +1003,7 @@
         const SCROLL_KEYS = new Set(['PageUp', 'PageDown', 'Home', 'End', ' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
         // The far plane has to clear the furthest the camera can dolly plus the
         // scene's own extent behind the target, or the world is clipped away
-        // exactly when you pull back to look at the largest scale. This used to
-        // be a fixed 20000 while the dolly clamp reached ~54000 on the garage.
+        // exactly when you pull back to look at the largest scale.
         const FAR_PLANE_HEADROOM = 2.5;
         const MIN_FAR_PLANE = 40000;
 
@@ -1054,8 +1050,8 @@
         // swaps two axes while leaving the third fixed -- the transform's
         // determinant is -1). Left uncorrected, a loaded STL's own "up"
         // stays pointed along its OpenSCAD z-axis, which lands on three.js's
-        // depth axis instead of its up axis -- the "off by 90 degrees"
-        // orientation bug. Applying the same swap here keeps a real STL
+        // depth axis instead of its up axis, a quarter turn out. Applying the
+        // same swap here keeps a real STL
         // mesh's internal features (e.g. a wall's off-center door cutout) at
         // the same place, facing the same way, as the placeholder box it
         // replaces -- but a reflection also inverts triangle winding, so
@@ -1150,9 +1146,9 @@
         }
 
         // Standardized navigation over Assembly's fractal tree: the same
-        // click/double-click/scroll/zoom-out controls apply at any depth,
+        // click, double-click, wheel and step-out controls apply at any depth,
         // because every node -- Site, Structure, Substructure, Feature, or a
-        // migrated parts-library leaf -- is the same shape.
+        // parts-library leaf -- is the same shape.
         class FractalViewer {
             constructor() {
                 this.canvas = document.getElementById('viewer-canvas');
