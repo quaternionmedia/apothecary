@@ -222,7 +222,8 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     expect(floated).to_be_visible(timeout=5000)
     floated.locator(".bench-build").evaluate("(el) => el.scrollIntoView({ block: 'start' })")
     installed = floated.locator(".tc-module").evaluate_all(
-        "(ms) => ms.map((m) => `${m.dataset.id}: ${/not installed/.test(m.textContent)"
+        "(ms) => ms.map((m) => `${m.dataset.id ?? m.dataset.slicer}: "
+        "${/not installed/.test(m.textContent)"
         " ? 'not installed' : 'installed'}`)"
     )
     assert "rust-esp32: installed" in installed, installed

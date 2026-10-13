@@ -283,8 +283,10 @@ def _framed_on_the_cube(page: Page) -> None:
 def _envelope(page: Page) -> str:
     """What the editor says of the part's size: the envelope it declares, and what is
     drawn measures. It stands below the SCAD, out of a picture of the sizes, so a step
-    that names it carries its words."""
-    return " ".join(page.locator("#part-envelope").inner_text().split())
+    that names it carries its words -- all but which OpenSCAD measured, which is the
+    machine's (the page's "does not show")."""
+    said = " ".join(page.locator("#part-envelope").inner_text().split())
+    return re.sub(r" \((OpenSCAD's summary|read from the STL)\)", "", said)
 
 
 def _shown_whole(page: Page, show) -> None:
@@ -863,6 +865,8 @@ def test_designing_a_part_twice_round(
     # The defaults again, for nothing: from the part's ring.
     back = _back_to_the_defaults(page, from_the_ring=True)
     page.screenshot(path=str(shots / "saved-again.png"))
+    # Its parameters from the first, wherever the Apply left Selected scrolled.
+    page.evaluate(STAGE_BAR_AT_THE_TOP)
     story.shows(
         "Part › Defaults, then Part › Apply: the saved part again, for nothing",
         f"{PART}'s ring, Part › Defaults: the part's own SCAD back in its editor -- its "
