@@ -58,7 +58,7 @@ def _unused(wanted: str, taken: set) -> str:
     """A name nothing else in this arrangement has.
 
     Tidying turns "shed door" and "shed-door" into the same word, and two pieces
-    sharing one name meant the second quietly replaced the first — a piece
+    sharing one name would let the second replace the first unseen — a piece
     vanishing from the arrangement with nothing said. Numbers are added until
     the name is free, and the number is part of the name, so nothing is lost.
     """
@@ -90,8 +90,8 @@ def agreed_confidence(confidences: Sequence[float]) -> float:
         return typical
     # Scaled by what the pictures actually said, not only by how many of them
     # there were. Without this last factor, two sightings of something the
-    # finder was not sure about *at all* came back at twenty-five per cent —
-    # confidence conjured out of two admissions of ignorance.
+    # finder was not sure about *at all* would come back at twenty-five per cent
+    # — confidence conjured out of two admissions of ignorance.
     closed = (1.0 - typical) * (1.0 - 1.0 / (extra + 1)) * AGREEMENT_WEIGHT * typical
     return min(0.99, typical + closed)
 
@@ -170,9 +170,8 @@ def _merge_same(
                 f"shapes were assumed to be shapes {anchor} already saw"
             )
         # Every piece of the other picture, including any whose name does not
-        # end in a number. An earlier version looked only at the numbered ones
-        # and dropped the rest without a word — a piece disappearing from an
-        # arrangement is precisely the failure this module exists to avoid.
+        # end in a number: a piece disappearing from an arrangement unsaid is
+        # precisely the failure this module exists to avoid.
         numbered = _shape_to_piece(built[other].site)
         place_of = {id(piece): where for where, piece in numbered.items()}
         for piece in _pieces_of(built[other].site):
@@ -220,10 +219,8 @@ def _across(part: Assembly) -> float:
     """How wide a part really is, edge to edge.
 
     Measured from where each piece sits *and how big it is*. Measuring only the
-    middles of the pieces reported three arrangements nearly four thousand units
-    across as one unit across, and they were then laid out a unit apart — every
-    one of them on top of the others, under a heading promising they would not
-    be.
+    middles of the pieces would report wide arrangements as a unit across, and
+    lay them out a unit apart, one on top of the other.
     """
     left: List[float] = []
     right: List[float] = []
