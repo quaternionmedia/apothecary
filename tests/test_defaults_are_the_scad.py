@@ -1,7 +1,6 @@
-"""A part's default is its SCAD file as saved (docs/plans/part-iteration-2026-10-12.md):
-where a Python model's default and its SCAD's own value disagree, the part's
-checklist and ``apothecary problems`` say so, naming each value.
-"""
+"""A part's default is its SCAD file as saved (docs/parts-authoring.md): where a Python
+model's default and its SCAD's own value disagree, the part's checklist and ``apothecary
+problems`` say so, naming each value."""
 
 from __future__ import annotations
 

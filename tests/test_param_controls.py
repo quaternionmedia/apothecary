@@ -1,9 +1,7 @@
-"""What a page needs to draw real controls (docs/plans/part-iteration-2026-10-12.md,
-item 3): integers as integers, the customizer's step, enums with their options,
-a nested model as a group of fields, descriptions, and units declared on the
-field -- a model's ``json_schema_extra={"unit": ...}``, a customizer comment's
-bracket or trailing word -- and none where none is declared.
-"""
+"""What a page needs to draw real controls: integers as integers, the customizer's step,
+enums with their options, a nested model as a group of fields, descriptions, and units
+declared on the field -- a model's ``json_schema_extra={"unit": ...}``, a customizer
+comment's bracket or trailing word -- and none where none is declared."""
 
 from __future__ import annotations
 

@@ -1,9 +1,8 @@
 """Toolchain modules: one interface, Arduino and Rust for the ESP32 behind it.
 
-The rust-2026-10-08 plan's *Firmware in Rust*: each module says what it builds,
-finds its tools (its variable, the tools dir, PATH), reports their status, and
-builds and flashes a sketch as steps; the Rust esp32_blink lives with its part
-and says what the Arduino one says. Against the scripted cargo and espflash
+Each module (docs/firmware.md) says what it builds, finds its tools (its variable,
+the tools dir, PATH), reports their status, and builds and flashes a sketch as steps;
+the Rust esp32_blink lives with its part and says what the Arduino one says. Against the scripted cargo and espflash
 (tests/firmware_helpers.py); nothing here builds, flashes or fetches for real.
 """
 
@@ -459,7 +458,5 @@ def test_an_image_that_names_where_it_was_built_is_refused(tmp_path, capsys):
     assert f"build path in the image: {home}" in capsys.readouterr().out
     windows = tmp_path / "windows.elf"
     windows.write_bytes(b"\x7fELF C:/Users/pk/x.rs")
-    assert image_paths.found_in(windows.read_bytes(), ["C:\\Users\\pk"]) == {
-        "C:\\Users\\pk": [5]
-    }
+    assert image_paths.found_in(windows.read_bytes(), ["C:\\Users\\pk"]) == {"C:\\Users\\pk": [5]}
     assert image_paths.main([str(tmp_path / "missing.elf"), "--refuse", home]) == 2
