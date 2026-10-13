@@ -2512,12 +2512,10 @@
                 this.orbitControls.maxDistance = Math.max(2000, reach.distance * dollyOut);
             }
 
-            // The far plane was a fixed 20000 set once at startup, while the
-            // dolly clamp is derived per level and reaches roughly 9x the
-            // framing distance -- about 54000 on the garage. Everything
-            // between those two numbers was being clipped away, so pulling
-            // back to look at the largest scale emptied the view instead of
-            // widening it. Both ends now move together, per level.
+            // The far plane clears the dolly clamp, which is set per level (a
+            // multiple of the framing distance, Settings' Farthest), plus the
+            // scene's extent, so pulling back to the largest scale widens the view
+            // and clips nothing. Far and near both move per level.
             //
             // Near moves with the scene too: holding near at 1 while far grows
             // past 10^5 spends most of the depth buffer on the first
