@@ -23,39 +23,35 @@ Nothing here is entered by hand. Each problem is derived from a model that
 exists — a part's contested values, the build checklist, a layout validator,
 the black-box seam — so the index cannot go stale the way an issue list does.
 
-## Ownership is the boundary, made executable
+## Each problem has an owner
 
-The interesting field is who can close it:
+Each problem names who can close it:
 
     >>> from apothecary.spaces import KIND_OWNER
     >>> KIND_OWNER["contested"], KIND_OWNER["drift"]
     ('human', 'apothecary')
 
-Four owners, and each means something different about what happens next.
-`apothecary` is a commit here. `datum` is the consuming project's to supply —
-the board outline is its fact, and no amount of work here produces one.
-`human` is a decision between defensible alternatives. `measurement` waits on a
-physical artifact.
+There are four owners, and [where a problem is
+owned](../docs/fitting-a-part.md#where-a-problem-is-owned) says what each means
+for what happens next:
 
     >>> from apothecary.spaces import APOTHECARY, DATUM, HUMAN, MEASUREMENT
     >>> set(summary()["by_owner"]) <= {APOTHECARY, DATUM, HUMAN, MEASUREMENT}
     True
 
-Every problem carries one, and one that carries none would mean the boundary
-has a hole:
+Every problem carries one, and what closes it:
 
     >>> all(p.owner and p.closes_with for p in problems())
     True
 
-[`docs/fitting-a-part.md`](../docs/fitting-a-part.md) is the prose; this is the part a machine can check.
-
 ## The owner comes from one table
 
-It did not always. An adversarial pass changed `KIND_OWNER["contested"]` to
-`apothecary` and the index reported exactly the same thing, because the
-contested branch typed the owner again instead of reading the table. Two places
-declaring one fact is the duplication this index exists to avoid.
+A problem's owner is its kind's in `KIND_OWNER`. The one exception is an
+unmeasured board, which only the consuming project can supply:
 
+    >>> all(p.owner == KIND_OWNER[p.kind] or (p.kind, p.owner) == ("unmeasured", DATUM)
+    ...     for p in problems())
+    True
     >>> {p.owner for p in problems() if p.kind == "contested"}
     {'human'}
 
