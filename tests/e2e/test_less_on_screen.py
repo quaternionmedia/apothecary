@@ -1,5 +1,5 @@
-"""Less on the screen: the cameras-and-clutter plan's Phase 2
-(docs/plans/cameras-and-clutter-2026-10-04.md).
+"""Less on the screen: icon badges, handles, the Machine in the rail, one header row,
+problems said once, the hint bar and faded walls.
 
 A busy bench, on a server of its own from the conftest's ``start_server``:
 printer_1's mainboard pinned to the simulated printer (``/dev/ttyFAKE1``,
@@ -129,9 +129,8 @@ def test_the_board_and_the_place_badge_at_the_garage_top_level_do_not_overlap(
     page: Page, bench: str
 ):
     """At the garage's top level printer_1's board badge and the workbench's place
-    badge stood 30 px over their structures' middles and printed over each other. Each
-    is an icon at its own spot now -- the board inside the printer, the picture's
-    corner -- and two in each other's way step aside: they never intersect."""
+    badge are each an icon at its own spot -- the board inside the printer, the
+    picture's corner -- and two in each other's way step aside: they never intersect."""
     _open(page, bench)
     board, place = _rect(page, BOARD_BADGE), _rect(page, PLACE_BADGE)
     assert not _meet(board, place), (board, place)
@@ -501,7 +500,7 @@ def _canvas_ring(page: Page) -> None:
 @pytest.mark.e2e
 def test_the_header_is_one_row_at_1024_px(page: Page, bench: str):
     """At 1024 px wide the header is one row, at the top of the site and deep in it: the
-    site's drop-down (choosing loads; Load is gone), the trail (Zoom Out is gone), ⚙ View,
+    site's drop-down (choosing loads), the trail, ⚙ View,
     the ring and the problems' count, and a short pill whose tooltip is the whole of it."""
     page.set_viewport_size({"width": 1024, "height": 700})
     _open(page, bench)
@@ -616,7 +615,7 @@ def test_the_view_menu_holds_snap_detail_and_outlines_and_the_ring_backs_each(
         page.keyboard.press(digit)
     expect(page.locator("#overlay-toggle")).not_to_be_checked()
     assert page.evaluate("() => Object.keys(window.fractalViewer.compoundOverlayByKey).length") == 0
-    # View › Fit: Fit, one ring down from where it was.
+    # View › Fit: Fit, inside the canvas ring's View.
     _canvas_ring(page)
     for digit in "28":
         page.keyboard.press(digit)
@@ -633,8 +632,8 @@ def test_the_view_menu_holds_snap_detail_and_outlines_and_the_ring_backs_each(
 def test_problems_are_one_folded_line_in_site_and_the_headers_count_opens_it(
     page: Page, start_server
 ):
-    """Site says its problems in one folded line, "N problems ›", where the list stood
-    above Contents; the header's count opens the fold, and each problem still selects
+    """Site says its problems in one folded line, "N problems ›", above Contents; the
+    header's count opens the fold, and each problem still selects
     its piece."""
     url = start_server()
     page.goto(f"{url}/viewer/sites/garage")

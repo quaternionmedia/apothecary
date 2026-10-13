@@ -1,5 +1,5 @@
-"""Paths a person takes that no other browser test walked: the bare /viewer address the
-README and `apothecary serve` print, and a made piece's Print cell.
+"""Paths a person takes: the bare /viewer address the README and `apothecary serve`
+print, and a made piece's Print cell.
 
 The Print cell's server is this module's own: the simulated printer, idle, identified
 and pinned to printer_1's mainboard as the bench's real board is, and a picture folder

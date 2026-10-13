@@ -100,7 +100,7 @@ def test_viewer_shows_contents_for_the_loaded_site(page: Page, base_url: str):
 @pytest.mark.e2e
 def test_double_click_zooms_in_and_a_crumb_returns(page: Page, base_url: str):
     """Test the standardized zoom-in/zoom-out navigation controls: the breadcrumb is
-    the way out (Zoom Out is gone), a crumb going up as Backspace does."""
+    the way out, with no Zoom Out button, a crumb going up as Backspace does."""
     _open(page, f"{base_url}/viewer/sites/garage")
     expect(page.locator("#zoom-out-btn")).to_have_count(0)
 
@@ -244,10 +244,9 @@ def test_a_part_deep_link_arrives_with_its_panel_open(page: Page, base_url: str)
 
 @pytest.mark.e2e
 def test_a_link_written_before_the_rename_still_lands_on_the_part(page: Page, base_url: str):
-    """The library was consolidated to underscore case after links to
-    `datum-core` had been handed out. The wrapper lookup tolerates the old
-    spelling; the redirect canonicalises so the focus string matches a real
-    node instead of nothing.
+    """A link naming `datum-core` lands on datum_core: the wrapper lookup accepts
+    the hyphen, and the redirect canonicalises it so the focus string matches a
+    real node instead of nothing.
     """
     page.goto(f"{base_url}/viewer/parts/datum-core")
     page.wait_for_selector("#part-params", timeout=20000)
@@ -293,8 +292,8 @@ def _load_garage(page: Page, base_url: str) -> dict:
 
 @pytest.mark.e2e
 def test_far_plane_clears_the_furthest_the_camera_can_dolly(page: Page, base_url: str):
-    """Pulled back as far as the dolly clamp allows (about 54000 on the garage),
-    the world is still inside the far plane."""
+    """Pulled back as far as the dolly clamp allows, the world is still inside the
+    far plane."""
     state = _load_garage(page, base_url)
 
     assert state["far"] > state["maxDolly"], (
