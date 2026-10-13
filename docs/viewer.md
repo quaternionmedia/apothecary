@@ -12,7 +12,7 @@ controls as they are. The loops through them are walkthrough pages
 |---|---|
 | `/viewer` (or `/`) | the garage |
 | `/viewer/sites/<name>` | a site: `garage`, `parts_library` (the catalog), `datum_core` |
-| `?focus=<path>` | zoomed into that piece |
+| `?focus=<path>` | stepped into that piece |
 | `?panel=bench` | with the Bench in front (`/firmware` redirects here) |
 | `?machine=<port>` | with the Machine of the board on that port open (`/firmware/monitor?port=` leads here) |
 | `?variant=<part>:<key>` | with that applied variant of a part drawn, as Apply left it |
@@ -24,8 +24,8 @@ Left to right, one row:
 - **The site drop-down** loads another site and puts it in the address,
   `/viewer/sites/<name>`, so a reload or a link lands on it and Back returns
   to the one before; the old site's focus, Machine and variants stay with it.
-- **The breadcrumb**: the site, then each piece you have gone into. A crumb
-  goes up to its level; Backspace goes up one.
+- **The breadcrumb**: the site, then each piece you have stepped into. A crumb
+  steps out to its level; Page Up or Backspace steps out one.
 - **⚙ View**: how the world is drawn ([below](#how-the-world-is-drawn)), and
   Settings ([below](#settings)).
 - **Docs** opens the documentation in a new tab, the world left where it
@@ -42,45 +42,72 @@ state folder -- and how to leave it: `apothecary serve` without `--demo`.
 
 The status line is the bar along the bottom: every verb says there what it
 did and what comes next, with the address of the ring cell that does it,
-`(⌗98)`. Over the world, the depth ladder has a tick per level, and the hint
-bar says the mouse's verbs and fades once they have been used (`?` shows it
-again); it names the keys and the modifier Settings has.
+`(⌗98)`. It is announced to a screen reader as it changes. Over the world, the
+depth ladder has a tick per level, and the hint bar names the essentials -- a
+click, stepping in and out, panning, the ring -- in one line, and fades once
+they have been used (`?` shows it again); it names the keys and the modifier
+Settings has. [Settings](#settings) is the reference for every binding.
 
 ## The world
 
-A click selects a piece; a double-click, Page Down, or scrolling in past the
-edge of what is framed goes into it; Page Up, Backspace, or scrolling out past
-the edge comes back up. A selected piece wears move arrows: dragging one moves
-it, snapped to a 50 mm grid while Snap to grid is on. A picture dropped on a
-structure, or pasted, is pinned there; on empty canvas, at the floor.
+A still click -- pressed and let go without the pointer travelling more than a
+few pixels -- selects the piece it lands on; on empty space it lets the
+selection go. A drag of any button selects nothing: it is the view's. A
+double-click, Page Down, or scrolling in past the edge of what is framed steps
+into a piece; Page Up, Backspace, or scrolling out past the edge steps out. A
+selected piece wears move arrows: dragging one moves it, snapped to a 50 mm
+grid while Snap to grid is on. A picture dropped on a structure, or pasted, is
+pinned there; on empty canvas, at the floor.
 
-**The right button is the camera's.** A right-drag pans. A still right-click --
-pressed and let go without moving -- re-centres the view on the surface under
-the pointer: the point the view turns about moves there, gliding, and the
-camera keeps its distance and its angle, so the next turn turns about what was
-clicked. On empty space it does nothing. Neither selects anything or opens the
-ring; Ctrl+right-click opens the ring ([below](#the-ring)).
+**The right button is the camera's.** A right-drag pans. A still right-click
+re-centres the view on the surface under the pointer: the point the view turns
+about moves there, gliding, and the camera keeps its distance and its angle, so
+the next turn turns about what was clicked. On a badge it re-centres on what
+the badge stands for; on empty space it does nothing. Neither selects anything
+or opens the ring. Ctrl+right-click opens the ring ([below](#the-ring)), heard
+before the view so it never turns it.
 
 | Pointer | Does |
 |---|---|
-| Click | Selects the piece under it |
-| Double-click | Goes into the piece under it |
+| Click | Selects the piece under it; on empty space, lets the selection go |
+| Double-click | Steps into the piece under it, as deep as it is drawn |
 | Drag | Turns the view about the point it looks at |
 | Right-drag, or Shift and drag | Pans |
-| Right-click | Re-centres the view on the surface under the pointer; on empty space, nothing |
+| Middle-drag | Dollies |
+| Right-click | Re-centres the view on the surface under the pointer, or on a badge's piece; on empty space, nothing |
 | Ctrl+right-click | Opens the ring at the pointer (the modifier is Settings') |
 | Wheel | Dollies in and out; pushed on past the limit, steps a level in or out (automatic zoom) |
+| A finger: drag, two fingers, tap, a still long press | Turns; dollies and pans; selects; opens the ring |
+
+**Stepping in** goes into the piece named -- the one double-clicked, or the
+ring's -- else the selection, else what the middle of the view shows, walls
+passed through as a click passes them; as deep as it is drawn. The status line
+says which, and why. Stepping out lands on the piece left, selected.
 
 **Automatic zoom** is the wheel's step: once the camera is as near the level's
 pieces as it may come, or as far out, more scrolling the same way adds up, and
-past the resistance the view steps into the selected piece (or the one nearest
-the middle of the view) or out to the level above. Whether it steps, each way,
-how much scrolling it takes and where the limits sit are [Settings](#settings).
+past the resistance the view steps in or out. A trackpad's momentum is not a
+push: what scrolled past the limit is forgotten after a quarter of a second
+without a turn of the wheel, and nothing steps for a moment after a step.
+Whether it steps, each way, how much scrolling it takes and where the limits
+sit are [Settings](#settings).
+
+**The world takes the keyboard's focus** -- a press in it, or Tab to it, a ring
+round it for the keyboard's hand. While it has it, the arrows pan the view and
+Shift+arrows turn it, and Page Up and Page Down step out and in; with nothing
+focused after a press in the world they step too. Anywhere else Page Up and
+Page Down scroll, as the browser does.
+
+**Escape** does one thing a press, the first that applies: folds ⚙ View; puts a
+drag of the move arrows, or of a camera's turn ring or tilt arc, back where it
+began, nothing saved; then lets go of the selection. The ring, the SCAD editor's
+fullscreen and the picture chosen in Pictures take their Escape first, and a
+box being typed in keeps its own.
 
 **Walls are drawn faded**, whatever is in front of them: anything whose
 category is `wall` is see-through, and a click passes through it to what is
 behind or inside. A wall is solid while it is selected. To pick one, tick
-⚙ View › Walls selectable (the ring's View › Select walls), or click its row
+⚙ View › Select walls (the ring's View › Select walls), or click its row
 in Site's tree, which works either way.
 
 **Badges** stand over things in the world, their words shown on hover or
@@ -93,21 +120,26 @@ while their thing is selected; three or more that overlap fold into one,
 | 📷 | a camera: its device, its lens, where its next picture lands | selects the camera |
 | ⚡ or 🖨 | a pinned board: a devkit's state, or a printer's state and readings | selects the machine and opens its Machine |
 
+A badge passes the right button to what it stands for: a still right-click on
+it re-centres the view there, and Ctrl+right-click opens that piece's ring (the
+floor's, and a ×N's, the canvas ring).
+
 A part applied as a variant ([below](#the-part-editor)) is drawn with amber
 edges and an amber dot: an applied variant, not saved.
 
 ## How the world is drawn
 
-⚙ View folds out the controls below. Each is also a cell of the canvas
-ring's View, which adds **Fit**: frame the pieces at this level.
+⚙ View folds out the controls below, each named as its cell of the canvas
+ring's View is, which adds **Fit**: frame the pieces at this level (Shift+F;
+`f` with nothing selected).
 
-| ⚙ View | The ring's View | Does |
-|---|---|---|
-| Snap to grid | Snap to grid | Snaps a dragged piece to a 50 mm grid (on at first) |
-| Detail: Full, Black box, Dot | Detail › | How much of each compound piece to draw: its real geometry, its bounding box, or a marker. Leaves are always drawn in full; Selected's Detail overrides it for one piece |
-| Assembly outlines | Outlines | Outlines each compound piece's whole extent, so a subassembly reads as one thing (on at first) |
-| Walls selectable | Select walls | A click in the world picks a wall again, until the page is left (off at first) |
-| Settings… | Settings | Opens the Settings panel in the rail ([below](#settings)) |
+| ⚙ View, and the ring's View | Does |
+|---|---|
+| Snap to grid | Snaps a dragged piece to a 50 mm grid (on at first) |
+| Detail: Full, Black box, Dot | How much of each compound piece to draw: its real geometry, its bounding box, or a marker. Leaves are always drawn in full; Selected's Detail overrides it for one piece |
+| Outlines | Outlines each compound piece's whole extent, so a subassembly reads as one thing (on at first) |
+| Select walls | A click in the world picks a wall again, until the page is left (off at first) |
+| Settings | Opens the Settings panel in the rail ([below](#settings)) |
 
 None of the first four is remembered: a reload starts from the defaults.
 Settings are kept by this browser.
@@ -120,15 +152,18 @@ once.
 
 ## The ring
 
-`m` opens the ring at the middle of the screen, Ctrl+right-click at the
-pointer, and ⌗ Ring from the header; [Settings](#settings) gives the ring
-another key, or Alt, Shift or Meta for Ctrl. It opens on what it is for: the
-selected piece's ring, or with nothing selected (or the floor) the canvas
-ring; a Ctrl+right-click on a piece or a tree row selects it and opens its
-ring, on empty canvas the canvas ring, and inside a Machine that board's
-device ring. A right-click without the modifier opens nothing on any of
-these, and no menu of the browser's: on the world it is the camera's. On
-macOS, Ctrl+click is a right-click, so Ctrl+click opens the ring there.
+`m` opens the ring at the middle of the screen, Shift+M the canvas ring
+whatever is selected, Ctrl+right-click at the pointer, a still long press by
+touch at the finger, and ⌗ Ring from the header; [Settings](#settings) gives
+the ring other keys, or Alt, Shift or Meta for Ctrl. It opens on what it is
+for: the selected piece's ring, or with nothing selected (or the floor) the
+canvas ring. Ctrl+right-click is one rule everywhere: on a piece, a badge or a
+tree row it selects that piece and opens its ring, on empty canvas the canvas
+ring, and inside a Machine that board's device ring. Without the modifier a
+right-click is the camera's in the world and the browser's anywhere else, so a
+Machine's log can be copied. The press is heard before the view's controls, so
+Ctrl+right-click never turns the view. On macOS, Ctrl+click is a right-click,
+so Ctrl+click opens the ring there.
 
 Its cells are a numeric keypad, `7 8 9 / 4 5 6 / 1 2 3`. A ring holds up to
 eight options, seated in the order it lists them: 8, 6, 2 and 4 first, then
@@ -145,11 +180,16 @@ pressed together jump to the corner between them, Enter or Space chooses the
 highlighted cell, Backspace backs out, Escape closes. A click on a cell
 chooses it, on the hub backs out, and far outside the ring closes it.
 
-**The canvas ring** lists Pieces (each piece at this level; at a site's top
-the pieces made from pictures are one more cell, Made), Up (when zoomed in),
-Site (every site), Group (each category of the site's pieces: expand it, as
-its chip in Site does), View, Panels, Pictures and Reset (the site rebuilt
-from its factory, as it was first built).
+**Addresses hold still.** The cells a ring always has come first and keep one
+address wherever it is opened; the cells that come and go with where it is
+opened are seated after them.
+
+**The canvas ring** lists Pieces 8 (each piece at this level; at a site's top
+the pieces made from pictures are one more cell, Made; at a leaf, the leaf
+itself), Site 6 (every site), View 2, Panels 4, Pictures 9 and Rebuild 3 (the
+site built again from its factory, as it was first built: chosen twice); then
+Step out 1 (when stepped in) and Group (each category of the site's pieces:
+expand it, as its chip in Site does; 7 when stepped in, 1 at the top).
 
 - **Panels** › Site, Selected, Pictures, Machine (the selected board's), Rail
   (as `~`), Bench › Bench (show it), Install (a cell per toolchain
@@ -158,15 +198,15 @@ from its factory, as it was first built).
 - **Pictures** › Add (a picture pinned at the floor), Floor (the floor's
   Fit, Camera and Picture), Purge and Gather.
 
-**A piece's ring** lists Zoom in, Move, Device (when a board is pinned to
-it), Why this, Into (its children), Up (when nested), then what the piece is:
+**A piece's ring** lists Step in 8, Move 6 and Why this 2, then Inside (the
+pieces it holds: a digit selects one), then what the piece is:
 
 - a structure that stands on its own footprint, a host: **Camera** › Add here,
   and **Picture** › Add, Folder, Views, Make, Size, Unpin, Forget, Find shapes;
   Add here selects the camera it added, and Make the piece it made;
 - a camera: **Device**, Live or Still and **Take picture** (once its device is
-  this browser's camera), and Remove;
-- a piece made from a picture: **Picture** › Word, Drop;
+  this browser's camera), and Remove (chosen twice);
+- a piece made from a picture: **Picture** › Word, Drop (chosen twice);
 
 then **Part** (a part, a camera or a made piece; [below](#the-part-editor): Edit,
 Defaults, Apply, Revert, Save, View › Float, Fullscreen, Ghost and Fit,
@@ -174,7 +214,9 @@ History › Undo and Redo, and Variants › each saved variant › Draw, Rename,
 Duplicate, History, Compare and Delete, and Variants › Deleted), and, when a printer is pinned in the site, **Print** (a made piece) and
 **Slice** (a made piece, or a part not inside a printer and not a board: a
 devkit is flashed, never printed). Print and Slice say whether the printer
-has no board pinned or one pinned and not connected.
+has no board pinned or one pinned and not connected. Last come the cells that
+depend on where the piece is: **Device** (when a board is pinned to it) and
+**Parent** (the piece it is inside, selected).
 
 A printer's Pin, in its Device section, pins the board inside it -- printer_1's
 mainboard, where its Device, its Machine and Slice look -- and asks the board
@@ -184,8 +226,18 @@ a poll that said so), and the status line says whether it asked, and if not,
 why. The printer's Device section then shows its board's pin, with Unpin beside
 it. A piece made from a picture holds no board and has no Device section. A
 board's **Device** holds Open (its Machine), Poll, Flash, Query, Unpin,
-Rescan, Link and, on a printer, Control; [firmware.md](firmware.md#in-the-viewer-one-machine-per-board)
-says what each does.
+Rescan, Link (Reconnect, Reboot, Release) and, on a printer, Control;
+[firmware.md](firmware.md#in-the-viewer-one-machine-per-board) says what each
+does.
+
+**Asking first goes by consequence.** What the page can undo asks nothing. What
+it cannot -- Rebuild, Drop, a camera's Remove, a picture's Forget, Purge, a
+variant's Forget and Empty, a board's Reboot, a print's Cancel and Abort -- is
+chosen twice: chosen once, its wedge (or its button) says "again to …", and
+choosing it again does it. What heats, moves or flashes a machine -- Probe the
+bed, Print, Compile and upload, Raw flash -- asks in a dialog; the control
+overlay's own buttons stand behind its armed latch. The emergency stop never
+asks.
 
 ## The rail
 
@@ -195,12 +247,12 @@ across the page) moves it; its edge sets its width, up to half the page. ✕,
 
 - **Site**: the site's problems in one fold (each row selects its piece, at
   its level), its category chips, the **Contents** tree (a click selects a
-  row, a double-click goes in, ⚠ marks a piece in a problem), then folds for
+  row, a double-click steps in, ⚠ marks a piece in a problem), then folds for
   what is **Pinned** in every site (each with its Remove or Unpin), the
   site's **Jobs** (a row opens its machine) and its **SCAD**, generated from
   the tree.
 - **Selected**: the selected piece -- its name, place and footprint, a
-  compound piece's Detail, "⤵ Zoom into" for one with children -- then its
+  compound piece's Detail, "⤵ Step into" for one with children -- then its
   part editor, its Device line where a board belongs -- on a board, a printer,
   a piece that names a sketch, or anything a board is pinned to already (a
   pinned board's port and state, with Open and Unpin; for one with none, the
@@ -260,10 +312,14 @@ Where this OpenSCAD cannot build the part at all (gridfinity on 2021.01), the
 editor says so as it opens and **Apply is off** from the start, saying why.
 
 The bar of what is staged -- Apply, Revert, Defaults, Undo, Redo, Ghost --
-stands pinned at the top of Selected, above its body, in its own space: in view
-however far the parameters are scrolled, and over none of them. Where Selected
-is squeezed short (a tab's panel open under it), the bar scrolls in itself
-rather than spill over what is below.
+stands under the Parameters heading, and Selected shows the piece's name,
+place and facts first. While the piece is being edited -- Part › Edit asked
+for its editor, or something is staged -- the bar stands pinned at the top of
+Selected, above its body, in its own space: in view however far the parameters
+are scrolled, and over none of them. Where Selected is squeezed short (a tab's
+panel open under it), the bar scrolls in itself rather than spill over what is
+below. Whatever control had the focus in Selected has it again when the panel
+is drawn anew.
 
 Moving a control **stages** a value: its line is rewritten and nothing is
 drawn. Once the controls rest the text is checked, its values against the
@@ -345,15 +401,16 @@ part's own file is not touched. **Download SCAD** gives the SCAD as the editor
 has it, named as the part's own; with no edit, the draft the variant drawn was
 rendered from.
 
-OpenSCAD's keys work inside the editor, and only there:
+OpenSCAD's keys work inside the editor, and Ctrl+S anywhere on the page while
+a part's editor is open:
 
 | Key | Does |
 |---|---|
-| F5 | Checks the SCAD now, and draws it as soon as it reads |
-| F6, or Ctrl+Enter | Renders and draws: Apply |
-| Ctrl+S | Saves a variant: Save |
+| F5 | Checks the SCAD now, and draws it as soon as it reads (in the editor) |
+| F6, or Ctrl+Enter | Renders and draws: Apply (in the editor) |
+| Ctrl+S | Saves a variant: Save (anywhere, while the editor is open) |
 
-Outside the editor the browser's keys are the browser's.
+Outside the editor F5, F6 and Ctrl+Enter are the browser's.
 
 - **Part › Save** keeps the text as a variant in git, its values in it,
   under the name in the editor's *as* box -- empty, the next free name greyed
@@ -405,16 +462,17 @@ has none. The routes are `/parts/{name}/draft/check`, `/draft/render` and
 ## Settings
 
 **Settings**, a tab of the rail's strip, holds every shortcut and navigation
-setting of the page. ⚙ View › Settings… and the canvas ring's View › Settings
-open it. Each row says its default under its name, and its ↺ puts it back;
+setting of the page, and is the reference for every binding. ⚙ View ›
+Settings and the canvas ring's View › Settings open it. Each row says its default under its name, and its ↺ puts it back;
 **Reset all**, at the foot, puts every one back. A change applies at once,
 with no reload.
 
 | Setting | Default | What it is |
 |---|---|---|
 | Open the ring | `m` | The key that opens the ring on the selection |
+| Open the canvas ring | Shift+M | The key that opens the canvas ring, whatever is selected |
 | Ring: right-click with | Ctrl | The modifier held with a right-click to open the ring at the pointer: Ctrl, Alt, Shift or Meta |
-| Step in | Page Down | The key that steps into the selected piece, or the one nearest the middle of the view |
+| Step in | Page Down | The key that steps into the selected piece, or what the middle of the view shows |
 | Step out | Page Up | The key that steps out to the level above |
 | Automatic zoom | on | Whether the wheel pushed on past the limit steps at all |
 | Stepping in | on | Whether it steps in |
@@ -424,9 +482,12 @@ with no reload.
 | Farthest | 8 | How far out of a level it may go, as a multiple of the distance that frames the level: where stepping out starts |
 
 **A shortcut's field** takes the next key pressed: press the field, then the
-key, with Ctrl, Alt or Meta if they are to be held. A key another shortcut
-holds -- one of these, or one of the page's own [keys](#keys) -- is refused,
-and the field says whose it is and waits for another; Escape lets go of it.
+key, with Ctrl, Alt, Shift or Meta if they are to be held. A key another
+shortcut holds -- one of these, or one of the page's own [keys](#keys) -- is
+refused, and the field says whose it is and waits for another; Escape lets go
+of it. A shortcut is matched by the key it prints and by where the key sits on
+a US keyboard, so a layout that prints something else there still reaches it;
+a letter is matched with Shift said or not, so Caps Lock changes nothing.
 
 The settings are kept in this browser's storage, under one key
 (`apothecary.settings`), and only those that differ from their defaults. A
@@ -437,18 +498,24 @@ defaults, and a change holds until the page is left.
 
 | Key | Does |
 |---|---|
-| `m` | Opens the ring (Settings' Open the ring) |
-| Page Down | Steps into the selected piece, or the one nearest the middle of the view (Settings' Step in) |
-| Page Up | Steps out a level (Settings' Step out) |
-| `~` (or `` ` ``) | Hides or shows the rail |
+| `m` | Opens the ring on the selection (Settings' Open the ring) |
+| Shift+M | Opens the canvas ring, whatever is selected (Settings' Open the canvas ring) |
+| Page Down | Steps in: the selection, else what the middle of the view shows (Settings' Step in), while the world has the keys |
+| Page Up, or Backspace | Steps out a level (Settings' Step out), Page Up while the world has the keys |
+| Arrows, Shift+arrows | Pan, and turn, the view, while the world has the keyboard's focus |
+| `~` (or the key left of 1) | Hides or shows the rail |
 | `P` | Takes a picture, with a camera selected |
 | `?` | Shows or hides the hint bar |
-| Backspace | Goes up one level |
-| Escape | Closes the ring; lets go of the picture chosen in Pictures; leaves the SCAD editor's fullscreen; lets go of a Settings field waiting for a key |
-| `f` | Frames the selected piece, as drawn, Selected and its editor kept open (Part › View › Fit) |
+| Escape | One thing a press: folds ⚙ View; puts a drag back where it began, nothing saved; lets go of the selection. In the ring it closes the ring, in the SCAD editor's fullscreen it leaves it, in Pictures it lets go of the picture chosen, in a Settings field it lets go of the field |
+| `f` | Frames the selected piece, as drawn, Selected and its editor kept open (Part › View › Fit); with nothing selected, the level |
+| Shift+F | Frames the level, whatever is selected (View › Fit) |
 | Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y | Undoes and redoes the part editor's staged numbers (Part › History) |
+| Ctrl+S | Saves the variant, anywhere, while a part's editor is open (Part › Save) |
 | In the ring: 1-9, arrows, Enter, Space, Backspace | As [above](#the-ring) |
-| In the SCAD editor: F5, F6, Ctrl+Enter, Ctrl+S | As [above](#the-scad-editor) |
+| In the SCAD editor: F5, F6, Ctrl+Enter | As [above](#the-scad-editor) |
 
-None of them acts while you are typing in a box; Ctrl+Z in a box, or in the
-SCAD editor, is that box's own undo.
+One check decides for every key: none acts while you are typing in a box, a
+drop-down or the SCAD editor, nor on a key the focus takes itself (a slider
+keeps the arrows, Page Up and Page Down; a button, Enter and Space); Ctrl,
+Alt, Shift or Meta held rules Backspace out. Ctrl+Z in a box, or in the SCAD
+editor, is that box's own undo.
