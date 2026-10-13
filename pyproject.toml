@@ -62,13 +62,14 @@ include = ["apothecary*"]
 apothecary = ["static/**/*"]
 
 [tool.pytest.ini_options]
-# The walkthrough pages are executable. Named on the command line, not left to
-# testpaths: pytest ignores testpaths the moment it receives a path argument,
-# so a walkthrough reached only that way is one nobody runs. No -q here: a
-# `pytest -q` on top of one made -qq, which drops the summary line.
+# The walkthrough pages are executable. A bare `pytest` reaches them through
+# testpaths; a command that names a path names `walkthrough` too (CI's,
+# `apothecary test run`'s), since pytest ignores testpaths once it is given a
+# path. No -q here: a `pytest -q` on top of one would be -qq, which drops the
+# summary line.
 addopts = "--doctest-glob=*.md"
 testpaths = ["walkthrough", "tests"]
-# A deprecation in our own code is a failure now, not a warning nobody reads.
+# A deprecation warning raised from apothecary's own code fails the run.
 filterwarnings = ["error::DeprecationWarning:apothecary"]
 markers = [
     "e2e: end-to-end tests using Playwright",
