@@ -97,3 +97,5 @@ OpenSCAD runs are queued: `APOTHECARY_OPENSCAD_RUNS` at once, by default two,
 or one on a machine with a single core. A render or a check waiting its turn
 says it is queued, and how far back; a newer request from the same page for
 the same part cancels the older one's run.
+The timing behind two is in
+[validation/2026-10-12-openscad-runs-at-once.md](validation/2026-10-12-openscad-runs-at-once.md).

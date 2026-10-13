@@ -128,3 +128,5 @@ picture-shaped is stored in the browser, its HTTP cache included.
 | `photo gather`, `photo gather-check` | Several pictures taken in at once and sorted, and how well the sorting does |
 
 `apothecary photo --help`, and `--help` on each, says the rest.
+What the gathering's and the finder's thresholds were measured at is in
+[validation/2026-08-28-gathering-thresholds.md](validation/2026-08-28-gathering-thresholds.md).
