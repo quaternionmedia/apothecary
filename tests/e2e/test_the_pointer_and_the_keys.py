@@ -1,4 +1,4 @@
-"""The pointer, the keys and the ring, made one (docs/plans/input-2026-10-12.md).
+"""The pointer, the keys and the ring, made one (docs/viewer.md, "Keys" and "Settings").
 
 The right button is the camera's: a drag pans and a still click re-centres the view on
 the surface under the pointer, and neither opens the ring. Ctrl + right-click opens the
