@@ -559,7 +559,7 @@ class ManualBinding(BaseModel):
 
     site: str
     path: str  # dotted node path, as GET /sites/{name}/nodes/{path}/stl addresses it
-    identity: str  # DeviceInfo.identity: MAC or port
+    identity: str  # DeviceInfo.identity: MAC, USB bridge serial number, or port
     bound_at: datetime
 
 
