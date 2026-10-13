@@ -207,10 +207,11 @@ def _code(page: Page):
 
 
 def _into_code(page: Page) -> None:
-    """Into the editor as a person goes, by a click on a line of its text, at its start:
-    the text is taller than the part of Selected that shows it, so its middle may be out
-    of view, and a line's middle may be past its right edge."""
-    page.locator(".scad-editor .cm-line").last.click(position={"x": 4, "y": 4})
+    """Into the editor, its text taking the keys that follow, the view of it left as it
+    is: a click lands where the code happens to be scrolled -- its middle below what
+    Selected shows of it, a line's start under its gutter or out past the rail's left
+    edge, a line's middle past its right -- and scrolls it, run by run otherwise."""
+    page.locator(".scad-editor .cm-content").focus()
 
 
 def _text(page: Page) -> str:
