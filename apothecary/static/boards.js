@@ -1,11 +1,10 @@
 /* Boards: one model of every board the page knows, and one poller per board.
  *
- * A board was drawn by six render functions and polled from four places, and
- * the drawings could disagree. Here it is one record per port -- the board as
- * detected, what it should run, its last poll, its link, what it was heard
- * saying, its log -- and everything that draws it (the world's badge, Site's
- * tree badge, Selected's Device line, its Machine) reads that record and redraws
- * on the one event this module sends: `apothecary:board`, whose detail says
+ * A board is one record per port -- the board as detected, what it should run,
+ * its last poll, its link, what it was heard saying, its log -- and everything
+ * that draws it (the world's badge, Site's tree badge, Selected's Device line, its
+ * Machine) reads that record, so no two drawings of it disagree, and redraws on
+ * the one event this module sends: `apothecary:board`, whose detail says
  * which port (null for a scan) and what changed (`what`: scan, status, info,
  * device, observed, live, log, error).
  *
