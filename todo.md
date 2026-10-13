@@ -41,9 +41,10 @@ Decided, not started. Each waits on what its line names.
 - Data-only part wrappers become `part.json`; the import hook goes; the
   snowplow gets one name.
 - The unit suite under pytest-xdist.
-- The hidden command stubs (`system`, `install`, `testrun`, `dev`,
-  `inventory`, `submodules`, `photo look`) are removed one release after they
-  were hidden.
+- The hidden command stubs `apothecary/cli/retired.py` makes (`system`,
+  `install`, `testrun`, `dev`, `inventory`, `submodules`, `photo look`,
+  `test setup-e2e`, `test validate-e2e`, `test run-e2e`) are removed one
+  release after they were hidden.
 
 ## For a person to decide
 
