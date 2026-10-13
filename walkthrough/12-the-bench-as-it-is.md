@@ -98,7 +98,7 @@ GET /sites/garage/attached -> cameras: []
 
 ## 12. What the browser put here, it can take back
 
-Site's Pinned lists what a page pinned -- cameras, views, boards -- every site's, each row naming its site and carrying the button that takes it back, from here, without switching to that site; a pin whose site or piece is gone is shown as such, and this is the one place it can be seen. Pictures lists every picture in the picture folder as thumbnails, grouped by the camera that took them -- here none did -- the folder's own and the ones the browser kept (those added from its file picker kept as they were named under uploads/), each with where it is pinned as a view, and Forget on a kept one. A picture kept and pinned nowhere waits to be chosen: one clicked is chosen, as shelf.png is here, and the ring's Picture › Folder pins it where the ring stands -- the seven newest by modification time, an older one as its last cell -- as the status bar says.
+Site's Pinned lists what a page pinned -- cameras, views, boards -- every site's, each row naming its site and carrying the button that takes it back, from here, without switching to that site; a pin whose site or piece is gone is shown as such, and this is the one place it can be seen. Pictures lists every picture in the picture folder as thumbnails, grouped by the camera that took them -- here none did -- the folder's own and the ones the browser kept (those added from its file picker kept as they were named under uploads/), each with where it is pinned as a view, and Forget on a kept one. A picture kept and pinned nowhere waits to be chosen: one clicked is chosen, as shelf.png is here, and the ring's Picture › Folder pins it where the ring stands, as the status bar says. Folder holds the 7 newest by modification time; with more in the folder, its last cell pins the one chosen when that one is older.
 
 ![What the browser put here, it can take back](screenshots/12-12-what-the-browser-put-here-it-can-take-back.png)
 
@@ -127,7 +127,7 @@ Origin: http://elsewhere.test -> 403 Apothecary answers this machine only. Perso
 - **A real camera.** The camera placed here is Chromium's test pattern. Nothing of anyone's room is in these pictures.
 - **A printer or board that is connected.** The Ender 3 and the boards are drawn as what they are; none is pinned to a port, and the status each shows is the site's own.
 - **The import command writing into the repository.** `apothecary parts import` is what brings a file in for keeps; this run measures the file in a temporary folder and leaves `parts/` as it found it.
-- **The pieces without OpenSCAD.** A part is drawn from an STL that OpenSCAD renders on first request; on a machine without it the pieces are their footprint boxes. These pictures were made with it.
+- **The pieces without OpenSCAD.** A part is drawn from an STL OpenSCAD builds, and a server builds the missing ones as it starts; on a machine without OpenSCAD the pieces are their footprint boxes.
 
 Run it yourself:
 

@@ -90,6 +90,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     placed at a piece and drawn there, and the doors the program keeps shut."""
     from apothecary import meshes
     from apothecary.example_hierarchy import create_example_site
+    from apothecary.menu import NEWEST
     from apothecary.models.vectors import Vector3D
     from apothecary.primitives import Import
     from apothecary.projects.parts import ender3
@@ -127,9 +128,9 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
             "**The import command writing into the repository.** `apothecary parts "
             "import` is what brings a file in for keeps; this run measures the file "
             "in a temporary folder and leaves `parts/` as it found it.",
-            "**The pieces without OpenSCAD.** A part is drawn from an STL that "
-            "OpenSCAD renders on first request; on a machine without it the pieces "
-            "are their footprint boxes. These pictures were made with it.",
+            "**The pieces without OpenSCAD.** A part is drawn from an STL OpenSCAD "
+            "builds, and a server builds the missing ones as it starts; on a machine "
+            "without OpenSCAD the pieces are their footprint boxes.",
         ],
         page=page,
     )
@@ -470,10 +471,11 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
         "took them -- here none did -- the folder's own and the ones the browser kept "
         "(those added from its file picker kept as they were named under uploads/), "
         "each with where it is pinned as a view, and Forget on a kept one. A picture "
-        "kept and pinned nowhere waits to be chosen: one clicked is "
-        "chosen, as shelf.png is here, and the ring's Picture › Folder pins it where "
-        "the ring stands -- the seven newest by modification time, an older one as its last cell -- "
-        "as the status bar says.",
+        "kept and pinned nowhere waits to be chosen: one clicked is chosen, as "
+        "shelf.png is here, and the ring's Picture › Folder pins it where the ring "
+        "stands, as the status bar says. Folder holds the "
+        f"{NEWEST} newest by modification time; with more in the folder, its last cell "
+        "pins the one chosen when that one is older.",
     )
 
     page.evaluate("() => window.apothecaryPanels.dock('pictures', 'right')")
