@@ -27,6 +27,10 @@ Asked one at a time on 2026-10-12:
   `docs/README.md`, and each decision of it that is still true moves into
   the present-tense documentation, a record or the code's own docstring.
   The CHANGELOG is a release log and exempt too.
+- **0.1.0 was never released.** It is a version number, not a release: no
+  tag and no published build exist, so the CHANGELOG's `[0.1.0]` heading
+  carries no date, and the docs say a consumer pins a commit until a first
+  release is tagged.
 - **The gate joins CI after the record is ratified.** Until then
   `check_timeless.py --all` is the sweep's measure, run from the record's
   branch; once qm#136 is ratified and the governance pin carries the tool,
