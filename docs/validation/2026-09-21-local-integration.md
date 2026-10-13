@@ -85,10 +85,11 @@ on. Each check below is a door the record names; each should be shut.
 
 ```bash
 # the process cannot reach past this machine, whichever way it is asked
-uv run python -c "import apothecary, socket; socket.create_connection(('example.com', 80))"
-uv run python -c "import apothecary, socket; socket.getaddrinfo('example.com', 443)"
-uv run python -c "import apothecary, socket; s=socket.socket(); s.bind(('0.0.0.0', 0))"
-uv run python -c "import apothecary, socket; s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.sendto(b'x', ('127.0.0.53', 53))"
+# (apothecary.api is an install point; the geometry library alone installs nothing)
+uv run python -c "import apothecary.api, socket; socket.create_connection(('example.com', 80))"
+uv run python -c "import apothecary.api, socket; socket.getaddrinfo('example.com', 443)"
+uv run python -c "import apothecary.api, socket; s=socket.socket(); s.bind(('0.0.0.0', 0))"
+uv run python -c "import apothecary.api, socket; s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.sendto(b'x', ('127.0.0.53', 53))"
 ```
 
 - [ ] Each of the four → `LeftTheMachine: ... refused to reach ...` naming

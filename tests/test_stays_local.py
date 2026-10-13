@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import _socket
+import ast
 import http.client
 import json
 import os
@@ -10,6 +11,7 @@ import re
 import socket
 import ssl
 import subprocess
+import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -25,8 +27,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "apothecary"
 
 
-# The picture path runs under the guard `import apothecary` puts on the process:
-# a connection past this machine raises LeftTheMachine.
+# The picture path runs under the guard the root conftest.py and the vision
+# package put on the process: a connection past this machine raises LeftTheMachine.
 
 
 @pytest.fixture
@@ -96,7 +98,147 @@ def test_nothing_is_written_outside_the_folder_it_was_given(picture, tmp_path):
     assert set(Path.cwd().iterdir()) == before, "something was written outside the given folder"
 
 
-def test_importing_the_package_guards_every_name_for_a_socket():
+# Where the guard goes on: the first statement of each module through which
+# apothecary runs or reads personal data, and the tests' root conftest.py.
+INSTALL_POINTS = {
+    "apothecary.api": PACKAGE / "api.py",
+    "apothecary.cli": PACKAGE / "cli" / "__init__.py",
+    "apothecary.vision": PACKAGE / "vision" / "__init__.py",
+    "apothecary.gathering": PACKAGE / "gathering" / "__init__.py",
+    "apothecary.firmware": PACKAGE / "firmware" / "__init__.py",
+    "apothecary.routes": PACKAGE / "routes" / "__init__.py",
+}
+ROOT_CONFTEST = ROOT / "conftest.py"
+
+
+def _fresh(code: str, *args: str) -> subprocess.CompletedProcess:
+    """Run ``code`` in an interpreter of its own, so what an import does is its own."""
+    return subprocess.run(
+        [sys.executable, "-c", code, *args],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+
+# The geometry library: the package itself, its shapes, transforms, scene,
+# templates, models and meshes, and every part and assembly under
+# apothecary.projects.
+GEOMETRY_LIBRARY = (
+    "apothecary",
+    "apothecary.booleans",
+    "apothecary.core",
+    "apothecary.primitives",
+    "apothecary.transforms",
+    "apothecary.scene",
+    "apothecary.templates",
+    "apothecary.models",
+    "apothecary.meshes",
+    "apothecary.hierarchy",
+)
+
+LEAVES_THE_NETWORK_AS_IT_FOUND_IT = """
+import _socket, http.client, importlib, pkgutil, socket, ssl, sys
+
+def names():  # ids: the guard would rebind a name held for a class itself
+    return tuple(map(id, (socket.socket, socket.SocketType, _socket.socket, _socket.SocketType,
+            ssl.socket, socket.create_connection, http.client.HTTPConnection.connect,
+            socket.getaddrinfo, _socket.getaddrinfo, socket.gethostbyname,
+            socket.gethostbyaddr, socket.getnameinfo)))
+
+before = names()
+events = []
+
+def hear(event, args):
+    if event.startswith("socket."):
+        events.append(event)
+
+sys.addaudithook(hear)
+for name in sys.argv[1:]:
+    importlib.import_module(name)
+for package in ("apothecary.projects", "apothecary.models"):
+    path = importlib.import_module(package).__path__
+    for found in pkgutil.walk_packages(path, package + "."):
+        importlib.import_module(found.name)
+assert names() == before, "importing the geometry library replaced a name for a socket"
+assert not events, f"importing the geometry library made a socket call: {events}"
+guarded = ("apothecary.api", "apothecary.cli", "apothecary.vision", "apothecary.gathering",
+           "apothecary.firmware", "apothecary.routes")
+loaded = sorted(m for m in sys.modules if m in guarded or m.startswith(tuple(g + "." for g in guarded)))
+assert not loaded, f"the geometry library imported a guarded module: {loaded}"
+guard = sys.modules.get("apothecary.stays_local")
+assert guard is None or not guard.guard_installed(), "the geometry library installed the guard"
+print("left as found")
+"""
+
+
+def test_importing_the_geometry_library_leaves_the_network_as_it_found_it():
+    """A program that imports apothecary for its shapes keeps its network: the
+    import installs nothing, replaces no name for a socket, and makes no socket
+    and looks up no name while it loads (an audit hook hears no ``socket.*``)."""
+    run = _fresh(LEAVES_THE_NETWORK_AS_IT_FOUND_IT, *GEOMETRY_LIBRARY)
+    assert run.returncode == 0, run.stderr
+    assert run.stdout.strip() == "left as found"
+
+
+GUARDS_THE_PROCESS = """
+import importlib, socket, sys
+import apothecary
+from apothecary import stays_local
+assert not stays_local.guard_installed(), "import apothecary installed the guard"
+before = id(socket.socket)  # an id: the guard rebinds every name for the class itself
+importlib.import_module(sys.argv[1])
+assert stays_local.guard_installed(), f"importing {sys.argv[1]} did not install the guard"
+assert id(socket.socket) != before
+try:
+    socket.create_connection(("203.0.113.1", 80), timeout=1)
+except stays_local.LeftTheMachine:
+    print("guarded")
+"""
+
+
+@pytest.mark.parametrize("point", list(INSTALL_POINTS))
+def test_importing_an_install_point_puts_the_guard_on_the_process(point):
+    run = _fresh(GUARDS_THE_PROCESS, point)
+    assert run.returncode == 0, run.stderr
+    assert run.stdout.strip() == "guarded"
+
+
+def test_a_test_session_is_under_the_guard_before_its_first_test_is_collected():
+    """pytest loads the root conftest.py before it collects a test; loading it
+    puts the guard on."""
+    run = _fresh(
+        "import importlib.util, sys\n"
+        "spec = importlib.util.spec_from_file_location('root_conftest', sys.argv[1])\n"
+        "spec.loader.exec_module(importlib.util.module_from_spec(spec))\n"
+        "from apothecary import stays_local\n"
+        "print('guarded' if stays_local.guard_installed() else 'open')\n",
+        str(ROOT_CONFTEST),
+    )
+    assert run.returncode == 0, run.stderr
+    assert run.stdout.strip() == "guarded"
+
+
+@pytest.mark.parametrize(
+    "source", [*INSTALL_POINTS.values(), ROOT_CONFTEST], ids=[*INSTALL_POINTS, "conftest"]
+)
+def test_each_install_point_puts_the_guard_on_before_any_of_its_own_code(source):
+    """The guard's import and its call are the first two statements, after the
+    docstring: nothing of the module runs before the guard is on."""
+    body = ast.parse(source.read_text(encoding="utf-8")).body
+    if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+        body = body[1:]
+    first, second = body[0], body[1]
+    assert isinstance(first, ast.ImportFrom), "the first statement is not the guard's import"
+    assert (first.module or "").split(".")[-1] == "stays_local"
+    assert [alias.name for alias in first.names] == ["install_guard"]
+    called = first.names[0].asname or "install_guard"
+    assert isinstance(second, ast.Expr) and isinstance(second.value, ast.Call)
+    assert getattr(second.value.func, "id", None) == called, "the second statement is not the call"
+
+
+def test_the_guard_rebinds_every_name_for_a_socket():
     assert stays_local.guard_installed()
     assert socket.socket is not stays_local._original_socket
     assert socket.SocketType is _socket.socket and _socket.SocketType is _socket.socket
@@ -275,8 +417,6 @@ def test_a_tool_fetch_takes_no_proxy_and_a_version_is_three_numbers(monkeypatch)
 
 def _callers_of_tool_fetch() -> set:
     """Every module under apothecary/ that names ``tool_fetch``, read from the source."""
-    import ast
-
     found = set()
     for source in PACKAGE.rglob("*.py"):
         if source.name == "stays_local.py" and source.parent == PACKAGE:

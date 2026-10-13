@@ -15,6 +15,12 @@ their thresholds, ``judgement`` what a person says and why it wins,
 PROTOTYPE — not ratified.
 """
 
+# An install point of the guard (apothecary/stays_local.py), before any module
+# in this package runs: it reads photographs.
+from ..stays_local import install_guard as _install_guard
+
+_install_guard()
+
 from .combine import combine, whole_gathering
 from .models import (
     ALONE,
