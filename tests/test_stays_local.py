@@ -311,8 +311,8 @@ def test_a_tool_fetch_has_two_callers_the_two_installers():
     assert "codeload.github.com" in stays_local.TOOL_SOURCES
 
 
-# Every host `apothecary firmware install --rust-esp32` was seen to reach (strace
-# of a real install, 2026-10-09), and the step that reaches it. A build reached none.
+# Every host `apothecary firmware install --rust-esp32` reaches, as an strace of a
+# real install shows, and the step that reaches it. A build reaches none.
 RUST_INSTALL_HOSTS = {
     "static.rust-lang.org": "apothecary's fetch of rustup-init and its .sha256",
     "api.github.com": "apothecary's fetch of the SHA-256 GitHub publishes for espflash's "
@@ -327,7 +327,7 @@ RUST_INSTALL_HOSTS = {
 
 def test_every_host_the_rust_install_reaches_is_on_the_install_time_list():
     assert set(RUST_INSTALL_HOSTS) <= stays_local.TOOL_SOURCES
-    # espup's own update check went with espup: nothing asks crates.io's API.
+    # espup is not run, so nothing asks crates.io's API.
     assert "crates.io" not in stays_local.TOOL_SOURCES
 
 
@@ -889,9 +889,9 @@ def test_the_pictures_the_browser_keeps_are_never_committed():
         assert ignored.returncode == 0, f"{kept} would be committed"
 
 
-# Every host `apothecary slicer install` was seen to reach (strace of a real install of
-# OrcaSlicer 2.4.2 on Linux x86_64, 2026-10-10), and the step that reaches it. A slice
-# reached none: OrcaSlicer asked the resolver nothing and connected nowhere.
+# Every host `apothecary slicer install` reaches, as an strace of a real install of
+# OrcaSlicer 2.4.2 on Linux x86_64 shows, and the step that reaches it. A slice reaches
+# none: OrcaSlicer asks the resolver nothing and connects nowhere.
 SLICER_INSTALL_HOSTS = {
     "api.github.com": "the SHA-256 GitHub publishes for the pinned release's asset",
     "github.com": "the pinned release's asset",

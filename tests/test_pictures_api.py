@@ -318,7 +318,7 @@ def test_a_file_that_cannot_be_read_is_set_aside_and_the_rest_are_gathered(pictu
 
 
 def test_a_gathering_is_at_most_forty_pictures(pictures):
-    """Every pair is compared, so two hundred pictures was minutes of one request."""
+    """Every pair is compared, so two hundred pictures would be minutes of one request."""
     c = TestClient(app)
     r = c.post("/photos/gather", json={"pictures": [f"p{n}.png" for n in range(41)]})
     assert r.status_code == 422 and "40 is the most" in r.json()["detail"]
@@ -326,8 +326,8 @@ def test_a_gathering_is_at_most_forty_pictures(pictures):
 
 def test_cameras_are_parts_kept_in_the_state_folder_and_the_old_file_is_not_read(pictures):
     """A camera's device and label are kept on this machine, in the state folder,
-    the person's alone; the cameras file the pins were kept in is neither read nor
-    written, and the old routes are gone."""
+    the person's alone; a cameras.json in it is neither read nor written, and /cameras
+    answers no request."""
     import json
     import stat
 
@@ -374,8 +374,8 @@ def test_cameras_are_parts_kept_in_the_state_folder_and_the_old_file_is_not_read
 
 
 def test_a_gathering_never_covers_over_a_built_in_site(pictures):
-    """POST /photos/gather with build=true and name=garage replaced the viewer's
-    default site, and a DELETE then removed it."""
+    """A gathering never takes a built-in site's name: POST /photos/gather with
+    build=true and name=garage is refused, and the garage stays as it is built."""
     c = TestClient(app)
     pair = ["bench.png", "bench_again.png"]
     r = c.post("/photos/gather", json={"pictures": pair, "build": True, "name": "garage"})

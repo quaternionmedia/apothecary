@@ -143,7 +143,7 @@ def test_workbench_has_no_status_or_build_volume():
 def test_printers_default_to_idle_with_a_build_volume():
     data = client.get("/sites/garage").json()
     printers = [s for s in data["structures"] if s["name"].startswith("printer_")]
-    assert [p["name"] for p in printers] == ["printer_1"]  # one printer, for now
+    assert [p["name"] for p in printers] == ["printer_1"]  # one printer
     for printer in printers:
         assert printer["status"] == "idle"
         assert printer["build_volume"] == [220.0, 220.0, 250.0]
@@ -350,8 +350,8 @@ def test_find_node_by_path_unknown_segment_returns_none():
 
 # =============================================================================
 # GET /sites/{name}/nodes/{path}/stl -- render any addressable node's own
-# subtree through the OpenSCAD CLI, cached by content hash (edge 2: real
-# geometry for composite nodes, not just leaves).
+# subtree through the OpenSCAD CLI, cached by content hash (real geometry for
+# composite nodes, not only leaves).
 # =============================================================================
 
 
