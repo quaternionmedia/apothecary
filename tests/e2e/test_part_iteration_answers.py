@@ -1,11 +1,10 @@
-"""The page as the server now answers it (docs/plans/part-iteration-2026-10-12.md,
-part 2's Phase B), through the page's own controls: Apply off up front where this
-OpenSCAD cannot build a part, the server's integers, choices and groups drawn, a
-saved variant renamed, duplicated, restored from its history, deleted to the trash
-and back, and the trash emptied only when asked twice; two variants compared,
+"""The page as the server answers it, through the page's own controls: Apply off up
+front where this OpenSCAD cannot build a part, the server's integers, choices and groups
+drawn, a saved variant renamed, duplicated, restored from its history, deleted to the
+trash and back, and the trash emptied only when asked twice; two variants compared,
 overlaid and side by side, with what differs; a render waiting its turn said to be
-queued; Download SCAD giving the edit; and Slice and the readiness checklist
-following the variant drawn. A part in a submodule, edited as its overlay, is
+queued; Download SCAD giving the edit; and Slice and the readiness checklist following
+the variant drawn. A part in a submodule, edited as its overlay, is
 tests/e2e/test_text_tied.py's.
 
 The server is this module's own: the OpenSCAD every test server runs, a variant
@@ -250,10 +249,9 @@ def test_a_saved_variant_is_renamed_duplicated_restored_deleted_and_the_trash_em
 def test_every_action_on_a_saved_variant_is_a_cell_of_part_variants(
     page: Page, url, cube_as_it_was
 ):
-    """The owner's answer of 2026-10-12: Part › Variants › a name is a ring -- Draw,
-    Rename, Duplicate, History, Compare, Delete -- and Part › Variants › Deleted holds
-    the trash, each deleted variant Restore and Forget, and Empty; what destroys is
-    chosen twice. A name no cell types: Rename and Duplicate put the cursor in the
+    """Part › Variants › a name is a ring -- Draw, Rename, Duplicate, History, Compare,
+    Delete -- and Part › Variants › Deleted holds the trash, each deleted variant
+    Restore and Forget, and Empty; what destroys is chosen twice. A name no cell types: Rename and Duplicate put the cursor in the
     variant's box, and Enter does it."""
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
@@ -505,9 +503,9 @@ def test_slice_and_the_checklist_follow_the_variant_drawn(page: Page, url):
 
 @pytest.mark.e2e
 def test_the_device_section_stands_only_where_a_board_belongs(page: Page, url):
-    """The owner's word: Selected's Device section is on a board, a printer, a piece that
-    names a sketch (footpedal) and anything a board is pinned to already, so its Unpin
-    stays in reach; a plain printed part, a bin or a structure has none."""
+    """Selected's Device section is on a board, a printer, a piece that names a sketch
+    (footpedal) and anything a board is pinned to already, so its Unpin stays in reach;
+    a plain printed part, a bin or a structure has none."""
     section = page.locator("#selected-body .device-section")
 
     def chosen(path: str) -> None:
