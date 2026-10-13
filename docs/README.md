@@ -6,8 +6,9 @@ HTTP API is described at `/openapi.json`, the commands by `apothecary --help`.
 
 ## The walkthrough
 
-`walkthrough/` is the executable path through this repository, run by
-`pytest walkthrough`. Start there, at page 00.
+`walkthrough/` is the path through this repository. Pages 00 to 10 are
+doctests, run by `pytest walkthrough`; pages 11 to 16 are written by the
+browser tests that walk them. Start there, at page 00.
 
 | Page | |
 |---|---|

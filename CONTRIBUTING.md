@@ -111,6 +111,9 @@ a message that ends a step names the next one.
 - A decision: a `DRAFT-*.md` in `governance/qm/adr/`, following
   `governance/qm/adr/README.md`. A human ratifies it.
 - A change a user would notice: one line in [CHANGELOG.md](CHANGELOG.md).
+- A release: [walkthrough page 10](walkthrough/10-being-depended-on.md) says who pins
+  this repository, what `apothecary release` checks, and the two acts that publish one,
+  a merge to `main` and a tag.
 - A plan: `docs/plans/<topic>-<date>.md`, dated, listed under *Plans* in
   [docs/README.md](docs/README.md). When its work is built it moves to that page's
   *History*, and each decision of it that is still true is stated where it lives: a
