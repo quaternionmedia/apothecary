@@ -43,8 +43,7 @@ real install and a real offline build of every Rust sketch in a scratch tools
 dir and says what they did in its body (the hosts they reached, the build's
 result). A sketch's ``Cargo.lock`` is resolved against the toolchain pinned
 here, so a bump of the Xtensa Rust version is a bump of the lockfiles too,
-when they need it. (The owner's decision of 2026-10-10,
-docs/plans/rust-2026-10-08.md.)
+when they need it.
 
 The platforms are the ones Espressif publishes the Xtensa toolchain for, as
 the OpenSCAD installer does it (``openscad_installer.host()``, the
@@ -662,8 +661,8 @@ class RustEsp32Installer:
         """The toolchain, as rustup's ``esp``: linked, and the default -- nothing fetched.
 
         A link to another pin is let go (the folder it named is left); an ``esp``
-        that is a folder of its own -- espup's install, before there was this --
-        is uninstalled by rustup first.
+        that is a folder of its own (espup's install) is uninstalled by rustup
+        first.
         """
         env = self.env()
         existing = rustup_home() / "toolchains" / TOOLCHAIN
