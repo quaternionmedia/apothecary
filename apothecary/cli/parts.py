@@ -273,9 +273,9 @@ def parts_verify(
     """Check a part's declared bounds against the geometry OpenSCAD produces.
 
     A wrapper's get_bounds is hand-written Python beside hand-written
-    OpenSCAD, and nothing has been keeping the two honest. Anything consuming
-    the declared envelope -- catalog layout, an assembly sizing itself around
-    the part -- is wrong by exactly the amount they have drifted apart.
+    OpenSCAD, and the two can drift apart. Anything consuming the declared
+    envelope -- catalog layout, an assembly sizing itself around the part --
+    is wrong by exactly the amount they differ, which this measures.
 
     Renders to a temporary file, so the STL you are iterating on is untouched.
     """
