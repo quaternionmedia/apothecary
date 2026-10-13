@@ -6,10 +6,11 @@ SCAD editor and the browser's outside it, the staged numbers' undo and redo by k
 button and ring, a variant drawn where it stands, the ghost of what was drawn before,
 framing the part being edited, and a render of older SCAD saying so.
 
-What the server does not say yet -- a unit, an integer, a customizer's step, a choice
-or a vector on a model part -- is said to the page here by answering its read of the
-part's parameters with those fields added (Playwright's route): the page draws what
-it is told, and nothing where it is told nothing. The server is this module's own,
+What the test part does not declare -- an integer, a field's own step, a choice or a
+vector, and a field with no unit -- is said to the page here by answering its read of
+the part's parameters with those fields as the server's ParamField carries them
+(Playwright's route): the page draws what it is told, and nothing where it is told
+nothing. The server is this module's own,
 rendering with the OpenSCAD every server runs, its variant cache a temp folder.
 """
 
