@@ -18,8 +18,8 @@ and says that sketch's hello, as esp32_blink does. And a server with Rust alone,
 no arduino-cli anywhere, where the Rust module finds the devkit and listens to it
 itself, through the simulated serial engine (APOTHECARY_SIMULATED_DEVKIT).
 Nothing here opens a real port, builds for real or reaches the network;
-flashing the bench's own ESP32 is a step of the bench checklist
-(docs/validation/2026-09-20-ender-bench.md).
+flashing the bench's own ESP32 is section H of the bench checklist
+(docs/bench-checklist.md).
 """
 
 from __future__ import annotations
@@ -181,8 +181,8 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
         ),
         does_not_show=[
             "**A real board.** The devkit is a simulation that says what esp32_blink "
-            "says; flashing the bench's own ESP32 and hearing it is step G of the bench "
-            "checklist (docs/validation/2026-09-20-ender-bench.md).",
+            "says; flashing the bench's own ESP32 and hearing it is section H of the "
+            "bench checklist (docs/bench-checklist.md).",
             "**A real build.** The scripted cargo writes a stand-in image; a real one is "
             "`apothecary firmware install --rust-esp32` and then the same Compile "
             "(docs/firmware.md).",
