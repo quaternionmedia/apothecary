@@ -22,14 +22,14 @@ Panels › Bench › Bench on the canvas ring opens the Bench, floated here from
 
 ```
 rust-esp32: installed
-undefined: not installed
+orcaslicer: not installed
 esp32_blink@arduino · esp32:esp32:esp32
 esp32_blink@rust-esp32 · esp32
 ```
 
 ## 2. Compile builds it for its board
 
-Panels › Bench › Compile (⌗932) builds what the Bench has chosen, as a task whose output is in the Bench's log; nothing is sent to a board. Upload is next.
+Panels › Bench › Compile (⌗432) builds what the Bench has chosen, as a task whose output is in the Bench's log; nothing is sent to a board. Upload is next.
 
 ```
 succeeded — Compile esp32_blink@arduino (esp32:esp32:esp32)
@@ -37,7 +37,7 @@ succeeded — Compile esp32_blink@arduino (esp32:esp32:esp32)
 
 ## 3. Upload writes it to the devkit, after asking
 
-Panels › Bench › Upload (⌗934) asks first, naming the sketch with its toolchain and the port; then it builds again and uploads that fresh build. The garage's esp32_blink, which runs the sketch of that name, now wears the board.
+Panels › Bench › Upload (⌗434) asks first, naming the sketch with its toolchain and the port; then it builds again and uploads that fresh build. The garage's esp32_blink, which runs the sketch of that name, now wears the board.
 
 ```
 Compile and upload "esp32_blink@arduino" to /dev/ttyFAKE2?
@@ -59,7 +59,7 @@ observed esp32_blink ✓ matches
 
 ## 5. Device › Flash, and the Rust esp32_blink chosen
 
-esp32_blink's ring, Device › Flash (⌗22): the Machine's Flashing card, for this board's port alone, starting from the build it should run. The Rust esp32_blink chosen beside it: it builds for the chip its Cargo project names, so the board box goes. Compile is next.
+esp32_blink's ring, Device › Flash (⌗12): the Machine's Flashing card, for this board's port alone, starting from the build it should run. The Rust esp32_blink chosen beside it: it builds for the chip its Cargo project names, so the board box goes. Compile is next.
 
 ![Device › Flash, and the Rust esp32_blink chosen](screenshots/15-05-device-flash-and-the-rust-esp32-blink-chosen.png)
 

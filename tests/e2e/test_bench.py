@@ -130,7 +130,9 @@ def test_the_bench_s_verbs_are_cells_of_panels_bench(page: Page, url: str):
     """Panels › Bench holds the panel and its verbs, and the Bench's buttons wear their
     addresses; Compile from the ring compiles what the Bench has chosen."""
     _open_viewer(page, url)
-    page.locator("#viewer-canvas").click(button="right", position={"x": 30, "y": 30})
+    page.locator("#viewer-canvas").click(
+        button="right", modifiers=["Control"], position={"x": 30, "y": 30}
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press(_wedges(page)["Panels"])
     panels = _wedges(page)
@@ -154,30 +156,32 @@ def test_the_bench_s_verbs_are_cells_of_panels_bench(page: Page, url: str):
     expect(bench.locator(".sketch-select option[value='footpedal@arduino']")).to_have_count(
         1, timeout=10000
     )
-    expect(bench.locator(".compile-btn")).to_have_attribute("data-address", "932", timeout=5000)
+    expect(bench.locator(".compile-btn")).to_have_attribute("data-address", "432", timeout=5000)
     # Install is a ring of the toolchain modules: arduino-cli's install moved one level
     # deeper (it was 936), and Rust for the ESP32's has a cell of its own.
-    expect(bench.locator(".install-btn")).to_have_attribute("data-address", "9368")
+    expect(bench.locator(".install-btn")).to_have_attribute("data-address", "4368")
     expect(bench.locator(".module-install[data-id='rust-esp32']")).to_have_attribute(
-        "data-address", "9366"
+        "data-address", "4366"
     )
     # The slicer after them: OrcaSlicer, none of the person's own found by this server,
     # its Install the last cell of Install.
     slicer = bench.locator(".tc-module[data-slicer='orcaslicer']")
     expect(slicer).to_contain_text("not installed: pinned 2.4.2")
     expect(slicer.locator(".slicer-install")).to_have_text("Install OrcaSlicer")
-    expect(slicer.locator(".slicer-install")).to_have_attribute("data-address", "9362")
+    expect(slicer.locator(".slicer-install")).to_have_attribute("data-address", "4362")
     expect(bench.locator(".core-install[data-id='esp8266:esp8266']")).to_have_attribute(
-        "data-address", re.compile(r"^931\d$")
+        "data-address", re.compile(r"^431\d$")
     )
     bench.locator(".sketch-select").select_option("footpedal@arduino")
-    page.locator("#viewer-canvas").click(button="right", position={"x": 30, "y": 30})
+    page.locator("#viewer-canvas").click(
+        button="right", modifiers=["Control"], position={"x": 30, "y": 30}
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    for digit in ("9", "3", "2"):
+    for digit in ("4", "3", "2"):  # Panels › Bench › Compile
         page.keyboard.press(digit)
     expect(page.locator("#ring-overlay")).to_have_count(0)
     _ended(bench, "Compile footpedal@arduino (arduino:avr:uno)")
-    expect(page.locator("#status")).to_contain_text("⌗932")
+    expect(page.locator("#status")).to_contain_text("⌗432")
 
 
 @pytest.mark.e2e

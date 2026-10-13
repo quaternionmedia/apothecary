@@ -70,7 +70,9 @@ def _open(page: Page, url: str) -> None:
 
 
 def _ring(page: Page, part: str, *labels: str) -> None:
-    page.locator(f"#contents-list .contents-item[data-path='{part}']").click(button="right")
+    page.locator(f"#contents-list .contents-item[data-path='{part}']").click(
+        button="right", modifiers=["Control"]
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
     for label in labels:
         page.wait_for_function(

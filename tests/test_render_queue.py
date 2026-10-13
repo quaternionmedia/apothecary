@@ -139,6 +139,18 @@ def _until(client, test, timeout: float = 10.0) -> dict:
     raise AssertionError(client.get("/openscad/runs").json())
 
 
+def _rendering(exe: Path, marker: str, timeout: float = 20.0) -> None:
+    """Until the scripted OpenSCAD has begun rendering a text holding ``marker``: the
+    queue counts a run as running once it has its place, which is before the process
+    it starts is under way -- under load, long before."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if any(marker in r["text"] for r in renders(exe)):
+            return
+        time.sleep(0.02)
+    raise AssertionError(f"no render of {marker} began: {renders(exe)}")
+
+
 class TestThroughTheRoutes:
     def test_a_waiting_render_is_shown_to_its_page_and_cancels_as_a_running_one_does(
         self, block, monkeypatch
@@ -147,6 +159,8 @@ class TestThroughTheRoutes:
         client, out = TestClient(app), {}
         slow = _render_in_thread(client, SCAD + "// SLEEP\n", "page-a", out, "slow")
         _until(client, lambda now: [r["kind"] for r in now["running"]] == ["render"])
+        # Its OpenSCAD under way, so stopping it later stops a render that began.
+        _rendering(block, "SLEEP")
         waiting = _render_in_thread(client, SCAD + "// b one\n", "page-b", out, "waiting")
         _until(client, lambda now: len(now["waiting"]) == 1)
         mine = client.get("/openscad/runs", params={"page": "page-b"}).json()

@@ -223,7 +223,9 @@ def _press(page: Page, *labels: str) -> None:
 
 def _edit(page: Page) -> None:
     """The part's ring, from its row in Contents: Part › Edit."""
-    page.locator(f"#contents-list .contents-item[data-path='{PART}']").click(button="right")
+    page.locator(f"#contents-list .contents-item[data-path='{PART}']").click(
+        button="right", modifiers=["Control"]
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
     _press(page, "Part", "Edit")
     expect(page.locator("#part-params .param[data-field='size'] input[type=range]")).to_be_visible(
@@ -283,8 +285,10 @@ def _framed_on_the_cube(page: Page) -> None:
 def _envelope(page: Page) -> str:
     """What the editor says of the part's size: the envelope it declares, and what is
     drawn measures. It stands below the SCAD, out of a picture of the sizes, so a step
-    that names it carries its words."""
-    return " ".join(page.locator("#part-envelope").inner_text().split())
+    that names it carries its words -- all but which OpenSCAD measured, which is the
+    machine's (the page's "does not show")."""
+    said = " ".join(page.locator("#part-envelope").inner_text().split())
+    return re.sub(r" \((OpenSCAD's summary|read from the STL)\)", "", said)
 
 
 def _shown_whole(page: Page, show) -> None:
@@ -312,7 +316,9 @@ def _status(page: Page):
 
 def _ring_on_the_part(page: Page, *labels: str) -> None:
     """The part's ring, from its row in Site, and the cells ``labels`` name."""
-    page.locator(f"#contents-list .contents-item[data-path='{PART}']").click(button="right")
+    page.locator(f"#contents-list .contents-item[data-path='{PART}']").click(
+        button="right", modifiers=["Control"]
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
     _press(page, *labels)
 
@@ -863,6 +869,8 @@ def test_designing_a_part_twice_round(
     # The defaults again, for nothing: from the part's ring.
     back = _back_to_the_defaults(page, from_the_ring=True)
     page.screenshot(path=str(shots / "saved-again.png"))
+    # Its parameters from the first, wherever the Apply left Selected scrolled.
+    page.evaluate(STAGE_BAR_AT_THE_TOP)
     story.shows(
         "Part › Defaults, then Part › Apply: the saved part again, for nothing",
         f"{PART}'s ring, Part › Defaults: the part's own SCAD back in its editor -- its "

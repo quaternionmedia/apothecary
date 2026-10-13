@@ -336,7 +336,7 @@ export function mountPictures({ base = "", marks, world, log }) {
         const pictures = await picturesNow(true);
         const kept = pictures.filter((p) => p.kept);
         if (!kept.length) throw new Error("nothing kept from the browser to forget");
-        if (!confirm(`Forget every picture the browser put here? ${kept.length} kept picture(s) go; the folder's own (${pictures.length - kept.length}) stay.`)) return null;
+        // Asked twice where it was chosen: the ring's wedge, or Pictures' button.
         const gone = await api("/photos/pictures", { method: "DELETE" });
         state.picturesAt = 0;
         await marks.refresh();

@@ -359,6 +359,22 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
             return true;
         },
         get(key) { return anchors.get(key) ? anchors.get(key).el : null; },
+        /* The point in the world a badge stands for, given the badge's element or
+         * anything inside it: its own point, or for a count the middle of its
+         * members'. Null when it stands nowhere now. */
+        pointOf(el) {
+            const own = el && el.closest && el.closest("[data-anchor]");
+            const a = own && anchors.get(own.dataset.anchor);
+            const at = (x) => { const q = typeof x.point === "function" ? x.point() : x.point; return q ? q.clone() : null; };
+            if (a) return at(a);
+            const box = el && el.closest && el.closest(".world-badge.cluster");
+            const c = box && [...clusters.values()].find((x) => x.el === box);
+            if (!c) return null;
+            const points = c.keys.map((k) => anchors.get(k)).filter(Boolean).map(at).filter(Boolean);
+            if (!points.length) return null;
+            const sum = points.reduce((s, q) => s.add(q), new THREE.Vector3());
+            return sum.divideScalar(points.length);
+        },
         has(key) { return anchors.has(key); },
         keys() { return [...anchors.keys()]; },
         /* Where an anchor's point was last projected, in canvas pixels (null when hidden) -- for tests. */

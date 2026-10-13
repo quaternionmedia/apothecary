@@ -67,8 +67,9 @@ control is deleted.
   of the world (the consolidation plan's Phase 5) -- plus the widget modules it
   imports and the marks modules it imports by name (`MARKS`: what the world
   wears -- a machine's marks, a picture's -- and the boards' model behind them).
-  `ring.js`, `panels.js` and `anchors.js` stay off the meter as chrome with
-  their own tests; `board_text.js` writes text and listens to nothing. The command line and
+  `ring.js`, `panels.js`, `anchors.js` and `keys.js` (how a key is named, and
+  when a shortcut may act) stay off the meter as chrome with their own tests;
+  `board_text.js` writes text and listens to nothing. The command line and
   direct requests are not in the number.
 - It refuses when it finds nothing, because a page it failed to read and a page
   with no controls must not produce the same answer.
@@ -129,6 +130,11 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # The header's View menu (a fold, like Site's): how the world is drawn.
     "snap-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box for snapping to a grid"),
     "walls-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box that lets a click in the world pick a wall"),
+    "settings-open": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "an item of the View menu that opens the Settings panel",
+    ),
     "zoom-in-btn": (WIDGET, WHAT_YOU_SEE, "a button that goes into the chosen piece"),
     "status-select": (WIDGET, WHAT_IS_THERE, "a drop-down for the state of a piece"),
     "pos-x": (WIDGET, WHAT_IS_THERE, "a box for typing where a piece is, across"),
@@ -413,6 +419,37 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "print-pause": (WIDGET, WHAT_IS_THERE, "a button that stops feeding the print from here"),
     "print-resume": (WIDGET, WHAT_IS_THERE, "a button that feeds the print from here again"),
     "print-cancel": (WIDGET, WHAT_IS_THERE, "a button that ends the print from here, heaters off"),
+    # ---- Settings, apothecary/static/widgets/settings.js -------------------
+    # Every shortcut and navigation setting (the input plan of 2026-10-12): one row
+    # each, its default shown and a reset beside it, and Reset all. They change how
+    # the page takes a press, not what is there, and none is ring-backed: the plan
+    # gives the panel a cell (View › Settings), not each row one.
+    "setting-key": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a field that takes the next key pressed as a shortcut: the ring's, a step in or out",
+    ),
+    "setting-choice": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a drop-down of the modifier a right-click opens the ring with",
+    ),
+    "setting-tick": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a tick-box that turns automatic zoom, or one way of it, on or off",
+    ),
+    "setting-number": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a box for automatic zoom's resistance, or how near or far the camera may dolly",
+    ),
+    "setting-reset": (WIDGET, WHAT_YOU_SEE, "a button that puts one setting back to its default"),
+    "settings-reset-all": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button that puts every setting back to its default",
+    ),
 }
 
 # A control of its own that does the same thing as a cell of the ring, and the
@@ -519,13 +556,16 @@ RING_BACKED: Dict[str, str] = {
     "li:click:selectChild": "select:printer_1",
     "badge:click:selectPath": "select:printer_1",
     "crumb:click:goUpTo": "zoom-out",
-    "zoomInLink:click:zoomIn": "zoom-in",
+    "zoomInLink:click:stepIn": "zoom-in",
     # The header's View menu: each of its items a cell of the canvas ring's
     # View (a Detail value is View › Detail › that value).
     "snap-toggle": "view:snap",
     "detail-mode": "view:detail:full",
     "overlay-toggle": "view:outlines",
     "walls-toggle": "view:walls",
+    # ⚙ View › Settings is the canvas ring's View › Settings: the Settings panel shown.
+    "settings-open": "view:settings",
+    "settingsOpenBtn:click:openSettings": "view:settings",
     "snapToggle:change:setTranslationSnap": "view:snap",
     "detailModeEl:change:clear": "view:detail:full",
     "overlayToggle:change:renderFocus": "view:outlines",
@@ -563,6 +603,7 @@ RING_BACKED: Dict[str, str] = {
     "ghost-toggle": "part:ghost",
     "window:keydown:onUndoKey": "part:undo",
     "window:keydown:onFitKey": "part:fit",
+    "window:keydown:onSaveKey": "part:save",
     # a camera in Selected: Take picture is its ring's, and so is P
     "cam-take": "camera:take-picture",
     "takeBtn:click:takePictureWith": "camera:take-picture",
@@ -629,10 +670,10 @@ BY_SHAPE: Sequence[Tuple[re.Pattern, str]] = (
 # list are one entry, and a new control can be added to that row unnoticed.
 LISTENING: Dict[str, Tuple[str, str, str]] = {
     # taking hold of the thing itself
-    "transformControls:dragging-changed:(nothing)": (  # noqa: E501 - see NO_CALL
+    "transformControls:dragging-changed:noteDragStart": (
         DRAG,
         WHAT_YOU_SEE,
-        "taking hold stops the view from turning under you",
+        "taking hold notes where the piece was, for Escape, and stops the view turning under you",
     ),
     "transformControls:objectChange:onGizmoDrag": (
         DRAG,
@@ -670,6 +711,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "the tick-box that lets a click pick walls, for the session",
     ),
+    "settingsOpenBtn:click:openSettings": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "⚙ View › Settings, showing the Settings panel in the rail",
+    ),
     # The View menu folds away when a press lands anywhere else, as a menu does.
     "document:pointerdown:foldViewMenu": (
         WIDGET,
@@ -678,17 +724,70 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     ),
     "posAxis:change:recomputeWorldBounds": (WIDGET, WHAT_IS_THERE, "typing a position"),
     "statusSelect:change:submitStatus": (WIDGET, WHAT_IS_THERE, "choosing a state"),
-    "zoomInLink:click:zoomIn": (WIDGET, WHAT_YOU_SEE, "the go-in button on the chosen piece"),
+    "zoomInLink:click:stepIn": (WIDGET, WHAT_YOU_SEE, "the step-in button on the chosen piece"),
     # done to the scene itself
-    "canvas:pointerdown:onPointerDown": (GESTURE, WHAT_YOU_SEE, "pointing at a piece"),
-    "canvas:dblclick:onDoubleClick": (GESTURE, WHAT_YOU_SEE, "double-tapping to go in"),
+    "canvas:dblclick:onDoubleClick": (GESTURE, WHAT_YOU_SEE, "double-tapping to step in"),
     "canvas:wheel:onWheel": (GESTURE, WHAT_YOU_SEE, "the wheel, with a counter of its own"),
-    "window:keydown:zoomOut": (GESTURE, WHAT_YOU_SEE, "a key that steps back out"),
+    # The pointer in the world, decided at the release (the input plan of 2026-10-12):
+    # a still left click selects, or clears the selection on empty space; a still
+    # right click re-centres; a drag is the view's. Held with Settings' modifier, the
+    # right button is the ring's, counted with the ring. A badge passes the right
+    # button to what it stands for.
+    "canvas:pointerdown:onPress": (
+        GESTURE,
+        WHAT_YOU_SEE,
+        "a press on the world, kept to tell a still click from a turn or a pan",
+    ),
+    "canvas:pointermove:onTravel": (
+        GESTURE,
+        NOTHING,
+        "how far a press has travelled, so one that wandered and came back is no click",
+    ),
+    "canvas:pointerup:onRelease": (
+        GESTURE,
+        WHAT_YOU_SEE,
+        "a still click: a piece selected, the selection let go, or the view re-centred",
+    ),
+    "layer:pointerdown:onPress": (
+        GESTURE,
+        WHAT_YOU_SEE,
+        "a press on a badge, kept to tell a still right click on it",
+    ),
+    "layer:pointerup:onRelease": (
+        GESTURE,
+        WHAT_YOU_SEE,
+        "a still right click on a badge, re-centring the view on what it stands for",
+    ),
+    "document:keydown:noteTab": (
+        AUTOMATIC,
+        NOTHING,
+        "Tab pressed, which can bring the focus to the world: its ring shows again",
+    ),
+    "document:pointerdown:notePress": (
+        AUTOMATIC,
+        NOTHING,
+        "where the last press landed, so Page Up and Page Down are the world's after one there",
+    ),
+    "window:keydown:onZoomKey": (
+        GESTURE,
+        WHAT_YOU_SEE,
+        "keys (Page Down and Page Up while the world has the keys, Backspace) that step in and out",
+    ),
+    "window:keydown:onEscapeKey": (
+        GESTURE,
+        WHAT_YOU_SEE,
+        "Escape: the View menu folded, a drag put back unsaved, then the selection let go",
+    ),
+    "window:keydown:onSaveKey": (
+        GESTURE,
+        WHAT_IS_THERE,
+        "Ctrl+S, while a part's editor is open: its variant saved, from anywhere on the page",
+    ),
     "window:keydown:onHintKey": (GESTURE, WHAT_YOU_SEE, "a key (?) that brings the hint bar back"),
     "window:keydown:onFitKey": (
         GESTURE,
         WHAT_YOU_SEE,
-        "a key (f) that frames the selected piece, Selected and its editor kept open",
+        "keys (f, Shift+F) that frame the selected piece, else the level, and the level",
     ),
     "window:keydown:onUndoKey": (
         GESTURE,
@@ -824,7 +923,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "the header's count of problems, unfolding them in Site",
     ),
-    "li:dblclick:zoomIn": (LIST, WHAT_YOU_SEE, "going into a piece from the list"),
+    "li:dblclick:stepIn": (LIST, WHAT_YOU_SEE, "stepping into a piece from the list"),
     "rootCrumb:click:goUpTo": (LIST, WHAT_YOU_SEE, "the top of the trail"),
     "crumb:click:goUpTo": (LIST, WHAT_YOU_SEE, "a step on the trail"),
     # how much to draw
@@ -915,6 +1014,27 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WIDGET,
         WHAT_IS_THERE,
         "one listener for the whole control overlay, told which button by what it carries",
+    ),
+    # ---- Settings (widgets/settings.js): one listener of each kind on the panel ----
+    "settingsEl:click:settingClicked": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a shortcut's field set waiting for a key, a setting's reset, or Reset all",
+    ),
+    "settingsEl:change:settingChanged": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a setting's tick-box, drop-down or number, changed and applied at once",
+    ),
+    "settingsEl:keydown:keyCaptured": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "the key a waiting shortcut's field takes, refused when another shortcut holds it",
+    ),
+    "settingsEl:focusout:captureLetGo": (
+        WIDGET,
+        NOTHING,
+        "a waiting shortcut's field let go of when the focus leaves it",
     ),
     "document:visibilitychange:onVisibility": (
         AUTOMATIC,

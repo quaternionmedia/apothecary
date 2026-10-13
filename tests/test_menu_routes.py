@@ -95,7 +95,10 @@ def test_a_node_with_a_printer_pinned_offers_the_device_ring_with_cells():
     assert answer.status_code == 200, answer.text
     ring = answer.json()
     device = next(o for o in ring["options"] if o["id"] == "device")
-    assert device["cell"] == 2, "after Zoom in and Move"
+    # After Step in, Move, Why this and Inside, which every such piece keeps where
+    # they are; only Parent, which comes and goes too, after it.
+    assert [o["label"] for o in ring["options"]][-2:] == ["Device", "Parent"]
+    assert device["cell"] == 9
     labels = {c["label"]: c["cell"] for c in device["children"]}
     assert labels == {
         "Open": 8,

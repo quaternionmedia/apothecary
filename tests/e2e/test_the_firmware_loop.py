@@ -96,7 +96,9 @@ def _choose(page: Page, *labels: str) -> None:
 
 
 def _ring_on(page: Page, path: str) -> None:
-    page.locator(f"#contents-list .contents-item[data-path='{path}']").click(button="right")
+    page.locator(f"#contents-list .contents-item[data-path='{path}']").click(
+        button="right", modifiers=["Control"]
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
 
 
@@ -109,7 +111,9 @@ def _ended(where, title: str, timeout: int = 15000) -> None:
 def _canvas_ring(page: Page, *digits: str) -> None:
     """The ring on the world, nothing chosen, and the cells named by their digits."""
     page.wait_for_function("() => !!window.apothecaryRing", timeout=15000)
-    page.locator("#viewer-canvas").click(button="right", position={"x": 30, "y": 30})
+    page.locator("#viewer-canvas").click(
+        button="right", modifiers=["Control"], position={"x": 30, "y": 30}
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=15000)
     for digit in digits:
         page.keyboard.press(digit)
@@ -201,7 +205,7 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
 
     # ---------------------------------------------------------------- round one
     # 1. The Bench, from the canvas ring: Panels › Bench › Bench.
-    _canvas_ring(page, "9", "3", "8")
+    _canvas_ring(page, "4", "3", "8")
     bench = page.locator(BENCH)
     expect(bench).to_be_visible(timeout=5000)
     select = bench.locator(".sketch-select")
@@ -222,7 +226,8 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     expect(floated).to_be_visible(timeout=5000)
     floated.locator(".bench-build").evaluate("(el) => el.scrollIntoView({ block: 'start' })")
     installed = floated.locator(".tc-module").evaluate_all(
-        "(ms) => ms.map((m) => `${m.dataset.id}: ${/not installed/.test(m.textContent)"
+        "(ms) => ms.map((m) => `${m.dataset.id ?? m.dataset.slicer}: "
+        "${/not installed/.test(m.textContent)"
         " ? 'not installed' : 'installed'}`)"
     )
     assert "rust-esp32: installed" in installed, installed
@@ -242,24 +247,24 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     expect(bench).to_be_visible(timeout=5000)
 
     # 2. Compile, from the ring: Panels › Bench › Compile.
-    _canvas_ring(page, "9", "3", "2")
+    _canvas_ring(page, "4", "3", "2")
     _ended(bench, f"Compile {ARDUINO} (esp32:esp32:esp32)")
     expect(bench.locator(".task-log")).to_contain_text("fake compile")
-    expect(page.locator("#status")).to_contain_text("⌗932")
+    expect(page.locator("#status")).to_contain_text("⌗432")
     story.says(
         "Compile builds it for its board",
-        "Panels › Bench › Compile (⌗932) builds what the Bench has chosen, as a task "
+        "Panels › Bench › Compile (⌗432) builds what the Bench has chosen, as a task "
         "whose output is in the Bench's log; nothing is sent to a board. Upload is next.",
         shown=_title(bench),
     )
 
     # 3. Upload, from the ring, after asking.
-    _canvas_ring(page, "9", "3", "4")
+    _canvas_ring(page, "4", "3", "4")
     _ended(bench, f"Upload {ARDUINO} → {DEVKIT}")
     expect(bench.locator(".task-log")).to_contain_text("fake upload")
     story.says(
         "Upload writes it to the devkit, after asking",
-        "Panels › Bench › Upload (⌗934) asks first, naming the sketch with its toolchain "
+        "Panels › Bench › Upload (⌗434) asks first, naming the sketch with its toolchain "
         "and the port; then it builds again and uploads that fresh build. The garage's "
         "esp32_blink, which runs the sketch of that name, now wears the board.",
         shown=f"{dialogs[0]}\n{_title(bench)}",
@@ -318,7 +323,7 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     settled(page)
     story.shows(
         "Device › Flash, and the Rust esp32_blink chosen",
-        "esp32_blink's ring, Device › Flash (⌗22): the Machine's Flashing card, for this "
+        "esp32_blink's ring, Device › Flash (⌗12): the Machine's Flashing card, for this "
         "board's port alone, starting from the build it should run. The Rust "
         "esp32_blink chosen beside it: it builds for the chip its Cargo project names, "
         "so the board box goes. Compile is next.",
@@ -429,7 +434,7 @@ def test_the_bench_lists_the_rust_sketch_and_its_toolchain_beside_arduino(page: 
     expect(rust).to_contain_text("espflash 4.6.0")
     install = rust.locator(".module-install")
     expect(install).to_have_text("Update Rust for the ESP32")
-    expect(install).to_have_attribute("data-address", "9366")  # Panels › Bench › Install › Rust
+    expect(install).to_have_attribute("data-address", "4366")  # Panels › Bench › Install › Rust
     expect(install).to_be_enabled()
     assert "vendor every Rust sketch's crates" in (install.get_attribute("title") or "")
     expect(bench.locator(".tc-status")).to_contain_text("✓ 9.9.9")  # arduino-cli, as it was
@@ -441,13 +446,15 @@ def test_the_bench_lists_the_rust_sketch_and_its_toolchain_beside_arduino(page: 
     select.select_option(RUST)
     expect(bench.locator(".sk-board-row")).to_be_hidden()
     expect(bench.locator(".compile-btn")).to_be_enabled()
-    page.locator("#viewer-canvas").click(button="right", position={"x": 30, "y": 30})
+    page.locator("#viewer-canvas").click(
+        button="right", modifiers=["Control"], position={"x": 30, "y": 30}
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    for digit in ("9", "3", "2"):  # Panels › Bench › Compile
+    for digit in ("4", "3", "2"):  # Panels › Bench › Compile
         page.keyboard.press(digit)
     _ended(bench, f"Compile {RUST} (esp32)")
     expect(bench.locator(".task-log")).to_contain_text("--offline")
-    expect(page.locator("#status")).to_contain_text("⌗932")
+    expect(page.locator("#status")).to_contain_text("⌗432")
 
 
 @pytest.mark.e2e
@@ -462,7 +469,7 @@ def test_with_rust_alone_the_loop_goes_round_with_no_arduino_cli(page: Page, rus
     dialogs: list[str] = []
     page.on("dialog", lambda d: (dialogs.append(d.message), d.accept()))
     _open_viewer(page, url)
-    _canvas_ring(page, "9", "3", "8")
+    _canvas_ring(page, "4", "3", "8")
     bench = page.locator(BENCH)
     expect(bench.locator(".tc-status")).to_contain_text("not installed", timeout=10000)
     expect(bench.locator(".tc-module[data-id='rust-esp32']")).to_contain_text("installed: can")
