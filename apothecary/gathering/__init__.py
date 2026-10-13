@@ -12,7 +12,7 @@ This works out which is which, says how sure it is about each answer, and
 their thresholds, ``judgement`` what a person says and why it wins,
 ``questions`` which pairs are worth asking about, and ``bench`` the meter.
 
-PROTOTYPE — not ratified.
+A prototype: no ratified record governs it.
 """
 
 # An install point of the guard (apothecary/stays_local.py), before any module
