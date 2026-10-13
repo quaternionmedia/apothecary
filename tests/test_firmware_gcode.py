@@ -1634,10 +1634,10 @@ def test_a_pin_by_a_path_that_resolves_to_the_port_matches(tmp_path):
     assert same_device(str(link), str(real))
     assert same_device(str(real), str(real))
     assert not same_device(str(tmp_path / "other"), str(real))
-    dev = DeviceInfo(port="/dev/ttyUSB0", serial_number="A106ZTEU")
-    assert same_device("a106zteu", "/dev/ttyUSB0", dev) and dev.identity == "A106ZTEU"
-    assert not same_device("A106ZTEU", "/dev/ttyUSB0", None)
-    assert validate_identity("A106ZTEU") == "A106ZTEU"
+    dev = DeviceInfo(port="/dev/ttyUSB0", serial_number="A1B2C3D4")
+    assert same_device("a1b2c3d4", "/dev/ttyUSB0", dev) and dev.identity == "A1B2C3D4"
+    assert not same_device("A1B2C3D4", "/dev/ttyUSB0", None)
+    assert validate_identity("A1B2C3D4") == "A1B2C3D4"
     with pytest.raises(ValueError):
         validate_identity("no spaces here")
 

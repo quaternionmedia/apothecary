@@ -2,8 +2,9 @@
 
 Each module (docs/firmware.md) says what it builds, finds its tools (its variable,
 the tools dir, PATH), reports their status, and builds and flashes a sketch as steps;
-the Rust esp32_blink lives with its part and says what the Arduino one says. Against the scripted cargo and espflash
-(tests/firmware_helpers.py); nothing here builds, flashes or fetches for real.
+the Rust esp32_blink lives with its part and says what the Arduino one says. Against
+the scripted cargo and espflash (tests/firmware_helpers.py); nothing here builds,
+flashes or fetches for real.
 """
 
 from __future__ import annotations
@@ -319,8 +320,8 @@ def test_a_rust_sketch_compiles_and_uploads_through_the_routes(
 
 def test_the_board_a_route_names_is_each_module_s_own(fake_rust, builds, fresh_task_runner):
     """An Arduino sketch is built for a board, and the request names it; a Rust sketch
-    builds for its chip and takes none. A name two sketches share
-    is refused, naming both."""
+    builds for its chip and takes none. A name two sketches share is refused, naming
+    both."""
     client = TestClient(app)
     r = client.post("/firmware/sketches/esp32_blink/compile", json={})
     assert r.status_code == 422 and "esp32_blink@arduino, esp32_blink@rust-esp32" in r.text
@@ -457,6 +458,6 @@ def test_an_image_that_names_where_it_was_built_is_refused(tmp_path, capsys):
     assert image_paths.main([str(named), "--refuse", home]) == 1
     assert f"build path in the image: {home}" in capsys.readouterr().out
     windows = tmp_path / "windows.elf"
-    windows.write_bytes(b"\x7fELF C:/Users/pk/x.rs")
-    assert image_paths.found_in(windows.read_bytes(), ["C:\\Users\\pk"]) == {"C:\\Users\\pk": [5]}
+    windows.write_bytes(b"\x7fELF C:/Users/you/x.rs")
+    assert image_paths.found_in(windows.read_bytes(), ["C:\\Users\\you"]) == {"C:\\Users\\you": [5]}
     assert image_paths.main([str(tmp_path / "missing.elf"), "--refuse", home]) == 2

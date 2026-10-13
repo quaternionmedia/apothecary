@@ -529,8 +529,9 @@ def test_the_header_is_one_row_with_its_view_menu_on_the_ring():
 
 def test_settings_rows_are_counted_and_unbacked_and_its_view_item_is_view_settings():
     """The Settings panel's rows are controls of their own, counted from the module
-    that writes them and never ring-backed (the panel has a cell, and no row has one); ⚙ View › Settings is backed by the canvas ring's View › Settings,
-    which the ring really produces. The right button's press and release and the zoom
+    that writes them and never ring-backed (the panel has a cell, and no row has one);
+    ⚙ View › Settings is backed by the canvas ring's View › Settings, which the ring
+    really produces. The right button's press and release and the zoom
     keys are things done to the scene."""
     from apothecary.menu import Context, Pointing, resolve
 

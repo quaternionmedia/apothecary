@@ -182,5 +182,6 @@ above:
 | The OpenSCAD renders use | `apothecary openscad status` |
 | The viewer, no hardware | `apothecary serve --demo` |
 | The viewer, this machine's boards | `apothecary serve` |
+| The real printer and board, checked at the bench | [the bench checklist](../docs/bench-checklist.md) |
 | The ordinary tests | `apothecary test run` |
 | Every command | `apothecary --help` |

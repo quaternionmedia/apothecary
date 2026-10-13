@@ -63,7 +63,9 @@ def bench(start_server, tmp_path_factory) -> str:
     url = start_server({"APOTHECARY_PICTURE_ROOT": str(folder)})
     with httpx.Client(base_url=url, timeout=15.0) as http:
         http.post("/firmware/devices/identify", json={"port": PRINTER}).raise_for_status()
-        http.put(f"/sites/garage/nodes/{BOARD}/device", json={"identity": PRINTER}).raise_for_status()
+        http.put(
+            f"/sites/garage/nodes/{BOARD}/device", json={"identity": PRINTER}
+        ).raise_for_status()
         http.put("/sites/garage/nodes/footpedal/device", json={"identity": UNO}).raise_for_status()
         view = http.post(
             "/sites/garage/views",
@@ -370,7 +372,6 @@ def test_a_movable_thing_selected_wears_one_compact_set_of_handles(page: Page, b
     assert page.evaluate(HANDLES)["on"] == "workbench"
 
 
-
 # --------------------------------------------------------------------------
 # The Machine in the rail
 # --------------------------------------------------------------------------
@@ -382,9 +383,7 @@ def _rail_machine(page: Page):
     rail = page.locator(".panel-rail")
     machine = rail.locator(f".panel-tabbody {MACHINE}")
     expect(machine).to_be_visible(timeout=5000)
-    expect(rail.locator(".rail-tab[data-panel='machine']")).to_have_class(
-        re.compile(r"\bactive\b")
-    )
+    expect(rail.locator(".rail-tab[data-panel='machine']")).to_have_class(re.compile(r"\bactive\b"))
     assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
     expect(page.locator(f".panel-free-layer {MACHINE}")).to_have_count(0)
     return machine
@@ -543,15 +542,24 @@ def test_the_header_is_one_row_at_1024_px(page: Page, bench: str):
 def test_the_tab_strip_and_the_hint_are_one_line_at_1024_px(page: Page, bench: str):
     """At 1024 px wide, with a Machine open, the rail's tab strip is one row -- the
     Machine's tab names its node, the whole title with the port its tooltip -- and
-    the hint bar is one line, nothing of it cut."""
+    the hint bar is one line, nothing of it cut, as it starts and with the longest words
+    Settings gives it: Shift for the ring, Page Down to step out."""
     page.set_viewport_size({"width": 1024, "height": 700})
     _open(page, bench)
-    cut = page.evaluate(
-        "() => { const h = document.getElementById('viewer-hint'); "
-        "return h.scrollWidth > h.clientWidth; }"
+    hint = page.locator("#viewer-hint")
+    cut = "(h) => h.scrollWidth > h.clientWidth"
+    assert not hint.evaluate(cut)
+    assert hint.bounding_box()["height"] < 40  # one line
+    said = page.evaluate(
+        "() => { const s = window.apothecarySettings; "
+        "return [s.set('ringModifier', 'shift'), s.set('zoomInKey', 'Home'), "
+        "s.set('zoomOutKey', 'PageDown')].map((r) => r.ok); }"
     )
-    assert not cut
-    assert page.locator("#viewer-hint").bounding_box()["height"] < 40  # one line
+    assert said == [True, True, True], said
+    expect(hint).to_contain_text("Page Down: step out")
+    expect(hint).to_contain_text("Shift+right-click: ring")
+    assert not hint.evaluate(cut)
+    assert hint.bounding_box()["height"] < 40
     page.locator(BOARD_BADGE).click()
     _rail_machine(page)
     tab = page.locator(".panel-rail .rail-tab[data-panel='machine'] .rail-tab-name")

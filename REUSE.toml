@@ -35,3 +35,12 @@ path = ["apothecary/static/vendor/codemirror/*/index.js", "apothecary/static/ven
 precedence = "override"
 SPDX-FileCopyrightText = "Copyright (C) 2016-2024 Marijn Haverbeke and others"
 SPDX-License-Identifier = "MIT"
+
+# The corpus's seed checks, copied byte for byte from its main at df1cb51
+# (project-seed/ci/), where they are Apache-2.0; .github/workflows/leak-check.yml
+# and one-pr-check.yml say why they are here rather than run from the submodule.
+[[annotations]]
+path = ".github/qm-seed/**"
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright (c) 2026 Quaternion Media"
+SPDX-License-Identifier = "Apache-2.0"

@@ -81,7 +81,7 @@ const HEAD = `
     <button type="button" id="poll" class="printer-only" title="One poll now (M105/M114/M27/M119)">⟳ Poll</button>
     <button type="button" id="reconnect" title="Release and reopen the serial link (no reset); the remedy for a wedged port">⇄ Reconnect</button>
     <button type="button" id="identify" title="Ask M115 again (no reset)">M115</button>
-    <button type="button" id="reset" class="danger printer-only" title="Reboot the board with a DTR pulse — never mid-print">⏻ Reset board</button>
+    <button type="button" id="reset" class="danger printer-only" title="Reboot the board with a DTR pulse — never mid-print">⏻ Reboot</button>
     <button type="button" id="release" title="Drop the held link so another program can open the port">Release</button>
     <button type="button" id="listen" class="devkit-only" title="Open the port and stream what the board says into the log. Opening the port may reset the board">Listen</button>
     <button type="button" id="probe" class="devkit-only" title="Ask esptool for the chip, its MAC and its flash size (an Espressif board; this resets it)">Probe</button>

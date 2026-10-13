@@ -9,3 +9,9 @@ Espressif chips). Both are invoked over a subprocess seam with a stable CLI
 and JSON output contract, never linked or vendored -- the same disposition as
 the ``openscad`` binary.
 """
+
+# An install point of the guard (apothecary/stays_local.py), before any module
+# in this package runs: it reads the state folder, the serial link and its comms log.
+from ..stays_local import install_guard as _install_guard
+
+_install_guard()

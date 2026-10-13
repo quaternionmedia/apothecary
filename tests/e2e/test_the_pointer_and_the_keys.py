@@ -138,8 +138,15 @@ def _unfocus(page: Page) -> None:
     page.evaluate("() => document.activeElement && document.activeElement.blur()")
 
 
+# The wheel counts again: a step it took holds it still for a moment after (the page's
+# STEP_QUIET_MS, since a trackpad's momentum is no push past the limit), and a notch
+# turned in that moment is let go of.
+WHEEL_COUNTS = "() => performance.now() >= window.fractalViewer.stepQuietUntil"
+
+
 def _wheel(page: Page, notches: int) -> None:
-    """Turned over the world, clear of what stands on it: negative is in."""
+    """Turned over the world, clear of what stands on it: negative is in. A turn
+    starts once the wheel counts again, or a step just taken would cost it notches."""
     middle = page.evaluate(
         "() => { const r = window.fractalViewer.canvas.getBoundingClientRect(); "
         "return [r.left + r.width / 2, r.top + r.height / 2]; }"
@@ -147,6 +154,7 @@ def _wheel(page: Page, notches: int) -> None:
     spot = page.evaluate(FREE_SPOT, middle)
     assert spot, "nowhere over the world to turn the wheel"
     page.mouse.move(*spot)
+    page.wait_for_function(WHEEL_COUNTS)
     for _ in range(abs(notches)):
         page.mouse.wheel(0, NOTCH if notches > 0 else -NOTCH)
     settled(page)

@@ -140,7 +140,7 @@ def test_jobs_list_by_site_and_by_machine_and_a_moved_port_keeps_its_history():
             machine=jobs.JobMachine(
                 kind="printer",
                 port="/dev/ttyUSB1",
-                identity="A106ZTEU",
+                identity="A1B2C3D4",
                 path="printer_1.frame_system.mainboard",
             ),
         )
@@ -148,7 +148,7 @@ def test_jobs_list_by_site_and_by_machine_and_a_moved_port_keeps_its_history():
     anonymous = _run(_job(port="/dev/ttyUSB0", at=AT + timedelta(hours=1)))
     assert [j.id for j in jobs.list_jobs(site="garage")] == [here.id]
     assert jobs.list_jobs(site="parts_library") == []
-    assert [j.id for j in jobs.list_jobs(machine="/dev/ttyUSB0", identity="A106ZTEU")] == [
+    assert [j.id for j in jobs.list_jobs(machine="/dev/ttyUSB0", identity="A1B2C3D4")] == [
         anonymous.id,
         here.id,
     ]

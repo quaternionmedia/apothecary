@@ -251,8 +251,8 @@ def test_every_action_on_a_saved_variant_is_a_cell_of_part_variants(
 ):
     """Part › Variants › a name is a ring -- Draw, Rename, Duplicate, History, Compare,
     Delete -- and Part › Variants › Deleted holds the trash, each deleted variant
-    Restore and Forget, and Empty; what destroys is chosen twice. A name no cell types: Rename and Duplicate put the cursor in the
-    variant's box, and Enter does it."""
+    Restore and Forget, and Empty; what destroys is chosen twice. A name no cell types:
+    Rename and Duplicate put the cursor in the variant's box, and Enter does it."""
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     own = CUBE.source_file.read_text()

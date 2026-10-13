@@ -82,12 +82,23 @@ markers = [
 line-length = 100
 target-version = "py311"
 # Vendored and submodule code is not ours to lint.
-extend-exclude = ["parts/gridfinity/gridfinity-rebuilt-openscad", "governance/qm"]
+extend-exclude = ["parts/gridfinity/gridfinity-rebuilt-openscad", "governance/qm", ".github/qm-seed"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B"]
 # Line length is the formatter's business; the lint gate is for mistakes.
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# The guard's install points (apothecary/stays_local.py): the guard goes on at
+# each one's first statement, so every other import comes after a statement.
+"apothecary/api.py" = ["E402"]
+"apothecary/cli/__init__.py" = ["E402"]
+"apothecary/firmware/__init__.py" = ["E402"]
+"apothecary/gathering/__init__.py" = ["E402"]
+"apothecary/routes/__init__.py" = ["E402"]
+"apothecary/vision/__init__.py" = ["E402"]
+"conftest.py" = ["E402"]
 
 [tool.coverage.run]
 source = ["apothecary"]

@@ -456,8 +456,9 @@ def test_a_piece_made_from_a_picture_has_no_device_section(
     fixture_picture,  # noqa: F811 - the fixture's value, the picture's name
     leaves_garage_as_found,  # noqa: F811
 ):
-    """A piece made from a picture holds no board: neither it nor a piece made at a place has a Device section, nor the
-    structure it was made on; a printer has one (only where a board belongs)."""
+    """A piece made from a picture holds no board: neither it nor a piece made at a place
+    has a Device section, nor the structure it was made on; a printer has one (only
+    where a board belongs)."""
     answer = page.request.post(
         f"{base_url}/photos",
         data={
