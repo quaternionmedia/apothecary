@@ -223,7 +223,9 @@ def _press(page: Page, *labels: str) -> None:
 
 def _edit(page: Page) -> None:
     """The part's ring, from its row in Contents: Part › Edit."""
-    page.locator(f"#contents-list .contents-item[data-path='{PART}']").click(button="right")
+    page.locator(f"#contents-list .contents-item[data-path='{PART}']").click(
+        button="right", modifiers=["Control"]
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
     _press(page, "Part", "Edit")
     expect(page.locator("#part-params .param[data-field='size'] input[type=range]")).to_be_visible(
@@ -312,7 +314,9 @@ def _status(page: Page):
 
 def _ring_on_the_part(page: Page, *labels: str) -> None:
     """The part's ring, from its row in Site, and the cells ``labels`` name."""
-    page.locator(f"#contents-list .contents-item[data-path='{PART}']").click(button="right")
+    page.locator(f"#contents-list .contents-item[data-path='{PART}']").click(
+        button="right", modifiers=["Control"]
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
     _press(page, *labels)
 

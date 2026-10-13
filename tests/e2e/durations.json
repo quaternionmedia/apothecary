@@ -141,7 +141,7 @@
  "tests/e2e/test_ring.py::test_the_rail_swaps_to_the_left_and_is_remembered_there[chromium]": 2.76,
  "tests/e2e/test_ring.py::test_the_rails_width_is_dragged_and_remembered[chromium]": 2.1,
  "tests/e2e/test_ring.py::test_the_tilde_hides_the_rail_and_the_ring_does_too[chromium]": 1.37,
- "tests/e2e/test_ring.py::test_the_toolbar_button_and_right_click_open_it_too[chromium]": 1.46,
+ "tests/e2e/test_ring.py::test_the_toolbar_button_and_ctrl_right_click_open_it_too[chromium]": 1.46,
  "tests/e2e/test_scad_loop.py::test_after_a_scad_edit_defaults_then_apply_draws_the_saved_part[chromium]": 10.72,
  "tests/e2e/test_scad_loop.py::test_editing_a_parts_scad_twice_round[chromium]": 47.28,
  "tests/e2e/test_site_panel.py::test_a_layout_remembered_with_the_jobs_panel_is_harmless[chromium]": 1.19,

@@ -1165,10 +1165,14 @@ def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
         timeout=8000
     )
     # The ring's control verbs go to the machine in front of the world: Control > Jog > Y+.
-    page.locator("#viewer-canvas").click(button="right", position={"x": 30, "y": 30})
+    page.locator("#viewer-canvas").click(
+        button="right", modifiers=["Control"], position={"x": 30, "y": 30}
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press("Escape")
-    page.locator("#contents-list .contents-item[data-path='printer_1']").click(button="right")
+    page.locator("#contents-list .contents-item[data-path='printer_1']").click(
+        button="right", modifiers=["Control"]
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press("2")  # Device
     page.keyboard.press("7")  # Control

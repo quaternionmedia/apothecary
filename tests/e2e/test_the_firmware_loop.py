@@ -96,7 +96,9 @@ def _choose(page: Page, *labels: str) -> None:
 
 
 def _ring_on(page: Page, path: str) -> None:
-    page.locator(f"#contents-list .contents-item[data-path='{path}']").click(button="right")
+    page.locator(f"#contents-list .contents-item[data-path='{path}']").click(
+        button="right", modifiers=["Control"]
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
 
 
@@ -109,7 +111,9 @@ def _ended(where, title: str, timeout: int = 15000) -> None:
 def _canvas_ring(page: Page, *digits: str) -> None:
     """The ring on the world, nothing chosen, and the cells named by their digits."""
     page.wait_for_function("() => !!window.apothecaryRing", timeout=15000)
-    page.locator("#viewer-canvas").click(button="right", position={"x": 30, "y": 30})
+    page.locator("#viewer-canvas").click(
+        button="right", modifiers=["Control"], position={"x": 30, "y": 30}
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=15000)
     for digit in digits:
         page.keyboard.press(digit)
@@ -441,7 +445,9 @@ def test_the_bench_lists_the_rust_sketch_and_its_toolchain_beside_arduino(page: 
     select.select_option(RUST)
     expect(bench.locator(".sk-board-row")).to_be_hidden()
     expect(bench.locator(".compile-btn")).to_be_enabled()
-    page.locator("#viewer-canvas").click(button="right", position={"x": 30, "y": 30})
+    page.locator("#viewer-canvas").click(
+        button="right", modifiers=["Control"], position={"x": 30, "y": 30}
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     for digit in ("9", "3", "2"):  # Panels › Bench › Compile
         page.keyboard.press(digit)

@@ -656,6 +656,10 @@ PANELS: Sequence[Tuple[str, str]] = (
     # registered at start and shown when asked for. Its verbs are a ring of
     # their own under its cell (_bench).
     ("bench", "Bench"),
+    # Settings: every shortcut and navigation setting, kept per browser, a tab of
+    # the rail's strip registered at start. Its cell is View's (View › Settings),
+    # as ⚙ View › Settings opens it, not one of Panels'.
+    ("settings", "Settings"),
 )
 # The panels seated before the rail's own cell, which keeps the cell it has had
 # since Phase 3 (Panels › Rail, 99); a panel registered after them is seated
@@ -691,7 +695,9 @@ def _view() -> Option:
     lets a click in the world pick a wall, which it otherwise passes through, for
     the page's session. Snap, Outlines and Select walls each turn what they name the
     other way, as their tick-boxes do, and the status line says which way it went;
-    the ring is not told how they stand.
+    the ring is not told how they stand. Settings, last, opens the Settings panel --
+    the shortcuts and automatic zoom -- as the menu's Settings does
+    (docs/plans/input-2026-10-12.md), so no cell before it moves.
     """
     return Option(
         id="view",
@@ -710,6 +716,7 @@ def _view() -> Option:
             ),
             Option(id="view:outlines", label="Outlines", action="view:outlines"),
             Option(id="view:walls", label="Select walls", action="view:walls"),
+            Option(id="view:settings", label="Settings", action="view:settings"),
         ],
     )
 

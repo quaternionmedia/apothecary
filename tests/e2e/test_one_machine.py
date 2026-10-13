@@ -83,7 +83,9 @@ def _choose(page: Page, *labels: str) -> None:
 
 
 def _ring_on(page: Page, path: str) -> None:
-    page.locator(f"#contents-list .contents-item[data-path='{path}']").click(button="right")
+    page.locator(f"#contents-list .contents-item[data-path='{path}']").click(
+        button="right", modifiers=["Control"]
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
 
 
@@ -345,7 +347,7 @@ def test_flash_takes_monitor_s_old_cell_and_every_cell_after_it_is_back(page: Pa
 
 @pytest.mark.e2e
 def test_a_machine_s_ring_is_its_device_ring(page: Page, url: str):
-    """Right-click inside a printer's Machine: the device ring on its port, the monitor
+    """Ctrl+right-click inside a printer's Machine: the device ring on its port, the monitor
     page's ring -- Control at 7 -- and the Machine's buttons wear its cells: Control ›
     Arm ⌗77, E-STOP ⌗71, Link › Reconnect ⌗18; armed, Jog › Y+ ⌗728, Pause ⌗796."""
     _open_viewer(page, url)
@@ -356,7 +358,7 @@ def test_a_machine_s_ring_is_its_device_ring(page: Page, url: str):
     expect(machine.locator("#estop")).to_have_attribute("data-address", "71")
     expect(machine.locator("#reconnect")).to_have_attribute("data-address", "18")
     expect(machine.locator("#poll")).to_have_attribute("data-address", "6")
-    machine.locator(".kv").first.click(button="right")
+    machine.locator(".kv").first.click(button="right", modifiers=["Control"])
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     expect(page.locator("#ring-overlay .title")).to_have_text("ttyFAKE1")
     cells = _wedges(page)

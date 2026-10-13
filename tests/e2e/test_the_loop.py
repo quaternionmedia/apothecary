@@ -93,8 +93,10 @@ def _open_garage(page, base_url: str) -> None:
 
 
 def _ring_on(page, path: str) -> None:
-    """The node ring on a piece, as a right-click on its row in Contents opens it."""
-    page.locator(f"#contents-list .contents-item[data-path='{path}']").click(button="right")
+    """The node ring on a piece, as a Ctrl+right-click on its row in Contents opens it."""
+    page.locator(f"#contents-list .contents-item[data-path='{path}']").click(
+        button="right", modifiers=["Control"]
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
 
 

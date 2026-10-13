@@ -67,7 +67,7 @@ def _row(page: Page, path: str):
 
 
 def _ring_on(page: Page, path: str) -> None:
-    _row(page, path).click(button="right")
+    _row(page, path).click(button="right", modifiers=["Control"])
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
 
 

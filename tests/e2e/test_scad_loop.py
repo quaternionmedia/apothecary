@@ -179,7 +179,9 @@ def _press(page: Page, *labels: str) -> None:
 
 def _ring(page: Page, *labels: str) -> None:
     """The part's ring, from its row in Site, and the cells ``labels`` name."""
-    page.locator(f"#contents-list .contents-item[data-path='{PART}']").click(button="right")
+    page.locator(f"#contents-list .contents-item[data-path='{PART}']").click(
+        button="right", modifiers=["Control"]
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
     _press(page, *labels)
 
@@ -638,7 +640,9 @@ def test_editing_a_parts_scad_twice_round(
     expect(_said(page)).to_contain_text("Not rendered until it reads", timeout=15000)
 
     # Another part edited, and back: the editor as it was left, its undo with it.
-    page.locator("#contents-list .contents-item[data-path='v_slot']").click(button="right")
+    page.locator("#contents-list .contents-item[data-path='v_slot']").click(
+        button="right", modifiers=["Control"]
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
     _press(page, "Part", "Edit")
     expect(page.locator(".part-editor[data-target='part:v_slot']")).to_be_attached(timeout=10000)

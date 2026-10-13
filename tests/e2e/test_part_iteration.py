@@ -86,7 +86,9 @@ def _press(page: Page, *labels: str) -> None:
 
 
 def _ring(page: Page, *labels: str, part: str = PART) -> None:
-    page.locator(f"#contents-list .contents-item[data-path='{part}']").click(button="right")
+    page.locator(f"#contents-list .contents-item[data-path='{part}']").click(
+        button="right", modifiers=["Control"]
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
     _press(page, *labels)
 

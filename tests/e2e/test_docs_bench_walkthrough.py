@@ -286,7 +286,9 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     page.keyboard.press("Backspace")
     expect(page.locator("#minimap .minimap-tick.filled")).to_have_count(1)
     page.evaluate("() => window.apothecaryPictureVerbs.ready")
-    page.locator("#contents-list .contents-item[data-path='workbench']").click(button="right")
+    page.locator("#contents-list .contents-item[data-path='workbench']").click(
+        button="right", modifiers=["Control"]
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     _press(page, "Camera")
     _press(page, "Add here")
@@ -294,7 +296,9 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
         "added camera_1 above workbench, looking straight down", timeout=5000
     )
     page.wait_for_function("() => window.fractalViewer.selectedName === 'camera_1'")
-    page.locator("#contents-list .contents-item[data-path='camera_1']").click(button="right")
+    page.locator("#contents-list .contents-item[data-path='camera_1']").click(
+        button="right", modifiers=["Control"]
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     _press(page, "Device")
     _press(page, _wedges(page)["8"])  # this browser's camera, by its name

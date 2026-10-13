@@ -505,17 +505,48 @@ class RingInstance {
 }
 
 // ---------------------------------------------------------------------------
-// The invokers: right-click, the m key, and a button
+// The invokers: a modifier and the right button, a key, and a button
 // ---------------------------------------------------------------------------
 
 const TYPING = (el) => !!el && (el.matches("input, textarea, select, [contenteditable]"));
 
-/* Bind the three ways in. `whatFor(event)` is the page's: given a contextmenu
- * event (or null for the key and the button) it says what the ring opens on --
- * {context, site, device, at} -- or null to leave the browser's own menu alone.
- * `onResolved(ring, spec)` fires after every resolve, for annotating the page.
+// The modifiers a right-click can be held with to open the ring, by the name a
+// person chooses them by, and the event's flag for each.
+export const MODIFIERS = { ctrl: "ctrlKey", alt: "altKey", shift: "shiftKey", meta: "metaKey" };
+const MODIFIER_KEYS = new Set(["Control", "Alt", "AltGraph", "Shift", "Meta", "OS", "CapsLock", "Dead", "Unidentified"]);
+
+/* A key pressed, as a shortcut names it: "m", "PageDown", "Ctrl+m", "Shift+F2".
+ * Ctrl, Alt and Meta are named when held; Shift only before a named key, since a
+ * printed character carries its Shift in itself ("M", "?"). Space is "Space". A
+ * modifier pressed alone is no shortcut: null.
  */
-export function installRing({ base = "", whatFor, onIntent, onResolved, onError, button = "#ring-open", key = "m" }) {
+export function comboOf(e) {
+    const key = e && e.key;
+    if (!key || MODIFIER_KEYS.has(key)) return null;
+    const named = key.length > 1;
+    const parts = [];
+    if (e.ctrlKey) parts.push("Ctrl");
+    if (e.altKey) parts.push("Alt");
+    if (named && e.shiftKey) parts.push("Shift");
+    if (e.metaKey) parts.push("Meta");
+    parts.push(key === " " ? "Space" : key);
+    return parts.join("+");
+}
+
+/* Bind the three ways in. `whatFor(event, { opening })` is the page's: given a
+ * contextmenu event (or null for the key and the button) it says what the ring
+ * opens on -- {context, site, device, at} -- or null to leave the browser's own
+ * menu alone. The ring opens at the pointer only with `modifier` held (ctrl,
+ * alt, shift or meta); without it, whatFor is asked with `opening` false only
+ * whether the spot is the page's -- where it is, the browser's menu never shows
+ * and nothing opens, a plain right-click being the page's own (the camera's, on
+ * the canvas). `key` is the shortcut, as comboOf names one, that opens the ring
+ * on the selection.
+ * `onResolved(ring, spec)` fires after every resolve, for annotating the page.
+ * The key and the modifier change at once with `configure({ key, modifier })`.
+ */
+export function installRing({ base = "", whatFor, onIntent, onResolved, onError, button = "#ring-open", key = "m", modifier = "ctrl" }) {
+    const bound = { key, modifier: MODIFIERS[modifier] ? modifier : "ctrl" };
     const open = async (spec, at) => {
         if (!spec) return null;
         try {
@@ -540,23 +571,32 @@ export function installRing({ base = "", whatFor, onIntent, onResolved, onError,
     const fromKeyboard = () => open(whatFor(null), { x: window.innerWidth / 2, y: window.innerHeight / 2 });
 
     window.addEventListener("keydown", (e) => {
-        if (e.key !== key || e.ctrlKey || e.metaKey || e.altKey || isOpen()) return;
+        if (comboOf(e) !== bound.key || isOpen()) return;
         if (TYPING(document.activeElement)) return;
         e.preventDefault();
         fromKeyboard();
     });
     document.addEventListener("contextmenu", (e) => {
         if (isOpen() || TYPING(e.target)) return;
-        const spec = whatFor(e);
+        const held = !!e[MODIFIERS[bound.modifier]];
+        const spec = whatFor(e, { opening: held });
         if (!spec) return;
         e.preventDefault();
-        open(spec, { x: e.clientX, y: e.clientY });
+        if (held) open(spec, { x: e.clientX, y: e.clientY });
     });
     const btn = typeof button === "string" ? document.querySelector(button) : button;
     if (btn) btn.addEventListener("click", () => { if (isOpen()) close(); else fromKeyboard(); });
 
     const api = {
         open: (spec, at) => open(spec, at),
+        /* The key and the modifier, changed: at once, for the next press. */
+        configure({ key: nextKey, modifier: nextModifier } = {}) {
+            if (typeof nextKey === "string" && nextKey) bound.key = nextKey;
+            if (MODIFIERS[nextModifier]) bound.modifier = nextModifier;
+            return { ...bound };
+        },
+        bound: () => ({ ...bound }),
+        comboOf,
         close,
         isOpen,
         nearest,

@@ -1069,7 +1069,8 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
 def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
     """The header's ⚙ View menu is ring-backed by a cell of the canvas ring's own, in
     the seat Fit had (the owner's choice of 2026-10-04): View › Fit first, then Snap to
-    grid, Detail (Full, Black box, Dot), Outlines and Select walls; at the root and
+    grid, Detail (Full, Black box, Dot), Outlines and Select walls, and last Settings
+    (the input plan of 2026-10-12), so no cell before it moved; at the root and
     inside a piece alike, eight or fewer at the top; Panels is its six again. The
     page carries them all."""
     from apothecary.menu import carried_by
@@ -1091,6 +1092,7 @@ def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
             ("Detail", None, 2),
             ("Outlines", "view:outlines", 4),
             ("Select walls", "view:walls", 9),
+            ("Settings", "view:settings", 3),
         ]
         assert [(c.label, c.action) for c in view.children[2].children] == [
             ("Full", "view:detail:full"),
@@ -1101,9 +1103,17 @@ def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
         assert address_of(root, "view:snap") == f"{view_cell}6"
         assert address_of(root, "view:detail:box") == f"{view_cell}26"
         assert address_of(root, "view:walls") == f"{view_cell}9"
+        assert address_of(root, "view:settings") == f"{view_cell}3"
         panels = next(o for o in root.options if o.label == "Panels")
         assert "View" not in [c.label for c in panels.children]
-    for action in ("fit", "view:snap", "view:detail:dot", "view:outlines", "view:walls"):
+    for action in (
+        "fit",
+        "view:snap",
+        "view:detail:dot",
+        "view:outlines",
+        "view:walls",
+        "view:settings",
+    ):
         assert carried_by(action).name == "VIEWER"
 
 

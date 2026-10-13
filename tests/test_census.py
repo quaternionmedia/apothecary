@@ -458,7 +458,22 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # part in a submodule's Upstream SCAD, read only (part-upstream), a link as Download
 # SCAD is, not backed. The parameter controls are the same markup, now one for each
 # parameter its text assigns. No ring address moved. The ceiling follows the count.
-VIEWER_CEILING = 154
+#
+# The pointer, the keys and the ring (docs/plans/input-2026-10-12.md). Added: the
+# Settings panel (widgets/settings.js), a tab of the rail, its rows one markup each --
+# a shortcut's field that takes the next key (setting-key), the ring's modifier
+# (setting-choice), automatic zoom's tick-boxes (setting-tick) and numbers
+# (setting-number), a setting's reset (setting-reset) and Reset all
+# (settings-reset-all) -- none ring-backed, since the plan gives the panel a cell and
+# its rows none; and ⚙ View › Settings (settings-open), ring-backed by the canvas
+# ring's View › Settings, a new last cell of View, so no cell before it moves.
+# Places the page listens, added: the right button's press and still release, which
+# re-centres the view (canvas:pointerdown:onRightPress,
+# canvas:pointerup:onRightRelease); Page Down and Page Up (window:keydown:onZoomKey);
+# the menu item; and the panel's click, change, the key a field takes and the field
+# let go of. `apothecary census` gives the counts. The ceiling follows the count up by
+# the seven controls.
+VIEWER_CEILING = 161
 
 
 def test_the_viewer_stays_under_its_ceiling():
@@ -671,9 +686,10 @@ def _on_the_page(text: str) -> list:
 
 
 def test_the_ring_module_opens_three_ways_and_the_pages_import_it():
-    """ring.js installs the `m` key on the window, right-click on the document
-    and a click on `#ring-open`, and nothing else on either; everything else it
-    listens to is on the ring's own element while the ring is open."""
+    """ring.js installs its key (`m` unless Settings gives another) on the window,
+    a right-click held with its modifier on the document and a click on
+    `#ring-open`, and nothing else on either; everything else it listens to is on
+    the ring's own element while the ring is open."""
     text = (STATIC / "ring.js").read_text(encoding="utf-8")
     assert _on_the_page(text) == [("document", "contextmenu"), ("window", "keydown")]
     assert 'button = "#ring-open"' in text
@@ -827,10 +843,11 @@ def test_the_viewers_ring_backed_share_did_not_fall():
     comparison, none of it on the ring: 78 of 151. Then every action on a saved
     variant became a cell of Part › Variants: 86 of 151. The text tied to the controls
     added a computed value's question and an overlay's upstream link, neither on the
-    ring: 86 of 154."""
+    ring: 86 of 154. The Settings panel's rows came unbacked, as the input plan has
+    them, and ⚙ View › Settings backed by View › Settings: 87 of 161."""
     taken = census.take()
     own, backed = len(taken.controls_of_its_own()), len(taken.ring_backed())
-    assert backed / own >= 86 / 154, f"{backed} of {own} ring-backed"
+    assert backed / own >= 87 / 161, f"{backed} of {own} ring-backed"
 
 
 def test_the_headers_docs_is_panels_docs_and_back_and_forward_follow_the_address():
@@ -976,3 +993,38 @@ def test_the_header_is_one_row_with_its_view_menu_on_the_ring():
     ):
         assert by_name[name].ring_action == action and action in produced, name
     assert "view-menu" in census.VIEWER.read_text(encoding="utf-8")
+
+
+def test_settings_rows_are_counted_and_unbacked_and_its_view_item_is_view_settings():
+    """The Settings panel's rows are controls of their own, counted from the module
+    that writes them and never ring-backed (the input plan gives the panel a cell, not
+    each row one); ⚙ View › Settings is backed by the canvas ring's View › Settings,
+    which the ring really produces. The right button's press and release and the zoom
+    keys are things done to the scene."""
+    from apothecary.menu import Context, Pointing, resolve
+
+    taken = census.take()
+    by_name = {f.name: f for f in taken.controls_of_its_own()}
+    rows = (
+        "setting-key",
+        "setting-choice",
+        "setting-tick",
+        "setting-number",
+        "setting-reset",
+        "settings-reset-all",
+    )
+    for name in rows:
+        assert by_name[name].source == "settings.js", name
+        assert by_name[name].ring_action is None and by_name[name].taken_back is None, name
+    assert by_name["settings-open"].ring_action == "view:settings"
+    ring = resolve(Context(pointing=Pointing.CANVAS), site_names=["garage"], groups=["wall"])
+    view = next(o for o in ring.options if o.label == "View")
+    assert "view:settings" in [c.action for c in view.children]
+    listening = {f.key: f for f in taken.found if f.how == "listening"}
+    for key in (
+        "canvas:pointerdown:onRightPress",
+        "canvas:pointerup:onRightRelease",
+        "window:keydown:onZoomKey",
+    ):
+        assert listening[key].surface == census.GESTURE, key
+    assert listening["settingsOpenBtn:click:openSettings"].ring_action == "view:settings"

@@ -129,6 +129,11 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # The header's View menu (a fold, like Site's): how the world is drawn.
     "snap-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box for snapping to a grid"),
     "walls-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box that lets a click in the world pick a wall"),
+    "settings-open": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "an item of the View menu that opens the Settings panel",
+    ),
     "zoom-in-btn": (WIDGET, WHAT_YOU_SEE, "a button that goes into the chosen piece"),
     "status-select": (WIDGET, WHAT_IS_THERE, "a drop-down for the state of a piece"),
     "pos-x": (WIDGET, WHAT_IS_THERE, "a box for typing where a piece is, across"),
@@ -413,6 +418,37 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "print-pause": (WIDGET, WHAT_IS_THERE, "a button that stops feeding the print from here"),
     "print-resume": (WIDGET, WHAT_IS_THERE, "a button that feeds the print from here again"),
     "print-cancel": (WIDGET, WHAT_IS_THERE, "a button that ends the print from here, heaters off"),
+    # ---- Settings, apothecary/static/widgets/settings.js -------------------
+    # Every shortcut and navigation setting (the input plan of 2026-10-12): one row
+    # each, its default shown and a reset beside it, and Reset all. They change how
+    # the page takes a press, not what is there, and none is ring-backed: the plan
+    # gives the panel a cell (View › Settings), not each row one.
+    "setting-key": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a field that takes the next key pressed as a shortcut: the ring's, a step in or out",
+    ),
+    "setting-choice": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a drop-down of the modifier a right-click opens the ring with",
+    ),
+    "setting-tick": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a tick-box that turns automatic zoom, or one way of it, on or off",
+    ),
+    "setting-number": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a box for automatic zoom's resistance, or how near or far the camera may dolly",
+    ),
+    "setting-reset": (WIDGET, WHAT_YOU_SEE, "a button that puts one setting back to its default"),
+    "settings-reset-all": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button that puts every setting back to its default",
+    ),
 }
 
 # A control of its own that does the same thing as a cell of the ring, and the
@@ -526,6 +562,9 @@ RING_BACKED: Dict[str, str] = {
     "detail-mode": "view:detail:full",
     "overlay-toggle": "view:outlines",
     "walls-toggle": "view:walls",
+    # ⚙ View › Settings is the canvas ring's View › Settings: the Settings panel shown.
+    "settings-open": "view:settings",
+    "settingsOpenBtn:click:openSettings": "view:settings",
     "snapToggle:change:setTranslationSnap": "view:snap",
     "detailModeEl:change:clear": "view:detail:full",
     "overlayToggle:change:renderFocus": "view:outlines",
@@ -670,6 +709,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "the tick-box that lets a click pick walls, for the session",
     ),
+    "settingsOpenBtn:click:openSettings": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "⚙ View › Settings, showing the Settings panel in the rail",
+    ),
     # The View menu folds away when a press lands anywhere else, as a menu does.
     "document:pointerdown:foldViewMenu": (
         WIDGET,
@@ -684,6 +728,24 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "canvas:dblclick:onDoubleClick": (GESTURE, WHAT_YOU_SEE, "double-tapping to go in"),
     "canvas:wheel:onWheel": (GESTURE, WHAT_YOU_SEE, "the wheel, with a counter of its own"),
     "window:keydown:zoomOut": (GESTURE, WHAT_YOU_SEE, "a key that steps back out"),
+    # The right button is the camera's (the input plan of 2026-10-12): a drag pans, as
+    # the orbit's own, and a still click re-centres; held with Settings' modifier, it
+    # is the ring's, counted with the ring.
+    "canvas:pointerdown:onRightPress": (
+        GESTURE,
+        WHAT_YOU_SEE,
+        "a right press on the world, kept to tell a still click from a pan",
+    ),
+    "canvas:pointerup:onRightRelease": (
+        GESTURE,
+        WHAT_YOU_SEE,
+        "a still right-click, re-centring the view on the surface under the pointer",
+    ),
+    "window:keydown:onZoomKey": (
+        GESTURE,
+        WHAT_YOU_SEE,
+        "keys (Page Down, Page Up, or what Settings gives) that step a level in and out",
+    ),
     "window:keydown:onHintKey": (GESTURE, WHAT_YOU_SEE, "a key (?) that brings the hint bar back"),
     "window:keydown:onFitKey": (
         GESTURE,
@@ -915,6 +977,27 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WIDGET,
         WHAT_IS_THERE,
         "one listener for the whole control overlay, told which button by what it carries",
+    ),
+    # ---- Settings (widgets/settings.js): one listener of each kind on the panel ----
+    "settingsEl:click:settingClicked": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a shortcut's field set waiting for a key, a setting's reset, or Reset all",
+    ),
+    "settingsEl:change:settingChanged": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a setting's tick-box, drop-down or number, changed and applied at once",
+    ),
+    "settingsEl:keydown:keyCaptured": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "the key a waiting shortcut's field takes, refused when another shortcut holds it",
+    ),
+    "settingsEl:focusout:captureLetGo": (
+        WIDGET,
+        NOTHING,
+        "a waiting shortcut's field let go of when the focus leaves it",
     ),
     "document:visibilitychange:onVisibility": (
         AUTOMATIC,

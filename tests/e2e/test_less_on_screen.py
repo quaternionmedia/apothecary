@@ -412,7 +412,9 @@ def test_the_machine_opens_in_the_rail_and_floats_only_when_floated(page: Page, 
     expect(machine.locator("#c-board")).to_contain_text("Arduino Uno", timeout=10000)
 
     page.evaluate("() => window.fractalViewer.closeMachine()")
-    page.locator("#contents-list .contents-item[data-path='printer_1']").click(button="right")
+    page.locator("#contents-list .contents-item[data-path='printer_1']").click(
+        button="right", modifiers=["Control"]
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press("2")  # Device
     page.keyboard.press("8")  # Open
@@ -453,7 +455,9 @@ def test_a_printers_machine_has_no_flashing(page: Page, start_server):
     machine = _rail_machine(page)
     expect(machine.locator("#c-board")).to_be_visible(timeout=10000)
     expect(machine.locator("#flash-card")).to_be_hidden()
-    page.locator("#contents-list .contents-item[data-path='printer_1']").click(button="right")
+    page.locator("#contents-list .contents-item[data-path='printer_1']").click(
+        button="right", modifiers=["Control"]
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press("2")  # Device
     page.keyboard.press("2")  # Flash

@@ -130,7 +130,9 @@ def test_the_bench_s_verbs_are_cells_of_panels_bench(page: Page, url: str):
     """Panels › Bench holds the panel and its verbs, and the Bench's buttons wear their
     addresses; Compile from the ring compiles what the Bench has chosen."""
     _open_viewer(page, url)
-    page.locator("#viewer-canvas").click(button="right", position={"x": 30, "y": 30})
+    page.locator("#viewer-canvas").click(
+        button="right", modifiers=["Control"], position={"x": 30, "y": 30}
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press(_wedges(page)["Panels"])
     panels = _wedges(page)
@@ -171,7 +173,9 @@ def test_the_bench_s_verbs_are_cells_of_panels_bench(page: Page, url: str):
         "data-address", re.compile(r"^931\d$")
     )
     bench.locator(".sketch-select").select_option("footpedal@arduino")
-    page.locator("#viewer-canvas").click(button="right", position={"x": 30, "y": 30})
+    page.locator("#viewer-canvas").click(
+        button="right", modifiers=["Control"], position={"x": 30, "y": 30}
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     for digit in ("9", "3", "2"):
         page.keyboard.press(digit)

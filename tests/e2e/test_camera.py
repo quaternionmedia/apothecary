@@ -526,7 +526,9 @@ def test_gather_says_what_it_refused_and_what_it_set_aside(
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
     # The canvas ring's Pictures › Gather opens Pictures with its gathering section
     # unfolded and gathers what is ticked: nothing yet, which it refuses.
-    page.locator("#viewer-canvas").click(button="right", position={"x": 8, "y": 8})
+    page.locator("#viewer-canvas").click(
+        button="right", modifiers=["Control"], position={"x": 8, "y": 8}
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press(_cell(page, "Pictures"))
     page.wait_for_function(

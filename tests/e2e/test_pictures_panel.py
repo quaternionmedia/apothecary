@@ -81,7 +81,9 @@ def leaves_as_found(page, base_url: str, picture_folder):
 
 def _folder_on_the_bench(page) -> dict:
     """The bench's ring, entered to Picture › Folder: its wedges, cell -> label."""
-    page.locator("#contents-list .contents-item[data-path='workbench']").click(button="right")
+    page.locator("#contents-list .contents-item[data-path='workbench']").click(
+        button="right", modifiers=["Control"]
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     _press(page, "Picture")
     _press(page, "Folder")

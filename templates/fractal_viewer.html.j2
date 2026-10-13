@@ -87,6 +87,8 @@
             display: flex; align-items: center; gap: 0.35rem;
             font-size: 0.85rem; color: #ccc; cursor: pointer; user-select: none;
         }
+        /* An item of the View menu that opens something: Settings. */
+        .view-menu-body .view-menu-item { padding: 0.25rem 0.6rem; font-size: 0.85rem; }
         .toolbar .toolbar-toggle select { font-size: 0.75rem; background: #1e1e1e; color: #ccc; border: 1px solid #444; border-radius: 3px; padding: 0.05rem 0.2rem; min-width: 0; width: auto; }
         .device-section input[type="text"] { font-size: 0.72rem; padding: 0.15rem 0.4rem; background: #1e1e1e; color: #ddd; border: 1px solid #444; border-radius: 3px; width: 9.5rem; }
         .device-section .device-query { margin-top: 0.3rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #9cd2ff; white-space: pre-wrap; }
@@ -695,17 +697,18 @@
                     <label class="toolbar-toggle" title="Walls are drawn faded and a click in the world passes through them to what is behind or inside; ticked, a click picks a wall again, until the page is left. A wall's row in Site selects it either way">
                         <input type="checkbox" id="walls-toggle"> Walls selectable
                     </label>
+                    <button type="button" id="settings-open" class="view-menu-item" title="The shortcuts and automatic zoom, each with its default and a reset, kept by this browser: a tab of the rail">Settings…</button>
                 </div>
             </details>
             <a id="docs-link" class="docs-link" href="/docs" target="_blank" rel="noopener" title="The documentation in a new tab: the guides, and the walkthrough, each of its pages a run of the tests (Panels › Docs on the ring)">Docs</a>
-            <button type="button" id="ring-open" title="Open the ring for the chosen piece (m, or right-click a piece). Digits choose cells as on a numeric keypad; 5 backs out.">⌗ Ring</button>
+            <button type="button" id="ring-open" title="Open the ring for the chosen piece (m, or Ctrl+right-click a piece). Digits choose cells as on a numeric keypad; 5 backs out.">⌗ Ring</button>
             <span id="validity-indicator" class="validity-indicator valid" title="The site's problems: click to unfold them in Site">Layout valid</span>
         </div>
         <div class="main-content">
             <div class="viewer-panel">
                 <canvas id="viewer-canvas"></canvas>
                 <div id="minimap"></div>
-                <div class="viewer-hint" id="viewer-hint">Click: select • Double-click or scroll in: go in • Drag an arrow: move • Shift+drag: pan • ?: hide this</div>
+                <div class="viewer-hint" id="viewer-hint">Click: select • Double-click or Page Down: go in • Right-drag: pan • Ctrl+right-click: ring • ?: hide this</div>
             </div>
             <div class="side-panel">
                 <div class="panel-section" data-panel="site" data-zone="stack">
@@ -794,6 +797,8 @@
         import { makeMachineMarks, makeBoardBadge, sayBoard, toScene as marksToScene } from '/static/machine_marks.js';
         import { mountPictureMarks, axes as cameraAxes } from '/static/picture_marks.js';
         import { mountPictures } from '/static/pictures.js';
+        import { makeSettings, mountSettings, keyLabel, modifierLabel } from '/static/widgets/settings.js';
+        import { comboOf, MODIFIERS } from '/static/ring.js';
 
         const BASE_URL = {{ base_url | tojson }};
         const DEFAULT_SITE = {{ default_site | tojson }};
@@ -948,7 +953,6 @@
         const PLACEHOLDER_SIZE = 40;   // mm -- box size for a child with no footprint
         const PLACEHOLDER_PITCH = 60;  // mm -- spacing between footprint-less siblings
         const WAVE_CONCURRENCY = 3;    // real-geometry loads in flight at once
-        const WHEEL_RESISTANCE_THRESHOLD = 500;
         const SNAP_INCREMENT = 50;    // mm -- matches WALL_THICKNESS; fine enough for by-hand placement
         // Walls -- the pieces of this category -- are drawn this opaque, and a click
         // in the world passes through them, unless the View menu says otherwise.
@@ -975,13 +979,17 @@
         const HINT_SEEN_KEY = 'apothecary.hint';
         const FLOOR_MARGIN_MM = 200;
 
-        // How far out of the current level you can dolly, as a multiple of the
-        // framing distance. This is also where the "scroll past the edge to
-        // zoom out" gesture fires (see onWheel), because that gesture triggers
-        // at the clamp -- so raising it buys viewing range and moves the
-        // gesture's edge outward by the same amount, deliberately.
-        const MAX_DOLLY_FACTOR = 8;
-        const MIN_DOLLY_FACTOR = 0.08;
+        // How far out of the current level you can dolly, and how near its pieces, are
+        // Settings' Farthest (a multiple of the framing distance) and Nearest (a
+        // fraction of the level's size): widgets/settings.js, dollyOut and dollyIn. That
+        // is also where the "scroll past the edge" step fires (see onWheel), because
+        // the step triggers at the clamp -- so raising Farthest buys viewing range and
+        // moves the step's edge outward by the same amount, deliberately.
+        // A right-click is still -- re-centring the view, not panning it -- while the
+        // pointer moves no further than this between its press and its release, and
+        // the view glides to the point over this long.
+        const RECENTRE_SLOP_PX = 4;
+        const RECENTRE_MS = 250;
         // The far plane has to clear the furthest the camera can dolly plus the
         // scene's own extent behind the target, or the world is clipped away
         // exactly when you pull back to look at the largest scale. This used to
@@ -1165,6 +1173,17 @@
                 let hintSeen = false;
                 try { hintSeen = localStorage.getItem(HINT_SEEN_KEY) === 'seen'; } catch (e) { hintSeen = false; }
                 this.hintEl.classList.toggle('faded', hintSeen);
+                // Every shortcut and navigation setting, kept per browser
+                // (widgets/settings.js): the ring's key and modifier, the keys that step
+                // in and out, and automatic zoom's. A change applies at once.
+                this.settings = makeSettings();
+                this.settingsOpenBtn = document.getElementById('settings-open');
+                this.ringOpenBtn = document.getElementById('ring-open');
+                this.settings.onChange((values, id) => this.settingsChanged(values, id));
+                this.sayInputs();
+                this.reach = null;            // the level's size and framing distance, for the dolly's limits
+                this.glide = null;            // a re-centre under way
+                this.rightPress = null;       // a right button held on the world
 
                 this.tree = null;            // full recursive tree for the loaded site
                 this.siteName = null;
@@ -1192,7 +1211,7 @@
                 // wrong with it; and every path above one of them, with the same.
                 this.invalidPaths = new Map();
                 this.invalidInside = new Map();
-                this.wheelResistance = 0;
+                this.wheelPastLimit = 0;
                 this.stlLoader = new STLLoader();
                 this.loadGeneration = 0;  // guards against a slow real-geometry
                                           // fetch upgrading a mesh after the
@@ -1448,6 +1467,19 @@
                     onOpen: () => { if (this.bench) this.bench.load(); },
                     body: (slot) => { this.bench = this.mountBench(slot); window.apothecaryBench = this.bench; },
                 });
+                // Settings: every shortcut and navigation setting, each with its default
+                // and a reset (widgets/settings.js) -- a tab of the rail's strip, opened
+                // from ⚙ View › Settings and the canvas ring's View › Settings.
+                this.settingsWidget = null;
+                this.panels.register('settings', {
+                    title: 'Settings',
+                    body: (slot) => {
+                        this.settingsWidget = mountSettings(slot, this.settings, {
+                            log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
+                        });
+                    },
+                });
+                window.apothecarySettings = this.settings;
                 window.apothecaryPanels = this.panels;
                 this.onResize();
                 this.marks = {};       // bearer path -> { marks, port, where }
@@ -1491,6 +1523,11 @@
                     this.renderFocus();
                 });
                 this.canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
+                // The right button is the camera's: a drag pans (the orbit's own), and a
+                // still click re-centres the view on the surface under the pointer. Held
+                // with Settings' modifier, it opens the ring instead (ring.js).
+                this.canvas.addEventListener('pointerdown', (e) => this.onRightPress(e));
+                this.canvas.addEventListener('pointerup', (e) => this.onRightRelease(e));
                 // A selected camera's turn ring or tilt arc, dragged. Its press is heard
                 // first, ahead of the move arrows and the orbit, which never hear it.
                 this.canvas.addEventListener('pointerdown', (e) => this.onCameraHandleDown(e), { capture: true });
@@ -1511,6 +1548,11 @@
                         this.zoomOut();
                     }
                 });
+                // Page Down and Page Up, or the keys Settings gives them: a level in -- the
+                // selected piece, or the one nearest the middle of the view -- and out.
+                window.addEventListener('keydown', (e) => this.onZoomKey(e));
+                // ⚙ View › Settings: the Settings panel, in the rail.
+                this.settingsOpenBtn.addEventListener('click', () => this.openSettings());
                 // ? brings the hint bar back (and puts it away again).
                 window.addEventListener('keydown', (e) => this.onHintKey(e));
                 // f frames the selected piece, Selected and its editor kept open, as the
@@ -1574,6 +1616,7 @@
             // place of their own (a card under the pointer).
             animate() {
                 requestAnimationFrame(() => this.animate());
+                this.stepGlide();
                 if (this.orbitControls.update()) this.frameWanted = true;
                 for (const m of Object.values(this.marks)) if (m.marks && m.marks.tick()) this.frameWanted = true;
                 this.sizeCameraHandles();
@@ -2336,12 +2379,27 @@
                     targetZAp + distance * 0.55,
                     targetYAp + distance * 0.7
                 );
-                this.orbitControls.minDistance = Math.max(10, maxSpan * MIN_DOLLY_FACTOR);
-                this.orbitControls.maxDistance = Math.max(2000, distance * MAX_DOLLY_FACTOR);
+                this.reach = { span: maxSpan, distance, fitSpan: null };
+                this.applyReach();
                 this.orbitControls.update();
 
                 this.updateCameraClipping(maxSpan);
                 this.updateHelpersForSpan(maxSpan);
+            }
+
+            // How near and how far the camera may dolly at this level: Settings'
+            // Nearest times the level's size (or the size of a piece framed in it, f,
+            // when that is smaller) and Farthest times the distance that frames it.
+            // Set again at once when either is changed, and where the wheel's step
+            // in or out starts (onWheel).
+            applyReach() {
+                const reach = this.reach;
+                if (!reach) return;
+                const { dollyIn, dollyOut } = this.settings.values();
+                let nearest = Math.max(10, reach.span * dollyIn);
+                if (reach.fitSpan !== null) nearest = Math.min(nearest, Math.max(1, reach.fitSpan * dollyIn));
+                this.orbitControls.minDistance = nearest;
+                this.orbitControls.maxDistance = Math.max(2000, reach.distance * dollyOut);
             }
 
             // The far plane was a fixed 20000 set once at startup, while the
@@ -2438,7 +2496,45 @@
                     this.detailModeEl.dispatchEvent(new Event('change'));
                     return `Detail: ${DETAIL_LABELS[this.detailModeEl.value]}`;
                 }
+                if (verb === 'settings') return this.openSettings();
                 return null;
+            }
+
+            // ⚙ View › Settings, and the ring's View › Settings: the Settings panel, shown
+            // in the rail, the menu folded away. Answers what the status line says.
+            openSettings() {
+                this.viewMenuEl.open = false;
+                this.panels.open('settings');
+                return 'Settings: the shortcuts and automatic zoom, each with its default and a reset';
+            }
+
+            // A setting changed (widgets/settings.js), or all of them reset (id null):
+            // what it governs follows at once. The ring's key and modifier are the ring
+            // wiring's to follow (installRing's configure).
+            settingsChanged(values, id) {
+                if (id === null || id === 'dollyIn' || id === 'dollyOut') {
+                    this.applyReach();
+                    if (this.reach) this.updateCameraClipping(this.reach.span);
+                    this.orbitControls.update();
+                    this.invalidate();
+                }
+                this.wheelPastLimit = 0;
+                this.sayInputs();
+                // A place's facts name the ring's ways in.
+                if (this.selectedName && this.pictureFactsHtml(this.selectedName) !== this.shownFacts) this.renderSelectedPanel();
+            }
+
+            // The ring's ways in as words, as Settings has them: "m, or Ctrl+right-click".
+            ringWays() {
+                const v = this.settings.values();
+                return `${keyLabel(v.ringKey)}, or ${modifierLabel(v.ringModifier)}+right-click`;
+            }
+            // The words that teach the pointer and the keys -- the hint bar, ⌗ Ring's
+            // tooltip -- as Settings has them.
+            sayInputs() {
+                const v = this.settings.values();
+                this.hintEl.textContent = `Click: select • Double-click or ${keyLabel(v.zoomInKey)}: go in • Right-drag: pan • ${modifierLabel(v.ringModifier)}+right-click: ring • ?: hide this`;
+                this.ringOpenBtn.title = `Open the ring for the chosen piece (${keyLabel(v.ringKey)}, or ${modifierLabel(v.ringModifier)}+right-click a piece). Digits choose cells as on a numeric keypad; 5 backs out.`;
             }
 
             // Deliberately a depth ladder, not a node-link graph: one tick
@@ -3056,7 +3152,7 @@
                 const ring = (verb) => `⌗ ${host === '' ? 'Pictures › Floor › ' : ''}${verb}`;
                 // Nothing here yet: the way in, so the durable hint is where the person
                 // looks. The verbs stay the ring's.
-                if (!views.length) return `<div class="prop-readonly picture-facts" data-facts="${host === '' ? 'floor' : 'host'}"><div class="k">Pictures at ${esc(where(host))}</div><div data-facts="way-in">${ring('Camera › Add here')} stands a camera above ${esc(where(host))}, looking down; ${host === '' ? '⌗ Pictures › Add' : '⌗ Picture › Add'} pins a picture from disk, and ${host === '' ? '⌗ Pictures › Floor › Picture › Folder' : '⌗ Picture › Folder'} one already in the folder, any chosen in Pictures; m, or right-click, opens the ring</div></div>`;
+                if (!views.length) return `<div class="prop-readonly picture-facts" data-facts="${host === '' ? 'floor' : 'host'}"><div class="k">Pictures at ${esc(where(host))}</div><div data-facts="way-in">${ring('Camera › Add here')} stands a camera above ${esc(where(host))}, looking down; ${host === '' ? '⌗ Pictures › Add' : '⌗ Picture › Add'} pins a picture from disk, and ${host === '' ? '⌗ Pictures › Floor › Picture › Folder' : '⌗ Picture › Folder'} one already in the folder, any chosen in Pictures; ${esc(this.ringWays())}, opens the ring</div></div>`;
                 const drawn = pm.drawnAt(host);
                 const rows = [];
                 for (const view of [...views].reverse()) {
@@ -5321,7 +5417,8 @@
                 from.normalize().multiplyScalar(distance);
                 this.orbitControls.target.copy(centre);
                 this.camera.position.copy(centre).add(from);
-                this.orbitControls.minDistance = Math.min(this.orbitControls.minDistance, Math.max(1, span * MIN_DOLLY_FACTOR));
+                if (this.reach) this.reach.fitSpan = Math.min(this.reach.fitSpan ?? Infinity, span);
+                this.orbitControls.minDistance = Math.min(this.orbitControls.minDistance, Math.max(1, span * this.settings.get('dollyIn')));
                 const near = Math.min(1, Math.max(0.05, span * 0.0004));
                 if (near < this.camera.near) { this.camera.near = near; this.camera.updateProjectionMatrix(); }
                 this.orbitControls.update();
@@ -7006,16 +7103,65 @@
             // for a picture's mark, or null. Every click, drop and right-click in
             // the world asks here.
             raycastPick(event) {
-                const rect = this.canvas.getBoundingClientRect();
-                this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-                this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-                this.raycaster.setFromCamera(this.pointer, this.camera);
-                const intersects = this.raycaster.intersectObjects([...Object.values(this.meshByName), ...this.pictureMarks.pickables()], false)
-                    .filter((hit) => this.wallsSelectable || !this.isWall(this.renderNodeByKey[hit.object.userData.key]));
+                const intersects = this.raycastHits(event);
                 if (!intersects.length) return null;
                 const hit = intersects[0].object;
                 const pick = this.pictureMarks.picked(hit);
                 return pick ? { pick } : { key: hit.userData.key };
+            }
+
+            // What is drawn under the pointer, nearest first: the meshes and the marks a
+            // click picks, walls passed through as a click passes them.
+            raycastHits(event) {
+                const rect = this.canvas.getBoundingClientRect();
+                this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+                this.raycaster.setFromCamera(this.pointer, this.camera);
+                return this.raycaster.intersectObjects([...Object.values(this.meshByName), ...this.pictureMarks.pickables()], false)
+                    .filter((hit) => this.wallsSelectable || !this.isWall(this.renderNodeByKey[hit.object.userData.key]));
+            }
+
+            // A right press on the world, kept until it is let go: a still one re-centres.
+            onRightPress(event) {
+                if (event.button !== 2) return;
+                this.rightPress = { x: event.clientX, y: event.clientY, ring: this.ringModifierHeld(event) };
+            }
+            // Let go where it was pressed (within RECENTRE_SLOP_PX), and without the
+            // ring's modifier: the orbit's pivot moves to the surface under the
+            // pointer, the camera keeping its offset from it, so the next turn turns
+            // about that point. On empty space, nothing. Moved further, it was a pan.
+            onRightRelease(event) {
+                const press = this.rightPress;
+                if (event.button !== 2 || !press) return;
+                this.rightPress = null;
+                if (press.ring || this.ringModifierHeld(event)) return;
+                if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > RECENTRE_SLOP_PX) return;
+                this.recentreAt(event);
+            }
+            ringModifierHeld(event) {
+                return !!event[MODIFIERS[this.settings.get('ringModifier')]];
+            }
+            // The view re-centred on the surface point under the pointer, eased over
+            // RECENTRE_MS: the pivot and the camera glide together, so the distance
+            // and the angle stay as they were. False on empty space.
+            recentreAt(event) {
+                const hit = this.raycastHits(event)[0];
+                if (!hit) return false;
+                this.glide = { from: this.orbitControls.target.clone(), to: hit.point.clone(), start: performance.now() };
+                this.invalidate();
+                return true;
+            }
+            // One frame of a re-centre: the pivot and the camera moved by the same step.
+            stepGlide() {
+                const glide = this.glide;
+                if (!glide) return;
+                const t = Math.min(1, (performance.now() - glide.start) / RECENTRE_MS);
+                const eased = 1 - Math.pow(1 - t, 3);
+                const step = glide.from.clone().lerp(glide.to, eased).sub(this.orbitControls.target);
+                this.orbitControls.target.add(step);
+                this.camera.position.add(step);
+                if (t >= 1) this.glide = null;
+                this.frameWanted = true;
             }
 
             // The node under the pointer; a picture's mark stands for its host (the floor's for none).
@@ -7028,9 +7174,10 @@
 
             // A click on a node selects it. On an outline it selects the host and
             // chooses the shape; on a mat outside the outlines, the host (or the
-            // floor), clearing the choice.
+            // floor), clearing the choice. The primary button's: the others are the
+            // camera's.
             onPointerDown(event) {
-                if (this.transformControls.dragging || this.cameraDrag) return;
+                if (event.button !== 0 || this.transformControls.dragging || this.cameraDrag) return;
                 const hit = this.raycastPick(event);
                 if (!hit) return;
                 if (!hit.pick) { this.selectChild(hit.key); return; }
@@ -7096,10 +7243,11 @@
                 if (payload.scad) this.codeContentEl.textContent = payload.scad;
                 if (this.selectedName && this.selectedName !== FLOOR_KEY && !this.nodeByPath(this.selectedName)) this.selectedName = null;
                 const at = this.camera.position.clone(), target = this.orbitControls.target.clone();
-                const near = this.orbitControls.minDistance, far = this.orbitControls.maxDistance;
+                const near = this.orbitControls.minDistance, far = this.orbitControls.maxDistance, reach = this.reach;
                 this.renderFocus();
                 this.camera.position.copy(at); this.orbitControls.target.copy(target);
                 this.orbitControls.minDistance = near; this.orbitControls.maxDistance = far;
+                if (reach) this.reach = reach;
                 this.orbitControls.update();
                 if (this.machine && this.machine.handle) this.machine.handle.print.loadChoices();
                 return this.pictureMarks.refresh();
@@ -7118,31 +7266,45 @@
             // direction accumulates instead of doing nothing, and crossing a
             // resistance threshold triggers the same zoom-in/zoom-out a
             // double-click or a crumb would -- continuous and discrete
-            // navigation both drive the same two actions.
+            // navigation both drive the same two actions. Automatic zoom, each way
+            // of it, and the resistance are Settings'; a change holds from the next
+            // turn of the wheel.
             onWheel(event) {
+                const { autoZoom, autoZoomIn, autoZoomOut, wheelResistance } = this.settings.values();
                 const distance = this.orbitControls.getDistance();
                 const atMin = distance <= this.orbitControls.minDistance * 1.05;
                 const atMax = distance >= this.orbitControls.maxDistance * 0.95;
-                const zoomingIn = event.deltaY < 0;
-                const zoomingOut = event.deltaY > 0;
+                const zoomingIn = event.deltaY < 0 && autoZoomIn;
+                const zoomingOut = event.deltaY > 0 && autoZoomOut;
 
-                if ((zoomingIn && atMin) || (zoomingOut && atMax)) {
-                    this.wheelResistance += Math.abs(event.deltaY);
-                    if (this.wheelResistance > WHEEL_RESISTANCE_THRESHOLD) {
-                        this.wheelResistance = 0;
+                if (autoZoom && ((zoomingIn && atMin) || (zoomingOut && atMax))) {
+                    this.wheelPastLimit += Math.abs(event.deltaY);
+                    if (this.wheelPastLimit > wheelResistance) {
+                        this.wheelPastLimit = 0;
                         if (zoomingIn) this.zoomInFromWheel();
                         else this.zoomOut();
                     }
                 } else {
-                    this.wheelResistance = 0;
+                    this.wheelPastLimit = 0;
                 }
             }
 
-            // No continuous hover-tracking is wired (would need per-frame
-            // raycasting for marginal benefit) -- prefer the already-selected
-            // child, else whichever child sits closest to the camera's
-            // current look-at point, as a reasonable proxy for "what the
-            // user is looking at."
+            // Page Down and Page Up, or the keys Settings gives them: a level in, as
+            // the wheel steps in, and out, as Backspace steps out -- unless a person is
+            // typing in a box or the SCAD editor, whose keys they are there.
+            onZoomKey(event) {
+                const combo = comboOf(event);
+                if (!combo || typing(document.activeElement)) return;
+                const { zoomInKey, zoomOutKey } = this.settings.values();
+                if (combo === zoomInKey) { event.preventDefault(); this.zoomInFromWheel(); }
+                else if (combo === zoomOutKey) { event.preventDefault(); this.zoomOut(); }
+            }
+
+            // A level in, from the wheel or Page Down. No continuous hover-tracking
+            // is wired (would need per-frame raycasting for marginal benefit) --
+            // prefer the already-selected child, else whichever child sits
+            // closest to the camera's current look-at point, as a reasonable
+            // proxy for "what the user is looking at."
             zoomInFromWheel() {
                 const focus = this.currentFocusNode();
                 if (!focus.children.length) return;
@@ -7439,13 +7601,17 @@
             context: { pointing: 'device', targets: [viewer.machine.port] },
             device: viewer.machine.handle.device(), at,
         });
-        // Right-click on a Contents row or on a piece in the 3D view opens the
-        // node ring for that piece (and selects it, so the panel agrees); on
-        // empty canvas the canvas ring; inside a board's Machine, its device
-        // ring. The key and the button open the ring for whatever is selected,
+        // Ctrl+right-click (Settings' modifier) on a Contents row or on a piece in
+        // the 3D view opens the node ring for that piece (and selects it, so the
+        // panel agrees); on empty canvas the canvas ring; inside a board's
+        // Machine, its device ring. A plain right-click on any of them opens
+        // nothing and no menu of the browser's: on the world it is the camera's.
+        // The key and the button open the ring for whatever is selected,
         // at the centre of the screen -- with nothing selected and a Machine
-        // open for a board pinned nowhere, that Machine's.
-        function whatFor(event) {
+        // open for a board pinned nowhere, that Machine's. Asked of a right-click
+        // without the modifier (`opening` false), it only says whether the spot is
+        // the page's (true) or the browser's (null), and selects nothing.
+        function whatFor(event, { opening = true } = {}) {
             if (!viewer.siteName) return null;
             const machineOpen = !!(viewer.machine && viewer.machine.handle);
             // The floor has no ring of its own: the canvas ring's Pictures › Floor is its.
@@ -7454,13 +7620,15 @@
                 return viewer.selectedName && viewer.selectedName !== '@floor' ? nodeSpec(viewer.selectedName, null) : canvasSpec(null);
             }
             const at = { x: event.clientX, y: event.clientY };
-            if (machineOpen && event.target.closest && event.target.closest(".panel[data-panel='machine']")) return machineSpec(at);
+            if (machineOpen && event.target.closest && event.target.closest(".panel[data-panel='machine']")) return opening ? machineSpec(at) : true;
             const row = event.target.closest('#contents-list .contents-item');
             if (row) {
+                if (!opening) return true;
                 if (viewer.renderNodeByKey[row.dataset.path]) viewer.selectChild(row.dataset.path);
                 return nodeSpec(row.dataset.path, at);
             }
             if (event.target === viewer.canvas) {
+                if (!opening) return true;
                 const key = viewer.raycastChild(event);
                 if (key) { viewer.selectChild(key); return nodeSpec(key, at); }
                 return canvasSpec(at);
@@ -7838,8 +8006,10 @@
             }
         }
 
-        installRing({
+        const ringKeys = () => ({ key: viewer.settings.get('ringKey'), modifier: viewer.settings.get('ringModifier') });
+        const ringApi = installRing({
             base: BASE,
+            ...ringKeys(),
             whatFor,
             onIntent: carry,
             onResolved: async (ring, spec) => {
@@ -7848,6 +8018,8 @@
             },
             onError: (err) => viewer.setStatus(`Ring: ${err.message}`, 'error'),
         });
+        // Settings' ring key and modifier, changed: the next press is held to them.
+        viewer.settings.onChange(() => ringApi.configure(ringKeys()));
         window.apothecaryRing.lastRing = () => lastRing;
         window.apothecaryRing.refreshAddresses = refreshAddresses;
         window.apothecaryRing.annotateMachine = annotateMachine;

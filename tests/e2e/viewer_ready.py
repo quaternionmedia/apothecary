@@ -125,10 +125,11 @@ def _drag(page: Page, aim: tuple, by: tuple, shift: bool = False) -> None:
 
 
 def by_hand(page: Page, key: str, distance: float) -> None:
-    """Frame a piece as a person does, with the controls the hint bar names. A drag turns
-    the view round until the piece stands between it and the middle of the orbit (the
-    wheel only ever moves towards that middle), Shift+drag brings the piece to the middle
-    of the world, and the wheel brings the view to about ``distance`` mm from it. No
+    """Frame a piece as a person does, with the pointer's controls (docs/viewer.md). A
+    drag turns the view round until the piece stands between it and the middle of the
+    orbit (the wheel only ever moves towards that middle), Shift+drag -- a pan, as a
+    right-drag is -- brings the piece to the middle of the world, and the wheel brings
+    the view to about ``distance`` mm from it. No
     camera is moved behind the page's back; how far to drag and how many notches to turn
     are worked out here, as a hand works them out by eye.
 
