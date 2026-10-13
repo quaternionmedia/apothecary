@@ -394,15 +394,15 @@ def _rail_machine(page: Page):
 @pytest.mark.e2e
 def test_the_machine_opens_in_the_rail_and_floats_only_when_floated(page: Page, bench: str):
     """Every way into a Machine -- its badge, Selected's Open, the ring's Device › Open,
-    the monitor's address -- shows it in the rail's tab strip beside Pictures and the
-    Bench, its tab active, over none of the world; floated from its tab it floats, and
-    opened again while it floats it stays where a person put it; closed and opened, it
-    is in the rail again."""
+    the monitor's address -- shows it in the rail's tab strip beside Pictures, the
+    Bench and Settings, its tab active, over none of the world; floated from its tab it
+    floats, and opened again while it floats it stays where a person put it; closed and
+    opened, it is in the rail again."""
     _open(page, bench)
     page.locator(BOARD_BADGE).click()
     machine = _rail_machine(page)
     tabs = page.locator(".panel-rail .rail-tab .rail-tab-name")
-    expect(tabs).to_have_text(["Pictures", "Bench", re.compile(r"^printer_1")])
+    expect(tabs).to_have_text(["Pictures", "Bench", "Settings", re.compile(r"^printer_1")])
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
 
     page.evaluate("() => window.fractalViewer.closeMachine()")
@@ -562,7 +562,13 @@ def test_the_tab_strip_and_the_hint_are_one_line_at_1024_px(page: Page, bench: s
         "() => [...document.querySelectorAll('.panel-rail .rail-tab')]"
         ".map((t) => Math.round(t.getBoundingClientRect().top))"
     )
-    assert len(tops) == 3 and len(set(tops)) == 1, tops
+    assert len(tops) == 4 and len(set(tops)) == 1, tops
+    # Pictures, the Bench, Settings and the Machine: no name cut.
+    cut = page.evaluate(
+        "() => [...document.querySelectorAll('.panel-rail .rail-tab-name')]"
+        ".filter((n) => n.scrollWidth > n.clientWidth).map((n) => n.textContent)"
+    )
+    assert cut == [], cut
 
 
 @pytest.mark.e2e
