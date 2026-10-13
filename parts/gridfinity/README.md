@@ -1,17 +1,16 @@
-# Gridfinity Parts
+# Gridfinity
 
-This directory contains 3D printable parts designed for the [Gridfinity](https://gridfinity.com) modular storage system. Gridfinity is a customizable and scalable storage solution that allows users to create organized storage units using standardized parts.
+The Gridfinity bin, for the [Gridfinity](https://gridfinity.com) modular
+storage system: a part wrapping `gridfinity-rebuilt-bins.scad` from the
+[`gridfinity-rebuilt-openscad`](https://github.com/kennetek/gridfinity-rebuilt-openscad)
+library, a submodule at `parts/gridfinity/gridfinity-rebuilt-openscad`
+(`apothecary/projects/parts/gridfinity.py`).
 
-## Quick Start
+## Using it
 
 ```bash
-# Initialize the submodule
-git submodule update --init
-
-# List gridfinity part
+git submodule update --init                     # the library, if the clone was made without it
 uv run apothecary parts list | grep gridfinity
-
-# Get part info
 uv run apothecary parts info gridfinity
 ```
 
@@ -19,9 +18,7 @@ The bins need an OpenSCAD newer than 2021.01 (the part's
 `openscad_min_version`): `uv run apothecary openscad install` puts one in, and
 `uv run apothecary check` says which OpenSCAD the part renders with.
 
-## Apothecary Integration
-
-Gridfinity is integrated into Apothecary as a parametric part wrapper. You can use it programmatically:
+## From Python
 
 ```python
 from apothecary.projects.parts.gridfinity import DEFAULT, BinParams, get_bin_dimensions
@@ -48,7 +45,7 @@ print(f"Volume: {bounds.volume:.0f} mm³")
 scad_params = DEFAULT.scad_overrides(params.model_dump())
 ```
 
-### Available Parameters
+### Parameters
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
@@ -61,23 +58,13 @@ scad_params = DEFAULT.scad_overrides(params.model_dump())
 | `scoop` | 1.0 | Scoop percentage (0-1) |
 | `style_tab` | AUTO | Tab style for compartments |
 
-## Submodules
-
-### gridfinity-rebuilt-openscad
-
-This repository includes a Git submodule that contains the OpenSCAD designs for Gridfinity parts. The submodule is located at `parts/gridfinity/gridfinity-rebuilt-openscad`.
-
-To initialize the submodule, run this in the root directory of the main repository:
-
-```bash
-git submodule update --init
-```
+## The submodule
 
 The submodule is pinned. Moving the pin is a commit that bumps it and passes
 `tests/test_parameter_coverage.py`, which holds the wrapper's names and
 defaults to the upstream file's own.
 
-## Gridfinity Specifications
+## The Gridfinity standard
 
 The standard Gridfinity system uses:
 
