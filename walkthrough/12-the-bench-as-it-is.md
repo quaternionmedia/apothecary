@@ -111,7 +111,7 @@ GET /firmware/pins -> []
 
 ## 14. And none of it leaves the machine
 
-The guard is on the process, installed when the package is imported: a connection past this machine is refused before any name is looked up. The server answers this machine alone; a page from anywhere else asking it for a site's cameras and pictures gets a refusal, not the list. Neither is a setting.
+The guard is on every apothecary process, installed before anything else in the server or the command line runs: a connection past this machine is refused before any name is looked up. The server answers this machine alone; a page from anywhere else asking it for a site's cameras and pictures gets a refusal, not the list. Neither is a setting.
 
 ```
 socket.create_connection: refused to reach ('example.com', 80). Apothecary keeps personal data on this machine by construction; nothing in it connects anywhere else. (The named exception, secured user accounts, is not built.)
