@@ -1,13 +1,12 @@
-"""
-Apothecary API - FastAPI endpoints for OpenSCAD generation toolkit.
+"""Apothecary's server: the FastAPI app the viewer and the CLI talk to.
 
-This module provides REST API endpoints for:
-- Scene rendering to OpenSCAD code
-- Parts browsing and downloading
-- 3D viewer for part preview
+This module renders scenes to OpenSCAD, serves the parts library and its STLs,
+the sites and their nodes, and the one viewer page, and mounts the routers for
+the docs, pictures, views, cameras, jobs, the slicer, part edits, firmware and
+the ring's menus. ``/openapi.json`` lists every route.
 
-Note: STL files are generated on-demand and not stored in git.
-On startup, missing STLs are automatically generated if OpenSCAD is available.
+STL files are generated on demand and not stored in git. On startup, missing
+STLs are generated in the background when OpenSCAD is available.
 """
 
 # An install point of the guard (apothecary/stays_local.py), before anything
@@ -1163,10 +1162,9 @@ def validate_without_model(
 # =============================================================================
 # Site/Structure/Substructure/Feature hierarchy (prototype, unratified)
 #
-# Backed by a process-lifetime SiteStore (see site_store.py): edits persist
-# across requests, unlike /render's stateless Scene handling. Known
-# limitation: in-memory only, lost on restart, not shared across worker
-# processes -- fine for a single-process dev server.
+# Backed by a process-lifetime SiteStore: edits persist across requests,
+# unlike /render's stateless Scene handling. site_store.py says what it keeps
+# across a restart and what it does not share between worker processes.
 #
 # Routes that change a site stay `async def`: they run one at a time on the
 # event loop, which is all that serializes the store's plain dicts until it
@@ -1387,9 +1385,9 @@ def _primitive_descriptor(obj: OpenSCADObject, offset: Vector3D) -> Dict[str, ob
     the node's own ``position`` so the returned bounds are already
     world-space, matching ``world_bounds``). This covers every leaf in this
     repo's own examples. Returns None for anything richer (nested booleans,
-    Rotate, Scale, multiple children) -- the viewer falls back to a
-    bounding-box wireframe for those, a deliberate scope boundary, not a
-    bug: real CSG rendering of composite nodes is future work.
+    Rotate, Scale, multiple children): the viewer draws those from the STL
+    the server renders of the node's subtree
+    (``GET /sites/{name}/nodes/{path}/stl``).
     """
     if isinstance(obj, Translate):
         if len(obj.children) != 1:
@@ -1440,22 +1438,21 @@ def _assembly_tree(
 ) -> Dict[str, object]:
     """Recursive serialization of an Assembly node and everything beneath it.
 
-    Unlike ``_structure_summary`` (which flattens one extra level for the
-    old, depth-capped viewers), this walks the *whole* tree -- the shape the
-    fractal zoom viewer needs to navigate unbounded depth. ``children``,
-    ``additions``, and ``subtractions`` are all real Assembly nodes (a
-    garage printer's ``left_post``/``gantry_bar`` Features are additions, not
-    children), so all three are combined into one navigable ``children``
-    list here, each tagged with how it composes into its parent's geometry --
-    navigation doesn't care about that distinction, but a viewer showing
-    "what's inside" vs. "what's added/removed" might.
+    Unlike ``_structure_summary`` (the root's direct children and one level
+    below them, in the payload's ``structures``), this walks the *whole*
+    tree -- the shape the fractal zoom viewer needs to navigate unbounded
+    depth. ``children``, ``additions``, and ``subtractions`` are all real
+    Assembly nodes (a garage printer's ``left_post``/``gantry_bar`` Features
+    are additions, not children), so all three are combined into one
+    navigable ``children`` list here, each tagged with how it composes into
+    its parent's geometry -- navigation doesn't care about that distinction,
+    but a viewer showing "what's inside" vs. "what's added/removed" might.
 
     ``Assembly.world_bounds()`` only offsets by *this* node's own
-    ``position`` -- correct for a direct child of the root (the only depth
-    the old, depth-capped viewers ever showed), wrong for anything deeper,
-    since a node's ``position`` is relative to its immediate parent, not the
-    root. A Structure two levels down from the site root would render as if
-    its parent were sitting at the origin. ``parent_world_position``
+    ``position`` -- correct for a direct child of the root, wrong for
+    anything deeper, since a node's ``position`` is relative to its
+    immediate parent, not the root. A Structure two levels down from the
+    site root would render as if its parent were sitting at the origin. ``parent_world_position``
     accumulates every ancestor's position on the way down so every node's
     reported ``position``/``world_bounds`` is genuinely in one consistent
     global frame, however deep -- the fractal viewer's camera framing and
