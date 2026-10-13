@@ -536,8 +536,8 @@ whether it runs natively, and whether it has Manifold.
 **Windows on ARM (a Snapdragon PC, if one is to hand)**
 
 - [ ] `uv run apothecary openscad install`, from an ARM64 and from an x64
-      Python → both refuse with "Windows on ARM is not supported yet (a
-      planned item)", and download nothing.
+      Python → both refuse with "Windows on ARM is not supported", and
+      download nothing.
 
 **Linux arm64 (a Raspberry Pi 4/5 on 64-bit Raspberry Pi OS, or another
 arm64 board)**
