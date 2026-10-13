@@ -59,4 +59,55 @@ said on several pages -- only a reader finds, so each area is read in full.
    still-true decisions go.
 
 The inventory of each area -- every passage, its problem and its home --
-and the order of the sweep follow below once read.
+is in `timeless-docs-2026-10-12/`, one file per area, read against the
+branch at `c67725a`; a sweep re-reads each passage against the text as it
+stands before changing it.
+
+## What the reading found
+
+- **Top-level and reference pages** are mostly present tense already. What
+  they carry is decisions told as events, the same instructions on several
+  pages (the install and test commands, OpenSCAD's platforms and limits, the
+  SCAD grammar), and some statements the code no longer bears out.
+  `QUICKSTART.md` points nowhere; `docs/fitting-a-part.md` is half a
+  proposal.
+- **The walkthrough's hand-written pages** state their constraints through
+  the stories that produced them; its generated pages are mostly sound,
+  with a few false statements in the tests that write them, and a shared
+  header that claims more than it asserts.
+- **The package's docstrings** carry the most: decisions cited by date or
+  plan, the old names of things, and past failures given as reasons; and a
+  set of statements the code contradicts, one of them in the API's own
+  description.
+- **The page's comments and the tests' docstrings** tell how bugs were found
+  rather than what a test holds, and retell the page's consolidation in
+  several files. The census's classification rules are written down only in
+  its test's ledger.
+- **Plans**: most are finished and retire; a few stay open, one to be split.
+  Three draft records lag the code, and the bench checklist moves to a
+  present-tense runbook.
+- **The gate** sees little of this, and two of its findings are false
+  positives: "was found in" describing a search's result in the present
+  tense.
+
+## The order of the sweep
+
+Each step is its own pull request into this branch, stating passage by
+passage which home each went to, and reporting `check_timeless.py --all`.
+
+1. **Statements the code contradicts**, everywhere: they are wrong today,
+   whatever the rule.
+2. **The front door**: `README.md`, `AGENTS.md`, `CONTRIBUTING.md`, walkthrough
+   page 00, `--help` and the API's descriptions; `QUICKSTART.md` goes.
+3. **Plans retire**: `docs/README.md` lists the finished ones under
+   *History*, each still-true decision moves to its present-tense home, and
+   no present-tense page or message links a finished plan as current.
+4. **Reference pages**: the duplicated explanations gathered into the pages
+   they belong to (OpenSCAD, pictures, configuration, the census), and the
+   pages that repeat them pointing there.
+5. **The package, by module**, worst first.
+6. **The page, the tests and the configuration's comments.**
+7. **The walkthrough**: the hand-written pages' constraints stated as facts,
+   the generated pages' words in their tests, the shared header made true.
+8. **Retrospectives**: the stories each step moved out, gathered by area and
+   proposed to the corpus's `perspectives/` in one draft pull request.
