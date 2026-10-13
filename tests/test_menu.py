@@ -888,7 +888,7 @@ def test_the_canvas_ring_lists_the_pieces_at_this_level_and_the_way_out():
     assert labels[0] == "Pieces" and "Step out" not in labels
     pieces = root.options[0]
     assert pieces.cell == 8 and pieces.children is not None
-    # Thirteen pieces in the garage: two lettered groups, nothing lost.
+    # Every piece of the garage, in lettered groups, nothing lost.
     names = sorted(c.name for c in _garage().children)
     leaves = [leaf for group in pieces.children for leaf in group.children]
     assert [leaf.action for leaf in leaves] == [f"select:{n}" for n in names]

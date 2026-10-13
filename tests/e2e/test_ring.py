@@ -461,7 +461,7 @@ def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: s
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     wedges = _wedges(page)
     assert wedges["8"] == "Pieces" and "Step out" not in wedges.values()
-    # Sixteen pieces: grouped in small lettered groups, each named for its
+    # The garage's pieces, grouped in small lettered groups, each named for its
     # first piece in name order. The page knows the address; the test asks
     # rather than guesses.
     address = page.evaluate(
