@@ -7,7 +7,7 @@ through ``POST /sites/garage/views`` with the page's own request context, at a
 width of 1800 mm: the bench's top is x 0..1800, y 0..600 at z 780, so the mat is
 centred at (900, 300, 780) and is 900 mm deep. Its three shapes: 0, ``block``,
 under ``printer_1``; 1, ``coin``, in front of every printer; 2, ``bar``, behind
-them. Phase 4 of the pictures plan pins it by a drop instead.
+them.
 
 Every view, camera and kept picture a test adds is taken back after it, and the
 bench is put back where the site's code has it, so a later test finds the server
