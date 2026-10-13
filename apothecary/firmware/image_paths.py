@@ -8,7 +8,7 @@ This is what holds that it did: it reads the built ELF, every byte of it,
 debug information included (a superset of what is flashed), and fails the
 build if any of the folders it is given is in it.
 
-    python -m apothecary.firmware.image_paths ELF --refuse /home/pk --refuse /repo ...
+    python -m apothecary.firmware.image_paths ELF --refuse "$HOME" --refuse /repo ...
 
 Exit 0 when none is there, 1 naming each one found and where, 2 when the ELF
 cannot be read. Stdlib only, so it runs as the task's step in a process of its

@@ -14,6 +14,7 @@ The order to take these in, with the work in flight, is [the cleanup triage](doc
 - Designing a part from the browser, a spike with a recommended order: [docs/plans/part-editing-in-the-browser-2026-09-27.md](docs/plans/part-editing-in-the-browser-2026-09-27.md).
 - Pictures in the world, what is still open: Phase 6 (Selected at the selection) and Phase 7 (the album routes closed): [docs/plans/pictures-in-the-world-2026-09-26.md](docs/plans/pictures-in-the-world-2026-09-26.md).
 - Optional local models behind the shape finder: [docs/plans/photo-finders-local-models-2026-09-21.md](docs/plans/photo-finders-local-models-2026-09-21.md).
+- Pictures without Pillow, a research effort: whether a library under an approved licence decodes JPEG and PNG, resizes and reads pixels as well and as fast as Pillow does here, and what moving would cost. Until it reports, Pillow stays, a recorded exception in the adoption scope: [the governance plan's stub](docs/plans/governance-2026-10-13.md#stubbed-pictures-without-pillow).
 - The bench checklist re-run on the one page, with the Ender: [docs/validation/2026-09-20-ender-bench.md](docs/validation/2026-09-20-ender-bench.md). Its three screenshots are of the pages as they were on 2026-09-20.
 
 ## Next round
@@ -41,6 +42,12 @@ Decided, not started. Each waits on what its line names.
 - Data-only part wrappers become `part.json`; the import hook goes; the
   snowplow gets one name.
 - The unit suite under pytest-xdist.
+- A licence gate for the Rust crates (the workspace's `Cargo.lock` and each Rust
+  sketch's) and the vendored three.js and CodeMirror. `license-check.yml` gates
+  Python packages alone; the rest is a recorded exception in the adoption scope
+  ([the governance plan](docs/plans/governance-2026-10-13.md)). It ends, and the
+  gate is built, at the first of: a second Rust sketch, a crate or a vendored
+  library outside the allowlist, or the corpus's own gate for them.
 - The hidden command stubs `apothecary/cli/retired.py` makes (`system`,
   `install`, `testrun`, `dev`, `inventory`, `submodules`, `photo look`,
   `test setup-e2e`, `test validate-e2e`, `test run-e2e`) are removed one
