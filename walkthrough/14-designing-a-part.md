@@ -21,7 +21,7 @@ The parts library, /viewer/sites/parts_library (the site drop-down's parts_libra
 ![Part › Edit opens the part's editor at what is drawn](screenshots/14-01-part-edit-opens-the-part-s-editor-at-what-is-drawn.png)
 
 ```
-envelope 10.00 × 10.00 × 10.00 mm · measured 10.00 × 10.00 × 10.00 mm (read from the STL)
+envelope 10.00 × 10.00 × 10.00 mm · measured 10.00 × 10.00 × 10.00 mm
 ```
 
 ## 2. A size dragged is checked once the slider rests
@@ -43,7 +43,7 @@ Apply: the text rendered, its size in it and nothing passed beside it, into the 
 
 ```
 calibration_cube regenerated: an applied variant, not saved
-envelope 30.00 × 30.00 × 30.00 mm · measured 30.00 × 30.00 × 30.00 mm (read from the STL)
+envelope 30.00 × 30.00 × 30.00 mm · measured 30.00 × 30.00 × 30.00 mm
 ```
 
 ## 4. A reload draws what the tab applied, marked at a glance
@@ -108,7 +108,7 @@ Recent applies, under the parameters, lists this tab's applies of calibration_cu
 
 ```
 calibration_cube: drawn again from the cache, the variant applied then; nothing rendered
-envelope 30.00 × 30.00 × 30.00 mm · measured 30.00 × 30.00 × 30.00 mm (read from the STL)
+envelope 30.00 × 30.00 × 30.00 mm · measured 30.00 × 30.00 × 30.00 mm
 ```
 
 ## 12. A size staged and not applied is kept over a reload
