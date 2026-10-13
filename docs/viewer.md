@@ -24,6 +24,10 @@ Left to right, one row:
 - **The site drop-down** loads another site and puts it in the address,
   `/viewer/sites/<name>`, so a reload or a link lands on it and Back returns
   to the one before; the old site's focus, Machine and variants stay with it.
+  The drop-down, Site in the canvas ring, a link and Back are the only ways
+  the site on screen changes: no other verb switches it as a side effect. A
+  picture's view or a take-back in another site names that site and leaves the
+  screen where it is.
 - **The breadcrumb**: the site, then each piece you have stepped into. A crumb
   steps out to its level; Page Up or Backspace steps out one.
 - **⚙ View**: how the world is drawn ([below](#how-the-world-is-drawn)), and
