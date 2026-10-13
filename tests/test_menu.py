@@ -1141,12 +1141,12 @@ def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
         assert carried_by(action).name == "VIEWER"
 
 
-# --- pictures and cameras on the ring (pictures plan, Phase 4) -------------------------
+# --- pictures and cameras on the ring --------------------------------------------------
 #
 # A host -- a root structure with a footprint that is not a made piece -- appends
 # Camera and Picture to its node ring; the floor's are under the canvas ring's
-# Pictures › Floor, since the floor is a selection and not a node (the owner's
-# decision of 2026-09-27: no new ring shapes). A shape is made from its host's
+# Pictures › Floor, since the floor is a selection and not a node, and the ring
+# takes no new shape for it. A shape is made from its host's
 # Picture › Make; Word and Drop are under Picture on a made piece.
 
 
@@ -1213,7 +1213,7 @@ def test_a_host_appends_camera_and_picture_and_no_existing_cell_moves():
     assert _ring_labels(_group(bare, "Camera")) == [("Add here", 8)]
     assert _group(bare, "Camera", "Add here").action == "camera:add-here"
     assert [c.action for c in _group(bare, "Picture").children] == ["picture:add"]
-    # A printer with a board pinned: every cell above where it was, and Device last.
+    # A printer with a board pinned: every cell above as on a bare host, and Device last.
     printer = resolve(
         Context(pointing=Pointing.NODE, targets=["printer_1"]), garage, device=PRINTER
     )
@@ -1236,16 +1236,16 @@ def test_camera_and_picture_are_absent_below_the_root_and_where_nothing_can_be_p
         assert "Camera" not in labels and "Picture" not in labels, (path, labels)
 
 
-# --- the part editor on the ring (the part-editing spike's decision) --------------------
+# --- the part editor on the ring --------------------------------------------------------
 #
 # One editor, in Selected, for a part and for a piece made from a picture: Part ›
 # Edit opens it there. Appended after every cell the ring had, so none moves; the
 # page carries it, and Apply goes through the part and made routes. A part from
 # the parts folder also has Part › Defaults after Edit: its own numbers staged in
-# the editor, as the editor's Defaults does (loop 1's owner's answer). A made
+# the editor, as the editor's Defaults does. A made
 # piece's numbers are what was found, with no part's own to go back to. Then Apply
 # and Revert, on every Part, acting on what the editor has staged, as its buttons
-# do: the part's ring holds the whole loop (the owner's answer once more).
+# do: the part's ring holds the whole loop.
 
 
 def test_a_part_and_a_made_piece_end_with_part_edit_and_nothing_else_does():
@@ -1288,7 +1288,8 @@ def test_a_part_and_a_made_piece_end_with_part_edit_and_nothing_else_does():
     view, history = made.options[-1].children[-2:]
     assert [c.action for c in view.children] == ["part:fit"]
     assert [c.action for c in history.children] == ["part:undo", "part:redo"]
-    # A structure that is neither is left alone: the bench's ring ends as it did.
+    # A structure that is neither is left alone: the bench's ring ends with its Camera
+    # and Picture.
     bench = resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), garage)
     assert [o.label for o in bench.options][-2:] == ["Camera", "Picture"]
     for action in (
@@ -1314,7 +1315,7 @@ def test_part_holds_the_loop_edit_keeping_its_address():
         assert walk(ring, address).action == action
 
 
-# --- the SCAD editor on the ring (loop 2, the owner's answer of 2026-10-10) -------------
+# --- the SCAD editor on the ring --------------------------------------------------------
 #
 # A part from the parts folder, told by the server what its SCAD is (``picture.part``):
 # Save, Float and Fullscreen after Revert, so the loop's cells keep their seats, and
@@ -1339,8 +1340,8 @@ def test_a_part_s_ring_holds_its_scad_editor_too():
         ("View", "part:view"),
         ("History", "part:history"),
     ]
-    # The ring was full at eight: Float and Fullscreen are View's now, in the seat
-    # Float had, beside the ghost and Fit; History, in Fullscreen's, holds Undo and Redo.
+    # A ring holds eight: Float and Fullscreen are under View, beside the ghost and Fit,
+    # and History holds Undo and Redo.
     view, history = part.children[5:7]
     assert [(c.label, c.action) for c in view.children] == [
         ("Float", "part:float"),
@@ -1357,8 +1358,7 @@ def test_a_part_s_ring_holds_its_scad_editor_too():
     assert address_of(ring, "part:undo")[:-1] == address_of(ring, "part:save")[:-1] + "1"
     variants = part.children[-1]
     assert (variants.label, variants.id) == ("Variants", "part:variants")
-    # Each saved variant a ring of what can be done to it (the owner's answer of
-    # 2026-10-12): choosing one is Draw, one press deeper than choosing it was.
+    # Each saved variant is a ring of what can be done to it; choosing one is its Draw.
     assert [(c.label, c.id) for c in variants.children] == [
         ("taller", "part:variant:taller"),
         ("wider", "part:variant:wider"),
@@ -1467,7 +1467,7 @@ def test_the_server_tells_the_ring_what_a_part_s_scad_is(monkeypatch):
 
 
 def test_a_made_piece_with_a_printer_pinned_in_its_site_ends_with_print():
-    """The owner's answer of 2026-10-10: a made piece's ring gets Print, which opens
+    """A made piece's ring has Print when a printer is pinned in its site: it opens
     the pinned printer's Machine with the piece chosen under makes. One printer is the
     cell itself; several are a cell each under it; with none there is no Print.
     Appended after Part, so no cell above it moves, and only on a made piece."""
@@ -1503,12 +1503,12 @@ def test_a_made_piece_with_a_printer_pinned_in_its_site_ends_with_print():
 
 
 def test_a_made_piece_and_a_part_slice_for_a_printer_pinned_in_their_site():
-    """Slice is a step of the page (docs/plans/slicer-2026-10-10.md): a made piece's
-    ring has it beside Print, and a part from the parts folder standing in the site has
-    it after Part; it opens the printer's Machine with the piece chosen under makes and
-    slices it there. One printer is the cell itself, several a cell each; with none
-    pinned in the site there is no Slice; a host, a camera and a printer, or anything
-    inside one, have none. Appended last, so no cell above it moves."""
+    """Slice is a step of the page (docs/slicer.md): a made piece's ring has it beside
+    Print, and a part from the parts folder standing in the site has it after Part; it
+    opens the printer's Machine with the piece chosen under makes and slices it there.
+    One printer is the cell itself, several a cell each; with none pinned in the site
+    there is no Slice; a host, a camera and a printer, or anything inside one, have
+    none. Appended last, so no cell above it moves."""
     from apothecary.menu import PictureContext, carried_by
 
     site = _garage()
@@ -1781,8 +1781,9 @@ def test_find_shapes_is_the_step_after_a_view_is_pinned_and_appended_after_unpin
 
 
 def test_pin_here_and_unpin_are_gone_and_a_host_and_the_floor_add_a_camera_here():
-    """A camera is no longer pinned at a place: a host's and the floor's Camera holds
-    Add here alone, and Take picture is a camera part's own (Keep went before)."""
+    """A camera is a part, not a pin: a host's and the floor's Camera holds Add here
+    alone, Take picture is a camera part's own, and no ring at a host or the floor
+    offers Keep, Pin, Unpin or Take picture."""
     told = _context(views=[_view()], drawn="view_1")
     told.finders = ["plain", "stated"]
     told.camera_parts = ["camera_1"]
@@ -1921,8 +1922,8 @@ def test_the_fullest_context_holds_every_ring_to_eight_and_says_how_deep_it_goes
     """A board, a camera, several views, many shapes, many pictures, several finders:
     every ring and sub-ring holds eight or fewer. The deepest path on a node ring is
     four rings (Picture › Make › group › shape); on the canvas ring the floor is two
-    further down (Pictures › Floor › Picture › Make › group › shape), the level deeper
-    the owner's decision accepts for the floor having no ring of its own."""
+    further down (Pictures › Floor › Picture › Make › group › shape), since the floor
+    has no ring of its own."""
     from apothecary.menu import CameraSeen
 
     views = [_view(f"view_{i:02d}", shapes=32) for i in range(10)]
