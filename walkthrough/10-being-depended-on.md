@@ -2,10 +2,12 @@
 
 **Hermetic.**
 
-This repository has consumers that pin it. That is easy to forget from inside,
-because nothing in the parts knows about them — clause 2 of the enclosure
-record requires exactly that, and `datum_core` renders as a sensible 40 mm tray
-for someone who has never heard of the project it was drawn for.
+This repository has consumers that pin it, and nothing in the parts knows
+about them. `datum`'s enclosure record, *Enclosure Parts Live in Apothecary*,
+requires that in its clause 2, and `datum_core` renders as a sensible 40 mm
+tray for someone who has never heard of the project it was drawn for. The
+record is `adr/DRAFT-enclosure-parts-live-in-apothecary.md` on the governance
+corpus's `project/datum` branch, which `datum` pins as its `governance/qm`.
 
 But the same record has a clause pointing the other way:
 
@@ -17,10 +19,6 @@ Read from this side, that is an obligation on *this* repository: **a geometry
 change reaches a consumer by being published.** Until it is published, the
 consumer either does without it or pins a commit — and a commit on an unmerged
 branch is a state nobody else can obtain.
-
-That obligation was documented only in the consumer's repository. A contributor
-here had no way to find out it existed, which is how a one-directional
-boundary becomes a one-directional surprise.
 
 ## Who is watching
 
@@ -51,17 +49,12 @@ is there a version, has it already been used, is this commit on a branch anyone
 else can obtain, is the tree clean. It does not try to judge whether the change
 is any good; that is what review is for.
 
-## The state today
+## Until a release is tagged
 
-Nothing here has ever been released. No tags, no GitHub releases, and the
-version has stood at 0.1.0. So the downstream pins a commit by necessity rather
-than by choice, and clause 5 is unmet for a reason that lives in this
-repository rather than in that one.
-
-The consumer's side of this is already automatic: it reports the deviation
-while nothing is published and fails the moment something is. Nobody has to
-remember to tighten it later — which matters, because "we will fix this when X
-happens" depends on somebody re-reading the note at the moment X happens, and
-nobody does.
+`apothecary release` says what is published. Until a first release is tagged,
+a consumer pins a commit, and clause 5 is unmet for a reason that lives in this
+repository rather than in that one. `datum`'s side needs no reminder:
+`datum apothecary --check` reports the deviation while nothing is published,
+and fails once something is.
 
 Closing it needs two acts here, in order: merge to `main`, and tag a version.
