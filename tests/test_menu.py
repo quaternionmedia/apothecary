@@ -1999,8 +1999,9 @@ def test_make_make_all_drop_and_a_made_pieces_word_are_the_servers_and_the_rest_
 
 
 def test_the_camera_panels_retired_cells_are_off_every_ring():
-    """Allow, Capture, Place, Unplace and Open as one left with the camera panel's
-    sections: the camera is pinned and takes pictures from its host's Camera."""
+    """The canvas ring and a host's ring offer no camera Allow, Capture, Place, Unplace,
+    Open, Add or Purge: a camera is a part, added above a host by its Camera › Add
+    here, and Device › Allow and Take picture are on the camera's own ring."""
     rings = [
         resolve(Context(pointing=Pointing.CANVAS), _garage(), picture=_context()),
         resolve(
