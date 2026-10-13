@@ -15,7 +15,7 @@ Which kinds are open is deliberately not pinned here. It depends on what has
 been rendered on this machine — a part whose STL exists has been measured, one
 whose STL does not has not — so a page that asserted the census would fail on a
 fresh checkout for a reason that is not a defect. `apothecary problems` prints
-today's. What this page does assert is the part that must hold everywhere:
+the kinds open on this machine. What this page asserts is what holds everywhere:
 every kind is drawn from the one table, and every open kind has something that
 can close it.
 
