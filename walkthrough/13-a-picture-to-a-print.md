@@ -151,7 +151,7 @@ printer_1 · print · disc_1.gcode → disc_1 · done
 
 ## What this page does not show
 
-- **A real camera, a real slicer or a real printer.** The camera plays a drawing; the slicer is a script that answers as OrcaSlicer's command line does and writes a few layers of moves and dwells, whatever the piece; the printer is a simulation that answers as Marlin does. OrcaSlicer's real slices are docs/slicer.md's, and the camera's and the printer's real runs are steps of the bench checklist.
+- **A real camera, a real slicer or a real printer.** The camera plays a drawing; the slicer is a script that answers as OrcaSlicer's command line does and writes a few layers of moves and dwells, whatever the piece; the printer is a simulation that answers as Marlin does. OrcaSlicer's real slices are docs/slicer.md's; the printer's real runs are sections A to G of the bench checklist (docs/bench-checklist.md), and the camera's is the optional last step of its F.
 - **A print that heats.** The start the slice writes sets the hotend and the bed, and the simulated printer is at what it is told at once; nothing warms, and the file turns both off at its end.
 - **What changes on every run.** When a print started and ended, how long it took, and the names pictures are kept under (the time each was taken) are blanked in the pictures and left out of the words, so this page changes when the loop does, not when the clock does. A running print is described rather than pictured, for the same reason.
 
