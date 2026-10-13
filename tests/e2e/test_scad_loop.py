@@ -55,6 +55,14 @@ RUN_CLONE = re.compile(r"/[^\s`'\"]*?/server\d*/variants\.git")
 # where the status line names it.
 BLANK = (*all_words(".saved-when"), ("#status", RUN_CLONE.pattern))
 
+# How long after a check that passes the page renders a SCAD edit, read from the page.
+RENDER_AFTER_CHECK_MS = int(
+    re.search(
+        r"const SCAD_RENDER_AFTER_CHECK_MS = (\d+);",
+        (ROOT / "templates" / "fractal_viewer.html.j2").read_text(encoding="utf-8"),
+    ).group(1)
+)
+
 REFUSED = 'assert(size < 5, "too big to keep");'
 SMALL_TOP = "translate([0, 0, size]) cube(size / 2);"
 BIG_TOP = "translate([0, 0, size]) cube(size);"
@@ -358,8 +366,10 @@ def test_editing_a_parts_scad_twice_round(
             "writes the checkout.",
             "**A part without a model.** Its controls come from what its SCAD declares, "
             "where the OpenSCAD in use lists them; calibration_cube has a model.",
-            "**When a variant was saved.** It differs on every run, so the lists' times "
-            "are blanked in the pictures.",
+            "**When a variant was saved, and where the server keeps it.** Both differ on "
+            "every run: the lists' times are blanked in the pictures, and the server's clone "
+            "of the checkout is named as the test server's variants repository in the "
+            "words and blanked where the status line shows it.",
             "**The way back to the saved part.** Part › Defaults, then Apply, draws the "
             "part's own SCAD and numbers again, as walkthrough 14 does for its numbers.",
         ],
@@ -441,7 +451,8 @@ def test_editing_a_parts_scad_twice_round(
     story.shows(
         "A change that reads is rendered soon after its check",
         "The line replaced with a smaller cube on top. Checked once typing stops, and "
-        "300 ms after the check passes rendered as Apply renders, from the edited SCAD "
+        f"{RENDER_AFTER_CHECK_MS} ms after the check passes rendered as Apply renders, "
+        "from the edited SCAD "
         "written beside the part, and drawn in this tab, 15 mm tall now: an applied "
         "variant, not saved, the view brought to it by hand, Shift+drag and the wheel. "
         "Taller than the envelope its numbers declare, the envelope's line turns amber and "
