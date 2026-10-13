@@ -280,16 +280,14 @@ parameter is a control starting from what is drawn, its description as its
 caption; a contested one comes first, with its candidates as buttons.
 
 **The parameters and the SCAD are one draft.** A part's values are the
-top-level assignments in its SCAD (the grammar is in
-`apothecary/projects/parts/assignments.py`, and the page reads it the same
-way): moving a control rewrites its value in its line, at once, keeping the
+top-level assignments in its SCAD, read as
+[parts-authoring.md](parts-authoring.md#in-the-page-the-text-is-the-truth)
+says: moving a control rewrites its value in its line, at once, keeping the
 line's comment and range, and a value typed in the text moves its control. A
 name the text does not assign yet gets its line appended. The controls are
 the part's model's fields, where it has a model, then every other parameter
-its text assigns -- as OpenSCAD's customizer has them, before the first
-module or function and outside `/* [Hidden] */` -- each described by its own
-line's comment (`// [5:100]`, `// [0:off, 1:on]`, a unit) and the caption
-above it. **A computed one** (`wall = size * 0.1;`) shows the value the newest
+its text assigns, each described by its line's comment and the caption above
+it. **A computed one** (`wall = size * 0.1;`) shows the value the newest
 check gave it, under its expression; until a check has given one it says
 "computed when checked". Moving it asks first: **Replace** puts the plain value
 in place of the expression, as one edit Undo takes back; **Keep it computed**
@@ -312,7 +310,8 @@ controls drive the model, and the SCAD follows, read only.
 - A field that declares a **unit** shows it beside its number; one that
   declares none shows nothing.
 
-Where this OpenSCAD cannot build the part at all (gridfinity on 2021.01), the
+Where this OpenSCAD cannot build the part at all (gridfinity on
+[2021.01](openscad.md#what-openscad-202101-cannot-do)), the
 editor says so as it opens and **Apply is off** from the start, saying why.
 
 The bar of what is staged -- Apply, Revert, Defaults, Undo, Redo, Ghost --

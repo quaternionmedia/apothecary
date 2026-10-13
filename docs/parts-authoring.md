@@ -173,13 +173,12 @@ A part with no `Params` model still has controls in the viewer where the
 OpenSCAD it renders with can list its SCAD's parameters: a development
 snapshot can (`--export-format=param`), 2021.01 cannot. `GET
 /parts/{name}/params` then answers what OpenSCAD's customizer lists
-(`apothecary/projects/parts/customizer.py`, `source: "customizer"`): the
-top-level assignments before the first module or function, annotated the
-customizer's way -- `width = 34; // [10:100]` a number with its range,
+(`apothecary/projects/parts/customizer.py`, `source: "customizer"`): its
+parameters as [above](#in-the-page-the-text-is-the-truth), each typed by its
+value and its comment -- `width = 34; // [10:100]` a number with its range,
 `hollow = true;` a tick, `label = "hi";` a string, `shape = "round"; //
-[round, square]` a choice, `size = [10, 20];` a vector, `/* [Size] */` the
-group what follows is in, a comment on the line above its caption, and
-`/* [Hidden] */` what is not offered. Where there is nothing to list, the
+[round, square]` a choice, `size = [10, 20];` a vector -- and grouped by a
+`/* [Size] */` above them. Where there is nothing to list, the
 `404`'s `detail` says why, `lists: false` when the OpenSCAD in use cannot
 list at all. `POST /parts/{name}/validate` and `.../stl/generate` check a
 staged set against the same list: a number as a number, a choice one of its

@@ -72,7 +72,7 @@ uv run apothecary firmware install --rust-esp32   # Rust for the ESP32, for part
 ```
 
 Rendering STLs requires OpenSCAD: the snapshot `apothecary openscad install`
-put in the tools dir, else the `openscad` CLI on `PATH`; the browser tests,
+put in the tools dir, else the `openscad` CLI on `PATH` (`docs/openscad.md`); the browser tests,
 and `apothecary test run`'s walkthrough demonstration, additionally require
 `uv run playwright install chromium`. `walkthrough/00-getting-started.md` is
 the path a person takes from a fresh clone. `uv run apothecary --help` is the
