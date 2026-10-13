@@ -42,7 +42,7 @@ def stl_output_for(item: ProjectInfo) -> Path:
     any part whose SCAD is not in the folder the render belongs in. gridfinity
     is the live example: its source sits inside a third-party submodule and its
     wrapper overrides this precisely so a render does not land in somebody
-    else's checkout. Every caller that guessed wrote a stray file in there.
+    else's checkout. A caller that guesses writes a stray file in there.
     """
     if item.wrapper:
         try:
