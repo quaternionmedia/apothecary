@@ -1,15 +1,18 @@
 # 11 — Photographs into pieces you could print
 
-**This page is written by the run it describes.** Every sentence below
-was emitted by a test that had just asserted it, and the whole page is
-rewritten by the ordinary test command. Editing it by hand is editing
-the output of a program: the next run puts it back.
+Written by `tests/e2e/test_docs_photo_walkthrough.py`, and
+rewritten by the ordinary test command (`uv run apothecary test run`).
+Each numbered step is written as the run reaches it, after the assertions
+before it pass, and what a step shows is what the run had then. The
+opening, the notes under it and the list of what the page does not show
+are the test's fixed words. Editing the page by hand is editing the output
+of a program: the next run puts it back.
 
 Point the tool at a photograph. It finds the flat shapes in it, matches each one to a named, reusable word, places them in space, sorts a folder of them into what belongs with what, asks you the questions it cannot settle, and shows the result in the viewer it already had. Nothing claims to be measured unless somebody said how wide the picture is.
 
 **Runtime-bound.** It draws its own photographs and reads them back, then walks the same pieces in a real browser against a real server. It needs no network. It does need a browser and a running server, which is the price of this page and the viewer's page being one page.
 
-Its pictures were taken once every part's STL that OpenSCAD version 2021.01, the OpenSCAD its server runs, can build was built by it; a part it cannot build is drawn from an STL already there, or as its box.
+Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its server runs, can build from an STL it built; a part it cannot build is drawn from an STL already there, or as its box.
 
 ---
 

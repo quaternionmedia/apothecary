@@ -220,13 +220,13 @@ class DocRecorder:
 
 
 # --------------------------------------------------------------------------
-# The one demonstration.
+# The walkthrough's pages.
 #
-# Everything above serves `apothecary docs generate`, which is a command
-# somebody has to remember. The walkthrough is not allowed to be that: it is
-# the page a newcomer meets, and a page produced by a remembered command is
-# stale by default. So the walkthrough is written by the run that asserts it,
-# on every ordinary run, and this is the recorder for it.
+# Everything above serves `apothecary docs generate`, a command run on
+# request. A walkthrough page is written by the run that asserts it instead:
+# pages 11 and 12 by the ordinary test command, a loop's page by the browser
+# suite. CI fails when a page a run rewrote differs from the committed one, so
+# a page carries nothing that changes from run to run.
 #
 # Recorded rather than compared. Nothing asserts what the page says -- a
 # behaviour that changes shows up as a diff in the page, which is a thing a
@@ -334,28 +334,27 @@ class Walkthrough:
     def write(self) -> Path:
         """Write the page. Called however the run ends, so a red run is visible.
 
-        A run that failed half way writes the steps it reached and says so. The
-        alternative -- write nothing on failure -- leaves the last green run's
-        page in place, which is the stale page this whole arrangement exists to
-        prevent.
+        A run that fails half way writes the steps it reached, so the page's diff
+        shows where it stopped. Writing nothing on failure would leave the last
+        green run's page in place, describing a run that did not happen.
         """
         lines: List[str] = [
             f"# {self.ordinal} — {self.title}",
             "",
-            "**This page is written by the run it describes.** Every sentence below",
-            "was emitted by a test that had just asserted it, and the whole page is",
+            f"Written by `{self.module}`, and" if self.module else "Written by its test, and",
             *(
                 [
                     "rewritten by every run of the browser suite (`uv run apothecary test",
-                    "all`), though not by the quicker `apothecary test run`. Editing it",
-                    "by hand is editing the output of a program: the next run puts it back.",
+                    "all`), though not by the quicker `apothecary test run`.",
                 ]
                 if self.browser_suite_only
-                else [
-                    "rewritten by the ordinary test command. Editing it by hand is editing",
-                    "the output of a program: the next run puts it back.",
-                ]
+                else ["rewritten by the ordinary test command (`uv run apothecary test run`)."]
             ),
+            "Each numbered step is written as the run reaches it, after the assertions",
+            "before it pass, and what a step shows is what the run had then. The",
+            "opening, the notes under it and the list of what the page does not show",
+            "are the test's fixed words. Editing the page by hand is editing the output",
+            "of a program: the next run puts it back.",
             "",
             self.intro,
             "",
