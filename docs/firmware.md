@@ -55,6 +55,8 @@ apothecary firmware libraries --install FastLED --install "Control Surface@2.1.2
 | `APOTHECARY_SERIAL_ENGINE` | byte transport for the printer seam and the Rust module's ports: `pyserial` or `simulated` | `pyserial` |
 | `APOTHECARY_SIMULATED_DEVKIT` | with the simulated engine, the ports the Rust module finds, each a pretend devkit (comma-separated) | — |
 
+[Configuration](configuration.md) lists every variable Apothecary reads.
+
 The tools dir is under `$HOME` because sandboxed editors (the VS Code snap)
 point `XDG_DATA_HOME` at a tree that disappears on the next editor update.
 
