@@ -5,20 +5,22 @@ pages under ``walkthrough/``, whose examples run as doctests.
 The app answers this machine only (``apothecary/stays_local.py``). Starlette's
 ``TestClient`` presents itself as "testclient" at "testserver", which is
 nowhere; every test here runs on this machine, so what the client presents is
-this machine. Importing ``apothecary`` first puts the guard on the process
-before any test connects anywhere.
+this machine. The guard goes on here, before any test is collected, so a
+test connects to nothing past this machine whichever module it imports.
 
 The state folder is the run's own too: a site a test builds is given the
 cameras recorded in the state folder, and a person's own (``~/.apothecary``)
 must neither appear in a test's site nor be written by one.
 """
 
+from apothecary.stays_local import install_guard
+
+install_guard()
+
 import os
 
 import pytest
 import starlette.testclient as _st
-
-import apothecary  # noqa: F401  -- the guard, before any test connects anywhere
 
 _test_client_init = _st.TestClient.__init__
 

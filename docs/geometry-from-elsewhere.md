@@ -7,7 +7,7 @@ things they are.
 ## Bring a file in
 
 ```bash
-apothecary parts import ~/Downloads/bracket.stl --name bracket \
+apothecary parts import path/to/bracket.stl --name bracket \
     --title "Spool bracket" --author "A. Person" --license CC-BY-4.0 \
     --url https://example.org/bracket --units mm --up z
 ```
