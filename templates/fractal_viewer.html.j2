@@ -1085,6 +1085,7 @@
                 this.editorTarget = null;  // what the editor edits: a part, or a piece made from a picture
                 this.editorOpenFor = null; // a machine drawn as a part whose editor Part › Edit opened
                 this.editorFocusWanted = null;  // the target key whose first control Part › Edit focuses
+                this.editorFocusFrom = null;    // what had the focus when Part › Edit asked for it
                 this.nodeLoads = new Map();  // nodeKey() -> token of its newest load
                 this.waveDone = Promise.resolve();  // settles when the level's geometry has loaded
                 this.cameraHandles = null; // a selected camera's turn ring and tilt arc
@@ -3161,6 +3162,7 @@
                 this.editorOpenFor = path;
                 this.editorFocusWanted = this.isCameraNode(node) ? `camera:${this.siteName}:${path}`
                     : made ? `made:${this.siteName}:${path}` : `part:${node.part_ref}`;
+                this.editorFocusFrom = document.activeElement;
                 if (this.selectedName !== path) this.selectPath(path); else this.renderSelectedPanel();
                 this.panels.open('selected');
                 this.focusEditor();
@@ -3169,6 +3171,14 @@
 
             focusEditor() {
                 if (!this.partSection || this.editorFocusWanted !== this.partSection.dataset.target) return;
+                // The code, shown before the controls are built, taken since Part › Edit
+                // asked: the focus stays there, and the keys pressed are the code's, not
+                // the first control's (where Ctrl+End is the largest value).
+                const at = document.activeElement;
+                if (at !== this.editorFocusFrom && this.scadEditor?.root.contains(at)) {
+                    this.editorFocusWanted = null;
+                    return;
+                }
                 const first = this.partSection.querySelector('#part-params input, #part-params select, #part-params button');
                 if (!first) return;  // not built yet: loadPartParams calls again
                 this.editorFocusWanted = null;
