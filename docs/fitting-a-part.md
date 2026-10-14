@@ -2,9 +2,9 @@
 
 The seam between a project that owns facts about a physical thing and this
 repository, which owns geometry: what is built of it, and how it is checked.
-`datum` is its consumer; [walkthrough 02](../walkthrough/02-fitting.md) drives it,
-[08](../walkthrough/08-problems-and-solutions.md) checks who owns each open
-problem, and [10](../walkthrough/10-being-depended-on.md) is the release side.
+`datum` is its consumer; [walkthrough 08](../walkthrough/08-fitting.md) drives it,
+[14](../walkthrough/14-problems-and-solutions.md) checks who owns each open
+problem, and [16](../walkthrough/16-being-depended-on.md) is the release side.
 
 ## Three objects, at every level of complexity
 

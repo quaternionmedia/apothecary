@@ -13,22 +13,22 @@ browser tests that walk them. Start there, at page 00.
 | Page | |
 |---|---|
 | [00 — Getting started](../walkthrough/00-getting-started.md) | Install, `apothecary check`, `apothecary openscad install`, `apothecary serve --demo`; the four loops and what each needs; the optional installs |
-| [01 — The parts registry](../walkthrough/01-a-part.md) | What a part is, and how its envelope is checked |
-| [02 — Which numbers are whose](../walkthrough/02-fitting.md) | The seam, and driving it with overrides |
-| [03 — Navigating a sub-assembly](../walkthrough/03-an-assembly.md) | datum_core as an addressable tree |
-| [04 — Serving it](../walkthrough/04-serving-it.md) | The API and the viewer |
-| [05 — Contested numbers](../walkthrough/05-contested-numbers.md) | Numbers the sources disagree about, and turning them in the viewer |
-| [06 — Ready to build](../walkthrough/06-ready-to-build.md) | Whether a part can be printed and checked against a real one |
-| [07 — Status and progress](../walkthrough/07-status-and-progress.md) | One vocabulary for how the CLI reports state |
-| [08 — Problems and solutions](../walkthrough/08-problems-and-solutions.md) | What is unresolved, who can close it, and what exists to close it with |
-| [09 — Running the checks before pushing](../walkthrough/09-preflight.md) | `apothecary preflight`: each CI workflow, run here before a push |
-| [10 — Being depended on](../walkthrough/10-being-depended-on.md) | What a consumer pinning this repository is entitled to |
-| [11 — Photographs into pieces](../walkthrough/11-photographs-into-pieces.md) | A photograph becomes named, placed pieces in the viewer; written by its own run |
-| [12 — The bench as it is](../walkthrough/12-the-bench-as-it-is.md) | Geometry from elsewhere, the printer and boards drawn as they are, a camera added above the bench; written by its own run |
-| [13 — A picture to a print](../walkthrough/13-a-picture-to-a-print.md) | A camera's picture, its shapes, a piece made and adjusted, sliced for printer_1, and a print job for it there, twice round through the page; written by the browser suite |
-| [14 — Designing a part](../walkthrough/14-designing-a-part.md) | A part's size moved, checked, applied and drawn in its tab, OpenSCAD's refusal by line, the saved part again for nothing, round twice and in two tabs; written by the browser suite |
-| [15 — Firmware](../walkthrough/15-firmware.md) | A sketch chosen, built, flashed to the ESP32 devkit and heard saying its hello in the board's Machine, the Arduino esp32_blink then the Rust one; written by its own run, in the browser suite |
-| [16 — Editing a part's SCAD](../walkthrough/16-editing-a-parts-scad.md) | A part's SCAD edited in Selected's editor, a failing line marked, a change rendered once its check passes and saved as a variant in git, the editor floated and fullscreen, round twice; written by the browser suite |
+| [01 — Photographs into pieces](../walkthrough/01-photographs-into-pieces.md) | A photograph becomes named, placed pieces in the viewer; written by its own run |
+| [02 — The bench as it is](../walkthrough/02-the-bench-as-it-is.md) | Geometry from elsewhere, the printer and boards drawn as they are, a camera added above the bench; written by its own run |
+| [03 — A picture to a print](../walkthrough/03-a-picture-to-a-print.md) | A camera's picture, its shapes, a piece made and adjusted, sliced for printer_1, and a print job for it there, twice round through the page; written by the browser suite |
+| [04 — Designing a part](../walkthrough/04-designing-a-part.md) | A part's size moved, checked, applied and drawn in its tab, OpenSCAD's refusal by line, the saved part again for nothing, round twice and in two tabs; written by the browser suite |
+| [05 — Firmware](../walkthrough/05-firmware.md) | A sketch chosen, built, flashed to the ESP32 devkit and heard saying its hello in the board's Machine, the Arduino esp32_blink then the Rust one; written by its own run, in the browser suite |
+| [06 — Editing a part's SCAD](../walkthrough/06-editing-a-parts-scad.md) | A part's SCAD edited in Selected's editor, a failing line marked, a change rendered once its check passes and saved as a variant in git, the editor floated and fullscreen, round twice; written by the browser suite |
+| [07 — The parts registry](../walkthrough/07-a-part.md) | What a part is, and how its envelope is checked |
+| [08 — Which numbers are whose](../walkthrough/08-fitting.md) | The seam, and driving it with overrides |
+| [09 — Navigating a sub-assembly](../walkthrough/09-an-assembly.md) | datum_core as an addressable tree |
+| [10 — Serving it](../walkthrough/10-serving-it.md) | The API and the viewer |
+| [11 — Contested numbers](../walkthrough/11-contested-numbers.md) | Numbers the sources disagree about, and turning them in the viewer |
+| [12 — Ready to build](../walkthrough/12-ready-to-build.md) | Whether a part can be printed and checked against a real one |
+| [13 — Status and progress](../walkthrough/13-status-and-progress.md) | One vocabulary for how the CLI reports state |
+| [14 — Problems and solutions](../walkthrough/14-problems-and-solutions.md) | What is unresolved, who can close it, and what exists to close it with |
+| [15 — Running the checks before pushing](../walkthrough/15-preflight.md) | `apothecary preflight`: each CI workflow, run here before a push |
+| [16 — Being depended on](../walkthrough/16-being-depended-on.md) | What a consumer pinning this repository is entitled to |
 
 ## Guides
 

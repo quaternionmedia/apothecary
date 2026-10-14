@@ -4,8 +4,8 @@
 through a site's tree at any depth, with one rail of panels beside it and a
 ring that holds every verb by address. This page describes the page's own
 controls as they are. The loops through them are walkthrough pages
-[13](../walkthrough/13-a-picture-to-a-print.md) to
-[16](../walkthrough/16-editing-a-parts-scad.md); boards and printers are in
+[03](../walkthrough/03-a-picture-to-a-print.md) to
+[06](../walkthrough/06-editing-a-parts-scad.md); boards and printers are in
 [firmware.md](firmware.md), the slicer in [slicer.md](slicer.md).
 
 | Address | Opens |

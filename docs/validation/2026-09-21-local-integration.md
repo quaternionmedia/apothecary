@@ -424,7 +424,7 @@ release), unchanged, plus these three that the bench did not have:
       and the nozzle marker sit on the Ender 3 model's bed in the world.
 - [ ] The loop from a picture to a print, with the real camera over the bench
       and the board pinned, as
-      [walkthrough 13](../../walkthrough/13-a-picture-to-a-print.md) goes round
+      [walkthrough 03](../../walkthrough/03-a-picture-to-a-print.md) goes round
       it with the fakes: the bench's **Camera › Add here**, the camera's
       **Device**, **Take picture**, **Picture › Find shapes**, **Picture › Make**
       on a shape -- the status names *Part › Edit* and *a printer's Machine* --

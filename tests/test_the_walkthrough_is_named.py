@@ -49,19 +49,19 @@ def test_the_command_collects_the_run_that_writes_the_page():
 LOOP_PAGES = {
     Path(__file__).resolve().parent / "e2e" / "test_picture_to_print.py": (
         "test_a_picture_to_a_print_twice",
-        ROOT / "walkthrough" / "13-a-picture-to-a-print.md",
+        ROOT / "walkthrough" / "03-a-picture-to-a-print.md",
     ),
     Path(__file__).resolve().parent / "e2e" / "test_part_loop.py": (
         "test_designing_a_part_twice_round",
-        ROOT / "walkthrough" / "14-designing-a-part.md",
+        ROOT / "walkthrough" / "04-designing-a-part.md",
     ),
     Path(__file__).resolve().parent / "e2e" / "test_the_firmware_loop.py": (
         "test_the_firmware_loop_goes_round_with_arduino_then_rust",
-        ROOT / "walkthrough" / "15-firmware.md",
+        ROOT / "walkthrough" / "05-firmware.md",
     ),
     Path(__file__).resolve().parent / "e2e" / "test_scad_loop.py": (
         "test_editing_a_parts_scad_twice_round",
-        ROOT / "walkthrough" / "16-editing-a-parts-scad.md",
+        ROOT / "walkthrough" / "06-editing-a-parts-scad.md",
     ),
 }
 

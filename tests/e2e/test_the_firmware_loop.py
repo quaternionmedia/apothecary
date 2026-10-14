@@ -6,7 +6,7 @@ the Rust one, through the Machine's own controls and the ring's cells, asserting
 a person sees at each step -- the Flashing card's task, the board's one log, the
 sketch it should run against the sketch it was heard saying.
 
-This module is a walkthrough page too: `walkthrough/15-firmware.md` is what its
+This module is a walkthrough page too: `walkthrough/05-firmware.md` is what its
 first test writes, its pictures taken as it goes, so the page shows the loop as
 it is. The browser suite alone writes it -- the test is marked e2e and not
 walkthrough -- so `apothecary test run` stays quick.
@@ -159,7 +159,7 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     same hello, so the Machine says it matches the sketch it should run, now the Rust
     one. Listen hears the hello on the wire. Walkthrough 15 is what it writes."""
     story = walkthrough(
-        ordinal="15",
+        ordinal="05",
         slug="firmware",
         title="Firmware",
         browser_suite_only=True,

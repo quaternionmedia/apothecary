@@ -42,7 +42,7 @@ never uses a server that happens to be listening.
 browser tests, and a loop's page (13, 14, 15, 16) by the browser suite alone; commit what a
 run rewrites, and change their words in the test that writes them, not in the page.
 [tests/e2e/README.md](tests/e2e/README.md) has the browser suite's flags and recorders, and
-[walkthrough/09-preflight.md](walkthrough/09-preflight.md) says what `preflight` reproduces
+[walkthrough/15-preflight.md](walkthrough/15-preflight.md) says what `preflight` reproduces
 and what it cannot.
 
 ### The Rust workspace
@@ -111,7 +111,7 @@ a message that ends a step names the next one.
 - A decision: a `DRAFT-*.md` in `governance/qm/adr/`, following
   `governance/qm/adr/README.md`. A human ratifies it.
 - A change a user would notice: one line in [CHANGELOG.md](CHANGELOG.md).
-- A release: [walkthrough page 10](walkthrough/10-being-depended-on.md) says who pins
+- A release: [walkthrough page 16](walkthrough/16-being-depended-on.md) says who pins
   this repository, what `apothecary release` checks, and the two acts that publish one,
   a merge to `main` and a tag.
 - A plan: `docs/plans/<topic>-<date>.md`, dated, listed under *Plans* in

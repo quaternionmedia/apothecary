@@ -6,7 +6,7 @@ are yours to run, in order, from a fresh clone.
 Four steps take a fresh clone to a viewer with a bench it can drive and no
 hardware plugged in: install, see what this machine has, put a fast OpenSCAD
 in place, and serve the demo. Then the four loops through the page, each with
-what it needs, and the installs only some of them want. Page 01 onward is the
+what it needs, and the installs only some of them want. Page 07 onward is the
 library's tour.
 
 ## 1. Install
@@ -97,15 +97,15 @@ page the browser test that walks it writes as it goes.
 
 | Loop | Page | Needs | Under `serve --demo` |
 |---|---|---|---|
-| Designing a part: a size moved, checked, applied and drawn | [14](14-designing-a-part.md) | nothing but OpenSCAD | the same |
-| Editing a part's SCAD, kept as a variant in git | [16](16-editing-a-parts-scad.md) | nothing but OpenSCAD | the same |
-| A picture to a print: a camera's picture, a piece made from it, sliced and printed | [13](13-a-picture-to-a-print.md) | a printer pinned to printer_1's mainboard, OrcaSlicer, and a camera or a picture | the simulated Ender, OrcaSlicer if installed |
-| Firmware: a sketch built, flashed and heard saying hello | [15](15-firmware.md) | an ESP32 devkit and a toolchain | the simulated devkit and the scripted tools |
+| Designing a part: a size moved, checked, applied and drawn | [04](04-designing-a-part.md) | nothing but OpenSCAD | the same |
+| Editing a part's SCAD, kept as a variant in git | [06](06-editing-a-parts-scad.md) | nothing but OpenSCAD | the same |
+| A picture to a print: a camera's picture, a piece made from it, sliced and printed | [03](03-a-picture-to-a-print.md) | a printer pinned to printer_1's mainboard, OrcaSlicer, and a camera or a picture | the simulated Ender, OrcaSlicer if installed |
+| Firmware: a sketch built, flashed and heard saying hello | [05](05-firmware.md) | an ESP32 devkit and a toolchain | the simulated devkit and the scripted tools |
 
     >>> from apothecary.projects.parts.skeleton import ROOT
-    >>> loops = sorted((ROOT / "walkthrough").glob("1[3-6]-*.md"))
+    >>> loops = sorted((ROOT / "walkthrough").glob("0[3-6]-*.md"))
     >>> [page.name for page in loops]
-    ['13-a-picture-to-a-print.md', '14-designing-a-part.md', '15-firmware.md', '16-editing-a-parts-scad.md']
+    ['03-a-picture-to-a-print.md', '04-designing-a-part.md', '05-firmware.md', '06-editing-a-parts-scad.md']
     >>> all("rewritten by every run of the browser suite" in page.read_text(encoding="utf-8")
     ...     for page in loops)
     True
@@ -152,16 +152,16 @@ tests and this walkthrough, whose demonstration drives Chromium.
 
 ## 7. Where next
 
-[Page 01](01-a-part.md) onward is the library's tour: what a part is and how
-its envelope is checked (01), which numbers are whose (02), an assembly as a
-tree (03), the API (04), the numbers its sources disagree about (05), whether
-a part is ready to build (06), how the commands report state (07), and what
-is open and who can close it (08). Pages 09 and 10 are a contributor's: the
-CI workflows run here before a push, and what a consumer pinning this
-repository may rely on. Pages 11 and 12 are written by their runs: a
-photograph made into pieces, and the bench drawn as it is with a camera
-above it. Then [`docs/`](../docs/README.md): the guides, the plans and the
-records.
+Pages 01 and 02 are written by their runs: a photograph made into pieces,
+and the bench drawn as it is with a camera above it; 03 to 06 are the loops
+above. [Page 07](07-a-part.md) onward is the library's tour: what a part is
+and how its envelope is checked (07), which numbers are whose (08), an
+assembly as a tree (09), the API (10), the numbers its sources disagree about
+(11), whether a part is ready to build (12), how the commands report state
+(13), and what is open and who can close it (14). Pages 15 and 16 are a
+contributor's: the CI workflows run here before a push, and what a consumer
+pinning this repository may rely on. Then [`docs/`](../docs/README.md): the
+guides, the plans and the records.
 `apothecary --help` is the command reference, and it ends with the steps
 above:
 

@@ -55,7 +55,7 @@ dependencies.
     'blocked'
 
 Its own sources disagree about how deep the board is (`board_y`). A part is
-not ready to build while its size is undecided; [page 05](05-contested-numbers.md)
+not ready to build while its size is undecided; [page 11](11-contested-numbers.md)
 is where that is turned, and each candidate carries where it came from.
 
 Every check that is not a pass says what to do about it:

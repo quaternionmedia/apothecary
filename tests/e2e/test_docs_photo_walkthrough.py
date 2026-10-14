@@ -1,6 +1,6 @@
 """The one demonstration: photographs into pieces, and those pieces in the viewer.
 
-This module is the walkthrough. `walkthrough/11-photographs-into-pieces.md` is
+This module is the walkthrough. `walkthrough/01-photographs-into-pieces.md` is
 what it writes, and the ordinary test command runs it, so the page is a record
 of a run rather than a description standing beside one.
 
@@ -88,7 +88,7 @@ def test_photographs_into_pieces(
     from apothecary.vocabulary import word_for
 
     story = walkthrough(
-        ordinal="11",
+        ordinal="01",
         slug="photographs-into-pieces",
         title="Photographs into pieces you could print",
         intro=(

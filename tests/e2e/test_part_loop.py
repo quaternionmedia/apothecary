@@ -9,7 +9,7 @@ then undone and redone (Ctrl+Z, the editor's Redo), the defaults again for nothi
 (Part › Apply, then the editor's Defaults and Apply); an earlier apply drawn again from
 Recent applies; a size staged and not applied kept over a reload, in its text, and
 restored; then two tabs applying different values at once, each drawing its own. It
-writes walkthrough/14-designing-a-part.md and its pictures as it goes.
+writes walkthrough/04-designing-a-part.md and its pictures as it goes.
 
 The server is this module's own, with an OpenSCAD that is this machine's except
 that it refuses a cube of ``TOO_BIG`` mm or more, saying so as an assertion at
@@ -706,7 +706,7 @@ def test_designing_a_part_twice_round(
     Marked e2e and not walkthrough: a loop's page is written by the browser suite
     only, so `apothecary test run` stays quick."""
     story = walkthrough(
-        ordinal="14",
+        ordinal="04",
         slug="designing-a-part",
         title="Designing a part",
         browser_suite_only=True,

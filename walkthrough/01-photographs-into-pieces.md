@@ -1,4 +1,4 @@
-# 11 — Photographs into pieces you could print
+# 01 — Photographs into pieces you could print
 
 Written by `tests/e2e/test_docs_photo_walkthrough.py`, and
 rewritten by the ordinary test command (`uv run apothecary test run`).
@@ -97,7 +97,7 @@ line 2 says 'a and b are the same thing' and line 3 says 'b and a are not relate
 
 This is the picture the rest of the page is about: 800 by 600 pixels, 4 shapes found by the 'plain' finder. Everything above ran in this process. Everything below runs through the server and a browser.
 
-![The same path, now against a real server](screenshots/11-10-the-same-path-now-against-a-real-server.png)
+![The same path, now against a real server](screenshots/01-10-the-same-path-now-against-a-real-server.png)
 
 ## 11. Told how wide it is, the pieces get real sizes
 
@@ -112,7 +112,7 @@ sized: True
 
 An arrangement built from a photograph is an ordinary arrangement, drawn as any site is, each piece as its word builds it: a wedge is a triangle in the world, as the picture's was.
 
-![The arrangement opens in the viewer](screenshots/11-12-the-arrangement-opens-in-the-viewer.png)
+![The arrangement opens in the viewer](screenshots/01-12-the-arrangement-opens-in-the-viewer.png)
 
 ## 13. Every piece is listed, named for the word it was matched to
 
@@ -129,13 +129,13 @@ slot_4 (word)
 
 The chips are the viewer's own, one per word the pieces carry. A chip expands every piece of its word, at any depth; these pieces are flat shapes with nothing inside, so choosing one marks the chip and leaves the list and the world as they were.
 
-![Each word is a chip above the list, and 'disc' is chosen](screenshots/11-14-each-word-is-a-chip-above-the-list-and-disc-is-cho.png)
+![Each word is a chip above the list, and 'disc' is chosen](screenshots/01-14-each-word-is-a-chip-above-the-list-and-disc-is-cho.png)
 
 ## 15. Choosing a piece shows where it came from
 
 Its word and why, the finder that saw it ('plain'), how sure it was (0.67), and that its thickness is a guess: the same provenance the model half printed, in Selected, beside its place.
 
-![Choosing a piece shows where it came from](screenshots/11-15-choosing-a-piece-shows-where-it-came-from.png)
+![Choosing a piece shows where it came from](screenshots/01-15-choosing-a-piece-shows-where-it-came-from.png)
 
 ## 16. And it forgets on request
 

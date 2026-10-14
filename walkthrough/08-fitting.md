@@ -78,7 +78,7 @@ rest, and **Apply** renders it: a variant, kept by what made it
 amber. The part's own STL stays the saved part: **Defaults**, then **Apply**,
 draws it again without rendering anything. [The part
 editor](../docs/viewer.md#the-part-editor) says the rest, and
-[page 14](14-designing-a-part.md) walks it.
+[page 04](04-designing-a-part.md) walks it.
 
 ## Overrides reach OpenSCAD
 
