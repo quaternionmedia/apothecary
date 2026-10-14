@@ -43,10 +43,10 @@ Asked one at a time on 2026-10-13 and 2026-10-14:
   manufacturability), its single-number test and its rules 1 to 5 are not
   drafted as a record; the page describes the seam as built.
 - **The walkthrough puts the loops first.** After page 00 come the pages the
-  browser tests write (11 to 16 when the sweep began), then the library's
-  concepts, then the contributor pages, numbered in that order. Page names
-  reach the docs, the tests and the package, so the renumbering is a step of
-  its own after step 7, on a branch that carries every stack.
+  browser tests write (11 to 16 when the sweep began, 01 to 06 after), then
+  the other pages in their order (01 to 10, 07 to 16 after). Page names reach
+  the docs, the tests and the package, so the renumbering is a step of its
+  own after step 7, on a branch that carries every stack.
 - **Whether a made piece is saved as a variant stays open.** The page gives a
   made piece no Save or Variants, and the personal-data record says it is
   saved as a part is; the record pends on the answer.
