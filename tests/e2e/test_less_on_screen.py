@@ -468,7 +468,10 @@ def test_a_printers_machine_has_no_flashing(page: Page, start_server):
     httpx.put(
         f"{url}/sites/garage/nodes/footpedal/device", json={"identity": UNO}, timeout=15.0
     ).raise_for_status()
-    page.evaluate("() => window.fractalViewer.rescanDevices()")
+    # Rescan, and wait for what it finds -- the footpedal's badge -- not on the scan's
+    # promise: an evaluate still waiting when the page's context ends fails outright.
+    page.evaluate("() => { window.fractalViewer.rescanDevices(); }")
+    expect(page.locator(FOOTPEDAL_BADGE)).to_be_visible(timeout=10000)
     page.evaluate("() => window.fractalViewer.openMachine('footpedal')")
     expect(_rail_machine(page).locator("#flash-card")).to_be_visible(timeout=10000)
 
