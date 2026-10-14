@@ -10,6 +10,14 @@ Note: STL files are generated on-demand and not stored in git.
 On startup, missing STLs are automatically generated if OpenSCAD is available.
 """
 
+# An install point of the guard (apothecary/stays_local.py), before anything
+# else here runs: `apothecary serve`, `uvicorn apothecary.api:app` and the docs
+# generator's server all load this module, and from here on the process
+# reaches nothing past this machine.
+from .stays_local import install_guard as _install_guard
+
+_install_guard()
+
 import asyncio
 import hashlib
 import json

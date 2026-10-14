@@ -58,8 +58,14 @@ cover it:
 
     >>> from apothecary.preflight import LOCAL_DIFFERENCES
     >>> sorted(LOCAL_DIFFERENCES)
-    ['pytest.yml']
+    ['one-pr-check.yml', 'pytest.yml']
     >>> "uv run pytest" in LOCAL_DIFFERENCES["pytest.yml"].covered_by
+    True
+
+`one-pr-check.yml` reads a pull request's body in its second step, and a local
+run has none; the body is checked by the same script before it is posted:
+
+    >>> "check_pr_voice.py" in LOCAL_DIFFERENCES["one-pr-check.yml"].covered_by
     True
 
 That is the rule this module exists to hold. An excuse with no local equivalent
