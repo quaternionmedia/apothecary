@@ -159,7 +159,7 @@ Checked and true, no row: the five-minute latch (`CONTROL_TTL_S = 300.0`), the r
 
 | line(s) | quote | problem | home | rewrite or note |
 |---|---|---|---|---|
-| 5-7 | "The owner decided how on 2026-10-10 (the plan); this page says what was built" | history | inline | "The decisions behind it are in [the plan](plans/slicer-2026-10-10.md). A slice runs from the server, the command line and the page." |
+| 5-7 | "The owner decided how on 2026-10-10 (the plan); this page says what was built" | history | inline | "The decisions behind it are in [the plan](../slicer-2026-10-10.md). A slice runs from the server, the command line and the page." |
 | 40-44 | "OrcaSlicer 2.4.2 leaves both empty and its fixed version numbers say 2.0.0.0" | stale (risk) | inline | The vendor fact stays (§4), but the version repeats `ORCASLICER_VERSION` and goes stale when the pin moves: "The pinned release leaves both empty…". |
 | 69-70 | "The owner decided (2026-10-10) that the start of a print is composed from modules" | history | inline | "The start of a print is composed from modules, as they are wanted." |
 | 114-115 | "asks that server, as the page will" | stale | inline | The page slices a made piece already (walkthrough 13): "as the page does". |

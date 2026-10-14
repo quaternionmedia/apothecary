@@ -33,14 +33,22 @@ class Difference:
 # observed by running preflight rather than predicted from reading a workflow.
 LOCAL_DIFFERENCES: Dict[str, Difference] = {
     "pytest.yml": Difference(
-        why=(
-            "installs OpenSCAD with apt-get and Playwright with --with-deps, "
-            "both Linux-only"
-        ),
+        why=("installs OpenSCAD with apt-get and Playwright with --with-deps, both Linux-only"),
         covered_by=(
             "`uv run pytest` with OpenSCAD already installed, and "
             "`uv run pytest tests/e2e --start-server` once "
             "`uv run playwright install chromium` has been run once."
+        ),
+    ),
+    "one-pr-check.yml": Difference(
+        why=(
+            "its second step writes the pull request's body to $RUNNER_TEMP, which the "
+            "runner sets on GitHub alone, and a local run has no pull request body to "
+            "write; the first step, the stacked-draft check, runs here through `gh`"
+        ),
+        covered_by=(
+            "`python .github/qm-seed/check_pr_voice.py --body-file BODY --contributor LOGIN` "
+            "on a pull request's body before it is posted."
         ),
     ),
 }

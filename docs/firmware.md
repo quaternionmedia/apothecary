@@ -576,11 +576,12 @@ APOTHECARY_STATE_DIR=/tmp/apothecary-demo uv run apothecary serve
 
 Pins need none, and Linux already names every bridge with a serial under
 `/dev/serial/by-id/`. For a short name, a udev rule matches that serial
-(`S/N` in `apothecary firmware devices`):
+(`S/N` in `apothecary firmware devices`; the board's own in place of
+`A1B2C3D4`):
 
 ```
 # /etc/udev/rules.d/99-apothecary-printer.rules
-SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", ATTRS{serial}=="A106ZTEU", SYMLINK+="ender"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", ATTRS{serial}=="A1B2C3D4", SYMLINK+="ender"
 ```
 
 Then `sudo udevadm control --reload && sudo udevadm trigger`. arduino-cli
