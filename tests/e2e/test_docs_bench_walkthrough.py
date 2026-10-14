@@ -273,6 +273,13 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     page.locator("#contents-list .contents-item[data-path='esp32_blink']").dblclick()
     page.locator("#contents-list .contents-item[data-path='esp32_blink']").click()
     expect(_part_row(page)).to_contain_text("esp32_devkitc", timeout=5000)
+    # Selected's part section once the server has answered for it: its readiness read,
+    # and the line saying what its STL measures -- or, on a machine without OpenSCAD and
+    # so without an STL to measure, the readiness saying OpenSCAD is not installed.
+    measured = page.locator("#part-envelope .measured", has_text="measured")
+    no_openscad = page.locator("#part-checklist .check", has_text="OpenSCAD not installed")
+    expect(measured.or_(no_openscad).first).to_be_visible(timeout=20000)
+    expect(page.locator("#part-checklist .verdict")).to_be_visible(timeout=20000)
     settled(page)
     story.shows(
         "The DevKitC standing on its pins",
