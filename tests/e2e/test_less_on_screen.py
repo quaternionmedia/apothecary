@@ -63,7 +63,9 @@ def bench(start_server, tmp_path_factory) -> str:
     url = start_server({"APOTHECARY_PICTURE_ROOT": str(folder)})
     with httpx.Client(base_url=url, timeout=15.0) as http:
         http.post("/firmware/devices/identify", json={"port": PRINTER}).raise_for_status()
-        http.put(f"/sites/garage/nodes/{BOARD}/device", json={"identity": PRINTER}).raise_for_status()
+        http.put(
+            f"/sites/garage/nodes/{BOARD}/device", json={"identity": PRINTER}
+        ).raise_for_status()
         http.put("/sites/garage/nodes/footpedal/device", json={"identity": UNO}).raise_for_status()
         view = http.post(
             "/sites/garage/views",
@@ -371,7 +373,6 @@ def test_a_movable_thing_selected_wears_one_compact_set_of_handles(page: Page, b
     assert page.evaluate(HANDLES)["on"] == "workbench"
 
 
-
 # --------------------------------------------------------------------------
 # The Machine in the rail
 # --------------------------------------------------------------------------
@@ -383,9 +384,7 @@ def _rail_machine(page: Page):
     rail = page.locator(".panel-rail")
     machine = rail.locator(f".panel-tabbody {MACHINE}")
     expect(machine).to_be_visible(timeout=5000)
-    expect(rail.locator(".rail-tab[data-panel='machine']")).to_have_class(
-        re.compile(r"\bactive\b")
-    )
+    expect(rail.locator(".rail-tab[data-panel='machine']")).to_have_class(re.compile(r"\bactive\b"))
     assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
     expect(page.locator(f".panel-free-layer {MACHINE}")).to_have_count(0)
     return machine
@@ -465,7 +464,10 @@ def test_a_printers_machine_has_no_flashing(page: Page, start_server):
     httpx.put(
         f"{url}/sites/garage/nodes/footpedal/device", json={"identity": UNO}, timeout=15.0
     ).raise_for_status()
-    page.evaluate("() => window.fractalViewer.rescanDevices()")
+    # Rescan, and wait for what it finds -- the footpedal's badge -- not on the scan's
+    # promise: an evaluate still waiting when the page's context ends fails outright.
+    page.evaluate("() => { window.fractalViewer.rescanDevices(); }")
+    expect(page.locator(FOOTPEDAL_BADGE)).to_be_visible(timeout=10000)
     page.evaluate("() => window.fractalViewer.openMachine('footpedal')")
     expect(_rail_machine(page).locator("#flash-card")).to_be_visible(timeout=10000)
 
