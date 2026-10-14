@@ -446,10 +446,10 @@ release), unchanged, plus these three that the bench did not have:
       → rendered, links between
       pages work, every image is local (a picture from elsewhere would be
       named, not fetched).
-- [ ] `/walkthrough/11-photographs-into-pieces.md` → its last step gives the
+- [ ] `/walkthrough/01-photographs-into-pieces.md` → its last step gives the
       census count (`apothecary census` says the same) and its screenshots
       show the one rail, Site and Selected stacked in it.
-- [ ] `/walkthrough/12-the-bench-as-it-is.md` → fourteen steps: a file from
+- [ ] `/walkthrough/02-the-bench-as-it-is.md` → fourteen steps: a file from
       elsewhere measured, the sidecar part, the Ender 3, the mainboard, the
       DevKitC, a camera added above the bench and *not* following you into a
       printer, what the browser put here taken back (added pictures, one of
@@ -457,7 +457,7 @@ release), unchanged, plus these three that the bench did not have:
       put in its own picture folder, the guard's refusal and the server's
       403 -- each with the
       output or the picture of the run that wrote it.
-- [ ] `/walkthrough/13-a-picture-to-a-print.md` → the loop from a picture to a
+- [ ] `/walkthrough/03-a-picture-to-a-print.md` → the loop from a picture to a
       print twice round, each step's status line naming the next; the pictures'
       times and picture names blanked, the words without them.
 - [ ] `uv run apothecary docs generate` → both doc workflows regenerate under
