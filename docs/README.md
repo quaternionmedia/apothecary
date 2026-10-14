@@ -6,9 +6,9 @@ HTTP API is described at `/openapi.json`, the commands by `apothecary --help`.
 
 ## The walkthrough
 
-`walkthrough/` is the path through this repository. Pages 00 to 10 are
-doctests, run by `pytest walkthrough`; pages 11 to 16 are written by the
-browser tests that walk them. Start there, at page 00.
+`walkthrough/` is the path through this repository. Pages 01 to 06 are
+written by the browser tests that walk them; page 00 and pages 07 to 16 are
+doctests, run by `pytest walkthrough`. Start there, at page 00.
 
 | Page | |
 |---|---|
@@ -114,7 +114,7 @@ and `test_docs_printer_monitor.py`: each `docs.step(...)` in them is an
 assertion and a paragraph. Those tests run only under `--generate-docs`,
 which the command passes; an ordinary browser run skips them.
 `apothecary serve --refresh-docs` does the same in the background. (Walkthrough
-pages 11 and 12 come from the two other `test_docs_*.py` files, which are
+pages 01 and 02 come from the two other `test_docs_*.py` files, which are
 marked `walkthrough` and write `walkthrough/`, not `docs/generated/`.)
 
 Until they are generated the folder does not exist; once generated, each

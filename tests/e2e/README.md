@@ -66,7 +66,7 @@ drift apart.
 
 Both are fixtures in `conftest.py`; the recorders themselves are in `doc_capture.py`.
 
-- `walkthrough` writes `walkthrough/11-*.md` and `walkthrough/12-*.md` and
+- `walkthrough` writes `walkthrough/01-*.md` and `walkthrough/02-*.md` and
   their screenshots on every run that includes `test_docs_photo_walkthrough.py`
   or `test_docs_bench_walkthrough.py`. Each numbered step is written as the run
   reaches it, after the assertions before it. The page's opening, its notes and
