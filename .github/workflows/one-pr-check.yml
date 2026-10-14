@@ -1,0 +1,94 @@
+# No pull request is marked ready while it is stacked on another open one.
+#
+# SEED FILE: copy verbatim into .github/workflows/, the same discipline as
+# adr-lint.yml. Only the workflow is copied -- it runs check_one_pr.py out of
+# the governance submodule, so a fix to the rule reaches every project on its
+# next pin bump instead of needing N copies updated. The file, script and job
+# names predate the rule and are kept so that pin bump needs no re-copy and a
+# required `slot` context keeps reporting.
+#
+# The rule and the reasoning are handbook/async-contract.md §1: one change per
+# pull request, parallel when independent, stacked when dependent. A stacked
+# pull request's base is its parent's branch, and it stays a draft until the
+# parent merges.
+#
+# WHAT THIS FAILS, AND WHO CAN FIX IT
+#
+# Every ready pull request of this author whose base is another open pull
+# request's branch. The remedy is `gh pr ready <n> --undo`, which re-runs this.
+# Automation authors are not judged.
+
+# COPIED from the corpus's main at df1cb51 (project-seed/ci/one-pr-check.yml),
+# with one change: the scripts run from .github/qm-seed/, which holds
+# project-seed/ci/check_one_pr.py and check_pr_voice.py as they are at that
+# commit, byte for byte. The seed at the pin (project/apothecary) carries an
+# older rule under this file's name -- one open pull request per contributor
+# -- which refuses every pull request of a stack; this project keeps main's:
+# a stacked pull request stays a draft until the one beneath it merges. At a
+# pin whose seed carries main's rule, this file is the seed's, verbatim, and
+# those two scripts are removed from .github/qm-seed/.
+
+name: Stacked PRs are drafts
+
+on:
+  pull_request:
+    # `edited` fires on a base change -- the retarget when the pull request
+    # beneath merges -- and `converted_to_draft` is the remedy this check
+    # names, so both must re-run it.
+    types: [opened, reopened, synchronize, ready_for_review, converted_to_draft, edited]
+
+# One run per branch per workflow. A second push supersedes the first: nobody
+# reads the result of a run whose commit has already been replaced, and the
+# minutes are real -- 55 of this repository's 129 runs on 2026-08-11 came from
+# five iterative pushes to two pull request branches, where only the last
+# mattered.
+#
+# Cancellation is scoped to pull requests deliberately. On the default branch
+# and on a project branch the run IS the record of what that commit reported,
+# and cancelling it to start a newer one destroys the only evidence that the
+# earlier commit was ever checked.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  slot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: No pull request of this contributor is ready while stacked
+        run: |
+          python .github/qm-seed/check_one_pr.py \
+            --repo "$GITHUB_REPOSITORY" \
+            --contributor "$PR_AUTHOR"
+        env:
+          # The token is what lets `gh api` read the list at all. Without it the
+          # script exits non-zero rather than reporting a repository it could
+          # not read as compliant.
+          GH_TOKEN: ${{ github.token }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+
+      # The body is posted under the contributor's account and is their statement
+      # of the change; a sentence addressed to them is a tool talking to its
+      # operator under the operator's name. Written to a file first: a body is
+      # multi-line and may hold anything, and an argument would re-parse it.
+      - name: This pull request speaks as its contributor, to the world
+        run: |
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr-body.md"
+          python .github/qm-seed/check_pr_voice.py \
+            --body-file "$RUNNER_TEMP/pr-body.md" \
+            --contributor "$PR_AUTHOR"
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}

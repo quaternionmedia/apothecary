@@ -64,6 +64,8 @@ is not a member: it is its own Cargo project, built by its own toolchain
 | `license-check.yml` | A third-party dependency whose licence is not on the OSI/FSF allowlist, or that has a known vulnerability (`pip-audit`) |
 | `adr-lint.yml` | A record in `governance/qm/adr/`: a draft that narrates its own revisions, a numbered one not ratified, a ratified body edited outside its Amendments, or an index that disagrees with the directory |
 | `submodule-check.yml` | A submodule pin its own remote does not have |
+| `leak-check.yml` | On a pull request into `main` and a push to it: a tracked file naming an account's home folder, a path through one person's home layout or a session's scratch space, a shared-conversation link, or a conversation archive's path (the corpus's seed check, copied to `.github/qm-seed/`) |
+| `one-pr-check.yml` | A pull request that is ready while its base is another open pull request's branch, and a pull request body that addresses its own contributor (the corpus's seed checks, copied to `.github/qm-seed/`) |
 
 Nothing else is a gate. Formatting is not checked in CI, and neither is the Rust workspace.
 
