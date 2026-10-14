@@ -1,7 +1,7 @@
-"""The world is drawn only when something in it changes (the part-iteration plan of
-2026-10-12): a page left alone draws nothing, so a machine drawing in software --
-the headless shell these tests run in has no GPU -- idles, and answers typing at
-once. What changes draws: a selection, the view turned, the window resized.
+"""The world is drawn only when something in it changes (docs/viewer.md, "How the world
+is drawn"): a page left alone draws nothing, so a machine drawing in software -- the
+headless shell these tests run in has no GPU -- idles, and answers typing at once. What
+changes draws: a selection, the view turned, the window resized.
 
 The page counts the frames it draws (``framesDrawn``); these tests read the count,
 not a picture.

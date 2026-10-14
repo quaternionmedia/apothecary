@@ -8,7 +8,7 @@ folders that must be left as they were, and go round each loop through the page:
 the firmware loop (walkthrough 15), a picture to a print (13), and designing a part
 and editing its SCAD (14, 16). A demo with no OrcaSlicer says how to install it.
 
-**No real serial port is touched, and a test says so.** Every Python process of the
+No real serial port is touched, and a test says so. Every Python process of the
 demo -- the server, and the scripted tools it runs -- starts with a guard
 (``sitecustomize.py`` on its PYTHONPATH) that refuses, and writes down, any opening
 of a serial device and any listing of the machine's real ports. The guard is shown
@@ -408,8 +408,8 @@ def test_the_demo_touched_no_real_port_and_left_the_persons_folders_alone(demo, 
 
     ``browser_name`` makes it a [chromium] test like the ones before it: pytest runs a
     test with no browser after every test with one, so in a run with another browser
-    test module after this one it ran last of all, on a second demo of its own, and
-    found none of the first one's pictures."""
+    test module after this one it would run last of all, on a second demo of its own,
+    and find none of the first one's pictures."""
     touched = Path(demo["env"]["APOTHECARY_TEST_SERIAL_GUARD"])
     assert not touched.exists(), touched.read_text()
     person = demo["folder"] / "person"

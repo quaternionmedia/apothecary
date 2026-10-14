@@ -89,13 +89,12 @@ def test_pair_by_pair_it_is_never_wrong(pairwise):
 
 
 def test_pair_by_pair_it_is_not_completely_silent(pairwise):
-    """Measured at 18% to 41% of pairs answered, depending on what was drawn.
-
-    Low, and the floor is set below the lowest seen rather than at some rounder
-    number that reads better. Most pairs in a folder are two photographs of
-    different things which the sorting declines to call unrelated rather than
-    claiming to be sure — on drawn pictures taken in near-identical light there
-    is often nothing honest to say.
+    """Pair by pair, the sorting answers some pairs: few, and the floor is set below the
+    lowest rate measured on drawn pictures rather than at some rounder number that
+    reads better. Most pairs in a folder are two photographs of different things
+    which the sorting declines to call unrelated rather than claiming to be sure —
+    on drawn pictures taken in near-identical light there is often nothing honest
+    to say.
     """
     for seed, score in pairwise.items():
         assert score.right_rate >= 0.15, f"seed {seed} answers too little: {score.summary()}"

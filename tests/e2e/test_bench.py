@@ -1,9 +1,8 @@
-"""The Bench: the firmware page's toolchain, sketches, build and upload, raw flash
-and task log, as a panel in front of the world.
+"""The Bench: the toolchain, sketches, build and upload, raw flash and task log, as a
+panel in front of the world.
 
-The consolidation plan's Phase 5 (docs/plans/consolidation-2026-10-03.md): the
-firmware page's sections are the Bench, a tab of the rail's strip, closed until
-asked for; its verbs are cells of the canvas ring's Panels › Bench.
+The Bench is a tab of the rail's strip, closed until asked for; its verbs are cells
+of the canvas ring's Panels › Bench.
 
 Runs against a server of its own from the conftest's ``start_server``: the
 scripted ``arduino-cli`` (version 9.9.9, an Uno on ``/dev/ttyFAKE0``,
@@ -157,8 +156,8 @@ def test_the_bench_s_verbs_are_cells_of_panels_bench(page: Page, url: str):
         1, timeout=10000
     )
     expect(bench.locator(".compile-btn")).to_have_attribute("data-address", "432", timeout=5000)
-    # Install is a ring of the toolchain modules: arduino-cli's install moved one level
-    # deeper (it was 936), and Rust for the ESP32's has a cell of its own.
+    # Install is a ring of the toolchain modules: arduino-cli's install and Rust for the
+    # ESP32's each have a cell of their own.
     expect(bench.locator(".install-btn")).to_have_attribute("data-address", "4368")
     expect(bench.locator(".module-install[data-id='rust-esp32']")).to_have_attribute(
         "data-address", "4366"

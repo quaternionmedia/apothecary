@@ -11,468 +11,9 @@ from apothecary.cli.census import census as command
 
 STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 
-# The viewer's controls of its own today. A change that adds one raises this
-# on purpose; a change that removes one may lower it.
-#
-# Pictures plan Phase 3, first commit: the census also counts the marks modules
-# the page imports (census.MARKS). Before: 137 controls of its own, 65
-# ring-backed, 70 places the page listens. After: the same -- machine_marks.js
-# writes no markup and listens nowhere, so the new count it adds is nothing.
-#
-# Phase 3, the looks drawn: the camera badge's listener leaves the page for
-# picture_marks.js as the place badge's (badge:click:onSelect); no ring address
-# moved. Before and after: 137 controls of its own, 65 ring-backed, 70 places.
-#
-# Phase 4, the loop's verbs on the host. Before: 137 controls of its own, 65
-# ring-backed (47.4%), 70 places the page listens. After: 128, 61 ring-backed
-# (47.7%), 77 places. Gone with the camera panel's camera, capture, Look and
-# placement sections and Open as one: cam-pick, cam-allow, cam-refresh,
-# cam-name, cam-width, cam-capture, cam-look, cam-place, cam-unplace, pic-open,
-# and pic-refresh (the list is fetched when the panel mounts and after each
-# change). Added: Selected's width box (look-width) and a look's Unpin in the
-# pins list (look-unpin-one, ring-backed by Picture › Unpin); cam-unplace-one
-# and pic-forget are now backed by Camera › Unpin and Picture › Forget; pic-file
-# keeps a picture without pinning it, which no cell does, so it is no longer
-# backed. Ring addresses moved: Camera › Allow is Camera › Pin here › Allow on a
-# host's node ring (the floor's under Pictures › Floor); Unplace is Camera ›
-# Unpin there; Open as one is gone; the canvas ring's Camera is Pictures in the
-# same seat (Add, Floor, Purge, Gather), its Kept › Add and Purge now Pictures ›
-# Add (pinned at the floor) and Pictures › Purge.
-#
-# The Kept stub (the pictures plan's Phase 5, stubbed at the owner's word "stub
-# kept now"). Before: 128 controls of its own, 61 ring-backed (47.7%), 77 places
-# the page listens. After: 128, 58 ring-backed (45.3%), 75 places. The per-row
-# buttons of the old "Pictures & pins" panel -- forget a picture, unpin a
-# camera, unpin a look (pic-forget, cam-unplace-one, look-unpin-one) -- move to
-# Kept (kept-forget, kept-camera-unpin, kept-look-unpin) and are reclassified:
-# not ring-backed but census.TAKEN_BACK, the lasting exception for taking a
-# thing back from the list that shows it. They were counted as backed by Camera
-# › Unpin, Picture › Unpin and Picture › Forget, though a row can name another
-# site's pin, which those cells reach only from that site; §6 asks for every
-# site's to be taken back from the one list. The boards' Unpin and the list's
-# refresh move with them (pin-unpin, pin-refresh become kept-board-unpin,
-# kept-refresh), and Purge (pic-purge, kept-purge) stays backed by Pictures ›
-# Purge. The three row listeners are one on Kept's list. No ring address moved
-# but the panels': Panels › Camera is Panels › Pictures › Gather, beside Kept.
-#
-# The first-time camera flow: no control added or removed, and no ring address
-# moved. One place the page listens is added, in pictures.js: the browser's
-# camera permission changing (status:change:listCameras), automatic, since it
-# is the browser reporting a yes given in the address bar and not a control.
-# `apothecary census` before and after: the same meter and the same ring-backed
-# count; one more place the page listens.
-# The picture-to-editor seam: the part panel became one editor over a target,
-# serving a made piece too, and Part › Edit joined the node ring. Before and
-# after: 128 controls of its own, 58 ring-backed, 75 places the page listens.
-# The editor's markup is written once for either target (a made piece leaves
-# its checklist and Regenerate STL unwritten), so no control was added; the
-# Regenerate STL listener is keyed by the editor's apply (applyEditor) now.
-#
-# Consolidation Phase 1, the words: a picture pinned at a place is a view. The
-# census's keys follow the page: kept-look-unpin is kept-view-unpin, look-width
-# is view-width, and Selected's row listener is row:click:drawView, still backed
-# by Picture › Views' picture:draw. Camera › Look is Camera › Take picture in the
-# same cell, Picture › Looks is Picture › Views in the same cell; no ring address
-# moved. Before and after: 128 controls of its own, 58 ring-backed, 76 places
-# the page listens.
-#
-# Consolidation Phase 1, taking and finding: Take picture, a drop, a paste,
-# Picture › Add and Picture › Folder pin a view and find nothing; Picture › Find
-# shapes finds, a cell of its own; Camera › Keep is gone. Keep and Find shapes
-# are ring cells with no control behind them, and no listener was added, removed
-# or re-keyed (the drop, paste and Add listeners only say what they do now).
-# Before and after: 128 controls of its own, 58 ring-backed, 76 places the page
-# listens. Ring addresses moved, inside a host's Camera and Picture (and the
-# floor's, under Pictures › Floor): with this browser's camera pinned, Keep left
-# cell 4 and Unpin moved from cell 9 to cell 4 (Look's cell 2 is Take picture's).
-# Find shapes is appended after Unpin and Forget, so their cells stay put
-# whether it is there or not; where it replaces Find (another finder can read a
-# view already searched), Find moved from before Unpin to the last cell, and
-# Unpin and Forget each moved one cell earlier in the seating order (at a host:
-# Unpin 3 to 9, Forget 1 to 3; at the floor: Unpin 9 to 4, Forget 3 to 9).
-#
-# Consolidation Phase 2, the Site and Pictures panels. Before: 128 controls of
-# its own, 58 ring-backed (45.3%), 76 places the page listens. After: 128, 58
-# ring-backed (45.3%), 82 places. Gone with Kept and the Gather panel: Kept's
-# refresh (kept-refresh; Site's Pinned lists again each time it is unfolded) and
-# its rows' buttons, which move: the pins' take-backs to Site's Pinned
-# (kept-camera-unpin, kept-view-unpin, kept-board-unpin become pinned-*-unpin,
-# TAKEN_BACK still, and the row listener kept-list:click:closest is
-# pinned-list:click:closest), a kept picture's Forget and Purge to Pictures
-# (pictures-forget, TAKEN_BACK; pictures-purge, backed by Pictures › Purge as
-# kept-purge was). The gathering (pic-all, pic-gather, gather-answers, answer)
-# and the file picker (pic-file) move with the same names to Pictures. Added:
-# Pictures' Pin here (pictures-pin), counted and not ring-backed -- the ring's
-# Picture › Folder pins the seven newest pictures (and a chosen one, which the
-# page does not tell it), and Pin here pins any picture in the folder, the older
-# ones included, which no cell reaches. The Validation and OpenSCAD panels had
-# no controls. Six places the page listens are added: Pin here
-# (pin:click:pinHere), Forget (forgetBtn:click:forget, TAKEN_BACK), a view's
-# place on a picture's row (chip:click:showView, backed as Selected's view rows
-# are), a problem's row (li:click:goToProblem), Pinned unfolded
-# (pinnedEl:toggle:pinnedOpened), and the toolbar's count, a readout listened to
-# and not a control in the markup (validityEl:click:openProblems). Ring
-# addresses moved, all under the canvas ring's Panels (cell 9): Contents' cell 8
-# is Site's (98); Selected 96 and Jobs 92 stay; Validation's cell 4 is Pictures'
-# (94); OpenSCAD (99) is gone, and the Machine group moved from 91 to 99 (the
-# machine 918 to 998, its comms log 916 to 996); the Pictures group (93: Kept
-# 938, Gather 936) is gone, and Rail moved from 97 to 93. Picture › Folder's
-# eighth leaf keeps its cell: More opens Pictures (picture:more), not Kept.
-#
-# Consolidation Phase 2's follow-ups, a picture chosen in Pictures feeds the
-# ring. Before: 128 controls of its own, 58 ring-backed (45.3%), 82 places the
-# page listens. After: 127, 58 ring-backed (45.7%), 83 places. Pictures' Pin
-# here (pictures-pin, and its listener pin:click:pinHere) is gone: a row of
-# Pictures is chosen by a click (row:click:rowClicked, a list, not a control)
-# and let go by Escape (window:keydown:letGo, a key), the page tells every ring
-# the chosen picture, and Picture › Folder pins it -- the seven newest by name,
-# an older one as the eighth cell, "Pin" and its short name -- so every picture
-# in the folder is pinned from the ring and the button only did the same thing
-# again. No ring address moved: Pin <name> takes the eighth cell More holds
-# when nothing older is chosen (at the bench ⌗367, at the floor under the
-# canvas ring's Pictures › Floor ⌗46287), and a chosen picture among the seven
-# is marked in its own cell. The one rail (panels.js) is chrome, off the meter.
-#
-# Consolidation Phase 3, jobs: a print is the job. Before: 127 controls of its
-# own, 58 ring-backed (45.7%), 83 places the page listens. After: 118, 58
-# ring-backed (49.2%), 80 places. Gone with the Jobs panel and its hand-typed
-# records: its form (job-form, job-name, job-x, job-y, job-z and the form's send
-# button), a queued job's drop-down of printers and Assign (job-printer-select,
-# job-assign-btn), an assigned one's Mark Done (job-complete-btn), and their three
-# listeners (jobFormEl:submit:createJob, jobBtn:click:assignJob,
-# jobBtn:click:completeJob); none was ring-backed. Ring addresses moved, all under
-# the canvas ring's Panels (cell 9), Jobs (92) being gone: Pictures moved from 94
-# to 92, the Machine group from 99 to 94 (the machine 998 to 948, its comms log
-# 996 to 946), and Rail from 93 to 99. Site 98 and Selected 96 stay.
-#
-# Phase 3, the Print card starts a print job. Before: 118 controls of its own, 58
-# ring-backed (49.2%), 80 places the page listens. After: 119, 58 ring-backed
-# (48.7%), 80 places. Added: the card's drop-down of the part a print makes
-# (print-part), the parts and pieces of the site the printer is pinned in; it is
-# read when Print is pressed, so nothing listens to it. Not ring-backed: Control ›
-# Print › Send file prints what the card has chosen, the part with the file, and no
-# cell chooses either. No ring address moved.
-#
-# Phase 3, Site lists the site's jobs. Before: 119 controls of its own, 58
-# ring-backed (48.7%), 80 places the page listens. After: 119, 58 ring-backed
-# (48.7%), 81 places. Added: a job's row in Site's Jobs, a list, selecting its
-# machine at its level and opening it (siteJobsListEl:click:closest). Site's Jobs
-# is a fold, as Pinned is, and adds no control. No ring address moved.
-#
-# Consolidation Phase 4, one Machine per board. Before: 119 controls of its own,
-# 58 ring-backed (48.7%), 81 places the page listens. After: 101, 51 ring-backed
-# (50.5%), 72 places. Gone with the serial overlay: its toolbar tick-box
-# (serial-toggle), its port and speed drop-downs (serial-port, serial-baud), its
-# rescan, identify and monitor link (serial-refresh, serial-identify,
-# serial-monitor, all three ring-backed), its clear and close (serial-clear,
-# serial-close), its query form, box and send button (serial-query-row,
-# serial-query, serial-query-row:submit), and the firmware link it offered when
-# no board was found (firmware-page-link). Gone from the toolbar: the
-# look-for-boards tick-box and its interval (devices-auto, devices-interval) --
-# the board model looks again by itself when a board it watches goes quiet, and
-# Rescan is the one way to ask. Gone from Selected's Device section, which is one
-# line now: Watch, Poll now and the Monitor link (dev-watch, dev-poll,
-# dev-monitor, ring-backed), and the second of its two Unpin and of its two
-# Rescan buttons, each written once now (dev-unpin, dev-rescan, ring-backed).
-# Added: Selected's Open (dev-open), backed by Device › Open. The Machine's log,
-# its one query box and a devkit's cards are machine.js's, written once whatever
-# board it shows, and add no control. Listeners gone: the overlay's
-# (toggle:change:show, portSel:change:renderMeta, baudSel:change:connect,
-# queryRow:submit:line, es:open:add, es:close:line,
-# window:beforeunload:disconnect), the look-for-boards three (autoEl:change:setItem,
-# intervalEl:change:setItem, document:visibilitychange:scheduleAutoRefresh), Watch's
-# and Poll now's (devWatch:click:dispatchEvent, devPoll:click:pollNow), and the
-# visibility and unload listeners machine.js had, which move to boards.js. Added:
-# Open's (devOpen:click:openMachine), and boards.js's, counted with the viewer
-# now (census.MARKS): a devkit's stream (es:open:opened, es:close:streamStopped)
-# and the page's visibility and unload (document:visibilitychange:onVisibility,
-# window:beforeunload:onUnload). The Machine's query box is keyed by what it does
-# now (qform:submit:query). Ring addresses moved, all on the Device ring (cell 2 of
-# a node ring, the whole ring on the monitor page): Watch's cell 8 is Open's (⌗28,
-# ⌗8), which opens the board's Machine as Monitor did; Monitor (⌗22, ⌗2) is gone;
-# Query moved from 4 to 2 (⌗24 to ⌗22), Unpin from 9 to 4 (⌗29 to ⌗24), Rescan from
-# 3 to 9 (⌗23 to ⌗29), Link from 1 to 3 (⌗21 to ⌗23: Reconnect ⌗218 to ⌗238, Reset
-# ⌗216 to ⌗236, Release ⌗212 to ⌗232) and Control from 7 to 1 (⌗27 to ⌗21, and
-# every address under it: Jog › Y+ ⌗2728 to ⌗2128, Arm ⌗277 to ⌗217, Stop ⌗271 to
-# ⌗211; on the monitor page ⌗728 to ⌗128). Under the canvas ring's Panels, the
-# Machine group (94: the machine 948, its comms log 946) is the Machine's own cell,
-# 94.
-#
-# Consolidation Phase 5, the Bench. Before: 101 controls of its own, 51 ring-backed
-# (50.5%), 72 places the page listens. After: 117, 58 ring-backed (49.6%), 78
-# places. The firmware page's toolchain, sketches, build and upload, raw flash and
-# task log are the Bench, a tab of the rail's strip, written once in
-# widgets/toolchain.js, sketches.js and tasks.js and counted with the viewer, which
-# imports them: install-btn, install-force, core-install, lib-input, lib-btn,
-# sketch-select (the sketch list's rows are a drop-down now), fqbn-input,
-# port-select, compile-btn, upload-btn, esp-chip, esp-baud, esp-images (raw flash's
-# rows of offset, path and drop, and its add button, are lines of one box),
-# esp-erase, esp-flash-btn and cancel-btn. Seven are cells of the canvas ring's
-# Panels › Bench (93), which is a group now -- the panel (938) and its verbs:
-# Install 936, Compile 932, Upload 934, Raw flash 939, Cancel 933, Cores 931 (a
-# core by its architecture, 9318 AVR on), Libraries 937 -- and are ring-backed.
-# Places it listens, added: a core's Install (coresEl:click:closest), Enter in the
-# libraries box (libEl:keydown:libraries), the sketch, board and port boxes
-# (sketchEl:change:choose, fqbnEl:input:enable, portEl:change:enable) and a recent
-# task's row (historyEl:click:closest). No ring address moved: the Bench is seated
-# after Panels › Rail, which keeps 99.
-#
-# Phase 5, a board's flashing in its Machine. Before: 117 controls of its own, 58
-# ring-backed, 78 places the page listens. After: 119, 60 ring-backed, 78 places.
-# Added to the Machine: a devkit's Listen (listen), which opens its port -- opening
-# its Machine no longer does -- and Probe (probe), esptool's chip read; both are
-# ring-backed, by Device › Link › Listen and Probe. Its Flashing card mounts the
-# Bench's form and task log, written once in sketches.js and tasks.js, and adds no
-# control. Ring addresses moved, all on the Device ring (cell 2 of a node ring, the
-# whole ring inside a Machine), back to where they were before Phase 4: Flash takes
-# Monitor's old cell 2 (⌗22); Query 2 to 4 (⌗22 to ⌗24), Unpin 4 to 9 (⌗24 to ⌗29),
-# Rescan 9 to 3 (⌗29 to ⌗23), Link 3 to 1 (⌗23 to ⌗21: Reconnect ⌗238 to ⌗218,
-# Reset ⌗236 to ⌗216, Release ⌗232 to ⌗212) and Control 1 to 7 (⌗21 to ⌗27, and
-# every address under it: Jog › Y+ ⌗2128 to ⌗2728, Arm ⌗217 to ⌗277, Stop ⌗211 to
-# ⌗271; on the device ring alone ⌗128 to ⌗728). Appended, so nothing else moves:
-# Link › Listen (⌗214) and Link › Probe (⌗219) on a board that is not a printer.
-#
-# Phase 5, one page. Before: 119 controls of its own, 60 ring-backed, 78 places the
-# page listens. After: 116, 60 ring-backed, 77 places -- and for the phase as a
-# whole, from where Phase 4 left it: 101 controls, 51 ring-backed (50.5%), 72 places
-# before; 116, 60 ring-backed (51.7%), 77 places after. Retired: the firmware page
-# and the printer monitor, which were pages of their own (templates/firmware.html.j2,
-# templates/monitor.html.j2) and the census counted beside the viewer; census.PAGES
-# is the viewer alone. Their sections are the Bench and a board's Machine in front
-# of the world, so a person no longer leaves the world to install a core, flash a
-# board or watch a printer, and their addresses (/firmware, /firmware/monitor?port=)
-# open the viewer with the Bench or the board's Machine. Gone from the viewer with
-# them: the toolbar's ⚡ Firmware and 🖨 Monitor links (firmware-link, monitor-link,
-# neither ring-backed; Panels › Bench and a board's Machine replace them), and the
-# Machine's port picker, which only the monitor page showed (port, and its listener
-# port:change:selectPort). No ring address moved. The firmware page's own controls
-# went with it; those the Bench kept are named above (Phase 5, the Bench), and its
-# device cards are each board's Machine: Probe and Live are a devkit's Probe and
-# Listen, Printer?/Poll its Identify and a printer's Poll, ⤢ Monitor its Open.
-#
-# Cameras-and-clutter Phase 2, one header row. Before: 116 controls of its own, 60
-# ring-backed (51.7%), 77 places the page listens. After: 114, 62 ring-backed
-# (54.4%), 76 places. Gone: Load (load-btn, and its listener; choosing a site in its
-# drop-down loads it, as it already did) and Zoom Out (zoom-out-btn, and its
-# listener; ring-backed by Up, which the trail's crumb one level up now wears, and
-# which a crumb, Backspace and Up all do). Snap to grid, Detail and Assembly
-# outlines move into the header's ⚙ View menu -- a fold, as Site's sections are, so
-# no control is added for it -- and are ring-backed by the canvas ring's new
-# Panels › View (snap-toggle by View › Snap to grid, detail-mode by View › Detail,
-# overlay-toggle by View › Outlines). One place the page listens is added: a press
-# outside the View menu folds it away (document:pointerdown:foldViewMenu). The
-# trail's listeners keep their keys. No ring address moved: View is seated after
-# Panels › Bench, at 91 (31 inside a piece, where the canvas ring's top holds
-# eight): Snap to grid 918, Detail 916 (Full 9168, Black box 9166, Dot 9162),
-# Outlines 912.
-#
-# Phase 2, the hint bar. Before: 114 controls of its own, 62 ring-backed, 76 places
-# the page listens; after: 114, 62, 77. The hint bar shows on a first visit and
-# fades after a few things done; one place is added, ? bringing it back
-# (window:keydown:onHintKey), a key, as Backspace is. No control was added and no
-# ring address moved.
-#
-# Phase 2, walls. Before: 114 controls of its own, 62 ring-backed (54.4%), 77 places
-# the page listens. After: 115, 63 ring-backed (54.8%), 78 places. Walls are drawn
-# faded and a click in the world passes through them; the View menu's Walls
-# selectable (walls-toggle, and its listener wallsToggle:change:setWallsSelectable)
-# lets a click pick them again for the session, ring-backed by Panels › View ›
-# Select walls (914, appended after Outlines; nothing moved). For the phase as a
-# whole: 116 controls, 60 ring-backed (51.7%), 77 places before; 115, 63 ring-backed
-# (54.8%), 78 places after. The ceiling follows the count down by one.
-#
-# Phase 2, the trail's crumbs. The same counts: the crumbs' listeners are keyed by
-# what a crumb does now (rootCrumb:click:goUpTo, crumb:click:goUpTo), going up one
-# level as Up does and further as the trail did, so jumpTo keeps its meaning for the
-# page's own callers.
-#
-# After Phase 2, the owner's answer: View is a cell of the canvas ring's own, in the
-# seat Fit had, and Fit is its first cell. The same counts; no control or listener
-# was added or re-keyed. Ring addresses moved, at the root of a site with groups (one
-# cell on, at 9, inside a piece): Fit 4 to 48; Snap to grid 918 to 46; Detail 916 to
-# 42 (Full 9168 to 428, Black box 9166 to 426, Dot 9162 to 422); Outlines 912 to 44;
-# Select walls 914 to 49. Panels holds its six again, none of them moved.
-#
-# Cameras-and-clutter Phase 3, a camera in the world. Before: 115 controls of its
-# own, 63 ring-backed (54.8%), 78 places the page listens. After: 116, 64
-# ring-backed (55.2%), 85 places. A camera is a part of its site now, not a pin at a
-# host, and its verbs are its own ring's. Added: Selected's camera section's Take
-# picture (cam-take, and its listener takeBtn:click:takePictureWith), ring-backed by
-# the camera's Take picture, as P is (window:keydown:onPictureKey), a key as ? is;
-# its pictures, a list, one clicked drawn where it landed (thumbList:click:closest);
-# and its turn ring and tilt arc, a drag as the move arrows are -- taken hold of
-# ahead of the arrows and the orbit (canvas:pointerdown:onCameraHandleDown), aimed as
-# the pointer goes (canvas:pointermove:onCameraDragMove), the aim kept on letting go
-# (canvas:pointerup:onCameraDragEnd). A camera's 📷 badge selects it as a place's ▣
-# badge selects the place (a second badge:click:onSelect). Renamed: Pinned's camera
-# row removes the camera (pinned-camera-unpin is pinned-camera-remove), still a
-# take-back kept beside the ring. Ring addresses moved: on a host's ring, Camera
-# holds Add here alone, in the cell Pin here had; Live, Take picture and Unpin left
-# it for the camera's own ring, which is new: Device, Live (Still while live), Take
-# picture, Remove and Part › Edit after a piece's Zoom in, Move and Why this. The
-# ceiling follows the count up by one, for a button the plan asks for.
-#
-# Firmware in Rust (docs/plans/rust-2026-10-08.md): one control of its own and one
-# place the page listens more (`apothecary census` counts them). The Bench's toolchain
-# card draws every toolchain module beside arduino-cli, each with its own Install
-# (module-install, and its one listener, modulesEl:click:closest). The owner's answer
-# of 2026-10-10 made Panels › Bench › Install a ring of the modules, drawn from their
-# registry, so each module's Install is ring-backed by its cell there (Rust ESP32,
-# 9366) and arduino-cli's moved one level deeper (Arduino, 9368; it was 936); nothing
-# else moved. The Rust sketches need no control of their own: they are rows of the
-# sketch drop-down, and choosing one hides the board box it takes none of.
-#
-# Loop 1, designing a part (docs/plans/ui-flows-2026-10-08.md). Added: the part
-# editor's Defaults (defaults-btn), beside Revert, which stages the part's own
-# numbers so that Apply draws the saved part again; the loop goes back to the
-# defaults through the page's own controls, and a slider cannot be set to a
-# default exactly. No listener was added or re-keyed. The ceiling follows the
-# count up by one; `uv run apothecary census` gives the counts.
-#
-# Then the owner's answer: Defaults stays, and is ring-backed by a cell of the
-# part's ring, Part › Defaults, after Edit (on a part from the parts folder; a
-# camera's ring and a made piece's keep Part › Edit alone). No control added, so
-# the ceiling stands; one more of them ring-backed, and the share's floor below
-# follows it up.
-#
-# The two, merged (build/part-loop on build/rust-firmware): each added one control
-# of its own to the same count, so the ceiling is the count with both.
-#
-# Then the owner's answer once more: the part's ring holds the whole loop, Part ›
-# Edit, Defaults, Apply and Revert. The editor's Apply and Revert (apply-btn,
-# revert-btn) are ring-backed by Part › Apply and Part › Revert, wherever Part is
-# (a part's ring, a camera's, a made piece's), acting on what the editor has
-# staged. No control added; two more ring-backed, and the share's floor follows.
-#
-# The loop from a picture to a print, and the owner's answers of 2026-10-10: a made
-# piece's ring ends with Print when a printer is pinned in its site, after Part (its
-# Edit, Apply and Revert), so no cell above it moved; it opens the printer's Machine with the piece chosen under
-# Print from here's makes. A cell with no control of its own: `apothecary census`
-# prints the same report before and after, but for line numbers. The makes drop-down
-# (print-part) stays unbacked: Print chooses a made piece there, and makes lists the
-# site's parts as well, which no cell chooses. The Machine tells a print started and
-# a print ended in the status line, and an open Machine lists its site's parts again
-# when a piece is made, rebuilt or dropped; none of it adds a control or a listener.
-# Merged onto the part loop: the ceiling and the share's floor are the part loop's,
-# since Print adds no control and backs none.
-#
-# The managed slicer (docs/plans/slicer-2026-10-10.md): Slice is a step of the page.
-# Two controls of its own, both ring-backed, and no place the page listens more
-# (`apothecary census` gives the counts). Print from here's Slice (print-slice), in
-# the makes row, slices what makes names for the printer and chooses its G-code in
-# the card's files; it is ring-backed by Slice, a new cell of a made piece's ring and
-# of a part's from the parts folder, appended after Print (and after Part, where
-# there is no Print), so no cell above it moves; with no printer pinned in the site
-# there is no Slice, as there is no Print. The slice's log and its Cancel are the
-# task log the Flashing card mounts (tasks.js), counted once already; what the slice
-# used, its estimate and its errors are words, not controls. The Bench's toolchain
-# card draws the slicer after the toolchain modules with its own Install
-# (slicer-install, under the modules' one listener), ring-backed by a new last cell
-# of Panels › Bench › Install, OrcaSlicer (9362); Arduino and Rust ESP32 did not
-# move. The ceiling follows the count up by two, and the share's floor up with it.
-# Loop 2, editing a part's SCAD: five controls of its own, four of them ring-backed,
-# and no place the page listens more. The SCAD editor (widgets/scad_editor.js), where
-# the part's read-only source stood in Selected, has Save (scad-save), Float
-# (scad-float) and Fullscreen (scad-fullscreen), backed by Part › Save, Part › Float
-# and Part › Fullscreen, new cells of a part's ring from the parts folder after
-# Revert, so no cell above them moves; and a saved variant chosen from a list
-# (saved-variant, one markup for the short list under the part's parameters and the
-# editor's own), backed by Part › Variants › its name, the last cell, which the first
-# save brings. The name a variant is saved under (scad-name) is typed, and no cell
-# types. Its listening is .onclick, as the part editor's buttons are; the page's
-# Backspace stepping out now asks whether a person is typing (`typing`, plumbing),
-# so typing in the editor does not step out. The ceiling follows the count up by
-# five, and the share's floor up with it.
-#
-# Onboarding (docs/plans/onboarding-2026-10-11.md): the header's Docs (docs-link), a
-# link opening /docs -- the guides and the walkthrough -- in a new tab, ring-backed
-# by Panels › Docs, a new last cell of Panels, so no cell before it moves. The site
-# drop-down's listener now puts the site in the address (siteSelect:change:chooseSite,
-# renamed, not added), and the browser's Back and Forward load the site it names
-# (window:popstate:followAddress), a place the page listens that is no control of its
-# own. The ceiling follows the count up by one, and the share's floor up with it.
-#
-# Then the owner's answer: a printer's Selected shows its board's pin with Unpin
-# beside it, ring-backed by the Device › Unpin its ring already had. It is the
-# Device section's Unpin (dev-unpin), drawn on the printer too: no control added and
-# none newly backed, so the ceiling and the share's floor stand.
-#
-# The part-iteration plan (docs/plans/part-iteration-2026-10-12.md), the page's part.
-# Before: 126 controls of its own, 75 ring-backed, 87 places the page listens. After:
-# 137, 78 ring-backed, 91 places. The parameter controls are written as markup in
-# widgets/part_controls.js now, one each: the slider (param-slider), the number box
-# beside it that is new (param-number), a choice's drop-down (param-choice), a yes or
-# no (param-tick), words (param-text), a vector's captioned boxes (param-coord) and a
-# contested number's candidates (cand). All but the number box were there before,
-# built by the page one element at a time and so unseen by this count, which reads
-# the markup; it sees them now. None is ring-backed: no cell types a number. Added in
-# the editor: Undo and Redo of the staged numbers (undo-btn, redo-btn), backed by Part
-# › History › Undo and Redo, and the ghost of what was drawn before (ghost-toggle),
-# backed by Part › View › Ghost; the offer of work a tab kept before a reload, Restore
-# and Discard (kept-restore, kept-discard), not backed, since it stands only until it
-# is answered. Gone: Regenerate STL (part-regenerate-btn, and its listener), which
-# was Apply again. Places the page listens, added: f framing the selected piece
-# (window:keydown:onFitKey, backed by Part › View › Fit), Ctrl+Z and Ctrl+Shift+Z on
-# the staged numbers (window:keydown:onUndoKey, Part › History), a recent apply's row
-# (historyList:click:closest), the move arrows asking for a frame now the world is
-# drawn only when it changes (transformControls:change:invalidate), and leaving with
-# work not applied, rendered or saved (window:beforeunload:onLeaving). The SCAD
-# editor's F5, F6, Ctrl+Enter and Ctrl+S are its keymap's, which this count does not
-# read. Ring addresses moved, on a part's ring: the Part ring was full, so Float and
-# Fullscreen are one press deeper, under View in the seat Float had (beside Ghost and
-# Fit), and History, with Undo and Redo, takes the seat Fullscreen had; Edit,
-# Defaults, Apply, Revert, Save and Variants keep theirs.
-#
-# The part-iteration plan's page, Phase B, wiring the server's answers. Before: 137
-# controls of its own, 78 ring-backed, 91 places the page listens. After: 151, 78
-# ring-backed, 91 places. Added in the SCAD editor's list of saved variants
-# (widgets/scad_editor.js), under each variant's ⋯ (variant-more): a box for a new
-# name (variant-to), Rename, Duplicate, History, Compare and Delete (variant-rename,
-# variant-duplicate, variant-history, variant-compare, variant-delete), and in its
-# history Restore (variant-restore); in the trash's Deleted fold, a deleted variant's
-# Restore and Delete for good (trash-restore, trash-forget) and Empty the trash
-# (trash-empty), the last two asked twice. In the part's editor, a comparison's
-# drop-downs of what with and how drawn, and its Close (compare-with, compare-mode,
-# compare-close). None is ring-backed: Part › Variants › a name draws it, and no cell
-# manages one. No place the page listens is added, and no ring address moved.
-#
-# Then the owner's answer of 2026-10-12: every action on a saved variant is a ring
-# cell. Before: 151 controls of its own, 78 ring-backed, 91 places the page listens.
-# After: 151, 86 ring-backed, 91 places. Part › Variants › a name is a ring of its
-# own now, Draw, Rename, Duplicate, History, Compare and Delete, and Part › Variants ›
-# Deleted, the last cell under Variants when something is deleted, holds each
-# deleted variant (Restore, Forget) and Empty. The saved variant's row is backed by
-# Draw (saved-variant), and Rename, Duplicate, History, Compare and Delete, the
-# trash's Restore and Forget and Empty by their cells; a cell asked twice is chosen
-# twice. Not backed: a version's Restore in a variant's history (variant-restore),
-# which no cell names, and the comparison's drop-downs and Close. No control or
-# listener was added. Ring addresses moved: choosing a saved variant was Part ›
-# Variants › its name, and is one press deeper, Part › Variants › its name › Draw.
-#
-# The part-iteration plan's "parameters and text, tied together": a part's controls
-# write their lines in its SCAD and follow what is typed there. Before: 151 controls
-# of its own, 86 ring-backed, 91 places the page listens. After: 154, 86 ring-backed,
-# 91 places. Added: a computed value's question when it is moved, Replace it with the
-# plain value or Keep it computed (computed-replace, computed-keep), not backed -- it
-# stands only until it is answered, as the offer of a reload's kept work does; and a
-# part in a submodule's Upstream SCAD, read only (part-upstream), a link as Download
-# SCAD is, not backed. The parameter controls are the same markup, now one for each
-# parameter its text assigns. No ring address moved. The ceiling follows the count.
-#
-# The pointer, the keys and the ring (docs/plans/input-2026-10-12.md). Added: the
-# Settings panel (widgets/settings.js), a tab of the rail, its rows one markup each --
-# a shortcut's field that takes the next key (setting-key), the ring's modifier
-# (setting-choice), automatic zoom's tick-boxes (setting-tick) and numbers
-# (setting-number), a setting's reset (setting-reset) and Reset all
-# (settings-reset-all) -- none ring-backed, since the plan gives the panel a cell and
-# its rows none; and ⚙ View › Settings (settings-open), ring-backed by the canvas
-# ring's View › Settings, a new last cell of View, so no cell before it moves.
-# Places the page listens, added: the right button's press and still release, which
-# re-centres the view (canvas:pointerdown:onRightPress,
-# canvas:pointerup:onRightRelease); Page Down and Page Up (window:keydown:onZoomKey);
-# the menu item; and the panel's click, change, the key a field takes and the field
-# let go of. `apothecary census` gives the counts. The ceiling follows the count up by
-# the seven controls.
+# The viewer's controls of its own: a change that adds one raises this; one that removes
+# one may lower it. `uv run apothecary census` lists them, and docs/census.md says what
+# is counted, how each is classified and how the ceiling and the share's floor move.
 VIEWER_CEILING = 161
 
 
@@ -786,8 +327,8 @@ def test_the_rows_take_backs_are_counted_and_not_claimed_as_ring_backed():
     # Purge stays a cell of the canvas ring's Pictures, and so does Gather.
     assert by_name["pictures-purge"].ring_action == "picture:purge"
     assert by_name["pic-gather"].ring_action == "camera:gather"
-    # Kept and the Gather panel are gone from the page, and from the tables; so
-    # are the older panel's rows before them.
+    # Kept, the Gather panel and the older panel's rows are not on the page, nor in
+    # the tables.
     for gone in (
         "kept-refresh",
         "kept-purge",
@@ -832,29 +373,10 @@ def test_pictures_chooses_a_row_and_has_no_pin_here():
     )
 
 
-def test_the_viewers_ring_backed_share_did_not_fall():
-    """Consolidation Phase 2 held the ring-backed share where it was, 58 of 128; its
-    follow-ups did not let it fall, nor did Phase 3, which deleted the Jobs panel's
-    controls, none of them ring-backed, and left it at 58 of 119. Phase 4 deleted the
-    serial overlay and most of Selected's Device section, ring-backed and not, and
-    left it at 51 of 101. Phase 5 brought the Bench in front of the world, its verbs
-    cells of Panels › Bench, and a devkit's Listen and Probe, cells of Device › Link,
-    and did not let it fall below where Phase 4 left it. Loop 1, designing a part,
-    put the part editor's Defaults on the ring as Part › Defaults, and then its Apply
-    and Revert as Part › Apply and Part › Revert, and on the Rust firmware's count the
-    share does not fall below where that left it, 68 of 118. The slicer's two controls,
-    Slice and the slicer's Install, came ring-backed: 70 of 120. Loop 2's SCAD editor
-    brought five, four of them ring-backed (Save, Float, Fullscreen, a saved variant
-    chosen; not the name it is saved under): 74 of 125. The header's Docs came
-    ring-backed, Panels › Docs: 75 of 126. The part-iteration plan's page counts the
-    parameter controls, which were there unseen and which no cell types, and the offer
-    of a reload's kept work; its Undo, Redo and Ghost came ring-backed, and Regenerate
-    STL went: 78 of 137. Its Phase B added the management of saved variants and their
-    comparison, none of it on the ring: 78 of 151. Then every action on a saved
-    variant became a cell of Part › Variants: 86 of 151. The text tied to the controls
-    added a computed value's question and an overlay's upstream link, neither on the
-    ring: 86 of 154. The Settings panel's rows came unbacked, as the input plan has
-    them, and ⚙ View › Settings backed by View › Settings: 87 of 161."""
+def test_the_viewers_ring_backed_share_is_at_least_its_floor():
+    """The ring-backed share of the viewer's controls does not fall below its floor.
+    A change that adds a ring-backed control raises the floor with it (docs/census.md);
+    `apothecary census` gives the share."""
     taken = census.take()
     own, backed = len(taken.controls_of_its_own()), len(taken.ring_backed())
     assert backed / own >= 87 / 161, f"{backed} of {own} ring-backed"
@@ -872,7 +394,7 @@ def test_the_headers_docs_is_panels_docs_and_back_and_forward_follow_the_address
     assert "siteSelect:change:loadSite" not in census.LISTENING
 
 
-def test_the_serial_overlay_left_nothing_behind():
+def test_no_serial_overlay_or_watch_control_is_counted_and_open_opens_a_machine():
     """No control or listener of the serial overlay, the toolbar's look-for-boards
     tick-box or Selected's Watch, Poll now and Monitor is counted or classified; a
     board's Machine is opened by Open, which the ring backs, and the boards' model is
@@ -911,7 +433,7 @@ def test_the_serial_overlay_left_nothing_behind():
     assert "device:monitor" not in census.RING_BACKED.values()
 
 
-def test_the_jobs_panel_left_nothing_behind():
+def test_no_control_of_a_hand_typed_jobs_panel_is_counted():
     """No control or listener of the hand-typed Jobs panel is counted or classified."""
     taken = census.take()
     assert not [f.key for f in taken.found if f.key.startswith(("job-", "jobFormEl", "jobBtn"))]
@@ -925,11 +447,11 @@ def test_nothing_is_both_taken_back_and_ring_backed():
         assert key in census.CONTROLS or key in census.LISTENING, key
 
 
-def test_one_page_is_counted_and_the_retired_pages_left_nothing_behind():
-    """The census counts one page, the viewer: the firmware page and the printer monitor
-    are the Bench and a board's Machine in front of the world, their templates gone, and
-    nothing of theirs -- the toolbar's links to them, the monitor's port picker, the
-    firmware page's device cards and rows -- is counted or classified."""
+def test_the_census_counts_one_page_the_viewer_with_the_bench_in_it():
+    """The census counts one page, the viewer: /firmware and /firmware/monitor open the
+    Bench and a board's Machine in it, no template stands for either, and no toolbar
+    link to them, monitor port picker or firmware device card or row is counted or
+    classified."""
     assert census.PAGES == (census.VIEWER,)
     for gone in ("firmware.html.j2", "monitor.html.j2"):
         assert not (census.TEMPLATES / gone).exists(), gone
@@ -974,7 +496,7 @@ def test_one_page_is_counted_and_the_retired_pages_left_nothing_behind():
 
 
 def test_the_header_is_one_row_with_its_view_menu_on_the_ring():
-    """Load and Zoom Out are gone from the header, counted nowhere; Snap to grid,
+    """The header has no Load or Zoom Out, and neither is counted; Snap to grid,
     Detail, Assembly outlines and Walls selectable are in the View menu, each backed
     by a cell of the canvas ring's View that the ring really produces."""
     from apothecary.menu import Context, Pointing, resolve
@@ -1007,9 +529,9 @@ def test_the_header_is_one_row_with_its_view_menu_on_the_ring():
 
 def test_settings_rows_are_counted_and_unbacked_and_its_view_item_is_view_settings():
     """The Settings panel's rows are controls of their own, counted from the module
-    that writes them and never ring-backed (the input plan gives the panel a cell, not
-    each row one); ⚙ View › Settings is backed by the canvas ring's View › Settings,
-    which the ring really produces. The right button's press and release and the zoom
+    that writes them and never ring-backed (the panel has a cell, and no row has one);
+    ⚙ View › Settings is backed by the canvas ring's View › Settings, which the ring
+    really produces. The right button's press and release and the zoom
     keys are things done to the scene."""
     from apothecary.menu import Context, Pointing, resolve
 

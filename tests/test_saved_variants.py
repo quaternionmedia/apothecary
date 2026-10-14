@@ -1,8 +1,7 @@
-"""Save is a variant in git (decided 2026-09-27): the edited SCAD and its
-parameters committed to ``refs/apothecary/variants/<part>/<name>`` with git's
-plumbing, so the working tree, the index and the checked-out branch are never
-touched; listed from those refs; made the part's source by a merge the person
-does.
+"""Save is a variant in git: the edited SCAD and its parameters committed to
+``refs/apothecary/variants/<part>/<name>`` with git's plumbing, so the working tree, the
+index and the checked-out branch are never touched; listed from those refs; made the
+part's source by a merge the person does.
 
 Every repository here is the test's own, made in a temporary folder, with an
 identity of its own and none of the person's git configuration: no test makes
@@ -335,7 +334,7 @@ class TestWhatEachChanges:
 
 
 class TestWhereItsParametersAreKept:
-    """In its text (decided 2026-10-12); the part's own description a stub."""
+    """In its text; the part's own description a stub."""
 
     def test_its_text_is_built_and_the_description_is_a_stub(self):
         assert [(k.id, k.stub) for k in KEPT_IN] == [
@@ -345,7 +344,7 @@ class TestWhereItsParametersAreKept:
         assert keeping("text").id == "text"
         with pytest.raises(NotBuilt, match="stub, not built yet .what it will do: .*part.json"):
             keeping("part-description")
-        # The file beside its SCAD is no place to keep them any more.
+        # No file beside its SCAD keeps them.
         for gone in ("somewhere", "variant-file"):
             with pytest.raises(ValueError, match="no place"):
                 keeping(gone)
@@ -414,9 +413,9 @@ class TestTheMergeAdvice:
     def test_one_saved_before_says_a_merge_would_not_apply_its_file(
         self, checkout, block, monkeypatch
     ):
-        """A variant saved before the text was the truth: its values in its
-        .variant.json. Served, they are written into its SCAD; merged, they would
-        not be, and the advice says so."""
+        """A .variant.json variant, its values beside its SCAD in its .variant.json.
+        Served, they are written into its SCAD; merged, they would not be, and the
+        advice says so."""
         from apothecary.projects.parts import skeleton
 
         monkeypatch.setattr(skeleton, "ROOT", checkout)
@@ -465,8 +464,8 @@ class TestTheMergeAdvice:
 
 
 def _an_old_save(repo: Path, name: str, scad: str, params: dict) -> str:
-    """A variant as a save made one before the text was the truth: the SCAD as
-    given, its parameters beside it in block.variant.json. Its commit."""
+    """A .variant.json variant as a save commits one: the SCAD as given, its
+    parameters beside it in block.variant.json. Its commit."""
     record = json.dumps({"part": "block", "variant": name, "params": params}, indent=2) + "\n"
     scad_blob = git(repo, "hash-object", "-w", "--stdin", input=scad).strip()
     json_blob = git(repo, "hash-object", "-w", "--stdin", input=record).strip()

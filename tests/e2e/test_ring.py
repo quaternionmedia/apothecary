@@ -145,8 +145,8 @@ def test_digits_walk_device_control_jog_and_the_intent_carries_the_address(
 ):
     """7 7 2 8 reaches Jog > Y+ from printer_1's ring, Device seated last; the intent says so,
     and so does the page."""
-    # Device's cells: Open (the board's Machine) where Watch was, Flash where Monitor
-    # was, and Control, after Link, in cell 7 -- where it was before Phase 4.
+    # Device's cells: Open (the board's Machine), Flash, ..., and Control, after Link,
+    # in cell 7.
     _open_viewer(page, ring_url)
     expect(
         page.locator("#contents-list .contents-item[data-path='printer_1'] .dev-badge")
@@ -359,8 +359,8 @@ def test_the_pointer_uses_the_same_cells(page: Page, ring_url: str):
 @pytest.mark.e2e
 def test_jog_by_address_on_a_machine_s_device_ring(page: Page, ring_url: str):
     """The printer monitor's address opens the printer's Machine in front of the world;
-    inside it the ring is its device ring, as the monitor page's was. Armed, 7 2 8 jogs
-    Y+: G91/G1/G90 in the log, and the button wears ⌗728."""
+    inside it the ring is its device ring. Armed, 7 2 8 jogs Y+: G91/G1/G90 in the log,
+    and the button wears ⌗728."""
     page.add_init_script(CAPTURE)
     page.goto(f"{ring_url}/firmware/monitor?port={PRINTER}")
     expect(page.locator(MACHINE)).to_be_visible(timeout=15000)
@@ -461,7 +461,7 @@ def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: s
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     wedges = _wedges(page)
     assert wedges["8"] == "Pieces" and "Step out" not in wedges.values()
-    # Sixteen pieces: grouped in small lettered groups, each named for its
+    # The garage's pieces, grouped in small lettered groups, each named for its
     # first piece in name order. The page knows the address; the test asks
     # rather than guesses.
     address = page.evaluate(

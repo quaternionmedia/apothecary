@@ -1,4 +1,4 @@
-"""An error is a failed render (docs/plans/part-iteration-2026-10-12.md, item 1).
+"""An error is a failed render.
 
 A development snapshot exits 0 after a failed ``assert`` and writes the geometry
 it built before the error; 2021.01 exits 1 and writes nothing. Either way any

@@ -24,10 +24,9 @@ ROOT = Path(__file__).resolve().parents[2]
 PICTURES = "walkthrough/screenshots"
 
 # Of a picture's pixels: a tenth of a percent, a thousand pixels of a page. Two runs
-# of the walkthrough on one machine differed by a few dozen pixels in a picture at
-# most (the commit that brought this check says by how many); a word of the hint bar
-# or the status line is thousands. Past this, the picture shows something the
-# committed one does not, or another machine drew it.
+# of the walkthrough on one machine differ by a few dozen pixels in a picture at
+# most; a word of the hint bar or the status line is thousands. Past this, the
+# picture shows something the committed one does not, or another machine drew it.
 TOLERANCE = 0.001
 
 

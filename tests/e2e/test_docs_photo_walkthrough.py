@@ -4,13 +4,9 @@ This module is the walkthrough. `walkthrough/11-photographs-into-pieces.md` is
 what it writes, and the ordinary test command runs it, so the page is a record
 of a run rather than a description standing beside one.
 
-It used to be two demonstrations. A hand-written page of doctests walked the
-model half and said, in its own closing section, that the viewer "is driven by
-`apothecary docs generate` rather than here, because it needs a server and a
-browser". That sentence was the seam: two pages describing one path, one of them
-produced by a command somebody had to remember, and the remembered one went
-stale. Joining them costs this -- the demonstration now needs a browser and a
-server, everywhere, and the page says so.
+One path is one page: the model half and the viewer half are both here, so
+the demonstration needs a browser and a server, everywhere, and the page says
+so.
 
 Each step below is two things at once: an assertion the run has to satisfy, and
 a sentence of the page. A step cannot describe something that did not just
@@ -78,9 +74,14 @@ def test_photographs_into_pieces(
     page: Page, base_url: str, walkthrough, drawn_picture, tidy_up, tmp_path
 ):
     """Walk the whole chain, from a photograph to pieces you can walk into."""
-    from apothecary import census
     from apothecary.gathering import bench, gather
-    from apothecary.gathering.judgement import PeopleDisagree, read_answers, settle
+    from apothecary.gathering.judgement import (
+        ABOUT_A_PAIR,
+        ABOUT_ONE,
+        PeopleDisagree,
+        read_answers,
+        settle,
+    )
     from apothecary.gathering.questions import worth_asking
     from apothecary.vision import build
     from apothecary.vision.plain import PlainFinder
@@ -94,14 +95,13 @@ def test_photographs_into_pieces(
             "Point the tool at a photograph. It finds the flat shapes in it, matches "
             "each one to a named, reusable word, places them in space, sorts a folder "
             "of them into what belongs with what, asks you the questions it cannot "
-            "settle, and shows the result in the viewer it already had. Nothing claims "
+            "settle, and shows the result in the viewer. Nothing claims "
             "to be measured unless somebody said how wide the picture is."
         ),
         runtime=(
             "It draws its own photographs and reads them back, then walks the same "
-            "pieces in a real browser against a real server. It needs no network. It "
-            "does need a browser and a running server, which is the price of this "
-            "page and the viewer's page being one page."
+            "pieces in a real browser against a real server. It needs no network. Its "
+            "second half needs a browser and a running server."
         ),
         does_not_show=[
             "**A real photograph.** Everything here is drawn to order, which is how "
@@ -149,13 +149,13 @@ def test_photographs_into_pieces(
 
     choice = word_for(first)
     assert choice.word in {"plate", "disc", "post", "slot", "wedge"}
-    assert 0.0 < first.confidence < 1.0
+    assert 0.0 < first.confidence <= 0.8
     story.says(
         "Each shape gets a name, and says how sure it is",
         "A word is a recipe that builds an ordinary piece, so a named shape is "
         "something the rest of the tool already knows how to handle. The confidence "
-        "is never rounded up. It is measurably lower when the finder is wrong, which "
-        "is what makes it worth reporting at all.",
+        "is the finder's own, and the plain finder never gives more than 0.8: how much "
+        "of its box a blob fills is a guess at its shape, never a certainty.",
         shown=f"{choice.word}, {first.confidence:.2f} sure",
     )
 
@@ -220,8 +220,10 @@ def test_photographs_into_pieces(
     story.says(
         "You are better at this than it is, so it asks",
         "It works out which questions are worth a minute, best first, by how many "
-        "other pairs an answer would settle. A person answers in plain sentences, "
-        "and the whole language is five of them.",
+        "other pairs an answer would settle. A person answers in plain sentences, each "
+        "ending in one of the verdicts: "
+        + ", ".join(f"'{verdict}'" for verdict in (*ABOUT_A_PAIR, *ABOUT_ONE))
+        + ".",
         shown=questions[0].sentence(),
     )
 
@@ -303,10 +305,10 @@ def test_photographs_into_pieces(
     )
     assert facets and set(facets) == {3}, facets
     story.shows(
-        "The arrangement opens in the viewer the tool already had",
-        "No drawing code was written for any of this. An arrangement built from a "
-        "photograph is an ordinary arrangement, so the viewer already knew how to "
-        "show it.",
+        "The arrangement opens in the viewer",
+        "An arrangement built from a photograph is an ordinary arrangement, drawn as "
+        "any site is, each piece as its word builds it: a wedge is a triangle in the "
+        "world, as the picture's was.",
     )
 
     contents = page.locator("#contents-list")
@@ -367,24 +369,12 @@ def test_photographs_into_pieces(
         "the arrangement exists, and both go when the arrangement is forgotten.",
     )
 
-    # ------------------------------------------------------------ what it costs
-    controls = census.take()
-    story.says(
-        "What the whole thing costs a person",
-        "The census counts the controls the viewer puts on screen of its own, "
-        "because a tool that is pleasant to demonstrate and expensive to use is "
-        "neither. Unifying means it reaches nothing rather than a smaller pile.",
-        shown=f"{len(controls.controls_of_its_own())} controls of the viewer's own",
-    )
-
 
 @pytest.mark.e2e
 def test_the_walkthrough_would_notice_if_the_grouping_stopped_working(
     page: Page, base_url: str, drawn_picture, tidy_up
 ):
-    """A walkthrough that cannot fail is a screenshot with a caption.
-
-    The step above showing a chip per word rests on each piece carrying its
+    """The step above showing a chip per word rests on each piece carrying its
     word. This checks the same thing from the other side: strip the words out
     and there is no chip to show.
     """

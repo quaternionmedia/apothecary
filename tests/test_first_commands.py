@@ -1,6 +1,6 @@
 """The README's first commands, run as a person runs them: the paths a newcomer takes
-first, which no other test walked -- `serve` for real, the startup STL build, the
-example scene, one part's STL, `problems` and `parts checklist`."""
+first -- `serve` for real, the startup STL build, the example scene, one part's STL,
+`problems` and `parts checklist`."""
 
 from __future__ import annotations
 

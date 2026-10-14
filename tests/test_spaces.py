@@ -30,10 +30,9 @@ class TestOwnershipComesFromOneTable:
             assert problem.owner in allowed, (problem.id, problem.owner)
 
     def test_contested_reads_the_table_rather_than_hardcoding(self):
-        """An adversarial pass found this: `KIND_OWNER['contested']` could be
-        changed to anything and the index did not notice, because the contested
-        branch typed the owner again. Two places declaring one fact is the
-        duplication this index exists to avoid.
+        """The contested branch reads `KIND_OWNER['contested']` rather than typing the
+        owner again, so changing the table changes the index. Two places declaring
+        one fact is the duplication this index exists to avoid.
         """
         import apothecary.spaces as spaces
 
@@ -71,8 +70,8 @@ class TestTheIndexIsDerived:
         assert ids == [p.id for p in problems()]
 
     def test_a_part_is_only_told_about_black_boxes_it_is_fitted_to(self):
-        """`calibration_cube` was once reported as fitted to datum's board,
-        because the stub check read the bench for every part in the library.
+        """A part is told only about the black boxes it is fitted to: the stub check
+        reads the bench for the parts it places, so `calibration_cube` is told none.
         """
         unmeasured = {p.subject for p in problems() if p.kind == "unmeasured"}
         assert "calibration_cube" not in unmeasured
@@ -88,10 +87,10 @@ class TestTheIndexIsDerived:
 
 
 class TestAnUnmeasuredPartHasNotDrifted:
-    """CI found this: on a fresh checkout nothing is rendered, so every bounds
-    check comes back "needs a render" -- and the index called all of them
-    `drift`, telling a reader the declared size disagreed with geometry that
-    was never measured. Drift is a claim about a comparison that happened.
+    """On a fresh checkout nothing is rendered, so every bounds check comes back
+    "needs a render", and that is not `drift`: drift would tell a reader the declared
+    size disagreed with geometry that was never measured. Drift is a claim about a
+    comparison that happened.
     """
 
     def test_needs_a_render_is_not_reported_as_drift(self):

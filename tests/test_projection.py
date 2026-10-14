@@ -2,7 +2,7 @@
 
 A camera looking straight down at turn 0 takes exactly the flat picture, its
 width ``2 * h * tan(fov / 2)``; a flat view's numbers come out of the mapping as
-they always came out of their own formulas; a tilted camera's picture lands
+they come out of their own formulas; a tilted camera's picture lands
 where the hand-worked trigonometry says; and a camera's centre ray lands on the
 first top it meets, the floor, or nowhere.
 """
@@ -68,7 +68,7 @@ SHAPES = [
 
 
 def test_straight_down_at_turn_zero_is_the_flat_picture():
-    """At tilt 0 and turn 0 a camera's picture is today's flat mat: its right +x, its
+    """At tilt 0 and turn 0 a camera's picture is the flat mat: its right +x, its
     top +y, ``2 * h * tan(fov / 2)`` across and ``tallness`` times that deep."""
     for h, fov in ((600.0, 60.0), (1500.0, 40.0), (250.0, 112.0)):
         camera = pinhole((0.0, 0.0, h), 0.0, 0.0, fov, TALL)
@@ -131,7 +131,7 @@ def test_what_runs_past_the_horizon_lands_nowhere():
     assert onto(pinhole((0.0, 0.0, 1000.0), 0.0, 120.0, 60.0, TALL), 0.5, 0.5) is None
 
 
-# --- a flat view's numbers, as they always were -------------------------------------------
+# --- a flat view's numbers, by its own formulas and by the mapping ------------------------
 
 
 def _flat_view(host: str, width, anchor=None) -> View:
@@ -152,7 +152,7 @@ def _flat_view(host: str, width, anchor=None) -> View:
 @pytest.mark.parametrize("host", ["workbench", ""], ids=["host", "floor"])
 def test_a_flat_views_mapping_gives_what_its_own_formulas_gave(host):
     """``mm_across``, ``mat_centre``, ``shape_offset`` and the sides and turn a piece is
-    built with come out of the one mapping as they came out of their own formulas."""
+    built with come out of the one mapping as they come out of their own formulas."""
     from apothecary.example_hierarchy import create_example_site
 
     site = create_example_site()
@@ -176,7 +176,7 @@ def test_a_flat_views_mapping_gives_what_its_own_formulas_gave(host):
         assert laid.turned_degrees == pytest.approx(shape.turned_degrees, abs=1e-9)
         shift = (anchor.x + width / 2, anchor.y) if anchor is not None else (0.0, 0.0)
         assert laid.centre == pytest.approx((shift[0] + want[0], shift[1] + want[1]), abs=1e-9)
-    # Unsized, it has no mapping, and its mat stands where it always stood.
+    # Unsized, it has no mapping, and its mat stands where its own formulas put it.
     unsized = _flat_view(host, None, anchor)
     assert mapping(unsized) is None
     middle = mat_centre(unsized, site)

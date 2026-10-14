@@ -15,7 +15,7 @@ Every camera, view and kept picture a test adds is taken back after it, and
 garage is reset (tests/e2e/test_picture_in_the_world.py's fixture). Nothing here
 reloads the page between choosing a device and using it, since Chromium may hand
 a reloaded page other ids for its fake devices. The gathering is a section of
-Pictures until gathering leaves core.
+Pictures.
 """
 
 from __future__ import annotations
