@@ -1244,6 +1244,7 @@
                 this.variantRecords = {};
                 this.variantsRead = this.readVariantsFromAddress();
                 this.partSection = null;   // the Selected panel's section for the part being edited
+                this.checklistRead = 0;    // the newest read of a part's checklist: an older answer is let go
                 // The SCAD editor (widgets/scad_editor.js), for the part being edited: what
                 // its text is, per target key (the part's own, the draft, the variant it
                 // came from, the name Save keeps it under, its saved variants), and the one
@@ -3681,6 +3682,17 @@
                 this.appendEditor(this.partTarget(node.part_ref));
             }
 
+            // An element of the part's section: in the section kept for its target,
+            // whether or not Selected shows it now, else in its stage bar pinned above
+            // Selected. Selected is drawn again on every selection -- with nothing
+            // selected between a double-click's clicks -- and the section put in it as it
+            // was; what the server answers meanwhile is written into the section, not lost.
+            partEl(selector) {
+                return this.partSection?.querySelector(selector)
+                    ?? this.panels.pinnedSlot('selected')?.querySelector(selector)
+                    ?? null;
+            }
+
             // The editor's section in Selected, for a target. The section being
             // edited keeps itself across a redraw of the panel (re-selecting it, a
             // right-click, a pin, the site drawn again after Apply): nothing is
@@ -3796,7 +3808,12 @@
             // The same assessment the CLI prints, so the two cannot disagree
             // about what is buildable.
             async loadPartChecklist(target) {
-                const host = document.getElementById('part-checklist');
+                const host = this.partEl('#part-checklist');
+                if (!host) return;
+                // The newest read is the one written, into its section whether or not
+                // Selected shows it now: an answer to an older read (another part's
+                // section since, or the list read again after an Apply) is let go.
+                const read = (this.checklistRead += 1);
                 // Of what is drawn: a variant this tab applied, its fit judged by what it
                 // measured; and in this site, against the build volume of the printer pinned.
                 const variant = target.part ? this.variantByPart[target.part] : null;
@@ -3805,9 +3822,10 @@
                 if (this.siteName) asked.set('site', this.siteName);
                 try {
                     const response = await fetch(`${target.checklistUrl}${asked.size ? `?${asked}` : ''}`);
-                    if (host !== document.getElementById('part-checklist')) return;
+                    if (read !== this.checklistRead) return;
                     if (!response.ok) { host.textContent = 'No checklist available.'; return; }
                     const report = await response.json();
+                    if (read !== this.checklistRead) return;
                     host.innerHTML = '';
 
                     const verdict = document.createElement('div');
@@ -3886,8 +3904,8 @@
 
             async refreshStage() {
                 const target = this.editorTarget;
-                const summary = document.getElementById('stage-summary');
-                const apply = document.getElementById('apply-btn');
+                const summary = this.partEl('#stage-summary');
+                const apply = this.partEl('#apply-btn');
                 if (!target || !summary || !apply) return;
 
                 const diff = this.stagedDiff();
@@ -3937,8 +3955,8 @@
             }
 
             async validateStaged(target, seq, count) {
-                const summary = document.getElementById('stage-summary');
-                const apply = document.getElementById('apply-btn');
+                const summary = this.partEl('#stage-summary');
+                const apply = this.partEl('#apply-btn');
                 if (!summary || !apply || seq !== this._stageSeq || this.editorTarget?.key !== target.key) return;
                 // The target's validateUrl: a check against its own model, no render.
                 let report;
@@ -4004,23 +4022,23 @@
             }
 
             bindStageActions(target) {
-                document.getElementById('apply-btn').onclick = () => {
+                this.partEl('#apply-btn').onclick = () => {
                     if (this.toSaved(target)) this.drawSaved(target);
                     else if (this.stagedValid) this.applyEditor(target);
                 };
-                document.getElementById('revert-btn').onclick = () => this.revertStaged(target);
-                const defaults = document.getElementById('defaults-btn');
+                this.partEl('#revert-btn').onclick = () => this.revertStaged(target);
+                const defaults = this.partEl('#defaults-btn');
                 if (defaults) defaults.onclick = () => this.stageDefaults(target);
                 const say = ({ ok, said }) => this.setStatus(said, ok ? 'success' : 'error');
-                document.getElementById('undo-btn').onclick = () => say(this.undoStaged(target));
-                document.getElementById('redo-btn').onclick = () => say(this.redoStaged(target));
-                const ghost = document.getElementById('ghost-toggle');
+                this.partEl('#undo-btn').onclick = () => say(this.undoStaged(target));
+                this.partEl('#redo-btn').onclick = () => say(this.redoStaged(target));
+                const ghost = this.partEl('#ghost-toggle');
                 if (ghost) {
                     ghost.checked = this.ghostShown;
                     ghost.onchange = () => say(this.setGhost(ghost.checked));
                 }
-                document.getElementById('kept-restore').onclick = () => say(this.restoreKept(target));
-                document.getElementById('kept-discard').onclick = () => say(this.discardKept(target));
+                this.partEl('#kept-restore').onclick = () => say(this.restoreKept(target));
+                this.partEl('#kept-discard').onclick = () => say(this.discardKept(target));
             }
 
             // One value staged by a control: a step of undo (a slider dragged through
@@ -4038,7 +4056,7 @@
                         for (const sub of field.scad) if (!sameValue(value?.[sub], stage.staged[name]?.[sub])) writes[sub] = value[sub];
                     } else writes[field.scad] = value;
                     if (!Object.keys(writes).length) return;
-                    const at = focusedControl(document.getElementById('part-params'));
+                    const at = focusedControl(this.partEl('#part-params'));
                     if (at) this.lastStaged = { key: target.key, at };
                     if (field.computed) { this.askToPin(target, field, writes); return; }
                     stage.offerPending = false;
@@ -4051,7 +4069,7 @@
                 stage.offerPending = false;
                 // Where the person is in the parameters, for the focus to go back to after an
                 // Apply that took it (its button, disabled once nothing is staged).
-                const at = focusedControl(document.getElementById('part-params'));
+                const at = focusedControl(this.partEl('#part-params'));
                 if (at) this.lastStaged = { key: target.key, at };
                 this.refreshStage();
             }
@@ -4091,7 +4109,7 @@
 
             refreshUndoButtons(target) {
                 const stage = this.partStages[target?.key];
-                const undo = document.getElementById('undo-btn'), redo = document.getElementById('redo-btn');
+                const undo = this.partEl('#undo-btn'), redo = this.partEl('#redo-btn');
                 if (stage?.tied) {
                     const editor = this.tiedEditor(target);
                     if (undo) undo.disabled = !editor?.canUndo();
@@ -4291,7 +4309,7 @@
             // describes a part. A separate dashboard page would be a second
             // entry point onto the same object, and this viewer is the only one.
             async loadPartParams(target) {
-                const host = document.getElementById('part-params');
+                const host = this.partEl('#part-params');
                 // Kept per target, so a part left and come back to has what was
                 // staged on it. `committed` is what the STL on disk, or the piece
                 // in the site, was built from; `staged` is what the controls say.
@@ -4538,7 +4556,7 @@
             // typed in, a computed one checked, one set in an overlay), else each set where
             // it is, so the focus stays where a person left it.
             buildControls(target, stage) {
-                const host = document.getElementById('part-params');
+                const host = this.partEl('#part-params');
                 if (!host || this.editorTarget?.key !== target.key) return;
                 const fields = stage.fields ?? [];
                 const built = `${target.key}|tied|${JSON.stringify(fields.map((f) => [f.name, f.type, f.min, f.max, f.step, f.unit ?? null, f.description ?? null, (f.options || []).length, (f.contested || []).length, f.computed ?? null, f.unset ?? false, f.readOnly ?? false]))}`;
@@ -4649,7 +4667,7 @@
             }
 
             showEnvelope(bounds) {
-                const el = document.querySelector('#part-envelope .declared');
+                const el = this.partEl('#part-envelope .declared');
                 if (!el) return;
                 this.shownDeclared = bounds ?? null;
                 el.textContent = bounds
@@ -4662,7 +4680,7 @@
             // Beside what the part declares, what was drawn measures: OpenSCAD's
             // summary of the render, else read off the STL by the server.
             showMeasured(box, from) {
-                const el = document.querySelector('#part-envelope .measured');
+                const el = this.partEl('#part-envelope .measured');
                 if (!el) return;
                 this.shownMeasured = box ?? null;
                 el.textContent = box
@@ -4677,7 +4695,7 @@
             // the floor flagged by how far. Only while the envelope shown is the drawn
             // one's: a staged set's says what it would make, not what is drawn.
             markEnvelope() {
-                const line = document.getElementById('part-envelope');
+                const line = this.partEl('#part-envelope');
                 if (!line) return;
                 const differs = line.querySelector('.differs'), floor = line.querySelector('.floor');
                 const declared = this.shownDeclared, measured = this.shownMeasured;
@@ -4768,7 +4786,7 @@
             // OpenSCAD's errors and warnings, by file and line; a line of the part's
             // own SCAD that one names is marked in its source below.
             showMessages(target, messages) {
-                const list = document.getElementById('part-messages');
+                const list = this.partEl('#part-messages');
                 if (!list || this.editorTarget?.key !== target.key) return;
                 list.innerHTML = '';
                 const own = target.sourceFile;
@@ -4840,7 +4858,7 @@
             // The editor of a target that had work kept before a reload, other than what it
             // now shows: offered back, saying what it was.
             offerKeptWork(target) {
-                const offer = document.getElementById('kept-offer');
+                const offer = this.partEl('#kept-offer');
                 if (!offer || this.partSection.dataset.target !== target.key) return;
                 const kept = this.keptWork[target.key];
                 const stage = this.partStages[target.key], scad = this.scadStages[target.key];
@@ -4894,7 +4912,7 @@
                     else this.scadEditor.setText(kept.scad);
                     text = true;
                 }
-                document.getElementById('kept-offer')?.setAttribute('hidden', '');
+                this.partEl('#kept-offer')?.setAttribute('hidden', '');
                 this.keepWork(target, { now: true });
                 const what = [text ? (stage.tied ? 'its edited SCAD, staged: checked, and Apply draws it' : 'its edited SCAD, checked and rendered once it reads') : null, numbers.length ? `${numbers.length} number${numbers.length > 1 ? 's' : ''} staged` : null].filter(Boolean).join(' and ');
                 return { ok: true, said: `${target.label}: restored from before the reload, ${what || 'nothing that differed'}` };
@@ -4904,7 +4922,7 @@
                 delete this.keptWork[target.key];
                 const stage = this.partStages[target.key];
                 if (stage) stage.offerPending = false;
-                document.getElementById('kept-offer')?.setAttribute('hidden', '');
+                this.partEl('#kept-offer')?.setAttribute('hidden', '');
                 this.keepWork(target, { now: true });
                 return { ok: true, said: `${target.label}: what this tab kept from before the reload is let go; what is drawn stays` };
             }
@@ -5071,13 +5089,13 @@
             }
 
             showBuildNote(target) {
-                const note = document.getElementById('part-build-note');
+                const note = this.partEl('#part-build-note');
                 if (!note) return;
                 const stage = this.partStages[target.key];
                 const cannot = stage?.canBuild === false;
                 note.hidden = !cannot;
                 note.textContent = cannot ? `Apply is off: ${stage.buildNote || 'this OpenSCAD cannot build it'}` : '';
-                const apply = document.getElementById('apply-btn');
+                const apply = this.partEl('#apply-btn');
                 if (apply && cannot) {
                     apply.disabled = true;
                     apply.title = `This OpenSCAD cannot build it: ${stage.buildNote || ''}`;
@@ -5115,7 +5133,7 @@
             }
 
             showQueue(waiting, limit) {
-                const line = document.getElementById('part-queue');
+                const line = this.partEl('#part-queue');
                 if (!line) return;
                 this.queuedNow = waiting;
                 if (!waiting.length) { line.hidden = true; line.textContent = ''; return; }
@@ -5173,7 +5191,7 @@
                     icon: `failed at ${where}`,
                     words: `${esc(ref)}: a failed render, drawn greyed as far as OpenSCAD built it -- ${esc(partial.message ?? '')}${partial.file ? ` (${esc(partial.file.split('/').pop())}, ${esc(where)})` : ''}`,
                 });
-                const line = document.getElementById('part-envelope');
+                const line = this.partEl('#part-envelope');
                 if (line && this.editorTarget?.part === ref) {
                     line.classList.add('failed');
                     line.dataset.failed = `failed at ${where}: what it built before the error is drawn greyed`;
@@ -5191,7 +5209,7 @@
                 this.anchors.remove(`failed:${ref}`);
                 const drawn = this.meshByName[failure.key];
                 if (drawn) drawn.visible = true;
-                const line = document.getElementById('part-envelope');
+                const line = this.partEl('#part-envelope');
                 if (line) { line.classList.remove('failed'); delete line.dataset.failed; }
                 this.invalidate();
             }
@@ -5480,7 +5498,7 @@
 
             setGhost(on) {
                 this.ghostShown = Boolean(on);
-                const tick = document.getElementById('ghost-toggle');
+                const tick = this.partEl('#ghost-toggle');
                 if (tick) tick.checked = this.ghostShown;
                 const said = this.showGhost();
                 return { ok: true, said: this.ghostShown ? said : 'Ghost hidden' };
@@ -5496,7 +5514,7 @@
 
             showGhost() {
                 this.dropGhostMesh();
-                const line = document.getElementById('part-ghost');
+                const line = this.partEl('#part-ghost');
                 const ref = this.editorTarget?.part;
                 if (!this.ghostShown || !ref) { if (line) line.hidden = true; return 'Ghost hidden'; }
                 const before = this.ghostBefore[ref];
@@ -6090,7 +6108,7 @@
                         // The focus where it was: an Apply pressed by its button, which is
                         // disabled now nothing is staged, gives it back to the control last
                         // moved; a key in the SCAD editor never took it.
-                        const host = document.getElementById('part-params');
+                        const host = this.partEl('#part-params');
                         const lost = !document.activeElement || document.activeElement === document.body;
                         if (lost && host && this.lastStaged?.key === target.key) refocus(host, this.lastStaged.at);
                     }
