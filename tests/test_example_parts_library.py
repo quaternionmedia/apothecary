@@ -1,7 +1,5 @@
-"""Tests for the parts library as a fractal tree (prototype, unratified).
-
-Covers migrating the registered parts/ registry into leaf Assembly nodes --
-see apothecary/example_parts_library.py's docstring for why this exists.
+"""Tests for the parts library as a fractal tree, a prototype: every registered part
+a leaf Assembly node under one Site (apothecary/example_parts_library.py).
 """
 
 from apothecary.example_parts_library import (

@@ -238,8 +238,8 @@ WALKTHROUGH_ROOT = Path(__file__).resolve().parents[2] / "walkthrough"
 
 def _keep_unless_changed(path: Path, png: bytes) -> None:
     """Write the screenshot only when its pixels differ from the committed one: a
-    re-encode of the same picture is not a change, and every run used to leave
-    the tracked screenshots modified."""
+    re-encode of the same picture is not a change, so a run leaves an unchanged
+    screenshot as committed."""
     import io
 
     from PIL import Image, ImageChops
@@ -277,9 +277,9 @@ class Walkthrough:
     the only reason the sentence is worth anything.
 
     `browser_suite_only` is a page the browser suite writes and the quick
-    `apothecary test run` does not -- a loop's page (docs/plans/ui-flows-2026-10-08.md),
-    whose run is unmarked `walkthrough`: its header says the browser suite rewrites
-    it, and its footer names `module`, the test module that writes it, to run alone.
+    `apothecary test run` does not -- a loop's page, whose run is unmarked
+    `walkthrough`: its header says the browser suite rewrites it, and its footer
+    names `module`, the test module that writes it, to run alone.
     The fixture sets `module` and holds the flag to the run's marker, so the words
     stay true. It is the one place a page says who writes it.
     """

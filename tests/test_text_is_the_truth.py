@@ -1,8 +1,7 @@
-"""The text is the truth (docs/plans/part-iteration-2026-10-12.md, "parameters and
-text, tied together"), through the routes: a part's assignments read for a page's
-first load and by its check, computed values evaluated, values checked by the
-part's model with their fields, a part in a submodule edited as its overlay, and a
-part whose SCAD is generated kept one way.
+"""The text is the truth (docs/viewer.md: the parameters and the SCAD are one draft),
+through the routes: a part's assignments read for a page's first load and by its check,
+computed values evaluated, values checked by the part's model with their fields, a part
+in a submodule edited as its overlay, and a part whose SCAD is generated kept one way.
 
 Every OpenSCAD here is scripted (tests/scripted_openscad.py); every part and
 repository is the test's own.

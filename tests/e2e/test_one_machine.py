@@ -1,15 +1,13 @@
 """One Machine per board: the one surface a board has, and the one poller behind it.
 
-The consolidation plan's Phase 4 (docs/plans/consolidation-2026-10-03.md): a
-board's Machine is the one place for it -- its state, one log with one query
-box, its controls, its pin -- printer or devkit; everything that draws a board
-reads it from one model (static/boards.js) that polls it once; Selected's
-Device section is one line and Open; Watch and Monitor on the ring are one
-cell that opens the Machine; a refusal says so in the status bar; the serial
-overlay is gone. Phase 5 (and the owner's decisions after Phase 4): a board's
-flashing joins its Machine, Device › Flash in the cell Monitor freed, so every
-cell after it is back where it was before Phase 4; a devkit's port is opened
-only when asked (Listen); a Machine's ring is its device ring.
+A board's Machine is the one place for it -- its state, one log with one query box,
+its controls, its pin, its flashing -- printer or devkit; everything that draws a
+board reads it from one model (static/boards.js) that polls it once; Selected's
+Device section is one line and Open; Device › Open on the ring opens the Machine; a
+refusal says so in the status bar; there is no serial overlay. Device › Flash holds
+its cell on a printer too, so every cell after it is the same on a printer and a
+devkit; a devkit's port is opened only when asked (Listen); a Machine's ring is its
+device ring.
 
 Runs against servers of its own from the conftest's ``start_server``: the
 scripted ``arduino-cli`` (``/dev/ttyFAKE0`` an Uno, ``/dev/ttyFAKE1``
@@ -94,15 +92,15 @@ MACHINE = ".panel[data-panel='machine']"
 
 @pytest.mark.e2e
 def test_watch_and_monitor_are_one_cell_that_opens_the_machine(page: Page, url: str):
-    """The Device ring holds one cell for a board's Machine, where Watch was; Monitor is
-    gone. Chosen, the Machine opens in the rail's tab strip, the printer's."""
+    """The Device ring holds one cell for a board's Machine, Open, and no Watch or
+    Monitor. Chosen, the Machine opens in the rail's tab strip, the printer's."""
     _open_viewer(page, url)
     _ring_on(page, "printer_1")
     _choose(page, "Device")
     cells = _wedges(page)
     assert "Watch" not in cells and "Monitor" not in cells, cells
-    assert cells["Open"] == "8"  # the cell Watch had
-    assert cells["Flash"] == "2"  # the cell Monitor had
+    assert cells["Open"] == "8"
+    assert cells["Flash"] == "2"
     page.keyboard.press("8")
     expect(page.locator("#ring-overlay")).to_have_count(0)
     machine = page.locator(MACHINE)
@@ -227,8 +225,8 @@ def test_a_refusal_reaches_the_status_bar(page: Page, url: str):
 
 @pytest.mark.e2e
 def test_no_serial_overlay_and_no_scan_on_a_schedule(page: Page, url: str):
-    """The serial overlay, its toolbar toggle and the toolbar's look-for-boards tick-box
-    are gone, and a browser that remembered the overlay open opens none."""
+    """There is no serial overlay, toolbar toggle for it or look-for-boards tick-box, and
+    a browser that remembered the overlay open opens none."""
     page.add_init_script(
         "try { localStorage.setItem('apothecary.serial.open', '1');"
         " localStorage.setItem('apothecary.devices.auto', '1'); } catch (e) {}"
@@ -312,9 +310,9 @@ def test_a_devkit_has_a_machine_with_what_it_should_run_and_what_it_says(page: P
 
 @pytest.mark.e2e
 def test_flash_takes_monitor_s_old_cell_and_every_cell_after_it_is_back(page: Page, url: str):
-    """Device › Flash is in the cell Monitor had; Query, Unpin, Rescan, Link and Control
-    are where hands learned them before Phase 4 -- Control at 7, so from a printer's
-    node 2 7 2 8 is Control › Jog › Y+. A printer keeps its own firmware: its Flash
+    """Device › Flash is in cell 2; Query, Unpin, Rescan, Link and Control keep the cells
+    a devkit's device ring gives them -- Control at 7, so from a printer's node 2 7 2 8
+    is Control › Jog › Y+. A printer keeps its own firmware: its Flash
     holds the cell and cannot be chosen."""
     _open_viewer(page, url)
     _ring_on(page, "printer_1")
@@ -347,8 +345,8 @@ def test_flash_takes_monitor_s_old_cell_and_every_cell_after_it_is_back(page: Pa
 
 @pytest.mark.e2e
 def test_a_machine_s_ring_is_its_device_ring(page: Page, url: str):
-    """Ctrl+right-click inside a printer's Machine: the device ring on its port, the monitor
-    page's ring -- Control at 7 -- and the Machine's buttons wear its cells: Control ›
+    """Ctrl+right-click inside a printer's Machine: the device ring on its port -- Control
+    at 7 -- and the Machine's buttons wear its cells: Control ›
     Arm ⌗77, E-STOP ⌗71, Link › Reconnect ⌗18; armed, Jog › Y+ ⌗728, Pause ⌗796."""
     _open_viewer(page, url)
     page.locator(".world-badge[data-path='printer_1']").click()
@@ -512,8 +510,7 @@ def test_a_board_pinned_nowhere_opens_in_the_rail_on_the_default_site(page: Page
     """The monitor's address for a board pinned nowhere: the default site, its Machine
     in the rail as every Machine is. The Uno, never asked, is a devkit's Machine -- Probe and
     Listen, no Poll, its port closed -- and the printer, asked M115, a printer's: Poll,
-    and nothing that would take its port. (The firmware page's device cards, each a
-    board's Machine now.)"""
+    and nothing that would take its port."""
     url = start_server()
     opened = []
     page.on(

@@ -1,6 +1,5 @@
-/* The SCAD editor: a part's SCAD in CodeMirror 6, where the part editor's
- * read-only source stood in Selected (loop 2, the owner's answer of 2026-10-10,
- * docs/plans/ui-flows-2026-10-08.md).
+/* The SCAD editor: a part's SCAD in CodeMirror 6, in Selected's part editor
+ * (docs/viewer.md, "The SCAD editor").
  *
  * CodeMirror is vendored (apothecary/static/vendor/codemirror/, its README says
  * which packages and how to update them) and loaded the first time an editor
@@ -30,11 +29,10 @@
  *
  * A part whose SCAD the page edits has one draft: its text. A control moved writes
  * its value into its assignment's line here (writeValues), as an edit undo takes
- * back, and the page reads the text again on every change to move the controls
- * (the part-iteration plan's "parameters and text, tied together"). Such an edit,
- * a whole text put back (replaceText) and the page's own Undo and Redo are told to
- * the page as staged ({ staged: true }): checked, and drawn when Apply is pressed;
- * what a person types here is checked and drawn once it reads.
+ * back, and the page reads the text again on every change to move the controls.
+ * Such an edit, a whole text put back (replaceText) and the page's own Undo and
+ * Redo are told to the page as staged ({ staged: true }): checked, and drawn when
+ * Apply is pressed; what a person types here is checked and drawn once it reads.
  *
  * mountScadEditor(slot, options) renders into slot and resolves to the editor:
  *   options: { text, readOnly, editable, name, onChange(text, { staged }), onSave(),
@@ -179,8 +177,8 @@ function numbers(params) {
 }
 
 // What making a variant the part's source takes, as the server says it truly: where
-// its ref lives, and whether a merge brings its values (one saved before its values
-// were in its text does not, until it is saved again).
+// its ref lives, and whether a merge brings its values (a .variant.json variant,
+// whose values are not in its text, does not, until it is saved again).
 function mergeSaid(v) {
     return v.merge?.advice || `git merge ${v.ref} makes it the part's source`;
 }

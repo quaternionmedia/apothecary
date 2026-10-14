@@ -254,7 +254,8 @@ class TestMakingAVariant:
         assert len(_renders(exe)) == 2
 
     def test_a_variant_the_command_line_made_is_never_overwritten(self, tmp_path, openscad):
-        """`apothecary parts generate-stl -p x=12` left a variant as the part's STL."""
+        """A variant the command line made (`apothecary parts generate-stl -p x=12`)
+        stays a variant: a render never writes it over the part's STL."""
         exe = openscad()
         part = _part(tmp_path)
         canonical = part.get_stl_output_path()

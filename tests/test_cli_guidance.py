@@ -1,6 +1,6 @@
 """What the command line tells a person about where to start and what comes next:
 `apothecary --help`'s order and closing steps, `check`'s last line, and toolchain
-reports that say each thing once (the onboarding plan, 2026-10-11)."""
+reports that say each thing once."""
 
 from click.testing import CliRunner
 

@@ -1,7 +1,6 @@
 /* Keys: the one check every shortcut of the page asks, and how a key is named.
  *
- * A shortcut acts unless the focus takes that key itself (docs/plans/
- * input-2026-10-12.md, "keys act where they belong"):
+ * A shortcut acts unless the focus takes that key itself (docs/viewer.md, "Keys"):
  *
  * - a box typed in, a drop-down or editable text (the SCAD editor) takes every
  *   key: a person is typing there, and no shortcut acts;

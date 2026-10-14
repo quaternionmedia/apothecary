@@ -110,7 +110,7 @@ esp32_blink@rust-esp32 · esp32
 
 ## What this page does not show
 
-- **A real board.** The devkit is a simulation that says what esp32_blink says; flashing the bench's own ESP32 and hearing it is step G of the bench checklist (docs/validation/2026-09-20-ender-bench.md).
+- **A real board.** The devkit is a simulation that says what esp32_blink says; flashing the bench's own ESP32 and hearing it is section H of the bench checklist (docs/bench-checklist.md).
 - **A real build.** The scripted cargo writes a stand-in image; a real one is `apothecary firmware install --rust-esp32` and then the same Compile (docs/firmware.md).
 - **Rust with no arduino-cli.** The Rust module finds the devkit and listens to it itself when arduino-cli is not there; this module's last test goes round that way, and writes no page.
 - **What changes on every run.** When each task started and each log line arrived, when the board was flashed, and the folders the stand-in tools and the builds live in -- which a task's output names -- are blanked in the pictures and left out of the words, so this page changes when the loop does, not when the clock does.
