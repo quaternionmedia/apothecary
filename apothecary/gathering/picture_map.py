@@ -21,8 +21,8 @@ from typing import Dict, List, Tuple
 
 from .models import ALONE, CANNOT_TELL, PARTS_OF_ONE, SAME_THING, Cluster, Gathering
 
-# Two hues and a neutral. Checked with the validator on the all-pairs list in
-# both light and dark: worst pair well clear of both floors. "Cannot tell" is
+# Two hues and a neutral, each pair well clear of the contrast floors in both
+# light and dark. "Cannot tell" is
 # deliberately not a third hue — it is the absence of an answer, and a dashed
 # grey line reads as that where a colour would read as a third kind of answer.
 SAME_HUE_LIGHT = "#2a78d6"
@@ -76,7 +76,7 @@ def _layout(
 
     # Pictures that stand on their own are packed tight, several to a row. They
     # are usually most of a folder, and giving each the room a whole group needs
-    # pushed the groups off the top of the screen.
+    # would push the groups off the top of the screen.
     if alone:
         per_alone = max(per_row, int((width - PAD * 2) // ALONE_WIDE))
         top = height + (36.0 if joined else 0.0)
@@ -173,11 +173,10 @@ def as_html(gathering: Gathering, *, title: str = "Which pictures went together"
                         by_a_person=kinship.from_a_person,
                     )
                 )
-    # Undecided pairs are deliberately *not* drawn as lines. On eighteen
-    # photographs there were a hundred and four of them, and drawing each as a
-    # line turned the whole picture into a ball of string that hid the four
-    # answers it existed to show. They are counted on the picture they touch,
-    # named in the table underneath, and that is enough.
+    # Undecided pairs are deliberately *not* drawn as lines. They far outnumber
+    # the answers, and drawn as lines they would turn the picture into a ball of
+    # string that hides the answers it exists to show. They are counted on the
+    # picture they touch, named in the table underneath, and that is enough.
     unsure_about: Dict[str, int] = {}
     for kinship in gathering.undecided():
         for side in (kinship.left, kinship.right):
@@ -218,8 +217,8 @@ def as_html(gathering: Gathering, *, title: str = "Which pictures went together"
         for r in gathering.readings
     )
     # Only the pairs that got an answer. The undecided ones are counted, not
-    # listed: on eighteen photographs they ran to a hundred and four rows, all
-    # of them saying the same thing.
+    # listed: they far outnumber the answers, and every row would say the same
+    # thing.
     answered = [k for k in gathering.kinships if k.verdict != CANNOT_TELL]
     pairs = "".join(
         "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(

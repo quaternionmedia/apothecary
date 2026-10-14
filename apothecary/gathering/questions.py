@@ -83,9 +83,9 @@ def _same_thing_groups(gathering: Gathering) -> Dict[str, Tuple[str, ...]]:
 
     Not which cluster it is in. A cluster can be a larger thing built out of
     several separate groups, and answering "these two are the same thing" merges
-    the groups, not the whole composite. Reading the composite size here made the
-    valuable questions look worthless and the cheap ones look valuable — it
-    reported a question worth four as worth one and sorted it last.
+    the groups, not the whole composite. Reading the composite size here would
+    make the valuable questions look worthless and the cheap ones look valuable,
+    reporting a question worth four as worth one and sorting it last.
     """
     belongs: Dict[str, Tuple[str, ...]] = {}
     for cluster in gathering.clusters:
@@ -120,17 +120,15 @@ def worth_asking(gathering: Gathering, *, most: int = 8) -> List[Question]:
             f"asked for {most} question(s). One is the fewest worth writing out; "
             "to ask nothing, do not ask."
         )
-    # Worked out once, not once per pair. Recomputing it inside the loop made
-    # this take twenty-two seconds on two hundred photographs — longer than
-    # everything else in the run put together.
+    # Worked out once, not once per pair: inside the loop it would take longer
+    # than everything else in the run put together.
     belongs = _same_thing_groups(gathering)
 
     asked: List[Question] = []
     for said in gathering.kinships:
         # Only what the machine could not decide. A person's answer is never
         # "cannot tell", so a pair they have ruled on is already excluded by the
-        # verdict alone — an extra guard on who said it read as protection and
-        # was dead code, which a reviewer showed by deleting it with no effect.
+        # verdict alone.
         if said.verdict != CANNOT_TELL:
             continue
         if said.shared <= NOTHING_IN_COMMON:
@@ -169,12 +167,12 @@ THE_LINE = "# ---- below here is the machine's, and is rewritten each time ----"
 def theirs(already: str) -> str:
     """Only the part of an answers file a person wrote.
 
-    Splitting on the line above is what stops two things happening. The sheet was
-    appending its whole question block every run, so a file answered three times
-    held the same question three times over and answering two copies differently
-    was reported as two people disagreeing. And a sheet written to a file that
-    was not also passed in as answers replaced it outright — a person's notes,
-    gone, with no warning.
+    Splitting on the line above stops two things happening. Without it the sheet
+    would append its whole question block every run, so a file answered three
+    times would hold the same question three times over, and answering two
+    copies differently would read as two people disagreeing. And a sheet written
+    to a file that was not also passed in as answers would replace it outright —
+    a person's notes, gone, with no warning.
     """
     if THE_LINE not in already:
         return already
@@ -209,9 +207,8 @@ def as_sheet(
         "# The whole language is these five sentences:",
         "#",
         # Written with the gaps marked so that they cannot themselves be read as
-        # answers. Spelled out as ordinary names, uncommenting the instructions
-        # by accident fed the sheet its own examples back and the run stopped
-        # with a complaint about pictures called 'one' and 'another'.
+        # answers: spelled out as ordinary names, an instruction uncommented by
+        # accident would feed the sheet its own examples back.
         "#     <a picture> and <another picture> are the same thing",
         "#     <a picture> and <another picture> are parts of one thing",
         "#     <a picture> and <another picture> are not related",

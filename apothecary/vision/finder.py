@@ -11,7 +11,7 @@ connection is real.
 Every finder must work with the network switched off
 (``apothecary/stays_local.py``).
 
-PROTOTYPE — not ratified.
+A prototype: no ratified record governs it.
 """
 
 from __future__ import annotations

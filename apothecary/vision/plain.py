@@ -12,7 +12,7 @@ working because somebody else changed their mind.
 Every shape it reports is marked ``plain`` and carries a confidence well under
 1.0, so nothing downstream mistakes a guess for a measurement.
 
-PROTOTYPE — not ratified.
+A prototype: no ratified record governs it.
 """
 
 from __future__ import annotations
@@ -51,9 +51,10 @@ _FAMILIES: List[Tuple[ShapeKind, float, float]] = [
 LINE_RATIO = 0.12
 
 # A shape narrower than this many pixels is named on too little evidence to
-# trust. Measured: drawn at 3-6% of the picture's short side, naming was right
-# 33% of the time, against 100% at 14-26%. The names are still reported, because
-# a guess beats silence, but the confidence is pulled down to say so.
+# trust: naming a shape a few percent of the picture's short side across is
+# unreliable (`apothecary photo check` measures it). The names are still
+# reported, because a guess beats silence, but the confidence is pulled down to
+# say so.
 TRUSTWORTHY_PIXELS = 40
 LEAST_TRUSTED = 0.35
 
@@ -248,8 +249,8 @@ def _describe(blob: List[int], width: int, height: int) -> Optional[FoundShape]:
     # The angle is only meaningful for something with a long side. A circle has
     # no orientation, and a true square's is arbitrary within a quarter turn.
     # The threshold is deliberately close to square: a panel five pixels off
-    # square has an unambiguous direction, and throwing it away built the panel
-    # a quarter turn out.
+    # square has an unambiguous direction, and throwing it away would build the
+    # panel a quarter turn out.
     turned = box.degrees if thinness < 0.995 else 0.0
 
     if thinness < LINE_RATIO:

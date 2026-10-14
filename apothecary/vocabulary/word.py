@@ -9,7 +9,7 @@ A word sits alongside a part from the parts folder rather than underneath it. A
 part is one drawing file plus printing notes; a word is a small tree with no
 file at all.
 
-PROTOTYPE — not ratified.
+A prototype: no ratified record governs it.
 """
 
 from __future__ import annotations
@@ -39,10 +39,9 @@ class WordShape(BaseModel):
 Recipe = Callable[[str, WordShape], Assembly]
 
 
-# The owner's decision of 2026-10-10 (docs/plans/slicer-2026-10-10.md): a piece made
-# from a picture slices with the printer's values, and a word declaring print
-# settings for the pieces made as it is a stub -- the shape a part declares
-# (PrintSettings), refused if set until a slice uses it.
+# A piece made from a picture slices with the printer's values, and a word
+# declaring print settings for the pieces made as it is a stub -- the shape a
+# part declares (PrintSettings), refused if set until a slice uses it.
 WORD_PRINT_SETTINGS_STUB = (
     "a word's print settings are a stub, not built yet: a piece made as a word slices "
     "with the printer's values (docs/plans/slicer-2026-10-10.md)"
