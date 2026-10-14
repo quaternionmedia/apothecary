@@ -1602,12 +1602,13 @@ def _pinned_at(port: str) -> Optional[tuple[str, Assembly, str]]:
 def _parts_of(site_name: str, site: Assembly, leave_out: str) -> List[jobs.JobPart]:
     """What a job in ``site`` can name as the part it makes, by path: every node
     built from a part (named for its ``part_ref``) and every piece made from a
-    picture (named for its word), but nothing at or under ``leave_out`` -- the
-    machine itself. Holes cut from a piece are not things made."""
+    picture (named for its word, with the picture and the camera it came from),
+    but nothing at or under ``leave_out`` -- the machine itself. Holes cut from a
+    piece are not things made."""
     from .vision import views as viewing
 
     made = viewing.store().made_at(site_name)
-    found: Dict[str, str] = {}
+    found: Dict[str, jobs.JobPart] = {}
 
     def visit(node: Assembly, prefix: str) -> None:
         for child in [*node.children, *node.additions]:
@@ -1615,13 +1616,16 @@ def _parts_of(site_name: str, site: Assembly, leave_out: str) -> List[jobs.JobPa
             if path == leave_out or path.startswith(leave_out + "."):
                 continue
             if child.part_ref:
-                found[path] = child.part_ref
+                found[path] = jobs.JobPart(path=path, name=child.part_ref)
             elif not prefix and child.name in made:
-                found[path] = made[child.name].word
+                record = made[child.name]
+                found[path] = jobs.JobPart(
+                    path=path, name=record.word, picture=record.picture, camera=record.camera
+                )
             visit(child, path)
 
     visit(site, "")
-    return [jobs.JobPart(path=path, name=name) for path, name in sorted(found.items())]
+    return [found[path] for path in sorted(found)]
 
 
 def _place_of(port: str) -> Optional[jobs.Place]:
@@ -1635,6 +1639,25 @@ def _place_of(port: str) -> Optional[jobs.Place]:
 
 
 jobs.PLACES.append(_place_of)
+
+
+def printers_in(site_name: str) -> List[str]:
+    """The printers of ``site_name`` a print can go to: each node a board pinned in
+    the site drives, when that node is a printer (it carries a printer's status),
+    sorted. A made piece's Print offers them (``menu.py``)."""
+    if site_name not in _site_store.names():
+        return []
+    try:
+        site = _site_store.get(site_name)
+    except KeyError:
+        return []
+    found = set()
+    for binding in firmware_devices.get_state().bindings(site_name):
+        bearer = status_bearer_for(site, binding.path)
+        node = _find_node_by_path(site, bearer) if bearer else None
+        if node is not None and node.status in PRINTER_STATUSES:
+            found.add(bearer)
+    return sorted(found)
 
 
 @app.get("/firmware/pins", tags=["firmware"])

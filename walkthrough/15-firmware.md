@@ -2,8 +2,9 @@
 
 **This page is written by the run it describes.** Every sentence below
 was emitted by a test that had just asserted it, and the whole page is
-rewritten by the browser suite (`uv run apothecary test run --e2e`). Editing it by hand is editing
-the output of a program: the next run puts it back.
+rewritten by every run of the browser suite (`uv run apothecary test
+run --e2e`), though not by the quicker `apothecary test run`. Editing it
+by hand is editing the output of a program: the next run puts it back.
 
 A sketch chosen, built, flashed to the ESP32 devkit on the bench, and heard saying its hello in the board's Machine; then changed and round again. The first time it is the Arduino esp32_blink, from the Bench; the second, the Rust one, from the board's own Machine. Both say the same hello, so the board runs the sketch the garage's esp32_blink expects either way, and the Machine says which build it is. Every step is the page's own: a cell of a ring, a button or a drop-down, and every step's words name the next one.
 
@@ -113,5 +114,6 @@ esp32_blink@rust-esp32 · esp32
 Run it yourself:
 
 ```sh
-uv run apothecary test run --e2e
+uv run pytest tests/e2e/test_the_firmware_loop.py --start-server   # this page alone
+uv run apothecary test run --e2e                                   # with every browser test
 ```

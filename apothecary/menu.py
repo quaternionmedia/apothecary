@@ -157,9 +157,10 @@ class PictureContext(BaseModel):
     the browser has been allowed to name them), ``pictures`` the ones under the
     picture root, newest first, and ``here`` the place the ring stands on. The
     intent route fills in ``made`` (the site's made pieces), ``camera_parts``
-    (its cameras), ``words`` (the vocabulary), ``finders`` (those that can read
-    the drawn view's picture) and, on a camera part, ``here.camera`` (its device)
-    from what the server knows, so a page cannot claim them."""
+    (its cameras), ``printers`` (the site's printers with a board pinned, which a
+    made piece's Print offers), ``words`` (the vocabulary), ``finders`` (those
+    that can read the drawn view's picture) and, on a camera part, ``here.camera``
+    (its device) from what the server knows, so a page cannot claim them."""
 
     cameras: List[CameraSeen] = Field(default_factory=list)
     asked: bool = False
@@ -168,6 +169,7 @@ class PictureContext(BaseModel):
     finders: List[str] = Field(default_factory=list)
     made: List[str] = Field(default_factory=list)
     camera_parts: List[str] = Field(default_factory=list)
+    printers: List[str] = Field(default_factory=list)
     words: List[str] = Field(default_factory=list)
     here: Place = Field(default_factory=Place)
 
@@ -924,6 +926,20 @@ def _find_shapes(drawn: ViewSeen, finders: Sequence[str], tail: str) -> Optional
     )
 
 
+def _print_option(printers: Sequence[str]) -> Option:
+    """Print on a made piece: the pinned printer's Machine opened with the piece
+    chosen under its Print from here's *makes* (the owner's answer of 2026-10-10).
+    One printer pinned in the site is the cell itself; several are a cell each
+    under Print. The page carries it."""
+    if len(printers) == 1:
+        return Option(id="print:piece", label="Print", action=f"print:piece:{printers[0]}")
+    return Option(
+        id="print:piece",
+        label="Print",
+        children=_listed("print:piece", [(f"print:piece:{p}", p) for p in printers]),
+    )
+
+
 def _made_picture_group(picture: PictureContext) -> Option:
     """Picture on a made piece: Word › the vocabulary's words, and Drop (the piece
     goes; its shape reads as found again). Both change the site, so the server
@@ -1099,6 +1115,11 @@ def _node_ring(
         verbs.append(Option(id="part:apply", label="Apply", action="part:apply"))
         verbs.append(Option(id="part:revert", label="Revert", action="part:revert"))
         options.append(Option(id="part", label="Part", children=verbs))
+    # A made piece with a printer pinned in its site to print it on: Print,
+    # appended after Part so no cell above moves. A piece with nowhere to be
+    # printed has no Print rather than one greyed out.
+    if made and picture.printers:
+        options.append(_print_option(picture.printers))
     return Ring(title=shorten(path or (node.name if node else "")), options=options)
 
 
@@ -1310,6 +1331,9 @@ CARRIED_BY: Dict[str, Carries] = {
     "level": Carries.VIEWER,
     # Streaming a file: the page starts the job with the file it has chosen.
     "print": Carries.VIEWER,
+    # A made piece's Print: the page opens the printer's Machine with the piece
+    # chosen under makes; nothing is sent until that card's Print.
+    "print:piece": Carries.VIEWER,
     # Opening, closing, floating what stands in front of the world (panels.js).
     "panel": Carries.VIEWER,
     # How the world is drawn: the header's View menu (snapping, detail, outlines,
