@@ -523,8 +523,8 @@ def parts_generate_stl(
     """Generate STL files from SCAD sources.
 
     STL files are not committed to git (they're in .gitignore); this builds
-    them. An STL newer than its SCAD and wrapper, rendered with the same
-    parameters, is kept unless --force is given.
+    them. An STL newer than its SCAD, what that SCAD includes, and its
+    wrapper, rendered with the same parameters, is kept unless --force is given.
 
     Examples:
         apothecary parts generate-stl calibration_cube

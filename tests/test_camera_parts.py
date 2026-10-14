@@ -534,7 +534,11 @@ def test_add_here_and_remove_are_carried_by_the_server_and_the_ring_knows_a_came
         "Part",
     ]
     part = next(o for o in ring["options"] if o["label"] == "Part")
-    assert [(o["label"], o["action"]) for o in part["children"]] == [("Edit", "part:edit")]
+    assert [(o["label"], o["action"]) for o in part["children"]] == [
+        ("Edit", "part:edit"),
+        ("Apply", "part:apply"),
+        ("Revert", "part:revert"),
+    ]
     device = next(o for o in ring["options"] if o["label"] == "Device")
     assert [(o["action"], o["marked"]) for o in device["children"]] == [
         ("camera:device:mine", True)
@@ -559,6 +563,8 @@ def test_add_here_and_remove_are_carried_by_the_server_and_the_ring_knows_a_came
         "camera:device:mine",
         "camera:allow",
         "part:edit",
+        "part:apply",
+        "part:revert",
     ):
         r = c.post("/menu/intent", json=_intent(action, ["camera_2"]))
         assert r.status_code == 200 and r.json()["carried_by"] == "the viewer carries it out"
