@@ -24,6 +24,10 @@ Left to right, one row:
 - **The site drop-down** loads another site and puts it in the address,
   `/viewer/sites/<name>`, so a reload or a link lands on it and Back returns
   to the one before; the old site's focus, Machine and variants stay with it.
+  The drop-down, Site in the canvas ring, a link and Back are the only ways
+  the site on screen changes: no other verb switches it as a side effect. A
+  picture's view or a take-back in another site names that site and leaves the
+  screen where it is.
 - **The breadcrumb**: the site, then each piece you have stepped into. A crumb
   steps out to its level; Page Up or Backspace steps out one.
 - **⚙ View**: how the world is drawn ([below](#how-the-world-is-drawn)), and
@@ -205,8 +209,9 @@ expand it, as its chip in Site does; 7 when stepped in, 1 at the top).
 pieces it holds: a digit selects one), then what the piece is:
 
 - a structure that stands on its own footprint, a host: **Camera** › Add here,
-  and **Picture** › Add, Folder, Views, Make, Size, Unpin, Forget, Find shapes;
-  Add here selects the camera it added, and Make the piece it made;
+  and **Picture** › Add, Folder, Views, Make, Size, Unpin, Forget, Find shapes
+  ([pictures.md](pictures.md) says what each does); Add here selects the camera
+  it added, and Make the piece it made;
 - a camera: **Device**, Live or Still and **Take picture** (once its device is
   this browser's camera), and Remove (chosen twice);
 - a piece made from a picture: **Picture** › Word, Drop (chosen twice);
@@ -279,16 +284,14 @@ parameter is a control starting from what is drawn, its description as its
 caption; a contested one comes first, with its candidates as buttons.
 
 **The parameters and the SCAD are one draft.** A part's values are the
-top-level assignments in its SCAD (the grammar is in
-`apothecary/projects/parts/assignments.py`, and the page reads it the same
-way): moving a control rewrites its value in its line, at once, keeping the
+top-level assignments in its SCAD, read as
+[parts-authoring.md](parts-authoring.md#in-the-page-the-text-is-the-truth)
+says: moving a control rewrites its value in its line, at once, keeping the
 line's comment and range, and a value typed in the text moves its control. A
 name the text does not assign yet gets its line appended. The controls are
 the part's model's fields, where it has a model, then every other parameter
-its text assigns -- as OpenSCAD's customizer has them, before the first
-module or function and outside `/* [Hidden] */` -- each described by its own
-line's comment (`// [5:100]`, `// [0:off, 1:on]`, a unit) and the caption
-above it. **A computed one** (`wall = size * 0.1;`) shows the value the newest
+its text assigns, each described by its line's comment and the caption above
+it. **A computed one** (`wall = size * 0.1;`) shows the value the newest
 check gave it, under its expression; until a check has given one it says
 "computed when checked". Moving it asks first: **Replace** puts the plain value
 in place of the expression, as one edit Undo takes back; **Keep it computed**
@@ -311,7 +314,8 @@ controls drive the model, and the SCAD follows, read only.
 - A field that declares a **unit** shows it beside its number; one that
   declares none shows nothing.
 
-Where this OpenSCAD cannot build the part at all (gridfinity on 2021.01), the
+Where this OpenSCAD cannot build the part at all (gridfinity on
+[2021.01](openscad.md#what-openscad-202101-cannot-do)), the
 editor says so as it opens and **Apply is off** from the start, saying why.
 
 The bar of what is staged -- Apply, Revert, Defaults, Undo, Redo, Ghost --

@@ -34,11 +34,15 @@ HTTP API is described at `/openapi.json`, the commands by `apothecary --help`.
 | Page | |
 |---|---|
 | [The viewer](viewer.md) | The page's own controls: the header and ⚙ View, the world and its faded walls and badges, the ring and its addresses, the rail, the part editor and the SCAD editor, the keys |
+| [OpenSCAD](openscad.md) | Installing a snapshot with Manifold on each platform, which OpenSCAD a render uses, what 2021.01 cannot do, how many run at once |
 | [Scene JSON format](scene-json.md) | Scenes, primitives, booleans and transforms as JSON |
 | [Parts authoring](parts-authoring.md) | How to add a part, override its parameters, and check it |
-| [Fitting a part](fitting-a-part.md) | Which numbers belong to a consumer and which to this repository, and who owns each open problem |
+| [Fitting a part](fitting-a-part.md) | The seam between a consumer and this repository as built: black boxes, a part's parameters and the validator, a gate per pair of descriptions, the pin, and who owns each open problem |
 | [Geometry models](models.md) | Vectors, bounds, colors, shapes and units |
 | [Geometry made elsewhere](geometry-from-elsewhere.md) | An STL or OBJ as a part (`apothecary parts import`), and a part described by a sidecar |
+| [Pictures, cameras and pieces](pictures.md) | Where pictures live, a camera as a part of the site, a picture pinned as a view, its shapes made into pieces, what is taken back and how, the `photo` commands |
+| [The census](census.md) | What `apothecary census` counts of the viewer, how each control and listener is classified, ring-backed and taken back, and the ceiling and floor a change to the page keeps |
+| [Configuration](configuration.md) | Every `APOTHECARY_*` variable, and the tool variables, each with its default and the page that explains it |
 | [Firmware](firmware.md) | Programming boards from sketches kept with their parts, Arduino and Rust for the ESP32, from the Bench or a board's Machine; monitoring a G-code printer from its scene node |
 | [The slicer](slicer.md) | OrcaSlicer installed and pinned, the printer's profile kept with its part, a part or a made piece sliced for the pinned printer and kept for the Print card |
 | [The bench checklist](bench-checklist.md) | The Ender 3 and an ESP32 for real: pinning, the link, heat, motion, levelling, printing from here, slicing, the emergency stop, and the Rust and Arduino blinks |
@@ -94,8 +98,12 @@ whose work is done leaves the table above for this list.
 
 ### Records from the bench
 
+- 2026-10-12 — [OpenSCAD runs at once](validation/2026-10-12-openscad-runs-at-once.md): the timing behind the queue's default of two.
+- 2026-10-11 — [Walkthrough picture drift](validation/2026-10-11-walkthrough-picture-drift.md): how far two runs' pictures differ, behind CI's tolerance.
+- 2026-10-10 — [What the installs reach](validation/2026-10-10-what-the-installs-reach.md): the hosts the Rust and slicer installs reached under strace, and that a build and a slice reach none.
 - 2026-09-21 — [Local integration run-through](validation/2026-09-21-local-integration.md): a checklist for the review branch, section by section.
 - 2026-09-20 — [Ender bench](validation/2026-09-20-ender-bench.md): the printer seam against a real Marlin board, and what the bed measured.
+- 2026-08-28 — [Gathering thresholds](validation/2026-08-28-gathering-thresholds.md): what the gathering's and the finder's thresholds were measured at.
 
 ## Generated
 
