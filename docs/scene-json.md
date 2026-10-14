@@ -186,7 +186,7 @@ On the CLI (`render`, `render-jscad`, `templategenerate`, `validate`):
 
 - Invalid JSON results in a non-zero exit code and a message starting with `"Failed to parse scene JSON"`.
 - Schema/validation errors surface as `"Scene validation failed: ..."`.
-- `validate` requires explicit input (`--scene-file` or `--scene-json`) and will error with `"No scene input provided."` if neither is supplied.
+- `validate` requires explicit input (`--scene-file` or `--scene-json`) and exits with `"No scene input provided."` if neither is supplied.
 
 On the API (`POST /render`):
 

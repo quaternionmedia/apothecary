@@ -65,6 +65,6 @@ rather than leaving it to the eye:
 
 | | |
 |---|---|
-| Every registered site | `curl localhost:8765/sites` |
-| One node's geometry | `curl localhost:8765/sites/datum_core/nodes/tray.shell/stl` |
-| The generated OpenSCAD | `curl localhost:8765/sites/datum_core` → `scad` |
+| Every registered site | `curl localhost:8000/sites` |
+| One node's geometry | `curl localhost:8000/sites/datum_core/nodes/tray.shell/stl` |
+| The generated OpenSCAD | `curl localhost:8000/sites/datum_core` → `scad` |

@@ -87,7 +87,7 @@ the model rejects.
 
 Add candidates to the part's wrapper, each with its source and a note saying
 what choosing it costs. Nothing else is required — the endpoint and the
-dashboard read the declaration.
+viewer read the declaration.
 
 | | |
 |---|---|
