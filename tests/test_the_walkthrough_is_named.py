@@ -1,5 +1,5 @@
-"""`apothecary test run` collects the runs that write walkthrough pages 11 and 12,
-and not the runs that write a loop's page (13, 14, 15, 16), which the browser suite
+"""`apothecary test run` collects the runs that write walkthrough pages 01 and 02,
+and not the runs that write a loop's page (03, 04, 05, 06), which the browser suite
 writes: CI's browser shards write them and check them against what is committed."""
 
 import subprocess

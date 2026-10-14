@@ -8,7 +8,7 @@ upstream's parameters it does not set are listed with upstream's values, moving 
 appends its line, and its upstream SCAD is one link away, read only; a saved variant of
 it is its overlay, put in the editor. A part whose SCAD its Python generates (the
 snowplow) stays one way: its controls drive its model, its SCAD following, read only.
-Walkthrough 14 goes round the loop with the text tied, and keeps a size staged over a
+Walkthrough 04 goes round the loop with the text tied, and keeps a size staged over a
 reload in its text."""
 
 from __future__ import annotations

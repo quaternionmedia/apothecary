@@ -157,7 +157,7 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     from the Machine's Flashing card: the Rust esp32_blink, listed beside the Arduino
     one, takes no board; built with cargo, flashed with espflash, and heard saying the
     same hello, so the Machine says it matches the sketch it should run, now the Rust
-    one. Listen hears the hello on the wire. Walkthrough 15 is what it writes."""
+    one. Listen hears the hello on the wire. Walkthrough 05 is what it writes."""
     story = walkthrough(
         ordinal="05",
         slug="firmware",
