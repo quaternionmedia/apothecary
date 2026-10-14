@@ -88,12 +88,12 @@ def test_the_bench_lists_the_sketches_and_installs_with_the_scripted_cli(page: P
 
     # The sketches under parts/, each with the board its firmware.json names.
     sketch = bench.locator(".sketch-select")
-    expect(sketch.locator("option[value='footpedal']")).to_have_count(1, timeout=10000)
-    expect(sketch.locator("option[value='esp32_blink']")).to_have_count(1)
-    sketch.select_option("footpedal")
+    expect(sketch.locator("option[value='footpedal@arduino']")).to_have_count(1, timeout=10000)
+    expect(sketch.locator("option[value='esp32_blink@arduino']")).to_have_count(1)
+    sketch.select_option("footpedal@arduino")
     expect(bench.locator(".fqbn-input")).to_have_value("arduino:avr:uno")
     expect(bench.locator(".sk-note")).to_contain_text("FastLED")
-    sketch.select_option("esp32_blink")
+    sketch.select_option("esp32_blink@arduino")
     expect(bench.locator(".fqbn-input")).to_have_value("esp32:esp32:esp32")
     # The detected ports to upload to.
     ports = bench.locator(".port-select option").all_text_contents()
@@ -117,9 +117,9 @@ def test_the_bench_lists_the_sketches_and_installs_with_the_scripted_cli(page: P
     expect(bench.locator(".task-log")).to_contain_text("fake lib install FastLED")
 
     # A compile: nothing is sent to a board.
-    sketch.select_option("footpedal")
+    sketch.select_option("footpedal@arduino")
     bench.locator(".compile-btn").click()
-    _ended(bench, "Compile footpedal (arduino:avr:uno)")
+    _ended(bench, "Compile footpedal@arduino (arduino:avr:uno)")
     expect(bench.locator(".task-log")).to_contain_text("fake compile")
     assert bench.locator(".task-history li[data-id]").count() >= 4
     expect(bench.locator(".cancel-btn")).to_be_hidden()  # nothing running
@@ -151,21 +151,26 @@ def test_the_bench_s_verbs_are_cells_of_panels_bench(page: Page, url: str):
     expect(page.locator("#ring-overlay")).to_have_count(0)
     bench = page.locator(BENCH)
     expect(bench).to_be_visible(timeout=2000)
-    expect(bench.locator(".sketch-select option[value='footpedal']")).to_have_count(
+    expect(bench.locator(".sketch-select option[value='footpedal@arduino']")).to_have_count(
         1, timeout=10000
     )
     expect(bench.locator(".compile-btn")).to_have_attribute("data-address", "932", timeout=5000)
-    expect(bench.locator(".install-btn")).to_have_attribute("data-address", "936")
+    # Install is a ring of the toolchain modules: arduino-cli's install moved one level
+    # deeper (it was 936), and Rust for the ESP32's has a cell of its own.
+    expect(bench.locator(".install-btn")).to_have_attribute("data-address", "9368")
+    expect(bench.locator(".module-install[data-id='rust-esp32']")).to_have_attribute(
+        "data-address", "9366"
+    )
     expect(bench.locator(".core-install[data-id='esp8266:esp8266']")).to_have_attribute(
         "data-address", re.compile(r"^931\d$")
     )
-    bench.locator(".sketch-select").select_option("footpedal")
+    bench.locator(".sketch-select").select_option("footpedal@arduino")
     page.locator("#viewer-canvas").click(button="right", position={"x": 30, "y": 30})
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     for digit in ("9", "3", "2"):
         page.keyboard.press(digit)
     expect(page.locator("#ring-overlay")).to_have_count(0)
-    _ended(bench, "Compile footpedal (arduino:avr:uno)")
+    _ended(bench, "Compile footpedal@arduino (arduino:avr:uno)")
     expect(page.locator("#status")).to_contain_text("⌗932")
 
 
@@ -182,7 +187,7 @@ def test_the_firmware_address_opens_the_viewer_with_the_bench(page: Page, url: s
         re.compile(r"\bactive\b")
     )
     expect(bench.locator(".tc-status")).to_contain_text("✓ 9.9.9", timeout=10000)
-    expect(bench.locator(".sketch-select option[value='footpedal']")).to_have_count(1)
+    expect(bench.locator(".sketch-select option[value='footpedal@arduino']")).to_have_count(1)
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     for gone in ("#firmware-link", "#monitor-link", ".toolbar a.toolbar-link"):
         expect(page.locator(gone)).to_have_count(0)

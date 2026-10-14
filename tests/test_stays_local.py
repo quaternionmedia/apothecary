@@ -11,6 +11,7 @@ import socket
 import ssl
 import subprocess
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 from fastapi.testclient import TestClient
@@ -295,15 +296,154 @@ def _callers_of_tool_fetch() -> set:
 
 def test_a_tool_fetch_has_two_callers_the_two_installers():
     """The record allows one kind of connection past this machine, by two callers:
-    the firmware installer (arduino-cli) and the OpenSCAD installer (a snapshot
-    from files.openscad.org). A third is a change to the record first."""
+    the firmware installer (arduino-cli, and for Rust on the ESP32 rustup-init,
+    espflash and Espressif's Xtensa archives, through the same fetch) and the OpenSCAD installer (a
+    snapshot from files.openscad.org). A third is a change to the record first."""
+    from apothecary.firmware import installer, rust_installer
+
     assert _callers_of_tool_fetch() == {
         "apothecary/firmware/installer.py",
         "apothecary/openscad_installer.py",
     }
+    assert rust_installer._fetch is installer._fetch
     assert "files.openscad.org" in stays_local.TOOL_SOURCES
     # OpenSCAD's source, for a Linux arm64 build: the tarballs GitHub serves.
     assert "codeload.github.com" in stays_local.TOOL_SOURCES
+
+
+# Every host `apothecary firmware install --rust-esp32` was seen to reach (strace
+# of a real install, 2026-10-09), and the step that reaches it. A build reached none.
+RUST_INSTALL_HOSTS = {
+    "static.rust-lang.org": "apothecary's fetch of rustup-init and its .sha256",
+    "api.github.com": "apothecary's fetch of the SHA-256 GitHub publishes for espflash's "
+    "asset and the Xtensa Rust and rust-src archives, whose release has no checksum file",
+    "github.com": "apothecary's fetch of espflash and of Espressif's Xtensa Rust, rust-src, "
+    "LLVM and GCC archives and the checksum files their releases publish",
+    "release-assets.githubusercontent.com": "where github.com redirects each release asset",
+    "index.crates.io": "cargo vendor reading the sparse index for each locked crate",
+    "static.crates.io": "cargo vendor downloading each locked crate",
+}
+
+
+def test_every_host_the_rust_install_reaches_is_on_the_install_time_list():
+    assert set(RUST_INSTALL_HOSTS) <= stays_local.TOOL_SOURCES
+    # espup's own update check went with espup: nothing asks crates.io's API.
+    assert "crates.io" not in stays_local.TOOL_SOURCES
+
+
+@pytest.mark.parametrize(
+    "triple", ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-pc-windows-msvc"]
+)
+def test_every_url_the_rust_installer_fetches_is_a_tool_source_by_a_pinned_version(
+    triple, tmp_path, monkeypatch
+):
+    """Each fetch is a GET of a pinned version's asset, from a tool source: refused
+    before anything is opened if it were not. Every archive is checked before it is
+    opened, and one that is not what its source publishes is refused."""
+    import json as json_
+
+    from apothecary.firmware import rust_installer as ri
+
+    monkeypatch.setenv("APOTHECARY_TOOLS_DIR", str(tmp_path / "tools"))
+    asked = []
+
+    def fetch(url):
+        stays_local.tool_fetch(url)  # the guard's own check of the host
+        asked.append(url)
+        if url.endswith(".sha256"):
+            name = url.rsplit("/", 1)[1]
+            return "".join(f"{'0' * 64} *{a.name}\n" for a in installer.archives()).encode() + (
+                ("0" * 64 + " *rustup-init\n").encode() if name.startswith("rustup") else b""
+            )
+        if "/releases/tags/" in url:
+            assets = [a.name for a in installer.archives()] + [f"espflash-{triple}.zip"]
+            return json_.dumps(
+                {"assets": [{"name": n, "digest": "sha256:" + "0" * 64} for n in assets]}
+            ).encode()
+        return b"x"
+
+    def fetch_to(url, path):
+        stays_local.tool_fetch(url)
+        asked.append(url)
+        return "f" * 64  # not what any source publishes
+
+    installer = ri.RustEsp32Installer(
+        fetch=fetch, fetch_to=fetch_to, run=lambda *a, **k: 0, triple=triple
+    )
+    with pytest.raises(ri.InstallError, match="checksum mismatch"):
+        installer.install_rustup(None)
+    for archive in installer.archives():
+        with pytest.raises(ri.InstallError, match=f"checksum mismatch for {archive.name}"):
+            installer.download(archive)
+    with pytest.raises(ri.InstallError, match="checksum mismatch"):
+        installer.install_espflash(None)
+    hosts = {urlsplit(u).hostname for u in asked}
+    assert hosts == {"static.rust-lang.org", "api.github.com", "github.com"}
+    pins = (
+        f"/{ri.RUSTUP_VERSION}/",
+        f"/v{ri.ESPFLASH_VERSION}",
+        f"/v{ri.XTENSA_RUST_VERSION}",
+        f"/{ri.LLVM_VERSION}/",
+        f"/esp-{ri.GCC_VERSION}/",
+    )
+    assert all(any(pin in u for pin in pins) for u in asked), asked
+
+
+def test_a_rust_build_and_flash_reach_no_host(monkeypatch, tmp_path):
+    """Offline from the vendored crates; rustup may not install a toolchain it lacks;
+    espflash may not ask whether there is a newer espflash; and nothing in the
+    environment points cargo or rustup elsewhere."""
+    from apothecary.firmware.modules.rust_esp32 import CARGO, RustEsp32Module
+    from apothecary.firmware.sketches import find_sketch
+
+    monkeypatch.setenv("APOTHECARY_TOOLS_DIR", str(tmp_path / "tools"))
+    monkeypatch.setenv("CARGO", "")
+    monkeypatch.setenv("ESPFLASH", str(tmp_path / "espflash"))
+    (tmp_path / "espflash").write_text("#!/bin/sh\n")
+    cargo = CARGO.managed_path()
+    cargo.parent.mkdir(parents=True)
+    cargo.write_text("#!/bin/sh\n")
+    (tmp_path / "tools" / "rust-esp32" / "vendor").mkdir()
+    for key, value in {
+        "HTTPS_PROXY": "http://proxy.example:3128",
+        "CARGO_HTTP_PROXY": "http://proxy.example:3128",
+        "CARGO_REGISTRIES_CRATES_IO_PROTOCOL": "git",
+        "CARGO_SOURCE_CRATES_IO_REPLACE_WITH": "elsewhere",
+        "CARGO_NET_OFFLINE": "false",
+        "RUSTUP_DIST_SERVER": "https://evil.example",
+        "RUSTUP_UPDATE_ROOT": "https://evil.example/rustup",
+        "RUSTC_WRAPPER": "sccache",
+        "GITHUB_TOKEN": "a-person-s-token",
+    }.items():
+        monkeypatch.setenv(key, value)
+    sketch = find_sketch("esp32_blink@rust-esp32", ROOT)
+    plan = RustEsp32Module().flash(sketch, None, "/dev/ttyFAKE0", tmp_path / "out")
+    build, check, flash = plan.steps
+    assert "--offline" in build
+    # No folder it was built in -- and so no user name -- is in the image: rustc is
+    # told to write each another way, and the build's last step holds it did.
+    remaps = build[build.index("--config", build.index("--offline")) + 1]
+    assert remaps.startswith("target.xtensa-esp32-none-elf.rustflags=[")
+    assert f"'--remap-path-prefix={Path.home()}=/home'" in remaps
+    assert check[1:4] == [
+        "-m",
+        "apothecary.firmware.image_paths",
+        str(tmp_path / "out" / "xtensa-esp32-none-elf" / "release" / "esp32_blink"),
+    ]
+    assert str(Path.home()) in check
+    assert 'source.crates-io.replace-with="apothecary-vendored"' in build
+    assert flash[1:3] == ["flash", "--skip-update-check"] and "--non-interactive" in flash
+    env = plan.env
+    assert env["RUSTUP_AUTO_INSTALL"] == "0"
+    assert env["ESPFLASH_SKIP_UPDATE_CHECK"] == "true"
+    assert not [
+        k
+        for k in env
+        if k.lower().endswith("_proxy")
+        or k.startswith(("CARGO_REGISTRIES_", "CARGO_SOURCE_", "CARGO_NET_", "CARGO_HTTP_"))
+        or k.startswith(("RUSTUP_DIST_", "RUSTUP_UPDATE_"))
+        or k in ("RUSTC_WRAPPER", "GITHUB_TOKEN")
+    ], sorted(env)
 
 
 def test_the_openscad_installer_fetches_from_its_source_alone_by_a_date(monkeypatch):

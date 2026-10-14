@@ -311,7 +311,17 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # it for the camera's own ring, which is new: Device, Live (Still while live), Take
 # picture, Remove and Part › Edit after a piece's Zoom in, Move and Why this. The
 # ceiling follows the count up by one, for a button the plan asks for.
-VIEWER_CEILING = 116
+#
+# Firmware in Rust (docs/plans/rust-2026-10-08.md): one control of its own and one
+# place the page listens more (`apothecary census` counts them). The Bench's toolchain
+# card draws every toolchain module beside arduino-cli, each with its own Install
+# (module-install, and its one listener, modulesEl:click:closest). The owner's answer
+# of 2026-10-10 made Panels › Bench › Install a ring of the modules, drawn from their
+# registry, so each module's Install is ring-backed by its cell there (Rust ESP32,
+# 9366) and arduino-cli's moved one level deeper (Arduino, 9368; it was 936); nothing
+# else moved. The Rust sketches need no control of their own: they are rows of the
+# sketch drop-down, and choosing one hides the board box it takes none of.
+VIEWER_CEILING = 117
 
 
 def test_the_viewer_stays_under_its_ceiling():

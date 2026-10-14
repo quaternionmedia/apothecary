@@ -1,0 +1,12 @@
+{
+  "toolchain": "rust-esp32",
+  "chip": "esp32",
+  "note": "The Rust esp32_blink (esp-hal, no_std) for a classic ESP32: says what the Arduino one says, `apothecary esp32_blink: hello` at boot and every ten blinks, at 115200 baud.",
+  "baud": 115200,
+  "display": {
+    "position": [27.5, 14.0, 13.5],
+    "normal": [0, 0, 1],
+    "up": [0, 1, 0],
+    "size": [40, 20]
+  }
+}

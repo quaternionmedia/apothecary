@@ -630,10 +630,14 @@ def _bench(show: Option) -> Option:
     Each verb is the Bench's button of the same name and acts on what the Bench
     has chosen -- the sketch, the board (FQBN) and the port in its boxes, the
     images in its raw-flash list, the libraries typed in its box -- as Control ›
-    Print › Send file prints what the Print card has chosen. Install installs or
-    updates arduino-cli; Cores installs one of the suggested cores; Cancel stops
-    the running task. Upload and Raw flash overwrite what a board runs.
+    Print › Send file prints what the Print card has chosen. Install is a ring of
+    the toolchain modules, drawn from their registry (firmware/modules): Arduino
+    installs or updates arduino-cli, Rust ESP32 fetches Rust for the ESP32, and a
+    module added later is a cell of it with no change here (the owner's decision
+    of 2026-10-10); Cores installs one of the suggested cores; Cancel stops the
+    running task. Upload and Raw flash overwrite what a board runs.
     """
+    from .firmware.modules import modules
     from .firmware.toolchains import SUGGESTED_CORES
 
     return Option(
@@ -641,7 +645,18 @@ def _bench(show: Option) -> Option:
         label="Bench",
         children=[
             show,
-            Option(id="bench:install", label="Install", action="bench:install"),
+            Option(
+                id="bench:install",
+                label="Install",
+                children=[
+                    Option(
+                        id=f"bench:install:{module.id}",
+                        label=shorten(module.ring_label),
+                        action=f"bench:install:{module.id}",
+                    )
+                    for module in modules()
+                ],
+            ),
             Option(id="bench:compile", label="Compile", action="bench:compile"),
             Option(id="bench:upload", label="Upload", action="bench:upload", destructive=True),
             Option(id="bench:esptool", label="Raw flash", action="bench:esptool", destructive=True),

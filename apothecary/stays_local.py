@@ -13,7 +13,11 @@ editing this code and having that edit reviewed:
    the ``apothecary`` package is imported, so every apothecary process -- the
    server, the CLI, the docs generator's server, the tests -- is under it
    before any of its code runs. The one allowance is a *tool fetch*, and it
-   has two callers: the firmware installer downloads arduino-cli, and the
+   has two callers: the firmware installer downloads arduino-cli -- and, for
+   Rust on the ESP32 (apothecary/firmware/rust_installer.py, through the
+   firmware installer's own fetch), rustup-init from static.rust-lang.org,
+   espflash and Espressif's Xtensa Rust, rust-src, LLVM and GCC archives from
+   their GitHub releases -- and the
    OpenSCAD installer (apothecary/openscad_installer.py) downloads a
    development snapshot from files.openscad.org -- or, on Linux arm64, where
    none is published, OpenSCAD's source from GitHub: api.github.com names the
@@ -49,7 +53,14 @@ editing this code and having that edit reviewed:
 
 4. **A subprocess that fetches is told where, and nothing else tells it.**
    arduino-cli, esptool and OpenSCAD are outside the socket guard (it is a
-   Python object). Of the three only arduino-cli reaches out, and it is a
+   Python object), and so are rustup-init and cargo. At install time
+   ``cargo vendor`` fetches each Rust sketch's locked crates from crates.io
+   (rustup-init, told to install no toolchain, fetches nothing); its
+   environment carries no proxy, no registry or source override and no
+   GitHub token (``modules/rust_esp32.NOT_INHERITED``). A Rust *build*
+   fetches nothing: ``cargo --offline`` from the vendored crates, rustup told
+   not to install a toolchain it lacks, espflash told not to check for
+   updates. Of the first three only arduino-cli reaches out, and it is a
    program that will, left to itself, ask Arduino's cloud about every USB
    device it does not recognise and check for its own updates. Every
    arduino-cli the seam starts is given ``--config-file`` naming a file this
@@ -84,20 +95,36 @@ from urllib.parse import urlsplit
 
 LOOPBACK_NAMES = frozenset({"localhost", "127.0.0.1", "::1", "0:0:0:0:0:0:0:1", "ip6-localhost"})
 
-# The fixed hosts a tool fetch may reach: arduino-cli's releases (the API
-# that names the latest, the archive, and where GitHub redirects the archive),
-# OpenSCAD's snapshots (the listing, a night's file, its checksum), and, for a
-# Linux arm64 source build, OpenSCAD's source (the API names the commits,
-# codeload serves a tarball of each).
+# The fixed hosts an install may reach. A tool fetch -- this process's own
+# download, under the guard -- reaches the first group; the install-time
+# subprocesses named beside the rest reach them, outside the guard, as
+# arduino-cli reaches downloads.arduino.cc. Each is reached at install time
+# only; a build or a flash reaches none of them.
 TOOL_SOURCES = frozenset(
     {
+        # arduino-cli's releases: the API that names the latest, the archive,
+        # and where GitHub redirects the archive. For Rust on the ESP32, the
+        # same hosts serve espflash's release and Espressif's Xtensa Rust,
+        # rust-src, LLVM and GCC archives with their checksum files, and the API
+        # the SHA-256 GitHub publishes for an asset whose release has no
+        # checksum file.
         "api.github.com",
         "github.com",
         "objects.githubusercontent.com",
         "release-assets.githubusercontent.com",
+        # arduino-cli itself, on a core or library install.
         "downloads.arduino.cc",
+        # OpenSCAD's snapshots (the listing, a night's file, its checksum), and,
+        # for a Linux arm64 source build, OpenSCAD's source (the API names the
+        # commits, codeload serves a tarball of each).
         "files.openscad.org",
         "codeload.github.com",
+        # Rust: rustup-init at a pinned version, and the .sha256 beside it.
+        "static.rust-lang.org",
+        # Rust: `cargo vendor` reads crates.io's sparse index and downloads each
+        # locked crate from its static host.
+        "index.crates.io",
+        "static.crates.io",
     }
 )
 

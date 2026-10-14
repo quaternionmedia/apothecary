@@ -141,8 +141,11 @@ class ArduinoCli:
 
     @staticmethod
     def detect() -> Optional[Path]:
-        """Explicit ``ARDUINO_CLI`` env, then our tools dir, then PATH."""
+        """Explicit ``ARDUINO_CLI`` env, then our tools dir, then PATH. ``none`` means
+        none (a server that must work with no arduino-cli, as a Rust-only one does)."""
         env = os.environ.get("ARDUINO_CLI", "").strip()
+        if env.lower() == "none":
+            return None
         if env and Path(env).is_file():
             return Path(env)
         managed = tools_dir() / "arduino-cli" / _exe("arduino-cli")

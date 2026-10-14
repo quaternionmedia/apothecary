@@ -1,0 +1,3 @@
+# Espressif's Xtensa Rust, as espup names it.
+[toolchain]
+channel = "esp"
