@@ -118,7 +118,7 @@ Restore: the draft back in the editor, checked, its refusal marked. Then v_slot'
 - **Making a variant the part's source.** That is a merge you do (`git merge refs/apothecary/variants/<part>/<name>`); no control in the page writes the checkout.
 - **A part without a model.** Its controls come from what its SCAD declares, where the OpenSCAD in use lists them; calibration_cube has a model.
 - **When a variant was saved, and where the server keeps it.** Both differ on every run: the lists' times are blanked in the pictures, and the server's clone of the checkout is named as the test server's variants repository in the words and blanked where the status line shows it.
-- **The way back to the saved part.** Part › Defaults, then Apply, draws the part's own SCAD and numbers again, as walkthrough 14 does for its numbers.
+- **The way back to the saved part.** Part › Defaults, then Apply, draws the part's own SCAD and numbers again, as walkthrough 04 does for its numbers.
 
 Run it yourself:
 

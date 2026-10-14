@@ -144,7 +144,7 @@ The picture it was all built from is served beside the arrangement while the arr
 ## What this page does not show
 
 - **A real photograph.** Everything here is drawn to order, which is how the answers are known. Shadow, texture, blur and clutter are all absent, so a good showing here means it handles the easy case.
-- **A printable model.** These pieces stay an arrangement here; a piece made from a camera's picture is sliced and printed in walkthrough 13.
+- **A printable model.** These pieces stay an arrangement here; a piece made from a camera's picture is sliced and printed in walkthrough 03.
 - **Anything about how long it takes.** No timing is asserted anywhere in this run.
 - **Anything surviving a restart.** Nothing here is stored. The run builds what it needs and forgets it.
 

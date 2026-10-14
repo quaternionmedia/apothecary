@@ -105,7 +105,7 @@ bare word is an identifier:
 | A different printer | `apothecary parts generate-stl datum_core -p walls=2 -p tolerence=0.3` |
 | Check a variant's envelope | `apothecary parts verify datum_core -p headroom=12` |
 | What produced the STL on disk | `apothecary parts info datum_core --json-out` → `stl_params` |
-| See the change | `apothecary serve`, then the part's ring, Part › Edit — page 14 |
+| See the change | `apothecary serve`, then the part's ring, Part › Edit — page 04 |
 
 The whole loop, from a cold checkout:
 

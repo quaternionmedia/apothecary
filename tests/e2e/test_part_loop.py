@@ -702,7 +702,7 @@ def _two_tabs(page: Page, site: str, story) -> None:
 def test_designing_a_part_twice_round(
     page: Page, loop_url: str, cube_as_it_was, shots, walkthrough
 ):
-    """The loop, twice round and in two tabs, and walkthrough page 14 written from it.
+    """The loop, twice round and in two tabs, and walkthrough page 04 written from it.
     Marked e2e and not walkthrough: a loop's page is written by the browser suite
     only, so `apothecary test run` stays quick."""
     story = walkthrough(
@@ -731,10 +731,10 @@ def test_designing_a_part_twice_round(
         ),
         does_not_show=[
             "**Editing the SCAD.** The part's source is in the editor below its parameters, "
-            "its refused line marked there; editing it is walkthrough 16's.",
+            "its refused line marked there; editing it is walkthrough 06's.",
             "**A variant kept for good.** An applied variant lives in its tab's address and "
             "the cache, which keeps the most recently drawn of each part; saving one is a "
-            "variant in git, walkthrough 16's too.",
+            "variant in git, walkthrough 06's too.",
             "**Which OpenSCAD measured.** The editor says whether the measured bounds are "
             "OpenSCAD's own summary of the render or were read off the STL; which it is "
             "depends on the machine's OpenSCAD, so the words here leave it out.",
@@ -834,7 +834,7 @@ def test_designing_a_part_twice_round(
             "OpenSCAD's refusal, by line, drawn greyed",
             "A size of 70 mm, which this run's OpenSCAD refuses -- the test's stand-in, which "
             f"refuses a cube of {TOO_BIG:.0f} mm or more where a real OpenSCAD renders it; "
-            "walkthrough 16 meets a refusal of the SCAD's own. Like a snapshot, it says the "
+            "walkthrough 06 meets a refusal of the SCAD's own. Like a snapshot, it says the "
             "error and still writes the geometry it built: a failed render, never a variant. "
             "Apply answers with OpenSCAD's words, listed by file and line under the stage "
             "bar, the line marked in the part's source below, and carried on the status "

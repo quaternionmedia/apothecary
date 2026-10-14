@@ -61,7 +61,7 @@ Part › Edit again: the size slider stands at 30.00 mm, the variant's, the meas
 
 ## 6. OpenSCAD's refusal, by line, drawn greyed
 
-A size of 70 mm, which this run's OpenSCAD refuses -- the test's stand-in, which refuses a cube of 60 mm or more where a real OpenSCAD renders it; walkthrough 16 meets a refusal of the SCAD's own. Like a snapshot, it says the error and still writes the geometry it built: a failed render, never a variant. Apply answers with OpenSCAD's words, listed by file and line under the stage bar, the line marked in the part's source below, and carried on the status line; what it built is drawn greyed where the part stands, a red flag over it naming the line, the variant drawn before hidden under it -- f frames it. Part › Save refuses it in the same words. The refused size is still staged.
+A size of 70 mm, which this run's OpenSCAD refuses -- the test's stand-in, which refuses a cube of 60 mm or more where a real OpenSCAD renders it; walkthrough 06 meets a refusal of the SCAD's own. Like a snapshot, it says the error and still writes the geometry it built: a failed render, never a variant. Apply answers with OpenSCAD's words, listed by file and line under the stage bar, the line marked in the part's source below, and carried on the status line; what it built is drawn greyed where the part stands, a red flag over it naming the line, the variant drawn before hidden under it -- f frames it. Part › Save refuses it in the same words. The refused size is still staged.
 
 ![OpenSCAD's refusal, by line, drawn greyed](screenshots/04-06-openscad-s-refusal-by-line-drawn-greyed.png)
 
@@ -130,8 +130,8 @@ A second tab of the same page: this one stages 24.00 mm and the other 36.00 mm, 
 
 ## What this page does not show
 
-- **Editing the SCAD.** The part's source is in the editor below its parameters, its refused line marked there; editing it is walkthrough 16's.
-- **A variant kept for good.** An applied variant lives in its tab's address and the cache, which keeps the most recently drawn of each part; saving one is a variant in git, walkthrough 16's too.
+- **Editing the SCAD.** The part's source is in the editor below its parameters, its refused line marked there; editing it is walkthrough 06's.
+- **A variant kept for good.** An applied variant lives in its tab's address and the cache, which keeps the most recently drawn of each part; saving one is a variant in git, walkthrough 06's too.
 - **Which OpenSCAD measured.** The editor says whether the measured bounds are OpenSCAD's own summary of the render or were read off the STL; which it is depends on the machine's OpenSCAD, so the words here leave it out.
 - **What changes from machine to machine.** A variant's key is a hash of what made it, its OpenSCAD among them; the address that carries it is not in the pictures, nor in the words.
 

@@ -336,7 +336,7 @@ def _at_both_widths(page: Page, shots, how: str) -> None:
 def test_editing_a_parts_scad_twice_round(
     page: Page, scad_url: str, cube_as_it_was, shots, walkthrough
 ):
-    """The loop, twice round, and walkthrough page 16 written from it. Marked e2e and
+    """The loop, twice round, and walkthrough page 06 written from it. Marked e2e and
     not walkthrough: a loop's page is written by the browser suite only."""
     story = walkthrough(
         ordinal="06",
@@ -371,7 +371,7 @@ def test_editing_a_parts_scad_twice_round(
             "of the checkout is named as the test server's variants repository in the "
             "words and blanked where the status line shows it.",
             "**The way back to the saved part.** Part › Defaults, then Apply, draws the "
-            "part's own SCAD and numbers again, as walkthrough 14 does for its numbers.",
+            "part's own SCAD and numbers again, as walkthrough 04 does for its numbers.",
         ],
     )
     refs_before = _variant_refs_here()
