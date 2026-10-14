@@ -15,13 +15,18 @@ from apothecary.models import Vector3D
 from .base import BasePart
 from .skeleton import ROOT
 
+# A length in the SCAD's own unit: what the page shows beside the number.
+MM = {"unit": "mm"}
+
 
 class FifelParams(BaseModel):
     """Parameters for the fifel instrument."""
 
-    height: float = Field(default=200, description="Total length of the fife in mm")
-    bore: float = Field(default=20, description="Inner diameter of the resonating chamber")
-    wall: float = Field(default=4, description="Wall thickness in mm")
+    height: float = Field(default=200, description="Total length of the fife", json_schema_extra=MM)
+    bore: float = Field(
+        default=20, description="Inner diameter of the resonating chamber", json_schema_extra=MM
+    )
+    wall: float = Field(default=4, description="Wall thickness", json_schema_extra=MM)
 
 
 def create(metadata_root: Path) -> BasePart:

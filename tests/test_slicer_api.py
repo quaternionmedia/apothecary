@@ -108,6 +108,9 @@ def test_a_part_is_sliced_for_a_site_printer_and_kept_in_the_print_cards_file_bo
         "site": None,
         "path": None,
         "word": None,
+        "variant": None,
+        "params": {},
+        "draft": None,
     }
     assert record["printer"] == {
         "part": "ender3",
@@ -143,6 +146,9 @@ def test_a_part_standing_in_the_site_is_sliced_as_its_part(fake_orcaslicer, part
         "site": "garage",
         "path": "footpedal",
         "word": None,
+        "variant": None,
+        "params": {},
+        "draft": None,
     }
     assert parts_built == ["footpedal"]
 
@@ -179,6 +185,9 @@ def test_a_made_piece_is_sliced_from_its_nodes_render_with_the_printers_settings
         "site": "garage",
         "path": "bin_1",
         "word": "bin",
+        "variant": None,
+        "params": {},
+        "draft": None,
     }
     assert rendered == [("garage", "bin_1")]
     origins = {s["name"]: s["origin"] for s in record["settings"]}

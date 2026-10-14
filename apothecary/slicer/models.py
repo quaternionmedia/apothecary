@@ -4,7 +4,7 @@ and the record a slice leaves beside the G-code it kept."""
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -92,6 +92,12 @@ class Made(BaseModel):
     site: Optional[str] = None
     path: Optional[str] = None  # its node's path in the site, when it stands in one
     word: Optional[str] = None  # a piece's word
+    # A part's variant from the variant cache, when that is what was sliced:
+    # its key, the parameters it was rendered with, and the sha256 of the draft
+    # of its SCAD it was rendered from (None: the part's own SCAD).
+    variant: Optional[str] = None
+    params: Dict[str, Any] = Field(default_factory=dict)
+    draft: Optional[str] = None
 
 
 class SlicedFor(BaseModel):

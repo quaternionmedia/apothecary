@@ -158,6 +158,8 @@ class PartSeen(BaseModel):
 
     editable: bool = True
     variants: List[str] = Field(default_factory=list)
+    # Its deleted variants, in the trash (refs/apothecary/trash/), newest first.
+    deleted: List[str] = Field(default_factory=list)
     board: bool = False
 
 
@@ -541,6 +543,75 @@ def _grouped(
             for index, (head, members) in enumerate(_bucket(ordered))
         ],
     )
+
+
+# What can be done to a saved variant (the owner's answer of 2026-10-12): each its own
+# cell, under the variant's name. Draw is first, in the seat choosing the name had.
+VARIANT_VERBS = (
+    ("draw", "Draw"),
+    ("rename", "Rename"),
+    ("duplicate", "Duplicate"),
+    ("history", "History"),
+    ("compare", "Compare"),
+    ("delete", "Delete"),
+)
+# And to a deleted one, in the trash: back among the variants, or deleted for good.
+TRASH_VERBS = (("restore", "Restore"), ("forget", "Forget"))
+
+
+def _variants_group(names: Sequence[str], deleted: Sequence[str]) -> Optional[Option]:
+    """Part › Variants: each saved variant a ring of what can be done to it -- Draw,
+    Rename, Duplicate, History, Compare, Delete (``part:variant:<verb>:<name>``) --
+    and, when anything is deleted, Deleted last: the trash, each deleted variant a
+    ring of Restore and Forget (``part:trash:<verb>:<name>``), and Empty
+    (``part:trash:empty``), which empties it once confirmed. Nothing saved and
+    nothing deleted: no Variants. More than fit in one ring are grouped, as any
+    list is."""
+
+    def ring_of(prefix: str, verbs, name: str, label: str) -> Option:
+        return Option(
+            id=f"{prefix}:{name}",
+            label=label,
+            children=[
+                Option(id=f"{prefix}:{verb}:{name}", label=said, action=f"{prefix}:{verb}:{name}")
+                for verb, said in verbs
+            ],
+        )
+
+    def rings(prefix: str, verbs, members: Sequence[str], room: int) -> List[Option]:
+        made = [
+            ring_of(prefix, verbs, name, label)
+            for name, label in zip(members, distinct(members), strict=True)
+        ]
+        if len(made) <= room:
+            return made
+        return [
+            Option(
+                id=f"{prefix}:group{index}",
+                label=head,
+                children=[
+                    ring_of(prefix, verbs, name, label)
+                    for name, label in zip(group, distinct(group), strict=True)
+                ],
+            )
+            for index, (head, group) in enumerate(_bucket(list(members)))
+        ]
+
+    trash: Optional[Option] = None
+    if deleted:
+        kept = rings("part:trash", TRASH_VERBS, deleted, MOST_OPTIONS - 1)
+        kept.append(
+            Option(
+                id="part:trash:empty", label="Empty", action="part:trash:empty", destructive=True
+            )
+        )
+        trash = Option(id="part:trash", label="Deleted", children=kept)
+    if not names and trash is None:
+        return None
+    children = rings("part:variant", VARIANT_VERBS, names, MOST_OPTIONS - (1 if trash else 0))
+    if trash is not None:
+        children.append(trash)
+    return Option(id="part:variants", label="Variants", children=children)
 
 
 def _pieces(prefix: str, parent: str, node: Optional[Assembly]) -> Optional[Option]:
@@ -1161,21 +1232,44 @@ def _node_ring(
         verbs.append(Option(id="part:revert", label="Revert", action="part:revert"))
         # Its SCAD, edited in the editor where the read-only source stood (loop 2,
         # the owner's answer of 2026-10-10): Save, a variant in git under the name
-        # the editor shows; Float and Fullscreen, the editor out of Selected and
-        # back; Variants, the saved ones, choosing one draws it. Told by the server
-        # (``picture.part``); a part built by Python has no Save and no Variants,
-        # and a part with none saved has no Variants. After Revert, so the loop's
-        # cells keep their seats: eight at the most.
-        seen = picture.part if node.part_ref and not camera and not made else None
+        # the editor shows; Variants, the saved ones, choosing one draws it. Told
+        # by the server (``picture.part``); a part built by Python has no Save and
+        # no Variants, and a part with none saved has no Variants. After Revert,
+        # so the loop's cells keep their seats: eight at the most.
+        part_of_the_folder = bool(node.part_ref and not camera and not made)
+        seen = picture.part if part_of_the_folder else None
+        if seen is not None and seen.editable:
+            verbs.append(Option(id="part:save", label="Save", action="part:save"))
+        # The ring was full at eight, so what this round adds is two groups
+        # (docs/plans/part-iteration-2026-10-12.md), in the seats Float and
+        # Fullscreen had: View -- how the part and its editor are seen: the
+        # editor floated over the world or over the whole page, the ghost of what
+        # was drawn before beside what is drawn now, and the part framed with
+        # Selected and its editor kept open (f) -- and History, the staged
+        # numbers' undo and redo (Ctrl+Z, Ctrl+Shift+Z). Float and Fullscreen
+        # are one press deeper; every other cell keeps its seat.
+        view = []
         if seen is not None:
-            if seen.editable:
-                verbs.append(Option(id="part:save", label="Save", action="part:save"))
-            verbs.append(Option(id="part:float", label="Float", action="part:float"))
-            verbs.append(Option(id="part:fullscreen", label="Fullscreen", action="part:fullscreen"))
+            view.append(Option(id="part:float", label="Float", action="part:float"))
+            view.append(Option(id="part:fullscreen", label="Fullscreen", action="part:fullscreen"))
+        if part_of_the_folder:
+            view.append(Option(id="part:ghost", label="Ghost", action="part:ghost"))
+        view.append(Option(id="part:fit", label="Fit", action="part:fit"))
+        verbs.append(Option(id="part:view", label="View", children=view))
+        verbs.append(
+            Option(
+                id="part:history",
+                label="History",
+                children=[
+                    Option(id="part:undo", label="Undo", action="part:undo"),
+                    Option(id="part:redo", label="Redo", action="part:redo"),
+                ],
+            )
+        )
+        if seen is not None and seen.editable:
             # Last, so the first save, which brings it, moves no cell.
-            chosen = _grouped("Variants", seen.variants, lambda n: f"part:variant:{n}")
-            if seen.editable and chosen is not None:
-                chosen.id = "part:variants"
+            chosen = _variants_group(seen.variants, seen.deleted)
+            if chosen is not None:
                 verbs.append(chosen)
         options.append(Option(id="part", label="Part", children=verbs))
     # A made piece with a printer pinned in its site to print it on: Print,

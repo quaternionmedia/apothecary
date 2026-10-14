@@ -18,7 +18,10 @@ drift from what either renderer accepts.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Mapping, Optional
+import math
+import re
+from enum import Enum
+from typing import Any, Dict, List, Mapping, Optional, get_args
 
 from pydantic import BaseModel, Field, ValidationError
 from pydantic_core import to_jsonable_python
@@ -61,6 +64,14 @@ class ParamField(BaseModel):
     # The candidates the part's sources disagree about, each with where it
     # comes from: the number a person can turn instead of argue about.
     contested: List[ContestedValue] = Field(default_factory=list)
+    # The unit its value is in, where its source declares one: a model's field
+    # by ``json_schema_extra={"unit": "mm"}``, a customizer parameter by its
+    # comment (``customizer.unit_of``). None where none is declared.
+    unit: Optional[str] = None
+    # A whole number: its value, its range and its step are integers.
+    integer: bool = False
+    # A "group": a nested model's own fields, each a field as these are.
+    fields: List["ParamField"] = Field(default_factory=list)
 
 
 # Where a spec's fields come from: the part's Python model, or its SCAD's own
@@ -84,6 +95,10 @@ class ParamsSpec(BaseModel):
     openscad: Optional[str] = Field(
         None, description="The OpenSCAD that listed them, for the customizer's"
     )
+    can_build: bool = Field(
+        True, description="An OpenSCAD here can build the part (gridfinity's cannot on 2021.01)"
+    )
+    build_note: Optional[str] = Field(None, description="Why it cannot be built here")
 
 
 class FieldError(BaseModel):
@@ -100,67 +115,221 @@ class Validation(BaseModel):
     bounds: Optional[BoundingBox3D] = None
 
 
+def _resolved(spec: Dict[str, Any], defs: Dict[str, Any]) -> Dict[str, Any]:
+    """A property's schema with its ``$ref`` followed and an ``Optional``'s null
+    taken out: what the field is, with what the property itself says over it."""
+    ref = spec.get("$ref")
+    if isinstance(ref, str) and ref.startswith("#/$defs/"):
+        target = dict(defs.get(ref[len("#/$defs/") :], {}))
+        spec = {**target, **{k: v for k, v in spec.items() if k != "$ref"}}
+    options = spec.get("anyOf")
+    if isinstance(options, list):
+        real = [o for o in options if o.get("type") != "null"]
+        if len(real) == 1:
+            inner = _resolved(real[0], defs)
+            spec = {**inner, **{k: v for k, v in spec.items() if k != "anyOf"}}
+    return spec
+
+
+def _enum_class(annotation: Any) -> Optional[type]:
+    """The Enum a field's annotation names, through an ``Optional``."""
+    if isinstance(annotation, type) and issubclass(annotation, Enum):
+        return annotation
+    for arg in get_args(annotation):
+        found = _enum_class(arg)
+        if found is not None:
+            return found
+    return None
+
+
+def _model_class(annotation: Any) -> Optional[type]:
+    """The model a nested field's annotation names, through an ``Optional``."""
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        return annotation
+    for arg in get_args(annotation):
+        found = _model_class(arg)
+        if found is not None:
+            return found
+    return None
+
+
+def _label(name: str) -> str:
+    """An Enum member's name as words: ``UNITS_EXCLUDE_LIP`` is "units exclude lip"."""
+    return name.replace("_", " ").lower()
+
+
+def _shown(value: Any) -> str:
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def _number_range(
+    spec: Dict[str, Any], interesting: List[float], integer: bool, step: Optional[float]
+) -> tuple:
+    """(min, max) for a slider: what the model states, else a span around the
+    default (and every contested candidate), a quarter of it to two and a
+    half times it, mirrored below zero. A whole number's are whole."""
+    low = spec.get("minimum")
+    # gt=0 arrives as exclusiveMinimum, and a slider stopping exactly there
+    # offers a value the model then refuses -- which is the one thing this
+    # contract exists to prevent.
+    exclusive_low = spec.get("exclusiveMinimum")
+    high = spec.get("maximum")
+    exclusive_high = spec.get("exclusiveMaximum")
+    if low is None and exclusive_low is not None:
+        low = float(exclusive_low)
+    if high is None and exclusive_high is not None:
+        high = float(exclusive_high)
+    if low is None:
+        smallest = min(interesting)
+        low = max(0.0, smallest * 0.25) if smallest >= 0 else smallest * 2.5
+    if high is None:
+        largest = max(interesting)
+        high = largest * 2.5 if largest > 0 else largest * 0.25
+    low, high = float(low), float(high)
+    if high <= low:
+        high = low + 10 * (step or 1.0)
+    if integer:
+        low, high = float(math.ceil(low)), float(math.floor(high))
+        if exclusive_low is not None and low <= float(exclusive_low):
+            low = float(math.floor(float(exclusive_low)) + 1)
+        if exclusive_high is not None and high >= float(exclusive_high):
+            high = float(math.ceil(float(exclusive_high)) - 1)
+        return low, high
+    if exclusive_low is not None and low <= float(exclusive_low):
+        # One slider step above the bound it may not touch.
+        low = float(exclusive_low) + (high - float(exclusive_low)) / 200
+    if exclusive_high is not None and high >= float(exclusive_high):
+        high = float(exclusive_high) - (float(exclusive_high) - low) / 200
+    return low, high
+
+
+def _field(
+    name: str,
+    spec: Dict[str, Any],
+    default: Any,
+    annotation: Any,
+    defs: Dict[str, Any],
+    candidates: List[ContestedValue],
+) -> ParamField:
+    """One property of a model's schema as the field a control surface builds."""
+    spec = _resolved(spec, defs)
+    common = {
+        "name": name,
+        "description": spec.get("description"),
+        "unit": spec.get("unit") if isinstance(spec.get("unit"), str) else None,
+        "contested": candidates,
+    }
+    nested = _model_class(annotation)
+    if nested is not None or isinstance(spec.get("properties"), dict):
+        inner = nested.model_fields if nested is not None else {}
+        fields = [
+            _field(
+                sub,
+                sub_spec,
+                getattr(default, sub, None) if default is not None else sub_spec.get("default"),
+                inner[sub].annotation if sub in inner else None,
+                defs,
+                [],
+            )
+            for sub, sub_spec in (spec.get("properties") or {}).items()
+        ]
+        return ParamField(
+            type="group", default=to_jsonable_python(default), fields=fields, **common
+        )
+    values = spec.get("enum")
+    if values is None and "const" in spec:
+        values = [spec["const"]]
+    if isinstance(values, list) and values:
+        members = _enum_class(annotation)
+        names = {m.value: m.name for m in members} if members is not None else {}
+        options = [
+            ParamOption(value=v, label=_label(names[v]) if v in names else _shown(v))
+            for v in values
+        ]
+        words = "|".join(re.escape(_shown(v)) for v in values)
+        return ParamField(
+            type="enum",
+            default=to_jsonable_python(default),
+            options=options,
+            pattern=f"^({words})$",
+            **common,
+        )
+    if spec.get("pattern"):
+        return ParamField(
+            type="enum", default=to_jsonable_python(default), pattern=spec["pattern"], **common
+        )
+    kind = spec.get("type")
+    if kind == "boolean" or isinstance(default, bool):
+        # A tick is not a number, though Python counts True as one.
+        return ParamField(type="boolean", default=default, **common)
+    if kind in ("number", "integer") or (kind is None and isinstance(default, (int, float))):
+        integer = kind == "integer"
+        step = spec.get("multipleOf")
+        step = float(step) if isinstance(step, (int, float)) else (1.0 if integer else None)
+        interesting = [float(v) for v in [default, *(c.value for c in candidates)] if v is not None]
+        low, high = _number_range(spec, interesting or [0.0], integer, step)
+        return ParamField(
+            type="number",
+            default=to_jsonable_python(default),
+            min=low,
+            max=high,
+            step=step,
+            integer=integer,
+            **common,
+        )
+    numbers = isinstance(default, (list, tuple)) and all(
+        isinstance(v, (int, float)) and not isinstance(v, bool) for v in default
+    )
+    if kind == "array" and numbers:
+        items = spec.get("items") or {}
+        return ParamField(
+            type="vector",
+            default=to_jsonable_python(default),
+            min=items.get("minimum"),
+            max=items.get("maximum"),
+            integer=items.get("type") == "integer",
+            **common,
+        )
+    return ParamField(type="text", default=to_jsonable_python(default), **common)
+
+
 def params_spec(part: BasePart) -> ParamsSpec:
     """The part's fields, defaults, ranges and contested candidates.
 
     Types, defaults and bounds come from the part's own Pydantic model, so
     the page cannot drift from what the renderer will accept. Raises
     ``NoParameters`` for a part without a model.
+
+    A number has a slider's range (the model's bounds, else a span around its
+    default) and, where it is an ``int``, ``integer`` and a step of 1, its
+    range in whole numbers; a ``multiple_of`` is its step. An Enum, a
+    ``Literal`` or an ``enum`` in the schema is an "enum" with its options
+    (an Enum member's label is its name in words). A nested model is a
+    "group" of its own fields. A field's ``json_schema_extra={"unit": ...}``
+    is its ``unit``; none is given where none is declared.
     """
     model_cls = part.params_model
     if model_cls is None:
         raise NoParameters(f"Part '{part.name}' declares no parameters")
 
     schema = model_cls.model_json_schema()
+    defs = schema.get("$defs", {})
     defaults = model_cls()
+    annotations = model_cls.model_fields
 
-    fields = []
-    for field_name, spec in schema.get("properties", {}).items():
-        default = getattr(defaults, field_name)
-        candidates = list(part.contested.get(field_name, []))
-        # A slider needs a range. Pydantic states one only where the field
-        # constrains it, so the rest get a span around the default wide enough
-        # to be worth dragging -- and wide enough to reach every candidate.
-        interesting = [default, *(c.value for c in candidates)]
-        low = spec.get("minimum")
-        # gt=0 arrives as exclusiveMinimum, and a slider stopping exactly there
-        # offers a value the model then refuses -- which is the one thing this
-        # contract exists to prevent.
-        exclusive_low = spec.get("exclusiveMinimum")
-        high = spec.get("maximum")
-        if isinstance(default, bool) or not isinstance(default, (int, float)):
-            # A tick is not a number, though Python counts True as one.
-            low = high = None
-        else:
-            if low is None:
-                low = float(exclusive_low) if exclusive_low is not None else None
-            else:
-                low = float(low)
-            if low is None:
-                low = max(0.0, min(interesting) * 0.25)
-            high = max(interesting) * 2.5 if high is None else float(high)
-            if exclusive_low is not None and low <= float(exclusive_low):
-                # One slider step above the bound it may not touch.
-                low = float(exclusive_low) + (high - float(exclusive_low)) / 200
-
-        if spec.get("pattern"):
-            kind = "enum"
-        elif isinstance(default, bool):
-            kind = "boolean"
-        else:
-            kind = "number" if high else "text"
-        fields.append(
-            ParamField(
-                name=field_name,
-                type=kind,
-                default=to_jsonable_python(default),
-                min=low,
-                max=high,
-                pattern=spec.get("pattern"),
-                description=spec.get("description"),
-                contested=candidates,
-            )
+    fields = [
+        _field(
+            field_name,
+            spec,
+            getattr(defaults, field_name),
+            annotations[field_name].annotation if field_name in annotations else None,
+            defs,
+            list(part.contested.get(field_name, [])),
         )
+        for field_name, spec in schema.get("properties", {}).items()
+    ]
 
     return ParamsSpec(
         part=part.name,

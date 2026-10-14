@@ -4,22 +4,25 @@ part's STL is built, whichever command or route asks for it."""
 from __future__ import annotations
 
 import asyncio
+import contextvars
+import inspect
 import json
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
 import threading
 import time
 import uuid
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, Iterator, List, Optional, Tuple
 
 from pydantic import BaseModel
 
@@ -91,6 +94,8 @@ class RenderResult:
     measured: Optional[Dict[str, List[float]]] = None
     # Stopped by a Cancellation before it finished: superseded, not failed.
     cancelled: bool = False
+    # How long it waited for its turn in the queue of OpenSCAD runs (``RUNS``).
+    queued_seconds: float = 0.0
 
 
 class Cancellation:
@@ -128,6 +133,152 @@ class Cancellation:
 
 
 SUPERSEDED = "Render superseded by a newer request"
+
+
+# --- the queue: at most a few OpenSCAD runs at once ----------------------------------
+#
+# Every OpenSCAD run that evaluates or renders -- a render, a check's parameter
+# or echo export, a compile -- takes a place in one queue first, and at most
+# ``runs_limit()`` run at once; the rest wait their turn, first come first
+# served, and a page can see where its own are (``RUNS.snapshot``, the
+# ``/openscad/runs`` route). Two (one on a single core): what a person waits
+# for is their newest render, and every run beside it makes it later -- timed
+# on a four-core machine, two renders at once each took a sixth to a third
+# longer than one alone, four at once nearly twice as long -- while two still
+# let a check go beside a render, or a check's two exports go together.
+# ``APOTHECARY_OPENSCAD_RUNS`` sets another number. Asking ``--version`` or
+# ``--help`` is not a run. A run cancelled while it waits leaves the queue
+# without starting; one cancelled while it runs is stopped, as before.
+
+OPENSCAD_RUNS = 2
+
+
+def runs_limit() -> int:
+    """How many OpenSCAD runs at once: ``APOTHECARY_OPENSCAD_RUNS``, else two,
+    or one on a machine with a single core."""
+    raw = os.environ.get("APOTHECARY_OPENSCAD_RUNS", "").strip()
+    default = min(OPENSCAD_RUNS, os.cpu_count() or 1)
+    try:
+        wanted = int(raw) if raw else default
+    except ValueError:
+        wanted = default
+    return max(1, wanted)
+
+
+# Who a run is for, set by the route that asks for it: the part, and the page.
+_LABEL: contextvars.ContextVar[Optional[Dict[str, Optional[str]]]] = contextvars.ContextVar(
+    "openscad_run_for", default=None
+)
+
+
+@contextmanager
+def runs_for(part: Optional[str] = None, page: Optional[str] = None) -> Iterator[None]:
+    """Every OpenSCAD run in the block is shown in the queue as ``part``'s, for ``page``."""
+    token = _LABEL.set({"part": part, "page": page})
+    try:
+        yield
+    finally:
+        _LABEL.reset(token)
+
+
+@dataclass
+class Run:
+    """One OpenSCAD run's place in the queue."""
+
+    id: str
+    kind: str
+    part: Optional[str]
+    page: Optional[str]
+    queued: float  # time.monotonic() when it asked
+    asked: str  # when it asked, ISO 8601
+    started: Optional[float] = None
+
+    @property
+    def waited(self) -> float:
+        return (self.started if self.started is not None else time.monotonic()) - self.queued
+
+
+class RunQueue:
+    """At most ``runs_limit()`` OpenSCAD runs at once; the rest wait in order."""
+
+    def __init__(self) -> None:
+        self._cond = threading.Condition()
+        self._running: List[Run] = []
+        self._waiting: List[Run] = []
+
+    def acquire(self, kind: str, cancel: Optional[Cancellation] = None) -> Optional[Run]:
+        """A place to run, once there is one; None when ``cancel`` was set while
+        it waited (it never started)."""
+        label = _LABEL.get() or {}
+        run = Run(
+            id=uuid.uuid4().hex[:12],
+            kind=kind,
+            part=label.get("part"),
+            page=label.get("page"),
+            queued=time.monotonic(),
+            asked=datetime.now().isoformat(timespec="seconds"),
+        )
+        with self._cond:
+            self._waiting.append(run)
+            while True:
+                if cancel is not None and cancel.cancelled:
+                    self._waiting.remove(run)
+                    self._cond.notify_all()
+                    return None
+                if self._waiting[0] is run and len(self._running) < runs_limit():
+                    self._waiting.pop(0)
+                    run.started = time.monotonic()
+                    self._running.append(run)
+                    return run
+                self._cond.wait(0.05)
+
+    def release(self, run: Optional[Run]) -> None:
+        if run is None:
+            return
+        with self._cond:
+            if run in self._running:
+                self._running.remove(run)
+            self._cond.notify_all()
+
+    @contextmanager
+    def place(self, kind: str, cancel: Optional[Cancellation] = None) -> Iterator[Optional[Run]]:
+        """``acquire`` for the block, released after; None: cancelled waiting."""
+        run = self.acquire(kind, cancel)
+        try:
+            yield run
+        finally:
+            self.release(run)
+
+    def snapshot(self, page: Optional[str] = None) -> Dict[str, object]:
+        """What runs and what waits, each with its part, page and kind, a waiting
+        one with its place in the line (1: next); ``page``: that page's alone."""
+        with self._cond:
+            running, waiting = list(self._running), list(self._waiting)
+
+        def shown(run: Run, position: Optional[int] = None) -> Dict[str, object]:
+            out: Dict[str, object] = {
+                "id": run.id,
+                "kind": run.kind,
+                "part": run.part,
+                "page": run.page,
+                "asked": run.asked,
+            }
+            if position is None:
+                out["running_seconds"] = round(time.monotonic() - (run.started or run.queued), 3)
+            else:
+                out["position"] = position
+                out["waited_seconds"] = round(run.waited, 3)
+            return out
+
+        mine = (lambda run: run.page == page) if page else (lambda run: True)
+        return {
+            "limit": runs_limit(),
+            "running": [shown(r) for r in running if mine(r)],
+            "waiting": [shown(r, i + 1) for i, r in enumerate(waiting) if mine(r)],
+        }
+
+
+RUNS = RunQueue()
 
 
 def _stop(process: subprocess.Popen) -> None:
@@ -184,22 +335,26 @@ def run_openscad(
     stopped, by ``"timeout"`` or by ``cancel`` (``"cancelled"``)."""
     if cancel is not None and cancel.cancelled:
         return None, "", "", "cancelled"
-    process = subprocess.Popen(
-        [str(executable), *args],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        cwd=str(cwd),
-    )
-    if cancel is not None and not cancel._attach(process):
-        _stop(process)
-    try:
-        stdout, stderr, stopped = _wait(process, timeout, cancel)
-    finally:
-        if cancel is not None:
-            cancel._detach(process)
+    kind = next((a.split("=", 1)[1] for a in args if a.startswith("--export-format=")), "run")
+    with RUNS.place(kind, cancel) as run:
+        if run is None:
+            return None, "", "", "cancelled"
+        process = subprocess.Popen(
+            [str(executable), *args],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            cwd=str(cwd),
+        )
+        if cancel is not None and not cancel._attach(process):
+            _stop(process)
+        try:
+            stdout, stderr, stopped = _wait(process, timeout, cancel)
+        finally:
+            if cancel is not None:
+                cancel._detach(process)
     return (None if stopped else process.returncode), stdout, stderr, stopped
 
 
@@ -296,8 +451,10 @@ class OpenSCADRenderer:
         timeout: float = 120.0,
         params: Optional[dict] = None,
         cancel: Optional[Cancellation] = None,
+        binary: bool = False,
     ) -> RenderResult:
         """Render a SCAD file to STL, with ``params`` passed as ``-D name=value``.
+        ``binary`` asks for a binary STL where the OpenSCAD writes one.
 
         ``stl_path`` defaults to the SCAD's own name. OpenSCAD writes a temporary
         file beside it that replaces it only on success, so a failed or killed
@@ -345,36 +502,47 @@ class OpenSCADRenderer:
             if has_summary(self.openscad_path)
             else []
         )
+        binstl = (
+            ["--export-format=binstl"] if binary and writes_binary_stl(self.openscad_path) else []
+        )
         cmd = [
             str(self.openscad_path),
             "-o",
             str(partial),
+            *binstl,
             *backend,
             *summarise,
             *definitions,
             str(scad_path),
         ]
 
+        run = RUNS.acquire("render", cancel)
+        if run is None:
+            return RenderResult(success=False, error_message=SUPERSEDED, cancelled=True)
+        waited = run.waited
         start = time.monotonic()
         try:
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                # OpenSCAD resolves a relative import() against the source
-                # file's own directory, so this is for the process, not paths.
-                cwd=str(scad_path.parent),
-            )
-            if cancel is not None and not cancel._attach(process):
-                _stop(process)
             try:
-                stdout, stderr, stopped = _wait(process, timeout, cancel)
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    # OpenSCAD resolves a relative import() against the source
+                    # file's own directory, so this is for the process, not paths.
+                    cwd=str(scad_path.parent),
+                )
+                if cancel is not None and not cancel._attach(process):
+                    _stop(process)
+                try:
+                    stdout, stderr, stopped = _wait(process, timeout, cancel)
+                finally:
+                    if cancel is not None:
+                        cancel._detach(process)
             finally:
-                if cancel is not None:
-                    cancel._detach(process)
+                RUNS.release(run)
             elapsed = time.monotonic() - start
 
             if stopped == "cancelled":
@@ -385,6 +553,7 @@ class OpenSCADRenderer:
                     stdout=stdout,
                     stderr=stderr,
                     cancelled=True,
+                    queued_seconds=waited,
                 )
             if stopped == "timeout":
                 return RenderResult(
@@ -393,6 +562,7 @@ class OpenSCADRenderer:
                     render_time_seconds=elapsed,
                     stdout=stdout,
                     stderr=stderr,
+                    queued_seconds=waited,
                 )
 
             if process.returncode != 0:
@@ -402,6 +572,7 @@ class OpenSCADRenderer:
                     render_time_seconds=elapsed,
                     stdout=stdout,
                     stderr=stderr,
+                    queued_seconds=waited,
                 )
 
             if not partial.exists():
@@ -411,6 +582,7 @@ class OpenSCADRenderer:
                     render_time_seconds=elapsed,
                     stdout=stdout,
                     stderr=stderr,
+                    queued_seconds=waited,
                 )
 
             os.replace(partial, stl_path)
@@ -430,6 +602,7 @@ class OpenSCADRenderer:
                 stderr=stderr,
                 dropped=dropped,
                 measured=read_summary_bounds(summary),
+                queued_seconds=waited,
             )
 
         except Exception as e:
@@ -569,6 +742,67 @@ def has_manifold(executable: Optional[Path]) -> bool:
     from apothecary.openscad_installer import has_manifold as reports_manifold
 
     return executable is not None and reports_manifold(openscad_version(Path(executable)))
+
+
+_BINARY: Dict[str, bool] = {}
+
+
+def writes_binary_stl(executable: Optional[Path]) -> bool:
+    """Whether ``executable`` writes a binary STL when asked
+    (``--export-format=binstl``): its help names ``binstl``. 2021.01 and the
+    snapshots do; asked once per executable. One that does not has its ASCII
+    STL turned binary in Python (``binary_stl``)."""
+    if executable is None:
+        return False
+    key = str(executable)
+    if key not in _BINARY:
+        try:
+            done = subprocess.run(
+                [key, "--help"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=10,
+            )
+            _BINARY[key] = "binstl" in f"{done.stdout}\n{done.stderr}"
+        except (OSError, subprocess.SubprocessError):
+            _BINARY[key] = False
+    return _BINARY[key]
+
+
+def is_binary_stl(path: Path) -> bool:
+    """Whether the STL at ``path`` is binary: its triangle count fits its size."""
+    try:
+        size = path.stat().st_size
+        with open(path, "rb") as handle:
+            head = handle.read(84)
+    except OSError:
+        return False
+    if len(head) < 84:
+        return False
+    (count,) = struct.unpack_from("<I", head, 80)
+    return 84 + count * 50 == size
+
+
+def binary_stl(path: Path) -> bool:
+    """The STL at ``path`` made binary where it is ASCII: read and written again
+    in place, its solid's name kept in the header (as far as eighty bytes go).
+    Whether it was changed."""
+    from apothecary.meshes import read_stl, write_stl
+
+    if is_binary_stl(path):
+        return False
+    data = path.read_bytes()
+    first = data.split(b"\n", 1)[0].decode("ascii", errors="replace").strip()
+    name = first[len("solid") :].strip() if first.lower().startswith("solid") else ""
+    partial = path.with_name(f".{path.name}.{uuid.uuid4().hex[:12]}.tmp")
+    try:
+        write_stl(read_stl(data), partial, name=name or "apothecary")
+        os.replace(partial, path)
+    finally:
+        partial.unlink(missing_ok=True)
+    return True
 
 
 def has_summary(executable: Optional[Path]) -> bool:
@@ -789,10 +1023,21 @@ def _scratch_beside(stl_path: Path) -> tempfile.TemporaryDirectory:
     )
 
 
-def _cancelling(cancel: Optional[Cancellation]) -> Dict[str, Cancellation]:
-    """``cancel=`` for a render only when there is one: a stand-in renderer
-    need not take the keyword."""
-    return {"cancel": cancel} if cancel is not None else {}
+def _cancelling(
+    renderer: OpenSCADRenderer, cancel: Optional[Cancellation], binary: bool = False
+) -> Dict[str, object]:
+    """``cancel=`` for a render only when there is one, and ``binary=`` only
+    when it is asked for and the renderer takes it: a stand-in renderer need
+    not take the keywords (its STL is made binary after, as any ASCII one is)."""
+    found: Dict[str, object] = {"cancel": cancel} if cancel is not None else {}
+    if binary:
+        try:
+            takes = "binary" in inspect.signature(renderer.render_stl).parameters
+        except (TypeError, ValueError):
+            takes = False
+        if takes:
+            found["binary"] = True
+    return found
 
 
 def _render_rotated(
@@ -803,6 +1048,7 @@ def _render_rotated(
     timeout: float,
     params: dict,
     cancel: Optional[Cancellation] = None,
+    binary: bool = False,
 ) -> RenderResult:
     """Render upright into a scratch directory, then turn it with a one-line wrapper.
 
@@ -814,7 +1060,11 @@ def _render_rotated(
     with _scratch_beside(stl_path) as tmp:
         upright = Path(tmp) / "upright.stl"
         first = renderer.render_stl(
-            scad_path, upright, timeout, params=params or None, **_cancelling(cancel)
+            scad_path,
+            upright,
+            timeout,
+            params=params or None,
+            **_cancelling(renderer, cancel, binary),
         )
         if not first.success:
             return first
@@ -822,8 +1072,11 @@ def _render_rotated(
         wrapper.write_text(
             f'rotate({scad_literal(rotation)}) import("{upright.name}");\n', encoding="utf-8"
         )
-        second = renderer.render_stl(wrapper, stl_path, timeout, **_cancelling(cancel))
+        second = renderer.render_stl(
+            wrapper, stl_path, timeout, **_cancelling(renderer, cancel, binary)
+        )
     second.render_time_seconds += first.render_time_seconds
+    second.queued_seconds += first.queued_seconds
     second.dropped = first.dropped + second.dropped
     second.stderr = (first.stderr or "") + (second.stderr or "")
     second.measured = first.measured
@@ -839,9 +1092,11 @@ def render_part(
     rotation: Optional[List[float]] = None,
     cancel: Optional[Cancellation] = None,
     scad: Optional[Path] = None,
+    binary: bool = False,
 ) -> RenderResult:
     """Render a part with already-validated ``params`` to ``stl_path``, and
-    nothing more: no freshness check, no sidecar. A part with Python geometry
+    nothing more: no freshness check, no sidecar. ``binary`` asks OpenSCAD for
+    a binary STL where it writes one. A part with Python geometry
     is rendered from that geometry's SCAD, written to a scratch file beside
     ``stl_path``; any other from its SCAD file, or from ``scad`` standing in
     for it (a draft written beside it), the params reaching it through
@@ -858,9 +1113,15 @@ def render_part(
             scad, definitions = Path(tmp) / part.source_file.name, {}
             scad.write_text(text, encoding="utf-8")
         if rotation and any(rotation):
-            return _render_rotated(renderer, scad, stl_path, rotation, timeout, definitions, cancel)
+            return _render_rotated(
+                renderer, scad, stl_path, rotation, timeout, definitions, cancel, binary
+            )
         return renderer.render_stl(
-            scad, stl_path, timeout, params=definitions or None, **_cancelling(cancel)
+            scad,
+            stl_path,
+            timeout,
+            params=definitions or None,
+            **_cancelling(renderer, cancel, binary),
         )
 
 

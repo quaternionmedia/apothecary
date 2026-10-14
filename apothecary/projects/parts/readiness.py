@@ -13,6 +13,12 @@ Three states, and the middle one is the point:
 ``unknown``   the check could not run — no OpenSCAD, no build volume given.
               Never counted as a pass. A checklist that reports a question it
               could not ask as a tick is worse than no checklist.
+
+A page asks about what it draws: ``assess`` takes the variant drawn
+(``Drawn``, from the variant cache), whose render, measured bounds and
+parameters then answer the geometry questions instead of the part's own STL's,
+and a build volume with where it came from (``Volume``: a printer pinned in
+the site, or one given).
 """
 
 from __future__ import annotations
@@ -32,6 +38,33 @@ UNKNOWN = "unknown"
 BOUNDS = "Declared bounds match geometry"
 
 Size = Tuple[float, float, float]
+
+
+@dataclass(frozen=True)
+class Drawn:
+    """A variant from the variant cache: what a page drew, which the checklist
+    then asks about instead of the part's own STL."""
+
+    key: str
+    stl: Path
+    params: dict
+    # Its bounding box in the frame the bounds are declared in ({"min", "max",
+    # "size"}), as the cache measured it; None where it measured none.
+    measured: Optional[dict] = None
+    # The sha256 of the draft it was rendered from; None: the part's own SCAD.
+    draft: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class Volume:
+    """A build volume, and where it came from: "printer_1 in garage", "given"."""
+
+    size: Size
+    source: str = "given"
+
+
+# What "Fits the printer" says when no volume is known: the detail, and the fix.
+NO_VOLUME = ("no build volume given", "pass --build-volume X,Y,Z to check it")
 
 
 @dataclass
@@ -248,6 +281,101 @@ def _bounds_check(part, stl_path: Path, tolerance: float) -> Check:
     )
 
 
+def _drawn_checks(part, drawn: Drawn, tolerance: float) -> List[Check]:
+    """The geometry questions, asked of a variant drawn from the cache: it is
+    there only because it rendered, so it renders; its measured size is held to
+    the bounds the part declares for its parameters."""
+    if not part.source_file.exists():
+        return _geometry_checks(part, None, Path(drawn.stl))
+    checks = [Check("Source geometry exists", PASS, str(part.source_file.name))]
+    try:
+        size_kb = Path(drawn.stl).stat().st_size // 1024
+    except OSError:
+        size_kb = None
+    from_draft = " from an edit of its SCAD" if drawn.draft else ""
+    checks.append(
+        Check(
+            "Geometry renders",
+            PASS,
+            f"variant {drawn.key}{from_draft}" + (f", {size_kb} KB" if size_kb is not None else ""),
+        )
+    )
+    checks.append(_drawn_bounds_check(part, drawn, tolerance))
+    return checks
+
+
+def _speaks_for_params(part) -> bool:
+    """Whether the part's declared bounds follow its parameters: its own
+    get_bounds, not BasePart's, which answers its defaults whatever is asked."""
+    from apothecary.projects.parts.base import BasePart
+
+    return type(part).get_bounds is not BasePart.get_bounds
+
+
+def _drawn_bounds_check(part, drawn: Drawn, tolerance: float) -> Check:
+    if drawn.params and not _speaks_for_params(part):
+        return Check(
+            BOUNDS,
+            UNKNOWN,
+            f"the part declares bounds for its defaults only, and the variant sets "
+            f"{', '.join(sorted(drawn.params))}",
+            "give the wrapper a get_bounds that follows its parameters",
+        )
+    try:
+        declared = part.get_bounds(dict(drawn.params) or None)
+    except Exception as exc:  # a wrapper that cannot size itself for these
+        return Check(BOUNDS, UNKNOWN, f"the part could not size itself for them: {exc}")
+    if declared is None:
+        return Check(
+            BOUNDS,
+            BLOCKED,
+            "the part declares no bounds",
+            "give the wrapper a get_bounds or default_bounds",
+        )
+    if not drawn.measured:
+        return Check(BOUNDS, UNKNOWN, "the variant was not measured")
+    want = (declared.size.x, declared.size.y, declared.size.z)
+    measured = tuple(float(v) for v in drawn.measured["size"])
+    result = compare_bounds(want, measured, tolerance)
+    if not result.ok:
+        return Check(
+            BOUNDS,
+            BLOCKED,
+            f"off by {result.worst:.2f} mm — declared "
+            f"{want[0]:.1f} x {want[1]:.1f} x {want[2]:.1f} for these parameters, measured "
+            f"{measured[0]:.1f} x {measured[1]:.1f} x {measured[2]:.1f}",
+            "reconcile the wrapper with the SCAD; anything sizing around this part is wrong",
+        )
+    return Check(
+        BOUNDS,
+        PASS,
+        f"{want[0]:.1f} x {want[1]:.1f} x {want[2]:.1f} mm, within {tolerance} mm",
+    )
+
+
+DEFAULTS = "Model defaults match the SCAD"
+
+
+def _defaults_check(part) -> Optional[Check]:
+    """Where a part's Python model's defaults and its SCAD's own values disagree:
+    the SCAD as saved is the part's default (decided 2026-10-12), and a model
+    that says otherwise sizes it, and checks values, against something else.
+    None where there is nothing to compare (no model; a SCAD that is generated)."""
+    from apothecary.projects.parts.texts import defaults_disagree
+
+    found = defaults_disagree(part)
+    if found is None:
+        return None
+    if not found:
+        return Check(DEFAULTS, PASS, "every model default is what the SCAD assigns")
+    return Check(
+        DEFAULTS,
+        BLOCKED,
+        "; ".join(found),
+        "make the model's default the SCAD's value: the SCAD as saved is the part's default",
+    )
+
+
 def _print_settings_check(part) -> Check:
     settings = getattr(part, "print_settings", None)
     if settings is None:
@@ -278,19 +406,29 @@ def _contested_check(part) -> Check:
     )
 
 
-def _build_volume_check(part, build_volume) -> Check:
+def _build_volume_check(
+    part,
+    build_volume,
+    drawn: Optional[Drawn] = None,
+    source: str = "given",
+    none: Tuple[str, str] = NO_VOLUME,
+) -> Check:
+    """Whether the part fits ``build_volume``: the variant drawn by the size it
+    measured, else the part by the size it declares. ``source`` says where the
+    volume came from; ``none`` is what to say, and to do, when there is none."""
     if build_volume is None:
-        return Check(
-            "Fits the printer",
-            UNKNOWN,
-            "no build volume given",
-            "pass --build-volume X,Y,Z to check it",
-        )
-    declared = part.get_bounds()
-    if declared is None:
-        return Check("Fits the printer", UNKNOWN, "the part declares no bounds")
-
-    size = (declared.size.x, declared.size.y, declared.size.z)
+        return Check("Fits the printer", UNKNOWN, none[0], none[1])
+    if drawn is not None and drawn.measured:
+        size = tuple(float(v) for v in drawn.measured["size"])
+        what = "measured"
+    else:
+        params = (dict(drawn.params) or None) if drawn is not None else None
+        declared = part.get_bounds(params)
+        if declared is None:
+            return Check("Fits the printer", UNKNOWN, "the part declares no bounds")
+        size = (declared.size.x, declared.size.y, declared.size.z)
+        what = "declared"
+    inside = "" if source == "given" else f" ({source})"
     over = [
         f"{axis} {have:.1f} > {limit:.1f}"
         for axis, have, limit in zip("XYZ", size, build_volume, strict=False)
@@ -300,14 +438,14 @@ def _build_volume_check(part, build_volume) -> Check:
         return Check(
             "Fits the printer",
             BLOCKED,
-            "; ".join(over),
+            "; ".join(over) + inside,
             "split the part, or print it on a larger machine",
         )
     return Check(
         "Fits the printer",
         PASS,
-        f"{size[0]:.1f} x {size[1]:.1f} x {size[2]:.1f} mm inside "
-        f"{build_volume[0]:.0f} x {build_volume[1]:.0f} x {build_volume[2]:.0f}",
+        f"{size[0]:.1f} x {size[1]:.1f} x {size[2]:.1f} mm {what}, inside "
+        f"{build_volume[0]:.0f} x {build_volume[1]:.0f} x {build_volume[2]:.0f}{inside}",
     )
 
 
@@ -361,19 +499,33 @@ def _stub_check(part) -> Check:
     )
 
 
-def assess(part, build_volume: Optional[tuple] = None, tolerance: float = 0.5) -> Readiness:
-    """Everything the repository can answer about printing this part."""
-    renderer = get_renderer()
-    # The part decides where its STL lives (gridfinity's is outside its submodule).
-    stl_path = part.get_stl_output_path()
-
-    checks = _geometry_checks(part, renderer, stl_path)
-    if any(c.name == "Geometry renders" and c.ok for c in checks):
-        checks.append(_bounds_check(part, stl_path, tolerance))
+def assess(
+    part,
+    build_volume: Optional[tuple] = None,
+    tolerance: float = 0.5,
+    drawn: Optional[Drawn] = None,
+    volume_from: str = "given",
+    no_volume: Tuple[str, str] = NO_VOLUME,
+) -> Readiness:
+    """Everything the repository can answer about printing this part: the part
+    as its own STL is, or the variant ``drawn``. ``volume_from`` says where
+    ``build_volume`` came from, and ``no_volume`` what to say without one."""
+    if drawn is not None:
+        checks = _drawn_checks(part, drawn, tolerance)
+    else:
+        renderer = get_renderer()
+        # The part decides where its STL lives (gridfinity's is outside its submodule).
+        stl_path = part.get_stl_output_path()
+        checks = _geometry_checks(part, renderer, stl_path)
+        if any(c.name == "Geometry renders" and c.ok for c in checks):
+            checks.append(_bounds_check(part, stl_path, tolerance))
 
     checks.append(_print_settings_check(part))
+    defaults = _defaults_check(part)
+    if defaults is not None:
+        checks.append(defaults)
     checks.append(_contested_check(part))
-    checks.append(_build_volume_check(part, build_volume))
+    checks.append(_build_volume_check(part, build_volume, drawn, volume_from, no_volume))
     checks.append(_stub_check(part))
 
     return Readiness(part=part.name, checks=checks)

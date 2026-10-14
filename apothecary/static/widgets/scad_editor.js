@@ -19,26 +19,49 @@
  * already holds it. A part whose SCAD is not its own source (its geometry is
  * Python, or a made piece's few lines) is read-only, and has no name and no Save.
  *
+ * OpenSCAD's own keys work inside it, and only there: F5 checks and draws
+ * (onCheck), F6 and Ctrl+Enter render and draw (onApply), Ctrl+S saves a variant
+ * (onSave). Outside it the browser's keys are the browser's.
+ *
+ * The page keeps a part's editor while another part is selected, so its text and
+ * its undo come back with it: its root is taken out of the page and put back, and
+ * rebind() points its callbacks at the page's newest. The name box names the
+ * variant Save keeps; empty, Save keeps it under the name suggest() greyed in it.
+ *
+ * A part whose SCAD the page edits has one draft: its text. A control moved writes
+ * its value into its assignment's line here (writeValues), as an edit undo takes
+ * back, and the page reads the text again on every change to move the controls
+ * (the part-iteration plan's "parameters and text, tied together"). Such an edit,
+ * a whole text put back (replaceText) and the page's own Undo and Redo are told to
+ * the page as staged ({ staged: true }): checked, and drawn when Apply is pressed;
+ * what a person types here is checked and drawn once it reads.
+ *
  * mountScadEditor(slot, options) renders into slot and resolves to the editor:
- *   options: { text, readOnly, editable, name, onChange(text), onSave(),
- *              onFloat(), onFullscreen(), onChoose(name), shownAs }
- *   editor:  { root, text(), setText(text), mark(messages), say(words, kind),
- *              name(), setName(name), showVariants(list), fullscreen(on),
- *              isFullscreen(), focus(), measure(), destroy() }
+ *   options: { text, readOnly, editable, name, onChange(text, { staged }), onSave(),
+ *              onFloat(), onFullscreen(), onChoose(name), onCheck(), onApply(),
+ *              onName(name), onManage(verb, name, { to, commit, button }), shownAs }
+ *   editor:  { root, text(), setText(text), writeValues(values, { join }),
+ *              replaceText(text), undo(), redo(), canUndo(), canRedo(),
+ *              mark(messages), say(words, kind), name(), setName(name),
+ *              suggest(name), showVariants(list, chosen, trash),
+ *              showHistory(name, commits), fullscreen(on), isFullscreen(), focus(),
+ *              measure(), rebind(callbacks), destroy() }
  * variantChoices(list) is the markup of a list of saved variants to choose one
  * from, as the editor's own list and the page's short list under a part's
  * parameters both draw it; the page listens on the list.
  */
+
+import { valueChanges } from "./assignments.js";
 
 const MARKUP = `
 <div class="scad-editor" tabindex="-1">
     <div class="scad-bar">
         <span class="scad-said" role="status"></span>
         <span class="scad-spacer"></span>
-        <label class="scad-name-label" title="The name Save keeps this variant under, in git: letters, digits, _ . and -">as <input type="text" id="scad-name" spellcheck="false" maxlength="64"></label>
-        <button type="button" id="scad-save" title="Save: this SCAD and the numbers staged in the editor, committed to this part's own ref in git under the name beside it. Nothing in the checkout changes; merging it is yours to do (Part › Save)">Save</button>
-        <button type="button" id="scad-float" title="Float the editor over the world, or put it back in Selected (Part › Float)">Float</button>
-        <button type="button" id="scad-fullscreen" title="The editor over the whole page; Esc or this button puts it back (Part › Fullscreen)">Fullscreen</button>
+        <label class="scad-name-label" title="The name Save keeps this variant under, in git: letters, digits, _ . and -. Empty, the name greyed in it; a name already saved is asked about first">as <input type="text" id="scad-name" spellcheck="false" maxlength="64"></label>
+        <button type="button" id="scad-save" title="Save: this SCAD, its values in it, committed to this part's own ref in git under the name beside it. Nothing in the checkout changes; merging it is yours to do (Ctrl+S in the editor; Part › Save)">Save</button>
+        <button type="button" id="scad-float" title="Float the editor over the world, or put it back in Selected (Part › View › Float)">Float</button>
+        <button type="button" id="scad-fullscreen" title="The editor over the whole page; Esc or this button puts it back (Part › View › Fullscreen)">Fullscreen</button>
     </div>
     <div class="scad-code"></div>
     <div class="scad-saved"></div>
@@ -155,27 +178,77 @@ function numbers(params) {
     return shown.length ? shown.join(", ") : "its own numbers";
 }
 
+// What making a variant the part's source takes, as the server says it truly: where
+// its ref lives, and whether a merge brings its values (one saved before its values
+// were in its text does not, until it is saved again).
+function mergeSaid(v) {
+    return v.merge?.advice || `git merge ${v.ref} makes it the part's source`;
+}
+
 /* A list of saved variants to choose one from: each a button naming it, when it
- * was saved and with what numbers; with `full`, also whether HEAD holds it and,
- * folded, what it changes. */
+ * was saved and with what numbers; with `full`, also whether HEAD holds it, what
+ * making it the part's source takes and, folded, what it changes; and its ⋯, which
+ * unfolds what can be done to it: renamed or duplicated under the name typed beside
+ * them, its history (each earlier save restorable), compared with what is drawn,
+ * deleted to the trash. A part in a submodule's variant is an overlay of its
+ * upstream SCAD, and says so. */
 export function variantChoices(list, { full = false, chosen = null } = {}) {
     if (!list || !list.length) return `<span class="empty">no variants saved yet: Save keeps one in git</span>`;
     return list.map((v) => {
-        const head = v.merged ? `<span class="in-head" title="HEAD already holds it: merged">in HEAD</span>` : `<span class="not-in-head" title="Not merged: git merge ${esc(v.ref)} makes it the part's source">not merged</span>`;
+        const head = v.merged
+            ? `<span class="in-head" title="HEAD already holds it: merged">in HEAD</span>`
+            : `<span class="not-in-head" title="${esc(mergeSaid(v))}">not merged</span>`;
+        const overlay = v.kind === "overlay" ? `<span class="saved-kind" title="Saved as ${esc(v.scad_path)}: it includes ${esc(v.upstream || "the upstream SCAD")} and sets its values; the submodule is never touched">overlay</span>` : "";
         const changes = full && v.diff !== null && v.diff !== undefined
             ? `<details class="variant-diff"><summary>what it changes</summary><pre>${v.diff ? esc(v.diff) : "nothing: its SCAD is the part's own"}</pre></details>`
             : "";
+        const manage = full
+            ? `<button type="button" class="variant-more" title="Rename, duplicate, its history, compare with what is drawn, delete">⋯</button>`
+              + `<div class="variant-manage" hidden>`
+              + `<input type="text" class="variant-to" maxlength="64" spellcheck="false" placeholder="a new name" aria-label="A new name for ${esc(v.name)}">`
+              + `<button type="button" class="variant-rename" title="Rename ${esc(v.name)} to the name beside it">Rename</button>`
+              + `<button type="button" class="variant-duplicate" title="A copy of ${esc(v.name)} under the name beside it">Duplicate</button>`
+              + `<button type="button" class="variant-history" title="Each save of ${esc(v.name)}, newest first; an earlier one can be restored">History</button>`
+              + `<button type="button" class="variant-compare" title="${esc(v.name)} beside what is drawn: overlaid or side by side, with what differs">Compare</button>`
+              + `<button type="button" class="variant-delete" title="Move ${esc(v.name)} to the trash: Deleted, below, restores it">Delete</button>`
+              + `<div class="variant-history-list"></div></div>`
+            : "";
         return `<div class="saved-row${v.name === chosen ? " chosen" : ""}" data-variant="${esc(v.name)}">`
-            + `<button type="button" class="saved-variant" data-variant="${esc(v.name)}" title="Draw ${esc(v.name)}: its SCAD in the editor and its numbers staged, rendered (Part › Variants › ${esc(v.name)})">${esc(v.name)}</button>`
-            + `<span class="saved-when">${esc(when(v.date))}</span>${full ? head : ""}`
+            + `<button type="button" class="saved-variant" data-variant="${esc(v.name)}" title="Draw ${esc(v.name)}: its SCAD in the editor and its numbers staged, rendered (Part › Variants › ${esc(v.name)} › Draw)">${esc(v.name)}</button>`
+            + `<span class="saved-when">${esc(when(v.date))}</span>${full ? head : ""}${overlay}${manage}`
             + `<div class="saved-numbers">${esc(numbers(v.params))}</div>${changes}</div>`;
     }).join("");
+}
+
+/* A variant's saves, newest first: when, what was said, its numbers; each but the
+ * one it is now restorable. */
+export function historyRows(name, commits) {
+    if (!commits.length) return `<span class="empty">no saves found</span>`;
+    return commits.map((c) => `<div class="history-row${c.current ? " current" : ""}" data-commit="${esc(c.commit)}">`
+        + `<span class="saved-when">${esc(when(c.date))}</span> <span class="history-subject">${esc(c.subject)}</span>`
+        + `<div class="saved-numbers">${esc(numbers(c.params))}</div>`
+        + (c.current ? `<span class="history-now">as it is now</span>` : `<button type="button" class="variant-restore" data-commit="${esc(c.commit)}" title="${esc(name)} as it was at this save: a new save of it, its history keeping what came between">Restore</button>`)
+        + `</div>`).join("");
+}
+
+/* The part's deleted variants, in their fold: each restorable, or deleted for good;
+ * and the whole trash emptied. Emptying asks first: the button asks again. */
+export function trashRows(list) {
+    if (!list.length) return `<span class="empty">nothing deleted</span>`;
+    return list.map((v) => `<div class="trash-row" data-variant="${esc(v.name)}">`
+        + `<span class="trash-name">${esc(v.name)}</span> <span class="saved-when">${esc(when(v.date))}</span>`
+        + `<button type="button" class="trash-restore" title="Back among the variants, under its own name">Restore</button>`
+        + `<button type="button" class="trash-forget" title="Forget ${esc(v.name)}: deleted for good, once asked again">Forget</button></div>`).join("")
+        + `<button type="button" class="trash-empty" title="Every deleted variant of this part deleted for good: asks first">Empty the trash</button>`;
 }
 
 // --- the editor --------------------------------------------------------------------
 
 export async function mountScadEditor(slot, options = {}) {
-    const { text = "", readOnly = false, editable = !readOnly, name = "", onChange, onSave, onFloat, onFullscreen, onChoose, shownAs = null } = options;
+    const { text = "", readOnly = false, editable = !readOnly, name = "", shownAs = null } = options;
+    // What the page is told, through one object it can point elsewhere (rebind).
+    const on = {};
+    for (const key of ["onChange", "onSave", "onFloat", "onFullscreen", "onChoose", "onCheck", "onApply", "onName", "onManage"]) on[key] = options[key];
     slot.innerHTML = MARKUP;
     const root = slot.querySelector(".scad-editor");
     const said = root.querySelector(".scad-said");
@@ -187,12 +260,39 @@ export async function mountScadEditor(slot, options = {}) {
     nameBox.value = name;
     for (const el of [nameBox.parentElement, saveBtn]) el.hidden = !editable;
     savedList.hidden = !editable;
-    saveBtn.onclick = () => onSave && onSave();
-    floatBtn.onclick = () => onFloat && onFloat();
-    fullBtn.onclick = () => onFullscreen && onFullscreen();
+    saveBtn.onclick = () => on.onSave && on.onSave();
+    floatBtn.onclick = () => on.onFloat && on.onFloat();
+    fullBtn.onclick = () => on.onFullscreen && on.onFullscreen();
+    nameBox.oninput = () => on.onName && on.onName(nameBox.value);
+    // The list: a variant chosen draws it; its ⋯ unfolds what can be done to it, each
+    // of which the page does (onManage(verb, name, { to, commit, button })).
+    const verbs = { "variant-rename": "rename", "variant-duplicate": "duplicate", "variant-history": "history",
+        "variant-compare": "compare", "variant-delete": "delete", "variant-restore": "restore",
+        "trash-restore": "undelete", "trash-forget": "forget", "trash-empty": "empty" };
     savedList.onclick = (ev) => {
         const b = ev.target.closest(".saved-variant");
-        if (b && onChoose) onChoose(b.dataset.variant);
+        if (b && on.onChoose) { on.onChoose(b.dataset.variant); return; }
+        const more = ev.target.closest(".variant-more");
+        if (more) {
+            const box = more.parentElement.querySelector(".variant-manage");
+            box.hidden = !box.hidden;
+            if (!box.hidden) box.querySelector(".variant-to").focus();
+            return;
+        }
+        const button = ev.target.closest("button");
+        const verb = button && Object.entries(verbs).find(([cls]) => button.classList.contains(cls))?.[1];
+        if (!verb || !on.onManage) return;
+        const row = button.closest("[data-variant]");
+        const to = row?.querySelector(".variant-to")?.value.trim() || "";
+        on.onManage(verb, row?.dataset.variant ?? null, { to, commit: button.dataset.commit ?? null, button });
+    };
+    // Enter in a variant's name box: what the ring's Rename or Duplicate readied, else Rename.
+    savedList.onkeydown = (ev) => {
+        const box = ev.target.closest(".variant-to");
+        if (!box || ev.key !== "Enter" || !on.onManage) return;
+        ev.preventDefault();
+        const row = box.closest("[data-variant]");
+        on.onManage(box.dataset.verb || "rename", row.dataset.variant, { to: box.value.trim(), button: null });
     };
     // Escape, with the editor over the page, puts it back: the editor holds the
     // focus while it is there (its root takes it when nothing in it does).
@@ -200,15 +300,34 @@ export async function mountScadEditor(slot, options = {}) {
         if (ev.key === "Escape" && root.classList.contains("fullscreen")) {
             ev.preventDefault();
             ev.stopPropagation();
-            if (onFullscreen) onFullscreen();
+            if (on.onFullscreen) on.onFullscreen();
         }
     };
 
     const cm = await codemirror();
     const { state, view, language, commands, lint } = cm;
+    // An edit the page made for a control, a text put back, or its own Undo and Redo.
+    const staged = state.Annotation.define();
+    let undoing = false;
+    // Which kind of edit came last: a control's moves close together are one step of
+    // undo, as typing is, but never one step with typing beside them.
+    const kindOf = (tr) => (tr.annotation(staged) ? "control" : "typed");
+    let lastKind = null;
     const listen = view.EditorView.updateListener.of((update) => {
-        if (update.docChanged && onChange) onChange(update.state.doc.toString());
+        for (const tr of update.transactions) if (tr.docChanged) lastKind = kindOf(tr);
+        if (!update.docChanged || !on.onChange) return;
+        const fromPage = undoing || update.transactions.some((tr) => tr.annotation(staged));
+        on.onChange(update.state.doc.toString(), { staged: fromPage });
     });
+    // OpenSCAD's keys, ahead of the editor's own: each is taken, so F5 does not reload
+    // the page nor Ctrl+S save it, while the editor has the focus.
+    const take = (call) => () => { if (on[call]) on[call](); return true; };
+    const openscadKeys = view.keymap.of([
+        { key: "F5", run: take("onCheck"), preventDefault: true },
+        { key: "F6", run: take("onApply"), preventDefault: true },
+        { key: "Mod-Enter", run: take("onApply"), preventDefault: true },
+        { key: "Mod-s", run: take("onSave"), preventDefault: true },
+    ]);
     const editorView = new view.EditorView({
         parent: root.querySelector(".scad-code"),
         state: state.EditorState.create({
@@ -218,11 +337,12 @@ export async function mountScadEditor(slot, options = {}) {
                 view.highlightActiveLine(),
                 view.highlightActiveLineGutter(),
                 view.drawSelection(),
-                commands.history(),
+                commands.history({ joinToEvent: (tr, adjacent) => adjacent && kindOf(tr) === lastKind }),
                 language.indentOnInput(),
                 language.bracketMatching(),
                 language.StreamLanguage.define(openscadMode()),
                 lint.lintGutter(),
+                openscadKeys,
                 view.keymap.of([...commands.defaultKeymap, ...commands.historyKeymap, commands.indentWithTab]),
                 state.EditorState.readOnly.of(readOnly),
                 view.EditorView.editable.of(!readOnly),
@@ -242,6 +362,33 @@ export async function mountScadEditor(slot, options = {}) {
             if (next === editorView.state.doc.toString()) return;
             editorView.dispatch({ changes: { from: 0, to: editorView.state.doc.length, insert: next } });
         },
+        /* Values written into their assignments, a control's move: each value's span
+         * of its name's last assignment, or a line appended (assignments.js, the
+         * server's grammar). With `join`, moves of one control close together are one
+         * step of undo, as typing is; without, a step of its own. */
+        writeValues(values, { join = true } = {}) {
+            const changes = valueChanges(editorView.state.doc.toString(), values);
+            if (!changes.length) return false;
+            editorView.dispatch({ changes, userEvent: join ? "input.type.control" : "input.control", annotations: staged.of(true) });
+            return true;
+        },
+        // The whole text put back by the page (Defaults, Revert): one step of undo.
+        replaceText(next) {
+            if (next === editorView.state.doc.toString()) return false;
+            editorView.dispatch({ changes: { from: 0, to: editorView.state.doc.length, insert: next }, userEvent: "input.control", annotations: staged.of(true) });
+            return true;
+        },
+        // The page's Undo and Redo: the one history, of the text and the controls both.
+        undo() {
+            undoing = true;
+            try { return commands.undo(editorView); } finally { undoing = false; }
+        },
+        redo() {
+            undoing = true;
+            try { return commands.redo(editorView); } finally { undoing = false; }
+        },
+        canUndo: () => commands.undoDepth(editorView.state) > 0,
+        canRedo: () => commands.redoDepth(editorView.state) > 0,
         /* What OpenSCAD said, marked on the lines it names: those of this file
          * (shownAs, the part's SCAD as the API names it) or of no file at all. */
         mark(messages) {
@@ -270,7 +417,39 @@ export async function mountScadEditor(slot, options = {}) {
         },
         name: () => nameBox.value.trim(),
         setName(next) { nameBox.value = next; },
-        showVariants(list, chosen = null) { savedList.innerHTML = `<div class="code-header">Saved variants</div>${variantChoices(list, { full: true, chosen })}`; },
+        suggest(next) { nameBox.placeholder = next || ""; },
+        // The saved variants, all of them, and under them the fold of the deleted ones.
+        showVariants(list, chosen = null, trash = null) {
+            const open = savedList.querySelector(".variant-trash")?.open;
+            const deleted = trash === null ? "" : `<details class="fold variant-trash"${open ? " open" : ""}><summary>Deleted (${trash.length})</summary>${trashRows(trash)}</details>`;
+            savedList.innerHTML = `<div class="code-header">Saved variants</div>${variantChoices(list, { full: true, chosen })}${deleted}`;
+        },
+        // A variant's row unfolded, the cursor in its name box, Enter to do `verb`.
+        armVariant(name, verb) {
+            const row = [...savedList.querySelectorAll(".saved-row")].find((r) => r.dataset.variant === name);
+            if (!row) return false;
+            row.querySelector(".variant-manage").hidden = false;
+            const box = row.querySelector(".variant-to");
+            box.dataset.verb = verb;
+            box.placeholder = verb === "rename" ? `rename ${name} to…` : `copy ${name} as…`;
+            box.focus();
+            box.scrollIntoView({ block: "nearest" });
+            return true;
+        },
+        // The trash's fold opened, to see what the ring's Deleted does.
+        openTrash() {
+            const fold = savedList.querySelector(".variant-trash");
+            if (fold) fold.open = true;
+        },
+        // A variant's history, unfolded under its row.
+        showHistory(name, commits) {
+            const row = [...savedList.querySelectorAll(".saved-row")].find((r) => r.dataset.variant === name);
+            const box = row?.querySelector(".variant-history-list");
+            if (!box) return false;
+            row.querySelector(".variant-manage").hidden = false;
+            box.innerHTML = historyRows(name, commits);
+            return true;
+        },
         fullscreen(on) {
             root.classList.toggle("fullscreen", on);
             fullBtn.textContent = on ? "Exit fullscreen" : "Fullscreen";
@@ -281,7 +460,8 @@ export async function mountScadEditor(slot, options = {}) {
         floated(on) { floatBtn.textContent = on ? "Dock" : "Float"; editorView.requestMeasure(); },
         focus() { editorView.focus(); },
         measure() { editorView.requestMeasure(); },
-        destroy() { editorView.destroy(); slot.innerHTML = ""; },
+        rebind(callbacks) { Object.assign(on, callbacks); },
+        destroy() { editorView.destroy(); root.remove(); },
     };
     return editor;
 }
