@@ -4,8 +4,7 @@ beside each slider, round steps, choices, groups, captions, captioned vectors,
 units where a field declares one), the focus kept after Apply, OpenSCAD's keys in the
 SCAD editor and the browser's outside it, the staged numbers' undo and redo by key,
 button and ring, a variant drawn where it stands, the ghost of what was drawn before,
-framing the part being edited, a render of older SCAD saying so, and a part's
-section holding what the server answered while Selected was drawn without it.
+framing the part being edited, and a render of older SCAD saying so.
 
 What the server does not say yet -- a unit, an integer, a customizer's step, a choice
 or a vector on a model part -- is said to the page here by answering its read of the
