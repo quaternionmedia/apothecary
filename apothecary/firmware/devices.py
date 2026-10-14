@@ -49,6 +49,7 @@ except ImportError:
 
 from .. import jobs
 from ..projects.parts.skeleton import ROOT
+from ..stamped import claim, stamp
 from ..stays_local import subprocess_env
 from . import gcode
 from .models import (
@@ -794,11 +795,12 @@ def leveling_record(record_id: str) -> Optional[LevelingRecord]:
 
 
 def _save_leveling(record: LevelingRecord) -> Path:
-    folder = leveling_dir()
-    private_folder(folder)
-    path = folder / f"{record.id}.json"
-    path.write_text(record.model_dump_json(indent=2), encoding="utf-8")
-    return path
+    """Keep ``record`` under its id, or its id with ``-2``, ``-3``… after it when another
+    reading has that id (two in one millisecond); the record takes the id it is kept under."""
+    kept = claim(private_folder(leveling_dir()), record.id, ".json")
+    record.id = kept.name.removesuffix(".json")
+    kept.write_text(record.model_dump_json(indent=2), encoding="utf-8")
+    return kept
 
 
 def read_bed(link: gcode.GcodeLink, port: str, method: str, note: Optional[str]) -> LevelingRecord:
@@ -816,7 +818,7 @@ def read_bed(link: gcode.GcodeLink, port: str, method: str, note: Optional[str])
     at = datetime.now(timezone.utc)
     slug = re.sub(r"[^A-Za-z0-9]+", "_", port).strip("_")
     record = LevelingRecord(
-        id=f"{at:%Y%m%dT%H%M%S}.{at.microsecond // 1000:03d}-{slug}",
+        id=f"{stamp(at)}-{slug}",  # with -2 after it, if need be, when it is kept
         port=port,
         at=at,
         method=method,
@@ -875,8 +877,9 @@ class LevelingJob:
                 link.command("G29", timeout=LEVELING_PROBE_TIMEOUT_S, origin="control")
             self.stage = "reading"
             link.job = self.snapshot()
-            self.record = read_bed(link, self.port, "probe" if self.probe else "read", self.note)
-            _save_leveling(self.record)
+            record = read_bed(link, self.port, "probe" if self.probe else "read", self.note)
+            _save_leveling(record)
+            self.record = record  # named by the id it is kept under, never before it is kept
             link.log.add("sys", f"bed reading saved: {self.record.id}", "control")
             self.stage = "saved"
         except (ToolchainError, ValueError) as exc:
@@ -949,10 +952,10 @@ def save_print_file(name: str, data: bytes) -> PrintFile:
     at = datetime.now(timezone.utc)
     stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", Path(name).name).strip("_.") or "print"
     stem = re.sub(r"\.(gcode|gco|g|txt)$", "", stem, flags=re.IGNORECASE)[:60]
-    file_id = f"{at:%Y%m%dT%H%M%S}.{at.microsecond // 1000:03d}-{stem}"
-    folder = prints_dir()
-    private_folder(folder)
-    _print_file_path(file_id).write_text(text, encoding="utf-8")
+    # Its own id, though another file of the same name was kept in the same millisecond.
+    kept = claim(private_folder(prints_dir()), f"{stamp(at)}-{stem}", ".gcode")
+    file_id = kept.name.removesuffix(".gcode")
+    kept.write_text(text, encoding="utf-8")
     meta = PrintFile(
         id=file_id,
         name=Path(name).name[:120] or file_id,
