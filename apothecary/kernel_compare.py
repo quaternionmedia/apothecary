@@ -1,7 +1,7 @@
 """Comparing a geometry kernel with the reference, by numbers.
 
-The question (``docs/plans/rust-geometry-kernels-2026-10-09.md``) is whether a
-kernel other than OpenSCAD could render apothecary's scenes. This module is
+The question (docs/README.md, "The Rust workspace") is whether a kernel other
+than OpenSCAD could render apothecary's scenes. This module is
 the harness that answers it, and it holds no kernel: a corpus of scenes, the
 reference (OpenSCAD with the Manifold backend), the measures of a mesh and of
 two meshes against each other, and the protocol a kernel is wired in through.
@@ -698,9 +698,8 @@ def compare(
 
 
 # What a kernel has to be within, to count as rendering the same part. These
-# are where the first comparison starts, not findings: the first real run says
-# which are too tight or too loose, and they change in the commit that records
-# why. Lengths are relative to the reference's bounding-box diagonal.
+# are starting tolerances, not findings: each changes in a commit that records
+# the run that justified it. Lengths are relative to the reference's bounding-box diagonal.
 TOLERANCES = {
     "volume_error": 1e-3,
     "area_error": 1e-2,
