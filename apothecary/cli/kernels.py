@@ -10,7 +10,7 @@ from typing import Tuple
 import click
 
 
-@click.command("kernel-reference")
+@click.command("kernel-reference", short_help="Measure the kernel corpus as Manifold renders it.")
 @click.option(
     "--case",
     "names",

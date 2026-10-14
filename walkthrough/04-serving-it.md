@@ -8,8 +8,8 @@
     >>> client.get("/health").json()
     {'status': 'healthy', 'version': '0.1.0'}
 
-Three sites are registered. `datum_core` is the sub-assembly; `parts_library`
-is the catalog every registered part appears in.
+The registered sites: `datum_core` is the sub-assembly, `garage` the bench as
+it is, and `parts_library` the catalog every registered part appears in.
 
     >>> client.get("/sites").json()
     ['datum_core', 'garage', 'parts_library']

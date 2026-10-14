@@ -3,18 +3,20 @@
 **This page is written by the run it describes.** Every sentence below
 was emitted by a test that had just asserted it, and the whole page is
 rewritten by every run of the browser suite (`uv run apothecary test
-run --e2e`), though not by the quicker `apothecary test run`. Editing it
+all`), though not by the quicker `apothecary test run`. Editing it
 by hand is editing the output of a program: the next run puts it back.
 
 A camera over the bench, a picture taken, its shapes found, one made a piece, the piece adjusted, sliced for printer_1, and a print job for it on printer_1, watched to its end in printer_1's Machine; then round again with the camera turned, for a second piece, sliced from its own ring, and a second print. Every step is the page's own: a cell of a ring, a button, a key or a box, and every step's words name the next one.
 
 **Runtime-bound.** It drives a real browser against a real server of its own. The browser's camera is Chromium's fake one, playing a drawing of three shapes, the slicer a scripted stand-in for OrcaSlicer's command line, and the printer the simulated one, pinned to printer_1's board as the bench's real board is. It needs no network, opens no serial port, and refuses both.
 
+Its pictures were taken once every part's STL that OpenSCAD version 2021.01, the OpenSCAD its server runs, can build was built by it; a part it cannot build is drawn from an STL already there, or as its box.
+
 ---
 
 ## 1. Camera › Add here stands a camera over the bench
 
-The bench's ring, Camera › Add here: camera_1 stands above the bench's middle, looking straight down, selected, a row of Contents. The status line names the next step: its Device.
+The garage brought closer to the bench by hand -- Shift+drag brings it to the middle, the wheel nearer -- and the bench's ring, Camera › Add here: camera_1 stands above the bench's middle, looking straight down, selected, a row of Site. The status line names the next step: its Device.
 
 ![Camera › Add here stands a camera over the bench](screenshots/13-01-camera-add-here-stands-a-camera-over-the-bench.png)
 
@@ -52,7 +54,7 @@ The bench's ring, Picture › Find shapes: the plain finder outlines each shape 
 
 ## 5. Make stands a shape up as a piece
 
-The bench's ring, Picture › Make and the disc: disc_1 stands on its outline, a row of Contents. The status line names the two steps after it: Part › Edit adjusts it, and a printer's Machine prints it.
+The bench's ring, Picture › Make and the disc: disc_1 stands on its outline, selected, a row of Site. The status line names the two steps after it: Part › Edit adjusts it, and a printer's Machine prints it.
 
 ![Make stands a shape up as a piece](screenshots/13-05-make-stands-a-shape-up-as-a-piece.png)
 
@@ -72,7 +74,7 @@ disc_1 rebuilt 173.2 × 172.2 × 5.1 mm; found 173.2 × 172.2, thickness a perso
 
 ## 7. Slice, in printer_1's Machine, slices the piece and chooses its G-code
 
-printer_1's ring, Device › Open: its Machine in the rail, beside Selected. Print from here lists the pieces of the garage under makes; disc_1 chosen, its Slice slices it for printer_1, the slicer's log in the card while it runs. The G-code it kept is chosen in the card's files, saying what it was sliced from and for which printer, and the card lists what the slice used -- each value from the printer's profile, a piece declaring none -- with the slicer's estimate; control is armed.
+printer_1's ring, Device › Open: its Machine in the rail, beside Selected. Print from here lists the pieces of the garage under makes; disc_1 chosen, its Slice slices it for printer_1, the slicer's log in the card while it runs. The G-code it kept is chosen in the card's files, saying what it was sliced from and for which printer, and the card lists what the slice used -- each value from the printer's profile, a piece declaring none -- with the slicer's estimate. Selected is folded to its title here, by its ▾, so Site and the Machine share the rail.
 
 ![Slice, in printer_1's Machine, slices the piece and chooses its G-code](screenshots/13-07-slice-in-printer-1-s-machine-slices-the-piece-and-.png)
 
@@ -82,7 +84,7 @@ disc_1.gcode kept and chosen: sliced from disc_1 for printer_1, 1h 2m 3s, 0.79 g
 
 ## 8. Print starts a job that names the piece
 
-Print from here's ▶ Print asks first, naming the file, the port and disc_1; then the file streams, one line per ok, and the job is the newest of printer_1's history, running. The status line names where it is followed.
+The Machine's ⚙ Control armed, above the card -- the latch a print needs -- Print from here's ▶ Print asks first, naming the file, the port and disc_1; then the file streams, one line per ok, and the job is the newest of printer_1's history, running. The status line names where it is followed.
 
 ```
 Print disc_1.gcode on /dev/ttyFAKE1, making disc_1?
@@ -114,7 +116,7 @@ camera_1's picture lies on workbench: Picture › Find shapes finds what is in i
 
 ## 11. A second piece, made and adjusted
 
-Find shapes and Make on the second picture: plate_1 stands beside disc_1. Part › Edit narrows it to 38.5 mm and applies it.
+Find shapes and Make on the second picture: plate_1 stands beside disc_1, the view brought to it by hand. Part › Edit narrows it to 38.5 mm and applies it.
 
 ![A second piece, made and adjusted](screenshots/13-11-a-second-piece-made-and-adjusted.png)
 
@@ -154,5 +156,5 @@ Run it yourself:
 
 ```sh
 uv run pytest tests/e2e/test_picture_to_print.py --start-server   # this page alone
-uv run apothecary test run --e2e                                  # with every browser test
+uv run apothecary test all                                        # with every browser test
 ```

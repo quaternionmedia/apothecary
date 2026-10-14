@@ -308,8 +308,10 @@ class SimulatedPrinter:
     moving values. ``APOTHECARY_SIMULATED_PRINTER=printing`` starts it
     mid-way through an SD print that advances about 1 %/s and starts over
     at the end (so a viewer sees ``printing`` and a progress figure
-    straight away, however long it looks); the default is a cold, idle
-    machine. Any other command gets ``ok``.
+    straight away, however long it looks), or holds still at the fraction
+    ``APOTHECARY_SIMULATED_PROGRESS`` names, for pictures that are the same
+    on every run; the default is a cold, idle machine. Any other command
+    gets ``ok``.
     """
 
     FIRMWARE = "Marlin Apothecary Simulator 1.0 (simulated)"
@@ -331,11 +333,19 @@ class SimulatedPrinter:
         self.halted = False
         # Multiplies every G4 dwell: 1 is real time, 0 skips them.
         self.dwell_scale = float(os.environ.get("APOTHECARY_SIMULATED_SPEED", "1"))
+        held = os.environ.get("APOTHECARY_SIMULATED_PROGRESS", "").strip()
+        self.held_at = min(max(float(held), 0.0), 1.0) if held else None
 
     def _progress(self) -> float:
         # A print that goes round: a browser suite that runs longer than one
-        # print still finds the machine printing, at whatever percent it is.
-        return ((time.monotonic() - self._t0) / self.print_len) % 1.0 if self.printing else 0.0
+        # print still finds the machine printing, at whatever percent it is --
+        # unless APOTHECARY_SIMULATED_PROGRESS holds it at one (a fraction), so
+        # pictures of it are the same on every run.
+        if not self.printing:
+            return 0.0
+        if self.held_at is not None:
+            return self.held_at
+        return ((time.monotonic() - self._t0) / self.print_len) % 1.0
 
     def _apply_control(self, cmd: str) -> Optional[List[str]]:
         """Honour the control set so the overlay's effects show up in the next poll."""
@@ -399,10 +409,15 @@ class SimulatedPrinter:
         return ["ok"]
 
     def _bed_z(self, i: float, j: float) -> float:
-        """A bed that is slightly tilted and a little bowed, the same every run for a port."""
+        """A bed that is slightly tilted and a little bowed, the same at a place of a
+        port's bed however many polls and probes came before: its roughness is seeded by
+        the port and the place alone, apart from the temperatures' wobble."""
+        import random
+
         tilt = 0.12 * (i - 2) - 0.08 * (j - 2)
         bow = -0.05 * ((i - 2) ** 2 + (j - 2) ** 2) / 4
-        return tilt + bow + self._rng.uniform(-0.01, 0.01)
+        rough = random.Random(f"{self.port}:{i:.4f}:{j:.4f}").uniform(-0.01, 0.01)
+        return tilt + bow + rough
 
     def _grid_lines(self) -> List[str]:
         lines = ["Bilinear Leveling Grid:", "      0      1      2      3      4"]
@@ -470,7 +485,8 @@ class SimulatedPrinter:
                 return [f"SD printing byte {int(358856 * self._progress())}/358856", "ok"]
             return ["Not SD printing", "ok"]
         if code == "M31":
-            secs = int(time.monotonic() - self._t0)
+            held = self.held_at is not None and self.printing
+            secs = int(self.held_at * self.print_len if held else time.monotonic() - self._t0)
             return [f"echo:Print time: {secs // 60}m {secs % 60}s", "ok"]
         return ["ok"]
 

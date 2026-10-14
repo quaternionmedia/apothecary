@@ -28,8 +28,9 @@ it says what it builds -- its languages and board families -- finds its tools
 status and what it can do, installs them, builds and flashes a sketch as steps
 the task runner runs, and may find ports, listen to a board and ask its chip
 what it is itself. Arduino (arduino-cli, esptool) and Rust for the ESP32 (cargo,
-espflash) are the two today; a later family or language -- the ESP32-C3 on
-stable Rust, AVR, the RP2040 -- is a module of its own beside them, and the
+espflash) are modules today (`apothecary firmware validate` lists each); a later
+family or language -- the ESP32-C3 on stable Rust, AVR, the RP2040 -- is a module
+of its own beside them, and the
 Bench, the Machine, the routes and the CLI draw it without a change of their
 own. `GET /firmware/toolchains` lists them; `GET /firmware/status` carries
 them as `toolchains`, its other fields Arduino's as they always were.
@@ -37,9 +38,10 @@ them as `toolchains`, its other fields Arduino's as they always were.
 ## Setup
 
 ```bash
-apothecary firmware install --avr --esp32      # arduino-cli + the AVR and ESP32 cores
+apothecary firmware install --esp32            # arduino-cli + the ESP32 core: parts/esp32_blink; start here
+apothecary firmware install --avr              # the AVR core: parts/footpedal, on an Uno, Nano or Mega
 apothecary firmware install --rust-esp32       # Rust for the classic ESP32; see below
-apothecary firmware validate                   # exit 1 if arduino-cli is unusable
+apothecary firmware validate                   # each module and what it can do; exit 1 if arduino-cli is unusable
 apothecary firmware cores --install rp2040:rp2040   # more cores; index URLs are added for you
 apothecary firmware libraries --install FastLED --install "Control Surface@2.1.2"
 ```
@@ -75,8 +77,11 @@ rule) anywhere under `parts/`, including nested category folders:
 ```
 parts/footpedal/footpedal.ino
 parts/esp32_blink/esp32_blink.ino
-parts/rc/snowplow/controller/controller.ino
 ```
+
+A sketch in a category folder is found the same way: a
+`parts/rc/snowplow/controller/controller.ino`, which does not exist yet, would
+be the sketch `controller`.
 
 An optional `firmware.json` beside the `.ino` supplies defaults:
 
@@ -135,7 +140,7 @@ apothecary firmware sketches                 # what was found
 apothecary firmware compile esp32_blink@arduino   # FQBN from firmware.json
 apothecary firmware upload esp32_blink@arduino    # compile, then upload the fresh build
 apothecary firmware upload footpedal --fqbn arduino:avr:nano:cpu=atmega328old -p /dev/ttyUSB1
-apothecary firmware flash-bin /dev/ttyUSB0 0x0:.cache/firmware/esp32_blink/esp32_blink.ino.merged.bin --chip esp32
+apothecary firmware flash-bin /dev/ttyUSB0 0x0:.cache/firmware/esp32_blink@arduino/esp32_blink.ino.merged.bin --chip esp32
 apothecary firmware compile esp32_blink@rust-esp32               # cargo build --release --offline
 apothecary firmware upload esp32_blink@rust-esp32 -p /dev/ttyUSB0  # build, then espflash flash
 ```
@@ -159,7 +164,8 @@ toolchain module under them -- Rust for the ESP32, its cargo and espflash as
 found, its problems and what it can do -- with an **Install** of its own (`POST
 /firmware/toolchains/{id}/install`; *force* fetches its tools again); Panels ›
 Bench › Install is a ring of the modules, one cell each, drawn from their
-registry (Arduino's arduino-cli, Rust ESP32, and any added later); the suggested
+registry (Arduino's arduino-cli, Rust ESP32, and any added later), with the
+slicer's, OrcaSlicer, after them ([the slicer](slicer.md#in-the-page)); the suggested
 cores, each with **Install**; libraries typed and installed; the sketches
 under `parts/`, each with the board its `firmware.json` names -- a Rust one
 beside the Arduino ones, its row naming its language and chip; choosing it
@@ -356,8 +362,8 @@ link. `POST /firmware/printers/release` drops the link when another program
 
 ### A pin follows the board
 
-Every printer in the garage carries a `mainboard` node inside its base
-(`printer_1.frame_system.mainboard`). Pin the real printer's port there
+The garage's one printer, printer_1, carries a `mainboard` node inside its
+base (`printer_1.frame_system.mainboard`). Pin the real printer's port there
 (`PUT /sites/{name}/nodes/{path}/device` with `{"identity": "/dev/ttyUSB1"}`,
 or Pin in the viewer's Selected) and every poll writes the printer's `state`
 (`offline` when a poll fails) into the `status` of **the nearest ancestor
@@ -465,8 +471,8 @@ there is no EEPROM write and no firmware configuration. A jog is three lines
 
 ```
 POST /firmware/printers/control  {"port": …, "armed": true, "ttl_s": 300}
+GET  /firmware/printers/control?port=…                               → armed, and the seconds left
 POST /firmware/printers/command  {"port": …, "command": "M140 S60"}   → 409 unless armed
-GET  /firmware/printers/controls                                     → the allowlist and bounds
 ```
 
 Anything else a person may send by hand is *report-only*
@@ -547,13 +553,18 @@ port list and monitor -- is an engine slot:
 | `pyserial` | the default: any baud, every platform |
 | `simulated` | an in-process pretend Marlin for demos and browser tests: any port opened through it answers with plausible, slowly moving values, and answers `G29`, `M420 V`, `M851` and `G30` with a slightly tilted bed; and, for the Rust module, the pretend devkits `APOTHECARY_SIMULATED_DEVKIT` names, each saying the hello of the sketch Apothecary last flashed to it |
 
+`apothecary serve --demo` is the way to try all of this with no board: an
+idle simulated Ender pinned to printer_1's mainboard, a simulated ESP32
+devkit and the scripted firmware tools, on a state folder of its own
+(`.cache/demo` in the checkout, kept between runs), with every port the
+simulated engine's ([walkthrough 00](../walkthrough/00-getting-started.md)). By hand,
 `APOTHECARY_SIMULATED_PRINTER=printing` starts the simulator mid-way through
 an SD print; the default is a cold, idle machine. A port must still be
 *detected*; on a machine with no boards the tests' scripted `arduino-cli`
 supplies two:
 
 ```bash
-ARDUINO_CLI=$(uv run python -c "import sys; sys.path.insert(0, 'tests'); from pathlib import Path; from firmware_helpers import write_fake_arduino_cli; print(write_fake_arduino_cli(Path('/tmp/fake-arduino-cli')))") \
+ARDUINO_CLI=$(uv run python -c "from pathlib import Path; from apothecary.firmware.scripted import write_fake_arduino_cli; print(write_fake_arduino_cli(Path('/tmp/fake-arduino-cli')))") \
 APOTHECARY_SERIAL_ENGINE=simulated APOTHECARY_SIMULATED_PRINTER=printing \
 APOTHECARY_STATE_DIR=/tmp/apothecary-demo uv run apothecary serve
 ```
@@ -588,8 +599,9 @@ serial ports on the host, which is why the server listens on this machine only.
 ## Testing
 
 The seam's tests run against a scripted fake `arduino-cli`, and the Rust
-module's against a scripted `cargo` and `espflash` (`tests/firmware_helpers.py`),
-so CI needs no toolchain, network or serial port. The fakes in one folder are
+module's against a scripted `cargo` and `espflash`
+(`apothecary/firmware/scripted.py`, which `serve --demo` runs too), so CI
+needs no toolchain, network or serial port. The fakes in one folder are
 one simulated bench: with `FAKE_DEVKIT` set, an ESP32 devkit on
 `/dev/ttyFAKE2` runs whatever was last uploaded or flashed to it and says that
 sketch's hello. The scripted cargo refuses a build that is not `--offline`. With

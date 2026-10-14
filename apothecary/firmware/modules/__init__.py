@@ -28,7 +28,7 @@ ESP32-C3 on stable Rust, AVR in Rust, the RP2040 -- is a new module, not a
 redesign: a subclass of ``ToolchainModule`` in a file of its own under this
 package, its tools described as ``Tool``s (an environment variable naming the
 one to run, its place in the tools dir, its name on ``PATH``), registered in
-``MODULES`` below. Sketch discovery asks every registered module whether a
+``_registry`` below. Sketch discovery asks every registered module whether a
 folder under ``parts/`` is one of its sketches (``sketch_in``); the status
 route, the Bench's toolchain card, the build form, the compile and upload
 routes and the CLI all go through this interface, so none of them changes.

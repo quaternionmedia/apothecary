@@ -15,7 +15,7 @@ from ..release import consumers_waiting, published_versions, readiness
 from . import status
 
 
-@click.command()
+@click.command(short_help="Whether this commit may be depended on downstream.")
 @click.option(
     "--check",
     "check_only",

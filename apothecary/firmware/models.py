@@ -530,6 +530,9 @@ class PrintRequest(ProbeRequest):
 class PrinterIdentifyRequest(ProbeRequest):
     baud: int = Field(115200, ge=300, le=2000000)
     reset: bool = False  # reboot the board to capture its banner -- never mid-print
+    # Ask only a board nothing here knows to be printing (a printer's Pin asks once);
+    # one that may be busy is refused, 409, with why, and nothing is sent.
+    if_idle: bool = False
 
 
 # --- bindings: which board is which scene node -----------------------------------

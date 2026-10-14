@@ -55,9 +55,14 @@ def _openscad_for(name: str, part) -> str:
     return f"  ✓ {name}: {exe} ({version}; {manifold})"
 
 
-@click.command()
+@click.command(short_help="What is installed here, and what is missing.")
 def check():
-    """Check installation and dependencies; exit 1 if a required package is missing."""
+    """Check installation and dependencies; exit 1 if a required package is missing.
+
+    Python and the packages the server needs, the viewer's three.js, OpenSCAD
+    and the one each part renders with, the slicer, each firmware toolchain
+    module and the parts; then the next step to take.
+    """
     click.secho("Apothecary Installation Check", bold=True)
     click.echo("")
 
@@ -111,7 +116,7 @@ def check():
     else:
         _safe_echo("  ✗ OpenSCAD not found", fg="yellow")
         click.echo("     STL rendering endpoints and commands will be unavailable")
-        click.echo("     `apothecary openscad install` fetches a snapshot (Linux x86_64)")
+        click.echo("     `apothecary openscad install` installs a snapshot, with Manifold")
 
     click.echo("")
 
@@ -183,6 +188,16 @@ def check():
         raise click.ClickException(
             f"required packages missing: {', '.join(missing)}; run `uv sync`"
         )
+    click.echo("")
+    click.echo(_next_step(renderer))
+
+
+def _next_step(renderer: OpenSCADRenderer) -> str:
+    """The line `check` ends with: the next command walkthrough page 00 gives."""
+    page = "walkthrough/00-getting-started.md"
+    if renderer.is_available and has_manifold(renderer.openscad_path):
+        return f"next: apothecary serve --demo ({page})"
+    return f"next: apothecary openscad install, then apothecary serve --demo ({page})"
 
 
 install = retired("install", "nothing to install: three.js is vendored")

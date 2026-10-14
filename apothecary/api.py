@@ -266,6 +266,22 @@ def _load_part_wrapper(name: str):
     return part
 
 
+_BOARDS: Dict[str, bool] = {}
+
+
+def is_board(part_ref: Optional[str]) -> bool:
+    """Whether a part is a board -- one the boards library tags ``board``, bought and
+    pinned to, never printed: a printer's mainboard, a devkit. Asked once per part."""
+    if not part_ref:
+        return False
+    if part_ref not in _BOARDS:
+        try:
+            _BOARDS[part_ref] = "board" in (_load_part_wrapper(part_ref).tags or [])
+        except HTTPException:
+            _BOARDS[part_ref] = False
+    return _BOARDS[part_ref]
+
+
 def _available_part_names() -> List[str]:
     return sorted({p.name for p in scan_projects(ROOT) if p.kind == "part" and p.wrapper})
 
@@ -1128,6 +1144,8 @@ def _assembly_tree(
         "comment": node.comment,
         "part_ref": node.part_ref,
         "sketch_ref": node.sketch_ref,
+        # A board (a printer's mainboard, a devkit): where a printer's Pin puts its port.
+        "board": is_board(node.part_ref),
         "category": category,
         "position": {"x": world_position.x, "y": world_position.y, "z": world_position.z},
         "footprint": _bounds_dict(node.footprint),
@@ -2131,8 +2149,9 @@ def firmware_page():
 def monitor_page(port: str = ""):
     """The printer monitor is a board's Machine: the viewer on the site the port is
     pinned in, its Machine open there -- or, pinned nowhere, on the default site with
-    its Machine floating. A port of the wrong shape is dropped, as the page dropped
-    it: the viewer opens with nothing in front of it."""
+    its Machine open; either way the Machine is a tab of the rail's strip. A port of
+    the wrong shape is dropped, as the page dropped it: the viewer opens with nothing
+    in front of it."""
     try:
         validate_port(port) if port else None
     except ValueError:
@@ -2168,8 +2187,17 @@ def site_viewer(name: str, request: Request, focus: str = Query(default="")):
             default_site=name,
             focus_path=focus,
             three_is_vendored=THREE_IS_VENDORED,
+            demo=_demo_folder(),
         )
     )
+
+
+def _demo_folder() -> Optional[str]:
+    """The demo's folder as the page's banner names it, when this is the demo."""
+    from .demo import running, shown
+
+    root = running()
+    return shown(root) if root is not None else None
 
 
 @app.get("/viewer/parts/{name}")

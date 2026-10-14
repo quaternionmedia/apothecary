@@ -46,7 +46,7 @@ WORKFLOW_DOC_TEMPLATE = """# {title}
 
 {intro}
 
-{steps}
+{stls}{steps}
 ## Walkthrough GIF
 
 ![{title} walkthrough]({workflow}.gif)
@@ -68,7 +68,7 @@ STEP_TEMPLATE = """### {index}. {description}
 """
 
 
-@click.group()
+@click.group(short_help="Write docs/generated/ from the browser tests marked docs.")
 def docs():
     """Generate documentation (screenshots, GIFs, Markdown) from the E2E doc-workflow tests."""
 
@@ -190,12 +190,11 @@ def clean():
 def _simulated_device_env(env: dict) -> dict:
     """Point the doc server at scripted ports and the simulated printer.
 
-    The scripted ``arduino-cli`` is the unit tests' fake (tests/firmware_helpers.py):
-    a doc-generation command borrowing a test helper is the right layering
-    for something whose whole job is to run tests.
+    The scripted ``arduino-cli`` is the package's (apothecary/firmware/scripted.py),
+    which the unit tests and ``apothecary serve --demo`` run too: an installed
+    package has no tests/ to borrow it from.
     """
-    sys.path.insert(0, str(ROOT / "tests"))
-    from firmware_helpers import write_fake_arduino_cli  # noqa: E402
+    from ..firmware.scripted import write_fake_arduino_cli
 
     tmp = Path(tempfile.mkdtemp(prefix="apothecary-docs-"))
     env["ARDUINO_CLI"] = str(write_fake_arduino_cli(tmp / "arduino-cli"))
@@ -204,6 +203,8 @@ def _simulated_device_env(env: dict) -> dict:
     env["APOTHECARY_STATE_DIR"] = str(tmp / "state")
     env["APOTHECARY_SERIAL_ENGINE"] = "simulated"
     env["APOTHECARY_SIMULATED_PRINTER"] = "printing"
+    # Its SD print held at one point, so its pictures are the same on every run.
+    env["APOTHECARY_SIMULATED_PROGRESS"] = "0.41"
     return env
 
 
@@ -273,6 +274,8 @@ def _render_workflow(workflow_dir: Path) -> None:
     doc = WORKFLOW_DOC_TEMPLATE.format(
         title=manifest["title"],
         intro=manifest["intro"],
+        # Which OpenSCAD built the STLs the pictures draw (tests/e2e/parts_built.py).
+        stls=f"{manifest['stls']}\n\n" if manifest.get("stls") else "",
         steps=steps_md,
         workflow=workflow,
         video_section=video_section,

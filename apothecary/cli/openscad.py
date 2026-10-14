@@ -34,7 +34,7 @@ def parts_floor() -> Tuple[Optional[str], Optional[str]]:
     return best
 
 
-@click.group()
+@click.group(short_help="Install an OpenSCAD with Manifold; say which one renders use.")
 def openscad():
     """Install an OpenSCAD development snapshot (it has Manifold), and say which is in use."""
 
@@ -78,6 +78,11 @@ def openscad_install(
     is installed must run and report its date before it goes under the tools
     dir (~/.apothecary/tools/openscad/<date>/, or $APOTHECARY_TOOLS_DIR) and is
     made current: every render then uses it, with Manifold.
+
+    STLs the older OpenSCAD built are kept as they are: `apothecary parts
+    generate-stl --all --force` builds them again with this one. A part the
+    older one could not build has no STL yet, and the next `apothecary serve`
+    builds it, as `apothecary parts generate-stl --all` does.
     """
     if latest and snapshot:
         raise click.UsageError("--latest or --snapshot DATE: one or the other")
@@ -98,6 +103,11 @@ def openscad_install(
     stl_renderer._renderer = None  # the default renderer is found again
     click.echo("")
     _status()
+    click.echo("")
+    click.echo(
+        "STLs an older OpenSCAD built are kept: `apothecary parts generate-stl --all --force` "
+        "builds them again with this one; the next `apothecary serve` builds the missing ones."
+    )
 
 
 def _status() -> None:

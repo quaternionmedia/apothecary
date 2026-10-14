@@ -9,6 +9,8 @@ Point the tool at a photograph. It finds the flat shapes in it, matches each one
 
 **Runtime-bound.** It draws its own photographs and reads them back, then walks the same pieces in a real browser against a real server. It needs no network. It does need a browser and a running server, which is the price of this page and the viewer's page being one page.
 
+Its pictures were taken once every part's STL that OpenSCAD version 2021.01, the OpenSCAD its server runs, can build was built by it; a part it cannot build is drawn from an STL already there, or as its box.
+
 ---
 
 ## 1. A photograph becomes shapes
@@ -111,9 +113,14 @@ No drawing code was written for any of this. An arrangement built from a photogr
 
 ## 13. Every piece is listed, named for the word it was matched to
 
-The names in this list are the words from the top of this page. One vocabulary runs the whole length of the path.
+Site, beside the world in the picture above, lists the pieces by name, and the names are the words from the top of this page. One vocabulary runs the whole length of the path.
 
-![Every piece is listed, named for the word it was matched to](screenshots/11-13-every-piece-is-listed-named-for-the-word-it-was-ma.png)
+```
+plate_1 (word)
+disc_2 (word)
+wedge_3 (word)
+slot_4 (word)
+```
 
 ## 14. Each word is a chip above the list, and 'disc' is chosen
 
@@ -136,18 +143,18 @@ The picture it was all built from is served beside the arrangement while the arr
 The census counts the controls the viewer puts on screen of its own, because a tool that is pleasant to demonstrate and expensive to use is neither. Unifying means it reaches nothing rather than a smaller pile.
 
 ```
-125 controls of the viewer's own
+126 controls of the viewer's own
 ```
 
 ## What this page does not show
 
 - **A real photograph.** Everything here is drawn to order, which is how the answers are known. Shadow, texture, blur and clutter are all absent, so a good showing here means it handles the easy case.
-- **A printable model.** Turning an arrangement into a solid needs a program this run does not install. Nothing below the arrangement is exercised.
+- **A printable model.** These pieces stay an arrangement here; a piece made from a camera's picture is sliced and printed in walkthrough 13.
 - **Anything about how long it takes.** No timing is asserted anywhere in this run.
 - **Anything surviving a restart.** Nothing here is stored. The run builds what it needs and forgets it.
 
 Run it yourself:
 
 ```sh
-uv run apothecary test run --e2e
+uv run apothecary test run
 ```

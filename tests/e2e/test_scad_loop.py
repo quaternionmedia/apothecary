@@ -25,18 +25,27 @@ import re
 import subprocess
 
 import pytest
+from doc_capture import all_words
 from playwright.sync_api import Page, expect
-from viewer_ready import settled
+from viewer_ready import (
+    MARKED_LINE_FIRST,
+    STAGE_BAR_AT_THE_TOP,
+    UNDER_THE_STAGE_BAR,
+    by_hand,
+    settled,
+    site_folded,
+)
 
 from apothecary.projects.parts.calibration_cube import DEFAULT as CUBE
 from apothecary.projects.parts.skeleton import ROOT
-from apothecary.projects.parts.stl_renderer import get_renderer, params_sidecar_path
+from apothecary.projects.parts.stl_renderer import params_sidecar_path
 
 PART = "calibration_cube"
 RING_MS = 15000
 WIDTHS = ((1280, 800), (1024, 768))
 # What differs on every run whatever the page does: when a variant was saved.
-BLANK = (".saved-when",)
+# When each variant was saved, a grey of one width whatever the time.
+BLANK = all_words(".saved-when")
 
 REFUSED = 'assert(size < 5, "too big to keep");'
 SMALL_TOP = "translate([0, 0, size]) cube(size / 2);"
@@ -91,15 +100,15 @@ def _inside(a, b, slack: float = 0.5) -> bool:
 
 
 @pytest.fixture(scope="module")
-def scad_url(start_server, tmp_path_factory):
-    """A server of this module's own, rendering with this machine's OpenSCAD."""
-    renderer = get_renderer()
-    if not renderer.is_available:
+def scad_url(start_server, every_stl_built, tmp_path_factory):
+    """A server of this module's own, rendering with the OpenSCAD every server runs."""
+    real = every_stl_built()["path"]
+    if not real:
         pytest.skip("OpenSCAD not installed")
     folder = tmp_path_factory.mktemp("scad-loop")
     return start_server(
         {
-            "APOTHECARY_OPENSCAD": str(renderer.openscad_path),
+            "APOTHECARY_OPENSCAD": real,
             "APOTHECARY_CACHE_DIR": str(folder / "cache"),
         }
     )
@@ -301,8 +310,8 @@ def test_editing_a_parts_scad_twice_round(
             "step's words name the next one."
         ),
         runtime=(
-            "It drives a real browser against a real server of its own, with this "
-            "machine's OpenSCAD and a temporary cache of variants. A variant is saved into "
+            "It drives a real browser against a real server of its own, with the "
+            "OpenSCAD every test server runs and a temporary cache of variants. A variant is saved into "
             "a clone of the checkout the server was given, never the checkout's own refs, "
             "which the run checks are as it found them. It needs no network, and refuses one."
         ),
@@ -314,6 +323,8 @@ def test_editing_a_parts_scad_twice_round(
             "where the OpenSCAD in use lists them; calibration_cube has a model.",
             "**When a variant was saved.** It differs on every run, so the lists' times "
             "are blanked in the pictures.",
+            "**The way back to the saved part.** Part › Defaults, then Apply, draws the "
+            "part's own SCAD and numbers again, as walkthrough 14 does for its numbers.",
         ],
     )
     refs_before = _variant_refs_here()
@@ -329,13 +340,15 @@ def test_editing_a_parts_scad_twice_round(
     expect(page.locator("#part-saved")).to_contain_text("no variants saved yet")
     own = _text(page)
     assert own == CUBE.source_file.read_text()
-    page.locator(".scad-editor .scad-bar").scroll_into_view_if_needed()
-    story.shows(
-        "Part › Edit opens the SCAD where its source stood",
-        f"{PART}'s ring, Part › Edit: its parameters in Selected and, below them and the "
-        "short list of its saved variants (none yet), its SCAD in an editor. Typing in it "
-        "is the next step.",
-    )
+    with site_folded(page):
+        page.evaluate(STAGE_BAR_AT_THE_TOP)
+        story.shows(
+            "Part › Edit opens the SCAD where its source stood",
+            f"{PART}'s ring, Part › Edit: its parameters in Selected and, below them and "
+            "the short list of its saved variants (none yet), its SCAD in an editor -- "
+            "Site folded to its title by its ▾ here, so Selected has the rail. Typing in "
+            "it is the next step.",
+        )
 
     # Round one: a line OpenSCAD refuses, checked once typing stops, marked, not rendered.
     asked, stop = _counting(page)
@@ -356,15 +369,22 @@ def test_editing_a_parts_scad_twice_round(
     marked = page.locator(".scad-editor .cm-line:has(.cm-lintRange-error)")
     expect(marked).to_have_count(1)
     expect(marked).to_contain_text("too big to keep")
-    story.shows(
-        "A failing line is checked once typing stops, and marked where it is",
-        f"An assertion typed at the end that this part fails. One check, once typing "
-        f"stops: OpenSCAD evaluates the edited SCAD beside the part and renders nothing, "
-        f"and its error is marked on line {refused_line}, listed under the stage bar and "
-        "said above the code. Nothing is rendered while it does not read; changing the "
-        "line is the next step.",
-        blank=BLANK,
-    )
+    # The error listed in the stage bar, which stays at the top of Selected; what the
+    # editor says of it just under the bar; and the code below that, scrolled so the
+    # marked line is its first.
+    with site_folded(page):
+        page.evaluate(STAGE_BAR_AT_THE_TOP)
+        marked.evaluate(MARKED_LINE_FIRST)
+        story.shows(
+            "A failing line is checked once typing stops, and marked where it is",
+            f"An assertion typed at the end that this part fails. One check, once typing "
+            f"stops: OpenSCAD evaluates the edited SCAD beside the part and renders nothing, "
+            f"and its error is marked on line {refused_line}, listed under the stage bar and "
+            "said above the code -- Site folded to its title by its ▾ here, so Selected has "
+            "the rail. Nothing is rendered while it does not read; changing the line is the "
+            "next step.",
+            blank=BLANK,
+        )
 
     # A change that reads: rendered after a second of quiet, drawn as an applied variant.
     asked["check"] = asked["render"] = 0
@@ -373,12 +393,14 @@ def test_editing_a_parts_scad_twice_round(
     assert asked == {"check": 1, "render": 1}, asked
     stop()
     expect(page.locator(".cm-lintRange-error")).to_have_count(0)
+    by_hand(page, PART, distance=110)
     story.shows(
         "A change that reads is rendered after a second of quiet",
         "The line replaced with a smaller cube on top. Checked once typing stops, and "
         "after a second of quiet rendered as Apply renders, from the edited SCAD written "
         "beside the part, and drawn in this tab, 15 mm tall now: an applied variant, not "
-        "saved. The part's own SCAD is not touched. Part › Save is the next step.",
+        "saved, the view brought to it by hand, Shift+drag and the wheel. The part's own "
+        "SCAD is not touched. Part › Save is the next step.",
         shown=_status(page).inner_text(),
         blank=BLANK,
     )
@@ -443,6 +465,7 @@ def test_editing_a_parts_scad_twice_round(
     rows = page.locator("#part-saved .saved-variant")
     expect(rows).to_have_count(2)
     assert rows.evaluate_all("(rs) => rs.map((r) => r.dataset.variant)") == ["taller", "variant-1"]
+    page.locator("#part-saved").evaluate(UNDER_THE_STAGE_BAR)
     story.shows(
         "Round two: a name, a change and Save",
         "In the floated editor: a name typed, taller, and the top made as big as the "
@@ -463,6 +486,7 @@ def test_editing_a_parts_scad_twice_round(
     expect(page.locator(".panel[data-panel='scad-editor']")).to_have_count(0)
     expect(page.locator(".part-editor .scad-editor")).to_be_visible()
     page.locator(".scad-editor .scad-bar").scroll_into_view_if_needed()
+    by_hand(page, PART, distance=110)
     story.shows(
         "Part › Variants draws the first again, and Part › Float docks it",
         f"{PART}'s ring, Part › Variants › variant-1: its SCAD back in the editor, its "
@@ -476,3 +500,96 @@ def test_editing_a_parts_scad_twice_round(
     assert [(v["name"], v["merged"]) for v in listed] == [("taller", False), ("variant-1", False)]
     assert _variant_refs_here() == refs_before
     assert CUBE.source_file.read_text() == own
+
+
+@pytest.mark.e2e
+def test_after_a_scad_edit_defaults_then_apply_draws_the_saved_part(
+    page: Page, scad_url: str, cube_as_it_was
+):
+    """The onboarding review found the way back stuck: after a SCAD edit, Part ›
+    Defaults staged the numbers already drawn, and Part › Apply said nothing was
+    staged, the amber mark and ?variant= staying. A variant drawn with the part's own
+    numbers is Apply's to undo: it draws the saved part, the part's own SCAD back in
+    the editor, the mark and the address's variant gone -- from the ring, and with the
+    editor's own Defaults and Apply."""
+    quarter = "translate([0, 0, size]) cube(size / 4);"  # 12.5 mm tall, this test's own
+    assert page.request.post(f"{scad_url}/parts/{PART}/stl/generate").ok
+    _open(page, f"{scad_url}/viewer/sites/parts_library")
+    _ring(page, "Part", "Edit")
+    expect(_code(page)).to_be_visible(timeout=20000)
+    own = _text(page)
+
+    for from_the_ring in (True, False):
+        _code(page).click()
+        page.keyboard.press("Control+End")
+        page.keyboard.insert_text(quarter if own.endswith("\n") else "\n" + quarter)
+        expect(_status(page)).to_contain_text(
+            "from its edited SCAD: an applied variant, not saved", timeout=60000
+        )
+        settled(page)
+        assert _height(page) == pytest.approx(12.5, abs=0.05)
+        assert re.search(rf"[?&]variant={PART}", page.url), page.url
+        expect(page.locator(".part-editor")).to_have_class(re.compile(r"\bdrawn-from-variant\b"))
+        # Nothing differs from what is drawn, and still there is the saved part to go to.
+        expect(page.locator("#apply-btn")).to_have_text("Apply: the saved part")
+        expect(page.locator("#apply-btn")).to_be_enabled()
+        if from_the_ring:
+            _ring(page, "Part", "Defaults")
+            expect(_status(page)).to_contain_text(
+                "the part's own numbers are staged", timeout=10000
+            )
+            _ring(page, "Part", "Apply")
+        else:
+            page.locator("#defaults-btn").click()
+            page.locator("#apply-btn").click()
+        expect(_status(page)).to_contain_text(f"{PART} from the cache", timeout=30000)
+        expect(_status(page)).to_contain_text("drawn as saved")
+        settled(page)
+        assert _height(page) == pytest.approx(10, abs=0.05)  # the saved cube, its own size
+        assert "variant=" not in page.url, page.url
+        expect(page.locator(".part-editor")).not_to_have_class(
+            re.compile(r"\bdrawn-from-variant\b")
+        )
+        assert _text(page) == own
+        expect(_said(page)).to_contain_text("The part's own SCAD, as the saved part is drawn")
+        expect(page.locator("#stage-summary")).to_have_text("No staged changes")
+        expect(page.locator("#apply-btn")).to_be_disabled()
+
+
+@pytest.mark.e2e
+def test_the_code_taken_before_the_controls_are_built_keeps_the_keys(
+    page: Page, scad_url: str, cube_as_it_was
+):
+    """Part › Edit puts the cursor in the part's first control once its controls are
+    built, and the code can be shown before them. Taken first, the code keeps the focus
+    when they arrive, and the keys pressed in it are its own: not the size slider's,
+    where Ctrl+End is the largest size and the text typed lands at the code's start.
+    The part's parameters are held back here until the code has the focus, as a slow
+    machine holds them."""
+    quarter = "translate([0, 0, size]) cube(size / 4);"
+    _open(page, f"{scad_url}/viewer/sites/parts_library")
+    page.evaluate(
+        """(part) => { const real = window.fetch;
+            const held = new Promise((go) => { window.releaseParams = go; });
+            window.fetch = async (url, init) => {
+                if (String(url).includes(`/parts/${part}/params`)) await held;
+                return real(url, init);
+            }; }""",
+        PART,
+    )
+    _ring(page, "Part", "Edit")
+    expect(_code(page)).to_be_visible(timeout=20000)
+    size = page.locator("#part-params .param[data-field='size']")
+    expect(size).to_have_count(0)
+    own = _text(page)
+    _code(page).focus()
+    page.evaluate("() => window.releaseParams()")
+    expect(size).to_be_visible(timeout=15000)
+    assert page.evaluate("() => document.activeElement.classList.contains('cm-content')")
+    page.keyboard.press("Control+End")
+    typed = quarter if own.endswith("\n") else "\n" + quarter
+    page.keyboard.insert_text(typed)
+    page.wait_for_function(
+        "(want) => window.fractalViewer.scadEditor.text() === want", arg=own + typed
+    )
+    assert page.evaluate("() => window.fractalViewer.partParams.size") == 10
