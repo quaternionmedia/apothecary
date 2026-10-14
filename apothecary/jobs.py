@@ -17,7 +17,8 @@ job here when it begins (``begin``) and when it ends (``end``).
 
 **The store** is the state folder's ``jobs/``, one JSON file per job, readable
 by this account alone. A job is written when it
-begins and again when it ends; in between, a read takes it from the machine's
+begins, under an id no other job's file has (``apothecary/stamped.py``), and
+again when it ends; in between, a read takes it from the machine's
 own thread (``begin``'s ``live``), so its progress costs no writes. A job
 written as running that no thread of this process holds was running when the
 server stopped: it reads as failed and says so, and its file is left as it is.
@@ -53,6 +54,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, Field
+
+from .stamped import claim, stamp
 
 OUTCOMES: Tuple[str, ...] = ("running", "done", "cancelled", "failed")
 Outcome = Literal["running", "done", "cancelled", "failed"]
@@ -125,9 +128,11 @@ class Job(JobFacts):
 
 
 def new_id(started: datetime, port: str) -> str:
-    """A job's id: when it started, to the millisecond, and the port it ran on."""
+    """A job's id: when it started, to the millisecond, and the port it ran on. A job
+    begun in the same millisecond on the same port is kept with ``-2`` after it
+    (``begin``)."""
     slug = re.sub(r"[^A-Za-z0-9]+", "_", port).strip("_")
-    return f"{started:%Y%m%dT%H%M%S}.{started.microsecond // 1000:03d}-{slug}"
+    return f"{stamp(started)}-{slug}"
 
 
 # --- what a machine offers ------------------------------------------------------------------
@@ -261,7 +266,11 @@ def _tell(job: Job) -> None:
 
 
 def begin(job: Job, live: Callable[[], Job]) -> Job:
-    """A machine began ``job``: written as running; ``live`` answers it fresh until it ends."""
+    """A machine began ``job``: written as running; ``live`` answers it fresh until it ends.
+
+    The job is kept under its id, or under its id with ``-2``, ``-3``… after it when
+    another job has that id (two begun in one millisecond on one port): ``job`` takes
+    the id it is kept under, so the machine holding it ends the job it began."""
     if operation(job.kind) is None:
         kinds = ", ".join(op.kind for op in operations()) or "none"
         raise ValueError(f"no machine offers {job.kind!r}; the kinds are {kinds}")
@@ -269,8 +278,16 @@ def begin(job: Job, live: Callable[[], Job]) -> Job:
         raise ValueError(f"{job.id!r} is not a job id")
     if not job.running:
         raise ValueError("a job begins running")
+    from .firmware.devices import private_folder
+
     with _LOCK:
-        _write(job)
+        kept = claim(private_folder(jobs_dir()), job.id, ".json")
+        job.id = kept.name.removesuffix(".json")
+        try:
+            _write(job)
+        except BaseException:
+            kept.unlink(missing_ok=True)
+            raise
         _LIVE[job.id] = live
     _tell(job)
     return job
