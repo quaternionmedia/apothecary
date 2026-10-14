@@ -3,11 +3,12 @@ plan (docs/plans/ui-flows-2026-10-08.md), held end to end.
 
 A camera added above the bench and told which of this browser's cameras it is; a
 picture taken that lies on the bench; its shapes found; one made a piece; the piece
-adjusted in Selected; a print job for it started on printer_1; the job watched in
+adjusted in Selected; sliced for printer_1 by Slice in its Machine's Print from here,
+the G-code chosen there; a print job for it started on printer_1; the job watched in
 printer_1's Machine to its end. Then round again: the camera turned by its turn
-ring, a second picture taken with P, a second piece made and adjusted, and a
-second print, started from the ring's Send file this time, while the Machine stays
-open in the rail and the plate is chosen there by Print on its own ring. Every step
+ring, a second picture taken with P, a second piece made and adjusted, sliced by
+Slice on its own ring this time, and a second print, started from the ring's Send
+file, while the Machine stays open in the rail. Every step
 is taken through the page's own controls and ring cells, and what is asserted is
 what a person sees: the status line, Contents, the camera's section, the Machine's
 Print from here card and Site's Jobs. Each step's words name the next step.
@@ -23,8 +24,11 @@ has shapes to find in every frame and no real camera is ever opened. The server 
 this module's own: the simulated printer, idle, answers on ``/dev/ttyFAKE1``,
 identified and pinned to printer_1's mainboard as the bench's real board is, and
 its picture folder holds only what this run puts there. No real serial port is
-opened. The G-code each print streams is a short file kept through the card's own
-file box, as a file a slicer wrote would be; apothecary does not slice.
+opened. The slicer is the scripted OrcaSlicer of the unit tests
+(tests/slicer_helpers.py), named by the server's APOTHECARY_ORCASLICER: it answers
+as OrcaSlicer's command line does and writes a short file of layers, each move
+followed by a dwell the simulated printer takes in real time, so a print is seen
+running before it ends.
 """
 
 from __future__ import annotations
@@ -36,6 +40,7 @@ from pathlib import Path
 import httpx
 import pytest
 from playwright.sync_api import expect
+from slicer_helpers import write_fake_orcaslicer
 from test_camera import _drag
 from test_the_loop import _labels, _open_garage, _press, _ring_on, _said, _status, _y4m
 from viewer_ready import settled
@@ -45,29 +50,77 @@ BOARD = "printer_1.frame_system.mainboard"
 MACHINE = ".panel[data-panel='machine']"
 
 
-def _sliced(piece: str, moves: int = 60) -> str:
-    """A short file as a slicer would write one for ``piece``: a few seconds of moves,
-    each with a dwell the simulated printer takes in real time, so the print is seen
-    running before it ends."""
-    lines = [f"; {piece}, sliced elsewhere", "G28", "G90"]
-    for i in range(moves):
-        lines += [f"G1 X{40 + i % 20} Y{40 + i // 20} F3000", "G4 P30"]
-    lines.append("M84")
-    return "\n".join(lines) + "\n"
+# The scripted slicer's layers, each move followed by a dwell of this many ms: a few
+# seconds of printing on the simulated printer, seen running before it ends.
+LAYERS, DWELL = "15", "60"
 
 
-def _lines(gcode: str) -> int:
-    """The lines a print streams of a file: its comments and blank lines are not sent."""
-    return sum(1 for line in gcode.splitlines() if line.strip() and not line.startswith(";"))
+def _kept(page, url: str, piece: str) -> dict:
+    """The newest slice of ``piece`` (GET /slicer/slices) and the file it kept, as the
+    Print card lists it: its id, its name and the lines a print of it streams."""
+    record = next(
+        r for r in page.request.get(f"{url}/slicer/slices").json() if r["made"]["name"] == piece
+    )
+    (kept,) = [
+        f
+        for f in page.request.get(f"{url}/firmware/printers/prints").json()
+        if f["id"] == record["file_id"]
+    ]
+    return {"record": record, **kept}
+
+
+# The widths the page is laid out for: the rail beside the world, and the narrower.
+WIDTHS = ((1280, 800), (1024, 768))
+
+# Print from here, read as a person reads it: its blocks one under the other, the
+# controls of each row side by side, and nothing poking out of the card -- what scrolls
+# (the slice's values, the task log, the history) keeps its own overflow. What overlaps
+# or pokes out, named.
+CROWDED = """(sel) => {
+    const card = document.querySelector(sel);
+    const shown = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+    const over = (a, b) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+    const name = (el) => el.id || el.className || el.tagName;
+    const bad = [];
+    const blocks = [...card.children].filter(shown);
+    for (let i = 0; i < blocks.length; i++) for (let j = i + 1; j < blocks.length; j++)
+        if (over(blocks[i].getBoundingClientRect(), blocks[j].getBoundingClientRect())) bad.push(`${name(blocks[i])} over ${name(blocks[j])}`);
+    for (const row of card.querySelectorAll('.row')) {
+        const kids = [...row.children].filter(shown);
+        for (let i = 0; i < kids.length; i++) for (let j = i + 1; j < kids.length; j++)
+            if (over(kids[i].getBoundingClientRect(), kids[j].getBoundingClientRect())) bad.push(`${name(kids[i])} over ${name(kids[j])}`);
+    }
+    const edge = card.getBoundingClientRect().right;
+    const scrolled = (el) => el.closest('.slice-settings, .task-log, #print-history');
+    for (const el of card.querySelectorAll('*'))
+        if (shown(el) && !scrolled(el) && el.getBoundingClientRect().right > edge + 1) bad.push(`${name(el)} past the card's edge`);
+    return bad;
+}"""
 
 
 @pytest.fixture(scope="module")
-def url(base_url, start_server):
+def shots(tmp_path_factory):
+    """Where the Print card is pictured at each width, under pytest's temp folder."""
+    folder = tmp_path_factory.getbasetemp() / "slice-shots"
+    folder.mkdir(exist_ok=True)
+    return folder
+
+
+@pytest.fixture(scope="module")
+def url(base_url, start_server, tmp_path_factory):
     """This module's own server: the simulated printer idle on ``/dev/ttyFAKE1``,
-    identified (M115) and pinned to printer_1's mainboard. ``base_url`` is asked for
-    only so that with no server to run against this is skipped, as every browser test
-    is."""
-    url = start_server({"APOTHECARY_SIMULATED_PRINTER": "idle"})
+    identified (M115) and pinned to printer_1's mainboard, and the scripted OrcaSlicer
+    its slicer. ``base_url`` is asked for only so that with no server to run against
+    this is skipped, as every browser test is."""
+    orca = write_fake_orcaslicer(tmp_path_factory.mktemp("orca"))
+    url = start_server(
+        {
+            "APOTHECARY_SIMULATED_PRINTER": "idle",
+            "APOTHECARY_ORCASLICER": str(orca),
+            "FAKE_ORCA_LAYERS": LAYERS,
+            "FAKE_ORCA_DWELL": DWELL,
+        }
+    )
     with httpx.Client(base_url=url, timeout=15.0) as http:
         http.post("/firmware/devices/identify", json={"port": PRINTER}).raise_for_status()
         http.put(
@@ -213,7 +266,7 @@ def _found(page, host: str = "workbench") -> None:
 
 
 @pytest.mark.e2e
-def test_a_picture_to_a_print_twice(page, url, walkthrough):
+def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     story = walkthrough(
@@ -222,27 +275,29 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough):
         title="A picture to a print",
         intro=(
             "A camera over the bench, a picture taken, its shapes found, one made a "
-            "piece, the piece adjusted, and a print job for it on printer_1, watched to "
-            "its end in printer_1's Machine; then round again with the camera turned, "
-            "for a second piece and a second print. Every step is the page's own: a "
-            "cell of a ring, a button, a key or a box, and every step's words name the "
-            "next one."
+            "piece, the piece adjusted, sliced for printer_1, and a print job for it on "
+            "printer_1, watched to its end in printer_1's Machine; then round again with "
+            "the camera turned, for a second piece, sliced from its own ring, and a "
+            "second print. Every step is the page's own: a cell of a ring, a button, a "
+            "key or a box, and every step's words name the next one."
         ),
         runtime=(
             "It drives a real browser against a real server of its own. The browser's "
-            "camera is Chromium's fake one, playing a drawing of three shapes, and the "
-            "printer is the simulated one, pinned to printer_1's board as the bench's "
-            "real board is. It needs no network, opens no serial port, and refuses both."
+            "camera is Chromium's fake one, playing a drawing of three shapes, the "
+            "slicer a scripted stand-in for OrcaSlicer's command line, and the printer "
+            "the simulated one, pinned to printer_1's board as the bench's real board "
+            "is. It needs no network, opens no serial port, and refuses both."
         ),
         does_not_show=[
-            "**A real camera or a real printer.** The camera plays a drawing and the "
-            "printer is a simulation that answers as Marlin does; their real runs are "
-            "steps of the bench checklist.",
-            "**Slicing.** The G-code each print streams is a short file kept through "
-            "the card's own file box, as a file a slicer wrote from the piece would be. "
-            "Apothecary keeps, checks and streams G-code; it does not make it.",
-            "**A print that heats.** The file moves the head and dwells; it sets no "
-            "temperature, so the simulated hotend and bed stay cold.",
+            "**A real camera, a real slicer or a real printer.** The camera plays a "
+            "drawing; the slicer is a script that answers as OrcaSlicer's command line "
+            "does and writes a few layers of moves and dwells, whatever the piece; the "
+            "printer is a simulation that answers as Marlin does. OrcaSlicer's real "
+            "slices are docs/slicer.md's, and the camera's and the printer's real runs "
+            "are steps of the bench checklist.",
+            "**A print that heats.** The start the slice writes sets the hotend and the "
+            "bed, and the simulated printer is at what it is told at once; nothing "
+            "warms, and the file turns both off at its end.",
             "**What changes on every run.** When a print started and ended, how long it "
             "took, and the names pictures are kept under (the time each was taken) are "
             "blanked in the pictures and left out of the words, so this page "
@@ -375,22 +430,54 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough):
     expect(makes.locator(f"option[value='{disc}']")).to_be_attached(timeout=10000)
     expect(machine.locator("#print-where")).to_have_text("in garage")
 
-    # A file sliced from the piece, kept through the card's own box; the piece chosen
-    # as what it makes; control armed.
-    machine.locator("#print-file").set_input_files(
-        {"name": f"{disc}.gcode", "mimeType": "text/plain", "buffer": _sliced(disc).encode()}
-    )
-    expect(machine.locator("#print-pick")).to_contain_text(f"{disc}.gcode", timeout=8000)
+    # The piece chosen as what it makes, and Slice: the slicer's log in the card while
+    # it runs, then the G-code it kept chosen in the card's files, saying what it was
+    # sliced from and for which printer, and what the slice used.
     makes.select_option(disc)
+    slicing = machine.locator("#print-slice")
+    expect(slicing).to_be_enabled()
+    slicing.click()
+    _said(
+        page,
+        f"slicing {disc} for printer_1: its log is in Print from here, and its G-code is "
+        "chosen there when it ends",
+    )
+    said = machine.locator("#print-slice-said")
+    expect(said).to_contain_text(f"{disc} sliced for printer_1 by OrcaSlicer 2.4.2", timeout=30000)
+    kept = _kept(page, url, disc)
+    pick = machine.locator("#print-pick")
+    expect(pick).to_have_value(kept["id"])
+    expect(pick.locator("option:checked")).to_have_text(
+        f"{disc}.gcode · {kept['lines']} lines · sliced from {disc} for printer_1"
+    )
+    expect(machine.locator("#print-slice-task")).to_be_hidden()
+    _said(
+        page,
+        f"{disc}.gcode kept and chosen: sliced from {disc} for printer_1, 1h 2m 3s, "
+        f"0.79 g of filament, {LAYERS} layers; ▶ Print prints it",
+    )
+    sliced_said = _status(page).inner_text()
+    # What the slice used, each value with where it came from: a made piece declares
+    # none, so every one is the printer's, and the words say why.
+    settings = {s["name"]: s for s in kept["record"]["settings"]}
+    assert settings["print settings"]["note"].startswith("a word's print settings are a stub")
+    assert {s["origin"] for s in settings.values()} == {"printer"}
+    expect(said.locator(".slice-settings")).to_contain_text("layer_height")
+    expect(said.locator(".slice-settings")).to_contain_text("start")
     machine.locator("#ctl").check()
     expect(page.locator("#control")).to_be_visible(timeout=5000)
     expect(machine.locator("#print-start")).to_be_enabled()
     machine.locator("#print-card").scroll_into_view_if_needed()
     story.shows(
-        "printer_1's Machine offers the piece to print",
+        "Slice, in printer_1's Machine, slices the piece and chooses its G-code",
         "printer_1's ring, Device › Open: its Machine in the rail, beside Selected. Print "
-        f"from here keeps a file a slicer wrote for {disc}, and lists the pieces of the "
-        f"garage under makes; {disc} is chosen, and control is armed.",
+        f"from here lists the pieces of the garage under makes; {disc} chosen, its Slice "
+        "slices it for printer_1, the slicer's log in the card while it runs. The G-code "
+        "it kept is chosen in the card's files, saying what it was sliced from and for "
+        "which printer, and the card lists what the slice used -- each value from the "
+        "printer's profile, a piece declaring none -- with the slicer's estimate; "
+        "control is armed.",
+        shown=sliced_said,
         blank=CHANGING,
     )
 
@@ -402,11 +489,13 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough):
         f"{disc}.gcode · printing", timeout=5000
     )
     assert asked and f"making {disc}" in asked[0], asked
-    _said(
-        page,
+    # What was asserted is what the page shows: a short print can end, and say so in
+    # the status line, before the line is read again.
+    started = (
         f"started {disc}.gcode on {PRINTER}, making {disc}: Print from here follows it to "
-        "its end, and Site's Jobs lists it",
+        "its end, and Site's Jobs lists it"
     )
+    _said(page, started)
     expect(machine.locator("#print-history")).to_contain_text(
         f"print · {disc}.gcode → {disc} · running", timeout=5000
     )
@@ -415,13 +504,13 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough):
         f"Print from here's ▶ Print asks first, naming the file, the port and {disc}; "
         "then the file streams, one line per ok, and the job is the newest of printer_1's "
         "history, running. The status line names where it is followed.",
-        shown=f"{asked[0]}\n\n{_status(page).inner_text()}",
+        shown=f"{asked[0]}\n\n{started}",
     )
 
     # 9. Watched to its end, in the Machine and in Site's Jobs.
     progress = machine.locator("#print-progress")
     expect(progress).to_contain_text(f"{disc}.gcode · done", timeout=30000)
-    lines = _lines(_sliced(disc))
+    lines = kept["lines"]
     expect(progress).to_contain_text(f"{disc}.gcode · done · {lines}/{lines} lines (100.0%)")
     expect(machine.locator("#print-history")).to_contain_text(
         f"print · {disc}.gcode → {disc} · done · {lines}/{lines} lines"
@@ -519,27 +608,34 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough):
     expect(makes.locator(f"option[value='{plate}']")).to_be_attached(timeout=10000)
     expect(makes).to_have_value(disc)
     _ring_on(page, plate)
-    assert _labels(page)[-3:] == ["Picture", "Part", "Print"]
-    _press(page, "Print")
+    assert _labels(page)[-4:] == ["Picture", "Part", "Print", "Slice"]
+    _press(page, "Slice")
     _said(
         page,
-        f"Print: printer_1's Machine makes {plate}: choose its file in Print from here, "
-        "then ▶ Print",
+        f"Slice: slicing {plate} for printer_1: its log is in Print from here, and its "
+        "G-code is chosen there when it ends",
     )
     expect(makes).to_have_value(plate)
     assert page.evaluate("() => window.fractalViewer.selectedName") == plate
-    machine.locator("#print-file").set_input_files(
-        {"name": f"{plate}.gcode", "mimeType": "text/plain", "buffer": _sliced(plate).encode()}
+    expect(said).to_contain_text(f"{plate} sliced for printer_1 by OrcaSlicer 2.4.2", timeout=30000)
+    plate_kept = _kept(page, url, plate)
+    expect(pick).to_have_value(plate_kept["id"])
+    expect(pick.locator("option:checked")).to_have_text(
+        f"{plate}.gcode · {plate_kept['lines']} lines · sliced from {plate} for printer_1"
     )
-    expect(machine.locator("#print-pick")).to_contain_text(f"{plate}.gcode", timeout=8000)
-    expect(makes).to_have_value(plate)
+    _said(page, f"{plate}.gcode kept and chosen: sliced from {plate} for printer_1")
+    # The first piece's file is still kept, and still says what it was sliced from.
+    expect(pick.locator(f"option[value='{kept['id']}']")).to_have_text(
+        f"{disc}.gcode · {kept['lines']} lines · sliced from {disc} for printer_1"
+    )
     settled(page)
     story.shows(
-        "Print, on the piece's ring, chooses it in printer_1's Machine",
-        f"{plate}'s ring ends with Print, a printer being pinned in the garage: it brings "
-        f"printer_1's Machine forward with {plate} chosen under makes -- listed there "
-        "already, though the Machine stayed open while it was made -- and the status line "
-        "names the next step. A file sliced for it is kept beside it.",
+        "Slice, on the piece's ring, slices it in printer_1's Machine",
+        f"{plate}'s ring ends with Print and Slice, a printer being pinned in the garage. "
+        f"Slice brings printer_1's Machine forward with {plate} chosen under makes -- "
+        "listed there already, though the Machine stayed open while it was made -- and "
+        "slices it there; its G-code is chosen beside the first piece's, each saying what "
+        "it was sliced from. The status line names ▶ Print.",
         shown=_status(page).inner_text(),
         blank=CHANGING,
     )
@@ -563,7 +659,11 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough):
     expect(machine.locator("#print-progress")).to_contain_text(
         f"{plate}.gcode · done", timeout=30000
     )
-    _said(page, f"{plate}.gcode on {PRINTER}, making {plate}, ended: done, {lines}/{lines} lines")
+    plate_lines = plate_kept["lines"]
+    _said(
+        page,
+        f"{plate}.gcode on {PRINTER}, making {plate}, ended: done, {plate_lines}/{plate_lines} lines",
+    )
 
     # 16. Two jobs, each naming its piece: the Machine's history and Site's Jobs.
     history = machine.locator("#print-history > div")
@@ -588,6 +688,18 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough):
         ),
         blank=CHANGING,
     )
+
+    # Print from here at each width the page is laid out for, with the second piece's
+    # slice said under makes: nothing in it overlaps, and nothing pokes out of it.
+    card = machine.locator("#print-card")
+    for width, height in WIDTHS:
+        page.set_viewport_size({"width": width, "height": height})
+        card.scroll_into_view_if_needed()
+        expect(said).to_contain_text(f"{plate} sliced for printer_1", timeout=5000)
+        settled(page)
+        assert page.evaluate(CROWDED, f"{MACHINE} #print-card") == [], width
+        card.screenshot(path=str(shots / f"print-card-{width}.png"))
+        page.screenshot(path=str(shots / f"page-{width}.png"))
 
     assert "/viewer/sites/garage" in page.url  # nothing switched the site
     assert errors == []

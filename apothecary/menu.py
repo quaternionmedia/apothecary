@@ -637,10 +637,14 @@ def _bench(show: Option) -> Option:
     installs or updates arduino-cli, Rust ESP32 fetches Rust for the ESP32, and a
     module added later is a cell of it with no change here (the owner's decision
     of 2026-10-10); Cores installs one of the suggested cores; Cancel stops the
-    running task. Upload and Raw flash overwrite what a board runs.
+    running task. Upload and Raw flash overwrite what a board runs. The slicer's
+    modules follow the toolchain modules in Install, from their own registry
+    (apothecary/slicer/modules): OrcaSlicer installs the pinned release, as the
+    Bench's toolchain card's button for it does; appended, so no cell before it moves.
     """
     from .firmware.modules import modules
     from .firmware.toolchains import SUGGESTED_CORES
+    from .slicer.modules import modules as slicers
 
     return Option(
         id="bench",
@@ -657,6 +661,14 @@ def _bench(show: Option) -> Option:
                         action=f"bench:install:{module.id}",
                     )
                     for module in modules()
+                ]
+                + [
+                    Option(
+                        id=f"bench:install:slicer:{slicer.id}",
+                        label=shorten(slicer.label),
+                        action=f"bench:install:slicer:{slicer.id}",
+                    )
+                    for slicer in slicers()
                 ],
             ),
             Option(id="bench:compile", label="Compile", action="bench:compile"),
@@ -926,6 +938,22 @@ def _find_shapes(drawn: ViewSeen, finders: Sequence[str], tail: str) -> Optional
     )
 
 
+def _slice_option(printers: Sequence[str]) -> Option:
+    """Slice on a made piece or a part from the parts folder: the pinned printer's
+    Machine opened with it chosen under its Print from here's *makes*, and a slice of
+    it started there for that printer (docs/plans/slicer-2026-10-10.md): its log in
+    the card, and the G-code chosen in the card's files when it ends, so Print
+    follows. One printer pinned in the site is the cell itself; several are a cell
+    each under Slice, as Print's are. The page carries it."""
+    if len(printers) == 1:
+        return Option(id="slice:piece", label="Slice", action=f"slice:piece:{printers[0]}")
+    return Option(
+        id="slice:piece",
+        label="Slice",
+        children=_listed("slice:piece", [(f"slice:piece:{p}", p) for p in printers]),
+    )
+
+
 def _print_option(printers: Sequence[str]) -> Option:
     """Print on a made piece: the pinned printer's Machine opened with the piece
     chosen under its Print from here's *makes* (the owner's answer of 2026-10-10).
@@ -1120,6 +1148,14 @@ def _node_ring(
     # printed has no Print rather than one greyed out.
     if made and picture.printers:
         options.append(_print_option(picture.printers))
+    # Slice, beside Print: a made piece, or a part from the parts folder standing in
+    # the site -- not a camera, nor a printer or anything inside one -- sliced for a
+    # printer pinned there. Appended last, so no cell above moves; with no printer
+    # pinned in the site there is nothing to slice for, and no Slice.
+    in_a_printer = any(path == p or path.startswith(p + ".") for p in picture.printers)
+    part = bool(node is not None and node.part_ref and not camera)
+    if (made or part) and picture.printers and not in_a_printer:
+        options.append(_slice_option(picture.printers))
     return Ring(title=shorten(path or (node.name if node else "")), options=options)
 
 
@@ -1334,6 +1370,10 @@ CARRIED_BY: Dict[str, Carries] = {
     # A made piece's Print: the page opens the printer's Machine with the piece
     # chosen under makes; nothing is sent until that card's Print.
     "print:piece": Carries.VIEWER,
+    # Slice, on a made piece or a part: the page opens the printer's Machine with it
+    # chosen under makes and starts the slice there (POST /slicer/slice), a task the
+    # card follows; nothing is sent to the printer.
+    "slice": Carries.VIEWER,
     # Opening, closing, floating what stands in front of the world (panels.js).
     "panel": Carries.VIEWER,
     # How the world is drawn: the header's View menu (snapping, detail, outlines,

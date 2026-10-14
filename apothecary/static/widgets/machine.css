@@ -98,6 +98,18 @@
 #print-history { font-size: 0.74rem; color: var(--ink-2); max-height: 6rem; overflow: auto; margin-top: 0.3rem; }
 #print-history a { color: var(--tx); margin-left: 0.4rem; }
 #print-history .cancelled, #print-history .failed { color: var(--warn); }
+/* Slicing, in Print from here: the slice's task log while it runs, then what it used.
+   Quiet: small, scrolled, one line a value, the part's own in bold. */
+#print-card .slice-box { margin: 0.2rem 0 0.3rem; font-size: 0.74rem; color: var(--ink-2); }
+#print-card [hidden] { display: none !important; }
+#print-card .slice-box .bench-ui .task-log { max-height: 7rem; }
+#print-card .slice-said .slice-head { color: var(--ink); margin-bottom: 0.2rem; }
+#print-card .slice-said .bad { color: var(--bad); } #print-card .slice-said .warn { color: var(--warn); }
+#print-card .slice-settings { max-height: 7.5rem; overflow: auto; border: 1px solid var(--line); border-radius: 4px; padding: 0.2rem 0.4rem; font-variant-numeric: tabular-nums; }
+#print-card .slice-settings > div { display: flex; gap: 0.4rem; white-space: nowrap; }
+#print-card .slice-settings > div > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; color: var(--ink); }
+#print-card .slice-settings .declared > span:first-child { color: var(--ink); font-weight: 600; }
+#print-card .slice-settings .meta { color: var(--ink-3); }
 /* Control: a latched overlay. Nothing in it exists in the DOM as enabled until the latch is armed. */
 .machine-head label.ctl { display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; color: var(--ink-2); padding: 0.15rem 0.5rem; border: 1px solid #3a443a; border-radius: 4px; }
 .machine-head label.ctl.armed { border-color: #7a5a1a; color: var(--warn); background: #2a2410; }

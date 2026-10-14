@@ -7,12 +7,14 @@
  * by a board's Machine (its Flashing card's task alone).
  *
  * mountTasks(root, { base, history, say, onStart, onEnd }) renders into `root` and returns
- * { start(fn), show(task), attach(id), list(), current(), cancel(), destroy() }.
+ * { start(fn, tasks), show(task), attach(id), list(), current(), cancel(), destroy() }.
  * start(fn) calls fn() -- a request that answers with a task -- and follows the
  * task it answers with; the promise it returns settles with the task as it ended
  * (or null when it could not start, said through `say`). `onStart(task)` is
  * told of a task started here, `onEnd(task)` of every task that ends while it
- * is followed here.
+ * is followed here. A task of another runner -- the slicer's, whose tasks are
+ * GET /slicer/tasks/{id} -- is followed, and cancelled, at the route `tasks`
+ * names when it is started; the recent tasks are the firmware's.
  */
 
 import { esc } from "/static/board_text.js";
@@ -38,7 +40,7 @@ const mark = (status) => (status === "succeeded" ? ["ok", "✓"] : status === "r
 export function mountTasks(root, { base = "", history = true, say = null, onStart = null, onEnd = null } = {}) {
     root.innerHTML = MARKUP + (history ? HISTORY : "");
     const $ = (sel) => root.querySelector(sel);
-    const state = { task: null, next: 0, timer: null, waiters: [], alive: true };
+    const state = { task: null, next: 0, timer: null, waiters: [], alive: true, route: "/firmware/tasks" };
 
     async function api(path, opts = {}) {
         const r = await fetch(base + path, { headers: { "Content-Type": "application/json" }, ...opts });
@@ -84,15 +86,16 @@ export function mountTasks(root, { base = "", history = true, say = null, onStar
     }
     async function poll() {
         if (!state.task || !state.alive) return;
-        try { show(await api(`/firmware/tasks/${state.task.id}?since=${state.next}`)); }
+        try { show(await api(`${state.route}/${state.task.id}?since=${state.next}`)); }
         catch (e) { append([`poll error: ${e.message}`]); state.timer = setTimeout(poll, POLL_MS * 4); }
     }
 
     // fn() starts a task; it is followed here until it ends.
-    async function start(fn) {
+    async function start(fn, tasks = "/firmware/tasks") {
         let task;
         try { task = await fn(); }
         catch (e) { if (say) say(e.message, "error"); return null; }
+        state.route = tasks;
         const ending = new Promise((done) => state.waiters.push({ id: task.id, done }));
         show(task, true);
         if (history) list();
@@ -102,6 +105,7 @@ export function mountTasks(root, { base = "", history = true, say = null, onStar
     // A task started elsewhere (another tab, another mount): followed here too.
     async function attach(id) {
         if (state.task && state.task.id === id && state.task.status === "running") return;
+        state.route = "/firmware/tasks";
         try { show(await api(`/firmware/tasks/${encodeURIComponent(id)}`), true); } catch (e) { /* gone */ }
     }
 
@@ -121,7 +125,7 @@ export function mountTasks(root, { base = "", history = true, say = null, onStar
 
     async function cancel() {
         if (!state.task || state.task.status !== "running") { if (say) say("no task is running", "error"); return false; }
-        try { show(await api(`/firmware/tasks/${state.task.id}/cancel`, { method: "POST" })); return true; }
+        try { show(await api(`${state.route}/${state.task.id}/cancel`, { method: "POST" })); return true; }
         catch (e) { if (say) say(`cancel: ${e.message}`, "error"); return false; }
     }
 
