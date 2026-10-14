@@ -86,6 +86,12 @@ controls: `apothecary census`. What is open: `apothecary problems`. The tests:
 `uv run pytest --co -q`. Only pages a run writes (walkthrough pages 11 to 16, and
 `docs/generated/`) print such numbers.
 
+## Words on the page
+
+Every verb says in the status line what it did and what comes next, with the
+ring address of the cell that does it ([docs/viewer.md](docs/viewer.md#the-header));
+a message that ends a step names the next one.
+
 ## Where things go
 
 - A part: [docs/parts-authoring.md](docs/parts-authoring.md).
@@ -105,3 +111,7 @@ controls: `apothecary census`. What is open: `apothecary problems`. The tests:
 - A decision: a `DRAFT-*.md` in `governance/qm/adr/`, following
   `governance/qm/adr/README.md`. A human ratifies it.
 - A change a user would notice: one line in [CHANGELOG.md](CHANGELOG.md).
+- A plan: `docs/plans/<topic>-<date>.md`, dated, listed under *Plans* in
+  [docs/README.md](docs/README.md). When its work is built it moves to that page's
+  *History*, and each decision of it that is still true is stated where it lives: a
+  guide in `docs/`, a governance record, or the code's own docstring.

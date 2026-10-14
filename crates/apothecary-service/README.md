@@ -21,6 +21,13 @@ version.
   survey compared ([the kernel spike](../../docs/plans/rust-geometry-kernels-2026-10-09.md));
   the first to try is Manifold through its Rust bindings. The comparison
   tests in `tests/test_kernel_comparison.py` decide whether it earns the job.
+  It would be a command reading the scene JSON `apothecary render` reads and
+  writing an STL, called with `subprocess` as OpenSCAD is and fetched at
+  install time as OpenSCAD is; the Rust side owns the translation
+  `apothecary/jscad.py` does for JSCAD. A kernel whose build fetches something
+  -- `manifold-csg`'s first build clones Manifold with cmake -- has that fetch
+  written into the personal-data record's install-time list, or its source
+  vendored, before it is built.
 
 It is not in the wheel, and neither the Python suites nor CI build or run it;
 `cargo check --workspace` checks it locally. A crate that does something

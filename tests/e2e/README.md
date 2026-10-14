@@ -80,10 +80,19 @@ Both are fixtures in `conftest.py`; the recorders themselves are in `doc_capture
   the same way by a test marked `e2e` and not `walkthrough`, which passes
   `browser_suite_only=True` to the fixture: the browser suite writes it,
   `apothecary test run` stays quick, and the page's header and footer say so.
-  The fixture fails a run whose marker and flag disagree.
+  The fixture fails a run whose marker and flag disagree. A loop's test goes
+  round its loop at least twice, through the page's own controls and ring
+  cells, asserting what a person sees; a loop that needs hardware runs against
+  the scripted tools and the simulated printer, and its real run is a step of
+  [the bench checklist](../../docs/bench-checklist.md).
 - `doc_recorder` takes screenshots for `docs/generated/`. The tests that use it
   are marked `docs` and skip unless `--generate-docs` is given;
   `apothecary docs generate` runs them that way, on a scripted server of its own.
+
+After the browser tests, CI runs `tests/e2e/picture_drift.py`: a walkthrough
+picture the run rewrote that differs from the committed one in more than its
+`TOLERANCE` of the pixels is named in a warning, and it never fails the run,
+since a person judges a picture against its caption.
 
 Before a screenshot of the viewer, `viewer_ready.settled(page)` waits until the
 level's geometry has loaded (`window.fractalViewer.waveDone`), the camera is at

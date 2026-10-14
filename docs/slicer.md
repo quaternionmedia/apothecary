@@ -121,7 +121,7 @@ used. The routes:
 |---|---|
 | `GET /slicer/status` | Each slicer module, the one a slice uses, and the printers that keep a profile |
 | `POST /slicer/install` | Install the pinned release (a task) |
-| `POST /slicer/slice` | `{part, port}` or `{part, site[, printer]}` or `{part, printer}`: slice a part or a made piece for a printer (a task). `part` is a node's path in the printer's site, as `GET /jobs/choices` lists it for the Print card, or a part's name; a site named without its printer slices for its one printer |
+| `POST /slicer/slice` | `{part, port}` or `{part, site[, printer]}` or `{part, printer}`: slice a part or a made piece for a printer (a task). `part` is a node's path in the printer's site, as `GET /jobs/choices` lists it for the Print card, or a part's name; a site named without its printer slices for its one printer; `variant`, a part's cached variant, is sliced in place of its own STL |
 | `GET /slicer/tasks/{id}?since=N` | The task's log; once it ends, `slice` is the answer: the record, or the error with the slicer's errors and warnings by line |
 | `POST /slicer/tasks/{id}/cancel` | Stop a slice; nothing is kept |
 | `GET /slicer/slices`, `GET /slicer/slices/{file_id}` | The slices whose files the Print card still keeps |
@@ -135,6 +135,12 @@ errors and warnings, where the extruding moves reach -- is the state folder's
 `slices/<file id>.json`, and is forgotten when the Print card forgets the
 file. Slices run one at a time on a task runner of their own, so a slice and a
 flash never wait for each other.
+
+OrcaSlicer slices one plate: the part arranged on the bed as it is turned (a
+part is authored the way up it prints) and lifted onto the bed if it reaches
+below it. The G-code kept is named for what was sliced, `<part>.gcode`. A
+part's variant, as the page draws it, is what its Slice slices -- the route's
+`variant`, a key of the variant cache -- and the slice's record names it.
 
 ## In the page
 
