@@ -77,8 +77,7 @@ site's pin, which a ring cell reaches only from that site. Nothing is both.
 
 `tests/test_census.py` holds the viewer's controls of its own at or under
 `VIEWER_CEILING`, and the share of them that is ring-backed at or above a
-floor (`test_the_viewers_ring_backed_share_did_not_fall`). A change to the
-page keeps them so:
+floor. A change to the page keeps them so:
 
 - A change that adds a control raises `VIEWER_CEILING` in the same change; one
   that removes a control may lower it.
