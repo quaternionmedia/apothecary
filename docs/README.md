@@ -26,6 +26,7 @@ HTTP API is described at `/openapi.json`, the commands by `apothecary --help`.
 | [13 — A picture to a print](../walkthrough/13-a-picture-to-a-print.md) | A camera's picture, its shapes, a piece made and adjusted, and a print job for it on printer_1, twice round through the page; written by the browser suite |
 | [14 — Designing a part](../walkthrough/14-designing-a-part.md) | A part's size moved, checked, applied and drawn in its tab, OpenSCAD's refusal by line, the saved part again for nothing, round twice and in two tabs; written by the browser suite |
 | [15 — Firmware](../walkthrough/15-firmware.md) | A sketch chosen, built, flashed to the ESP32 devkit and heard saying its hello in the board's Machine, the Arduino esp32_blink then the Rust one; written by its own run, in the browser suite |
+| [16 — Editing a part's SCAD](../walkthrough/16-editing-a-parts-scad.md) | A part's SCAD edited where its source stood, a failing line marked, a change rendered after a second of quiet and saved as a variant in git, the editor floated and fullscreen, round twice; written by the browser suite |
 
 ## Guides
 

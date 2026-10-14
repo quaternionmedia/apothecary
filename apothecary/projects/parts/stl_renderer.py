@@ -171,6 +171,38 @@ def _wait(
         return out or "", err or "", why
 
 
+def run_openscad(
+    executable: Path,
+    args: List[str],
+    cwd: Path,
+    timeout: float,
+    cancel: Optional[Cancellation] = None,
+) -> Tuple[Optional[int], str, str, Optional[str]]:
+    """One OpenSCAD run that renders nothing (an export of what a file lists or
+    says): ``(exit code, stdout, stderr, why it was stopped)``. It runs in
+    ``cwd``, where a relative include resolves; the code is None when it was
+    stopped, by ``"timeout"`` or by ``cancel`` (``"cancelled"``)."""
+    if cancel is not None and cancel.cancelled:
+        return None, "", "", "cancelled"
+    process = subprocess.Popen(
+        [str(executable), *args],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=str(cwd),
+    )
+    if cancel is not None and not cancel._attach(process):
+        _stop(process)
+    try:
+        stdout, stderr, stopped = _wait(process, timeout, cancel)
+    finally:
+        if cancel is not None:
+            cancel._detach(process)
+    return (None if stopped else process.returncode), stdout, stderr, stopped
+
+
 class OpenSCADRenderer:
     """
     Renders SCAD files to STL using OpenSCAD CLI.
@@ -806,11 +838,13 @@ def render_part(
     renderer: Optional[OpenSCADRenderer] = None,
     rotation: Optional[List[float]] = None,
     cancel: Optional[Cancellation] = None,
+    scad: Optional[Path] = None,
 ) -> RenderResult:
     """Render a part with already-validated ``params`` to ``stl_path``, and
     nothing more: no freshness check, no sidecar. A part with Python geometry
     is rendered from that geometry's SCAD, written to a scratch file beside
-    ``stl_path``; any other from its SCAD file, the params reaching it through
+    ``stl_path``; any other from its SCAD file, or from ``scad`` standing in
+    for it (a draft written beside it), the params reaching it through
     ``part.scad_overrides``. ``rotation`` turns the result; ``renderer``
     defaults to the OpenSCAD the part asks for; ``cancel`` can stop it."""
     if renderer is None:
@@ -819,7 +853,7 @@ def render_part(
     with _scratch_beside(stl_path) as tmp:
         text = geometry_scad(part, params)
         if text is None:
-            scad, definitions = part.source_file, part.scad_overrides(params)
+            scad, definitions = scad or part.source_file, part.scad_overrides(params)
         else:
             scad, definitions = Path(tmp) / part.source_file.name, {}
             scad.write_text(text, encoding="utf-8")

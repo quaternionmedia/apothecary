@@ -137,6 +137,18 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "apply-btn": (WIDGET, WHAT_IS_THERE, "a button that rebuilds a piece with its staged numbers"),
     "revert-btn": (WIDGET, WHAT_YOU_SEE, "a button that puts the staged numbers back"),
     "defaults-btn": (WIDGET, WHAT_YOU_SEE, "a button that stages a part's own numbers"),
+    # The SCAD editor where the part's read-only source stood (widgets/scad_editor.js):
+    # the name a save keeps a variant under, Save, Float and Fullscreen; and a saved
+    # variant chosen from a list -- under the part's parameters, or in the editor.
+    "scad-name": (WIDGET, WHAT_YOU_SEE, "a box for the name a variant is saved under"),
+    "scad-save": (WIDGET, WHAT_IS_THERE, "a button that saves the SCAD as a variant in git"),
+    "scad-float": (WIDGET, WHAT_YOU_SEE, "a button that floats the SCAD editor, or puts it back"),
+    "scad-fullscreen": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button that puts the SCAD editor over the whole page, or back",
+    ),
+    "saved-variant": (WIDGET, WHAT_YOU_SEE, "a button that draws a saved variant of a part"),
     # How much of a subassembly to draw, and whether to outline its extent.
     "detail-mode": (WIDGET, WHAT_YOU_SEE, "a drop-down for how much of each subassembly to draw"),
     "overlay-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box that outlines each subassembly's extent"),
@@ -455,6 +467,11 @@ RING_BACKED: Dict[str, str] = {
     "defaults-btn": "part:defaults",
     "apply-btn": "part:apply",
     "revert-btn": "part:revert",
+    # the SCAD editor's Save, Float and Fullscreen, and a saved variant chosen, are too
+    "scad-save": "part:save",
+    "scad-float": "part:float",
+    "scad-fullscreen": "part:fullscreen",
+    "saved-variant": "part:variant",
     # a camera in Selected: Take picture is its ring's, and so is P
     "cam-take": "camera:take-picture",
     "takeBtn:click:takePictureWith": "camera:take-picture",
@@ -830,6 +847,9 @@ PLUMBING = frozenset(
         "catch",
         "function",
         "return",
+        # The page's guard against a key a person is typing (in a box, or the SCAD
+        # editor) is not what the key does.
+        "typing",
     }
 )
 A_CALL = re.compile(r"([\w$]+)\s*\(")

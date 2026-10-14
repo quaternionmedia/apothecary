@@ -30,6 +30,7 @@ from ..menu import (
     Context,
     Device,
     Intent,
+    PartSeen,
     PictureContext,
     Ring,
     RingTooFull,
@@ -132,12 +133,33 @@ def _pictures_known(
         known.here.camera = (
             CameraSeen(id=device.id, label=device.label) if device is not None else None
         )
+    on_a_node = context is not None and context.pointing is Pointing.NODE
+    known.part = _part_seen(site, target) if on_a_node and site else None
     known.words = starter_words().names()
     drawn = next((vw for vw in known.here.views if vw.id == known.here.drawn), None)
     if drawn is None and known.here.views:
         drawn = known.here.views[0]
     known.finders = finders_for(drawn.picture) if drawn is not None and drawn.picture else []
     return known
+
+
+def _part_seen(site: str, path: str) -> Optional[PartSeen]:
+    """The part a node of ``site`` is drawn as, when it is one from the parts folder:
+    whether its SCAD is its own to edit, and its variants saved in git."""
+    from ..api import _load_part_wrapper
+    from ..menu import _find
+    from ..projects.parts.drafts import editable
+    from ..projects.parts.saved import saved_names
+
+    node = _find(_site(site), path) if path else None
+    if node is None or not node.part_ref:
+        return None
+    try:
+        part = _load_part_wrapper(node.part_ref)
+    except HTTPException:
+        return None
+    own = editable(part)
+    return PartSeen(editable=own, variants=saved_names(part) if own else [])
 
 
 @router.post("/resolve", response_model=Ring)

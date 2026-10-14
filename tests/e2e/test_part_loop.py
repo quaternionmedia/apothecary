@@ -392,9 +392,16 @@ def _refused_by_openscad(page: Page, side_before: float) -> str:
     expect(error).to_contain_text("it fits the bed")
     expect(_status(page)).to_have_class(re.compile(r"\berror\b"))
     expect(_status(page)).to_contain_text(f"line {SIZE_LINE}")
-    marked = page.locator("#part-scad-content .scad-line.error-line")
+    # Marked on its line in the SCAD editor below, as the editor's lint marks one.
+    page.wait_for_function(
+        "(line) => (window.fractalViewer.scadEditor?.marked ?? [])"
+        ".some((m) => m.severity === 'error' && m.line === line)",
+        arg=SIZE_LINE,
+        timeout=10000,
+    )
+    page.locator(".scad-editor .scad-code").scroll_into_view_if_needed()
+    marked = page.locator(".scad-editor .cm-line:has(.cm-lintRange-error)")
     expect(marked).to_have_count(1)
-    expect(marked).to_have_attribute("data-line", str(SIZE_LINE))
     expect(marked).to_contain_text("size =")
     assert _side(page) == pytest.approx(side_before, abs=0.05)
     return _status(page).inner_text()
@@ -482,11 +489,11 @@ def test_designing_a_part_twice_round(
             "temporary folder. It needs no network, and refuses one."
         ),
         does_not_show=[
-            "**Editing the SCAD.** The part's source is shown read-only, its refused line "
-            "marked; an editor in the page is the next loop's.",
+            "**Editing the SCAD.** The part's source is in the editor below its parameters, "
+            "its refused line marked there; editing it is walkthrough 16's.",
             "**A variant kept for good.** An applied variant lives in its tab's address and "
             "the cache, which keeps the most recently drawn of each part; saving one is a "
-            "variant in git, the next loop's too.",
+            "variant in git, walkthrough 16's too.",
             "**Which OpenSCAD measured.** The editor says whether the measured bounds are "
             "OpenSCAD's own summary of the render or were read off the STL; which it is "
             "depends on the machine's OpenSCAD, so the words here leave it out.",
