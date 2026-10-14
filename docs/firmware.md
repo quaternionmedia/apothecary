@@ -28,12 +28,12 @@ it says what it builds -- its languages and board families -- finds its tools
 status and what it can do, installs them, builds and flashes a sketch as steps
 the task runner runs, and may find ports, listen to a board and ask its chip
 what it is itself. Arduino (arduino-cli, esptool) and Rust for the ESP32 (cargo,
-espflash) are modules today (`apothecary firmware validate` lists each); a later
+espflash) are the modules (`apothecary firmware validate` lists each); another
 family or language -- the ESP32-C3 on stable Rust, AVR, the RP2040 -- is a module
 of its own beside them, and the
 Bench, the Machine, the routes and the CLI draw it without a change of their
 own. `GET /firmware/toolchains` lists them; `GET /firmware/status` carries
-them as `toolchains`, its other fields Arduino's as they always were.
+them as `toolchains`, and its other fields are the Arduino module's.
 
 ## Setup
 
@@ -55,6 +55,8 @@ apothecary firmware libraries --install FastLED --install "Control Surface@2.1.2
 | `APOTHECARY_SERIAL_ENGINE` | byte transport for the printer seam and the Rust module's ports: `pyserial` or `simulated` | `pyserial` |
 | `APOTHECARY_SIMULATED_DEVKIT` | with the simulated engine, the ports the Rust module finds, each a pretend devkit (comma-separated) | — |
 
+[Configuration](configuration.md) lists every variable Apothecary reads.
+
 The tools dir is under `$HOME` because sandboxed editors (the VS Code snap)
 point `XDG_DATA_HOME` at a tree that disappears on the next editor update.
 
@@ -64,7 +66,8 @@ Every arduino-cli the seam starts gets `--config-file
 named package indexes only. Its environment carries no proxy variable and no
 `ARDUINO_*` override, and `~/.arduino15/arduino-cli.yaml` is not read;
 `apothecary firmware validate` names the file in use. The record is *Personal
-data stays on the device, by construction* (`governance/qm/adr/`).
+data stays on the device, by construction*, a draft proposed for
+`governance/qm/adr/` in [qm#121](https://github.com/quaternionmedia/qm/pull/121).
 
 On Linux the serial port must be writable by your user: usually
 `sudo usermod -aG dialout $USER` and a new login.
@@ -80,8 +83,8 @@ parts/esp32_blink/esp32_blink.ino
 ```
 
 A sketch in a category folder is found the same way: a
-`parts/rc/snowplow/controller/controller.ino`, which does not exist yet, would
-be the sketch `controller`.
+`parts/rc/snowplow/controller/controller.ino` would be the sketch
+`controller`.
 
 An optional `firmware.json` beside the `.ino` supplies defaults:
 
@@ -255,7 +258,8 @@ it; that commit re-runs a real install and a real offline build of every Rust
 sketch in a scratch tools dir and says what they did in its body -- the hosts
 they reached, the build's result. A sketch's `Cargo.lock` is resolved against
 the pinned toolchain, so a toolchain bump bumps the lockfiles too, when they
-need it. There is no licence gate over the crates yet.
+need it. No licence gate reads the crates: `license-check.yml` checks the
+Python dependencies.
 
 | Platform | The install |
 |---|---|
@@ -451,7 +455,7 @@ and the Machine's buttons wear that ring's addresses. `POST /menu/resolve`
 seats the options
 (`apothecary/menu.py`); `POST /menu/intent` receives the choice. A control
 verb from the ring goes through the same latch, allowlist and confirms as the
-button it replaces; the ring never opens a port.
+Machine's button for that verb; the ring never opens a port.
 
 ### Control, behind a latch
 
@@ -512,7 +516,8 @@ release, reconnect, reset or upload on that port are refused. **Cancel** and
 a failed line send the safe-off (`M104 S0`, `M140 S0`, `M107`, `M84`); E-STOP
 ends the job with nothing more sent. It is not a queue or a webcam, and the
 slicing is OrcaSlicer's, behind the slicer's own seam; the *G-code printer
-seam* record's sixth decision draws that line.
+seam* record draws that line: a host for one print at a time, and no more
+than that.
 
 ### A print is a job
 
@@ -535,9 +540,9 @@ The card's history is the printer's jobs (`GET /jobs?machine=PORT&kind=print`),
 each with its JSON (`GET /jobs/{id}`, with the tail of what the firmware
 said), and the viewer's **Site** lists the jobs of the site's machines, a row
 opening its machine. `GET /jobs/choices?machine=PORT` says what a job there
-would record and which parts it can name. The print records kept before jobs
-(`~/.apothecary/prints/records/`) are carried over as print jobs the first
-time jobs are read, and left where they were.
+would record and which parts it can name. A print record under
+`~/.apothecary/prints/records/` that is not yet a job is written as one
+whenever jobs are read, and the record is left where it is.
 
 A kind of job belongs to a kind of machine: a printer offers `print`
 (`jobs.PRINT`), and a mill or a laser would register its own operation with
@@ -627,13 +632,16 @@ a board's Machine, its flashing and its port opened only by Listen.
 through the page -- the Arduino `esp32_blink` from the Bench, then the Rust one
 from the board's Machine, each built, flashed and heard saying its hello --
 against the simulated devkit, and again with Rust alone and no arduino-cli;
-flashing the bench's own ESP32 is a step of the bench checklist. Its first test
+flashing the bench's own ESP32 is a step of
+[the bench checklist](bench-checklist.md). Its first test
 writes [walkthrough 15](../walkthrough/15-firmware.md), the loop as it is, with
 pictures it takes as it goes; the browser suite alone runs it.
-[`validation/2026-09-20-ender-bench.md`](validation/2026-09-20-ender-bench.md)
-is the seam against a real Ender mainboard, with a checklist for what needs
-control armed.
+[The bench checklist](bench-checklist.md) is the seam against the real Ender
+mainboard and ESP32, for what no test touches: heat, motion, levelling, a
+print, the emergency stop, a real flash. What the Ender's board and bed
+measured, which printer_1's slicer profile cites, is the dated
+[Ender bench record](validation/2026-09-20-ender-bench.md).
 
-The decision records are *Firmware toolchain seam* and *G-code printer seam*
-in `governance/qm/adr/`; the toolchain modules extend the first
-([rust-2026-10-08.md](plans/rust-2026-10-08.md)).
+The decision records are *Firmware toolchain seam*, whose toolchains are the
+modules above, and *G-code printer seam*, drafts proposed for
+`governance/qm/adr/` in [qm#121](https://github.com/quaternionmedia/qm/pull/121).

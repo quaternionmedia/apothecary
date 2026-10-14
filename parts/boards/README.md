@@ -19,6 +19,6 @@ X to the right, Y back, Z up. `board_common.scad` holds what they are made
 of (a PCB with holes, headers, chips, jacks); it is a library, not a part.
 
 Each board is described by a `part.json` beside its SCAD rather than a
-Python wrapper -- see `docs/geometry-from-elsewhere.md`. No mesh of anyone
-else's went into them; the dimensions are the specifications the makers
-publish so that things can be made to fit.
+Python wrapper -- see `docs/geometry-from-elsewhere.md`. They contain no one
+else's mesh: the dimensions are the specifications the makers publish so that
+things can be made to fit, and the models are this repository's own, MIT.

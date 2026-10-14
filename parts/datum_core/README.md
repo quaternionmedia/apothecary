@@ -46,7 +46,7 @@ board this is sized around, so the footprint, the connector position and the
 mounting pattern are placeholders chosen to render coherently and to be easy
 to move; so are the cover's contact grid and indicator.
 
-What has to be checked against a real board before this is printed in anger:
+What has to be checked against a real board before this is printed for use:
 
 - board footprint and corner radius
 - mounting hole pattern — this assumes four, symmetric, inset equally

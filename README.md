@@ -6,25 +6,20 @@
 Apothecary builds 3D-printable things from Python and keeps the parts it has built.
 
 - **Scenes to OpenSCAD.** Pydantic models (`Cube`, `Union`, `Translate`, ...) render to
-  OpenSCAD or JSCAD, from Python or from a scene JSON file.
+  OpenSCAD or JSCAD, from Python or from a scene JSON file
+  ([docs/scene-json.md](docs/scene-json.md)).
 - **A parts library.** Each part is a folder under `parts/`: its SCAD, the parameters and
   bounds it declares, and the STL the `openscad` CLI builds from it.
 - **A viewer.** A local FastAPI server and one page: a three.js world that zooms through
-  sites, assemblies and parts at any depth, its walls drawn faded so a click passes through
-  them to what is inside, with one rail beside it -- **Site** (the tree, its problems, its SCAD, every pin
-  and the site's jobs) and **Selected** stacked over a strip of tabs, **Pictures**, the
-  **Bench**, **Settings** and a docked **Machine**. The ring (`m`, or Ctrl+right-click) reaches every one of
-  them by address, and the header's **⚙ View** menu says how the world is drawn. A part's
-  **Part › Edit** opens its parameters and its SCAD in Selected: a size moved is checked and
-  applied as a variant drawn in its own tab, and an edited SCAD is checked as it is typed,
-  rendered, and saved as a variant kept in git.
+  sites, assemblies and parts at any depth, a rail of panels beside it, and a ring that
+  reaches every verb by address. A part's parameters and its SCAD are edited there, applied
+  as a variant drawn in its own tab, and saved as a variant kept in git
+  ([docs/viewer.md](docs/viewer.md)).
 - **Boards and printers.** Sketches kept with their parts, Arduino and Rust, are compiled and
-  uploaded to Arduinos and ESP32s, from the command line or the viewer's Bench; a Marlin
-  printer is monitored, and drives its node in the viewer. Each board pinned in the viewer
-  has one Machine -- its state, its one log, its controls, a devkit's flashing -- opened
-  from its badge, polled once whatever shows it. A part or a made piece is sliced for the
-  pinned printer with OrcaSlicer, and a print is a job, kept with the part it makes and
-  listed in the printer's site.
+  uploaded to Arduinos and ESP32s, from the command line or the viewer; a Marlin printer is
+  monitored, and drives its node in the viewer ([docs/firmware.md](docs/firmware.md)). A part
+  or a made piece is sliced for the pinned printer with OrcaSlicer, and a print is a job,
+  kept with the part it makes ([docs/slicer.md](docs/slicer.md)).
 - **Photographs into pieces.** A picture becomes named, placed pieces you can build.
 - **It stays on this machine.** The server answers this machine only, and the process
   connects nowhere else but to fetch its tools: OpenSCAD, the slicer, the firmware
@@ -46,47 +41,20 @@ steps.
 
 ## Install
 
-Python 3.11+ and [uv](https://docs.astral.sh/uv/).
-
-```bash
-git clone --recurse-submodules https://github.com/quaternionmedia/apothecary.git
-cd apothecary
-uv sync
-uv run apothecary check      # packages, three.js, OpenSCAD and each part's, the slicer, the firmware toolchains, the parts
-```
-
-A clone made without `--recurse-submodules` has an empty `governance/qm` and no gridfinity
-library: run `git submodule update --init --recursive`.
+Python 3.11+ and [uv](https://docs.astral.sh/uv/); page 00's first step is the clone and
+`uv sync`. A clone made without `--recurse-submodules` has an empty `governance/qm` and no
+gridfinity library: run `git submodule update --init --recursive`.
 
 Rendering STLs needs OpenSCAD; nothing else does. Run `uv run apothecary openscad install`
-before the first `serve`: it puts a development snapshot into `~/.apothecary/tools`, and
-renders use it, with Manifold. The OpenSCAD most package managers carry, 2021.01, renders
-slowly with CGAL and is too old for the gridfinity bins. Without the snapshot the `openscad`
-CLI on `PATH` is used; `APOTHECARY_OPENSCAD` names another. What it installs is native to
-the machine:
+before the first `serve`: it puts a development snapshot with Manifold into the tools
+folder, and renders use it. [docs/openscad.md](docs/openscad.md) says what it installs on
+each platform, which OpenSCAD a render uses, and what 2021.01, the version most package
+managers carry, cannot do.
 
-- **Linux x86_64**: the night's AppImage from files.openscad.org; where there is no FUSE,
-  the AppImage is extracted and its `AppRun` used.
-- **macOS**, Intel and Apple Silicon: `OpenSCAD.app`, copied out of the night's disk image
-  (attached read-only with `hdiutil`, then detached). The app is universal.
-- **Windows x64**: the night's portable zip, unpacked; no installer, no admin.
-- **Linux arm64**: no current build is published, so it is built here from OpenSCAD's
-  source at the night's date (cmake, headless, with Manifold; `--jobs N`). What the build
-  needs is checked first, and anything missing is refused with the `sudo apt install` line
-  that adds it; it never runs sudo itself. The build takes long on a small board.
-- **Windows on ARM** is not supported yet; it is a planned item.
-
-`uv run apothecary openscad status` says, for each install, its platform, how it was
-installed, whether it runs natively here, and whether it has Manifold.
-
-The rest is optional, each into the same tools folder:
-
-```bash
-uv run apothecary slicer install                  # OrcaSlicer, pinned: Slice and Print in the viewer
-uv run apothecary firmware install --esp32        # arduino-cli and the ESP32 core (or --avr: Uno, Nano, Mega)
-uv run apothecary firmware install --rust-esp32   # Rust for the ESP32: rustup, Xtensa Rust, espflash
-uv run playwright install chromium                # the browser the tests drive, once per machine
-```
+The rest is optional, each into the same tools folder: the slicer, each firmware
+toolchain and the browser the tests drive. Page 00's
+[last install section](walkthrough/00-getting-started.md#6-the-installs-only-some-loops-want)
+names each.
 
 ## First commands
 
@@ -104,27 +72,11 @@ uv run apothecary problems                          # what is open here, and who
 uv run apothecary photo view examples/shapes.png --width-mm 300 --port 8001   # a picture's pieces, in a viewer of its own
 ```
 
-In the viewer, a picture is taken by a camera, a part of the site. Select a structure (the
-bench, say) and open its ring -- `m`, or Ctrl+right-click on it -- then Camera › Add here: a
-camera stands above the bench, looking straight down, selected. On the camera's own ring,
-Device › Allow asks the browser once, and with one camera it is the camera's device at once.
-Take picture -- on its ring, in Selected, or `P` -- keeps a frame that lies on the bench
-where the camera looks, as a view, and the bench's Picture › Find shapes finds its shapes;
-each step's message names the next. Picture › Make stands a shape up as a piece; its Part ›
-Edit adjusts it. Its ring's Slice brings the pinned printer's Machine forward with the piece
-chosen under *makes* and slices it there with OrcaSlicer, choosing the G-code it kept, and
-▶ Print in Print from here prints it: the print is a job that names the piece
-([walkthrough 13](walkthrough/13-a-picture-to-a-print.md) goes round twice;
-[docs/slicer.md](docs/slicer.md) says what a slice uses). The camera's turn ring and tilt arc
-aim it, and Part › Edit sets its numbers.
-
-Pictures live in one folder: `APOTHECARY_PICTURE_ROOT`, or else the folder `serve` was
-started in, never a home folder or anything above one. A camera's frames are kept in its `captures` folder,
-and the pictures added from the browser in its `uploads` folder. Picture › Add on the bench's ring
-pins a picture from disk instead of a camera's, and Picture › Folder one already in the
-picture folder: the seven newest by modification time, and any other once it is chosen in
-Pictures, a tab of the rail beside the world. The floor's verbs are under the canvas ring's
-Pictures › Floor.
+In the viewer, a camera is a part of the site: Camera › Add here stands one above a
+structure, Take picture (`P`) pins its frame where it looks, Picture › Find shapes finds the
+shapes in it, and Picture › Make stands one up as a piece to slice and print
+([docs/pictures.md](docs/pictures.md); [walkthrough 13](walkthrough/13-a-picture-to-a-print.md)
+goes round twice).
 
 From Python:
 

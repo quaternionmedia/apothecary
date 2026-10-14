@@ -59,20 +59,20 @@ this file's summary of the corpus instead of the corpus.
 ```bash
 uv sync                        # install dependencies
 uv run apothecary test run     # the ordinary test command: unit tests and the walkthrough
-uv run pytest                  # the quick inner loop (-q is in addopts): unit tests and the walkthrough; browser tests skip
+uv run pytest                  # the quick inner loop: unit tests and the walkthrough; browser tests skip
 uv run apothecary test all     # unit tests and the walkthrough, then every browser test
 uv run apothecary serve        # the viewer at :8000/viewer; docs at /docs, the API at /openapi.json
 uv run apothecary serve --demo # the same on a state folder of its own, a simulated printer and devkit
 uv run apothecary check        # what is installed: packages, three.js, OpenSCAD and each part's, the slicer, the firmware toolchains
 uv run --group preflight apothecary preflight   # the CI workflows, run here before a push
-uv run apothecary openscad install --latest   # an OpenSCAD snapshot with Manifold, the fast renders
+uv run apothecary openscad install            # an OpenSCAD snapshot with Manifold, the fast renders
 uv run apothecary slicer install              # OrcaSlicer, pinned, to slice a part for printer_1
 uv run apothecary firmware install --esp32    # arduino-cli + the ESP32 core, for parts/esp32_blink (--avr: parts/footpedal)
 uv run apothecary firmware install --rust-esp32   # Rust for the ESP32, for parts/esp32_blink/rust
 ```
 
 Rendering STLs requires OpenSCAD: the snapshot `apothecary openscad install`
-put in the tools dir, else the `openscad` CLI on `PATH`; the browser tests,
+put in the tools dir, else the `openscad` CLI on `PATH` (`docs/openscad.md`); the browser tests,
 and `apothecary test run`'s walkthrough demonstration, additionally require
 `uv run playwright install chromium`. `walkthrough/00-getting-started.md` is
 the path a person takes from a fresh clone. `uv run apothecary --help` is the

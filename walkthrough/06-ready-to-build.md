@@ -20,23 +20,15 @@ another default, that is asked too; `datum_core`'s agree:
 
 ## An unanswered question is not a pass
 
-Three states, and the middle one is the whole point. `unknown` means the check
-could not run — no OpenSCAD, no build volume, no measured envelope — and it
-never counts as ready:
+Each check is `pass`, `blocked` or `unknown`. `unknown` means the check could
+not run — no OpenSCAD, no build volume, no measured envelope — and it never
+counts as ready:
 
     >>> from apothecary.projects.parts.readiness import Check, Readiness, PASS, UNKNOWN
     >>> Readiness("x", [Check("asked", PASS), Check("could not ask", UNKNOWN)]).ready
     False
 
-A checklist that ticks a box it could not check is worse than no checklist.
-This module shipped that defect twice. First it read `build()` as one object
-when it returns two, so it reported "no stubs remain" about an assembly it had
-never looked at. Then, once it read the assembly properly, it reported *that*
-assembly's stubs for every part in the library — `calibration_cube` was told it
-was fitted to a board it has never heard of.
-
-It is part-specific now, and the answer differs between parts for a reason
-worth knowing:
+The check for stubs is per part, and its answer differs between parts:
 
     >>> from apothecary.projects.parts.calibration_cube import DEFAULT as cube
     >>> stubs = next(c for c in report.checks if c.name == "Fitted to measured artifacts")
@@ -48,27 +40,23 @@ worth knowing:
     'pass'
 
 `datum_core` is the part `projects/assemblies/datum_bench.py` drives through
-the black-box seam, so it inherits the board and mounting-surface stubs. It did
-not always: the seam arrived with `parts/datum`, the single-piece tray the
-compound replaced, and moved here rather than being retired with it — the
-geometry was superseded, the seam was the part worth keeping.
+the black-box seam, so it inherits the board and mounting-surface stubs.
 
-`calibration_cube` is fitted to nothing, and says so. That is
-`models/blackbox.py` earning its `source` field: a reader can tell a measured
-envelope from a guessed one, and both from a part that is not fitted to either.
-Note which way round the good news runs — the `pass` belongs to the part nobody
-has made a claim about, and the `unknown` to the one carrying real, unmeasured
+`calibration_cube` is fitted to nothing, and says so. The `source` field of
+`models/blackbox.py` lets a reader tell a measured envelope from a guessed one,
+and both from a part fitted to neither. So the `pass` belongs to the part with
+no claims on it, and the `unknown` to the one with real, unmeasured
 dependencies.
 
-## What blocks datum_core today
+## What blocks datum_core
 
     >>> disputed = next(c for c in report.checks if c.name == "No disputed dimensions")
     >>> disputed.state
     'blocked'
 
-Its own sources still disagree about how deep the board is. A part cannot be
-called ready to build while nobody has decided how big it is — page 05 is where
-that is turned, and each candidate carries where it came from.
+Its own sources disagree about how deep the board is (`board_y`). A part is
+not ready to build while its size is undecided; [page 05](05-contested-numbers.md)
+is where that is turned, and each candidate carries where it came from.
 
 Every check that is not a pass says what to do about it:
 

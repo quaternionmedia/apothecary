@@ -62,7 +62,7 @@ and every render uses it from then on. Installing it before the first
     True
 
 `apothecary openscad status` says what is installed and which one renders
-use; the README's *Install* says what the install does on each
+use; [OpenSCAD](../docs/openscad.md) says what the install does on each
 platform. STLs an older OpenSCAD already built are kept: `apothecary parts
 generate-stl --all --force` builds them again.
 
@@ -85,20 +85,15 @@ checkout, kept between runs; deleting it starts the demo afresh. Without
 `--demo`, `serve` is the same viewer on your own state and the boards plugged
 into this machine.
 
-The page opens on the garage. The world fills it, and one rail beside it
-holds Site (the tree, its problems, its SCAD, its pins and jobs) and Selected,
-over a strip of tabs: Pictures, the Bench, Settings, a board's Machine. The
-ring, `m` or Ctrl+right-click, holds every verb of what it opens on; each cell
-has a digit, and the digits pressed are the address the status line shows as
-⌗. A right-click alone is the camera's: a drag pans, and a still click
-re-centres the view on what it lands on.
+The page opens on the garage: the world, a rail of panels beside it, and the
+ring, `m` or Ctrl+right-click, which holds every verb of what it opens on, the
+digits pressed to reach one its address. A right-click alone is the camera's.
 [The viewer](../docs/viewer.md) describes each of its controls.
 
 ## 5. The four loops
 
 Each loop is a path through the page that goes round twice, and each has a
-page written by the browser test that walks it, so the words there are what
-the page says today.
+page the browser test that walks it writes as it goes.
 
 | Loop | Page | Needs | Under `serve --demo` |
 |---|---|---|---|
@@ -158,10 +153,15 @@ tests and this walkthrough, whose demonstration drives Chromium.
 ## 7. Where next
 
 [Page 01](01-a-part.md) onward is the library's tour: what a part is and how
-its envelope is checked, which numbers are whose, an assembly as a tree, the
-API, the numbers its sources disagree about, whether a part is ready to
-build, and what is open and who can close it. Then
-[`docs/`](../docs/README.md): the guides, the plans and the records.
+its envelope is checked (01), which numbers are whose (02), an assembly as a
+tree (03), the API (04), the numbers its sources disagree about (05), whether
+a part is ready to build (06), how the commands report state (07), and what
+is open and who can close it (08). Pages 09 and 10 are a contributor's: the
+CI workflows run here before a push, and what a consumer pinning this
+repository may rely on. Pages 11 and 12 are written by their runs: a
+photograph made into pieces, and the bench drawn as it is with a camera
+above it. Then [`docs/`](../docs/README.md): the guides, the plans and the
+records.
 `apothecary --help` is the command reference, and it ends with the steps
 above:
 

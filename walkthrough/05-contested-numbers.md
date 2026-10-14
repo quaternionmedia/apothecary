@@ -11,8 +11,8 @@ each has a document behind it:
 
 `board_y` is the case that shows why prose does not resolve this. The datum
 packet specifies the board outline as at most 40 mm, so an enclosure must
-accept that. The black-box stub the seam serves today describes a specific
-30 mm board. Both are live, and no schematic exists to settle them.
+accept that. The black-box stub the seam serves describes a specific 30 mm
+board. Both are live, and no schematic exists to settle them.
 
     >>> [c.value for c in DEFAULT.contested["board_y"]]
     [40.0, 30.0]
@@ -25,73 +25,61 @@ opinion, and an opinion cannot be adjudicated:
     >>> all(c.source and c.note for v in DEFAULT.contested.values() for c in v)
     True
 
-## A disagreement can be settled by retiring one of its sides
+## A candidate's source must be readable
 
-This page listed three until recently. `walls` and `tolerence` were disputed
-only by `parts/datum`, a single-piece tray that carried 2.4 and 0.2 while
-citing the enclosure record for values that record does not contain. When the
-compound — `datum_core` plus `datum_cap` — replaced it, the dissenting source
-stopped existing and the house constants were left unopposed:
-
-    >>> DEFAULT.params_model().walls, DEFAULT.params_model().tolerence
-    (3.0, 0.4)
-
-That is a real resolution, not a silencing, because what went away was an
-artifact making a claim it could not support. The distinction matters: a
-citation is provenance only while a reader can go and look, so a candidate
-pointing at a deleted file is worse than no candidate at all. `board_y` stayed
-precisely because both of its sources are still there to be read.
+A citation is provenance only while a reader can go and look, so a candidate
+is kept only while its source can be read, and one citing a file that is
+deleted goes with it. A disagreement whose only dissenting source is gone is
+settled, and the number stops being contested. `board_y` stays contested
+because both of its sources are there to be read.
 
 ## The disagreement has a consequence
 
-That is the whole reason to surface it. The wall thickness is settled now, but
-it shows the shape of the consequence: 0.6 mm of wall is 1.2 mm of envelope,
-which is the difference between fitting an opening and not:
+The board's depth is the enclosure's depth: the two candidates are 10 mm
+apart, and so are the envelopes they give, which is the difference between
+fitting a board and not:
 
     >>> P = DEFAULT.params_model
-    >>> round(DEFAULT.get_bounds(P(walls=3.0).model_dump()).size.x, 2)
+    >>> round(DEFAULT.get_bounds(P(board_y=40.0).model_dump()).size.y, 2)
     46.8
-    >>> round(DEFAULT.get_bounds(P(walls=2.4).model_dump()).size.x, 2)
-    45.6
+    >>> round(DEFAULT.get_bounds(P(board_y=30.0).model_dump()).size.y, 2)
+    36.8
 
 ## Where you turn them
 
-In the viewer. Select a part and Selected carries every parameter as a
-control, contested ones first, each candidate a button that sets it. Turn the
-number and the declared envelope follows; Apply renders the part with it.
-
-The viewer is the one page, and there is no second page onto the same object,
-so a link to a part lands there:
-
-    >>> from fastapi.testclient import TestClient
-    >>> from apothecary.api import app
-    >>> client = TestClient(app)
-    >>> r = client.get("/viewer/parts/datum_core", follow_redirects=False)
-    >>> r.status_code, r.headers["location"]
-    (307, '/viewer/sites/parts_library?focus=datum_core')
+In the viewer: a part's ring, Part › Edit, opens its parameters in Selected, a
+contested one first, each candidate a button that sets it ([the part
+editor](../docs/viewer.md#the-part-editor)). Turn the number and the declared
+envelope follows; Apply renders the part with it.
 
 The controls are built from the part's own model, so a slider cannot offer a
 value the renderer would refuse. That is not free: `gt=0` reaches the schema as
-an *exclusive* minimum, and a slider stopping exactly on it hands back a value
-the model rejects.
+an *exclusive* minimum, and a slider stopping exactly on it would hand back a
+value the model rejects. The endpoint gives a range whose ends the model
+accepts, and each candidate is inside it:
 
+    >>> from fastapi.testclient import TestClient
+    >>> from apothecary.api import app
     >>> from apothecary.projects.parts.datum_core import Params
+    >>> client = TestClient(app)
     >>> spec = client.get("/parts/datum_core/params").json()
-    >>> walls = next(f for f in spec["fields"] if f["name"] == "walls")
-    >>> walls["min"] <= 2.4 <= walls["max"] and walls["min"] <= 3.0 <= walls["max"]
+    >>> board_y = next(f for f in spec["fields"] if f["name"] == "board_y")
+    >>> [c["value"] for c in board_y["contested"]]
+    [40.0, 30.0]
+    >>> all(board_y["min"] <= c["value"] <= board_y["max"] for c in board_y["contested"])
     True
-    >>> Params(walls=walls["min"]) and Params(walls=walls["max"]) and "accepted"
+    >>> Params(board_y=board_y["min"]) and Params(board_y=board_y["max"]) and "accepted"
     'accepted'
 
 ## Recording one
 
 Add candidates to the part's wrapper, each with its source and a note saying
 what choosing it costs. Nothing else is required — the endpoint and the
-dashboard read the declaration.
+viewer read the declaration.
 
 | | |
 |---|---|
 | See the disagreements | `apothecary parts info datum_core --json-out` |
-| Turn them | the viewer, with the part selected |
-| Render one candidate | `apothecary parts generate-stl datum_core -p walls=2.4` |
-| Check the envelope it gives | `apothecary parts verify datum_core -p walls=2.4` |
+| Turn them | the viewer: the part's ring, Part › Edit |
+| Render one candidate | `apothecary parts generate-stl datum_core -p board_y=30` |
+| Check the envelope it gives | `apothecary parts verify datum_core -p board_y=30` |

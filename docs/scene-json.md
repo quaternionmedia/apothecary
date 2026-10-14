@@ -1,6 +1,6 @@
 # Scene JSON format
 
-This document describes the JSON shape accepted by Apothecary for scenes, both on the CLI (`render`, `templategenerate`, `validate`) and via the FastAPI `/render` endpoint.
+This document describes the JSON shape accepted by Apothecary for scenes, both on the CLI (`render`, `render-jscad`, `templategenerate`, `validate`) and via the FastAPI `/render` endpoint. `render` writes the scene as OpenSCAD, and `render-jscad` the same scene as a JSCAD module.
 
 ## Top-level `Scene`
 
@@ -182,11 +182,11 @@ Transforms also use a `children` array.
 
 ## Error handling
 
-On the CLI (`render`, `templategenerate`, `validate`):
+On the CLI (`render`, `render-jscad`, `templategenerate`, `validate`):
 
 - Invalid JSON results in a non-zero exit code and a message starting with `"Failed to parse scene JSON"`.
 - Schema/validation errors surface as `"Scene validation failed: ..."`.
-- `validate` requires explicit input (`--scene-file` or `--scene-json`) and will error with `"No scene input provided."` if neither is supplied.
+- `validate` requires explicit input (`--scene-file` or `--scene-json`) and exits with `"No scene input provided."` if neither is supplied.
 
 On the API (`POST /render`):
 

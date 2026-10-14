@@ -44,8 +44,8 @@ Recipe = Callable[[str, WordShape], Assembly]
 # settings for the pieces made as it is a stub -- the shape a part declares
 # (PrintSettings), refused if set until a slice uses it.
 WORD_PRINT_SETTINGS_STUB = (
-    "a word's print settings are a stub, not built yet: a piece made as a word slices "
-    "with the printer's values (docs/plans/slicer-2026-10-10.md)"
+    "a word's print settings are a stub: a piece made as a word slices with the "
+    "printer's values (docs/slicer.md)"
 )
 
 

@@ -36,12 +36,13 @@ not answer `/health` stops the run.
 | `--headed`, `--slowmo 500`, `--tracing on` | pytest-playwright's own flags, for debugging. Open a trace with `uv run playwright show-trace test-results/<test>/trace.zip`. |
 
 Every server comes from one factory, the `start_server` fixture in
-`conftest.py`, on a free port with state of its own. `test_printer_ui.py`,
-`test_ring.py`, `test_one_machine.py`, `test_bench.py`,
-`test_viewer_regressions.py` and `test_less_on_screen.py` ask it for servers of
-their own, so what they pin, arm, flash and print stays off the session's
-server; `test_docs_bench_walkthrough.py` for one whose picture folder holds only
-what its page puts there; and each loop's module for the bench its loop needs:
+`conftest.py`, on a free port with state of its own. A module whose tests change
+what a server holds -- a pin, an armed latch, a flash, a print, a saved
+variant -- or need a bench of their own asks it for servers of its own, so what
+they do stays off the session's server (`grep -l start_server
+tests/e2e/test_*.py` lists them); `test_docs_bench_walkthrough.py` asks for one
+whose picture folder holds only what its page puts there; and each loop's
+module for the bench its loop needs:
 `test_picture_to_print.py` the simulated printer idle and pinned to printer_1's
 mainboard with a scripted OrcaSlicer, `test_part_loop.py` an OpenSCAD that
 refuses one size, `test_scad_loop.py` this machine's OpenSCAD, and
@@ -79,11 +80,21 @@ Both are fixtures in `conftest.py`; the recorders themselves are in `doc_capture
   the same way by a test marked `e2e` and not `walkthrough`, which passes
   `browser_suite_only=True` to the fixture: the browser suite writes it,
   `apothecary test run` stays quick, and the page's header and footer say so.
-  The fixture fails a run whose marker and flag disagree.
+  The fixture fails a run whose marker and flag disagree. A loop's test goes
+  round its loop at least twice, through the page's own controls and ring
+  cells, asserting what a person sees; a loop that needs hardware runs against
+  the scripted tools and the simulated printer, and its real run is a step of
+  [the bench checklist](../../docs/bench-checklist.md).
 - `doc_recorder` takes screenshots for `docs/generated/`. The tests that use it
   are marked `docs` and skip unless `--generate-docs` is given;
   `apothecary docs generate` runs them that way, on a scripted server of its own.
 
+After the browser tests, CI runs `tests/e2e/picture_drift.py`: a walkthrough
+picture the run rewrote that differs from the committed one in more than its
+`TOLERANCE` of the pixels is named in a warning, and it never fails the run,
+since a person judges a picture against its caption.
+
 Before a screenshot of the viewer, `viewer_ready.settled(page)` waits until the
-level's geometry has loaded (`window.fractalViewer.waveDone`) and the canvas has
-drawn it.
+level's geometry has loaded (`window.fractalViewer.waveDone`), the camera is at
+rest, the badges' occlusion is tested where it came to rest, nothing is part
+way through an animation, and the canvas has drawn it.
