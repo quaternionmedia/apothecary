@@ -22,7 +22,7 @@ HTTP API is described at `/openapi.json`, the commands by `apothecary --help`.
 | [09 — Running the checks before pushing](../walkthrough/09-preflight.md) | `apothecary preflight`: each CI workflow, run here before a push |
 | [10 — Being depended on](../walkthrough/10-being-depended-on.md) | What a consumer pinning this repository is entitled to |
 | [11 — Photographs into pieces](../walkthrough/11-photographs-into-pieces.md) | A photograph becomes named, placed pieces in the viewer; written by its own run |
-| [12 — The bench as it is](../walkthrough/12-the-bench-as-it-is.md) | Geometry from elsewhere, the printers and boards drawn as they are, a camera placed at a piece; written by its own run |
+| [12 — The bench as it is](../walkthrough/12-the-bench-as-it-is.md) | Geometry from elsewhere, the printer and boards drawn as they are, a camera added above the bench; written by its own run |
 
 ## Guides
 
@@ -41,6 +41,11 @@ HTTP API is described at `/openapi.json`, the commands by `apothecary --help`.
 |---|---|
 | [One screen](plans/one-screen-2026-09-20.md) | The world as the one screen: anchors, popups and panels in front of it, and the census as the meter; done |
 | [Consolidation](plans/consolidation-2026-10-03.md) | One page and one place per thing: Site and Selected over a strip of tabs, one Machine per board, the Bench, one Pictures panel, jobs over machine kinds; done |
+| [Cameras and clutter](plans/cameras-and-clutter-2026-10-04.md) | Cameras as parts, easier pictures, and less on the screen: badges as icons, the Machine in the rail, one header row, faded walls; in four phases |
+| [Cleanup, triaged](plans/cleanup-triage-2026-10-08.md) | Every open cleanup item sorted by kind and given an order: in flight, delivery, dead code, parts, tests, structure, the owner's |
+| [Rust](plans/rust-2026-10-08.md) | Firmware in Rust for the ESP32 behind modular toolchains; a Rust geometry kernel researched and compared by numbers; a Rust service and core stubbed |
+| [The loops through the page](plans/ui-flows-2026-10-08.md) | Designing a part, editing its SCAD, firmware, and a picture to a print: each built out and held end to end by a browser test |
+| [A managed slicer](plans/slicer-2026-10-10.md) | OrcaSlicer behind a switchable slicer interface, installed like OpenSCAD; the printer's profile kept with its part, print settings from what each part declares |
 | [Pictures in the world](plans/pictures-in-the-world-2026-09-26.md) | A picture pinned at a place as a view, its shapes made into pieces there; what is built, and what is open |
 | [Designing a part from the browser](plans/part-editing-in-the-browser-2026-09-27.md) | A spike: the loop for changing a part from the viewer today, what other tools do, and a recommended order |
 | [The shape finder, with a model behind it](plans/photo-finders-local-models-2026-09-21.md) | Optional local models behind the photo finder: the seam, the plugin shape, what reach is lawful, the phases |

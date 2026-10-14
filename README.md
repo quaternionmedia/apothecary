@@ -68,14 +68,17 @@ uv run apothecary problems                          # what is open here, and who
 uv run apothecary photo view PICTURE.jpg --width-mm 300   # a picture's pieces, in the viewer
 ```
 
-In the viewer, a picture is taken from the ring. Select a structure (the bench, say) and
-open its ring -- `m`, or a right-click on it -- then Camera › Pin here › Allow: the browser
-asks once, and with one camera it is pinned there at once. Camera › Take picture then keeps
-a frame and pins it there as a view, and Picture › Find shapes finds its shapes; each step's
-message names the next. Picture › Add on the same ring pins a picture from disk instead, and
-Picture › Folder one already in the picture folder: the seven newest by name, and any other
-once it is chosen in Pictures, a tab of the rail beside the world. The floor's verbs are
-under the canvas ring's Pictures › Floor.
+In the viewer, a picture is taken by a camera, a part of the site. Select a structure (the
+bench, say) and open its ring -- `m`, or a right-click on it -- then Camera › Add here: a
+camera stands above the bench, looking straight down, selected. On the camera's own ring,
+Device › Allow asks the browser once, and with one camera it is the camera's device at once.
+Take picture -- on its ring, in Selected, or `P` -- keeps a frame that lies on the bench
+where the camera looks, as a view, and the bench's Picture › Find shapes finds its shapes;
+each step's message names the next. The camera's turn ring and tilt arc aim it, and Part ›
+Edit sets its numbers. Picture › Add on the bench's ring pins a picture from disk instead,
+and Picture › Folder one already in the picture folder: the seven newest by name, and any
+other once it is chosen in Pictures, a tab of the rail beside the world. The floor's verbs
+are under the canvas ring's Pictures › Floor.
 
 From Python:
 

@@ -9,9 +9,13 @@
  * rather than jumps: setPosition sets a target and tick() moves the drawn
  * position a fraction of the way each frame, so a poll tweens it and a jog
  * sent from a page moves it ahead of the poll that confirms it.
+ *
+ * And the board's badge (makeBoardBadge, sayBoard): ⚡ at the board's own spot,
+ * its words what the board model says of it, on the anchors layer's badges.
  */
 
 import * as THREE from "three";
+import { esc } from "/static/board_text.js";
 
 export const VOLUME_COLOR = 0x6fb3e8;
 export const NOZZLE_COLOR = 0xff8080;
@@ -208,4 +212,47 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
             if (group.parent) group.parent.remove(group);
         },
     };
+}
+
+/* A board's badge on the anchors layer (anchors.js): ⚡ at the board's own spot
+ * -- `point()`, the top of its node, inside the printer it drives -- and never
+ * dimmed by the node it is inside, nor by that node's marks (a group keyed as
+ * the node is). Keyed by `key`, the machine it stands for (the printer a board
+ * inside drives, else the board's node); the page listens to it. `selected()`
+ * opens its words. */
+export function makeBoardBadge(anchors, key, boardPath, { point, selected }) {
+    const inside = (mesh) => {
+        for (let o = mesh; o; o = o.parent) {
+            const k = o.userData.key;
+            if (k && (k === boardPath || boardPath.startsWith(`${k}.`))) return true;
+        }
+        return false;
+    };
+    const badge = anchors.badge(key, point, { selected, ignore: inside });
+    badge.dataset.path = key;
+    badge.dataset.board = boardPath;
+    badge.setAttribute("aria-label", "Select this board and open its Machine");
+    return badge;
+}
+
+/* What a board's badge says, from the board model's summary (board_text.js):
+ * the words the badge carried before it was an icon -- a printer's state,
+ * readings and job, a devkit's label and sketch -- and under them the board
+ * and its port. */
+export function sayBoard(anchors, key, sum, device) {
+    const badge = anchors.get(key);
+    if (!badge) return;
+    badge.classList.remove("printing", "offline", "job", "mismatch");
+    let line;
+    if (sum.kind === "devkit") {
+        line = `⚡ ${esc(device.label)} · <span class="state">${esc(sum.short)}</span>`;
+    } else {
+        const parts = [`🖨 <span class="state">${esc(sum.state)}</span>`];
+        if (sum.readings) parts.push(sum.readings);
+        parts.push(...sum.extra.map(esc));
+        line = parts.join(" · ");
+        if (sum.job) badge.classList.add("job");
+    }
+    if (sum.cls) badge.classList.add(sum.cls);
+    anchors.say(key, { icon: "⚡", words: `<div>${line}</div><div class="sub">${esc(device.port)} — click to open its Machine</div>` });
 }

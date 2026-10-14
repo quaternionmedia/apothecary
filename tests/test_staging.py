@@ -75,18 +75,23 @@ class TestStagingReachesTheViewer:
 
     def test_a_slider_change_calls_validate_not_generate(self):
         """`refreshStage` is what a control's handler runs, and it posts to the
-        target's validateUrl, which for either target ends in /validate. Only
+        target's validateUrl, which for every target ends in /validate. Only
         a part target's apply reaches stl/generate; a made piece's PUTs the
-        made route.
+        made route, and a camera's its own.
         """
         page = client.get("/viewer/sites/parts_library").text
         stage = page[page.index("async refreshStage()") : page.index("bindStageActions")]
         assert "target.validateUrl" in stage
         assert "stl/generate" not in stage
         targets = page[page.index("partTarget(ref) {") : page.index("appendPartPanel(node")]
-        assert targets.count("/validate`") == 2
+        assert targets.count("/validate`") == 3
         assert targets.count("stl/generate") == 1
-        assert "method: 'PUT'" in targets[targets.index("pieceTarget(name") :]
+        piece = targets[targets.index("pieceTarget(name") : targets.index("cameraTarget(name")]
+        assert "method: 'PUT'" in piece
+        camera = targets[targets.index("cameraTarget(name") :]
+        assert "/cameras/" in camera and "method: 'PUT'" in camera
+        # A camera is never printed: no SCAD, no checklist.
+        assert "scadUrl: null, checklistUrl: null" in camera
 
     def test_a_render_commits_what_it_sent(self):
         """Otherwise the next diff is measured against the wrong baseline and

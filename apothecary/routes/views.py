@@ -1,20 +1,27 @@
-"""Views from the browser: a picture pinned at a place, its shapes, the pieces made.
+"""Views from the browser: a picture lying on a place, its shapes, the pieces made.
 
-The store, the anchors and the making are ``apothecary/vision/views.py``; these
-routes are its doors. ``host: ""`` is the site's floor in every one.
+The store, the anchors, the one mapping and the making are
+``apothecary/vision/views.py``; these routes are its doors. ``host: ""`` is the
+site's floor in every one; a view whose ``host`` is null is a camera's picture
+that landed nowhere.
 
 Plain ``def``, on the threadpool, for the routes that change no site -- a find
 reads a file and may be slow, and the store's lock is never held across it:
 
-- ``POST /sites/{s}/views`` ``{host, picture, camera?, mm_across?}`` pins a
-  picture under the picture root at a host as a view, and finds nothing: its
-  ``finder`` and ``found_at`` are null and it has no shapes.
+- ``POST /sites/{s}/views`` ``{host?, picture, mm_across?}`` pins a picture
+  under the picture root at a host (the floor when none is named) as a view,
+  and finds nothing: its ``finder`` and ``found_at`` are null and it has no
+  shapes. ``{camera, picture}`` makes it that camera part's picture instead,
+  lying where the camera looks and keeping how it stood, as Take picture does
+  (``POST /photos/pictures?site=&camera=``).
 - ``POST /sites/{s}/views/{id}/find`` ``{finder?}`` is Find shapes: the finder
   (``plain`` unless named) reads the view's picture, through the finder cache,
   and its shapes are kept on the view; another finder's shapes on a view
   already searched are a new view of the same picture at the same host.
 - ``DELETE /sites/{s}/views/{id}`` unpins a view; its picture and pieces stay.
-- ``GET /sites/{s}/attached``: a site's cameras, views and made pieces, in one.
+- ``GET /sites/{s}/attached``: a site's camera parts (each with its pose, its
+  field of view, its device and where its next picture would land), views and
+  made pieces, in one.
 - ``GET /placed``: every site's cameras, boards and views, each a row to take back.
 
 A made piece is a part (``vision/piece.py``), and answers the parameter contract
@@ -30,13 +37,18 @@ a part from the parts folder answers (``projects/parts/params.py``):
 change a site says; each answers with the site as ``GET /sites/{s}`` does:
 
 - ``PUT /sites/{s}/views/{id}/scale`` ``{mm_across} | {known_index, mm}`` sizes
-  a view, stores the width it comes to on the view's camera, so the next view
-  from that camera is sized alike, and rebuilds every piece made from it whose
-  sides no person stated (``rebuilt`` names them).
+  a view and rebuilds every piece made from it whose sides no person stated
+  (``rebuilt`` names them). A camera's picture is sized by the field of view
+  that gives the width, found by bisection and kept on the view; the first
+  width typed for any of a camera's pictures teaches the camera that field of
+  view (``taught``), and its pictures no person sized follow it, their pieces
+  rebuilt too.
 - ``PUT /sites/{s}/views/{id}/shapes/{i}`` ``{word}``: a person's word for a
   shape; on a made shape it rebuilds the piece in place.
 - ``POST /sites/{s}/views/{id}/make`` ``{shape} | {all: true}``: pieces from
-  shapes, skipping the shapes already made.
+  shapes, skipping the shapes already made and those past a camera picture's
+  horizon (``beyond``), each standing where its shape lies and as big as it
+  is there, through the view's one mapping.
 - ``PUT /sites/{s}/made/{piece}`` ``{params: {word?, width?, depth?, height?}}``
   (the editor's), or ``{word?, parameters?}`` (the ring's Word), and ``DELETE
   /sites/{s}/made/{piece}`` (Drop): keyed by the piece, so they work after its
@@ -56,9 +68,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from ..hierarchy import Assembly
 from ..projects.parts.params import ParamsSpec, Validation, params_spec, validate_staged
 from ..projects.parts.stl_renderer import geometry_scad
+from ..vision import cameras
 from ..vision import views as viewing
 from ..vision.models import FoundShape, ScaleReference
 from ..vision.piece import SIDES, MadePart
+from ..vision.projection import as_lists
 from ..vision.views import Made, View
 
 router = APIRouter(tags=["views"])
@@ -92,9 +106,18 @@ def _xyz(v) -> List[float]:
 
 def view_answer(view: View, site: Optional[Assembly], made: Dict[str, Made]) -> Dict[str, object]:
     """A view as the page reads it: its mat where it lies now, and each shape's state.
-    ``finder`` and ``found_at`` are null until Find shapes has run on it."""
+    ``finder`` and ``found_at`` are null until Find shapes has run on it.
+
+    The mat carries the view's one mapping in the site's frame (``homography``,
+    rows of three: ``(u, v, 1)`` multiplied out is ``(x * w, y * w, w)``, at the
+    mat's height), which every point of the picture -- a corner, an outline --
+    is laid through, and its four ``corners`` already laid, each null where a
+    camera's picture runs past the horizon. ``taken`` is how a camera stood when
+    it took the picture; ``scale`` is null on one no person sized, whose field of
+    view follows its camera's lens."""
     centre = viewing.mat_centre(view, site) if site is not None else None
     width = view.mm_across
+    in_site = viewing.in_site(view, site) if site is not None else None
     shapes = []
     for index, shape in enumerate(view.shapes):
         word, reason, stated = viewing.word_for_shape(view, index)
@@ -120,11 +143,23 @@ def view_answer(view: View, site: Optional[Assembly], made: Dict[str, Made]) -> 
         "left_out": view.left_out,
         "made": {str(i): piece for i, piece in sorted(view.made.items())},
         "anchor": _xyz(view.anchor) if view.anchor is not None else None,
+        "taken": (
+            {
+                "eye": _xyz(view.taken.eye),
+                "turn": view.taken.turn,
+                "tilt": view.taken.tilt,
+                "fov": view.taken.fov,
+            }
+            if view.taken is not None
+            else None
+        ),
         "mat": (
             {
                 "centre": _xyz(centre),
                 "width": width,
-                "depth": width * view.tallness if width is not None else None,
+                "depth": viewing.mat_depth(view),
+                "corners": viewing.mat_corners(view, site),
+                "homography": as_lists(in_site) if in_site is not None else None,
             }
             if centre is not None
             else None
@@ -134,15 +169,19 @@ def view_answer(view: View, site: Optional[Assembly], made: Dict[str, Made]) -> 
 
 
 def view_row(view: View, site: Optional[Assembly]) -> Dict[str, object]:
-    """A view as one row of what is pinned: enough to name it and take it back."""
-    host_found = site is not None and (
-        view.at_floor or any(c.name == view.host for c in site.children)
+    """A view as one row of what is pinned: enough to name it and take it back.
+    ``placed`` is false for a camera's picture that landed nowhere."""
+    host_found = (
+        site is not None
+        and view.placed
+        and (view.at_floor or any(c.name == view.host for c in site.children))
     )
     return {
         "id": view.id,
         "site": view.site,
         "host": view.host,
         "host_found": host_found,
+        "placed": view.placed,
         "picture": view.picture,
         "camera": view.camera,
         "taken_at": view.taken_at,
@@ -191,7 +230,7 @@ def check_host(site_name: str, host: str) -> Assembly:
     """The site, once ``host`` is known to be able to hold a view or a camera; or refused."""
     site = _site(site_name)
     try:
-        viewing.host_node(site, host, viewing.made_names(site_name))
+        viewing.host_node(site, host, viewing.made_names(site_name), cameras.names(site_name))
     except viewing.HostNotFound as missing:
         raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
     except viewing.NotAHost as refused:
@@ -224,43 +263,66 @@ def _picture_size(where: Path) -> Tuple[int, int]:
 
 
 def pin_picture(
-    site_name: str,
-    host: str,
-    picture: str,
-    *,
-    camera: Optional[str] = None,
-    mm_across: Optional[float] = None,
+    site_name: str, host: str, picture: str, *, mm_across: Optional[float] = None
 ) -> View:
-    """Pin a picture under the root at ``host`` as a view, finding nothing in it.
+    """Pin a picture under the root at ``host`` as a view no camera took, finding
+    nothing in it: flat, and unsized until a person gives its width.
 
-    Find shapes (``find_in``) is the step that finds its shapes. A view with no
-    width given takes its camera's last one."""
+    Find shapes (``find_in``) is the step that finds its shapes."""
     from ..api import _picture_root
-    from .pictures import _load_cameras
 
     site = check_host(site_name, host)
     root = _picture_root()
     where = _picture_at(picture)
     width, height = _picture_size(where)
-    if mm_across is None and camera:
-        mm_across = _load_cameras().get(camera, {}).get("mm_across")
     at = datetime.now(timezone.utc)
     view = View(
         id=viewing.new_view_id(at),
         site=site_name,
         host=host,
         picture=where.relative_to(root).as_posix(),
-        camera=camera,
         taken_at=at.isoformat(),
         scale={"mm_across": mm_across} if mm_across else None,
         mm_across=mm_across or None,
         pixel_width=width,
         pixel_height=height,
         anchor=(
-            viewing.floor_anchor(site, viewing.made_names(site_name))
+            viewing.floor_anchor(site, viewing.added_roots(site_name))
             if host == viewing.FLOOR
             else None
         ),
+    )
+    return viewing.store().pin(view)
+
+
+def camera_or_404(site_name: str, name: str) -> cameras.Camera:
+    """A camera part of the site, or a 404 that says so."""
+    _site(site_name)
+    try:
+        return cameras.record(site_name, name)
+    except cameras.CameraNotFound as missing:
+        raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
+
+
+def take_picture(site_name: str, camera: str, picture: str) -> View:
+    """A picture under the root, as the camera part ``camera`` took it standing as it
+    stands now: a view lying where the camera's centre ray first meets a top or the
+    floor -- or nowhere, at a wall or the sky -- keeping the camera's pose and lens,
+    and finding nothing in it. What Take picture pins."""
+    from ..api import _picture_root
+
+    taker = camera_or_404(site_name, camera)
+    site = _site(site_name)
+    where = _picture_at(picture)
+    width, height = _picture_size(where)
+    view = viewing.taken_by(
+        site_name,
+        site,
+        taker,
+        picture=where.relative_to(_picture_root()).as_posix(),
+        pixel_width=width,
+        pixel_height=height,
+        at=datetime.now(timezone.utc),
     )
     return viewing.store().pin(view)
 
@@ -330,24 +392,43 @@ CAMERA_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
 
 
 class PinView(BaseModel):
-    """A picture to pin, and where. A finder is not asked for here: finding is Find
-    shapes, its own request, so a pin that names one is refused rather than
-    silently not found."""
+    """A picture to pin, and where: at a host (the floor, ``""``, when none is
+    named), or as the picture a camera part took. A finder is not asked for here:
+    finding is Find shapes, its own request, so a pin that names one is refused
+    rather than silently not found."""
 
     model_config = ConfigDict(extra="forbid")
 
-    host: str = Field("", max_length=400)
+    host: Optional[str] = Field(None, max_length=400)
     picture: str = Field(..., min_length=1, max_length=400)
     camera: Optional[str] = Field(None, pattern=CAMERA_PATTERN)
     mm_across: Optional[float] = Field(None, gt=0, allow_inf_nan=False)
 
+    @model_validator(mode="after")
+    def _a_host_or_a_camera(self) -> "PinView":
+        if self.camera is not None and self.host is not None:
+            raise ValueError(
+                "a camera's picture lies where the camera looks: give the camera, or a "
+                "host, not both"
+            )
+        if self.camera is not None and self.mm_across is not None:
+            raise ValueError(
+                "a camera's picture is sized by how the camera stands; to say its width, "
+                "size it once it is pinned (PUT .../scale)"
+            )
+        return self
+
 
 @router.post("/sites/{site_name}/views", status_code=201)
 def pin_view(site_name: str, body: PinView):
-    """Pin a picture as a view at a host, or the floor (``""``); nothing is found yet."""
-    view = pin_picture(
-        site_name, body.host, body.picture, camera=body.camera, mm_across=body.mm_across
-    )
+    """Pin a picture as a view at a host, or the floor (``""``), or as the picture a
+    camera part took; nothing is found yet."""
+    if body.camera is not None:
+        view = take_picture(site_name, body.camera, body.picture)
+    else:
+        view = pin_picture(
+            site_name, body.host or viewing.FLOOR, body.picture, mm_across=body.mm_across
+        )
     return _answer(site_name, view)
 
 
@@ -384,21 +465,24 @@ class ScaleBody(BaseModel):
 
 @router.put("/sites/{site_name}/views/{view_id}/scale")
 async def size_view(site_name: str, view_id: str, body: ScaleBody):
-    """Size a view; the width it comes to is stored on its camera as the next view's.
+    """Size a view by the picture's width or one shape's long side.
 
     Every piece made from the view whose sides no person stated is rebuilt at
     the new width, in place, and laid on its shape again if it still stands
     where it was made (``rebuilt`` names them; ``site`` is the site as it is
     now). A piece whose sides a person stated keeps them, and the scale it was
-    made at, in its provenance. ``async def``: a rebuild changes the site."""
+    made at, in its provenance.
+
+    A camera's picture is sized by its field of view: the one that brings it to
+    the width given, found by bisection, kept on the view. The first width typed
+    for any of a camera's pictures teaches the camera that field of view
+    (``taught`` names it), and its pictures here no person sized follow, their
+    pieces rebuilt as this view's are. ``async def``: a rebuild changes the site."""
     from ..vision.models import Picture
-    from .pictures import set_camera_width
 
     view = _view_or_404(site_name, view_id)
     site = _site(site_name)
-    if body.mm_across is not None:
-        scale, mm_across = {"mm_across": body.mm_across}, body.mm_across
-    else:
+    if body.mm_across is None:
         if not view.found:
             raise HTTPException(
                 status_code=422,
@@ -411,6 +495,11 @@ async def size_view(site_name: str, view_id: str, body: ScaleBody):
                 detail=f"this view has {len(view.shapes)} shape(s); there is no shape "
                 f"{body.known_index}",
             )
+    if view.taken is not None:
+        return _size_by_lens(site_name, site, view, body)
+    if body.mm_across is not None:
+        scale, mm_across = {"mm_across": body.mm_across}, body.mm_across
+    else:
         seen = Picture(
             name=view.picture,
             pixel_width=view.pixel_width,
@@ -429,12 +518,41 @@ async def size_view(site_name: str, view_id: str, body: ScaleBody):
         view = viewing.store().set_scale(site_name, view_id, scale, mm_across)
     except viewing.ViewNotFound as missing:
         raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
-    if view.camera:
-        set_camera_width(view.camera, mm_across)
     rebuilt = viewing.rescale_made(site_name, site, view)
     return {
         **view_answer(view, site, viewing.store().made_at(site_name)),
         "rebuilt": rebuilt,
+        "taught": None,
+        "site": _site_answer(site_name, site) if rebuilt else None,
+    }
+
+
+def _size_by_lens(site_name: str, site: Assembly, view: View, body: ScaleBody):
+    """A camera's picture sized: by the field of view that gives the width, the
+    camera taught by its first, and its other pictures no person sized following."""
+    if not view.placed:
+        raise HTTPException(status_code=409, detail=viewing.AIM_DOWN)
+    if viewing.frame_origin(view, site) is None:
+        raise HTTPException(
+            status_code=409, detail=f"{view.host} is no longer in the site, so nothing is sized"
+        )
+    if body.mm_across is not None:
+        scale = {"mm_across": body.mm_across}
+        asked = {"mm_across": body.mm_across}
+    else:
+        scale = {"known_index": body.known_index, "mm": body.mm}
+        asked = {"known_index": body.known_index, "mm": body.mm}
+    try:
+        fov = viewing.fov_for(view, **asked)
+        sized, rebuilt, taught = viewing.size_by_lens(site_name, site, view, scale, fov)
+    except viewing.CannotSize as refused:
+        raise HTTPException(status_code=422, detail=str(refused)) from None
+    except viewing.ViewNotFound as missing:
+        raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
+    return {
+        **view_answer(sized, site, viewing.store().made_at(site_name)),
+        "rebuilt": rebuilt,
+        "taught": taught,
         "site": _site_answer(site_name, site) if rebuilt else None,
     }
 
@@ -451,9 +569,8 @@ def unpin_view(site_name: str, view_id: str):
 
 @router.get("/sites/{site_name}/attached")
 def attached(site_name: str):
-    """A site's cameras, views (oldest first) and made pieces, in one request."""
-    from .pictures import camera_rows
-
+    """A site's camera parts (in the order they were added), views (oldest first) and
+    made pieces, in one request."""
     site = _site(site_name)
     store = viewing.store()
     made = store.made_at(site_name)
@@ -461,7 +578,7 @@ def attached(site_name: str):
     pinned = {vw.id for vw in views}
     return {
         "site": site_name,
-        "cameras": camera_rows(site_name),
+        "cameras": [cameras.answer(camera, site) for camera in cameras.records(site_name)],
         "views": [view_answer(vw, site, made) for vw in views],
         "made": {
             piece: made_answer(rec, rec.view in pinned) for piece, rec in sorted(made.items())
@@ -471,13 +588,15 @@ def attached(site_name: str):
 
 @router.get("/placed")
 def placed():
-    """Everything a page pinned, every site's: cameras, boards and views, each a row.
+    """Everything a page placed or pinned, every site's: cameras, boards and views,
+    each a row.
 
-    A row whose host is gone says so (``host_found``/``node_found``), so it can
-    still be taken back from the list that shows it."""
+    A row whose host or site is gone says so (``host_found``/``node_found``/
+    ``site_known``), so it can still be taken back from the list that shows it: a
+    camera whose site is gone (an arrangement built from a picture, forgotten) is
+    removed by ``DELETE /sites/{s}/cameras/{name}`` all the same."""
     from ..api import _find_node_by_path, _site_store
     from ..firmware import devices as firmware_devices
-    from .pictures import camera_rows
 
     names = set(_site_store.names())
 
@@ -498,8 +617,21 @@ def placed():
                 and _find_node_by_path(site, binding.path) is not None,
             }
         )
+    camera_rows = []
+    for camera in cameras.records():
+        site = site_or_none(camera.site)
+        camera_rows.append(
+            {
+                "site": camera.site,
+                "name": camera.name,
+                "device": camera.device.model_dump() if camera.device is not None else None,
+                "site_known": site is not None,
+                "node_found": site is not None
+                and any(c.name == camera.name for c in site.children),
+            }
+        )
     return {
-        "cameras": camera_rows(None),
+        "cameras": camera_rows,
         "boards": boards,
         "views": [view_row(vw, site_or_none(vw.site)) for vw in viewing.store().views_at()],
     }
@@ -556,17 +688,19 @@ class MakeBody(BaseModel):
 
 @router.post("/sites/{site_name}/views/{view_id}/make")
 async def make_pieces(site_name: str, view_id: str, body: MakeBody):
-    """Pieces from a view's shapes: one, or every one not already made."""
+    """Pieces from a view's shapes: one, or every one not already made. ``beyond``
+    counts the shapes left because they lie past a camera picture's horizon."""
     site = _site(site_name)
     try:
-        made, skipped = viewing.make(site_name, site, view_id, body.shape)
+        making = viewing.make(site_name, site, view_id, body.shape)
     except viewing.ViewNotFound as missing:
         raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
     except viewing.CannotMake as refused:
         raise HTTPException(status_code=409, detail=str(refused)) from None
     return {
-        "made": made,
-        "skipped": skipped,
+        "made": making.made,
+        "skipped": making.skipped,
+        "beyond": making.beyond,
         "view": _view_if_pinned(site_name, view_id),
         "site": _site_answer(site_name, site),
     }
