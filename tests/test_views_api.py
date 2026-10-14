@@ -17,6 +17,7 @@ import io
 import json
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -198,6 +199,40 @@ def test_a_taken_picture_is_kept_and_pinned_with_no_shapes(world):
     assert c.post("/photos/pictures", params=nowhere, content=_png()).status_code == 404
     found = c.post(f"/sites/garage/views/{view['id']}/find", json={"finder": "plain"}).json()
     assert found["finder"] == "plain" and len(found["shapes"]) == 3
+
+
+class OneMillisecond(datetime):
+    """A clock stopped at one moment: whatever a module stamps by it is made in the same
+    millisecond, as two frames taken close together are."""
+
+    @classmethod
+    def now(cls, tz=None):
+        return datetime(2026, 10, 14, 12, 0, 0, 123456, tzinfo=timezone.utc)
+
+
+def test_two_pictures_a_camera_takes_in_one_millisecond_are_both_kept(world, monkeypatch):
+    """A camera's frame is named for the moment, to the millisecond, and for its camera. A
+    second frame in the same millisecond takes that name with -2 after it, the first is
+    not written over, and each is read back as the camera's."""
+    from apothecary.routes import pictures as picture_routes
+
+    monkeypatch.setattr(picture_routes, "datetime", OneMillisecond)
+    c = TestClient(app)
+    assert c.post("/sites/garage/cameras", json={"host": "workbench"}).status_code == 201
+    take = {"name": "camera_1", "site": "garage", "camera": "camera_1"}
+    first = c.post("/photos/pictures", params=take, content=_png(shapes="r")).json()
+    second = c.post("/photos/pictures", params=take, content=_png(shapes="e")).json()
+    camera = {"site": "garage", "name": "camera_1"}
+    captured = [p for p in c.get("/photos/pictures").json() if p["captured"]]
+    assert [p["camera"] for p in captured] == [camera, camera]
+    assert first["path"] == "captures/20261014T120000.123-garage--camera_1.png"
+    assert second["path"] == "captures/20261014T120000.123-garage--camera_1-2.png"
+    assert (world / first["path"]).read_bytes() == _png(shapes="r")
+    assert (world / second["path"]).read_bytes() == _png(shapes="e")
+    listed = {p["path"]: p["camera"] for p in captured}
+    assert listed == {first["path"]: camera, second["path"]: camera}
+    assert first["view"]["picture"] == first["path"]
+    assert second["view"]["picture"] == second["path"]
 
 
 def test_make_before_find_shapes_is_refused_and_names_find_shapes(world):
