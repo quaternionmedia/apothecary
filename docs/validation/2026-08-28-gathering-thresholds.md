@@ -4,7 +4,8 @@
 `TOO_ALIKE_TO_TELL` in `apothecary/gathering/resolve.py`, `DRIFT_ALLOWED` in
 `apothecary/gathering/arrangement.py`, `TRUSTWORTHY_PIXELS` in
 `apothecary/vision/plain.py`, and the share of groups the sorting finds
-(`apothecary/gathering/judgement.py`). Each was recorded in a comment beside
+(`apothecary/gathering/judgement.py`), with the share of pairs it answers one
+pair at a time (`tests/test_gathering_accuracy.py`). Each was recorded in a comment beside
 its number when the number was set, in commit `70b6c26` (2026-08-28), and is
 kept here as it was recorded. The code states each rule; `apothecary photo
 gather-check` and `apothecary photo check` measure the sorting and the finder
@@ -59,3 +60,10 @@ down to `LEAST_TRUSTED`.
 On drawn pictures, about a fifth of the groups that are there. A person
 naming what belongs together (`apothecary/gathering/judgement.py`) is the
 rest.
+
+## How many pairs it answers, one pair at a time
+
+18% to 41% of pairs, depending on what was drawn. Most pairs in a folder are
+two photographs of different things, which the sorting declines to call
+unrelated rather than claim to be sure. `tests/test_gathering_accuracy.py`
+sets its floor below the lowest rate seen.
