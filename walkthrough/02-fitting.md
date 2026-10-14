@@ -34,10 +34,9 @@ file as defaults — a part has to render for someone who has never heard of
 
 ## Every number in the file is a control
 
-A dimension that lives only in the SCAD file cannot be staged, validated or
-iterated — it can only be edited, which is the loop this tooling replaces. So
-every top-level number in a part's SCAD has a parameter, and a test holds the
-two together in both directions:
+A dimension that lives only in the SCAD file cannot be staged or validated,
+so every top-level number in a part's SCAD has a parameter, and
+`tests/test_parameter_coverage.py` holds the two together in both directions:
 
     >>> import re
     >>> from apothecary.projects.parts.datum_core import DEFAULT
@@ -47,8 +46,7 @@ two together in both directions:
     True
 
 Both directions matter. A number with no parameter is untunable; a parameter
-with no number renders nothing when moved — `datum_core` carried six of those
-after the cover moved to `datum_cap`.
+with no number renders nothing when moved.
 
 ## Staging, then iterating
 
@@ -74,14 +72,13 @@ refused here:
     ... ).json()["valid"]
     False
 
-In the viewer the staged changes are marked, counted and shown against their
-previous values, checked once the controls rest, and **Apply** is the only
-thing that renders. What it renders is a variant, kept by what made it
-(`apothecary/projects/parts/variants.py`) and drawn in that tab alone; the
-tab's address names it, so a reload or a link draws it again, and a part drawn
-from one wears a quiet amber mark. The part's own STL stays the saved part:
-**Defaults**, then **Apply** -- the editor's buttons, or the same cells under
-Part on the part's ring -- go back to it without rendering anything.
+In the viewer a moved control stages a value, checked once the controls
+rest, and **Apply** renders it: a variant, kept by what made it
+(`apothecary/projects/parts/variants.py`) and drawn in that tab alone, marked
+amber. The part's own STL stays the saved part: **Defaults**, then **Apply**,
+draws it again without rendering anything. [The part
+editor](../docs/viewer.md#the-part-editor) says the rest, and
+[page 14](14-designing-a-part.md) walks it.
 
 ## Overrides reach OpenSCAD
 

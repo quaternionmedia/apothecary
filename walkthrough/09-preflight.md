@@ -2,10 +2,9 @@
 
 **Hermetic.**
 
-CI is not a barrier on this repository. `main` is unprotected, no ruleset is
-applied, and the governance corpus says so about itself: *"every gate in this
-repository is a signal to whoever merges rather than a barrier."* A signal only
-works if somebody reads it before it costs a round trip, so read it here:
+CI runs the workflows after a push, and what they say is a signal to whoever
+merges. `preflight` runs them here first, so it is read before it costs a
+round trip:
 
 ```
 uv run --group preflight apothecary preflight
@@ -22,11 +21,10 @@ rather than restating what the workflows do. A second list of "what CI runs" is
 a list that drifts, and the point is to find out what the runner will say —
 which a paraphrase cannot tell you.
 
-Each workflow gets its own invocation. That is not tidiness: the runner
-executes every job in one environment where CI gives each job a fresh machine.
-In the sibling project that difference was not theoretical — one workflow's
-`uv sync --locked` stripped the tools a later workflow needed, and the
-licensing gate failed for it while saying nothing about licensing.
+Each workflow gets its own invocation, because the runner executes every job
+in one environment where CI gives each job a fresh machine: in one environment,
+one workflow's `uv sync --locked` would strip the tools a later workflow
+needs, and that workflow would fail for a reason that is not its own.
 
 It also runs against a scratch environment it owns, under `.preflight/`. The
 workflows install their own tools, and `actions/setup-python` is an environment
@@ -68,30 +66,29 @@ run has none; the body is checked by the same script before it is posted:
     >>> "check_pr_voice.py" in LOCAL_DIFFERENCES["one-pr-check.yml"].covered_by
     True
 
-That is the rule this module exists to hold. An excuse with no local equivalent
-is a gap wearing a reason, and it is checked rather than trusted:
+That is the rule `apothecary/preflight.py` holds. An excuse with no local
+equivalent is a gap, so each is checked rather than trusted:
 
     >>> from apothecary.preflight import differences_are_current
     >>> differences_are_current()
     []
 
-The same check catches the quieter failure: a workflow renamed or deleted while
-its excuse stays behind, still describing a gate that no longer exists.
+It also reports an excuse naming a workflow that is not there, renamed or
+deleted.
 
 ## A pass here is evidence, not proof
 
 `uses:` steps are environment, not logic, and are not reproduced. The runner
-image differs from this machine — which is the usual reason a locally green
-step fails on a runner, and this repository has been caught by it more than
-once: an `npm ci` step, since removed, died in CI on a postinstall a local
-`npm install` had long since cached, and seven tests read STLs that only
-existed here.
+image is not this machine either: a tool, a cache or a file this machine has
+and a fresh runner does not (an STL rendered here, a package cached) passes a
+step here that fails there.
 
-The command can also refuse to run at all, and that refusal is worth reading
-rather than working around. The pinned governance runner invokes steps as bare
-`bash`; on Windows that resolves through System32, where the WSL alias lives,
-before PATH is consulted. The upstream fix passes an absolute POSIX shell and
-is already on the corpus's `main`, but `governance/qm` here is pinned to
-`project/apothecary`, which has not had a propagation merge since 2026-08-11.
-Bumping that pin is a governance act — org ratifications reach a project by
-merging `main` into its branch, and that merge commit is the pin bump.
+On Windows the command can refuse to run, and the refusal is worth reading
+rather than working around. A runner without the corpus's `resolve_bash`
+invokes steps as bare `bash`, which Windows resolves through System32, where
+the WSL alias lives, before PATH is consulted. `preflight` looks for
+`resolve_bash` in the pinned runner (`governance/qm`, on `project/apothecary`)
+and, where it is missing and the bare name does not run, refuses and names the
+gates to run directly. The fix is on the corpus's `main`. Bumping the pin is a
+governance act: org ratifications reach a project by merging `main` into its
+branch, and that merge commit is the pin bump.
