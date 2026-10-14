@@ -3,7 +3,7 @@
 Three different things get called "resolved" in ordinary speech, and keeping
 them apart is most of the work here:
 
-1. **A picture resolves on its own** — enough was found in it, clearly enough,
+1. **A picture resolves on its own** — enough was found in it, clearly enough,  # timeless: allow a search's result, in the present
    to be worth placing at all. A picture of a blank wall does not.
 2. **Two pictures resolve to the same thing** — the same object, from a
    different angle, distance or light. Their pieces are one set of pieces.
@@ -15,7 +15,7 @@ A fourth outcome matters as much as the three: **cannot tell**. It is a real
 answer, it is recorded with a reason, and nothing is merged on the strength of
 it.
 
-PROTOTYPE — not ratified.
+A prototype: no ratified record governs it.
 """
 
 from __future__ import annotations
@@ -284,10 +284,9 @@ class Gathering(BaseModel):
 
         A group is only as good as the flimsiest judgement in it, so that is what
         is reported. This is the shortlist of what to look at by eye — and it is
-        needed, because the sorting is measurably conservative but not
-        infallible: on made-up pictures with known answers it has never joined
-        photographs that were plainly unrelated, and it has occasionally joined
-        two that merely looked alike.
+        needed, because the sorting is conservative but not infallible: it can
+        join two pictures that merely look alike, and `apothecary photo
+        gather-check` measures how often, on made-up pictures with known answers.
         """
         weak = [c for c in self.clusters if c.kind != ALONE and c.strength < below]
         return sorted(weak, key=lambda c: c.strength)

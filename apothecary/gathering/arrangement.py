@@ -1,11 +1,10 @@
 """Do the matched shapes sit in the same places relative to each other?
 
-This is the check that turns a coincidence into evidence, and it was added
-because the meter caught its absence: without it, two photographs of entirely
-different things were joined into one object, because both happened to contain a
-square, a disc and a triangle of roughly the same proportions. Matching shapes
-one at a time cannot tell that apart from a real match. Matching them *as an
-arrangement* can.
+This is the check that turns a coincidence into evidence: without it, two
+photographs of entirely different things would be joined into one object
+whenever both contain a square, a disc and a triangle of roughly the same
+proportions. Matching shapes one at a time cannot tell that apart from a real
+match. Matching them *as an arrangement* can.
 
 The idea is small. If two photographs are of one thing, then stepping sideways
 and stepping closer are the only differences, and both are covered by one
@@ -14,7 +13,7 @@ factor. So look for a single move-and-scale that puts all the matched shapes of
 one picture on top of their partners in the other, and see how badly it fits. A
 real pair fits well. A coincidence does not fit at all.
 
-**Two known limits, stated rather than hidden.**
+**Two limits.**
 
 - **Turning the camera is not covered.** A photograph taken with the camera
   rotated ninety degrees will not fit, and will be judged unrelated. Handheld
@@ -37,12 +36,9 @@ from .models import ShapeMark
 # How far a matched shape may sit from where the single move-and-scale says it
 # should, as a share of the picture, averaged over all of them.
 #
-# Four percent, and the number was measured rather than chosen. At ten percent —
-# the first guess, which looked generous and harmless — ten pairs of unrelated
-# photographs were joined into single objects in one folder of twenty-seven.
-# Genuine pairs come in at nought to two percent; the false ones sat at four to
-# eight. Six percent still let three through. Four lets none through and costs
-# nothing measurable in what it finds.
+# Four percent: genuine pairs fit within about two percent, and unrelated ones
+# from about four up, so four lets none through (`apothecary photo gather-check`
+# measures it) and costs nothing measurable in what it finds.
 DRIFT_ALLOWED = 0.04
 
 # The line between two matched shapes may point this many degrees differently
@@ -58,8 +54,8 @@ SCALE_RANGE = (0.2, 5.0)
 class Fit:
     """Whether the matched shapes really are the same arrangement.
 
-    ``kept`` is the important part. Some of the shapes that looked alike one by
-    one will be coincidences, and the arrangement is what tells them apart — so
+    ``kept`` says which matches belong together. Some of the shapes that looked
+    alike one by one will be coincidences, and the arrangement is what tells them apart — so
     this does not merely pass or fail the whole set, it says **which** of the
     matches belong to one move-and-scale and hands the rest back. Everything
     downstream counts the kept ones and ignores the others.
@@ -121,10 +117,10 @@ def _drift(
 
     The obvious sum measures the error in the *second* picture's frame. That
     makes the whole check ``1/scale`` times stricter one way round than the
-    other, and a reviewer showed the consequence: handing the same two
-    photographs in in the other order changed a confident "the same thing" into
-    "cannot tell". Dividing by the square root of the scale is what makes the
-    number identical both ways, and it is the only thing that does.
+    other, so handing the same two photographs in in the other order could
+    change a confident "the same thing" into "cannot tell". Dividing by the
+    square root of the scale is what makes the number identical both ways, and
+    it is the only thing that does.
     """
     scale, mx, my = move
     raw = math.sqrt(
@@ -142,7 +138,7 @@ def _one_each(pairs: Sequence[Tuple[int, int]], ranked: Sequence[Tuple[float, in
     """Keep one partner per shape, closest fit first.
 
     A shape is allowed several possible partners going in — deciding between
-    them by how alike they look, before knowing the arrangement, is what let a
+    them by how alike they look, before knowing the arrangement, would let a
     coincidence take the place of the real match and block it. The arrangement
     decides instead, and one-to-one is enforced here, at the end, where it is a
     consequence rather than a guess.
@@ -169,9 +165,9 @@ def arrangement_agrees(
 
     Not *all* of them: two pictures that genuinely overlap along one edge share
     the shapes in the overlap and nothing else, and the shapes outside it throw
-    up coincidental matches. Demanding that every match fit therefore threw away
-    every real overlap — the meter caught exactly that. So the biggest agreeing
-    set wins and the rest are handed back as coincidences.
+    up coincidental matches. Demanding that every match fit would therefore
+    throw away every real overlap, so the biggest agreeing set wins and the rest
+    are handed back as coincidences.
     """
     if len(pairs) < 2:
         return Fit(

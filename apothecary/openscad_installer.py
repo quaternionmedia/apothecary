@@ -314,7 +314,7 @@ def snapshot_pattern(system: Optional[str] = None, machine: Optional[str] = None
 
 # --- where it lives ------------------------------------------------------------------
 
-# Before install.json, an install was the AppImage itself, at <date>/openscad.
+# An install with no install.json is the AppImage itself, at <date>/openscad.
 LEGACY_EXECUTABLE = "openscad"
 
 
@@ -342,7 +342,7 @@ def read_manifest(date: str) -> dict:
 
 def executable_for(date: str) -> Path:
     """The executable of the snapshot of ``date``: where ``install.json`` says it
-    is, else the AppImage an install made before there was one."""
+    is, else the AppImage at ``<date>/openscad`` (an install with none)."""
     rel = _plain(read_manifest(date).get("executable")) or LEGACY_EXECUTABLE
     return openscad_dir() / check_date(date) / rel
 

@@ -33,7 +33,7 @@ reaches: a host's top -- a root structure with a footprint that is neither a
 made piece nor a camera -- or the floor. A ray that meets the side of something
 first (a wall), or nothing (the sky), lands nowhere (``lands``).
 
-PROTOTYPE -- not ratified.
+A prototype: no ratified record governs it.
 """
 
 from __future__ import annotations
@@ -434,7 +434,7 @@ def set_pose(
 def set_device(site_name: str, name: str, device: Optional[Device]) -> Tuple[Camera, List[Camera]]:
     """Which of a browser's cameras this camera is, or (None) none; and the cameras
     the device was taken from. One device is one camera: choosing it for this one
-    takes it off any other, in any site (the owner's decision of 2026-10-04)."""
+    takes it off any other, in any site."""
     with _LOCK:
         cameras = _load()
         index = next(

@@ -19,7 +19,7 @@ the browser serve it as they serve a part from the parts folder:
 A made piece has no file: its ``source_file`` names one that does not exist,
 and the record is its source. ``validate_overrides`` is ``BasePart``'s.
 
-PROTOTYPE -- not ratified.
+A prototype: no ratified record governs it.
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 """Jobs: one operation a machine performs on a part, and the record of it.
 
-A job is a print on a printer today; a cut on a mill or a laser would be one the
-same way. Each records its kind; the machine (its kind, its port, the board's
+A job is a print on a printer; a cut on a mill or a laser would be one the same
+way. Each records its kind; the machine (its kind, its port, the board's
 own identity when it is known, and the node it is pinned to, if any); the site
 and the part it makes, when known (a piece made from a picture with that picture
 and its camera); the input file it ran (its name, size and SHA-256); when it
@@ -16,20 +16,20 @@ work -- ``firmware/devices.py``'s ``PrintJob`` streams a print -- and hands the
 job here when it begins (``begin``) and when it ends (``end``).
 
 **The store** is the state folder's ``jobs/``, one JSON file per job, readable
-by this account alone, as the print records were. A job is written when it
+by this account alone. A job is written when it
 begins and again when it ends; in between, a read takes it from the machine's
 own thread (``begin``'s ``live``), so its progress costs no writes. A job
 written as running that no thread of this process holds was running when the
 server stopped: it reads as failed and says so, and its file is left as it is.
 
-**The print records kept before jobs** (``prints/records/*.json``) are carried
-over on the first read after they appear: each becomes a print job with the
-record's id -- its port, its file's name and kept id, when it started and
+**Print records** (``prints/records/*.json``, a format nothing writes) are
+carried over on the first read after they appear: each becomes a print job with
+the record's id -- its port, its file's name and kept id, when it started and
 finished, its outcome, its error as the reason, the lines sent of the total as
 its progress, the firmware and the tail of what the firmware said. The file's
-size comes from the kept file's description when that is still there; the
-site, the part and the hash were never recorded and stay empty. The records are
-left where they are, and nothing writes there any more.
+size comes from the kept file's description when that is there; a record holds
+no site, part or hash, so those stay empty. The records are left where they
+are.
 
 **Listeners** (``LISTENERS``) hear each job as it begins and as it ends; the
 site layer registers one that marks the machine's node busy while a job runs
@@ -350,7 +350,7 @@ def list_jobs(
     return found
 
 
-# --- the print records kept before jobs ----------------------------------------------------
+# --- print records, carried over as print jobs ---------------------------------------------
 
 
 def _carry_over_print_records() -> None:

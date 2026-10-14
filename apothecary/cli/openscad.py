@@ -81,7 +81,7 @@ def openscad_install(
     Windows x64    the night's portable zip, unpacked
     Linux arm64    built here with cmake from OpenSCAD's source at the night's
                    date; what the build needs is checked first (the apt line)
-    Windows on ARM not supported yet
+    Windows on ARM not supported
 
     A download is checked against its listed size and published SHA-256; what
     is installed must run and report its date before it goes under the tools

@@ -358,7 +358,7 @@ DEFAULTS = "Model defaults match the SCAD"
 
 def _defaults_check(part) -> Optional[Check]:
     """Where a part's Python model's defaults and its SCAD's own values disagree:
-    the SCAD as saved is the part's default (decided 2026-10-12), and a model
+    the SCAD as saved is the part's default, and a model
     that says otherwise sizes it, and checks values, against something else.
     None where there is nothing to compare (no model; a SCAD that is generated)."""
     from apothecary.projects.parts.texts import defaults_disagree
@@ -463,9 +463,10 @@ def _stub_check(part) -> Check:
         return Check("Fitted to measured artifacts", UNKNOWN, "no assembly drives this part")
 
     try:
-        # build() returns (Scene, Assembly). Reading it as one object made this
-        # check report "no stubs remain" for an assembly it had never looked
-        # at -- the false pass this module's own docstring warns about.
+        # build() returns (Scene, Assembly), and the stubs are the assembly's:
+        # read as one object, this check would report "no stubs remain" for an
+        # assembly it never looked at -- the false pass this module's own
+        # docstring warns about.
         _scene, assembly = build()
     except Exception as exc:  # pragma: no cover - defensive
         return Check("Fitted to measured artifacts", UNKNOWN, f"assembly did not build: {exc}")
@@ -474,9 +475,8 @@ def _stub_check(part) -> Check:
     if placements is None:
         return Check("Fitted to measured artifacts", UNKNOWN, "the assembly reports no placements")
 
-    # Only for a part the assembly actually places. This used to report the
-    # bench's stubs for every part in the library, so `calibration_cube` was
-    # told it was fitted to a board it has never heard of.
+    # Only for a part the assembly places: a part the bench does not use is
+    # fitted to none of its boards.
     source = part.source_file.name
     placed = any(source in (getattr(p, "note", "") or "") for p in placements)
     if not placed:

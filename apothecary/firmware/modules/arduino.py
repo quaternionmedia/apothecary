@@ -1,9 +1,8 @@
 """The Arduino module: arduino-cli builds and uploads, esptool flashes raw images.
 
-What the seam was before there were modules, moved behind the interface and
-otherwise unchanged: a sketch is ``<folder>/<folder>.ino`` with an optional
-``firmware.json``; a build names a board (its FQBN); an upload compiles first
-and uploads that build; arduino-cli always runs with the managed config
+A sketch is ``<folder>/<folder>.ino`` with an optional ``firmware.json``; a
+build names a board (its FQBN); an upload compiles first and uploads that
+build; arduino-cli always runs with the managed config
 (``toolchains.managed_config_file``) in ``env_for_arduino()``.
 """
 
@@ -106,7 +105,7 @@ class ArduinoModule(ToolchainModule):
         self, cli: Optional[ArduinoCli] = None, esptool: Optional[Esptool] = None
     ) -> ToolchainStatus:
         """Everything ``validate`` reports of arduino-cli and esptool, in the shape
-        ``GET /firmware/status`` has always had; never raises."""
+        of ``GET /firmware/status``'s top-level fields; never raises."""
         cli = cli or get_arduino_cli()
         esptool = esptool or get_esptool()
         status = ToolchainStatus(tools_dir=str(tools_dir()))
@@ -191,7 +190,7 @@ class ArduinoModule(ToolchainModule):
     # -- ports: arduino-cli's board list and monitor, and esptool -------------------
 
     def ports(self) -> Optional[List[BoardInfo]]:
-        # Raises when arduino-cli is not there, with the message it always had.
+        # Raises when arduino-cli is not there, saying so.
         return get_arduino_cli().board_list()
 
     def monitor_argv(self, port: str, baud: int) -> Optional[List[str]]:

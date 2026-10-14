@@ -142,13 +142,12 @@ SUPERSEDED = "Render superseded by a newer request"
 # ``runs_limit()`` run at once; the rest wait their turn, first come first
 # served, and a page can see where its own are (``RUNS.snapshot``, the
 # ``/openscad/runs`` route). Two (one on a single core): what a person waits
-# for is their newest render, and every run beside it makes it later -- timed
-# on a four-core machine, two renders at once each took a sixth to a third
-# longer than one alone, four at once nearly twice as long -- while two still
-# let a check go beside a render, or a check's two exports go together.
+# for is their newest render, and every run beside it makes it later, while
+# two still let a check go beside a render, or a check's two exports go
+# together.
 # ``APOTHECARY_OPENSCAD_RUNS`` sets another number. Asking ``--version`` or
 # ``--help`` is not a run. A run cancelled while it waits leaves the queue
-# without starting; one cancelled while it runs is stopped, as before.
+# without starting; one cancelled while it runs is stopped.
 
 OPENSCAD_RUNS = 2
 

@@ -94,8 +94,9 @@ DEMO_HELP = (
 )
 @click.option("--port", default=8000, type=int, show_default=True, help="Port to bind to")
 @click.option("--reload/--no-reload", default=False, help="Enable auto-reload on code changes")
-# The JSCAD viewer these named is served by no route; the flags do nothing
-# and stay, hidden, for one release so scripts that pass them keep working.
+# `--viewer-path` and `--no-viewer` are accepted and ignored, hidden, for one
+# release, so scripts that pass them keep working: no route serves a JSCAD
+# viewer.
 @click.option("--viewer-path", hidden=True, expose_value=False)
 @click.option("--no-viewer", is_flag=True, hidden=True, expose_value=False)
 @click.option(

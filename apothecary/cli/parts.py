@@ -273,9 +273,9 @@ def parts_verify(
     """Check a part's declared bounds against the geometry OpenSCAD produces.
 
     A wrapper's get_bounds is hand-written Python beside hand-written
-    OpenSCAD, and nothing has been keeping the two honest. Anything consuming
-    the declared envelope -- catalog layout, an assembly sizing itself around
-    the part -- is wrong by exactly the amount they have drifted apart.
+    OpenSCAD, and the two can drift apart. Anything consuming the declared
+    envelope -- catalog layout, an assembly sizing itself around the part --
+    is wrong by exactly the amount they differ, which this measures.
 
     Renders to a temporary file, so the STL you are iterating on is untouched.
     """
@@ -491,8 +491,7 @@ def parts_render(name: str, params_json: str | None, template: str | None, outpu
         click.echo(f"Rendered parametric part '{part.name}' -> {output_path}")
         return
 
-    # Otherwise, use template rendering (legacy/generic). The stub includes the
-    # source file, so writing it over that file would destroy the part.
+    # Otherwise, the template's include stub. The stub includes the source file, so writing it over that file would destroy the part.
     if output_path.resolve() == part.source_file.resolve():
         raise click.ClickException(
             f"Refusing to overwrite the part's own source file {part.source_file}; "
@@ -630,8 +629,8 @@ def parts_elephant_walk(output: Path | None, gap: int, ensure_stl: bool):
     in a single row along the X axis, using bounding boxes to prevent
     parts from overlapping.
 
-    Note: This imports STL files, not SCAD modules, for reliable rendering
-    regardless of how individual parts define their modules.
+    It imports STL files, not SCAD modules, so it renders however each part
+    defines its modules.
 
     \b
     Examples:

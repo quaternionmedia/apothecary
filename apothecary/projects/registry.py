@@ -42,7 +42,7 @@ def stl_output_for(item: ProjectInfo) -> Path:
     any part whose SCAD is not in the folder the render belongs in. gridfinity
     is the live example: its source sits inside a third-party submodule and its
     wrapper overrides this precisely so a render does not land in somebody
-    else's checkout. Every caller that guessed wrote a stray file in there.
+    else's checkout. A caller that guesses writes a stray file in there.
     """
     if item.wrapper:
         try:
@@ -93,8 +93,9 @@ def invalidate() -> None:
 def scan_projects(root: Path) -> List[ProjectInfo]:
     """Scan the repository root for known projects and parts.
 
-    - Detects 'fifel', 'footpedal', and 'parts' directories if present
     - For 'parts', returns a top-level ProjectInfo and per-part entries
+    - A 'fifel' or 'footpedal' directory at the root, if a checkout has one, is
+      an entry of its own; this repository keeps both under 'parts/'
 
     The scan is kept per root until a directory it depends on changes (see
     ``_scan_stamp``); each call returns a new list of the same entries.
@@ -111,7 +112,8 @@ def scan_projects(root: Path) -> List[ProjectInfo]:
 def _scan(root: Path) -> List[ProjectInfo]:
     items: List[ProjectInfo] = []
 
-    # Fifel project (canonical location under 'fifel/')
+    # A 'fifel/' directory at the root, if there is one (this repository's is
+    # parts/fifel/, scanned as a part below)
     fifel_dir = root / "fifel"
     if fifel_dir.is_dir():
         files = _gather(fifel_dir, ["*.scad", "*.jscad", "*.md"])
@@ -125,7 +127,8 @@ def _scan(root: Path) -> List[ProjectInfo]:
             )
         )
 
-    # Footpedal project (canonical location under 'footpedal/')
+    # A 'footpedal/' directory at the root, if there is one (this repository's
+    # is parts/footpedal/, scanned as a part below)
     foot_dir = root / "footpedal"
     if foot_dir.is_dir():
         files = _gather(foot_dir, ["*.scad", "*.ino", "*.md"])
@@ -139,7 +142,7 @@ def _scan(root: Path) -> List[ProjectInfo]:
             )
         )
 
-    # Parts collection (canonical location under 'parts/')
+    # The parts collection, under 'parts/'
     parts_dir = root / "parts"
     if parts_dir.is_dir():
         # Gather all SCAD files in both flat and folder structures

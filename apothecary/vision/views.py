@@ -47,7 +47,7 @@ picture or a file is read. Whether views may be kept in the state folder across 
 waits on what the draft record *Personal data stays on the device* counts as
 this machine.
 
-PROTOTYPE — not ratified.
+A prototype: no ratified record governs it.
 """
 
 from __future__ import annotations
