@@ -1,7 +1,7 @@
 # Inventory: `docs/plans/*.md` and `docs/validation/*.md`
 
-Read on `build/timeless-docs` at `c67725a` (the worktree
-`scratchpad/wt-timeless`). The governance corpus in that worktree is empty, so
+Read on `build/timeless-docs` at `c67725a`, in a worktree of its own. The
+governance corpus in that worktree is empty, so
 records were read in `<checkout>/governance/qm` (branch
 `adr/firmware-toolchain-seam`, every `adr/` record still `DRAFT-*`, Proposed).
 Plans and validation records are dated and exempt: no passage of them is
@@ -88,7 +88,7 @@ when a host wants one part". That is not scheduled work, and it belongs in
 `machine.js`'s header comment.
 
 **History line:**
-`- 2026-09-20 — [One screen](plans/one-screen-2026-09-20.md): the world as the one page, with anchors and panels in front of it, and the census as the meter.`
+`- 2026-09-20 — [One screen](../one-screen-2026-09-20.md): the world as the one page, with anchors and panels in front of it, and the census as the meter.`
 
 | Decision still true | Home |
 |---|---|
@@ -132,7 +132,7 @@ when a host wants one part". That is not scheduled work, and it belongs in
 - `boards.js` is the one board model, with one poller.
 
 **History line:**
-`- 2026-10-03 — [Consolidation](plans/consolidation-2026-10-03.md): one page and one place per thing; Site and Selected over a strip of tabs, one Machine per board, the Bench, one Pictures panel, jobs over machine kinds.`
+`- 2026-10-03 — [Consolidation](../consolidation-2026-10-03.md): one page and one place per thing; Site and Selected over a strip of tabs, one Machine per board, the Bench, one Pictures panel, jobs over machine kinds.`
 
 | Decision still true | Home |
 |---|---|
@@ -179,7 +179,7 @@ when a host wants one part". That is not scheduled work, and it belongs in
 says it is done.
 
 **History line:**
-`- 2026-10-04 — [Cameras and clutter](plans/cameras-and-clutter-2026-10-04.md): a camera as a part of the site, pictures sized and taken from it, and less on the screen (icon badges, the Machine in the rail, one header row, faded walls).`
+`- 2026-10-04 — [Cameras and clutter](../cameras-and-clutter-2026-10-04.md): a camera as a part of the site, pictures sized and taken from it, and less on the screen (icon badges, the Machine in the rail, one header row, faded walls).`
 
 | Decision still true | Home |
 |---|---|
@@ -245,7 +245,7 @@ person to do* heading:
 so it needs no line. The bench-checklist re-run is already `todo.md:17`.
 
 **History line:**
-`- 2026-10-08 — [Cleanup, triaged](plans/cleanup-triage-2026-10-08.md): the open cleanup items sorted by kind and given an order, while the review branch was split into a stack.`
+`- 2026-10-08 — [Cleanup, triaged](../cleanup-triage-2026-10-08.md): the open cleanup items sorted by kind and given an order, while the review branch was split into a stack.`
 
 | Decision still true | Home |
 |---|---|
@@ -273,7 +273,7 @@ in, with the work in flight". Delete that line when the plan retires.
 - `?variant=` is in the address (`docs/viewer.md` address table).
 
 **History line:**
-`- 2026-10-08 — [The loops through the page](plans/ui-flows-2026-10-08.md): designing a part, editing its SCAD, firmware, and a picture to a print, each built out and held end to end by a browser test.`
+`- 2026-10-08 — [The loops through the page](../ui-flows-2026-10-08.md): designing a part, editing its SCAD, firmware, and a picture to a print, each built out and held end to end by a browser test.`
 
 | Decision still true | Home |
 |---|---|
@@ -324,7 +324,7 @@ Its three *Open until built* items are settled:
   not in this plan.
 
 **History line:**
-`- 2026-10-10 — [A managed slicer](plans/slicer-2026-10-10.md): OrcaSlicer behind a slicer interface, installed like OpenSCAD, the printer's profile kept with its part, print settings from what each part declares.`
+`- 2026-10-10 — [A managed slicer](../slicer-2026-10-10.md): OrcaSlicer behind a slicer interface, installed like OpenSCAD, the printer's profile kept with its part, print settings from what each part declares.`
 
 | Decision still true | Home |
 |---|---|
@@ -349,7 +349,7 @@ Its three *Open until built* items are settled:
   *Decided after the server side*.
 
 **Present-tense text that narrates this plan:**
-- `docs/slicer.md:5`: "The owner decided how on 2026-10-10 ([the plan](…));
+- `docs/slicer.md:5`: "The owner decided how on 2026-10-10 ([the plan](../slicer-2026-10-10.md));
   this page says what was built". This is history and a plan link, and should
   be deleted (the page is already present tense).
 - `docs/slicer.md:69`: "The owner decided (2026-10-10) that the start of a
@@ -385,7 +385,7 @@ Its three *Open until built* items are settled:
 - `tests/e2e/test_onboarding.py` exists.
 
 **History line:**
-`- 2026-10-11 — [Onboarding at the top of the stack](plans/onboarding-2026-10-11.md): a newcomer's path, the docs, the suites and the pictures reviewed; serve --demo, a Getting started page, one ordinary test command, pictures held to their captions.`
+`- 2026-10-11 — [Onboarding at the top of the stack](../onboarding-2026-10-11.md): a newcomer's path, the docs, the suites and the pictures reviewed; serve --demo, a Getting started page, one ordinary test command, pictures held to their captions.`
 
 | Decision still true | Home |
 |---|---|
@@ -431,7 +431,7 @@ The crates READMEs already state both as open, so nothing open is lost by
 retiring the plan.
 
 **History line:**
-`- 2026-10-08 — [Rust](plans/rust-2026-10-08.md): firmware in Rust for the ESP32 behind modular toolchains, a Rust geometry kernel researched and compared by numbers, a Rust service and core stubbed.`
+`- 2026-10-08 — [Rust](../rust-2026-10-08.md): firmware in Rust for the ESP32 behind modular toolchains, a Rust geometry kernel researched and compared by numbers, a Rust service and core stubbed.`
 
 | Decision still true | Home |
 |---|---|
@@ -481,7 +481,7 @@ dated survey. Its prose about crates is external and dated ("as the
 registries showed them that day"), which §4 of the rule allows.
 
 **History line:**
-`- 2026-10-09 — [A Rust geometry kernel](plans/rust-geometry-kernels-2026-10-09.md): a spike surveying which Rust kernel could render scenes to STL without OpenSCAD (Manifold bindings, csgrs, boolmesh, truck, Fornjot, OCCT) by licence, build, coverage and maturity; Manifold's bindings first.`
+`- 2026-10-09 — [A Rust geometry kernel](../rust-geometry-kernels-2026-10-09.md): a spike surveying which Rust kernel could render scenes to STL without OpenSCAD (Manifold bindings, csgrs, boolmesh, truck, Fornjot, OCCT) by licence, build, coverage and maturity; Manifold's bindings first.`
 
 | Decision still true | Home |
 |---|---|
@@ -494,7 +494,7 @@ registries showed them that day"), which §4 of the rule allows.
 **Superseded decisions:** none.
 
 **Present-tense links to this spike:**
-- `docs/README.md:58` ("([the spike](plans/rust-geometry-kernels-…), …)").
+- `docs/README.md:58` ("([the spike](../rust-geometry-kernels-2026-10-09.md), …)").
   Keep it, but say "the 2026-10-09 survey".
 - `crates/apothecary-service/README.md:22` ("on one of the kernels in [the
   kernel spike]"). Keep it, dated.
@@ -523,7 +523,7 @@ The spike has no open work of its own. **`todo.md:14` still lists it under
 stale. Delete that line.
 
 **History line:**
-`- 2026-09-27 — [Designing a part from the browser](plans/part-editing-in-the-browser-2026-09-27.md): a spike measuring the part loop, OpenSCAD 2021.01 against a Manifold snapshot, and what other tools do; fast renders, parameters from the SCAD, then an editor in the page.`
+`- 2026-09-27 — [Designing a part from the browser](../part-editing-in-the-browser-2026-09-27.md): a spike measuring the part loop, OpenSCAD 2021.01 against a Manifold snapshot, and what other tools do; fast renders, parameters from the SCAD, then an editor in the page.`
 
 | Decision still true | Home |
 |---|---|
@@ -604,7 +604,7 @@ dropped**; then delete it from `todo.md:15`.
   state.
 
 **History line:**
-`- 2026-09-26 — [Pictures in the world](plans/pictures-in-the-world-2026-09-26.md): a picture pinned at a place as a view, its shapes made into pieces standing there, every surface of the camera panel given a home in the world (Phases 0 and 2–4; Phase 5 overtaken by the consolidation).`
+`- 2026-09-26 — [Pictures in the world](../pictures-in-the-world-2026-09-26.md): a picture pinned at a place as a view, its shapes made into pieces standing there, every surface of the camera panel given a home in the world (Phases 0 and 2–4; Phase 5 overtaken by the consolidation).`
 
 | Decision still true | Home |
 |---|---|
@@ -741,7 +741,7 @@ Then either:
   checkout?") under *For a person to decide*.
 
 **History line (at the split):**
-`- 2026-10-12 — [Iterating on a part, tightened](plans/part-iteration-2026-10-12.md): the part and SCAD loops reviewed and timed; errors as failed renders, real controls, kept work, OpenSCAD's keys, variants drawn where they stand, history, compare, variant management, and a part's controls and its SCAD as one text.`
+`- 2026-10-12 — [Iterating on a part, tightened](../part-iteration-2026-10-12.md): the part and SCAD loops reviewed and timed; errors as failed renders, real controls, kept work, OpenSCAD's keys, variants drawn where they stand, history, compare, variant management, and a part's controls and its SCAD as one text.`
 
 | Decision still true | Home |
 |---|---|
@@ -807,7 +807,7 @@ them on before it retires:
   a person* line, since it waits on ratification.
 
 **History line (when the sweep's last area merges):**
-`- 2026-10-12 — [The documentation, swept](plans/timeless-docs-2026-10-12.md): every durable text brought under the record on durable text; each passage sent inline, to a reference page, to a retrospective, or deleted.`
+`- 2026-10-12 — [The documentation, swept](../timeless-docs-2026-10-12.md): every durable text brought under the record on durable text; each passage sent inline, to a reference page, to a retrospective, or deleted.`
 
 Stray file: during this read `docs/plans/` briefly held
 `timeless-docs-2026-10-12.md.tmp.6097.1ae7d59a0bc8`. An editor was writing
@@ -925,12 +925,12 @@ Each row below is a decision an earlier plan made and a later one reversed.
 
 | Page:line | What it says | Fix when the plan retires |
 |---|---|---|
-| `docs/README.md:58` | "the reference a Rust geometry kernel is compared with ([the spike](plans/rust-geometry-kernels-…)" | Keep the link, labelled as the 2026-10-09 survey |
+| `docs/README.md:58` | "the reference a Rust geometry kernel is compared with ([the spike](../rust-geometry-kernels-2026-10-09.md)" | Keep the link, labelled as the 2026-10-09 survey |
 | `docs/README.md:61-80` | The whole *Plans and records* table lists 14 plans and 2 validation records beside the guides; one-screen and consolidation say "done", cameras-and-clutter "in four phases" | Replace with *Open plans* (pictures (split), photo-finders, part-iteration, timeless-docs) and a dated *History* list (the lines above, newest first); validation records under a dated *Records* list. The heading says "and records" but lists no governance records |
 | `docs/README.md:30` | page 16 "rendered after a second of quiet" | Stale (not a link): "rendered once a check passes" |
 | `docs/firmware.md:632-634` | the bench validation as "the seam against a real Ender mainboard, with a checklist" | Point to `docs/bench-checklist.md`; keep the dated record as the measurement source |
-| `docs/firmware.md:637-638` | "the toolchain modules extend the first ([rust-2026-10-08.md](plans/rust-…))" | Cite `DRAFT-firmware-toolchain-seam`'s amendment; drop the plan |
-| `docs/slicer.md:5` | "The owner decided how on 2026-10-10 ([the plan](plans/slicer-…)); this page says what was built" | Delete (history) |
+| `docs/firmware.md:637-638` | "the toolchain modules extend the first ([rust-2026-10-08.md](../rust-2026-10-08.md))" | Cite `DRAFT-firmware-toolchain-seam`'s amendment; drop the plan |
+| `docs/slicer.md:5` | "The owner decided how on 2026-10-10 ([the plan](../slicer-2026-10-10.md)); this page says what was built" | Delete (history) |
 | `docs/slicer.md:69` | "The owner decided (2026-10-10) that the start of a print is composed …" | Inline: "The start of a print is composed …" |
 | `docs/slicer.md:62` | the bench record as the firmware's source | Keep (dated measurement) |
 | `todo.md:8` | "The order to take these in … is [the cleanup triage]" | Delete |
@@ -991,21 +991,21 @@ Plans and research that are finished, by date. Each is a dated record of what
 was decided and why; what is still true of it is stated in the guides above,
 the governance records, or the code it describes.
 
-- 2026-10-11 — [Onboarding at the top of the stack](plans/onboarding-2026-10-11.md): a newcomer's path, the docs, the suites and the pictures reviewed; serve --demo, a Getting started page, one ordinary test command, pictures held to their captions.
-- 2026-10-10 — [A managed slicer](plans/slicer-2026-10-10.md): OrcaSlicer behind a slicer interface, installed like OpenSCAD, the printer's profile kept with its part, print settings from what each part declares.
-- 2026-10-09 — [A Rust geometry kernel](plans/rust-geometry-kernels-2026-10-09.md): a spike surveying which Rust kernel could render scenes to STL without OpenSCAD, by licence, build, coverage and maturity; Manifold's bindings first.
-- 2026-10-08 — [The loops through the page](plans/ui-flows-2026-10-08.md): designing a part, editing its SCAD, firmware, and a picture to a print, each built out and held end to end by a browser test.
-- 2026-10-08 — [Rust](plans/rust-2026-10-08.md): firmware in Rust for the ESP32 behind modular toolchains, a Rust geometry kernel researched and compared by numbers, a Rust service and core stubbed.
-- 2026-10-08 — [Cleanup, triaged](plans/cleanup-triage-2026-10-08.md): the open cleanup items sorted by kind and given an order, while the review branch was split into a stack.
-- 2026-10-04 — [Cameras and clutter](plans/cameras-and-clutter-2026-10-04.md): a camera as a part of the site, pictures sized and taken from it, and less on the screen.
-- 2026-10-03 — [Consolidation](plans/consolidation-2026-10-03.md): one page and one place per thing; Site and Selected over a strip of tabs, one Machine per board, the Bench, one Pictures panel, jobs over machine kinds.
-- 2026-09-27 — [Designing a part from the browser](plans/part-editing-in-the-browser-2026-09-27.md): a spike measuring the part loop and what other tools do; fast renders, parameters from the SCAD, then an editor in the page.
-- 2026-09-20 — [One screen](plans/one-screen-2026-09-20.md): the world as the one page, with anchors and panels in front of it, and the census as the meter.
+- 2026-10-11 — [Onboarding at the top of the stack](../onboarding-2026-10-11.md): a newcomer's path, the docs, the suites and the pictures reviewed; serve --demo, a Getting started page, one ordinary test command, pictures held to their captions.
+- 2026-10-10 — [A managed slicer](../slicer-2026-10-10.md): OrcaSlicer behind a slicer interface, installed like OpenSCAD, the printer's profile kept with its part, print settings from what each part declares.
+- 2026-10-09 — [A Rust geometry kernel](../rust-geometry-kernels-2026-10-09.md): a spike surveying which Rust kernel could render scenes to STL without OpenSCAD, by licence, build, coverage and maturity; Manifold's bindings first.
+- 2026-10-08 — [The loops through the page](../ui-flows-2026-10-08.md): designing a part, editing its SCAD, firmware, and a picture to a print, each built out and held end to end by a browser test.
+- 2026-10-08 — [Rust](../rust-2026-10-08.md): firmware in Rust for the ESP32 behind modular toolchains, a Rust geometry kernel researched and compared by numbers, a Rust service and core stubbed.
+- 2026-10-08 — [Cleanup, triaged](../cleanup-triage-2026-10-08.md): the open cleanup items sorted by kind and given an order, while the review branch was split into a stack.
+- 2026-10-04 — [Cameras and clutter](../cameras-and-clutter-2026-10-04.md): a camera as a part of the site, pictures sized and taken from it, and less on the screen.
+- 2026-10-03 — [Consolidation](../consolidation-2026-10-03.md): one page and one place per thing; Site and Selected over a strip of tabs, one Machine per board, the Bench, one Pictures panel, jobs over machine kinds.
+- 2026-09-27 — [Designing a part from the browser](../part-editing-in-the-browser-2026-09-27.md): a spike measuring the part loop and what other tools do; fast renders, parameters from the SCAD, then an editor in the page.
+- 2026-09-20 — [One screen](../one-screen-2026-09-20.md): the world as the one page, with anchors and panels in front of it, and the census as the meter.
 
 ### Records from the bench
 
-- 2026-09-21 — [Local integration run-through](validation/2026-09-21-local-integration.md): a checklist for the review branch, section by section.
-- 2026-09-20 — [Ender bench](validation/2026-09-20-ender-bench.md): the printer seam against a real Marlin board, and what the bed measured.
+- 2026-09-21 — [Local integration run-through](../../validation/2026-09-21-local-integration.md): a checklist for the review branch, section by section.
+- 2026-09-20 — [Ender bench](../../validation/2026-09-20-ender-bench.md): the printer seam against a real Marlin board, and what the bed measured.
 ```
 
 ## `todo.md` lines this area produces

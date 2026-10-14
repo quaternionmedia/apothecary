@@ -743,3 +743,42 @@ def test_after_a_scad_edit_defaults_then_apply_draws_the_saved_part(
         assert _text(page) == own
         expect(page.locator("#stage-summary")).to_have_text("No staged changes")
         expect(page.locator("#apply-btn")).to_be_disabled()
+
+
+@pytest.mark.e2e
+def test_the_code_taken_before_the_controls_are_built_keeps_the_keys(
+    page: Page, scad_url: str, cube_as_it_was
+):
+    """Part › Edit puts the cursor in the part's first control once its controls are
+    built, and the code can be shown before them. Taken first, the code keeps the focus
+    when they arrive, and the keys pressed in it are its own: not the size slider's,
+    where Ctrl+End is the largest size and the text typed lands at the code's start.
+    The part's parameters are held back here until the code has the focus, as a slow
+    machine holds them."""
+    quarter = "translate([0, 0, size]) cube(size / 4);"
+    _open(page, f"{scad_url}/viewer/sites/parts_library")
+    page.evaluate(
+        """(part) => { const real = window.fetch;
+            const held = new Promise((go) => { window.releaseParams = go; });
+            window.fetch = async (url, init) => {
+                if (String(url).includes(`/parts/${part}/params`)) await held;
+                return real(url, init);
+            }; }""",
+        PART,
+    )
+    _ring(page, "Part", "Edit")
+    expect(_code(page)).to_be_visible(timeout=20000)
+    size = page.locator("#part-params .param[data-field='size']")
+    expect(size).to_have_count(0)
+    own = _text(page)
+    _code(page).focus()
+    page.evaluate("() => window.releaseParams()")
+    expect(size).to_be_visible(timeout=15000)
+    assert page.evaluate("() => document.activeElement.classList.contains('cm-content')")
+    page.keyboard.press("Control+End")
+    typed = quarter if own.endswith("\n") else "\n" + quarter
+    page.keyboard.insert_text(typed)
+    page.wait_for_function(
+        "(want) => window.fractalViewer.scadEditor.text() === want", arg=own + typed
+    )
+    assert page.evaluate("() => window.fractalViewer.partParams.size") == 10
