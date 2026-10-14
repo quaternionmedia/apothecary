@@ -117,7 +117,7 @@ def preflight(passthrough: tuple[str, ...]) -> None:
     # Otherwise one invocation per workflow. The runner executes every job in a
     # single environment; CI gives each job a fresh machine. Here one
     # workflow's `uv sync --locked` would strip the tools a later one needs, and
-    # that one would fail for a reason not its own (walkthrough/09).
+    # that one would fail for a reason not its own (walkthrough/15).
     source = repo / ".github" / "workflows"
     staged_root = repo / ".preflight" / "workflows"
     if staged_root.exists():
