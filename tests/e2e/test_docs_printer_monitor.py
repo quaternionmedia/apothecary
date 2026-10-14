@@ -316,7 +316,7 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
         "polls keep coming between lines, and every print is recorded with how it ended",
         blank=CHANGING,
     )
-    page.once("dialog", lambda d: d.accept())
+    page.locator("#print-cancel").click()
     page.locator("#print-cancel").click()
     expect(page.locator("#print-progress")).to_contain_text("cancelled", timeout=10000)
     page.locator("#control button[data-cmd='M24']").click()

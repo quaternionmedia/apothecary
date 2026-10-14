@@ -63,7 +63,7 @@ def test_typing_in_the_scad_editor_draws_nothing_until_it_renders(page: Page, ba
     page.set_viewport_size({"width": 1280, "height": 800})
     _open(page, f"{base_url}/viewer/sites/parts_library")
     page.locator("#contents-list .contents-item[data-path='calibration_cube']").click(
-        button="right"
+        button="right", modifiers=["Control"]
     )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=15000)
     for label in ("Part", "Edit"):

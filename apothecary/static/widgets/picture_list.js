@@ -42,13 +42,15 @@
  * is fetched when it mounts and after each change; load() fetches it again.
  */
 
+import { again } from "/static/twice.js";
+
 const MARKUP = `
 <div class="panel-ui">
     <div id="pictures-where" class="note"></div>
     <div id="pictures-list" class="pin-list pictures-list"><span class="empty">no pictures yet</span></div>
     <div class="row">
         <label class="grow">add <input type="file" id="pic-file" accept="image/png,image/jpeg,image/gif,image/webp,image/bmp,image/tiff" multiple title="Add pictures from this browser: kept under uploads/ in the picture folder, on this machine, as you named them, and pinned nowhere until one is chosen here and pinned from the ring's Picture › Folder"></label>
-        <button type="button" id="pictures-purge" title="Forget every picture the browser put here -- captures and uploads -- after asking once. The folder's own pictures stay">Purge kept</button>
+        <button type="button" id="pictures-purge" title="Forget every picture the browser put here -- captures and uploads -- pressed twice. The folder's own pictures stay">Purge kept</button>
     </div>
     <details id="pictures-gather" class="fold">
         <summary>Gather</summary>
@@ -114,6 +116,8 @@ export function mountPictureList(root, { base = "", world = null, log = null } =
         if (ev.key !== "Escape" || !state.chosen) return;
         const t = ev.target;
         if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+        // Taken: the page's Escape lets go of the selection only on the press after.
+        ev.preventDefault();
         choose(null);
     }
     window.addEventListener("keydown", letGo);
@@ -169,7 +173,7 @@ export function mountPictureList(root, { base = "", world = null, log = null } =
                 + `<div class="picture-tiles">${groups.get(key).map(tile).join("")}</div></div>`).join("");
         }
         for (const row of root.querySelectorAll(".picture-row")) row.addEventListener("click", (ev) => rowClicked(row.dataset.path, ev));
-        for (const forgetBtn of root.querySelectorAll(".pictures-forget")) forgetBtn.addEventListener("click", () => forget(forgetBtn.dataset.path).catch((e) => say(e.message, "bad")));
+        for (const forgetBtn of root.querySelectorAll(".pictures-forget")) forgetBtn.addEventListener("click", () => forget(forgetBtn.dataset.path, forgetBtn).catch((e) => say(e.message, "bad")));
         for (const chip of root.querySelectorAll(".picture-view.here")) chip.addEventListener("click", () => showView(chip.dataset.view));
         // A chosen picture forgotten or purged is no longer chosen.
         if (state.chosen && !state.pictures.some((p) => p.path === state.chosen)) choose(null);
@@ -190,14 +194,19 @@ export function mountPictureList(root, { base = "", world = null, log = null } =
     function showView(id) {
         if (world && world.showView) world.showView(id);
     }
-    async function forget(path) {
+    // Not undoable: its button is pressed twice ("Again to forget"); a call without one
+    // was confirmed where it was asked.
+    async function forget(path, button = null) {
+        if (!again(button, "forget")) { say(`${path}: press again to forget it; its views are unpinned, every site's`); return; }
         await api(`/photos/pictures/${segs(path)}`, { method: "DELETE" });
         say(`forgot ${path}; its views are unpinned, every site's; pieces made from it stay`);
         if (world && world.changed) await world.changed();
         await load();
     }
-    // Purge kept: the ring's Pictures › Purge, which asks once.
-    async function purge() {
+    // Purge kept: the ring's Pictures › Purge, which the ring asks twice; its button
+    // here is pressed twice too.
+    async function purge(button = null) {
+        if (!again(button, "purge")) { say("press again to forget every picture the browser put here; the folder's own stay"); return null; }
         const gone = world && world.purge ? await world.purge() : null;
         await load();
         return gone;
@@ -224,7 +233,7 @@ export function mountPictureList(root, { base = "", world = null, log = null } =
         return kept;
     }
     $("pic-file").addEventListener("change", async (ev) => { await addFiles(ev.target.files); ev.target.value = ""; });
-    $("pictures-purge").onclick = () => purge().catch((e) => say(e.message, "bad"));
+    $("pictures-purge").onclick = () => purge($("pictures-purge")).catch((e) => say(e.message, "bad"));
 
     // --- the gathering, until it leaves core -----------------------------------------------
     function ticked() { return [...root.querySelectorAll("#pic-list input[type=checkbox]:checked")].map((i) => i.value); }

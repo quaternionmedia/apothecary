@@ -22,11 +22,14 @@
  * same digits onto the buttons it already has, so the numbering is visible
  * where the control is.
  *
- * Plain ES module, no build step, no dependencies. The pure parts (angle to
+ * Plain ES module, no build step; its one import is keys.js, how a key is named
+ * and when a shortcut may act. The pure parts (angle to
  * slot, nearest cell in a direction, addresses) are exported so a test can
  * compare them with the Python resolver's; the same four are on
  * window.apothecaryRing.
  */
+
+import { comboOf, matches, mayAct, typing } from "./keys.js";
 
 export const PLACEMENT = [8, 6, 2, 4, 9, 3, 1, 7];
 export const COMPASS = [8, 9, 6, 3, 2, 1, 4, 7]; // compass slot (up, clockwise) -> cell
@@ -196,6 +199,8 @@ const STYLE = `
 .apothecary-ring .wedge.destructive.hot { fill: #7a2a2a; }
 .apothecary-ring .wedge.marked { fill: #23384a; stroke: #6fb3e8; }
 .apothecary-ring .wedge.marked.hot { fill: #33557a; }
+.apothecary-ring .wedge.armed, .apothecary-ring .wedge.armed.hot { fill: #8a3a1a; stroke: #ffb27a; }
+.apothecary-ring .label.armed { fill: #ffe0c8; font-weight: 600; }
 .apothecary-ring .hub { fill: #141614; stroke: #3a443a; stroke-width: 1.5; cursor: pointer; }
 .apothecary-ring text { fill: #d8e0d8; pointer-events: none; user-select: none; }
 .apothecary-ring .label { font-size: 12px; text-anchor: middle; }
@@ -274,6 +279,7 @@ class RingInstance {
         this.address = "";
         this.highlight = null;
         this.lastArrow = null;
+        this.armed = null; // a cell chosen once that asks to be chosen again
         this.previousFocus = document.activeElement;
         this.done = false;
     }
@@ -336,14 +342,20 @@ class RingInstance {
                 if (option.destructive) cls.push("destructive");
                 if (option.marked) cls.push("marked");  // the one chosen elsewhere (a picture chosen in Pictures)
                 if (this.highlight === cell) cls.push("hot");
+                if (this.armed === cell) cls.push("armed");
             }
+            const armed = option && this.armed === cell;
             const label = option ? (option.marked ? "• " : "") + esc(option.label) + (option.children ? " ›" : "") : "";
+            // A cell that cannot be undone, chosen once, says what choosing it again does.
+            const words = armed
+                ? `<text class="label armed" x="${lx.toFixed(1)}" y="${(ly - 2).toFixed(1)}">again to<tspan x="${lx.toFixed(1)}" dy="13">${esc(option.label.toLowerCase())}</tspan></text>`
+                : `<text class="label" x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}">${label}</text>`;
             parts.push(
                 `<path id="ring-cell-${cell}" class="${cls.join(" ")}" data-cell="${cell}" role="menuitem"`
-                + ` aria-label="${option ? esc(option.label) : "empty"}"`
+                + ` aria-label="${option ? esc(armed ? `again to ${option.label.toLowerCase()}` : option.label) : "empty"}"`
                 + (option && option.marked ? ' aria-current="true"' : "")
                 + `${option ? "" : ' aria-disabled="true"'} d="${wedgePath(slot, r0, r1)}"></path>`
-                + (option ? `<text class="label" x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}">${label}</text>` : "")
+                + (option ? words : "")
                 + `<text class="digit${option ? "" : " empty-digit"}" x="${dx.toFixed(1)}" y="${(dy + 3).toFixed(1)}">${cell}</text>`
             );
         }
@@ -435,6 +447,15 @@ class RingInstance {
     commit(cell) {
         const option = this.byCell[cell];
         if (!option || option.enabled === false) return;
+        // Not undoable: chosen once it asks, its wedge saying "again to ..."; chosen
+        // again, it is done. Choosing any other cell lets the question go.
+        if (option.twice && this.armed !== cell) {
+            this.armed = cell;
+            this.highlight = cell;
+            this.draw();
+            return;
+        }
+        this.armed = null;
         this.address += String(cell);
         if (option.children) {
             this.stack.push({ ring: { title: option.label, options: option.children }, digit: String(cell) });
@@ -449,6 +470,7 @@ class RingInstance {
             address: this.address,
             context: this.context,
             label: option.label,
+            confirmed: !!option.twice, // asked twice, in the ring itself
             site: this.site,
             device: this.device,
             at: { x: this.cx, y: this.cy }, // where the ring stood, for one that follows from it
@@ -483,6 +505,7 @@ class RingInstance {
     // One level out; at the top, away.
     back() {
         if (this.stack.length <= 1) { this.close(false); return; }
+        this.armed = null;
         this.stack.pop();
         this.address = this.address.slice(0, -1);
         this.highlight = null;
@@ -505,17 +528,40 @@ class RingInstance {
 }
 
 // ---------------------------------------------------------------------------
-// The invokers: right-click, the m key, and a button
+// The invokers: the right button with a modifier, a long press, two keys, a button
 // ---------------------------------------------------------------------------
 
-const TYPING = (el) => !!el && (el.matches("input, textarea, select, [contenteditable]"));
+// The modifiers a right-click can be held with to open the ring, by the name a
+// person chooses them by, and the event's flag for each.
+export const MODIFIERS = { ctrl: "ctrlKey", alt: "altKey", shift: "shiftKey", meta: "metaKey" };
+export { comboOf };
 
-/* Bind the three ways in. `whatFor(event)` is the page's: given a contextmenu
- * event (or null for the key and the button) it says what the ring opens on --
- * {context, site, device, at} -- or null to leave the browser's own menu alone.
- * `onResolved(ring, spec)` fires after every resolve, for annotating the page.
+const STILL_PX = 4;       // a press let go within this of where it was pressed is still
+const LONG_PRESS_MS = 500; // a still touch held this long is the ring
+const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "");
+
+/* Bind the ways in. `whatFor(event, { opening, canvas })` is the page's: given a
+ * pointer event (or null for a key and the button) it says what the ring opens on
+ * -- {context, site, device, at} -- or null where the spot is the browser's.
+ * Asked with `opening` false it only says whose the spot is: "world" (the canvas,
+ * a badge: the browser's menu never shows there, and a plain right-click is the
+ * camera's), "page" (a Contents row, a Machine: a plain right-click is the
+ * browser's), or null. With `canvas` it answers the canvas ring, whatever is
+ * selected.
+ *
+ * The ring opens at the pointer on a still press and release of the right button
+ * held with `modifier` (ctrl, alt, shift or meta; on macOS Ctrl+click is a
+ * right-click), heard before anything under it -- the view's controls never see
+ * the press, so it never turns the view -- and by touch on a still long press, in
+ * the world and on a row. Pressed elsewhere, or moved, it opens nothing. `key`
+ * opens the ring on the selection and `canvasKey` the canvas ring, each a shortcut
+ * as keys.js names one, matched by the key or its position, and never while the
+ * focus takes the key (keys.js's mayAct). `onResolved(ring, spec)` fires after
+ * every resolve, for annotating the page. The keys and the modifier change at once
+ * with `configure({ key, canvasKey, modifier })`.
  */
-export function installRing({ base = "", whatFor, onIntent, onResolved, onError, button = "#ring-open", key = "m" }) {
+export function installRing({ base = "", whatFor, onIntent, onResolved, onError, button = "#ring-open", key = "m", canvasKey = "Shift+m", modifier = "ctrl" }) {
+    const bound = { key, canvasKey, modifier: MODIFIERS[modifier] ? modifier : "ctrl" };
     const open = async (spec, at) => {
         if (!spec) return null;
         try {
@@ -537,26 +583,99 @@ export function installRing({ base = "", whatFor, onIntent, onResolved, onError,
             return null;
         }
     };
-    const fromKeyboard = () => open(whatFor(null), { x: window.innerWidth / 2, y: window.innerHeight / 2 });
+    const middle = () => ({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+    const fromKeyboard = () => open(whatFor(null), middle());
 
     window.addEventListener("keydown", (e) => {
-        if (e.key !== key || e.ctrlKey || e.metaKey || e.altKey || isOpen()) return;
-        if (TYPING(document.activeElement)) return;
+        if (isOpen() || !mayAct(e)) return;
+        const canvas = matches(e, bound.canvasKey);
+        if (!canvas && !matches(e, bound.key)) return;
         e.preventDefault();
-        fromKeyboard();
+        open(whatFor(null, { canvas }), middle());
     });
-    document.addEventListener("contextmenu", (e) => {
-        if (isOpen() || TYPING(e.target)) return;
-        const spec = whatFor(e);
-        if (!spec) return;
+
+    // The ring's press: the right button held with the modifier (or, on macOS, Ctrl
+    // and the left button), on a spot of the page's; a touch, in the world or on a row.
+    const held = (e) => !!e[MODIFIERS[bound.modifier]];
+    function ringPress(e) {
+        if (e.pointerType === "touch") return e.isPrimary ? "touch" : null;
+        if (!held(e)) return null;
+        if (e.button === 2) return "click";
+        if (e.button === 0 && MAC && bound.modifier === "ctrl") return "click";
+        return null;
+    }
+    let pressed = null;
+    // How far a press has gone: one that wandered and came back is a drag, not a click.
+    const moved = (e, p) => Math.max(p.far || 0, Math.hypot(e.clientX - p.x, e.clientY - p.y)) > STILL_PX;
+    const letGo = () => { if (pressed && pressed.timer) clearTimeout(pressed.timer); pressed = null; };
+    document.addEventListener("pointerdown", (e) => {
+        letGo();
+        if (isOpen()) return;
+        const kind = ringPress(e);
+        if (!kind) return;
+        const spot = whatFor(e, { opening: false });
+        if (!spot) return;
+        if (kind === "touch") {
+            // A touch is the view's until it has stood still long enough; a Machine's
+            // text is the browser's to select.
+            if (spot !== "world" && !e.target.closest(".contents-item")) return;
+            pressed = { kind, id: e.pointerId, x: e.clientX, y: e.clientY, event: e, fired: false };
+            const p = pressed;
+            p.timer = setTimeout(() => {
+                if (pressed !== p) return;
+                p.fired = true;
+                open(whatFor(p.event), { x: p.x, y: p.y });
+            }, LONG_PRESS_MS);
+            return;
+        }
+        // Heard first, so the view's controls never take it for a turn.
         e.preventDefault();
-        open(spec, { x: e.clientX, y: e.clientY });
+        e.stopImmediatePropagation();
+        pressed = { kind, id: e.pointerId, x: e.clientX, y: e.clientY, event: e };
+    }, true);
+    document.addEventListener("pointermove", (e) => {
+        if (!pressed || e.pointerId !== pressed.id) return;
+        pressed.far = Math.max(pressed.far || 0, Math.hypot(e.clientX - pressed.x, e.clientY - pressed.y));
+        if (pressed.kind === "touch" && !pressed.fired && moved(e, pressed)) letGo();
+    }, true);
+    document.addEventListener("pointerup", (e) => {
+        if (!pressed || e.pointerId !== pressed.id) return;
+        const p = pressed;
+        pressed = null;
+        if (p.timer) clearTimeout(p.timer);
+        if (p.kind === "touch") {
+            // The ring opened under the finger: lifting it is no tap.
+            if (p.fired) { e.preventDefault(); e.stopImmediatePropagation(); }
+            return;
+        }
+        e.stopImmediatePropagation();
+        if (moved(e, p)) return;
+        open(whatFor(p.event), { x: p.x, y: p.y });
+    }, true);
+    document.addEventListener("pointercancel", () => letGo(), true);
+    // The browser's own menu: never over the world, nor where the ring was asked for
+    // (the modifier held, or a long press under way); anywhere else it is the browser's.
+    document.addEventListener("contextmenu", (e) => {
+        if (isOpen()) { e.preventDefault(); return; }
+        if (typing(e.target)) return;
+        const spot = whatFor(e, { opening: false });
+        if (!spot) return;
+        if (spot === "world" || held(e) || (MAC && bound.modifier === "ctrl" && e.ctrlKey) || (pressed && pressed.kind === "touch")) e.preventDefault();
     });
     const btn = typeof button === "string" ? document.querySelector(button) : button;
     if (btn) btn.addEventListener("click", () => { if (isOpen()) close(); else fromKeyboard(); });
 
     const api = {
         open: (spec, at) => open(spec, at),
+        /* The keys and the modifier, changed: at once, for the next press. */
+        configure({ key: nextKey, canvasKey: nextCanvasKey, modifier: nextModifier } = {}) {
+            if (typeof nextKey === "string" && nextKey) bound.key = nextKey;
+            if (typeof nextCanvasKey === "string" && nextCanvasKey) bound.canvasKey = nextCanvasKey;
+            if (MODIFIERS[nextModifier]) bound.modifier = nextModifier;
+            return { ...bound };
+        },
+        bound: () => ({ ...bound }),
+        comboOf,
         close,
         isOpen,
         nearest,

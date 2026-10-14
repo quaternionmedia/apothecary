@@ -67,7 +67,7 @@ def _row(page: Page, path: str):
 
 
 def _ring_on(page: Page, path: str) -> None:
-    _row(page, path).click(button="right")
+    _row(page, path).click(button="right", modifiers=["Control"])
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
 
 
@@ -230,8 +230,8 @@ def test_the_headers_docs_and_panels_docs_open_the_docs_and_the_walkthrough(page
     _open(page, url)
     docs = page.locator("#docs-link")
     expect(docs).to_be_visible()
-    expect(docs).to_have_attribute("data-address", "91", timeout=15000)
-    expect(docs).to_have_attribute("title", re.compile(r"Panels › Docs.* · ⌗91$"))
+    expect(docs).to_have_attribute("data-address", "41", timeout=15000)
+    expect(docs).to_have_attribute("title", re.compile(r"Panels › Docs.* · ⌗41$"))
     tops = page.evaluate(
         "() => [...document.querySelectorAll('.toolbar > *')]"
         ".filter((el) => el.getBoundingClientRect().width > 0)"
@@ -418,7 +418,7 @@ def test_a_printers_pin_asks_an_idle_board_once_what_it_is(page: Page, url: str)
     expect(machine.locator("#ident")).to_contain_text("Marlin Apothecary Simulator", timeout=8000)
     page.evaluate("() => window.fractalViewer.closeMachine()")
     unpin = section.locator(".dev-unpin")
-    expect(unpin).to_have_attribute("data-address", "29", timeout=8000)  # Device › Unpin
+    expect(unpin).to_have_attribute("data-address", "79", timeout=8000)  # Device › Unpin
     unpin.click()
     _said(page, f"printer_1's board {BOARD}: device unpinned")
     assert _pins(page, url) == {}

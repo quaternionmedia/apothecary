@@ -13,7 +13,7 @@ Apothecary builds 3D-printable things from Python and keeps the parts it has bui
   sites, assemblies and parts at any depth, its walls drawn faded so a click passes through
   them to what is inside, with one rail beside it -- **Site** (the tree, its problems, its SCAD, every pin
   and the site's jobs) and **Selected** stacked over a strip of tabs, **Pictures**, the
-  **Bench** and a docked **Machine**. The ring (`m`, or a right-click) reaches every one of
+  **Bench**, **Settings** and a docked **Machine**. The ring (`m`, or Ctrl+right-click) reaches every one of
   them by address, and the header's **⚙ View** menu says how the world is drawn. A part's
   **Part › Edit** opens its parameters and its SCAD in Selected: a size moved is checked and
   applied as a variant drawn in its own tab, and an edited SCAD is checked as it is typed,
@@ -105,7 +105,7 @@ uv run apothecary photo view examples/shapes.png --width-mm 300 --port 8001   # 
 ```
 
 In the viewer, a picture is taken by a camera, a part of the site. Select a structure (the
-bench, say) and open its ring -- `m`, or a right-click on it -- then Camera › Add here: a
+bench, say) and open its ring -- `m`, or Ctrl+right-click on it -- then Camera › Add here: a
 camera stands above the bench, looking straight down, selected. On the camera's own ring,
 Device › Allow asks the browser once, and with one camera it is the camera's device at once.
 Take picture -- on its ring, in Selected, or `P` -- keeps a frame that lies on the bench

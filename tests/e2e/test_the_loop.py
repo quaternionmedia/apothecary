@@ -93,8 +93,10 @@ def _open_garage(page, base_url: str) -> None:
 
 
 def _ring_on(page, path: str) -> None:
-    """The node ring on a piece, as a right-click on its row in Contents opens it."""
-    page.locator(f"#contents-list .contents-item[data-path='{path}']").click(button="right")
+    """The node ring on a piece, as a Ctrl+right-click on its row in Contents opens it."""
+    page.locator(f"#contents-list .contents-item[data-path='{path}']").click(
+        button="right", modifiers=["Control"]
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
 
 
@@ -365,7 +367,8 @@ def test_the_loop_at_the_bench_from_the_ring(page, base_url: str, leaves_garage_
     _ring_on(page, piece)
     _press(page, "Picture")
     assert _labels(page) == ["Word", "Drop"]
-    _press(page, "Drop")
+    # It cannot be undone: the wedge asks again, and the ring waits for it.
+    _press(page, "Drop", "again to drop")
     page.wait_for_function(
         "() => Object.keys(window.apothecaryPictures.attached().made || {}).length === 0",
         timeout=10000,
@@ -376,7 +379,7 @@ def test_the_loop_at_the_bench_from_the_ring(page, base_url: str, leaves_garage_
 
     # Forget: the kept frame goes, its view with it.
     _ring_on(page, "workbench")
-    _press(page, "Picture", "Forget")
+    _press(page, "Picture", "Forget", "again to forget")
     _said(page, f"forgot {view['picture']}")
     kept = {p["path"] for p in page.request.get(f"{base_url}/photos/pictures").json()}
     assert view["picture"] not in kept

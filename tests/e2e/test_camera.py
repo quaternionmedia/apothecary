@@ -177,7 +177,7 @@ def test_a_camera_added_at_the_bench_takes_pictures_where_it_looks(
     # Take picture, three ways: its ring's cell, Selected's button, and P.
     _ring_on(page, name)
     assert _labels(page) == [
-        "Zoom in",
+        "Step in",
         "Move",
         "Why this",
         "Device",
@@ -236,7 +236,7 @@ def test_a_camera_added_at_the_bench_takes_pictures_where_it_looks(
 
     # Remove: the camera goes, its pictures stay, and so does the page.
     _ring_on(page, name)
-    _press(page, "Remove")
+    _press(page, "Remove", "again to remove")
     _said(page, f"removed {name}; the pictures it took, and the pieces made from them, stay")
     expect(badge).to_have_count(0, timeout=5000)
     expect(page.locator(f"#contents-list .contents-item[data-path='{name}']")).to_have_count(0)
@@ -289,7 +289,7 @@ def test_a_camera_removed_from_sites_pinned_leaves_the_tree_and_the_world(
     expect(badge).to_have_count(0, timeout=5000)
     assert page.evaluate(MESH, name) is None
     assert page.evaluate("() => window.fractalViewer.selectedName") is None
-    expect(page.locator("#selected-body")).to_contain_text("Click a node to select it")
+    expect(page.locator("#selected-body")).to_contain_text("Click a piece to select it")
     expect(pinned.locator("#pinned-list")).to_contain_text("none pinned")
     assert page.request.get(f"{base_url}/sites/garage/cameras/{name}").status == 404
     assert page.url == url and loads == [], loads
@@ -526,7 +526,9 @@ def test_gather_says_what_it_refused_and_what_it_set_aside(
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
     # The canvas ring's Pictures › Gather opens Pictures with its gathering section
     # unfolded and gathers what is ticked: nothing yet, which it refuses.
-    page.locator("#viewer-canvas").click(button="right", position={"x": 8, "y": 8})
+    page.locator("#viewer-canvas").click(
+        button="right", modifiers=["Control"], position={"x": 8, "y": 8}
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press(_cell(page, "Pictures"))
     page.wait_for_function(
