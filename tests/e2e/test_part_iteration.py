@@ -4,7 +4,8 @@ beside each slider, round steps, choices, groups, captions, captioned vectors,
 units where a field declares one), the focus kept after Apply, OpenSCAD's keys in the
 SCAD editor and the browser's outside it, the staged numbers' undo and redo by key,
 button and ring, a variant drawn where it stands, the ghost of what was drawn before,
-framing the part being edited, and a render of older SCAD saying so.
+framing the part being edited, a render of older SCAD saying so, and a part's
+section holding what the server answered while Selected was drawn without it.
 
 What the server does not say yet -- a unit, an integer, a customizer's step, a choice
 or a vector on a model part -- is said to the page here by answering its read of the
@@ -451,3 +452,42 @@ def test_a_render_of_older_scad_says_so_and_leaves_the_newer_check_marked(
     expect(page.locator(".scad-said")).to_contain_text("Not rendered until it reads")
     expect(page.locator(".cm-lintRange-error")).to_have_count(1)
     assert re.search(rf"[?&]variant={PART}", page.url)
+
+
+# --- what a section reads while Selected is drawn without it ----------------------------
+
+
+@pytest.mark.e2e
+def test_a_part_selected_again_after_a_double_click_shows_what_its_section_read(
+    page: Page, url, cube_as_it_was
+):
+    """A double-click on a part's row selects it, steps in and draws Selected with nothing
+    selected; a click selects it again, and its section is put in Selected as it was.
+    What the server answered between -- the part's readiness, its size, its controls --
+    is in the section then. The server's answers are held here until the double-click
+    has drawn Selected empty, so they land while the section is out of the page."""
+    _open(page, url)
+    held, holding = [], [True]
+
+    def hold(route):
+        if holding[0]:
+            held.append(route)
+        else:
+            route.continue_()
+
+    page.route(f"**/parts/{PART}/**", hold)
+    row = page.locator(f"#contents-list .contents-item[data-path='{PART}']")
+    with page.expect_request(lambda r: f"/parts/{PART}/checklist" in r.url):
+        row.dblclick()
+    expect(page.locator("#selected-body .no-selection")).to_be_visible()
+    holding[0] = False
+    with page.expect_response(lambda r: f"/parts/{PART}/checklist" in r.url):
+        for route in held:
+            route.continue_()
+    page.evaluate("() => window.fractalViewer.scadLoading")
+    page.evaluate("() => window.fractalViewer.editorLoading")
+    row.click()
+    section = page.locator(f".part-editor[data-target='part:{PART}']")
+    expect(section.locator("#part-checklist .verdict")).to_be_visible()
+    expect(section.locator("#part-envelope .measured")).to_contain_text("measured")
+    expect(section.locator("#part-params .param")).not_to_have_count(0)
