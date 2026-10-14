@@ -20,7 +20,7 @@ from viewer_ready import UNDER_THE_STAGE_BAR, by_hand
 @pytest.mark.docs
 def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     """Zoom from the garage's Structures down to a Feature, then switch to
-    the parts library and zoom to a part -- the absorbed part view.
+    the parts library and zoom to a part, its SCAD in Selected's editor.
     """
     page.request.post(f"{base_url}/sites/garage/reset")
 
@@ -152,4 +152,4 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     # Its heading just under the stage bar, the source below it: the bar stands over the
     # top of Selected as it scrolls, and would cover the words above the heading.
     scad.evaluate(f"(el) => ({UNDER_THE_STAGE_BAR})(el.previousElementSibling)")
-    docs.step("Select a part leaf -- its real SCAD source is the absorbed part view")
+    docs.step("Select a part leaf -- its SCAD, in the editor under its parameters in Selected")

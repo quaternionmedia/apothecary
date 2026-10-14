@@ -34,6 +34,7 @@ import stat
 import sys
 
 import pytest
+from doc_capture import moments
 from playwright.sync_api import Page, expect
 from viewer_ready import (
     MARKED_LINE_FIRST,
@@ -907,6 +908,7 @@ def test_designing_a_part_twice_round(
             "the cache of variants, nothing rendered, its text and its numbers what is "
             "drawn; f frames it.",
             shown=again,
+            blank=moments("#part-history-list"),
         ),
     )
 

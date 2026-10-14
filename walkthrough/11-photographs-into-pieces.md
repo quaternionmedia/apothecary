@@ -1,15 +1,18 @@
 # 11 — Photographs into pieces you could print
 
-**This page is written by the run it describes.** Every sentence below
-was emitted by a test that had just asserted it, and the whole page is
-rewritten by the ordinary test command. Editing it by hand is editing
-the output of a program: the next run puts it back.
+Written by `tests/e2e/test_docs_photo_walkthrough.py`, and
+rewritten by the ordinary test command (`uv run apothecary test run`).
+Each numbered step is written as the run reaches it, after the assertions
+before it pass, and what a step shows is what the run had then. The
+opening, the notes under it and the list of what the page does not show
+are the test's fixed words. Editing the page by hand is editing the output
+of a program: the next run puts it back.
 
-Point the tool at a photograph. It finds the flat shapes in it, matches each one to a named, reusable word, places them in space, sorts a folder of them into what belongs with what, asks you the questions it cannot settle, and shows the result in the viewer it already had. Nothing claims to be measured unless somebody said how wide the picture is.
+Point the tool at a photograph. It finds the flat shapes in it, matches each one to a named, reusable word, places them in space, sorts a folder of them into what belongs with what, asks you the questions it cannot settle, and shows the result in the viewer. Nothing claims to be measured unless somebody said how wide the picture is.
 
-**Runtime-bound.** It draws its own photographs and reads them back, then walks the same pieces in a real browser against a real server. It needs no network. It does need a browser and a running server, which is the price of this page and the viewer's page being one page.
+**Runtime-bound.** It draws its own photographs and reads them back, then walks the same pieces in a real browser against a real server. It needs no network. Its second half needs a browser and a running server.
 
-Its pictures were taken once every part's STL that OpenSCAD version 2021.01, the OpenSCAD its server runs, can build was built by it; a part it cannot build is drawn from an STL already there, or as its box.
+Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its server runs, can build from an STL it built; a part it cannot build is drawn from an STL already there, or as its box.
 
 ---
 
@@ -31,7 +34,7 @@ x from 0.754 to 0.918, y from 0.141 to 0.362
 
 ## 3. Each shape gets a name, and says how sure it is
 
-A word is a recipe that builds an ordinary piece, so a named shape is something the rest of the tool already knows how to handle. The confidence is never rounded up. It is measurably lower when the finder is wrong, which is what makes it worth reporting at all.
+A word is a recipe that builds an ordinary piece, so a named shape is something the rest of the tool already knows how to handle. The confidence is the finder's own, and the plain finder never gives more than 0.8: how much of its box a blob fills is a guess at its shape, never a certainty.
 
 ```
 plate, 0.64 sure
@@ -66,7 +69,7 @@ same0_a and same0_b: the same thing, because 4 matching shapes line up under one
 
 ## 7. You are better at this than it is, so it asks
 
-It works out which questions are worth a minute, best first, by how many other pairs an answer would settle. A person answers in plain sentences, and the whole language is five of them.
+It works out which questions are worth a minute, best first, by how many other pairs an answer would settle. A person answers in plain sentences, each ending in one of the verdicts: 'the same thing', 'parts of one thing', 'not related', 'not worth using', 'worth using anyway'.
 
 ```
 Are apart0_a and blankset_a photographs of the same thing?
@@ -105,11 +108,11 @@ words: disc, plate, slot, wedge
 sized: True
 ```
 
-## 12. The arrangement opens in the viewer the tool already had
+## 12. The arrangement opens in the viewer
 
-No drawing code was written for any of this. An arrangement built from a photograph is an ordinary arrangement, so the viewer already knew how to show it.
+An arrangement built from a photograph is an ordinary arrangement, drawn as any site is, each piece as its word builds it: a wedge is a triangle in the world, as the picture's was.
 
-![The arrangement opens in the viewer the tool already had](screenshots/11-12-the-arrangement-opens-in-the-viewer-the-tool-alrea.png)
+![The arrangement opens in the viewer](screenshots/11-12-the-arrangement-opens-in-the-viewer.png)
 
 ## 13. Every piece is listed, named for the word it was matched to
 
@@ -137,14 +140,6 @@ Its word and why, the finder that saw it ('plain'), how sure it was (0.67), and 
 ## 16. And it forgets on request
 
 The picture it was all built from is served beside the arrangement while the arrangement exists, and both go when the arrangement is forgotten.
-
-## 17. What the whole thing costs a person
-
-The census counts the controls the viewer puts on screen of its own, because a tool that is pleasant to demonstrate and expensive to use is neither. Unifying means it reaches nothing rather than a smaller pile.
-
-```
-161 controls of the viewer's own
-```
 
 ## What this page does not show
 
