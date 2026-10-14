@@ -176,6 +176,21 @@ def test_listeners_hear_a_job_begin_and_end():
     assert heard == [(job.id, "running"), (job.id, "done")]
 
 
+def test_two_jobs_begun_in_one_millisecond_on_one_port_are_both_kept(_a_state_folder_of_its_own):
+    """A job's id is when it started, to the millisecond, and its port. A second job begun
+    in the same millisecond takes that id with -2 after it, keeps it to its end, and the
+    first job's record is not written over."""
+    first = _run(_job(input=jobs.JobInput(name="first.gcode")))
+    second = _run(_job(input=jobs.JobInput(name="second.gcode")), "cancelled")
+    assert first.started_at == second.started_at
+    assert sorted(j.input.name for j in jobs.list_jobs()) == ["first.gcode", "second.gcode"]
+    assert first.id == "20261003T120000.000-dev_ttyUSB0" and second.id == f"{first.id}-2"
+    kept = {j.id: (j.input.name, j.outcome) for j in jobs.list_jobs()}
+    assert kept == {first.id: ("first.gcode", "done"), second.id: ("second.gcode", "cancelled")}
+    files = {p.name for p in (_a_state_folder_of_its_own / "jobs").glob("*.json")}
+    assert files == {f"{first.id}.json", f"{second.id}.json"}
+
+
 def _old_record(folder, rid, port, name, file_id, at, outcome, sent, total, error=None):
     folder.mkdir(parents=True, exist_ok=True)
     (folder / f"{rid}.json").write_text(
