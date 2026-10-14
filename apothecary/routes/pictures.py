@@ -44,6 +44,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, field_validator
 
 from ..gathering.looking import PICTURE_SUFFIXES
+from ..stamped import claim, stamp
 
 router = APIRouter(tags=["photos"])
 
@@ -70,10 +71,12 @@ def _kept_as(path: Path, root: Path) -> Optional[str]:
 
 
 # A frame a camera part took is named for the moment and for its camera:
-# ``20261004T120000.123-garage--camera_1.png``. The name is how Pictures knows a
-# picture's camera after the views that also say so are gone (a restart).
+# ``20261004T120000.123-garage--camera_1.png``, or ``…camera_1-2.png`` for a second
+# frame in the same millisecond (``apothecary/stamped.py``). The name is how Pictures
+# knows a picture's camera after the views that also say so are gone (a restart).
 TAKEN_BY = re.compile(
-    r"^\d{8}T\d{6}\.\d{3}-(?P<site>[A-Za-z0-9][A-Za-z0-9_-]*?)--(?P<camera>[A-Za-z0-9_]+)\.\w+$"
+    r"^\d{8}T\d{6}\.\d{3}-(?P<site>[A-Za-z0-9][A-Za-z0-9_-]*?)--(?P<camera>[A-Za-z0-9_]+)"
+    r"(?:-\d+)?\.\w+$"
 )
 
 
@@ -164,16 +167,6 @@ def _private(folder: Path) -> Path:
     return folder
 
 
-def _unused(folder: Path, stem: str, suffix: str) -> Path:
-    """``stem.suffix`` in the folder, or ``stem-2.suffix``, ``stem-3.suffix``… if taken."""
-    path = folder / f"{stem}{suffix}"
-    n = 2
-    while path.exists():
-        path = folder / f"{stem}-{n}{suffix}"
-        n += 1
-    return path
-
-
 async def _picture_body(request: Request) -> bytes:
     """The picture the request carries, read no further than the limit: a body
     that says it is too large is refused before a byte of it is read, and one
@@ -252,12 +245,12 @@ def keep_picture(
     stem = re.sub(r"-{2,}", "-", re.sub(r"[^A-Za-z0-9_-]+", "_", Path(name).stem)).strip("_")[:60]
     if pinning and camera is not None and kept == "capture":
         stem = f"{site}--{camera}"
+    # A name of its own, never another picture's: ``-2``, ``-3``… after it when taken.
     if kept == "upload":
-        path = _unused(_private(root / UPLOADS), stem or "picture", suffix)
+        path = claim(_private(root / UPLOADS), stem or "picture", suffix)
     else:
         at = datetime.now(timezone.utc)
-        stamp = f"{at:%Y%m%dT%H%M%S}.{at.microsecond // 1000:03d}"
-        path = _private(root / CAPTURES) / f"{stamp}-{stem or 'capture'}{suffix}"
+        path = claim(_private(root / CAPTURES), f"{stamp(at)}-{stem or 'capture'}", suffix)
     path.write_bytes(data)
     entry = _entry(path, root)
     from ..vision.views import store
