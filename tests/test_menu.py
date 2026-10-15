@@ -888,7 +888,7 @@ def test_the_canvas_ring_lists_the_pieces_at_this_level_and_the_way_out():
     assert labels[0] == "Pieces" and "Step out" not in labels
     pieces = root.options[0]
     assert pieces.cell == 8 and pieces.children is not None
-    # Thirteen pieces in the garage: two lettered groups, nothing lost.
+    # Every piece of the garage, in lettered groups, nothing lost.
     names = sorted(c.name for c in _garage().children)
     leaves = [leaf for group in pieces.children for leaf in group.children]
     assert [leaf.action for leaf in leaves] == [f"select:{n}" for n in names]
@@ -1999,8 +1999,9 @@ def test_make_make_all_drop_and_a_made_pieces_word_are_the_servers_and_the_rest_
 
 
 def test_the_camera_panels_retired_cells_are_off_every_ring():
-    """Allow, Capture, Place, Unplace and Open as one left with the camera panel's
-    sections: the camera is pinned and takes pictures from its host's Camera."""
+    """The canvas ring and a host's ring offer no camera Allow, Capture, Place, Unplace,
+    Open, Add or Purge: a camera is a part, added above a host by its Camera › Add
+    here, and Device › Allow and Take picture are on the camera's own ring."""
     rings = [
         resolve(Context(pointing=Pointing.CANVAS), _garage(), picture=_context()),
         resolve(

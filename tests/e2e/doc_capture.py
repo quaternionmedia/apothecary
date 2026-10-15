@@ -1,13 +1,14 @@
-"""Step-by-step screenshot + manifest capture for E2E doc-workflow tests.
+"""Screenshots, manifests and pages written by the browser tests that document.
 
-Only active when pytest runs with ``--generate-docs`` (see conftest.py's
-``doc_recorder`` fixture) -- a normal test run (including CI's
-``apothecary test all``) never touches the filesystem here, so the docs
-pipeline stays "on demand" rather than a side effect of every test run.
+Two recorders. ``DocRecorder`` captures a doc workflow's screenshots and manifest
+under ``docs/generated/`` only when pytest runs with ``--generate-docs`` (see
+conftest.py's ``doc_recorder`` fixture); without it, it writes nothing, so those
+docs are made on demand. ``apothecary docs generate`` (apothecary/cli/docs.py) runs
+the tests marked ``docs`` and turns the manifests into Markdown and GIFs.
 
-``apothecary docs generate`` (apothecary/cli/docs.py) is what actually runs
-the flagged tests and turns the manifests this module writes into Markdown
-+ GIFs.
+``Walkthrough``, below, writes its walkthrough page and that page's screenshots on
+every run of the test that holds it, ``--generate-docs`` or not (conftest.py's
+``walkthrough`` fixture).
 """
 
 from __future__ import annotations

@@ -216,8 +216,8 @@ def test_an_installed_snapshot_is_not_fetched_again_unless_forced(tools):
         (
             "Windows",
             "ARM64",
-            "Windows on ARM is not supported yet (a planned item); set APOTHECARY_OPENSCAD "
-            "to an OpenSCAD you installed",
+            "Windows on ARM is not supported: files.openscad.org publishes no ARM64 Windows "
+            "build; set APOTHECARY_OPENSCAD to an OpenSCAD you installed",
         ),
         ("Linux", "riscv64", "APOTHECARY_OPENSCAD"),
         ("Plan9", "mips", "Plan9"),
@@ -625,7 +625,9 @@ def test_windows_on_arm_is_refused_even_from_an_emulated_python(tools, windows, 
     # An x64 Python on an ARM64 PC says AMD64; the hardware is asked instead.
     monkeypatch.setattr(oi, "_windows_native_machine", lambda: "arm64")
     host = Host()
-    with pytest.raises(oi.InstallError, match=r"Windows on ARM is not supported yet \(a planned"):
+    with pytest.raises(
+        oi.InstallError, match=r"Windows on ARM is not supported: files\.openscad\.org"
+    ):
         _install(host)
     assert host.urls == []
 

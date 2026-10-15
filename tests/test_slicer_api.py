@@ -366,7 +366,7 @@ def test_slicer_slice_reaches_a_made_piece_through_the_running_server(
     fake_orcaslicer, garage, monkeypatch
 ):
     """`apothecary slicer slice SITE/PATH` asks the server on this machine, as the page
-    will: a made piece lives in its memory. Its log arrives as the task runs."""
+    does: a made piece lives in its memory. Its log arrives as the task runs."""
     import click
     from click.testing import CliRunner
 
