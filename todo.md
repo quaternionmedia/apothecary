@@ -48,9 +48,10 @@ Decided, not started. Each waits on what its line names.
   ([the governance plan](docs/plans/governance-2026-10-13.md)). It ends, and the
   gate is built, at the first of: a second Rust sketch, a crate or a vendored
   library outside the allowlist, or the corpus's own gate for them.
-- The hidden command stubs (`system`, `install`, `testrun`, `dev`,
-  `inventory`, `submodules`, `photo look`) are removed one release after they
-  were hidden.
+- The hidden command stubs `apothecary/cli/retired.py` makes (`system`,
+  `install`, `testrun`, `dev`, `inventory`, `submodules`, `photo look`,
+  `test setup-e2e`, `test validate-e2e`, `test run-e2e`) are removed one
+  release after they were hidden.
 
 ## For a person to decide
 

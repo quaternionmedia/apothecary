@@ -128,7 +128,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 - `apothecary parts render` refuses to write over the part's own source file. ([code](apothecary/cli/parts.py))
 
-## [0.1.0] - 2026-01-02
+## [0.1.0]
 
 ### Added
 

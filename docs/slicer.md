@@ -112,7 +112,7 @@ uv run apothecary slicer slice garage/disc_1               # a made piece, throu
 ```
 
 A piece made from a picture lives in the running server's memory, so
-`apothecary slicer slice SITE/PATH` asks that server, as the page will: it
+`apothecary slicer slice SITE/PATH` asks that server, as the page does: it
 posts to the slice route and echoes the task's log as it arrives. No command
 finds a running server for itself, so it asks the one at `apothecary serve`'s
 own address, 127.0.0.1:8000, unless `--host` and `--port` name another, on

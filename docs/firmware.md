@@ -64,7 +64,8 @@ Every arduino-cli the seam starts gets `--config-file
 named package indexes only. Its environment carries no proxy variable and no
 `ARDUINO_*` override, and `~/.arduino15/arduino-cli.yaml` is not read;
 `apothecary firmware validate` names the file in use. The record is *Personal
-data stays on the device, by construction* (`governance/qm/adr/`).
+data stays on the device, by construction*, a draft proposed for
+`governance/qm/adr/` in [qm#121](https://github.com/quaternionmedia/qm/pull/121).
 
 On Linux the serial port must be writable by your user: usually
 `sudo usermod -aG dialout $USER` and a new login.
@@ -512,7 +513,8 @@ release, reconnect, reset or upload on that port are refused. **Cancel** and
 a failed line send the safe-off (`M104 S0`, `M140 S0`, `M107`, `M84`); E-STOP
 ends the job with nothing more sent. It is not a queue or a webcam, and the
 slicing is OrcaSlicer's, behind the slicer's own seam; the *G-code printer
-seam* record's sixth decision draws that line.
+seam* record draws that line: a host for one print at a time, and no more
+than that.
 
 ### A print is a job
 
@@ -634,6 +636,6 @@ pictures it takes as it goes; the browser suite alone runs it.
 is the seam against a real Ender mainboard, with a checklist for what needs
 control armed.
 
-The decision records are *Firmware toolchain seam* and *G-code printer seam*
-in `governance/qm/adr/`; the toolchain modules extend the first
-([rust-2026-10-08.md](plans/rust-2026-10-08.md)).
+The decision records are *Firmware toolchain seam*, whose toolchains are the
+modules above, and *G-code printer seam*, drafts proposed for
+`governance/qm/adr/` in [qm#121](https://github.com/quaternionmedia/qm/pull/121).
