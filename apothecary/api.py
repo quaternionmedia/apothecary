@@ -35,6 +35,7 @@ from . import jobs
 from .core import OpenSCADObject
 from .datum_core_site import create_datum_core_site, validate_datum_core
 from .docs_site import router as docs_router
+from .echs_pac_site import create_echs_pac_site, load_echs_rig, validate_echs_pac, venue_present
 from .example_hierarchy import (
     PRINTER_STATUSES,
     create_example_site,
@@ -87,8 +88,10 @@ from .projects.parts.variants import (
 )
 from .projects.parts.variants import wants as request_wants
 from .projects.registry import ProjectInfo, _sanitize_module_name, scan_projects
+from .routes import lighting as lighting_routes
 from .routes.cameras import router as cameras_router
 from .routes.jobs import router as jobs_router
+from .routes.lighting import router as lighting_router
 from .routes.part_edits import router as part_edits_router
 from .routes.pictures import router as pictures_router
 from .routes.views import router as views_router
@@ -167,7 +170,9 @@ async def lifespan(app: FastAPI):
     # Startup
     stl_task = asyncio.create_task(_generate_missing_stls_in_background())
     app.state.stl_generation_task = stl_task  # keep a strong reference (asyncio GC gotcha)
+    lighting_routes.start_console_feeds()
     yield
+    lighting_routes.stop_console_feeds()
     # Shutdown: don't leave a render subprocess dangling if we're still generating
     if not stl_task.done():
         stl_task.cancel()
@@ -217,6 +222,7 @@ app.include_router(jobs_router)
 app.include_router(slicer_router)
 # A part's SCAD edited: drafts checked and rendered, and saves as variants in git.
 app.include_router(part_edits_router)
+app.include_router(lighting_router)
 THREE_DIR = STATIC_ROOT / "vendor" / "three"
 THREE_IS_VENDORED = (THREE_DIR / "three.module.js").is_file()
 
@@ -830,8 +836,11 @@ _site_store = SiteStore(
         "garage": (create_example_site, validate_garage_layout),
         "parts_library": (create_parts_library_site, validate_parts_library),
         "datum_core": (create_datum_core_site, validate_datum_core),
+        # Only where the venue's export is on this machine; see echs_pac_site.py.
+        **({"echs_pac": (create_echs_pac_site, validate_echs_pac)} if venue_present() else {}),
     }
 )
+lighting_routes.RIG_LOADERS["echs_pac"] = load_echs_rig
 # The site /viewer opens on. Named rather than "whichever sorts first", so that
 # registering a new site cannot silently move the front door.
 DEFAULT_VIEWER_SITE = "garage"
