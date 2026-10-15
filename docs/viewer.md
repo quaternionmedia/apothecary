@@ -4,8 +4,8 @@
 through a site's tree at any depth, with one rail of panels beside it and a
 ring that holds every verb by address. This page describes the page's own
 controls as they are. The loops through them are walkthrough pages
-[13](../walkthrough/13-a-picture-to-a-print.md) to
-[16](../walkthrough/16-editing-a-parts-scad.md); boards and printers are in
+[03](../walkthrough/03-a-picture-to-a-print.md) to
+[06](../walkthrough/06-editing-a-parts-scad.md); boards and printers are in
 [firmware.md](firmware.md), the slicer in [slicer.md](slicer.md).
 
 | Address | Opens |
@@ -24,6 +24,10 @@ Left to right, one row:
 - **The site drop-down** loads another site and puts it in the address,
   `/viewer/sites/<name>`, so a reload or a link lands on it and Back returns
   to the one before; the old site's focus, Machine and variants stay with it.
+  The drop-down, Site in the canvas ring, a link and Back are the only ways
+  the site on screen changes: no other verb switches it as a side effect. A
+  picture's view or a take-back in another site names that site and leaves the
+  screen where it is.
 - **The breadcrumb**: the site, then each piece you have stepped into. A crumb
   steps out to its level; Page Up or Backspace steps out one.
 - **⚙ View**: how the world is drawn ([below](#how-the-world-is-drawn)), and
@@ -82,7 +86,10 @@ before the view so it never turns it.
 **Stepping in** goes into the piece named -- the one double-clicked, or the
 ring's -- else the selection, else what the middle of the view shows, walls
 passed through as a click passes them; as deep as it is drawn. The status line
-says which, and why. Stepping out lands on the piece left, selected.
+says which, and why. Stepping out lands on the piece left, selected. Inside a
+piece the world draws what it holds, not the piece: stepped into a printer, its
+board and its posts are drawn, and its body is the picture at the level above.
+A piece that holds nothing is drawn itself.
 
 **Automatic zoom** is the wheel's step: once the camera is as near the level's
 pieces as it may come, or as far out, more scrolling the same way adds up, and
@@ -202,8 +209,9 @@ expand it, as its chip in Site does; 7 when stepped in, 1 at the top).
 pieces it holds: a digit selects one), then what the piece is:
 
 - a structure that stands on its own footprint, a host: **Camera** › Add here,
-  and **Picture** › Add, Folder, Views, Make, Size, Unpin, Forget, Find shapes;
-  Add here selects the camera it added, and Make the piece it made;
+  and **Picture** › Add, Folder, Views, Make, Size, Unpin, Forget, Find shapes
+  ([pictures.md](pictures.md) says what each does); Add here selects the camera
+  it added, and Make the piece it made;
 - a camera: **Device**, Live or Still and **Take picture** (once its device is
   this browser's camera), and Remove (chosen twice);
 - a piece made from a picture: **Picture** › Word, Drop (chosen twice);
@@ -276,16 +284,14 @@ parameter is a control starting from what is drawn, its description as its
 caption; a contested one comes first, with its candidates as buttons.
 
 **The parameters and the SCAD are one draft.** A part's values are the
-top-level assignments in its SCAD (the grammar is in
-`apothecary/projects/parts/assignments.py`, and the page reads it the same
-way): moving a control rewrites its value in its line, at once, keeping the
+top-level assignments in its SCAD, read as
+[parts-authoring.md](parts-authoring.md#in-the-page-the-text-is-the-truth)
+says: moving a control rewrites its value in its line, at once, keeping the
 line's comment and range, and a value typed in the text moves its control. A
 name the text does not assign yet gets its line appended. The controls are
 the part's model's fields, where it has a model, then every other parameter
-its text assigns -- as OpenSCAD's customizer has them, before the first
-module or function and outside `/* [Hidden] */` -- each described by its own
-line's comment (`// [5:100]`, `// [0:off, 1:on]`, a unit) and the caption
-above it. **A computed one** (`wall = size * 0.1;`) shows the value the newest
+its text assigns, each described by its line's comment and the caption above
+it. **A computed one** (`wall = size * 0.1;`) shows the value the newest
 check gave it, under its expression; until a check has given one it says
 "computed when checked". Moving it asks first: **Replace** puts the plain value
 in place of the expression, as one edit Undo takes back; **Keep it computed**
@@ -308,7 +314,8 @@ controls drive the model, and the SCAD follows, read only.
 - A field that declares a **unit** shows it beside its number; one that
   declares none shows nothing.
 
-Where this OpenSCAD cannot build the part at all (gridfinity on 2021.01), the
+Where this OpenSCAD cannot build the part at all (gridfinity on
+[2021.01](openscad.md#what-openscad-202101-cannot-do)), the
 editor says so as it opens and **Apply is off** from the start, saying why.
 
 The bar of what is staged -- Apply, Revert, Defaults, Undo, Redo, Ghost --
@@ -325,7 +332,8 @@ Moving a control **stages** a value: its line is rewritten and nothing is
 drawn. Once the controls rest the text is checked, its values against the
 part's own model, and the bar above them says what is staged -- what the text
 says otherwise than the text drawn -- whether it is valid and the envelope it
-would make. What is typed in the SCAD is drawn once it reads, as before.
+would make. What is typed in the SCAD is drawn once it reads
+([below](#the-scad-editor)).
 **Apply** renders the text, its values in it, nothing passed on the side:
 when the result is not the saved part, it is
 drawn in this tab only as an applied variant -- amber, not saved -- and the
@@ -419,8 +427,9 @@ Outside the editor F5, F6 and Ctrl+Enter are the browser's.
   checkout, HEAD or the working tree. The status line says what making it the
   part's source takes, as the server words it: where the ref lives (a fetch
   first, when `APOTHECARY_VARIANTS_REPO` names another repository to keep them
-  in), and that a merge brings its values with it -- or, for a variant saved
-  before its values were in its text, that it does not until it is saved again.
+  in), and that a merge brings its values with it -- or, for a variant whose
+  values are in a `.variant.json` beside its SCAD and not in its text, that a
+  merge does not apply them until it is saved again.
   What would be a failed render is not saved. A part in a submodule
   (gridfinity) is saved as its **overlay**: the include of the upstream file
   and the values set after it, the submodule never touched; an edit of the
@@ -433,9 +442,9 @@ Outside the editor F5, F6 and Ctrl+Enter are the browser's.
   to it, each a button of its row in the editor's list too (its **⋯** unfolds
   them): **Draw** loads it -- its SCAD into the editor, its values in it and
   the controls on them, checked and drawn; a part in a submodule's variant is
-  its overlay, the upstream file never put in the editor as the part's; one
-  saved before its values were written into its text has them written in when
-  it is read -- **Rename** and
+  its overlay, the upstream file never put in the editor as the part's; a
+  variant whose values are in a `.variant.json` and not its text has them
+  written in when it is read -- **Rename** and
   **Duplicate**, under the name typed in its row's box (the cell puts the
   cursor there; Enter does it), **History** (each save, newest first, an
   earlier one restored by its **Restore** as a new save, the history keeping

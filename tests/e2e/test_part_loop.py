@@ -1,17 +1,15 @@
-"""Loop 1, designing a part (docs/plans/ui-flows-2026-10-08.md), gone round in
-the page: the part chosen from its ring (Part › Edit), a parameter moved -- its
-line in the part's SCAD rewritten as it moves, the text the one draft -- and
-checked once the slider rests, its box beside it in step, Apply drawing the
-variant where it stands with the bounds it measured beside the declared ones, a
-reload drawing what the tab had applied (its address keeps the variant),
-OpenSCAD's error shown by line and the refused size put back (Part › Revert),
-then undone and redone (Ctrl+Z, the editor's Redo), the defaults again for
-nothing (Part › Defaults and Part › Apply), and round once more, the size typed
-in its box (Part › Apply, then the editor's Defaults and Apply); an earlier apply
-drawn again from Recent applies; a size staged and not applied kept over a
-reload, in its text, and restored; then two tabs applying different values at once, each
-drawing its own. It writes walkthrough/14-designing-a-part.md and its pictures
-as it goes (the part-iteration plan, docs/plans/part-iteration-2026-10-12.md).
+"""Loop 1, designing a part, gone round in the page: the part chosen from its ring
+(Part › Edit), a parameter moved -- its line in the part's SCAD rewritten as it moves,
+the text the one draft -- and checked once the slider rests, its box beside it in step,
+Apply drawing the variant where it stands with the bounds it measured beside the
+declared ones, a reload drawing what the tab had applied (its address keeps the
+variant), OpenSCAD's error shown by line and the refused size put back (Part › Revert),
+then undone and redone (Ctrl+Z, the editor's Redo), the defaults again for nothing
+(Part › Defaults and Part › Apply), and round once more, the size typed in its box
+(Part › Apply, then the editor's Defaults and Apply); an earlier apply drawn again from
+Recent applies; a size staged and not applied kept over a reload, in its text, and
+restored; then two tabs applying different values at once, each drawing its own. It
+writes walkthrough/04-designing-a-part.md and its pictures as it goes.
 
 The server is this module's own, with an OpenSCAD that is this machine's except
 that it refuses a cube of ``TOO_BIG`` mm or more, saying so as an assertion at
@@ -36,6 +34,7 @@ import stat
 import sys
 
 import pytest
+from doc_capture import moments
 from playwright.sync_api import Page, expect
 from viewer_ready import (
     MARKED_LINE_FIRST,
@@ -196,7 +195,7 @@ def _drawn(page: Page) -> None:
 
 
 # How long a ring may take to open: it asks the server what to offer, and on a
-# machine loaded with OpenSCAD runs that answer has been seen to take over 5 s.
+# machine loaded with OpenSCAD runs that answer can take over 5 s.
 RING_MS = 15000
 
 # The widths the page is laid out for (the rail beside the world, and the narrower).
@@ -703,11 +702,11 @@ def _two_tabs(page: Page, site: str, story) -> None:
 def test_designing_a_part_twice_round(
     page: Page, loop_url: str, cube_as_it_was, shots, walkthrough
 ):
-    """The loop, twice round and in two tabs, and walkthrough page 14 written from it.
+    """The loop, twice round and in two tabs, and walkthrough page 04 written from it.
     Marked e2e and not walkthrough: a loop's page is written by the browser suite
-    only, so `apothecary test run` stays quick (the loops plan)."""
+    only, so `apothecary test run` stays quick."""
     story = walkthrough(
-        ordinal="14",
+        ordinal="04",
         slug="designing-a-part",
         title="Designing a part",
         browser_suite_only=True,
@@ -732,10 +731,10 @@ def test_designing_a_part_twice_round(
         ),
         does_not_show=[
             "**Editing the SCAD.** The part's source is in the editor below its parameters, "
-            "its refused line marked there; editing it is walkthrough 16's.",
+            "its refused line marked there; editing it is walkthrough 06's.",
             "**A variant kept for good.** An applied variant lives in its tab's address and "
             "the cache, which keeps the most recently drawn of each part; saving one is a "
-            "variant in git, walkthrough 16's too.",
+            "variant in git, walkthrough 06's too.",
             "**Which OpenSCAD measured.** The editor says whether the measured bounds are "
             "OpenSCAD's own summary of the render or were read off the STL; which it is "
             "depends on the machine's OpenSCAD, so the words here leave it out.",
@@ -835,7 +834,7 @@ def test_designing_a_part_twice_round(
             "OpenSCAD's refusal, by line, drawn greyed",
             "A size of 70 mm, which this run's OpenSCAD refuses -- the test's stand-in, which "
             f"refuses a cube of {TOO_BIG:.0f} mm or more where a real OpenSCAD renders it; "
-            "walkthrough 16 meets a refusal of the SCAD's own. Like a snapshot, it says the "
+            "walkthrough 06 meets a refusal of the SCAD's own. Like a snapshot, it says the "
             "error and still writes the geometry it built: a failed render, never a variant. "
             "Apply answers with OpenSCAD's words, listed by file and line under the stage "
             "bar, the line marked in the part's source below, and carried on the status "
@@ -909,6 +908,7 @@ def test_designing_a_part_twice_round(
             "the cache of variants, nothing rendered, its text and its numbers what is "
             "drawn; f frames it.",
             shown=again,
+            blank=moments("#part-history-list"),
         ),
     )
 

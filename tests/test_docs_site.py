@@ -79,7 +79,7 @@ def test_every_page_renders_and_its_links_resolve():
     assert not missing, "\n".join(missing)
 
 
-ROOT_DOCS = ["README.md", "QUICKSTART.md", "CONTRIBUTING.md", "AGENTS.md", "CHANGELOG.md"]
+ROOT_DOCS = ["README.md", "CONTRIBUTING.md", "AGENTS.md", "CHANGELOG.md"]
 FENCE = re.compile(r"^```.*?^```", re.M | re.S)
 REMOVED = re.compile(r"^### Removed$.*?(?=^#|\Z)", re.M | re.S)  # names what is gone
 HTML_LINK = re.compile(r'\b(?:src|href)="([^"]+)"')
@@ -98,8 +98,8 @@ def _names_a_repo_path(span: str) -> bool:
 
 
 def test_the_root_docs_name_only_files_that_exist():
-    """README, QUICKSTART, CONTRIBUTING, AGENTS and CHANGELOG link to, and name in
-    code, only files and folders this checkout has."""
+    """README, CONTRIBUTING, AGENTS and CHANGELOG link to, and name in code, only
+    files and folders this checkout has."""
     governance = (ROOT / "governance" / "qm" / "README.md").exists()
     missing = []
     for name in ROOT_DOCS:
@@ -163,7 +163,7 @@ def test_docs_routes_serve_pages_and_files_and_refuse_the_rest(tmp_path, monkeyp
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/plain")
     assert c.get("/docs/../pyproject.toml").status_code in (404, 422)
     assert c.get("/docs/no-such-page.md").status_code == 404
-    assert c.get("/walkthrough/01-a-part.md").status_code == 200
+    assert c.get("/walkthrough/07-a-part.md").status_code == 200
     # The API is described by /openapi.json; FastAPI's Swagger and ReDoc pages are off,
     # since each would load its script from a public CDN.
     assert c.get("/openapi.json").status_code == 200
@@ -235,8 +235,8 @@ def test_the_bar_says_what_makes_the_generated_pages(tmp_path, monkeypatch):
 
 
 def test_the_walkthrough_is_an_index_of_its_pages_in_order():
-    """/walkthrough answered 404 (no README.md there): it is an index of the pages,
-    in order, page 00 (Getting started) first once it is written."""
+    """/walkthrough is an index of the walkthrough's pages, in order, page 00 (Getting
+    started) first; the folder has no README.md to serve in its place."""
     c = TestClient(app)
     for url in ("/walkthrough", "/walkthrough/"):
         r = c.get(url, follow_redirects=False)
@@ -246,7 +246,7 @@ def test_the_walkthrough_is_an_index_of_its_pages_in_order():
     listed = re.findall(r'<li><a href="/walkthrough/([^"]+)">', c.get("/walkthrough").text)
     assert listed == pages and listed[0].startswith(("00-", "01-"))
     assert (
-        '<a href="/walkthrough/01-a-part.md">01 — The parts registry</a>'
+        '<a href="/walkthrough/07-a-part.md">07 — The parts registry</a>'
         in c.get("/walkthrough").text
     )
     assert 'href="/walkthrough"' in c.get("/docs/README.md").text  # the bar reaches it
@@ -254,14 +254,14 @@ def test_the_walkthrough_is_an_index_of_its_pages_in_order():
 
 def test_page_00_leads_the_index_once_it_exists(tmp_path, monkeypatch):
     for name, heading in (
-        ("01-a-part.md", "# 01 — The parts registry"),
+        ("07-a-part.md", "# 07 — The parts registry"),
         ("00-getting-started.md", "# 00 — Getting started"),
-        ("02-fitting.md", "# 02 — Which numbers are whose"),
+        ("08-fitting.md", "# 08 — Which numbers are whose"),
     ):
         (tmp_path / name).write_text(heading + "\n")
     monkeypatch.setattr(docs_site, "WALKTHROUGH_ROOT", tmp_path)
     assert docs_site.walkthrough_pages() == [
         ("00-getting-started.md", "00 — Getting started"),
-        ("01-a-part.md", "01 — The parts registry"),
-        ("02-fitting.md", "02 — Which numbers are whose"),
+        ("07-a-part.md", "07 — The parts registry"),
+        ("08-fitting.md", "08 — Which numbers are whose"),
     ]

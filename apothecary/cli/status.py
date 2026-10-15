@@ -1,8 +1,7 @@
 """One vocabulary for how this CLI reports state.
 
-Colour and glyphs were being chosen per command, so the same outcome looked
-different depending on which one you ran. These are the marks every command
-uses, and the progress bar every long loop uses.
+These are the marks every command uses, so one outcome looks the same from
+any command, and the progress bar every long loop uses.
 
 Built on Click, which is in the blessed set and already a dependency. `rich`
 would be an out-of-state addition needing an org-level record, and buys little
@@ -20,8 +19,8 @@ import click
 
 from .utils import _safe_echo
 
-# state -> (mark, colour). The marks are ASCII on purpose: Windows still
-# defaults to cp1252 and this CLI has already died once on a check mark.
+# state -> (mark, colour). The marks are ASCII: a Windows console defaults to
+# cp1252, which cannot print a check mark (walkthrough/13).
 MARKS = {
     "pass": ("OK  ", "green"),
     "ok": ("OK  ", "green"),

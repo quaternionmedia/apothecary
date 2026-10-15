@@ -74,10 +74,8 @@ class TestTheChecksAnswerHonestly:
         """A part cannot be called ready while its own sources disagree about
         how big it is.
 
-        `walls` and `tolerence` were contested only by `parts/datum`, the
-        single-piece tray this part replaced; retiring it left the house
-        constants unopposed. `board_y` is the one that survives, because the
-        two sources that disagree about the board are both still live.
+        `board_y` is contested: the two sources that disagree about the board
+        are both live.
         """
         report = assess(CORE)
         disputed = next(c for c in report.checks if c.name == "No disputed dimensions")
@@ -91,12 +89,11 @@ class TestTheChecksAnswerHonestly:
         assert "nozzle" in settings.detail
 
     def test_the_stub_check_actually_reads_the_assembly(self):
-        """It once reported "no stubs remain" without looking, because
-        `build()` returns a tuple and it read the tuple as an Assembly.
+        """The stub check reads the assembly `build()` returns, a tuple, rather than
+        taking the tuple for an Assembly.
 
-        The bench drives `datum_core` -- the compound that replaced the
-        single-piece `parts/datum` and inherited its black-box seam -- so that
-        is where the stubs surface.
+        The bench drives `datum_core`, which holds the black-box seam, so that is
+        where the stubs surface.
         """
         report = assess(CORE)
         stubs = next(c for c in report.checks if c.name == "Fitted to measured artifacts")
@@ -105,8 +102,9 @@ class TestTheChecksAnswerHonestly:
         assert "board" in stubs.detail
 
     def test_a_part_the_assembly_does_not_place_is_not_told_about_its_stubs(self):
-        """`calibration_cube` was reported as fitted to datum's board, because
-        the check read the bench for every part in the library.
+        """A part the assembly does not place is told nothing of its stubs: the
+        check reads the bench for the parts it places, not for every part in the
+        library.
         """
         from apothecary.projects.parts.calibration_cube import DEFAULT as CUBE
 
@@ -310,9 +308,9 @@ class TestCompareBounds:
 class TestThePartDecidesWhereItsStlLives:
     """`gridfinity`'s SCAD is inside a third-party submodule, and its wrapper
     overrides `get_stl_output_path` precisely so the render does not land in
-    somebody else's checkout. Assuming `source_file.with_suffix('.stl')`
-    looked in the wrong place — and the render that put it there left
-    untracked content in that submodule.
+    somebody else's checkout. Assuming `source_file.with_suffix('.stl')` would
+    look inside the submodule, and a render there would leave untracked content
+    in it.
     """
 
     def test_readiness_reads_the_path_the_part_names(self):

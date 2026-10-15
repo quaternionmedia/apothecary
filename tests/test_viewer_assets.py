@@ -43,7 +43,7 @@ class TestVendoredLibraryIsServed:
 
 class TestMissingLibraryIsAnnounced:
     def test_a_missing_install_renders_a_banner(self):
-        """Silence was the original defect; absence has to be visible."""
+        """A missing install is said on the page, never left silent."""
         from apothecary.viewer import render_fractal_viewer_page
 
         page = render_fractal_viewer_page(

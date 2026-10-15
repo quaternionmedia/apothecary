@@ -1,12 +1,11 @@
 """Docs generation CLI: regenerate docs/generated/ from the E2E doc-workflow tests.
 
-**This does not produce the walkthrough.** The walkthrough is written by the run
+This does not produce the walkthrough: the walkthrough is written by the run
 that asserts it, on the ordinary test command -- see
 tests/e2e/test_docs_photo_walkthrough.py and the guards in
-tests/test_the_walkthrough_is_named.py. It was produced here once, which made
-the viewer half of one path a second page behind a command somebody had to
-remember, and the remembered page went stale. What is left here is the fractal
-viewer workflow, which nothing else describes.
+tests/test_the_walkthrough_is_named.py. This produces the workflows marked
+`docs`, which nothing else describes: the fractal viewer, and the boards and
+printers in front of the world (docs/generated/printer-monitor/).
 
 The doc-workflow tests (tests/e2e/test_docs_*.py marked `docs`) are the single
 source of truth for what they cover: each `docs.step("...")` call inside one of
@@ -211,10 +210,11 @@ def _simulated_device_env(env: dict) -> dict:
 def _start_server(host: str, port: int, simulated_devices: bool = True):
     env = os.environ.copy()
     env["APOTHECARY_SKIP_STL_GENERATION"] = "1"
-    # The picture walkthrough asks the server to look at a picture, and the
-    # server reads pictures from one folder and refuses everywhere else. Both
-    # sides have to agree which folder that is, so it is decided here and
-    # handed to the server and to the tests alike.
+    # The server reads pictures from one folder and refuses everywhere else;
+    # without this it would be the repository the server starts in. An empty
+    # folder of the run's own keeps the Pictures panel the fractal viewer
+    # workflow opens the same on every machine, and is handed to the tests
+    # alike, so a test that asks for `picture_folder` finds the server's.
     pictures = Path(tempfile.mkdtemp(prefix="apothecary-docs-pictures-"))
     env["APOTHECARY_PICTURE_ROOT"] = str(pictures)
     os.environ["APOTHECARY_PICTURE_ROOT"] = str(pictures)

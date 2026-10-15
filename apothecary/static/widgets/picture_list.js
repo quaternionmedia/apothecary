@@ -5,8 +5,7 @@
  * of their own; newest first in each, each with the places it is pinned at as a
  * view; Forget on a kept one, and Purge kept. A picture's camera is the one its
  * kept name says (GET /photos/pictures' `camera`), else the one a view of it
- * says. The gathering is a section of it until gathering leaves core (the
- * pictures plan's Phase 1).
+ * says. The gathering is a section of it.
  *
  * A row is chosen by a click on it, one at a time, and let go by a click on it
  * again or by Escape. The choice is the ring's to act on: the page tells it with
@@ -235,7 +234,7 @@ export function mountPictureList(root, { base = "", world = null, log = null } =
     $("pic-file").addEventListener("change", async (ev) => { await addFiles(ev.target.files); ev.target.value = ""; });
     $("pictures-purge").onclick = () => purge($("pictures-purge")).catch((e) => say(e.message, "bad"));
 
-    // --- the gathering, until it leaves core -----------------------------------------------
+    // --- the gathering ---------------------------------------------------------------------
     function ticked() { return [...root.querySelectorAll("#pic-list input[type=checkbox]:checked")].map((i) => i.value); }
     function renderGatherList() {
         const list = $("pic-list");

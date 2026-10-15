@@ -210,7 +210,7 @@ class TestGridfinityBinPart:
     def test_get_stl_output_path(self):
         """Test STL output path is not in submodule."""
         stl_path = DEFAULT.get_stl_output_path()
-        # Should be parts/gridfinity/gridfinity.stl, NOT inside submodule
+        # parts/gridfinity/gridfinity.stl, outside the submodule
         assert "gridfinity-rebuilt-openscad" not in str(stl_path)
         assert stl_path.name == "gridfinity.stl"
 

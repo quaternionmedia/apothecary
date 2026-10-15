@@ -1,5 +1,5 @@
 /* Settings: every shortcut and navigation setting of the page, in one panel, kept
- * per browser (docs/plans/input-2026-10-12.md).
+ * per browser (docs/viewer.md, "Settings").
  *
  * The shortcuts: the key that opens the ring on the selection (m), the key that
  * opens the canvas ring whatever is selected (Shift+M), the modifier a right-click

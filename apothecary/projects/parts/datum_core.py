@@ -90,13 +90,9 @@ def params_for(board: BlackBox, **overrides: float) -> Params:
     """Derive tray parameters from a black box.
 
     The entire adapter between "something described the board" and "the tray
-    fits it". A provider swap -- a hand-entered stub today, a KiCad outline
-    later -- is invisible past this line.
-
-    This seam arrived with ``parts/datum``, the single-piece tray this part
-    supersedes. The geometry was replaced by a core and a separate cap; the
-    seam was the part worth keeping, so it moved here rather than retiring
-    with it.
+    fits it". A provider swap -- the hand-entered stub
+    (``shims.kicad.t1_core_stub``) for a KiCad outline, say -- is invisible
+    past this line.
     """
     env = board.envelope
     inset = (
@@ -121,8 +117,8 @@ def params_for(board: BlackBox, **overrides: float) -> Params:
         "screw_d": hole,
     }
 
-    # The board's own keepouts choose the openings. `parts/datum` called these
-    # usb_w/usb_h; the core names them for what they are, an edge connector.
+    # The board's own keepouts choose the openings: the edge connector's, and the
+    # antenna's band.
     for keepout in board.keepouts:
         if keepout.name == "usb-c-mating":
             values["connector_w"] = keepout.box.width
@@ -140,9 +136,8 @@ class DatumCorePart(BasePart):
     def get_bounds(self, params: Optional[Dict] = None) -> BoundingBox3D:
         """Outer envelope of the tray.
 
-        One object, one envelope. It used to branch on a ``show`` parameter
-        that selected between the tray and the cover, which is two parts
-        wearing one name -- the cover is ``datum_cap``.
+        One object, one envelope: the tray's. The cover is ``datum_cap``, a
+        part of its own.
         """
         values = Params(**(params or {}))
 
@@ -171,18 +166,16 @@ def create(metadata_root: Path) -> DatumCorePart:
             nozzle_diameter=0.4, layer_height=0.2, wall_thickness=3.0, tolerance=0.4
         ),
         preview_color=Color.from_hex("#3E7CB1"),
-        # Three numbers this project's own sources state differently. None is a
-        # typo to be quietly corrected: each has a document behind it, and the
-        # dashboard exists so the choice is made by looking rather than arguing.
-        # `walls` and `tolerence` were contested only by parts/datum, the
-        # single-piece tray this part supersedes. It carried 2.4 and 0.2 while
-        # citing the enclosure record for values that record does not contain.
-        # Retiring it settled both: the house constants stand unopposed, and a
-        # part that wants to differ must now say why, as clause 3 requires.
+        # A number this project's own sources state differently. It is not a
+        # typo to be quietly corrected: each value has a document behind it, and
+        # the dashboard exists so the choice is made by looking rather than
+        # arguing. `walls` and `tolerence` are the house constants and nothing
+        # disputes them; a part that differs from them says why, as the
+        # enclosure record's clause 3 requires.
         #
-        # board_y is not settled and must not look settled. Two live sources
-        # still disagree about how big the board is, and neither is the retired
-        # part -- so the dissent is cited where it actually lives now.
+        # board_y is not settled and must not look settled: two live sources
+        # disagree about how big the board is, and each is cited where a reader
+        # can open it.
         contested={
             "board_y": [
                 ContestedValue(

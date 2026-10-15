@@ -1,12 +1,10 @@
 /* How a board's state is written: once, for every drawer.
  *
- * The world's badge, the badge on Site's tree, Selected's Device line, the
- * Machine's cards and the firmware page's device cards each used to write a
- * board's state their own way -- the heater alone four times -- and could
- * disagree. Each now writes it from here: one heater, one printer line, one
- * summary of a board (a printer's poll, or a devkit's sketch against what it
- * was heard saying). Pure functions of what they are given; nothing here
- * fetches, listens or keeps state (boards.js does that).
+ * The world's badge, the badge on Site's tree, Selected's Device line and the
+ * Machine's cards write a board's state from here, so they agree: one heater, one
+ * printer line, one summary of a board (a printer's poll, or a devkit's sketch
+ * against what it was heard saying). Pure functions of what they are given;
+ * nothing here fetches, listens or keeps state (boards.js does that).
  */
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));

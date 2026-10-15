@@ -117,7 +117,8 @@ def test_a_made_piece_is_edited_from_its_ring_and_the_found_candidate_returns_it
         facts.evaluate("(el) => el.compareDocumentPosition(document.getElementById('part-params'))")
         & 4
     )
-    # A made piece has no checklist, and no Regenerate STL: Apply is its rebuild.
+    # A made piece has no checklist, and no rebuild button beside Apply: Apply is its
+    # rebuild.
     expect(page.locator("#part-checklist")).to_have_count(0)
     expect(page.locator("#part-regenerate-btn")).to_have_count(0)
     # Its few lines of SCAD, read-only, in the editor where a part's SCAD is edited.
@@ -194,8 +195,8 @@ def test_a_part_in_the_library_gets_the_same_editor_from_the_same_cell(page, bas
     _press(page, "Part", "Edit")
     _said(page, "Editing v_slot")
     expect(page.locator("#part-params input[type=range]").first).to_be_focused(timeout=10000)
-    # A part has what a made piece lacks: its checklist. Regenerate STL, which was
-    # Apply again, is gone from both.
+    # A part has what a made piece lacks: its checklist. Neither has a rebuild button
+    # beside Apply.
     expect(page.locator("#part-checklist")).to_be_visible()
     expect(page.locator("#part-regenerate-btn")).to_have_count(0)
     expect(page.locator("#stage-summary")).to_have_text("No staged changes")

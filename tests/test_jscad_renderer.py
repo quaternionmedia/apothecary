@@ -54,7 +54,7 @@ def test_an_uncentred_primitive_keeps_its_corner_and_base_at_the_origin():
 
 
 def test_a_cone_is_a_cylinder_elliptic_and_a_hull_renders():
-    """The datum_core site holds a hull; rendering it raised TypeError."""
+    """A hull renders through JSCAD, as the datum_core site, which holds one, needs."""
     from apothecary.datum_core_site import create_datum_core_site
     from apothecary.primitives import Cylinder
 

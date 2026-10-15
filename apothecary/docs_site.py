@@ -536,9 +536,9 @@ def walkthrough_index_page() -> HTMLResponse:
     body = (
         "<h1>The walkthrough</h1>"
         "<p>The executable path through this repository, a page at a time. Each page is "
-        "checked by the tests, or written by the run it describes, so it says what the "
-        'code does today. <a href="/docs/README.md">The documentation</a> says what each '
-        "page shows, and lists the guides beside them.</p>"
+        "checked by the tests, or its steps are written by the test that runs them, so it "
+        'says what the code does. <a href="/docs/README.md">The documentation</a> says what '
+        "each page shows, and lists the guides beside them.</p>"
         f'<ul class="pages">{rows}</ul>'
     )
     return _page(body, "The walkthrough", "walkthrough/")

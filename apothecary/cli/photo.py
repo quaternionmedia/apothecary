@@ -534,8 +534,7 @@ def gather_pictures(
             )
         ask.parent.mkdir(parents=True, exist_ok=True)
         # Whatever is already in the file a person wrote is kept, whether or not
-        # it was the file passed in as answers. Writing over somebody's notes
-        # because they used two different file names is not a thing to do once.
+        # it was the file passed in as answers.
         keep = ask.read_text(encoding="utf-8-sig") if ask.exists() else ""
         if answers is not None and answers.exists() and answers.resolve() != ask.resolve():
             keep = (

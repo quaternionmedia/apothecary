@@ -1,7 +1,7 @@
 /* Twice: a button whose press cannot be undone in the page asks to be pressed again.
  *
- * The rule (docs/plans/input-2026-10-12.md, "confirming by consequence"): what the
- * page can undo asks nothing; what it cannot -- a site rebuilt, a picture forgotten,
+ * The rule (docs/viewer.md, "Asking first goes by consequence"): what the page can
+ * undo asks nothing; what it cannot -- a site rebuilt, a picture forgotten,
  * a camera removed, a board rebooted, a print abandoned -- is pressed twice, the
  * control itself saying "Again to ..." between the two; what heats, moves or
  * flashes a machine asks in a dialog; the emergency stop never asks. The ring asks

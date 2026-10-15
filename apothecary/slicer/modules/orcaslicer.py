@@ -30,8 +30,8 @@ top, then the part's declared print settings:
   for a fit, and a slicer compensating as well would take it twice.
 
 The machine's start G-code is composed from the pieces the printer's profile
-names (``compose.py``): today ``home``, OrcaSlicer's own start for the printer,
-which homes and does no levelling; the stored mesh, probing each print and a
+names (``compose.py``): printer_1's names ``home``, OrcaSlicer's own start for
+the printer, which homes and does no levelling; the stored mesh, probing each print and a
 measured first-layer offset are stubs. The filament is the printer's one,
 named in its profile; choosing another is a stub.
 

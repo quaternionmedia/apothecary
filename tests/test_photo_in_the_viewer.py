@@ -1,9 +1,8 @@
 """An arrangement built from a picture, in the viewer the tool already has.
 
-The point of these is that almost nothing new had to be drawn. The viewer
-already picks an arrangement by name, walks into it, and filters it by the group
-each piece belongs to. Naming each piece's word as its group is what makes that
-last one a filter by word.
+The viewer picks an arrangement by name, walks into it, and filters it by the
+group each piece belongs to. Naming each piece's word as its group is what makes
+that last one a filter by word.
 """
 
 from __future__ import annotations
@@ -90,14 +89,14 @@ def test_the_viewer_sees_those_groups_without_any_new_drawing_code(shelved):
 def test_a_wedge_is_drawn_with_the_three_sides_it_is_built_with(shelved):
     """A wedge is built as a cylinder of three facets. The viewer draws a leaf from the
     primitive the tree describes, so the description names the facets: without them the
-    viewer drew a round cone, a disc where the picture had a triangle."""
+    viewer would draw a round cone, a disc where the picture had a triangle."""
     tree = client.get("/sites/test_bench").json()["tree"]
     wedges = [child for child in tree["children"] if child["category"] == "wedge"]
     assert wedges
     for wedge in wedges:
         assert wedge["primitive"]["type"] == "cylinder"
         assert wedge["primitive"]["fn"] == 3
-    # A round word names no facets, and the viewer draws it as finely as it always has.
+    # A round word names no facets, and the viewer draws it as finely as any round one.
     rounds = [c["primitive"] for c in tree["children"] if c["category"] == "disc"]
     assert rounds and all(p is None or p.get("fn") is None for p in rounds)
 
@@ -111,11 +110,8 @@ def test_pieces_are_gathered_by_word_with_the_biggest_group_first(shelved):
 
 
 def test_what_is_known_sits_beside_the_arrangement_not_inside_it(shelved):
-    """A node gained no new fields, so the tree is the shape it always was.
-
-    The reasoning does appear in each piece's note, in words, on purpose — that
-    is what makes it readable in the viewer today. What has not happened is a
-    node growing fields to carry it.
+    """What is known is in each piece's note, in words, on purpose -- that is what
+    makes it readable in the viewer -- and a node carries no fields for it.
     """
     piece = shelved.site.children[0]
     for invented in ("confidence", "finder", "origin", "word", "provenance"):
@@ -191,7 +187,7 @@ def test_the_shelf_replaces_an_arrangement_of_the_same_name(picture):
 
 
 def test_the_register_takes_an_arrangement_it_did_not_start_with(picture):
-    """The register held only what was decided in advance. A picture is not."""
+    """The register takes an arrangement it did not start with, as a picture's is."""
     stock = Shelf()
     stock.put(build(PlainFinder().look(picture), name="added_later", picture_path=picture))
     _site_store.add("added_later", stock.factory("added_later"), stock.checker("added_later"))
@@ -240,7 +236,7 @@ def held_port():
 
 def test_a_held_port_is_refused_before_anything_is_built_or_printed(picture, held_port):
     """`photo view` and `serve` both default to 8000: with a server there, the command
-    used to print three addresses of the other server and then fail. It says so first."""
+    says so first, before it builds or prints anything."""
     with patch("uvicorn.run") as started:
         said = CliRunner().invoke(
             cli, ["photo", "view", str(picture), "--name", "held_go", "--port", str(held_port)]
@@ -284,14 +280,14 @@ def test_an_arrangement_can_be_taken_back_off_the_register(picture):
 
 
 def test_an_arrangement_from_a_picture_cannot_cover_a_built_in_one(picture, tmp_path):
-    """Naming it 'garage' used to replace the built-in garage, permanently."""
+    """An arrangement from a picture cannot take a built-in name: 'garage' is refused."""
     answer = client.post("/photos", json={"picture": str(picture), "name": "garage"})
     assert answer.status_code == 409
     assert len(client.get("/sites/garage").json()["tree"]["children"]) > 3
 
 
 def test_a_built_in_arrangement_cannot_be_forgotten(picture):
-    """Deleting it used to remove it from the register for the whole run."""
+    """A built-in arrangement cannot be deleted from the register."""
     assert client.delete("/photos/garage").status_code == 404
     assert "garage" in client.get("/sites").json()
 
@@ -351,7 +347,8 @@ def test_the_type_is_chosen_from_a_list_not_built_from_the_file_name(picture, tm
 
 @pytest.mark.skipif(sys.platform == "win32", reason="an unprivileged Windows user cannot symlink")
 def test_a_picture_swapped_for_a_link_out_of_the_folder_is_refused_when_served(picture, tmp_path):
-    """The front door refused this. The serving door has to refuse it too."""
+    """Import refuses a picture swapped for a link out of the folder, and so does
+    serving it."""
     client.post("/photos", json={"picture": str(picture), "name": "swaptest"})
     try:
         picture.unlink()
@@ -365,7 +362,7 @@ def test_a_picture_swapped_for_a_link_out_of_the_folder_is_refused_when_served(p
 
 
 def test_resetting_an_arrangement_built_from_a_picture_really_resets_it(shelved):
-    """It used to hand back the same object it had just been asked to discard."""
+    """Reset hands back a new arrangement, not the object it was asked to discard."""
     moved = client.post(
         "/sites/test_bench/layout",
         json={"positions": {"plate_1": {"x": 999, "y": 888, "z": 777}}},

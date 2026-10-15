@@ -19,6 +19,10 @@ rules are enforced here rather than described:
   an option's address. ``COMPASS`` names the cell each of the browser's eight
   wedges draws, up first and clockwise. ``tests/conformance/nine_cells.json``
   holds this module and ``static/ring.js`` to the same rules.
+
+Addresses hold still (docs/viewer.md): the cells a ring always has come first
+and keep one address wherever it is opened, and an option that comes and goes
+is seated after them, so adding one moves no cell before it.
 """
 
 from __future__ import annotations
@@ -549,8 +553,8 @@ def _grouped(
     )
 
 
-# What can be done to a saved variant (the owner's answer of 2026-10-12): each its own
-# cell, under the variant's name. Draw is first, in the seat choosing the name had.
+# What can be done to a saved variant: each its own cell, under the variant's name,
+# Draw first.
 VARIANT_VERBS = (
     ("draw", "Draw"),
     ("rename", "Rename"),
@@ -665,7 +669,7 @@ PANELS: Sequence[Tuple[str, str]] = (
     ("pictures", "Pictures"),
     ("machine", "Machine"),
     # The Bench: the toolchain, the sketches, compile and upload, raw flash and
-    # the task log -- what the firmware page was -- a tab of the rail's strip,
+    # the task log, a tab of the rail's strip,
     # registered at start and shown when asked for. Its verbs are a ring of
     # their own under its cell (_bench).
     ("bench", "Bench"),
@@ -674,9 +678,8 @@ PANELS: Sequence[Tuple[str, str]] = (
     # as ⚙ View › Settings opens it, not one of Panels'.
     ("settings", "Settings"),
 )
-# The panels seated before the rail's own cell, which keeps the cell it has had
-# since Phase 3 (Panels › Rail, 99); a panel registered after them is seated
-# after it, so no learned address moves.
+# The panels seated before the rail's own cell (Panels › Rail, 49); a panel
+# registered after them is seated after the rail, so no address moves.
 _BEFORE_RAIL = ("site", "selected", "pictures", "machine")
 
 
@@ -698,19 +701,18 @@ def _panels() -> Option:
 
 
 def _view() -> Option:
-    """View, a cell of the canvas ring in the seat Fit had: how the world is drawn.
+    """View, cell 2 of the canvas ring: how the world is drawn.
 
-    Fit, first, frames the pieces at this level, as it did one ring up (the owner's
-    choice of 2026-10-04: Fit's address gains a digit, and View's cells are the
-    header's ⚙ View menu's items). Snap to grid snaps a dragged piece to the grid;
+    Its cells are the header's ⚙ View menu's items. Fit, first, frames the pieces
+    at this level. Snap to grid snaps a dragged piece to the grid;
     Detail draws every subassembly in full, as a black box or as a dot; Outlines
     draws each subassembly's extent; Select walls (the menu's "Walls selectable")
     lets a click in the world pick a wall, which it otherwise passes through, for
     the page's session. Snap, Outlines and Select walls each turn what they name the
     other way, as their tick-boxes do, and the status line says which way it went;
     the ring is not told how they stand. Settings, last, opens the Settings panel --
-    the shortcuts and automatic zoom -- as the menu's Settings does
-    (docs/plans/input-2026-10-12.md), so no cell before it moves.
+    the shortcuts and automatic zoom -- as the menu's Settings does, so no cell
+    before it moves.
     """
     return Option(
         id="view",
@@ -737,18 +739,17 @@ def _view() -> Option:
 def _bench(show: Option) -> Option:
     """The Bench's cell under Panels: the panel itself first, then its verbs.
 
-    Each verb is the Bench's button of the same name and acts on what the Bench
-    has chosen -- the sketch, the board (FQBN) and the port in its boxes, the
-    images in its raw-flash list, the libraries typed in its box -- as Control ›
-    Print › Send file prints what the Print card has chosen. Install is a ring of
-    the toolchain modules, drawn from their registry (firmware/modules): Arduino
-    installs or updates arduino-cli, Rust ESP32 fetches Rust for the ESP32, and a
-    module added later is a cell of it with no change here (the owner's decision
-    of 2026-10-10); Cores installs one of the suggested cores; Cancel stops the
-    running task. Upload and Raw flash overwrite what a board runs. The slicer's
-    modules follow the toolchain modules in Install, from their own registry
-    (apothecary/slicer/modules): OrcaSlicer installs the pinned release, as the
-    Bench's toolchain card's button for it does; appended, so no cell before it moves.
+    Each verb is the Bench's button of the same name and acts on what the Bench has
+    chosen -- the sketch, the board (FQBN) and the port in its boxes, the images in its
+    raw-flash list, the libraries typed in its box -- as Control › Print › Send file
+    prints what the Print card has chosen. Install is a ring of the toolchain modules,
+    drawn from their registry (firmware/modules): Arduino installs or updates
+    arduino-cli, Rust ESP32 fetches Rust for the ESP32, and a module added later is a
+    cell of it with no change here; Cores installs one of the suggested cores; Cancel
+    stops the running task. Upload and Raw flash overwrite what a board runs. The
+    slicer's modules follow the toolchain modules in Install, from their own registry
+    (apothecary/slicer/modules): OrcaSlicer installs the pinned release, as the Bench's
+    toolchain card's button for it does; appended, so no cell before it moves.
     """
     from .firmware.modules import modules
     from .firmware.toolchains import SUGGESTED_CORES
@@ -1051,11 +1052,11 @@ def _find_shapes(drawn: ViewSeen, finders: Sequence[str], tail: str) -> Optional
 
 def _slice_option(printers: Sequence[str]) -> Option:
     """Slice on a made piece or a part from the parts folder: the pinned printer's
-    Machine opened with it chosen under its Print from here's *makes*, and a slice of
-    it started there for that printer (docs/plans/slicer-2026-10-10.md): its log in
-    the card, and the G-code chosen in the card's files when it ends, so Print
-    follows. One printer pinned in the site is the cell itself; several are a cell
-    each under Slice, as Print's are. The page carries it."""
+    Machine opened with it chosen under its Print from here's *makes*, and a slice of it
+    started there for that printer: its log in the card, and the G-code chosen in the
+    card's files when it ends, so Print follows. One printer pinned in the site is the
+    cell itself; several are a cell each under Slice, as Print's are. The page carries
+    it."""
     if len(printers) == 1:
         return Option(id="slice:piece", label="Slice", action=f"slice:piece:{printers[0]}")
     return Option(
@@ -1066,10 +1067,9 @@ def _slice_option(printers: Sequence[str]) -> Option:
 
 
 def _print_option(printers: Sequence[str]) -> Option:
-    """Print on a made piece: the pinned printer's Machine opened with the piece
-    chosen under its Print from here's *makes* (the owner's answer of 2026-10-10).
-    One printer pinned in the site is the cell itself; several are a cell each
-    under Print. The page carries it."""
+    """Print on a made piece: the pinned printer's Machine opened with the piece chosen
+    under its Print from here's *makes*. One printer pinned in the site is the cell
+    itself; several are a cell each under Print. The page carries it."""
     if len(printers) == 1:
         return Option(id="print:piece", label="Print", action=f"print:piece:{printers[0]}")
     return Option(
@@ -1101,9 +1101,9 @@ def _made_picture_group(picture: PictureContext) -> Option:
 
 
 def _pictures(picture: PictureContext) -> Option:
-    """The canvas ring's Pictures, in the seat its Camera had: Add (pinned at the
-    floor), Floor › Fit, Camera, Picture (the floor's own verbs), Purge, and
-    Gather, the gathering's report, until gathering leaves core."""
+    """The canvas ring's Pictures, cell 9: Add (pinned at the floor), Floor › Fit,
+    Camera, Picture (the floor's own verbs), Purge, and Gather, the gathering's
+    report."""
     return Option(
         id="pictures",
         label="Pictures",
@@ -1191,11 +1191,10 @@ def _canvas_ring(
     it; Panels opens and closes what stands in front of it; Rebuild builds the
     site again from its factory, asked twice.
 
-    The cells that are always there come first and keep one address wherever the
-    ring is opened (the owner's answer after the input overview): Pieces 8, Site 6,
-    View 2, Panels 4, Pictures 9, Rebuild 3. The two that come and go are seated
-    after them: Step out (one level in or deeper), then Group (a site whose pieces
-    have categories).
+    The cells that are always there come first and keep one address wherever the ring is
+    opened: Pieces 8, Site 6, View 2, Panels 4, Pictures 9, Rebuild 3. The two that come
+    and go are seated after them: Step out (one level in or deeper), then Group (a site
+    whose pieces have categories).
     """
     focus_path = context.targets[0] if context.targets else ""
     focus = _find(site, focus_path) if site and focus_path else site
@@ -1227,10 +1226,10 @@ def _node_ring(
     node = _find(site, path) if site and path else None
     camera = bool(path) and path in picture.camera_parts
 
-    # Step in, Move and Why this are every piece's, and keep cells 8, 6 and 2
-    # wherever the ring is opened (the owner's answer after the input overview);
-    # what comes and goes with the piece follows them, and what comes and goes with
-    # where it is -- a board pinned to it, a piece it is inside -- comes last.
+    # Step in, Move and Why this are every piece's, and keep cells 8, 6 and 2 wherever
+    # the ring is opened; what comes and goes with the piece follows them, and what
+    # comes and goes with where it is -- a board pinned to it, a piece it is inside --
+    # comes last.
     options: List[Option] = [
         Option(id="zoom", label="Step in", action="zoom-in"),
         Option(id="move", label="Move", action="move"),
@@ -1255,28 +1254,26 @@ def _node_ring(
         options.append(_made_picture_group(picture))
     elif camera:
         options.extend(_camera_options(picture))
-    # A part, or a piece made from a picture, is edited in Selected: Part › Edit
-    # opens the one editor there (the part-editing spike's decision). Appended
-    # last, so no cell above moves; a host with a board, children and a part
-    # is the fullest node ring, eight, and so is a camera of this browser's. A
-    # camera's editor edits its numbers -- its lens's position, its turn, tilt and
-    # field of view (vision/camera_part.py, GET /sites/{s}/cameras/{name}/params).
+    # A part, or a piece made from a picture, is edited in Selected: Part › Edit opens
+    # the one editor there. Appended last, so no cell above moves; a host with a board,
+    # children and a part is the fullest node ring, eight, and so is a camera of this
+    # browser's. A camera's editor edits its numbers -- its lens's position, its turn,
+    # tilt and field of view (vision/camera_part.py,
+    # GET /sites/{s}/cameras/{name}/params).
     made = bool(path and "." not in path and path in picture.made)
     if node is not None and (node.part_ref or camera or made):
         verbs = [Option(id="part:edit", label="Edit", action="part:edit")]
-        # A part from the parts folder: Defaults stages the part's own numbers in
-        # its editor, as the editor's Defaults does, so Apply draws the saved part
-        # again (loop 1, docs/plans/ui-flows-2026-10-08.md). A camera's numbers and a
-        # made piece's are what was found and set, with no part's own to go back to.
+        # A part from the parts folder: Defaults stages the part's own numbers in its
+        # editor, as the editor's Defaults does, so Apply draws the saved part again. A
+        # camera's numbers and a made piece's are what was found and set, with no part's
+        # own to go back to.
         if node.part_ref and not camera and not made:
             verbs.append(Option(id="part:defaults", label="Defaults", action="part:defaults"))
         # Apply and Revert act on what the editor has staged, as its buttons do,
-        # for whatever it edits: the part's ring holds the whole loop (the owner's
-        # answer, docs/plans/ui-flows-2026-10-08.md).
+        # for whatever it edits: the part's ring holds the whole loop.
         verbs.append(Option(id="part:apply", label="Apply", action="part:apply"))
         verbs.append(Option(id="part:revert", label="Revert", action="part:revert"))
-        # Its SCAD, edited in the editor where the read-only source stood (loop 2,
-        # the owner's answer of 2026-10-10): Save, a variant in git under the name
+        # Its SCAD, edited in Selected's editor: Save, a variant in git under the name
         # the editor shows; Variants, the saved ones, choosing one draws it. Told
         # by the server (``picture.part``); a part built by Python has no Save and
         # no Variants, and a part with none saved has no Variants. After Revert,
@@ -1285,14 +1282,11 @@ def _node_ring(
         seen = picture.part if part_of_the_folder else None
         if seen is not None and seen.editable:
             verbs.append(Option(id="part:save", label="Save", action="part:save"))
-        # The ring was full at eight, so what this round adds is two groups
-        # (docs/plans/part-iteration-2026-10-12.md), in the seats Float and
-        # Fullscreen had: View -- how the part and its editor are seen: the
-        # editor floated over the world or over the whole page, the ghost of what
-        # was drawn before beside what is drawn now, and the part framed with
-        # Selected and its editor kept open (f) -- and History, the staged
-        # numbers' undo and redo (Ctrl+Z, Ctrl+Shift+Z). Float and Fullscreen
-        # are one press deeper; every other cell keeps its seat.
+        # Two groups, so the ring holds eight at the most: View -- how the part
+        # and its editor are seen: the editor floated over the world or over the
+        # whole page, the ghost of what was drawn before beside what is drawn now,
+        # and the part framed with Selected and its editor kept open (f) -- and
+        # History, the staged numbers' undo and redo (Ctrl+Z, Ctrl+Shift+Z).
         view = []
         if seen is not None:
             view.append(Option(id="part:float", label="Float", action="part:float"))
@@ -1358,14 +1352,12 @@ def _device_ring_on_top(context: Context, device: Optional[Device]) -> Ring:
 
 
 def _device_options(device: Device) -> List[Option]:
-    """What can be done with a board. The pages' existing handlers do each one.
+    """What can be done with a board. The page's handlers do each one.
 
-    Open is the board's Machine, the one place for it, in the cell Watch had;
-    Watch and Monitor were two ways into two views of one board, and are that
-    one cell now. Flash is the Machine opened at its Flashing card, in the cell
-    Monitor freed, so every cell after it is where hands learned it before the
-    two became one (Control at 7). A printer keeps its own firmware and is
-    never flashed: its Flash holds the cell and cannot be chosen. Pin and Unpin
+    Open is the board's Machine, the one place for it. Flash is the Machine opened
+    at its Flashing card. A printer keeps its own firmware and is never flashed:
+    its Flash holds the cell and cannot be chosen, so every cell after it is the
+    same on a devkit and on a printer (Control at 7). Pin and Unpin
     are one cell, since a port is either pinned to this node or not. Control
     appears only for a printer: a board running a sketch has no G-code to be
     driven with.
@@ -1537,8 +1529,7 @@ CARRIED_BY: Dict[str, Carries] = {
     "select": Carries.VIEWER,
     "explain": Carries.VIEWER,
     # Taking hold of a piece happens under a finger. The commit that follows it
-    # is a change to the arrangement and is not on any ring yet -- when it
-    # arrives it is its own action, carried by the server.
+    # changes the arrangement through the site's layout route, not a ring.
     "move": Carries.VIEWER,
     # Choosing which arrangement to look at, and which pieces to show, are both
     # about what is on screen rather than what the arrangement is.

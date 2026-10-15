@@ -10,8 +10,8 @@ garage draws its one printer, printer_1, with its nozzle where the last poll
 said.
 
 `ender3.scad` says which numbers are Creality's specifications and which are
-measured off a machine of this kind or chosen to look right. No mesh of
-anyone's went into it.
+measured off a machine of this kind or chosen to look right. It contains no
+one else's mesh: the model is this repository's own, MIT.
 
 `slicer.json` beside it is printer_1's slicer profile: OrcaSlicer's own
 Creality Ender-3 profiles, read from the installed release at each slice, and

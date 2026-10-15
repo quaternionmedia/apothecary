@@ -1,16 +1,15 @@
-"""A part's parameters and its SCAD, tied together (docs/plans/part-iteration-2026-10-12.md,
-"parameters and text, tied together"): the text is the one draft. A control moved
-rewrites its value in its line, the line's comment kept; a value typed in the text
-moves its control; the SCAD editor's undo takes back each, whichever made it, and
-Apply sends the text alone. A computed assignment shows the value its check gave it,
-under its expression, and moving it asks before the expression gives way. A part in a
-submodule (gridfinity) is edited as its overlay: the upstream's parameters it does
-not set are listed with upstream's values, moving one appends its line, and its
-upstream SCAD is one link away, read only; a saved variant of it is its overlay, put
-in the editor. A part whose SCAD its Python generates (the snowplow) stays one way:
-its controls drive its model, its SCAD following, read only. Walkthrough 14 goes
-round the loop with the text tied, and keeps a size staged over a reload in its text.
-"""
+"""A part's parameters and its SCAD, tied together (docs/viewer.md, "The part editor"):
+the text is the one draft. A control moved rewrites its value in its line, the line's
+comment kept; a value typed in the text moves its control; the SCAD editor's undo takes
+back each, whichever made it, and Apply sends the text alone. A computed assignment
+shows the value its check gave it, under its expression, and moving it asks before the
+expression gives way. A part in a submodule (gridfinity) is edited as its overlay: the
+upstream's parameters it does not set are listed with upstream's values, moving one
+appends its line, and its upstream SCAD is one link away, read only; a saved variant of
+it is its overlay, put in the editor. A part whose SCAD its Python generates (the
+snowplow) stays one way: its controls drive its model, its SCAD following, read only.
+Walkthrough 04 goes round the loop with the text tied, and keeps a size staged over a
+reload in its text."""
 
 from __future__ import annotations
 

@@ -1,8 +1,6 @@
 """The jobs over the API: ``GET /jobs``, ``GET /jobs/{id}`` and ``GET /jobs/choices``.
 
-A print is the job (consolidation Phase 3): the hand-typed queue -- a name and a
-volume posted to a site, assigned to an idle printer and marked done -- is gone
-with its routes, and nothing typed by hand marks a printer busy. A job is started
+A print is the job, and nothing typed by hand marks a printer busy: a job is started
 by its machine's own route (the Print card's, for a print) and listed here.
 """
 
@@ -163,8 +161,7 @@ def test_the_choices_say_where_a_machine_stands_and_what_its_job_can_name(
     assert not [p for p in parts if p == "printer_1" or p.startswith("printer_1.")]
     assert list(parts) == sorted(parts)
     # A made piece carries the picture and the camera it came from, for the job's
-    # record (the owner's answer of 2026-10-10: kept, not shown in a job's row); a
-    # part carries neither.
+    # record (kept, and not shown in a job's row); a part carries neither.
     by_path = {p["path"]: p for p in here["parts"]}
     assert by_path["bin_1"] == {
         "path": "bin_1",
