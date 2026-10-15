@@ -539,8 +539,8 @@ class CommsLog:
     """A per-port ring of what went over the wire, kept by ``PrinterLinks``.
 
     Survives a reconnect (the registry owns it, not the link) and a page
-    reload (it lives in the server), so the monitor shows polls made by
-    other clients too. Entries carry a monotonically increasing index so a
+    reload (it lives in the server), so a printer's Machine shows polls made
+    by other clients too. Entries carry a monotonically increasing index so a
     reader asks for ``since=N`` and gets only what is new.
     """
 
@@ -1101,8 +1101,8 @@ class ControlLatch:
     """Per-port arm state: control commands go through only while armed.
 
     Arming is an explicit act with a lifetime; every accepted command
-    renews it, silence lets it lapse. It exists so the monitor's control
-    overlay cannot heat or move a machine from a stray click.
+    renews it, silence lets it lapse. It exists so the control overlay of a
+    printer's Machine cannot heat or move a machine from a stray click.
     """
 
     def __init__(self):

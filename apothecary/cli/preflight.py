@@ -48,9 +48,9 @@ def preflight(passthrough: tuple[str, ...]) -> None:
         apothecary preflight --event push --ref main
 
     A pass here is evidence, not proof. `uses:` steps and the runner image are
-    not reproduced, and this machine carries tools a fresh runner does not --
-    which is how a green local suite hid a CI failure here more than once.
-    `walkthrough/09-preflight.md` has the detail.
+    not reproduced, and this machine carries tools a fresh runner does not, so
+    a green run here can still fail in CI. `walkthrough/09-preflight.md` has
+    the detail.
     """
     root = Path(__file__).resolve()
     runner = repo = None

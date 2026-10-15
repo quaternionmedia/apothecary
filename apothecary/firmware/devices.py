@@ -1,7 +1,6 @@
 """Devices: what is plugged in, what it is, what should be running, and what it says.
 
-Three views of one board, kept deliberately separate so the GUI can show
-where they disagree:
+Views of one board, kept separate so the GUI can show where they disagree:
 
 * **Detected** -- each toolchain module's own finding (``scan_ports``):
   ``arduino-cli board list`` for Arduino, pyserial's port list for Rust. A
@@ -337,8 +336,7 @@ def expected_firmware(
 
 
 # ``arduino-cli board list`` takes ~2 s; the viewer's board model, a Machine
-# and the firmware page each ask for it, often within a second of one
-# another. A short-lived cache of the raw scan (cached probes are merged
+# and the Bench each ask for it, often within a second of one another. A short-lived cache of the raw scan (cached probes are merged
 # afresh each call) turns those into one scan. Long enough to coalesce a
 # page's requests, short enough that a replug shows on the next click.
 SCAN_TTL = 2.0
@@ -683,7 +681,7 @@ def printer_reconnect(
     """Drop the held link and open a fresh one (no reset), then poll.
 
     The remedy for a wedged port or a board that was replugged: the comms
-    log is kept across the reopen so the monitor shows the whole story.
+    log is kept across the reopen so the printer's Machine shows the whole story.
     """
     state = state or get_state()
     links = links or gcode.get_printer_links()
@@ -1340,7 +1338,8 @@ def printer_query(
 
 
 class SerialStreams:
-    """Open ``arduino-cli monitor`` processes, one per port, stoppable as a group.
+    """Open serial monitors, one per port, stoppable as a group: arduino-cli's, or
+    the Rust module's own (``serial_monitor.py``), as ``listener_argv`` says.
 
     Uploads and probes need the port; ``stop_all()`` is called before any
     task starts so a devkit's Machine listening never blocks a flash -- it

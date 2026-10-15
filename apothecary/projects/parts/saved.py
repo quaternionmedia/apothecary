@@ -329,8 +329,8 @@ class SavedVariant(BaseModel):
     )
     values_in: str = Field(
         KEEP_DEFAULT,
-        description='Where its commit keeps its values: "text"; "variant-file" for one saved '
-        "before, whose scad here has them written in",
+        description='Where its commit keeps its values: "text"; "variant-file" for one whose '
+        "commit keeps them in <stem>.variant.json, and whose scad here has them written in",
     )
     deleted: bool = Field(
         False, description="It is in the trash (refs/apothecary/trash/), restorable"
