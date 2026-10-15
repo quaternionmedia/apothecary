@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 import apothecary.api as api
 from apothecary.api import _find_node_by_path, _site_store, app
+from apothecary.echs_pac_site import venue_present
 from apothecary.example_hierarchy import create_example_site
 from apothecary.firmware import devices as firmware_devices
 from apothecary.firmware import gcode as firmware_gcode
@@ -32,7 +33,10 @@ def reset_garage_site():
 def test_list_sites():
     response = client.get("/sites")
     assert response.status_code == 200
-    assert response.json() == ["datum_core", "garage", "parts_library"]
+    expected = ["datum_core", "garage", "parts_library"]
+    if venue_present():  # the ECHS-PAC export is on this machine
+        expected.append("echs_pac")
+    assert response.json() == sorted(expected)
 
 
 def test_get_unknown_site_is_404():

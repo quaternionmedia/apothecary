@@ -702,6 +702,7 @@
         import { makeMachineMarks, makeBoardBadge, sayBoard, toScene as marksToScene } from '/static/machine_marks.js';
         import { mountPictureMarks, axes as cameraAxes } from '/static/picture_marks.js';
         import { mountPictures } from '/static/pictures.js';
+        import { mountLighting } from '/static/lighting.js';
 
         const BASE_URL = {{ base_url | tojson }};
         const DEFAULT_SITE = {{ default_site | tojson }};
@@ -1205,6 +1206,8 @@
                 // camera's 📷 badge, its pyramid while it is selected or live, and its
                 // live video -- from one GET /sites/{s}/attached per site, asked again
                 // after anything that moves a host or a camera, or takes a picture.
+                // The lighting rig and the console's levels, when the site has a rig (lighting.js).
+                this.lighting = mountLighting({ scene: this.scene, base: BASE_URL });
                 this.pictureMarks = mountPictureMarks({
                     scene: this.scene, anchors: this.anchors, base: BASE_URL,
                     hostBounds: (path) => { const node = this.tree && this.nodeByPath(path); return node ? envelopeBounds(node) : null; },
@@ -1497,6 +1500,7 @@
                     // Another site's pins say nothing here: forgotten until the scan answers.
                     if (name !== this.siteName) this.boards.forget();
                     this.siteName = name;
+                    this.lighting.setSite(name);
                     this.tree = data.tree;
                     this.maxDepthValue = maxDepth(this.tree);
                     this.violations = data.violations;
