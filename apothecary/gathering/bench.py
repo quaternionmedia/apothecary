@@ -219,10 +219,8 @@ def draw_occasions(into: Path, *, seed: int = 20260820, each: int = 3) -> List[O
         )
 
         # --- two neighbouring parts of one larger thing ---------------------
-        # The two windows have to genuinely share several shapes. An earlier
-        # version overlapped by so little that typically one shape was in both,
-        # and one shared shape is not evidence of anything — the sorter said so,
-        # and it was right; the drawing was wrong.
+        # The two windows have to genuinely share several shapes: one shared
+        # shape is not evidence of anything, and the sorter rightly says so.
         spread = WINDOW_WIDE * 1.6
         scene = _scene(dice, spread=spread, count=11)
         step = spread - WINDOW_WIDE
@@ -307,11 +305,11 @@ def score(finder: ShapeFinder, occasions: Sequence[Occasion]) -> Score:
 def score_together(finder: ShapeFinder, occasions: Sequence[Occasion]) -> Score:
     """Hand every picture in at once and score every pair, including across sets.
 
-    This exists because scoring occasion by occasion missed the worst failure
-    this code has had. Pair by pair everything looked reasonable; handed a whole
-    folder, weak seams chained twelve unrelated photographs into one object.
-    Nothing in a pairwise score can see that, because the pairs that did the
-    damage were never in the same occasion and so were never compared.
+    Scoring occasion by occasion cannot see a chain built across occasions: pair
+    by pair everything can look reasonable while, handed a whole folder, weak
+    seams chain unrelated photographs into one object. Nothing in a pairwise
+    score can see that, because the pairs that do the damage are never in the
+    same occasion and so are never compared.
 
     Every pair from two different occasions is known to be unrelated. Anything
     else is a mistake, and here it is counted as one.

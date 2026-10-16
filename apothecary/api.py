@@ -1,13 +1,12 @@
-"""
-Apothecary API - FastAPI endpoints for OpenSCAD generation toolkit.
+"""Apothecary's server: the FastAPI app the viewer and the CLI talk to.
 
-This module provides REST API endpoints for:
-- Scene rendering to OpenSCAD code
-- Parts browsing and downloading
-- 3D viewer for part preview
+This module renders scenes to OpenSCAD, serves the parts library and its STLs,
+the sites and their nodes, and the one viewer page, and mounts the routers for
+the docs, pictures, views, cameras, jobs, the slicer, part edits, firmware and
+the ring's menus. ``/openapi.json`` lists every route.
 
-Note: STL files are generated on-demand and not stored in git.
-On startup, missing STLs are automatically generated if OpenSCAD is available.
+STL files are generated on demand and not stored in git. On startup, missing
+STLs are generated in the background when OpenSCAD is available.
 """
 
 # An install point of the guard (apothecary/stays_local.py), before anything
@@ -200,13 +199,12 @@ app = FastAPI(
 )
 
 # The viewer's 3D library, kept here rather than fetched from a public website
-# while somebody is using it. See apothecary/static/vendor/three/README.md: with
-# the network switched off, fetching it meant the viewer never loaded at all.
-# A CDN copy is also exactly what an ad blocker or a corporate proxy drops --
-# and when it goes, the page's script never executes, so the canvas, the
-# Site panel's tree and its SCAD come up empty together while the static
-# markup still reads "Layout valid". Frontend dependencies are vendored per
-# the house-stack record for the same reason.
+# while somebody is using it (apothecary/static/vendor/three/README.md). With
+# the network off, or a CDN copy dropped by an ad blocker or a corporate proxy,
+# the page's script never executes, so the canvas, the Site panel's tree and
+# its SCAD come up empty together while the static markup still reads "Layout
+# valid". Frontend dependencies are vendored per the house-stack record for
+# the same reason.
 STATIC_ROOT = Path(__file__).resolve().parent / "static"
 # Personal data stays on this machine by the shape of the program: the app
 # answers a client on loopback only and fences every page it sends
@@ -252,7 +250,7 @@ def _part_template() -> str:
 
 def _load_part_wrapper(name: str):
     # Only a registered part: a name from a URL is never turned into an import
-    # path (GET /parts/stl_renderer used to import that module and answer 500).
+    # path, so GET /parts/stl_renderer is a 404 and imports nothing.
     # Spellings a link may carry: the registry's name in any case of - and _
     # (datum-core), or a nested part's package path (rc.snowplow). Each resolves
     # to a registered wrapper, never to a module constructed from the URL.
@@ -693,8 +691,8 @@ def openscad_runs(
         None, max_length=128, description="Only this page's runs (the id it sends with each)"
     ),
 ):
-    """The queue of OpenSCAD runs: at most ``limit`` run at once (two; see
-    apothecary/projects/parts/stl_renderer.py's ``RUNS``) and the rest wait,
+    """The queue of OpenSCAD runs: at most ``limit`` run at once
+    (apothecary/projects/parts/stl_renderer.py's ``RUNS``) and the rest wait,
     first come first served. ``running``: each run's ``kind`` (``render``, or
     the export a check or compile makes: ``param``, ``echo``, ``csg``), its
     ``part`` and ``page``, how long it has run; ``waiting``: the same, with its
@@ -1163,10 +1161,9 @@ def validate_without_model(
 # =============================================================================
 # Site/Structure/Substructure/Feature hierarchy (prototype, unratified)
 #
-# Backed by a process-lifetime SiteStore (see site_store.py): edits persist
-# across requests, unlike /render's stateless Scene handling. Known
-# limitation: in-memory only, lost on restart, not shared across worker
-# processes -- fine for a single-process dev server.
+# Backed by a process-lifetime SiteStore: edits persist across requests,
+# unlike /render's stateless Scene handling. site_store.py says what it keeps
+# across a restart and what it does not share between worker processes.
 #
 # Routes that change a site stay `async def`: they run one at a time on the
 # event loop, which is all that serializes the store's plain dicts until it
@@ -1387,9 +1384,9 @@ def _primitive_descriptor(obj: OpenSCADObject, offset: Vector3D) -> Dict[str, ob
     the node's own ``position`` so the returned bounds are already
     world-space, matching ``world_bounds``). This covers every leaf in this
     repo's own examples. Returns None for anything richer (nested booleans,
-    Rotate, Scale, multiple children) -- the viewer falls back to a
-    bounding-box wireframe for those, a deliberate scope boundary, not a
-    bug: real CSG rendering of composite nodes is future work.
+    Rotate, Scale, multiple children): the viewer draws those from the STL
+    the server renders of the node's subtree
+    (``GET /sites/{name}/nodes/{path}/stl``).
     """
     if isinstance(obj, Translate):
         if len(obj.children) != 1:
@@ -1417,7 +1414,7 @@ def _primitive_descriptor(obj: OpenSCADObject, offset: Vector3D) -> Dict[str, ob
         bounds = BoundingBox3D(min_point=local_min + offset, max_point=local_max + offset)
         drawn = {"type": "cylinder", "h": obj.h, "r1": r1, "r2": r2, "bounds": _bounds_dict(bounds)}
         # Its facets, when it names them: a wedge is a cylinder of three, and drawn
-        # without them it was a round cone.
+        # without them it would be a round cone.
         if obj.fn:
             drawn["fn"] = obj.fn
         return drawn
@@ -1440,22 +1437,21 @@ def _assembly_tree(
 ) -> Dict[str, object]:
     """Recursive serialization of an Assembly node and everything beneath it.
 
-    Unlike ``_structure_summary`` (which flattens one extra level for the
-    old, depth-capped viewers), this walks the *whole* tree -- the shape the
-    fractal zoom viewer needs to navigate unbounded depth. ``children``,
-    ``additions``, and ``subtractions`` are all real Assembly nodes (a
-    garage printer's ``left_post``/``gantry_bar`` Features are additions, not
-    children), so all three are combined into one navigable ``children``
-    list here, each tagged with how it composes into its parent's geometry --
-    navigation doesn't care about that distinction, but a viewer showing
-    "what's inside" vs. "what's added/removed" might.
+    Unlike ``_structure_summary`` (the root's direct children and one level
+    below them, in the payload's ``structures``), this walks the *whole*
+    tree -- the shape the fractal zoom viewer needs to navigate unbounded
+    depth. ``children``, ``additions``, and ``subtractions`` are all real
+    Assembly nodes (a garage printer's ``left_post``/``gantry_bar`` Features
+    are additions, not children), so all three are combined into one
+    navigable ``children`` list here, each tagged with how it composes into
+    its parent's geometry -- navigation doesn't care about that distinction,
+    but a viewer showing "what's inside" vs. "what's added/removed" might.
 
     ``Assembly.world_bounds()`` only offsets by *this* node's own
-    ``position`` -- correct for a direct child of the root (the only depth
-    the old, depth-capped viewers ever showed), wrong for anything deeper,
-    since a node's ``position`` is relative to its immediate parent, not the
-    root. A Structure two levels down from the site root would render as if
-    its parent were sitting at the origin. ``parent_world_position``
+    ``position`` -- correct for a direct child of the root, wrong for
+    anything deeper, since a node's ``position`` is relative to its
+    immediate parent, not the root. A Structure two levels down from the
+    site root would render as if its parent were sitting at the origin. ``parent_world_position``
     accumulates every ancestor's position on the way down so every node's
     reported ``position``/``world_bounds`` is genuinely in one consistent
     global frame, however deep -- the fractal viewer's camera framing and
@@ -1522,10 +1518,9 @@ def _assembly_tree(
 def _site_payload(site, report) -> Dict[str, object]:
     """The site as the viewer consumes it, including its generated OpenSCAD.
 
-    ``scad`` used to be attached only by the layout route, so a site that had
-    merely been loaded -- never dragged -- left the viewer's code panel showing
-    its "Load a site..." placeholder indefinitely. It is string generation over
-    a tree already in memory, not an OpenSCAD process, so every read carries it.
+    Every read carries ``scad``, so a site merely loaded, never dragged, shows its
+    code in the viewer's code panel: it is string generation over a tree already
+    in memory, not an OpenSCAD process.
 
     A node that cannot compile is reported as a comment rather than a 500: the
     panel is one of several surfaces on the page, and the rest of them work.
@@ -2472,35 +2467,31 @@ def _default_site() -> str:
 
 @app.get("/viewer")
 async def viewer_home():
-    """Redirect to the fractal zoom viewer for the first registered site.
-
-    There is no longer a standalone parts browser or bare Site browser --
-    both are absorbed into one viewer (see ``site_viewer`` below); this is
-    just its default entry point.
+    """Redirect to the fractal zoom viewer on the default site (``_default_site``):
+    the one viewer's entry point when no site is named (``site_viewer`` below).
     """
     return RedirectResponse(f"/viewer/sites/{_default_site()}", status_code=307)
 
 
-# The firmware page and the printer monitor were pages of their own; they are
-# the Bench and a board's Machine in front of the world now (the consolidation
-# plan's Phase 5). Their links were handed out, so each still answers, with the
+# /firmware and /firmware/monitor are the Bench and a board's Machine in front
+# of the world. Links to them exist outside the app, so each answers with the
 # viewer and the right panel open: the viewer reads ``panel`` and ``machine``
 # from its address once the site's boards are known.
 
 
 @app.get("/firmware", include_in_schema=False)
 def firmware_page():
-    """The firmware page is the Bench: the viewer, on the default site, with it open."""
+    """``/firmware`` is the Bench: the viewer, on the default site, with it open."""
     return RedirectResponse(f"/viewer/sites/{_default_site()}?panel=bench", status_code=307)
 
 
 @app.get("/firmware/monitor", include_in_schema=False)
 def monitor_page(port: str = ""):
-    """The printer monitor is a board's Machine: the viewer on the site the port is
-    pinned in, its Machine open there -- or, pinned nowhere, on the default site with
-    its Machine open; either way the Machine is a tab of the rail's strip. A port of
-    the wrong shape is dropped, as the page dropped it: the viewer opens with nothing
-    in front of it."""
+    """``/firmware/monitor?port=`` is a board's Machine: the viewer on the site the
+    port is pinned in, its Machine open there -- or, pinned nowhere, on the default
+    site with its Machine open; either way the Machine is a tab of the rail's strip.
+    A port of the wrong shape is dropped: the viewer opens with nothing in front of
+    it."""
     try:
         validate_port(port) if port else None
     except ValueError:
@@ -2519,12 +2510,10 @@ def site_viewer(name: str, request: Request, focus: str = Query(default="")):
     """Fractal zoom viewer: navigates any registered site's Assembly tree at
     any depth with standardized controls (prototype).
 
-    Absorbs both previous viewers: the registered ``parts/`` library is
-    reachable by selecting the ``parts_library`` site and zooming down to a
-    leaf (``part_ref`` set) -- the old part-viewer experience, no longer a
-    separate page. ``focus`` is an optional dotted path (e.g.
-    ``workbench.frame_system``) used to deep-link directly to a node instead
-    of always opening at the root.
+    The registered ``parts/`` library is the ``parts_library`` site, each part
+    a leaf of it (``part_ref`` set), reached by zooming down. ``focus`` is an
+    optional dotted path (e.g. ``workbench.frame_system``) that opens the
+    viewer at that node instead of at the root.
     """
     if name not in _site_store.names():
         raise HTTPException(status_code=404, detail=f"Site '{name}' not found")
@@ -2553,26 +2542,23 @@ def _demo_folder() -> Optional[str]:
 def part_view(name: str):
     """A part is reached by navigating to it, not by a second viewer.
 
-    This deep-link survives because links to it were handed out, but it now
-    lands in the one viewer, focused on the part, where the parameter controls
-    and the contested values live. Two pages onto one object is how a codebase
-    ends up with two answers about it.
+    Links to this address exist outside the app, so it lands in the one
+    viewer, focused on the part, where the parameter controls and the
+    contested values live.
     """
     part = _load_part_wrapper(name)  # 404 here rather than after a redirect
-    # Focus on the part's own name, not on whatever spelling was typed. The
-    # library was consolidated to underscore case and links to `datum-core`
-    # were handed out before that; the wrapper lookup already tolerates the
-    # old spelling, and this makes the viewer land on the part rather than on
-    # a focus string matching nothing.
+    # Focus on the part's own name, not on whatever spelling was typed: a link
+    # may spell it `datum-core`, which the wrapper lookup accepts, and the
+    # viewer lands on the part rather than on a focus string matching nothing.
     canonical = part.name or name
     return RedirectResponse(
         f"/viewer/sites/parts_library?focus={quote(canonical, safe='')}", status_code=307
     )
 
 
-# The project's first APIRouter, mounted last. Its handlers reach back into the
-# helpers above, so this module has to be finished before it is imported --
-# importing it at the top would close a circle.
+# Mounted last: its handlers reach back into the helpers above, so this module
+# has to be finished before it is imported -- importing it at the top would
+# close a circle.
 from .routes.menu import router as menu_router  # noqa: E402
 
 app.include_router(menu_router)

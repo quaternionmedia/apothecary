@@ -4,7 +4,7 @@
 ``BasePart``, so the one parameter contract (``projects/parts/params.py``) and
 the one editor in the browser serve it as they serve a part from the parts
 folder and a piece made from a picture: Part › Edit on its ring opens it in
-Selected (the owner's decision of 2026-10-04).
+Selected.
 
 - ``params_model`` is a ``CameraParams`` built for the record: where its lens
   stands (``x``, ``y``, ``z``, in the site's frame, mm), its ``turn`` about the
@@ -21,7 +21,7 @@ Selected (the owner's decision of 2026-10-04).
 A field of view typed here is the camera's lens from then on, a person's, and
 its pictures no person sized follow it, as they follow a width that teaches it.
 
-PROTOTYPE -- not ratified.
+A prototype: no ratified record governs it.
 """
 
 from __future__ import annotations

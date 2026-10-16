@@ -31,8 +31,8 @@ def toolchain_status(
 ) -> ToolchainStatus:
     """Everything ``validate`` reports; never raises -- problems are listed.
 
-    The top-level fields are the Arduino module's, as they always were;
-    ``toolchains`` holds every module's status, Arduino's first.
+    The top-level fields are the Arduino module's; ``toolchains`` holds every
+    module's status, Arduino's first.
     """
     arduino = ArduinoModule()
     status = arduino.legacy_status(cli, esptool)

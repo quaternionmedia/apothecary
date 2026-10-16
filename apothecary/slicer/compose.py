@@ -1,9 +1,7 @@
 """What a slice is composed from beyond the slicer's own profiles: the start of a
 print, the filament, and what a piece's word declares.
 
-The owner's decision of 2026-10-10 (docs/plans/slicer-2026-10-10.md, *Decided
-after the server side*): the start of a print is composed from modules as they
-are wanted; the filament is the printer's one, and choosing another is a
+The start of a print is composed from modules as they are wanted; the filament is the printer's one, and choosing another is a
 module; a word declaring print settings for the pieces made as it has the shape
 a part's declaration has. Each is a ``Piece`` here, and each says what it does.
 

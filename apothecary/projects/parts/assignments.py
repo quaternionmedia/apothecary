@@ -1,8 +1,7 @@
 """A SCAD text's top-level assignments, where they are, and how to write one.
 
-The text is the truth (docs/plans/part-iteration-2026-10-12.md, "parameters
-and text, tied together"): a part's values are the assignments in its SCAD,
-a control moves one by rewriting its value in place, and a value typed in the
+The text is the truth: a part's values are the assignments in its SCAD, a
+control moves one by rewriting its value in place, and a value typed in the
 text moves its control. The page rewrites lines itself, so it and this module
 must agree on what a top-level assignment is. This is the grammar both follow.
 

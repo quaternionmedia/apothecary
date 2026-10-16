@@ -1,13 +1,12 @@
 """What is unresolved here, and what exists to resolve it.
 
 Two indexes over things this repository already knows, so a reader does not
-have to run five commands and hold the answers in their head.
+have to run each command and hold the answers in their head.
 
 **The problem space** is every open question the repository can state: a
 dimension its sources disagree about, a part whose declared size its geometry
 does not have, an envelope nobody has measured, a layout that does not close.
-Each carries who can close it, which is the interesting field — a problem
-nobody owns is how a project accumulates them.
+Each carries who can close it: a problem nobody owns is one a project keeps.
 
 **The solution space** is what is here to close them with: the parts, the
 assemblies, the providers behind the black-box seam, and the commands that
@@ -17,7 +16,7 @@ Neither index invents anything. Every entry is derived from a model that
 already exists, so this cannot drift from the repository the way a
 hand-maintained issue list does.
 
-**Scope, stated so its absence is not mistaken for silence.** These are open
+**Scope.** These are open
 *questions*, not failing checks. An assembly that has drifted from the parts it
 models is a failing test, not an entry here — `tests/test_datum_core_site.py`
 is that gate, and the suite is where it reports. The index answers "what is
@@ -107,9 +106,8 @@ def _contested_problems(part) -> List[Problem]:
                 kind="contested",
                 subject=part.name,
                 summary=f"{part.name}.{name} has {len(candidates)} candidate values",
-                # From the table, not typed again here. Two places declaring
-                # one fact is the duplication this whole index exists to avoid,
-                # and an adversarial pass caught this one lying dormant.
+                # From the table, not typed again here: two places declaring
+                # one fact is the duplication this index exists to avoid.
                 owner=KIND_OWNER["contested"],
                 closes_with=(
                     "choose one in the viewer — the panel lists each candidate "
@@ -133,11 +131,11 @@ def _readiness_problems(part, report) -> List[Problem]:
             if "declares no bounds" in check.detail:
                 kind = "unbounded"
             elif check.state == "unknown":
-                # Nothing was measured, so nothing can have drifted. On a fresh
-                # checkout no part is rendered yet, and calling that drift told
-                # a reader the declared size disagreed with geometry that was
-                # never looked at. The missing render is already open on its
-                # own, as `unprintable`, with the command that closes it.
+                # Nothing was measured, so nothing can have drifted: on a fresh
+                # checkout no part is rendered, and calling that drift would tell
+                # a reader the declared size disagrees with geometry nobody
+                # looked at. The missing render is open on its own, as
+                # `unprintable`, with the command that closes it.
                 continue
             else:
                 kind = "drift"

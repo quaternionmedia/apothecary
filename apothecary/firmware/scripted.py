@@ -7,8 +7,8 @@ small Python script written into a folder (``write_fake_*``) and named by the
 variable that names the real tool (``ARDUINO_CLI``, ``CARGO``, ``ESPFLASH``); the
 scripts in one folder are one bench, sharing one simulated devkit.
 
-They were the unit tests' alone; ``tests/firmware_helpers.py`` imports them from
-here now, since a command a person runs does not import from the tests.
+``tests/firmware_helpers.py`` imports them from here: a command a person runs
+does not import from the tests.
 """
 
 import stat

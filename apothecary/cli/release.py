@@ -2,9 +2,8 @@
 
 This repository is consumed by pinned downstreams, and the enclosure record
 asks them to depend on a *released* version rather than a commit. That is an
-obligation on this side too: geometry reaches a consumer by publishing, and a
-contributor here had no way to learn that until it was written down somewhere
-the code could point at.
+obligation on this side too: geometry reaches a consumer by publishing
+(walkthrough/10-being-depended-on.md).
 """
 
 from __future__ import annotations
@@ -44,9 +43,9 @@ def release(check_only: bool) -> None:
         for reason in report.reasons:
             status.line("blocked", reason)
         click.echo("")
-        # The consumer's side of this is already automated: it reports the
-        # deviation while nothing is published and fails once something is, so
-        # nobody has to remember to go and tighten it.
+        # The consumer's side of this is automated: it reports the deviation
+        # while nothing is published and fails once something is, so nobody has
+        # to remember to go and tighten it.
         status.verdict(
             False,
             "downstream is pinned to a commit until this repository publishes",

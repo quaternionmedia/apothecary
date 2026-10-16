@@ -62,11 +62,10 @@ control is deleted.
   only, as its typing does, and are written in the viewer's documentation.
 - The drawing library's own listeners (turning and sliding the view) are not in
   this count.
-- It is one page, the viewer -- the only page there is since the firmware
-  page and the printer monitor became the Bench and a board's Machine in front
-  of the world (the consolidation plan's Phase 5) -- plus the widget modules it
-  imports and the marks modules it imports by name (`MARKS`: what the world
-  wears -- a machine's marks, a picture's -- and the boards' model behind them).
+- It is one page, the viewer (``/firmware`` and ``/firmware/monitor`` lead to
+  it, as the Bench and a board's Machine) -- plus the widget modules it imports
+  and the marks modules it imports by name (`MARKS`: what the world wears -- a
+  machine's marks, a picture's -- and the boards' model behind them).
   `ring.js`, `panels.js`, `anchors.js` and `keys.js` (how a key is named, and
   when a shortcut may act) stay off the meter as chrome with their own tests;
   `board_text.js` writes text and listens to nothing. The command line and
@@ -84,10 +83,8 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 TEMPLATES = Path(__file__).resolve().parents[1] / "templates"
 VIEWER = TEMPLATES / "fractal_viewer.html.j2"
-# The pages there are to count: one, the viewer. The firmware page and the printer
-# monitor were pages of their own until the consolidation plan's Phase 5 made them
-# the Bench and a board's Machine, in front of the world; their addresses lead
-# there, and their templates are gone.
+# The pages there are to count: one, the viewer. /firmware and /firmware/monitor
+# redirect to it, to the Bench and a board's Machine in front of the world.
 PAGES = (VIEWER,)
 
 # --- what kind of surface -------------------------------------------------
@@ -111,7 +108,7 @@ EFFECTS = (WHAT_IS_THERE, WHAT_YOU_SEE, NOTHING)
 UNCLASSIFIED = "unclassified"
 
 
-class NothingFound(Exception):
+class NothingFound(Exception):  # timeless: allow a search's result, in the present
     """The page was read and nothing was found in it.
 
     A refusal, not an answer of zero: a page that could not be read and a page
@@ -145,8 +142,8 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "apply-btn": (WIDGET, WHAT_IS_THERE, "a button that rebuilds a piece with its staged numbers"),
     "revert-btn": (WIDGET, WHAT_YOU_SEE, "a button that puts the staged numbers back"),
     "defaults-btn": (WIDGET, WHAT_YOU_SEE, "a button that stages a part's own numbers"),
-    # The staged numbers' undo and redo, and the ghost of what was drawn before
-    # (the part-iteration plan of 2026-10-12): Part › History and Part › View.
+    # The staged numbers' undo and redo, and the ghost of what was drawn before:
+    # Part › History and Part › View.
     "undo-btn": (WIDGET, WHAT_YOU_SEE, "a button that undoes the last change to the staged numbers"),
     "redo-btn": (WIDGET, WHAT_YOU_SEE, "a button that redoes the change undone"),
     "ghost-toggle": (
@@ -161,8 +158,8 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         "a button that puts back the work the tab kept from before a reload",
     ),
     "kept-discard": (WIDGET, WHAT_YOU_SEE, "a button that lets go of that kept work"),
-    # One control per parameter (widgets/part_controls.js), written there as markup
-    # since the part-iteration plan: built by the page before it, they were not counted.
+    # One control per parameter (widgets/part_controls.js), written there as markup,
+    # so the census counts them.
     "param-slider": (WIDGET, WHAT_YOU_SEE, "a slider that stages one of a part's numbers"),
     "param-number": (
         WIDGET,
@@ -197,9 +194,9 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "compare-with": (WIDGET, WHAT_YOU_SEE, "a drop-down of what a variant is compared with"),
     "compare-mode": (WIDGET, WHAT_YOU_SEE, "a drop-down: the two overlaid, or side by side"),
     "compare-close": (WIDGET, WHAT_YOU_SEE, "a button that ends a comparison"),
-    # A part's controls tied to its text (the part-iteration plan's "parameters and
-    # text, tied together"): a computed value moved asks first, whether its expression
-    # gives way to the plain value; and a part in a submodule's upstream SCAD, read only.
+    # A part's controls tied to its text: a computed value moved asks first, whether
+    # its expression gives way to the plain value; and a part in a submodule's
+    # upstream SCAD, read only.
     "computed-replace": (
         WIDGET,
         WHAT_IS_THERE,
@@ -207,7 +204,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     ),
     "computed-keep": (WIDGET, WHAT_YOU_SEE, "a button that leaves a computed value computed"),
     "part-upstream": (WIDGET, NOTHING, "a link that opens a part's upstream SCAD, read only"),
-    # The SCAD editor where the part's read-only source stood (widgets/scad_editor.js):
+    # The SCAD editor (widgets/scad_editor.js):
     # the name a save keeps a variant under, Save, Float and Fullscreen; and a saved
     # variant chosen from a list -- under the part's parameters, or in the editor.
     "scad-name": (WIDGET, WHAT_YOU_SEE, "a box for the name a variant is saved under"),
@@ -252,8 +249,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "contents-item": (LIST, WHAT_YOU_SEE, "a row of the list of pieces"),
     "breadcrumb": (LIST, WHAT_YOU_SEE, "the trail back to where you came from"),
     # ---- a board's Machine, apothecary/static/widgets/machine.js ------------
-    # One board, close up, as the monitor page had it. The header: how often to
-    # poll, and the link itself.
+    # One board, close up. The header: how often to poll, and the link itself.
     "auto": (WIDGET, WHAT_YOU_SEE, "a tick-box that polls on a schedule"),
     "interval": (WIDGET, WHAT_YOU_SEE, "a drop-down for how often to poll"),
     "poll": (WIDGET, WHAT_YOU_SEE, "a button that polls the printer once"),
@@ -335,34 +331,32 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "corner:BL": (WIDGET, WHAT_IS_THERE, "a button that moves the nozzle to the back-left corner"),
     "corner:BR": (WIDGET, WHAT_IS_THERE, "a button that moves the nozzle to the back-right corner"),
     # ---- the Bench, apothecary/static/widgets/{toolchain,sketches,tasks}.js
-    # The firmware page's sections in front of the world, written once in the
-    # modules and named as the page named them (by class now, since the form and
-    # the task log are mounted by the Bench and by a board's Flashing card). The
-    # toolchain: install it, list what it knows, add to it.
+    # The Bench's sections, written once in the modules and named by class, since
+    # the form and the task log are mounted by the Bench and by a board's Flashing
+    # card. The toolchain: install it, list what it knows, add to it.
     "install-btn": (WIDGET, WHAT_IS_THERE, "a button that installs or updates arduino-cli"),
     "install-force": (WIDGET, WHAT_YOU_SEE, "a tick-box that makes the install start over"),
     "lib-input": (WIDGET, WHAT_YOU_SEE, "a box for a library to install"),
     "lib-btn": (WIDGET, WHAT_IS_THERE, "a button that installs that library"),
     "core-install": (WIDGET, WHAT_IS_THERE, "a button that installs a board core"),
-    # Every other toolchain module, drawn from the status beside arduino-cli: Rust
-    # for the ESP32 today, one Install each.
+    # Every other toolchain module, drawn from the status beside arduino-cli, one
+    # Install each.
     "module-install": (
         WIDGET,
         WHAT_IS_THERE,
         "a button that installs a toolchain module's tools (Rust for the ESP32)",
     ),
-    # The slicer's modules, drawn after the toolchain's from GET /slicer/status:
-    # OrcaSlicer today, its pinned release installed by its own Install.
+    # The slicer's modules, drawn after the toolchain's from GET /slicer/status, each
+    # with its pinned release installed by its own Install.
     "slicer-install": (WIDGET, WHAT_IS_THERE, "a button that installs the slicer (OrcaSlicer)"),
-    # Sketches: pick one from a drop-down (a list on the firmware page), name the
-    # board and the port, build and send.
+    # Sketches: pick one from a drop-down, name the board and the port, build and
+    # send.
     "sketch-select": (WIDGET, WHAT_YOU_SEE, "a drop-down of the sketches under parts/"),
     "fqbn-input": (WIDGET, WHAT_YOU_SEE, "a box for the board to build for"),
     "port-select": (WIDGET, WHAT_YOU_SEE, "a drop-down of ports to upload to"),
     "compile-btn": (WIDGET, WHAT_IS_THERE, "a button that compiles the chosen sketch"),
     "upload-btn": (WIDGET, WHAT_IS_THERE, "a button that compiles and uploads it"),
-    # esptool: raw images onto an Espressif chip, one offset and path a line (rows
-    # of three controls and an add button on the firmware page).
+    # esptool: raw images onto an Espressif chip, one offset and path a line.
     "esp-chip": (WIDGET, WHAT_YOU_SEE, "a box for the chip to flash"),
     "esp-baud": (WIDGET, WHAT_YOU_SEE, "a box for the flashing baud rate"),
     "esp-images": (
@@ -377,8 +371,8 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # Every picture under the picture root, each row chosen by a click for the
     # ring's Picture › Folder to pin (a list, not a control), a kept one with
     # Forget (TAKEN_BACK), Purge, a file picker that keeps pictures here pinned
-    # nowhere, and the gathering's section until gathering leaves core: the
-    # pictures ticked, gathered into a report, and what a person says about them.
+    # nowhere, and the gathering's section: the pictures ticked, gathered into a
+    # report, and what a person says about them.
     "pictures-forget": (WIDGET, WHAT_YOU_SEE, "a button that forgets one kept picture"),
     "pictures-purge": (
         WIDGET,
@@ -420,10 +414,10 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "print-resume": (WIDGET, WHAT_IS_THERE, "a button that feeds the print from here again"),
     "print-cancel": (WIDGET, WHAT_IS_THERE, "a button that ends the print from here, heaters off"),
     # ---- Settings, apothecary/static/widgets/settings.js -------------------
-    # Every shortcut and navigation setting (the input plan of 2026-10-12): one row
-    # each, its default shown and a reset beside it, and Reset all. They change how
-    # the page takes a press, not what is there, and none is ring-backed: the plan
-    # gives the panel a cell (View › Settings), not each row one.
+    # Every shortcut and navigation setting: one row each, its default shown and a
+    # reset beside it, and Reset all. They change how the page takes a press, not
+    # what is there, and none is ring-backed: the panel has a cell (View ›
+    # Settings), not each row one.
     "setting-key": (
         WIDGET,
         WHAT_YOU_SEE,
@@ -586,8 +580,7 @@ RING_BACKED: Dict[str, str] = {
     "scad-fullscreen": "part:fullscreen",
     "saved-variant": "part:variant:draw",
     # and so is what can be done to a saved variant, each a cell of Part › Variants ›
-    # its name, and the trash's, of Part › Variants › Deleted (the owner's answer of
-    # 2026-10-12)
+    # its name, and the trash's, of Part › Variants › Deleted
     "variant-rename": "part:variant:rename",
     "variant-duplicate": "part:variant:duplicate",
     "variant-history": "part:variant:history",
@@ -728,11 +721,10 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     # done to the scene itself
     "canvas:dblclick:onDoubleClick": (GESTURE, WHAT_YOU_SEE, "double-tapping to step in"),
     "canvas:wheel:onWheel": (GESTURE, WHAT_YOU_SEE, "the wheel, with a counter of its own"),
-    # The pointer in the world, decided at the release (the input plan of 2026-10-12):
-    # a still left click selects, or clears the selection on empty space; a still
-    # right click re-centres; a drag is the view's. Held with Settings' modifier, the
-    # right button is the ring's, counted with the ring. A badge passes the right
-    # button to what it stands for.
+    # The pointer in the world: a still left click selects, or clears the selection
+    # on empty space; a still right click re-centres; a drag is the view's. Held with
+    # Settings' modifier, the right button is the ring's, counted with the ring. A
+    # badge passes the right button to what it stands for.
     "canvas:pointerdown:onPress": (
         GESTURE,
         WHAT_YOU_SEE,
