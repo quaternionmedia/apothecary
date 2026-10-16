@@ -3,7 +3,7 @@
   "slicer": "orcaslicer",
   "start": {
     "modules": ["home"],
-    "source": "the owner's decision of 2026-10-10 (docs/plans/slicer-2026-10-10.md): the start of a print is composed from modules as they are wanted; homing, with no levelling, for now -- using the stored mesh, probing each print and a measured first-layer offset are stubs"
+    "source": "the owner's decision of 2026-10-10 (docs/plans/slicer-2026-10-10.md): the start of a print is composed from modules as they are wanted; homing, with no levelling -- using the stored mesh, probing each print and a measured first-layer offset are stubs"
   },
   "filament": {
     "modules": ["printer"],

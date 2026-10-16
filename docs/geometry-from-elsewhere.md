@@ -57,21 +57,18 @@ footprint is what places it: the viewer centres the mesh in the footprint
 box, the layout check uses it for overlaps, and the site's own OpenSCAD
 render imports the STL at the node's position.
 
-Two things worth knowing about OpenSCAD 2021.01, the version on most
-machines: it drops a mesh it cannot read back into a boolean ("The given
-mesh is not closed", a CGAL assertion) from a union **and exits 0** -- so a
-render that unions an imported mesh with anything else is checked for
-that, and a node's STL is refused rather than served without its body
-(`RenderResult.dropped`). Its own exports are the usual culprit: parts that
+OpenSCAD 2021.01, the version most package managers carry
+([openscad.md](openscad.md#what-openscad-202101-cannot-do) lists what it
+cannot do), drops a mesh it cannot read back into a boolean ("The given mesh is not closed", a CGAL
+assertion) from a union and exits 0, so a render that unions an imported
+mesh with anything else is checked for that, and a node's STL is refused
+rather than served without its body (`RenderResult.dropped`). Its own exports are the usual culprit: parts that
 merely touch along an edge, pins drawn as hexagonal prisms, a cylinder
 cutting a box's face. The models here overlap their neighbours by half a
 millimetre for that reason, and every one of them survives a union. A mesh
 from elsewhere that does not is still drawn by the viewer (it draws a part
 by its own STL) and still renders alone; it is the union with other
-geometry that OpenSCAD refuses. And the viewer, focused *inside* a node,
-draws the node's children, not the node -- zoomed into a printer you see
-its board and its posts, not its body, which is the picture at the level
-above.
+geometry that OpenSCAD refuses.
 
 A mesh that is not in the scene's frame can be moved in the model rather
 than in the file: `Import(file=..., scale=25.4, rotate=Vector3D(x=90),
@@ -102,21 +99,15 @@ file of its own there is a library its parts include, not a part.
 
 ## The bench, drawn as it is
 
-The garage's printer is an Ender 3 (`parts/ender3`): a 2018 original with the
-power supply on the right side of the frame behind the upright, the
-electronics box under the bed at the front left, the LCD off the front
-right corner and the spool on a bracket over the top bar -- built in
-OpenSCAD from Creality's published dimensions (440 x 440 x 465 overall,
-220 x 220 x 250 printable; the SCAD says which numbers are specifications
-and which are measured). The axes are parameters (`z_axis`, `x_axis`,
-`y_axis`), so the model can stand where the last poll said.
-
-The boards are the boards (`parts/boards/`): an Arduino Uno R3, a Raspberry
-Pi 4 B, a Teensy 4.0, an ESP32-DevKitC V4 and a Creality V4.2.2 mainboard,
-each from its maker's published drawing (outline, holes, headers, jacks),
-each described by a sidecar. The printer's `mainboard` node is the Creality
-board in the electronics box; `esp32_blink` is the DevKitC standing on its
-pins; an Uno, a Pi and a Teensy lie at the right end of the bench.
+The garage's printer is an Ender 3 and its boards are the boards on the
+bench, each drawn in OpenSCAD from its maker's published dimensions:
+[`parts/ender3`](../parts/ender3/README.md), a wrapper whose axes are
+parameters, so the model stands where the last poll said, and
+[`parts/boards`](../parts/boards/README.md), each board described by a
+sidecar. Their READMEs say what each is. The printer's `mainboard` node is
+the Creality board in its electronics box; `esp32_blink` is the DevKitC
+standing on its pins; an Uno, a Pi and a Teensy lie at the right end of the
+bench.
 
 A machine drawn as it is needs one more thing than a block: where its build
 volume starts. `build_origin` on a node with a `build_volume` says where
@@ -127,9 +118,6 @@ the bed plane, the nozzle marker and a bed reading's
 relief sit on the Ender 3's bed at 95 mm, not on the floor of its footprint.
 Without it, a viewer centres the volume on the footprint and puts it on the
 floor, which is right for a block.
-
-No mesh of anyone else's went into any of these; they are our own OpenSCAD
-from public dimensions, MIT like the rest of the repository.
 
 The walkthrough's page 12 ([`walkthrough/12-the-bench-as-it-is.md`](../walkthrough/12-the-bench-as-it-is.md))
 is a run of all of this -- a file measured, the sidecar part, the printer
