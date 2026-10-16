@@ -65,6 +65,7 @@ is not a member: it is its own Cargo project, built by its own toolchain
 | `submodule-check.yml` | A submodule pin its own remote does not have |
 | `leak-check.yml` | On a pull request into `main` and a push to it: a tracked file naming an account's home folder, a path through one person's home layout or a session's scratch space, a shared-conversation link, or a conversation archive's path (the corpus's seed check, copied to `.github/qm-seed/`) |
 | `one-pr-check.yml` | A pull request that is ready while its base is another open pull request's branch, and a pull request body that addresses its own contributor (the corpus's seed checks, copied to `.github/qm-seed/`) |
+| `integrates.yml` | A pull request whose head conflicts with the open pull requests merged before it, depth first from their base and oldest first on each, and every pull request stacked on it (`.github/ci/check_integrates.py`): it is fixed in its own branch before it merges |
 
 Nothing else is a gate. Formatting is not checked in CI, and neither is the Rust workspace.
 
