@@ -77,8 +77,10 @@ Both are fixtures in `conftest.py`; the recorders themselves are in `doc_capture
   that varies -- and a step that would show one names it instead. A screenshot
   is rewritten only when its pixels change; commit the page and pictures when
   they do. What changes on every run whatever the page does -- a time, a
-  picture's name made of one -- is blanked (`shows`'s `blank`), so a picture
-  changes only when the page does. A loop's page --
+  picture's name made of one -- is blanked (`shows`'s `blank`), and the picture
+  is taken once the page has drawn under its blanks, at the size they leave it
+  (`doc_capture.picture`), so a picture changes only when the page does. A
+  loop's page --
   `walkthrough/13-a-picture-to-a-print.md` from `test_picture_to_print.py`,
   `walkthrough/14-designing-a-part.md` from `test_part_loop.py`,
   `walkthrough/15-firmware.md` from `test_the_firmware_loop.py`,
@@ -91,6 +93,12 @@ Both are fixtures in `conftest.py`; the recorders themselves are in `doc_capture
   are marked `docs` and skip unless `--generate-docs` is given;
   `apothecary docs generate` runs them that way, on a scripted server of its own.
 
-Before a screenshot of the viewer, its blanks in the page, `viewer_ready.settled(page)`
-waits until the level's geometry has loaded (`window.fractalViewer.waveDone`) and
-the canvas has drawn it, at the size the blanks leave it.
+After the browser tests, CI runs `tests/e2e/picture_drift.py`: a walkthrough
+picture the run rewrote that differs from the committed one in more than its
+`TOLERANCE` of the pixels is named in a warning, and it never fails the run,
+since a person judges a picture against its caption.
+
+Before a screenshot of the viewer, `viewer_ready.settled(page)` waits until the
+level's geometry has loaded (`window.fractalViewer.waveDone`), the camera is at
+rest, the badges' occlusion is tested where it came to rest, nothing is part
+way through an animation, and the canvas has drawn it.
