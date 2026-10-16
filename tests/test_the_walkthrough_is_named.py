@@ -43,7 +43,7 @@ def test_the_command_collects_the_run_that_writes_the_page():
         assert run in collected, f"`test run` does not collect {module.name}::{run}"
 
 
-# A loop's page is written by the browser suite alone (the loops plan, 2026-10-10), so
+# A loop's page is written by the browser suite alone, so
 # `apothecary test run` stays quick: its test is marked e2e and not walkthrough, and
 # passes browser_suite_only=True to the walkthrough fixture, which says so in the page.
 LOOP_PAGES = {

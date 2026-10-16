@@ -20,7 +20,7 @@ from viewer_ready import UNDER_THE_STAGE_BAR, by_hand
 @pytest.mark.docs
 def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     """Zoom from the garage's Structures down to a Feature, then switch to
-    the parts library and zoom to a part -- the absorbed part view.
+    the parts library and zoom to a part, its SCAD in Selected's editor.
     """
     page.request.post(f"{base_url}/sites/garage/reset")
 
@@ -69,7 +69,7 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     # The same navigation from the ring: a Ctrl+right-click on empty canvas opens
     # the canvas ring; Pieces (cell 8) lists this level in groups; digits choose.
     # Empty floor in front of the building, to the right of its front corner: room for
-    # the whole ring, which at the world's lower left was clipped by the canvas's edge.
+    # the whole ring, which the canvas's edge would clip at the world's lower left.
     page.locator("#viewer-canvas").click(
         button="right", modifiers=["Control"], position={"x": 680, "y": 560}
     )
@@ -150,6 +150,6 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     scad = page.locator("#part-scad")
     expect(scad).to_be_visible()
     # Its heading just under the stage bar, the source below it: the bar stands over the
-    # top of Selected as it scrolls, and covered the words above the heading.
+    # top of Selected as it scrolls, and would cover the words above the heading.
     scad.evaluate(f"(el) => ({UNDER_THE_STAGE_BAR})(el.previousElementSibling)")
-    docs.step("Select a part leaf -- its real SCAD source is the absorbed part view")
+    docs.step("Select a part leaf -- its SCAD, in the editor under its parameters in Selected")

@@ -1,15 +1,18 @@
 # 12 — The bench as it is, and a camera looking at it
 
-**This page is written by the run it describes.** Every sentence below
-was emitted by a test that had just asserted it, and the whole page is
-rewritten by the ordinary test command. Editing it by hand is editing
-the output of a program: the next run puts it back.
+Written by `tests/e2e/test_docs_bench_walkthrough.py`, and
+rewritten by the ordinary test command (`uv run apothecary test run`).
+Each numbered step is written as the run reaches it, after the assertions
+before it pass, and what a step shows is what the run had then. The
+opening, the notes under it and the list of what the page does not show
+are the test's fixed words. Editing the page by hand is editing the output
+of a program: the next run puts it back.
 
 A mesh made in another program is brought in measured, not trusted; a part can be a folder with a sidecar and no Python; the garage's printer is an Ender 3 from published dimensions and its boards are the boards. A camera placed at a piece is drawn there, at the level where that piece is, and nowhere else. And nothing here leaves the machine, by construction rather than by anyone's care.
 
 **Runtime-bound.** The model half runs in this process. The browser half drives a real browser against a real server of its own, whose picture folder holds only the pictures this page puts there; the browser is launched with a fake camera so there is one to place. It needs no network, and it refuses one.
 
-Its pictures were taken once every part's STL that OpenSCAD version 2021.01, the OpenSCAD its server runs, can build was built by it; a part it cannot build is drawn from an STL already there, or as its box.
+Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its server runs, can build from an STL it built; a part it cannot build is drawn from an STL already there, or as its box.
 
 ---
 
@@ -95,7 +98,7 @@ GET /sites/garage/attached -> cameras: []
 
 ## 12. What the browser put here, it can take back
 
-Site's Pinned lists what a page pinned -- cameras, views, boards -- every site's, each row naming its site and carrying the button that takes it back, from here, without switching to that site; a pin whose site or piece is gone is shown as such, and this is the one place it can be seen. Pictures lists every picture in the picture folder as thumbnails, grouped by the camera that took them -- here none did -- the folder's own and the ones the browser kept (those added from its file picker kept as they were named under uploads/), each with where it is pinned as a view, and Forget on a kept one. A picture kept and pinned nowhere waits to be chosen: one clicked is chosen, as shelf.png is here, and the ring's Picture › Folder pins it where the ring stands -- the seven newest by modification time, an older one as its last cell -- as the status bar says.
+Site's Pinned lists what a page pinned -- cameras, views, boards -- every site's, each row naming its site and carrying the button that takes it back, from here, without switching to that site; a pin whose site or piece is gone is shown as such, and this is the one place it can be seen. Pictures lists every picture in the picture folder as thumbnails, grouped by the camera that took them -- here none did -- the folder's own and the ones the browser kept (those added from its file picker kept as they were named under uploads/), each with where it is pinned as a view, and Forget on a kept one. A picture kept and pinned nowhere waits to be chosen: one clicked is chosen, as shelf.png is here, and the ring's Picture › Folder pins it where the ring stands, as the status bar says. Folder holds the 7 newest by modification time; with more in the folder, its last cell pins the one chosen when that one is older.
 
 ![What the browser put here, it can take back](screenshots/12-12-what-the-browser-put-here-it-can-take-back.png)
 
@@ -124,7 +127,7 @@ Origin: http://elsewhere.test -> 403 Apothecary answers this machine only. Perso
 - **A real camera.** The camera placed here is Chromium's test pattern. Nothing of anyone's room is in these pictures.
 - **A printer or board that is connected.** The Ender 3 and the boards are drawn as what they are; none is pinned to a port, and the status each shows is the site's own.
 - **The import command writing into the repository.** `apothecary parts import` is what brings a file in for keeps; this run measures the file in a temporary folder and leaves `parts/` as it found it.
-- **The pieces without OpenSCAD.** A part is drawn from an STL that OpenSCAD renders on first request; on a machine without it the pieces are their footprint boxes. These pictures were made with it.
+- **The pieces without OpenSCAD.** A part is drawn from an STL OpenSCAD builds, and a server builds the missing ones as it starts; on a machine without OpenSCAD the pieces are their footprint boxes.
 
 Run it yourself:
 

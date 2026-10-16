@@ -68,11 +68,20 @@ Both are fixtures in `conftest.py`; the recorders themselves are in `doc_capture
 
 - `walkthrough` writes `walkthrough/11-*.md` and `walkthrough/12-*.md` and
   their screenshots on every run that includes `test_docs_photo_walkthrough.py`
-  or `test_docs_bench_walkthrough.py`. Each sentence is emitted after the
-  assertion behind it. A screenshot is rewritten only when its pixels change;
-  commit the page and pictures when they do. What changes on every run whatever
-  the page does -- a time, a picture's name made of one -- is blanked (`shows`'s
-  `blank`), so a picture changes only when the page does. A loop's page --
+  or `test_docs_bench_walkthrough.py`. Each numbered step is written as the run
+  reaches it, after the assertions before it. The page's opening, its notes and
+  its list of what it does not show are the test's fixed words: nothing checks
+  them against the run, so they are kept true by whoever edits the test. CI
+  fails when a page a run rewrote differs from the committed one (`git diff
+  --exit-code -- 'walkthrough/*.md'` in `pytest.yml`), so a page's words carry
+  nothing that changes from run to run -- a temporary folder, a time, a count
+  that varies -- and a step that would show one names it instead. A screenshot
+  is rewritten only when its pixels change; commit the page and pictures when
+  they do. What changes on every run whatever the page does -- a time, a
+  picture's name made of one -- is blanked (`shows`'s `blank`), and the picture
+  is taken once the page has drawn under its blanks, at the size they leave it
+  (`doc_capture.picture`), so a picture changes only when the page does. A
+  loop's page --
   `walkthrough/13-a-picture-to-a-print.md` from `test_picture_to_print.py`,
   `walkthrough/14-designing-a-part.md` from `test_part_loop.py`,
   `walkthrough/15-firmware.md` from `test_the_firmware_loop.py`,

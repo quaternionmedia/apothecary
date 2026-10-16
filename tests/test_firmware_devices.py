@@ -396,8 +396,8 @@ def test_cli_devices_probe_listen(fake_arduino_cli, monkeypatch):
 
 
 def test_two_writers_of_the_state_file_keep_each_others_records(tmp_path, monkeypatch):
-    """The server and a CLI command both write the state file. Two read-modify-
-    writes interleaved used to keep 12 of 200 pins and crash on a shared temp name."""
+    """The server and a CLI command both write the state file. Two read-modify-writes
+    interleaved keep every record, and never share a temp name."""
     import threading
 
     from apothecary.firmware.devices import FirmwareState

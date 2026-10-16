@@ -346,7 +346,8 @@ def test_find_explains_an_unknown_finder(three_shapes):
 
 
 def test_photo_look_is_retired_and_names_photo_find(three_shapes):
-    """The viewer calls this step Find shapes; the command took the same word."""
+    """The viewer calls this step Find shapes, and the command uses the same word:
+    `photo look` is refused, naming `photo find`."""
     result = CliRunner().invoke(cli, ["photo", "look", str(three_shapes)])
     assert result.exit_code == 1
     assert "apothecary photo find" in result.output
@@ -466,8 +467,8 @@ def _axis_offset(node):
 
 
 def test_a_round_piece_is_drawn_where_it_was_seen():
-    """A disc seen at 60-90 % of the picture was drawn half its size off: the
-    words' corner shift moved a cylinder that was already centred."""
+    """A cylinder is already centred, so the words' corner shift does not move it: a
+    disc is drawn where it was seen."""
     from apothecary.primitives import Cube, Cylinder
 
     site = picture_to_site(_two_shape_picture(), scale=ScaleReference(millimetres_across=1000))

@@ -20,8 +20,8 @@
  * when what it says changes), an open card's each frame: there are at most a
  * few.
  *
- * The page draws its world only when something in it changes (render on demand,
- * the part-iteration plan of 2026-10-12), and places the badges on each frame it
+ * The page draws its world only when something in it changes (render on demand;
+ * docs/viewer.md, "How the world is drawn"), and places the badges on each frame it
  * draws and a few after; wants() says when the layer has something to place
  * though nothing drawn moved -- a badge added, taken away or saying something
  * new, or one under the pointer, or a card lingering after it.

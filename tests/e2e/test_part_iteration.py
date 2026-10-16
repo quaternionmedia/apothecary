@@ -1,15 +1,16 @@
-"""Iterating on a part in the page (docs/plans/part-iteration-2026-10-12.md), each
-piece through the page's own controls and keys: the parameter controls (a number box
-beside each slider, round steps, choices, groups, captions, captioned vectors,
-units where a field declares one), the focus kept after Apply, OpenSCAD's keys in the
-SCAD editor and the browser's outside it, the staged numbers' undo and redo by key,
-button and ring, a variant drawn where it stands, the ghost of what was drawn before,
-framing the part being edited, and a render of older SCAD saying so.
+"""Iterating on a part in the page, each piece through the page's own controls and keys:
+the parameter controls (a number box beside each slider, round steps, choices, groups,
+captions, captioned vectors, units where a field declares one), the focus kept after
+Apply, OpenSCAD's keys in the SCAD editor and the browser's outside it, the staged
+numbers' undo and redo by key, button and ring, a variant drawn where it stands, the
+ghost of what was drawn before, framing the part being edited, and a render of older
+SCAD saying so.
 
-What the server does not say yet -- a unit, an integer, a customizer's step, a choice
-or a vector on a model part -- is said to the page here by answering its read of the
-part's parameters with those fields added (Playwright's route): the page draws what
-it is told, and nothing where it is told nothing. The server is this module's own,
+What the test part does not declare -- an integer, a field's own step, a choice or a
+vector, and a field with no unit -- is said to the page here by answering its read of
+the part's parameters with those fields as the server's ParamField carries them
+(Playwright's route): the page draws what it is told, and nothing where it is told
+nothing. The server is this module's own,
 rendering with the OpenSCAD every server runs, its variant cache a temp folder.
 """
 

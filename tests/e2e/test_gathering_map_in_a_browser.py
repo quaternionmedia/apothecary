@@ -1,9 +1,8 @@
 """The picture of what went with what, opened in a real browser.
 
-Reading the page and believing it renders is exactly the mistake this project has
-already made once: the viewer was read, believed, and did not work at all with no
-way out to the internet. So the map is driven rather than inspected — loaded with
-no network available, in light and in dark, with every console message watched.
+A page read and believed can still fail to render, so the map is driven rather
+than inspected — loaded with no network available, in light and in dark, with every
+console message watched.
 
 Needs no server. The map is one file that fetches nothing, and this test would
 fail loudly if that stopped being true.
@@ -76,9 +75,7 @@ def test_the_map_draws_without_a_word_of_complaint(page: Page, drawn_map: Path):
 
 @pytest.mark.e2e
 def test_it_asks_the_network_for_nothing(page: Page, drawn_map: Path):
-    """The one that would have caught the viewer's own failure.
-
-    Everything the page needs is inside it. If that ever stops being true this
+    """Everything the page needs is inside it. If that ever stops being true this
     goes red here rather than on somebody's machine with the network off.
     """
     asked_for = []
@@ -226,8 +223,8 @@ def test_the_picture_shown_to_people_comes_out_of_a_real_run(
     page.wait_for_timeout(120)
     page.screenshot(path=str(SHOWN / "which-pictures-went-together-dark.png"))
 
-    # The generator asserts its own artifacts exist. Fifteen lines turns
-    # "somebody forgot" into a red build.
+    # The generator asserts its own artifacts exist, so a forgotten one fails the
+    # build.
     for name in (
         "which-pictures-went-together.png",
         "which-pictures-went-together-dark.png",

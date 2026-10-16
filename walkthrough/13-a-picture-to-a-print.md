@@ -1,16 +1,19 @@
 # 13 — A picture to a print
 
-**This page is written by the run it describes.** Every sentence below
-was emitted by a test that had just asserted it, and the whole page is
+Written by `tests/e2e/test_picture_to_print.py`, and
 rewritten by every run of the browser suite (`uv run apothecary test
-all`), though not by the quicker `apothecary test run`. Editing it
-by hand is editing the output of a program: the next run puts it back.
+all`), though not by the quicker `apothecary test run`.
+Each numbered step is written as the run reaches it, after the assertions
+before it pass, and what a step shows is what the run had then. The
+opening, the notes under it and the list of what the page does not show
+are the test's fixed words. Editing the page by hand is editing the output
+of a program: the next run puts it back.
 
 A camera over the bench, a picture taken, its shapes found, one made a piece, the piece adjusted, sliced for printer_1, and a print job for it on printer_1, watched to its end in printer_1's Machine; then round again with the camera turned, for a second piece, sliced from its own ring, and a second print. Every step is the page's own: a cell of a ring, a button, a key or a box, and every step's words name the next one.
 
 **Runtime-bound.** It drives a real browser against a real server of its own. The browser's camera is Chromium's fake one, playing a drawing of three shapes, the slicer a scripted stand-in for OrcaSlicer's command line, and the printer the simulated one, pinned to printer_1's board as the bench's real board is. It needs no network, opens no serial port, and refuses both.
 
-Its pictures were taken once every part's STL that OpenSCAD version 2021.01, the OpenSCAD its server runs, can build was built by it; a part it cannot build is drawn from an STL already there, or as its box.
+Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its server runs, can build from an STL it built; a part it cannot build is drawn from an STL already there, or as its box.
 
 ---
 
@@ -148,7 +151,7 @@ printer_1 · print · disc_1.gcode → disc_1 · done
 
 ## What this page does not show
 
-- **A real camera, a real slicer or a real printer.** The camera plays a drawing; the slicer is a script that answers as OrcaSlicer's command line does and writes a few layers of moves and dwells, whatever the piece; the printer is a simulation that answers as Marlin does. OrcaSlicer's real slices are docs/slicer.md's, and the camera's and the printer's real runs are steps of the bench checklist.
+- **A real camera, a real slicer or a real printer.** The camera plays a drawing; the slicer is a script that answers as OrcaSlicer's command line does and writes a few layers of moves and dwells, whatever the piece; the printer is a simulation that answers as Marlin does. OrcaSlicer's real slices are docs/slicer.md's; the printer's real runs are sections A to G of the bench checklist (docs/bench-checklist.md), and the camera's is the optional last step of its F.
 - **A print that heats.** The start the slice writes sets the hotend and the bed, and the simulated printer is at what it is told at once; nothing warms, and the file turns both off at its end.
 - **What changes on every run.** When a print started and ended, how long it took, and the names pictures are kept under (the time each was taken) are blanked in the pictures and left out of the words, so this page changes when the loop does, not when the clock does. A running print is described rather than pictured, for the same reason.
 

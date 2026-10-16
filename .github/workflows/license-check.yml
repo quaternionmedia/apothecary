@@ -2,13 +2,13 @@ name: License check
 
 # Enforcement path for the QM open-license-exclusion-and-upstream-remediation
 # record (governance/qm/records/DRAFT-open-license-exclusion-and-upstream-remediation.md),
-# §4: "a dependency-manifest report per package ecosystem for everything else."
+# §4: "a dependency-manifest report per package ecosystem".
 # Apothecary ships no container image, so this is the dependency-manifest path,
 # not the SBOM-per-image path (see adr/DRAFT-constitution-adoption-scope.md).
 #
 # `apothecary` itself is excluded from the scan: this audits third-party
-# dependencies against the OSI/FSF allowlist, not the project's own
-# (separately tracked) license metadata gap.
+# dependencies against the OSI/FSF allowlist. The project's own licence, MIT,
+# is declared in pyproject.toml and REUSE.toml.
 
 on:
   push:
