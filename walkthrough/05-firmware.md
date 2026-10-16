@@ -1,4 +1,4 @@
-# 15 — Firmware
+# 05 — Firmware
 
 Written by `tests/e2e/test_the_firmware_loop.py`, and
 rewritten by every run of the browser suite (`uv run apothecary test
@@ -21,7 +21,7 @@ Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its ser
 
 Panels › Bench › Bench on the canvas ring opens the Bench, floated here from its tab: arduino-cli's status and its cores, and under them the other modules as installed -- Rust for the ESP32, and the slicer, OrcaSlicer, which this run leaves uninstalled -- and the sketches under parts/, each named with its toolchain: the Arduino esp32_blink and the Rust one next to each other in its drop-down, as listed below with the modules. The Arduino one chosen, its board filled in from its firmware.json, and the devkit's port: Compile is next.
 
-![The Bench lists both builds of esp32_blink, each with its toolchain](screenshots/15-01-the-bench-lists-both-builds-of-esp32-blink-each-wi.png)
+![The Bench lists both builds of esp32_blink, each with its toolchain](screenshots/05-01-the-bench-lists-both-builds-of-esp32-blink-each-wi.png)
 
 ```
 rust-esp32: installed
@@ -51,7 +51,7 @@ succeeded — Upload esp32_blink@arduino → /dev/ttyFAKE2
 
 esp32_blink's ring, Device › Open: the board's Machine, with what it should run -- esp32_blink@arduino, for its board -- and Device › Query, which listens a few seconds for the hello. Heard, the Machine says the board runs what it should. Change it next: Device › Flash.
 
-![The board's Machine hears it say hello](screenshots/15-04-the-board-s-machine-hears-it-say-hello.png)
+![The board's Machine hears it say hello](screenshots/05-04-the-board-s-machine-hears-it-say-hello.png)
 
 ```
 listening 6 s for the sketch's hello
@@ -64,7 +64,7 @@ observed esp32_blink ✓ matches
 
 esp32_blink's ring, Device › Flash (⌗12): the Machine's Flashing card, for this board's port alone, starting from the build it should run. The Rust esp32_blink chosen beside it: it builds for the chip its Cargo project names, so the board box goes. Compile is next.
 
-![Device › Flash, and the Rust esp32_blink chosen](screenshots/15-05-device-flash-and-the-rust-esp32-blink-chosen.png)
+![Device › Flash, and the Rust esp32_blink chosen](screenshots/05-05-device-flash-and-the-rust-esp32-blink-chosen.png)
 
 ```
 built by Rust for the ESP32 for esp32
@@ -83,7 +83,7 @@ esp32_blink: no build path in the image (9 folders checked)
 
 Compile & upload asks, builds again and flashes that build with espflash; the Machine listens for the hello and hears it. It is the hello the Arduino build said, so the board still runs what esp32_blink expects, and the Machine says it is the Rust build now. Listen is next.
 
-![Compile & upload flashes it with espflash, and the Machine hears the same hello](screenshots/15-07-compile-upload-flashes-it-with-espflash-and-the-ma.png)
+![Compile & upload flashes it with espflash, and the Machine hears the same hello](screenshots/05-07-compile-upload-flashes-it-with-espflash-and-the-ma.png)
 
 ```
 Compile and upload "esp32_blink@rust-esp32" to /dev/ttyFAKE2?

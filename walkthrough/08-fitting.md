@@ -78,7 +78,7 @@ rest, and **Apply** renders it: a variant, kept by what made it
 amber. The part's own STL stays the saved part: **Defaults**, then **Apply**,
 draws it again without rendering anything. [The part
 editor](../docs/viewer.md#the-part-editor) says the rest, and
-[page 14](14-designing-a-part.md) walks it.
+[page 04](04-designing-a-part.md) walks it.
 
 ## Overrides reach OpenSCAD
 
@@ -105,7 +105,7 @@ bare word is an identifier:
 | A different printer | `apothecary parts generate-stl datum_core -p walls=2 -p tolerence=0.3` |
 | Check a variant's envelope | `apothecary parts verify datum_core -p headroom=12` |
 | What produced the STL on disk | `apothecary parts info datum_core --json-out` → `stl_params` |
-| See the change | `apothecary serve`, then the part's ring, Part › Edit — page 14 |
+| See the change | `apothecary serve`, then the part's ring, Part › Edit — page 04 |
 
 The whole loop, from a cold checkout:
 

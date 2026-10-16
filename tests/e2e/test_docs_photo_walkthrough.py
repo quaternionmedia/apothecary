@@ -1,6 +1,6 @@
 """The one demonstration: photographs into pieces, and those pieces in the viewer.
 
-This module is the walkthrough. `walkthrough/11-photographs-into-pieces.md` is
+This module is the walkthrough. `walkthrough/01-photographs-into-pieces.md` is
 what it writes, and the ordinary test command runs it, so the page is a record
 of a run rather than a description standing beside one.
 
@@ -88,7 +88,7 @@ def test_photographs_into_pieces(
     from apothecary.vocabulary import word_for
 
     story = walkthrough(
-        ordinal="11",
+        ordinal="01",
         slug="photographs-into-pieces",
         title="Photographs into pieces you could print",
         intro=(
@@ -108,7 +108,7 @@ def test_photographs_into_pieces(
             "the answers are known. Shadow, texture, blur and clutter are all "
             "absent, so a good showing here means it handles the easy case.",
             "**A printable model.** These pieces stay an arrangement here; a piece "
-            "made from a camera's picture is sliced and printed in walkthrough 13.",
+            "made from a camera's picture is sliced and printed in walkthrough 03.",
             "**Anything about how long it takes.** No timing is asserted anywhere in this run.",
             "**Anything surviving a restart.** Nothing here is stored. The run "
             "builds what it needs and forgets it.",

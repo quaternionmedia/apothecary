@@ -211,7 +211,7 @@ def _needs_site(chosen: Chosen) -> str:
 
 
 # What a person does with a piece once it is made, the steps after Make in the
-# loop from a picture to a print (walkthrough/13-a-picture-to-a-print.md):
+# loop from a picture to a print (walkthrough/03-a-picture-to-a-print.md):
 # adjust it in Selected, then print it from a printer's Machine, whose Print
 # from here lists the site's pieces under "makes".
 AFTER_MAKE = "Part › Edit adjusts it, and a printer's Machine prints it"

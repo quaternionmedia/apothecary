@@ -438,7 +438,7 @@ Machine is a tab of the rail's strip, as every Machine is. The address
 carries `?machine=` while a Machine is open, so a reload opens it again. `apothecary docs generate` writes all of it step by
 step against the simulated printer into
 [`generated/printer-monitor/printer-monitor.md`](generated/printer-monitor/printer-monitor.md);
-[walkthrough 12](../walkthrough/12-the-bench-as-it-is.md) shows the boards
+[walkthrough 02](../walkthrough/02-the-bench-as-it-is.md) shows the boards
 drawn where they sit.
 
 Every device verb is also on the ring (Ctrl+right-click a piece, or `m`), whose
@@ -634,7 +634,7 @@ from the board's Machine, each built, flashed and heard saying its hello --
 against the simulated devkit, and again with Rust alone and no arduino-cli;
 flashing the bench's own ESP32 is a step of
 [the bench checklist](bench-checklist.md). Its first test
-writes [walkthrough 15](../walkthrough/15-firmware.md), the loop as it is, with
+writes [walkthrough 05](../walkthrough/05-firmware.md), the loop as it is, with
 pictures it takes as it goes; the browser suite alone runs it.
 [The bench checklist](bench-checklist.md) is the seam against the real Ender
 mainboard and ESP32, for what no test touches: heat, motion, levelling, a

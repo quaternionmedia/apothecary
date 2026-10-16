@@ -1,7 +1,7 @@
 """`apothecary preflight`: run the CI gates here, before pushing.
 
 Every check on this repository is a signal to whoever merges, read here
-before it costs a round trip; walkthrough/09-preflight.md says why and how.
+before it costs a round trip; walkthrough/15-preflight.md says why and how.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ def preflight(passthrough: tuple[str, ...]) -> None:
 
     A pass here is evidence, not proof. `uses:` steps and the runner image are
     not reproduced, and this machine carries tools a fresh runner does not, so
-    a green run here can still fail in CI. `walkthrough/09-preflight.md` has
+    a green run here can still fail in CI. `walkthrough/15-preflight.md` has
     the detail.
     """
     root = Path(__file__).resolve()
@@ -117,7 +117,7 @@ def preflight(passthrough: tuple[str, ...]) -> None:
     # Otherwise one invocation per workflow. The runner executes every job in a
     # single environment; CI gives each job a fresh machine. Here one
     # workflow's `uv sync --locked` would strip the tools a later one needs, and
-    # that one would fail for a reason not its own (walkthrough/09).
+    # that one would fail for a reason not its own (walkthrough/15).
     source = repo / ".github" / "workflows"
     staged_root = repo / ".preflight" / "workflows"
     if staged_root.exists():

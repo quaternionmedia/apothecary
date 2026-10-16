@@ -5,8 +5,8 @@ simulated Ender pinned to printer_1's mainboard, a simulated ESP32 devkit and th
 scripted firmware tools. These start it as a subprocess -- `python -m apothecary
 serve --demo` -- with the person's own folders (state, tools, render cache) temp
 folders that must be left as they were, and go round each loop through the page:
-the firmware loop (walkthrough 15), a picture to a print (13), and designing a part
-and editing its SCAD (14, 16). A demo with no OrcaSlicer says how to install it.
+the firmware loop (walkthrough 05), a picture to a print (03), and designing a part
+and editing its SCAD (04, 06). A demo with no OrcaSlicer says how to install it.
 
 No real serial port is touched, and a test says so. Every Python process of the
 demo -- the server, and the scripted tools it runs -- starts with a guard

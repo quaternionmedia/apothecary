@@ -145,7 +145,7 @@ part's variant, as the page draws it, is what its Slice slices -- the route's
 ## In the page
 
 Slice is a step of the loop from a picture to a print
-([walkthrough 13](../walkthrough/13-a-picture-to-a-print.md)):
+([walkthrough 03](../walkthrough/03-a-picture-to-a-print.md)):
 
 - **On the ring.** A made piece's ring has **Slice** beside Print, and a part
   from the parts folder standing in the site has it after Part, when a printer

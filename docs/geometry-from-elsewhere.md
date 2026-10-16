@@ -119,7 +119,7 @@ relief sit on the Ender 3's bed at 95 mm, not on the floor of its footprint.
 Without it, a viewer centres the volume on the footprint and puts it on the
 floor, which is right for a block.
 
-The walkthrough's page 12 ([`walkthrough/12-the-bench-as-it-is.md`](../walkthrough/12-the-bench-as-it-is.md))
+The walkthrough's page 02 ([`walkthrough/02-the-bench-as-it-is.md`](../walkthrough/02-the-bench-as-it-is.md))
 is a run of all of this -- a file measured, the sidecar part, the printer
 and the mainboard, the DevKitC -- written by its own test with the pictures
 it took.

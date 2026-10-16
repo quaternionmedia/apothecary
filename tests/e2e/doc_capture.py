@@ -231,7 +231,7 @@ class DocRecorder:
 #
 # Everything above serves `apothecary docs generate`, a command run on
 # request. A walkthrough page is written by the run that asserts it instead:
-# pages 11 and 12 by the ordinary test command, a loop's page by the browser
+# pages 01 and 02 by the ordinary test command, a loop's page by the browser
 # suite. CI fails when a page a run rewrote differs from the committed one, so
 # a page carries nothing that changes from run to run.
 #

@@ -12,7 +12,7 @@ is taken through the page's own controls and ring cells, and what is asserted is
 what a person sees: the status line, Site, the camera's section, the Machine's
 Print from here card and Site's Jobs. Each step's words name the next step.
 
-This module is a walkthrough page too: `walkthrough/13-a-picture-to-a-print.md` is
+This module is a walkthrough page too: `walkthrough/03-a-picture-to-a-print.md` is
 what it writes, its pictures taken as it goes, so the page shows the loop as it is.
 It is the browser suite's alone, unmarked `walkthrough`, so `apothecary test run`
 stays quick; CI's browser shards write it and check it against what is committed.
@@ -263,7 +263,7 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     story = walkthrough(
-        ordinal="13",
+        ordinal="03",
         slug="a-picture-to-a-print",
         title="A picture to a print",
         intro=(

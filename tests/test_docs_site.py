@@ -163,7 +163,7 @@ def test_docs_routes_serve_pages_and_files_and_refuse_the_rest(tmp_path, monkeyp
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/plain")
     assert c.get("/docs/../pyproject.toml").status_code in (404, 422)
     assert c.get("/docs/no-such-page.md").status_code == 404
-    assert c.get("/walkthrough/01-a-part.md").status_code == 200
+    assert c.get("/walkthrough/07-a-part.md").status_code == 200
     # The API is described by /openapi.json; FastAPI's Swagger and ReDoc pages are off,
     # since each would load its script from a public CDN.
     assert c.get("/openapi.json").status_code == 200
@@ -246,7 +246,7 @@ def test_the_walkthrough_is_an_index_of_its_pages_in_order():
     listed = re.findall(r'<li><a href="/walkthrough/([^"]+)">', c.get("/walkthrough").text)
     assert listed == pages and listed[0].startswith(("00-", "01-"))
     assert (
-        '<a href="/walkthrough/01-a-part.md">01 — The parts registry</a>'
+        '<a href="/walkthrough/07-a-part.md">07 — The parts registry</a>'
         in c.get("/walkthrough").text
     )
     assert 'href="/walkthrough"' in c.get("/docs/README.md").text  # the bar reaches it
@@ -254,14 +254,14 @@ def test_the_walkthrough_is_an_index_of_its_pages_in_order():
 
 def test_page_00_leads_the_index_once_it_exists(tmp_path, monkeypatch):
     for name, heading in (
-        ("01-a-part.md", "# 01 — The parts registry"),
+        ("07-a-part.md", "# 07 — The parts registry"),
         ("00-getting-started.md", "# 00 — Getting started"),
-        ("02-fitting.md", "# 02 — Which numbers are whose"),
+        ("08-fitting.md", "# 08 — Which numbers are whose"),
     ):
         (tmp_path / name).write_text(heading + "\n")
     monkeypatch.setattr(docs_site, "WALKTHROUGH_ROOT", tmp_path)
     assert docs_site.walkthrough_pages() == [
         ("00-getting-started.md", "00 — Getting started"),
-        ("01-a-part.md", "01 — The parts registry"),
-        ("02-fitting.md", "02 — Which numbers are whose"),
+        ("07-a-part.md", "07 — The parts registry"),
+        ("08-fitting.md", "08 — Which numbers are whose"),
     ]

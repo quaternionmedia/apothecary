@@ -1,4 +1,4 @@
-# 13 — A picture to a print
+# 03 — A picture to a print
 
 Written by `tests/e2e/test_picture_to_print.py`, and
 rewritten by every run of the browser suite (`uv run apothecary test
@@ -21,7 +21,7 @@ Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its ser
 
 The garage brought closer to the bench by hand -- Shift+drag brings it to the middle, the wheel nearer -- and the bench's ring, Camera › Add here: camera_1 stands above the bench's middle, looking straight down, selected, a row of Site. The status line names the next step: its Device.
 
-![Camera › Add here stands a camera over the bench](screenshots/13-01-camera-add-here-stands-a-camera-over-the-bench.png)
+![Camera › Add here stands a camera over the bench](screenshots/03-01-camera-add-here-stands-a-camera-over-the-bench.png)
 
 ```
 Add here: added camera_1 above workbench, looking straight down: its Device says which of this browser's cameras it is (⌗98)
@@ -39,7 +39,7 @@ camera_1 is /tmp/apothecary-e2e/three-shapes.y4m: Take picture (P) keeps a frame
 
 The camera's ring, Take picture: the frame is kept, lies on the bench where the camera looks, and is the first thumbnail in the camera's section. Nothing is found in it yet; the status line names Picture › Find shapes.
 
-![Take picture lays the frame on the bench](screenshots/13-03-take-picture-lays-the-frame-on-the-bench.png)
+![Take picture lays the frame on the bench](screenshots/03-03-take-picture-lays-the-frame-on-the-bench.png)
 
 ```
 camera_1's picture lies on workbench: Picture › Find shapes finds what is in it
@@ -49,7 +49,7 @@ camera_1's picture lies on workbench: Picture › Find shapes finds what is in i
 
 The bench's ring, Picture › Find shapes: the plain finder outlines each shape on the picture where it lies. A camera's picture is sized as it is taken, so the status line names Make at once.
 
-![Find shapes outlines what the picture holds](screenshots/13-04-find-shapes-outlines-what-the-picture-holds.png)
+![Find shapes outlines what the picture holds](screenshots/03-04-find-shapes-outlines-what-the-picture-holds.png)
 
 ```
 3 shapes found at workbench, 693 mm across: Picture › Make makes them pieces
@@ -59,7 +59,7 @@ The bench's ring, Picture › Find shapes: the plain finder outlines each shape 
 
 The bench's ring, Picture › Make and the disc: disc_1 stands on its outline, selected, a row of Site. The status line names the two steps after it: Part › Edit adjusts it, and a printer's Machine prints it.
 
-![Make stands a shape up as a piece](screenshots/13-05-make-stands-a-shape-up-as-a-piece.png)
+![Make stands a shape up as a piece](screenshots/03-05-make-stands-a-shape-up-as-a-piece.png)
 
 ```
 disc 1: made disc_1: Part › Edit adjusts it, and a printer's Machine prints it (⌗322)
@@ -69,7 +69,7 @@ disc 1: made disc_1: Part › Edit adjusts it, and a printer's Machine prints it
 
 The piece's ring, Part › Edit: its parameters in Selected, under where it came from. Its thickness, which a picture cannot see, set to 5 mm and applied: it is rebuilt where it stands, and the status line names the printer's Machine.
 
-![Part › Edit adjusts it in Selected](screenshots/13-06-part-edit-adjusts-it-in-selected.png)
+![Part › Edit adjusts it in Selected](screenshots/03-06-part-edit-adjusts-it-in-selected.png)
 
 ```
 disc_1 rebuilt 173.2 × 172.2 × 5 mm; found 173.2 × 172.2, thickness a person's: a printer's Machine prints it
@@ -79,7 +79,7 @@ disc_1 rebuilt 173.2 × 172.2 × 5 mm; found 173.2 × 172.2, thickness a person'
 
 printer_1's ring, Device › Open: its Machine in the rail, beside Selected. Print from here lists the pieces of the garage under makes; disc_1 chosen, its Slice slices it for printer_1, the slicer's log in the card while it runs. The G-code it kept is chosen in the card's files, saying what it was sliced from and for which printer, and the card lists what the slice used -- each value from the printer's profile, a piece declaring none -- with the slicer's estimate. Selected is folded to its title here, by its ▾, so Site and the Machine share the rail.
 
-![Slice, in printer_1's Machine, slices the piece and chooses its G-code](screenshots/13-07-slice-in-printer-1-s-machine-slices-the-piece-and-.png)
+![Slice, in printer_1's Machine, slices the piece and chooses its G-code](screenshots/03-07-slice-in-printer-1-s-machine-slices-the-piece-and-.png)
 
 ```
 disc_1.gcode kept and chosen: sliced from disc_1 for printer_1, 1h 2m 3s, 0.79 g of filament, 15 layers; ▶ Print prints it
@@ -110,7 +110,7 @@ printer_1 · print · disc_1.gcode → disc_1 · done
 
 camera_1 selected wears its turn ring; dragged half a turn, its next picture lands on the bench the other way round. P takes it: the second thumbnail, and the status line names Find shapes again.
 
-![Turned by its ring, the camera takes a second picture with P](screenshots/13-10-turned-by-its-ring-the-camera-takes-a-second-pictu.png)
+![Turned by its ring, the camera takes a second picture with P](screenshots/03-10-turned-by-its-ring-the-camera-takes-a-second-pictu.png)
 
 ```
 camera_1 turned to 180°: its next picture lands on workbench
@@ -121,7 +121,7 @@ camera_1's picture lies on workbench: Picture › Find shapes finds what is in i
 
 Find shapes and Make on the second picture: plate_1 stands beside disc_1, the view brought to it by hand. Part › Edit narrows it to 40 mm and applies it.
 
-![A second piece, made and adjusted](screenshots/13-11-a-second-piece-made-and-adjusted.png)
+![A second piece, made and adjusted](screenshots/03-11-a-second-piece-made-and-adjusted.png)
 
 ```
 plate_1 rebuilt 40 × 129.9 × 19.5 mm; found 238.2 × 129.9, thickness a guess: a printer's Machine prints it
@@ -131,7 +131,7 @@ plate_1 rebuilt 40 × 129.9 × 19.5 mm; found 238.2 × 129.9, thickness a guess:
 
 plate_1's ring ends with Print and Slice, a printer being pinned in the garage. Slice brings printer_1's Machine forward with plate_1 chosen under makes -- listed there already, though the Machine stayed open while it was made -- and slices it there; its G-code is chosen beside the first piece's, each saying what it was sliced from. The status line names ▶ Print.
 
-![Slice, on the piece's ring, slices it in printer_1's Machine](screenshots/13-12-slice-on-the-piece-s-ring-slices-it-in-printer-1-s.png)
+![Slice, on the piece's ring, slices it in printer_1's Machine](screenshots/03-12-slice-on-the-piece-s-ring-slices-it-in-printer-1-s.png)
 
 ```
 plate_1.gcode kept and chosen: sliced from plate_1 for printer_1, 1h 2m 3s, 0.79 g of filament, 15 layers; ▶ Print prints it
@@ -141,7 +141,7 @@ plate_1.gcode kept and chosen: sliced from plate_1 for printer_1, 1h 2m 3s, 0.79
 
 printer_1's ring, Device › Control › Print › Send file, prints what the card has chosen: plate_1, and the status line says when it ends. The Machine's history and Site's Jobs keep both jobs, newest first, each with the piece it made.
 
-![Send file prints the second, and both jobs name their pieces](screenshots/13-13-send-file-prints-the-second-and-both-jobs-name-the.png)
+![Send file prints the second, and both jobs name their pieces](screenshots/03-13-send-file-prints-the-second-and-both-jobs-name-the.png)
 
 ```
 plate_1.gcode on /dev/ttyFAKE1, making plate_1, ended: done, 163/163 lines

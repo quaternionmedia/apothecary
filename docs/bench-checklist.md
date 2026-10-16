@@ -120,7 +120,7 @@ Machine, Ctrl + right-click opens the board's own ring (the device ring); from
       (or the kept file): `G28` before the first extrusion, nothing added to Z.
 - [ ] With filament loaded: **▶ Print** it, and watch the first layer. Note
       any stutter on long straight moves.
-- [ ] Optional, with a camera over the bench: the loop of walkthrough page 13
+- [ ] Optional, with a camera over the bench: the loop of walkthrough page 03
       on the real hardware -- Camera › Add here, Device, Take picture, Find
       shapes, Make, Part › Edit, Slice, Print.
 
