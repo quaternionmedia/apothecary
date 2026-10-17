@@ -26,6 +26,8 @@ from typing import TYPE_CHECKING, Dict, Iterator, List, Optional, Tuple
 
 from pydantic import BaseModel
 
+from .assignments import escaped
+
 if TYPE_CHECKING:
     from .base import BasePart
 
@@ -48,8 +50,7 @@ def scad_literal(value: object) -> str:
             raise ValueError(f"{value!r} has no OpenSCAD literal")
         return repr(value)
     if isinstance(value, str):
-        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-        return f'"{escaped}"'
+        return f'"{escaped(value)}"'
     if isinstance(value, (list, tuple)):
         return "[" + ", ".join(scad_literal(v) for v in value) + "]"
     if isinstance(value, BaseModel):
