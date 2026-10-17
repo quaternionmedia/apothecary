@@ -1,4 +1,7 @@
 {
+ "tests/e2e/test_airgap.py::test_the_airgap_is_a_tab_of_the_strip_that_computes_the_parts_own_text[chromium]": 2.78,
+ "tests/e2e/test_airgap.py::test_the_panel_follows_the_editors_text_and_a_preset_is_written_into_it[chromium]": 4.32,
+ "tests/e2e/test_airgap.py::test_the_verbs_are_cells_of_panels_airgap[chromium]": 5.59,
  "tests/e2e/test_api_e2e.py::test_health_endpoint_returns_json[chromium]": 0.05,
  "tests/e2e/test_api_e2e.py::test_nonexistent_part_returns_404[chromium]": 0.05,
  "tests/e2e/test_api_e2e.py::test_part_detail_endpoint[chromium]": 0.09,

@@ -208,12 +208,14 @@ Step out 1 (when stepped in) and Group (each category of the site's pieces:
 expand it, as its chip in Site does; 7 when stepped in, 1 at the top).
 
 - **Panels** › Site › Site, Problems, Pinned, Jobs and SCAD; Selected;
-  Pictures › Pictures and Gather; Machine (the selected board's),
-  Windows › World alone (as `~`) and Reset layout, Bench › Bench (show it),
-  Install (a cell per toolchain module, then the slicer), Compile, Upload, Raw
-  flash, Cancel, Cores, Libraries; Docs (the documentation in a new tab, as the
-  header's Docs); and Control pad (an armed printer's pad in a loud window of
-  its own or back in its Machine, as the pad's ⧉ Pop out and ⇥ Put back).
+  Pictures › Pictures and Gather; Machine › Machine (the selected board's) and
+  Control pad (an armed printer's pad in a loud window of its own or back in its
+  Machine, as the pad's ⧉ Pop out and ⇥ Put back); Windows › World alone (as
+  `~`) and Reset layout; Bench › Bench (show it), Install (a cell per toolchain
+  module, then the slicer), Compile, Upload, Raw flash, Cancel, Cores,
+  Libraries; Docs (the documentation in a new tab, as the header's Docs); and
+  Airgap › Airgap (show it), Play, Sweep, To editor, From editor, Copy SCAD,
+  Copy metrics, Reset ([the Airgap](airgap.md)).
 - **Pictures** › Add (a picture pinned at the floor), Floor (the floor's
   Fit, Camera and Picture), Purge and Gather.
 
@@ -291,12 +293,15 @@ layout puts every window where the page puts it.
   **Bench**, **Settings**, and a **Machine** for each board opened, which opens
   in front. Only the tab in front wears its ✕. **Gather**, the gathering of
   several pictures, is a tab beside Pictures when asked for (the canvas ring's
-  Pictures › Gather, or Panels › Pictures › Gather), and a site with a lighting
-  rig adds **Lighting** ([lighting.md](lighting.md)).
+  Pictures › Gather, or Panels › Pictures › Gather); so is the **Airgap**, the
+  airgap part as a field, torque and dynamics model (Panels › Airgap ›
+  Airgap; [airgap.md](airgap.md)); and a site with a lighting rig adds
+  **Lighting** ([lighting.md](lighting.md)).
 - **The control pad**: an armed printer's pad opens as a window of its own
   beside the world, its tab and frame red, its frame pulsing as it opens, and
   the printer framed in the world that is left. Its ⇥ Put back, its tab's ✕,
-  the ring's Panels › Control pad or disarming put it back in the Machine, and
+  the ring's Panels › Machine › Control pad or disarming put it back in the
+  Machine, and
   the world takes its room back.
 - **The SCAD editor**, popped out of Selected (Part › View › Pop out), is a
   window of its own beside the world, the code filling it.

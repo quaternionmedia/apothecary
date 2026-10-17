@@ -728,6 +728,7 @@
     {% endif %}
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/machine.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/bench.css">
+    <link rel="stylesheet" href="{{ base_url }}/static/widgets/airgap.css">
     <script type="importmap">
     {
         "imports": {
@@ -764,6 +765,7 @@
         import { mountToolchain } from '/static/widgets/toolchain.js';
         import { mountBuild, mountRawFlash } from '/static/widgets/sketches.js';
         import { mountTasks } from '/static/widgets/tasks.js';
+        import { mountAirgap } from '/static/widgets/airgap.js';
         import { mountScadEditor, variantChoices } from '/static/widgets/scad_editor.js';
         import { buildParamControl, described, sameValue, shown, focusedControl, refocus } from '/static/widgets/part_controls.js';
         import { parseAssignments, lastOf, literalText, writeValues } from '/static/widgets/assignments.js';
@@ -1470,6 +1472,18 @@
                     title: 'Bench',
                     onOpen: () => { if (this.bench) this.bench.load(); },
                     body: (slot) => { this.bench = this.mountBench(slot); window.apothecaryBench = this.bench; },
+                });
+                // The Airgap: the airgap part explored as a field, torque and dynamics model
+                // (widgets/airgap.js) -- a tab beside Pictures, closed until asked for
+                // (Panels › Airgap), filled the first time it is shown, and reading the
+                // part's text again each time it is shown again. While the part is being
+                // edited the panel follows every edit of its text. Its verbs are a ring of
+                // their own under its cell.
+                this.airgap = null;
+                this.panels.register('airgap', {
+                    title: 'Airgap', open: false,
+                    onOpen: () => { if (this.airgap) this.airgap.load(); },
+                    body: (slot) => { this.airgap = this.mountAirgap(slot); window.apothecaryAirgap = this.airgap; },
                 });
                 // Settings: every shortcut and navigation setting, each with its default
                 // and a reset (widgets/settings.js) -- a tab beside Pictures, opened
@@ -5703,6 +5717,8 @@
                     }
                     this.scadEditor = editor;
                     this.scadTarget = target;
+                    // The Airgap panel follows the airgap part's text from the moment it is in the editor.
+                    if (target.part === 'airgap' && editable && this.airgap) this.airgap.textChanged(scad.text);
                     if (!editable) editor.say(target.part ? "Its geometry is Python: this is the SCAD it generates, read-only. Its parameters are what to edit." : 'Read-only: the few lines its shape is made from.');
                     else if (scad.text === own && target.upstreamUrl) editor.say(`${target.part}'s overlay: the upstream SCAD included, its values set after it. A control sets its line here; typed, it is checked once typing stops and rendered once it reads.`);
                     else if (scad.text === own) editor.say("The part's own SCAD: edit it here; it is checked once typing stops and rendered once it reads.");
@@ -5739,6 +5755,8 @@
                 if (!target.part || target.editable === false) { scad.text = text; return; }
                 scad.text = text;
                 scad.version = (scad.version ?? 0) + 1;
+                // The Airgap panel analyses the airgap part's text as it is typed.
+                if (target.part === 'airgap' && this.airgap) this.airgap.textChanged(text);
                 clearTimeout(scad.checkTimer);
                 clearTimeout(scad.renderTimer);
                 const seq = (scad.seq += 1);
@@ -6852,6 +6870,33 @@
                     },
                 };
                 return bench;
+            }
+
+            // The Airgap panel's world: the airgap part's text as the editor has it (its
+            // own file while it is not being edited), whether the editor is on it, a write of
+            // values into that text (the text is the truth: the panel then follows the text),
+            // and the editor opened on the part where this site has it.
+            mountAirgap(slot) {
+                const target = this.partTarget('airgap');
+                const world = {
+                    text: async () => {
+                        const scad = this.scadStages[target.key];
+                        if (scad && scad.text) return scad.text;
+                        const response = await fetch(target.scadUrl);
+                        if (!response.ok) throw new Error(`the airgap part's SCAD: HTTP ${response.status}`);
+                        return response.text();
+                    },
+                    editing: () => this.editorTarget?.key === target.key && Boolean(this.tiedEditor(target)),
+                    write: (values) => this.writeTied(target, values),
+                    edit: async () => {
+                        const found = Object.entries(this.renderNodeByKey).find(([, n]) => n.part_ref === 'airgap');
+                        if (!found) { this.setStatus(`The airgap part is not in ${this.siteName}: ${BASE_URL}/viewer/parts/airgap opens the library on it`, 'error'); return false; }
+                        if (!this.openEditor(found[0])) return false;
+                        await new Promise((resolve) => setTimeout(resolve, 0));
+                        return true;
+                    },
+                };
+                return mountAirgap(slot, { base: BASE_URL, say: (text, kind) => this.setStatus(text, kind), world });
             }
 
             // Stops the Machine watching its board and takes its panel away. Called
@@ -8017,6 +8062,14 @@
                     if (viewer.bench) viewer.bench.act(action.slice('bench:'.length));
                     return;
                 }
+                // An Airgap verb: the panel shown, and the verb done; what it did, or
+                // refused, is the panel's own last word.
+                if (action.startsWith('airgap:')) {
+                    viewer.panels.open('airgap');
+                    viewer.setStatus(`${intent.label}${tail}`, 'success');
+                    if (viewer.airgap) viewer.airgap.act(action.slice('airgap:'.length));
+                    return;
+                }
                 // Panels › Docs: the documentation in a new tab, as the header's Docs opens it.
                 if (action === 'panel:docs') {
                     const docs = document.getElementById('docs-link');
@@ -8250,6 +8303,11 @@
             for (const el of document.querySelectorAll('.scad-editor .trash-empty')) pairs.push([el, 'part:trash:empty']);
             annotate(ring, pairs);
         }
+        // The Airgap's buttons, by the verb each one is (Panels › Airgap).
+        const AIRGAP_VERBS = [
+            ['.airgap-play', 'airgap:play'], ['.airgap-run', 'airgap:sweep'], ['.airgap-to-editor', 'airgap:to-editor'], ['.airgap-from-editor', 'airgap:from-editor'],
+            ['.airgap-copy-scad', 'airgap:copy-scad'], ['.airgap-copy-metrics', 'airgap:copy-metrics'], ['.airgap-reset', 'airgap:reset'],
+        ];
         // The Bench's buttons, by the verb each one is (Panels › Bench).
         const BENCH_VERBS = [
             ['.install-btn', 'bench:install:arduino'], ['.compile-btn', 'bench:compile'], ['.upload-btn', 'bench:upload'],
@@ -8287,6 +8345,8 @@
                 // Each slicer's Install: its cell of Install, after the toolchain modules'.
                 for (const el of bench.querySelectorAll('.slicer-install[data-slicer]')) pairs.push([el, `bench:install:slicer:${el.dataset.slicer}`]);
             }
+            const airgap = document.querySelector(".panel[data-panel='airgap']");
+            if (airgap) for (const [selector, action] of AIRGAP_VERBS) for (const el of airgap.querySelectorAll(selector)) pairs.push([el, action]);
             annotate(ring, pairs);
         }
         let pending = null;

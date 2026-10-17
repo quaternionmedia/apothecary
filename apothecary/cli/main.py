@@ -2,6 +2,7 @@
 
 import click
 
+from .airgap import airgap
 from .census import census
 from .docs import docs
 from .firmware import firmware
@@ -88,6 +89,7 @@ cli.add_command(firmware)
 cli.add_command(openscad)
 cli.add_command(slicer)
 cli.add_command(lighting)
+cli.add_command(airgap)
 
 
 def main():  # pragma: no cover - entry point
