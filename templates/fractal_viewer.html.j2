@@ -2487,7 +2487,9 @@
                 const targetX = (minX + maxX) / 2;
                 const targetYAp = (minY + maxY) / 2;  // apothecary Y (depth) -> three Z
                 const targetZAp = (minZ + maxZ) / 2;  // apothecary Z (height) -> three Y
-                const distance = Math.max(150, maxSpan * 1.8);
+                // As near as Part › View › Fit comes (frameBox), so a small part stepped
+                // into fills the view rather than standing small in its middle.
+                const distance = Math.max(30, maxSpan * 1.8);
 
                 this.orbitControls.target.set(targetX, targetZAp, targetYAp);
                 this.camera.position.set(
@@ -2500,7 +2502,7 @@
                 this.orbitControls.update();
 
                 this.updateCameraClipping(maxSpan);
-                this.updateHelpersForSpan(maxSpan);
+                this.updateHelpersForSpan(maxSpan, { x: targetX, z: targetYAp });
             }
 
             // How near and how far the camera may dolly at this level: Settings'
@@ -2543,8 +2545,11 @@
             // often too small once you're several levels deep (a single
             // Feature might span 10mm) or too small when zoomed out over the
             // whole garage (spans ~1800mm) -- rebuild them to match whatever
-            // is actually in view.
-            updateHelpersForSpan(span) {
+            // is actually in view, and under it: the grid lies on the floor
+            // beneath the level's middle (three.js x, z), its lines on whole
+            // cells of the site's frame, where snapping puts things. A level
+            // far from the origin -- a part in the parts library -- stands on it.
+            updateHelpersForSpan(span, middle = { x: 0, z: 0 }) {
                 // Six times the span, so the ground plane does not end mid-view
                 // when the camera dollies out to its clamp; divisions are capped
                 // because cell count, not extent, is what costs anything to draw.
@@ -2555,11 +2560,19 @@
                 this.scene.remove(this.gridHelper);
                 disposeDeep(this.gridHelper);
                 this.gridHelper = new THREE.GridHelper(gridSize, gridDivisions, 0x444444, 0x2a2a2a);
+                const half = gridSize / 2, cell = gridSize / gridDivisions;
+                const onCell = (v) => Math.round((v - half) / cell) * cell + half;
+                const [gridX, gridZ] = [onCell(middle.x), onCell(middle.z)];
+                this.gridHelper.position.set(gridX, 0, gridZ);
                 this.scene.add(this.gridHelper);
 
+                // The axes stand at the site's origin while it is on the grid, else at the
+                // grid's middle, so they are in view with what they orient.
+                const originOnGrid = Math.abs(gridX) <= half && Math.abs(gridZ) <= half;
                 this.scene.remove(this.axesHelper);
                 disposeDeep(this.axesHelper);
                 this.axesHelper = new THREE.AxesHelper(Math.max(20, span * 0.4));
+                if (!originOnGrid) this.axesHelper.position.set(gridX, 0, gridZ);
                 this.scene.add(this.axesHelper);
             }
 
