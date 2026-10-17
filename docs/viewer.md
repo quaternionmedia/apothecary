@@ -151,6 +151,15 @@ ring's View is, which adds **Fit**: frame the pieces at this level (Shift+F;
 None of the first four is remembered: a reload starts from the defaults.
 Settings are kept by this browser.
 
+The world is the site's own frame, z up, turned onto the screen and never
+mirrored: a part reads as OpenSCAD draws it, its engraved text the right way
+round, and a picture lies on what it was taken of as it was taken. The axes are
+the site's -- red x, green y, blue z -- at its origin while the origin is on the
+floor grid, else at the grid's middle; the grid lies on the floor under the
+level in view, its lines on whole cells, where snapping puts things. A level is
+framed from its front right, above, from as near as 30 mm for a small part, and
+View › Fit frames it so again; `f` frames a piece from the side the view is on.
+
 The world is drawn only when something in it changes -- the view turned or
 easing to a stop, a piece or its colour, the handles, the window's size, a live
 camera's video, a texture arriving, a printer's nozzle moving -- so a machine
