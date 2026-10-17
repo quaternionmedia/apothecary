@@ -2,13 +2,16 @@
 
 The fixture is a stated description of a picture 1000 by 500 pixels (so not
 square), pinned at node ``workbench`` in site ``garage``. The bench's top is
-x 0..1800, y 0..600 at z 780, so its top-centre is (900, 300, 780); at a
-width of 1800 mm the mat covers the bench's width exactly and is 900 mm deep.
-Its three shapes, read in the world at that width:
+x 0..1800, y 0..600 at z 780, its top-centre (900, 300, 780). ``printer_1``
+rests on it at x 98..568, y 109..563, and the footpedal and the boards from x
+1620, so a picture pinned there is laid in the clear stretch between, its
+middle at (1094, 300, 780) (vision/free_space.py), 1052 mm wide as it fits
+there. At a width of 1800 mm the mat is 900 mm deep. Its three shapes, read in
+the world at that width:
 
-- 0, ``block``: centre (333, 336), under ``printer_1`` (x 98..568, y 109..563);
-- 1, ``coin``: centre (1080, 50), in front of every printer, touching nothing;
-- 2, ``bar``: centre (590, 590), just past ``printer_1``'s right side, behind it.
+- 0, ``block``: centre (527, 336), over ``printer_1``'s right side;
+- 1, ``coin``: centre (1274, 50), in front of everything, touching nothing;
+- 2, ``bar``: centre (784, 590), past ``printer_1``'s right side, behind it.
 """
 
 from __future__ import annotations
@@ -29,6 +32,7 @@ from apothecary.api import _site_store, app
 WIDE, HIGH = 1000, 500
 TALLNESS = HIGH / WIDE
 BENCH_TOP = (900.0, 300.0, 780.0)
+LAID = (1094.0, 300.0, 780.0)  # a pinned picture's middle: clear of what rests on the top
 SHAPES = [
     {
         "kind": "rect",
@@ -149,7 +153,8 @@ def test_a_pinned_view_has_no_shapes_until_find_shapes_finds_them(world):
     assert pinned["shapes"] == [] and pinned["finder"] is None and pinned["found_at"] is None
     # Its mat is laid all the same, at the picture's own proportions.
     assert (pinned["pixel_width"], pinned["pixel_height"]) == (WIDE, HIGH)
-    assert pinned["mat"]["centre"] == list(BENCH_TOP)
+    assert pinned["mat"]["centre"] == list(LAID)
+    assert pinned["mat"]["fit_width"] == pytest.approx(1052)  # as wide as fits clear there
     found = c.post(f"/sites/garage/views/{pinned['id']}/find", json={"finder": "stated"})
     assert found.status_code == 200, found.text
     view = found.json()
@@ -301,7 +306,7 @@ def test_a_view_keeps_the_boxes_and_points_it_found(world):
     assert shapes[1]["confidence"] == 0.9 and shapes[1]["word"] == "disc"
     assert all(s["status"] == "found" for s in shapes)
     # The mat lies on the bench's top, centred, unsized until a width is given.
-    assert view["mat"]["centre"] == list(BENCH_TOP) and view["mat"]["width"] is None
+    assert view["mat"]["centre"] == list(LAID) and view["mat"]["width"] is None
     # Listed with the site's camera parts in one request; GET /sites does not change.
     attached = c.get("/sites/garage/attached").json()
     assert [vw["id"] for vw in attached["views"]] == [view["id"]]
@@ -400,10 +405,41 @@ def test_a_piece_stands_on_its_outline_at_a_host(world):
         assert r.status_code == 200, r.text
         piece = r.json()["made"][0]
         x, y, z = _centre(_roots(c)[piece])
-        ex, ey = _outline_centre(BENCH_TOP, 1800, SHAPES[index])
+        ex, ey = _outline_centre(LAID, 1800, SHAPES[index])
         assert (x, y) == pytest.approx((ex, ey), abs=1e-6)
         assert z == pytest.approx(780.0)  # resting on the bench's top
-    assert _outline_centre(BENCH_TOP, 1800, SHAPES[0]) == pytest.approx((333.0, 336.0))
+    assert _outline_centre(LAID, 1800, SHAPES[0]) == pytest.approx((527.0, 336.0))
+
+
+def test_a_picture_is_laid_clear_of_what_rests_on_its_host(world):
+    """Pinned at the bench, a picture lies where the widest picture of its shape fits
+    clear of what rests on the top, and stays there: printer_1 at one end, the
+    footpedal and the boards at the other, nothing of it over either."""
+    c = TestClient(app)
+    view = _pin(c)
+    (x, y, _), wide = view["mat"]["centre"], view["mat"]["fit_width"]
+    deep = wide * TALLNESS
+    left, right = x - wide / 2, x + wide / 2
+    roots = _roots(c)
+    assert roots["printer_1"]["world_bounds"]["max"][0] <= left
+    assert right <= roots["footpedal"]["world_bounds"]["min"][0]
+    assert 0 <= y - deep / 2 and y + deep / 2 <= 600
+
+
+def test_a_shape_over_what_rests_on_its_host_is_flagged_and_still_made(world):
+    """At 1800 mm across the block lies over printer_1's right side: flagged with what it
+    overlaps, a flag and not a refusal -- Make makes it, and the site's layout check
+    then holds the piece. The coin and the bar overlap nothing."""
+    c = TestClient(app)
+    view = _pin(c, mm_across=1800)
+    assert [shape["overlaps"] for shape in view["shapes"]] == [["printer_1"], [], []]
+    r = c.post(f"/sites/garage/views/{view['id']}/make", json={"shape": 0})
+    assert r.status_code == 200, r.text
+    block, site = r.json()["made"][0], r.json()["site"]
+    assert sorted([block, "printer_1"]) in [sorted(v["structures"]) for v in site["violations"]]
+    # The piece made from it is not counted against it.
+    shapes = c.get("/sites/garage/attached").json()["views"][0]["shapes"]
+    assert shapes[0]["status"] == "made" and shapes[0]["overlaps"] == ["printer_1"]
 
 
 def test_a_piece_stands_on_its_outline_at_the_floor(world):
@@ -531,7 +567,7 @@ def test_a_moved_piece_is_neither_made_twice_nor_hides_the_outline_it_stands_ove
     coin = c.post(f"/sites/garage/views/{first['id']}/make", json={"shape": 1}).json()["made"][0]
     x, y, z = _centre(_roots(c)[coin])
     # Moved 500 mm onto where the bar was seen.
-    bar_x, bar_y = _outline_centre(BENCH_TOP, 1800, SHAPES[2])
+    bar_x, bar_y = _outline_centre(LAID, 1800, SHAPES[2])
     c.post("/sites/garage/layout", json={"positions": {coin: {"x": bar_x, "y": bar_y, "z": z}}})
     second = _pin(c, mm_across=1800)
     shapes = next(
@@ -550,7 +586,7 @@ def test_moving_the_host_moves_its_mat_and_not_its_pieces(world):
     before = _centre(_roots(c)[coin])
     c.post("/sites/garage/layout", json={"positions": {"workbench": {"x": 100, "y": 50, "z": 0}}})
     moved = c.get("/sites/garage/attached").json()["views"][0]
-    assert moved["mat"]["centre"] == [1000.0, 350.0, 780.0]
+    assert moved["mat"]["centre"] == [LAID[0] + 100, LAID[1] + 50, LAID[2]]
     assert _centre(_roots(c)[coin]) == before
 
 

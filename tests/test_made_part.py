@@ -6,7 +6,7 @@ what it is now, its provenance is offered as candidates, its geometry is what
 ``piece_from_shape`` builds, and the made routes answer the shapes the parts
 routes answer. The fixture is tests/test_views_api.py's: a stated picture 1000
 by 500 pinned at ``workbench`` in ``garage``; at 1800 mm across, shape 1 (the
-coin) is 54 by 54 mm, its thickness guessed at 8.1, standing at (1080, 50, 780).
+coin) is 54 by 54 mm, its thickness guessed at 8.1, standing at (1274, 50, 780).
 """
 
 from __future__ import annotations
@@ -15,7 +15,12 @@ import math
 
 import pytest
 from fastapi.testclient import TestClient
-from test_views_api import _pin, _roots, world  # noqa: F401 - the fixture, used by every test here
+from test_views_api import (  # noqa: F401 - the fixture, used by every test here
+    LAID,
+    _pin,
+    _roots,
+    world,
+)
 
 from apothecary.api import app
 from apothecary.projects.parts.params import ParamsSpec, Validation, params_spec, validate_staged
@@ -27,7 +32,7 @@ from apothecary.vision.piece import MadePart
 pytestmark = pytest.mark.usefixtures("world")
 
 COIN = {"width": 54.0, "depth": 54.0, "height": 8.1}
-COIN_AT = {"x": 1080.0, "y": 50.0, "z": 780.0}
+COIN_AT = {"x": 1274.0, "y": 50.0, "z": 780.0}
 
 
 def _make(c, view, shape=1):
@@ -296,8 +301,8 @@ def test_a_rescale_rebuilds_unstated_pieces_and_leaves_stated_and_moved_ones():
     shape = view["shapes"][0]
     cx = (shape["min"][0] + shape["max"][0]) / 2
     cy = (shape["min"][1] + shape["max"][1]) / 2
-    assert after[block]["position"]["x"] == pytest.approx(900 + (cx - 0.5) * 900)
-    assert after[block]["position"]["y"] == pytest.approx(300 + (0.5 - cy) * 0.5 * 900)
+    assert after[block]["position"]["x"] == pytest.approx(LAID[0] + (cx - 0.5) * 900)
+    assert after[block]["position"]["y"] == pytest.approx(LAID[1] + (0.5 - cy) * 0.5 * 900)
     assert made[block]["mm_across"] == 900 and made[block]["parameters_stated"] is False
     assert made[block]["placed_at"] == after[block]["position"]
     # The bar: rebuilt at the new width, standing where it was moved to.

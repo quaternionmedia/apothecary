@@ -61,6 +61,7 @@ export const MADE_COLOR = 0x6fdb75;
 export const ALREADY_COLOR = 0x9a9a9a;
 export const CHOSEN_COLOR = 0x66ccff;
 export const TRACE_COLOR = 0xff66cc;
+export const OVER_COLOR = 0xff5544;  // a shape over something resting on its host: flagged, not refused
 export const PYRAMID_COLOR = 0xffcc66;
 
 const MAT_LIFT = 1.0;      // mm above the top: the mat
@@ -103,6 +104,12 @@ export function pinhole(eye, turn, tilt, fov, tallness) {
 }
 
 /* A picture laid flat, width across, its middle at (cx, cy). */
+/* A view's shapes over something resting on its host, the made ones left out: the
+   site's layout check holds a made piece. */
+export function overShapes(view) {
+    return (view.shapes || []).filter((s) => s.overlaps && s.overlaps.length && s.status !== "made" && s.status !== "beyond");
+}
+
 export function flat(width, tallness, cx, cy) {
     const depth = width * tallness;
     return [[width, 0, cx - width / 2], [0, -depth, cy + depth / 2], [0, 0, 1]];
@@ -170,6 +177,8 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
         if (view.host === FLOOR) {
             width = FLOOR_UNSIZED_MM;
             mx += width / 2;  // the anchor is the near edge; unsized, the server reports it as the centre
+        } else if (view.mat.fit_width) {
+            width = view.mat.fit_width;  // as wide as it fits where it was laid, clear of what rests there
         } else {
             const b = hostBounds(view.host);
             if (!b) return null;
@@ -258,6 +267,7 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
         if (chosen && chosen.view === view.id && chosen.index === shape.index) return CHOSEN_COLOR;
         if (shape.status === "made") return MADE_COLOR;
         if (shape.status === "already_made") return ALREADY_COLOR;
+        if (shape.overlaps && shape.overlaps.length) return OVER_COLOR;
         return FOUND_COLOR;
     }
     const outlineOf = (shape) => (shape.points && shape.points.length >= 3
@@ -363,7 +373,9 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
         if (!view) return host === FLOOR ? "floor" : host;
         const shapes = view.finder === null ? "Find shapes next" : `${view.shapes.length} shape${view.shapes.length === 1 ? "" : "s"}`;
         const by = view.camera ? ` · by ${view.camera}` : "";
-        return `${host === FLOOR ? "floor" : host} · ${view.picture.split("/").pop()} · ${shapes}${view.mat && view.mat.width ? "" : " · unsized"}${by}`;
+        const flagged = overShapes(view);
+        const over = flagged.length ? ` · ${flagged.length} over ${[...new Set(flagged.flatMap((s) => s.overlaps))].join(", ")}` : "";
+        return `${host === FLOOR ? "floor" : host} · ${view.picture.split("/").pop()} · ${shapes}${over}${view.mat && view.mat.width ? "" : " · unsized"}${by}`;
     }
     // The place's own spot: the drawn picture's top-left corner, or with none
     // drawn, the same corner of the host's top.

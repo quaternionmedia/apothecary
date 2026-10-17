@@ -4,10 +4,11 @@ the floor beside the site, its shapes as outlines, a place badge over each.
 The fixture is a stated description of a picture 1000 by 500 pixels (the one
 tests/test_views_api.py states), pinned at node ``workbench`` in site ``garage``
 through ``POST /sites/garage/views`` with the page's own request context, at a
-width of 1800 mm: the bench's top is x 0..1800, y 0..600 at z 780, so the mat is
-centred at (900, 300, 780) and is 900 mm deep. Its three shapes: 0, ``block``,
-under ``printer_1``; 1, ``coin``, in front of every printer; 2, ``bar``, behind
-them.
+width of 1800 mm: the bench's top is x 0..1800, y 0..600 at z 780, and the mat is
+laid in its clear stretch between ``printer_1`` and the footpedal, centred at
+(1094, 300, 780), 900 mm deep. Its three shapes: 0, ``block``, under
+``printer_1``'s right side; 1, ``coin``, in front of everything; 2, ``bar``,
+behind them.
 
 Every view, camera and kept picture a test adds is taken back after it, and the
 bench is put back where the site's code has it, so a later test finds the server
@@ -69,6 +70,29 @@ LOOK_DOWN = """([x, y, z, height]) => {
 }"""
 
 STATE = "() => window.apothecaryPictures.state()"
+FOUND_COLOR, OVER_COLOR = 0xFFCC66, 0xFF5544  # picture_marks.js: a shape found, and one flagged
+
+
+# A point of a shape's outline, in page pixels, where printer_1 stands over it as seen:
+# the first mesh a ray from the camera meets there is printer_1's, and nothing stands
+# over the canvas there. Null where it covers none of it.
+UNDER_THE_PRINTER = """([view, box]) => {
+    const v = window.fractalViewer, r = v.canvas.getBoundingClientRect();
+    const step = (lo, hi) => (hi - lo) / 8;
+    for (let fy = box.min[1]; fy <= box.max[1]; fy += step(box.min[1], box.max[1])) {
+        for (let fx = box.min[0]; fx <= box.max[0]; fx += step(box.min[0], box.max[0])) {
+            const p = window.apothecaryPictures.scenePoint(view, fx, fy);
+            if (!p) continue;
+            const s = p.clone().project(v.camera);
+            const x = r.left + (s.x + 1) / 2 * r.width, y = r.top + (1 - s.y) / 2 * r.height;
+            if (document.elementFromPoint(x, y) !== v.canvas) continue;
+            v.raycaster.setFromCamera({ x: s.x, y: s.y }, v.camera);
+            const hit = v.raycaster.intersectObjects(Object.values(v.meshByName), false)[0];
+            if (hit && hit.object.userData.key === 'printer_1') return { x, y };
+        }
+    }
+    return null;
+}"""
 
 
 def _picture(pen_shapes: bool = True) -> bytes:
@@ -163,10 +187,11 @@ def _pixel(page, point) -> int:
 def test_a_view_at_the_bench_is_a_mat_with_its_outlines(
     page, base_url: str, fixture_picture, leaves_garage_as_found
 ):
-    """The mat lies on the bench's top at the view's width, one outline per shape; a
-    click on an outline chooses it, a click on printer_1 standing over one selects
-    printer_1, a click on the mat outside the outlines selects the bench and clears
-    the choice."""
+    """The mat lies on the bench's top at the view's width, where it was laid clear of
+    what rests on the bench, one outline per shape; the block's, under printer_1, is
+    flagged in its own colour and on the badge. A click on an outline chooses it, a
+    click on printer_1 standing over one selects printer_1, a click on the mat outside
+    the outlines selects the bench and clears the choice."""
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     view = _pin(page, base_url, "workbench", fixture_picture, mm_across=1800)
@@ -178,20 +203,24 @@ def test_a_view_at_the_bench_is_a_mat_with_its_outlines(
     drawn = _drawn(page, "workbench")
     assert drawn["view"] == view["id"]
     assert drawn["mat"]["visible"] and drawn["mat"]["sized"]
-    assert drawn["mat"]["centre"] == [900, 300, 780]
+    # Laid in the bench top's clear stretch, between printer_1 and the footpedal.
+    assert drawn["mat"]["centre"] == [1094, 300, 780]
     assert (drawn["mat"]["width"], drawn["mat"]["depth"]) == (1800, 900)
     assert [(o["index"], o["status"]) for o in drawn["outlines"]] == [
         (0, "found"),
         (1, "found"),
         (2, "found"),
     ]
+    # The block lies over printer_1: its outline in the flag's colour, the others as found.
+    assert [o["colour"] for o in drawn["outlines"]] == [OVER_COLOR, FOUND_COLOR, FOUND_COLOR]
     assert "px=1024" in drawn["texture"]["url"]
     badge = page.locator(".world-badge.place-mark[data-host='workbench']")
-    # Its words: the place, the picture drawn there, and how many shapes are in it.
-    expect(badge).to_contain_text("workbench · world_bench.png · 3 shapes")
+    # Its words: the place, the picture drawn there, how many shapes are in it, and
+    # what of it lies over something resting on the bench.
+    expect(badge).to_contain_text("workbench · world_bench.png · 3 shapes · 1 over printer_1")
 
-    # From above the bench, a little in front of it.
-    page.evaluate(LOOK_DOWN, [900, 300, 780, 2600])
+    # From above the mat, a little in front of it.
+    page.evaluate(LOOK_DOWN, [1094, 300, 780, 2600])
     settled(page)
 
     # An outline chooses its shape, and selects the bench.
@@ -205,8 +234,9 @@ def test_a_view_at_the_bench_is_a_mat_with_its_outlines(
     expect(page.locator("#selected-body [data-facts='shape']")).to_contain_text("Shape 1: a disc")
     expect(page.locator("#selected-body [data-facts='host']")).to_contain_text(fixture_picture)
 
-    # printer_1 stands over the block's outline: the click is the printer's.
-    block = _at(page, view["id"], *_centre(SHAPES[0]))
+    # printer_1 stands over the block's outline: a click where it covers it is the printer's.
+    block = page.evaluate(UNDER_THE_PRINTER, [view["id"], SHAPES[0]])
+    assert block, "printer_1 covers no point of the block's outline as seen"
     page.mouse.click(block["x"], block["y"])
     assert page.evaluate("() => window.fractalViewer.selectedName") == "printer_1"
     assert page.evaluate("() => window.apothecaryPictures.chosen()") is None
@@ -292,6 +322,7 @@ def test_the_mat_follows_its_bench_when_the_gizmo_moves_it(
         timeout=5000,
     )
     page.locator("#contents-list .contents-item[data-path='workbench']").click()
+    laid_x = _drawn(page, "workbench")["mat"]["centre"][0]
     before = page.evaluate("() => window.fractalViewer.anchors.at('place:workbench')")
     assert before
     asked = []
@@ -310,8 +341,9 @@ def test_the_mat_follows_its_bench_when_the_gizmo_moves_it(
             }"""
         )
     page.wait_for_function(
-        "() => window.apothecaryPictures.state().find((e) => e.host === 'workbench')"
-        ".mat.centre[0] === 1400",
+        "(x) => window.apothecaryPictures.state().find((e) => e.host === 'workbench')"
+        ".mat.centre[0] === x",
+        arg=laid_x + 500,
         timeout=5000,
     )
     settled(page)
