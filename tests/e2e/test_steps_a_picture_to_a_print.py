@@ -33,7 +33,7 @@ from playwright.sync_api import Page, expect
 from slicer_helpers import write_fake_orcaslicer
 from test_picture_to_print import BOARD, DWELL, LAYERS, MACHINE, PRINTER, _attached, _make
 from test_the_loop import _labels, _press, _ring_on, _said, _status
-from viewer_ready import settled
+from viewer_ready import by_hand, settled
 
 ROOT = Path(__file__).resolve().parents[2]
 SHAPES_PNG = ROOT / "examples" / "shapes.png"
@@ -71,7 +71,8 @@ def where(step: str, leaves: str, holds: bool) -> None:
 
 def add(w: Walk) -> None:
     """The bench's ring, Picture › Add, examples/shapes.png: pinned there as a view, laid
-    clear of what rests on the bench, nothing found in it yet."""
+    clear of what rests on the bench, nothing found in it yet; the view brought to the
+    bench by hand, to look at it."""
     w.page.goto(f"{w.base}/viewer/sites/garage")
     expect(w.page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
     if not w.on_the_demo:
@@ -94,10 +95,9 @@ def add(w: Walk) -> None:
     roots = {
         s["name"]: s for s in w.page.request.get(f"{w.base}/sites/garage").json()["structures"]
     }
-    assert roots["printer_1"]["world_bounds"]["max"][0] <= x - half, (
-        view["mat"],
-        roots["printer_1"],
-    )
+    printer = roots["printer_1"]["world_bounds"]
+    assert printer["max"][0] <= x - half, (view["mat"], printer)
+    by_hand(w.page, "workbench", distance=2600)
 
 
 def find(w: Walk) -> None:
