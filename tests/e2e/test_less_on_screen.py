@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import io
 import json
+import math
 import re
 
 import httpx
@@ -164,7 +165,9 @@ def test_the_board_and_the_place_badge_at_the_garage_top_level_do_not_overlap(
     assert abs(spots["board"]["x"] - spots["mainboard"]["x"]) < 1
     assert abs(spots["board"]["y"] - spots["mainboard"]["y"]) < 1
     assert abs(spots["board"]["y"] - spots["printer"]["y"]) > 10
-    assert abs(spots["place"]["x"] - spots["bench"]["x"]) > 10
+    # Apart on the screen, whichever side of the bench the view is from.
+    place, bench_middle = spots["place"], spots["bench"]
+    assert math.hypot(place["x"] - bench_middle["x"], place["y"] - bench_middle["y"]) > 10, spots
 
 
 @pytest.mark.e2e
@@ -735,19 +738,22 @@ def test_the_hint_shows_and_fades_with_no_storage(page: Page, bench: str):
 
 # A point of the world, in page pixels, where the first mesh a ray from the camera
 # meets is the garage's wall and another piece stands behind or inside it: found by
-# casting through a grid of points, as a click there would, walls included.
+# casting through a grid of points, as a click there would, walls included -- where
+# nothing stands over the canvas, a badge taking a click there before the world does.
 THROUGH_THE_WALL = """() => {
     const v = window.fractalViewer;
     const rect = v.canvas.getBoundingClientRect();
     const meshes = Object.values(v.meshByName);
     for (let gy = 0.15; gy < 0.95; gy += 0.025) {
         for (let gx = 0.05; gx < 0.95; gx += 0.025) {
+            const x = rect.left + gx * rect.width, y = rect.top + gy * rect.height;
+            if (document.elementFromPoint(x, y) !== v.canvas) continue;
             v.pointer.set(gx * 2 - 1, -(gy * 2 - 1));
             v.raycaster.setFromCamera(v.pointer, v.camera);
             const hits = v.raycaster.intersectObjects(meshes, false).map((h) => h.object.userData.key);
             if (hits[0] !== 'garage_building') continue;
             const behind = hits.find((k) => k !== 'garage_building' && !k.startsWith('garage_building.'));
-            if (behind) return { x: rect.left + gx * rect.width, y: rect.top + gy * rect.height, behind };
+            if (behind) return { x, y, behind };
         }
     }
     return null;

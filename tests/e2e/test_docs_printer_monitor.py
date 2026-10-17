@@ -191,6 +191,8 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
             break
         time.sleep(0.05)
     page.evaluate("() => window.fractalViewer.rescanDevices()")
+    # At the bench's other end from the printer: the view brought to it by hand.
+    by_hand(page, "footpedal", distance=1400)
     devkit = page.locator(".world-badge[data-path='footpedal']")
     expect(devkit).to_be_visible(timeout=10000)
     devkit.click()

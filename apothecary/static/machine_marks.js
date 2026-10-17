@@ -24,8 +24,9 @@ const MESH_LOW = [0x6f, 0xb3, 0xe8];   // the bed card's blue, below the mean
 const MESH_HIGH = [0xe8, 0xb0, 0x4a];  // its amber, above
 const MESH_INSET = 10;                 // Marlin's default MESH_INSET, mm from the probeable edge
 
-// apothecary (x, y, z) z-up -> three.js (x, z, y) y-up.
-export const toScene = (p) => new THREE.Vector3(p.x, p.z, p.y);
+// apothecary (x, y, z) z-up -> three.js (x, z, -y) y-up: a quarter turn about x, as the
+// viewer's sceneAt turns it.
+export const toScene = (p) => new THREE.Vector3(p.x, p.z, -p.y);
 
 /* Where the mesh points lie, in bed coordinates. Marlin prints the grid
  * without its positions; the probeable rectangle is the bed less what the

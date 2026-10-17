@@ -60,8 +60,8 @@ SIGHTED = """(key) => {
     const node = v.renderNodeByKey[key] || v.nodeByPath(key);
     const b = node && node.world_bounds;
     if (!b) return null;
-    const centre = v.camera.position.clone().set(
-        (b.min[0] + b.max[0]) / 2, (b.min[2] + b.max[2]) / 2, (b.min[1] + b.max[1]) / 2);
+    const centre = v.sceneAt(
+        (b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, (b.min[2] + b.max[2]) / 2);
     const p = centre.clone().project(v.camera);
     const r = v.canvas.getBoundingClientRect();
     const t = v.orbitControls.target, c = v.camera.position;
