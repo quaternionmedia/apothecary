@@ -211,8 +211,12 @@ def test_a_view_at_the_bench_is_a_mat_with_its_outlines(
         (1, "found"),
         (2, "found"),
     ]
-    # The block lies over printer_1: its outline in the flag's colour, the others as found.
+    # The block lies over printer_1: its outline in the flag's colour, the others as found,
+    # and its area filled to be seen from across the room.
     assert [o["colour"] for o in drawn["outlines"]] == [OVER_COLOR, FOUND_COLOR, FOUND_COLOR]
+    assert drawn["fills"] == [{"index": 0, "overlaps": ["printer_1"], "colour": OVER_COLOR}]
+    # An overlay on the bench, not a made part: seen through at half, and hatched.
+    assert drawn["mat"]["opacity"] == 0.5 and drawn["mat"]["hatched"]
     assert "px=1024" in drawn["texture"]["url"]
     badge = page.locator(".world-badge.place-mark[data-host='workbench']")
     # Its words: the place, the picture drawn there, how many shapes are in it, and
@@ -262,8 +266,8 @@ def test_a_view_at_the_bench_is_a_mat_with_its_outlines(
 def test_the_mat_shows_the_picture_and_the_floor_is_a_selection(
     page, base_url: str, fixture_picture, leaves_garage_as_found
 ):
-    """A view at the floor lies beside the site; its pixels are the picture's; a
-    click on it selects the floor, and its badge is not dimmed by it."""
+    """A view at the floor lies beside the site; its pixels are the picture's, seen
+    through at half; a click on it selects the floor, and its badge is not dimmed by it."""
     view = _pin(page, base_url, "", fixture_picture, mm_across=1000)
     _open_garage(page, base_url)
     page.wait_for_function(
@@ -281,10 +285,11 @@ def test_the_mat_shows_the_picture_and_the_floor_is_a_selection(
     page.evaluate(LOOK_DOWN, [centre[0], centre[1], 0, 1400])
     settled(page, frames=OCCLUSION_TESTED)
 
-    # The dark rectangle drawn at the picture's top left, and its light background.
+    # The dark rectangle drawn at the picture's top left reads apart from its light
+    # background, the picture seen through at half over the floor.
     dark = _pixel(page, _at(page, view["id"], 0.15, 0.2))
     light = _pixel(page, _at(page, view["id"], 0.8, 0.6))
-    assert dark < 90 < 180 < light, (dark, light)
+    assert light - dark > 50, (dark, light)
 
     badge = page.locator(".world-badge.place-mark[data-host='']")
     expect(badge).to_be_visible()

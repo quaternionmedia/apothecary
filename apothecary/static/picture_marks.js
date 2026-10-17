@@ -65,6 +65,11 @@ export const OVER_COLOR = 0xff5544;  // a shape over something resting on its ho
 export const PYRAMID_COLOR = 0xffcc66;
 
 const MAT_LIFT = 1.0;      // mm above the top: the mat
+const HATCH_LIFT = 1.5;    // its hatch, between it and the outlines
+const MAT_OPACITY = 0.5;   // a picture is seen through: an overlay on what it shows, not a made part
+const HATCH_STEP = 1 / 24; // the hatch's spacing, as a fraction of the picture's width
+const HATCH_COLOR = 0x8fa3b8;
+const OVER_FILL_OPACITY = 0.45; // a flagged shape's area, filled to be seen from across the room
 const OUTLINE_LIFT = 2.0;  // the outlines and their pick meshes, over the mat
 const BADGE_LIFT = 6.0;    // the badge's point, over both, so neither dims it
 const FLOOR_UNSIZED_MM = 600;  // an unsized floor mat's drawing width
@@ -274,14 +279,39 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
         ? shape.points
         : [[shape.min[0], shape.min[1]], [shape.max[0], shape.min[1]], [shape.max[0], shape.max[1]], [shape.min[0], shape.max[1]]]);
 
+    // Diagonal lines across a picture, laid through its lay as every point of it is (so
+    // a camera's picture keeps them on the plane it lies on): u - tall * v = c, at 45
+    // degrees on a flat one. A line running past the horizon is left out.
+    function hatchOf(lay) {
+        const tall = lay.tall || 1, points = [];
+        for (let c = -tall + HATCH_STEP / 2; c < 1; c += HATCH_STEP) {
+            const v0 = Math.max(0, -c / tall), v1 = Math.min(1, (1 - c) / tall);
+            if (v1 <= v0) continue;
+            const a = on(lay, c + tall * v0, v0, HATCH_LIFT), b = on(lay, c + tall * v1, v1, HATCH_LIFT);
+            if (a && b) points.push(toScene(...a), toScene(...b));
+        }
+        if (!points.length) return null;
+        const hatch = new THREE.LineSegments(
+            new THREE.BufferGeometry().setFromPoints(points),
+            new THREE.LineBasicMaterial({ color: HATCH_COLOR, transparent: true, opacity: 0.6, depthWrite: false }),
+        );
+        hatch.name = "hatch";
+        return hatch;
+    }
+
     function drawMat(host, view, lay, map) {
         const laid = surface(lay, MAT_LIFT);
         if (!laid) return null;
         const group = new THREE.Group();
         group.name = view ? `view:${view.id}` : `live:${host}`;
+        // Seen through and hatched: a picture is an overlay on what it was taken of, so
+        // the top and anything under it show, and it reads apart from a made part.
         const picture = new THREE.Mesh(
             laid.geometry,
-            new THREE.MeshBasicMaterial({ map, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
+            new THREE.MeshBasicMaterial({
+                map, side: THREE.DoubleSide, transparent: true, opacity: MAT_OPACITY, depthWrite: false,
+                polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+            }),
         );
         picture.userData.pick = { host, view: view ? view.id : null, index: null };
         picture.userData.live = !view;
@@ -295,6 +325,8 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
         );
         if (!lay.sized) border.computeLineDistances();
         group.add(border);
+        const hatch = hatchOf(lay);
+        if (hatch) group.add(hatch);
         group.userData.corners = laid.corners;
         if (!view) return group;
         // The outlines, laid as the picture is, and a pick mesh under each one not
@@ -324,6 +356,14 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
             pick.userData.pick = { host, view: view.id, index: shape.index };
             group.add(pick);
             pickables.push(pick);
+            // Over something resting on the host: its area filled, not only its outline.
+            if (shape.overlaps && shape.overlaps.length) {
+                const fill = new THREE.Mesh(flatShape, new THREE.MeshBasicMaterial({
+                    color: OVER_COLOR, transparent: true, opacity: OVER_FILL_OPACITY, depthWrite: false, side: THREE.DoubleSide,
+                }));
+                fill.userData.over = { index: shape.index, overlaps: [...shape.overlaps] };
+                group.add(fill);
+            }
         }
         return group;
     }
@@ -729,7 +769,10 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
                     depth: apart(g.lay, [0.5, 0], [0.5, 1]),
                     sized: g.lay.sized,
                     corners: siteCorners(g.mats.userData.corners),
+                    opacity: g.mats.children.find((o) => o.userData.pick && o.userData.pick.index === null)?.material.opacity ?? null,
+                    hatched: g.mats.children.some((o) => o.name === "hatch"),
                 } : null,
+                fills: g.mats ? g.mats.children.filter((o) => o.userData.over).map((o) => ({ ...o.userData.over, colour: o.material.color.getHex() })) : [],
                 outlines: g.mats ? g.mats.children.filter((o) => o.userData.shape).map((o) => ({ ...o.userData.shape, colour: o.material.color.getHex() })) : [],
                 texture: g.view && textures.get(g.view.id) ? { ...textures.get(g.view.id).userData } : null,
             }));
