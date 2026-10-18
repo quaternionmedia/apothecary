@@ -8,39 +8,29 @@ order, on a server of the test's own (the simulated printer on ``/dev/ttyFAKE1``
 to printer_1's mainboard, the scripted OrcaSlicer) in its own browser, so nothing it adds
 outlives it.
 
-Given ``--step N`` and ``--base-url`` naming the demo (``apothecary serve --demo``), only
-step N runs, on the demo, in the visible Chromium answering DevTools at 127.0.0.1:9222
-(started with ``--remote-debugging-port=9222``), in its tab named ``apothecary-walk``,
-opened if there is none. The tab is left where the step leaves it, to be looked at, its
-picture in ``.cache/walk/step-N.png``, and step N + 1 goes on from there; a step whose
-page is not where the step before leaves it does nothing and says why. A breakpoint in a
-step, under a debugger, stops there with the page live::
+Given ``--step N`` and ``--base-url`` naming the demo, only step N runs, on the demo's
+walk tab, and the tab is left there (tests/e2e/stepping.py); its picture is
+``.cache/walk/picture-to-print-step-N.png``::
 
     uv run pytest tests/e2e/test_steps_a_picture_to_a_print.py --base-url http://127.0.0.1:8000 --step 1
 """
 
 from __future__ import annotations
 
-import base64
-import os
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
 import httpx
 import pytest
 from playwright.sync_api import Page, expect
 from slicer_helpers import write_fake_orcaslicer
+from stepping import ROOT, chosen, where
 from test_picture_to_print import BOARD, DWELL, LAYERS, MACHINE, PRINTER, _attached, _make
 from test_the_loop import _labels, _press, _ring_on, _said, _status
 from viewer_ready import by_hand, settled
 
-ROOT = Path(__file__).resolve().parents[2]
 SHAPES_PNG = ROOT / "examples" / "shapes.png"
 WIDTH_MM = 300  # shapes.png across, as the README's photo example has it
-DEVTOOLS = os.environ.get("APOTHECARY_WALK_DEVTOOLS", "http://127.0.0.1:9222")
-WALK_TAB = "apothecary-walk"
-PICTURES = ROOT / ".cache" / "walk"
 
 
 @dataclass
@@ -61,12 +51,6 @@ class Walk:
         """The piece made from that view."""
         view = self.view()
         return next(iter(view["made"].values()), None) if view else None
-
-
-def where(step: str, leaves: str, holds: bool) -> None:
-    """Stop, having done nothing, unless the page is where the step before leaves it."""
-    if not holds:
-        pytest.fail(f"{step}: not where the step before leaves it ({leaves}), so nothing done")
 
 
 def add(w: Walk) -> None:
@@ -203,47 +187,15 @@ STEPS: List[Tuple[str, Callable[[Walk], None]]] = [
 ]
 
 
-def _picture(page: Page, step: int) -> Path:
-    """The window as the step leaves it, by Chrome's own capture: Playwright's screenshot
-    can wait forever on a browser it reached over DevTools."""
-    PICTURES.mkdir(parents=True, exist_ok=True)
-    session = page.context.new_cdp_session(page)
-    try:
-        shot = PICTURES / f"step-{step}.png"
-        shot.write_bytes(
-            base64.b64decode(session.send("Page.captureScreenshot", {"format": "png"})["data"])
-        )
-        return shot
-    finally:
-        session.detach()
-
-
 @pytest.fixture
 def steps(request, base_url):
-    """The steps to run and the page to run them on: one step on the demo's walk tab
-    under --step, every step on a server of the test's own otherwise."""
-    n = request.config.getoption("--step")
-    if n is not None:
-        if not 1 <= n <= len(STEPS):
-            pytest.fail(f"--step {n}: this test has steps 1 to {len(STEPS)}")
-        browser = request.getfixturevalue("playwright").chromium.connect_over_cdp(DEVTOOLS)
-        context = browser.contexts[0]
-        page = next(
-            (pg for pg in context.pages if pg.evaluate("() => window.name") == WALK_TAB), None
-        )
-        if page is None:
-            page = context.new_page()
-            page.goto(f"{base_url}/viewer/sites/garage")
-            page.evaluate(f"() => {{ window.name = '{WALK_TAB}'; }}")
-        page.bring_to_front()
-        yield Walk(page, base_url, on_the_demo=True), [n]
-        print(
-            f"\nstep {n} ({STEPS[n - 1][0]}): {_status(page).inner_text()}\npicture: {_picture(page, n)}"
-        )
-        return
-    page = request.getfixturevalue("page")
-    url = request.getfixturevalue("own_server")
-    yield Walk(page, url, on_the_demo=False), list(range(1, len(STEPS) + 1))
+    """One step on the demo's walk tab under --step; every step on a server of the
+    test's own otherwise (stepping.chosen)."""
+
+    def own():
+        return request.getfixturevalue("page"), request.getfixturevalue("own_server")
+
+    yield from chosen(request, base_url, "picture-to-print", STEPS, own)
 
 
 @pytest.fixture
@@ -269,6 +221,7 @@ def own_server(start_server, tmp_path_factory):
 
 @pytest.mark.e2e
 def test_a_picture_to_a_print_a_step_at_a_time(steps):
-    walk, numbers = steps
+    page, url, on_the_demo, numbers = steps
+    walk = Walk(page, url, on_the_demo)
     for n in numbers:
         STEPS[n - 1][1](walk)
