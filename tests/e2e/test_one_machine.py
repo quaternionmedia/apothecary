@@ -349,7 +349,8 @@ def test_a_printers_device_ring_holds_flash_disabled_in_cell_2_and_control_in_7(
 def test_a_machine_s_ring_is_its_device_ring(page: Page, url: str):
     """Ctrl+right-click inside a printer's Machine: the device ring on its port -- Control
     at 7 -- and the Machine's buttons wear its cells: Control ›
-    Arm ⌗77, E-STOP ⌗71, Link › Reconnect ⌗18; armed, Jog › Y+ ⌗728, Pause ⌗796."""
+    Arm ⌗77, E-STOP ⌗71, Link › Reconnect ⌗18; armed, the control pad popped out over
+    the world wears Jog › Y+ ⌗728 and Pause ⌗796, and its ring is the device ring too."""
     _open_viewer(page, url)
     page.locator(".world-badge[data-path='printer_1']").click()
     machine = page.locator(MACHINE)
@@ -365,17 +366,20 @@ def test_a_machine_s_ring_is_its_device_ring(page: Page, url: str):
     assert cells["Control"] == "7" and cells["Link"] == "1" and cells["Flash"] == "2", cells
     for digit in ("7", "7"):  # Control › Arm
         page.keyboard.press(digit)
-    expect(machine.locator("#control")).to_be_visible(timeout=5000)
-    expect(machine.locator("#control button[data-jog='Y+']")).to_have_attribute(
+    # Armed, the pad pops out of the Machine over the world, and is still the Machine's:
+    # its buttons wear the device ring's cells, and its ring is the device ring.
+    pad = page.locator("#control")
+    expect(pad).to_be_visible(timeout=5000)
+    expect(pad.locator("button[data-jog='Y+']")).to_have_attribute(
         "data-address", "728", timeout=5000
     )
-    expect(machine.locator("#control button[data-cmd='M25']")).to_have_attribute(
-        "data-address", "796"
-    )
-    assert (
-        machine.locator("#control button[data-jog='Y+']").get_attribute("title") or ""
-    ).endswith(" · ⌗728")
-    machine.locator("#ctl-disarm").click()
+    expect(pad.locator("button[data-cmd='M25']")).to_have_attribute("data-address", "796")
+    assert (pad.locator("button[data-jog='Y+']").get_attribute("title") or "").endswith(" · ⌗728")
+    pad.locator(".head").click(button="right", modifiers=["Control"])
+    expect(page.locator("#ring-overlay .title")).to_have_text("ttyFAKE1", timeout=5000)
+    page.keyboard.press("Escape")
+    expect(page.locator("#ring-overlay")).to_have_count(0)
+    pad.locator("#ctl-disarm").click()
     expect(machine.locator("#control")).to_be_hidden(timeout=5000)
 
 

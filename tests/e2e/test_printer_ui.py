@@ -654,6 +654,74 @@ def test_control_overlay_is_latched(page: Page, printer_url: str):
 
 
 @pytest.mark.e2e
+def test_armed_the_pad_pops_out_over_the_world_and_can_be_put_back(page: Page, printer_url: str):
+    """Armed, the control pad pops out of the Machine into the page: over the world's corner
+    by the rail, bordered, naming the printer it heats and moves, and still there with
+    another of the rail's tabs shown. Its ⇥ puts it back as the Machine's last child, its ⧉
+    pops it out again; disarmed, it goes back in the Machine, and armed again it pops out."""
+    _pin(printer_url, BOARD)
+    _identify(printer_url)
+    page.goto(f"{printer_url}/firmware/monitor?port=/dev/ttyFAKE1")
+    expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
+    machine, pad = page.locator(MACHINE), page.locator("#control")
+    expect(machine.locator("#control")).to_be_hidden()
+
+    page.locator("#ctl").check()
+    expect(pad).to_be_visible(timeout=5000)
+    expect(machine.locator("#control")).to_have_count(0)
+    expect(pad).to_have_class(re.compile(r"\bout\b"))
+    expect(pad.locator(".head")).to_contain_text("printer_1 armed: it can heat and move")
+    expect(pad.locator("#ctl-pop")).to_have_text("⇥")
+    world = page.locator("#viewer-canvas").bounding_box()
+    box = pad.bounding_box()
+    assert box["x"] >= world["x"] and box["x"] + box["width"] <= world["x"] + world["width"], (
+        box,
+        world,
+    )
+    assert box["y"] >= world["y"] and box["y"] + box["height"] <= world["y"] + world["height"], (
+        box,
+        world,
+    )
+    assert world["x"] + world["width"] - (box["x"] + box["width"]) < 40, "not by the rail"
+    # Another tab of the rail shown: the Machine is hidden, the pad is not.
+    page.locator(".panel-rail .rail-tab[data-panel='pictures'] .rail-tab-name").click()
+    expect(machine).to_be_hidden(timeout=5000)
+    expect(pad).to_be_visible()
+    page.locator(".panel-rail .rail-tab[data-panel='machine'] .rail-tab-name").click()
+    expect(machine).to_be_visible(timeout=5000)
+
+    pad.locator("#ctl-pop").click()
+    expect(machine.locator("#control")).to_be_visible()
+    expect(pad).not_to_have_class(re.compile(r"\bout\b"))
+    expect(pad.locator("#ctl-pop")).to_have_text("⧉")
+    pad.locator("#ctl-pop").click()
+    expect(machine.locator("#control")).to_have_count(0)
+    expect(pad).to_have_class(re.compile(r"\bout\b"))
+    # The toggle is the canvas ring's Panels › Control pad, and wears its address.
+    expect(pad.locator("#ctl-pop")).to_have_attribute("data-address", "47", timeout=5000)
+    page.locator("#viewer-canvas").click(
+        button="right", modifiers=["Control"], position={"x": 30, "y": 30}
+    )
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    page.keyboard.press("4")  # Panels
+    page.keyboard.press("7")  # Control pad
+    expect(page.locator("#ring-overlay")).to_have_count(0)
+    expect(machine.locator("#control")).to_be_visible()
+    expect(page.locator("#status")).to_contain_text(
+        "printer_1's control pad put back in its Machine"
+    )
+
+    # Put back, then disarmed and armed again: out again.
+    page.locator("#ctl-disarm").click()
+    expect(machine.locator("#control")).to_be_hidden(timeout=3000)
+    page.locator("#ctl").check()
+    expect(pad).to_have_class(re.compile(r"\bout\b"), timeout=5000)
+    expect(machine.locator("#control")).to_have_count(0)
+    pad.locator("#ctl-disarm").click()
+    expect(machine.locator("#control")).to_be_hidden(timeout=3000)
+
+
+@pytest.mark.e2e
 def test_a_bed_reading_needs_no_latch_and_a_probe_does(page: Page, fresh_url: str):
     """Read mesh needs no latch and fills the heatmap; Probe bed needs it, shows its stage
     while the port is held, and saves a record the history lists. A server of its own:
@@ -1144,11 +1212,12 @@ def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
 
     # Armed, a jog from the Machine moves the world's nozzle marker ahead of the poll.
     machine.locator("#ctl").check()
-    expect(machine.locator("#control")).to_be_visible(timeout=5000)
-    machine.locator("#control button[data-cmd='M25']").click()
+    pad = page.locator("#control")  # armed, popped out of the Machine over the world
+    expect(pad).to_be_visible(timeout=5000)
+    pad.locator("button[data-cmd='M25']").click()
     expect(machine.locator("#c-state")).to_contain_text("idle", timeout=WITHIN_A_POLL)
     before = page.evaluate("() => window.fractalViewer.marks['printer_1'].marks.target()")
-    machine.locator("#control button[data-step='10']").click()
+    pad.locator("button[data-step='10']").click()
     # Ahead of the poll, by mechanism rather than by the clock: where the marker
     # stands at the moment the jog's own event is dispatched, before any poll can
     # answer. (A wall-clock bound here would measure the machine's load, not the page.)
@@ -1161,7 +1230,7 @@ def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
             });
         }"""
     )
-    machine.locator("#control button[data-jog='X+']").click()
+    pad.locator("button[data-jog='X+']").click()
     page.wait_for_function("() => window.__atJog !== null", timeout=8000)
     assert page.evaluate("() => window.__atJog") == before["x"] + 10
     expect(log.locator("#log .tx.control", has_text="G1 X10 F3000").last).to_be_visible(
@@ -1185,8 +1254,8 @@ def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
     expect(log.locator("#log .tx.control", has_text="G1 Y10 F3000").last).to_be_visible(
         timeout=8000
     )
-    machine.locator("#control button[data-cmd='M24']").click()
-    machine.locator("#ctl-disarm").click()
+    pad.locator("button[data-cmd='M24']").click()
+    pad.locator("#ctl-disarm").click()
     expect(machine.locator("#control")).to_be_hidden(timeout=3000)
 
     # Closing it stops its polling, and its log goes with it.

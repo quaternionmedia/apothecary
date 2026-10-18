@@ -6753,7 +6753,7 @@
                     tab: anchor ? anchor.split('.').pop() : (port.split('/').pop() || port),
                     body: (slot) => {
                         machine.handle = mountMachine(slot, {
-                            base: BASE_URL, port, host: 'world', boards: this.boards, inPrinter,
+                            base: BASE_URL, port, host: 'world', boards: this.boards, inPrinter, name: anchor,
                             pin: row ? { site: this.siteName, path: row.path, how: row.binding_source, sketch: row.sketch || null } : null,
                             say: (text, kind) => this.setStatus(text, kind),
                             // A part drawn from a variant this tab applied is sliced as drawn.
@@ -6770,6 +6770,8 @@
             // printer's level card sizes its corners from where it stands.
             machineOpened(port) {
                 if (window.apothecaryRing && window.apothecaryRing.annotateMachine) window.apothecaryRing.annotateMachine();
+                // Its pad's ⇥ and ⧉ are the canvas ring's Panels › Control pad.
+                if (window.apothecaryRing && window.apothecaryRing.refreshAddresses) window.apothecaryRing.refreshAddresses();
                 this.keepMachineInAddress(port);
                 const where = this.whereByPort[port] || fetch(`${BASE_URL}/firmware/printers/where?port=${encodeURIComponent(port)}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
                 where.then((w) => { if (w && w.printer && this.machine && this.machine.port === port) window.dispatchEvent(new CustomEvent('apothecary:where', { detail: { ...w, port } })); });
@@ -7878,7 +7880,8 @@
             const at = { x: event.clientX, y: event.clientY };
             const target = event.target && event.target.closest ? event.target : null;
             if (!target) return null;
-            if (machineOpen && target.closest(".panel[data-panel='machine']")) return opening ? machineSpec(at) : 'page';
+            // The Machine, or its control pad popped out of it over the world.
+            if (machineOpen && target.closest(".panel[data-panel='machine'], #control")) return opening ? machineSpec(at) : 'page';
             const row = target.closest('#contents-list .contents-item');
             if (row) {
                 if (!opening) return 'page';
@@ -7992,6 +7995,15 @@
                     const docs = document.getElementById('docs-link');
                     window.open(docs ? docs.href : `${BASE_URL}/docs`, '_blank', 'noopener');
                     viewer.setStatus(`Opened the documentation in a new tab: the guides, and the walkthrough from its table${tail}`, 'success');
+                    return;
+                }
+                // Panels › Control pad: the open Machine's pad out over the world or back
+                // in it, as the pad's ⇥ and ⧉ do; while it is armed only.
+                if (action === 'panel:pad') {
+                    const r = viewer.machine && viewer.machine.handle
+                        ? viewer.machine.handle.pad()
+                        : { refused: 'No Machine is open: a printer\'s pad shows while ⚙ Control in its Machine is armed' };
+                    viewer.setStatus(`${r.refused || r.said}${tail}`, r.refused ? 'error' : 'success');
                     return;
                 }
                 if (action === 'panel:rail:toggle') {
@@ -8229,6 +8241,9 @@
             pairs.push([viewer.wallsToggle.closest('label'), 'view:walls']);
             // The header's Docs: Panels › Docs.
             pairs.push([document.getElementById('docs-link'), 'panel:docs']);
+            // An armed printer's pad, popped out or put back: Panels › Control pad.
+            const padToggle = document.getElementById('ctl-pop');
+            if (padToggle) pairs.push([padToggle, 'panel:pad']);
             const bench = document.querySelector(".panel[data-panel='bench']");
             if (bench) {
                 for (const [selector, action] of BENCH_VERBS) for (const el of bench.querySelectorAll(selector)) pairs.push([el, action]);

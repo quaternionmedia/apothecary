@@ -466,6 +466,14 @@ accepted command renews it) and is dropped by a **Release** or a lost link.
 **E-STOP** (`M112`) is always accepted, latch or not; the board halts until
 it is reset.
 
+Armed, the Machine's control pad -- heaters, motion, the SD print, leveling --
+pops out over the world's corner by the rail, bordered and headed with the
+printer it heats and moves and the time left, and stays there whatever tab
+the rail shows: a real machine is armed. Every arming pops it out, from the
+Machine, the ring or another browser. Its **⇥** puts it back as the last
+thing in the Machine's column; its **⧉** pops it out again, and the ring's
+Panels › Control pad does either. Disarmed, it goes.
+
 What can be sent is a bounded allowlist, `firmware.gcode.CONTROL_CODES`
 (heaters and fan, homing, moves, motors off, SD start, pause and abort, mesh
 on and off, probing, break wait, quickstop), with heater, travel and feed

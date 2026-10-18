@@ -695,8 +695,12 @@ def _panels() -> Option:
         + [Option(id="panel:rail", label="Rail", action="panel:rail:toggle")]
         + [_bench(toggle("bench", "Bench"))]
         # The documentation and the walkthrough, in a tab of the browser's own, as
-        # the header's Docs opens them. Last, so no cell before it moves.
-        + [Option(id="panel:docs", label="Docs", action="panel:docs")],
+        # the header's Docs opens them. After the others, so no cell before it moves.
+        + [Option(id="panel:docs", label="Docs", action="panel:docs")]
+        # An armed printer's control pad, popped out over the world or put back in its
+        # Machine, as the pad's ⇥ and ⧉ do (widgets/machine.js). Last, so no cell
+        # before it moves.
+        + [Option(id="panel:pad", label="Control pad", action="panel:pad")],
     )
 
 
