@@ -235,6 +235,9 @@ CHANGING = (
     (MACHINE, TEMPERATURE),
     (f"{MACHINE} #chart-span", r"\d+"),
     f"{MACHINE} #chart",
+    # The latch's countdown, in the Machine's head and on the pad.
+    f"{MACHINE} #ctl-ttl",
+    "#control .ttl",
 )
 
 
@@ -461,8 +464,6 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     assert {s["origin"] for s in settings.values()} == {"printer"}
     expect(said.locator(".slice-settings")).to_contain_text("layer_height")
     expect(said.locator(".slice-settings")).to_contain_text("start")
-    machine.locator("#ctl").check()
-    expect(page.locator("#control")).to_be_visible(timeout=5000)
     expect(machine.locator("#print-start")).to_be_enabled()
     folding = page.locator(".panel[data-panel='selected'] .panel-collapse")
     folding.click()
@@ -488,7 +489,11 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
         re.compile(r"\bcollapsed\b")
     )
 
-    # 8. ▶ Print: asked first, naming the piece; a job begins.
+    # 8. ⚙ Control armed, its pad popped out over the world; ▶ Print: asked first, naming
+    # the piece; a job begins.
+    machine.locator("#ctl").check()
+    expect(page.locator("#control")).to_be_visible(timeout=5000)
+    expect(page.locator("#control")).to_have_class(re.compile(r"\bout\b"))
     asked = []
     page.once("dialog", lambda d: (asked.append(d.message), d.accept()))
     machine.locator("#print-start").click()
@@ -508,8 +513,8 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     )
     story.says(
         "Print starts a job that names the piece",
-        "The Machine's ⚙ Control armed, above the card -- the latch a print needs -- "
-        f"Print from here's ▶ Print asks first, naming the file, the port and {disc}; "
+        "The Machine's ⚙ Control armed -- the latch a print needs, its pad popped out "
+        f"over the world -- Print from here's ▶ Print asks first, naming the file, the port and {disc}; "
         "then the file streams, one line per ok, and the job is the newest of printer_1's "
         "history, running. The status line names where it is followed.",
         shown=f"{asked[0]}\n\n{started}",
@@ -540,12 +545,16 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     }, job
     assert job["machine"]["port"] == PRINTER and job["outcome"] == "done"
     expect(rows.first).not_to_contain_text(first["picture"])
+    # Nothing armed while the next piece is made: the pad's 🔒 Disarm lets the latch go.
+    page.locator("#control #ctl-disarm").click()
+    expect(page.locator("#control")).to_be_hidden(timeout=5000)
     story.says(
         "The job ends, and says so where it is watched",
         "The status line says the print ended and how; the Machine's progress reads done, "
         "every line sent; its history keeps the job with the piece it made, and Site's "
         "Jobs lists it under printer_1. The job's record keeps the picture and the camera "
-        "the piece came from, and its row does not show them.",
+        "the piece came from, and its row does not show them. The pad's 🔒 Disarm lets "
+        "the latch go, and the pad with it, while the next piece is made.",
         shown=(
             f"{ended_said}\n{_undated(progress.inner_text())}\n{_undated(rows.first.inner_text())}"
         ),
@@ -649,14 +658,15 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
         blank=CHANGING,
     )
 
-    # 15. Send file, from printer_1's ring: what the card has chosen, printed.
+    # 15. Send file, from printer_1's ring: armed again (disarmed when the first print
+    # ended), and what the card has chosen, printed.
     _ring_on(page, "printer_1")
     _press(page, "Device", "Control")
-    if "Arm" in _labels(page):  # the latch lapses after minutes without a control
-        _press(page, "Arm")
-        expect(page.locator("#control")).to_be_visible(timeout=5000)
-        _ring_on(page, "printer_1")
-        _press(page, "Device", "Control")
+    assert "Arm" in _labels(page), _labels(page)
+    _press(page, "Arm")
+    expect(page.locator("#control")).to_have_class(re.compile(r"\bout\b"), timeout=5000)
+    _ring_on(page, "printer_1")
+    _press(page, "Device", "Control")
     asked.clear()
     page.once("dialog", lambda d: (asked.append(d.message), d.accept()))
     _press(page, "Print", "Send file")
@@ -689,7 +699,8 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     expect(jobs.locator("summary")).to_contain_text("Jobs · 2")
     story.shows(
         "Send file prints the second, and both jobs name their pieces",
-        f"printer_1's ring, Device › Control › Print › Send file, prints what the card has "
+        "printer_1's ring, Device › Control › Arm, pops the pad out over the world again; "
+        f"Control › Print › Send file prints what the card has "
         f"chosen: {plate}, and the status line says when it ends. The Machine's history "
         "and Site's Jobs keep both jobs, newest first, each with the piece it made.",
         shown="\n".join(
