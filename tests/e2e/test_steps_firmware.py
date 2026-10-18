@@ -107,6 +107,7 @@ def compile_(w: Walk) -> None:
     _canvas_ring(w.page, "4", "3", "2")
     _ended(w.bench, f"Compile {ARDUINO} (esp32:esp32:esp32)")
     expect(w.bench.locator(".task-log")).to_contain_text("fake compile")
+    w.bench.locator(".task-title").scroll_into_view_if_needed()
 
 
 def upload(w: Walk) -> None:
@@ -120,6 +121,7 @@ def upload(w: Walk) -> None:
     _ended(w.bench, f"Upload {ARDUINO} → {DEVKIT}")
     assert asked == [f'Compile and upload "{ARDUINO}" to {DEVKIT}?'], asked
     expect(w.page.locator(f".world-badge[data-path='{NODE}']")).to_be_visible(timeout=15000)
+    w.bench.locator(".task-title").scroll_into_view_if_needed()
 
 
 def hello(w: Walk) -> None:
@@ -226,6 +228,7 @@ def listen(w: Walk) -> None:
     expect(log).to_contain_text("blink 1")
     expect(w.page.locator("#selected-body .device-section")).to_contain_text(f"runs {RUST} ✓")
     w.machine.locator("#release").click()
+    log.scroll_into_view_if_needed()
     w.page.wait_for_function(
         f"() => !window.fractalViewer.boards.board('{DEVKIT}').stream", timeout=5000
     )

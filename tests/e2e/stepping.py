@@ -13,10 +13,11 @@ debugger, stops there with the page live.
 
 from __future__ import annotations
 
-import base64
 import os
+import subprocess
+import sys
 from pathlib import Path
-from typing import Callable, Iterator, List, Sequence, Tuple
+from typing import Callable, Iterator, List, Optional, Sequence, Tuple
 
 import pytest
 from playwright.sync_api import Page
@@ -35,18 +36,34 @@ def where(step: str, leaves: str, holds: bool) -> None:
         pytest.fail(f"{step}: not where the step before leaves it ({leaves}), so nothing done")
 
 
-def picture(page: Page, name: str) -> Path:
-    """The window as it is, by Chrome's own capture: Playwright's screenshot can wait
-    forever on a browser it reached over DevTools."""
+# The walk tab's window by Chrome's own capture, in a process of its own: a window that is
+# covered or minimised paints nothing, and the capture then waits for ever.
+CAPTURE = """
+import base64, sys
+from playwright.sync_api import sync_playwright
+with sync_playwright() as p:
+    pages = p.chromium.connect_over_cdp(sys.argv[1]).contexts[0].pages
+    page = next(pg for pg in pages if pg.evaluate("() => window.name") == sys.argv[2])
+    data = page.context.new_cdp_session(page).send("Page.captureScreenshot", {"format": "png"})["data"]
+    open(sys.argv[3], "wb").write(base64.b64decode(data))
+"""
+
+
+def picture(name: str, wait: float = 15.0) -> Optional[Path]:
+    """The walk tab's window as it is, or None when Chrome gives none within ``wait``
+    seconds."""
     PICTURES.mkdir(parents=True, exist_ok=True)
-    session = page.context.new_cdp_session(page)
+    shot = PICTURES / f"{name}.png"
     try:
-        data = session.send("Page.captureScreenshot", {"format": "png"})["data"]
-        shot = PICTURES / f"{name}.png"
-        shot.write_bytes(base64.b64decode(data))
-        return shot
-    finally:
-        session.detach()
+        subprocess.run(
+            [sys.executable, "-c", CAPTURE, DEVTOOLS, WALK_TAB, str(shot)],
+            timeout=wait,
+            check=True,
+            capture_output=True,
+        )
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
+        return None
+    return shot
 
 
 def walk_tab(request, base_url: str) -> Page:
@@ -79,4 +96,6 @@ def chosen(
     page = walk_tab(request, base_url)
     yield page, base_url, True, [n]
     said = page.locator("#status").inner_text()
-    print(f"\nstep {n} ({steps[n - 1][0]}): {said}\npicture: {picture(page, f'{loop}-step-{n}')}")
+    shot = picture(f"{loop}-step-{n}")
+    taken = shot or "none: Chrome gave none (is the window covered or minimised?)"
+    print(f"\nstep {n} ({steps[n - 1][0]}): {said}\npicture: {taken}")
