@@ -41,10 +41,12 @@ jobs:
           python-version: '3.11'
 
       - name: This pull request merges into the open pull requests before it
+        # With no pull request -- this workflow run here by `apothecary preflight` --
+        # every open pull request is judged, as the command in the header does.
         run: |
           python .github/ci/check_integrates.py \
             --repo "$GITHUB_REPOSITORY" \
-            --pr "$PR_NUMBER"
+            ${PR_NUMBER:+--pr "$PR_NUMBER"}
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
