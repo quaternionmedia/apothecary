@@ -123,7 +123,8 @@
     background: #1c1f1c; border: 1px solid #7a5a1a; border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.55); }
 #control[hidden] { display: none; }
 #control .head { display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem; padding: 0.45rem 0.7rem; border-bottom: 1px solid #3a3020; background: #2a2410; border-radius: 8px 8px 0 0; font-size: 0.8rem; color: var(--warn); }
-#control.out { border: 2px solid var(--warn); box-shadow: 0 0 0 4px rgba(255, 204, 102, 0.22), 0 10px 32px rgba(0, 0, 0, 0.6); }
+#control.out { border: 2px solid var(--warn); box-shadow: 0 0 0 4px rgba(255, 204, 102, 0.22), 0 10px 32px rgba(0, 0, 0, 0.6);
+    opacity: var(--popover-opacity, 0.9); }
 #control.out .head { background: #5a4410; color: #fff0c8; font-size: 0.85rem; font-weight: 600; border-radius: 6px 6px 0 0; }
 #control.out.alert { animation: control-armed 0.5s ease-out 3; }
 @keyframes control-armed {

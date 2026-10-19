@@ -29,10 +29,11 @@
  * the ring or another browser: it stands over the world's bottom corner on the
  * Machine's side, wherever the person is looking and whatever tab the rail
  * shows, bordered and named loudly, since a real machine armed can heat and
- * move. Its ⇥ puts it back as the last thing in the Machine's column; its ⧉
- * pops it out again.
+ * move; the host frames the printer in what the pad leaves clear (onPadOut).
+ * Its ⇥ puts it back as the last thing in the Machine's column; its ⧉ pops it
+ * out again.
  *
- * mountMachine(root, { base, port, host, boards, kind, inPrinter, pin, name, say, variantFor })
+ * mountMachine(root, { base, port, host, boards, kind, inPrinter, pin, name, say, onPadOut, variantFor })
  * renders into `root` and returns the handle the ring drives (carry, pairs,
  * device), the world asks to list its site's parts again when a piece is made,
  * rebuilt or dropped (print.loadChoices), to choose the piece a made piece's
@@ -55,7 +56,9 @@
  * whatever it has been identified as so far, so its Flashing card folds away and
  * Device › Flash says why. `pin` ({ site, path, how }) is where the board is pinned, or bound
  * by its sketch when `how` is "sketch". `name` is what the world calls the board's
- * Machine (the printer it is in), named on the control pad; left out, the port. `say(text,
+ * Machine (the printer it is in), named on the control pad; left out, the port.
+ * `onPadOut(box)` is told each time the pad pops out, with where it stands in the
+ * page (its bounding box), so the host can frame the printer clear of it. `say(text,
  * kind)` is the host's status bar: a refusal is said there as an error as well
  * as in the log; a print started is said there, naming where it is followed, and
  * a print that ends, how it ended (failed, and why, as an error). `variantFor(path)`
@@ -261,7 +264,7 @@ const BY_CMD = {
 };
 
 
-export function mountMachine(root, { base = "", port = "", host = "world", boards = null, kind = null, inPrinter = false, pin = null, name = null, say = null, variantFor = null } = {}) {
+export function mountMachine(root, { base = "", port = "", host = "world", boards = null, kind = null, inPrinter = false, pin = null, name = null, say = null, onPadOut = null, variantFor = null } = {}) {
     const BASE = base;
     const model = boards || mountBoards({ base });
     root.classList.add("machine", `host-${host}`);
@@ -681,7 +684,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         ctl.until = Date.now() + (c ? c.seconds_left * 1000 : 0);
         if (ctl.armed && !was) ctl.out = true;
         renderControl();
-        if (ctl.armed && !was) { pad.classList.remove("alert"); void pad.offsetWidth; pad.classList.add("alert"); }
+        if (ctl.armed && !was) { pad.classList.remove("alert"); void pad.offsetWidth; pad.classList.add("alert"); poppedOut(); }
     }
     // The pad popped out stands in the page, over the world's bottom corner on the side
     // the rail is (the Machine's), clear of the status bar; put back, or disarmed, it is
@@ -703,6 +706,10 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (railRight) pad.style.right = `${innerWidth - w.right + gap}px`;
         else { pad.style.left = `${w.left + gap}px`; pad.style.right = "auto"; }
         pad.style.maxWidth = `${Math.max(240, w.width - 2 * gap)}px`;
+    }
+    // Popped out, the host is told where it stands.
+    function poppedOut() {
+        if (onPadOut && pad.classList.contains("out")) onPadOut(pad.getBoundingClientRect());
     }
     const onResize = () => { if (pad.classList.contains("out")) placePad(); };
     window.addEventListener("resize", onResize);
@@ -781,7 +788,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (!ctl.armed) return { refused: `${who}'s control is not armed: ⚙ Control in its Machine arms it, and its pad pops out` };
         ctl.out = !ctl.out;
         placePad();
-        if (!ctl.out) pad.scrollIntoView({ block: "nearest" });
+        if (ctl.out) poppedOut();
+        else pad.scrollIntoView({ block: "nearest" });
         return { said: ctl.out ? `${who}'s control pad popped out over the world` : `${who}'s control pad put back in its Machine` };
     }
     $("ctl-pop").onclick = () => togglePad();

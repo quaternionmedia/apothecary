@@ -653,11 +653,24 @@ def test_control_overlay_is_latched(page: Page, printer_url: str):
     expect(page.locator("#control")).to_be_hidden(timeout=3000)
 
 
+# Whether a piece's middle is drawn in the world and clear of the control pad.
+FRAMED_CLEAR = """(key) => {
+    const v = window.fractalViewer, b = v.renderNodeByKey[key].world_bounds;
+    const s = v.sceneAt(...b.min.map((m, i) => (m + b.max[i]) / 2)).project(v.camera);
+    const world = v.renderer.domElement.getBoundingClientRect();
+    const pad = document.querySelector('#control').getBoundingClientRect();
+    const x = world.left + (s.x + 1) / 2 * world.width, y = world.top + (1 - s.y) / 2 * world.height;
+    const inWorld = x > world.left && x < world.right && y > world.top && y < world.bottom;
+    return inWorld && (x < pad.left || x > pad.right || y < pad.top || y > pad.bottom);
+}"""
+
+
 @pytest.mark.e2e
 def test_armed_the_pad_pops_out_over_the_world_and_can_be_put_back(page: Page, printer_url: str):
     """Armed, the control pad pops out of the Machine into the page: over the world's corner
-    by the rail, bordered, naming the printer it heats and moves, and still there with
-    another of the rail's tabs shown. Its ⇥ puts it back as the Machine's last child, its ⧉
+    by the rail, bordered, naming the printer it heats and moves, the world seen faintly
+    through it and printer_1 framed clear of it, and still there with another of the
+    rail's tabs shown. Its ⇥ puts it back as the Machine's last child, its ⧉
     pops it out again; disarmed, it goes back in the Machine, and armed again it pops out."""
     _pin(printer_url, BOARD)
     _identify(printer_url)
@@ -683,6 +696,9 @@ def test_armed_the_pad_pops_out_over_the_world_and_can_be_put_back(page: Page, p
         world,
     )
     assert world["x"] + world["width"] - (box["x"] + box["width"]) < 40, "not by the rail"
+    # The world lets it be seen through, and frames printer_1 in what the pad leaves clear.
+    assert float(pad.evaluate("(el) => getComputedStyle(el).opacity")) < 1
+    page.wait_for_function(FRAMED_CLEAR, arg="printer_1", timeout=5000)
     # Another tab of the rail shown: the Machine is hidden, the pad is not.
     page.locator(".panel-rail .rail-tab[data-panel='pictures'] .rail-tab-name").click()
     expect(machine).to_be_hidden(timeout=5000)
