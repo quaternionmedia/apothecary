@@ -8012,7 +8012,9 @@
                     if (port && !(viewer.machine && viewer.machine.port === port) && !viewer.openMachine(path)) return;
                     const done = await viewer.machine.handle.carry(intent);
                     if (done) {
-                        if (done.refused) viewer.setStatus(`${intent.label}: ${done.refused}${tail}`, 'error');
+                        // A refusal naming the verb and its address, as the Machine's log
+                        // keeps it, is said as it is; one that does not, after the label.
+                        if (done.refused) viewer.setStatus(done.refused.includes(tail.trim()) ? done.refused : `${intent.label}: ${done.refused}${tail}`, 'error');
                         else viewer.setStatus(`${intent.label}${done.said ? `: ${done.said}` : ''}${tail}`, 'success');
                         return;
                     }

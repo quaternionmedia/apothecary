@@ -203,7 +203,8 @@ def test_one_log_with_one_query_box_in_the_machine(page: Page, url: str):
 @pytest.mark.e2e
 def test_a_refusal_reaches_the_status_bar(page: Page, url: str):
     """A verb the Machine refuses -- a jog while control is not armed, chosen from the
-    ring -- is said in the status bar as an error, with its address, and in the log."""
+    ring -- is said in the status bar as an error, with its label and address once, and
+    in the log in the same words."""
     _open_viewer(page, url)
     page.locator(".world-badge[data-path='printer_1']").click()
     machine = page.locator(MACHINE)
@@ -212,10 +213,10 @@ def test_a_refusal_reaches_the_status_bar(page: Page, url: str):
     _choose(page, "Device", "Control", "Jog", "Y+")
     expect(page.locator("#ring-overlay")).to_have_count(0)
     status = page.locator("#status")
-    expect(status).to_contain_text("not armed", timeout=5000)
+    said = "Y+ (⌗7728): control is not armed"
+    expect(status).to_have_text(said, timeout=5000)
     expect(status).to_have_class(re.compile(r"\berror\b"))
-    expect(status).to_contain_text("⌗7")
-    expect(machine.locator("#log .sys", has_text="not armed").last).to_be_visible()
+    expect(machine.locator("#log .sys", has_text=said).last).to_be_visible()
     # A refused report code from the Machine's own box says so too.
     machine.locator("#q").fill("G28")
     machine.locator("#qform button").click()

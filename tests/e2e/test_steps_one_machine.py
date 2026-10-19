@@ -197,7 +197,7 @@ def disarm(w: Walk) -> None:
     _ring_on(w.page, "printer_1")
     assert _press(w.page, "Device", "Control", "Jog", "Y+") == "7728"
     status = w.page.locator("#status")
-    expect(status).to_contain_text("not armed", timeout=5000)
+    expect(status).to_have_text("Y+ (⌗7728): control is not armed", timeout=5000)
     expect(status).to_have_class(re.compile(r"\berror\b"))
 
 
