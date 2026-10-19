@@ -106,3 +106,26 @@ def test_the_map_says_what_is_wrong_with_it(breaks, says):
     assert old in readme
     problems = map_problems(readme.replace(old, new, 1))
     assert any(says in problem for problem in problems), problems
+
+
+def test_the_maps_address_asked_as_another_host_serves_something_here():
+    """The row showing that the server answers this machine only names an address that
+    serves something here and is refused when asked as another host: an address serving
+    nothing would show the refusal while sending the reviewer nowhere."""
+    from fastapi.testclient import TestClient
+
+    from apothecary.api import app
+
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    asked = [
+        found
+        for row in _rows(readme)
+        for found in re.findall(
+            r"`curl -H 'Host: ([^']+)' http://127\.0\.0\.1:8000(/[^`\s]*)`", row[1]
+        )
+    ]
+    assert asked, "the map names no address to ask as another host"
+    here = TestClient(app)
+    for host, path in asked:
+        assert here.get(path).status_code == 200, f"{path} serves nothing here"
+        assert here.get(path, headers={"host": host}).status_code == 403, f"{path} answers {host}"
