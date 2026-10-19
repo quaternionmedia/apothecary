@@ -106,7 +106,20 @@ DEMO_HELP = (
     "a minute or two). Off by default: starting a server is not a test run.",
 )
 @click.option("--demo", is_flag=True, help=DEMO_HELP)
-def serve(host: str, port: int, reload: bool, refresh_docs: bool, demo: bool):
+@click.option(
+    "--console-sacn",
+    is_flag=True,
+    help="Listen on UDP 5568 for a lighting console's sACN (E1.31) and show its levels on "
+    "a site with a lighting rig. Receive only: the guard still lets nothing leave this machine.",
+)
+@click.option(
+    "--console-osc",
+    is_flag=True,
+    help="Listen on UDP 8001 for an Eos console's OSC output and show its status (command line, "
+    "active channels) beside the lighting. Set the console's OSC TX to this machine's address, "
+    "UDP, port 8001. Receive only.",
+)
+def serve(host: str, port: int, reload: bool, refresh_docs: bool, demo: bool, console_sacn: bool, console_osc: bool):
     """Run the viewer's server: the viewer at /viewer, the docs at /docs, the API at
     /openapi.json. It listens on this machine only (see apothecary/stays_local.py).
 
@@ -114,6 +127,10 @@ def serve(host: str, port: int, reload: bool, refresh_docs: bool, demo: bool):
     scripted firmware tools, on a state folder of its own."""
     host = _loopback_or_die(host)
     _port_free_or_die(host, port)
+    if console_sacn:
+        os.environ["APOTHECARY_CONSOLE_SACN"] = "1"
+    if console_osc:
+        os.environ["APOTHECARY_CONSOLE_OSC"] = "1"
     if refresh_docs:  # before the demo's environment is this process's
         refresh_docs_in_background()
     target, factory = "apothecary.api:app", False
