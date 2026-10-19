@@ -669,18 +669,18 @@ PANELS: Sequence[Tuple[str, str]] = (
     ("pictures", "Pictures"),
     ("machine", "Machine"),
     # The Bench: the toolchain, the sketches, compile and upload, raw flash and
-    # the task log, a tab of the rail's strip,
-    # registered at start and shown when asked for. Its verbs are a ring of
+    # the task log, a tab beside Pictures, registered at start and shown when
+    # asked for. Its verbs are a ring of
     # their own under its cell (_bench).
     ("bench", "Bench"),
-    # Settings: every shortcut and navigation setting, kept per browser, a tab of
-    # the rail's strip registered at start. Its cell is View's (View › Settings),
+    # Settings: every shortcut and navigation setting, kept per browser, a tab
+    # beside Pictures registered at start. Its cell is View's (View › Settings),
     # as ⚙ View › Settings opens it, not one of Panels'.
     ("settings", "Settings"),
 )
-# The panels seated before the rail's own cell (Panels › Rail, 49); a panel
-# registered after them is seated after the rail, so no address moves.
-_BEFORE_RAIL = ("site", "selected", "pictures", "machine")
+# The panels seated before the windows' own cell (Panels › Windows, 49); a panel
+# registered after them is seated after it, so no address moves.
+_BEFORE_WINDOWS = ("site", "selected", "pictures", "machine")
 
 
 def _panels() -> Option:
@@ -690,16 +690,29 @@ def _panels() -> Option:
     return Option(
         id="panels",
         label="Panels",
-        children=[toggle(pid, label) for pid, label in PANELS if pid in _BEFORE_RAIL]
-        # The rail itself: hidden and shown, as the tilde key does.
-        + [Option(id="panel:rail", label="Rail", action="panel:rail:toggle")]
+        children=[toggle(pid, label) for pid, label in PANELS if pid in _BEFORE_WINDOWS]
+        # The layout itself: the world alone (its window maximised) and every window
+        # back, as the tilde key does; and the page's own layout again, whatever was
+        # dragged, split or closed.
+        + [
+            Option(
+                id="panel:windows",
+                label="Windows",
+                children=[
+                    Option(id="panel:world", label="World alone", action="panel:world:toggle"),
+                    Option(
+                        id="panel:layout:reset", label="Reset layout", action="panel:layout:reset"
+                    ),
+                ],
+            )
+        ]
         + [_bench(toggle("bench", "Bench"))]
         # The documentation and the walkthrough, in a tab of the browser's own, as
         # the header's Docs opens them. After the others, so no cell before it moves.
         + [Option(id="panel:docs", label="Docs", action="panel:docs")]
-        # An armed printer's control pad, popped out over the world or put back in its
-        # Machine, as the pad's ⇥ and ⧉ do (widgets/machine.js). Last, so no cell
-        # before it moves.
+        # An armed printer's control pad, in a loud window of its own or put back in
+        # its Machine, as the pad's ⧉ Pop out and ⇥ Put back do (widgets/machine.js).
+        # Last, so no cell before it moves.
         + [Option(id="panel:pad", label="Control pad", action="panel:pad")],
     )
 
@@ -1287,13 +1300,13 @@ def _node_ring(
         if seen is not None and seen.editable:
             verbs.append(Option(id="part:save", label="Save", action="part:save"))
         # Two groups, so the ring holds eight at the most: View -- how the part
-        # and its editor are seen: the editor floated over the world or over the
-        # whole page, the ghost of what was drawn before beside what is drawn now,
+        # and its editor are seen: the editor in a window of its own beside the
+        # world or over the whole page, the ghost of what was drawn before beside what is drawn now,
         # and the part framed with Selected and its editor kept open (f) -- and
         # History, the staged numbers' undo and redo (Ctrl+Z, Ctrl+Shift+Z).
         view = []
         if seen is not None:
-            view.append(Option(id="part:float", label="Float", action="part:float"))
+            view.append(Option(id="part:popout", label="Pop out", action="part:popout"))
             view.append(Option(id="part:fullscreen", label="Fullscreen", action="part:fullscreen"))
         if part_of_the_folder:
             view.append(Option(id="part:ghost", label="Ghost", action="part:ghost"))
@@ -1561,7 +1574,7 @@ CARRIED_BY: Dict[str, Carries] = {
     # chosen under makes and starts the slice there (POST /slicer/slice), a task the
     # card follows; nothing is sent to the printer.
     "slice": Carries.VIEWER,
-    # Opening, closing, floating what stands in front of the world (panels.js).
+    # Opening and closing the windows beside the world (panels.js).
     "panel": Carries.VIEWER,
     # How the world is drawn: the header's View menu (snapping, detail, outlines,
     # whether a click picks a wall).
@@ -1596,7 +1609,7 @@ CARRIED_BY: Dict[str, Carries] = {
     # The part editor is the page's: Part › Edit opens it in Selected and puts
     # the cursor in its first control, Part › Defaults opens it with the part's
     # own numbers staged, and Part › Apply and Revert do what its buttons do with
-    # what is staged; Part › Save, Variants, Float and Fullscreen do what the SCAD
+    # what is staged; Part › Save, Variants, Pop out and Fullscreen do what the SCAD
     # editor's own do. What Apply and Save change goes through the part, made,
     # camera and saved-variant routes the editor already calls, never the intent
     # route.

@@ -2517,7 +2517,7 @@ def firmware_page():
 def monitor_page(port: str = ""):
     """``/firmware/monitor?port=`` is a board's Machine: the viewer on the site the
     port is pinned in, its Machine open there -- or, pinned nowhere, on the default
-    site with its Machine open; either way the Machine is a tab of the rail's strip.
+    site with its Machine open; either way the Machine is a tab beside Pictures.
     A port of the wrong shape is dropped: the viewer opens with nothing in front of
     it."""
     try:

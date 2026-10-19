@@ -4,10 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Apothecary Fractal Viewer</title>
+    <link rel="stylesheet" href="{{ base_url }}/static/vendor/golden-layout/css/goldenlayout-base.css">
+    <link rel="stylesheet" href="{{ base_url }}/static/vendor/golden-layout/css/goldenlayout-dark-theme.css">
     <style>
         * { box-sizing: border-box; }
-        /* What pops over the world -- a floated panel, the View menu, a badge's words,
-           an armed printer's control pad -- lets the world show faintly through it. */
+        /* What pops over the world -- the View menu, a badge's words, a window being
+           dragged -- lets the world show faintly through it. */
         :root { --popover-opacity: 0.9; }
         html, body {
             height: 100%; margin: 0;
@@ -16,7 +18,7 @@
         }
 
         .app-container { display: flex; flex-direction: column; height: 100vh; }
-        .main-content { display: flex; flex: 1; overflow: hidden; }
+        .main-content { flex: 1; min-height: 0; overflow: hidden; position: relative; }
 
         /* The header: one row at any width a laptop has, 1024 px included. Its
            parts keep their size; only the trail gives way (see #breadcrumb). */
@@ -96,7 +98,7 @@
         .device-section input[type="text"] { font-size: 0.72rem; padding: 0.15rem 0.4rem; background: #1e1e1e; color: #ddd; border: 1px solid #444; border-radius: 3px; width: 9.5rem; }
         .device-section .device-query { margin-top: 0.3rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #9cd2ff; white-space: pre-wrap; }
 
-        .viewer-panel { flex: 2; min-width: 0; position: relative; background: #111; }
+        .viewer-panel { position: relative; background: #111; }
         #viewer-canvas { width: 100%; height: 100%; display: block; }
         /* The world has the keyboard's focus: a ring round it when the keyboard brought it
            there (Tab), never after a press in the world. */
@@ -129,108 +131,55 @@
         }
         .minimap-tick.filled { background: #0d6efd; border-color: #9cd2ff; }
 
-        /* Panels (panels.js): one rail of them beside the world -- Site and
-           Selected stacked, the rest tabs of a strip below them; any can float.
-           Its width holds Site's tree rows and Selected's label-and-box rows at
-           the garage's depths without cutting a name short, and leaves the world
-           more than half of any window wider than a phone. */
-        .side-panel { display: none; }
-        .panel-rail {
-            flex: 0 0 auto; width: min(400px, 33vw); background: #1e1e1e; position: relative;
-            display: flex; flex-direction: column; min-height: 0;
+        /* Windows (panels.js): the world and every panel are windows of one
+           GoldenLayout (vendor/golden-layout, its dark theme under these rules) --
+           each in a stack of tabs, dragged by its tab anywhere, split beside
+           another, maximised or closed. The world's window has no tab: it is
+           always there, and maximised it is the world alone (the tilde). */
+        .main-content > .lm_goldenlayout { background: #141414; }
+        .lm_goldenlayout .lm_content { background: #1e1e1e; border: 0; }
+        .world-window { overflow: hidden; }
+        .world-window > .viewer-panel { position: absolute; inset: 0; }
+        .panel-window { display: flex; flex-direction: column; overflow: hidden; }
+        /* A panel fills its window; its body scrolls inside it, under the pinned bar,
+           so its tab and that bar stay in view, and selecting a row in Site's tree
+           does not move the row under the pointer. */
+        .panel { background: #1e1e1e; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+        .panel-body-slot { padding: 0.75rem 1rem; overflow: auto; flex: 1 1 auto; min-height: 0; }
+        /* The tabs, in the page's own type and colours. A name too long for its tab is
+           cut, never wrapped; the whole of it is the tab's tooltip. */
+        .lm_header { background: #191919; }
+        .lm_header .lm_tab {
+            font-family: inherit; font-size: 0.78rem; color: #999; background: #202020;
+            border-radius: 4px 4px 0 0; box-shadow: none; height: auto; line-height: 18px;
+            padding: 2px 24px 2px 9px; margin: 3px 2px 0 0;
         }
-        .panel-rail[hidden] { display: none; }
-        /* Site and Selected, stacked, share what the rail has left half and half,
-           whatever either holds: their bodies scroll inside them, not the rail, so
-           their titles stay in view, and selecting a piece in Site's tree does not
-           move the row under the pointer -- the second click of a double click
-           lands where the first did. One dragged from its bottom edge keeps the
-           height it was given (.sized), and the other takes the rest. */
-        .panel-rail-body > .panel[data-panel="site"]:not(.collapsed),
-        .panel-rail-body > .panel[data-panel="selected"]:not(.collapsed) { flex: 1 1 0; min-height: 140px; }
-        .panel-rail-body > .panel[data-panel="site"] .panel-body-slot,
-        .panel-rail-body > .panel[data-panel="selected"] .panel-body-slot { max-height: none; flex: 1 1 auto; min-height: 0; }
-        .panel-rail-body > .panel.sized:not(.collapsed) { flex: 0 0 auto; }
-        /* The tab strip: one tab per docked panel that is not stacked, the one
-           shown under it. A tab carries its panel's name, and shown, its float
-           and close; the panel's own title bar is the tab. */
-        .panel-tabstrip {
-            flex: 0 0 auto; display: flex; flex-wrap: nowrap; gap: 2px; padding: 0.3rem 0.3rem 0;
-            background: #191919; border-top: 1px solid #333; border-bottom: 1px solid #333; margin-top: auto;
+        .lm_header .lm_tab .lm_title { max-width: 14em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .lm_header .lm_tab:hover { color: #eee; background: #262626; }
+        .lm_header .lm_tab.lm_active { color: #eee; background: #1e1e1e; font-weight: 600; box-shadow: inset 0 2px 0 #4a4a4a; }
+        .lm_header .lm_tab.lm_active.lm_focused { background-color: #1e1e1e; box-shadow: inset 0 2px 0 #6fb3e8; }
+        .lm_header .lm_tab .lm_close_tab { top: 6px; }
+        .lm_splitter { background: #141414; opacity: 1; }
+        .lm_splitter:hover, .lm_splitter.lm_dragging { background: rgba(111, 179, 232, 0.45); }
+        .lm_dropTargetIndicator { outline: 1px dashed #6fb3e8; box-shadow: inset 0 0 30px rgba(111, 179, 232, 0.25); }
+        .lm_dragProxy .lm_content { box-shadow: 0 8px 28px rgba(0,0,0,0.55); opacity: var(--popover-opacity); }
+        .lm_maximised .lm_header { background-color: #191919; }
+        /* A loud window: an armed printer's control pad -- a real machine that moves
+           when it is pressed. Its tab is red and stays red, its frame glows, and
+           as it opens it pulses (widgets/machine.js). */
+        .lm_header .lm_tab.loud, .lm_header .lm_tab.loud:hover { color: #ffe1e1; background: #5a1f1f; }
+        .lm_header .lm_tab.loud.lm_active { background: #6e2222; box-shadow: inset 0 2px 0 #ff6b6b; }
+        .panel-window.loud { box-shadow: inset 0 0 0 2px #ff6b6b, inset 0 0 18px rgba(255, 107, 107, 0.35); }
+        .panel-window.loud > .panel { background: #22191a; }
+        .panel-window.loud.alert { animation: loud-alert 0.9s ease-out 2; }
+        @keyframes loud-alert {
+            0% { box-shadow: inset 0 0 0 2px #ff6b6b, inset 0 0 0 rgba(255, 107, 107, 0); }
+            40% { box-shadow: inset 0 0 0 4px #ff9b9b, inset 0 0 42px rgba(255, 107, 107, 0.7); }
+            100% { box-shadow: inset 0 0 0 2px #ff6b6b, inset 0 0 18px rgba(255, 107, 107, 0.35); }
         }
-        .panel-tabstrip[hidden], .panel-tabbody[hidden] { display: none; }
-        /* One row of tabs: a name too long for the rail is cut, never wrapped. Four of
-           them -- Pictures, Bench, Settings and a Machine with its float and close --
-           fit the rail at 1024 px in DejaVu Sans, the widest sans-serif a Linux browser
-           is likely to have. */
-        .rail-tab { display: flex; align-items: center; min-width: 0; background: #202020; border: 1px solid #333; border-bottom: 0; border-radius: 4px 4px 0 0; margin-bottom: -1px; }
-        .rail-tab .rail-tab-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .rail-tab.active { background: #1e1e1e; border-color: #4a4a4a; }
-        .rail-tab button { background: none; border: 0; color: #999; font: inherit; font-size: 0.8rem; cursor: pointer; padding: 0.3rem 0.4rem; line-height: 1; }
-        .rail-tab button:hover { color: #eee; }
-        .rail-tab.active .rail-tab-name { color: #eee; font-weight: 600; }
-        .rail-tab .rail-tab-float, .rail-tab .rail-tab-close { padding: 0.3rem 0.2rem; font-size: 0.75rem; }
-        .rail-tab button[hidden] { display: none; }
-        .panel-tabbody { flex: 0 0 auto; display: flex; flex-direction: column; }
-        .panel-tabbody > .panel > .panel-title { display: none; }
-        .panel-rail-right { border-left: 1px solid #333; }
-        .panel-rail-left { border-right: 1px solid #333; }
-        .panel-rail-head {
-            display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.5rem 0.25rem 0.4rem; background: #191919;
-            border-bottom: 1px solid #333; font-size: 0.72rem; color: #777; text-transform: uppercase; letter-spacing: 0.05em; user-select: none;
-        }
-        .panel-rail-grip { cursor: grab; color: #666; letter-spacing: -2px; padding: 0 0.2rem; }
-        .panel-rail-grip:hover { color: #ccc; }
-        .panel-rail-head button { background: none; border: 0; color: #888; font: inherit; font-size: 0.8rem; cursor: pointer; padding: 0 0.3rem; line-height: 1; }
-        .panel-rail-head button:hover { color: #eee; }
-        .panel-rail-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
-        .panel-rail-resizer { position: absolute; top: 0; bottom: 0; width: 6px; cursor: ew-resize; z-index: 2; }
-        .panel-rail-right .panel-rail-resizer { left: -3px; }
-        .panel-rail-left .panel-rail-resizer { right: -3px; }
-        .panel-rail-resizer:hover { background: rgba(111, 179, 232, 0.35); }
-        .panel { border-bottom: 1px solid #333; background: #1e1e1e; display: flex; flex-direction: column; min-height: 0; position: relative; }
-        .panel[hidden] { display: none; }
-        .panel-resizer { height: 6px; cursor: ns-resize; flex: 0 0 auto; }
-        .panel-resizer:hover { background: rgba(111, 179, 232, 0.35); }
-        .panel-resizer[hidden] { display: none; }
-        .panel.free {
-            position: absolute; width: min(380px, 80%); max-height: 75%; border: 1px solid #3a3a3a;
-            border-radius: 6px; box-shadow: 0 8px 28px rgba(0,0,0,0.55); overflow: auto; resize: both; min-width: 220px; min-height: 40px; pointer-events: auto;
-            opacity: var(--popover-opacity);
-        }
-        /* Fullscreen, an editor floated in a panel covers the page: not a popover. */
-        .panel.free:has(.scad-editor.fullscreen) { opacity: 1; }
-        .panel-title {
-            display: flex; align-items: center; gap: 0.35rem; padding: 0.45rem 0.6rem 0.45rem 0.75rem; background: #252525;
-            font-weight: 600; font-size: 0.85rem; color: #ccc; user-select: none;
-        }
-        .panel.free .panel-title { cursor: grab; }
-        .panel-title .panel-spacer { flex: 1; }
-        .panel-title button {
-            background: none; border: 0; color: #888; font: inherit; font-size: 0.8rem; cursor: pointer; padding: 0 0.3rem; line-height: 1;
-        }
-        .panel-title button:hover { color: #eee; }
-        /* A docked panel keeps its height when the panel below it grows on a
-           selection -- a list a person is scrolling does not shrink under the
-           pointer, and a form's button does not slide under the next title.
-           Each body scrolls inside itself past 40% of the page; the rail
-           scrolls as a whole when the panels outgrow it. */
-        .panel-rail-body > .panel { flex: 0 0 auto; }
-        .panel-body-slot { padding: 0.75rem 1rem; overflow: auto; max-height: 40vh; }
-        .panel.free .panel-body-slot { max-height: none; flex: 1; }
-        .panel.collapsed .panel-body-slot { display: none; }
-        .panel-free-layer { position: absolute; inset: 0; pointer-events: none; }
-        .panel-free-layer .panel { pointer-events: auto; }
-        .panel-tabs { position: absolute; right: 0.5rem; bottom: 2.6rem; display: flex; gap: 0.3rem; pointer-events: auto; }
-        .panel-tabs[hidden] { display: none; }
-        .panel-tab {
-            background: #252525; color: #bbb; border: 1px solid #3a3a3a; border-radius: 4px; padding: 0.2rem 0.55rem;
-            font: inherit; font-size: 0.78rem; cursor: pointer;
-        }
-        .panel-tab:hover { color: #fff; border-color: #666; }
-        /* The Machine: a board's one surface, a tab of the rail (widgets/machine.js), its log in it; as wide as this when floated. */
-        .panel[data-panel="machine"].free { width: min(500px, 90%); }
-        .panel[data-panel="machine"] .panel-body-slot { padding: 0; }
+        @media (prefers-reduced-motion: reduce) { .panel-window.loud.alert { animation: none; } }
+        /* The Machine: a board's one surface (widgets/machine.js), its log in it. */
+        .panel[data-panel="machine"] .panel-body-slot, .panel[data-panel="control"] .panel-body-slot { padding: 0; }
         /* Pictures (widgets/picture_list.js) and Site's Pinned (widgets/pinned.js): rows, each with its buttons */
         .panel-ui { font-size: 0.8rem; color: #bbb; display: flex; flex-direction: column; gap: 0.4rem; }
         .panel-ui .row { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
@@ -494,7 +443,7 @@
            resizer: squeezed (a tab's panel open below), it scrolls in itself, and nothing
            of Selected spills over the tab strip under it. */
         .panel-pinned { flex: 0 0 auto; padding: 0 1rem; background: #1b1e24; max-height: calc(100% - 4rem); overflow-y: auto; }
-        .panel-pinned:empty, .panel.collapsed .panel-pinned { display: none; }
+        .panel-pinned:empty { display: none; }
         .panel-pinned #stage-bar { margin-bottom: 0; }
         .panel-pinned #part-messages { max-height: 5.5em; overflow: auto; }
         #stage-summary { font-size: 12px; margin-bottom: 6px; }
@@ -503,7 +452,7 @@
         #stage-summary.invalid { color: #ff9b9b; }
         .stage-actions { display: flex; gap: 6px; }
         /* One row, one line: Apply wider, saying what it draws, cut short rather than
-           wrapped where the rail is narrow (the summary above says it whole). */
+           wrapped where Selected's window is narrow (the summary above says it whole). */
         .stage-actions button { flex: 1 1 0; min-width: 0; padding: 6px; border: 0; border-radius: 4px;
                                 font-weight: 700; cursor: pointer; font: inherit;
                                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -543,7 +492,7 @@
         .scad-messages li.warning { color: #e0cf8e; }
         .scad-messages .where { color: #8a929e; font-variant-numeric: tabular-nums; }
         /* The SCAD editor (widgets/scad_editor.js): in Selected where the read-only
-           source stood, floated over the world, or over the whole page. */
+           source stood, in a window of its own beside the world, or over the whole page. */
         .scad-editor { display: flex; flex-direction: column; gap: 4px; outline: none; }
         .scad-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 11px; }
         .scad-bar .scad-spacer { flex: 1; }
@@ -558,8 +507,11 @@
                                  border: 1px solid #2a2f38; padding: 2px 4px; font: inherit; }
         .scad-code { height: 260px; border: 1px solid #2a2f38; border-radius: 4px; overflow: hidden; }
         .scad-code .cm-editor { height: 100%; }
-        .panel[data-panel="scad-editor"].free { width: min(560px, calc(100% - 16px)); }
-        .panel[data-panel="scad-editor"] .scad-code { height: min(42vh, 420px); }
+        /* Out of Selected, in a window of its own, the editor fills it: the code takes
+           what its bar and the saved list leave. */
+        .panel[data-panel="scad-editor"] .panel-body-slot { display: flex; flex-direction: column; }
+        .panel[data-panel="scad-editor"] .scad-editor { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+        .panel[data-panel="scad-editor"] .scad-code { flex: 1 1 auto; height: auto; min-height: 160px; }
         .panel[data-panel="scad-editor"] .scad-saved { max-height: 22vh; overflow: auto; }
         .scad-editor.fullscreen { position: fixed; inset: 0; z-index: 900; background: #1b1e24;
                                   padding: 10px 14px; }
@@ -668,10 +620,6 @@
         .status.error { color: #dc3545; }
         .status.success { color: #28a745; }
 
-        @media (max-width: 768px) {
-            .main-content { flex-direction: column; }
-            .panel-rail { width: 100% !important; max-height: 50%; }
-        }
     </style>
 </head>
 <body>
@@ -711,7 +659,7 @@
                     <label class="toolbar-toggle" title="Walls are drawn faded and a click in the world passes through them to what is behind or inside; ticked, a click picks a wall again, until the page is left. A wall's row in Site selects it either way">
                         <input type="checkbox" id="walls-toggle"> Select walls
                     </label>
-                    <button type="button" id="settings-open" class="view-menu-item" title="The shortcuts and automatic zoom, each with its default and a reset, kept by this browser: a tab of the rail">Settings</button>
+                    <button type="button" id="settings-open" class="view-menu-item" title="The shortcuts and automatic zoom, each with its default and a reset, kept by this browser: a tab beside Pictures">Settings</button>
                 </div>
             </details>
             <a id="docs-link" class="docs-link" href="/docs" target="_blank" rel="noopener" title="The documentation in a new tab: the guides, and the walkthrough, each of its pages a run of the tests (Panels › Docs on the ring)">Docs</a>
@@ -724,8 +672,8 @@
                 <div id="minimap"></div>
                 <div class="viewer-hint" id="viewer-hint">Click: select · Double-click: step in · Page Up: step out · Right-drag: pan · Ctrl+right-click: ring · ?: hide</div>
             </div>
-            <div class="side-panel">
-                <div class="panel-section" data-panel="site" data-zone="stack">
+            <div class="side-panel" hidden>
+                <div class="panel-section" data-panel="site">
                     <div class="panel-header">Site</div>
                     <div class="panel-body">
                         <details id="site-problems" class="fold site-problems" hidden>
@@ -749,7 +697,7 @@
                         </details>
                     </div>
                 </div>
-                <div class="panel-section" data-panel="selected" data-zone="stack">
+                <div class="panel-section" data-panel="selected">
                     <div class="panel-header">Selected</div>
                     <div class="panel-body" id="selected-body">
                         <div class="no-selection">Click a piece to select it</div>
@@ -1240,11 +1188,11 @@
                 // The SCAD editor (widgets/scad_editor.js), for the part being edited: what
                 // its text is, per target key (the part's own, the draft, the variant it
                 // came from, the name Save keeps it under, its saved variants), and the one
-                // mounted, floated out of Selected or not.
+                // mounted, popped out of Selected or not.
                 this.scadStages = {};
                 this.scadEditor = null;
                 this.scadTarget = null;
-                this.scadFloated = false;
+                this.scadPopped = false;
                 this.scadLoading = Promise.resolve();
                 this.editorTarget = null;  // what the editor edits: a part, or a piece made from a picture
                 this.editorOpenFor = null; // a machine drawn as a part whose editor Part › Edit opened
@@ -1289,7 +1237,7 @@
             }
 
             // A link into the world with a panel open: the Bench, or a board's Machine
-            // in the rail, pinned in this site or nowhere here, once the site's boards
+            // in its window, pinned in this site or nowhere here, once the site's boards
             // are known.
             async followDeepLink() {
                 const panel = DEEP_LINK.get('panel');
@@ -1371,23 +1319,19 @@
                     container: this.canvas.parentElement, canvas: this.canvas, camera: this.camera, scene: this.scene,
                     keepClear: () => [this.hintEl, this.minimapEl],  // no badge's words over these
                 });
-                // The page's sections are panels in the one rail: Site and Selected
-                // stacked at its top, each one closable, collapsible and draggable
-                // free; what a person did to them is remembered per browser
-                // (panels.js), and a remembered panel the page does not register, or
-                // a remembered layout with no rail of its own, is ignored. A panel
-                // floated lands clear of the header, the hint bar and the depth ladder,
-                // as a badge's words do, and of the closed panels' tabs.
+                // The world and the page's sections are windows of one layout
+                // (panels.js): Site and Selected each a window in the column beside
+                // the world, the rest tabs below them; any dragged anywhere, split,
+                // maximised or closed. What a person made of it is remembered per
+                // browser, and a remembered layout the page cannot read is ignored.
                 this.panels = mountPanels({
-                    container: document.querySelector('.main-content'), overlay: this.canvas.parentElement,
-                    keepClear: () => [document.querySelector('.toolbar'), this.hintEl, this.minimapEl],
+                    host: document.querySelector('.main-content'), world: this.canvas.parentElement,
                 });
                 for (const section of document.querySelectorAll('.side-panel [data-panel]')) {
-                    const id = section.dataset.panel;
-                    this.panels.register(id, {
+                    this.panels.register(section.dataset.panel, {
                         title: section.querySelector('.panel-header').textContent.trim(),
                         body: section.querySelector('.panel-body'),
-                        zone: section.dataset.zone || 'tabs',
+                        home: 'column',
                     });
                 }
                 document.querySelector('.side-panel')?.remove();
@@ -1454,8 +1398,8 @@
                 this.pinnedWidget = null;
                 this.pinnedEl.addEventListener('toggle', () => this.pinnedOpened());
                 // Pictures: every picture under the picture root, each with its views,
-                // Forget on a kept one, Purge, and the gathering -- a tab of the rail's
-                // strip, filled the first time it is shown and listed again each time
+                // Forget on a kept one, Purge, and the gathering -- a tab below Site and
+                // Selected, filled the first time it is shown and listed again each time
                 // it is shown again. A row chosen there is told to every ring, whose
                 // Picture › Folder pins it where the ring stands.
                 this.picturesWidget = null;
@@ -1480,8 +1424,7 @@
                 });
                 // The Bench: the toolchain, the sketches built and uploaded, raw flash
                 // and the task log (widgets/toolchain.js, sketches.js, tasks.js) -- a
-                // tab of the rail's strip, closed until it
-                // is pressed, filled the first time it is shown and asked for the
+                // tab beside Pictures, filled the first time it is shown and asked for the
                 // toolchain's state again each time it is shown again. A board's own
                 // flashing is in its Machine; the Bench is for any sketch and any port.
                 this.bench = null;
@@ -1491,7 +1434,7 @@
                     body: (slot) => { this.bench = this.mountBench(slot); window.apothecaryBench = this.bench; },
                 });
                 // Settings: every shortcut and navigation setting, each with its default
-                // and a reset (widgets/settings.js) -- a tab of the rail's strip, opened
+                // and a reset (widgets/settings.js) -- a tab beside Pictures, opened
                 // from ⚙ View › Settings and the canvas ring's View › Settings.
                 this.settingsWidget = null;
                 this.panels.register('settings', {
@@ -1584,7 +1527,7 @@
                 window.addEventListener('keydown', (e) => this.onEscapeKey(e));
                 // Ctrl+S, while a part's editor is open, saves its variant from anywhere.
                 window.addEventListener('keydown', (e) => this.onSaveKey(e));
-                // ⚙ View › Settings: the Settings panel, in the rail.
+                // ⚙ View › Settings: the Settings panel, its tab in front.
                 this.settingsOpenBtn.addEventListener('click', () => this.openSettings());
                 // ? brings the hint bar back (and puts it away again).
                 window.addEventListener('keydown', (e) => this.onHintKey(e));
@@ -1599,9 +1542,9 @@
                 // not rendered or not saved, asks first; what this tab keeps of it, kept.
                 window.addEventListener('beforeunload', (e) => this.onLeaving(e));
                 window.addEventListener('resize', () => this.onResize());
-                // The world is as wide as the rail leaves it: a rail dragged wider,
-                // hidden, swapped or given a docked Machine, or a header that wraps,
-                // changes the canvas while the window stays as it was, so the canvas
+                // The world is as big as its window: a splitter dragged, a window opened
+                // beside it or closed, the world alone, or a header that wraps, changes
+                // the canvas while the browser's window stays as it was, so the canvas
                 // itself is watched and the camera's aspect follows it.
                 if (window.ResizeObserver) {
                     this.canvasObserver = new ResizeObserver(() => this.onResize());
@@ -2630,8 +2573,8 @@
                 return null;
             }
 
-            // ⚙ View › Settings, and the ring's View › Settings: the Settings panel, shown
-            // in the rail, the menu folded away. Answers what the status line says.
+            // ⚙ View › Settings, and the ring's View › Settings: the Settings panel, its
+            // tab in front, the menu folded away. Answers what the status line says.
             openSettings() {
                 this.viewMenuEl.open = false;
                 this.panels.open('settings');
@@ -5601,45 +5544,30 @@
                 return { ok: true, said: `Framed ${key}; Selected and its editor stay open (f)` };
             }
 
-            // A piece framed in what something standing over the world (`cover`, its box
-            // in the page's pixels) leaves of it: the larger part beside it or above it,
-            // the one the piece is drawn biggest in. An armed printer, its control pad
-            // popped out, is framed so; what it said, or why not.
-            frameClearOf(key, cover) {
-                const node = this.renderNodeByKey[key];
-                if (!node) return { ok: false, said: `${key} is not drawn at this level, so not framed` };
-                const view = this.renderer.domElement.getBoundingClientRect();
-                const gap = 12, aspect = this.camera.aspect;
-                const parts = [
-                    { x: view.left, y: view.top, w: cover.left - gap - view.left, h: view.height },
-                    { x: cover.right + gap, y: view.top, w: view.right - cover.right - gap, h: view.height },
-                    { x: view.left, y: view.top, w: view.width, h: cover.top - gap - view.top },
-                    { x: view.left, y: cover.bottom + gap, w: view.width, h: view.bottom - cover.bottom - gap },
-                ].filter((p) => p.w > 40 && p.h > 40);
-                const size = (p) => Math.min(p.h / view.height, aspect * p.w / view.width);
-                const clear = parts.sort((a, b) => size(b) - size(a))[0] || null;
-                const mesh = this.meshByName[key];
-                const box = mesh ? new THREE.Box3().setFromObject(mesh) : null;
-                this.frameBox(box && !box.isEmpty() ? siteBox(box) : this.boundsFor(node, 0), clear);
-                return { ok: true, said: `Framed ${key} beside its control pad` };
+            // An armed printer framed in the world, once its control pad's window beside
+            // the world has taken its room: the next frame but one, after the world has
+            // been told its new size.
+            frameArmed(key) {
+                requestAnimationFrame(() => requestAnimationFrame(() => {
+                    const node = this.renderNodeByKey[key];
+                    if (!node) return;
+                    this.onResize();
+                    const mesh = this.meshByName[key];
+                    const box = mesh ? new THREE.Box3().setFromObject(mesh) : null;
+                    this.frameBox(box && !box.isEmpty() ? siteBox(box) : this.boundsFor(node, 0));
+                }));
             }
 
             // The view brought to a box of the site's (x, y, z up), from the side it looks
             // from, near enough that the whole box fits; the level's reach left as it was.
-            // Given `clear`, a part of the world in the page's pixels ({ x, y, w, h }) that
-            // nothing stands over, the box fits that part and stands in its middle.
-            frameBox(bounds, clear = null) {
+            frameBox(bounds) {
                 const sizes = bounds.max.map((v, i) => v - bounds.min[i]);
                 const span = Math.max(20, ...sizes);
                 const centre = sceneAt(...bounds.min.map((v, i) => (v + bounds.max[i]) / 2));
-                const view = this.renderer.domElement.getBoundingClientRect();
-                const part = clear && view.width && view.height
-                    ? { w: clear.w / view.width, h: clear.h / view.height, x: (clear.x + clear.w / 2 - view.left) / view.width, y: (clear.y + clear.h / 2 - view.top) / view.height }
-                    : { w: 1, h: 1, x: 0.5, y: 0.5 };
                 // Far enough that the piece's whole extent fits the narrower of the two
-                // angles of the view (or of its clear part), with a margin round it.
+                // angles of the view, with a margin round it.
                 const tan = Math.tan(this.camera.fov * Math.PI / 360);
-                const half = Math.atan(tan * Math.min(part.h, this.camera.aspect * part.w));
+                const half = Math.atan(tan * Math.min(1, this.camera.aspect));
                 const distance = Math.max(30, (Math.hypot(...sizes) / 2) / Math.sin(half) * 1.25);
                 // From the side the view is on, at the distance that frames it.
                 const from = this.camera.position.clone().sub(this.orbitControls.target);
@@ -5647,18 +5575,6 @@
                 from.normalize().multiplyScalar(distance);
                 this.orbitControls.target.copy(centre);
                 this.camera.position.copy(centre).add(from);
-                if (part.x !== 0.5 || part.y !== 0.5) {
-                    // The view slid across, the box's middle where the clear part's is.
-                    this.camera.lookAt(centre);
-                    this.camera.updateMatrixWorld();
-                    const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
-                    const up = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 1);
-                    const across = (0.5 - part.x) * 2 * tan * distance * this.camera.aspect;
-                    const rise = (part.y - 0.5) * 2 * tan * distance;
-                    const slide = right.multiplyScalar(across).add(up.multiplyScalar(rise));
-                    this.orbitControls.target.add(slide);
-                    this.camera.position.add(slide);
-                }
                 if (this.reach) this.reach.fitSpan = Math.min(this.reach.fitSpan ?? Infinity, span);
                 this.orbitControls.minDistance = Math.min(this.orbitControls.minDistance, Math.max(1, span * this.settings.get('dollyIn')));
                 const near = Math.min(1, Math.max(0.05, span * 0.0004));
@@ -5719,7 +5635,7 @@
                     const handlers = {
                         onChange: (text, how) => this.scadChanged(target, text, how),
                         onSave: () => this.saveScadKey(target),
-                        onFloat: () => this.toggleScadFloat(),
+                        onPopout: () => this.toggleScadPopout(),
                         onFullscreen: () => this.toggleScadFullscreen(),
                         onChoose: (name) => this.chooseSavedVariant(target, name),
                         onCheck: () => this.checkAndDraw(target),
@@ -5765,7 +5681,7 @@
             // page, kept for when its part is edited again.
             releaseScadEditor() {
                 if (!this.scadEditor) return;
-                if (this.scadFloated) this.dockScad();
+                if (this.scadPopped) this.dockScad();
                 if (this.scadEditor.isFullscreen()) this.scadEditor.fullscreen(false);
                 this.scadEditor.root.remove();
                 this.scadEditor = null;
@@ -6049,43 +5965,41 @@
                 this.setStatus(said, ok ? 'success' : 'error');
             }
 
-            // Float: the editor out of Selected, a panel of its own over the world;
-            // again (or its Dock, or its ✕), back in Selected where it was.
-            toggleScadFloat() {
+            // Pop out: the editor out of Selected, a window of its own beside the
+            // world, as tall as the world; again (or its Dock, or its tab's ✕), back
+            // in Selected where it was.
+            toggleScadPopout() {
                 const editor = this.scadEditor;
                 if (!editor) return null;
-                if (this.scadFloated) { this.dockScad(); return 'docked'; }
+                if (this.scadPopped) { this.dockScad(); return 'docked'; }
                 if (editor.isFullscreen()) editor.fullscreen(false);
                 this.scadHome = editor.root.parentElement;
-                const at = editor.root.getBoundingClientRect(), base = this.canvas.parentElement.getBoundingClientRect();
-                this.scadFloated = true;
+                this.scadPopped = true;
                 this.panels.register('scad-editor', {
                     title: `SCAD · ${this.scadTarget?.label ?? ''}`,
                     body: editor.root,
-                    where: 'free',
-                    x: Math.max(0, at.left - base.left - 24),
-                    y: Math.max(0, at.top - base.top),
+                    home: 'beside',
                     onDock: () => this.dockScad(),
                     onClose: () => this.dockScad(),
                 });
-                this.panels.float('scad-editor');
-                editor.floated(true);
+                this.panels.open('scad-editor');
+                editor.poppedOut(true);
                 // Where it stood says where it is.
                 const note = document.createElement('div');
                 note.className = 'scad-away';
-                note.textContent = 'The SCAD editor floats over the world: its Dock, or Part › View › Float, puts it back here.';
+                note.textContent = 'The SCAD editor is in a window of its own beside the world: its Dock, or Part › View › Pop out, puts it back here.';
                 this.scadHome?.appendChild(note);
-                return 'floated';
+                return 'popped';
             }
 
             dockScad() {
-                if (!this.scadFloated) return;
-                this.scadFloated = false;
+                if (!this.scadPopped) return;
+                this.scadPopped = false;
                 const editor = this.scadEditor;
                 this.scadHome?.querySelector('.scad-away')?.remove();
                 if (editor && this.scadHome) this.scadHome.appendChild(editor.root);
                 this.panels.unregister('scad-editor');
-                editor?.floated(false);
+                editor?.poppedOut(false);
             }
 
             // Fullscreen: the editor over the whole page; again, or Esc, puts it back.
@@ -6112,11 +6026,11 @@
                 return this.saveScad(target);
             }
 
-            async floatScadOn(path) {
+            async popoutScadOn(path) {
                 const target = await this.scadOn(path);
-                if (!target) return { ok: false, said: `${path} has no SCAD editor to float` };
-                const how = this.toggleScadFloat();
-                return { ok: true, said: how === 'floated' ? `${target.label}'s SCAD editor floats over the world; Part › View › Float again, or its Dock, puts it back in Selected` : `${target.label}'s SCAD editor is back in Selected` };
+                if (!target) return { ok: false, said: `${path} has no SCAD editor to pop out` };
+                const how = this.toggleScadPopout();
+                return { ok: true, said: how === 'popped' ? `${target.label}'s SCAD editor is in a window of its own beside the world; Part › View › Pop out again, or its Dock, puts it back in Selected` : `${target.label}'s SCAD editor is back in Selected` };
             }
 
             async fullscreenScadOn(path) {
@@ -6499,11 +6413,10 @@
                 return true;
             }
 
-            // The header's count: Site opened (and the rail shown, where it is
-            // docked), unfolded, its problems' fold opened, and scrolled to them.
+            // The header's count: Site opened and in front (the world alone ended),
+            // its problems' fold opened, and scrolled to them.
             openProblems() {
                 this.panels.open('site');
-                this.panels.collapse('site', false);
                 this.problemsEl.open = true;
                 const slot = this.problemsEl.closest('.panel-body-slot');
                 if (slot) slot.scrollTop = 0;
@@ -6731,11 +6644,9 @@
             }
 
             // A board's Machine (widgets/machine.js): a printer's cards and controls or
-            // a devkit's sketch and serial output, with the board's one log, shown in
-            // the rail's tab strip beside Pictures and the Bench, its tab active --
-            // every way into a Machine comes here. It floats only when a person floats
-            // it from its tab, until it is closed: opened again while it floats, it
-            // stays where they put it. It stands for the printer a board inside drives,
+            // a devkit's sketch and serial output, with the board's one log, a tab
+            // beside Pictures and the Bench, in front -- every way into a Machine comes
+            // here. Opened again while it is open, it stays where a person dragged it. It stands for the printer a board inside drives,
             // else the board's own node. One at a time; opening another closes the first.
             openMachine(path) {
                 const { row } = this.bindingFor(path);
@@ -6757,8 +6668,8 @@
                 const which = row.path !== path ? ` ${row.path}` : '';
                 return `${path}'s board${which} is pinned to ${row.identity || 'a board'}, but not connected: connect it, or ⟳ Rescan in its Device section${again}`;
             }
-            // A made piece's Print, from its ring: the printer's Machine opened (in
-            // the rail, its tab active) with the piece chosen under its Print from
+            // A made piece's Print, from its ring: the printer's Machine opened (its
+            // tab in front) with the piece chosen under its Print from
             // here's makes. Nothing is sent: the card's file and ▶ Print are the next
             // step, and the status line names them. What it says, or why it could not.
             async printPiece(piece, printer) {
@@ -6808,8 +6719,11 @@
                     body: (slot) => {
                         machine.handle = mountMachine(slot, {
                             base: BASE_URL, port, host: 'world', boards: this.boards, inPrinter, name: anchor,
-                            // Its pad popped out over the world: the printer framed clear of it.
-                            onPadOut: (cover) => { if (anchor) this.frameClearOf(anchor, cover); },
+                            // Its pad popped out: a loud window of its own beside the world.
+                            padWindow: {
+                                open: (pad, who) => this.openPadWindow(machine, pad, who),
+                                close: (pad, putBack) => this.closePadWindow(putBack),
+                            },
                             pin: row ? { site: this.siteName, path: row.path, how: row.binding_source, sketch: row.sketch || null } : null,
                             say: (text, kind) => this.setStatus(text, kind),
                             // A part drawn from a variant this tab applied is sliced as drawn.
@@ -6820,6 +6734,26 @@
                     onClose: () => this.closeMachine(),  // its ✕: the watching stops with it
                 });
                 return machine;
+            }
+            // An armed printer's control pad, popped out: a loud window of its own beside
+            // the world, its tab red, its frame pulsing as it opens, and the printer
+            // framed in what the world has left. Its ✕ puts the pad back in the Machine.
+            openPadWindow(machine, pad, who) {
+                this.panels.register('control', {
+                    title: `${who}: control armed, it can heat and move`,
+                    tab: `🔓 ${who}`,
+                    body: pad, home: 'beside', loud: true,
+                    onClose: () => { if (this.machine === machine && machine.handle) machine.handle.padBack(); },
+                });
+                this.panels.open('control');
+                this.panels.alert('control');
+                if (machine.path) this.frameArmed(machine.path);
+            }
+            // The pad's window gone: disarmed, the Machine closed, or the pad put back --
+            // the last shows the Machine, where it now is.
+            closePadWindow(putBack) {
+                this.panels.unregister('control');
+                if (putBack && this.machine) this.panels.open('machine');
             }
             // A Machine opened: its buttons wear its device ring's addresses, the
             // address says which board's it is (so a reload opens it again), and a
@@ -7872,7 +7806,7 @@
         const PART_VERBS = [
             ['#apply-btn', 'part:apply'], ['#revert-btn', 'part:revert'], ['#defaults-btn', 'part:defaults'],
             ['#undo-btn', 'part:undo'], ['#redo-btn', 'part:redo'], ['.ghost-label', 'part:ghost'],
-            ['#scad-save', 'part:save'], ['#scad-float', 'part:float'], ['#scad-fullscreen', 'part:fullscreen'],
+            ['#scad-save', 'part:save'], ['#scad-popout', 'part:popout'], ['#scad-fullscreen', 'part:fullscreen'],
         ];
         // A board's own verbs: carried by its Machine, opened for it when it is not.
         const MACHINE_VERB = /^(control:|level:|print:|device:(poll|query|reconnect|reset|release|flash|listen|probe))/;
@@ -8055,8 +7989,8 @@
                     viewer.setStatus(`Opened the documentation in a new tab: the guides, and the walkthrough from its table${tail}`, 'success');
                     return;
                 }
-                // Panels › Control pad: the open Machine's pad out over the world or back
-                // in it, as the pad's ⇥ and ⧉ do; while it is armed only.
+                // Panels › Control pad: the open Machine's pad in a loud window of its own
+                // or back in it, as the pad's ⧉ Pop out and ⇥ Put back do; while it is armed only.
                 if (action === 'panel:pad') {
                     const r = viewer.machine && viewer.machine.handle
                         ? viewer.machine.handle.pad()
@@ -8064,9 +7998,16 @@
                     viewer.setStatus(`${r.refused || r.said}${tail}`, r.refused ? 'error' : 'success');
                     return;
                 }
-                if (action === 'panel:rail:toggle') {
-                    const hidden = viewer.panels.hideRail(!viewer.panels.railHidden());
-                    viewer.setStatus(`${hidden ? 'Hid' : 'Showed'} the rail${tail}`, 'success');
+                // Panels › Windows: the world alone or every window back (~), and the
+                // page's own layout again.
+                if (action === 'panel:world:toggle') {
+                    const alone = viewer.panels.worldAlone(!viewer.panels.isWorldAlone());
+                    viewer.setStatus(`${alone ? 'The world alone: ~ brings every window back' : 'Every window back beside the world'}${tail}`, 'success');
+                    return;
+                }
+                if (action === 'panel:layout:reset') {
+                    viewer.panels.reset();
+                    viewer.setStatus(`The page's own layout again: the world, Site and Selected beside it, the tabs below them${tail}`, 'success');
                     return;
                 }
                 if (action === 'panel:toggle:machine') {
@@ -8106,8 +8047,8 @@
                     viewer.variantOn(path, where, verb, name, !!intent.confirmed).then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
                     return;
                 }
-                if (action === 'part:float') {
-                    viewer.floatScadOn(path).then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
+                if (action === 'part:popout') {
+                    viewer.popoutScadOn(path).then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
                     return;
                 }
                 if (action === 'part:fullscreen') {
@@ -8261,7 +8202,7 @@
             // A camera's Take picture is its ring's.
             for (const el of viewer.selectedBodyEl.querySelectorAll('.cam-take')) pairs.push([el, 'camera:take-picture']);
             // The part editor's buttons are the cells of Part, wherever the editor stands
-            // (in Selected, floated, over the page): their tooltips teach the digits.
+            // (in Selected, popped out, over the page): their tooltips teach the digits.
             for (const [selector, action] of PART_VERBS) for (const el of document.querySelectorAll(selector)) pairs.push([el, action]);
             for (const el of document.querySelectorAll('.part-editor .saved-variant, .scad-editor .saved-variant')) pairs.push([el, `part:variant:draw:${el.dataset.variant}`]);
             // A saved variant's buttons under its ⋯, and the trash's, are its cells.

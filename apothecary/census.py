@@ -205,11 +205,15 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "computed-keep": (WIDGET, WHAT_YOU_SEE, "a button that leaves a computed value computed"),
     "part-upstream": (WIDGET, NOTHING, "a link that opens a part's upstream SCAD, read only"),
     # The SCAD editor (widgets/scad_editor.js):
-    # the name a save keeps a variant under, Save, Float and Fullscreen; and a saved
+    # the name a save keeps a variant under, Save, Pop out and Fullscreen; and a saved
     # variant chosen from a list -- under the part's parameters, or in the editor.
     "scad-name": (WIDGET, WHAT_YOU_SEE, "a box for the name a variant is saved under"),
     "scad-save": (WIDGET, WHAT_IS_THERE, "a button that saves the SCAD as a variant in git"),
-    "scad-float": (WIDGET, WHAT_YOU_SEE, "a button that floats the SCAD editor, or puts it back"),
+    "scad-popout": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button that pops the SCAD editor out into a window, or puts it back",
+    ),
     "scad-fullscreen": (
         WIDGET,
         WHAT_YOU_SEE,
@@ -276,14 +280,14 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "follow": (WIDGET, WHAT_YOU_SEE, "a tick-box that keeps the log scrolled to the end"),
     "clear": (WIDGET, WHAT_YOU_SEE, "a button that empties the log"),
     "download": (WIDGET, NOTHING, "a button that downloads the log"),
-    # The control overlay, behind the latch. The buttons carry the G-code line
+    # The control pad, behind the latch. The buttons carry the G-code line
     # they send rather than a name, and are named here by that line; a box
     # beside a button holds the number the line is filled in with.
     "ctl-disarm": (WIDGET, WHAT_YOU_SEE, "a button that disarms the control latch"),
     "ctl-pop": (
         WIDGET,
         WHAT_YOU_SEE,
-        "a button that pops the control pad out over the world or puts it back",
+        "a button that pops the control pad out into a loud window or puts it back",
     ),
     "h-hot": (WIDGET, WHAT_YOU_SEE, "a box for the hotend temperature to set"),
     "cmd:M104 S{h-hot}": (WIDGET, WHAT_IS_THERE, "a button that heats the hotend to that"),
@@ -580,9 +584,9 @@ RING_BACKED: Dict[str, str] = {
     "defaults-btn": "part:defaults",
     "apply-btn": "part:apply",
     "revert-btn": "part:revert",
-    # the SCAD editor's Save, Float and Fullscreen, and a saved variant chosen, are too
+    # the SCAD editor's Save, Pop out and Fullscreen, and a saved variant chosen, are too
     "scad-save": "part:save",
-    "scad-float": "part:float",
+    "scad-popout": "part:popout",
     "scad-fullscreen": "part:fullscreen",
     "saved-variant": "part:variant:draw",
     # and so is what can be done to a saved variant, each a cell of Part › Variants ›
@@ -713,7 +717,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "settingsOpenBtn:click:openSettings": (
         WIDGET,
         WHAT_YOU_SEE,
-        "⚙ View › Settings, showing the Settings panel in the rail",
+        "⚙ View › Settings, showing the Settings panel with its tab in front",
     ),
     # The View menu folds away when a press lands anywhere else, as a menu does.
     "document:pointerdown:foldViewMenu": (

@@ -1,476 +1,368 @@
-/* Panels: windows in front of the world.
+/* Panels: the page's windows, laid out by GoldenLayout.
  *
- * A panel is a titled box the world's page registers once -- Site, Selected,
- * Pictures, a machine and its log -- and a person opens, closes,
- * collapses, drags free or docks back. Docked panels live in one rail, on the
- * right of the world unless a person moved it; the other side stays world. In
- * the rail, the panels registered to stack (Site and Selected) are stacked at
- * its top, each collapsible, and below them one tab strip holds every other
- * docked panel, one shown at a time: a tab pressed shows its panel, pressed
- * again folds it away. The rail has a width a person drags (never more than
- * half the page, so the world keeps the other half), it hides and shows on
- * the tilde key, and it moves -- press its swap button, or drag its grip
- * across the page -- to the other side. A docked panel's body has a height a
- * person drags; a free panel is dragged by its title bar, clamped to the page,
- * and resized from its corner. Floated, a panel lands beside where it was docked,
- * or the nearest place clear of the closed panels' tabs and of what the page asks
- * to keep clear (keepClear). What a person did to the panels and the rail
- * is remembered per browser; a remembered panel the page does not register is
- * ignored, and forgotten the next time anything is remembered, and a remembered
- * layout with no rail of its own (one naming a left and a right rail) is ignored
- * whole.
+ * The world and every panel the page registers -- Site, Selected, Pictures, the
+ * Bench, Settings, a board's Machine, an armed printer's control pad, the SCAD
+ * editor popped out of Selected -- are components of one GoldenLayout
+ * (vendor/golden-layout): each its own window, in a stack of tabs, a person
+ * drags anywhere, splits beside another, maximises or closes. There is no other
+ * system of panels.
  *
- * The chrome is the module's: every listener it installs is on the elements
- * it makes, except the pointer moves that finish a drag, which go on the
- * window while a drag is in progress and come off after, and the tilde key,
- * which is on the window so it works wherever the pointer is.
+ * Where a panel opens when it is not in the layout is its `home`: "column", a
+ * stack of its own in the column beside the world (Site, Selected); "tabs", the
+ * stack where the other tabbed panels are (Pictures, the Bench, Settings, a
+ * Machine); "beside", a stack of its own next to the world (the control pad, the
+ * SCAD editor out of Selected). A `loud` panel's tab and frame say so (the armed
+ * control pad). The world's stack maximised is the world alone (the tilde, and
+ * the ring's Panels › World); again, everything back.
+ *
+ * What a person did to the layout is remembered per browser; the components a
+ * page makes for the moment (a Machine, the control pad, the editor out of
+ * Selected) are left out of what is remembered, and a remembered layout this
+ * page cannot read is ignored.
+ *
+ * Each panel's element is a `section.panel[data-panel=<id>]`: a pinned bar
+ * (pinnedSlot) above a body that scrolls. The element outlives its component:
+ * closed and opened again, the same element, with what it holds, is shown.
  */
 
+import { GoldenLayout, LayoutConfig } from "golden-layout";
 import { mayAct } from "./keys.js";
 
-const RAIL_MAX_FRACTION = 1 / 2;
-const RAIL_MIN_PX = 220;
-const PANEL_MIN_PX = 60;
 const TILDE_KEYS = new Set(["`", "~"]);
-const SIDES = new Set(["left", "right"]);
-const STRIP_ORDER = 1000; // the tab strip, and the shown tab under it, below every stacked panel
-const FREE_EDGE_PX = 8; // a floated panel's room from the world's edges, and from what it keeps clear of
+const WORLD = "world";
+// Made for the moment: never remembered, so a reload does not bring back an empty one.
+const TRANSIENT = new Set(["machine", "control", "scad-editor"]);
+const HOMES = new Set(["column", "tabs", "beside"]);
+// A window opened beside the world takes this share of the world's row (per cent).
+const BESIDE = 28;
 
-export function mountPanels({ container, overlay, storageKey = "apothecary.panels", keepClear = () => [] } = {}) {
-    overlay = overlay || container;  // where free panels float: over the world
-    const panels = new Map();
-    // The one rail: which side it is on, the width a person dragged it to, whether
-    // it is hidden, and which tab of its strip is shown (null: none).
-    const rail = { side: "right", width: null, hidden: false, tab: null };
-    const railEl = document.createElement("div");
-    railEl.className = "panel-rail";
-    // Its own head: a grip to drag it across, a swap and a hide.
-    railEl.innerHTML = `<div class="panel-rail-head"><span class="panel-rail-grip" title="Drag across the page to move the rail to the other side">⋮⋮</span><span class="panel-rail-name">Panels</span><span class="panel-spacer"></span><button type="button" class="panel-rail-swap" title="Move the rail to the other side">⇄</button><button type="button" class="panel-rail-hide" title="Hide the rail (tilde shows it again)">✕</button></div><div class="panel-rail-body"><div class="panel-tabstrip" role="tablist"></div><div class="panel-tabbody"></div></div><div class="panel-rail-resizer" title="Drag to resize"></div>`;
-    railEl.querySelector(".panel-rail-swap").addEventListener("click", () => api.moveRail(rail.side === "left" ? "right" : "left"));
-    railEl.querySelector(".panel-rail-hide").addEventListener("click", () => api.hideRail(true));
-    railEl.querySelector(".panel-rail-grip").addEventListener("pointerdown", (ev) => startRailDrag(ev));
-    railEl.querySelector(".panel-rail-resizer").addEventListener("pointerdown", (ev) => startRailResize(ev));
-    const railBody = railEl.querySelector(".panel-rail-body");
-    const strip = railEl.querySelector(".panel-tabstrip");
-    const tabBody = railEl.querySelector(".panel-tabbody");
-    strip.style.order = String(STRIP_ORDER);
-    tabBody.style.order = String(STRIP_ORDER + 1);
-    const free = document.createElement("div");
-    free.className = "panel-free-layer";
-    const tabs = document.createElement("div");
-    tabs.className = "panel-tabs";
-    overlay.appendChild(free);
-    overlay.appendChild(tabs);
+const DEFAULT_LAYOUT = {
+    settings: { showPopoutIcon: false, constrainDragToContainer: true, reorderEnabled: true },
+    header: { popout: false, maximise: "Maximise", minimise: "Restore", close: "Close", tabDropdown: "More tabs" },
+    dimensions: { borderWidth: 6, headerHeight: 26, minItemWidth: 160, minItemHeight: 80 },
+    root: {
+        type: "row",
+        content: [
+            {
+                type: "stack", width: 70, header: { show: false },
+                content: [{ type: "component", componentType: WORLD, id: WORLD, title: "World", isClosable: false }],
+            },
+            {
+                type: "column", width: 30,
+                content: [
+                    { type: "stack", height: 42, content: [{ type: "component", componentType: "site", id: "site", title: "Site" }] },
+                    { type: "stack", height: 34, content: [{ type: "component", componentType: "selected", id: "selected", title: "Selected" }] },
+                    {
+                        type: "stack", height: 24,
+                        content: [
+                            { type: "component", componentType: "pictures", id: "pictures", title: "Pictures" },
+                            { type: "component", componentType: "bench", id: "bench", title: "Bench" },
+                            { type: "component", componentType: "settings", id: "settings", title: "Settings" },
+                        ],
+                    },
+                ],
+            },
+        ],
+    },
+};
 
-    let remembered = {};
-    try { remembered = JSON.parse(localStorage.getItem(storageKey) || "{}") || {}; } catch (e) { remembered = {}; }
-    // A remembered layout with no `_rail` (one naming a left and a right rail and
-    // panels docked to either) says nowhere anything goes on this page: all of it is
-    // ignored, and the panels start as they would in a browser that saw none.
-    if (typeof remembered !== "object" || !remembered._rail || typeof remembered._rail !== "object") remembered = {};
-    if (remembered._rail) {
-        const had = remembered._rail;
-        if (SIDES.has(had.side)) rail.side = had.side;
-        if (typeof had.width === "number" && had.width > 0) rail.width = had.width;
-        if (typeof had.hidden === "boolean") rail.hidden = had.hidden;
-        if (typeof had.tab === "string") rail.tab = had.tab;
+// A resolved layout with the transient components and anything this page does not
+// register taken out, and the stacks and rows they leave empty; null when no world
+// is left in it (nothing to lay the rest around).
+function kept(config, known) {
+    let world = false;
+    const walk = (item) => {
+        if (item.type === "component") {
+            if (item.componentType === WORLD) world = true;
+            return known.has(item.componentType) && !TRANSIENT.has(item.componentType) ? item : null;
+        }
+        const content = (item.content || []).map(walk).filter(Boolean);
+        if (!content.length) return null;
+        const out = { ...item, content };
+        if (item.type === "stack" && typeof item.activeItemIndex === "number") {
+            out.activeItemIndex = Math.min(item.activeItemIndex, content.length - 1);
+        }
+        return out;
+    };
+    const root = config && config.root ? walk(config.root) : null;
+    return root && world ? { ...config, root } : null;
+}
+
+export function mountPanels({ host, world, storageKey = "apothecary.layout", known = [] } = {}) {
+    const records = new Map();  // id -> the panel: its element, its body, its callbacks
+    const knownTypes = new Set([WORLD, "site", "selected", "pictures", "bench", "settings", ...TRANSIENT, ...known]);
+    const layout = new GoldenLayout(host);
+    // The host is the page's main row, not the body: its size follows the window, the
+    // demo's banner and the status line, and the layout follows it.
+    layout.resizeWithContainerAutomatically = true;
+
+    function record(id) {
+        let r = records.get(id);
+        if (r) return r;
+        const el = document.createElement("section");
+        el.className = "panel";
+        el.dataset.panel = id;
+        const pinned = document.createElement("div");
+        pinned.className = "panel-pinned";
+        const slot = document.createElement("div");
+        slot.className = "panel-body-slot";
+        el.append(pinned, slot);
+        r = { id, title: id, tab: null, home: null, loud: false, el, slot, mount: null, filled: true, open: false,
+              registered: false, container: null, onClose: null, onOpen: null, onDock: null, releasing: false };
+        records.set(id, r);
+        return r;
     }
+
+    // The world's component holds the world itself; every other one its panel's element.
+    function factory(container, state) {
+        const id = container.componentType;
+        if (id === WORLD) {
+            container.element.classList.add("world-window");
+            container.element.appendChild(world);
+            return;
+        }
+        const r = record(id);
+        r.container = container;
+        r.open = true;
+        container.element.classList.add("panel-window");
+        container.element.appendChild(r.el);
+        const markTab = (tab) => {
+            if (!tab || !tab.element) return;
+            tab.element.dataset.panel = id;
+            tab.element.classList.toggle("loud", r.loud);
+            tab.element.title = r.title;
+        };
+        markTab(container.tab);
+        container.on("tab", markTab);
+        container.element.classList.toggle("loud", r.loud);
+        const shown = () => {
+            if (r.mount && r.registered) { const mount = r.mount; r.mount = null; mount(r.slot); r.filled = true; return; }
+            if (r.filled && r.onOpen) r.onOpen();
+        };
+        container.on("shown", shown);
+        if (container.visible) Promise.resolve().then(() => { if (r.container === container && container.visible && r.mount) shown(); });
+        container.on("beforeComponentRelease", () => {
+            if (r.container !== container) return;
+            giveBackRoom(container.parent);
+            r.container = null;
+            r.open = false;
+            r.el.remove();
+            if (!r.releasing && r.onClose) r.onClose();
+        });
+    }
+    for (const id of knownTypes) layout.registerComponentFactoryFunction(id, factory);
+
+    let remembered = null;
+    try { remembered = JSON.parse(localStorage.getItem(storageKey) || "null"); } catch (e) { remembered = null; }
+    const start = (remembered && kept(remembered, knownTypes)) || null;
+    try {
+        layout.loadLayout(start ? LayoutConfig.fromResolved(start) : DEFAULT_LAYOUT);
+    } catch (e) {
+        console.warn("The remembered layout could not be read; the page's own is laid out instead.", e);
+        layout.loadLayout(DEFAULT_LAYOUT);
+    }
+
+    let saving = null;
     function remember() {
-        const out = { _rail: { ...rail } };
-        for (const [id, p] of panels) out[id] = { open: p.open, collapsed: p.collapsed, where: p.where === "free" ? "free" : "rail", x: p.x, y: p.y, height: p.height };
-        try { localStorage.setItem(storageKey, JSON.stringify(out)); } catch (e) { /* private window, blocked storage: the panels still work */ }
+        if (saving) return;
+        saving = setTimeout(() => {
+            saving = null;
+            try {
+                const resolved = layout.saveLayout();
+                const out = kept(JSON.parse(JSON.stringify(resolved)), knownTypes);
+                if (out) localStorage.setItem(storageKey, JSON.stringify(out));
+            } catch (e) { /* private window, blocked storage: the layout still works */ }
+        }, 200);
+    }
+    layout.on("stateChanged", remember);
+
+    const item = (id) => layout.findFirstComponentItemById(id);
+    const worldStack = () => item(WORLD)?.parentItem || null;
+    const isWorldAlone = () => !!worldStack()?.isMaximised;
+
+    // Where a panel opens when it is not in the layout: its home. Added to a stack of
+    // tabs, it is in front only when `front` (opened by a person), so a panel the page
+    // registers does not take the place of the one a person was reading.
+    function addAt(r, front = true) {
+        const config = { type: "component", componentType: r.id, id: r.id, title: r.tab || r.title };
+        const tabbed = [...records.values()].filter((o) => o.id !== r.id && o.registered && o.home === "tabs" && item(o.id));
+        if (r.home === "tabs" && tabbed.length) {
+            const stack = item(tabbed[0].id).parentItem;
+            const before = stack.getActiveComponentItem();
+            stack.addItem(config);
+            if (!front && before) stack.setActiveComponentItem(before, false);
+            return;
+        }
+        // A component's stack is its parentItem; a stack's row or column, its parent.
+        const ws = worldStack();
+        const besideWorld = ws && ws.parent;
+        if (r.home === "beside" && besideWorld) {
+            // Its room is taken from the world's: the windows on the world's other side
+            // keep theirs.
+            const sizes = new Map(besideWorld.contentItems.map((c) => [c, c.size]));
+            const at = besideWorld.contentItems.indexOf(ws) + 1;
+            besideWorld.addItem({ type: "stack", content: [config] }, at);
+            const added = besideWorld.contentItems[at];
+            const room = Math.min(BESIDE, sizes.get(ws) / 2);
+            for (const [c, size] of sizes) c.size = c === ws ? size - room : size;
+            added.size = room;
+            besideWorld.updateSize(false);
+            return;
+        }
+        // A stack of its own in the column beside the world, else beside the world.
+        const column = [...records.values()].map((o) => item(o.id)).filter(Boolean)
+            .map((ci) => ci.parentItem?.parent).find((p) => p && p.type === "column");
+        if (column) { column.addItem({ type: "stack", content: [config] }); return; }
+        if (besideWorld) besideWorld.addItem({ type: "stack", content: [config] }, besideWorld.contentItems.indexOf(ws) + 1);
+        else layout.addItem(config);
     }
 
-    const docked = (p) => p.where === "rail";
-    const inStrip = (p) => p.open && docked(p) && p.zone === "tabs";
-    // Whether a panel's body is in front of a person, the rail's hiding aside.
-    function visible(p) {
-        if (!p.open) return false;
-        if (docked(p) && p.zone === "tabs") return rail.tab === p.id;
+    // A window beside the world closed, its stack with it: its room goes back to the
+    // world, and the windows on the world's other side keep theirs -- so a window
+    // opened beside the world and closed again leaves the layout as it found it.
+    // GoldenLayout takes the stack away after this, in the same task.
+    function giveBackRoom(ci) {
+        const stack = ci?.parentItem, ws = worldStack(), row = ws?.parent;
+        if (!stack || !row || stack === ws || stack.parent !== row || stack.contentItems.length !== 1) return;
+        const sizes = new Map(row.contentItems.filter((c) => c !== stack).map((c) => [c, c.size]));
+        sizes.set(ws, sizes.get(ws) + stack.size);
+        queueMicrotask(() => {
+            if (row.contentItems.includes(stack) || !row.contentItems.includes(ws)) return;
+            for (const [c, size] of sizes) if (row.contentItems.includes(c)) c.size = size;
+            row.updateSize(false);
+        });
+    }
+
+    function show(id) {
+        const ci = item(id);
+        if (!ci) return false;
+        if (isWorldAlone() && id !== WORLD) worldStack().toggleMaximise();
+        ci.parentItem.setActiveComponentItem(ci, false);
         return true;
     }
 
-    function railMax() { return Math.floor(container.clientWidth * RAIL_MAX_FRACTION); }
-    function layoutRail() {
-        const any = [...panels.values()].some((p) => p.open && docked(p));
-        railEl.hidden = rail.hidden || !any;
-        railEl.dataset.side = rail.side;
-        railEl.classList.toggle("panel-rail-right", rail.side === "right");
-        railEl.classList.toggle("panel-rail-left", rail.side === "left");
-        // On the left it comes before the world; on the right, after it.
-        if (rail.side === "left" && container.firstElementChild !== railEl) container.prepend(railEl);
-        if (rail.side === "right" && container.lastElementChild !== railEl) container.appendChild(railEl);
-        railEl.style.width = rail.width ? `${Math.max(RAIL_MIN_PX, Math.min(railMax(), rail.width))}px` : "";
-    }
-    function startRailResize(ev) {
-        ev.preventDefault();
-        const startX = ev.clientX, from = railEl.offsetWidth;
-        const move = (e) => {
-            const delta = rail.side === "right" ? startX - e.clientX : e.clientX - startX;
-            rail.width = Math.max(RAIL_MIN_PX, Math.min(railMax(), from + delta));
-            layoutRail();
-        };
-        const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); remember(); };
-        window.addEventListener("pointermove", move);
-        window.addEventListener("pointerup", up);
-    }
-    function startRailDrag(ev) {
-        // The rail follows the pointer across the page: past the middle it is on the other side.
-        ev.preventDefault();
-        const move = (e) => {
-            const rect = container.getBoundingClientRect();
-            const wanted = e.clientX < rect.left + rect.width / 2 ? "left" : "right";
-            if (wanted !== rail.side) api.moveRail(wanted);
-        };
-        const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); remember(); };
-        window.addEventListener("pointermove", move);
-        window.addEventListener("pointerup", up);
-    }
-    // The tilde: the rail hides and shows, as a console does -- unless a person is typing.
+    // The tilde: the world alone, or everything back -- unless a person is typing.
     // Matched by the key's place as well (Backquote, left of 1), so a layout where that
     // key prints something else, or is a dead key, still reaches it.
     const onKey = (ev) => {
         if (!(TILDE_KEYS.has(ev.key) || ev.code === "Backquote") || ev.ctrlKey || ev.metaKey || ev.altKey) return;
         if (!mayAct(ev)) return;
         ev.preventDefault();
-        api.hideRail(!rail.hidden);
+        api.worldAlone(!isWorldAlone());
     };
     window.addEventListener("keydown", onKey);
 
-    function esc(v) { return String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
-
-    // In the order the page registered them, whatever order they were docked in.
-    function insertInOrder(parent, p) {
-        const after = [...parent.children].find((el) => el.classList.contains("panel") && Number(el.dataset.order) > p.order);
-        if (p.el.parentElement === parent && p.el.nextElementSibling === (after || null)) return;
-        parent.insertBefore(p.el, after || null);
-    }
-
-    function place(p) {
-        // Where the panel's element lives: the rail's stack, the rail's tab body,
-        // the free layer, or nowhere while closed.
-        if (!p.open) { p.el.remove(); relayout(); return; }
-        if (p.where === "free") { free.appendChild(p.el); p.el.style.left = `${p.x}px`; p.el.style.top = `${p.y}px`; }
-        else { insertInOrder(p.zone === "stack" ? railBody : tabBody, p); p.el.style.left = ""; p.el.style.top = ""; }
-        // Filled the first time its body is in front of a person.
-        if (p.mount && visible(p)) { const mount = p.mount; p.mount = null; mount(p.slot); }
-        p.slot.style.height = docked(p) && p.height ? `${p.height}px` : "";
-        p.el.classList.toggle("sized", docked(p) && !!p.height);  // a height a person dragged it to
-        p.el.querySelector(".panel-resizer").hidden = !docked(p);
-        p.el.classList.toggle("free", !docked(p));
-        p.el.querySelector(".panel-title").title = p.where === "free" ? "Drag to move" : "";
-        p.el.classList.toggle("collapsed", p.collapsed && !(docked(p) && p.zone === "tabs"));
-        p.el.querySelector(".panel-collapse").textContent = p.collapsed ? "▸" : "▾";
-        p.el.querySelector(".panel-float").textContent = docked(p) ? "⧉" : "⇥";
-        p.el.querySelector(".panel-float").title = docked(p) ? "Float this panel" : "Dock this panel in the rail";
-        relayout();
-    }
-    // What follows from where every panel is: which shows, the tab strip, the
-    // closed panels' tabs, the rail.
-    function relayout() {
-        for (const p of panels.values()) if (p.open) p.el.hidden = !visible(p);
-        renderStrip();
-        renderTabs();
-        layoutRail();
-    }
-
-    function renderStrip() {
-        const here = [...panels.values()].filter(inStrip).sort((a, b) => a.order - b.order);
-        strip.innerHTML = here.map((p) => {
-            const on = rail.tab === p.id;
-            return `<div class="rail-tab${on ? " active" : ""}" data-panel="${esc(p.id)}" role="presentation">`
-                + `<button type="button" class="rail-tab-name" role="tab" aria-selected="${on}" title="${on ? `Fold ${esc(p.title)} away` : `Show ${esc(p.title)}`}">${esc(p.tab || p.title)}</button>`
-                + `<button type="button" class="rail-tab-float" title="Float this panel"${on ? "" : " hidden"}>⧉</button>`
-                + `<button type="button" class="rail-tab-close" title="Close (reopen from its tab, or the ring's Panels)"${on ? "" : " hidden"}>✕</button></div>`;
-        }).join("");
-        strip.hidden = here.length === 0;
-        tabBody.hidden = !here.some((p) => p.id === rail.tab);
-    }
-    strip.addEventListener("click", (ev) => {
-        const tab = ev.target.closest(".rail-tab");
-        if (!tab) return;
-        const id = tab.dataset.panel;
-        if (ev.target.closest(".rail-tab-close")) api.close(id);
-        else if (ev.target.closest(".rail-tab-float")) api.float(id);
-        else api.collapse(id, rail.tab === id);
-    });
-
-    function renderTabs() {
-        // Closed panels keep a tab, so nothing a person closed is lost; a hidden
-        // rail with panels in it keeps one too, since the tilde is not a thing to see.
-        const closed = [...panels.values()].filter((p) => !p.open);
-        const railTab = rail.hidden && [...panels.values()].some((p) => p.open && docked(p));
-        tabs.innerHTML = (railTab ? `<button type="button" class="panel-tab panel-tab-rail" title="Show the rail (tilde does too)">⋮ Panels ~</button>` : "")
-            + closed.map((p) => `<button type="button" class="panel-tab" data-panel="${esc(p.id)}" title="Open ${esc(p.title)}">${esc(p.title)}</button>`).join("");
-        tabs.hidden = closed.length === 0 && !railTab;
-    }
-    tabs.addEventListener("click", (ev) => {
-        const b = ev.target.closest(".panel-tab");
-        if (!b) return;
-        if (b.classList.contains("panel-tab-rail")) api.hideRail(false); else api.open(b.dataset.panel);
-    });
-
-    function clampFree(p) {
-        const w = overlay.clientWidth, h = overlay.clientHeight;
-        const pw = p.el.offsetWidth || 320, ph = p.el.offsetHeight || 40;
-        p.x = Math.max(0, Math.min(w - Math.min(pw, w), p.x));
-        p.y = Math.max(0, Math.min(h - Math.min(ph, 40), p.y));
-    }
-
-    // What a floated panel lands clear of, as boxes in the overlay's pixels: what the
-    // page asks to keep clear (keepClear: the header, the hint bar, the depth ladder),
-    // as an open card keeps clear of it -- a thing hidden or faded out is not in the
-    // way -- and the row where closed panels' tabs stand, as wide as the world and
-    // whether a tab stands there yet or not, so a panel closed after never puts its
-    // tab under a floated one. An empty row is measured with a stand-in tab.
-    function inTheWay() {
-        const base = overlay.getBoundingClientRect(), w = overlay.clientWidth;
-        const shown = (el) => el && !el.hidden && el.offsetWidth && parseFloat(getComputedStyle(el).opacity) > 0.05;
-        const boxes = keepClear().filter(shown).map((el) => {
-            const r = el.getBoundingClientRect();
-            return { l: r.left - base.left, r: r.right - base.left, t: r.top - base.top, b: r.bottom - base.top };
-        });
-        let row = tabs.getBoundingClientRect();
-        if (tabs.hidden || !row.height) {
-            const wasHidden = tabs.hidden;
-            const stand = document.createElement("button");
-            stand.className = "panel-tab";
-            stand.style.visibility = "hidden";
-            stand.textContent = "Panel";
-            tabs.appendChild(stand);
-            tabs.hidden = false;
-            row = tabs.getBoundingClientRect();
-            stand.remove();
-            tabs.hidden = wasHidden;
-        }
-        boxes.push({ l: 0, r: w, t: row.top - base.top, b: row.bottom - base.top });
-        return boxes;
-    }
-
-    // A floated panel's place: where it was put, kept FREE_EDGE_PX inside the world,
-    // else the nearest place clear of everything in the way -- beside one thing in
-    // the way, else beside that again; where nothing is clear (a panel taller than
-    // the room left), where it was put.
-    function placeClear(p) {
-        const w = overlay.clientWidth, h = overlay.clientHeight;
-        const pw = Math.min(p.el.offsetWidth || 320, w - 2 * FREE_EDGE_PX), ph = p.el.offsetHeight || 40;
-        const keep = inTheWay();
-        const inside = ({ x, y }) => ({
-            x: Math.max(FREE_EDGE_PX, Math.min(w - FREE_EDGE_PX - pw, x)),
-            y: Math.max(FREE_EDGE_PX, Math.min(h - FREE_EDGE_PX - ph, y)),
-        });
-        const clear = ({ x, y }) => !keep.some((q) => x < q.r + FREE_EDGE_PX && q.l - FREE_EDGE_PX < x + pw
-            && y < q.b + FREE_EDGE_PX && q.t - FREE_EDGE_PX < y + ph);
-        const want = inside({ x: p.x, y: p.y });
-        let tries = [want];
-        for (let round = 0; round < 3; round += 1) {
-            const ok = tries.filter(clear);
-            if (ok.length) {
-                const far = (t) => (t.x - want.x) ** 2 + (t.y - want.y) ** 2;
-                const best = ok.reduce((a, b) => (far(b) < far(a) ? b : a));
-                p.x = best.x; p.y = best.y;
-                return;
-            }
-            tries = tries.flatMap((t) => keep.flatMap((q) => [
-                { x: t.x, y: q.t - FREE_EDGE_PX - ph }, { x: t.x, y: q.b + FREE_EDGE_PX },
-                { x: q.l - FREE_EDGE_PX - pw, y: t.y }, { x: q.r + FREE_EDGE_PX, y: t.y },
-            ].map(inside)));
-        }
-        p.x = want.x; p.y = want.y;
-    }
-
-    function startDrag(p, ev) {
-        if (p.where !== "free") return;
-        ev.preventDefault();
-        const startX = ev.clientX, startY = ev.clientY, fromX = p.x, fromY = p.y;
-        const move = (e) => { p.x = fromX + (e.clientX - startX); p.y = fromY + (e.clientY - startY); clampFree(p); p.el.style.left = `${p.x}px`; p.el.style.top = `${p.y}px`; };
-        const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); remember(); };
-        window.addEventListener("pointermove", move);
-        window.addEventListener("pointerup", up);
-    }
-
-    function build(p) {
-        const el = document.createElement("section");
-        el.className = "panel";
-        el.dataset.panel = p.id;
-        el.dataset.order = String(p.order);
-        el.style.order = String(p.order);
-        el.innerHTML = `<div class="panel-title"><button type="button" class="panel-collapse" title="Collapse or expand">▾</button><span class="panel-name">${esc(p.title)}</span><span class="panel-spacer"></span><button type="button" class="panel-float" title="Float this panel">⧉</button><button type="button" class="panel-close" title="Close (reopen from its tab, or the ring's Panels)">✕</button></div>`;
-        // What stands between the title and the body and never scrolls with it: a bar
-        // that must stay in view takes its own space here, so nothing it heads slides
-        // under it (pinnedSlot).
-        const pinned = document.createElement("div");
-        pinned.className = "panel-pinned";
-        el.appendChild(pinned);
-        const body = document.createElement("div");
-        body.className = "panel-body-slot";
-        el.appendChild(body);
-        // A docked panel's body has a height a person drags from its bottom edge.
-        const resizer = document.createElement("div");
-        resizer.className = "panel-resizer";
-        resizer.title = "Drag to resize";
-        resizer.addEventListener("pointerdown", (ev) => startPanelResize(p, ev));
-        el.appendChild(resizer);
-        el.querySelector(".panel-collapse").addEventListener("click", () => api.collapse(p.id, !p.collapsed));
-        el.querySelector(".panel-close").addEventListener("click", () => api.close(p.id));
-        el.querySelector(".panel-float").addEventListener("click", () => (docked(p) ? api.float(p.id) : api.dock(p.id)));
-        el.querySelector(".panel-title").addEventListener("pointerdown", (ev) => { if (!ev.target.closest("button")) startDrag(p, ev); });
-        p.el = el;
-        p.slot = body;
-    }
-
-    function startPanelResize(p, ev) {
-        ev.preventDefault();
-        const startY = ev.clientY, from = p.slot.offsetHeight;
-        const move = (e) => { p.height = Math.max(PANEL_MIN_PX, from + (e.clientY - startY)); p.slot.style.height = `${p.height}px`; p.el.classList.add("sized"); };
-        const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); remember(); };
-        window.addEventListener("pointermove", move);
-        window.addEventListener("pointerup", up);
-    }
-
-    // A change to a panel, and what follows from it: placed again and remembered,
-    // and a panel whose filled body comes back in front of a person told so
-    // (onOpen) -- the first time it shows, filling it is the panel's to do.
-    function change(p, fn) {
-        const was = visible(p), filled = !p.mount;
-        fn();
-        place(p);
-        remember();
-        if (!was && visible(p) && filled && p.onOpen) p.onOpen();
-    }
-    // A tab shown: the one shown before it folds away, and the rail shows.
-    function showTab(p) {
-        const before = rail.tab && rail.tab !== p.id ? panels.get(rail.tab) : null;
-        rail.tab = p.id;
-        if (before) place(before);
-    }
-
-    let order = 0;
     const api = {
-        rail: railEl, free, tabs,
-        /* Register a panel. `body` is an element the panel adopts (moved into
-         * it) or a function given the slot to fill the first time the panel
-         * shows. `tab`, when given, is the short name its tab in the strip shows,
-         * the whole `title` being the tab's tooltip, so the strip stays one row.
-         * `zone` is "stack" (Site, Selected: stacked at the rail's top)
-         * or "tabs" (a tab of the strip below them); `where` is "rail" or
-         * "free"; `open` and `collapsed` are the defaults a browser that has not
-         * seen the panel starts from. `onClose` is called when an open panel is
-         * closed or unregistered; `onOpen` when a panel whose body is already
-         * filled comes back in front of a person -- opened again, or its tab
-         * shown again. `onDock`, for a panel that is a part of another one
-         * floated out of it (the SCAD editor, out of Selected), is called
-         * instead of docking it in the rail: the page puts it back. */
-        register(id, { title, tab = null, body, zone = "tabs", where = "rail", open = true, collapsed = false, x = 40, y = 40, onClose = null, onOpen = null, onDock = null } = {}) {
-            if (panels.has(id)) this.unregister(id);
-            const p = { id, title: title || id, tab, zone: zone === "stack" ? "stack" : "tabs", where: where === "free" ? "free" : "rail", order: order++, open, collapsed, x, y, height: null, el: null, slot: null, mount: null, onClose, onOpen, onDock };
-            const had = remembered[id];
-            if (had && typeof had === "object") {
-                if (typeof had.open === "boolean") p.open = had.open;
-                if (typeof had.collapsed === "boolean") p.collapsed = had.collapsed;
-                if (had.where === "rail" || had.where === "free") p.where = had.where;
-                if (typeof had.x === "number") p.x = had.x;
-                if (typeof had.y === "number") p.y = had.y;
-                if (typeof had.height === "number") p.height = had.height;
+        layout,
+        /* Register a panel. `body` is an element the panel adopts or a function given
+         * the slot to fill the first time the panel is in front of a person. `title`
+         * is its tab; `home` where it opens ("column", "tabs", "beside"); `open`
+         * whether it opens now when the layout does not hold it; `loud` a panel whose
+         * tab and frame say it must be seen. `onClose` is called when it is closed;
+         * `onOpen` when its filled body is in front of a person again; `onDock`, for a
+         * panel that is a part of another one popped out of it (the SCAD editor),
+         * is what docking it does. */
+        register(id, { title, tab = null, body, home = "tabs", open = true, loud = false, onClose = null, onOpen = null, onDock = null } = {}) {
+            if (!knownTypes.has(id)) { knownTypes.add(id); layout.registerComponentFactoryFunction(id, factory); }
+            const r = record(id);
+            r.title = title || id; r.tab = tab; r.home = HOMES.has(home) ? home : "tabs"; r.loud = !!loud;
+            r.onClose = onClose; r.onOpen = onOpen; r.onDock = onDock; r.registered = true;
+            if (typeof body === "function") { r.mount = body; r.filled = false; } else if (body) { r.slot.appendChild(body); }
+            const ci = item(id);
+            if (ci) {
+                ci.setTitle(r.tab || r.title);
+                r.container?.tab && (r.container.tab.element.title = r.title);
+                r.container?.element.classList.toggle("loud", r.loud);
+                if (r.container?.visible && r.mount) { const mount = r.mount; r.mount = null; mount(r.slot); r.filled = true; }
+            } else if (open) {
+                addAt(r, false);
             }
-            build(p);
-            if (typeof body === "function") p.mount = body;
-            else if (body) p.slot.appendChild(body);
-            panels.set(id, p);
-            place(p);
-            return p.el;
+            return r.el;
         },
+        /* Take a panel away for good; its onClose is called when it was open. Called
+         * from its own onClose (its ✕), GoldenLayout is already taking it away. */
         unregister(id) {
-            const p = panels.get(id);
-            if (!p) return;
-            p.el.remove();
-            panels.delete(id);
-            relayout();
-            if (p.open && p.onClose) p.onClose();
+            const r = records.get(id);
+            if (!r) return;
+            const ci = r.container ? item(id) : null;
+            r.releasing = true;
+            ci?.remove();
+            r.el.remove();
+            records.delete(id);
+            if (ci && r.onClose) r.onClose();
         },
-        /* Open a panel: in the rail it shows (its tab shown, the rail shown). */
+        /* Open a panel: shown where it is, else opened at its home, its tab in front. */
         open(id) {
-            const p = panels.get(id);
-            if (!p) return false;
-            change(p, () => {
-                p.open = true;
-                if (docked(p)) { rail.hidden = false; if (p.zone === "tabs") showTab(p); }
-            });
-            return true;
+            const r = records.get(id);
+            if (!r || !r.registered) return false;
+            if (!item(id)) addAt(r);
+            return show(id);
         },
         close(id) {
-            const p = panels.get(id);
-            if (!p) return false;
-            const was = p.open;
-            p.open = false;
-            if (rail.tab === id) rail.tab = null;
-            place(p); remember();
-            if (was && p.onClose) p.onClose();
+            const ci = item(id);
+            if (!ci) return false;
+            ci.remove();
             return true;
         },
-        /* Open and showing, closed; else opened. */
-        toggle(id) { const p = panels.get(id); if (!p) return false; return p.open && visible(p) ? this.close(id) : this.open(id); },
-        /* Folded away or shown again: a stacked or free panel's body, or a
-         * docked tab (folded, no tab is shown). */
-        collapse(id, collapsed = true) {
-            const p = panels.get(id);
-            if (!p) return false;
-            change(p, () => {
-                if (docked(p) && p.zone === "tabs") {
-                    if (collapsed) { if (rail.tab === id) rail.tab = null; } else { p.open = true; showTab(p); }
-                } else p.collapsed = collapsed;
-            });
+        /* The panel's frame pulses, for a loud one that has just opened. */
+        alert(id) {
+            const el = records.get(id)?.container?.element;
+            if (!el) return false;
+            el.classList.remove("alert");
+            void el.offsetWidth;  // the animation starts again
+            el.classList.add("alert");
             return true;
         },
-        float(id) {
-            const p = panels.get(id);
-            if (!p) return false;
-            const rect = p.el.getBoundingClientRect(), base = overlay.getBoundingClientRect();
-            change(p, () => {
-                // Beside where it was docked; one already free stays where it is.
-                if (p.where !== "free") { p.x = Math.max(0, rect.left - base.left - 24); p.y = Math.max(0, rect.top - base.top + 8); }
-                p.where = "free"; p.open = true;
-                if (rail.tab === id) rail.tab = null;
-            });
-            placeClear(p); p.el.style.left = `${p.x}px`; p.el.style.top = `${p.y}px`; remember();
-            return true;
+        /* Open and in front, closed; else opened. */
+        toggle(id) { return this.isShown(id) ? this.close(id) : this.open(id); },
+        /* A popped-out part going back where it came from (onDock), or the panel opened. */
+        dock(id) { const r = records.get(id); if (r && r.onDock) { r.onDock(); return true; } return this.open(id); },
+        /* The world alone (its stack maximised), or everything back. */
+        worldAlone(on = true) {
+            const ws = worldStack();
+            if (!ws) return false;
+            if (!!on !== isWorldAlone()) ws.toggleMaximise();
+            return isWorldAlone();
         },
-        /* Docked in the rail: Site and Selected in its stack, any other panel a
-         * tab of its strip, shown. */
-        dock(id) {
-            const p = panels.get(id);
-            if (!p) return false;
-            if (p.onDock) { p.onDock(); return true; }
-            change(p, () => {
-                p.where = "rail"; p.open = true; rail.hidden = false;
-                if (p.zone === "tabs") showTab(p);
-            });
-            return true;
+        isWorldAlone,
+        isOpen(id) { return !!item(id); },
+        /* In the layout, its tab in front, and not behind the world alone. */
+        isShown(id) {
+            const ci = item(id);
+            if (!ci) return false;
+            if (isWorldAlone() && id !== WORLD) return false;
+            return ci.parentItem.getActiveComponentItem() === ci;
         },
-        /* The rail: hidden or shown (the tilde does it too), moved to a side, its width. */
-        hideRail(hidden = true) { rail.hidden = !!hidden; relayout(); remember(); return rail.hidden; },
-        railHidden() { return rail.hidden; },
-        moveRail(side) {
-            if (!SIDES.has(side) || side === rail.side) return false;
-            rail.side = side; rail.hidden = false;
-            relayout(); remember();
-            return true;
-        },
-        railSide() { return rail.side; },
-        railWidth() { return railEl.hidden ? 0 : railEl.offsetWidth; },
-        shownTab() { return rail.tab; },
-        isOpen(id) { const p = panels.get(id); return !!(p && p.open); },
-        isShown(id) { const p = panels.get(id); return !!(p && visible(p) && !(docked(p) && rail.hidden)); },
         /* The panel's pinned slot: above its body, out of its scrolling. */
-        pinnedSlot(id) { const p = panels.get(id); return p && p.el ? p.el.querySelector(":scope > .panel-pinned") : null; },
-        state(id) { const p = panels.get(id); return p ? { id, title: p.title, zone: p.zone, open: p.open, shown: this.isShown(id), collapsed: p.collapsed, where: p.where, x: p.x, y: p.y, height: p.height } : null; },
-        list() { return [...panels.keys()].map((id) => this.state(id)); },
+        pinnedSlot(id) { const r = records.get(id); return r ? r.el.querySelector(":scope > .panel-pinned") : null; },
+        state(id) {
+            const r = records.get(id);
+            if (!r && id !== WORLD) return null;
+            const ci = item(id);
+            const stack = ci?.parentItem;
+            return {
+                id, title: r ? r.title : "World", home: r ? r.home : "world", loud: !!(r && r.loud),
+                open: !!ci, shown: this.isShown(id), where: ci ? "layout" : "closed",
+                stack: stack ? stack.contentItems.map((c) => c.id) : [],
+            };
+        },
+        list() { return [WORLD, ...records.keys()].map((id) => this.state(id)); },
+        /* The page's own layout again, whatever a person made of it. */
+        reset() {
+            for (const r of records.values()) r.releasing = true;
+            layout.loadLayout(DEFAULT_LAYOUT);
+            for (const r of records.values()) {
+                r.releasing = false;
+                if (TRANSIENT.has(r.id) && r.registered) addAt(r, false);
+            }
+            remember();
+            return true;
+        },
         destroy() {
-            for (const id of [...panels.keys()]) this.unregister(id);
             window.removeEventListener("keydown", onKey);
-            railEl.remove(); free.remove(); tabs.remove();
+            for (const r of records.values()) r.releasing = true;
+            layout.destroy();
         },
     };
-    layoutRail();
     return api;
 }
