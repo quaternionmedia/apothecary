@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -8,6 +10,17 @@ from apothecary.example import create_example_scene
 from apothecary.projects.parts.calibration_cube import DEFAULT as CUBE
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.projects.registry import scan_projects
+
+
+def test_the_api_says_what_it_serves():
+    """The API's description names every tag its routes are grouped by, so it says what
+    this server serves rather than what the project once was."""
+    spec = app.openapi()
+    tags = {
+        t for path in spec["paths"].values() for op in path.values() for t in op.get("tags", [])
+    }
+    words = set(re.findall(r"[a-z]+", spec["info"]["description"].lower()))
+    assert tags and tags <= words, f"tags the description does not name: {sorted(tags - words)}"
 
 
 def test_health_endpoint():

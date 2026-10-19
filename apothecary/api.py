@@ -188,7 +188,13 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Apothecary API",
     version="0.1.0",
-    description="Lean OpenSCAD generation toolkit exposed via FastAPI endpoints",
+    description=(
+        "The viewer's server, answering this machine only: sites and their layout; "
+        "parts, rendered by OpenSCAD and kept as variants; photos, the views pinned "
+        "from them, the cameras that take them and the shapes found in them; firmware "
+        "for the boards and printers, with their control and prints; the slicer; jobs; "
+        "the ring's menu; and the documentation and walkthrough it serves."
+    ),
     lifespan=lifespan,
     # /docs is the project's documentation (docs_site.py). FastAPI's own Swagger
     # and ReDoc pages are off: each loads its script from a public CDN, which a
