@@ -6,7 +6,7 @@ unmatched), the in-process ``SimulatedPrinter`` mid-way through an SD print,
 and firmware state in a temp dir, so pins never touch ``~/.apothecary``.
 
 The printer monitor's address (``/firmware/monitor?port=``) opens the viewer
-with the board's Machine in the rail's tab strip, pinned or pinned nowhere: these tests
+with the board's Machine a tab beside Pictures, pinned or pinned nowhere: these tests
 drive that Machine, by its ids.
 
 Every test starts with nothing pinned, no file kept, the garage rebuilt and
@@ -29,6 +29,7 @@ import time
 
 import httpx
 import pytest
+import windows
 from playwright.sync_api import Page, expect
 from viewer_ready import FRAMES
 
@@ -364,8 +365,8 @@ def test_manual_pin_poll_and_rescan(page: Page, printer_url: str):
 
 @pytest.mark.e2e
 def test_focused_monitor_page(page: Page, fresh_url: str):
-    """The printer monitor's address: the printer's Machine, pinned nowhere, in the rail's
-    tab strip on the default site, its port kept in the address -- status within
+    """The printer monitor's address: the printer's Machine, pinned nowhere, a tab beside
+    Pictures on the default site, its port kept in the address -- status within
     a bound, cadence, log, query, reconnect, reset. A server of its own, so the log holds
     only this test's lines."""
     _identify(fresh_url)
@@ -374,7 +375,7 @@ def test_focused_monitor_page(page: Page, fresh_url: str):
     expect(page).to_have_url(re.compile(r"/viewer/sites/garage\?machine=%2Fdev%2FttyFAKE1$"))
     expect(page.locator("#c-state")).to_contain_text("printing", timeout=15000)
     expect(page.locator("#ident")).to_contain_text("Marlin Apothecary Simulator")
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "layout"
     expect(page.locator("#c-board")).to_contain_text("held", timeout=5000)
     expect(page.locator("#c-hot")).to_contain_text("/210°")
 
@@ -653,68 +654,19 @@ def test_control_overlay_is_latched(page: Page, printer_url: str):
     expect(page.locator("#control")).to_be_hidden(timeout=3000)
 
 
-# Whether a piece's middle is drawn in the world and clear of the control pad.
-FRAMED_CLEAR = """(key) => {
+# Whether a piece's middle is drawn inside the world's window.
+FRAMED = """(key) => {
     const v = window.fractalViewer, b = v.renderNodeByKey[key].world_bounds;
     const s = v.sceneAt(...b.min.map((m, i) => (m + b.max[i]) / 2)).project(v.camera);
     const world = v.renderer.domElement.getBoundingClientRect();
-    const pad = document.querySelector('#control').getBoundingClientRect();
     const x = world.left + (s.x + 1) / 2 * world.width, y = world.top + (1 - s.y) / 2 * world.height;
-    const inWorld = x > world.left && x < world.right && y > world.top && y < world.bottom;
-    return inWorld && (x < pad.left || x > pad.right || y < pad.top || y > pad.bottom);
+    return world.width > 0 && Math.abs(s.x) < 0.5 && Math.abs(s.y) < 0.5
+        && x > world.left && x < world.right && y > world.top && y < world.bottom;
 }"""
 
 
-@pytest.mark.e2e
-def test_armed_the_pad_pops_out_over_the_world_and_can_be_put_back(page: Page, printer_url: str):
-    """Armed, the control pad pops out of the Machine into the page: over the world's corner
-    by the rail, bordered, naming the printer it heats and moves, the world seen faintly
-    through it and printer_1 framed clear of it, and still there with another of the
-    rail's tabs shown. Its ⇥ puts it back as the Machine's last child, its ⧉
-    pops it out again; disarmed, it goes back in the Machine, and armed again it pops out."""
-    _pin(printer_url, BOARD)
-    _identify(printer_url)
-    page.goto(f"{printer_url}/firmware/monitor?port=/dev/ttyFAKE1")
-    expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
-    machine, pad = page.locator(MACHINE), page.locator("#control")
-    expect(machine.locator("#control")).to_be_hidden()
-
-    page.locator("#ctl").check()
-    expect(pad).to_be_visible(timeout=5000)
-    expect(machine.locator("#control")).to_have_count(0)
-    expect(pad).to_have_class(re.compile(r"\bout\b"))
-    expect(pad.locator(".head")).to_contain_text("printer_1 armed: it can heat and move")
-    expect(pad.locator("#ctl-pop")).to_have_text("⇥")
-    world = page.locator("#viewer-canvas").bounding_box()
-    box = pad.bounding_box()
-    assert box["x"] >= world["x"] and box["x"] + box["width"] <= world["x"] + world["width"], (
-        box,
-        world,
-    )
-    assert box["y"] >= world["y"] and box["y"] + box["height"] <= world["y"] + world["height"], (
-        box,
-        world,
-    )
-    assert world["x"] + world["width"] - (box["x"] + box["width"]) < 40, "not by the rail"
-    # The world lets it be seen through, and frames printer_1 in what the pad leaves clear.
-    assert float(pad.evaluate("(el) => getComputedStyle(el).opacity")) < 1
-    page.wait_for_function(FRAMED_CLEAR, arg="printer_1", timeout=5000)
-    # Another tab of the rail shown: the Machine is hidden, the pad is not.
-    page.locator(".panel-rail .rail-tab[data-panel='pictures'] .rail-tab-name").click()
-    expect(machine).to_be_hidden(timeout=5000)
-    expect(pad).to_be_visible()
-    page.locator(".panel-rail .rail-tab[data-panel='machine'] .rail-tab-name").click()
-    expect(machine).to_be_visible(timeout=5000)
-
-    pad.locator("#ctl-pop").click()
-    expect(machine.locator("#control")).to_be_visible()
-    expect(pad).not_to_have_class(re.compile(r"\bout\b"))
-    expect(pad.locator("#ctl-pop")).to_have_text("⧉")
-    pad.locator("#ctl-pop").click()
-    expect(machine.locator("#control")).to_have_count(0)
-    expect(pad).to_have_class(re.compile(r"\bout\b"))
-    # The toggle is the canvas ring's Panels › Control pad, and wears its address.
-    expect(pad.locator("#ctl-pop")).to_have_attribute("data-address", "47", timeout=5000)
+def _ring_control_pad(page: Page) -> None:
+    """The canvas ring's Panels › Control pad."""
     page.locator("#viewer-canvas").click(
         button="right", modifiers=["Control"], position={"x": 30, "y": 30}
     )
@@ -722,6 +674,71 @@ def test_armed_the_pad_pops_out_over_the_world_and_can_be_put_back(page: Page, p
     page.keyboard.press("4")  # Panels
     page.keyboard.press("7")  # Control pad
     expect(page.locator("#ring-overlay")).to_have_count(0)
+
+
+@pytest.mark.e2e
+def test_armed_the_pad_opens_a_loud_window_beside_the_world_and_goes_back(
+    page: Page, printer_url: str
+):
+    """Armed, the control pad leaves the Machine for a window of its own beside the
+    world: its tab red and named for the printer it heats and moves, its frame loud,
+    the world narrower with printer_1 framed in the middle of it, and still there with
+    another tab in front of the Machine. Its ⇥ Put back, its tab's ✕ and the ring's
+    Panels › Control pad put it back as the Machine's last child, and the world is as
+    wide as it was; ⧉ Pop out and the ring pop it out again. Disarmed, it goes back;
+    armed again, it pops out."""
+    _pin(printer_url, BOARD)
+    _identify(printer_url)
+    page.goto(f"{printer_url}/firmware/monitor?port=/dev/ttyFAKE1")
+    expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
+    machine, pad = page.locator(MACHINE), page.locator("#control")
+    expect(machine.locator("#control")).to_be_hidden()
+    width = windows.world_width(page)
+
+    page.locator("#ctl").check()
+    window = windows.panel(page, "control")
+    expect(window.locator("#control")).to_be_visible(timeout=5000)
+    expect(machine.locator("#control")).to_have_count(0)
+    expect(pad).to_have_class(re.compile(r"\bout\b"))
+    expect(pad.locator(".head")).to_contain_text("printer_1 armed: it can heat and move")
+    expect(pad.locator("#ctl-pop")).to_have_text("⇥ Put back")
+    tab = windows.tab(page, "control")
+    expect(tab).to_have_class(re.compile(r"\bloud\b"))
+    expect(tab).to_contain_text("printer_1")
+    expect(page.locator(".panel-window.loud", has=pad)).to_be_visible()
+    # Beside the world, on its right: the world narrower, printer_1 framed in it.
+    world = page.locator(windows.WORLD).bounding_box()
+    assert window.bounding_box()["x"] >= world["x"] + world["width"] - 1
+    assert world["width"] < width - 100, (world, width)
+    page.wait_for_function(FRAMED, arg="printer_1", timeout=5000)
+    # Another tab in front of the Machine: the Machine is hidden, the pad is not.
+    windows.show(page, "pictures")
+    expect(machine).to_be_hidden(timeout=5000)
+    expect(pad).to_be_visible()
+    windows.show(page, "machine")
+    expect(machine).to_be_visible(timeout=5000)
+
+    # ⇥ Put back: in the Machine, its window gone, the world as wide as it was.
+    pad.locator("#ctl-pop").click()
+    expect(machine.locator("#control")).to_be_visible()
+    expect(pad).not_to_have_class(re.compile(r"\bout\b"))
+    expect(windows.tab(page, "control")).to_have_count(0)
+    expect(pad.locator("#ctl-pop")).to_have_text("⧉ Pop out")
+    windows.world_is(page, width)
+    # ⧉ Pop out: out again; its tab's ✕: back.
+    pad.locator("#ctl-pop").click()
+    expect(window.locator("#control")).to_be_visible(timeout=5000)
+    windows.close(page, "control")
+    expect(machine.locator("#control")).to_be_visible()
+    windows.world_is(page, width)
+    # The toggle is the canvas ring's Panels › Control pad, and wears its address.
+    expect(pad.locator("#ctl-pop")).to_have_attribute("data-address", "47", timeout=5000)
+    _ring_control_pad(page)
+    expect(window.locator("#control")).to_be_visible(timeout=5000)
+    expect(page.locator("#status")).to_contain_text(
+        "printer_1's control pad is in a loud window of its own beside the world"
+    )
+    _ring_control_pad(page)
     expect(machine.locator("#control")).to_be_visible()
     expect(page.locator("#status")).to_contain_text(
         "printer_1's control pad put back in its Machine"
@@ -731,10 +748,12 @@ def test_armed_the_pad_pops_out_over_the_world_and_can_be_put_back(page: Page, p
     page.locator("#ctl-disarm").click()
     expect(machine.locator("#control")).to_be_hidden(timeout=3000)
     page.locator("#ctl").check()
-    expect(pad).to_have_class(re.compile(r"\bout\b"), timeout=5000)
+    expect(window.locator("#control")).to_be_visible(timeout=5000)
     expect(machine.locator("#control")).to_have_count(0)
     pad.locator("#ctl-disarm").click()
     expect(machine.locator("#control")).to_be_hidden(timeout=3000)
+    expect(windows.tab(page, "control")).to_have_count(0)
+    windows.world_is(page, width)
 
 
 @pytest.mark.e2e
@@ -791,7 +810,7 @@ def test_the_reading_shown_is_drawn_over_the_bed(page: Page, printer_url: str):
     page.goto(f"{printer_url}/firmware/monitor?port=/dev/ttyFAKE1")
     machine = page.locator(MACHINE)
     expect(machine.locator("#c-state")).not_to_have_text("—", timeout=15000)
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "layout"
     marks = "window.fractalViewer.marks['printer_1']"
     shown = f"() => {marks} && {marks}.marks && {marks}.marks.mesh()"
     page.wait_for_function(f"(id) => ({shown})() && ({shown})().record_id === id", arg=probe_id)
@@ -1056,9 +1075,10 @@ def _until_it_ends(url: str, cancel: bool = False) -> dict:
 
 @pytest.mark.e2e
 def test_site_lists_the_sites_jobs_and_a_row_opens_its_machine(page: Page, printer_url: str):
-    """Site's Jobs lists the jobs of the garage's machines: a print running on printer_1
-    on top, then the one before it with the part it made and how it ended; the row of
-    either selects printer_1 and opens its Machine, from whatever level is shown."""
+    """Site's Jobs, a window beside Site, lists the jobs of the garage's machines -- its
+    tab counts them and the running ones: a print running on printer_1 on top, then the
+    one before it with the part it made and how it ended; the row of either selects
+    printer_1 and opens its Machine, from whatever level is shown."""
     _pin(printer_url, BOARD)
     _identify(printer_url)
     dot = _keep(printer_url, "dot.gcode", "G28\nG1 X5 Y5 E0.1\nM84\n")
@@ -1069,24 +1089,28 @@ def test_site_lists_the_sites_jobs_and_a_row_opens_its_machine(page: Page, print
     try:
         page.goto(f"{printer_url}/viewer/sites/garage")
         expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
-        jobs = page.locator("#site-jobs")
-        expect(jobs.locator("summary")).to_contain_text("running", timeout=10000)
-        jobs.locator("summary").click()
+        expect(windows.tab(page, "jobs")).to_have_text(
+            re.compile(r"^Jobs · \d+ · 1 running$"), timeout=10000
+        )
+        windows.show(page, "jobs")
         rows = page.locator("#site-jobs-list li[data-job]")
         expect(rows.first).to_have_attribute("data-job", running["job_id"])
         expect(rows.first).to_have_class(re.compile(r"\brunning\b"))
         expect(rows.first).to_contain_text("printer_1 · print · slow cube.gcode · running")
         expect(rows.nth(1)).to_have_attribute("data-job", before["job_id"])
         expect(rows.nth(1)).to_contain_text("printer_1 · print · dot.gcode → footpedal · done")
-        # From a level below, the row steps out to printer_1, selects it and opens it.
+        # From a level below, the row steps out to printer_1, selects it and opens it:
+        # Site in front to step in, Jobs in front again to press the row.
+        windows.show(page, "site")
         page.locator("#contents-list .contents-item[data-path='workbench']").dblclick()
         expect(page.locator("#contents-list .contents-item[data-path='printer_1']")).to_have_count(
             0, timeout=10000
         )
+        windows.show(page, "jobs")
         rows.first.click()
         machine = page.locator(".panel[data-panel='machine']")
         expect(machine).to_be_visible(timeout=10000)
-        expect(machine.locator(".panel-name")).to_contain_text("printer_1 · /dev/ttyFAKE1")
+        expect(windows.tab(page, "machine")).to_have_attribute("title", "printer_1 · /dev/ttyFAKE1")
         expect(page.locator("#selected-body .prop-row", has_text="Name")).to_contain_text(
             "printer_1"
         )
@@ -1094,7 +1118,7 @@ def test_site_lists_the_sites_jobs_and_a_row_opens_its_machine(page: Page, print
         ended = _until_it_ends(printer_url, cancel=True)
         assert ended["stage"] == "cancelled"
         expect(rows.first).to_contain_text("slow cube.gcode · cancelled", timeout=10000)
-        expect(jobs.locator("summary")).not_to_contain_text("running")
+        expect(windows.tab(page, "jobs")).not_to_contain_text("running")
     finally:
         _until_it_ends(printer_url, cancel=True)
 
@@ -1201,7 +1225,7 @@ def test_a_reading_lies_on_the_bed_and_the_badge_selects_its_printer(page: Page,
 
 @pytest.mark.e2e
 def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
-    """A badge click opens the Machine in the rail's tab strip, its cards and latch on
+    """A badge click opens the Machine as a tab beside Pictures, its cards and latch on
     its own module (static/widgets/machine.js); a jog from it moves the world's
     nozzle ahead of the poll; its comms log is in it, the board's one log; the ring's
     verbs go to it; closing it stops its polling."""
@@ -1214,7 +1238,7 @@ def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
     badge.click()
     machine = page.locator(".panel[data-panel='machine']")
     expect(machine).to_be_visible(timeout=3000)
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "layout"
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
     expect(machine.locator("#ident")).to_contain_text("Marlin")
     # The Machine's module: its ids, its latch.
@@ -1228,7 +1252,7 @@ def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
 
     # Armed, a jog from the Machine moves the world's nozzle marker ahead of the poll.
     machine.locator("#ctl").check()
-    pad = page.locator("#control")  # armed, popped out of the Machine over the world
+    pad = page.locator("#control")  # armed, popped out of the Machine into a window of its own
     expect(pad).to_be_visible(timeout=5000)
     pad.locator("button[data-cmd='M25']").click()
     expect(machine.locator("#c-state")).to_contain_text("idle", timeout=WITHIN_A_POLL)
@@ -1282,10 +1306,13 @@ def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
 
 
 @pytest.mark.e2e
-def test_the_machine_docks_in_the_rails_strip_and_floats_when_floated(page: Page, printer_url: str):
-    """The machine opens in the rail's tab strip, shown, with no leader to anything;
-    floated from its tab it is a free panel, and opened from the badge again it stays
-    one; its dock button puts it back in the strip."""
+def test_the_machine_opens_beside_pictures_and_stays_beside_site_when_dragged_there(
+    page: Page, printer_url: str
+):
+    """The machine opens as a tab beside Pictures, in front, with no leader to anything,
+    Site and Selected above it; its tab dragged onto Site's, it is a tab beside Site,
+    and opened from the board again it stays there; the page's own layout again puts it
+    back beside Pictures."""
     _pin(printer_url, BOARD)
     _identify(printer_url)
     page.goto(f"{printer_url}/viewer/sites/garage")
@@ -1293,31 +1320,30 @@ def test_the_machine_docks_in_the_rails_strip_and_floats_when_floated(page: Page
     badge = page.locator(".world-badge[data-path='printer_1']")
     expect(badge).to_be_visible(timeout=15000)
     badge.click()
-    rail = page.locator(".panel-rail")
-    docked = rail.locator(".panel-tabbody .panel[data-panel='machine']")
-    expect(docked).to_be_visible(timeout=3000)
-    expect(rail.locator(".rail-tab[data-panel='machine']")).to_have_class(re.compile(r"\bactive\b"))
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
-    expect(docked.locator("#c-state")).to_contain_text("printing", timeout=10000)
+    machine = windows.panel(page, "machine")
+    expect(machine).to_be_visible(timeout=3000)
+    expect(windows.tab(page, "machine")).to_have_class(re.compile(r"\blm_active\b"))
+    assert windows.state(page, "machine")["stack"] == ["pictures", "bench", "settings", "machine"]
+    expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
     expect(page.locator(".panel-leader[visibility='visible']")).to_have_count(0)
-    # Site and Selected stay stacked above it.
+    # Site and Selected stay above it.
     for pid in ("site", "selected"):
-        expect(rail.locator(f".panel[data-panel='{pid}']")).to_be_visible()
+        expect(windows.panel(page, pid)).to_be_visible()
 
-    rail.locator(".rail-tab[data-panel='machine'] .rail-tab-float").click()
-    free = page.locator(".panel-free-layer .panel[data-panel='machine']")
-    expect(free).to_be_visible(timeout=2000)
-    expect(free).not_to_have_class(re.compile(r"\btethered\b"))
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "free"
-    expect(rail.locator(".rail-tab[data-panel='machine']")).to_have_count(0)
+    # Its tab dropped on Site's header, just after Site's tab.
+    site_tab = windows.tab(page, "site").bounding_box()
+    to = (site_tab["x"] + site_tab["width"] + 20, site_tab["y"] + site_tab["height"] / 2)
+    windows.drag(page, windows.tab(page, "machine"), to)
+    page.wait_for_function("() => window.apothecaryPanels.state('machine').stack.includes('site')")
+    assert windows.state(page, "machine")["stack"][:2] == ["site", "machine"]
+    expect(machine).to_be_visible()
 
     # Opened again from the board's Open: it stays where the person put it.
     page.evaluate("() => window.fractalViewer.openMachine('printer_1')")
-    expect(free).to_be_visible(timeout=3000)
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "free"
-    expect(free.locator(".panel-float")).to_have_attribute("title", re.compile("Dock"))
-    free.locator(".panel-float").click()
-    expect(docked).to_be_visible(timeout=2000)
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
+    expect(machine).to_be_visible(timeout=3000)
+    assert windows.state(page, "machine")["stack"][:2] == ["site", "machine"]
+    page.evaluate("() => window.apothecaryPanels.reset()")
+    expect(machine).to_be_attached()
+    assert windows.state(page, "machine")["stack"] == ["pictures", "bench", "settings", "machine"]
     page.evaluate("() => window.fractalViewer.closeMachine()")
     expect(page.locator(".panel[data-panel='machine']")).to_have_count(0)

@@ -1,6 +1,7 @@
-"""Site: the site's Contents tree as its body, its problems at the top, its
-generated SCAD, Pinned -- every site's pins, each taken back from its row -- and
-its Jobs (tests/e2e/test_printer_ui.py prints one and opens its machine from it).
+"""Site: the site's Contents tree as its body, and its own windows, tabs beside it:
+Problems, Pinned -- every site's pins, each taken back from its row -- Jobs
+(tests/e2e/test_printer_ui.py prints one and opens its machine from it) and its
+generated SCAD.
 
 The problems: a piece a problem names -- by the tree path the server sends
 beside its name -- is red in the tree and its ancestors say something inside is
@@ -18,6 +19,7 @@ import re
 from urllib.parse import urlparse
 
 import pytest
+import windows
 from PIL import Image, ImageDraw
 from playwright.sync_api import expect
 
@@ -73,31 +75,45 @@ def leaves_as_found(page, base_url: str):
 
 
 @pytest.mark.e2e
-def test_site_is_stacked_in_the_one_rail_and_the_retired_panels_are_gone(page, base_url: str):
-    """Site is the one rail's, open and stacked over Selected, with the tree as its body;
-    Validation, OpenSCAD, Kept and Gather are no panels of the page's."""
+def test_site_is_a_window_beside_the_world_and_the_retired_panels_are_gone(page, base_url: str):
+    """Site is a window beside the world, open above Selected, with the tree as its body
+    and its own windows as tabs beside it; Contents, Validation, Kept and the Camera are
+    no panels of the page's."""
     _open(page, base_url)
-    rail = page.locator(".panel-rail")
-    expect(rail).to_have_count(1)
-    site = rail.locator(".panel[data-panel='site']")
+    site = windows.panel(page, "site")
     expect(site).to_be_visible()
-    expect(site.locator(".panel-name")).to_have_text("Site")
+    expect(windows.tab(page, "site")).to_have_text("Site")
     expect(site.locator("#contents-list")).to_be_visible()
-    assert page.evaluate("() => window.apothecaryPanels.state('site').zone") == "stack"
+    assert windows.state(page, "site")["home"] == "column"
+    assert site.bounding_box()["y"] < windows.panel(page, "selected").bounding_box()["y"]
     ids = page.evaluate("() => window.apothecaryPanels.list().map((p) => p.id)")
-    assert ids == ["site", "selected", "pictures", "bench", "settings"]
-    for gone in ("contents", "validation", "scad", "kept", "camera", "jobs"):
-        assert page.evaluate("(id) => window.apothecaryPanels.state(id)", gone) is None
-    # The one rail leaves the world at least half the page.
+    assert ids == [
+        "world",
+        "site",
+        "problems",
+        "pinned",
+        "jobs",
+        "scad",
+        "selected",
+        "pictures",
+        "bench",
+        "settings",
+        "gather",
+    ]
+    assert windows.state(page, "site")["stack"] == ["site", "problems", "pinned", "jobs", "scad"]
+    for gone in ("contents", "validation", "kept", "camera"):
+        assert windows.state(page, gone) is None
+    # The windows beside it leave the world at least half the page.
     width = page.viewport_size["width"]
-    assert page.locator(".viewer-panel").bounding_box()["width"] >= width / 2 - 2
+    assert page.locator(windows.WORLD).bounding_box()["width"] >= width / 2 - 2
 
 
 @pytest.mark.e2e
-def test_a_layout_remembered_with_the_old_panels_is_ignored(page, base_url: str):
-    """A browser that remembered two rails -- Site docked left, the right rail narrowed
-    and the left hidden -- and Contents, Validation, OpenSCAD, Kept and Gather opens
-    the page with no error and the panels and the one rail as they start."""
+def test_what_the_rail_remembered_is_ignored_and_forgotten(page, base_url: str):
+    """A browser that remembered the rail's panels -- two rails, Site docked left, the
+    right rail narrowed and the left hidden, Contents, Validation, OpenSCAD, Kept and
+    Gather -- opens the page with no error and its windows as they start, and the old
+    record is gone from the browser."""
     old = {
         "contents": {"open": False, "where": "free", "x": 9, "y": 9},
         "validation": {"open": True, "collapsed": True, "where": "left"},
@@ -119,72 +135,84 @@ def test_a_layout_remembered_with_the_old_panels_is_ignored(page, base_url: str)
     page.goto(f"{base_url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
     states = page.evaluate("() => window.apothecaryPanels.list()")
-    assert [(s["id"], s["open"], s["collapsed"], s["where"]) for s in states] == [
-        ("site", True, False, "rail"),
-        ("selected", True, False, "rail"),
-        ("pictures", True, False, "rail"),
-        ("bench", True, False, "rail"),
-        ("settings", True, False, "rail"),
+    assert [(s["id"], s["open"], s["shown"]) for s in states] == [
+        ("world", True, True),
+        ("site", True, True),
+        ("problems", True, False),
+        ("pinned", True, False),
+        ("jobs", True, False),
+        ("scad", True, False),
+        ("selected", True, True),
+        ("pictures", True, True),
+        ("bench", True, False),
+        ("settings", True, False),
+        ("gather", False, False),  # closed until asked for
     ]
-    expect(page.locator(".panel-tab")).to_have_count(0)  # nothing closed
-    rail = page.locator(".panel-rail")
-    expect(rail).to_be_visible()
-    expect(rail).to_have_attribute("data-side", "right")
-    # The width it starts with, not the one a right rail was dragged to.
-    assert page.evaluate("() => window.apothecaryPanels.railWidth()") != 300
+    assert page.locator(windows.WORLD).bounding_box()["x"] <= 1
+    assert page.evaluate("() => localStorage.getItem('apothecary.panels')") is None
     assert errors == []
 
 
+# A remembered layout with a Kept tab beside the Bench, as a page that had a Kept panel
+# would have remembered it: the Bench's own record, renamed.
+WITH_KEPT = """() => {
+    const saved = JSON.parse(localStorage.getItem('apothecary.layout'));
+    const walk = (item) => {
+        const bench = (item.content || []).find((c) => c.componentType === 'bench');
+        if (bench) { item.content.push({ ...bench, componentType: 'kept', id: 'kept', title: 'Kept' }); return true; }
+        return (item.content || []).some(walk);
+    };
+    walk(saved.root);
+    localStorage.setItem('apothecary.layout', JSON.stringify(saved));
+}"""
+
+
 @pytest.mark.e2e
-def test_a_layout_remembered_with_the_jobs_panel_is_harmless(page, base_url: str):
-    """A one-rail layout remembered while the Jobs panel was a tab of the strip -- Jobs
-    floated free, then its tab the one shown -- opens the page with no error and no
-    Jobs anywhere; the rest of what was remembered still holds, and the next thing
-    remembered forgets Jobs."""
-    old = {
-        "_rail": {"side": "left", "width": 360, "hidden": False, "tab": "jobs"},
-        "site": {"open": True, "collapsed": False, "where": "rail"},
-        "selected": {"open": True, "collapsed": True, "where": "rail"},
-        "jobs": {"open": True, "collapsed": False, "where": "free", "x": 80, "y": 60},
-        "pictures": {"open": False, "collapsed": False, "where": "rail"},
-    }
-    page.add_init_script(
-        f"if (!sessionStorage.getItem('seeded')) {{ sessionStorage.setItem('seeded', '1');"
-        f" localStorage.setItem('apothecary.panels', {json.dumps(json.dumps(old))}); }}"
+def test_a_layout_remembered_with_a_retired_panel_is_harmless(page, base_url: str):
+    """A layout remembered while the retired Kept panel was a tab beside the Bench --
+    Pictures closed, Site's window dragged to the world's left -- opens the page with
+    no error and no Kept anywhere; the rest of what was remembered still holds, and the
+    next thing remembered forgets Kept."""
+    _open(page, base_url)
+    page.evaluate("() => window.apothecaryPanels.close('pictures')")
+    world = page.locator(windows.WORLD).bounding_box()
+    windows.drag(
+        page, windows.tab(page, "site"), (world["x"] + 30, world["y"] + world["height"] / 2)
     )
+    page.wait_for_function(
+        "() => document.querySelector(\".panel[data-panel='site']\").getBoundingClientRect().x < 2"
+    )
+    page.wait_for_timeout(400)  # the layout is remembered a moment after it changes
+    page.evaluate(WITH_KEPT)
+    assert "kept" in page.evaluate("() => localStorage.getItem('apothecary.layout')")
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(f"{base_url}/viewer/sites/garage")
+    page.reload()
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
-    states = page.evaluate("() => window.apothecaryPanels.list()")
-    assert [(s["id"], s["open"], s["collapsed"]) for s in states] == [
-        ("site", True, False),
-        ("selected", True, True),
-        ("pictures", False, False),
-        ("bench", True, False),
-        ("settings", True, False),
-    ]
-    assert page.evaluate("() => window.apothecaryPanels.state('jobs')") is None
-    expect(page.locator("[data-panel='jobs']")).to_have_count(0)
-    rail = page.locator(".panel-rail")
-    expect(rail).to_have_attribute("data-side", "left")
-    # Pictures' tab, closed, brings it back into the strip and shows it.
-    page.locator(".panel-tab[data-panel='pictures']").click()
-    expect(rail.locator(".panel[data-panel='pictures']")).to_be_visible()
-    remembered = json.loads(page.evaluate("() => localStorage.getItem('apothecary.panels')"))
-    assert "jobs" not in remembered and remembered["_rail"]["tab"] == "pictures"
+    assert windows.state(page, "kept") is None
+    expect(page.locator("[data-panel='kept']")).to_have_count(0)
+    assert windows.state(page, "pictures")["open"] is False
+    assert windows.panel(page, "site").bounding_box()["x"] < 2  # still on the world's left
+    assert windows.state(page, "bench")["stack"] == ["bench", "settings"]
+    # Pictures, opened from the ring's Panels as a person would, is a tab beside the Bench.
+    page.evaluate("() => window.apothecaryPanels.open('pictures')")
+    expect(windows.panel(page, "pictures")).to_be_visible()
+    page.wait_for_timeout(400)
+    remembered = page.evaluate("() => localStorage.getItem('apothecary.layout')")
+    assert "kept" not in remembered and "pictures" in remembered
     assert errors == []
 
 
 @pytest.mark.e2e
 def test_a_problem_marks_its_pieces_and_its_row_selects_one_at_its_level(page, base_url: str):
-    """printer_1 moved onto the footpedal: both rows red, saying why on hover; Site's one
-    folded line says so, and unfolded, the problem selects printer_1 from a level
-    below, stepping out to it."""
+    """printer_1 moved onto the footpedal: both rows red, saying why on hover; Problems'
+    tab, beside Site, counts it, and in front, the problem selects printer_1 from a
+    level below, stepping out to it."""
     _open(page, base_url)
     status = page.locator("#status")
-    problems = page.locator("#site-problems")
-    expect(problems).to_be_hidden()
+    problems = windows.panel(page, "problems")
+    expect(problems).to_be_hidden()  # a tab behind Site
+    expect(windows.tab(page, "problems")).to_have_text("Problems")
     _row(page, "printer_1").click()
     x = page.locator("#pos-x")
     expect(x).to_be_visible()
@@ -194,9 +222,10 @@ def test_a_problem_marks_its_pieces_and_its_row_selects_one_at_its_level(page, b
     rows = page.locator("#problem-list li")
     expect(rows).to_have_count(1)
     expect(rows.first).to_have_text("printer_1 and footpedal overlap")
-    expect(page.locator("#site-problems-count")).to_have_text("1 problem")
-    expect(rows.first).to_be_hidden()  # folded until asked for
-    page.locator("#site-problems > summary").click()
+    expect(windows.tab(page, "problems")).to_have_text("Problems · 1")
+    expect(windows.tab(page, "problems")).to_have_class(re.compile(r"\bhas-problems\b"))
+    expect(rows.first).to_be_hidden()  # behind Site until asked for
+    windows.show(page, "problems")
     expect(rows.first).to_be_visible()
     for name in ("printer_1", "footpedal"):
         expect(_row(page, name)).to_have_class(re.compile(r"\binvalid\b"))
@@ -219,7 +248,8 @@ def test_a_problem_marks_its_pieces_and_its_row_selects_one_at_its_level(page, b
     x.fill("100")
     x.press("Tab")
     expect(page.locator("#validity-indicator")).to_have_text("Layout valid", timeout=5000)
-    expect(problems).to_be_hidden()
+    expect(page.locator("#site-problems-none")).to_be_visible()
+    expect(windows.tab(page, "problems")).to_have_text("Problems")
     expect(_row(page, "printer_1")).not_to_have_class(re.compile(r"\binvalid"))
     expect(status).not_to_have_class(re.compile(r"\berror\b"))
 
@@ -266,7 +296,7 @@ def test_a_problem_deep_in_the_tree_marks_every_piece_above_it(page, base_url: s
     expect(_row(page, "cnc_router")).not_to_have_class(re.compile(r"\binvalid"))
     expect(page.locator("#validity-indicator")).to_have_text("1 violation")
 
-    page.locator("#validity-indicator").click()  # opens the problems' fold
+    page.locator("#validity-indicator").click()  # brings Problems in front
     page.locator("#problem-list li", has_text="left_post and right_post overlap").click()
     assert page.evaluate("() => window.fractalViewer.focusPath") == ["printer_1", "gantry_system"]
     selected = "printer_1.gantry_system.left_post"
@@ -309,14 +339,15 @@ def test_a_problem_selects_the_right_one_of_two_pieces_of_the_same_name(page, ba
         "data-path", "cnc_router.frame_system"
     )
 
-    page.locator("#validity-indicator").click()  # opens the problems' fold
+    page.locator("#validity-indicator").click()  # brings Problems in front
     page.locator("#problem-list li", has_text="frame_system and storage_shelving").click()
     assert page.evaluate("() => window.fractalViewer.focusPath") == ["cnc_router"]
     selected = "cnc_router.frame_system"
     assert page.evaluate("() => window.fractalViewer.selectedName") == selected
     expect(_row(page, selected)).to_have_class(re.compile(r"\bselected\b"))
     expect(_row(page, selected)).to_have_class(re.compile(r"\binvalid\b"))
-    # The bench's frame_system, of the same name, is not in it.
+    # The bench's frame_system, of the same name, is not in it: Site in front to see.
+    windows.show(page, "site")
     page.evaluate("() => { const v = window.fractalViewer; v.jumpTo(0); v.zoomIn('workbench'); }")
     expect(_row(page, "workbench.frame_system")).to_be_visible(timeout=5000)
     expect(_row(page, "workbench.frame_system")).not_to_have_class(re.compile(r"\binvalid"))
@@ -324,31 +355,28 @@ def test_a_problem_selects_the_right_one_of_two_pieces_of_the_same_name(page, ba
 
 @pytest.mark.e2e
 def test_the_toolbar_count_opens_sites_problems(page, base_url: str):
-    """Site closed, or the rail hidden: the toolbar's count opens Site, shows the rail and
-    brings the problems into view at its top, their fold opened."""
+    """Problems closed, or the world alone: the toolbar's count opens Problems in front,
+    the panels back, its list at its top."""
     _open(page, base_url)
     _row(page, "printer_1").click()
     x = page.locator("#pos-x")
     x.fill("1160")
     x.press("Tab")
     expect(page.locator("#validity-indicator")).to_contain_text("violation", timeout=5000)
-    page.evaluate("() => { window.apothecaryPanels.close('site'); }")
-    expect(page.locator(".panel[data-panel='site']")).to_have_count(0)
+    page.evaluate("() => { window.apothecaryPanels.close('problems'); }")
+    expect(windows.panel(page, "problems")).to_have_count(0)
     page.locator("#validity-indicator").click()
-    problems = page.locator("#site-problems")
+    problems = windows.panel(page, "problems")
     expect(problems).to_be_visible()
     expect(problems).to_be_in_viewport()
-    expect(problems).to_have_attribute("open", "")
     expect(page.locator("#problem-list li").first).to_be_visible()
-    assert page.evaluate("() => window.apothecaryPanels.state('site').open") is True
+    assert windows.state(page, "problems")["shown"] is True
 
-    page.evaluate(
-        "() => { window.apothecaryPanels.collapse('site'); window.apothecaryPanels.hideRail(); }"
-    )
+    page.evaluate("() => window.apothecaryPanels.worldAlone(true)")
     expect(problems).to_be_hidden()
     page.locator("#validity-indicator").click()
     expect(problems).to_be_visible()
-    assert page.evaluate("() => window.apothecaryPanels.railHidden()") is False
+    assert page.evaluate("() => window.apothecaryPanels.isWorldAlone()") is False
     x = page.locator("#pos-x")
     x.fill("100")
     x.press("Tab")
@@ -357,11 +385,12 @@ def test_the_toolbar_count_opens_sites_problems(page, base_url: str):
 
 @pytest.mark.e2e
 def test_sites_scad_section_shows_the_sites_scad(page, base_url: str):
-    """The site's generated OpenSCAD is a section of Site, folded until opened."""
+    """The site's generated OpenSCAD is SCAD, a window beside Site, behind it until its
+    tab is pressed."""
     _open(page, base_url)
-    code = page.locator(".panel[data-panel='site'] #code-content")
+    code = windows.panel(page, "scad").locator("#code-content")
     expect(code).to_be_hidden()
-    page.locator("#site-scad summary").click()
+    windows.show(page, "scad")
     expect(code).to_be_visible()
     expect(code).to_contain_text("// Structure: workbench")
     expect(code).not_to_contain_text("Load a site to see")
@@ -371,7 +400,7 @@ def test_sites_scad_section_shows_the_sites_scad(page, base_url: str):
 def test_pinned_takes_back_another_sites_pins_without_switching(
     page, base_url: str, leaves_as_found
 ):
-    """Site's Pinned lists every site's cameras and pins, each naming its site; another
+    """Pinned, beside Site, lists every site's cameras and pins, each naming its site; another
     site's camera is removed and its view unpinned from their rows on this site's
     page."""
     api = page.request
@@ -393,9 +422,9 @@ def test_pinned_takes_back_another_sites_pins_without_switching(
     url = page.url
     status = page.locator("#status")
 
-    section = page.locator(".panel[data-panel='site'] #site-pinned")
-    expect(section.locator(".pin-row")).to_have_count(0)  # folded: not fetched yet
-    section.locator("summary").click()
+    section = windows.panel(page, "pinned")
+    expect(section.locator(".pin-row")).to_have_count(0)  # behind Site: not fetched yet
+    windows.show(page, "pinned")
 
     # Each row names its site; garage's are not this page's.
     camera = section.locator(".pin-row.camera", has_text="pinned test camera")
@@ -417,10 +446,10 @@ def test_pinned_takes_back_another_sites_pins_without_switching(
     assert view["id"] not in {vw["id"] for vw in views}
     assert pinned["path"] in {p["path"] for p in api.get(f"{base_url}/photos/pictures").json()}
 
-    # A pin made elsewhere shows when the section is opened again.
+    # A pin made elsewhere shows when Pinned is in front again.
     again = _keep(page, base_url, "pinned_again.png", 30, "&site=garage&host=workbench")
-    section.locator("summary").click()
-    section.locator("summary").click()
+    windows.show(page, "site")
+    windows.show(page, "pinned")
     expect(section.locator(f".pinned-view-unpin[data-id='{again['view']['id']}']")).to_be_visible(
         timeout=5000
     )

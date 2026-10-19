@@ -2,7 +2,9 @@
 
 from contextlib import contextmanager
 
+import windows
 from playwright.sync_api import Page
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 FRAMES = """(n) => new Promise((done) => {
     const step = () => (n-- > 0 ? requestAnimationFrame(step) : done());
@@ -220,9 +222,17 @@ UNDER_THE_STAGE_BAR = """(el) => {
 }"""
 
 
-# Whether Site is folded to its title.
-SITE_FOLDED = """(folded) => document.querySelector(".panel[data-panel='site']")
-    .classList.contains('collapsed') === folded"""
+# How high Site's window and the tabs under Selected are dragged to: their tabs, and
+# a sliver of what is under them.
+SHORT = 30
+
+# Whether the window at one end of the column, Site's (0) or the tabs under Selected
+# (-1), is short: under 100 px high, where the page lays each out near a third of it.
+END_SHORT = """([end, short]) => {
+    const column = document.querySelector(".panel[data-panel='selected']").closest('.lm_column');
+    const stacks = [...column.children].filter((c) => c.classList.contains('lm_stack'));
+    return (stacks.at(end).getBoundingClientRect().height < 100) === short;
+}"""
 
 # The part's editor from its stage bar down: the bar is pinned above Selected's body,
 # and the body scrolled to the parameters it heads, the first of them at its top.
@@ -244,13 +254,50 @@ MARKED_LINE_FIRST = """(line) => {
 
 @contextmanager
 def site_folded(page: Page):
-    """Site folded to its title by its ▾ while a picture is taken, as a person folds it
-    to give Selected the rail; unfolded again after, so its rows are there to press."""
-    fold = page.locator(".panel[data-panel='site'] .panel-collapse")
-    fold.click()
-    page.wait_for_function(SITE_FOLDED, arg=True)
+    """Site's window and the tabs under Selected dragged short by their splitters while
+    a picture is taken, as a person drags them to give Selected the column; dragged
+    back after, so Site's rows are there to press."""
+    column = page.locator(".lm_column", has=windows.panel(page, "selected"))
+    box = column.bounding_box()
+    splitters = column.locator(":scope > .lm_splitter")
+    ends = (
+        (0, splitters.first, box["y"] + SHORT),
+        (-1, splitters.last, box["y"] + box["height"] - SHORT),
+    )
+    homes = []
+    for end, splitter, edge in ends:
+        b = splitter.bounding_box()
+        homes.append((end, splitter, b["y"] + b["height"] / 2))
+        _drag_until(page, splitter, edge, end, True)
+    _clear_of_the_splitters(page)
     try:
         yield
     finally:
-        fold.click()
-        page.wait_for_function(SITE_FOLDED, arg=False)
+        for end, splitter, home in reversed(homes):
+            _drag_until(page, splitter, home, end, False)
+        _clear_of_the_splitters(page)
+
+
+def _drag_until(page: Page, splitter, y: float, end: int, short: bool) -> None:
+    """A splitter of the column dragged by its middle to ``y`` -- for a short end, to
+    where the window beyond it is SHORT high, the splitter's own half besides -- until
+    that end is short, or not; dragged again, as a hand drags again, when a drag did
+    not take."""
+    for attempt in range(3):
+        b = splitter.bounding_box()
+        x, half = b["x"] + b["width"] / 2, b["height"] / 2
+        to = y if not short else (y + half if end == 0 else y - half)
+        windows.drag(page, splitter, (x, to))
+        try:
+            page.wait_for_function(END_SHORT, arg=[end, short], timeout=5000)
+            return
+        except PlaywrightTimeoutError:
+            if attempt == 2:
+                raise
+
+
+def _clear_of_the_splitters(page: Page) -> None:
+    """The pointer off the splitter it let go of, which it would light up in a picture:
+    onto the far end of the status line, where it lights up nothing."""
+    b = page.locator("#status").bounding_box()
+    page.mouse.move(b["x"] + b["width"] - 8, b["y"] + b["height"] / 2)

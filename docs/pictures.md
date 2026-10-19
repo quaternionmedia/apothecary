@@ -22,7 +22,7 @@ Each is checked to be a picture by its first bytes, not its name. Those are the
 *kept* pictures: a page may forget them. The folder's own pictures are never
 deleted from a page.
 
-The Pictures tab of the rail lists every picture under the root, the folder's
+The Pictures tab, below Site and Selected, lists every picture under the root, the folder's
 and the kept ones, newest first. A row chosen there is what the ring's
 Picture › Folder pins.
 

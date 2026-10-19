@@ -14,6 +14,7 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
+import windows
 from playwright.sync_api import expect
 from test_picture_in_the_world import HIGH, NAME, SHAPES, WIDE, _open_garage, _picture, _pin
 from test_the_loop import _labels, _press, _ring_on, _said
@@ -65,8 +66,8 @@ def bench(base_url, start_server, tmp_path_factory):
 
 @pytest.mark.e2e
 def test_a_made_piece_s_print_cell_opens_its_printer_s_machine_with_it_chosen(page, bench):
-    """A made piece's ring, Print: printer_1's Machine in the rail with the piece chosen
-    under Print from here's makes, and the status line naming the next step."""
+    """A made piece's ring, Print: printer_1's Machine, a tab beside Pictures, with the
+    piece chosen under Print from here's makes, and the status line naming the next step."""
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     view = _pin(page, bench.url, "workbench", bench.picture, mm_across=1800)
@@ -83,6 +84,8 @@ def test_a_made_piece_s_print_cell_opens_its_printer_s_machine_with_it_chosen(pa
     )
     machine = page.locator(MACHINE)
     expect(machine).to_be_visible(timeout=5000)
-    expect(machine.locator(".panel-name")).to_contain_text(f"printer_1 · {PRINTER}")
+    # Its tab names the printer; its whole title, the tab's tooltip, the port too.
+    expect(windows.tab(page, "machine").locator(".lm_title")).to_have_text("printer_1")
+    expect(windows.tab(page, "machine")).to_have_attribute("title", f"printer_1 · {PRINTER}")
     expect(machine.locator("#print-part")).to_have_value(piece, timeout=10000)
     assert errors == []

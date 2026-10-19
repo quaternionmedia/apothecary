@@ -9,9 +9,8 @@ don't depend on whatever a previous test left behind in the process-lifetime
 SiteStore (see apothecary/site_store.py).
 """
 
-import re
-
 import pytest
+import windows
 from playwright.sync_api import Page, expect
 from viewer_ready import UNDER_THE_STAGE_BAR, by_hand
 
@@ -106,14 +105,16 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     x_input.press("Tab")
     expect(page.locator("#validity-indicator")).to_contain_text("violation")
     page.locator("#validity-indicator").click()
+    expect(windows.panel(page, "problems")).to_be_visible()
+    expect(windows.tab(page, "problems")).to_contain_text("Problems · ")
     expect(page.locator("#problem-list li")).to_contain_text("printer_1 and footpedal overlap")
     by_hand(page, "printer_1", distance=1600)
     docs.step(
-        "Select printer_1 at the root and move it onto the footpedal -- caught: Site's "
-        "folded line says how many problems there are, and a click on the header's count "
-        "opens the fold, which names the pair; both pieces are red in Site's tree, printer_1 "
-        "here near its top, and in the world, brought closer by hand (Shift+drag, the "
-        "wheel), where the two stand in each other"
+        "Select printer_1 at the root and move it onto the footpedal -- caught: the "
+        "header's count says how many problems there are, as Problems' tab beside Site "
+        "does, and a click on the count brings Problems in front, which names the pair; "
+        "both pieces are red in the world, brought closer by hand (Shift+drag, the "
+        "wheel), where the two stand in each other, and in Site's tree, a tab away"
     )
 
     x_input.fill("100")
@@ -121,24 +122,32 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     expect(page.locator("#validity-indicator")).to_contain_text("valid")
     docs.step("Move it back -- the layout is valid again")
 
-    page.locator(".panel-rail .rail-tab[data-panel='pictures'] .rail-tab-name").click()
-    page.locator(".panel-rail .rail-tab[data-panel='pictures'] .rail-tab-float").click()
-    page.locator(".panel[data-panel='selected'] .panel-close").click()
-    expect(page.locator(".panel-free-layer .panel[data-panel='pictures']")).to_be_visible()
-    docs.step(
-        "Panels stand in front of the world, in one rail beside it -- Site and Selected "
-        "stacked, the other panels tabs of a strip below them: each closes to a tab, "
-        "collapses, floats free and drags, and docks back; the ring's Panels cell reaches "
-        "every one by address. The rail never takes more than half the page, and what you "
-        "did to the panels is remembered"
+    # Site's tree in front again; Pictures' tab dragged onto the world's left edge: a
+    # window of its own there, the Bench in front of the tabs it left.
+    windows.show(page, "site")
+    wb = page.locator(windows.WORLD).bounding_box()
+    windows.drag(page, windows.tab(page, "pictures"), (wb["x"] + 30, wb["y"] + wb["height"] / 2))
+    page.wait_for_function(
+        "() => document.querySelector(\".panel[data-panel='pictures']\").getBoundingClientRect().x < 2"
     )
-    page.locator(".panel-free-layer .panel[data-panel='pictures'] .panel-float").click()
-    page.locator(".panel-tab[data-panel='selected']").click()
-    # Pictures, docked again, is folded away to its tab, so the rail is as it was.
-    pictures_tab = page.locator(".panel-rail .rail-tab[data-panel='pictures']")
-    pictures_tab.locator(".rail-tab-name").click()
-    expect(page.locator(".panel[data-panel='pictures']")).to_be_hidden()
-    expect(pictures_tab).not_to_have_class(re.compile(r"\bactive\b"))
+    assert windows.state(page, "pictures")["stack"] == ["pictures"]
+    expect(windows.tab(page, "pictures")).to_be_visible()
+    expect(windows.panel(page, "bench")).to_be_visible()
+    expect(windows.panel(page, "site")).to_be_visible()
+    expect(windows.panel(page, "selected")).to_be_visible()
+    docs.step(
+        "The world and the panels are windows of one layout -- Site and Selected beside the "
+        "world, Site's own Problems, Pinned, Jobs and SCAD tabs beside Site, Pictures, the "
+        "Bench and Settings tabs below them. Any window is dragged by its tab anywhere, "
+        "split beside another, maximised or closed, as Pictures is dragged here onto the "
+        "world's left edge; the ring's Panels cell reaches each by address, and the tilde "
+        "shows the world alone. What is made of the layout is remembered in this browser, "
+        "and Panels › Windows › Reset layout puts it back"
+    )
+    # The page's own layout again, for the steps that follow.
+    page.evaluate("() => window.apothecaryPanels.reset()")
+    assert windows.state(page, "pictures")["stack"] == ["pictures", "bench", "settings"]
+    expect(windows.panel(page, "pictures")).to_be_visible()
 
     page.goto(f"{base_url}/viewer/sites/parts_library")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)

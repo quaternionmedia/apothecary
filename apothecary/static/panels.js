@@ -11,7 +11,8 @@
  * stack of its own in the column beside the world (Site, Selected); "tabs", the
  * stack where the other tabbed panels are (Pictures, the Bench, Settings, a
  * Machine); "beside", a stack of its own next to the world (the control pad, the
- * SCAD editor out of Selected). A `loud` panel's tab and frame say so (the armed
+ * SCAD editor out of Selected); or another panel's id, a tab beside it (Problems,
+ * Pinned, Jobs and SCAD beside Site). A `loud` panel's tab and frame say so (the armed
  * control pad). The world's stack maximised is the world alone (the tilde, and
  * the ring's Panels › World); again, everything back.
  *
@@ -30,30 +31,43 @@ import { mayAct } from "./keys.js";
 
 const TILDE_KEYS = new Set(["`", "~"]);
 const WORLD = "world";
-// Made for the moment: never remembered, so a reload does not bring back an empty one.
-const TRANSIENT = new Set(["machine", "control", "scad-editor"]);
+// Made for the moment -- a Machine, the pad, the editor out of Selected, a rig's
+// Lighting -- never remembered, so a reload does not bring back an empty one.
+const TRANSIENT = new Set(["machine", "control", "scad-editor", "lighting"]);
 const HOMES = new Set(["column", "tabs", "beside"]);
 // A window opened beside the world takes this share of the world's row (per cent).
 const BESIDE = 28;
 
 const DEFAULT_LAYOUT = {
     settings: { showPopoutIcon: false, constrainDragToContainer: true, reorderEnabled: true },
+    // A stack's own ✕ is hidden by the page's CSS, not turned off here: turned off, no
+    // window alone in its stack could be closed by its tab's ✕ either.
     header: { popout: false, maximise: "Maximise", minimise: "Restore", close: "Close", tabDropdown: "More tabs" },
-    dimensions: { borderWidth: 6, headerHeight: 26, minItemWidth: 160, minItemHeight: 80 },
+    // The least a window is dragged down to: its tab and a sliver of it, never nothing.
+    dimensions: { borderWidth: 6, headerHeight: 26, defaultMinItemWidth: "160px", defaultMinItemHeight: "40px" },
     root: {
         type: "row",
         content: [
             {
-                type: "stack", width: 70, header: { show: false },
+                type: "stack", width: 68, header: { show: false },
                 content: [{ type: "component", componentType: WORLD, id: WORLD, title: "World", isClosable: false }],
             },
             {
-                type: "column", width: 30,
+                type: "column", width: 32,
                 content: [
-                    { type: "stack", height: 42, content: [{ type: "component", componentType: "site", id: "site", title: "Site" }] },
-                    { type: "stack", height: 34, content: [{ type: "component", componentType: "selected", id: "selected", title: "Selected" }] },
                     {
-                        type: "stack", height: 24,
+                        type: "stack", height: 32,
+                        content: [
+                            { type: "component", componentType: "site", id: "site", title: "Site" },
+                            { type: "component", componentType: "problems", id: "problems", title: "Problems" },
+                            { type: "component", componentType: "pinned", id: "pinned", title: "Pinned" },
+                            { type: "component", componentType: "jobs", id: "jobs", title: "Jobs" },
+                            { type: "component", componentType: "scad", id: "scad", title: "SCAD" },
+                        ],
+                    },
+                    { type: "stack", height: 42, content: [{ type: "component", componentType: "selected", id: "selected", title: "Selected" }] },
+                    {
+                        type: "stack", height: 26,
                         content: [
                             { type: "component", componentType: "pictures", id: "pictures", title: "Pictures" },
                             { type: "component", componentType: "bench", id: "bench", title: "Bench" },
@@ -90,7 +104,10 @@ function kept(config, known) {
 
 export function mountPanels({ host, world, storageKey = "apothecary.layout", known = [] } = {}) {
     const records = new Map();  // id -> the panel: its element, its body, its callbacks
-    const knownTypes = new Set([WORLD, "site", "selected", "pictures", "bench", "settings", ...TRANSIENT, ...known]);
+    const knownTypes = new Set([
+        WORLD, "site", "problems", "pinned", "jobs", "scad", "selected", "pictures", "gather", "bench", "settings",
+        ...TRANSIENT, ...known,
+    ]);
     const layout = new GoldenLayout(host);
     // The host is the page's main row, not the body: its size follows the window, the
     // demo's banner and the status line, and the layout follows it.
@@ -107,7 +124,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         const slot = document.createElement("div");
         slot.className = "panel-body-slot";
         el.append(pinned, slot);
-        r = { id, title: id, tab: null, home: null, loud: false, el, slot, mount: null, filled: true, open: false,
+        r = { id, title: id, tab: null, hint: null, flag: null, home: null, loud: false, el, slot, mount: null, filled: true, open: false,
               registered: false, container: null, onClose: null, onOpen: null, onDock: null, releasing: false };
         records.set(id, r);
         return r;
@@ -126,11 +143,17 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         r.open = true;
         container.element.classList.add("panel-window");
         container.element.appendChild(r.el);
+        // A tab says whose it is, and double-clicked maximises its stack (again, restores).
         const markTab = (tab) => {
             if (!tab || !tab.element) return;
             tab.element.dataset.panel = id;
             tab.element.classList.toggle("loud", r.loud);
-            tab.element.title = r.title;
+            if (r.flag) tab.element.classList.add(r.flag);
+            tab.element.title = r.hint || r.title;
+            if (!tab.element.dataset.maximises) {
+                tab.element.dataset.maximises = "dblclick";
+                tab.element.addEventListener("dblclick", () => tab.contentItem?.parentItem?.toggleMaximise());
+            }
         };
         markTab(container.tab);
         container.on("tab", markTab);
@@ -154,30 +177,54 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
 
     let remembered = null;
     try { remembered = JSON.parse(localStorage.getItem(storageKey) || "null"); } catch (e) { remembered = null; }
+    // What the rail this layout replaced remembered: nothing reads it any more.
+    try { localStorage.removeItem("apothecary.panels"); } catch (e) { /* blocked storage */ }
     const start = (remembered && kept(remembered, knownTypes)) || null;
+    // Laid out from what this browser remembered: a panel it left out was closed, and
+    // stays closed when the page registers it, until it is opened -- unless the page
+    // had no such panel when the layout was remembered (`panels`), which opens at home.
+    let fromMemory = !!start;
+    const rememberedPanels = new Set((start && Array.isArray(start.panels)) ? start.panels : []);
     try {
         layout.loadLayout(start ? LayoutConfig.fromResolved(start) : DEFAULT_LAYOUT);
     } catch (e) {
         console.warn("The remembered layout could not be read; the page's own is laid out instead.", e);
         layout.loadLayout(DEFAULT_LAYOUT);
+        fromMemory = false;
     }
 
+    // Remembered a moment after a change, so a drag is saved once; and at once when
+    // the page goes, so a window closed just before a reload stays closed.
     let saving = null;
-    function remember() {
-        if (saving) return;
-        saving = setTimeout(() => {
-            saving = null;
-            try {
-                const resolved = layout.saveLayout();
-                const out = kept(JSON.parse(JSON.stringify(resolved)), knownTypes);
-                if (out) localStorage.setItem(storageKey, JSON.stringify(out));
-            } catch (e) { /* private window, blocked storage: the layout still works */ }
-        }, 200);
+    function save() {
+        saving = null;
+        try {
+            const resolved = layout.saveLayout();
+            const out = kept(JSON.parse(JSON.stringify(resolved)), knownTypes);
+            if (out) {
+                out.panels = [...records.values()].filter((r) => r.registered && !TRANSIENT.has(r.id)).map((r) => r.id);
+                localStorage.setItem(storageKey, JSON.stringify(out));
+            }
+        } catch (e) { /* private window, blocked storage: the layout still works */ }
     }
+    function remember() {
+        if (!saving) saving = setTimeout(save, 200);
+    }
+    const flush = () => { if (saving) { clearTimeout(saving); save(); } };
     layout.on("stateChanged", remember);
+    window.addEventListener("pagehide", flush);
 
     const item = (id) => layout.findFirstComponentItemById(id);
     const worldStack = () => item(WORLD)?.parentItem || null;
+    // A window dropped on the world's left, right, top or bottom is a stack of its own
+    // made with the world's stack's header -- hidden -- and would have no tab to drag,
+    // close or find it by. The world's stack hands new stacks the layout's own header.
+    function tabsForDrops() {
+        const ws = worldStack();
+        if (ws && !ws.apothecaryDrops) { ws.apothecaryDrops = true; ws.createHeaderConfig = () => undefined; }
+    }
+    tabsForDrops();
+    layout.on("stateChanged", tabsForDrops);
     const isWorldAlone = () => !!worldStack()?.isMaximised;
 
     // Where a panel opens when it is not in the layout: its home. Added to a stack of
@@ -186,10 +233,12 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
     function addAt(r, front = true) {
         const config = { type: "component", componentType: r.id, id: r.id, title: r.tab || r.title };
         const tabbed = [...records.values()].filter((o) => o.id !== r.id && o.registered && o.home === "tabs" && item(o.id));
-        if (r.home === "tabs" && tabbed.length) {
-            const stack = item(tabbed[0].id).parentItem;
+        const beside = !HOMES.has(r.home) && r.home !== r.id ? item(r.home) : null;
+        if ((r.home === "tabs" && tabbed.length) || beside) {
+            const stack = (beside || item(tabbed[0].id)).parentItem;
             const before = stack.getActiveComponentItem();
-            stack.addItem(config);
+            // Beside its home panel, else after the stack's last tab.
+            stack.addItem(config, beside ? stack.contentItems.indexOf(beside) + 1 : undefined);
             if (!front && before) stack.setActiveComponentItem(before, false);
             return;
         }
@@ -256,25 +305,31 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         layout,
         /* Register a panel. `body` is an element the panel adopts or a function given
          * the slot to fill the first time the panel is in front of a person. `title`
-         * is its tab; `home` where it opens ("column", "tabs", "beside"); `open`
+         * is its tab, `hint` its tab's tooltip (else the title); `home` where it opens
+         * ("column", "tabs", "beside", or another panel's id: a tab beside it); `open`
          * whether it opens now when the layout does not hold it; `loud` a panel whose
          * tab and frame say it must be seen. `onClose` is called when it is closed;
          * `onOpen` when its filled body is in front of a person again; `onDock`, for a
          * panel that is a part of another one popped out of it (the SCAD editor),
          * is what docking it does. */
-        register(id, { title, tab = null, body, home = "tabs", open = true, loud = false, onClose = null, onOpen = null, onDock = null } = {}) {
+        register(id, { title, tab = null, hint = null, body, home = "tabs", open = true, loud = false, onClose = null, onOpen = null, onDock = null } = {}) {
             if (!knownTypes.has(id)) { knownTypes.add(id); layout.registerComponentFactoryFunction(id, factory); }
             const r = record(id);
-            r.title = title || id; r.tab = tab; r.home = HOMES.has(home) ? home : "tabs"; r.loud = !!loud;
+            r.title = title || id; r.tab = tab; r.hint = hint; r.loud = !!loud;
+            r.home = HOMES.has(home) || (typeof home === "string" && home && home !== id) ? home : "tabs";
             r.onClose = onClose; r.onOpen = onOpen; r.onDock = onDock; r.registered = true;
-            if (typeof body === "function") { r.mount = body; r.filled = false; } else if (body) { r.slot.appendChild(body); }
+            if (typeof body === "function") { r.mount = body; r.filled = false; } else if (body) {
+                r.slot.appendChild(body);
+                // Already in front of a person: told now, as a tab pressed would tell it.
+                if (r.onOpen && r.container?.visible) queueMicrotask(() => { if (r.container?.visible && r.onOpen) r.onOpen(); });
+            }
             const ci = item(id);
             if (ci) {
                 ci.setTitle(r.tab || r.title);
-                r.container?.tab && (r.container.tab.element.title = r.title);
+                r.container?.tab && (r.container.tab.element.title = r.hint || r.title);
                 r.container?.element.classList.toggle("loud", r.loud);
                 if (r.container?.visible && r.mount) { const mount = r.mount; r.mount = null; mount(r.slot); r.filled = true; }
-            } else if (open) {
+            } else if (open && (!fromMemory || TRANSIENT.has(id) || !rememberedPanels.has(id))) {
                 addAt(r, false);
             }
             return r.el;
@@ -302,6 +357,20 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             const ci = item(id);
             if (!ci) return false;
             ci.remove();
+            return true;
+        },
+        /* A panel's tab says something new -- a count -- and wears `flag` as a class
+         * while it is given (Problems' count, red). */
+        retitle(id, title, { flag = null } = {}) {
+            const r = records.get(id);
+            if (!r) return false;
+            r.title = title;
+            const element = r.container?.tab?.element;
+            if (element && r.flag) element.classList.remove(r.flag);
+            r.flag = flag;
+            const ci = item(id);
+            if (ci) ci.setTitle(r.tab || title);
+            if (element) { if (flag) element.classList.add(flag); element.title = r.hint || title; }
             return true;
         },
         /* The panel's frame pulses, for a loud one that has just opened. */
@@ -349,8 +418,10 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         list() { return [WORLD, ...records.keys()].map((id) => this.state(id)); },
         /* The page's own layout again, whatever a person made of it. */
         reset() {
+            fromMemory = false;
             for (const r of records.values()) r.releasing = true;
             layout.loadLayout(DEFAULT_LAYOUT);
+            tabsForDrops();
             for (const r of records.values()) {
                 r.releasing = false;
                 if (TRANSIENT.has(r.id) && r.registered) addAt(r, false);
@@ -360,6 +431,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         },
         destroy() {
             window.removeEventListener("keydown", onKey);
+            window.removeEventListener("pagehide", flush);
             for (const r of records.values()) r.releasing = true;
             layout.destroy();
         },

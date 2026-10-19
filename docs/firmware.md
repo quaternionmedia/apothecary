@@ -390,8 +390,9 @@ differently after a replug. A pin by a path that resolves to the same device
 
 A pinned board has one surface in the viewer, its **Machine**
 (`apothecary/static/widgets/machine.js`), opened from the board's badge as a
-tab of the rail's strip beside Pictures and the Bench; it floats over the
-world only when floated from its tab. A printer's Machine holds its
+tab beside Pictures and the Bench, in front; dragged by its tab anywhere in the
+layout, it opens there again until the page's own layout is put back
+([viewer.md](viewer.md#the-windows)). A printer's Machine holds its
 state cards, temperature chart, link verbs, the control latch and pad, the bed
 reading and the print from here; a devkit's holds its port and board, the
 sketch it should run against the sketch it was heard saying (its
@@ -434,7 +435,7 @@ so a replugged board is found without a reload; it never scans on a timer.
 `/firmware/monitor?port=…` opens the viewer on the site the port is pinned
 in with the Machine of the piece it is pinned to open, or, for a port
 pinned nowhere, on the default site with its Machine open; either way the
-Machine is a tab of the rail's strip, as every Machine is. The address
+Machine is a tab beside Pictures, as every Machine is. The address
 carries `?machine=` while a Machine is open, so a reload opens it again. `apothecary docs generate` writes all of it step by
 step against the simulated printer into
 [`generated/printer-monitor/printer-monitor.md`](generated/printer-monitor/printer-monitor.md);
@@ -467,12 +468,13 @@ accepted command renews it) and is dropped by a **Release** or a lost link.
 it is reset.
 
 Armed, the Machine's control pad -- heaters, motion, the SD print, leveling --
-pops out over the world's corner by the rail, bordered and headed with the
-printer it heats and moves and the time left, and stays there whatever tab
-the rail shows: a real machine is armed. Every arming pops it out, from the
-Machine, the ring or another browser. Its **⇥** puts it back as the last
-thing in the Machine's column; its **⧉** pops it out again, and the ring's
-Panels › Control pad does either. Disarmed, it goes.
+pops out into a loud window of its own beside the world: its tab and frame red,
+headed with the printer it heats and moves and the time left, there whatever
+tab is in front: a real machine is armed. Every arming pops it out, from the
+Machine, the ring or another browser. Its **⇥ Put back**, or its window's ✕,
+puts it back as the last thing in the Machine's column; its **⧉ Pop out** pops
+it out again, and the ring's Panels › Control pad does either. Disarmed, it
+goes.
 
 What can be sent is a bounded allowlist, `firmware.gcode.CONTROL_CODES`
 (heaters and fan, homing, moves, motors off, SD start, pause and abort, mesh

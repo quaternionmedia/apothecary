@@ -10,6 +10,7 @@ import re
 
 import httpx
 import pytest
+import windows
 from playwright.sync_api import Page, expect
 from viewer_ready import settled
 
@@ -247,8 +248,8 @@ def _unpin(page: Page, url: str) -> None:
 
 
 def _close(page: Page, url: str) -> None:
-    # In the rail, its tab's ✕.
-    page.locator(".panel-rail .rail-tab[data-panel='machine'] .rail-tab-close").click()
+    # Its tab's ✕.
+    windows.close(page, "machine")
 
 
 @pytest.mark.e2e

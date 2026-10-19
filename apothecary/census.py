@@ -903,15 +903,10 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "taking back what a row of Pinned names -- a camera, a view, a board's pin -- "
         "whatever site it is in",
     ),
-    "pinnedEl:toggle:pinnedOpened": (
-        LIST,
-        WHAT_YOU_SEE,
-        "unfolding Site's Pinned, which lists every site's pins again",
-    ),
     "li:click:goToProblem": (
         LIST,
         WHAT_YOU_SEE,
-        "a problem's row in Site's fold of problems, selecting its piece at its level",
+        "a problem's row in Problems, selecting its piece at its level",
     ),
     "siteJobsListEl:click:closest": (
         LIST,
@@ -923,7 +918,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "validityEl:click:openProblems": (
         WIDGET,
         WHAT_YOU_SEE,
-        "the header's count of problems, unfolding them in Site",
+        "the header's count of problems, bringing Problems in front",
     ),
     "li:dblclick:stepIn": (LIST, WHAT_YOU_SEE, "stepping into a piece from the list"),
     "rootCrumb:click:goUpTo": (LIST, WHAT_YOU_SEE, "the top of the trail"),

@@ -9,7 +9,7 @@ opening, the notes under it and the list of what the page does not show
 are the test's fixed words. Editing the page by hand is editing the output
 of a program: the next run puts it back.
 
-A part's SCAD edited in the page: the editor where its source stood in Selected, a failing line checked once typing stops and marked where it is, a change rendered soon after its check passes and drawn as an applied variant, kept as a variant in git and listed with what it changes, the editor floated and made fullscreen; then round again, and the first variant drawn once more; then the name a save keeps, OpenSCAD's own keys, a draft kept over a reload and the editor's undo kept while another part is edited. Every step is the page's own: a cell of a ring, a key or a button, and every step's words name the next one.
+A part's SCAD edited in the page: the editor where its source stood in Selected, a failing line checked once typing stops and marked where it is, a change rendered soon after its check passes and drawn as an applied variant, kept as a variant in git and listed with what it changes, the editor popped out into a window of its own beside the world and made fullscreen; then round again, and the first variant drawn once more; then the name a save keeps, OpenSCAD's own keys, a draft kept over a reload and the editor's undo kept while another part is edited. Every step is the page's own: a cell of a ring, a key or a button, and every step's words name the next one.
 
 **Runtime-bound.** It drives a real browser against a real server of its own, with the OpenSCAD every test server runs and a temporary cache of variants. A variant is saved into a clone of the checkout the server was given, never the checkout's own refs, which the run checks are as it found them. It needs no network, and refuses one.
 
@@ -19,13 +19,13 @@ Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its ser
 
 ## 1. Part › Edit opens the SCAD where its source stood
 
-calibration_cube's ring, Part › Edit: its parameters in Selected and, below them and the short list of its saved variants (none yet), its SCAD in an editor -- Site folded to its title by its ▾ here, so Selected has the rail. Typing in it is the next step.
+calibration_cube's ring, Part › Edit: its parameters in Selected and, below them and the short list of its saved variants (none yet), its SCAD in an editor -- Site's window and the tabs under Selected dragged short by their splitters here, so Selected has the column. Typing in it is the next step.
 
 ![Part › Edit opens the SCAD where its source stood](screenshots/06-01-part-edit-opens-the-scad-where-its-source-stood.png)
 
 ## 2. A failing line is checked once typing stops, and marked where it is
 
-An assertion typed at the end that this part fails. One check, once typing stops: OpenSCAD evaluates the edited SCAD beside the part and renders nothing, and its error is marked on line 125, listed under the stage bar and said above the code -- Site folded to its title by its ▾ here, so Selected has the rail. Nothing is rendered while it does not read; changing the line is the next step.
+An assertion typed at the end that this part fails. One check, once typing stops: OpenSCAD evaluates the edited SCAD beside the part and renders nothing, and its error is marked on line 125, listed under the stage bar and said above the code -- Site's window and the tabs under Selected dragged short by their splitters here, so Selected has the column. Nothing is rendered while it does not read; changing the line is the next step.
 
 ![A failing line is checked once typing stops, and marked where it is](screenshots/06-02-a-failing-line-is-checked-once-typing-stops-and-ma.png)
 
@@ -41,7 +41,7 @@ calibration_cube regenerated from its edited SCAD: an applied variant, not saved
 
 ## 4. Part › Save keeps it as a variant in git
 
-calibration_cube's ring, Part › Save: the edited SCAD, its values in it, committed to refs/apothecary/variants/calibration_cube/variant-1, the name the editor offered. Nothing in the checkout changes; a merge would bring it, its values with it, and merging is yours to do. It is listed under the part's parameters and, in the editor, with what it changes against the part's SCAD and that HEAD does not hold it. Floating the editor is the next step.
+calibration_cube's ring, Part › Save: the edited SCAD, its values in it, committed to refs/apothecary/variants/calibration_cube/variant-1, the name the editor offered. Nothing in the checkout changes; a merge would bring it, its values with it, and merging is yours to do. It is listed under the part's parameters and, in the editor, with what it changes against the part's SCAD and that HEAD does not hold it. Popping the editor out is the next step.
 
 ![Part › Save keeps it as a variant in git](screenshots/06-04-part-save-keeps-it-as-a-variant-in-git.png)
 
@@ -49,11 +49,11 @@ calibration_cube's ring, Part › Save: the edited SCAD, its values in it, commi
 calibration_cube saved as the variant variant-1, a commit on refs/apothecary/variants/calibration_cube/variant-1; nothing in the checkout changed. The ref is in <the test server's variants repository>, not this checkout: `git fetch <the test server's variants repository> refs/apothecary/variants/calibration_cube/variant-1:refs/apothecary/variants/calibration_cube/variant-1` there brings it, then `git merge refs/apothecary/variants/calibration_cube/variant-1` makes the variant's SCAD the part's, its values with it: they are its assignments, so the part is drawn with them. (⌗39)
 ```
 
-## 5. Part › View › Float puts the editor over the world
+## 5. Part › View › Pop out puts the editor in a window of its own
 
-Part › View › Float: the editor out of Selected, a panel of its own over the world, clear of the header, the hint bar, the depth ladder and the closed panels' tabs; where it stood, Selected says where it is. Its Fullscreen is the next step.
+Part › View › Pop out: the editor out of Selected, a window of its own beside the world, as tall as the world and clear of it, its tab naming the part; where it stood, Selected says where it is. Its Fullscreen is the next step.
 
-![Part › View › Float puts the editor over the world](screenshots/06-05-part-view-float-puts-the-editor-over-the-world.png)
+![Part › View › Pop out puts the editor in a window of its own](screenshots/06-05-part-view-pop-out-puts-the-editor-in-a-window-of-i.png)
 
 ## 6. Fullscreen covers the page
 
@@ -63,7 +63,7 @@ Its Fullscreen button: the editor over the whole page, the code as tall as it ca
 
 ## 7. Round two: a name, a change and Save
 
-In the floated editor: a name typed, taller, and the top made as big as the cube, rendered once it reads, 20 mm tall; then Ctrl+S in the editor, OpenSCAD's key, which saves as its Save does. Both variants are listed, newest first. Drawing the first again is the next step.
+In the popped-out editor: a name typed, taller, and the top made as big as the cube, rendered once it reads, 20 mm tall; then Ctrl+S in the editor, OpenSCAD's key, which saves as its Save does. Both variants are listed, newest first. Drawing the first again is the next step.
 
 ![Round two: a name, a change and Save](screenshots/06-07-round-two-a-name-a-change-and-save.png)
 
@@ -71,11 +71,11 @@ In the floated editor: a name typed, taller, and the top made as big as the cube
 calibration_cube saved as the variant taller, a commit on refs/apothecary/variants/calibration_cube/taller; nothing in the checkout changed. The ref is in <the test server's variants repository>, not this checkout: `git fetch <the test server's variants repository> refs/apothecary/variants/calibration_cube/taller:refs/apothecary/variants/calibration_cube/taller` there brings it, then `git merge refs/apothecary/variants/calibration_cube/taller` makes the variant's SCAD the part's, its values with it: they are its assignments, so the part is drawn with them.
 ```
 
-## 8. Part › Variants draws the first again, and Part › View › Float docks it
+## 8. Part › Variants draws the first again, and Part › View › Pop out docks it
 
-calibration_cube's ring, Part › Variants › variant-1 › Draw: its SCAD back in the editor, its values in it and the controls on them, drawn, 15 mm tall again, the name it saves under its own. Part › View › Float again puts the editor back in Selected.
+calibration_cube's ring, Part › Variants › variant-1 › Draw: its SCAD back in the editor, its values in it and the controls on them, drawn, 15 mm tall again, the name it saves under its own. Part › View › Pop out again puts the editor back in Selected.
 
-![Part › Variants draws the first again, and Part › View › Float docks it](screenshots/06-08-part-variants-draws-the-first-again-and-part-view-.png)
+![Part › Variants draws the first again, and Part › View › Pop out docks it](screenshots/06-08-part-variants-draws-the-first-again-and-part-view-.png)
 
 ## 9. The name box lets go of a variant once the text moves on
 

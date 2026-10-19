@@ -7,7 +7,7 @@ the G-code chosen there; a print job for it started on printer_1; the job watche
 printer_1's Machine to its end. Then round again: the camera turned by its turn
 ring, a second picture taken with P, a second piece made and adjusted, sliced by
 Slice on its own ring this time, and a second print, started from the ring's Send
-file, while the Machine stays open in the rail. Every step
+file, while the Machine stays open, a tab beside Pictures. Every step
 is taken through the page's own controls and ring cells, and what is asserted is
 what a person sees: the status line, Site, the camera's section, the Machine's
 Print from here card and Site's Jobs. Each step's words name the next step.
@@ -39,6 +39,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+import windows
 from browsers import launch
 from doc_capture import TEMPERATURE, moments
 from playwright.sync_api import expect
@@ -71,7 +72,8 @@ def _kept(page, url: str, piece: str) -> dict:
     return {"record": record, **kept}
 
 
-# The widths the page is laid out for: the rail beside the world, and the narrower.
+# The widths the page is laid out for: the column of windows beside the world, and the
+# narrower.
 WIDTHS = ((1280, 800), (1024, 768))
 
 # Print from here, read as a person reads it: its blocks one under the other, the
@@ -424,7 +426,8 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     _said(page, "Opened printer_1")
     machine = page.locator(MACHINE)
     expect(machine).to_be_visible(timeout=5000)
-    expect(machine.locator(".panel-name")).to_contain_text(f"printer_1 · {PRINTER}")
+    expect(windows.tab(page, "machine")).to_have_attribute("title", f"printer_1 · {PRINTER}")
+    assert "pictures" in windows.state(page, "machine")["stack"]  # a tab beside Pictures
     expect(machine.locator("#c-state")).to_contain_text("idle", timeout=10000)
     makes = machine.locator("#print-part")
     expect(makes.locator(f"option[value='{disc}']")).to_be_attached(timeout=10000)
@@ -465,35 +468,36 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     expect(said.locator(".slice-settings")).to_contain_text("layer_height")
     expect(said.locator(".slice-settings")).to_contain_text("start")
     expect(machine.locator("#print-start")).to_be_enabled()
-    folding = page.locator(".panel[data-panel='selected'] .panel-collapse")
-    folding.click()
-    expect(page.locator(".panel[data-panel='selected']")).to_have_class(
-        re.compile(r"\bcollapsed\b")
-    )
+    # Maximised from its stack, to see the whole card.
+    maximise = page.locator(".lm_stack", has=machine).locator(".lm_maximise")
+    maximise.click()
+    expect(page.locator(".lm_stack.lm_maximised", has=machine)).to_be_visible(timeout=5000)
     machine.locator("#print-card").scroll_into_view_if_needed()
     story.shows(
         "Slice, in printer_1's Machine, slices the piece and chooses its G-code",
-        "printer_1's ring, Device › Open: its Machine in the rail, beside Selected. Print "
-        f"from here lists the pieces of the garage under makes; {disc} chosen, its Slice "
-        "slices it for printer_1, the slicer's log in the card while it runs. The G-code "
+        "printer_1's ring, Device › Open: its Machine a tab beside Pictures, below "
+        "Selected. Print from here lists the pieces of the garage under makes; "
+        f"{disc} chosen, its Slice slices it for printer_1, the slicer's log in the card "
+        "while it runs. The G-code "
         "it kept is chosen in the card's files, saying what it was sliced from and for "
         "which printer, and the card lists what the slice used -- each value from the "
         "printer's profile, a piece declaring none -- with the slicer's estimate. "
-        "Selected is folded to its title here, by its ▾, so Site and the Machine share "
-        "the rail.",
+        "The Machine is maximised here from its stack, so the whole card is seen.",
         shown=sliced_said,
         blank=CHANGING,
     )
-    folding.click()
-    expect(page.locator(".panel[data-panel='selected']")).not_to_have_class(
-        re.compile(r"\bcollapsed\b")
-    )
+    maximise.click()  # restored: the world beside it again
+    expect(page.locator(".lm_maximised")).to_have_count(0)
+    expect(machine).to_be_visible()
 
-    # 8. ⚙ Control armed, its pad popped out over the world; ▶ Print: asked first, naming
-    # the piece; a job begins.
+    # 8. ⚙ Control armed, its pad a loud window of its own beside the world; ▶ Print:
+    # asked first, naming the piece; a job begins.
     machine.locator("#ctl").check()
-    expect(page.locator("#control")).to_be_visible(timeout=5000)
+    pad = windows.panel(page, "control")
+    expect(pad.locator("#control")).to_be_visible(timeout=5000)
     expect(page.locator("#control")).to_have_class(re.compile(r"\bout\b"))
+    world = page.locator(windows.WORLD).bounding_box()
+    assert pad.bounding_box()["x"] >= world["x"] + world["width"] - 1  # on the world's right
     asked = []
     page.once("dialog", lambda d: (asked.append(d.message), d.accept()))
     machine.locator("#print-start").click()
@@ -513,10 +517,11 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     )
     story.says(
         "Print starts a job that names the piece",
-        "The Machine's ⚙ Control armed -- the latch a print needs, its pad popped out "
-        f"over the world -- Print from here's ▶ Print asks first, naming the file, the port and {disc}; "
-        "then the file streams, one line per ok, and the job is the newest of printer_1's "
-        "history, running. The status line names where it is followed.",
+        "The Machine's ⚙ Control armed -- the latch a print needs, its pad a loud window "
+        "of its own beside the world -- Print from here's ▶ Print asks first, naming the "
+        f"file, the port and {disc}; then the file streams, one line per ok, and the job "
+        "is the newest of printer_1's history, running. The status line names where it is "
+        "followed.",
         shown=f"{asked[0]}\n\n{started}",
     )
 
@@ -531,8 +536,7 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     _said(page, f"{disc}.gcode on {PRINTER}, making {disc}, ended: done, {lines}/{lines} lines")
     ended_said = _status(page).inner_text()
     expect(machine.locator("#c-state")).to_contain_text("idle", timeout=10000)
-    jobs = page.locator("#site-jobs")
-    jobs.locator("summary").click()
+    windows.show(page, "jobs")  # Site's Jobs, a tab beside Site
     rows = page.locator("#site-jobs-list li[data-job]")
     expect(rows.first).to_contain_text(f"printer_1 · print · {disc}.gcode → {disc} · done")
     # The job keeps the picture and the camera its piece came from; its row does not say them.
@@ -559,17 +563,19 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
             f"{ended_said}\n{_undated(progress.inner_text())}\n{_undated(rows.first.inner_text())}"
         ),
     )
+    windows.show(page, "site")  # Site's tree in front again, its rows to press
 
     # ---------------------------------------------------------------- round two
     # 10. The camera turned by its turn ring: half a turn, so its next picture lies
-    # the other way round on the bench.
+    # the other way round on the bench. Pressed an eighth of the way round, clear of the
+    # camera's 📷 badge, which stands over the ring where it starts.
     _row(page, camera).click()
     page.wait_for_function(
         "(n) => window.fractalViewer.cameraHandles?.userData.camera === n", arg=camera
     )
     settled(page)
     with page.expect_response(lambda r: r.url.endswith(f"/cameras/{camera}/pose")) as posed:
-        _drag(page, "turn", [0, -45, -90, -135, -180])
+        _drag(page, "turn", [-45, -90, -135, -180, -225])
     assert posed.value.ok
     _said(page, f"{camera} turned to")
     expect(_status(page)).to_contain_text("its next picture lands on workbench")
@@ -620,8 +626,8 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
         blank=CHANGING,
     )
 
-    # 14. The Machine stayed open in the rail, and makes lists the new piece without its
-    # being opened again; the piece's own ring's Print chooses it there.
+    # 14. The Machine stayed open, a tab beside Pictures, and makes lists the new piece
+    # without its being opened again; the piece's own ring's Print chooses it there.
     expect(machine).to_be_visible()
     expect(makes.locator(f"option[value='{plate}']")).to_be_attached(timeout=10000)
     expect(makes).to_have_value(disc)
@@ -688,6 +694,7 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     history = machine.locator("#print-history > div")
     expect(history.first).to_contain_text(f"print · {plate}.gcode → {plate} · done")
     expect(history.nth(1)).to_contain_text(f"print · {disc}.gcode → {disc} · done")
+    windows.show(page, "jobs")
     expect(rows).to_have_count(2, timeout=10000)
     expect(rows.first).to_contain_text(f"printer_1 · print · {plate}.gcode → {plate} · done")
     expect(rows.nth(1)).to_contain_text(f"printer_1 · print · {disc}.gcode → {disc} · done")
@@ -695,11 +702,11 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     assert (newest["part"]["path"], older["part"]["path"]) == (plate, disc)
     assert (newest["part"]["picture"], newest["part"]["camera"]) == (second["picture"], camera)
     machine.locator("#print-history").evaluate("(el) => el.scrollIntoView({ block: 'end' })")
-    jobs.scroll_into_view_if_needed()
-    expect(jobs.locator("summary")).to_contain_text("Jobs · 2")
+    expect(windows.tab(page, "jobs")).to_contain_text("Jobs · 2")
     story.shows(
         "Send file prints the second, and both jobs name their pieces",
-        "printer_1's ring, Device › Control › Arm, pops the pad out over the world again; "
+        "printer_1's ring, Device › Control › Arm, opens the pad's loud window beside the "
+        "world again; "
         f"Control › Print › Send file prints what the card has "
         f"chosen: {plate}, and the status line says when it ends. The Machine's history "
         "and Site's Jobs keep both jobs, newest first, each with the piece it made.",

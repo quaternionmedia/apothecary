@@ -503,6 +503,18 @@ export class RowOrColumn extends ContentItem {
         return totalMinSize;
     }
     /**
+     * The least size of an item beside a splitter. Patched for apothecary (see
+     * PATCHES.md): a stack's tabs lie over one another, so its least size is its
+     * largest tab's, not the sum of them all.
+     * @internal
+     */
+    calculateSplitItemMinSize(item) {
+        if (item.isStack) {
+            return Math.max(0, ...item.contentItems.map((contentItem) => this.calculateContentItemMinSize(contentItem)));
+        }
+        return this.calculateContentItemsTotalMinSize(item.contentItems);
+    }
+    /**
      * Invoked when a splitter's dragListener fires dragStart. Calculates the splitters
      * movement area once (so that it doesn't need calculating on every mousemove event)
      * @internal
@@ -511,8 +523,8 @@ export class RowOrColumn extends ContentItem {
         const items = this.getSplitItems(splitter);
         const beforeWidth = pixelsToNumber(items.before.element.style[this._dimension]);
         const afterSize = pixelsToNumber(items.after.element.style[this._dimension]);
-        const beforeMinSize = this.calculateContentItemsTotalMinSize(items.before.contentItems);
-        const afterMinSize = this.calculateContentItemsTotalMinSize(items.after.contentItems);
+        const beforeMinSize = this.calculateSplitItemMinSize(items.before);
+        const afterMinSize = this.calculateSplitItemMinSize(items.after);
         this._splitterPosition = 0;
         this._splitterMinPosition = -1 * (beforeWidth - beforeMinSize);
         this._splitterMaxPosition = afterSize - afterMinSize;

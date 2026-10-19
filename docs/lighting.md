@@ -3,7 +3,8 @@
 A site can carry a lighting rig: fixture types, a patch (channel, universe and
 address, position, orientation), and live levels from a console. The viewer draws
 each placed fixture in the colour its levels give it, with a beam, and lists the
-patches that have no position in a panel. `apothecary/lighting.py` is the model
+patches that have no position, with the console's own words, in its Lighting
+window, a tab beside Pictures while the site has a rig. `apothecary/lighting.py` is the model
 and is tied to no one theatre; `apothecary/theatre_site.py` is the example that
 uses it, the `theatre` site.
 

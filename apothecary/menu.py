@@ -657,16 +657,24 @@ def _bucket(names: Sequence[str]) -> List[Tuple[str, List[str]]]:
 # (cardinals first): what stands in front of the world, each a cell away.
 # The page registers exactly these; a test holds the two lists to each other.
 PANELS: Sequence[Tuple[str, str]] = (
-    # Site: the site's Contents tree, its problems in one fold, its generated
-    # SCAD, every site's pins (Pinned), each taken back from its row, and the
-    # site's jobs, each row opening its machine.
+    # Site: the site's chips and its Contents tree.
     ("site", "Site"),
     ("selected", "Selected"),
+    # Site's own windows, tabs beside Site, each a cell of Panels › Site: the site's
+    # problems (the header's count opens them), every site's pins (Pinned), each
+    # taken back from its row, the site's jobs, each row opening its machine, and
+    # its generated SCAD.
+    ("problems", "Problems"),
+    ("pinned", "Pinned"),
+    ("jobs", "Jobs"),
+    ("scad", "SCAD"),
     # Registered by the page's script rather than marked in its markup: Pictures
-    # (every picture under the picture root, each pinned here or forgotten, and
-    # the gathering) at start; a board's Machine, its log in it, when a board is
-    # opened.
+    # (every picture under the picture root, each pinned here or forgotten) and
+    # Gather (the gathering, a window beside it, closed until asked for), a ring of
+    # their own under Pictures' cell, at start; a board's Machine, its log in it,
+    # when a board is opened.
     ("pictures", "Pictures"),
+    ("gather", "Gather"),
     ("machine", "Machine"),
     # The Bench: the toolchain, the sketches, compile and upload, raw flash and
     # the task log, a tab beside Pictures, registered at start and shown when
@@ -679,18 +687,34 @@ PANELS: Sequence[Tuple[str, str]] = (
     ("settings", "Settings"),
 )
 # The panels seated before the windows' own cell (Panels › Windows, 49); a panel
-# registered after them is seated after it, so no address moves.
+# registered after them is seated after it, so no address moves. Site's cell is a
+# ring of Site and its own windows, and Pictures' a ring of Pictures and Gather.
 _BEFORE_WINDOWS = ("site", "selected", "pictures", "machine")
+_RINGS = {
+    "site": ("site", "problems", "pinned", "jobs", "scad"),
+    "pictures": ("pictures", "gather"),
+}
 
 
 def _panels() -> Option:
     def toggle(pid: str, label: str) -> Option:
         return Option(id=f"panel:{pid}", label=label, action=f"panel:toggle:{pid}")
 
+    labels = dict(PANELS)
+
+    def cell(pid: str, label: str) -> Option:
+        if pid not in _RINGS:
+            return toggle(pid, label)
+        return Option(
+            id=f"panels:{pid}",
+            label=label,
+            children=[toggle(each, labels[each]) for each in _RINGS[pid]],
+        )
+
     return Option(
         id="panels",
         label="Panels",
-        children=[toggle(pid, label) for pid, label in PANELS if pid in _BEFORE_WINDOWS]
+        children=[cell(pid, label) for pid, label in PANELS if pid in _BEFORE_WINDOWS]
         # The layout itself: the world alone (its window maximised) and every window
         # back, as the tilde key does; and the page's own layout again, whatever was
         # dragged, split or closed.

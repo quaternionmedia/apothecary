@@ -147,23 +147,33 @@
         .panel { background: #1e1e1e; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
         .panel-body-slot { padding: 0.75rem 1rem; overflow: auto; flex: 1 1 auto; min-height: 0; }
         /* The tabs, in the page's own type and colours. A name too long for its tab is
-           cut, never wrapped; the whole of it is the tab's tooltip. */
+           cut, never wrapped; the whole of it is the tab's tooltip. Only the tab in front
+           wears its ✕, so four tabs -- Pictures, the Bench, Settings and a Machine -- fit
+           the column at 1024 px; a stack too narrow for its tabs lists the rest under ▾. */
         .lm_header { background: #191919; }
         .lm_header .lm_tab {
-            font-family: inherit; font-size: 0.78rem; color: #999; background: #202020;
+            font-family: inherit; font-size: 0.76rem; color: #999; background: #202020;
             border-radius: 4px 4px 0 0; box-shadow: none; height: auto; line-height: 18px;
-            padding: 2px 24px 2px 9px; margin: 3px 2px 0 0;
+            padding: 2px 22px 2px 8px; margin: 3px 2px 0 0;
         }
         .lm_header .lm_tab .lm_title { max-width: 14em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .lm_header .lm_tab:hover { color: #eee; background: #262626; }
         .lm_header .lm_tab.lm_active { color: #eee; background: #1e1e1e; font-weight: 600; box-shadow: inset 0 2px 0 #4a4a4a; }
         .lm_header .lm_tab.lm_active.lm_focused { background-color: #1e1e1e; box-shadow: inset 0 2px 0 #6fb3e8; }
         .lm_header .lm_tab .lm_close_tab { top: 6px; }
+        .lm_header .lm_tab:not(.lm_active) { padding-right: 8px; }
+        /* A stack's own ✕ is not drawn: a window is closed by its tab's, and the room
+           goes to the tabs. */
+        .lm_header .lm_controls .lm_close { display: none; }
+        .lm_header .lm_tab:not(.lm_active) .lm_close_tab { display: none; }
         .lm_splitter { background: #141414; opacity: 1; }
         .lm_splitter:hover, .lm_splitter.lm_dragging { background: rgba(111, 179, 232, 0.45); }
         .lm_dropTargetIndicator { outline: 1px dashed #6fb3e8; box-shadow: inset 0 0 30px rgba(111, 179, 232, 0.25); }
         .lm_dragProxy .lm_content { box-shadow: 0 8px 28px rgba(0,0,0,0.55); opacity: var(--popover-opacity); }
         .lm_maximised .lm_header { background-color: #191919; }
+        /* A stack maximised -- the world alone, or a panel's ☐ -- is all there is: the
+           windows under it are hidden, not only covered, so nothing of them is reached. */
+        .lm_root:has(> .lm_maximised) > :not(.lm_maximised) { visibility: hidden; }
         /* A loud window: an armed printer's control pad -- a real machine that moves
            when it is pressed. Its tab is red and stays red, its frame glows, and
            as it opens it pulses (widgets/machine.js). */
@@ -238,7 +248,7 @@
         .camera-thumbs img.drawn { border-color: #ffcc66; }
         .camera-thumbs img.nowhere { opacity: 0.55; }
         .camera-thumbs .empty { grid-column: 1 / -1; color: #666; }
-        /* A section that folds away: Site's Pinned and SCAD, Pictures' gathering. */
+        /* A fold inside an editor: the part's recent applies, the variants' trash. */
         details.fold { border-top: 1px solid #2a2a2a; margin-top: 0.5rem; padding-top: 0.35rem; }
         details.fold > summary { cursor: pointer; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: #888; user-select: none; }
         details.fold > summary:hover { color: #ccc; }
@@ -383,17 +393,12 @@
         }
         .part-actions button:hover, .part-actions a:hover { background: #505050; }
 
-        /* Site: its problems once, as one folded line at its top, "N problems ›",
-           unfolded by itself or by the header's count, each row selecting its
-           piece; in the tree, a piece in a problem is red and its ancestors say so. */
-        details.fold.site-problems { margin: 0 0 0.5rem; padding: 0; border: 0; }
-        .site-problems[hidden] { display: none; }
-        details.fold.site-problems > summary {
-            list-style: none; color: #ff8080; font-size: 0.8rem; text-transform: none; letter-spacing: 0;
-        }
-        details.fold.site-problems > summary::-webkit-details-marker { display: none; }
-        .site-problems .fold-mark { display: inline-block; margin-left: 0.3em; transition: transform 0.15s; }
-        .site-problems[open] .fold-mark { transform: rotate(90deg); }
+        /* Problems: the site's problems, a tab beside Site, its count in its tab and
+           opened by the header's count, each row selecting its piece; in the tree, a
+           piece in a problem is red and its ancestors say so. */
+        .site-problems .empty-note { margin: 0; color: #8a9a8a; font-style: italic; font-size: 0.8rem; }
+        .site-problems .empty-note[hidden] { display: none; }
+        .lm_tab[data-panel="problems"].has-problems { color: #ff9d9d; }
         .problem-list { list-style: none; margin: 0; padding: 0; font-size: 0.8rem; }
         .problem-list li {
             padding: 0.35rem 0.5rem; margin-bottom: 0.25rem; border-radius: 4px;
@@ -404,8 +409,9 @@
         .contents-item .problem-mark { flex: 0 0 auto; font-size: 0.72rem; color: #ff6060; }
         .contents-item.invalid-inside .problem-mark { color: #b06060; }
         .validity-indicator { cursor: pointer; }
-        .site-scad .code-content { max-height: 320px; }
-        .site-jobs { list-style: none; margin: 0; padding: 0; font-size: 0.78rem; max-height: 220px; overflow: auto; }
+        /* SCAD and Jobs fill their windows: the window scrolls them. */
+        .site-scad .code-content { max-height: none; }
+        .site-jobs { list-style: none; margin: 0; padding: 0; font-size: 0.78rem; }
         .site-jobs li { padding: 0.25rem 0.45rem; margin-bottom: 0.15rem; border-radius: 4px; color: #ccc; cursor: pointer; }
         .site-jobs li:hover { background: #2f2f2f; }
         .site-jobs li.running { color: #ffcc66; background: #2e2716; }
@@ -664,7 +670,7 @@
             </details>
             <a id="docs-link" class="docs-link" href="/docs" target="_blank" rel="noopener" title="The documentation in a new tab: the guides, and the walkthrough, each of its pages a run of the tests (Panels › Docs on the ring)">Docs</a>
             <button type="button" id="ring-open" title="Open the ring for the chosen piece (m, or Ctrl+right-click a piece); Shift+M opens the canvas ring. Digits choose cells as on a numeric keypad; 5 backs out.">⌗ Ring</button>
-            <span id="validity-indicator" class="validity-indicator valid" title="The site's problems: click to unfold them in Site">Layout valid</span>
+            <span id="validity-indicator" class="validity-indicator valid" title="The site's problems: click to bring Problems, beside Site, in front">Layout valid</span>
         </div>
         <div class="main-content">
             <div class="viewer-panel">
@@ -676,25 +682,9 @@
                 <div class="panel-section" data-panel="site">
                     <div class="panel-header">Site</div>
                     <div class="panel-body">
-                        <details id="site-problems" class="fold site-problems" hidden>
-                            <summary title="The site's problems: unfold them (or press the header's count); each selects its piece"><span id="site-problems-count"></span><span class="fold-mark"> ›</span></summary>
-                            <ul id="problem-list" class="problem-list"></ul>
-                        </details>
                         <div id="category-filters" class="category-filters"
                              title="Expand every piece of a subsystem at once, at any depth beneath the current level, at the cost of render time"></div>
                         <ul id="contents-list" class="contents-list contents-tree"></ul>
-                        <details id="site-pinned" class="fold" title="Every camera a page added, and every view and board it pinned, every site's, each taken back from its row">
-                            <summary>Pinned · every site's</summary>
-                            <div id="site-pinned-body"></div>
-                        </details>
-                        <details id="site-jobs" class="fold" title="The jobs of this site's machines -- a print started from a pinned printer's Print card -- the running ones first, then the newest; a row selects its machine and opens it">
-                            <summary>Jobs<span id="site-jobs-count"></span></summary>
-                            <ul id="site-jobs-list" class="site-jobs"></ul>
-                        </details>
-                        <details id="site-scad" class="fold site-scad" title="The site as OpenSCAD, generated from its tree">
-                            <summary>SCAD</summary>
-                            <div id="code-content" class="code-content">Load a site to see its generated OpenSCAD</div>
-                        </details>
                     </div>
                 </div>
                 <div class="panel-section" data-panel="selected">
@@ -702,6 +692,26 @@
                     <div class="panel-body" id="selected-body">
                         <div class="no-selection">Click a piece to select it</div>
                     </div>
+                </div>
+                <!-- Site's own windows, tabs beside Site: each a window of its own. -->
+                <div class="panel-section" data-panel="problems" data-home="site" title="The site's problems (the header's count opens them); each row selects its piece">
+                    <div class="panel-header">Problems</div>
+                    <div class="panel-body site-problems">
+                        <p id="site-problems-none" class="empty-note">No problems: the layout is valid.</p>
+                        <ul id="problem-list" class="problem-list"></ul>
+                    </div>
+                </div>
+                <div class="panel-section" data-panel="pinned" data-home="site" title="Every camera a page added, and every view and board it pinned, every site's, each taken back from its row">
+                    <div class="panel-header">Pinned</div>
+                    <div class="panel-body" id="site-pinned-body"></div>
+                </div>
+                <div class="panel-section" data-panel="jobs" data-home="site" title="The jobs of this site's machines -- a print started from a pinned printer's Print card -- the running ones first, then the newest; a row selects its machine and opens it">
+                    <div class="panel-header">Jobs</div>
+                    <div class="panel-body"><ul id="site-jobs-list" class="site-jobs"></ul></div>
+                </div>
+                <div class="panel-section" data-panel="scad" data-home="site" title="The site as OpenSCAD, generated from its tree">
+                    <div class="panel-header">SCAD</div>
+                    <div class="panel-body site-scad"><div id="code-content" class="code-content">Load a site to see its generated OpenSCAD</div></div>
                 </div>
             </div>
         </div>
@@ -1112,13 +1122,10 @@
                 this.categoryFiltersEl = document.getElementById('category-filters');
                 this.contentsEl = document.getElementById('contents-list');
                 this.selectedBodyEl = document.getElementById('selected-body');
-                this.problemsEl = document.getElementById('site-problems');
-                this.problemsCountEl = document.getElementById('site-problems-count');
+                this.problemsNoneEl = document.getElementById('site-problems-none');
                 this.problemListEl = document.getElementById('problem-list');
                 this.validityEl = document.getElementById('validity-indicator');
                 this.codeContentEl = document.getElementById('code-content');
-                this.pinnedEl = document.getElementById('site-pinned');
-                this.siteJobsCountEl = document.getElementById('site-jobs-count');
                 this.siteJobsListEl = document.getElementById('site-jobs-list');
                 this.siteJobs = [];      // GET /jobs?site= for the loaded site: running first, then newest
                 this.siteJobsAt = 0;     // when they were last asked for
@@ -1321,17 +1328,24 @@
                 });
                 // The world and the page's sections are windows of one layout
                 // (panels.js): Site and Selected each a window in the column beside
-                // the world, the rest tabs below them; any dragged anywhere, split,
+                // the world, Site's own -- Problems, Pinned, Jobs, SCAD -- tabs beside
+                // Site, the rest tabs below them; any dragged anywhere, split,
                 // maximised or closed. What a person made of it is remembered per
                 // browser, and a remembered layout the page cannot read is ignored.
                 this.panels = mountPanels({
                     host: document.querySelector('.main-content'), world: this.canvas.parentElement,
                 });
+                // Pinned is mounted the first time it is in front of a person, and listed
+                // again each time it is in front again.
+                const onOpen = { pinned: () => this.pinnedOpened() };
                 for (const section of document.querySelectorAll('.side-panel [data-panel]')) {
-                    this.panels.register(section.dataset.panel, {
+                    const id = section.dataset.panel;
+                    this.panels.register(id, {
                         title: section.querySelector('.panel-header').textContent.trim(),
+                        hint: section.title || null,
                         body: section.querySelector('.panel-body'),
-                        home: 'column',
+                        home: section.dataset.home || 'column',
+                        onOpen: onOpen[id] || null,
                     });
                 }
                 document.querySelector('.side-panel')?.remove();
@@ -1347,8 +1361,15 @@
                 // camera's 📷 badge, its pyramid while it is selected or live, and its
                 // live video -- from one GET /sites/{s}/attached per site, asked again
                 // after anything that moves a host or a camera, or takes a picture.
-                // The lighting rig and the console's levels, when the site has a rig (lighting.js).
-                this.lighting = mountLighting({ scene: this.scene, base: BASE_URL });
+                // The lighting rig and the console's levels, when the site has a rig
+                // (lighting.js): its legend a window, Lighting, a tab beside Pictures,
+                // there while the site has a rig.
+                this.lighting = mountLighting({
+                    scene: this.scene, base: BASE_URL,
+                    onPanel: (el) => (el
+                        ? (this.panels.state('lighting') || this.panels.register('lighting', { title: 'Lighting', body: el }))
+                        : this.panels.unregister('lighting')),
+                });
                 this.pictureMarks = mountPictureMarks({
                     scene: this.scene, anchors: this.anchors, base: BASE_URL,
                     hostBounds: (path) => { const node = this.tree && this.nodeByPath(path); return node ? envelopeBounds(node) : null; },
@@ -1393,34 +1414,48 @@
                 window.apothecaryPictureVerbs = this.pictures;
                 // Site's Pinned: every camera a page added, and every view and board it
                 // pinned, every site's, each taken back from its row without switching the site.
-                // Mounted the first time the section opens, and listed again each
-                // time it does.
+                // Mounted the first time its window is in front, and listed again each
+                // time it is.
                 this.pinnedWidget = null;
-                this.pinnedEl.addEventListener('toggle', () => this.pinnedOpened());
                 // Pictures: every picture under the picture root, each with its views,
-                // Forget on a kept one, Purge, and the gathering -- a tab below Site and
-                // Selected, filled the first time it is shown and listed again each time
-                // it is shown again. A row chosen there is told to every ring, whose
-                // Picture › Folder pins it where the ring stands.
+                // Forget on a kept one and Purge -- a tab below Site and Selected -- and
+                // Gather, the gathering, a window of its own beside it, closed until
+                // asked for (the ring's Pictures › Gather, Panels › Pictures › Gather).
+                // One widget fills both, the first time either is in front; Pictures is
+                // listed again each time it is in front again. A row chosen there is
+                // told to every ring, whose Picture › Folder pins it where the ring stands.
                 this.picturesWidget = null;
+                const picturesEl = document.createElement('div');
+                const gatherEl = document.createElement('div');
+                this.pictureList = () => {
+                    if (this.picturesWidget) return this.picturesWidget;
+                    this.picturesWidget = mountPictureList(picturesEl, {
+                        base: BASE_URL,
+                        gather: gatherEl,
+                        log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
+                        world: {
+                            siteName: () => this.siteName,
+                            choose: (path) => this.pictures.choose(path),
+                            showView: (id) => this.showView(id),
+                            purge: () => this.pictures.purge(),
+                            // A picture forgotten: its views go wherever they were.
+                            changed: () => this.pictureMarks.refresh(),
+                            showGather: () => this.panels.open('gather'),
+                        },
+                    });
+                    window.apothecaryPictureList = this.picturesWidget;
+                    return this.picturesWidget;
+                };
                 this.panels.register('pictures', {
                     title: 'Pictures',
-                    onOpen: () => { if (this.picturesWidget) this.picturesWidget.load(); },
-                    body: (slot) => {
-                        this.picturesWidget = mountPictureList(slot, {
-                            base: BASE_URL,
-                            log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
-                            world: {
-                                siteName: () => this.siteName,
-                                choose: (path) => this.pictures.choose(path),
-                                showView: (id) => this.showView(id),
-                                purge: () => this.pictures.purge(),
-                                // A picture forgotten: its views go wherever they were.
-                                changed: () => this.pictureMarks.refresh(),
-                            },
-                        });
-                        window.apothecaryPictureList = this.picturesWidget;
-                    },
+                    body: picturesEl,
+                    onOpen: () => { const fresh = !this.picturesWidget; const list = this.pictureList(); if (!fresh) list.load(); },
+                });
+                this.panels.register('gather', {
+                    title: 'Gather',
+                    hint: 'Which of the ticked pictures are of one thing, and what the machine would ask a person',
+                    body: gatherEl, home: 'pictures', open: false,
+                    onOpen: () => this.pictureList(),
                 });
                 // The Bench: the toolchain, the sketches built and uploaded, raw flash
                 // and the task log (widgets/toolchain.js, sketches.js, tasks.js) -- a
@@ -1462,7 +1497,7 @@
                 window.addEventListener('popstate', () => this.followAddress());
                 // The View menu folds away when a press lands anywhere else, as a menu does.
                 document.addEventListener('pointerdown', (e) => this.foldViewMenu(e));
-                // The header's count of problems unfolds them in Site.
+                // The header's count of problems brings Problems in front.
                 this.validityEl.addEventListener('click', () => this.openProblems());
                 // A row of Site's Jobs selects its machine, at its level, and opens it.
                 this.siteJobsListEl.addEventListener('click', (e) => {
@@ -6310,8 +6345,8 @@
                     this.problemListEl.appendChild(li);
                 }
                 const n = this.violations.length;
-                this.problemsEl.hidden = n === 0;
-                this.problemsCountEl.textContent = `${n} problem${n === 1 ? '' : 's'}`;
+                this.problemsNoneEl.hidden = n > 0;
+                this.panels.retitle('problems', n ? `Problems · ${n}` : 'Problems', { flag: n > 0 ? 'has-problems' : null });
                 this.validityEl.textContent = this.isValid
                     ? 'Layout valid'
                     : `${n} violation${n === 1 ? '' : 's'}`;
@@ -6369,7 +6404,7 @@
             renderSiteJobs() {
                 const jobs = this.siteJobs;
                 const running = jobs.filter((j) => j.outcome === 'running').length;
-                this.siteJobsCountEl.textContent = jobs.length ? ` · ${jobs.length}${running ? ` · ${running} running` : ''}` : '';
+                this.panels.retitle('jobs', jobs.length ? `Jobs · ${jobs.length}${running ? ` · ${running} running` : ''}` : 'Jobs');
                 this.siteJobsListEl.innerHTML = jobs.length
                     ? jobs.map((j) => {
                         const machine = this.jobMachine(j);
@@ -6413,20 +6448,18 @@
                 return true;
             }
 
-            // The header's count: Site opened and in front (the world alone ended),
-            // its problems' fold opened, and scrolled to them.
+            // The header's count: Problems opened and in front (the world alone ended),
+            // scrolled to its top.
             openProblems() {
-                this.panels.open('site');
-                this.problemsEl.open = true;
-                const slot = this.problemsEl.closest('.panel-body-slot');
+                this.panels.open('problems');
+                const slot = this.problemListEl.closest('.panel-body-slot');
                 if (slot) slot.scrollTop = 0;
-                this.problemsEl.scrollIntoView({ block: 'nearest' });
             }
 
-            // Site's Pinned opened: mounted the first time, listed again each time
-            // after, so a pin made elsewhere shows.
+            // Pinned in front: mounted the first time, listed again each time after,
+            // so a pin made elsewhere shows.
             pinnedOpened() {
-                if (!this.pinnedEl.open) return;
+                if (!this.panels.isShown('pinned')) return;
                 if (this.pinnedWidget) { this.pinnedWidget.load(); return; }
                 this.pinnedWidget = mountPinned(document.getElementById('site-pinned-body'), {
                     base: BASE_URL,
@@ -6455,7 +6488,7 @@
             // Something pinned, unpinned, kept or forgotten: Site's Pinned and
             // Pictures, where they are open, list it again.
             listsChanged() {
-                if (this.pinnedWidget && this.pinnedEl.open) this.pinnedWidget.load();
+                if (this.pinnedWidget && this.panels.isShown('pinned')) this.pinnedWidget.load();
                 if (this.picturesWidget && this.panels.isShown('pictures')) this.picturesWidget.load();
             }
 
@@ -7043,7 +7076,7 @@
                 this.renderContentsList(this.currentFocusNode());
                 this.renderSelectedPanel();
                 // A pin made or taken back here shows in Site's Pinned too.
-                if (this.pinnedWidget && this.pinnedEl.open) this.pinnedWidget.load();
+                if (this.pinnedWidget && this.panels.isShown('pinned')) this.pinnedWidget.load();
             }
 
             // On every word from the board model: swap only the badge spans and
@@ -7967,11 +8000,10 @@
                     if (await viewer.pictures.carry(intent)) { viewer.listsChanged(); return; }
                 }
                 if (action === 'camera:gather') {
-                    // Pictures' gathering section, opened, does what its button does.
-                    // Said first, so a refusal of the gathering's own is the last word.
-                    viewer.panels.open('pictures');
+                    // Gather, in front, does what its button does. Said first, so a
+                    // refusal of the gathering's own is the last word.
                     viewer.setStatus(`Gather${tail}`, 'success');
-                    if (!(viewer.picturesWidget && viewer.picturesWidget.act('gather'))) viewer.setStatus(`${intent.label}: Pictures cannot do that${tail}`, 'error');
+                    if (!viewer.pictureList().act('gather')) viewer.setStatus(`${intent.label}: Pictures cannot do that${tail}`, 'error');
                     return;
                 }
                 // A Bench verb: the Bench shown, and what its button does done on what

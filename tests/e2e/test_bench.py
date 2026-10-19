@@ -1,8 +1,8 @@
 """The Bench: the toolchain, sketches, build and upload, raw flash and task log, as a
 panel in front of the world.
 
-The Bench is a tab of the rail's strip, closed until asked for; its verbs are cells
-of the canvas ring's Panels › Bench.
+The Bench is a tab beside Pictures, behind it until pressed; its verbs are cells of
+the canvas ring's Panels › Bench.
 
 Runs against a server of its own from the conftest's ``start_server``: the
 scripted ``arduino-cli`` (version 9.9.9, an Uno on ``/dev/ttyFAKE0``,
@@ -16,6 +16,7 @@ from __future__ import annotations
 import re
 
 import pytest
+import windows
 from firmware_helpers import write_fake_arduino_cli
 from playwright.sync_api import Page, expect
 
@@ -52,19 +53,20 @@ def _ended(bench, title: str, timeout: int = 10000):
 
 
 @pytest.mark.e2e
-def test_the_bench_is_a_tab_of_the_strip_closed_until_asked_for(page: Page, url: str):
-    """Registered at start as a tab of the rail's strip, shown only when pressed; its
-    body is filled the first time it is shown, so the page asks nothing of the
-    toolchain until then."""
+def test_the_bench_is_a_tab_beside_pictures_behind_it_until_pressed(page: Page, url: str):
+    """Registered at start as a tab beside Pictures, behind it until pressed; its body is
+    filled the first time it is shown, so the page asks nothing of the toolchain until
+    then."""
     asked = []
     page.on("request", lambda r: asked.append(r.url) if "/firmware/status" in r.url else None)
     _open_viewer(page, url)
-    tab = page.locator(".panel-rail .rail-tab[data-panel='bench']")
-    expect(tab).to_be_visible()
+    expect(windows.tab(page, "bench")).to_be_visible()
     expect(page.locator(BENCH)).to_be_hidden()
-    assert page.evaluate("() => window.apothecaryPanels.state('bench').shown") is False
+    state = windows.state(page, "bench")
+    assert state["shown"] is False and "pictures" in state["stack"], state
+    assert windows.state(page, "pictures")["shown"] is True
     assert asked == [], asked
-    tab.locator(".rail-tab-name").click()
+    windows.show(page, "bench")
     expect(page.locator(BENCH)).to_be_visible(timeout=2000)
     expect(page.locator(BENCH).locator(".tc-status")).to_contain_text("9.9.9", timeout=10000)
 
@@ -135,7 +137,7 @@ def test_the_bench_s_verbs_are_cells_of_panels_bench(page: Page, url: str):
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press(_wedges(page)["Panels"])
     panels = _wedges(page)
-    assert panels["Rail"] == "9" and panels["Bench"] == "3", panels  # Rail keeps its cell
+    assert panels["Windows"] == "9" and panels["Bench"] == "3", panels  # Windows keeps its cell
     page.keyboard.press("3")
     bench_cells = _wedges(page)
     assert bench_cells == {
@@ -192,9 +194,7 @@ def test_the_firmware_address_opens_the_viewer_with_the_bench(page: Page, url: s
     expect(page).to_have_url(re.compile(r"/viewer/sites/garage\?panel=bench$"))
     bench = page.locator(BENCH)
     expect(bench).to_be_visible(timeout=15000)
-    expect(page.locator(".panel-rail .rail-tab[data-panel='bench']")).to_have_class(
-        re.compile(r"\bactive\b")
-    )
+    expect(windows.tab(page, "bench")).to_have_class(re.compile(r"\blm_active\b"))
     expect(bench.locator(".tc-status")).to_contain_text("✓ 9.9.9", timeout=10000)
     expect(bench.locator(".sketch-select option[value='footpedal@arduino']")).to_have_count(1)
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)

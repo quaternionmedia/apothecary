@@ -1007,18 +1007,18 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert [c.destructive for c in pictures.children] == [False, False, True, False]
     assert carried_by("picture:add:@floor").name == "VIEWER"
     assert carried_by("picture:purge").name == "VIEWER"
-    # Site (Contents, its problems, its SCAD, Pinned, the site's jobs), Selected,
-    # Pictures (every picture, and the gathering) and a board's Machine (its log in
-    # it) each a cell; then Windows: the world alone and the page's own layout
-    # again; then the Bench, a group of its own: the panel and its verbs. A print
-    # is the job: Jobs is no panel. Then Docs: the documentation and the
+    # Site, a ring of Site (its chips and its Contents) and its own windows --
+    # Problems, Pinned, Jobs, SCAD; Selected, Pictures (every picture, and the
+    # gathering) and a board's Machine (its log in it) each a cell; then Windows:
+    # the world alone and the page's own layout again; then the Bench, a group of
+    # its own: the panel and its verbs. Then Docs: the documentation and the
     # walkthrough in a new tab, as the header's Docs opens them; last, Control pad:
     # an armed printer's pad in a loud window of its own or back in its Machine.
     # Each seated after the others so none of them moves.
     assert [(c.label, c.action, c.cell) for c in panels.children] == [
-        ("Site", "panel:toggle:site", 8),
+        ("Site", None, 8),
         ("Selected", "panel:toggle:selected", 6),
-        ("Pictures", "panel:toggle:pictures", 2),
+        ("Pictures", None, 2),
         ("Machine", "panel:toggle:machine", 4),
         ("Windows", None, 9),
         ("Bench", None, 3),
@@ -1029,8 +1029,22 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert carried_by("panel:docs").name == "VIEWER"
     assert address_of(root, "panel:pad") == "47"
     assert carried_by("panel:pad").name == "VIEWER"
-    assert address_of(root, "panel:site") == "48"  # by the option's id
-    assert address_of(root, "panel:pictures") == "42"
+    site = next(c for c in panels.children if c.label == "Site")
+    assert [(c.label, c.action, c.cell) for c in site.children] == [
+        ("Site", "panel:toggle:site", 8),
+        ("Problems", "panel:toggle:problems", 6),
+        ("Pinned", "panel:toggle:pinned", 2),
+        ("Jobs", "panel:toggle:jobs", 4),
+        ("SCAD", "panel:toggle:scad", 9),
+    ]
+    assert address_of(root, "panel:site") == "488"  # by the option's id
+    assert address_of(root, "panel:problems") == "486"
+    pictures = next(c for c in panels.children if c.label == "Pictures")
+    assert [(c.label, c.action, c.cell) for c in pictures.children] == [
+        ("Pictures", "panel:toggle:pictures", 8),
+        ("Gather", "panel:toggle:gather", 6),
+    ]
+    assert address_of(root, "panel:pictures") == "428"
     assert address_of(root, "panel:machine") == "44"
     assert address_of(root, "panel:windows") == "49"
     windows = next(c for c in panels.children if c.label == "Windows")
@@ -1084,7 +1098,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     ):
         assert carried_by(f"bench:{verb}").name == "VIEWER"
     # No ring offers a panel the page does not have: the Comms log is in the Machine.
-    for gone in ("contents", "validation", "scad", "kept", "camera", "jobs", "log"):
+    for gone in ("contents", "validation", "kept", "camera", "log"):
         assert f"panel:toggle:{gone}" not in set(every_action([root])), gone
     # The page's sections are marked in its markup; Pictures is registered at
     # start and a board's Machine when one is opened. Both lists are the
@@ -1094,12 +1108,14 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     registered = re.findall(r"panels\.register\('([\w-]+)'", page)
     # The SCAD editor popped out of Selected is a panel only while it is out, and
     # Part › Pop out's rather than one of Panels: it is Selected's, put back there;
-    # an armed printer's control pad is Panels › Control pad's, not a toggle.
-    assert "scad-editor" in registered and "control" in registered
-    registered = [pid for pid in registered if pid not in ("scad-editor", "control")]
+    # an armed printer's control pad is Panels › Control pad's, not a toggle; and a
+    # rig's Lighting is the lighting overlay's, there while the site has a rig.
+    made = ("scad-editor", "control", "lighting")
+    assert all(pid in registered for pid in made)
+    registered = [pid for pid in registered if pid not in made]
     assert marked == [pid for pid, _ in PANELS[: len(marked)]]
     assert sorted(registered) == sorted(pid for pid, _ in PANELS[len(marked) :])
-    for gone in ("contents", "validation", "scad", "kept", "camera", "jobs", "log"):
+    for gone in ("contents", "validation", "kept", "camera", "log"):
         assert f'data-panel="{gone}"' not in page and f"register('{gone}'" not in page
 
 
