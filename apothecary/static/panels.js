@@ -93,6 +93,8 @@ function kept(config, known) {
         const content = (item.content || []).map(walk).filter(Boolean);
         if (!content.length) return null;
         const out = { ...item, content };
+        // The world's window has no tab, whatever a layout says.
+        if (item.type === "stack" && content.some((c) => c.componentType === WORLD)) out.header = { ...(item.header || {}), show: false };
         if (item.type === "stack" && typeof item.activeItemIndex === "number") {
             out.activeItemIndex = Math.min(item.activeItemIndex, content.length - 1);
         }
@@ -218,10 +220,18 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
     const worldStack = () => item(WORLD)?.parentItem || null;
     // A window dropped on the world's left, right, top or bottom is a stack of its own
     // made with the world's stack's header -- hidden -- and would have no tab to drag,
-    // close or find it by. The world's stack hands new stacks the layout's own header.
+    // close or find it by. While a drop is made on it, the world's stack hands new
+    // stacks the layout's own header; at any other time (saving the layout) its own.
     function tabsForDrops() {
         const ws = worldStack();
-        if (ws && !ws.apothecaryDrops) { ws.apothecaryDrops = true; ws.createHeaderConfig = () => undefined; }
+        if (!ws || ws.apothecaryDrops) return;
+        ws.apothecaryDrops = true;
+        const drop = ws.onDrop;
+        ws.onDrop = function (contentItem, area) {
+            const own = this.createHeaderConfig;
+            this.createHeaderConfig = () => undefined;
+            try { return drop.call(this, contentItem, area); } finally { this.createHeaderConfig = own; }
+        };
     }
     tabsForDrops();
     layout.on("stateChanged", tabsForDrops);

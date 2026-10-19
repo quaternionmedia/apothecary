@@ -691,6 +691,7 @@ def test_a_window_dragged_beside_the_world_is_remembered_until_the_layout_is_res
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     assert pictures.bounding_box()["x"] < 2
     assert windows.state(page, "pictures")["stack"] == ["pictures"]
+    expect(page.locator(windows.WORLD_HEADER)).to_be_hidden()  # still no tab of its own
 
     inner = _panels_ring(page)
     page.keyboard.press(next(cell for cell, label in inner.items() if label == "Windows"))
@@ -701,6 +702,15 @@ def test_a_window_dragged_beside_the_world_is_remembered_until_the_layout_is_res
     expect(page.locator("#status")).to_contain_text("The page's own layout again")
     assert windows.state(page, "pictures")["stack"] == ["pictures", "bench", "settings"]
     assert world.bounding_box()["x"] <= 1
+
+    # A tab dropped on the world's own right quarter: a window of its own there, with
+    # its tab to drag, close and find it by; the world's window still has none.
+    wb = world.bounding_box()
+    to = (wb["x"] + wb["width"] * 0.85, wb["y"] + wb["height"] / 2)
+    windows.drag(page, windows.tab(page, "bench"), to)
+    page.wait_for_function("() => window.apothecaryPanels.state('bench').stack.length === 1")
+    expect(windows.tab(page, "bench")).to_be_visible()
+    expect(page.locator(windows.WORLD_HEADER)).to_be_hidden()
 
 
 @pytest.mark.e2e
@@ -760,3 +770,4 @@ def test_the_splitter_beside_the_world_is_dragged_and_remembered(page: Page, rin
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     windows.world_is(page, narrower)
     assert world.bounding_box()["width"] < before - 80
+    expect(page.locator(windows.WORLD_HEADER)).to_be_hidden()  # still no tab of its own

@@ -11,6 +11,8 @@ from __future__ import annotations
 from playwright.sync_api import Page
 
 WORLD = ".viewer-panel"
+# The world's stack's header: the world's window has no tab, so this is never shown.
+WORLD_HEADER = ".lm_stack:has(.world-window) > .lm_header"
 
 
 def tab(page: Page, pid: str):
