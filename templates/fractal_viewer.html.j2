@@ -198,6 +198,8 @@
             border-radius: 6px; box-shadow: 0 8px 28px rgba(0,0,0,0.55); overflow: auto; resize: both; min-width: 220px; min-height: 40px; pointer-events: auto;
             opacity: var(--popover-opacity);
         }
+        /* Fullscreen, an editor floated in a panel covers the page: not a popover. */
+        .panel.free:has(.scad-editor.fullscreen) { opacity: 1; }
         .panel-title {
             display: flex; align-items: center; gap: 0.35rem; padding: 0.45rem 0.6rem 0.45rem 0.75rem; background: #252525;
             font-weight: 600; font-size: 0.85rem; color: #ccc; user-select: none;
