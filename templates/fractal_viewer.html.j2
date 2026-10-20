@@ -6814,7 +6814,7 @@
             // printer's level card sizes its corners from where it stands.
             machineOpened(port) {
                 if (window.apothecaryRing && window.apothecaryRing.annotateMachine) window.apothecaryRing.annotateMachine();
-                // Its pad's ⇥ and ⧉ are the canvas ring's Panels › Control pad.
+                // Its pad's ⇥ and ⧉ are the canvas ring's Panels › Machine › Control pad.
                 if (window.apothecaryRing && window.apothecaryRing.refreshAddresses) window.apothecaryRing.refreshAddresses();
                 this.keepMachineInAddress(port);
                 const where = this.whereByPort[port] || fetch(`${BASE_URL}/firmware/printers/where?port=${encodeURIComponent(port)}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
@@ -8077,7 +8077,7 @@
                     viewer.setStatus(`Opened the documentation in a new tab: the guides, and the walkthrough from its table${tail}`, 'success');
                     return;
                 }
-                // Panels › Control pad: the open Machine's pad in a loud window of its own
+                // Panels › Machine › Control pad: the open Machine's pad in a loud window of its own
                 // or back in it, as the pad's ⧉ Pop out and ⇥ Put back do; while it is armed only.
                 if (action === 'panel:pad') {
                     const r = viewer.machine && viewer.machine.handle
@@ -8333,7 +8333,7 @@
             pairs.push([viewer.wallsToggle.closest('label'), 'view:walls']);
             // The header's Docs: Panels › Docs.
             pairs.push([document.getElementById('docs-link'), 'panel:docs']);
-            // An armed printer's pad, popped out or put back: Panels › Control pad.
+            // An armed printer's pad, popped out or put back: Panels › Machine › Control pad.
             const padToggle = document.getElementById('ctl-pop');
             if (padToggle) pairs.push([padToggle, 'panel:pad']);
             const bench = document.querySelector(".panel[data-panel='bench']");

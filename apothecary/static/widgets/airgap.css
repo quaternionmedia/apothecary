@@ -1,5 +1,5 @@
 /* The Airgap panel (widgets/airgap.js): a rotor/stator pair as a field, torque and dynamics
- * model, in a tab of the rail. Scoped to .airgap-ui; the palette is the widget's own, read by
+ * model, in a window of the page's layout. Scoped to .airgap-ui; the palette is the widget's own, read by
  * its canvases from these custom properties, so the page's rules are left alone. */
 .airgap-ui {
     --paper: #0e1217; --card: #161c24; --ink: #e4e8ee; --ink-2: #98a5b5; --line: #2c3644; --line-2: #222b36;

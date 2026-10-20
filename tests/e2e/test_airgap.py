@@ -1,8 +1,8 @@
 """The Airgap: the airgap part as a field, torque and dynamics model, as a panel in
 front of the world, following the part's text in the SCAD editor.
 
-The panel is a tab of the rail's strip, closed until asked for; its verbs are cells of
-the canvas ring's Panels › Airgap. Opened, it reads the part's own SCAD and computes;
+The panel is a window, a tab beside Pictures, closed until asked for; its verbs are
+cells of the canvas ring's Panels › Airgap. Opened, it reads the part's own SCAD and computes;
 with the part in the editor (Part › Edit) it follows every edit of the text, and a
 preset chosen in it is written into the text, which the editor then checks and renders
 as any edit. The metrics it says are one document, ``airgap/metrics/1``, which
@@ -15,6 +15,7 @@ machine's OpenSCAD; nothing here reaches the network.
 from __future__ import annotations
 
 import pytest
+import windows
 from playwright.sync_api import Page, expect
 
 PART = "airgap"
@@ -33,7 +34,7 @@ def url(start_server):
 def _open(page: Page, url: str) -> None:
     page.goto(f"{url}/viewer/sites/parts_library")
     expect(page.locator("#status")).to_contain_text("Loaded", timeout=20000)
-    page.evaluate("() => localStorage.removeItem('apothecary.panels')")
+    page.evaluate("() => localStorage.removeItem('apothecary.layout')")
     page.wait_for_function(
         "() => !!window.apothecaryRing && !!window.apothecaryPanels", timeout=15000
     )
@@ -59,7 +60,9 @@ def _part_ring(page: Page, *labels: str) -> None:
 
 
 def _canvas_ring(page: Page, *labels: str) -> None:
-    page.locator("#viewer-canvas").click(button="right", modifiers=["Control"], position={"x": 60, "y": 60})
+    page.locator("#viewer-canvas").click(
+        button="right", modifiers=["Control"], position={"x": 60, "y": 60}
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
     _press(page, *labels)
 
@@ -78,16 +81,16 @@ def _values(page: Page) -> dict:
 
 
 @pytest.mark.e2e
-def test_the_airgap_is_a_tab_of_the_strip_that_computes_the_parts_own_text(page: Page, url: str):
-    """Registered at start, closed until pressed; shown, it reads the part's own SCAD
-    and says its figures as the metrics document, which the server reads back."""
+def test_the_airgap_is_a_window_that_computes_the_parts_own_text(page: Page, url: str):
+    """Registered at start and closed until asked for; Panels › Airgap › Airgap opens it
+    as a tab beside Pictures, where it reads the part's own SCAD and says its figures as
+    the metrics document, which the server reads back."""
     _open(page, url)
-    tab = page.locator(".panel-rail .rail-tab[data-panel='airgap']")
-    expect(tab).to_be_visible()
-    expect(page.locator(PANEL)).to_be_hidden()
-    assert page.evaluate("() => window.apothecaryPanels.state('airgap').shown") is False
-    tab.locator(".rail-tab-name").click()
+    expect(windows.tab(page, "airgap")).to_have_count(0)
+    assert windows.state(page, "airgap")["open"] is False
+    _canvas_ring(page, "Panels", "Airgap", "Airgap")
     expect(page.locator(PANEL)).to_be_visible(timeout=2000)
+    assert windows.state(page, "airgap")["stack"] == ["pictures", "bench", "settings", "airgap"]
     doc = _metrics(page)
     assert doc["schema"] == "airgap/metrics/1"
     assert [g["id"] for g in doc["groups"]] == ["geometry", "windings", "field", "dynamics"]

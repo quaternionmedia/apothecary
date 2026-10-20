@@ -262,7 +262,7 @@ def test_the_headers_docs_and_panels_docs_open_the_docs_and_the_walkthrough(page
 
     _canvas_ring(page)
     _press(page, "Panels")
-    assert _labels(page)[-2:] == ["Docs", "Control pad"], _labels(page)
+    assert _labels(page)[-2:] == ["Docs", "Airgap"], _labels(page)
     with page.context.expect_page() as opened:
         _press(page, "Docs")
     again = opened.value

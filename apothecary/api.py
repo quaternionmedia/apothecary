@@ -199,7 +199,8 @@ app = FastAPI(
         "parts, rendered by OpenSCAD and kept as variants; photos, the views pinned "
         "from them, the cameras that take them and the shapes found in them; firmware "
         "for the boards and printers, with their control and prints; the slicer; jobs; "
-        "the ring's menu; and the documentation and walkthrough it serves."
+        "the airgap part's metrics document, its schema and its check; the ring's menu; "
+        "and the documentation and walkthrough it serves."
     ),
     lifespan=lifespan,
     # /docs is the project's documentation (docs_site.py). FastAPI's own Swagger

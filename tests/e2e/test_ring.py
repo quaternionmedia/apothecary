@@ -581,6 +581,7 @@ def test_the_world_and_the_panels_are_windows_of_one_layout(page: Page, ring_url
         "bench",
         "settings",
         "gather",
+        "airgap",
     ]
     expect(page.locator(".lm_goldenlayout")).to_have_count(1)
     expect(windows.tab(page, "world")).to_have_count(0)  # the world's window has no tab
@@ -635,8 +636,8 @@ def test_a_closed_window_stays_closed_and_the_ring_reopens_it(page: Page, ring_u
     # From the ring: Panels › Site opens it by address.
     inner = _panels_ring(page)
     assert sorted(inner.values()) == [
+        "Airgap",
         "Bench",
-        "Control pad",
         "Docs",
         "Machine",
         "Pictures",

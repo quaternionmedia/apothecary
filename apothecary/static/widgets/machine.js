@@ -698,7 +698,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const pop = $("ctl-pop");
         pop.hidden = !padWindow;
         pop.textContent = ctl.out ? "⇥ Put back" : "⧉ Pop out";
-        pop.title = ctl.out ? "Put the control pad back in the Machine, as its window's ✕ does (Panels › Control pad)" : "The control pad in a loud window of its own beside the world (Panels › Control pad)";
+        pop.title = ctl.out ? "Put the control pad back in the Machine, as its window's ✕ does (Panels › Machine › Control pad)" : "The control pad in a loud window of its own beside the world (Panels › Machine › Control pad)";
         if (out === padIsOut) return;
         padIsOut = out;
         pad.classList.toggle("out", out);
@@ -770,7 +770,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     $("ctl").addEventListener("change", () => arm($("ctl").checked));
     $("ctl-disarm").onclick = () => arm(false);
     // In its own window, or back in the Machine: the pad's ⧉ Pop out and ⇥ Put back,
-    // and the ring's Panels › Control pad. What it did, or why it could not.
+    // and the ring's Panels › Machine › Control pad. What it did, or why it could not.
     function togglePad() {
         const who = name || state.port;
         if (!ctl.armed) return { refused: `${who}'s control is not armed: ⚙ Control in its Machine arms it, and its pad pops out` };

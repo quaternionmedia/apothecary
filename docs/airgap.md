@@ -1,7 +1,7 @@
 # The Airgap
 
 The `airgap` part is a rotor/stator pair of any base form; the Airgap panel is
-that part as a field, torque and dynamics model, in a tab of the viewer's rail.
+that part as a field, torque and dynamics model, in a window of the viewer's own.
 The two meet in the part's text: the panel reads the part's top-level
 assignments -- the SCAD editor's text while the part is being edited, its own
 file otherwise -- and computes from them, and what the panel chooses is
@@ -37,7 +37,8 @@ walks the mirror and the document in doctests.
 
 ## The panel
 
-Panels › Airgap on the canvas ring, or the Airgap tab of the rail. Shown, the
+Panels › Airgap › Airgap on the canvas ring opens it, a tab beside Pictures,
+closed until asked for. Shown, the
 panel computes from the part's text and draws the section -- the rotor at its
 angle, the stator's iron by covered run, the gap field or the gap itself as
 colour, each conductor with its phase and its sense -- and, in folds below it:
