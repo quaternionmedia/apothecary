@@ -1,16 +1,19 @@
 # 16 — Editing a part's SCAD
 
-**This page is written by the run it describes.** Every sentence below
-was emitted by a test that had just asserted it, and the whole page is
+Written by `tests/e2e/test_scad_loop.py`, and
 rewritten by every run of the browser suite (`uv run apothecary test
-all`), though not by the quicker `apothecary test run`. Editing it
-by hand is editing the output of a program: the next run puts it back.
+all`), though not by the quicker `apothecary test run`.
+Each numbered step is written as the run reaches it, after the assertions
+before it pass, and what a step shows is what the run had then. The
+opening, the notes under it and the list of what the page does not show
+are the test's fixed words. Editing the page by hand is editing the output
+of a program: the next run puts it back.
 
 A part's SCAD edited in the page: the editor where its source stood in Selected, a failing line checked once typing stops and marked where it is, a change rendered soon after its check passes and drawn as an applied variant, kept as a variant in git and listed with what it changes, the editor floated and made fullscreen; then round again, and the first variant drawn once more; then the name a save keeps, OpenSCAD's own keys, a draft kept over a reload and the editor's undo kept while another part is edited. Every step is the page's own: a cell of a ring, a key or a button, and every step's words name the next one.
 
 **Runtime-bound.** It drives a real browser against a real server of its own, with the OpenSCAD every test server runs and a temporary cache of variants. A variant is saved into a clone of the checkout the server was given, never the checkout's own refs, which the run checks are as it found them. It needs no network, and refuses one.
 
-Its pictures were taken once every part's STL that OpenSCAD version 2021.01, the OpenSCAD its server runs, can build was built by it; a part it cannot build is drawn from an STL already there, or as its box.
+Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its server runs, can build from an STL it built; a part it cannot build is drawn from an STL already there, or as its box.
 
 ---
 
@@ -114,7 +117,7 @@ Restore: the draft back in the editor, checked, its refusal marked. Then v_slot'
 
 - **Making a variant the part's source.** That is a merge you do (`git merge refs/apothecary/variants/<part>/<name>`); no control in the page writes the checkout.
 - **A part without a model.** Its controls come from what its SCAD declares, where the OpenSCAD in use lists them; calibration_cube has a model.
-- **When a variant was saved.** It differs on every run, so the lists' times are blanked in the pictures.
+- **When a variant was saved, and where the server keeps it.** Both differ on every run: the lists' times are blanked in the pictures, and the server's clone of the checkout is named as the test server's variants repository in the words and blanked where the status line shows it.
 - **The way back to the saved part.** Part › Defaults, then Apply, draws the part's own SCAD and numbers again, as walkthrough 14 does for its numbers.
 
 Run it yourself:

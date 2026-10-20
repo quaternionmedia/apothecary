@@ -150,15 +150,22 @@ def _blanked(blanks: Sequence[Blank]) -> str:
 
 def picture(page: Page, blanks: Sequence[Blank] = ()) -> bytes:
     """The page as a person sees it once it has settled (viewer_ready.settled), with
-    ``blanks`` blanked."""
+    ``blanks`` blanked. The blanks are in the page while it settles: a blanked word is
+    one width, so the line holding it can take another number of rows and the world
+    beside it another size, and a canvas given a new size is cleared until a frame is
+    drawn at it."""
     settled(page)
+    if not blanks:
+        return page.screenshot()
     words = [list(b) for b in blanks if not isinstance(b, str)]
     if words:
         page.evaluate(WRAP_WORDS, words)
-        settled(page)
+    style = page.add_style_tag(content=_blanked(blanks))
     try:
-        return page.screenshot(style=_blanked(blanks))
+        settled(page)
+        return page.screenshot()
     finally:
+        style.evaluate("(tag) => tag.remove()")
         if words:
             page.evaluate("() => window.__unblank && window.__unblank()")
 
@@ -220,13 +227,13 @@ class DocRecorder:
 
 
 # --------------------------------------------------------------------------
-# The one demonstration.
+# The walkthrough's pages.
 #
-# Everything above serves `apothecary docs generate`, which is a command
-# somebody has to remember. The walkthrough is not allowed to be that: it is
-# the page a newcomer meets, and a page produced by a remembered command is
-# stale by default. So the walkthrough is written by the run that asserts it,
-# on every ordinary run, and this is the recorder for it.
+# Everything above serves `apothecary docs generate`, a command run on
+# request. A walkthrough page is written by the run that asserts it instead:
+# pages 11 and 12 by the ordinary test command, a loop's page by the browser
+# suite. CI fails when a page a run rewrote differs from the committed one, so
+# a page carries nothing that changes from run to run.
 #
 # Recorded rather than compared. Nothing asserts what the page says -- a
 # behaviour that changes shows up as a diff in the page, which is a thing a
@@ -236,23 +243,27 @@ class DocRecorder:
 WALKTHROUGH_ROOT = Path(__file__).resolve().parents[2] / "walkthrough"
 
 
-def _keep_unless_changed(path: Path, png: bytes) -> None:
-    """Write the screenshot only when its pixels differ from the committed one: a
-    re-encode of the same picture is not a change, so a run leaves an unchanged
-    screenshot as committed."""
+def same_picture(one: bytes, other: bytes) -> bool:
+    """Whether two pictures show the same: a re-encode of the same pixels is the same.
+    Software WebGL rasterises an edge a pixel differently now and then; a change is more
+    than a hundredth of a percent of the picture."""
     import io
 
     from PIL import Image, ImageChops
 
-    if path.exists():
-        old = Image.open(path).convert("RGB")
-        new = Image.open(io.BytesIO(png)).convert("RGB")
-        if old.size == new.size:
-            changed = sum(ImageChops.difference(old, new).convert("L").histogram()[1:])
-            # Software WebGL rasterises an edge a pixel differently now and then;
-            # a change is more than a hundredth of a percent of the picture.
-            if changed <= old.size[0] * old.size[1] // 10000:
-                return
+    one_image = Image.open(io.BytesIO(one)).convert("RGB")
+    other_image = Image.open(io.BytesIO(other)).convert("RGB")
+    if one_image.size != other_image.size:
+        return False
+    changed = sum(ImageChops.difference(one_image, other_image).convert("L").histogram()[1:])
+    return changed <= one_image.size[0] * one_image.size[1] // 10000
+
+
+def _keep_unless_changed(path: Path, png: bytes) -> None:
+    """Write the screenshot only when its pixels differ from the committed one, so a
+    run leaves an unchanged screenshot as committed."""
+    if path.exists() and same_picture(path.read_bytes(), png):
+        return
     path.write_bytes(png)
 
 
@@ -334,28 +345,27 @@ class Walkthrough:
     def write(self) -> Path:
         """Write the page. Called however the run ends, so a red run is visible.
 
-        A run that failed half way writes the steps it reached and says so. The
-        alternative -- write nothing on failure -- leaves the last green run's
-        page in place, which is the stale page this whole arrangement exists to
-        prevent.
+        A run that fails half way writes the steps it reached, so the page's diff
+        shows where it stopped. Writing nothing on failure would leave the last
+        green run's page in place, describing a run that did not happen.
         """
         lines: List[str] = [
             f"# {self.ordinal} — {self.title}",
             "",
-            "**This page is written by the run it describes.** Every sentence below",
-            "was emitted by a test that had just asserted it, and the whole page is",
+            f"Written by `{self.module}`, and" if self.module else "Written by its test, and",
             *(
                 [
                     "rewritten by every run of the browser suite (`uv run apothecary test",
-                    "all`), though not by the quicker `apothecary test run`. Editing it",
-                    "by hand is editing the output of a program: the next run puts it back.",
+                    "all`), though not by the quicker `apothecary test run`.",
                 ]
                 if self.browser_suite_only
-                else [
-                    "rewritten by the ordinary test command. Editing it by hand is editing",
-                    "the output of a program: the next run puts it back.",
-                ]
+                else ["rewritten by the ordinary test command (`uv run apothecary test run`)."]
             ),
+            "Each numbered step is written as the run reaches it, after the assertions",
+            "before it pass, and what a step shows is what the run had then. The",
+            "opening, the notes under it and the list of what the page does not show",
+            "are the test's fixed words. Editing the page by hand is editing the output",
+            "of a program: the next run puts it back.",
             "",
             self.intro,
             "",

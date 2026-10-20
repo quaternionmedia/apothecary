@@ -68,7 +68,7 @@ class TestTheChecklistAndProblemsSayIt:
         assert len(found) == 1 and found[0].owner == APOTHECARY == KIND_OWNER["disagree"]
         assert "size: model 10.0, SCAD 12" in found[0].detail
 
-    def test_no_part_has_none_today(self):
+    def test_every_part_with_a_model_agrees_with_its_scad(self):
         """Every part of the library with a model agrees with its SCAD."""
         disagree = {}
         for item in scan_projects(ROOT):

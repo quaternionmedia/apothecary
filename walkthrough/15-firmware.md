@@ -1,22 +1,25 @@
 # 15 — Firmware
 
-**This page is written by the run it describes.** Every sentence below
-was emitted by a test that had just asserted it, and the whole page is
+Written by `tests/e2e/test_the_firmware_loop.py`, and
 rewritten by every run of the browser suite (`uv run apothecary test
-all`), though not by the quicker `apothecary test run`. Editing it
-by hand is editing the output of a program: the next run puts it back.
+all`), though not by the quicker `apothecary test run`.
+Each numbered step is written as the run reaches it, after the assertions
+before it pass, and what a step shows is what the run had then. The
+opening, the notes under it and the list of what the page does not show
+are the test's fixed words. Editing the page by hand is editing the output
+of a program: the next run puts it back.
 
 A sketch chosen, built, flashed to the ESP32 devkit on the bench, and heard saying its hello in the board's Machine; then changed and round again. The first time it is the Arduino esp32_blink, from the Bench; the second, the Rust one, from the board's own Machine. Both say the same hello, so the board runs the sketch the garage's esp32_blink expects either way, and the Machine says which build it is. Every step is the page's own: a cell of a ring, a button or a drop-down, and every step's words name the next one.
 
 **Runtime-bound.** It drives a real browser against a real server of its own. arduino-cli, cargo and espflash are scripted stand-ins in one folder, and the devkit is a simulated one on /dev/ttyFAKE2 that runs whatever was last flashed to it and says that sketch's hello. It needs no network, opens no serial port, builds nothing for real, and refuses all three.
 
-Its pictures were taken once every part's STL that OpenSCAD version 2021.01, the OpenSCAD its server runs, can build was built by it; a part it cannot build is drawn from an STL already there, or as its box.
+Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its server runs, can build from an STL it built; a part it cannot build is drawn from an STL already there, or as its box.
 
 ---
 
 ## 1. The Bench lists both builds of esp32_blink, each with its toolchain
 
-Panels › Bench › Bench on the canvas ring opens the Bench, floated here from its tab: the toolchains as installed, arduino-cli and Rust for the ESP32 beside it, and the sketches under parts/, each named with its toolchain -- the Arduino esp32_blink and the Rust one next to each other in its drop-down, as listed below with the toolchains. The Arduino one chosen, its board filled in from its firmware.json, and the devkit's port: Compile is next.
+Panels › Bench › Bench on the canvas ring opens the Bench, floated here from its tab: arduino-cli's status and its cores, and under them the other modules as installed -- Rust for the ESP32, and the slicer, OrcaSlicer, which this run leaves uninstalled -- and the sketches under parts/, each named with its toolchain: the Arduino esp32_blink and the Rust one next to each other in its drop-down, as listed below with the modules. The Arduino one chosen, its board filled in from its firmware.json, and the devkit's port: Compile is next.
 
 ![The Bench lists both builds of esp32_blink, each with its toolchain](screenshots/15-01-the-bench-lists-both-builds-of-esp32-blink-each-wi.png)
 

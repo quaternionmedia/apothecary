@@ -229,13 +229,16 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
         " ? 'not installed' : 'installed'}`)"
     )
     assert "rust-esp32: installed" in installed, installed
+    assert "orcaslicer: not installed" in installed, installed
     story.shows(
         "The Bench lists both builds of esp32_blink, each with its toolchain",
         "Panels › Bench › Bench on the canvas ring opens the Bench, floated here from its "
-        "tab: the toolchains as installed, arduino-cli and Rust for the ESP32 beside it, "
-        "and the sketches under parts/, each named with its toolchain -- the Arduino "
+        "tab: arduino-cli's status and its cores, and under them the other modules as "
+        "installed -- Rust for the ESP32, and the slicer, OrcaSlicer, which this run "
+        "leaves uninstalled -- "
+        "and the sketches under parts/, each named with its toolchain: the Arduino "
         "esp32_blink and the Rust one next to each other in its drop-down, as listed "
-        "below with the toolchains. The Arduino one chosen, its board filled in from its "
+        "below with the modules. The Arduino one chosen, its board filled in from its "
         "firmware.json, and the devkit's port: Compile is next.",
         shown="\n".join([*installed, *(r for r in rows if r.startswith("esp32_blink"))]),
         blank=CHANGING,

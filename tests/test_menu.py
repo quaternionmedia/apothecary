@@ -1780,7 +1780,7 @@ def test_find_shapes_is_the_step_after_a_view_is_pinned_and_appended_after_unpin
     ]
 
 
-def test_pin_here_and_unpin_are_gone_and_a_host_and_the_floor_add_a_camera_here():
+def test_a_host_and_the_floor_add_a_camera_here_and_no_ring_there_pins_one():
     """A camera is a part, not a pin: a host's and the floor's Camera holds Add here
     alone, Take picture is a camera part's own, and no ring at a host or the floor
     offers Keep, Pin, Unpin or Take picture."""
@@ -1995,7 +1995,7 @@ def test_make_make_all_drop_and_a_made_pieces_word_are_the_servers_and_the_rest_
     assert carried_by("picture:pin:make:3.png").name == "VIEWER"
 
 
-def test_the_camera_panels_retired_cells_are_off_every_ring():
+def test_the_canvas_and_a_hosts_ring_offer_no_camera_allow_capture_or_place():
     """The canvas ring and a host's ring offer no camera Allow, Capture, Place, Unplace,
     Open, Add or Purge: a camera is a part, added above a host by its Camera › Add
     here, and Device › Allow and Take picture are on the camera's own ring."""

@@ -5,11 +5,16 @@ without the window changing size. The camera's aspect and the canvas's
 drawing buffer must follow the canvas each time, or the world is drawn
 stretched; and since the world is drawn only when something in it changes, a
 frame must be drawn at the new size each time, or what shows is stale.
+
+A walkthrough's picture blanks words that differ from run to run, each blank one
+width, which can give the world another size too: the picture is of the world
+drawn at that size.
 """
 
 from __future__ import annotations
 
 import pytest
+from doc_capture import WRAP_WORDS, _blanked, picture, same_picture
 from playwright.sync_api import Page
 from viewer_ready import settled
 
@@ -81,3 +86,46 @@ def test_the_world_keeps_its_aspect_as_the_rail_changes(page: Page, base_url: st
     page.keyboard.press("Backquote")  # the tilde key shows the rail again
     again = _in_step(page, before)
     assert abs(again["width"] - narrower["width"]) <= 2, (narrower, again)
+
+
+# A status line naming a folder by a path long enough to take rows of its own, as Part ›
+# Save names the server's clone, and the blank a walkthrough's picture puts on it.
+FOLDER = "/" + "/".join(["a-folder-named-at-length"] * 16) + "/server1/variants.git"
+FOLDER_BLANKED = (("#status", r"/\S+/variants\.git"),)
+
+
+@pytest.mark.e2e
+def test_a_picture_with_words_blanked_is_of_the_world_drawn_at_the_size_they_leave_it(
+    page: Page, base_url: str
+):
+    """The path blanked, the status line takes fewer rows in the picture than on the
+    screen, so the world above it is taller there, and a canvas given a new size is
+    cleared until a frame is drawn at it. The picture is that frame: the page as it
+    shows once it has drawn under the same blank."""
+    page.set_viewport_size({"width": 1280, "height": 800})
+    page.goto(f"{base_url}/viewer/sites/garage")
+    settled(page)
+    page.evaluate(
+        "(said) => window.fractalViewer.setStatus(said, 'success')",
+        f"Saved: the ref is in {FOLDER}, not this checkout",
+    )
+    settled(page)
+    on_screen = _in_step(page)
+    shot = picture(page, FOLDER_BLANKED)
+
+    # The page back as it shows, then the same blank put in it, and a frame drawn at the
+    # size it leaves waited for.
+    settled(page)
+    assert _in_step(page)["height"] == on_screen["height"]
+    page.evaluate(WRAP_WORDS, [list(b) for b in FOLDER_BLANKED])
+    before = _frames(page)
+    style = page.add_style_tag(content=_blanked(FOLDER_BLANKED))
+    try:
+        blanked = _in_step(page, before)
+        settled(page)
+        drawn = page.screenshot()
+    finally:
+        style.evaluate("(tag) => tag.remove()")
+        page.evaluate("() => window.__unblank()")
+    assert blanked["height"] > on_screen["height"], (on_screen, blanked)
+    assert same_picture(shot, drawn), "the picture is not of the world drawn at its size"
