@@ -718,6 +718,7 @@ def test_a_closed_panel_stays_closed_and_the_ring_reopens_it(page: Page, ring_ur
     inner = _wedges(page)
     assert sorted(inner.values()) == [
         "Bench",
+        "Control pad",
         "Docs",
         "Machine",
         "Pictures",

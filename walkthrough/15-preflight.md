@@ -49,9 +49,9 @@ aside before it runs:
 
 ## An excuse must name what covers it
 
-`pytest.yml` installs OpenSCAD with `apt-get` and Playwright with
-`--with-deps`. Both are Linux-only, so that gate cannot run on a Windows
-machine — and saying so is only acceptable because something else here does
+`pytest.yml` installs OpenSCAD with `apt-get` when the machine has none, and
+Chromium's system libraries with `--with-deps` on a runner. Both are
+Linux-only, so that gate cannot run on a Windows machine — and saying so is only acceptable because something else here does
 cover it:
 
     >>> from apothecary.preflight import LOCAL_DIFFERENCES

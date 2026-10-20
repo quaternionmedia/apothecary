@@ -33,7 +33,11 @@ class Difference:
 # observed by running preflight rather than predicted from reading a workflow.
 LOCAL_DIFFERENCES: Dict[str, Difference] = {
     "pytest.yml": Difference(
-        why=("installs OpenSCAD with apt-get and Playwright with --with-deps, both Linux-only"),
+        why=(
+            "installs OpenSCAD with apt-get when the machine has none, and Chromium's "
+            "system libraries with --with-deps on a runner: on a machine with no apt-get "
+            "(Windows) neither can install"
+        ),
         covered_by=(
             "`uv run pytest` with OpenSCAD already installed, and "
             "`uv run pytest tests/e2e --start-server` once "

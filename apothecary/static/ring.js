@@ -204,7 +204,8 @@ const STYLE = `
 .apothecary-ring .hub { fill: #141614; stroke: #3a443a; stroke-width: 1.5; cursor: pointer; }
 .apothecary-ring text { fill: #d8e0d8; pointer-events: none; user-select: none; }
 .apothecary-ring .label { font-size: 12px; text-anchor: middle; }
-.apothecary-ring .digit { font-size: 9px; fill: #9aa89a; text-anchor: middle; }
+.apothecary-ring .digit { font-size: 10px; fill: #b8a273; text-anchor: middle; }
+.apothecary-ring .digit-key { fill: #222722; stroke: #4c4532; stroke-width: 1; pointer-events: none; }
 .apothecary-ring .empty-digit { opacity: 0.35; }
 .apothecary-ring .hub-digit { font-size: 11px; fill: #66746a; text-anchor: middle; }
 .apothecary-ring .title { font-size: 10px; fill: #9aa89a; text-anchor: middle; }
@@ -333,8 +334,14 @@ class RingInstance {
             const cell = COMPASS[slot];
             const option = byCell[cell];
             const centre = GEOMETRY.startDeg + slot * 45;
-            const [lx, ly] = polar((r0 + r1) / 2 + 2, centre);
-            const [dx, dy] = polar(r1 - 11, centre);
+            // The cell's digit at the inner end of its spoke, by the hub, on a key of
+            // its own; its label further out, clear of it -- on the two level spokes
+            // begun just past the key and running outward, where a centred label would
+            // reach back over it.
+            const [dx, dy] = polar(r0 + 14, centre);
+            const level = Math.abs(Math.cos(rad(centre))) > 0.9;
+            const [lx, ly] = polar(level ? r0 + 29 : r0 + (r1 - r0) * 0.61, centre);
+            const anchor = level ? ` style="text-anchor: ${Math.cos(rad(centre)) > 0 ? "start" : "end"}"` : "";
             const cls = ["wedge"];
             if (!option) cls.push("empty");
             else {
@@ -348,15 +355,16 @@ class RingInstance {
             const label = option ? (option.marked ? "• " : "") + esc(option.label) + (option.children ? " ›" : "") : "";
             // A cell that cannot be undone, chosen once, says what choosing it again does.
             const words = armed
-                ? `<text class="label armed" x="${lx.toFixed(1)}" y="${(ly - 2).toFixed(1)}">again to<tspan x="${lx.toFixed(1)}" dy="13">${esc(option.label.toLowerCase())}</tspan></text>`
-                : `<text class="label" x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}">${label}</text>`;
+                ? `<text class="label armed"${anchor} x="${lx.toFixed(1)}" y="${(ly - 2).toFixed(1)}">again to<tspan x="${lx.toFixed(1)}" dy="13">${esc(option.label.toLowerCase())}</tspan></text>`
+                : `<text class="label"${anchor} x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}">${label}</text>`;
             parts.push(
                 `<path id="ring-cell-${cell}" class="${cls.join(" ")}" data-cell="${cell}" role="menuitem"`
                 + ` aria-label="${option ? esc(armed ? `again to ${option.label.toLowerCase()}` : option.label) : "empty"}"`
                 + (option && option.marked ? ' aria-current="true"' : "")
                 + `${option ? "" : ' aria-disabled="true"'} d="${wedgePath(slot, r0, r1)}"></path>`
                 + (option ? words : "")
-                + `<text class="digit${option ? "" : " empty-digit"}" x="${dx.toFixed(1)}" y="${(dy + 3).toFixed(1)}">${cell}</text>`
+                + `<circle class="digit-key${option ? "" : " empty-digit"}" cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="8.5"></circle>`
+                + `<text class="digit${option ? "" : " empty-digit"}" x="${dx.toFixed(1)}" y="${(dy + 4).toFixed(1)}">${cell}</text>`
             );
         }
         const title = this.ring.title || "";

@@ -210,7 +210,9 @@ expand it, as its chip in Site does; 7 when stepped in, 1 at the top).
 - **Panels** › Site, Selected, Pictures, Machine (the selected board's), Rail
   (as `~`), Bench › Bench (show it), Install (a cell per toolchain
   module, then the slicer), Compile, Upload, Raw flash, Cancel, Cores,
-  Libraries; and Docs (the documentation in a new tab, as the header's Docs).
+  Libraries; Docs (the documentation in a new tab, as the header's Docs); and
+  Control pad (an armed printer's pad out over the world or back in its
+  Machine, as the pad's ⇥ and ⧉).
 - **Pictures** › Add (a picture pinned at the floor), Floor (the floor's
   Fit, Camera and Picture), Purge and Gather.
 
@@ -253,8 +255,9 @@ variant's Forget and Empty, a board's Reboot, a print's Cancel and Abort -- is
 chosen twice: chosen once, its wedge (or its button) says "again to …", and
 choosing it again does it. What heats, moves or flashes a machine -- Probe the
 bed, Print, Compile and upload, Raw flash -- asks in a dialog; the control
-overlay's own buttons stand behind its armed latch. The emergency stop never
-asks.
+pad's own buttons stand behind its armed latch, the pad popped out over the
+world while it is armed ([firmware.md](firmware.md#control-behind-a-latch)).
+The emergency stop never asks.
 
 ## The rail
 

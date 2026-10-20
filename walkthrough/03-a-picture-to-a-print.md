@@ -87,7 +87,7 @@ disc_1.gcode kept and chosen: sliced from disc_1 for printer_1, 1h 2m 3s, 0.79 g
 
 ## 8. Print starts a job that names the piece
 
-The Machine's ⚙ Control armed, above the card -- the latch a print needs -- Print from here's ▶ Print asks first, naming the file, the port and disc_1; then the file streams, one line per ok, and the job is the newest of printer_1's history, running. The status line names where it is followed.
+The Machine's ⚙ Control armed -- the latch a print needs, its pad popped out over the world -- Print from here's ▶ Print asks first, naming the file, the port and disc_1; then the file streams, one line per ok, and the job is the newest of printer_1's history, running. The status line names where it is followed.
 
 ```
 Print disc_1.gcode on /dev/ttyFAKE1, making disc_1?
@@ -98,7 +98,7 @@ started disc_1.gcode on /dev/ttyFAKE1, making disc_1: Print from here follows it
 
 ## 9. The job ends, and says so where it is watched
 
-The status line says the print ended and how; the Machine's progress reads done, every line sent; its history keeps the job with the piece it made, and Site's Jobs lists it under printer_1. The job's record keeps the picture and the camera the piece came from, and its row does not show them.
+The status line says the print ended and how; the Machine's progress reads done, every line sent; its history keeps the job with the piece it made, and Site's Jobs lists it under printer_1. The job's record keeps the picture and the camera the piece came from, and its row does not show them. The pad's 🔒 Disarm lets the latch go, and the pad with it, while the next piece is made.
 
 ```
 disc_1.gcode on /dev/ttyFAKE1, making disc_1, ended: done, 163/163 lines
@@ -139,7 +139,7 @@ plate_1.gcode kept and chosen: sliced from plate_1 for printer_1, 1h 2m 3s, 0.79
 
 ## 13. Send file prints the second, and both jobs name their pieces
 
-printer_1's ring, Device › Control › Print › Send file, prints what the card has chosen: plate_1, and the status line says when it ends. The Machine's history and Site's Jobs keep both jobs, newest first, each with the piece it made.
+printer_1's ring, Device › Control › Arm, pops the pad out over the world again; Control › Print › Send file prints what the card has chosen: plate_1, and the status line says when it ends. The Machine's history and Site's Jobs keep both jobs, newest first, each with the piece it made.
 
 ![Send file prints the second, and both jobs name their pieces](screenshots/03-13-send-file-prints-the-second-and-both-jobs-name-the.png)
 
