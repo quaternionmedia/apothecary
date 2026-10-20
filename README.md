@@ -94,11 +94,11 @@ uv run apothecary serve                             # the viewer: http://127.0.0
 `serve` keeps its terminal until Ctrl+C; run the rest in another one.
 
 ```bash
-uv run apothecary render --scene-file examples/scene.json -o scene.scad   # a scene to OpenSCAD
+uv run apothecary render --scene-file examples/scenes/cube.json -o scene.scad   # a scene to OpenSCAD
 uv run apothecary parts list                        # the registered parts
 uv run apothecary parts generate-stl datum_core     # one part's STL (needs openscad)
 uv run apothecary problems                          # what is open here, and who can close it
-uv run apothecary photo view examples/shapes.png --width-mm 300 --port 8001   # a picture's pieces, in a viewer of its own
+uv run apothecary photo view examples/pictures/shapes.png --width-mm 300 --port 8001   # a picture's pieces, in a viewer of its own
 ```
 
 In the viewer, a camera is a part of the site: Camera › Add here stands one above a
@@ -126,6 +126,8 @@ in the background when OpenSCAD is present (`APOTHECARY_SKIP_STL_GENERATION=1` s
 - [walkthrough/](walkthrough/00-getting-started.md): the executable path through the
   repository, run by `uv run pytest walkthrough`. Start at page 00.
 - [docs/README.md](docs/README.md): the guides, plans and records.
+- [examples/README.md](examples/README.md): small things to run, by kind -- scenes, scripts,
+  pictures -- and *LLM's own*, the lane for language-model agents' contributions.
 - `uv run apothecary --help`, and `--help` on every command: the command reference.
 - `/openapi.json` on a running server: the HTTP API. `/docs` serves `docs/` and
   `/walkthrough` serves `walkthrough/`, rendered.

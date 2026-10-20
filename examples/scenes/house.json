@@ -1,0 +1,76 @@
+{
+  "name": "Simple House",
+  "objects": [
+    {
+      "comment": "Final house with door",
+      "children": [
+        {
+          "comment": "House shell",
+          "children": [
+            {
+              "comment": "House base",
+              "type": "cube",
+              "size": {
+                "x": 10.0,
+                "y": 10.0,
+                "z": 5.0
+              },
+              "center": false
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "comment": "Roof",
+                      "type": "cylinder",
+                      "h": 10.0,
+                      "r1": 7.0,
+                      "r2": 0.0,
+                      "center": true,
+                      "fn": 4
+                    }
+                  ],
+                  "type": "rotate",
+                  "a": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 45.0
+                  }
+                }
+              ],
+              "type": "translate",
+              "v": {
+                "x": 5.0,
+                "y": 5.0,
+                "z": 10.0
+              }
+            }
+          ],
+          "type": "union"
+        },
+        {
+          "children": [
+            {
+              "comment": "Door cutout",
+              "type": "cube",
+              "size": {
+                "x": 2.0,
+                "y": 0.2,
+                "z": 3.0
+              },
+              "center": false
+            }
+          ],
+          "type": "translate",
+          "v": {
+            "x": 4.0,
+            "y": -0.1,
+            "z": 0.0
+          }
+        }
+      ],
+      "type": "difference"
+    }
+  ]
+}
