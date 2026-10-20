@@ -77,6 +77,7 @@ Open plans: each says what is decided and what is not built.
 | [The shape finder, with a model behind it](plans/photo-finders-local-models-2026-09-21.md) | Optional local models behind the photo finder: the seam, the plugin shape, what reach is lawful, the phases |
 | [Iterating on a part, tightened](plans/part-iteration-2026-10-12.md) | The part and SCAD loops reviewed and timed, and this round built: errors as failed renders, real controls, kept work, OpenSCAD's keys, variants drawn where they stand, history, compare, variant management; its next phase written out |
 | [Governance, brought up to the corpus](plans/governance-2026-10-13.md) | The audit of apothecary's governance and audit documents against the corpus, and what is decided: the guard's install points, licence exceptions, the serial removed, drafts, the bench checklist |
+| [Landing the stack on main](plans/landing-the-stack-2026-10-20.md) | Every open pull request and the governance records it pins: what goes on origin first, the review of the whole once, the merge order and how each pull request merges, and the check that the order still merges |
 | [The documentation, swept](plans/timeless-docs-2026-10-12.md) | Every durable text brought under the governance record on durable text: present tense, no internal history, no ornament; the triage by area and the order |
 
 ## History
