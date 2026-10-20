@@ -45,6 +45,8 @@
  *   log(text, kind): the page's status bar; kind "bad" is a refusal.
  */
 
+import { overShapes } from "/static/picture_marks.js";
+
 export const FLOOR = "";
 const FLOOR_MARK = "@floor";
 const FRAME_SETTLE_MS = 500;     // after the first frame, before a still is kept
@@ -223,6 +225,15 @@ export function mountPictures({ base = "", marks, world, log }) {
         const by = view.camera ? `${view.camera}'s picture lies on ${where(view.host)}` : `${view.picture} pinned at ${where(view.host)} as a view`;
         return `${by}: ${ringPath(view.host, "Picture › Find shapes")} finds what is in it`;
     }
+    // The shapes that lie over something resting on the view's host: a flag, and Make
+    // makes them all the same.
+    function overWords(view) {
+        const over = overShapes(view);
+        if (!over.length) return "";
+        const names = [...new Set(over.flatMap((s) => s.overlaps))].join(", ");
+        const which = over.length === 1 ? `shape ${over[0].index} lies` : `${over.length} shapes lie`;
+        return `; ${which} over ${names}: Make makes ${over.length === 1 ? "it" : "them"} all the same, and the layout check names the piece`;
+    }
     // What Find shapes found, and the step after it: Make, once the view has a width.
     function found(view) {
         const n = view.shapes.length;
@@ -232,7 +243,7 @@ export function mountPictures({ base = "", marks, world, log }) {
         const next = view.mat && view.mat.width
             ? `, ${Math.round(view.mat.width)} mm across: ${make} makes them pieces`
             : `: type the picture's width in Selected (${ringPath(view.host, "Picture › Size")}), then ${make} makes them pieces`;
-        return `${n} shape${n === 1 ? "" : "s"} found at ${where(view.host)}${left}${next}`;
+        return `${n} shape${n === 1 ? "" : "s"} found at ${where(view.host)}${left}${next}${overWords(view)}`;
     }
     async function drawNew(host, view, select = true) {
         await marks.refresh();
@@ -368,7 +379,7 @@ export function mountPictures({ base = "", marks, world, log }) {
         const next = sized.finder === null
             ? `${ringPath(host, "Picture › Find shapes")} finds its shapes, then Make makes them pieces`
             : sized.shapes.length ? `${ringPath(host, "Picture › Make")} makes its shapes pieces` : "it holds no shapes to make";
-        say(`${drawn.picture}: ${Math.round(sized.mm_across)} mm across${byShape ? `, from shape ${chosen.index}'s long side` : ""}${taught}${followed}; ${next}`);
+        say(`${drawn.picture}: ${Math.round(sized.mm_across)} mm across${byShape ? `, from shape ${chosen.index}'s long side` : ""}${taught}${followed}; ${next}${overWords(sized)}`);
     }
 
     // --- what the ring is told -------------------------------------------------------------

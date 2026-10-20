@@ -114,10 +114,13 @@ def view_answer(view: View, site: Optional[Assembly], made: Dict[str, Made]) -> 
     is laid through, and its four ``corners`` already laid, each null where a
     camera's picture runs past the horizon. ``taken`` is how a camera stood when
     it took the picture; ``scale`` is null on one no person sized, whose field of
-    view follows its camera's lens."""
+    view follows its camera's lens. A flat view's ``fit_width`` is how wide it fits
+    where it was laid, how wide it is drawn until a person sizes it; each shape's
+    ``overlaps`` names what resting on its host its footprint overlaps now."""
     centre = viewing.mat_centre(view, site) if site is not None else None
     width = view.mm_across
     in_site = viewing.in_site(view, site) if site is not None else None
+    overlaps = viewing.overlaps_of(view, site) if site is not None else {}
     shapes = []
     for index, shape in enumerate(view.shapes):
         word, reason, stated = viewing.word_for_shape(view, index)
@@ -131,6 +134,7 @@ def view_answer(view: View, site: Optional[Assembly], made: Dict[str, Made]) -> 
                 "word_stated": stated,
                 "status": status,
                 "piece": piece,
+                "overlaps": overlaps.get(index, []),
             }
         )
     return {
@@ -157,6 +161,7 @@ def view_answer(view: View, site: Optional[Assembly], made: Dict[str, Made]) -> 
             {
                 "centre": _xyz(centre),
                 "width": width,
+                "fit_width": view.fit_width,
                 "depth": viewing.mat_depth(view),
                 "corners": viewing.mat_corners(view, site),
                 "homography": as_lists(in_site) if in_site is not None else None,
@@ -266,7 +271,9 @@ def pin_picture(
     site_name: str, host: str, picture: str, *, mm_across: Optional[float] = None
 ) -> View:
     """Pin a picture under the root at ``host`` as a view no camera took, finding
-    nothing in it: flat, and unsized until a person gives its width.
+    nothing in it: flat, and unsized until a person gives its width. At a host it is
+    laid where the widest picture of its shape fits clear of what rests on the top
+    (``viewing.laid_at``), and stays there.
 
     Find shapes (``find_in``) is the step that finds its shapes."""
     from ..api import _picture_root
@@ -276,6 +283,11 @@ def pin_picture(
     where = _picture_at(picture)
     width, height = _picture_size(where)
     at = datetime.now(timezone.utc)
+    offset, fit_width = (
+        (None, None)
+        if host == viewing.FLOOR
+        else viewing.laid_at(site_name, site, host, height / width)
+    )
     view = View(
         id=viewing.new_view_id(at),
         site=site_name,
@@ -291,6 +303,8 @@ def pin_picture(
             if host == viewing.FLOOR
             else None
         ),
+        offset=offset,
+        fit_width=fit_width,
     )
     return viewing.store().pin(view)
 
