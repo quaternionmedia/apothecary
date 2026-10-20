@@ -32,7 +32,8 @@ the envelope and for the checks; `tests/test_airgap_part.py` runs the SCAD with
 `-D echo_surfaces=true` and holds radii, coverage, stations and conductor paths
 to it, and with `--slow` the declared envelope to the rendered one. The part's
 README lists the parameters worth tuning first and what a render costs on each
-OpenSCAD.
+OpenSCAD; [walkthrough page 17](../walkthrough/17-a-part-that-computes-itself.md)
+walks the mirror and the document in doctests.
 
 ## The panel
 

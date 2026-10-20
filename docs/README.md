@@ -7,7 +7,7 @@ HTTP API is described at `/openapi.json`, the commands by `apothecary --help`.
 ## The walkthrough
 
 `walkthrough/` is the path through this repository. Pages 01 to 06 are
-written by the browser tests that walk them; page 00 and pages 07 to 16 are
+written by the browser tests that walk them; page 00 and pages 07 to 17 are
 doctests, run by `pytest walkthrough`. Start there, at page 00.
 
 | Page | |
@@ -29,6 +29,7 @@ doctests, run by `pytest walkthrough`. Start there, at page 00.
 | [14 — Problems and solutions](../walkthrough/14-problems-and-solutions.md) | What is unresolved, who can close it, and what exists to close it with |
 | [15 — Running the checks before pushing](../walkthrough/15-preflight.md) | `apothecary preflight`: each CI workflow, run here before a push |
 | [16 — Being depended on](../walkthrough/16-being-depended-on.md) | What a consumer pinning this repository is entitled to |
+| [17 — A part that computes itself](../walkthrough/17-a-part-that-computes-itself.md) | The airgap: a part whose SCAD computes its surfaces from its assignments, the Python mirror that declares its envelope, and the metrics document its panel says |
 
 ## Guides
 
