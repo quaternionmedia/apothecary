@@ -4,10 +4,8 @@ datum_cap - the cover for a datum_core tray.
 Four contact openings on a 2 x 2 grid and one indicator light pipe, over a lip
 that drops into the core's cavity.
 
-Split out of datum_core rather than selected by a parameter there. A `show`
-enum picking between the tray and the cover made one part's bounds depend on
-which mode you asked for, and the enclosure record asks for one core body with
-separate pieces around it.
+A part of its own, not a mode of datum_core: one part has one envelope, and the
+enclosure record asks for one core body with separate pieces around it.
 
 The board dimensions are assumptions carried as parameters, not measurements:
 no schematic exists. They match datum_core's, because the two pieces have to
@@ -90,14 +88,10 @@ def create(metadata_root: Path) -> DatumCapPart:
             nozzle_diameter=0.4, layer_height=0.2, wall_thickness=3.0, tolerance=0.4
         ),
         preview_color=Color.from_hex("#5A9367"),
-        # The same disagreement datum_core carries: these two pieces have to be
-        # made on the same printer, so they share the manufacturing facts.
-        # Nothing contested remains. `walls` and `tolerence` were disputed
-        # only by parts/datum, the single-piece tray the compound replaced,
-        # which carried 2.4 and 0.2 while citing the enclosure record for
-        # values that record does not contain. Retiring it left the house
-        # constants unopposed -- a resolution, not a silencing, because what
-        # went away was an artifact making a claim it could not support.
+        # Nothing contested here: `walls` and `tolerence` are the house
+        # constants, and these two pieces are made on the same printer, so they
+        # share the manufacturing facts. The board's size follows datum_core's,
+        # where `board_y` is contested.
         contested={},
     )
 

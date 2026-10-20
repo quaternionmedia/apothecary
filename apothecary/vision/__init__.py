@@ -9,7 +9,7 @@ Nothing here reaches the network, and nothing here writes outside the folder it
 is given; ``apothecary/stays_local.py`` holds the process to the first, under
 the draft record *Personal data stays on the device*.
 
-PROTOTYPE — not ratified.
+A prototype: no ratified record governs it.
 """
 
 # An install point of the guard (apothecary/stays_local.py), before any module

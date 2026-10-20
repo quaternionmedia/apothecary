@@ -125,11 +125,9 @@ def test_every_listed_part_serves_its_scad():
 
 
 def test_viewer_home_redirects_to_the_named_default_site():
-    """/viewer no longer serves a standalone parts browser -- it redirects to
-    the fractal viewer for api.py's DEFAULT_VIEWER_SITE. It used to redirect to
-    whichever site sorted first, which meant registering one could move the
-    front door without anyone deciding to (parts are reached by navigating into
-    "parts_library"; datum_core is its own site).
+    """/viewer redirects to the fractal viewer for api.py's DEFAULT_VIEWER_SITE, a
+    site named, so registering another site never moves the front door (parts are
+    reached by navigating into "parts_library"; datum_core is its own site).
     """
     client = TestClient(app)
     r = client.get("/viewer", follow_redirects=False)
@@ -139,7 +137,8 @@ def test_viewer_home_redirects_to_the_named_default_site():
 
 @pytest.mark.parametrize("name", ["base", "stl_renderer", "readiness", "nope"])
 def test_a_part_name_from_a_url_is_never_an_import_path(name):
-    """GET /parts/stl_renderer imported that module and answered 500."""
+    """A part's name from a URL is looked up, never imported: GET /parts/stl_renderer
+    is a 404."""
     assert TestClient(app).get(f"/parts/{name}").status_code == 404
 
 

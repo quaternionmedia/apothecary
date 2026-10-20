@@ -210,7 +210,7 @@ def lay(matrix: Matrix, shape, tallness: float) -> Optional[Laid]:
     only by its upright box is measured across and down the picture, and turned
     by its own ``turned_degrees`` plus however far the picture's across is
     turned where it lies. On a flat picture that is the shape's sides times
-    ``W`` and its own turn, as they always were."""
+    ``W`` and its own turn."""
     cx = (shape.min_point.x + shape.max_point.x) / 2
     cy = (shape.min_point.y + shape.max_point.y) / 2
     centre = onto(matrix, cx, cy)

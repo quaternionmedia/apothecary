@@ -245,10 +245,9 @@ export function makeBoardBadge(anchors, key, boardPath, { point, selected }) {
     return badge;
 }
 
-/* What a board's badge says, from the board model's summary (board_text.js):
- * the words the badge carried before it was an icon -- a printer's state,
- * readings and job, a devkit's label and sketch -- and under them the board
- * and its port. */
+/* What a board's badge says, from the board model's summary (board_text.js): a
+ * printer's state, readings and job, a devkit's label and sketch, and under them
+ * the board and its port. */
 export function sayBoard(anchors, key, sum, device) {
     const badge = anchors.get(key);
     if (!badge) return;

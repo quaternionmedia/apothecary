@@ -6,7 +6,7 @@ are yours to run, in order, from a fresh clone.
 Four steps take a fresh clone to a viewer with a bench it can drive and no
 hardware plugged in: install, see what this machine has, put a fast OpenSCAD
 in place, and serve the demo. Then the four loops through the page, each with
-what it needs, and the installs only some of them want. Page 01 onward is the
+what it needs, and the installs only some of them want. Page 07 onward is the
 library's tour.
 
 ## 1. Install
@@ -62,7 +62,7 @@ and every render uses it from then on. Installing it before the first
     True
 
 `apothecary openscad status` says what is installed and which one renders
-use; the README's *Install* says what the install does on each
+use; [OpenSCAD](../docs/openscad.md) says what the install does on each
 platform. STLs an older OpenSCAD already built are kept: `apothecary parts
 generate-stl --all --force` builds them again.
 
@@ -85,32 +85,27 @@ checkout, kept between runs; deleting it starts the demo afresh. Without
 `--demo`, `serve` is the same viewer on your own state and the boards plugged
 into this machine.
 
-The page opens on the garage. The world fills it, and one rail beside it
-holds Site (the tree, its problems, its SCAD, its pins and jobs) and Selected,
-over a strip of tabs: Pictures, the Bench, Settings, a board's Machine. The
-ring, `m` or Ctrl+right-click, holds every verb of what it opens on; each cell
-has a digit, and the digits pressed are the address the status line shows as
-⌗. A right-click alone is the camera's: a drag pans, and a still click
-re-centres the view on what it lands on.
+The page opens on the garage: the world, a rail of panels beside it, and the
+ring, `m` or Ctrl+right-click, which holds every verb of what it opens on, the
+digits pressed to reach one its address. A right-click alone is the camera's.
 [The viewer](../docs/viewer.md) describes each of its controls.
 
 ## 5. The four loops
 
 Each loop is a path through the page that goes round twice, and each has a
-page written by the browser test that walks it, so the words there are what
-the page says today.
+page the browser test that walks it writes as it goes.
 
 | Loop | Page | Needs | Under `serve --demo` |
 |---|---|---|---|
-| Designing a part: a size moved, checked, applied and drawn | [14](14-designing-a-part.md) | nothing but OpenSCAD | the same |
-| Editing a part's SCAD, kept as a variant in git | [16](16-editing-a-parts-scad.md) | nothing but OpenSCAD | the same |
-| A picture to a print: a camera's picture, a piece made from it, sliced and printed | [13](13-a-picture-to-a-print.md) | a printer pinned to printer_1's mainboard, OrcaSlicer, and a camera or a picture | the simulated Ender, OrcaSlicer if installed |
-| Firmware: a sketch built, flashed and heard saying hello | [15](15-firmware.md) | an ESP32 devkit and a toolchain | the simulated devkit and the scripted tools |
+| Designing a part: a size moved, checked, applied and drawn | [04](04-designing-a-part.md) | nothing but OpenSCAD | the same |
+| Editing a part's SCAD, kept as a variant in git | [06](06-editing-a-parts-scad.md) | nothing but OpenSCAD | the same |
+| A picture to a print: a camera's picture, a piece made from it, sliced and printed | [03](03-a-picture-to-a-print.md) | a printer pinned to printer_1's mainboard, OrcaSlicer, and a camera or a picture | the simulated Ender, OrcaSlicer if installed |
+| Firmware: a sketch built, flashed and heard saying hello | [05](05-firmware.md) | an ESP32 devkit and a toolchain | the simulated devkit and the scripted tools |
 
     >>> from apothecary.projects.parts.skeleton import ROOT
-    >>> loops = sorted((ROOT / "walkthrough").glob("1[3-6]-*.md"))
+    >>> loops = sorted((ROOT / "walkthrough").glob("0[3-6]-*.md"))
     >>> [page.name for page in loops]
-    ['13-a-picture-to-a-print.md', '14-designing-a-part.md', '15-firmware.md', '16-editing-a-parts-scad.md']
+    ['03-a-picture-to-a-print.md', '04-designing-a-part.md', '05-firmware.md', '06-editing-a-parts-scad.md']
     >>> all("rewritten by every run of the browser suite" in page.read_text(encoding="utf-8")
     ...     for page in loops)
     True
@@ -157,11 +152,16 @@ tests and this walkthrough, whose demonstration drives Chromium.
 
 ## 7. Where next
 
-[Page 01](01-a-part.md) onward is the library's tour: what a part is and how
-its envelope is checked, which numbers are whose, an assembly as a tree, the
-API, the numbers its sources disagree about, whether a part is ready to
-build, and what is open and who can close it. Then
-[`docs/`](../docs/README.md): the guides, the plans and the records.
+Pages 01 and 02 are written by their runs: a photograph made into pieces,
+and the bench drawn as it is with a camera above it; 03 to 06 are the loops
+above. [Page 07](07-a-part.md) onward is the library's tour: what a part is
+and how its envelope is checked (07), which numbers are whose (08), an
+assembly as a tree (09), the API (10), the numbers its sources disagree about
+(11), whether a part is ready to build (12), how the commands report state
+(13), and what is open and who can close it (14). Pages 15 and 16 are a
+contributor's: the CI workflows run here before a push, and what a consumer
+pinning this repository may rely on. Then [`docs/`](../docs/README.md): the
+guides, the plans and the records.
 `apothecary --help` is the command reference, and it ends with the steps
 above:
 

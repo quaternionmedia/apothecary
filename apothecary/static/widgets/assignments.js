@@ -1,6 +1,5 @@
 /* A SCAD text's top-level assignments, read as the server reads them, and a value
- * written back into one (the part-iteration plan's "parameters and text, tied
- * together", docs/plans/part-iteration-2026-10-12.md).
+ * written back into one (docs/viewer.md: the parameters and the SCAD are one draft).
  *
  * The text is the truth: a control moves its parameter by rewriting the value in
  * the text, and a value typed in the text moves its control. The page rewrites

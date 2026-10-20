@@ -1,7 +1,6 @@
-"""A bounded queue of OpenSCAD runs (docs/plans/part-iteration-2026-10-12.md,
-item 7): at most ``runs_limit()`` at once, the rest waiting their turn and shown
-as waiting to the page that asked (``GET /openscad/runs``), and a request
-cancelled while it waits leaving the line without running, as one cancelled
+"""A bounded queue of OpenSCAD runs: at most ``runs_limit()`` at once, the rest waiting
+their turn and shown as waiting to the page that asked (``GET /openscad/runs``), and a
+request cancelled while it waits leaving the line without running, as one cancelled
 while it runs is stopped.
 
 The OpenSCAD is scripted (tests/scripted_openscad.py): a SCAD holding ``SLEEP``

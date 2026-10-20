@@ -209,8 +209,7 @@ def test_parts_import_brings_a_file_in_as_a_part(tmp_path):
 def test_the_garage_printers_are_ender_3s_drawn_as_they_are(monkeypatch):
     """The printer is the Ender 3 part with its board in the electronics box, its
     build volume where the machine's bed is, its footprint the machine's; the
-    boards on the bench are the board models; the layout is still valid. One
-    printer for now: the owner's decision of 2026-10-04."""
+    boards on the bench are the board models; the layout is valid."""
     site = create_example_site()
     printers = [s for s in site.children if s.name.startswith("printer_")]
     assert [p.name for p in printers] == ["printer_1"]

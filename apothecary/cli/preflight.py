@@ -1,9 +1,7 @@
 """`apothecary preflight`: run the CI gates here, before pushing.
 
-CI is not a barrier on this repository -- `main` is unprotected and no ruleset
-is applied, so every check is a signal to whoever merges rather than a gate
-that stops them. A signal only works if somebody reads it before it costs a
-round trip.
+Every check on this repository is a signal to whoever merges, read here
+before it costs a round trip; walkthrough/15-preflight.md says why and how.
 """
 
 from __future__ import annotations
@@ -48,9 +46,9 @@ def preflight(passthrough: tuple[str, ...]) -> None:
         apothecary preflight --event push --ref main
 
     A pass here is evidence, not proof. `uses:` steps and the runner image are
-    not reproduced, and this machine carries tools a fresh runner does not --
-    which is how a green local suite hid a CI failure here more than once.
-    `walkthrough/09-preflight.md` has the detail.
+    not reproduced, and this machine carries tools a fresh runner does not, so
+    a green run here can still fail in CI. `walkthrough/15-preflight.md` has
+    the detail.
     """
     root = Path(__file__).resolve()
     runner = repo = None
@@ -68,8 +66,8 @@ def preflight(passthrough: tuple[str, ...]) -> None:
     except ImportError:
         raise click.ClickException(PYYAML_MISSING) from None
 
-    # Refuse to report gates red for a reason that is not about the gates. Five
-    # failing workflows all saying the same thing about a shell is noise that
+    # Refuse to report gates red for a reason that is not about the gates: a
+    # missing shell would fail every workflow alike, and that is noise that
     # trains a reader to stop looking.
     if not _runner_can_run_steps(runner):
         raise click.ClickException(STALE_RUNNER)
@@ -117,10 +115,9 @@ def preflight(passthrough: tuple[str, ...]) -> None:
         sys.exit(subprocess.call([sys.executable, str(runner), *passthrough], cwd=repo, env=env))
 
     # Otherwise one invocation per workflow. The runner executes every job in a
-    # single environment; CI gives each job a fresh machine. That difference is
-    # not cosmetic -- in the sibling project, one workflow's `uv sync --locked`
-    # stripped the tools a later workflow needed, and its licensing gate failed
-    # for it while saying nothing about licensing.
+    # single environment; CI gives each job a fresh machine. Here one
+    # workflow's `uv sync --locked` would strip the tools a later one needs, and
+    # that one would fail for a reason not its own (walkthrough/15).
     source = repo / ".github" / "workflows"
     staged_root = repo / ".preflight" / "workflows"
     if staged_root.exists():

@@ -1,9 +1,8 @@
 """Finding ports and listening to a board, for a toolchain module that does so itself.
 
-The Rust module needs no arduino-cli (the owner's decision of 2026-10-10): it
-finds ports and listens to a devkit through **pyserial**, the transport the
-G-code seam already uses, behind the same engine slot
-(``gcode.serial_engine()``):
+The Rust module needs no arduino-cli: it finds ports and listens to a devkit
+through **pyserial**, the transport the G-code seam uses, behind the same
+engine slot (``gcode.serial_engine()``):
 
 - **Finding** is pyserial's ``list_ports``: the operating system's own list of
   serial devices, with each one's USB VID, PID and serial number. Nothing is

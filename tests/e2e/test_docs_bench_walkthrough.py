@@ -2,7 +2,7 @@
 what stays on this machine.
 
 Like the first (`test_docs_photo_walkthrough.py`), this module is the page:
-`walkthrough/12-the-bench-as-it-is.md` is what it writes, the ordinary test
+`walkthrough/02-the-bench-as-it-is.md` is what it writes, the ordinary test
 command runs it, and each step is an assertion the run has to satisfy before
 it becomes a sentence. The model half needs no browser; the browser half runs
 in a browser launched with Chromium's fake camera, so a camera can be placed
@@ -90,6 +90,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     placed at a piece and drawn there, and the doors the program keeps shut."""
     from apothecary import meshes
     from apothecary.example_hierarchy import create_example_site
+    from apothecary.menu import NEWEST
     from apothecary.models.vectors import Vector3D
     from apothecary.primitives import Import
     from apothecary.projects.parts import ender3
@@ -100,7 +101,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
 
     page, base_url, picture_folder = bench.page, bench.url, bench.folder
     story = walkthrough(
-        ordinal="12",
+        ordinal="02",
         slug="the-bench-as-it-is",
         title="The bench as it is, and a camera looking at it",
         intro=(
@@ -127,9 +128,9 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
             "**The import command writing into the repository.** `apothecary parts "
             "import` is what brings a file in for keeps; this run measures the file "
             "in a temporary folder and leaves `parts/` as it found it.",
-            "**The pieces without OpenSCAD.** A part is drawn from an STL that "
-            "OpenSCAD renders on first request; on a machine without it the pieces "
-            "are their footprint boxes. These pictures were made with it.",
+            "**The pieces without OpenSCAD.** A part is drawn from an STL OpenSCAD "
+            "builds, and a server builds the missing ones as it starts; on a machine "
+            "without OpenSCAD the pieces are their footprint boxes.",
         ],
         page=page,
     )
@@ -272,6 +273,13 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     page.locator("#contents-list .contents-item[data-path='esp32_blink']").dblclick()
     page.locator("#contents-list .contents-item[data-path='esp32_blink']").click()
     expect(_part_row(page)).to_contain_text("esp32_devkitc", timeout=5000)
+    # Selected's part section once the server has answered for it: its readiness read,
+    # and the line saying what its STL measures -- or, on a machine without OpenSCAD and
+    # so without an STL to measure, the readiness saying OpenSCAD is not installed.
+    measured = page.locator("#part-envelope .measured", has_text="measured")
+    no_openscad = page.locator("#part-checklist .check", has_text="OpenSCAD not installed")
+    expect(measured.or_(no_openscad).first).to_be_visible(timeout=20000)
+    expect(page.locator("#part-checklist .verdict")).to_be_visible(timeout=20000)
     settled(page)
     story.shows(
         "The DevKitC standing on its pins",
@@ -470,10 +478,11 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
         "took them -- here none did -- the folder's own and the ones the browser kept "
         "(those added from its file picker kept as they were named under uploads/), "
         "each with where it is pinned as a view, and Forget on a kept one. A picture "
-        "kept and pinned nowhere waits to be chosen: one clicked is "
-        "chosen, as shelf.png is here, and the ring's Picture › Folder pins it where "
-        "the ring stands -- the seven newest by modification time, an older one as its last cell -- "
-        "as the status bar says.",
+        "kept and pinned nowhere waits to be chosen: one clicked is chosen, as "
+        "shelf.png is here, and the ring's Picture › Folder pins it where the ring "
+        "stands, as the status bar says. Folder holds the "
+        f"{NEWEST} newest by modification time; with more in the folder, its last cell "
+        "pins the one chosen when that one is older.",
     )
 
     page.evaluate("() => window.apothecaryPanels.dock('pictures', 'right')")

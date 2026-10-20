@@ -7,11 +7,10 @@ them explicitly:
        consumes parts through apothecary's CLI or API rather than by path.
        Geometry changes land upstream and arrive here by version bump.
 
-That sentence is an obligation on *this* repository as much as on the consumer,
-and it was documented in only one direction: a contributor here had no way to
-learn that a downstream pins this repo, or that publishing is how geometry
-reaches it. So the obligation is stated where the code is, and answered by a
-command rather than by prose.
+That sentence is an obligation on *this* repository as much as on the consumer:
+a downstream pins this repo, and publishing is how geometry reaches it. The
+obligation is stated where the code is, and answered by a command rather than
+by prose (walkthrough/16-being-depended-on.md).
 
 Nothing here publishes anything. Tagging and releasing is a human act, and the
 corpus is explicit that assistants draft and humans decide. This reports

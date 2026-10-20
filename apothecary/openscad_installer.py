@@ -27,8 +27,8 @@ it is (``host()``):
   configured headless with Manifold and built with cmake. What the build needs
   is checked first; anything missing is refused with the ``apt install`` line
   that adds it, and nothing here runs sudo.
-- **Windows on ARM** is not supported yet (a planned item), nor is anything
-  else; ``APOTHECARY_OPENSCAD`` names an OpenSCAD installed another way.
+- **Windows on ARM** is not supported, nor is anything else;
+  ``APOTHECARY_OPENSCAD`` names an OpenSCAD installed another way.
 
 Every fetch goes through ``tool_fetch`` (apothecary/stays_local.py), to those
 hosts alone, with no proxy. A download from files.openscad.org is checked
@@ -254,8 +254,8 @@ NIGHT = re.compile(
 )
 
 WINDOWS_ON_ARM = (
-    "Windows on ARM is not supported yet (a planned item); set APOTHECARY_OPENSCAD "
-    "to an OpenSCAD you installed"
+    "Windows on ARM is not supported: files.openscad.org publishes no ARM64 Windows "
+    "build; set APOTHECARY_OPENSCAD to an OpenSCAD you installed"
 )
 
 WHAT_INSTALL_DOES = {
@@ -314,7 +314,7 @@ def snapshot_pattern(system: Optional[str] = None, machine: Optional[str] = None
 
 # --- where it lives ------------------------------------------------------------------
 
-# Before install.json, an install was the AppImage itself, at <date>/openscad.
+# An install with no install.json is the AppImage itself, at <date>/openscad.
 LEGACY_EXECUTABLE = "openscad"
 
 
@@ -342,7 +342,7 @@ def read_manifest(date: str) -> dict:
 
 def executable_for(date: str) -> Path:
     """The executable of the snapshot of ``date``: where ``install.json`` says it
-    is, else the AppImage an install made before there was one."""
+    is, else the AppImage at ``<date>/openscad`` (an install with none)."""
     rel = _plain(read_manifest(date).get("executable")) or LEGACY_EXECUTABLE
     return openscad_dir() / check_date(date) / rel
 

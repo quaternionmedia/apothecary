@@ -1,12 +1,11 @@
-"""The five words we start with.
+"""The starter words.
 
 Chosen without a photograph in hand, which makes them a guess. They are meant to
 be replaced once somebody has pointed a camera at a real workbench.
 
-Each is built out of pieces the tool already had — nothing new was invented to
-make a word possible.
+Each is built from the tool's own primitives.
 
-PROTOTYPE — not ratified.
+A prototype: no ratified record governs it.
 """
 
 from __future__ import annotations
@@ -32,7 +31,7 @@ def _corner_at_origin(shape: WordShape, round_thing) -> Translate:
     """Every word is built with one corner at the origin (compose.py shifts each
     piece onto its middle). A cylinder is centred on its axis, so a round word
     stands on the middle of its box -- without this, every disc, post and wedge
-    was drawn half its size away from where it was seen."""
+    would be drawn half its size away from where it was seen."""
     return Translate(
         v=Vector3D(x=shape.width / 2, y=shape.depth / 2, z=0.0), children=[round_thing]
     )
@@ -41,14 +40,14 @@ def _corner_at_origin(shape: WordShape, round_thing) -> Translate:
 def _round(shape: WordShape):
     """A cylinder whose footprint is ``width`` x ``depth``: a circle when the two
     are equal, else that circle squeezed along its shorter side into the ellipse
-    the shape was found as. Building a circle of the longer side put a mesh
-    wider than the footprint, the bounds and the editor all said it was."""
+    the shape was found as. A circle of the longer side would put a mesh wider
+    than the footprint, the bounds and the editor all say it is."""
     across = max(shape.width, shape.depth)
     circle = Cylinder(h=shape.height, r=across / 2)
     if shape.width == shape.depth:
         return circle
-    # The circle keeps the longer side's radius, so it is faceted as finely as
-    # it always was; a unit circle scaled up would be faceted as a pentagon.
+    # The circle keeps the longer side's radius, so it is faceted as that circle
+    # is; a unit circle scaled up would be faceted as a pentagon.
     return Scale(
         v=Vector3D(x=shape.width / across, y=shape.depth / across, z=1.0), children=[circle]
     )
@@ -99,7 +98,7 @@ def _wedge(name: str, shape: WordShape) -> Assembly:
 
 
 def starter_words() -> WordList:
-    """The vocabulary as it stands. Five words, all guesses."""
+    """The vocabulary as it stands: every word a guess."""
     words = WordList()
     words.add(Word(name="plate", describes="a flat slab", build=_plate, tags=["flat"]))
     words.add(Word(name="disc", describes="a round flat piece", build=_disc, tags=["round"]))

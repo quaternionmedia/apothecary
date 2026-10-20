@@ -1,9 +1,8 @@
 """A part's SCAD edited from the browser: drafts checked and rendered, and
 saves as variants in git.
 
-The second and third iterations of
-docs/plans/part-editing-in-the-browser-2026-09-27.md, server side. A draft is
-the part's SCAD as the page holds it, sent whole with each request; nothing is
+The server side of the part editor and the SCAD editor (docs/viewer.md). A
+draft is the part's SCAD as the page holds it, sent whole with each request; nothing is
 kept between requests but what the variant cache and git keep.
 
 - ``POST /parts/{name}/draft/check`` ``{scad, params}``: the draft evaluated
@@ -168,8 +167,8 @@ class DraftRequest(BaseModel):
     )
     params: Dict[str, Any] = Field(
         default_factory=dict,
-        description="Values on the side, from a caller before the text was the truth: "
-        "written into the text first (the answer's text says how)",
+        description="Values sent on the side: written into the text first (the answer's "
+        "text says how)",
     )
     editor_version: Optional[Union[int, Annotated[str, Field(max_length=64)]]] = Field(
         None,
@@ -309,8 +308,8 @@ def check_part_draft(name: str, body: DraftRequest, page: Optional[str] = PAGE):
     """A draft of the part's text, evaluated by OpenSCAD and not rendered.
 
     The text is the truth: its values are what it assigns, and nothing is
-    passed on the side. ``params``, where a caller still sends them, are
-    written into it first, and ``text`` is then what was checked. Two runs at
+    passed on the side. ``params``, where a caller sends them, are written
+    into it first, and ``text`` is then what was checked. Two runs at
     once, written beside where the text stands so its includes resolve: the
     parameter export (or the echo export, on 2021.01) and the CSG export, which
     compiles it as a render would and echoes each computed assignment's value
@@ -469,8 +468,8 @@ def render_part_draft(
     Answered as ``POST /parts/{name}/stl/generate`` answers, ``draft`` the
     sha256 of the text (None when it is the part's own text, which is then the
     part). The text carries its values: nothing is passed on the side, and
-    ``params``, where a caller still sends them, are written into it first
-    (the answer's ``text`` is then what was rendered). Its values are checked
+    ``params``, where a caller sends them, are written into it first (the
+    answer's ``text`` is then what was rendered). Its values are checked
     by the part's model, or what its customizer lists (422). The draft is
     written beside where the text stands for the one run -- for a part in a
     submodule, where its overlay is -- and the part's own SCAD and STL are
@@ -606,13 +605,12 @@ class SaveRequest(BaseModel):
     )
     params: Dict[str, Any] = Field(
         default_factory=dict,
-        description="Values on the side, from a caller before the text was the truth: "
-        "written into the text first",
+        description="Values sent on the side: written into the text first",
     )
     params_in: str = Field(
         KEEP_DEFAULT,
-        description="Where its parameters are kept: 'variant-file' (beside its SCAD); "
-        "'part-description' is a stub, refused, saying what it will do",
+        description="Where its values are kept: 'text', in its SCAD; 'part-description' "
+        "is a stub, refused, saying what it will do",
     )
 
 
@@ -913,7 +911,7 @@ def _side(part: BasePart, name: str, page: Optional[str], measure: bool):
         if record is None:
             raise HTTPException(status_code=404, detail=f"No variant '{key}' is cached")
         text = read_variant_draft(part, key) or own
-        # A render from before the text was the truth had its values on the side.
+        # A render recorded with values on the side (``params``): written into its text.
         text = with_params(part, text, dict(record.get("params") or {}))
         side = Side(
             name=name,
@@ -964,7 +962,7 @@ def compare_variants(
     page: Optional[str] = PAGE,
 ):
     """Two variants side by side: a unified diff of a's text to b's (for a part
-    in a submodule, their overlays; a variant from before has its values
+    in a submodule, their overlays; a .variant.json variant has its values
     written in), every value whose text differs (by the names the SCAD uses;
     null: that side sets nothing otherwise than the part), and each one's
     measured bounds --

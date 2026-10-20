@@ -100,9 +100,9 @@ def described(found: dict) -> str:
     if found.get("openscad") is None:
         return "Its pictures were taken with no OpenSCAD: every part is drawn as its box."
     return (
-        "Its pictures were taken once every part's STL that "
-        f"{found['openscad']}, the OpenSCAD its server runs, can build was built by it; a "
-        "part it cannot build is drawn from an STL already there, or as its box."
+        f"Its pictures draw every part that {found['openscad']}, the OpenSCAD its server "
+        "runs, can build from an STL it built; a part it cannot build is drawn from an STL "
+        "already there, or as its box."
     )
 
 

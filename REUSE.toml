@@ -3,10 +3,10 @@ SPDX-PackageName = "apothecary"
 SPDX-PackageSupplier = "Quaternion Media <peter.kagstrom@gmail.com>"
 SPDX-PackageDownloadLocation = "https://github.com/quaternionmedia/apothecary"
 
-# MIT throughout, which is what this repository has claimed publicly since its
-# README was written -- the badge and the "MIT License. See LICENSE" line were
-# already there; the file they pointed at was not. Declaring anything else now
-# would contradict a claim people have been able to read and rely on.
+# MIT throughout, as README.md and LICENSE state: people read that claim and
+# rely on it, so nothing here declares another licence. The adoption-scope
+# record (governance/qm/adr/DRAFT-constitution-adoption-scope.md, §2) has the
+# reasoning.
 #
 # datum's hardware licensing record also builds on it: "The apothecary
 # repository, whose parts library this project extends, is MIT."

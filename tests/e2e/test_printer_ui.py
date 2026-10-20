@@ -6,8 +6,8 @@ unmatched), the in-process ``SimulatedPrinter`` mid-way through an SD print,
 and firmware state in a temp dir, so pins never touch ``~/.apothecary``.
 
 The printer monitor's address (``/firmware/monitor?port=``) opens the viewer
-with the board's Machine in the rail's tab strip, pinned or pinned nowhere: the tests
-that drove the monitor page drive that Machine, by the same ids.
+with the board's Machine in the rail's tab strip, pinned or pinned nowhere: these tests
+drive that Machine, by its ids.
 
 Every test starts with nothing pinned, no file kept, the garage rebuilt and
 both links released (the simulator mid-print again, control disarmed), and
@@ -269,8 +269,7 @@ def test_editing_survives_polling(page: Page, printer_url: str):
 
 @pytest.mark.e2e
 def test_a_printer_s_machine_polls_it_within_a_bound(page: Page, printer_url: str):
-    """⟳ Poll in an identified printer's Machine -- the firmware page's card's Poll, which
-    went with the card -- polls it within a bound."""
+    """⟳ Poll in an identified printer's Machine polls it within a bound."""
     _identify(printer_url)
     page.goto(f"{printer_url}/firmware/monitor?port=/dev/ttyFAKE1")
     machine = page.locator(MACHINE)
@@ -519,9 +518,8 @@ def test_the_printer_s_drawing_encloses_its_board_and_its_build_volume(
     """The bodies land where the site puts them, in the world: printer_1 drawn at the
     garage's root encloses its mainboard, drawn inside its frame, and its build volume,
     both the world's wire box and the marks its board's port lays on the bed. (A node's
-    STL arrives in its parent's frame; drawn untranslated, the printer sat a bench-width
-    away.) The monitor page's board view held this; the world that replaced it holds it
-    now."""
+    STL arrives in its parent's frame, so it is translated; drawn untranslated, the
+    printer would sit a bench-width away.)"""
     _pin(printer_url, BOARD)
     _identify(printer_url)
     page.goto(f"{printer_url}/viewer/sites/garage")
@@ -815,7 +813,7 @@ def test_a_print_from_here_pauses_from_the_ring_and_cancels(page: Page, printer_
 
     # Pause from the ring: Control > Print > Pause goes to the print from here, not the card.
     # Nothing is selected and the Machine stands for a port pinned nowhere, so m opens its
-    # device ring, as it did on the monitor page.
+    # device ring.
     m25_before = page.locator("#log .tx.control", has_text="M25").count()
     page.keyboard.press("m")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
@@ -908,8 +906,8 @@ def test_a_print_from_the_card_is_a_job_that_names_the_part_it_makes(page: Page,
 def test_the_print_records_kept_before_jobs_show_in_the_cards_history(
     page: Page, start_server, tmp_path
 ):
-    """A print record kept before a print was a job is in the printer's history,
-    carried over as a print job, on a server that never saw it printed."""
+    """A print record under prints/records is in the printer's history as a print job,
+    on a server that never saw it printed."""
     records = tmp_path / "state" / "prints" / "records"
     records.mkdir(parents=True)
     (records / "20260920T132512.468-dev_ttyFAKE1.json").write_text(
@@ -1117,8 +1115,8 @@ def test_a_reading_lies_on_the_bed_and_the_badge_selects_its_printer(page: Page,
 
 @pytest.mark.e2e
 def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
-    """A badge click opens the Machine in the rail's tab strip: the cards and latch the
-    monitor page had, on the module it was made of; a jog from it moves the world's
+    """A badge click opens the Machine in the rail's tab strip, its cards and latch on
+    its own module (static/widgets/machine.js); a jog from it moves the world's
     nozzle ahead of the poll; its comms log is in it, the board's one log; the ring's
     verbs go to it; closing it stops its polling."""
     _pin(printer_url, BOARD)
@@ -1133,7 +1131,7 @@ def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
     assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
     expect(machine.locator("#ident")).to_contain_text("Marlin")
-    # The module the monitor page was made of: the same ids, the same latch.
+    # The Machine's module: its ids, its latch.
     expect(machine.locator("#control")).to_be_hidden()
     assert page.evaluate("() => window.apothecaryMachine.host") == "world"
     # Its comms log is in it, the board's one log: no panel of its own.
@@ -1151,7 +1149,7 @@ def test_the_machine_stands_in_front_of_the_world(page: Page, printer_url: str):
     machine.locator("#control button[data-step='10']").click()
     # Ahead of the poll, by mechanism rather than by the clock: where the marker
     # stands at the moment the jog's own event is dispatched, before any poll can
-    # answer. (A wall-clock bound here measured the machine's load, not the page.)
+    # answer. (A wall-clock bound here would measure the machine's load, not the page.)
     page.evaluate(
         """() => {
             window.__atJog = null;

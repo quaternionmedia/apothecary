@@ -28,10 +28,10 @@ import click
 def kernel_reference(names: Tuple[str, ...], openscad: str | None, as_json: bool, list_only: bool):
     """Render the corpus with OpenSCAD's Manifold backend and print what it measures.
 
-    The reference a geometry kernel is compared with (see
-    docs/plans/rust-geometry-kernels-2026-10-09.md and
-    tests/test_kernel_comparison.py): per case, triangles, volume, surface
-    area, bounding box, watertightness, manifoldness and render seconds.
+    The reference a geometry kernel is compared with (docs/README.md, "The
+    Rust workspace"; tests/test_kernel_comparison.py): per case, triangles,
+    volume, surface area, bounding box, watertightness, manifoldness and
+    render seconds.
     Exits 1, saying why, when this machine has no OpenSCAD with Manifold.
     """
     from .. import kernel_compare as kc

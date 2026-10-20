@@ -59,10 +59,9 @@ SHARED = [(ShapeKind.RECT, 0.2, 0.2), (ShapeKind.DISC, 0.4, 0.35)]
 def half_alike(name, rest):
     """Two shapes in common and the rest different — reliably undecided.
 
-    Built by hand rather than found by trying pictures until one worked, because
-    three tests here used to skip themselves when there was nothing undecided,
-    and a test that skips itself is how the whole question-ranking mechanism came
-    to be deletable with the suite still green.
+    Built by hand rather than found by trying pictures until one worked, so the
+    tests that need something undecided never skip themselves: a test that skips
+    itself would let the question ranking be deleted with the suite still green.
     """
     return Picture(
         name=name,
@@ -225,13 +224,12 @@ def test_a_person_can_join_two_pictures_the_machine_called_unrelated():
 
 
 def test_a_machine_guess_cannot_destroy_a_group_you_built():
-    """The way "a person's word wins" failed, on one answer and no odd input.
+    """A person's word wins, on one answer and no odd input.
 
-    The machine had already decided a and b are the same thing, and was sure b
-    and far are unrelated. A person says a and far are the same thing. The group
-    {a, b, far} then contains a pair the machine calls unrelated — and that guess
-    was taken as grounds to throw the whole group away, while the report printed
-    "your word was taken as it stands" in the same breath.
+    The machine has decided a and b are the same thing, and is sure b and far are
+    unrelated. A person says a and far are the same thing. The group {a, b, far}
+    then contains a pair the machine calls unrelated, and that guess is no grounds
+    to throw the group away.
 
     A machine's disagreement is only a quarrel in a group the machine built.
     """
@@ -473,9 +471,8 @@ def test_the_worth_of_a_question_counts_the_group_it_would_actually_merge():
     """Not the composite it happens to be drawn inside.
 
     A larger thing is several separate groups placed side by side. Answering
-    "these two are the same thing" merges the *groups*, not the composite —
-    reading the composite size reported a question worth four as worth one and
-    sorted it last, and one worth two as worth four and sorted it first.
+    "these two are the same thing" merges the *groups*, not the composite, so the
+    composite's size would misstate a question's worth and sort it wrongly.
     """
     made = _made_up(
         clusters=[
@@ -639,10 +636,8 @@ WOULD_NOT_BE_ARITHMETIC = (
 def _the_whole_path():
     """Every file between a photograph and a group of photographs.
 
-    Both packages, not just the sorting. The claim made is about the whole path,
-    and a reviewer pointed out the guard only covered half of it — which is the
-    sort of gap that is invisible until somebody adds an import to the other
-    half.
+    Both packages, not just the sorting: the claim made is about the whole path,
+    so an import added to either half is caught.
     """
     from pathlib import Path
 
@@ -732,9 +727,8 @@ def test_the_questions_come_out_in_the_same_order_every_time():
 # --------------------------------------------------------------------------
 # The command itself
 #
-# None of this was covered at all, which is how a mutation that made the command
-# ignore --answers entirely survived the whole suite, and how --ask came to
-# overwrite a person's notes without anybody noticing.
+# What it does with --answers and --ask, each held here: a command that ignored
+# --answers, or an --ask that overwrote a person's notes, fails a test below.
 # --------------------------------------------------------------------------
 
 
@@ -792,7 +786,7 @@ def test_the_command_refuses_a_name_that_is_not_there(a_folder, tmp_path):
 
 
 def test_the_command_refuses_two_answers_that_disagree_without_a_traceback(a_folder, tmp_path):
-    """The flagship refusal came out as thirty lines of internal detail."""
+    """Two answers that disagree are refused with the reason, and no traceback."""
     answers = tmp_path / "mine.txt"
     answers.write_text(
         "bench_left and shed are the same thing\nshed and bench_left are not related\n",
@@ -814,7 +808,7 @@ def test_the_command_says_when_your_answer_could_not_be_used(a_folder, tmp_path)
 
 
 def test_asking_never_destroys_what_you_wrote(a_folder, tmp_path):
-    """It replaced the file outright whenever --answers was not the same path."""
+    """--ask never replaces the file it writes to, whatever --answers names."""
     mine = tmp_path / "mine.txt"
     mine.write_text(
         "# my careful notes\nbench_left and bench_right are the same thing\n", encoding="utf-8"
@@ -827,8 +821,8 @@ def test_asking_never_destroys_what_you_wrote(a_folder, tmp_path):
 
 
 def test_asking_twice_does_not_pile_the_questions_up(a_folder, tmp_path):
-    """Answering two copies of one question differently was reported as two
-    people disagreeing."""
+    """A question asked twice is written once, so answering two copies of it
+    differently is never reported as two people disagreeing."""
     sheet = tmp_path / "q.txt"
     _run(a_folder, "--ask", sheet)
     once = sheet.read_text(encoding="utf-8")
@@ -865,10 +859,10 @@ def test_the_sheet_it_writes_can_be_answered_and_handed_back(a_folder, tmp_path)
 
 
 def test_the_sheets_own_instructions_cannot_be_mistaken_for_answers(a_folder, tmp_path):
-    """Uncommenting the whole sheet by accident used to feed it its own examples.
+    """A sheet uncommented whole by accident does not feed it its own examples.
 
-    They are refused now — and refused by name, saying which line — rather than
-    read as pictures called 'one' and 'another'.
+    They are refused by name, saying which line, rather than read as pictures
+    called 'one' and 'another'.
     """
     from apothecary.gathering.judgement import CannotRead, read_answers
 
@@ -928,7 +922,7 @@ def test_a_file_that_cannot_be_read_is_set_aside_and_the_rest_are_gathered(a_fol
 
 
 def test_a_file_saved_by_an_ordinary_editor_is_read(a_folder, tmp_path):
-    """Three invisible bytes at the front made the first name unrecognisable."""
+    """A byte-order mark at the front is read past, so the first name is recognised."""
     answers = tmp_path / "mine.txt"
     answers.write_bytes("﻿bench_left and shed are the same thing\n".encode("utf-8"))
     said = _run(a_folder, "--answers", answers)

@@ -1,5 +1,4 @@
-"""A picture to a print, round twice through the page: the fourth loop of the loops
-plan (docs/plans/ui-flows-2026-10-08.md), held end to end.
+"""A picture to a print, round twice through the page, held end to end.
 
 A camera added above the bench and told which of this browser's cameras it is; a
 picture taken that lies on the bench; its shapes found; one made a piece; the piece
@@ -13,7 +12,7 @@ is taken through the page's own controls and ring cells, and what is asserted is
 what a person sees: the status line, Site, the camera's section, the Machine's
 Print from here card and Site's Jobs. Each step's words name the next step.
 
-This module is a walkthrough page too: `walkthrough/13-a-picture-to-a-print.md` is
+This module is a walkthrough page too: `walkthrough/03-a-picture-to-a-print.md` is
 what it writes, its pictures taken as it goes, so the page shows the loop as it is.
 It is the browser suite's alone, unmarked `walkthrough`, so `apothecary test run`
 stays quick; CI's browser shards write it and check it against what is committed.
@@ -264,7 +263,7 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     story = walkthrough(
-        ordinal="13",
+        ordinal="03",
         slug="a-picture-to-a-print",
         title="A picture to a print",
         intro=(
@@ -287,8 +286,9 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
             "drawing; the slicer is a script that answers as OrcaSlicer's command line "
             "does and writes a few layers of moves and dwells, whatever the piece; the "
             "printer is a simulation that answers as Marlin does. OrcaSlicer's real "
-            "slices are docs/slicer.md's, and the camera's and the printer's real runs "
-            "are steps of the bench checklist.",
+            "slices are docs/slicer.md's; the printer's real runs are sections A to G of "
+            "the bench checklist (docs/bench-checklist.md), and the camera's is the "
+            "optional last step of its F.",
             "**A print that heats.** The start the slice writes sets the hotend and the "
             "bed, and the simulated printer is at what it is told at once; nothing "
             "warms, and the file turns both off at its end.",

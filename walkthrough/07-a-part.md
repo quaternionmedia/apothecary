@@ -1,0 +1,59 @@
+# The parts registry
+
+**Hermetic.**
+
+A part is a folder, a SCAD file named after it, and a wrapper that says what
+it is and how big: a Python module, or a `part.json` beside the SCAD for a
+part that needs no Python.
+
+    parts/<name>/<name>.scad              the geometry
+    apothecary/projects/parts/<name>.py   the wrapper, underscored
+    parts/<name>/part.json                or a sidecar, read as the wrapper
+
+A folder whose subfolders hold parts is a category, searched the same way:
+`parts/boards/arduino_uno/arduino_uno.scad` is the part `arduino_uno`.
+Nothing registers a part but that naming. `scan_projects` finds the folder;
+`_locate_wrapper_for_part` finds the wrapper by sanitising the name, and
+falls back to the sidecar.
+
+    >>> from apothecary.projects.registry import _locate_wrapper_for_part
+    >>> from apothecary.projects.parts.skeleton import ROOT
+    >>> _locate_wrapper_for_part(ROOT / "parts" / "boards" / "arduino_uno" / "arduino_uno.scad")
+    'apothecary.projects.parts.described.arduino_uno'
+
+    >>> from apothecary.projects.registry import scan_projects, _sanitize_module_name
+    >>> _sanitize_module_name("datum_core")
+    'datum_core'
+
+The wrapper is what gives a part a description, a category and an envelope,
+the box anything assembled around it relies on.
+
+    >>> from apothecary.projects.parts.datum_core import DEFAULT
+    >>> DEFAULT.name
+    'datum_core'
+    >>> DEFAULT.category
+    'enclosure'
+
+## Bounds are declared, then checked
+
+`get_bounds` is hand-written Python beside hand-written OpenSCAD, so it is
+capable of lying. It reports the tray at its default parameters:
+
+    >>> size = DEFAULT.get_bounds().size
+    >>> round(size.x, 1), round(size.y, 1), round(size.z, 1)
+    (46.8, 46.8, 15.6)
+
+`apothecary parts verify <name>` renders the part and measures the real
+bounding box against that claim. It exits non-zero on drift, so it can gate a
+build. `apothecary problems --kind drift` lists the parts whose last render disagrees
+with their claim.
+
+## Recipes
+
+| | |
+|---|---|
+| List what is registered | `apothecary parts list` |
+| Everything about one part | `apothecary parts info datum_core --json-out` |
+| Render its STL | `apothecary parts generate-stl datum_core` |
+| Check the envelope is true | `apothecary parts verify datum_core` |
+| Check every part's envelope | `apothecary parts verify --all` |

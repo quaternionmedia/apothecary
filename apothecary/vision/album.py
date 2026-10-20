@@ -6,16 +6,15 @@ node everything else in this tool is made of. None of it has anywhere to record
 which word it was matched to and why, whether anything about it was measured or
 guessed.
 
-That could have been added to the node. It is deliberately not. The shape of a
-node is still being decided and is not this feature's to change, and the same
-argument was already made for links: a fact *about* a piece belongs beside the
-tree, not inside it, so the tree keeps rendering exactly as it did.
+It is kept beside the node, not in it. The shape of a node is the hierarchy's
+draft record's to decide, not this feature's, and a fact *about* a piece
+belongs beside the tree, as links do, so the tree renders unchanged.
 
 The join between the two is the dotted path — ``plate_1``,
-``bench.plate_1.relief`` — which is already how every other part of this tool
-names a node. Nothing new was needed.
+``bench.plate_1.relief`` — which is how every other part of this tool names a
+node.
 
-PROTOTYPE — not ratified.
+A prototype: no ratified record governs it.
 """
 
 from __future__ import annotations

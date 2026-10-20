@@ -167,7 +167,7 @@ def test_a_cameras_device_is_set_and_cleared_and_never_enters_the_site():
 
 def test_one_device_is_one_camera_in_any_site():
     """Choosing a device for a camera takes it off any other camera it was, in any
-    site (the owner's decision of 2026-10-04); another device stays where it is."""
+    site; another device stays where it is."""
     c = TestClient(app)
     _add(c)
     _add(c)
@@ -549,7 +549,7 @@ def test_add_here_and_remove_are_carried_by_the_server_and_the_ring_knows_a_came
     assert [(o["action"], o["marked"]) for o in device["children"]] == [
         ("camera:device:mine", True)
     ]
-    # A host no longer offers Pin here; it offers Add here.
+    # A host offers Add here, and no Pin here.
     bench = c.post(
         "/menu/resolve",
         json={"context": {"pointing": "node", "targets": ["workbench"]}, "site": "garage"},

@@ -1,12 +1,11 @@
 """A part's text, which is the truth: its values are the assignments in it.
 
-Decided with the owner on 2026-10-12 (docs/plans/part-iteration-2026-10-12.md,
-"parameters and text, tied together"): for a part whose SCAD the page edits,
-nothing is passed to OpenSCAD on the side. A check, a render and a save each
+For a part whose SCAD the page edits, nothing is passed to OpenSCAD on the
+side. A check, a render and a save each
 take a text, and the values are what that text assigns (the grammar of an
-assignment is apothecary/projects/parts/assignments.py's). A caller that still
-sends parameters has them written into the text first (``with_params``), so
-there is one path.
+assignment is apothecary/projects/parts/assignments.py's). A caller that sends
+parameters has them written into the text first (``with_params``), so there is
+one path.
 
 - **The text a part is edited as** (``own_text``): its SCAD file as saved --
   which is also its defaults -- or, for a part whose SCAD is in a submodule
@@ -16,14 +15,14 @@ there is one path.
   as they will from where it is saved. An overlay's text that is not one --
   no ``include`` of the upstream file -- is an edit of the upstream file,
   which is refused (``saved.UpstreamEdit``): it is upstream's.
-- **The values checked** (``check_values``): a part's Python model still
-  checks the values its text assigns -- a range, a type, a whole number --
+- **The values checked** (``check_values``): a part's Python model checks
+  the values its text assigns -- a range, a type, a whole number --
   each reported with the field it is and why it is refused; a part without
   one has them checked against what its SCAD's customizer lists. A computed
   assignment is checked by the value OpenSCAD gives it, where that is known.
 - **Where a model's default and its SCAD disagree** (``defaults_disagree``):
-  the SCAD is the default now, and ``apothecary problems`` and a part's
-  checklist say where the model says otherwise.
+  the SCAD is the default, and ``apothecary problems`` and a part's checklist
+  say where the model says otherwise.
 """
 
 from __future__ import annotations
@@ -127,7 +126,7 @@ def is_overlay_text(part: BasePart, text: str) -> bool:
 def as_edited(part: BasePart, text: Optional[str]) -> str:
     """The text a request means: ``text``, or the part's own when there is none.
     For a part in a submodule its upstream SCAD as it stands means its overlay
-    setting nothing (a caller from before overlays); any other text that is no
+    setting nothing; any other text that is no
     overlay is an edit of the upstream file, refused (``saved.UpstreamEdit``)."""
     if text is None:
         return own_text(part)

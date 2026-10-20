@@ -1,8 +1,9 @@
 """What a person tells the sorting, and why their word wins.
 
-The sorting is careful and it is not very good. Measured on drawn pictures it
-finds about a fifth of the groups that are there. A person glancing at two
-photographs gets nearly all of them, in about a second, and could not explain how.
+The sorting is careful and it is not very good: on drawn pictures it finds a
+minority of the groups that are there (`apothecary photo gather-check` says how
+many). A person glancing at two photographs gets nearly all of them, in about a
+second, and could not explain how.
 
 So this is not a machine with a person checking it. It is two of them doing the
 parts each is actually better at:
@@ -58,9 +59,8 @@ other line is one of these sentences:
     my_thumb is not worth using
     very_dark_one is worth using anyway
 
-That is the whole language. It was chosen so that it can be read aloud to
-somebody who does not do this work, which is the same test every page in this
-project has to pass.
+That is the whole language. It reads aloud to somebody who does not do this
+work, which is the same test every page in this project has to pass.
 
 ## Three rules about a person's word
 
@@ -202,8 +202,8 @@ def read_answers(text: str, *, where: str = "the answers") -> List[Judgement]:
                 )
             except ValueError as wrong:
                 # Turned into the same shape of complaint as everything else
-                # here. Left to itself this came out as a wall of internal
-                # detail with no line number and nothing to act on.
+                # here: Pydantic's own message is internal detail with no line
+                # number and nothing to act on.
                 raise CannotRead(f"{where}, line {number}: {_plainly(wrong)}") from None
             continue
 
@@ -248,8 +248,8 @@ def read_answers_file(path: Path) -> List[Judgement]:
 
     Read as ``utf-8-sig`` because a file saved by an ordinary text editor on
     Windows begins with three invisible bytes, and without this the first name in
-    the file quietly became a name nothing answered to — reported as missing and
-    present in the same sentence.
+    the file would be a name nothing answers to — reported as missing and present
+    in the same sentence.
     """
     try:
         text = path.read_text(encoding="utf-8-sig")
@@ -279,7 +279,7 @@ def settle(said: Sequence[Judgement]) -> Dict[Tuple[str, ...], Judgement]:
         settled[one.key] = one
 
     # Throwing a picture out and then saying something about it are two things
-    # that cannot both be meant. Left unchecked the second one simply vanished.
+    # that cannot both be meant. Unchecked, the second would vanish.
     thrown_out = {
         one.left: one for one in said if one.right is None and one.verdict == NOT_WORTH_USING
     }

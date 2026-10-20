@@ -146,10 +146,9 @@ def test_scad_source_exists_and_declares_every_parameter():
 def test_objects_are_actually_translated_into_place():
     """Cube carries no position of its own.
 
-    An earlier version filled in coordinates that were silently discarded, so
-    every object rendered at the origin and the scene looked correct in Python
-    while being wrong in OpenSCAD. Assert against the rendered output, which is
-    the artifact, rather than against the model that produced it.
+    Assert against the rendered output, which is the artifact, rather than against
+    the model that produced it: coordinates the model holds and the render discards
+    would put every object at the origin while the scene looks right in Python.
     """
     scene, assembly = build()
     scad = scene.render()
