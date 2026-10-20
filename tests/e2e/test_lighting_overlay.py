@@ -16,7 +16,8 @@ from apothecary.theatre_site import load_theatre_rig
 
 pytestmark = pytest.mark.e2e
 
-STATS = "() => window.fractalViewer.lighting.stats()"
+# What the overlay draws, as an expression: waited on as `() => {STATS}.placed > 0`.
+STATS = "window.fractalViewer.lighting.stats()"
 RIG = load_theatre_rig()
 LOCATED = [p for p in RIG.patches if p.location is not None]
 
@@ -33,10 +34,10 @@ def _feed(page, base_url: str, t: float) -> None:
 
 def test_placed_fixtures_are_drawn_and_glow_from_the_console(page, base_url: str):
     page.goto(f"{base_url}/viewer/sites/theatre")
-    page.wait_for_function(f"() => {STATS}().placed > 0", timeout=20000)
-    assert page.evaluate(STATS)["placed"] == len(LOCATED)
+    page.wait_for_function(f"() => {STATS}.placed > 0", timeout=20000)
+    assert page.evaluate(f"() => {STATS}")["placed"] == len(LOCATED)
     _feed(page, base_url, 1.0)
-    page.wait_for_function(f"() => {STATS}().lit > 0", timeout=10000)
+    page.wait_for_function(f"() => {STATS}.lit > 0", timeout=10000)
     expect(page.locator(".lighting-panel")).to_contain_text("console")
     expect(page.locator(".lighting-panel")).to_contain_text("unplaced")
 
@@ -45,7 +46,7 @@ def test_each_beam_points_where_its_patch_aims_it(page, base_url: str):
     """Front of house tilts upstage, towards the stage, and down; the groundrow points
     up at the cyc: ORIENTATION_X tilts a straight-down beam towards the site's +y."""
     page.goto(f"{base_url}/viewer/sites/theatre")
-    page.wait_for_function(f"() => {STATS}().placed > 0", timeout=20000)
+    page.wait_for_function(f"() => {STATS}.placed > 0", timeout=20000)
     foh = next(p for p in LOCATED if p.label.startswith("FOH"))
     ground = next(p for p in LOCATED if p.label.startswith("Groundrow"))
     x, y, z = page.evaluate("(ch) => window.fractalViewer.lighting.aim(ch)", foh.channel)
@@ -56,9 +57,9 @@ def test_each_beam_points_where_its_patch_aims_it(page, base_url: str):
 
 def test_a_site_without_a_rig_gets_no_overlay_and_switching_away_clears_it(page, base_url: str):
     page.goto(f"{base_url}/viewer/sites/theatre")
-    page.wait_for_function(f"() => {STATS}().placed > 0", timeout=20000)
+    page.wait_for_function(f"() => {STATS}.placed > 0", timeout=20000)
     page.evaluate("() => window.fractalViewer.loadSite('garage')")
-    page.wait_for_function(f"() => {STATS}().placed === 0", timeout=20000)
+    page.wait_for_function(f"() => {STATS}.placed === 0", timeout=20000)
     expect(page.locator(".lighting-panel")).to_be_hidden()
     page.evaluate("() => window.fractalViewer.loadSite('theatre')")
-    page.wait_for_function(f"() => {STATS}().placed === {len(LOCATED)}", timeout=20000)
+    page.wait_for_function(f"() => {STATS}.placed === {len(LOCATED)}", timeout=20000)
