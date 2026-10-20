@@ -103,7 +103,7 @@ class SketchInfo(BaseModel):
     is ``<name>@<toolchain>`` -- ``esp32_blink@arduino``,
     ``esp32_blink@rust-esp32`` -- and is how the sketch is named everywhere a
     person reads it: the Bench, a board's Machine, the CLI, build folders and
-    messages (the owner's decision of 2026-10-10).
+    messages.
     """
 
     name: str
@@ -181,8 +181,8 @@ class ToolchainStatus(BaseModel):
     esptool_version: Optional[str] = None
     esptool_ok: bool = False
     problems: List[str] = Field(default_factory=list)
-    # Every toolchain module, Arduino's first; the fields above are Arduino's, as
-    # they were before there were modules.
+    # Every toolchain module, Arduino's first; the fields above are Arduino's
+    # alone.
     toolchains: List[ModuleStatus] = Field(default_factory=list)
 
     @property
@@ -323,9 +323,9 @@ class DeviceInfo(BaseModel):
         """Stable key for flash records and pins: the MAC, else the bridge's USB
         serial number, else the port.
 
-        A port name is the socket, not the board: the same printer came back
-        as ``/dev/ttyUSB0`` after a night as ``/dev/ttyUSB1``. Its FTDI's
-        serial number did not change.
+        A port name is the socket, not the board: the kernel may number the
+        same printer ``/dev/ttyUSB0`` after a replug or a reboot and
+        ``/dev/ttyUSB1`` before it, while its USB bridge's serial number stays.
         """
         return self.mac or self.serial_number or self.port
 
@@ -349,8 +349,8 @@ class FlashRecord(BaseModel):
 
     @model_validator(mode="after")
     def _named(self) -> "FlashRecord":
-        # A record kept before a sketch was always named with its toolchain was an
-        # Arduino one's: name it as it would be named now.
+        # A record whose sketch is not named with its toolchain (no ``sketch_id``,
+        # or one without ``@``) is an Arduino sketch's: name it ``<name>@arduino``.
         if self.sketch and (not self.sketch_id or "@" not in self.sketch_id):
             self.toolchain = self.toolchain or ARDUINO
             self.sketch_id = sketch_id(self.sketch, self.toolchain)
@@ -494,17 +494,17 @@ class PrintFile(BaseModel):
     id: str
     name: str
     size: int
-    sha256: Optional[str] = None  # of its bytes; None for a file kept before it was recorded
+    sha256: Optional[str] = None  # of its bytes; None when its description has none
     lines: int  # the lines that would be sent: comments and blanks dropped
     uploaded_at: datetime
     problems: List[str] = Field(default_factory=list)  # why it may not be sent, if it may not
 
 
 class PrintRecord(BaseModel):
-    """One print streamed from the host, as it was kept before a print was a job.
+    """One print streamed from the host, in the ``prints/records/`` format.
 
-    Nothing writes one any more; ``apothecary/jobs.py`` reads the ones kept under
-    ``prints/records/`` once, and carries each over as a print job.
+    Nothing writes one; ``apothecary/jobs.py`` reads each kept under
+    ``prints/records/`` once, and carries it over as a print job.
     """
 
     id: str
@@ -559,7 +559,7 @@ class ManualBinding(BaseModel):
 
     site: str
     path: str  # dotted node path, as GET /sites/{name}/nodes/{path}/stl addresses it
-    identity: str  # DeviceInfo.identity: MAC or port
+    identity: str  # DeviceInfo.identity: MAC, USB bridge serial number, or port
     bound_at: datetime
 
 

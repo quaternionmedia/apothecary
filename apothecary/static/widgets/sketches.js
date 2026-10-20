@@ -64,8 +64,8 @@ export function mountBuild(root, { base = "", tasks = null, say = null, port = n
 
     const idOf = (x) => x.id || `${x.name}@${x.toolchain || "arduino"}`;
     const sketchOf = (id) => sketches.find((x) => idOf(x) === id) || null;
-    // The module that builds a sketch, from the status; Arduino's, as it was, when
-    // the status names none.
+    // The module that builds a sketch, from the status; Arduino's when the status
+    // names none.
     function moduleOf(s) {
         const id = (s && s.toolchain) || "arduino";
         const m = ((status && status.toolchains) || []).find((t) => t.id === id);
@@ -136,8 +136,8 @@ export function mountBuild(root, { base = "", tasks = null, say = null, port = n
             api("/firmware/sketches").catch(() => []),
         ]);
         // What the status says cannot be had is not asked for: the boards arduino-cli
-        // knows need arduino-cli, and the ports need a module that finds them -- each
-        // asked of a tool that is not there was a 503 in the console.
+        // knows need arduino-cli, and the ports need a module that finds them -- a tool
+        // that is not there would answer each with a 503 in the console.
         const findsPorts = ((s && s.toolchains) || []).some((t) => t.ok && (t.can || []).includes("find ports"));
         const [all, found] = await Promise.all([
             s && s.arduino_cli_ok ? api("/firmware/boards/all").catch(() => []) : Promise.resolve([]),

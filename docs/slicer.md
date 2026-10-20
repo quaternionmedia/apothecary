@@ -2,10 +2,8 @@
 
 A part, or a piece made from a picture, sliced into G-code for the pinned
 printer, and kept where the Print card keeps a file, so Print follows Slice.
-The owner decided how on 2026-10-10 ([the plan](plans/slicer-2026-10-10.md));
-this page says what was built: the server, the command line, and Slice as a
-step of the page. Slicing writes files only: nothing here opens a serial port
-or sends anything to a printer.
+A slice runs from the server, the command line and the page. Slicing writes
+files only: nothing here opens a serial port or sends anything to a printer.
 
 ## Installing it
 
@@ -66,12 +64,11 @@ how a slice uses it:
 
 ## What a slice is composed from
 
-The owner decided (2026-10-10) that the start of a print is composed from
-modules as they are wanted. Each piece a slice can be composed from says what
-it does (`apothecary/slicer/compose.py`; `slicer status` and `GET
-/slicer/status` list them); a **stub** exists, says what it will do, and is not
-chosen -- a profile naming one is refused, saying what it will do, before
-anything is built. The printer's profile names its pieces under `start` and
+The start of a print is composed from modules, as they are wanted. Each piece
+a slice can be composed from says what it does (`apothecary/slicer/compose.py`;
+`slicer status` and `GET /slicer/status` list them); a **stub** exists, says
+what it will do, and is not chosen -- a profile naming one is refused, saying
+what it will do, before anything is built. The printer's profile names its pieces under `start` and
 `filament`, each with its source.
 
 | Kind | Piece | What it does | |
@@ -112,7 +109,7 @@ uv run apothecary slicer slice garage/disc_1               # a made piece, throu
 ```
 
 A piece made from a picture lives in the running server's memory, so
-`apothecary slicer slice SITE/PATH` asks that server, as the page will: it
+`apothecary slicer slice SITE/PATH` asks that server, as the page does: it
 posts to the slice route and echoes the task's log as it arrives. No command
 finds a running server for itself, so it asks the one at `apothecary serve`'s
 own address, 127.0.0.1:8000, unless `--host` and `--port` name another, on
@@ -124,7 +121,7 @@ used. The routes:
 |---|---|
 | `GET /slicer/status` | Each slicer module, the one a slice uses, and the printers that keep a profile |
 | `POST /slicer/install` | Install the pinned release (a task) |
-| `POST /slicer/slice` | `{part, port}` or `{part, site[, printer]}` or `{part, printer}`: slice a part or a made piece for a printer (a task). `part` is a node's path in the printer's site, as `GET /jobs/choices` lists it for the Print card, or a part's name; a site named without its printer slices for its one printer |
+| `POST /slicer/slice` | `{part, port}` or `{part, site[, printer]}` or `{part, printer}`: slice a part or a made piece for a printer (a task). `part` is a node's path in the printer's site, as `GET /jobs/choices` lists it for the Print card, or a part's name; a site named without its printer slices for its one printer; `variant`, a part's cached variant, is sliced in place of its own STL |
 | `GET /slicer/tasks/{id}?since=N` | The task's log; once it ends, `slice` is the answer: the record, or the error with the slicer's errors and warnings by line |
 | `POST /slicer/tasks/{id}/cancel` | Stop a slice; nothing is kept |
 | `GET /slicer/slices`, `GET /slicer/slices/{file_id}` | The slices whose files the Print card still keeps |
@@ -139,10 +136,16 @@ errors and warnings, where the extruding moves reach -- is the state folder's
 file. Slices run one at a time on a task runner of their own, so a slice and a
 flash never wait for each other.
 
+OrcaSlicer slices one plate: the part arranged on the bed as it is turned (a
+part is authored the way up it prints) and lifted onto the bed if it reaches
+below it. The G-code kept is named for what was sliced, `<part>.gcode`. A
+part's variant, as the page draws it, is what its Slice slices -- the route's
+`variant`, a key of the variant cache -- and the slice's record names it.
+
 ## In the page
 
 Slice is a step of the loop from a picture to a print
-([walkthrough 13](../walkthrough/13-a-picture-to-a-print.md)):
+([walkthrough 03](../walkthrough/03-a-picture-to-a-print.md)):
 
 - **On the ring.** A made piece's ring has **Slice** beside Print, and a part
   from the parts folder standing in the site has it after Part, when a printer
@@ -172,5 +175,5 @@ A slicer is a module (`apothecary/slicer/modules/`): a subclass of
 `SlicerModule` in a file of its own, registered in `_registry`. A printer's
 profile has a section per module, in that slicer's terms. The slicer a slice
 uses is the one named (`--slicer`, or the route's `slicer`), else
-`APOTHECARY_SLICER`, else the `slicer` line of the printer's profile -- the
-owner switches by changing that line.
+`APOTHECARY_SLICER`, else the `slicer` line of the printer's profile, so a
+printer changes slicer by changing that line.

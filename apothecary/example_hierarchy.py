@@ -2,8 +2,9 @@
 own building shell, alongside abstract utility fixtures, storage, and a
 subtractive-manufacturing stub.
 
-PROTOTYPE — demonstrates apothecary/hierarchy.py's fractal Assembly against a
-concrete, spatially verifiable scene rather than an eyeballed one: one Site
+A prototype, under hierarchy.py's draft record: it demonstrates
+apothecary/hierarchy.py's fractal Assembly against a concrete, spatially
+verifiable scene rather than an eyeballed one: one Site
 ("Garage") containing multiple independently-sourced Structures -- the
 workbench, the 3D printer sitting on top of it, the boards beside it, the garage
 building itself (walls with a door and a window cut into them), one
@@ -26,8 +27,8 @@ pane.
 ``footprint`` (see ``Structure.world_bounds()`` in ``hierarchy.py``), so
 ``tests/test_garage_workbench.py`` checks, in code, that each sits exactly on
 the bench's top surface, stays within the bench's footprint, and doesn't
-overlap its neighbours -- and that the newer additions (the building,
-fixtures, storage, CNC router) don't overlap anything either, without being
+overlap its neighbours -- and that the rest (the building, fixtures, storage,
+CNC router) don't overlap anything either, without being
 held to that same bench-specific rule (see ``BENCH_MOUNTED_STRUCTURES`` and
 ``validate_garage_layout``) -- not just that the generated .scad "looks about
 right."
@@ -74,7 +75,7 @@ LEG_INSET = 50.0
 # picture agree.
 PRINTER_WIDTH = ender3.OVERALL.x  # 470: the frame is 400, the PSU and the spool tube make the rest
 PRINTER_DEPTH = ender3.OVERALL.y  # 454: the frame is 410, the LCD hangs 41 off the front, at y < 0
-PRINTER_HEIGHT = ender3.OVERALL.z  # 576, with a spool on the holder
+PRINTER_HEIGHT = ender3.OVERALL.z  # with a spool on the holder
 PRINTER_FRONT = -41.0  # where the LCD's bracket ends, in the printer's frame
 POST_SIZE = 20.0  # 2020 / 2040 extrusion
 UPRIGHT_Y = 150.0  # where the Z uprights stand along Y, the model's upright_y
@@ -84,8 +85,8 @@ TOP_BAR_Z = 440.0
 # Where each printer sits on the bench (world X, world Y), at BENCH_TOP_Z: one
 # 470 mm machine at the left end, the boards at the right end, and the bench's
 # middle clear between them, so a camera added above the bench looks down at
-# the bench (the owner's decision of 2026-10-04: one printer in the garage for
-# now) -- see tests/test_garage_workbench.py for the checks this satisfies.
+# the bench -- see tests/test_garage_workbench.py for the checks this
+# satisfies.
 PRINTER_X_POSITIONS = [100.0]
 PRINTER_Y_POSITION = 150.0
 
@@ -151,12 +152,10 @@ BENCH_BOARDS = [
 # Depth (y) runs well past the workbench/printer/storage cluster (all of
 # which sit within y=0..900) -- a single-car garage is normally longer than
 # its equipment needs, with open floor between the door and the workbench,
-# not a room sized to shrink-wrap its contents. Width (x) is doubled (3000mm
-# -> 6000mm) by moving the east wall out, not by moving GARAGE_MIN -- that
-# keeps electrical/fluids (positioned near the west wall) untouched, but
-# means storage_shelving and cnc_router (positioned flush against the old
-# east wall) must shift by the same delta the wall moved, below, or they'd
-# end up stranded mid-floor instead of against the new wall.
+# not a room sized to shrink-wrap its contents. Width (x) is 6000 mm, set by
+# the east wall (GARAGE_MAX.x): electrical and fluids stand by the west wall,
+# and storage_shelving and cnc_router are placed from GARAGE_MAX.x, below, so
+# they stand against the east wall wherever it is.
 GARAGE_MIN = Vector3D(x=-500.0, y=-500.0, z=0.0)
 GARAGE_MAX = Vector3D(x=5500.0, y=5500.0, z=2600.0)
 WALL_THICKNESS = 100.0
@@ -179,8 +178,7 @@ FLUIDS_POSITION = Vector3D(x=-400.0, y=1200.0, z=400.0)
 
 # --- Storage (mm) -- shelving stub against the wall opposite the fixtures.
 # x is GARAGE_MAX.x - 600 (100mm clearance + 500mm own width), not a literal
-# constant, so it stays flush against the east wall if that wall ever moves
-# again -- see GARAGE_MAX's comment on why this needed updating last time.
+# constant, so it stays flush against the east wall wherever that is.
 STORAGE_POSITION = Vector3D(x=GARAGE_MAX.x - 600.0, y=100.0, z=0.0)
 STORAGE_SIZE = Vector3D(x=500.0, y=600.0, z=2000.0)
 SHELF_THICKNESS = 30.0
@@ -293,10 +291,9 @@ def _build_printer(name: str, *, x: float, y: float, status: str = "idle") -> As
 
     # A Substructure nested inside a Substructure, containing a Feature with
     # its own child Feature: Structure -> Substructure -> Substructure ->
-    # Feature -> Feature, one level deeper than the ADR's fixed four -- a
-    # shape the old Feature class (a leaf with no children slot at all)
-    # could not represent. Demonstrates apothecary/hierarchy.py's Assembly is
-    # genuinely unbounded in depth, not just recursive at one level. On an
+    # Feature -> Feature, one level deeper than the ADR's fixed four.
+    # Demonstrates apothecary/hierarchy.py's Assembly is unbounded in depth,
+    # not just recursive at one level. On an
     # Ender 3 the Y belt's tensioner is at the front of the Y rail.
     tensioner_boss = Feature.boss(
         "belt_tensioner_boss",
@@ -651,8 +648,8 @@ def _build_footpedal() -> Assembly:
 def create_example_site() -> Assembly:
     """A garage: a workbench with a printer on top of it, inside its
     own building shell, alongside abstract utility fixtures, storage, a
-    subtractive-manufacturing stub, and two boards the firmware seam can
-    talk to -- see this module's docstring.
+    subtractive-manufacturing stub, and the boards on the bench that the
+    firmware seam binds devices to -- see this module's docstring.
     """
 
     workbench = _build_workbench()

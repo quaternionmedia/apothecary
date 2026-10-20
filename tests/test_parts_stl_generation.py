@@ -445,7 +445,7 @@ class TestGridfinityOutput:
         """Verify gridfinity STL is stored in parts/gridfinity, not inside submodule."""
         stl_path = GRIDFINITY.get_stl_output_path()
 
-        # Should NOT be inside the submodule directory
+        # Outside the submodule directory
         assert "gridfinity-rebuilt-openscad" not in str(stl_path), (
             f"STL should not be in submodule: {stl_path}"
         )

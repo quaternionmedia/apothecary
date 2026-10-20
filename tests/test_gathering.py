@@ -1,8 +1,7 @@
 """Taking in several pictures at once and working out which are of the same thing.
 
-Most of these are here because the meter, or a whole-folder run, caught something
-a plausible-sounding rule got wrong. Each names the mistake it is holding shut,
-so removing one means arguing with the mistake rather than only with the test.
+Each test names a mistake a plausible-sounding rule makes and holds it shut, so
+removing one means arguing with the mistake rather than only with the test.
 """
 
 from pathlib import Path
@@ -103,9 +102,7 @@ def test_a_readable_picture_says_so_in_a_sentence():
 
 
 def test_shapes_that_look_alike_but_are_arranged_differently_are_a_coincidence():
-    """The exact failure the meter caught first.
-
-    Two photographs of completely different things, each holding a square, a
+    """Two photographs of completely different things, each holding a square, a
     disc and a triangle of about the same proportions. One at a time every shape
     matches. As an arrangement, nothing does.
     """
@@ -140,8 +137,8 @@ def test_the_coincidences_are_dropped_and_the_real_matches_kept():
     """Two pictures that overlap along one edge.
 
     The shapes in the overlap really are the same shapes; the ones outside it
-    throw up matches that are luck. Requiring every match to fit threw away every
-    real overlap, so the biggest agreeing set wins and the rest are handed back.
+    throw up matches that are luck. Requiring every match to fit would throw away
+    every real overlap, so the biggest agreeing set wins and the rest are handed back.
     """
     left = [
         mark(ShapeKind.RECT, 0.7, 0.2),
@@ -436,12 +433,9 @@ def test_a_light_profile_that_is_not_a_share_is_refused():
 
 
 # --------------------------------------------------------------------------
-# The checks a reviewer walked straight through
+# Faults a change to this module could make
 #
-# An independent reviewer broke the first version of this module and then broke
-# its tests: twenty-four of twenty-seven deliberate faults injected into the code
-# were caught by nothing. Every test below closes one of those, and each names
-# the fault it holds shut.
+# Every test below closes one, and each names the fault it holds shut.
 # --------------------------------------------------------------------------
 
 
@@ -459,11 +453,11 @@ def _far_apart(name, seed):
 
 
 def test_the_answer_does_not_depend_on_the_order_the_pictures_arrive_in():
-    """A reviewer handed one folder in nine orders and got five different answers.
+    """One folder gives one answer, whatever order its pictures arrive in.
 
-    The fit measured how far out it was in the second picture's frame, so the
-    whole check was stricter one way round than the other. Some of those five
-    answers merged a photograph that did not belong.
+    A check stricter one way round than the other would give an answer that
+    depends on the order, and some orders would merge a photograph that does not
+    belong.
     """
     pictures = [_three_alike("a", 0.0), _three_alike("b", 0.02), _far_apart("c", 1)]
     forward = gather(pictures)
@@ -475,12 +469,11 @@ def test_the_answer_does_not_depend_on_the_order_the_pictures_arrive_in():
 
 
 def test_the_fit_is_exactly_as_strict_whichever_picture_comes_first():
-    """The fit measured how far out it was in the second picture's frame.
+    """The fit is not measured in the second picture's frame.
 
-    That made the whole check `1/scale` times stricter one way round than the
-    other, so a close-up compared with a wide shot got a different answer
-    depending on which was handed in first. A reviewer turned that into five
-    different results from one folder of twenty-seven photographs.
+    That would make the whole check `1/scale` times stricter one way round than
+    the other, so a close-up compared with a wide shot would get a different
+    answer depending on which was handed in first.
     """
     wide = [
         mark(ShapeKind.RECT, 0.20, 0.20),
@@ -516,12 +509,10 @@ def test_judging_two_pictures_gives_the_same_answer_either_way_round():
 
 
 def test_one_matching_shape_never_makes_two_pictures_the_same_thing():
-    """The escape hatch a reviewer walked through.
-
-    Two pictures with a single uncropped shape each score full coverage on one
-    match. There is no arrangement to check — one point cannot be checked — so
-    the arrangement never objected, and two unrelated photographs came back as
-    the same thing at a hundred per cent.
+    """Two pictures with a single uncropped shape each score full coverage on one
+    match. There is no arrangement to check — one point cannot be checked — so the
+    arrangement cannot object, and coverage alone would call two unrelated
+    photographs the same thing at a hundred per cent.
     """
     one = [mark(ShapeKind.DISC, 0.5, 0.5, area=0.05)]
     other = [mark(ShapeKind.DISC, 0.2, 0.8, area=0.05)]
@@ -610,9 +601,7 @@ def test_shapes_too_alike_to_tell_apart_are_not_evidence():
     The arrangement fits — those three really are in the same formation. But
     every shape in each picture is the same square as every other, so there are
     dozens of pairings that look right and only three that fit, and matching
-    three squares out of a pile of squares says nothing. Without this check the
-    sorting built nine groups out of unrelated photographs across fifteen
-    folders of drawn pictures.
+    three squares out of a pile of squares says nothing.
     """
     formation = [(0.15, 0.15), (0.35, 0.2), (0.25, 0.4)]
     crowd_here = [(0.7, 0.6), (0.85, 0.75), (0.6, 0.85), (0.9, 0.35), (0.75, 0.15)]
@@ -626,8 +615,8 @@ def test_shapes_too_alike_to_tell_apart_are_not_evidence():
 
 
 def test_two_pieces_never_end_up_sharing_one_name():
-    """Tidying turned two different names into one, and the second replaced the
-    first — a piece vanishing from the arrangement with nothing said."""
+    """Tidying never turns two different names into one: the second would replace
+    the first, a piece vanishing from the arrangement with nothing said."""
     from apothecary.vision import build
 
     one = _three_alike("shed door", 0.0)
@@ -645,8 +634,8 @@ def test_two_pieces_never_end_up_sharing_one_name():
 
 
 def test_parts_of_one_thing_are_laid_out_without_sitting_on_top_of_each_other():
-    """Width was measured as the spread of the pieces' middles, so three parts
-    thousands of units wide were spaced one unit apart."""
+    """Width includes how big the pieces are: measured as the spread of their
+    middles, three parts thousands of units wide would be spaced one unit apart."""
     from apothecary.gathering.combine import _across
     from apothecary.hierarchy import Assembly, Site
     from apothecary.models.bounds import BoundingBox3D
@@ -669,7 +658,7 @@ def test_parts_of_one_thing_are_laid_out_without_sitting_on_top_of_each_other():
 
 
 def test_a_shape_the_naming_scheme_does_not_recognise_is_kept_not_dropped():
-    """Pieces whose name does not end in a number were silently discarded."""
+    """A piece whose name does not end in a number is kept."""
     from apothecary.vision import build
 
     one = _three_alike("a", 0.0)
@@ -693,8 +682,8 @@ def test_a_shape_the_naming_scheme_does_not_recognise_is_kept_not_dropped():
 
 
 def test_the_middle_confidence_is_a_real_middle():
-    """The upper of two was taken, so a picture holding one certainty and one
-    blank guess reported itself as typically completely sure."""
+    """The typical confidence of two is their middle, not the upper, so a picture
+    holding one certainty and one blank guess is not typically completely sure."""
     mixed = [
         shape(ShapeKind.RECT, 0.2, 0.2, confidence=0.0),
         shape(ShapeKind.DISC, 0.7, 0.7, confidence=1.0),

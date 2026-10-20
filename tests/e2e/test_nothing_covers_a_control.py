@@ -1,10 +1,10 @@
-"""Nothing covers a control (the owner's word): in Selected with a part's editor open --
+"""Nothing covers a control: in Selected with a part's editor open --
 docked, floated, and with its SCAD editor floated or over the whole page -- at the
 widths the page is laid out for, scrolled from top to bottom, every control in view is
 the thing under its own middle; and so is every control of the rail, a tab's panel
 open under it and Selected squeezed. The part editor's stage bar stands pinned above
-Selected's body, in its own space, where it was once sticky over the parameters it
-heads, the first of them under it; squeezed, it scrolls in itself.
+Selected's body, in its own space, not over the parameters it heads; squeezed, it
+scrolls in itself.
 """
 
 from __future__ import annotations

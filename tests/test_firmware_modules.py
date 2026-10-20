@@ -1,10 +1,10 @@
 """Toolchain modules: one interface, Arduino and Rust for the ESP32 behind it.
 
-The rust-2026-10-08 plan's *Firmware in Rust*: each module says what it builds,
-finds its tools (its variable, the tools dir, PATH), reports their status, and
-builds and flashes a sketch as steps; the Rust esp32_blink lives with its part
-and says what the Arduino one says. Against the scripted cargo and espflash
-(tests/firmware_helpers.py); nothing here builds, flashes or fetches for real.
+Each module (docs/firmware.md) says what it builds, finds its tools (its variable,
+the tools dir, PATH), reports their status, and builds and flashes a sketch as steps;
+the Rust esp32_blink lives with its part and says what the Arduino one says. Against
+the scripted cargo and espflash (tests/firmware_helpers.py); nothing here builds,
+flashes or fetches for real.
 """
 
 from __future__ import annotations
@@ -61,8 +61,8 @@ def _wait(client, task_id):
 
 
 def test_two_modules_each_saying_what_it_builds():
-    """Arduino first, as the seam was; Rust for the ESP32 beside it. A later family or
-    language is another entry here, not a change to the callers."""
+    """Arduino first; Rust for the ESP32 beside it. Another family or language is
+    another entry here, not a change to the callers."""
     found = modules()
     assert [m.id for m in found] == ["arduino", "rust-esp32"]
     arduino, rust = found
@@ -261,7 +261,7 @@ def test_the_tools_dir_cargo_runs_with_its_homes_there_and_the_vendored_crates(
 
 def test_status_says_each_module_and_its_tools(fake_rust, tmp_path):
     status = service.toolchain_status()
-    assert status.arduino_cli_ok and status.ok  # the top level is Arduino's, as it was
+    assert status.arduino_cli_ok and status.ok  # the top level is Arduino's
     arduino, rust = status.toolchains
     assert arduino.id == "arduino" and arduino.ok and arduino.tools[0].name == "arduino-cli"
     assert rust.id == "rust-esp32" and rust.label == "Rust for the ESP32"
@@ -319,9 +319,9 @@ def test_a_rust_sketch_compiles_and_uploads_through_the_routes(
 
 
 def test_the_board_a_route_names_is_each_module_s_own(fake_rust, builds, fresh_task_runner):
-    """An Arduino sketch is built for a board, and the request names it, as it always
-    did; a Rust sketch builds for its chip and takes none. A name two sketches share
-    is refused, naming both."""
+    """An Arduino sketch is built for a board, and the request names it; a Rust sketch
+    builds for its chip and takes none. A name two sketches share is refused, naming
+    both."""
     client = TestClient(app)
     r = client.post("/firmware/sketches/esp32_blink/compile", json={})
     assert r.status_code == 422 and "esp32_blink@arduino, esp32_blink@rust-esp32" in r.text

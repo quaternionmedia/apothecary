@@ -1,14 +1,13 @@
 """Fractal Site/Structure/Substructure/Feature hierarchy.
 
-PROTOTYPE — not ratified. This module exists to let the design in
-``governance/qm/adr/DRAFT-site-structure-substructure-feature-hierarchy.md``
-be evaluated against real geometry before that ADR is ratified. It is
-additive: ``Scene`` and every existing primitive/boolean/transform are
-untouched. The API (``apothecary/api.py``) and a prototype migration of the
-``parts/`` registry (``apothecary/example_parts_library.py``) do import and
-build on this module now, feeding the fractal zoom viewer -- but both are
-themselves explicitly labeled prototype/unratified, evaluating this shape
-rather than treating it as ratified.
+A prototype under a draft record,
+``governance/qm/adr/DRAFT-site-structure-substructure-feature-hierarchy.md``:
+this module lets that design be evaluated against real geometry before the
+record is ratified. ``Scene`` and the primitives, booleans and transforms do
+not depend on it. The API (``apothecary/api.py``) and the ``parts/``
+registry's site (``apothecary/example_parts_library.py``) build on it, feeding
+the fractal zoom viewer, and are prototypes too, evaluating this shape rather
+than treating it as ratified.
 
 The model is one generic, self-similar recursive node, :class:`Assembly` —
 not four separate classes. A build is a tree of ``Assembly`` nodes of
@@ -20,9 +19,9 @@ each potentially decomposable the same way" recurs at every level, so hard-
 coding exactly four levels would just be an arbitrary depth limit waiting to
 be hit by the first project that needs a fifth.
 
-``Site``, ``Structure``, ``Substructure``, and ``Feature`` remain as the
-vocabulary — the ADR's named levels are this project's *worked example* of
-configuring the fractal model, not gone. ``Site``/``Structure``/
+``Site``, ``Structure``, ``Substructure``, and ``Feature`` are the vocabulary
+— the ADR's named levels are this project's *worked example* of configuring
+the fractal model. ``Site``/``Structure``/
 ``Substructure`` are thin factory functions that build a role-tagged
 ``Assembly``; ``Feature`` is a small namespace of constructors for common
 leaf geometry (``clearance_hole``, ``boss``). Every one of them returns a
@@ -72,8 +71,8 @@ def part_stl_path(part_ref: str) -> Optional[str]:
 class Assembly(BaseModel):
     """One generic, self-similar recursive node — the fractal core.
 
-    ``role`` is free-form metadata (used for the render comment and for
-    future revision/diff messages), not a type constraint: nothing here
+    ``role`` is free-form metadata (used for the render comment), not a type
+    constraint: nothing here
     stops a "feature"-role node from having ``children`` or a "site"-role
     node from having ``additions`` — the same shape applies uniformly at
     every depth, which is exactly the point.
@@ -139,8 +138,7 @@ class Assembly(BaseModel):
     def to_scad_object(self, strict: bool = False) -> OpenSCADObject:
         """Compile this node (and everything beneath it) to one OpenSCAD object.
 
-        The single algorithm that replaces what the four fixed classes used
-        to need three separate implementations for: gather positives (``base``
+        One algorithm for every level: gather positives (``base``
         + rendered ``additions`` + rendered ``children``), union them into a
         fresh wrapper (always -- even for exactly one item, since ``base`` or
         an already-rendered addition/child may already carry its own comment,
@@ -217,8 +215,8 @@ class Assembly(BaseModel):
     def validate(self) -> "LayoutReport":
         """Recursive layout check: no two sibling nodes physically overlap, at any depth.
 
-        Generalizes what used to be Site-only overlap-checking (Site's
-        direct Structure children) to every level of the tree — a
+        Checks every level of the tree, not only a Site's direct Structure
+        children — a
         Structure's Substructure children, a Substructure's nested
         Substructure children, and so on — for free, from one recursive
         function. Scenario-specific rules (e.g. "must rest on this other

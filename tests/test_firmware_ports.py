@@ -1,7 +1,7 @@
 """Each toolchain module brings its own ports: it finds them, listens to a board and
 asks the chip itself -- Arduino through arduino-cli and esptool, Rust through
 pyserial (apothecary/firmware/serial_monitor.py) and espflash -- so Rust works with
-no arduino-cli at all (the owner's decision of 2026-10-10).
+no arduino-cli at all.
 
 Against the scripted tools and the simulated serial engine: no test here lists or
 opens a real port.

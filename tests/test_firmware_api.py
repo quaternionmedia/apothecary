@@ -28,7 +28,7 @@ def _wait_for(client, task_id, timeout=5.0):
 
 
 def test_the_firmware_page_is_the_bench_in_the_viewer(fake_arduino_cli):
-    """/firmware leads to the viewer with the Bench open; the template is gone."""
+    """/firmware leads to the viewer with the Bench open."""
     r = TestClient(app).get("/firmware", follow_redirects=False)
     assert r.status_code == 307
     assert r.headers["location"] == "/viewer/sites/garage?panel=bench"
@@ -37,8 +37,8 @@ def test_the_firmware_page_is_the_bench_in_the_viewer(fake_arduino_cli):
 
 
 def test_the_viewer_links_to_no_page_of_its_own(fake_arduino_cli):
-    """The toolbar's Firmware and Monitor links went: Panels › Bench and a board's
-    Machine replace them."""
+    """The toolbar links to no page of its own: Panels › Bench and a board's Machine
+    are the ways in."""
     r = TestClient(app).get("/viewer/sites/garage")
     assert r.status_code == 200
     assert not re.search(r'href="[^"]*/firmware(/monitor)?(\?[^"]*)?"', r.text)

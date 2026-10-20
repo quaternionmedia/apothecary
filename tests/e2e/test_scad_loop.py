@@ -1,19 +1,17 @@
-"""Loop 2, editing a part's SCAD (docs/plans/ui-flows-2026-10-08.md), gone round in
-the page: the part's editor opened from its ring (Part › Edit), its SCAD edited in
-the editor where the read-only source stood, an assertion that fails checked once
-typing stops and marked on its line with nothing rendered, then a real change
-rendered soon after its check passes and drawn as an applied variant, taller than
+"""Loop 2, editing a part's SCAD, gone round in the page: the part's editor opened from
+its ring (Part › Edit), its SCAD edited in Selected's editor, an assertion that fails
+checked once typing stops and marked on its line with nothing rendered, then a real
+change rendered soon after its check passes and drawn as an applied variant, taller than
 its envelope and said so; saved from the ring (Part › Save) as a variant in git and
-listed in both places, with what it changes; the editor floated over the world (Part
-› View › Float) and made fullscreen (its own button, then Esc). Round two in the
-floated editor: a name typed, another change, saved with Ctrl+S; then the first
-variant drawn from the ring (Part › Variants › its name › Draw), and the editor docked
-back. Round three: the name box letting go of the variant once the text moves on and
-taking it back on Ctrl+Z, Save asking before it replaces a variant, F5 checking and
-drawing at once a change that reaches under the floor; then a draft that does not
-read kept over a reload and restored, and the editor's undo kept while another part
-is edited. It writes walkthrough/16-editing-a-parts-scad.md and its pictures as it
-goes (the part-iteration plan, docs/plans/part-iteration-2026-10-12.md).
+listed in both places, with what it changes; the editor floated over the world
+(Part › View › Float) and made fullscreen (its own button, then Esc). Round two in the
+floated editor: a name typed, another change, saved with Ctrl+S; then the first variant
+drawn from the ring (Part › Variants › its name › Draw), and the editor docked back.
+Round three: the name box letting go of the variant once the text moves on and taking it
+back on Ctrl+Z, Save asking before it replaces a variant, F5 checking and drawing at
+once a change that reaches under the floor; then a draft that does not read kept over a
+reload and restored, and the editor's undo kept while another part is edited. It writes
+walkthrough/06-editing-a-parts-scad.md and its pictures as it goes.
 
 The server is this module's own, with this machine's OpenSCAD and a variant cache
 of its own; it saves variants into a clone of the checkout (tests/e2e/conftest.py),
@@ -56,6 +54,14 @@ RUN_CLONE = re.compile(r"/[^\s`'\"]*?/server\d*/variants\.git")
 # variant was saved, a grey of one width whatever the time, and the run's own folder
 # where the status line names it.
 BLANK = (*all_words(".saved-when"), ("#status", RUN_CLONE.pattern))
+
+# How long after a check that passes the page renders a SCAD edit, read from the page.
+RENDER_AFTER_CHECK_MS = int(
+    re.search(
+        r"const SCAD_RENDER_AFTER_CHECK_MS = (\d+);",
+        (ROOT / "templates" / "fractal_viewer.html.j2").read_text(encoding="utf-8"),
+    ).group(1)
+)
 
 REFUSED = 'assert(size < 5, "too big to keep");'
 SMALL_TOP = "translate([0, 0, size]) cube(size / 2);"
@@ -330,10 +336,10 @@ def _at_both_widths(page: Page, shots, how: str) -> None:
 def test_editing_a_parts_scad_twice_round(
     page: Page, scad_url: str, cube_as_it_was, shots, walkthrough
 ):
-    """The loop, twice round, and walkthrough page 16 written from it. Marked e2e and
+    """The loop, twice round, and walkthrough page 06 written from it. Marked e2e and
     not walkthrough: a loop's page is written by the browser suite only."""
     story = walkthrough(
-        ordinal="16",
+        ordinal="06",
         slug="editing-a-parts-scad",
         title="Editing a part's SCAD",
         browser_suite_only=True,
@@ -360,10 +366,12 @@ def test_editing_a_parts_scad_twice_round(
             "writes the checkout.",
             "**A part without a model.** Its controls come from what its SCAD declares, "
             "where the OpenSCAD in use lists them; calibration_cube has a model.",
-            "**When a variant was saved.** It differs on every run, so the lists' times "
-            "are blanked in the pictures.",
+            "**When a variant was saved, and where the server keeps it.** Both differ on "
+            "every run: the lists' times are blanked in the pictures, and the server's clone "
+            "of the checkout is named as the test server's variants repository in the "
+            "words and blanked where the status line shows it.",
             "**The way back to the saved part.** Part › Defaults, then Apply, draws the "
-            "part's own SCAD and numbers again, as walkthrough 14 does for its numbers.",
+            "part's own SCAD and numbers again, as walkthrough 04 does for its numbers.",
         ],
     )
     refs_before = _variant_refs_here()
@@ -372,7 +380,7 @@ def test_editing_a_parts_scad_twice_round(
     assert page.request.post(f"{scad_url}/parts/{PART}/stl/generate").ok
     _open(page, site)
 
-    # Part › Edit: the SCAD in an editor where the read-only source stood.
+    # Part › Edit: the SCAD in its editor.
     _ring(page, "Part", "Edit")
     expect(_code(page)).to_be_visible(timeout=20000)
     expect(_said(page)).to_contain_text("The part's own SCAD: edit it here")
@@ -443,7 +451,8 @@ def test_editing_a_parts_scad_twice_round(
     story.shows(
         "A change that reads is rendered soon after its check",
         "The line replaced with a smaller cube on top. Checked once typing stops, and "
-        "300 ms after the check passes rendered as Apply renders, from the edited SCAD "
+        f"{RENDER_AFTER_CHECK_MS} ms after the check passes rendered as Apply renders, "
+        "from the edited SCAD "
         "written beside the part, and drawn in this tab, 15 mm tall now: an applied "
         "variant, not saved, the view brought to it by hand, Shift+drag and the wheel. "
         "Taller than the envelope its numbers declare, the envelope's line turns amber and "
@@ -687,11 +696,8 @@ def test_editing_a_parts_scad_twice_round(
 def test_after_a_scad_edit_defaults_then_apply_draws_the_saved_part(
     page: Page, scad_url: str, cube_as_it_was
 ):
-    """The onboarding review found the way back stuck: after a SCAD edit, Part ›
-    Defaults staged the numbers already drawn, and Part › Apply said nothing was
-    staged, the amber mark and ?variant= staying. With the text the truth (the
-    part-iteration plan, "parameters and text, tied together"), the edit drawn is
-    what is drawn: nothing is staged. Defaults puts the part's own SCAD back -- its
+    """The way back after a SCAD edit: the text is the one draft, so the edit drawn is
+    what is drawn and nothing is staged. Defaults puts the part's own SCAD back -- its
     defaults are its SCAD as saved -- and Apply, saying it draws the saved part, draws
     it, the mark and the address's variant gone: from the ring, and with the editor's
     own Defaults and Apply."""

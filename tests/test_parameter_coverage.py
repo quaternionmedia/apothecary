@@ -106,8 +106,9 @@ def test_every_default_matches_the_scad_default(part):
 
 
 def test_a_part_without_a_model_refuses_a_name_its_scad_does_not_declare():
-    """dryerknob has no Python model; `-p knob_diameter=60` used to render the
-    defaults and report success, because OpenSCAD ignores an unknown -D."""
+    """dryerknob has no Python model; a name its SCAD does not declare
+    (`-p knob_diameter=60`) is refused, because OpenSCAD ignores an unknown -D and
+    would render the defaults and report success."""
     from apothecary.projects.parts.dryerknob import DEFAULT as knob
 
     declared = scad_variables(knob.source_file)

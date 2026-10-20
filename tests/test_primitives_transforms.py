@@ -53,7 +53,7 @@ def test_vector_to_list():
 
 
 def test_a_comment_cannot_become_code():
-    """A newline in a comment used to end the comment and start geometry."""
+    """A newline in a comment stays in the comment: it never starts geometry."""
     out = Cube(comment="a\nsphere(100);").render()
     assert out.splitlines()[:2] == ["// a", "// sphere(100);"]
 
@@ -65,7 +65,7 @@ def test_a_quote_in_a_mesh_path_stays_in_the_string():
 
 
 def test_one_radius_given_sets_both_ends_as_the_viewer_draws_it():
-    """Cylinder(r1=3) rendered `r=1` while the viewer drew a 3 mm cylinder."""
+    """Cylinder(r1=3) renders both ends at 3 mm, as the viewer draws it."""
     from apothecary.primitives import Cylinder
 
     assert "r=3.0" in Cylinder(h=5, r1=3).render()

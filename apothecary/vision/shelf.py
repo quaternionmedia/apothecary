@@ -13,7 +13,7 @@ Held in memory only, like everything else that register holds: nothing is
 written anywhere, and a restart loses it. Where it would be kept waits on what
 the draft record *Personal data stays on the device* counts as this machine.
 
-PROTOTYPE — not ratified.
+A prototype: no ratified record governs it.
 """
 
 from __future__ import annotations
@@ -83,8 +83,8 @@ class Shelf:
         def fetch() -> Assembly:
             # A copy, not the shelved object. The register's "discard all edits
             # and rebuild" hands back whatever this returns, so returning the
-            # live one made resetting a picture-built arrangement do nothing at
-            # all while quietly appearing to work.
+            # live one would make resetting a picture-built arrangement do
+            # nothing while appearing to work.
             return self.site(name).model_copy(deep=True)
 
         return fetch

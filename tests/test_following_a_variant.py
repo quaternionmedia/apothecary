@@ -1,5 +1,4 @@
-"""Slice and the readiness checklist follow the variant a page draws
-(docs/plans/part-iteration-2026-10-12.md, item 4).
+"""Slice and the readiness checklist follow the variant a page draws.
 
 ``POST /slicer/slice`` takes a cached variant's key and slices its STL, and the
 slice record names the variant; ``GET /parts/{name}/checklist`` takes the key

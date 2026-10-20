@@ -163,7 +163,9 @@ Two places, kept in step: a top-level variable in the SCAD file (what `-p`
 reaches as `-D`) and a field on the wrapper's `Params` (what validates and
 documents it). `tests/test_parameter_coverage.py` fails on a field with no
 SCAD variable behind it; `apothecary parts verify` fails when the two
-disagree about size.
+disagree about size. A field's unit is declared on it,
+`json_schema_extra={"unit": "mm"}`, as a customizer parameter's is by its
+comment's unit word; the viewer shows a unit only where one is declared.
 
 ### A part without a model: its SCAD's own parameters
 
@@ -171,13 +173,12 @@ A part with no `Params` model still has controls in the viewer where the
 OpenSCAD it renders with can list its SCAD's parameters: a development
 snapshot can (`--export-format=param`), 2021.01 cannot. `GET
 /parts/{name}/params` then answers what OpenSCAD's customizer lists
-(`apothecary/projects/parts/customizer.py`, `source: "customizer"`): the
-top-level assignments before the first module or function, annotated the
-customizer's way -- `width = 34; // [10:100]` a number with its range,
+(`apothecary/projects/parts/customizer.py`, `source: "customizer"`): its
+parameters as [above](#in-the-page-the-text-is-the-truth), each typed by its
+value and its comment -- `width = 34; // [10:100]` a number with its range,
 `hollow = true;` a tick, `label = "hi";` a string, `shape = "round"; //
-[round, square]` a choice, `size = [10, 20];` a vector, `/* [Size] */` the
-group what follows is in, a comment on the line above its caption, and
-`/* [Hidden] */` what is not offered. Where there is nothing to list, the
+[round, square]` a choice, `size = [10, 20];` a vector -- and grouped by a
+`/* [Size] */` above them. Where there is nothing to list, the
 `404`'s `detail` says why, `lists: false` when the OpenSCAD in use cannot
 list at all. `POST /parts/{name}/validate` and `.../stl/generate` check a
 staged set against the same list: a number as a number, a choice one of its
@@ -200,9 +201,9 @@ sha256 of its text; the cache keeps the text, at
 never written.
 
 Saving is a variant in git: `POST /parts/{name}/saved` with `{name, scad,
-params}` commits the SCAD, and the parameters as `<stem>.variant.json`
-beside it, to `refs/apothecary/variants/<part>/<name>` in the repository
-that tracks the part, with git's plumbing alone
+params}` commits the SCAD, `params` written into it as its assignments, to
+`refs/apothecary/variants/<part>/<name>` in the repository that tracks the
+part, with git's plumbing alone
 (`apothecary/projects/parts/saved.py`), so the working tree, the index and
 the checked-out branch are never touched. The commit's author is the git
 identity of the checkout, and its parent is the variant's last save or
@@ -210,23 +211,24 @@ identity of the checkout, and its parent is the variant's last save or
 (`?diff=true`: with what each changes against the part's SCAD), and `GET
 /parts/{name}/saved/{variant}` reads one with its SCAD. Making one the
 part's source is a merge you do: `git merge
-refs/apothecary/variants/<part>/<name>`. Keeping a variant's parameters in
-the part's own description instead (`params_in: "part-description"`) is the
-aim, and a stub until then: a save that asks for it is refused, saying what it
-will do. `APOTHECARY_VARIANTS_REPO` names another repository to save into, a
+refs/apothecary/variants/<part>/<name>`. Keeping a variant's values in the
+part's own description instead (`params_in: "part-description"`) is a stub: a
+save that asks for it is refused, saying what it would do.
+`APOTHECARY_VARIANTS_REPO` names another repository to save into, a
 clone of the checkout; the browser suite's servers save into one of their own.
 
-In the viewer, the part's editor in Selected holds its SCAD, where the
-read-only source stood: checked once typing stops, rendered soon after a
-check that passes, saved with Save (Ctrl+S in the editor, or Part › Save)
-under the name beside it, its saved variants listed under its parameters
-and, with what each changes, in the editor; floated over the world or made
-fullscreen (Part › View › Float, Part › View › Fullscreen). Walkthrough 16
-goes round it, and [viewer.md](viewer.md#the-scad-editor) has its keys.
+In the viewer, the part's editor in Selected holds its SCAD
+([viewer.md](viewer.md#the-scad-editor) says how it checks, renders and saves,
+and its keys); walkthrough 06 goes round it.
 
 A part built by Python geometry (the snowplow) has no SCAD of its own to
 edit: `GET /parts/{name}/scad` answers the SCAD its geometry generates
 (`X-Part-Scad: generated`), and a draft or a save of it is a `403`.
+
+Every check and render is OpenSCAD run by the server on this machine; the
+page never runs it. OpenSCAD built to WebAssembly would duplicate the server,
+carry GPLv3 object code into the page, and need `wasm-unsafe-eval`, which the
+page's Content-Security-Policy (`apothecary/stays_local.py`) does not allow.
 
 ## Hooks for a part the SCAD file does not fully describe
 
@@ -237,13 +239,10 @@ through them.
 
 `openscad_min_version` is the oldest OpenSCAD that renders the part, as
 `openscad --version` numbers it (`"2021.08.24"`). The first OpenSCAD new
-enough is used, in this order (`stl_renderer.find_openscad`): the one
-`APOTHECARY_OPENSCAD` names, which is then the only one tried; the snapshot
-`apothecary openscad install` made current; the default install (the
-`openscad` CLI on `PATH`); then other development snapshots,
-`openscad-nightly` on `PATH` or one of the usual install locations. With
-none, `can_generate_stl()` names the version needed, every OpenSCAD it
-found, and `apothecary openscad install`.
+enough is used, in the order [openscad.md](openscad.md#which-openscad-a-render-uses)
+gives (`stl_renderer.find_openscad`). With none, `can_generate_stl()` names
+the version needed, every OpenSCAD it found, and `apothecary openscad
+install`.
 `generate-stl --all`, `verify` and server startup skip the part with that
 reason, `checklist` gives it, and a build of that part alone is refused
 with it: `generate-stl NAME` fails, and `POST /parts/{name}/stl/generate`

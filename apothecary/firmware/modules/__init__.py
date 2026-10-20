@@ -7,11 +7,11 @@ at the first failure. Apothecary itself compiles and flashes nothing; a
 module only turns a sketch into steps for the engines it drives, as the
 *Firmware toolchain seam* record has it.
 
-Two modules today:
+The modules (``_registry`` is the list):
 
 - ``arduino`` (``modules/arduino.py``): arduino-cli builds and uploads,
-  esptool flashes raw images. Its routes, messages and sketches are the ones
-  the seam had before there were modules.
+  esptool flashes raw images. Its sketches are ``<folder>/<folder>.ino``, and
+  the top-level fields of ``GET /firmware/status`` are its.
 - ``rust-esp32`` (``modules/rust_esp32.py``): cargo builds a Cargo project
   for the classic ESP32 on Espressif's Xtensa Rust toolchain, offline, from
   crates vendored at install time; espflash flashes it.

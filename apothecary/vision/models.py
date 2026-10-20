@@ -5,7 +5,7 @@ fractions of the picture — 0.0 is the left or top edge, 1.0 is the right or
 bottom. Turning those into millimetres needs a real-world reference, and there
 is no default for that. See ``ScaleReference`` and ``apothecary.vision.compose``.
 
-PROTOTYPE — not ratified.
+A prototype: no ratified record governs it.
 """
 
 from __future__ import annotations

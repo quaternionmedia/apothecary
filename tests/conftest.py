@@ -7,13 +7,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 
-# Registered here rather than in tests/e2e/conftest.py, where these options were
-# first defined. pytest loads a conftest for the paths named on the command line
-# before it parses the arguments, so an option defined one directory further down
-# than any named path does not exist yet when the parser meets it: the ordinary
-# test command names `tests/` and `walkthrough`, and died on its own
-# --start-server with "unrecognized arguments". Options live at the top; the
-# fixtures that read them stay where they are used.
+# Registered here rather than in tests/e2e/conftest.py. pytest loads a conftest for
+# the paths named on the command line before it parses the arguments, so an option
+# defined one directory further down than any named path does not exist yet when the
+# parser meets it: the ordinary test command names `tests/` and `walkthrough`, and
+# would refuse its own --start-server as "unrecognized arguments". Options live at
+# the top; the fixtures that read them stay where they are used.
 def pytest_addoption(parser):
     """Add custom pytest options for E2E tests."""
     parser.addoption(
@@ -160,7 +159,8 @@ def _no_variant_refs_appear_in_this_checkout():
 @pytest.fixture(autouse=True)
 def _scripted_boards_answer_at_once(monkeypatch):
     """Every board in the unit suite is scripted and answers at once; waiting out
-    a real board's silences (1.5 s settles, 5 s timeouts) was a minute of the run."""
+    a real board's silences (1.5 s settles, 5 s timeouts) would add a minute to the
+    run."""
     from apothecary.firmware import gcode
 
     monkeypatch.setattr(gcode.GcodeLink, "time_scale", 0.02)

@@ -154,9 +154,8 @@ def test_substructure_with_nonzero_position_wraps_in_translate():
 
 
 def test_feature_can_have_a_child_feature_one_level_deeper_than_the_fixed_four():
-    """Assembly is one generic recursive class, not four fixed levels -- a
-    Feature (a leaf under the old model, with no children slot at all) can
-    itself carry a child Feature, proving depth is genuinely unbounded.
+    """Assembly is one generic recursive class, not four fixed levels: a Feature
+    can itself carry a child Feature, so depth is unbounded.
     """
     chamfer = Feature.boss("chamfer", position=Vector3D(), diameter=6, height=1)
     boss = Feature.boss("boss", position=Vector3D(), diameter=4, height=2)

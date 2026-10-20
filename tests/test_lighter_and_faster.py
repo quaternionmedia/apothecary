@@ -1,9 +1,8 @@
-"""Lighter and faster (docs/plans/part-iteration-2026-10-12.md, item 6): binary STLs
-in the variant cache, variant URLs answered immutable, responses compressed, the
-cache keyed on what OpenSCAD compiles so a comment-only edit renders nothing, a
-render's answer naming the editor version it was for, the edited draft served for
-Download, the snowplow's generated SCAD for the parameters applied, and whether
-this OpenSCAD can build the part said up front.
+"""Lighter and faster: binary STLs in the variant cache, variant URLs answered
+immutable, responses compressed, the cache keyed on what OpenSCAD compiles so a
+comment-only edit renders nothing, a render's answer naming the editor version it was
+for, the edited draft served for Download, the snowplow's generated SCAD for the
+parameters applied, and whether this OpenSCAD can build the part said up front.
 
 Every OpenSCAD here is scripted (tests/scripted_openscad.py) and every part is
 the test's own, but for the library's parts the routes are asked about.

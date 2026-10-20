@@ -1,0 +1,50 @@
+# A pull request is eligible to merge only when its head merges, without a conflict,
+# into the integration of every open pull request before it: the open pull requests
+# merged depth first from their base, oldest first on each. The review walks that
+# integration as one codebase (README.md, "What it does, and how to see it"), so a
+# pull request that conflicts with it is fixed in its own branch before it merges.
+#
+# What this fails, and the fix: .github/ci/check_integrates.py says. A pull request
+# stacked on one that conflicts waits on it and fails with it.
+#
+# A run judges the open pull requests as they are when it starts. One pushed to later
+# can make an earlier verdict stale; the next push, or a re-run, judges again, and
+# `python .github/ci/check_integrates.py --repo quaternionmedia/apothecary` judges
+# every open pull request at once.
+
+name: Integrates
+
+on:
+  pull_request:
+    # `edited` fires on a base change: the retarget when the pull request beneath merges.
+    types: [opened, reopened, synchronize, ready_for_review, edited]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  integrates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Every branch's history: the merges are of whole branches.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: This pull request merges into the open pull requests before it
+        run: |
+          python .github/ci/check_integrates.py \
+            --repo "$GITHUB_REPOSITORY" \
+            --pr "$PR_NUMBER"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}

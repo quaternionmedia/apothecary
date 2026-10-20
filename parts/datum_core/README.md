@@ -20,7 +20,7 @@ uv run apothecary parts generate-stl datum_cap                    # its cover
 The SCAD draws the tray and nothing else; `openscad -o datum_core.stl
 parts/datum_core/datum_core.scad` renders the same. The tray and its lid as one
 addressable tree are the `datum_core` site (`/viewer/sites/datum_core`, and
-[walkthrough page 03](../../walkthrough/03-an-assembly.md)).
+[walkthrough page 09](../../walkthrough/09-an-assembly.md)).
 
 ## Parameters worth tuning first
 
@@ -46,7 +46,7 @@ board this is sized around, so the footprint, the connector position and the
 mounting pattern are placeholders chosen to render coherently and to be easy
 to move; so are the cover's contact grid and indicator.
 
-What has to be checked against a real board before this is printed in anger:
+What has to be checked against a real board before this is printed for use:
 
 - board footprint and corner radius
 - mounting hole pattern — this assumes four, symmetric, inset equally
