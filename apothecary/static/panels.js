@@ -253,6 +253,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             return;
         }
         // A component's stack is its parentItem; a stack's row or column, its parent.
+        rowForTheWorld();
         const ws = worldStack();
         const besideWorld = ws && ws.parent;
         if (r.home === "beside" && besideWorld) {
@@ -272,8 +273,22 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         const column = [...records.values()].map((o) => item(o.id)).filter(Boolean)
             .map((ci) => ci.parentItem?.parent).find((p) => p && p.type === "column");
         if (column) { column.addItem({ type: "stack", content: [config] }); return; }
-        if (besideWorld) besideWorld.addItem({ type: "stack", content: [config] }, besideWorld.contentItems.indexOf(ws) + 1);
-        else layout.addItem(config);
+        besideWorld.addItem({ type: "stack", content: [config] }, besideWorld.contentItems.indexOf(ws) + 1);
+    }
+
+    // With every window but the world closed, GoldenLayout lays the world's stack on the
+    // layout's root, where nothing can stand beside it. Before a window opens there, the
+    // layout is laid out again with the world in a row, every window kept, as reset()
+    // lays the page's own out.
+    function rowForTheWorld() {
+        const ws = worldStack();
+        if (!ws || ws.parent?.isRow || ws.parent?.isColumn) return;
+        const config = LayoutConfig.fromResolved(layout.saveLayout());
+        config.root = { type: "row", content: [config.root] };
+        for (const r of records.values()) r.releasing = true;
+        layout.loadLayout(config);
+        for (const r of records.values()) r.releasing = false;
+        tabsForDrops();
     }
 
     // A window beside the world closed, its stack with it: its room goes back to the

@@ -665,6 +665,19 @@ def test_a_closed_window_stays_closed_and_the_ring_reopens_it(page: Page, ring_u
         page.evaluate("(id) => window.apothecaryPanels.close(id)", state["id"])
     expect(page.locator(".panel")).to_have_count(0)
     windows.world_is(page, page.viewport_size["width"])
+    # The world alone in the layout, a panel opens beside it again, after a reload too.
+    page.wait_for_timeout(400)  # the layout is remembered a moment after it changes
+    page.reload()
+    expect(world).to_be_visible(timeout=15000)
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    inner = _panels_ring(page)
+    page.keyboard.press(next(cell for cell, label in inner.items() if label == "Site"))
+    page.keyboard.press(next(cell for cell, label in _wedges(page).items() if label == "Site"))
+    expect(windows.panel(page, "site")).to_be_visible(timeout=5000)
+    expect(page.locator(windows.WORLD_HEADER)).to_be_hidden()
+    assert world.bounding_box()["width"] < page.viewport_size["width"] - 100
+    assert errors == [], errors
 
 
 @pytest.mark.e2e
