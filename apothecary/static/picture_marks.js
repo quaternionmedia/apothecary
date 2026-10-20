@@ -50,8 +50,9 @@
 
 import * as THREE from "three";
 
-// apothecary (x, y, z) z-up -> three.js (x, z, y) y-up.
-const toScene = (x, y, z) => new THREE.Vector3(x, z, y);
+// apothecary (x, y, z) z-up -> three.js (x, z, -y) y-up: a quarter turn about x, as the
+// viewer's sceneAt turns it, so a picture reads as it was taken, not mirrored.
+const toScene = (x, y, z) => new THREE.Vector3(x, z, -y);
 // A badge's words are markup: a device's label and a picture's name are text in it.
 const escapeText = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 

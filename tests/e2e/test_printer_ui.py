@@ -478,25 +478,27 @@ def test_board_inside_the_printer_drives_it(page: Page, printer_url: str):
     ).to_have_count(0)
 
 
-# A node's body as the world draws it, in apothecary's frame (z up; three.js's y is
-# apothecary's z): the real geometry, centred on the node's envelope. None while the
+# A node's body as the world draws it, in apothecary's frame (z up), read back through the
+# viewer's own siteAt: the real geometry, centred on the node's envelope. None while the
 # placeholder box stands in for it.
 DRAWN_BODY = """(key) => {
-    const mesh = window.fractalViewer.meshByName[key];
+    const v = window.fractalViewer, mesh = v.meshByName[key];
     if (!mesh || mesh.userData.isPlaceholder || mesh.userData.isDot) return null;
     mesh.geometry.computeBoundingBox();
     const b = mesh.geometry.boundingBox, p = mesh.position;
-    return { min: { x: b.min.x + p.x, y: b.min.z + p.z, z: b.min.y + p.y },
-             max: { x: b.max.x + p.x, y: b.max.z + p.z, z: b.max.y + p.y } };
+    const [lo, hi] = [v.siteAt(b.min.clone().add(p)), v.siteAt(b.max.clone().add(p))];
+    const [x, y, z] = [0, 1, 2].map((i) => [Math.min(lo[i], hi[i]), Math.max(lo[i], hi[i])]);
+    return { min: { x: x[0], y: y[0], z: z[0] }, max: { x: x[1], y: y[1], z: z[1] } };
 }"""
 
 # The world's wire box for a printer's build volume: a unit box scaled and placed.
 WIRE_VOLUME = """(name) => {
-    const box = window.fractalViewer.buildVolumeMeshByName[name];
+    const v = window.fractalViewer, box = v.buildVolumeMeshByName[name];
     if (!box) return null;
-    const c = box.position, s = box.scale;
-    return { min: { x: c.x - s.x / 2, y: c.z - s.z / 2, z: c.y - s.y / 2 },
-             max: { x: c.x + s.x / 2, y: c.z + s.z / 2, z: c.y + s.y / 2 } };
+    const c = box.position, half = box.scale.clone().multiplyScalar(0.5);
+    const [lo, hi] = [v.siteAt(c.clone().sub(half)), v.siteAt(c.clone().add(half))];
+    const [x, y, z] = [0, 1, 2].map((i) => [Math.min(lo[i], hi[i]), Math.max(lo[i], hi[i])]);
+    return { min: { x: x[0], y: y[0], z: z[0] }, max: { x: x[1], y: y[1], z: z[1] } };
 }"""
 
 # The build volume the board's port lays its marks in (the bed, the nozzle, a reading),
@@ -504,8 +506,8 @@ WIRE_VOLUME = """(name) => {
 MARKED_VOLUME = """(path) => {
     const m = window.fractalViewer.marks[path];
     if (!m || !m.marks) return null;
-    const v = m.marks.volume(), g = m.marks.group.position;
-    const at = { x: g.x, y: g.z, z: g.y };
+    const v = m.marks.volume(), [x, y, z] = window.fractalViewer.siteAt(m.marks.group.position);
+    const at = { x, y, z };
     const add = (p) => ({ x: p.x + at.x, y: p.y + at.y, z: p.z + at.z });
     return { min: add(v.min), max: add(v.max) };
 }"""

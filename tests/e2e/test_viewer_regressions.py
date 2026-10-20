@@ -78,9 +78,9 @@ ON_THE_GRID = """(key) => {
     const v = window.fractalViewer, b = v.renderNodeByKey[key].world_bounds;
     const ys = [];
     for (const x of [b.min[0], b.max[0]]) for (const y of [b.min[1], b.max[1]])
-        for (const z of [b.min[2], b.max[2]]) ys.push(v.camera.position.clone().set(x, z, y).project(v.camera).y);
+        for (const z of [b.min[2], b.max[2]]) ys.push(v.sceneAt(x, y, z).project(v.camera).y);
     return {
-        grid: [v.gridHelper.position.x, v.gridHelper.position.z],
+        grid: v.siteAt(v.gridHelper.position).slice(0, 2),
         middle: [(b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2],
         share: (Math.max(...ys) - Math.min(...ys)) / 2,
     };
@@ -104,6 +104,64 @@ def test_a_part_stepped_into_stands_on_the_grid_and_fills_the_view(page: Page, b
     for grid, middle in zip(seen["grid"], seen["middle"], strict=True):
         assert abs(grid - middle) < 10, f"the grid lies away from the cube: {seen}"
     assert seen["share"] > 0.2, f"the cube takes {seen['share']:.0%} of the view's height"
+
+
+# The view put in front of a piece (its -y side, level with its middle), and for each point
+# of the site's frame named: where across the canvas it falls (0 the left edge, 1 the
+# right) and how far behind the piece's front a ray through it meets the mesh. With them,
+# where the axes drawn point, in the site's frame.
+FROM_THE_FRONT = """([key, points]) => {
+    const v = window.fractalViewer, m = v.meshByName[key], b = v.renderNodeByKey[key].world_bounds;
+    const mid = [0, 1, 2].map((i) => (b.min[i] + b.max[i]) / 2);
+    v.orbitControls.target.copy(v.sceneAt(...mid));
+    v.camera.position.copy(v.sceneAt(mid[0], b.min[1] - 60, mid[2]));
+    v.orbitControls.update();
+    v.camera.updateMatrixWorld();
+    const seen = points.map((p) => {
+        const s = v.sceneAt(...p).project(v.camera);
+        v.raycaster.setFromCamera({ x: s.x, y: s.y }, v.camera);
+        const hit = v.raycaster.intersectObject(m, false)[0];
+        return { across: (s.x + 1) / 2, behind: hit ? v.siteAt(hit.point)[1] - b.min[1] : null };
+    });
+    const vec = (x, y, z) => v.camera.position.clone().set(x, y, z);
+    const axis = (x, y, z) => v.siteAt(
+        v.axesHelper.localToWorld(vec(x, y, z)).sub(v.axesHelper.localToWorld(vec(0, 0, 0))),
+    ).map((n) => Math.round(n));
+    return { seen, axes: { red: axis(1, 0, 0), green: axis(0, 1, 0), blue: axis(0, 0, 1) } };
+}"""
+
+
+@pytest.mark.e2e
+def test_the_site_is_drawn_as_openscad_draws_it_not_mirrored(page: Page, base_url: str):
+    """calibration_cube's SCAD cuts a 1.5 mm notch from its top edge at its origin corner:
+    its -x, its -y side, its top. Seen from the site's front, the notch is at the top left,
+    as OpenSCAD draws it -- a ray through it meets the mesh 1.5 mm in, one through the
+    top right meets the front face -- and the axes are the site's: red x, green y, blue z."""
+    _open(page, f"{base_url}/viewer/sites/parts_library")
+    page.locator("#contents-list .contents-item[data-path='calibration_cube']").dblclick()
+    page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'calibration_cube'")
+    page.wait_for_function(
+        "() => { const m = window.fractalViewer.meshByName['calibration_cube'];"
+        " return m && !m.userData.isPlaceholder; }",
+        timeout=60000,
+    )
+    page.evaluate("() => window.fractalViewer.waveDone")
+    settled(page)
+    bounds = page.evaluate(
+        "() => window.fractalViewer.renderNodeByKey['calibration_cube'].world_bounds"
+    )
+    (x0, y0, _), (x1, _, top) = bounds["min"], bounds["max"]
+    notch, other = [x0 + 0.75, y0, top - 0.75], [x1 - 0.75, y0, top - 0.75]
+    found = page.evaluate(FROM_THE_FRONT, ["calibration_cube", [notch, other]])
+    at_notch, at_other = found["seen"]
+    assert at_notch["behind"] == pytest.approx(1.5, abs=0.1), (
+        f"no notch at the origin corner: {found}"
+    )
+    assert at_other["behind"] == pytest.approx(0, abs=0.1), f"the front face is not whole: {found}"
+    assert at_notch["across"] < 0.5 < at_other["across"], (
+        f"seen from the front, the notch at the site's -x is drawn on the right, mirrored: {found}"
+    )
+    assert found["axes"] == {"red": [1, 0, 0], "green": [0, 1, 0], "blue": [0, 0, 1]}, found
 
 
 @pytest.fixture

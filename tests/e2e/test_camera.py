@@ -47,7 +47,7 @@ HANDLE_AT = """([kind, deg]) => {
     let x, y, z;
     if (kind === 'turn') { const r = g.userData.turnRadius; x = -Math.sin(a) * r; y = Math.cos(a) * r; z = 0; }
     else { const r = g.userData.tiltRadius; x = -Math.sin(t) * Math.sin(a) * r; y = Math.cos(t) * Math.sin(a) * r; z = -Math.cos(a) * r; }
-    const p = g.localToWorld(v.camera.position.clone().set(x, z, y)).project(v.camera);
+    const p = g.localToWorld(v.sceneAt(x, y, z)).project(v.camera);
     const box = v.canvas.getBoundingClientRect();
     return [box.left + (p.x + 1) / 2 * box.width, box.top + (1 - p.y) / 2 * box.height];
 }"""

@@ -214,7 +214,20 @@ STATIC_ROOT = Path(__file__).resolve().parent / "static"
 # an image are left as they are (Starlette excludes them).
 app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
 app.add_middleware(LocalOnly)
-app.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
+
+
+class _AskedAgain(StaticFiles):
+    """The page's modules and the vendored libraries, asked again on every load and
+    answered 304 while unchanged (their ETag). With no Cache-Control a browser keeps a
+    script on a guess, and can run an older module beside a newer page."""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+app.mount("/static", _AskedAgain(directory=STATIC_ROOT), name="static")
 app.include_router(docs_router)
 # Mounted before the photo routes below, so /photos/pictures and /photos/gather
 # are matched before /photos/{name} can take "pictures" for a name. The router
