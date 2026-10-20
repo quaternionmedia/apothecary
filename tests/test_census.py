@@ -252,7 +252,8 @@ def test_the_panel_module_keeps_its_chrome_to_itself():
     """panels.js leaves the windows' own chrome -- tabs, splitters, a stack's
     maximise and close -- to GoldenLayout, and listens on the window only for the
     tilde key and the page going (the layout saved at once), each taken off again;
-    the viewer loads it."""
+    the + it adds to a stack, and the list the + opens, listen to themselves alone.
+    The viewer loads it."""
     text = (STATIC / "panels.js").read_text(encoding="utf-8")
     assert _on_the_page(text) == [("window", "keydown"), ("window", "pagehide")]
     for event in ("keydown", "pagehide"):

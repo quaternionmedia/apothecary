@@ -126,7 +126,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         const slot = document.createElement("div");
         slot.className = "panel-body-slot";
         el.append(pinned, slot);
-        r = { id, title: id, tab: null, hint: null, flag: null, home: null, loud: false, el, slot, mount: null, filled: true, open: false,
+        r = { id, title: id, tab: null, hint: null, flag: null, home: null, group: null, loud: false, el, slot, mount: null, filled: true, open: false,
               registered: false, container: null, onClose: null, onOpen: null, onDock: null, releasing: false };
         records.set(id, r);
         return r;
@@ -243,7 +243,11 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
     function addAt(r, front = true) {
         const config = { type: "component", componentType: r.id, id: r.id, title: r.tab || r.title };
         const tabbed = [...records.values()].filter((o) => o.id !== r.id && o.registered && o.home === "tabs" && item(o.id));
-        const beside = !HOMES.has(r.home) && r.home !== r.id ? item(r.home) : null;
+        // A window whose home is another one goes beside it, else beside a window open
+        // with the same home (an Airgap section beside another, the Airgap closed).
+        const kin = (o) => o.id !== r.id && o.home === r.home && item(o.id);
+        const beside = !HOMES.has(r.home) && r.home !== r.id
+            ? item(r.home) || item([...records.values()].find(kin)?.id) : null;
         if ((r.home === "tabs" && tabbed.length) || beside) {
             const stack = (beside || item(tabbed[0].id)).parentItem;
             const before = stack.getActiveComponentItem();
@@ -326,6 +330,178 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
     };
     window.addEventListener("keydown", onKey);
 
+    // ---- views ----------------------------------------------------------------
+    // A view is written in window ids: "site" is a window (a stack of its own where it
+    // stands in a row or a column); { stack: [...ids], size, active } a stack of tabs,
+    // `active` the one in front; { row: [...] } and { column: [...] } split, each child
+    // with an optional `size` (per cent of its row or column). "world", or
+    // { world: true, size }, is the world's window, tabless. A window the page has not
+    // registered is left out, and a stack, row or column left empty goes with it.
+    const views = new Map([["default", { title: "Default", spec: null }]]);
+    const worldItem = () => ({ type: "component", componentType: WORLD, id: WORLD, title: "World", isClosable: false });
+    function resolveView(spec, parent = "row") {
+        const sized = (out, size) => { if (size) out[parent === "column" ? "height" : "width"] = size; return out; };
+        if (typeof spec === "string") {
+            if (spec === WORLD) return { type: "stack", header: { show: false }, content: [worldItem()] };
+            const r = records.get(spec);
+            if (!r || !r.registered) return null;
+            return { type: "stack", content: [{ type: "component", componentType: spec, id: spec, title: r.tab || r.title }] };
+        }
+        if (spec.world) return sized({ type: "stack", header: { show: false }, content: [worldItem()] }, spec.size);
+        if (spec.stack) {
+            const ids = spec.stack.filter((id) => records.get(id)?.registered);
+            if (!ids.length) return null;
+            const content = ids.map((id) => ({ type: "component", componentType: id, id, title: records.get(id).tab || records.get(id).title }));
+            const out = { type: "stack", content };
+            if (spec.active && ids.includes(spec.active)) out.activeItemIndex = ids.indexOf(spec.active);
+            return sized(out, spec.size);
+        }
+        const type = spec.row ? "row" : "column";
+        const content = (spec.row || spec.column).map((child) => resolveView(child, type)).filter(Boolean);
+        if (!content.length) return null;
+        return sized({ type, content }, spec.size);
+    }
+
+    // ---- spawning a window ----------------------------------------------------
+    // Every stack but the world's wears a + among its buttons: pressed, a list of the
+    // windows, by group; a closed one chosen opens as a tab of that stack, an open one
+    // comes in front where it is.
+    // The list listens to itself alone: Escape, or the focus leaving it (a press
+    // anywhere else), closes it.
+    let spawnOpen = null;
+    function closeSpawn() {
+        if (!spawnOpen) return;
+        const list = spawnOpen;
+        spawnOpen = null;
+        list.remove();
+    }
+    // Up and down move along a list's buttons, Home and End to its ends.
+    function stepFocus(list, ev) {
+        const keys = { ArrowDown: 1, ArrowUp: -1, Home: -Infinity, End: Infinity };
+        if (!list || !(ev.key in keys)) return;
+        const buttons = [...list.querySelectorAll("button")];
+        if (!buttons.length) return;
+        ev.preventDefault();
+        const at = buttons.indexOf(document.activeElement);
+        const step = keys[ev.key];
+        const to = Number.isFinite(step) ? (at + step + buttons.length) % buttons.length : (step < 0 ? 0 : buttons.length - 1);
+        buttons[to].focus();
+    }
+    function windowsByGroup() {
+        const groups = new Map();
+        for (const r of records.values()) {
+            if (!r.registered) continue;
+            const g = r.group || "Panels";
+            if (!groups.has(g)) groups.set(g, []);
+            groups.get(g).push(r);
+        }
+        return groups;
+    }
+    function windowButton(r, into) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "window-item";
+        b.dataset.window = r.id;
+        const open = !!item(r.id);
+        b.classList.toggle("open", open);
+        b.textContent = (open ? "● " : "○ ") + (r.tab || r.title);
+        b.title = open ? `${r.hint || r.title}: open; brought in front` : `${r.hint || r.title}: opens ${into ? "here" : "at its place"}`;
+        return b;
+    }
+    function spawnInto(stack, button) {
+        closeSpawn();
+        const list = document.createElement("div");
+        list.className = "spawn-list";
+        list.setAttribute("role", "menu");
+        list.tabIndex = -1;  // a press inside it keeps the focus in it, a browser's buttons focusable or not
+        for (const [group, rs] of windowsByGroup()) {
+            const head = document.createElement("div");
+            head.className = "spawn-group";
+            head.textContent = group;
+            list.append(head);
+            for (const r of rs) {
+                const b = windowButton(r, true);
+                b.addEventListener("click", () => {
+                    closeSpawn();
+                    if (!item(r.id) && stack.element.isConnected) {
+                        stack.addItem({ type: "component", componentType: r.id, id: r.id, title: r.tab || r.title });
+                    }
+                    api.open(r.id);
+                });
+                list.append(b);
+            }
+        }
+        document.body.append(list);
+        const at = button.getBoundingClientRect();
+        // Below the +, or as low as the page lets it stand.
+        list.style.top = `${Math.round(Math.max(8, Math.min(at.bottom + 4, innerHeight - list.offsetHeight - 8)))}px`;
+        list.style.left = `${Math.round(Math.max(8, Math.min(at.right - list.offsetWidth, innerWidth - list.offsetWidth - 8)))}px`;
+        spawnOpen = list;
+        list.addEventListener("keydown", (ev) => {
+            if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); closeSpawn(); button.focus(); return; }
+            stepFocus(list, ev);
+        });
+        // The + itself toggles the list, on its click.
+        list.addEventListener("focusout", (ev) => {
+            if (!list.contains(ev.relatedTarget) && ev.relatedTarget !== button && spawnOpen === list) closeSpawn();
+        });
+        list.querySelector("button")?.focus();
+    }
+    function stacksOf(itemNode, out = []) {
+        if (!itemNode) return out;
+        if (itemNode.isStack) out.push(itemNode);
+        for (const c of itemNode.contentItems || []) stacksOf(c, out);
+        return out;
+    }
+    function spawnButtons() {
+        const ws = worldStack();
+        for (const stack of stacksOf(layout.rootItem)) {
+            if (stack === ws) continue;
+            const controls = stack.element.querySelector(":scope > .lm_header .lm_controls");
+            if (!controls || controls.querySelector(".lm_spawn")) continue;
+            const b = document.createElement("button");
+            b.type = "button";
+            b.className = "lm_spawn";
+            b.textContent = "+";
+            b.title = "Open a window here: every window, by its group";
+            b.setAttribute("aria-label", "Open a window here");
+            b.addEventListener("pointerdown", (ev) => ev.stopPropagation());
+            b.addEventListener("click", (ev) => { ev.stopPropagation(); if (spawnOpen) closeSpawn(); else spawnInto(stack, b); });
+            controls.prepend(b);
+        }
+    }
+    spawnButtons();
+    layout.on("stateChanged", spawnButtons);
+
+    function fillMenu(into, done) {
+        into.replaceChildren();
+        const viewsHead = document.createElement("div");
+        viewsHead.className = "spawn-group";
+        viewsHead.textContent = "Views";
+        into.append(viewsHead);
+        for (const [id, v] of views) {
+            const b = document.createElement("button");
+            b.type = "button";
+            b.className = "window-item view-item";
+            b.dataset.view = id;
+            b.textContent = v.title;
+            b.title = `The windows laid out as ${v.title}`;
+            b.addEventListener("click", () => { api.applyView(id); if (done) done(); });
+            into.append(b);
+        }
+        for (const [group, rs] of windowsByGroup()) {
+            const head = document.createElement("div");
+            head.className = "spawn-group";
+            head.textContent = group;
+            into.append(head);
+            for (const r of rs) {
+                const b = windowButton(r, false);
+                b.addEventListener("click", () => { api.open(r.id); if (done) done(); });
+                into.append(b);
+            }
+        }
+    }
+
     const api = {
         layout,
         /* Register a panel. `body` is an element the panel adopts or a function given
@@ -337,10 +513,10 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
          * `onOpen` when its filled body is in front of a person again; `onDock`, for a
          * panel that is a part of another one popped out of it (the SCAD editor),
          * is what docking it does. */
-        register(id, { title, tab = null, hint = null, body, home = "tabs", open = true, loud = false, onClose = null, onOpen = null, onDock = null } = {}) {
+        register(id, { title, tab = null, hint = null, body, home = "tabs", group = null, open = true, loud = false, onClose = null, onOpen = null, onDock = null } = {}) {
             if (!knownTypes.has(id)) { knownTypes.add(id); layout.registerComponentFactoryFunction(id, factory); }
             const r = record(id);
-            r.title = title || id; r.tab = tab; r.hint = hint; r.loud = !!loud;
+            r.title = title || id; r.tab = tab; r.hint = hint; r.loud = !!loud; r.group = group;
             r.home = HOMES.has(home) || (typeof home === "string" && home && home !== id) ? home : "tabs";
             r.onClose = onClose; r.onOpen = onOpen; r.onDock = onDock; r.registered = true;
             if (typeof body === "function") { r.mount = body; r.filled = false; } else if (body) {
@@ -438,26 +614,44 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             const ci = item(id);
             const stack = ci?.parentItem;
             return {
-                id, title: r ? r.title : "World", home: r ? r.home : "world", loud: !!(r && r.loud),
+                id, title: r ? r.title : "World", home: r ? r.home : "world", group: r ? r.group : null, loud: !!(r && r.loud),
                 open: !!ci, shown: this.isShown(id), where: ci ? "layout" : "closed",
                 stack: stack ? stack.contentItems.map((c) => c.id) : [],
             };
         },
         list() { return [WORLD, ...records.keys()].map((id) => this.state(id)); },
         /* The page's own layout again, whatever a person made of it. */
-        reset() {
+        reset() { return this.applyView("default"); },
+        /* A view: a named arrangement of windows, the page's own ("default") or one a
+         * page defines -- `layout` in rows, columns and stacks of window ids (see
+         * resolveView). A window a view leaves out is closed; one the page made for
+         * the moment (a Machine, the pad) stays, at its home. */
+        defineView(id, { title, layout: spec }) { views.set(id, { title: title || id, spec }); },
+        views() { return [...views].map(([id, v]) => ({ id, title: v.title })); },
+        applyView(id) {
+            const view = views.get(id);
+            if (!view) return false;
+            const root = view.spec ? resolveView(view.spec) : null;
+            if (view.spec && !root) return false;
             fromMemory = false;
             for (const r of records.values()) r.releasing = true;
-            layout.loadLayout(DEFAULT_LAYOUT);
+            layout.loadLayout(root ? { ...DEFAULT_LAYOUT, root } : DEFAULT_LAYOUT);
             tabsForDrops();
             for (const r of records.values()) {
                 r.releasing = false;
-                if (TRANSIENT.has(r.id) && r.registered) addAt(r, false);
+                if (TRANSIENT.has(r.id) && r.registered && !item(r.id)) addAt(r, false);
             }
+            for (const r of records.values()) if (r.container?.visible && r.onOpen && r.filled) r.onOpen();
             remember();
             return true;
         },
+        /* The header's Windows menu, drawn into `into` each time it opens: the views,
+         * then every window by its group, each opened (or brought in front) by a press. */
+        fillMenu(into, { done = null } = {}) { fillMenu(into, done); },
+        /* Up, down, Home and End along a list's buttons: the Windows menu's keys. */
+        stepFocus,
         destroy() {
+            closeSpawn();
             window.removeEventListener("keydown", onKey);
             window.removeEventListener("pagehide", flush);
             for (const r of records.values()) r.releasing = true;

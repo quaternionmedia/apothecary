@@ -178,18 +178,23 @@ class TestTheCommand:
 
 
 class TestThePanelInThePage:
-    """The panel is a tab of the viewer's rail, mounted from its own module, and the
-    module speaks the metrics document this schema reads."""
+    """The panel is a window of the viewer's layout, each of its sections a window of
+    its own, mounted from its own module, and the module speaks the metrics document
+    this schema reads."""
 
     def test_the_page_mounts_the_panel_from_the_vendored_free_module(self):
         page = (ROOT / "templates" / "fractal_viewer.html.j2").read_text(encoding="utf-8")
         assert "panels.register('airgap'" in page
-        assert "import { mountAirgap } from '/static/widgets/airgap.js'" in page
+        assert "import { mountAirgap, AIRGAP_SECTIONS } from '/static/widgets/airgap.js'" in page
+        assert "for (const sec of AIRGAP_SECTIONS)" in page
         assert 'href="{{ base_url }}/static/widgets/airgap.css"' in page
         module = (ROOT / "apothecary" / "static" / "widgets" / "airgap.js").read_text(
             encoding="utf-8"
         )
         assert "export function mountAirgap" in module
+        # Every section the module exports is a fold of its markup, moved into a window.
+        sections = re.findall(r"\{ id: \"([\w-]+)\", title:", module)
+        assert sections and all(f'data-section="{s}"' in module for s in sections)
         assert f"schema:'{SCHEMA}'" in module
         # Nothing of the panel's comes from outside the page.
         assert not re.search(r"https?://", module)

@@ -13,6 +13,12 @@ from playwright.sync_api import Page
 WORLD = ".viewer-panel"
 # The world's stack's header: the world's window has no tab, so this is never shown.
 WORLD_HEADER = ".lm_stack:has(.world-window) > .lm_header"
+# The Airgap's sections, each a window ``airgap-<section>`` of its own beside the
+# Airgap, registered after it and closed until asked for (widgets/airgap.js).
+AIRGAP_SECTIONS = (
+    "metrics", "field", "gap-map", "inductance", "torque", "harmonics",
+    "run-up", "orbit", "vibration", "rig", "sweep",
+)  # fmt: skip
 
 
 def tab(page: Page, pid: str):

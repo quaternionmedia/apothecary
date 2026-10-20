@@ -171,6 +171,28 @@
         .lm_dropTargetIndicator { outline: 1px dashed #6fb3e8; box-shadow: inset 0 0 30px rgba(111, 179, 232, 0.25); }
         .lm_dragProxy .lm_content { box-shadow: 0 8px 28px rgba(0,0,0,0.55); opacity: var(--popover-opacity); }
         .lm_maximised .lm_header { background-color: #191919; }
+        /* A stack's +: a window opened there (panels.js lists them by group). */
+        .lm_header .lm_controls .lm_spawn {
+            background: none; border: 0; color: #8a8f98; font: 600 15px/18px system-ui, sans-serif;
+            width: 18px; height: 18px; padding: 0; cursor: pointer; opacity: 1; text-align: center;
+        }
+        .lm_header .lm_controls .lm_spawn:hover, .lm_header .lm_controls .lm_spawn:focus-visible { color: #fff; }
+        .spawn-list {
+            position: fixed; z-index: 1000; min-width: 13rem; max-height: 60vh; overflow-y: auto;
+            background: #1f2228; border: 1px solid #3a3f48; border-radius: 6px;
+            box-shadow: 0 8px 28px rgba(0,0,0,0.55); padding: 0.3rem 0;
+        }
+        /* ⊞ Windows and a stack's + list: the views, then every window by its group,
+           ● open, ○ closed. */
+        .windows-menu-body { min-width: 15rem; max-height: 70vh; overflow-y: auto; padding: 0.2rem 0; }
+        .spawn-group { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em; color: #7a808a; padding: 0.45rem 0.7rem 0.15rem; }
+        .window-item {
+            display: block; width: 100%; text-align: left; background: none; border: 0; color: #a8adb5;
+            font: inherit; font-size: 0.8rem; padding: 0.22rem 0.8rem; cursor: pointer; border-radius: 3px;
+        }
+        .window-item:hover, .window-item:focus-visible { background: #2a2f38; color: #fff; outline: none; }
+        .window-item.open { color: #e8e8e8; }
+        .window-item.view-item { color: #9cd2ff; }
         /* A stack maximised -- the world alone, or a panel's ☐ -- is all there is: the
            windows under it are hidden, not only covered, so nothing of them is reached. */
         .lm_root:has(> .lm_maximised) > :not(.lm_maximised) { visibility: hidden; }
@@ -668,6 +690,10 @@
                     <button type="button" id="settings-open" class="view-menu-item" title="The shortcuts and automatic zoom, each with its default and a reset, kept by this browser: a tab beside Pictures">Settings</button>
                 </div>
             </details>
+            <details id="windows-menu" class="view-menu windows-menu">
+                <summary title="Every window by its group, and the views that lay them out together: a window chosen opens, or comes in front; a stack's + opens one there (Panels › Windows on the ring)">⊞ Windows</summary>
+                <div class="view-menu-body windows-menu-body"></div>
+            </details>
             <a id="docs-link" class="docs-link" href="/docs" target="_blank" rel="noopener" title="The documentation in a new tab: the guides, and the walkthrough, each of its pages a run of the tests (Panels › Docs on the ring)">Docs</a>
             <button type="button" id="ring-open" title="Open the ring for the chosen piece (m, or Ctrl+right-click a piece); Shift+M opens the canvas ring. Digits choose cells as on a numeric keypad; 5 backs out.">⌗ Ring</button>
             <span id="validity-indicator" class="validity-indicator valid" title="The site's problems: click to bring Problems, beside Site, in front">Layout valid</span>
@@ -679,7 +705,7 @@
                 <div class="viewer-hint" id="viewer-hint">Click: select · Double-click: step in · Page Up: step out · Right-drag: pan · Ctrl+right-click: ring · ?: hide</div>
             </div>
             <div class="side-panel" hidden>
-                <div class="panel-section" data-panel="site">
+                <div class="panel-section" data-panel="site" data-group="Site">
                     <div class="panel-header">Site</div>
                     <div class="panel-body">
                         <div id="category-filters" class="category-filters"
@@ -687,29 +713,29 @@
                         <ul id="contents-list" class="contents-list contents-tree"></ul>
                     </div>
                 </div>
-                <div class="panel-section" data-panel="selected">
+                <div class="panel-section" data-panel="selected" data-group="Selected">
                     <div class="panel-header">Selected</div>
                     <div class="panel-body" id="selected-body">
                         <div class="no-selection">Click a piece to select it</div>
                     </div>
                 </div>
                 <!-- Site's own windows, tabs beside Site: each a window of its own. -->
-                <div class="panel-section" data-panel="problems" data-home="site" title="The site's problems (the header's count opens them); each row selects its piece">
+                <div class="panel-section" data-panel="problems" data-home="site" data-group="Site" title="The site's problems (the header's count opens them); each row selects its piece">
                     <div class="panel-header">Problems</div>
                     <div class="panel-body site-problems">
                         <p id="site-problems-none" class="empty-note">No problems: the layout is valid.</p>
                         <ul id="problem-list" class="problem-list"></ul>
                     </div>
                 </div>
-                <div class="panel-section" data-panel="pinned" data-home="site" title="Every camera a page added, and every view and board it pinned, every site's, each taken back from its row">
+                <div class="panel-section" data-panel="pinned" data-home="site" data-group="Site" title="Every camera a page added, and every view and board it pinned, every site's, each taken back from its row">
                     <div class="panel-header">Pinned</div>
                     <div class="panel-body" id="site-pinned-body"></div>
                 </div>
-                <div class="panel-section" data-panel="jobs" data-home="site" title="The jobs of this site's machines -- a print started from a pinned printer's Print card -- the running ones first, then the newest; a row selects its machine and opens it">
+                <div class="panel-section" data-panel="jobs" data-home="site" data-group="Site" title="The jobs of this site's machines -- a print started from a pinned printer's Print card -- the running ones first, then the newest; a row selects its machine and opens it">
                     <div class="panel-header">Jobs</div>
                     <div class="panel-body"><ul id="site-jobs-list" class="site-jobs"></ul></div>
                 </div>
-                <div class="panel-section" data-panel="scad" data-home="site" title="The site as OpenSCAD, generated from its tree">
+                <div class="panel-section" data-panel="scad" data-home="site" data-group="Site" title="The site as OpenSCAD, generated from its tree">
                     <div class="panel-header">SCAD</div>
                     <div class="panel-body site-scad"><div id="code-content" class="code-content">Load a site to see its generated OpenSCAD</div></div>
                 </div>
@@ -765,7 +791,7 @@
         import { mountToolchain } from '/static/widgets/toolchain.js';
         import { mountBuild, mountRawFlash } from '/static/widgets/sketches.js';
         import { mountTasks } from '/static/widgets/tasks.js';
-        import { mountAirgap } from '/static/widgets/airgap.js';
+        import { mountAirgap, AIRGAP_SECTIONS } from '/static/widgets/airgap.js';
         import { mountScadEditor, variantChoices } from '/static/widgets/scad_editor.js';
         import { buildParamControl, described, sameValue, shown, focusedControl, refocus } from '/static/widgets/part_controls.js';
         import { parseAssignments, lastOf, literalText, writeValues } from '/static/widgets/assignments.js';
@@ -1117,6 +1143,7 @@
                 this.canvas = document.getElementById('viewer-canvas');
                 this.siteSelect = document.getElementById('site-select');
                 this.viewMenuEl = document.getElementById('view-menu');
+                this.windowsMenuEl = document.getElementById('windows-menu');
                 this.snapToggle = document.getElementById('snap-toggle');
                 this.wallsToggle = document.getElementById('walls-toggle');
                 this.wallsSelectable = false;  // for the page's session: never remembered
@@ -1337,8 +1364,10 @@
                 // Site, the rest tabs below them; any dragged anywhere, split,
                 // maximised or closed. What a person made of it is remembered per
                 // browser, and a remembered layout the page cannot read is ignored.
+                // The Airgap's sections are windows a remembered layout may hold too.
                 this.panels = mountPanels({
                     host: document.querySelector('.main-content'), world: this.canvas.parentElement,
+                    known: AIRGAP_SECTIONS.map((sec) => `airgap-${sec.id}`),
                 });
                 // Pinned is mounted the first time it is in front of a person, and listed
                 // again each time it is in front again.
@@ -1350,6 +1379,7 @@
                         hint: section.title || null,
                         body: section.querySelector('.panel-body'),
                         home: section.dataset.home || 'column',
+                        group: section.dataset.group || null,
                         onOpen: onOpen[id] || null,
                     });
                 }
@@ -1372,7 +1402,7 @@
                 this.lighting = mountLighting({
                     scene: this.scene, base: BASE_URL,
                     onPanel: (el) => (el
-                        ? (this.panels.state('lighting') || this.panels.register('lighting', { title: 'Lighting', body: el }))
+                        ? (this.panels.state('lighting') || this.panels.register('lighting', { title: 'Lighting', group: 'Lighting', body: el }))
                         : this.panels.unregister('lighting')),
                 });
                 this.pictureMarks = mountPictureMarks({
@@ -1452,12 +1482,12 @@
                     return this.picturesWidget;
                 };
                 this.panels.register('pictures', {
-                    title: 'Pictures',
+                    title: 'Pictures', group: 'Pictures',
                     body: picturesEl,
                     onOpen: () => { const fresh = !this.picturesWidget; const list = this.pictureList(); if (!fresh) list.load(); },
                 });
                 this.panels.register('gather', {
-                    title: 'Gather',
+                    title: 'Gather', group: 'Pictures',
                     hint: 'Which of the ticked pictures are of one thing, and what the machine would ask a person',
                     body: gatherEl, home: 'pictures', open: false,
                     onOpen: () => this.pictureList(),
@@ -1469,7 +1499,7 @@
                 // flashing is in its Machine; the Bench is for any sketch and any port.
                 this.bench = null;
                 this.panels.register('bench', {
-                    title: 'Bench',
+                    title: 'Bench', group: 'Tools',
                     onOpen: () => { if (this.bench) this.bench.load(); },
                     body: (slot) => { this.bench = this.mountBench(slot); window.apothecaryBench = this.bench; },
                 });
@@ -1479,24 +1509,99 @@
                 // part's text again each time it is shown again. While the part is being
                 // edited the panel follows every edit of its text. Its verbs are a ring of
                 // their own under its cell.
+                // Its sections -- the figures, the pictures, the rig, the sweep -- are
+                // windows of their own beside it, closed until asked for; opening any of
+                // them, or the Airgap, mounts the one widget that fills them all, and a
+                // section brought in front draws its picture at its window's size. The
+                // Airgap view lays them out together.
                 this.airgap = null;
+                const airgapEl = document.createElement('div');
+                const airgapSections = Object.fromEntries(AIRGAP_SECTIONS.map((sec) => [sec.id, document.createElement('div')]));
+                this.airgapWidget = () => {
+                    if (!this.airgap) {
+                        this.airgap = this.mountAirgap(airgapEl, airgapSections);
+                        window.apothecaryAirgap = this.airgap;
+                        this.airgap.load();
+                    }
+                    return this.airgap;
+                };
                 this.panels.register('airgap', {
-                    title: 'Airgap', open: false,
-                    onOpen: () => { if (this.airgap) this.airgap.load(); },
-                    body: (slot) => { this.airgap = this.mountAirgap(slot); window.apothecaryAirgap = this.airgap; },
+                    title: 'Airgap', open: false, group: 'Airgap', body: airgapEl,
+                    onOpen: () => { const fresh = !this.airgap; const widget = this.airgapWidget(); if (!fresh) widget.load(); },
                 });
+                for (const sec of AIRGAP_SECTIONS) {
+                    this.panels.register(`airgap-${sec.id}`, {
+                        title: sec.title, hint: `The Airgap's ${sec.title.toLowerCase()}`, group: 'Airgap',
+                        body: airgapSections[sec.id], home: 'airgap', open: false,
+                        onOpen: () => this.airgapWidget().redraw(),
+                    });
+                }
                 // Settings: every shortcut and navigation setting, each with its default
                 // and a reset (widgets/settings.js) -- a tab beside Pictures, opened
                 // from ⚙ View › Settings and the canvas ring's View › Settings.
                 this.settingsWidget = null;
                 this.panels.register('settings', {
-                    title: 'Settings',
+                    title: 'Settings', group: 'Tools',
                     body: (slot) => {
                         this.settingsWidget = mountSettings(slot, this.settings, {
                             log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
                         });
                     },
                 });
+                // Views: the windows laid out together for one kind of work, chosen from
+                // ⊞ Windows or the ring's Panels › Windows. Default is the page's own; a
+                // view's windows the page has not got (a Machine with no board open) are
+                // left out, and a Machine or a control pad already open stays, at its home.
+                this.panels.defineView('part', {
+                    title: 'Part',
+                    layout: { row: [
+                        { world: true, size: 52 },
+                        { column: [
+                            { stack: ['selected', 'scad-editor'], size: 64, active: 'selected' },
+                            { stack: ['site', 'problems', 'scad'], size: 36 },
+                        ], size: 48 },
+                    ] },
+                });
+                this.panels.defineView('machine', {
+                    title: 'Machine',
+                    layout: { row: [
+                        { world: true, size: 46 },
+                        { column: [
+                            { stack: ['machine', 'bench'], size: 62, active: 'machine' },
+                            { stack: ['site', 'jobs', 'pinned'], size: 38 },
+                        ], size: 34 },
+                        { column: [
+                            { stack: ['selected'], size: 55 },
+                            { stack: ['pictures', 'settings'], size: 45 },
+                        ], size: 20 },
+                    ] },
+                });
+                this.panels.defineView('airgap', {
+                    title: 'Airgap',
+                    layout: { row: [
+                        { column: [
+                            { stack: ['airgap'], size: 60 },
+                            { stack: ['airgap-metrics', 'airgap-rig', 'airgap-sweep', 'selected'], size: 40, active: 'airgap-metrics' },
+                        ], size: 34 },
+                        { column: [
+                            { stack: ['airgap-field', 'airgap-gap-map'], size: 50 },
+                            { stack: ['airgap-torque', 'airgap-inductance', 'airgap-harmonics'], size: 50 },
+                        ], size: 33 },
+                        { column: [
+                            { world: true, size: 44 },
+                            { stack: ['airgap-run-up', 'airgap-orbit', 'airgap-vibration'], size: 56 },
+                        ], size: 33 },
+                    ] },
+                });
+                // ⊞ Windows: drawn afresh each time it opens, so it says which are open.
+                this.windowsMenuEl.addEventListener('toggle', () => {
+                    if (!this.windowsMenuEl.open) return;
+                    this.viewMenuEl.open = false;
+                    const body = this.windowsMenuEl.querySelector('.windows-menu-body');
+                    this.panels.fillMenu(body, { done: () => { this.windowsMenuEl.open = false; } });
+                    body.querySelector('button')?.focus();
+                });
+                this.windowsMenuEl.querySelector('.windows-menu-body').addEventListener('keydown', (ev) => this.panels.stepFocus(ev.currentTarget, ev));
                 window.apothecarySettings = this.settings;
                 window.apothecaryPanels = this.panels;
                 this.onResize();
@@ -1788,6 +1893,7 @@
             onEscapeKey(event) {
                 if (event.key !== 'Escape' || event.defaultPrevented || !mayAct(event)) return;
                 if (this.viewMenuEl.open) { this.viewMenuEl.open = false; event.preventDefault(); return; }
+                if (this.windowsMenuEl.open) { this.windowsMenuEl.open = false; event.preventDefault(); return; }
                 if (this.cancelDrag()) { event.preventDefault(); return; }
                 // After every other listener has had it: Pictures' lets go of its picture first.
                 setTimeout(() => {
@@ -2603,9 +2709,10 @@
                 });
             }
 
-            // A press outside the View menu folds it away.
+            // A press outside the View menu, or the Windows menu, folds it away.
             foldViewMenu(event) {
                 if (this.viewMenuEl.open && !this.viewMenuEl.contains(event.target)) this.viewMenuEl.open = false;
+                if (this.windowsMenuEl.open && !this.windowsMenuEl.contains(event.target)) this.windowsMenuEl.open = false;
             }
 
             // A cell of the canvas ring's View: what its item in the View menu
@@ -6032,6 +6139,7 @@
                 this.scadHome = editor.root.parentElement;
                 this.scadPopped = true;
                 this.panels.register('scad-editor', {
+                    group: 'Selected',
                     title: `SCAD · ${this.scadTarget?.label ?? ''}`,
                     body: editor.root,
                     home: 'beside',
@@ -6766,6 +6874,7 @@
                 const bearer = row ? this.statusBearerFor(row.path) : null;
                 const inPrinter = !!(bearer && PRINTER_STATUSES.includes(bearer.status));
                 this.panels.register('machine', {
+                    group: 'Machine',
                     title: anchor ? `${anchor} · ${port}` : `${port} · pinned nowhere in ${this.siteName}`,
                     // Its tab, beside Pictures and the Bench: the node's name (the
                     // port's last part, pinned nowhere); the whole title its tooltip.
@@ -6794,6 +6903,7 @@
             // framed in what the world has left. Its ✕ puts the pad back in the Machine.
             openPadWindow(machine, pad, who) {
                 this.panels.register('control', {
+                    group: 'Machine',
                     title: `${who}: control armed, it can heat and move`,
                     tab: `🔓 ${who}`,
                     body: pad, home: 'beside', loud: true,
@@ -6876,7 +6986,7 @@
             // own file while it is not being edited), whether the editor is on it, a write of
             // values into that text (the text is the truth: the panel then follows the text),
             // and the editor opened on the part where this site has it.
-            mountAirgap(slot) {
+            mountAirgap(slot, sections = null) {
                 const target = this.partTarget('airgap');
                 const world = {
                     text: async () => {
@@ -6895,8 +7005,10 @@
                         await new Promise((resolve) => setTimeout(resolve, 0));
                         return true;
                     },
+                    // A section the panel acts on (the sweep it maps) brought in front.
+                    showSection: (id) => this.panels.open(`airgap-${id}`),
                 };
-                return mountAirgap(slot, { base: BASE_URL, say: (text, kind) => this.setStatus(text, kind), world });
+                return mountAirgap(slot, { base: BASE_URL, say: (text, kind) => this.setStatus(text, kind), world, sections });
             }
 
             // Stops the Machine watching its board and takes its panel away. Called
@@ -8067,7 +8179,7 @@
                 if (action.startsWith('airgap:')) {
                     viewer.panels.open('airgap');
                     viewer.setStatus(`${intent.label}${tail}`, 'success');
-                    if (viewer.airgap) viewer.airgap.act(action.slice('airgap:'.length));
+                    viewer.airgapWidget().act(action.slice('airgap:'.length));
                     return;
                 }
                 // Panels › Docs: the documentation in a new tab, as the header's Docs opens it.
@@ -8091,6 +8203,14 @@
                 if (action === 'panel:world:toggle') {
                     const alone = viewer.panels.worldAlone(!viewer.panels.isWorldAlone());
                     viewer.setStatus(`${alone ? 'The world alone: ~ brings every window back' : 'Every window back beside the world'}${tail}`, 'success');
+                    return;
+                }
+                // Panels › Windows › a view: its windows laid out together.
+                if (action.startsWith('panel:view:')) {
+                    const id = action.slice('panel:view:'.length);
+                    const view = viewer.panels.views().find((v) => v.id === id);
+                    const done = view && viewer.panels.applyView(id);
+                    viewer.setStatus(done ? `The ${view.title} view: its windows laid out together; Panels › Windows › Reset layout puts the page's own back${tail}` : `${intent.label}: no such view${tail}`, done ? 'success' : 'error');
                     return;
                 }
                 if (action === 'panel:layout:reset') {
@@ -8323,6 +8443,10 @@
             const summary = viewer.viewMenuEl.querySelector('summary');
             summary.title = `How the world is drawn${viewAt ? ` · ⌗${viewAt}` : ''}`;
             if (viewAt) summary.dataset.address = viewAt; else delete summary.dataset.address;
+            // The Windows menu is Panels › Windows: its views are that ring's cells.
+            const windowsAt = addressOf(ring, ['panels', 'panel:windows']);
+            const windowsSummary = viewer.windowsMenuEl.querySelector('summary');
+            if (windowsAt) windowsSummary.dataset.address = windowsAt; else delete windowsSummary.dataset.address;
             const pairs = [];
             for (const li of viewer.contentsEl.querySelectorAll('li[data-path]')) pairs.push([li, `select:${li.dataset.path}`]);
             const crumbs = viewer.breadcrumbEl.querySelectorAll('.crumb');

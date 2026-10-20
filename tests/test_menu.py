@@ -1074,7 +1074,12 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert [(c.label, c.action, c.cell) for c in windows.children] == [
         ("World alone", "panel:world:toggle", 8),
         ("Reset layout", "panel:layout:reset", 6),
+        ("Part view", "panel:view:part", 2),
+        ("Machine view", "panel:view:machine", 4),
+        ("Airgap view", "panel:view:airgap", 9),
     ]
+    assert address_of(root, "panel:view:airgap") == "499"
+    assert carried_by("panel:view:airgap").name == "VIEWER"
     assert carried_by("panel:world:toggle").name == "VIEWER"
     assert carried_by("panel:layout:reset").name == "VIEWER"
     bench = next(c for c in panels.children if c.label == "Bench")

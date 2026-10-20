@@ -32,6 +32,8 @@ Left to right, one row:
   steps out to its level; Page Up or Backspace steps out one.
 - **⚙ View**: how the world is drawn ([below](#how-the-world-is-drawn)), and
   Settings ([below](#settings)).
+- **⊞ Windows**: the views, then every window by its group, ● open and ○
+  closed ([below](#the-windows)); a window chosen opens, or comes in front.
 - **Docs** opens the documentation in a new tab, the world left where it
   was: the guides, and from its bar the walkthrough's index (`/walkthrough`),
   its pages in order. The ring's Panels › Docs opens the same.
@@ -211,7 +213,7 @@ expand it, as its chip in Site does; 7 when stepped in, 1 at the top).
   Pictures › Pictures and Gather; Machine › Machine (the selected board's) and
   Control pad (an armed printer's pad in a loud window of its own or back in its
   Machine, as the pad's ⧉ Pop out and ⇥ Put back); Windows › World alone (as
-  `~`) and Reset layout; Bench › Bench (show it), Install (a cell per toolchain
+  `~`), Reset layout, Part view, Machine view and Airgap view; Bench › Bench (show it), Install (a cell per toolchain
   module, then the slicer), Compile, Upload, Raw flash, Cancel, Cores,
   Libraries; Docs (the documentation in a new tab, as the header's Docs); and
   Airgap › Airgap (show it), Play, Sweep, To editor, From editor, Copy SCAD,
@@ -274,6 +276,25 @@ closed one again. `~` or the ring's Panels › Windows › World alone shows the
 world alone, the whole layout, and `~` again brings every window back. The
 layout a person makes is remembered by this browser; Panels › Windows › Reset
 layout puts every window where the page puts it.
+
+Every stack but the world's wears a **+** beside its ☐: it lists every window
+by its group -- Site, Selected, Pictures, Tools, Machine, Airgap -- and a closed
+one chosen opens as a tab of that stack; an open one comes in front where it
+is. The header's **⊞ Windows** lists the same, a window chosen there opening at
+its place, and above them the **views**: windows laid out together for one kind
+of work, each also a cell of Panels › Windows.
+
+| View | |
+|---|---|
+| Default | The page's own layout, as Reset layout puts it |
+| Part | The world, Selected (the SCAD editor behind it while it is open) and Site, Problems and SCAD below it |
+| Machine | The world, the board's Machine with the Bench behind it, Site, Jobs and Pinned below them, and Selected, Pictures and Settings at the side |
+| Airgap | The Airgap and each of its sections in a window ([airgap.md](airgap.md#the-panel)), the world among them |
+
+A view's windows the page has not got are left out: the Machine view without a
+board open lays out the rest. A window a view leaves out is closed, and comes
+back by a + or ⊞ Windows; the views and the windows in them are remembered
+like any layout.
 
 - **Site**: its category chips and the **Contents** tree (a click selects a
   row, a double-click steps in, ⚠ marks a piece in a problem). Site's own

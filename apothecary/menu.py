@@ -691,6 +691,18 @@ PANELS: Sequence[Tuple[str, str]] = (
     # its cell (_airgap), seated last.
     ("airgap", "Airgap"),
 )
+# The views: windows laid out together for one kind of work, each a cell of
+# Panels › Windows after the layout's own two, and an entry of the header's
+# ⊞ Windows. The page defines each by its id (panels.defineView); a view's windows
+# the page has not got are left out of it.
+VIEWS = (
+    # The world, the Selected window with the SCAD editor behind it, and Site's.
+    ("part", "Part view"),
+    # A board's Machine beside the world, the Bench behind it, Site's Jobs below.
+    ("machine", "Machine view"),
+    # The Airgap and each of its sections in a window of its own, the world among them.
+    ("airgap", "Airgap view"),
+)
 # The panels seated before the windows' own cell (Panels › Windows, 49); a panel
 # registered after them is seated after it. Site's cell is a ring of Site and its
 # own windows, Pictures' a ring of Pictures and Gather, and Machine's a ring of the
@@ -734,8 +746,8 @@ def _panels() -> Option:
         label="Panels",
         children=[cell(pid, label) for pid, label in PANELS if pid in _BEFORE_WINDOWS]
         # The layout itself: the world alone (its window maximised) and every window
-        # back, as the tilde key does; and the page's own layout again, whatever was
-        # dragged, split or closed.
+        # back, as the tilde key does; the page's own layout again, whatever was
+        # dragged, split or closed; and each view.
         + [
             Option(
                 id="panel:windows",
@@ -745,6 +757,10 @@ def _panels() -> Option:
                     Option(
                         id="panel:layout:reset", label="Reset layout", action="panel:layout:reset"
                     ),
+                ]
+                + [
+                    Option(id=f"panel:view:{vid}", label=label, action=f"panel:view:{vid}")
+                    for vid, label in VIEWS
                 ],
             )
         ]
