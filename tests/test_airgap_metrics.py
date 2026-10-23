@@ -192,7 +192,7 @@ class TestThePanelInThePage:
             encoding="utf-8"
         )
         assert "export function mountAirgap" in module
-        # Every section the module exports is a fold of its markup, moved into a window.
+        # Every section the module exports is a part of its markup, moved into a window.
         sections = re.findall(r"\{ id: \"([\w-]+)\", title:", module)
         assert sections and all(f'data-section="{s}"' in module for s in sections)
         assert f"schema:'{SCHEMA}'" in module

@@ -6986,7 +6986,7 @@
             // own file while it is not being edited), whether the editor is on it, a write of
             // values into that text (the text is the truth: the panel then follows the text),
             // and the editor opened on the part where this site has it.
-            mountAirgap(slot, sections = null) {
+            mountAirgap(slot, sections) {
                 const target = this.partTarget('airgap');
                 const world = {
                     text: async () => {
