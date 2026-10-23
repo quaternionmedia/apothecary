@@ -233,7 +233,7 @@
         .panel-ui input[type=file] { font-size: 0.72rem; max-width: 100%; }
         .pin-list { display: flex; flex-direction: column; gap: 0.2rem; max-height: 260px; overflow: auto; }
         .pin-row { display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; padding: 0.15rem 0.3rem; border-radius: 3px; background: #1d221d; }
-        .pin-row > span, .pin-row .picture-what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pin-row > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         /* A picture's row is chosen by a click, for the ring's Picture › Folder to pin. */
         .picture-row { cursor: pointer; border: 1px solid transparent; }
         .picture-row:hover { background: #222a22; }
@@ -242,8 +242,6 @@
         .pin-row.stale > span { color: #b08a8a; }
         .pin-row img { width: 40px; height: 30px; object-fit: cover; border-radius: 2px; flex: 0 0 auto; }
         .pictures-list { max-height: 340px; }
-        .picture-what { display: flex; flex-direction: column; gap: 0.1rem; }
-        .picture-what .picture-name { overflow: hidden; text-overflow: ellipsis; }
         .picture-views { display: flex; flex-wrap: wrap; gap: 0.25rem; color: #888; }
         .picture-view { padding: 0 0.3rem; border-radius: 6px; border: 1px solid #3a3a3a; color: #999; }
         .picture-view.here { border-color: #4a6fa8; color: #9cd2ff; cursor: pointer; }
@@ -432,7 +430,6 @@
         .contents-item.invalid-inside .problem-mark { color: #b06060; }
         .validity-indicator { cursor: pointer; }
         /* SCAD and Jobs fill their windows: the window scrolls them. */
-        .site-scad .code-content { max-height: none; }
         .site-jobs { list-style: none; margin: 0; padding: 0; font-size: 0.78rem; }
         .site-jobs li { padding: 0.25rem 0.45rem; margin-bottom: 0.15rem; border-radius: 4px; color: #ccc; cursor: pointer; }
         .site-jobs li:hover { background: #2f2f2f; }
@@ -637,7 +634,6 @@
             font-family: 'Consolas', 'Monaco', 'Menlo', monospace;
             font-size: 0.72rem; line-height: 1.4; color: #9cdcfe;
             white-space: pre-wrap; word-break: break-all;
-            max-height: 260px; overflow: auto;
         }
 
         .status {
@@ -799,7 +795,6 @@
         import { mountPictureMarks, axes as cameraAxes } from '/static/picture_marks.js';
         import { mountPictures } from '/static/pictures.js';
         import { makeSettings, mountSettings, keyLabel, modifierLabel } from '/static/widgets/settings.js';
-        import { MODIFIERS } from '/static/ring.js';
         import { comboOf, matches, mayAct, worldHasKeys } from '/static/keys.js';
         import { again } from '/static/twice.js';
         import { mountLighting } from '/static/lighting.js';
@@ -2138,13 +2133,6 @@
                     }
                     node = child;
                 }
-                return node;
-            }
-
-            parentOfFocus() {
-                if (!this.focusPath.length) return null;
-                let node = this.tree;
-                for (const name of this.focusPath.slice(0, -1)) node = findChild(node, name);
                 return node;
             }
 
@@ -6661,7 +6649,6 @@
             get devicesProblem() { return this.boards.problem; }
             get bindingsLoaded() { return this.boards.loaded; }
             get bindingsInFlight() { return this.boards.scanning; }
-            loadBindings(fresh = false) { return this.boards.scan({ fresh }); }
 
             // The one way to look for boards again: a fresh port scan, whose answer
             // every drawer of a board follows.
@@ -7556,9 +7543,6 @@
                 if (event.key === 'Tab') delete this.canvas.dataset.pressed;
             }
             worldHasKeys() { return worldHasKeys(this.canvas, this.lastPressInWorld); }
-            ringModifierHeld(event) {
-                return !!event[MODIFIERS[this.settings.get('ringModifier')]];
-            }
             // The view re-centred on the surface point under the pointer. False on empty space.
             recentreAt(event) {
                 const hit = this.raycastHits(event)[0];
