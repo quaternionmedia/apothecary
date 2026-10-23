@@ -49,7 +49,7 @@ succeeded — Upload esp32_blink@arduino → /dev/ttyFAKE2
 
 ## 4. The board's Machine hears it say hello
 
-esp32_blink's ring, Device › Open: the board's Machine, with what it should run -- esp32_blink@arduino, for its board -- and Device › Query, which listens a few seconds for the hello. Heard, the Machine says the board runs what it should. Change it next: Device › Flash.
+esp32_blink's ring, Device › Open: the board's Machine, and the world's ring, Panels › Windows › Machine view, lays a devkit's sections out beside it: its Sketch, with what it should run -- esp32_blink@arduino, for its board -- and its Log. Device › Query listens a few seconds for the hello. Heard, the Sketch says the board runs what it should. Change it next: Device › Flash.
 
 ![The board's Machine hears it say hello](screenshots/05-04-the-board-s-machine-hears-it-say-hello.png)
 
