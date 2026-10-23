@@ -77,7 +77,7 @@ disc_1 rebuilt 173.2 × 172.2 × 5 mm; found 173.2 × 172.2, thickness a person'
 
 ## 7. Slice, in printer_1's Machine, slices the piece and chooses its G-code
 
-printer_1's ring, Device › Open: its Machine a tab beside Pictures, below Selected, and ⊞ Windows › Print opens its Print from here under it. It lists the pieces of the garage under makes; disc_1 chosen, its Slice slices it for printer_1, the slicer's log in the card while it runs. The G-code it kept is chosen in the card's files, saying what it was sliced from and for which printer, and the card lists what the slice used -- each value from the printer's profile, a piece declaring none -- with the slicer's estimate. Print is maximised here from its stack, so the whole card is seen.
+printer_1's ring, Device › Open: its Machine a tab beside Pictures, below Selected, and ⊞ Windows › Print opens its Print from here, a tab beside it in a column already four stacks deep. It lists the pieces of the garage under makes; disc_1 chosen, its Slice slices it for printer_1, the slicer's log in the card while it runs. The G-code it kept is chosen in the card's files, saying what it was sliced from and for which printer, and the card lists what the slice used -- each value from the printer's profile, a piece declaring none -- with the slicer's estimate. Print is maximised here from its stack, so the whole card is seen.
 
 ![Slice, in printer_1's Machine, slices the piece and chooses its G-code](screenshots/03-07-slice-in-printer-1-s-machine-slices-the-piece-and-.png)
 
@@ -87,7 +87,7 @@ disc_1.gcode kept and chosen: sliced from disc_1 for printer_1, 1h 2m 3s, 0.79 g
 
 ## 8. Print starts a job that names the piece
 
-The Machine's ⚙ Control armed -- the latch a print needs, its pad a loud window of its own beside the world -- Print from here's ▶ Print asks first, naming the file, the port and disc_1; then the file streams, one line per ok, and the job is the newest of printer_1's history, running. The status line names where it is followed.
+printer_1's ring, Device › Control › Arm: the latch a print needs, its pad a loud window of its own beside the world, Print still in front. Print from here's ▶ Print asks first, naming the file, the port and disc_1; then the file streams, one line per ok, and the job is the newest of printer_1's history, running. The status line names where it is followed.
 
 ```
 Print disc_1.gcode on /dev/ttyFAKE1, making disc_1?
