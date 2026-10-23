@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import re
 
-from apothecary.menu import VIEWS
+from apothecary.menu import VIEWS, carried_by
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.systems import SYSTEMS, by_id, manifest
 from apothecary.viewer import render_fractal_viewer_page
@@ -18,10 +18,9 @@ from apothecary.viewer import render_fractal_viewer_page
 PAGE = ROOT / "templates" / "fractal_viewer.html.j2"
 SYSTEMS_JS = ROOT / "apothecary" / "static" / "systems.js"
 # The windows panels.js makes of its own (the world's), and those the page makes
-# for the moment: a board's Machine, the pad, the SCAD editor popped out, a rig's
-# lighting.
+# for the moment: a board's Machine, the pad, a rig's lighting.
 OWN = {"world"}
-FOR_THE_MOMENT = {"machine", "control", "scad-editor", "lighting"}
+FOR_THE_MOMENT = {"machine", "control", "lighting"}
 
 
 def _layout_windows(layout) -> set:
@@ -76,19 +75,41 @@ def test_the_page_is_given_the_registry_as_it_is_rendered():
 
 
 def test_the_page_registers_systems_from_the_registry_alone():
+    """The page makes no view and no system window by hand beside the registry's: it
+    hands the registry to static/systems.js. (That what it makes works is
+    tests/e2e/test_focused_systems.py's.)"""
     page = PAGE.read_text(encoding="utf-8")
-    assert (
-        "const SYSTEMS = JSON.parse(document.getElementById('apothecary-systems').textContent);"
-        in page
-    )
-    assert "known: knownWindows(SYSTEMS)" in page
-    assert "this.systems = mountSystems(this.panels, SYSTEMS, {" in page
-    # No view and no system window is made by hand beside the registry's.
+    assert "mountSystems(this.panels, SYSTEMS," in page
     assert "defineView(" not in page
     for system in SYSTEMS:
         for section in system.sections:
             assert f"register('{system.window(section.id)}'" not in page
     module = SYSTEMS_JS.read_text(encoding="utf-8")
-    assert "export function knownWindows(systems)" in module
-    assert "export function mountSystems(panels, systems, hooks = {})" in module
-    assert "panels.defineView(system.id, { title: system.title, layout: system.view });" in module
+    for name in ("knownWindows", "transientWindows", "openFor", "mountSystems"):
+        assert f"export function {name}(" in module, name
+    assert "panels.defineView(system.id," in module
+
+
+def test_each_sections_verbs_are_the_rings_and_the_page_opens_them():
+    """A section's verbs are actions the ring offers and the page carries; the page
+    opens each section a carried verb acts on, from the registry alone."""
+    menu = (ROOT / "apothecary" / "menu.py").read_text(encoding="utf-8")
+    for system in SYSTEMS:
+        for section in system.sections:
+            for verb in section.verbs:
+                assert carried_by(verb.rstrip(":")).name == "VIEWER", verb
+                # The ring's code names it: a cell's action, or the prefix it builds them on.
+                assert re.search(r'f?"' + re.escape(verb.rstrip(":")), menu), verb
+    page = PAGE.read_text(encoding="utf-8")
+    assert "openFor(this.panels, SYSTEMS, action)" in page
+
+
+def test_a_system_that_lives_while_its_subject_is_open_is_never_remembered():
+    """The Machine's windows are there while a board's Machine is open, and the layout
+    a browser remembers leaves them out: the page gives the window manager every
+    transient system's windows as made for the moment."""
+    machine = by_id("machine")
+    assert machine.transient and machine.sections
+    assert [s.id for s in SYSTEMS if s.transient] == ["machine"]
+    page = PAGE.read_text(encoding="utf-8")
+    assert "...transientWindows(SYSTEMS)]" in page

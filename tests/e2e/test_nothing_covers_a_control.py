@@ -114,6 +114,7 @@ def test_nothing_covers_a_control_of_the_part_editor(page: Page, base_url: str):
         page.evaluate("() => localStorage.removeItem('apothecary.layout')")
         settled(page)
         _ring(page, "Part", "Edit")
+        windows.part_view(page)  # the Part laid out: Selected, Parameters, the SCAD window
         expect(page.locator(".scad-editor .cm-content")).to_be_visible(timeout=20000)
         # Something staged, so the bar says so and Apply is live.
         page.locator("#part-params .param[data-field='size'] .param-number").fill("20")
@@ -122,7 +123,9 @@ def test_nothing_covers_a_control_of_the_part_editor(page: Page, base_url: str):
         pinned = page.locator(".panel[data-panel='selected'] > .panel-pinned #stage-bar")
         expect(pinned).to_be_visible()
         selected = ".panel[data-panel='selected']"
-        assert _nothing_covered(page, selected, f"docked at {width}") > 10
+        assert _nothing_covered(page, selected, f"Selected at {width}") > 5
+        parameters = ".panel[data-panel='part-parameters']"
+        assert _nothing_covered(page, parameters, f"Parameters at {width}") > 5
         # Every window beside the world, Site and the tabs with it; then Pictures in
         # front with its folds open: nothing of one window spills over another.
         assert _nothing_covered(page, ".lm_goldenlayout", f"the windows at {width}") > 15
@@ -141,15 +144,13 @@ def test_nothing_covers_a_control_of_the_part_editor(page: Page, base_url: str):
         maximise.click()
         expect(page.locator(".lm_maximised")).to_have_count(0)
 
-        # The SCAD editor popped out, then over the whole page.
-        _ring(page, "Part", "View", "Pop out")
-        popped = ".panel[data-panel='scad-editor']"
-        expect(page.locator(popped)).to_be_visible()
-        assert _nothing_covered(page, popped, f"SCAD popped out at {width}") > 3
-        assert _nothing_covered(page, selected, f"beside the SCAD popped out at {width}") > 5
+        # The SCAD window (Part › View › SCAD), then the editor over the whole page.
+        _ring(page, "Part", "View", "SCAD")
+        scad = ".panel[data-panel='part-scad']"
+        expect(page.locator(scad)).to_be_visible()
+        assert _nothing_covered(page, scad, f"the SCAD window at {width}") > 3
         page.locator("#scad-fullscreen").click()
         expect(page.locator(".scad-editor.fullscreen")).to_be_visible()
         assert _nothing_covered(page, ".scad-editor.fullscreen", f"fullscreen at {width}") > 3
         page.keyboard.press("Escape")
-        _ring(page, "Part", "View", "Pop out")
-        expect(page.locator(popped)).to_have_count(0)
+        expect(page.locator(".scad-editor.fullscreen")).to_have_count(0)

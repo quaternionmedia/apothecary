@@ -1140,11 +1140,9 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     by_systems = re.findall(r"^ {20}([\w-]+): \{\n {24}main:", page, re.M)
     assert by_systems == ["airgap"]
     registered += [by_id(sid).main for sid in by_systems]
-    # The SCAD editor popped out of Selected is a panel only while it is out, and
-    # Part › Pop out's rather than one of Panels: it is Selected's, put back there;
-    # an armed printer's control pad is Panels › Control pad's, not a toggle; and a
+    # An armed printer's control pad is Panels › Control pad's, not a toggle; and a
     # rig's Lighting is the lighting overlay's, there while the site has a rig.
-    made = ("scad-editor", "control", "lighting")
+    made = ("control", "lighting")
     assert all(pid in registered for pid in made)
     registered = [pid for pid in registered if pid not in made]
     assert marked == [pid for pid, _ in PANELS[: len(marked)]]
@@ -1381,9 +1379,9 @@ def test_part_holds_the_loop_edit_keeping_its_address():
 # --- the SCAD editor on the ring --------------------------------------------------------
 #
 # A part from the parts folder, told by the server what its SCAD is (``picture.part``):
-# Save, Pop out and Fullscreen after Revert, so the loop's cells keep their seats, and
+# Save, SCAD and Fullscreen after Revert, so the loop's cells keep their seats, and
 # Variants last, the saved ones, which the first save brings and so moves nothing. A
-# part built by Python reads its generated SCAD: Pop out and Fullscreen, no Save and no
+# part built by Python reads its generated SCAD: SCAD and Fullscreen, no Save and no
 # Variants. A made piece and a camera have none of them.
 
 
@@ -1403,11 +1401,11 @@ def test_a_part_s_ring_holds_its_scad_editor_too():
         ("View", "part:view"),
         ("History", "part:history"),
     ]
-    # A ring holds eight: Pop out and Fullscreen are under View, beside the ghost and Fit,
+    # A ring holds eight: SCAD and Fullscreen are under View, beside the ghost and Fit,
     # and History holds Undo and Redo.
     view, history = part.children[5:7]
     assert [(c.label, c.action) for c in view.children] == [
-        ("Pop out", "part:popout"),
+        ("SCAD", "part:scad"),
         ("Fullscreen", "part:fullscreen"),
         ("Ghost", "part:ghost"),
         ("Fit", "part:fit"),
@@ -1417,7 +1415,7 @@ def test_a_part_s_ring_holds_its_scad_editor_too():
         ("Redo", "part:redo"),
     ]
     ring = resolve(on, garage, picture=told)
-    assert address_of(ring, "part:popout")[:-1] == address_of(ring, "part:save")[:-1] + "3"
+    assert address_of(ring, "part:scad")[:-1] == address_of(ring, "part:save")[:-1] + "3"
     assert address_of(ring, "part:undo")[:-1] == address_of(ring, "part:save")[:-1] + "1"
     variants = part.children[-1]
     assert (variants.label, variants.id) == ("Variants", "part:variants")
@@ -1437,7 +1435,7 @@ def test_a_part_s_ring_holds_its_scad_editor_too():
     variants_at = address_of(ring, "part:variants")
     assert address_of(ring, "part:variant:draw:wider") == variants_at + "68"
     assert len(part.children) <= MOST_OPTIONS
-    for action in ("part:save", "part:popout", "part:fullscreen", "part:variant:draw:wider"):
+    for action in ("part:save", "part:scad", "part:fullscreen", "part:variant:draw:wider"):
         assert carried_by(action).name == "VIEWER"
     # Something deleted: Deleted, last under Variants, holds the trash -- each deleted
     # variant Restore and Forget -- and Empty.
@@ -1477,17 +1475,17 @@ def test_a_part_s_ring_holds_its_scad_editor_too():
     # None saved yet: no Variants, and nothing before it moved.
     bare = resolve(on, garage, picture=PictureContext(part=PartSeen(editable=True)))
     first = resolve(on, garage, picture=told)
-    for action in ("part:edit", "part:save", "part:popout", "part:fullscreen", "part:undo"):
+    for action in ("part:edit", "part:save", "part:scad", "part:fullscreen", "part:undo"):
         assert address_of(bare, action) == address_of(first, action)
     assert "part:variants" not in [c.id for c in bare.options[-1].children]
-    # Built by Python: its SCAD is read, so Pop out and Fullscreen and nothing to save.
+    # Built by Python: its SCAD is read, so SCAD and Fullscreen and nothing to save.
     python = resolve(on, garage, picture=PictureContext(part=PartSeen(editable=False)))
     assert [c.action or c.id for c in python.options[-1].children][4:] == [
         "part:view",
         "part:history",
     ]
     assert [c.action for c in python.options[-1].children[4].children][:2] == [
-        "part:popout",
+        "part:scad",
         "part:fullscreen",
     ]
     # Untold, the ring is the part loop's, its View the ghost and Fit.

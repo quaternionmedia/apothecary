@@ -17,7 +17,7 @@ entry. docs/plans/focused-systems-2026-10-22.md is the plan these follow.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 # A view's layout is written in window ids, as panels.js's resolveView reads it:
 # "id" is a window (a stack of its own); {"stack": [...ids], "size", "active"} a
@@ -34,6 +34,17 @@ class Section:
     title: str
     # What it holds, said where the window is listed (its tooltip).
     holds: str
+    # Where it opens when asked for outside its view: beside the system's main
+    # window as a tab (None), as a tab beside another window (its id), in a stack of
+    # its own in the column beside the world ("column"), or beside the world
+    # ("beside") -- panels.js's homes.
+    home: Optional[str] = None
+    # The ring's verbs that act on it, which open it: an action named, or every
+    # action under a prefix that ends with ":".
+    verbs: Tuple[str, ...] = ()
+    # The kind of subject it is for (a board that is a printer, or a devkit), where it
+    # is for one kind only: a subject of another kind has no such window.
+    kind: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -49,6 +60,8 @@ class System:
     view: Layout
     # Its view's cell under Panels › Windows (a ring label, twelve characters at most).
     cell: str
+    # How a person opens its subject: said where its view is asked for without it.
+    opened_by: str
     # Registered only while its subject is open (a board's Machine), and left out
     # of the layout a browser remembers.
     transient: bool = False
@@ -56,6 +69,10 @@ class System:
     def window(self, section: str) -> str:
         """A section's window id."""
         return f"{self.id}-{section}"
+
+    def home(self, section: Section) -> str:
+        """Where a section opens when asked for outside the view."""
+        return section.home or self.main
 
     def windows(self) -> List[str]:
         """Every window of the system: the main window, then each section's."""
@@ -68,6 +85,7 @@ AIRGAP = System(
     group="Airgap",
     main="airgap",
     cell="Airgap view",
+    opened_by="Panels › Airgap › Airgap",
     sections=(
         Section(
             "metrics",
@@ -99,7 +117,12 @@ AIRGAP = System(
         ),
         Section("vibration", "Vibration spectrum", "the run's vibration spectrum"),
         Section("rig", "Rig", "the settings the geometry runs under, one JSON document"),
-        Section("sweep", "Sweep", "a metric mapped over two of the SCAD's names"),
+        Section(
+            "sweep",
+            "Sweep",
+            "a metric mapped over two of the SCAD's names",
+            verbs=("airgap:sweep",),
+        ),
     ),  # fmt: skip
     view={
         "row": [
@@ -138,19 +161,74 @@ AIRGAP = System(
 PART = System(
     id="part",
     title="Part",
-    group="Selected",
+    group="Part",
+    # Selected: the piece, its part, what it is drawn from, its envelope and ghost,
+    # Download SCAD, and the staged changes' bar (Apply, Revert, Defaults, Undo, Redo).
     main="selected",
     cell="Part view",
-    sections=(),
+    opened_by="a piece's row in Site",
+    sections=(
+        # In a stack of its own under Selected, so the bar's Apply stays in view.
+        Section(
+            "parameters",
+            "Parameters",
+            "the piece's numbers as controls, tied to its text",
+            home="column",
+            verbs=("part:edit",),
+        ),
+        # Beside the world, as tall as it.
+        Section(
+            "scad",
+            "SCAD",
+            "the part's SCAD in the editor: checked as typing stops, rendered, saved as a variant",
+            home="beside",
+            verbs=("part:scad", "part:save"),
+        ),
+        Section(
+            "variants",
+            "Variants",
+            "the part's saved variants, each drawn again from its row, and the compare",
+            home="part-parameters",
+            verbs=("part:variant:",),
+        ),
+        Section(
+            "history",
+            "History",
+            "this tab's recent applies of the part, each drawn again from the cache",
+            home="part-parameters",
+        ),
+        Section(
+            "readiness",
+            "Readiness",
+            "whether the part is ready to print and check against a real one",
+            home="part-parameters",
+        ),
+    ),  # fmt: skip
     view={
         "row": [
-            {"world": True, "size": 52},
+            {"world": True, "size": 44},
             {
                 "column": [
-                    {"stack": ["selected", "scad-editor"], "size": 64, "active": "selected"},
-                    {"stack": ["site", "problems", "scad"], "size": 36},
+                    {"stack": ["selected"], "size": 38},
+                    {
+                        "stack": [
+                            "part-parameters",
+                            "part-variants",
+                            "part-history",
+                            "part-readiness",
+                        ],
+                        "size": 62,
+                        "active": "part-parameters",
+                    },
                 ],
-                "size": 48,
+                "size": 26,
+            },
+            {
+                "column": [
+                    {"stack": ["part-scad"], "size": 68},
+                    {"stack": ["site", "problems", "scad"], "size": 32},
+                ],
+                "size": 30,
             },
         ]
     },
@@ -160,30 +238,101 @@ MACHINE = System(
     id="machine",
     title="Machine",
     group="Machine",
+    # The Machine: the board's head -- its link verbs, the control latch, ⏹ E-STOP --
+    # what it is and its link, and its state.
     main="machine",
     cell="Machine view",
+    opened_by="a board's ring, Device › Open",
     transient=True,
-    sections=(),
+    # In one stack of their own under the Machine, so its head and E-STOP stay in view.
+    # A printer's Machine has a printer's sections and a devkit's a devkit's: the page
+    # attaches those of the board's kind, again when it is identified as another.
+    sections=(
+        Section(
+            "status",
+            "Status",
+            "a printer's hotend, bed, position, SD print, endstops and filament",
+            home="column",
+            verbs=("device:poll",),
+            kind="printer",
+        ),
+        Section(
+            "temperature",
+            "Temperature",
+            "a printer's hotend and bed against time, their targets dashed",
+            home="column",
+            kind="printer",
+        ),
+        Section(
+            "print",
+            "Print",
+            "a printer's print from here: the files kept, what it makes, Slice, the print",
+            home="column",
+            verbs=("print:", "slice:"),
+            kind="printer",
+        ),
+        Section(
+            "level",
+            "Bed level",
+            "a printer's bed: probed or read, its mesh, its corners, its records",
+            home="column",
+            verbs=("level:",),
+            kind="printer",
+        ),
+        Section(
+            "sketch",
+            "Sketch",
+            "a devkit's sketch: what it should run, and what it was heard saying",
+            home="column",
+            # A hello heard is said here as well as in the log.
+            verbs=("device:query", "device:listen"),
+            kind="devkit",
+        ),
+        Section(
+            "flashing",
+            "Flashing",
+            "a devkit's sketch built and uploaded to this port, and the task's output",
+            home="column",
+            verbs=("device:flash",),
+            kind="devkit",
+        ),
+        Section(
+            "log",
+            "Log",
+            "the board's one log: a printer's comms, or a devkit's serial output",
+            home="column",
+            verbs=("device:listen", "device:query", "device:probe"),
+        ),
+    ),  # fmt: skip
+    # Every window of the board's kind in view, none behind another: a printer's
+    # Status and Temperature under the Machine, its Print, Bed level and Log beside them;
+    # a devkit's Sketch and Flashing under it, its Log beside them. Selected and Site
+    # stay, each at a foot, so a board's row and its Device line are there to act on.
     view={
         "row": [
-            {"world": True, "size": 46},
+            {"world": True, "size": 34},
             {
                 "column": [
-                    {"stack": ["machine", "bench"], "size": 62, "active": "machine"},
-                    {"stack": ["site", "jobs", "pinned"], "size": 38},
+                    {"stack": ["machine"], "size": 26},
+                    {"stack": ["machine-status", "machine-sketch"], "size": 25},
+                    {"stack": ["machine-temperature", "machine-flashing"], "size": 25},
+                    {"stack": ["selected"], "size": 24},
                 ],
-                "size": 34,
+                "size": 33,
             },
             {
                 "column": [
-                    {"stack": ["selected"], "size": 55},
-                    {"stack": ["pictures", "settings"], "size": 45},
+                    {"stack": ["machine-print"], "size": 34},
+                    {"stack": ["machine-level"], "size": 22},
+                    {"stack": ["machine-log"], "size": 22},
+                    {"stack": ["site", "jobs", "pinned"], "size": 22, "active": "site"},
                 ],
-                "size": 20,
+                "size": 33,
             },
         ]
     },
 )
+
 
 # In the order their views are listed: under Panels › Windows, after the
 # layout's own two cells, and in ⊞ Windows after Default.
@@ -194,8 +343,8 @@ def by_id(system_id: str) -> System:
     return next(s for s in SYSTEMS if s.id == system_id)
 
 
-def manifest() -> List[Dict[str, Any]]:
-    """Every system as the page reads it: plain JSON."""
+def manifest(systems: Tuple[System, ...] = SYSTEMS) -> List[Dict[str, Any]]:
+    """Every system (or those given: a test's own) as the page reads it: plain JSON."""
     return [
         {
             "id": s.id,
@@ -203,12 +352,21 @@ def manifest() -> List[Dict[str, Any]]:
             "group": s.group,
             "main": s.main,
             "cell": s.cell,
+            "opened_by": s.opened_by,
             "transient": s.transient,
             "sections": [
-                {"id": sec.id, "title": sec.title, "holds": sec.holds, "window": s.window(sec.id)}
+                {
+                    "id": sec.id,
+                    "title": sec.title,
+                    "holds": sec.holds,
+                    "window": s.window(sec.id),
+                    "home": s.home(sec),
+                    "verbs": list(sec.verbs),
+                    "kind": sec.kind,
+                }
                 for sec in s.sections
             ],
             "view": s.view,
         }
-        for s in SYSTEMS
+        for s in systems
     ]

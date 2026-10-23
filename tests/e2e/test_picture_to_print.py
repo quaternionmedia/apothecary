@@ -50,7 +50,7 @@ from viewer_ready import UNDER_THE_STAGE_BAR, by_hand, settled
 
 PRINTER = "/dev/ttyFAKE1"
 BOARD = "printer_1.frame_system.mainboard"
-MACHINE = ".panel[data-panel='machine']"
+MACHINE = windows.MACHINE
 
 
 # The scripted slicer's layers, each move followed by a dwell of this many ms: a few
@@ -205,7 +205,7 @@ def _adjust(page, piece: str, field: str, value: float) -> float:
     """Part › Edit on the piece's ring, one slider moved, Apply; the value applied."""
     _ring_on(page, piece)
     _press(page, "Part", "Edit")
-    _said(page, f"Editing {piece}: its parameters are in Selected")
+    _said(page, f"Editing {piece}: its numbers are in Parameters, Apply and Revert in Selected")
     slider = page.locator(f"#part-params .param[data-field='{field}'] input[type=range]")
     expect(slider).to_be_visible(timeout=10000)
     got = slider.evaluate(
@@ -230,15 +230,15 @@ CHANGING = (
         "#selected-body .picture-facts[data-facts='made']",
         "#selected-body .view-row",
         "#part-params .cand .src",
-        f"{MACHINE} #print-progress",
-        f"{MACHINE} #print-history",
+        f"{windows.MACHINE_WINDOWS} #print-progress",
+        f"{windows.MACHINE_WINDOWS} #print-history",
         "#site-jobs-list",
     ),
-    (MACHINE, TEMPERATURE),
-    (f"{MACHINE} #chart-span", r"\d+"),
-    f"{MACHINE} #chart",
+    (windows.MACHINE_WINDOWS, TEMPERATURE),
+    (f"{windows.MACHINE_WINDOWS} #chart-span", r"\d+"),
+    f"{windows.MACHINE_WINDOWS} #chart",
     # The latch's countdown, in the Machine's head and on the pad.
-    f"{MACHINE} #ctl-ttl",
+    f"{windows.MACHINE_WINDOWS} #ctl-ttl",
     "#control .ttl",
 )
 
@@ -420,15 +420,19 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
         blank=CHANGING,
     )
 
-    # 7. printer_1's Machine, from its ring: Print from here offers the piece.
+    # 7. printer_1's Machine, from its ring, and its Print from ⊞ Windows: Print from
+    # here offers the piece.
     _ring_on(page, "printer_1")
     _press(page, "Device", "Open")
     _said(page, "Opened printer_1")
-    machine = page.locator(MACHINE)
-    expect(machine).to_be_visible(timeout=5000)
+    machine = windows.machine(page)
+    expect(page.locator(MACHINE)).to_be_visible(timeout=5000)
     expect(windows.tab(page, "machine")).to_have_attribute("title", f"printer_1 · {PRINTER}")
     assert "pictures" in windows.state(page, "machine")["stack"]  # a tab beside Pictures
     expect(machine.locator("#c-state")).to_contain_text("idle", timeout=10000)
+    windows.from_the_windows_menu(page, "machine-print")
+    print_window = windows.panel(page, "machine-print")
+    expect(print_window.locator("#print-card")).to_be_visible(timeout=5000)
     makes = machine.locator("#print-part")
     expect(makes.locator(f"option[value='{disc}']")).to_be_attached(timeout=10000)
     expect(machine.locator("#print-where")).to_have_text("in garage")
@@ -469,26 +473,27 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     expect(said.locator(".slice-settings")).to_contain_text("start")
     expect(machine.locator("#print-start")).to_be_enabled()
     # Maximised from its stack, to see the whole card.
-    maximise = page.locator(".lm_stack", has=machine).locator(".lm_maximise")
+    maximise = page.locator(".lm_stack", has=print_window).locator(".lm_maximise")
     maximise.click()
-    expect(page.locator(".lm_stack.lm_maximised", has=machine)).to_be_visible(timeout=5000)
+    expect(page.locator(".lm_stack.lm_maximised", has=print_window)).to_be_visible(timeout=5000)
     machine.locator("#print-card").scroll_into_view_if_needed()
     story.shows(
         "Slice, in printer_1's Machine, slices the piece and chooses its G-code",
         "printer_1's ring, Device › Open: its Machine a tab beside Pictures, below "
-        "Selected. Print from here lists the pieces of the garage under makes; "
+        "Selected, and ⊞ Windows › Print opens its Print from here under it. It lists "
+        "the pieces of the garage under makes; "
         f"{disc} chosen, its Slice slices it for printer_1, the slicer's log in the card "
         "while it runs. The G-code "
         "it kept is chosen in the card's files, saying what it was sliced from and for "
         "which printer, and the card lists what the slice used -- each value from the "
         "printer's profile, a piece declaring none -- with the slicer's estimate. "
-        "The Machine is maximised here from its stack, so the whole card is seen.",
+        "Print is maximised here from its stack, so the whole card is seen.",
         shown=sliced_said,
         blank=CHANGING,
     )
     maximise.click()  # restored: the world beside it again
     expect(page.locator(".lm_maximised")).to_have_count(0)
-    expect(machine).to_be_visible()
+    expect(page.locator(MACHINE)).to_be_visible()
 
     # 8. ⚙ Control armed, its pad a loud window of its own beside the world; ▶ Print:
     # asked first, naming the piece; a job begins.
@@ -628,7 +633,7 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
 
     # 14. The Machine stayed open, a tab beside Pictures, and makes lists the new piece
     # without its being opened again; the piece's own ring's Print chooses it there.
-    expect(machine).to_be_visible()
+    expect(page.locator(MACHINE)).to_be_visible()
     expect(makes.locator(f"option[value='{plate}']")).to_be_attached(timeout=10000)
     expect(makes).to_have_value(disc)
     _ring_on(page, plate)
@@ -724,7 +729,7 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
         card.scroll_into_view_if_needed()
         expect(said).to_contain_text(f"{plate} sliced for printer_1", timeout=5000)
         settled(page)
-        assert page.evaluate(CROWDED, f"{MACHINE} #print-card") == [], width
+        assert page.evaluate(CROWDED, f"{windows.MACHINE_WINDOWS} #print-card") == [], width
         card.screenshot(path=str(shots / f"print-card-{width}.png"))
         page.screenshot(path=str(shots / f"page-{width}.png"))
 

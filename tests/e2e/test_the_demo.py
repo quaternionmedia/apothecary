@@ -51,7 +51,7 @@ from apothecary.projects.parts.stl_renderer import get_renderer
 PRINTER = "/dev/ttyFAKE1"
 DEVKIT = "/dev/ttyFAKE2"
 BOARD = "printer_1.frame_system.mainboard"
-MACHINE = ".panel[data-panel='machine']"
+MACHINE = windows.MACHINE
 BENCH = ".panel[data-panel='bench']"
 
 # Every Python process the demo starts imports this first. Opening a serial device, by
@@ -267,7 +267,7 @@ def test_the_demo_goes_round_the_firmware_loop(page: Page, demo, shots):
     expect(page.locator(".world-badge[data-path='esp32_blink']")).to_be_visible(timeout=15000)
     _ring_on(page, "esp32_blink")
     _press(page, "Device", "Query")
-    machine = page.locator(MACHINE)
+    machine = windows.machine(page)
     expect(machine.locator("#log")).to_contain_text("heard esp32_blink say hello", timeout=30000)
     expect(machine.locator("#c-sketch")).to_contain_text("observed esp32_blink ✓ matches")
     settled(page)
@@ -305,7 +305,7 @@ def test_the_demo_goes_round_a_picture_to_a_print(page: Page, demo, shots):
     assert _labels(page)[-2:] == ["Print", "Slice"], _labels(page)
     _press(page, "Slice")
     _said(page, f"slicing {piece} for printer_1")
-    machine = page.locator(MACHINE)
+    machine = windows.machine(page)
     expect(machine.locator("#print-slice-said")).to_contain_text(
         f"{piece} sliced for printer_1 by OrcaSlicer 2.4.2", timeout=60000
     )
@@ -358,6 +358,7 @@ def test_the_demo_goes_round_designing_a_part_and_editing_its_scad(page: Page, d
     )
     assert re.search(r"[?&]variant=calibration_cube", page.url), page.url
 
+    windows.open_window(page, "part-scad")  # the part's SCAD, in its window
     code = page.locator(".scad-editor .cm-content")
     expect(code).to_be_visible(timeout=20000)
     # Pressed near its first line: the code runs on below what Selected's window shows.

@@ -24,8 +24,10 @@ import pytest
 import windows
 from playwright.sync_api import Page, expect
 
+from apothecary.systems import by_id
+
 PRINTER = "/dev/ttyFAKE1"
-MACHINE = ".panel[data-panel='machine']"  # a board's Machine, in front of the world
+MACHINE = windows.MACHINE
 # The arrow rule as vectors, generated from menu.py's resolver; tests/test_menu.py
 # fails when the file is missing or stale.
 VECTORS = Path(__file__).resolve().parents[1] / "conformance" / "nine_cells.json"
@@ -365,11 +367,12 @@ def test_jog_by_address_on_a_machine_s_device_ring(page: Page, ring_url: str):
     page.add_init_script(CAPTURE)
     page.goto(f"{ring_url}/firmware/monitor?port={PRINTER}")
     expect(page.locator(MACHINE)).to_be_visible(timeout=15000)
+    windows.machine_ready(page, "printer")  # its Log, where what the jog sent is said
     expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
     expect(page.locator("#ident")).to_contain_text("Marlin", timeout=8000)
     # Disarmed, the device ring's Control > Arm is the way in; the latch shows the address.
     expect(page.locator("#ctl")).to_have_attribute("data-address", "77", timeout=5000)
-    page.locator(f"{MACHINE} #ident").click(button="right", modifiers=["Control"])
+    page.locator(f"{windows.MACHINE_WINDOWS} #ident").click(button="right", modifiers=["Control"])
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     assert _title(page) == "ttyFAKE1"
     assert _wedges(page)["1"] == "Link"
@@ -440,7 +443,7 @@ def test_jog_by_address_on_a_machine_s_device_ring(page: Page, ring_url: str):
             + f"intents: {_intents(page)}"
         ) from None
     # Disarm by address, and the overlay goes.
-    page.locator(f"{MACHINE} #ident").click(button="right", modifiers=["Control"])
+    page.locator(f"{windows.MACHINE_WINDOWS} #ident").click(button="right", modifiers=["Control"])
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press("7")
     page.keyboard.press("7")
@@ -581,6 +584,9 @@ def test_the_world_and_the_panels_are_windows_of_one_layout(page: Page, ring_url
         "bench",
         "settings",
         "gather",
+        # The Part's sections, then the Airgap and its sections, each a window of its
+        # own closed until asked for (apothecary/systems.py).
+        *(f"part-{sid}" for sid in windows.PART_SECTIONS),
         "airgap",
         # The Airgap's sections, each a window of its own, closed until asked for.
         *(f"airgap-{sid}" for sid in windows.AIRGAP_SECTIONS),
@@ -777,7 +783,10 @@ def test_a_stacks_plus_opens_any_window_there_and_windows_lists_them_by_group(
     assert windows.state(page, "site")["stack"] == ["site", "problems", "scad"]
     assert windows.state(page, "gather")["open"] is False
     expect(page.locator(windows.WORLD_HEADER)).to_be_hidden()
-    assert world.bounding_box()["width"] > 600
+    share = by_id("part").view["row"][0]["size"] / 100  # the world's, in the registry
+    assert world.bounding_box()["width"] == pytest.approx(
+        page.viewport_size["width"] * share, abs=12
+    )
     # Default again, from the menu.
     page.locator("#windows-menu > summary").click()
     body.locator(".view-item[data-view='default']").click()

@@ -1113,9 +1113,7 @@ function loadSweepCell(ev){const p=pos(ev,sweepMapEl),c=sweepCell(p.x,p.y,p.w,p.
   const values={[nameOfAxis(SW.ax.id)]:SW.xs[c.xi],[nameOfAxis(SW.ay.id)]:SW.ys[c.yi]};
   if(following&&world.editing()&&world.write(values))return; // the text changes; the panel follows
   setP(state,SW.ax.id,SW.xs[c.xi]);setP(state,SW.ay.id,SW.ys[c.yi]);activePreset=null;syncPreset();following=false;markSource();requestUpdate();}
-// A fold opened draws the pictures in it; a resize draws them all again.
-const foldsEl=slot;
-foldsEl.addEventListener('toggle',()=>requestAnimationFrame(drawAll),true);
+// A resize, a window opened at its size among them, draws the pictures again.
 let rsz=false;const ro=new ResizeObserver(()=>{if(rsz)return;rsz=true;requestAnimationFrame(()=>{rsz=false;drawAll();});});
 for(const id of ['machine','mmf','gapmap','induct','energy','spectra','dynSpeed','dynOrbit','dynSpec','sweep'])ro.observe($(id));
 

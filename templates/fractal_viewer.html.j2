@@ -539,10 +539,14 @@
         .scad-code .cm-editor { height: 100%; }
         /* Out of Selected, in a window of its own, the editor fills it: the code takes
            what its bar and the saved list leave. */
-        .panel[data-panel="scad-editor"] .panel-body-slot { display: flex; flex-direction: column; }
-        .panel[data-panel="scad-editor"] .scad-editor { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-        .panel[data-panel="scad-editor"] .scad-code { flex: 1 1 auto; height: auto; min-height: 160px; }
-        .panel[data-panel="scad-editor"] .scad-saved { max-height: 22vh; overflow: auto; }
+        /* The Part's SCAD window: the editor fills it, the code taking what the bar and
+           the saved list leave. */
+        .panel[data-panel="part-scad"] .panel-body-slot { display: flex; flex-direction: column; }
+        .panel[data-panel="part-scad"] .panel-body-slot > div, .panel[data-panel="part-scad"] [data-section="scad"],
+        .panel[data-panel="part-scad"] .scad-slot { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+        .panel[data-panel="part-scad"] .scad-editor { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+        .panel[data-panel="part-scad"] .scad-code { flex: 1 1 auto; height: auto; min-height: 160px; }
+        .panel[data-panel="part-scad"] .scad-saved { max-height: 22vh; overflow: auto; }
         .scad-editor.fullscreen { position: fixed; inset: 0; z-index: 900; background: #1b1e24;
                                   padding: 10px 14px; }
         .scad-editor.fullscreen .scad-code { flex: 1; height: auto; min-height: 0; }
@@ -558,7 +562,8 @@
         .variant-diff summary { cursor: pointer; color: #8a929e; }
         .variant-diff pre { max-height: 200px; overflow: auto; font-size: 11px; background: #14161a;
                             padding: 4px; margin: 4px 0; white-space: pre; }
-        .saved-list .empty, .scad-saved .empty, .scad-away { color: #8a929e; font-size: 11px; }
+        .saved-list .empty, .scad-saved .empty { color: #8a929e; font-size: 11px; }
+        .section-empty { color: #8a929e; font-size: 0.78rem; font-style: italic; margin: 0.2rem 0; }
         .param input[type=checkbox] { margin-top: 4px; accent-color: #4a9eff; }
         .param input.text, .param .vector input { background: #14161a; color: #d7dae0;
                                                   border: 1px solid #2a2f38; padding: 2px 4px; font: inherit; }
@@ -795,7 +800,7 @@
         import { mountBuild, mountRawFlash } from '/static/widgets/sketches.js';
         import { mountTasks } from '/static/widgets/tasks.js';
         import { mountAirgap } from '/static/widgets/airgap.js';
-        import { knownWindows, mountSystems } from '/static/systems.js';
+        import { knownWindows, transientWindows, mountSystems, openFor } from '/static/systems.js';
         import { mountScadEditor, variantChoices } from '/static/widgets/scad_editor.js';
         import { buildParamControl, described, sameValue, shown, focusedControl, refocus } from '/static/widgets/part_controls.js';
         import { parseAssignments, lastOf, literalText, writeValues } from '/static/widgets/assignments.js';
@@ -810,6 +815,24 @@
         const BASE_URL = {{ base_url | tojson }};
         // The focused systems, as apothecary/systems.py has them (the JSON above).
         const SYSTEMS = JSON.parse(document.getElementById('apothecary-systems').textContent);
+        // The page's own layout, as Reset layout puts it: the world on the left, and
+        // a column beside it of Site and its own windows, Selected, then Pictures, the
+        // Bench and Settings.
+        const tab = (id, title) => ({ type: 'component', componentType: id, id, title });
+        const PAGE_LAYOUT = {
+            type: 'row',
+            content: [
+                { type: 'stack', width: 68, header: { show: false }, content: [{ ...tab('world', 'World'), isClosable: false }] },
+                {
+                    type: 'column', width: 32,
+                    content: [
+                        { type: 'stack', height: 32, content: [tab('site', 'Site'), tab('problems', 'Problems'), tab('pinned', 'Pinned'), tab('jobs', 'Jobs'), tab('scad', 'SCAD')] },
+                        { type: 'stack', height: 42, content: [tab('selected', 'Selected')] },
+                        { type: 'stack', height: 26, content: [tab('pictures', 'Pictures'), tab('bench', 'Bench'), tab('settings', 'Settings')] },
+                    ],
+                },
+            ],
+        };
         const DEFAULT_SITE = {{ default_site | tojson }};
         const INITIAL_FOCUS = {{ focus_path | tojson }};
         // What a link into the world asks to have open: ?panel=bench (where /firmware
@@ -1236,7 +1259,6 @@
                 this.scadStages = {};
                 this.scadEditor = null;
                 this.scadTarget = null;
-                this.scadPopped = false;
                 this.scadLoading = Promise.resolve();
                 this.editorTarget = null;  // what the editor edits: a part, or a piece made from a picture
                 this.editorOpenFor = null; // a machine drawn as a part whose editor Part › Edit opened
@@ -1369,11 +1391,17 @@
                 // Site, the rest tabs below them; any dragged anywhere, split,
                 // maximised or closed. What a person made of it is remembered per
                 // browser, and a remembered layout the page cannot read is ignored.
-                // Every focused system's windows are ones a remembered layout may hold.
+                // Its windows: the page's own, laid out as the page lays them (PAGE_LAYOUT),
+                // and every focused system's (apothecary/systems.py); a board's Machine and
+                // its sections, the armed pad and a rig's Lighting are made for the moment.
                 this.panels = mountPanels({
                     host: document.querySelector('.main-content'), world: this.canvas.parentElement,
-                    known: knownWindows(SYSTEMS),
+                    defaultRoot: PAGE_LAYOUT,
+                    known: ['gather', ...knownWindows(SYSTEMS)],
+                    transient: ['control', 'lighting', ...transientWindows(SYSTEMS)],
                 });
+                // What the rail this layout replaced remembered: nothing reads it any more.
+                try { localStorage.removeItem('apothecary.panels'); } catch (e) { /* blocked storage */ }
                 // Pinned is mounted the first time it is in front of a person, and listed
                 // again each time it is in front again.
                 const onOpen = { pinned: () => this.pinnedOpened() };
@@ -1517,6 +1545,18 @@
                 // text again each time the Airgap is shown again; while the part is being
                 // edited it follows every edit of its text.
                 this.systems = mountSystems(this.panels, SYSTEMS, {
+                    // The Part's windows are filled by the editor in Selected
+                    // (showPartSections); a section brought in front measures the SCAD
+                    // editor, which may have been built while its window was closed.
+                    part: {
+                        mount: () => ({ redraw: () => { this.scadEditor?.measure(); this.focusEditor(); } }),
+                    },
+                    // A board's Machine: its sections' windows are there while it is open
+                    // (mountMachinePanel attaches them, closeMachine takes them away), each
+                    // filled by the Machine's widget.
+                    machine: {
+                        mount: () => ({}),
+                    },
                     airgap: {
                         main: { title: 'Airgap' },
                         mount: (slot, sections) => {
@@ -1540,14 +1580,14 @@
                     },
                 });
                 // ⊞ Windows: drawn afresh each time it opens, so it says which are open.
+                const windowsBody = this.windowsMenuEl.querySelector('.windows-menu-body');
                 this.windowsMenuEl.addEventListener('toggle', () => {
                     if (!this.windowsMenuEl.open) return;
                     this.viewMenuEl.open = false;
-                    const body = this.windowsMenuEl.querySelector('.windows-menu-body');
-                    this.panels.fillMenu(body, { done: () => { this.windowsMenuEl.open = false; } });
-                    body.querySelector('button')?.focus();
+                    this.panels.fillMenu(windowsBody, { done: () => { this.windowsMenuEl.open = false; } });
+                    windowsBody.querySelector('button')?.focus();
                 });
-                this.windowsMenuEl.querySelector('.windows-menu-body').addEventListener('keydown', (ev) => this.panels.stepFocus(ev.currentTarget, ev));
+                windowsBody.addEventListener('keydown', (ev) => this.panels.stepFocus(windowsBody, ev));
                 window.apothecarySettings = this.settings;
                 window.apothecaryPanels = this.panels;
                 this.onResize();
@@ -3145,6 +3185,7 @@
                 const focused = this.focusKey();
                 this.drawSelectedPanel();
                 this.placeStageBar();
+                this.showPartSections();
                 this.refocus(focused);
             }
 
@@ -3740,8 +3781,37 @@
             // was; what the server answers meanwhile is written into the section, not lost.
             partEl(selector) {
                 return this.partSection?.querySelector(selector)
+                    ?? Object.values(this.partSection?.parts ?? {}).map((block) => block.querySelector(selector)).find(Boolean)
                     ?? this.panels.pinnedSlot('selected')?.querySelector(selector)
                     ?? null;
+            }
+
+            // Each focused system's sections a ring verb acts on, opened (the registry's
+            // verbs): the ring's script carries the verb, then asks for these.
+            openSectionsFor(action) { openFor(this.panels, SYSTEMS, action); }
+
+            // The Part's sections (apothecary/systems.py): each window shows its block of
+            // the editor in Selected, or, with nothing being edited or a piece without
+            // that section, says so. Called whenever Selected is drawn.
+            showPartSections() {
+                const part = this.systems?.part;
+                if (!part) return;
+                const editing = this.partSection && this.selectedBodyEl.contains(this.partSection) ? this.partSection : null;
+                for (const [id, host] of Object.entries(part.sections)) {
+                    const block = editing?.parts?.[id];
+                    if (block) { if (host.firstChild !== block) host.replaceChildren(block); continue; }
+                    const title = SYSTEMS.find((sys) => sys.id === 'part').sections.find((sec) => sec.id === id).title;
+                    const said = editing
+                        ? `No ${title} for ${editing.label}.`
+                        : 'Nothing is being edited: select a part, a piece made from a picture or a camera, and Part › Edit.';
+                    if (host.firstChild?.dataset?.said !== said) {
+                        const note = document.createElement('p');
+                        note.className = 'section-empty';
+                        note.dataset.said = said;
+                        note.textContent = said;
+                        host.replaceChildren(note);
+                    }
+                }
             }
 
             // The editor's section in Selected, for a target. The section being
@@ -3766,9 +3836,7 @@
                     <div class="envelope" id="part-envelope"><span class="declared"></span><span class="measured"></span><span class="differs"></span><span class="floor"></span></div>
                     ${target.part ? '<div class="ghost-said" id="part-ghost" hidden></div>' : ''}
                     ${target.scadUrl ? `<div class="part-actions"><a class="part-scad-download" href="${target.scadUrl}">💾 Download SCAD</a></div>` : ''}
-                    ${target.checklistUrl ? `<div class="code-header">Build readiness</div>
-                    <div id="part-checklist">Loading…</div>` : ''}
-                    <div class="code-header">Parameters</div>
+                    ${target.checklistUrl ? `<div data-section="readiness"><div id="part-checklist">Loading…</div></div>` : ''}
                     <div class="part-stage">
                     <div id="stage-bar">
                       <div id="stage-summary" class="clean">No staged changes</div>
@@ -3789,17 +3857,22 @@
                         <button type="button" id="kept-discard" title="Let it go: what is drawn stays">Discard</button></div>
                       <ul id="part-messages" class="scad-messages"></ul>
                     </div>
-                    <div id="part-params">Loading…</div>
-                    ${target.part ? `<details id="part-history" class="fold part-history" hidden title="This tab's recent applies of the part, newest first: one clicked is drawn again from the cache">
-                      <summary>Recent applies</summary><ul id="part-history-list" class="apply-history"></ul></details>` : ''}
                     </div>
-                    ${target.part ? `<div id="part-compare" class="compare-view" hidden></div>
-                    <div class="code-header saved-header">Saved variants</div>
-                    <div id="part-saved" class="saved-list"></div>` : ''}
-                    ${target.scadUrl ? `<div class="code-header">${target.part ? 'SCAD' : 'SCAD (a few lines, from its shape)'}</div>
-                    <div id="part-scad" class="scad-slot">Loading…</div>` : ''}
+                    <div data-section="parameters"><div id="part-params">Loading…</div></div>
+                    ${target.part ? `<div data-section="history"><div id="part-history" class="part-history" title="This tab's recent applies of the part, newest first: one clicked is drawn again from the cache">
+                      <p class="section-empty" id="part-history-none">No applies in this tab yet: Apply draws what is staged, and each is listed here.</p>
+                      <ul id="part-history-list" class="apply-history"></ul></div></div>
+                    <div data-section="variants"><div id="part-compare" class="compare-view" hidden></div>
+                    <div id="part-saved" class="saved-list"></div></div>` : ''}
+                    ${target.scadUrl ? `<div data-section="scad"><div id="part-scad" class="scad-slot">Loading…</div></div>` : ''}
                 `;
-                const shortList = this.partSection.querySelector('#part-saved');
+                // Each section a block of its own, kept with the editor: its window shows
+                // it while this is the piece being edited (showPartSections).
+                this.partSection.parts = Object.fromEntries([...this.partSection.querySelectorAll('[data-section]')]
+                    .map((block) => { block.remove(); return [block.dataset.section, block]; }));
+                this.partSection.label = target.label ?? target.part ?? target.key;
+                this.showPartSections();
+                const shortList = this.partEl('#part-saved');
                 if (shortList) {
                     shortList.onclick = (ev) => {
                         const chosen = ev.target.closest('.saved-variant');
@@ -3807,14 +3880,14 @@
                     };
                 }
                 // A recent apply's row draws it again, from the cache.
-                const historyList = this.partSection.querySelector('#part-history-list');
+                const historyList = this.partEl('#part-history-list');
                 historyList?.addEventListener('click', (ev) => {
                     const row = ev.target.closest('li[data-at]');
                     if (row) this.drawFromHistory(target, Number(row.dataset.at)).then(({ ok, said }) => this.setStatus(said, ok ? 'success' : 'error'));
                 });
                 // Download SCAD: the edit, when the editor holds one; the draft a variant
                 // drawn was rendered from; else the part's own.
-                const download = this.partSection.querySelector('.part-scad-download');
+                const download = this.partEl('.part-scad-download');
                 if (download && target.part) download.onclick = (ev) => this.downloadScad(target, ev);
                 if (target.scadUrl) this.scadLoading = this.loadPartScad(target);
                 if (target.checklistUrl) this.loadPartChecklist(target);
@@ -3822,9 +3895,10 @@
                 this.editorLoading = this.loadPartParams(target);
             }
 
-            // Part › Edit: the editor in Selected, the cursor in its first control.
-            // A machine drawn as a part shows the one row that says so until it is
-            // asked for; asked for, its editor opens under the machine's panel.
+            // Part › Edit: the editor in Selected, its Parameters window open beside it,
+            // the cursor in its first control. A machine drawn as a part shows the one
+            // row that says so until it is asked for; asked for, its editor opens under
+            // the machine's panel.
             openEditor(path) {
                 const node = this.renderNodeByKey[path];
                 const made = this.pictureMarks.madeRecord(path);
@@ -3835,6 +3909,7 @@
                 this.editorFocusFrom = document.activeElement;
                 if (this.selectedName !== path) this.selectPath(path); else this.renderSelectedPanel();
                 this.panels.open('selected');
+                this.systems.part.showSection('parameters');
                 this.focusEditor();
                 return true;
             }
@@ -3849,7 +3924,7 @@
                     this.editorFocusWanted = null;
                     return;
                 }
-                const first = this.partSection.querySelector('#part-params input, #part-params select, #part-params button');
+                const first = this.partEl('#part-params input, #part-params select, #part-params button');
                 if (!first) return;  // not built yet: loadPartParams calls again
                 this.editorFocusWanted = null;
                 first.focus();
@@ -5050,12 +5125,12 @@
             }
 
             renderHistory(target) {
-                const fold = this.partSection?.querySelector('#part-history');
-                const list = fold?.querySelector('#part-history-list');
+                const list = this.partEl('#part-history-list');
                 const stage = this.partStages[target.key];
                 if (!list || this.partSection.dataset.target !== target.key) return;
                 const history = stage?.history ?? [];
-                fold.hidden = !history.length;
+                const none = this.partEl('#part-history-none');
+                if (none) none.hidden = history.length > 0;
                 const drawn = this.variantByPart[target.part] ?? null;
                 const changed = (entry) => Object.entries(entry.params).filter(([k, v]) => stage.defaults && k in stage.defaults && !sameValue(v, stage.defaults[k]));
                 list.innerHTML = history.map((entry, i) => {
@@ -5417,7 +5492,7 @@
                 const ref = target.part;
                 const drawn = this.variantByPart[ref];
                 const other = b ?? (drawn ? `@${drawn}` : '@part');
-                const view = this.partSection?.querySelector('#part-compare');
+                const view = this.partEl('#part-compare');
                 if (!view) return { ok: false, said: `${ref}: its editor is not open` };
                 view.hidden = false;
                 view.innerHTML = `<div class="compare-said">Comparing ${esc(a)} with ${esc(this.sideName(other))}… a side not in the cache is rendered first</div>`;
@@ -5446,7 +5521,7 @@
 
             showComparison(target) {
                 const c = this.comparing;
-                const view = this.partSection?.querySelector('#part-compare');
+                const view = this.partEl('#part-compare');
                 if (!c || !view) return;
                 const { a, b, params, diff } = c.answer;
                 const scad = this.scadStages[target.key];
@@ -5520,7 +5595,7 @@
                 this.comparing = null;
                 this.compareToken = (this.compareToken ?? 0) + 1;
                 this.dropComparisonMeshes();
-                const view = this.partSection?.querySelector('#part-compare');
+                const view = this.partEl('#part-compare');
                 if (view) { view.hidden = true; view.innerHTML = ''; }
             }
 
@@ -5696,7 +5771,7 @@
             // OpenSCAD's keys work inside it: F5 checks and draws, F6 and Ctrl+Enter
             // apply, Ctrl+S saves a variant.
             async loadPartScad(target) {
-                const slot = this.partSection?.querySelector('#part-scad');
+                const slot = this.partEl('#part-scad');
                 try {
                     const [response, meta] = await Promise.all([
                         fetch(target.scadUrl),
@@ -5726,14 +5801,14 @@
                     if (scad.text === null || !editable) scad.text = own;
                     scad.drawnText ??= scad.text;
                     if (!editable) {
-                        this.partSection.querySelector('.saved-header')?.remove();
-                        this.partSection.querySelector('#part-saved')?.remove();
+                        // Nothing of it is saved as a variant: its Variants window says so.
+                        delete this.partSection.parts?.variants;
+                        this.showPartSections();
                     }
                     this.releaseScadEditor();
                     const handlers = {
                         onChange: (text, how) => this.scadChanged(target, text, how),
                         onSave: () => this.saveScadKey(target),
-                        onPopout: () => this.toggleScadPopout(),
                         onFullscreen: () => this.toggleScadFullscreen(),
                         onChoose: (name) => this.chooseSavedVariant(target, name),
                         onCheck: () => this.checkAndDraw(target),
@@ -5781,7 +5856,6 @@
             // page, kept for when its part is edited again.
             releaseScadEditor() {
                 if (!this.scadEditor) return;
-                if (this.scadPopped) this.dockScad();
                 if (this.scadEditor.isFullscreen()) this.scadEditor.fullscreen(false);
                 this.scadEditor.root.remove();
                 this.scadEditor = null;
@@ -5949,7 +6023,7 @@
                     this.scadEditor?.suggest(scad.suggested);
                     this.nameFollowsText(target);
                 }
-                const short = this.partSection?.querySelector('#part-saved');
+                const short = this.partEl('#part-saved');
                 if (short && this.partSection.dataset.target === target.key) {
                     short.innerHTML = variantChoices(scad.saved.slice(0, SAVED_SHORT_LIST), { chosen: mark })
                         + (scad.saved.length > SAVED_SHORT_LIST ? `<div class="saved-numbers">and ${scad.saved.length - SAVED_SHORT_LIST} more in the editor</div>` : '');
@@ -6067,44 +6141,6 @@
                 this.setStatus(said, ok ? 'success' : 'error');
             }
 
-            // Pop out: the editor out of Selected, a window of its own beside the
-            // world, as tall as the world; again (or its Dock, or its tab's ✕), back
-            // in Selected where it was.
-            toggleScadPopout() {
-                const editor = this.scadEditor;
-                if (!editor) return null;
-                if (this.scadPopped) { this.dockScad(); return 'docked'; }
-                if (editor.isFullscreen()) editor.fullscreen(false);
-                this.scadHome = editor.root.parentElement;
-                this.scadPopped = true;
-                this.panels.register('scad-editor', {
-                    group: 'Selected',
-                    title: `SCAD · ${this.scadTarget?.label ?? ''}`,
-                    body: editor.root,
-                    home: 'beside',
-                    onDock: () => this.dockScad(),
-                    onClose: () => this.dockScad(),
-                });
-                this.panels.open('scad-editor');
-                editor.poppedOut(true);
-                // Where it stood says where it is.
-                const note = document.createElement('div');
-                note.className = 'scad-away';
-                note.textContent = 'The SCAD editor is in a window of its own beside the world: its Dock, or Part › View › Pop out, puts it back here.';
-                this.scadHome?.appendChild(note);
-                return 'popped';
-            }
-
-            dockScad() {
-                if (!this.scadPopped) return;
-                this.scadPopped = false;
-                const editor = this.scadEditor;
-                this.scadHome?.querySelector('.scad-away')?.remove();
-                if (editor && this.scadHome) this.scadHome.appendChild(editor.root);
-                this.panels.unregister('scad-editor');
-                editor?.poppedOut(false);
-            }
-
             // Fullscreen: the editor over the whole page; again, or Esc, puts it back.
             toggleScadFullscreen() {
                 const editor = this.scadEditor;
@@ -6129,16 +6165,20 @@
                 return this.saveScad(target);
             }
 
-            async popoutScadOn(path) {
+            // Part › View › SCAD: the part's SCAD window, beside the world, the editor in it.
+            async scadWindowOn(path) {
                 const target = await this.scadOn(path);
-                if (!target) return { ok: false, said: `${path} has no SCAD editor to pop out` };
-                const how = this.toggleScadPopout();
-                return { ok: true, said: how === 'popped' ? `${target.label}'s SCAD editor is in a window of its own beside the world; Part › View › Pop out again, or its Dock, puts it back in Selected` : `${target.label}'s SCAD editor is back in Selected` };
+                if (!target) return { ok: false, said: `${path} has no SCAD to show` };
+                this.systems.part.showSection('scad');
+                this.scadEditor?.measure();
+                return { ok: true, said: `${target.label}'s SCAD, in its window beside the world: checked as typing stops, rendered once it reads; Save keeps it` };
             }
 
             async fullscreenScadOn(path) {
                 const target = await this.scadOn(path);
                 if (!target) return { ok: false, said: `${path} has no SCAD editor` };
+                // Over the page from its window, which is open for it.
+                if (!this.scadEditor?.isFullscreen()) this.systems.part.showSection('scad');
                 const on = this.toggleScadFullscreen();
                 return { ok: true, said: on ? `${target.label}'s SCAD editor covers the page; Esc, its button or Part › View › Fullscreen puts it back` : `${target.label}'s SCAD editor is back where it was` };
             }
@@ -6799,7 +6839,7 @@
             showMachine(port, anchor, row) {
                 if (this.machine && this.machine.port === port) { this.panels.open('machine'); return true; }
                 this.mountMachinePanel(port, anchor, row);
-                this.panels.dock('machine');
+                this.panels.open('machine');
                 return true;
             }
             // The Machine's panel, its body mounted when it is first in front of a
@@ -6811,6 +6851,11 @@
                 this.machine = machine;
                 const bearer = row ? this.statusBearerFor(row.path) : null;
                 const inPrinter = !!(bearer && PRINTER_STATUSES.includes(bearer.status));
+                // Its sections for any kind of board now (the Log); its kind's once the
+                // Machine says what the board is (onKind). A board inside a printer is
+                // the printer's: it has no Flashing.
+                const sectionsOf = (kind) => this.systems.machine.attach({ kind, without: inPrinter ? ['flashing'] : [] });
+                sectionsOf(null);
                 this.panels.register('machine', {
                     group: 'Machine',
                     title: anchor ? `${anchor} · ${port}` : `${port} · pinned nowhere in ${this.siteName}`,
@@ -6820,6 +6865,9 @@
                     body: (slot) => {
                         machine.handle = mountMachine(slot, {
                             base: BASE_URL, port, host: 'world', boards: this.boards, inPrinter, name: anchor,
+                            sections: this.systems.machine.sections,
+                            onVerb: (action) => this.openSectionsFor(action),
+                            onKind: (kind) => { if (this.machine === machine) sectionsOf(kind); },
                             // Its pad popped out: a loud window of its own beside the world.
                             padWindow: {
                                 open: (pad, who) => this.openPadWindow(machine, pad, who),
@@ -6957,6 +7005,7 @@
                 this.machine = null;
                 window.apothecaryMachine = null;
                 if (machine.handle) machine.handle.destroy();
+                this.systems.machine.detach();
                 this.panels.unregister('machine');
                 this.keepMachineInAddress(null);
             }
@@ -7934,7 +7983,7 @@
         const PART_VERBS = [
             ['#apply-btn', 'part:apply'], ['#revert-btn', 'part:revert'], ['#defaults-btn', 'part:defaults'],
             ['#undo-btn', 'part:undo'], ['#redo-btn', 'part:redo'], ['.ghost-label', 'part:ghost'],
-            ['#scad-save', 'part:save'], ['#scad-popout', 'part:popout'], ['#scad-fullscreen', 'part:fullscreen'],
+            ['#scad-save', 'part:save'], ['#scad-fullscreen', 'part:fullscreen'],
         ];
         // A board's own verbs: carried by its Machine, opened for it when it is not.
         const MACHINE_VERB = /^(control:|level:|print:|device:(poll|query|reconnect|reset|release|flash|listen|probe))/;
@@ -8040,7 +8089,14 @@
         // Each verb calls the function its button already calls. Anything not
         // named here is the server's: posted as the intent, and its answer
         // shown in the status line -- including a refusal, which is the point.
+        // A verb carried, then each section it acts on opened (apothecary/systems.py's
+        // verbs): a piece's Print opens the Machine's Print, Device › Flash its
+        // Flashing, Part › Edit the part's Parameters.
         async function carry(intent) {
+            await carryVerb(intent);
+            viewer.openSectionsFor(intent.action);
+        }
+        async function carryVerb(intent) {
             const action = intent.action, path = intent.context.targets[0] || '';
             const port = intent.device ? intent.device.port : null;
             const tail = ` (⌗${intent.address})`;
@@ -8144,8 +8200,10 @@
                 if (action.startsWith('panel:view:')) {
                     const id = action.slice('panel:view:'.length);
                     const view = viewer.panels.views().find((v) => v.id === id);
-                    const done = view && viewer.panels.applyView(id);
-                    viewer.setStatus(done ? `The ${view.title} view: its windows laid out together; Panels › Windows › Reset layout puts the page's own back${tail}` : `${intent.label}: no such view${tail}`, done ? 'success' : 'error');
+                    const missing = view && viewer.panels.viewMissing(id);
+                    const done = view && !missing && viewer.panels.applyView(id);
+                    const why = !view ? 'no such view' : missing ? `it lays out ${missing.title}'s windows: open ${missing.title} first${missing.hint ? ` (${missing.hint})` : ''}` : 'its windows could not be laid out';
+                    viewer.setStatus(done ? `The ${view.title} view: its windows laid out together; Panels › Windows › Reset layout puts the page's own back${tail}` : `${intent.label}: ${why}${tail}`, done ? 'success' : 'error');
                     return;
                 }
                 if (action === 'panel:layout:reset') {
@@ -8161,7 +8219,7 @@
                 }
                 // Part › Edit: the one editor, in Selected, for a part or a made piece.
                 if (action === 'part:edit') {
-                    if (viewer.openEditor(path)) viewer.setStatus(`Editing ${path}: its parameters are in Selected${tail}`, 'success');
+                    if (viewer.openEditor(path)) viewer.setStatus(`Editing ${path}: its numbers are in Parameters, Apply and Revert in Selected${tail}`, 'success');
                     else viewer.setStatus(`${path} has no parameters to edit${tail}`, 'error');
                     return;
                 }
@@ -8190,8 +8248,8 @@
                     viewer.variantOn(path, where, verb, name, !!intent.confirmed).then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
                     return;
                 }
-                if (action === 'part:popout') {
-                    viewer.popoutScadOn(path).then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
+                if (action === 'part:scad') {
+                    viewer.scadWindowOn(path).then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
                     return;
                 }
                 if (action === 'part:fullscreen') {

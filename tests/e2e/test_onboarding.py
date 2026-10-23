@@ -27,7 +27,7 @@ from viewer_ready import settled
 
 PRINTER = "/dev/ttyFAKE1"
 BOARD = "printer_1.frame_system.mainboard"
-MACHINE = ".panel[data-panel='machine']"
+MACHINE = windows.MACHINE
 
 WEDGES = (
     "() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]"
@@ -156,8 +156,8 @@ def test_a_printers_pin_pins_its_mainboard_where_device_machine_and_slice_find_i
     # Its ring's Device opens its Machine.
     _ring_on(page, "printer_1")
     _press(page, "Device", "Open")
-    machine = page.locator(MACHINE)
-    expect(machine).to_be_visible(timeout=5000)
+    machine = windows.machine(page)
+    expect(page.locator(MACHINE)).to_be_visible(timeout=5000)
     # Its tab names the printer; its whole title, the tab's tooltip, the port too.
     expect(windows.tab(page, "machine").locator(".lm_title")).to_have_text("printer_1")
     expect(windows.tab(page, "machine")).to_have_attribute("title", f"printer_1 · {PRINTER}")
@@ -415,7 +415,7 @@ def test_a_printers_pin_asks_an_idle_board_once_what_it_is(page: Page, url: str)
     section = page.locator("#selected-body .device-section")
     expect(section.locator(".dev-open")).to_be_visible(timeout=10000)
     section.locator(".dev-open").click()
-    machine = page.locator(MACHINE)
+    machine = windows.machine(page)
     expect(machine.locator("#ident")).to_contain_text("Marlin Apothecary Simulator", timeout=8000)
     page.evaluate("() => window.fractalViewer.closeMachine()")
     unpin = section.locator(".dev-unpin")

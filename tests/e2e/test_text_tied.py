@@ -16,7 +16,9 @@ from __future__ import annotations
 import json
 import re
 
+import part_editing
 import pytest
+import rings
 from playwright.sync_api import Page, expect
 from viewer_ready import settled
 
@@ -69,29 +71,15 @@ def _open(page: Page, url: str) -> None:
 
 
 def _ring(page: Page, part: str, *labels: str) -> None:
-    page.locator(f"#contents-list .contents-item[data-path='{part}']").click(
-        button="right", modifiers=["Control"]
-    )
-    expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
-    for label in labels:
-        page.wait_for_function(
-            f"() => [...document.querySelectorAll('#ring-overlay .wedge')]"
-            f".some((w) => w.getAttribute('aria-label') === {label!r})",
-            timeout=RING_MS,
-        )
-        page.keyboard.press(page.evaluate(WEDGES)[label])
+    rings.on_row(page, part, *labels)
 
 
 def _edit(page: Page, part: str = PART) -> None:
-    _ring(page, part, "Part", "Edit")
-    expect(
-        page.locator(f".part-editor[data-target='part:{part}'] #part-params .param")
-    ).not_to_have_count(0, timeout=20000)
-    expect(page.locator(".scad-editor .cm-content")).to_be_visible(timeout=20000)
+    part_editing.edit(page, part)
 
 
 def _param(page: Page, field: str):
-    return page.locator(f"#part-params > .param[data-field='{field}']")
+    return part_editing.param(page, field)
 
 
 def _text(page: Page) -> str:

@@ -10,6 +10,7 @@ not a picture.
 from __future__ import annotations
 
 import pytest
+import windows
 from playwright.sync_api import Page, expect
 from viewer_ready import by_hand, settled
 
@@ -78,6 +79,7 @@ def test_typing_in_the_scad_editor_draws_nothing_until_it_renders(page: Page, ba
             label,
         )
         page.keyboard.press(cell)
+    windows.open_window(page, "part-scad")  # the part's SCAD, in its window
     code = page.locator(".scad-editor .cm-content")
     expect(code).to_be_visible(timeout=20000)
     settled(page, 6)

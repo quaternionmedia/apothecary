@@ -34,6 +34,7 @@ import stat
 import sys
 
 import pytest
+import windows
 from doc_capture import moments
 from playwright.sync_api import Page, expect
 from viewer_ready import (
@@ -41,7 +42,6 @@ from viewer_ready import (
     STAGE_BAR_AT_THE_TOP,
     by_hand,
     settled,
-    site_folded,
 )
 
 from apothecary.projects.parts.calibration_cube import DEFAULT as CUBE
@@ -227,6 +227,8 @@ def _edit(page: Page) -> None:
     )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
     _press(page, "Part", "Edit")
+    # The part laid out as one works on it: Selected, its Parameters and its SCAD.
+    windows.part_view(page)
     expect(page.locator("#part-params .param[data-field='size'] input[type=range]")).to_be_visible(
         timeout=10000
     )
@@ -291,13 +293,11 @@ def _envelope(page: Page) -> str:
 
 
 def _shown_whole(page: Page, show) -> None:
-    """``show()``, the picture taken with Site's window and the tabs under Selected
-    dragged short by their splitters, so Selected has the column: the editor from its
-    stage bar down, its sizes and, under them, what the STL measures beside what the
-    part declares."""
-    with site_folded(page):
-        page.evaluate(STAGE_BAR_AT_THE_TOP)
-        show()
+    """``show()``, the picture taken in the Part view: Selected, its stage bar and what
+    the STL measures beside what the part declares, its sizes in Parameters under it,
+    and its SCAD beside the world."""
+    page.evaluate(STAGE_BAR_AT_THE_TOP)
+    show()
 
 
 def _side(page: Page) -> float:
@@ -305,7 +305,7 @@ def _side(page: Page) -> float:
 
 
 def _size_line(page: Page) -> str:
-    """The SCAD's size assignment, as the editor below the parameters has it."""
+    """The SCAD's size assignment, as the part's SCAD editor has it."""
     text = page.evaluate("() => window.fractalViewer.scadEditor.text()")
     return next(line for line in text.splitlines() if line.startswith("size ="))
 
@@ -760,15 +760,13 @@ def test_designing_a_part_twice_round(
         lambda: story.shows(
             "Part › Edit opens the part's editor at what is drawn",
             "The parts library, /viewer/sites/parts_library (the site drop-down's "
-            f"parts_library): {PART}'s row in Site, its ring, Part › Edit: its parameters in "
-            "Selected. They "
+            f"parts_library): {PART}'s row in Site, its ring, Part › Edit, then Panels › "
+            "Windows › Part view: its parameters in Parameters, under Selected. They "
             "start from what is drawn, the part's own STL as its params sidecar records it, "
             "and beside the envelope the part declares is what that STL measures. Nothing "
             "marks it: it is the saved part. The view is brought to it by hand, Shift+drag "
-            "and the wheel, as the library frames a whole shelf of parts; in this page's "
-            "pictures of the editor, Site's window and the tabs under Selected are dragged "
-            "short by their splitters, so Selected has the column. A slider is the next "
-            "step.",
+            "and the wheel, as the library frames a whole shelf of parts. A slider is the "
+            "next step.",
             shown=_envelope(page),
         ),
     )
@@ -829,22 +827,21 @@ def test_designing_a_part_twice_round(
     page.keyboard.press("f")
     expect(_status(page)).to_contain_text(f"Framed {PART}")
     settled(page)
-    with site_folded(page):
-        page.evaluate(STAGE_BAR_AT_THE_TOP)
-        marked.evaluate(MARKED_LINE_FIRST)
-        story.shows(
-            "OpenSCAD's refusal, by line, drawn greyed",
-            "A size of 70 mm, which this run's OpenSCAD refuses -- the test's stand-in, which "
-            f"refuses a cube of {TOO_BIG:.0f} mm or more where a real OpenSCAD renders it; "
-            "walkthrough 06 meets a refusal of the SCAD's own. Like a snapshot, it says the "
-            "error and still writes the geometry it built: a failed render, never a variant. "
-            "Apply answers with OpenSCAD's words, listed by file and line under the stage "
-            "bar, the line marked in the part's source below, and carried on the status "
-            "line; what it built is drawn greyed where the part stands, a red flag over it "
-            "naming the line, the variant drawn before hidden under it -- f frames it. Part › "
-            "Save refuses it in the same words. The refused size is still staged.",
-            shown=refused,
-        )
+    page.evaluate(STAGE_BAR_AT_THE_TOP)
+    marked.evaluate(MARKED_LINE_FIRST)
+    story.shows(
+        "OpenSCAD's refusal, by line, drawn greyed",
+        "A size of 70 mm, which this run's OpenSCAD refuses -- the test's stand-in, which "
+        f"refuses a cube of {TOO_BIG:.0f} mm or more where a real OpenSCAD renders it; "
+        "walkthrough 06 meets a refusal of the SCAD's own. Like a snapshot, it says the "
+        "error and still writes the geometry it built: a failed render, never a variant. "
+        "Apply answers with OpenSCAD's words, listed by file and line under the stage "
+        "bar, the line marked in the part's source below, and carried on the status "
+        "line; what it built is drawn greyed where the part stands, a red flag over it "
+        "naming the line, the variant drawn before hidden under it -- f frames it. Part › "
+        "Save refuses it in the same words. The refused size is still staged.",
+        shown=refused,
+    )
 
     # Revert, from the part's ring: what is staged put back to what is drawn.
     reverted = _reverted_from_the_ring(page, first)

@@ -457,7 +457,7 @@ def test_part_edit_on_a_camera_opens_its_numbers_in_selected(
     _open_garage(page, base_url)
     _ring_on(page, name)
     _press(page, "Part", "Edit")
-    _said(page, f"Editing {name}: its parameters are in Selected")
+    _said(page, f"Editing {name}: its numbers are in Parameters, Apply and Revert in Selected")
     params = page.locator("#part-params")
     expect(params.locator(".param")).to_have_count(6, timeout=10000)
     fields = params.locator(".param").evaluate_all("(ps) => ps.map((p) => p.dataset.field)")

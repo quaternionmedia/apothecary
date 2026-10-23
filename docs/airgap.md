@@ -45,7 +45,8 @@ colour, each conductor with its phase and its sense. What it computes is in
 windows of their own, grouped under Airgap in the header's ⊞ Windows and in
 every stack's + ([the windows](viewer.md#the-windows)); one opened while the
 panel is open is a tab beside it. Panels › Windows › Airgap view lays them all
-out together, the world among them:
+out together, the world among them. The Airgap is a focused system, these
+windows its entry in `apothecary/systems.py` ([the viewer](viewer.md#the-windows)):
 
 | Window | |
 |---|---|

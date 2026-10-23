@@ -205,15 +205,10 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "computed-keep": (WIDGET, WHAT_YOU_SEE, "a button that leaves a computed value computed"),
     "part-upstream": (WIDGET, NOTHING, "a link that opens a part's upstream SCAD, read only"),
     # The SCAD editor (widgets/scad_editor.js):
-    # the name a save keeps a variant under, Save, Pop out and Fullscreen; and a saved
-    # variant chosen from a list -- under the part's parameters, or in the editor.
+    # the name a save keeps a variant under, Save and Fullscreen; and a saved variant
+    # chosen from a list -- in the part's Variants window, or in the editor.
     "scad-name": (WIDGET, WHAT_YOU_SEE, "a box for the name a variant is saved under"),
     "scad-save": (WIDGET, WHAT_IS_THERE, "a button that saves the SCAD as a variant in git"),
-    "scad-popout": (
-        WIDGET,
-        WHAT_YOU_SEE,
-        "a button that pops the SCAD editor out into a window, or puts it back",
-    ),
     "scad-fullscreen": (
         WIDGET,
         WHAT_YOU_SEE,
@@ -640,9 +635,8 @@ RING_BACKED: Dict[str, str] = {
     "defaults-btn": "part:defaults",
     "apply-btn": "part:apply",
     "revert-btn": "part:revert",
-    # the SCAD editor's Save, Pop out and Fullscreen, and a saved variant chosen, are too
+    # the SCAD editor's Save and Fullscreen, and a saved variant chosen, are too
     "scad-save": "part:save",
-    "scad-popout": "part:popout",
     "scad-fullscreen": "part:fullscreen",
     "saved-variant": "part:variant:draw",
     # and so is what can be done to a saved variant, each a cell of Part › Variants ›
@@ -830,6 +824,25 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         GESTURE,
         WHAT_YOU_SEE,
         "keys (Page Down and Page Up while the world has the keys, Backspace) that step in and out",
+    ),
+    # A Machine's button that is a ring verb's, pressed: the sections that verb acts
+    # on opened, as the ring's cell opens them (apothecary/systems.py's verbs).
+    "btn:click:onVerb": (
+        AUTOMATIC,
+        NOTHING,
+        "a Machine's button pressed: the windows its ring verb acts on opened",
+    ),
+    # The header's ⊞ Windows: listed afresh as it opens, its views and every window
+    # by its group, the first focused; the arrows move along them.
+    "windowsMenuEl:toggle:fillMenu": (
+        AUTOMATIC,
+        NOTHING,
+        "⊞ Windows opened: its views and windows listed afresh, the first focused",
+    ),
+    "windowsBody:keydown:stepFocus": (
+        GESTURE,
+        NOTHING,
+        "the arrows, Home and End moving along ⊞ Windows' list",
     ),
     "window:keydown:onEscapeKey": (
         GESTURE,
@@ -1139,11 +1152,6 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         GESTURE,
         WHAT_YOU_SEE,
         "that cell's two values taken, into the text where it is edited",
-    ),
-    "foldsEl:toggle:requestAnimationFrame": (
-        AUTOMATIC,
-        NOTHING,
-        "a fold opened draws the pictures in it",
     ),
 }
 

@@ -1351,8 +1351,9 @@ def _node_ring(
         options.append(_made_picture_group(picture))
     elif camera:
         options.extend(_camera_options(picture))
-    # A part, or a piece made from a picture, is edited in Selected: Part › Edit opens
-    # the one editor there. Appended last, so no cell above moves; a host with a board,
+    # A part, or a piece made from a picture, is edited from Selected: Part › Edit opens
+    # the one editor there and its Parameters window (systems.py's Part). Appended
+    # last, so no cell above moves; a host with a board,
     # children and a part is the fullest node ring, eight, and so is a camera of this
     # browser's. A camera's editor edits its numbers -- its lens's position, its turn,
     # tilt and field of view (vision/camera_part.py,
@@ -1380,13 +1381,13 @@ def _node_ring(
         if seen is not None and seen.editable:
             verbs.append(Option(id="part:save", label="Save", action="part:save"))
         # Two groups, so the ring holds eight at the most: View -- how the part
-        # and its editor are seen: the editor in a window of its own beside the
-        # world or over the whole page, the ghost of what was drawn before beside what is drawn now,
-        # and the part framed with Selected and its editor kept open (f) -- and
-        # History, the staged numbers' undo and redo (Ctrl+Z, Ctrl+Shift+Z).
+        # and its editor are seen: its SCAD window, beside the world, or the editor
+        # over the whole page, the ghost of what was drawn before beside what is
+        # drawn now, and the part framed with Selected kept open (f) -- and History,
+        # the staged numbers' undo and redo (Ctrl+Z, Ctrl+Shift+Z).
         view = []
         if seen is not None:
-            view.append(Option(id="part:popout", label="Pop out", action="part:popout"))
+            view.append(Option(id="part:scad", label="SCAD", action="part:scad"))
             view.append(Option(id="part:fullscreen", label="Fullscreen", action="part:fullscreen"))
         if part_of_the_folder:
             view.append(Option(id="part:ghost", label="Ghost", action="part:ghost"))

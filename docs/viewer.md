@@ -233,7 +233,7 @@ pieces it holds: a digit selects one), then what the piece is:
 - a piece made from a picture: **Picture** › Word, Drop (chosen twice);
 
 then **Part** (a part, a camera or a made piece; [below](#the-part-editor): Edit,
-Defaults, Apply, Revert, Save, View › Pop out, Fullscreen, Ghost and Fit,
+Defaults, Apply, Revert, Save, View › SCAD, Fullscreen, Ghost and Fit,
 History › Undo and Redo, and Variants › each saved variant › Draw, Rename,
 Duplicate, History, Compare and Delete, and Variants › Deleted), and, when a printer is pinned in the site, **Print** (a made piece) and
 **Slice** (a made piece, or a part not inside a printer and not a board: a
@@ -278,23 +278,39 @@ layout a person makes is remembered by this browser; Panels › Windows › Rese
 layout puts every window where the page puts it.
 
 Every stack but the world's wears a **+** beside its ☐: it lists every window
-by its group -- Site, Selected, Pictures, Tools, Machine, Airgap -- and a closed
-one chosen opens as a tab of that stack; an open one comes in front where it
-is. The header's **⊞ Windows** lists the same, a window chosen there opening at
-its place, and above them the **views**: windows laid out together for one kind
-of work, each also a cell of Panels › Windows.
+by its group -- Site, Selected, Pictures, Tools, Part, Machine, Airgap -- and a
+closed one chosen opens as a tab of that stack; an open one comes in front where
+it is. The header's **⊞ Windows** lists the same, a window chosen there opening
+at its place, and above them the **views**: windows laid out together for one
+kind of work, each also a cell of Panels › Windows.
+
+**Focused systems.** The Part, the Machine and the Airgap are each one subject
+in windows of its own: a main window with the subject and its verbs, and
+sections, each a window, grouped under the system. Opening a system shows its
+main window alone; every section is closed until asked for -- from a stack's +,
+from ⊞ Windows, by a verb that acts on it (a piece's Print opens the Machine's
+Print, Part › Edit the part's Parameters), or by the system's view. Each system
+is one entry of `apothecary/systems.py`, which the page, the ring and the tests
+all read.
+
+| System | Main window | Sections |
+|---|---|---|
+| Part | Selected: the piece, its part, what it is drawn from, its envelope, and the staged changes' bar (Apply, Revert, Defaults, Undo, Redo, Ghost) | Parameters (in a stack of its own under Selected), SCAD (beside the world), Variants, History, Readiness |
+| Machine | The board's head -- its link verbs, the control latch, ⏹ E-STOP -- what it is and its state | Status, Temperature, Print, Bed level (a printer's); Sketch, Flashing (a devkit's); Log -- those of the board's kind, in one stack under the Machine, so its head stays in view |
+| Airgap | The machine drawn at its angle, its scrub and its verbs | Metrics, the field, gap map, inductance, torque, harmonics, run-up, orbit, vibration, Rig, Sweep ([airgap.md](airgap.md#the-panel)) |
 
 | View | |
 |---|---|
 | Default | The page's own layout, as Reset layout puts it |
-| Part | The world, Selected (the SCAD editor behind it while it is open) and Site, Problems and SCAD below it |
-| Machine | The world, the board's Machine with the Bench behind it, Site, Jobs and Pinned below them, and Selected, Pictures and Settings at the side |
-| Airgap | The Airgap and each of its sections in a window ([airgap.md](airgap.md#the-panel)), the world among them |
+| Part | The world; Selected over Parameters, Variants, History and Readiness; the SCAD window over Site, Problems and SCAD |
+| Machine | The world; the board's Machine over a printer's Status and Temperature, its Print, Bed level and Log beside them -- a devkit's Sketch and Flashing, its Log beside them; Selected under the board's sections, Site with Jobs and Pinned at the other foot |
+| Airgap | The Airgap and each of its sections in a window, the world among them |
 
-A view's windows the page has not got are left out: the Machine view without a
-board open lays out the rest. A window a view leaves out is closed, and comes
-back by a + or ⊞ Windows; the views and the windows in them are remembered
-like any layout.
+A view needs its main window: the Machine view with no board open is offered
+greyed, and asked for from the ring it says so and leaves the layout as it was.
+A section for another kind of board is left out of it. A window a view leaves
+out is closed, and comes back by a + or ⊞ Windows; the views and the windows in
+them are remembered like any layout.
 
 - **Site**: its category chips and the **Contents** tree (a click selects a
   row, a double-click steps in, ⚠ marks a piece in a problem). Site's own
@@ -305,14 +321,15 @@ like any layout.
   ones; a row opens its machine) and its **SCAD**, generated from the tree.
 - **Selected**: the selected piece -- its name, place and footprint, a
   compound piece's Detail, "⤵ Step into" for one with children -- then its
-  part editor, its Device line where a board belongs -- on a board, a printer,
+  part, with the staged changes' bar while it is edited (the Part's main
+  window, [below](#the-part-editor)), its Device line where a board belongs -- on a board, a printer,
   a piece that names a sketch, or anything a board is pinned to already (a
   pinned board's port and state, with Open and Unpin; for one with none, the
   detected ports to pin) -- and what a camera or a picture's piece knows. A
   plain printed part, a bin, a piece made from a picture has no Device line.
 - **The tabs** below them, one in front at a time: **Pictures**, the
-  **Bench**, **Settings**, and a **Machine** for each board opened, which opens
-  in front. Only the tab in front wears its ✕. **Gather**, the gathering of
+  **Bench**, **Settings**, and the **Machine** of the board opened, one at a
+  time, which opens in front; its sections open in a stack under it. Only the tab in front wears its ✕. **Gather**, the gathering of
   several pictures, is a tab beside Pictures when asked for (the canvas ring's
   Pictures › Gather, or Panels › Pictures › Gather); so is the **Airgap**, the
   airgap part as a field, torque and dynamics model (Panels › Airgap ›
@@ -324,16 +341,20 @@ like any layout.
   the ring's Panels › Machine › Control pad or disarming put it back in the
   Machine, and
   the world takes its room back.
-- **The SCAD editor**, popped out of Selected (Part › View › Pop out), is a
-  window of its own beside the world, the code filling it.
+- **The Part's SCAD** (Part › View › SCAD) is a window of its own beside the
+  world, the code filling it.
 
-A window the page makes for the moment -- a Machine, the pad, the editor popped
-out -- is left out of the layout this browser remembers.
+A window the page makes for the moment -- a Machine and its sections, the pad --
+is left out of the layout this browser remembers.
 
 ## The part editor
 
-**Part › Edit** on a piece's ring opens its editor in Selected: the part's
-readiness to build, its **Parameters**, its saved variants and its SCAD. Each
+**Part › Edit** on a piece's ring opens its editor: Selected holds the piece
+and the staged changes' bar, and the part's **Parameters** window opens under
+it, the cursor in its first control. Its **SCAD**, **Variants** (its saved
+variants, and the compare), **History** and **Readiness** (to build) are
+windows of their own, each closed until asked for, laid out together by
+Panels › Windows › Part view. Each
 parameter is a control starting from what is drawn, its description as its
 caption; a contested one comes first, with its candidates as buttons.
 
@@ -411,10 +432,10 @@ a box being typed in, and Part › History › Undo and Redo step the draft back
 and forward: the SCAD editor's own history, so the text and the controls go
 back together, whichever moved them. A slider dragged is one step, a control's
 moves are never one step with typing beside them, and Revert, Defaults and a
-variant chosen are a step each. **Recent applies**, a fold under the
-parameters, lists this tab's applies of the part, newest first, a reload of
-the tab included; one clicked is drawn again from the cache of variants, its
-numbers and its SCAD with it.
+variant chosen are a step each. **History**, a window of the part's, lists
+this tab's applies of the part, newest first, a reload of the tab included;
+one clicked is drawn again from the cache of variants, its numbers and its
+SCAD with it.
 
 **A variant is drawn where it stands**: placed by the bounds its render
 measured, at its piece, so a part grown is drawn where it grew, standing on
@@ -449,8 +470,8 @@ draws the piece again and nothing else.
 
 ## The SCAD editor
 
-Below the parameters is the part's SCAD, in an editor: the same draft as the
-controls above it, its values theirs. Typing in it is
+The part's SCAD is in an editor, in its SCAD window: the same draft as the
+controls in Parameters, its values theirs. Typing in it is
 checked 300 ms after typing stops, the values in it: a line OpenSCAD
 refuses is marked where it is, with its message, and nothing is rendered until
 it reads. About 300 ms after a check that passes, the edit is rendered as Apply
@@ -514,8 +535,8 @@ Outside the editor F5, F6 and Ctrl+Enter are the browser's.
   overlaid (blue and orange, seen through) or side by side, framed, with each
   one's measured size, every number that differs and what the SCAD changes.
   Close draws the part as it was.
-- **Part › View › Pop out** puts the editor in a window of its own beside the
-  world (its Dock, or Pop out again, puts it back in Selected); **Part › View › Fullscreen** gives it the page (Escape gives it back).
+- **Part › View › SCAD** opens the SCAD window, beside the world; **Part ›
+  View › Fullscreen** gives the editor the page (Escape gives it back).
 
 A part built by Python geometry shows the SCAD its geometry generates, read
 only, and has no Save; a made piece shows its few lines, read only; a camera

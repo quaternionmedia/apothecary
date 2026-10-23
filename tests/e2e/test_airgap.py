@@ -31,13 +31,6 @@ def _section(page: Page, sid: str):
     return windows.panel(page, f"airgap-{sid}")
 
 
-def _from_windows_menu(page: Page, sid: str) -> None:
-    """A window chosen from the header's ⊞ Windows, as a person opens one."""
-    page.locator("#windows-menu > summary").click()
-    page.locator(f".windows-menu-body .window-item[data-window='{sid}']").click()
-    expect(page.locator(".windows-menu-body")).to_be_hidden()
-
-
 RING_MS = 15000
 WEDGES = """() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]
     .filter((w) => !w.classList.contains('empty'))
@@ -124,7 +117,7 @@ def test_the_airgap_is_a_window_that_computes_the_parts_own_text(page: Page, url
     # The metrics are a window of their own, opened from ⊞ Windows beside the Airgap: a
     # grouped readout, each addressed by group and key.
     expect(windows.tab(page, "airgap-metrics")).to_have_count(0)
-    _from_windows_menu(page, "airgap-metrics")
+    windows.from_the_windows_menu(page, "airgap-metrics")
     assert windows.state(page, "airgap-metrics")["stack"][-2:] == ["airgap", "airgap-metrics"]
     expect(
         _section(page, "metrics").locator(".metric[data-key='field.mean_torque'] dd")
@@ -133,7 +126,8 @@ def test_the_airgap_is_a_window_that_computes_the_parts_own_text(page: Page, url
 
 @pytest.mark.e2e
 def test_the_panel_follows_the_editors_text_and_a_preset_is_written_into_it(page: Page, url: str):
-    """Part › Edit on the airgap part: the panel follows the text as it is typed -- a
+    """Part › Edit on the airgap part, and its SCAD window from ⊞ Windows: the panel
+    follows the text as it is typed -- a
     tooth count changed in the text is the panel's within the frame -- and a preset
     chosen in the panel is written into the text, where the editor's check sees it;
     the panel says it is following."""
@@ -141,6 +135,7 @@ def test_the_panel_follows_the_editors_text_and_a_preset_is_written_into_it(page
     page.evaluate("() => window.apothecaryPanels.open('airgap')")
     _metrics(page)
     _part_ring(page, "Part", "Edit")
+    windows.from_the_windows_menu(page, "part-scad")
     expect(page.locator(".scad-editor .cm-content")).to_be_visible(timeout=20000)
     page.wait_for_function(
         "() => window.apothecaryAirgap.values().stator_teeth_n === 12 && "
@@ -205,7 +200,7 @@ def test_the_verbs_are_cells_of_panels_airgap(page: Page, url: str):
     expect(sweep.locator("[data-airgap='swMsg']")).to_contain_text("x from..to")
     # The rig, one document in a window of its own: an unknown setting is refused, a
     # value past its range clamped and said.
-    _from_windows_menu(page, "airgap-rig")
+    windows.from_the_windows_menu(page, "airgap-rig")
     rig = _section(page, "rig")
     rig.locator(".airgap-rig").fill('{"loadT": 9999, "bogus": 1}')
     rig.locator(".airgap-rig").press("Tab")

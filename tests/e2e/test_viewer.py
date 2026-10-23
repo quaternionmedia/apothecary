@@ -147,6 +147,7 @@ def test_selecting_a_parts_library_leaf_shows_the_absorbed_part_view(page: Page,
     _open(page, f"{base_url}/viewer/sites/parts_library")
 
     page.locator("#contents-list .contents-item").first.click()
+    windows.open_window(page, "part-scad")  # the part's SCAD, in its window
 
     scad_content = page.locator("#part-scad .cm-content")
     expect(scad_content).to_be_visible()
@@ -251,7 +252,9 @@ def test_a_link_written_before_the_rename_still_lands_on_the_part(page: Page, ba
     real node instead of nothing.
     """
     page.goto(f"{base_url}/viewer/parts/datum-core")
-    page.wait_for_selector("#part-params", timeout=20000)
+    page.wait_for_selector(
+        ".part-editor[data-target='part:datum_core']", state="attached", timeout=20000
+    )
     assert "focus=datum_core" in page.url, page.url
     expect(page.locator("#breadcrumb")).to_contain_text("datum_core")
 

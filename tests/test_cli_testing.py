@@ -38,7 +38,7 @@ def test_run_is_two_pytests_the_browser_part_in_its_own():
     a browser test leaves an event loop running that a unit test after it cannot share."""
     unit, browser = testing.run_commands()
     assert _args(unit) == ["-q", "walkthrough", "tests", "--ignore=tests/e2e"]
-    assert _args(browser) == ["-q", "tests/e2e", "--start-server", "-m", "walkthrough"]
+    assert _args(browser) == ["-q", "tests/e2e", "--start-server", "-m", "walkthrough or windows"]
     assert _args(testing.browser_command(every=True)) == ["-q", "tests/e2e", "--start-server"]
     slow, _ = testing.run_commands(slow=True)
     assert slow[-1] == "--slow"
@@ -55,7 +55,9 @@ def test_run_exits_with_the_first_failure(pytest_exits, unit, browser, code):
     assert ran == [argv + ["-x"] for argv in testing.run_commands()]
 
 
-@pytest.mark.parametrize(("unit", "browser", "code"), [(0, 0, 0), (1, 0, 1), (0, 5, 5), (2, 1, 2)])
+@pytest.mark.parametrize(
+    ("unit", "browser", "code"), [(0, 0, 0), (1, 0, 1), (0, 5, 0), (5, 5, 5), (2, 1, 2)]
+)
 def test_all_runs_both_phases_and_exits_with_the_first_failure(pytest_exits, unit, browser, code):
     ran = pytest_exits(unit, browser)
     result = CliRunner().invoke(cli, ["test", "all"])
@@ -63,6 +65,27 @@ def test_all_runs_both_phases_and_exits_with_the_first_failure(pytest_exits, uni
     assert [_args(argv) for argv in ran] == [
         ["-q", "walkthrough", "tests", "--ignore=tests/e2e"],
         ["-q", "tests/e2e", "--start-server"],
+    ]
+
+
+@pytest.mark.parametrize(
+    ("given", "unit_extra", "browser_extra"),
+    [
+        ([], [], []),
+        (["-k", "part"], ["-k", "part"], ["-k", "part"]),
+        (["--workers", "2"], [], ["-n", "2", "--dist", "loadfile"]),
+        (["--workers", "3", "-x"], ["-x"], ["-n", "3", "--dist", "loadfile", "-x"]),
+    ],
+    ids=["defaults", "pytest-args-to-both", "workers", "workers-and-pytest-args"],
+)
+def test_all_takes_workers_and_hands_the_rest_to_pytest(
+    pytest_exits, given, unit_extra, browser_extra
+):
+    ran = pytest_exits(0, 0)
+    assert CliRunner().invoke(cli, ["test", "all", *given]).exit_code == 0
+    assert [_args(argv) for argv in ran] == [
+        ["-q", "walkthrough", "tests", "--ignore=tests/e2e", *unit_extra],
+        ["-q", "tests/e2e", "--start-server", *browser_extra],
     ]
 
 
