@@ -221,7 +221,7 @@
         .panel-ui button, .panel-ui input:not([type=checkbox]), .panel-ui textarea { font: inherit; font-size: 0.78rem; background: #232823; color: #ddd; border: 1px solid #3a443a; border-radius: 4px; padding: 0.2rem 0.45rem; }
         .panel-ui button:hover { background: #2f382f; } .panel-ui button:disabled { opacity: 0.45; cursor: not-allowed; }
         .panel-ui .empty { color: #666; font-style: italic; }
-        .panel-ui .pics { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 0.3rem; max-height: 220px; overflow: auto; margin: 0.3rem 0; }
+        .panel-ui .pics { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 0.3rem; margin: 0.3rem 0; }
         .panel-ui .pic { position: relative; display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.7rem; cursor: pointer; }
         .panel-ui .pic img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 3px; border: 1px solid #333; }
         .panel-ui .pic span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -231,7 +231,7 @@
         .panel-ui .question { border-top: 1px solid #2a332a; padding: 0.3rem 0; }
         .panel-ui pre { white-space: pre-wrap; font-size: 0.7rem; color: #aaa; max-height: 200px; overflow: auto; }
         .panel-ui input[type=file] { font-size: 0.72rem; max-width: 100%; }
-        .pin-list { display: flex; flex-direction: column; gap: 0.2rem; max-height: 260px; overflow: auto; }
+        .pin-list { display: flex; flex-direction: column; gap: 0.2rem; }
         .pin-row { display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; padding: 0.15rem 0.3rem; border-radius: 3px; background: #1d221d; }
         .pin-row > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         /* A picture's row is chosen by a click, for the ring's Picture › Folder to pin. */
@@ -241,7 +241,12 @@
         .pin-row.here { border-left: 2px solid #4a6fa8; }
         .pin-row.stale > span { color: #b08a8a; }
         .pin-row img { width: 40px; height: 30px; object-fit: cover; border-radius: 2px; flex: 0 0 auto; }
-        .pictures-list { max-height: 340px; }
+        /* Pictures' list and Gather's pictures: as tall as they are, or as the window
+           leaves above the controls under them, then they scroll; the controls stay in view. */
+        .panel[data-panel="pictures"] .panel-body-slot, .panel[data-panel="gather"] .panel-body-slot { display: flex; flex-direction: column; }
+        .panel[data-panel="pictures"] .panel-body-slot > *, .panel[data-panel="gather"] .panel-body-slot > * { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+        .panel[data-panel="pictures"] .panel-ui, .panel[data-panel="gather"] .panel-ui { flex: 1 1 auto; min-height: 0; }
+        .pictures-list, .pictures-gather .pics { flex: 0 1 auto; min-height: 3rem; overflow: auto; }
         .picture-views { display: flex; flex-wrap: wrap; gap: 0.25rem; color: #888; }
         .picture-view { padding: 0 0.3rem; border-radius: 6px; border: 1px solid #3a3a3a; color: #999; }
         .picture-view.here { border-color: #4a6fa8; color: #9cd2ff; cursor: pointer; }
