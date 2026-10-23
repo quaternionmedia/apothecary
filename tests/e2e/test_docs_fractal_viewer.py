@@ -10,9 +10,10 @@ SiteStore (see apothecary/site_store.py).
 """
 
 import pytest
+import rings
 import windows
 from playwright.sync_api import Page, expect
-from viewer_ready import UNDER_THE_STAGE_BAR, by_hand
+from viewer_ready import by_hand
 
 
 @pytest.mark.e2e
@@ -153,12 +154,12 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
     docs.step("Switch to the parts_library site")
 
-    # A part with parameters, so its editor is long enough to scroll its SCAD to the
-    # top; the first, arduino_uno, declares none.
+    # A part with parameters; the first, arduino_uno, declares none. Its Part laid out
+    # from the ring: Selected, its Parameters, and its SCAD in a window of its own.
     page.locator("#contents-list .contents-item[data-path='calibration_cube']").click()
-    scad = page.locator("#part-scad")
-    expect(scad).to_be_visible()
-    # Its heading just under the stage bar, the source below it: the bar stands over the
-    # top of Selected as it scrolls, and would cover the words above the heading.
-    scad.evaluate(f"(el) => ({UNDER_THE_STAGE_BAR})(el.previousElementSibling)")
-    docs.step("Select a part leaf -- its SCAD, in the editor under its parameters in Selected")
+    rings.on_world(page, "Panels", "Windows", "Part view")
+    expect(page.locator("#part-scad .cm-content")).to_be_visible(timeout=20000)
+    docs.step(
+        "Select a part leaf, and Panels › Windows › Part view: Selected, its parameters in "
+        "Parameters, and its SCAD in the SCAD window"
+    )

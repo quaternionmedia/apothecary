@@ -411,9 +411,9 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     expect(facts).to_contain_text(f"× {thick} mm, a person's")
     page.locator("#part-params .param[data-field='height']").evaluate(UNDER_THE_STAGE_BAR)
     story.shows(
-        "Part › Edit adjusts it in Selected",
-        f"The piece's ring, Part › Edit: its parameters in Selected, under where it came "
-        f"from. Its thickness, which a picture cannot see, set to {thick} mm and "
+        "Part › Edit adjusts it in Parameters",
+        f"The piece's ring, Part › Edit: its parameters in Parameters, a window under "
+        f"Selected and where it came from. Its thickness, which a picture cannot see, set to {thick} mm and "
         "applied: it is rebuilt where it stands, and the status line names the printer's "
         "Machine.",
         shown=_status(page).inner_text(),

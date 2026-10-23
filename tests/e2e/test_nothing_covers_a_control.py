@@ -106,51 +106,54 @@ def _nothing_covered(page: Page, selector: str, how: str) -> int:
 
 
 @pytest.mark.e2e
-def test_nothing_covers_a_control_of_the_part_editor(page: Page, base_url: str):
-    for width, height in SIZES:
-        page.set_viewport_size({"width": width, "height": height})
-        page.goto(f"{base_url}/viewer/sites/parts_library")
-        expect(page.locator("#status")).to_contain_text("Loaded", timeout=20000)
-        page.evaluate("() => localStorage.removeItem('apothecary.layout')")
-        settled(page)
-        _ring(page, "Part", "Edit")
-        windows.part_view(page)  # the Part laid out: Selected, Parameters, the SCAD window
-        expect(page.locator(".scad-editor .cm-content")).to_be_visible(timeout=20000)
-        # Something staged, so the bar says so and Apply is live.
-        page.locator("#part-params .param[data-field='size'] .param-number").fill("20")
-        expect(page.locator("#stage-summary")).to_contain_text("valid", timeout=10000)
-        # The bar takes its own space above Selected's body, not over it.
-        pinned = page.locator(".panel[data-panel='selected'] > .panel-pinned #stage-bar")
-        expect(pinned).to_be_visible()
-        selected = ".panel[data-panel='selected']"
-        assert _nothing_covered(page, selected, f"Selected at {width}") > 5
-        parameters = ".panel[data-panel='part-parameters']"
-        assert _nothing_covered(page, parameters, f"Parameters at {width}") > 5
-        # Every window beside the world, Site and the tabs with it; then Pictures in
-        # front with its folds open: nothing of one window spills over another.
-        assert _nothing_covered(page, ".lm_goldenlayout", f"the windows at {width}") > 15
-        windows.show(page, "pictures")
-        page.evaluate(
-            "() => document.querySelectorAll(\".panel[data-panel='pictures'] details\")"
-            ".forEach((d) => { d.open = true; })"
-        )
-        assert _nothing_covered(page, ".lm_goldenlayout", f"Pictures open at {width}") > 15
+@pytest.mark.parametrize("width, height", SIZES, ids=[f"{w}x{h}" for w, h in SIZES])
+def test_nothing_covers_a_control_of_the_part_editor(
+    page: Page, base_url: str, width: int, height: int
+):
+    page.set_viewport_size({"width": width, "height": height})
+    page.goto(f"{base_url}/viewer/sites/parts_library")
+    expect(page.locator("#status")).to_contain_text("Loaded", timeout=20000)
+    page.evaluate("() => localStorage.removeItem('apothecary.layout')")
+    settled(page)
+    _ring(page, "Part", "Edit")
+    windows.part_view(page)  # the Part laid out: Selected, Parameters, the SCAD window
+    expect(page.locator(".scad-editor .cm-content")).to_be_visible(timeout=20000)
+    # Something staged, so the bar says so and Apply is live.
+    page.locator("#part-params .param[data-field='size'] .param-number").fill("20")
+    expect(page.locator("#stage-summary")).to_contain_text("valid", timeout=10000)
+    # The bar takes its own space above Selected's body, not over it.
+    pinned = page.locator(".panel[data-panel='selected'] > .panel-pinned #stage-bar")
+    expect(pinned).to_be_visible()
+    selected = ".panel[data-panel='selected']"
+    assert _nothing_covered(page, selected, f"Selected at {width}") > 5
+    parameters = ".panel[data-panel='part-parameters']"
+    assert _nothing_covered(page, parameters, f"Parameters at {width}") > 5
+    # Every window beside the world, Site and the tabs with it; then Pictures,
+    # which the Part view leaves out, opened with its folds open: nothing of one
+    # window spills over another.
+    assert _nothing_covered(page, ".lm_goldenlayout", f"the windows at {width}") > 15
+    windows.open_window(page, "pictures")
+    page.evaluate(
+        "() => document.querySelectorAll(\".panel[data-panel='pictures'] details\")"
+        ".forEach((d) => { d.open = true; })"
+    )
+    assert _nothing_covered(page, ".lm_goldenlayout", f"Pictures open at {width}") > 15
 
-        # Selected maximised: its window the whole of the layout; again, restored.
-        maximise = page.locator(".lm_stack", has=page.locator(selected)).locator(".lm_maximise")
-        maximise.click()
-        expect(page.locator(".lm_maximised", has=page.locator(selected))).to_be_visible()
-        assert _nothing_covered(page, selected, f"maximised at {width}") > 5
-        maximise.click()
-        expect(page.locator(".lm_maximised")).to_have_count(0)
+    # Selected maximised: its window the whole of the layout; again, restored.
+    maximise = page.locator(".lm_stack", has=page.locator(selected)).locator(".lm_maximise")
+    maximise.click()
+    expect(page.locator(".lm_maximised", has=page.locator(selected))).to_be_visible()
+    assert _nothing_covered(page, selected, f"maximised at {width}") > 5
+    maximise.click()
+    expect(page.locator(".lm_maximised")).to_have_count(0)
 
-        # The SCAD window (Part › View › SCAD), then the editor over the whole page.
-        _ring(page, "Part", "View", "SCAD")
-        scad = ".panel[data-panel='part-scad']"
-        expect(page.locator(scad)).to_be_visible()
-        assert _nothing_covered(page, scad, f"the SCAD window at {width}") > 3
-        page.locator("#scad-fullscreen").click()
-        expect(page.locator(".scad-editor.fullscreen")).to_be_visible()
-        assert _nothing_covered(page, ".scad-editor.fullscreen", f"fullscreen at {width}") > 3
-        page.keyboard.press("Escape")
-        expect(page.locator(".scad-editor.fullscreen")).to_have_count(0)
+    # The SCAD window (Part › View › SCAD), then the editor over the whole page.
+    _ring(page, "Part", "View", "SCAD")
+    scad = ".panel[data-panel='part-scad']"
+    expect(page.locator(scad)).to_be_visible()
+    assert _nothing_covered(page, scad, f"the SCAD window at {width}") > 3
+    page.locator("#scad-fullscreen").click()
+    expect(page.locator(".scad-editor.fullscreen")).to_be_visible()
+    assert _nothing_covered(page, ".scad-editor.fullscreen", f"fullscreen at {width}") > 3
+    page.keyboard.press("Escape")
+    expect(page.locator(".scad-editor.fullscreen")).to_have_count(0)

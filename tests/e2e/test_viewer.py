@@ -235,14 +235,17 @@ def test_viewer_runs_with_no_access_to_any_cdn(page: Page, base_url: str):
 
 
 @pytest.mark.e2e
-def test_a_part_deep_link_arrives_with_its_panel_open(page: Page, base_url: str):
-    """`/viewer/parts/<name>` focuses the part and selects it, so its parameter
-    controls are on screen without another click."""
+def test_a_part_deep_link_arrives_with_the_part_selected(page: Page, base_url: str):
+    """`/viewer/parts/<name>` focuses the part and selects it: Selected, the Part's
+    main window, shows it with its staged changes' bar, and its parameter controls
+    are built, in Parameters, a window closed until asked for."""
     page.goto(f"{base_url}/viewer/parts/datum_core")
 
     expect(page.locator("#breadcrumb")).to_contain_text("datum_core", timeout=20000)
-    expect(page.locator("#part-params input[type=range]").first).to_be_attached()
     expect(page.locator("#stage-summary")).to_be_visible()
+    assert windows.state(page, "part-parameters")["open"] is False
+    windows.from_the_windows_menu(page, "part-parameters")
+    expect(page.locator("#part-params input[type=range]").first).to_be_visible()
 
 
 @pytest.mark.e2e

@@ -18,7 +18,7 @@ doctests, run by `pytest walkthrough`. Start there, at page 00.
 | [03 — A picture to a print](../walkthrough/03-a-picture-to-a-print.md) | A camera's picture, its shapes, a piece made and adjusted, sliced for printer_1, and a print job for it there, twice round through the page; written by the browser suite |
 | [04 — Designing a part](../walkthrough/04-designing-a-part.md) | A part's size moved, checked, applied and drawn in its tab, OpenSCAD's refusal by line, the saved part again for nothing, round twice and in two tabs; written by the browser suite |
 | [05 — Firmware](../walkthrough/05-firmware.md) | A sketch chosen, built, flashed to the ESP32 devkit and heard saying its hello in the board's Machine, the Arduino esp32_blink then the Rust one; written by its own run, in the browser suite |
-| [06 — Editing a part's SCAD](../walkthrough/06-editing-a-parts-scad.md) | A part's SCAD edited in Selected's editor, a failing line marked, a change rendered once its check passes and saved as a variant in git, the editor floated and fullscreen, round twice; written by the browser suite |
+| [06 — Editing a part's SCAD](../walkthrough/06-editing-a-parts-scad.md) | A part's SCAD edited in its SCAD window, a failing line marked, a change rendered once its check passes and saved as a variant in git, the editor fullscreen, round twice; written by the browser suite |
 | [07 — The parts registry](../walkthrough/07-a-part.md) | What a part is, and how its envelope is checked |
 | [08 — Which numbers are whose](../walkthrough/08-fitting.md) | The seam, and driving it with overrides |
 | [09 — Navigating a sub-assembly](../walkthrough/09-an-assembly.md) | datum_core as an addressable tree |

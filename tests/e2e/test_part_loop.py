@@ -106,7 +106,7 @@ NOTHING_SELECTED = """() => {
     for (const k of Object.keys(v.meshByName)) v.colorMesh(k, v.renderNodeByKey[k]);
 }"""
 
-# The part framed with the part nearest it, close in, for a picture of the two.
+# The part framed with the part nearest it, for a picture of the two.
 BESIDE = """(part) => {
     const v = window.fractalViewer;
     const at = (n) => { const b = v.boundsFor(n, 0); return b.min.map((m, i) => (m + b.max[i]) / 2); };
@@ -115,8 +115,9 @@ BESIDE = """(part) => {
         .filter(([k, n]) => k !== part && n.part_ref && v.meshByName[k]).map(([, n]) => n);
     const away = (n) => Math.hypot(...at(n).map((x, i) => x - c[i]));
     others.sort((a, b) => away(a) - away(b));
+    // Framed together, and no closer: both stay in the world however narrow its
+    // window (the Part view's is a little under half the page).
     v.frameCameraForChildren([here, others[0]]);
-    v.camera.position.lerp(v.orbitControls.target, 0.35);
     v.orbitControls.update();
     return [others[0].name];
 }"""
@@ -582,12 +583,13 @@ def _undone_and_redone(page: Page, refused: float, side: float) -> str:
 
 
 def _drawn_again_from_the_history(page: Page, side: float) -> str:
-    """Recent applies, unfolded: the round's apply clicked, drawn again from the cache
-    -- nothing rendered -- and marked as drawn. The status line."""
-    fold = page.locator("#part-history")
-    expect(fold).to_be_visible()
-    fold.locator("summary").click()
-    row = fold.locator("li[data-at]", has_text=f"size {side:g}")
+    """Recent applies, in History (a tab beside Parameters): the round's apply
+    clicked, drawn again from the cache -- nothing rendered -- and marked as drawn.
+    The status line."""
+    windows.show(page, "part-history")
+    history = page.locator("#part-history")
+    expect(history).to_be_visible()
+    row = history.locator("li[data-at]", has_text=f"size {side:g}")
     expect(row).to_have_count(1)
     rendered = []
     rendering = re.compile(r"/(stl/generate|draft/render)")
@@ -902,7 +904,7 @@ def test_designing_a_part_twice_round(
         page,
         lambda: story.shows(
             "Recent applies draws an earlier one again, from the cache",
-            f"Recent applies, under the parameters, lists this tab's applies of {PART}, "
+            f"Recent applies, in History, a tab beside Parameters, lists this tab's applies of {PART}, "
             f"newest first. The first round's, {first:.2f} mm, clicked: drawn again from "
             "the cache of variants, nothing rendered, its text and its numbers what is "
             "drawn; f frames it.",
@@ -911,7 +913,9 @@ def test_designing_a_part_twice_round(
         ),
     )
 
-    # A size staged and not applied, kept over a reload in its text, and restored.
+    # A size staged and not applied, kept over a reload in its text, and restored:
+    # Parameters in front again.
+    windows.show(page, "part-parameters")
     kept = _kept_over_a_reload(page, 20, first)
     story.says(
         "A size staged and not applied is kept over a reload",
