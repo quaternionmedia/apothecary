@@ -18,8 +18,9 @@
  *   metrics(), values(), setValues(values), load(), preset(id), redraw() }
  * world: { text(): Promise<string>, editing(): bool, write(values): bool, edit(): bool,
  *   showSection(id) }
- * sections: an element per AIRGAP_SECTIONS id, each the window the panel fills with that
- *   section; the slot holds the machine, its scrub and the verbs.
+ * sections: an element per section of the Airgap's entry in apothecary/systems.py, each
+ *   the window the panel fills with that section (each a `data-section` block of the
+ *   markup below); the slot holds the machine, its scrub and the verbs.
  */
 import { parseAssignments, lastOf, writeValues } from '/static/widgets/assignments.js';
 
@@ -33,22 +34,6 @@ const snake = (k) => k.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase());
 // The rig: what the panel runs the geometry under. Keys are DYN_DEFAULT's and the excitation's.
 const RIG_EXCITE = ['excite', 'current', 'advance'];
 const SWEEP_METRIC = { mean_torque: 'meanT', ripple: 'ripple', peak_b: 'bmax', mean_coenergy: 'meanW', dominant_order: 'dom' };
-
-// The panel's sections, each a window of its own that the host gives (mountAirgap's
-// `sections`): the figures, the pictures, the rig and the sweep.
-export const AIRGAP_SECTIONS = [
-    { id: "metrics", title: "Metrics" },
-    { id: "field", title: "Winding functions and gap field" },
-    { id: "gap-map", title: "Gap map g(θ, φ)" },
-    { id: "inductance", title: "Phase inductance and commutation" },
-    { id: "torque", title: "Co-energy and torque" },
-    { id: "harmonics", title: "Harmonic overlap" },
-    { id: "run-up", title: "Run-up: speed and torque" },
-    { id: "orbit", title: "Rotor orbit and stator modes" },
-    { id: "vibration", title: "Vibration spectrum" },
-    { id: "rig", title: "Rig" },
-    { id: "sweep", title: "Sweep" },
-];
 
 export function mountAirgap(slot, { base, say, world, sections }) {
 const TAU=Math.PI*2, MU0=4e-7*Math.PI;

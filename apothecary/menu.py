@@ -34,6 +34,7 @@ from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .hierarchy import Assembly
+from .systems import SYSTEMS
 
 MOST_OPTIONS = 8
 LONGEST_LABEL = 12
@@ -691,18 +692,11 @@ PANELS: Sequence[Tuple[str, str]] = (
     # its cell (_airgap), seated last.
     ("airgap", "Airgap"),
 )
-# The views: windows laid out together for one kind of work, each a cell of
-# Panels › Windows after the layout's own two, and an entry of the header's
-# ⊞ Windows. The page defines each by its id (panels.defineView); a view's windows
-# the page has not got are left out of it.
-VIEWS = (
-    # The world, the Selected window with the SCAD editor behind it, and Site's.
-    ("part", "Part view"),
-    # A board's Machine beside the world, the Bench behind it, Site's Jobs below.
-    ("machine", "Machine view"),
-    # The Airgap and each of its sections in a window of its own, the world among them.
-    ("airgap", "Airgap view"),
-)
+# The views: each focused system's windows laid out together (systems.py), a cell
+# of Panels › Windows after the layout's own two and an entry of the header's
+# ⊞ Windows. The page defines each from the same entry; a view's windows the page
+# has not got are left out of it.
+VIEWS = tuple((system.id, system.cell) for system in SYSTEMS)
 # The panels seated before the windows' own cell (Panels › Windows, 49); a panel
 # registered after them is seated after it. Site's cell is a ring of Site and its
 # own windows, Pictures' a ring of Pictures and Gather, and Machine's a ring of the

@@ -405,7 +405,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         const open = !!item(r.id);
         b.classList.toggle("open", open);
         b.textContent = (open ? "● " : "○ ") + (r.tab || r.title);
-        b.title = open ? `${r.hint || r.title}: open; brought in front` : `${r.hint || r.title}: opens ${into ? "here" : "at its place"}`;
+        b.title = `${r.hint || r.title} · ${open ? "open: brought in front" : into ? "opens here" : "opens at its place"}`;
         return b;
     }
     function spawnInto(stack, button) {

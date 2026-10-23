@@ -44,6 +44,7 @@ from apothecary.menu import (
     shorten,
 )
 from apothecary.primitives import Cube
+from apothecary.systems import by_id
 
 CONFORMANCE = Path(__file__).parent / "conformance" / "nine_cells.json"
 VIEWER = Path(__file__).parents[1] / "templates" / "fractal_viewer.html.j2"
@@ -1134,6 +1135,11 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     page = VIEWER.read_text(encoding="utf-8")
     marked = re.findall(r'class="panel-section"[^>]*data-panel="([\w-]+)"', page)
     registered = re.findall(r"panels\.register\('([\w-]+)'", page)
+    # A focused system whose main window the page hands to the systems module
+    # (static/systems.js, a hook with `main`) is registered there, from its entry.
+    by_systems = re.findall(r"^ {20}([\w-]+): \{\n {24}main:", page, re.M)
+    assert by_systems == ["airgap"]
+    registered += [by_id(sid).main for sid in by_systems]
     # The SCAD editor popped out of Selected is a panel only while it is out, and
     # Part › Pop out's rather than one of Panels: it is Selected's, put back there;
     # an armed printer's control pad is Panels › Control pad's, not a toggle; and a

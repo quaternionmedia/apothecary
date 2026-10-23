@@ -10,15 +10,15 @@ from __future__ import annotations
 
 from playwright.sync_api import Page
 
+from apothecary.systems import AIRGAP
+
 WORLD = ".viewer-panel"
 # The world's stack's header: the world's window has no tab, so this is never shown.
 WORLD_HEADER = ".lm_stack:has(.world-window) > .lm_header"
 # The Airgap's sections, each a window ``airgap-<section>`` of its own beside the
-# Airgap, registered after it and closed until asked for (widgets/airgap.js).
-AIRGAP_SECTIONS = (
-    "metrics", "field", "gap-map", "inductance", "torque", "harmonics",
-    "run-up", "orbit", "vibration", "rig", "sweep",
-)  # fmt: skip
+# Airgap, registered after it and closed until asked for: its entry in the registry
+# of focused systems (apothecary/systems.py).
+AIRGAP_SECTIONS = tuple(section.id for section in AIRGAP.sections)
 
 
 def tab(page: Page, pid: str):

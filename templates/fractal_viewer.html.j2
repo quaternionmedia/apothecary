@@ -777,6 +777,8 @@
         }
     }
     </script>
+    <!-- The focused systems (apothecary/systems.py): read by static/systems.js. -->
+    <script type="application/json" id="apothecary-systems">{{ systems|tojson }}</script>
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -792,7 +794,8 @@
         import { mountToolchain } from '/static/widgets/toolchain.js';
         import { mountBuild, mountRawFlash } from '/static/widgets/sketches.js';
         import { mountTasks } from '/static/widgets/tasks.js';
-        import { mountAirgap, AIRGAP_SECTIONS } from '/static/widgets/airgap.js';
+        import { mountAirgap } from '/static/widgets/airgap.js';
+        import { knownWindows, mountSystems } from '/static/systems.js';
         import { mountScadEditor, variantChoices } from '/static/widgets/scad_editor.js';
         import { buildParamControl, described, sameValue, shown, focusedControl, refocus } from '/static/widgets/part_controls.js';
         import { parseAssignments, lastOf, literalText, writeValues } from '/static/widgets/assignments.js';
@@ -805,6 +808,8 @@
         import { mountLighting } from '/static/lighting.js';
 
         const BASE_URL = {{ base_url | tojson }};
+        // The focused systems, as apothecary/systems.py has them (the JSON above).
+        const SYSTEMS = JSON.parse(document.getElementById('apothecary-systems').textContent);
         const DEFAULT_SITE = {{ default_site | tojson }};
         const INITIAL_FOCUS = {{ focus_path | tojson }};
         // What a link into the world asks to have open: ?panel=bench (where /firmware
@@ -1364,10 +1369,10 @@
                 // Site, the rest tabs below them; any dragged anywhere, split,
                 // maximised or closed. What a person made of it is remembered per
                 // browser, and a remembered layout the page cannot read is ignored.
-                // The Airgap's sections are windows a remembered layout may hold too.
+                // Every focused system's windows are ones a remembered layout may hold.
                 this.panels = mountPanels({
                     host: document.querySelector('.main-content'), world: this.canvas.parentElement,
-                    known: AIRGAP_SECTIONS.map((sec) => `airgap-${sec.id}`),
+                    known: knownWindows(SYSTEMS),
                 });
                 // Pinned is mounted the first time it is in front of a person, and listed
                 // again each time it is in front again.
@@ -1503,39 +1508,25 @@
                     onOpen: () => { if (this.bench) this.bench.load(); },
                     body: (slot) => { this.bench = this.mountBench(slot); window.apothecaryBench = this.bench; },
                 });
-                // The Airgap: the airgap part explored as a field, torque and dynamics model
-                // (widgets/airgap.js) -- a tab beside Pictures, closed until asked for
-                // (Panels › Airgap), filled the first time it is shown, and reading the
-                // part's text again each time it is shown again. While the part is being
-                // edited the panel follows every edit of its text. Its verbs are a ring of
-                // their own under its cell.
-                // Its sections -- the figures, the pictures, the rig, the sweep -- are
-                // windows of their own beside it, closed until asked for; opening any of
-                // them, or the Airgap, mounts the one widget that fills them all, and a
-                // section brought in front draws its picture at its window's size. The
-                // Airgap view lays them out together.
-                this.airgap = null;
-                const airgapEl = document.createElement('div');
-                const airgapSections = Object.fromEntries(AIRGAP_SECTIONS.map((sec) => [sec.id, document.createElement('div')]));
-                this.airgapWidget = () => {
-                    if (!this.airgap) {
-                        this.airgap = this.mountAirgap(airgapEl, airgapSections);
-                        window.apothecaryAirgap = this.airgap;
-                        this.airgap.load();
-                    }
-                    return this.airgap;
-                };
-                this.panels.register('airgap', {
-                    title: 'Airgap', open: false, group: 'Airgap', body: airgapEl,
-                    onOpen: () => { const fresh = !this.airgap; const widget = this.airgapWidget(); if (!fresh) widget.load(); },
+                // The focused systems (apothecary/systems.py, static/systems.js): each
+                // system's view, and its sections as windows of their own beside its main
+                // window, closed until asked for. The Airgap -- the airgap part explored
+                // as a field, torque and dynamics model (widgets/airgap.js) -- is a tab
+                // beside Pictures, closed until asked for (Panels › Airgap), its widget
+                // mounted the first time it or a section is shown and reading the part's
+                // text again each time the Airgap is shown again; while the part is being
+                // edited it follows every edit of its text.
+                this.systems = mountSystems(this.panels, SYSTEMS, {
+                    airgap: {
+                        main: { title: 'Airgap' },
+                        mount: (slot, sections) => {
+                            this.airgap = this.mountAirgap(slot, sections);
+                            window.apothecaryAirgap = this.airgap;
+                            return this.airgap;
+                        },
+                        shown: (widget) => widget.load(),
+                    },
                 });
-                for (const sec of AIRGAP_SECTIONS) {
-                    this.panels.register(`airgap-${sec.id}`, {
-                        title: sec.title, hint: `The Airgap's ${sec.title.toLowerCase()}`, group: 'Airgap',
-                        body: airgapSections[sec.id], home: 'airgap', open: false,
-                        onOpen: () => this.airgapWidget().redraw(),
-                    });
-                }
                 // Settings: every shortcut and navigation setting, each with its default
                 // and a reset (widgets/settings.js) -- a tab beside Pictures, opened
                 // from ⚙ View › Settings and the canvas ring's View › Settings.
@@ -1547,51 +1538,6 @@
                             log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
                         });
                     },
-                });
-                // Views: the windows laid out together for one kind of work, chosen from
-                // ⊞ Windows or the ring's Panels › Windows. Default is the page's own; a
-                // view's windows the page has not got (a Machine with no board open) are
-                // left out, and a Machine or a control pad already open stays, at its home.
-                this.panels.defineView('part', {
-                    title: 'Part',
-                    layout: { row: [
-                        { world: true, size: 52 },
-                        { column: [
-                            { stack: ['selected', 'scad-editor'], size: 64, active: 'selected' },
-                            { stack: ['site', 'problems', 'scad'], size: 36 },
-                        ], size: 48 },
-                    ] },
-                });
-                this.panels.defineView('machine', {
-                    title: 'Machine',
-                    layout: { row: [
-                        { world: true, size: 46 },
-                        { column: [
-                            { stack: ['machine', 'bench'], size: 62, active: 'machine' },
-                            { stack: ['site', 'jobs', 'pinned'], size: 38 },
-                        ], size: 34 },
-                        { column: [
-                            { stack: ['selected'], size: 55 },
-                            { stack: ['pictures', 'settings'], size: 45 },
-                        ], size: 20 },
-                    ] },
-                });
-                this.panels.defineView('airgap', {
-                    title: 'Airgap',
-                    layout: { row: [
-                        { column: [
-                            { stack: ['airgap'], size: 60 },
-                            { stack: ['airgap-metrics', 'airgap-rig', 'airgap-sweep', 'selected'], size: 40, active: 'airgap-metrics' },
-                        ], size: 34 },
-                        { column: [
-                            { stack: ['airgap-field', 'airgap-gap-map'], size: 50 },
-                            { stack: ['airgap-torque', 'airgap-inductance', 'airgap-harmonics'], size: 50 },
-                        ], size: 33 },
-                        { column: [
-                            { world: true, size: 44 },
-                            { stack: ['airgap-run-up', 'airgap-orbit', 'airgap-vibration'], size: 56 },
-                        ], size: 33 },
-                    ] },
                 });
                 // ⊞ Windows: drawn afresh each time it opens, so it says which are open.
                 this.windowsMenuEl.addEventListener('toggle', () => {
@@ -6998,7 +6944,7 @@
                         return true;
                     },
                     // A section the panel acts on (the sweep it maps) brought in front.
-                    showSection: (id) => this.panels.open(`airgap-${id}`),
+                    showSection: (id) => this.systems.airgap.showSection(id),
                 };
                 return mountAirgap(slot, { base: BASE_URL, say: (text, kind) => this.setStatus(text, kind), world, sections });
             }
@@ -8168,7 +8114,7 @@
                 if (action.startsWith('airgap:')) {
                     viewer.panels.open('airgap');
                     viewer.setStatus(`${intent.label}${tail}`, 'success');
-                    viewer.airgapWidget().act(action.slice('airgap:'.length));
+                    viewer.systems.airgap.widget().act(action.slice('airgap:'.length));
                     return;
                 }
                 // Panels › Docs: the documentation in a new tab, as the header's Docs opens it.
