@@ -36,6 +36,14 @@ def pytest_addoption(parser):
         "tests/e2e/durations.json. CI runs the three shards on three runners.",
     )
     parser.addoption(
+        "--record-durations",
+        action="store_true",
+        default=False,
+        help="Browser tests only: write each test's time (setup, call and teardown) into "
+        "tests/e2e/durations.json, which --shard balances by. A file run replaces its "
+        "entries; the others are kept.",
+    )
+    parser.addoption(
         "--step",
         action="store",
         type=int,

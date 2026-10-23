@@ -62,8 +62,10 @@ loadfile` gives each worker its own server on a free port (`--server-port` is
 refused with `-n`). `--shard K/N` runs the K-th of N shards, files placed
 heaviest first onto the lightest shard by `durations.json`; CI runs three. A
 file missing from `durations.json` counts as the average test for each of its
-tests; refresh the file from a serial run's `--durations=0` when the shards
-drift apart.
+tests. `--record-durations` writes a run's times into it -- each file run replaces
+its entries, the rest are kept -- so when the shards drift apart, `uv run
+apothecary test all --record-durations` (on as many workers as you like) brings it
+up to date.
 
 ## What each layer holds
 
