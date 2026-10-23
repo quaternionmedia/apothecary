@@ -119,6 +119,9 @@ Each in its own round, on the foundation, after the Machine.
 
 ## Work, in order
 
+*As of 2026-10-23, the first four are done on `build/window-views`; the
+next systems are what remains.*
+
 1. **The foundation**, with the Airgap on it and nothing on the page
    changed: `apothecary/systems.py`, `static/systems.js`, the page and the
    ring reading them, the tests that hold them together.

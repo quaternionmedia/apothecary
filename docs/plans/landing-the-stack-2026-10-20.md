@@ -125,10 +125,9 @@ it: each commit says why, with its evidence, and
 `python governance/qm/project-seed/ci/check_pr_base.py --base <base> --head <branch>`
 says what the branch carries.
 
-Known and not fixed, for the approval to name or for a pull request of their
-own: the airgap part stands below the floor (its readiness line in Selected
-says so, at `/viewer/parts/airgap`); walkthrough picture 03-07 holds a time
-of day in the Machine's board line that no blank covers.
+Known and not fixed, for the approval to name or for a pull request of its
+own: the airgap part stands below the floor (its Readiness window says so, at
+`/viewer/parts/airgap`).
 
 ## 3. Landing: bottom first
 

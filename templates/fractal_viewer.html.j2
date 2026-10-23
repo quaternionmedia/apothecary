@@ -964,8 +964,8 @@
         // Render on demand: after a frame is drawn, the badges are placed again for
         // this many frames more (anchors.js tests what hides them every few).
         const ANCHOR_TAIL_FRAMES = 8;
-        // The newest of a part's saved variants listed under its parameters; the
-        // editor lists them all.
+        // The newest of a part's saved variants listed in its Variants window; the
+        // SCAD window lists them all.
         const SAVED_SHORT_LIST = 5;
         // Whether a key pressed is a person typing: in a box, or in the SCAD editor.
         const typing = (el) => !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
@@ -3904,7 +3904,7 @@
                 this.editorLoading = this.loadPartParams(target);
             }
 
-            // Part › Edit: the editor in Selected, its Parameters window open beside it,
+            // Part › Edit: the editor in Selected, its Parameters window open under it,
             // the cursor in its first control. A machine drawn as a part shows the one
             // row that says so until it is asked for; asked for, its editor opens under
             // the machine's panel.
@@ -5767,15 +5767,14 @@
 
             // ---- the SCAD editor ----------------------------------------
             //
-            // In Selected's part editor: the target's SCAD in CodeMirror
+            // In the Part's SCAD window: the target's SCAD in CodeMirror
             // (widgets/scad_editor.js), its file's name as the API gives it
             // (source_file), which OpenSCAD's messages name it by. A part's own SCAD
             // is edited; a part built by Python, and a made piece, are read. Typing is checked once it stops
             // (evaluated, not rendered: POST .../draft/check) and rendered soon after
             // a check that passes, as Apply renders, the draft beside the part. Save
-            // keeps it, and the numbers staged, as a variant in git. It floats out
-            // of Selected (a panel of its own, put back by its Dock) and covers the
-            // page (Esc or its button puts it back). Each part's editor is kept while
+            // keeps it, and the numbers staged, as a variant in git. Fullscreen covers
+            // the page (Esc or its button puts it back). Each part's editor is kept while
             // another is selected -- its text, its undo, where it was scrolled -- and
             // OpenSCAD's keys work inside it: F5 checks and draws, F6 and Ctrl+Enter
             // apply, Ctrl+S saves a variant.
@@ -6010,8 +6009,8 @@
                 this.setStatus(said, ok ? 'success' : 'error');
             }
 
-            // The part's variants saved in git: a short list under its parameters,
-            // all of them in the editor, each with what it changes. The name Save
+            // The part's variants saved in git: a short list in Variants, all of
+            // them in the SCAD window, each with what it changes. The name Save
             // keeps an edit under when none is typed is the next free one.
             async loadSavedVariants(target, chosen = null) {
                 const scad = this.scadStages[target.key];
@@ -6438,10 +6437,10 @@
                 return (v.paths || []).filter((path) => this.nodeByPath(path));
             }
 
-            // Site's problems: one folded line at its top, "N problems ›", a row in it
-            // each, selecting its piece; in the tree, each piece a problem names is
-            // marked, and every piece above it says something inside is invalid. The
-            // toolbar counts them, and its count opens the fold (openProblems).
+            // Site's problems: Problems, a window beside Site, a row in it each,
+            // selecting its piece; in the tree, each piece a problem names is marked,
+            // and every piece above it says something inside is invalid. The toolbar
+            // counts them, and its count opens the window (openProblems).
             renderProblems({ list = true } = {}) {
                 this.invalidPaths = new Map();
                 this.invalidInside = new Map();

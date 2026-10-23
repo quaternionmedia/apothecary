@@ -16,8 +16,6 @@ from playwright.sync_api import Page, expect
 # Each section's window, and what it holds.
 PARAMETERS = ".panel[data-panel='part-parameters']"
 SCAD = ".panel[data-panel='part-scad']"
-VARIANTS = ".panel[data-panel='part-variants']"
-HISTORY = ".panel[data-panel='part-history']"
 READINESS = ".panel[data-panel='part-readiness']"
 
 

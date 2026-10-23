@@ -30,12 +30,6 @@ from apothecary.projects.parts.calibration_cube import DEFAULT as CUBE
 from apothecary.projects.parts.stl_renderer import params_sidecar_path
 
 PART = "calibration_cube"
-RING_MS = 15000
-WEDGES = (
-    "() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]"
-    ".filter((w) => !w.classList.contains('empty'))"
-    ".map((w) => [w.getAttribute('aria-label'), w.dataset.cell]))"
-)
 
 
 @pytest.fixture(scope="module")
