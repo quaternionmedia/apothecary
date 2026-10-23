@@ -52,7 +52,7 @@ const H = {
     log,
     // A layout mounted afresh: the page's own root, the windows it knows of and those
     // made for the moment; the windows given registered, each with a body of its own.
-    mount({ root = null, known = [], transient = [], register = [] } = {}) {
+    mount({ root = null, known = [], transient = [], register = [], columnStacks = null } = {}) {
         if (window.P) window.P.destroy();
         host.replaceChildren();
         const world = document.createElement('div');
@@ -60,6 +60,7 @@ const H = {
         world.textContent = 'world';
         const options = { host, world, storageKey: 'windows.test', known, transient };
         if (root) options.defaultRoot = root;
+        if (columnStacks) options.columnStacks = columnStacks;
         window.P = mountPanels(options);
         for (const [id, opts] of register) H.reg(id, opts);
         return true;
@@ -88,6 +89,7 @@ const H = {
         };
     },
     size(id) { const ci = H.item(id); return ci ? ci.parentItem.size : null; },
+    height(id) { const ci = H.item(id); return ci ? ci.parentItem.element.getBoundingClientRect().height : null; },
 };
 window.H = H;
 window.__wm = { mountPanels, mountSystems, knownWindows, transientWindows, openFor };
@@ -249,6 +251,29 @@ def _at_the_column_foot_after_nothing(page):
     assert w["parent"] == "column" and w["at"] == len(w["children"]) - 1
 
 
+# The column holds three stacks of the page's own; by default four at most.
+def _a_tab_beside_the_window_it_follows_once_the_column_is_full(page):
+    _js(page, "() => H.reg('x', { home: 'column', after: 'sel', open: false })")
+    _js(page, "() => H.reg('z', { home: 'column', after: 't1', open: false })")
+    _js(page, "() => { P.open('x'); P.open('z'); }")
+    assert _where(page, "x")["stack"] == ["x"]  # the fourth stack
+    z = _where(page, "z")
+    assert z["stack"] == ["t1", "t2", "z"] and z["front"] == "z" and len(z["children"]) == 4
+
+
+def _a_tab_at_once_in_a_column_of_three(page):
+    _mount(page, columnStacks=3)
+    _js(page, "() => { H.reg('x', { home: 'column', after: 'sel', open: false }); P.open('x'); }")
+    assert _where(page, "x")["stack"] == ["sel", "x"]
+
+
+def _a_tab_at_the_foot_of_a_full_column_after_nothing(page):
+    _mount(page, columnStacks=3)
+    _js(page, "() => { H.reg('x', { home: 'column', open: false }); P.open('x'); }")
+    w = _where(page, "x")
+    assert w["stack"] == ["t1", "t2", "x"] and len(w["children"]) == 3
+
+
 @pytest.mark.e2e
 @pytest.mark.parametrize(
     "case",
@@ -260,10 +285,96 @@ def _at_the_column_foot_after_nothing(page):
         _with_its_siblings_under_that_window,
         _beside_the_world_with_room_from_the_world,
         _at_the_column_foot_after_nothing,
+        _a_tab_beside_the_window_it_follows_once_the_column_is_full,
+        _a_tab_at_once_in_a_column_of_three,
+        _a_tab_at_the_foot_of_a_full_column_after_nothing,
     ],
     ids=lambda f: f.__name__.strip("_"),
 )
 def test_a_window_opens_at_its_home(wm: Page, case):
+    case(wm)
+
+
+# --- a window with nothing to show ----------------------------------------------------
+
+
+def _minimised(page: Page, pid: str) -> bool:
+    return _js(page, "(id) => P.state(id).minimised", pid)
+
+
+def _alone_its_stack_is_minimised_and_has_its_height_back(page):
+    before = _js(page, "() => H.size('sel')")
+    _js(page, "() => P.setEmpty('sel')")
+    assert _js(page, "() => P.state('sel').empty") is True and _minimised(page, "sel")
+    assert _js(page, "() => H.height('sel')") <= 42  # its tabs and a hidden sliver
+    _js(page, "() => P.setEmpty('sel', false)")
+    assert not _minimised(page, "sel")
+    assert _js(page, "() => H.size('sel')") == pytest.approx(before, abs=0.5)
+
+
+def _in_front_of_one_with_something_it_gives_that_one_the_front(page):
+    _js(page, "() => { P.open('b'); P.setEmpty('b'); }")
+    assert _where(page, "a")["front"] == "a" and not _minimised(page, "a")
+
+
+def _emptied_one_by_one_it_keeps_the_window_it_had_in_front(page):
+    _js(page, "() => { P.open('a'); P.setEmpty('a'); }")
+    assert _where(page, "a")["front"] == "b"
+    _js(page, "() => P.setEmpty('b')")
+    assert _where(page, "a")["front"] == "a" and _minimised(page, "a")
+    _js(page, "() => P.setEmpty('a', false)")
+    assert _where(page, "a")["front"] == "a" and not _minimised(page, "a")
+
+
+def _a_stack_is_minimised_once_all_of_it_is_empty(page):
+    _js(page, "() => P.setEmpty('a')")
+    assert not _minimised(page, "a")
+    _js(page, "() => P.setEmpty('b')")
+    assert _minimised(page, "a")
+
+
+def _opened_it_has_its_height_back(page):
+    _js(page, "() => P.setEmpty('sel')")
+    _js(page, "() => P.open('sel')")
+    assert not _minimised(page, "sel") and _js(page, "() => H.height('sel')") > 42
+
+
+def _its_tab_pressed_it_has_its_height_back(page):
+    _js(page, "() => P.setEmpty('sel')")
+    page.locator(".lm_tab[data-panel='sel']").click()
+    assert not _minimised(page, "sel")
+
+
+def _a_view_lays_it_out_minimised_again(page):
+    _js(page, "() => { P.setEmpty('sel'); P.open('sel'); }")
+    _js(page, "() => P.applyView('default')")
+    assert _minimised(page, "sel")
+
+
+def _remembered_at_the_height_it_had(page):
+    before = _js(page, "() => H.size('sel')")
+    _js(page, "() => P.setEmpty('sel')")
+    _reload(page)
+    assert not _minimised(page, "sel")
+    assert _js(page, "() => H.size('sel')") == pytest.approx(before, abs=0.5)
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize(
+    "case",
+    [
+        _alone_its_stack_is_minimised_and_has_its_height_back,
+        _in_front_of_one_with_something_it_gives_that_one_the_front,
+        _a_stack_is_minimised_once_all_of_it_is_empty,
+        _emptied_one_by_one_it_keeps_the_window_it_had_in_front,
+        _opened_it_has_its_height_back,
+        _its_tab_pressed_it_has_its_height_back,
+        _a_view_lays_it_out_minimised_again,
+        _remembered_at_the_height_it_had,
+    ],
+    ids=lambda f: f.__name__.strip("_"),
+)
+def test_a_window_with_nothing_to_show_gives_its_room_away(wm: Page, case):
     case(wm)
 
 

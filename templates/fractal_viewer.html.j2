@@ -201,6 +201,8 @@
            as it opens it pulses (widgets/machine.js). */
         .lm_header .lm_tab.loud, .lm_header .lm_tab.loud:hover { color: #ffe1e1; background: #5a1f1f; }
         .lm_header .lm_tab.loud.lm_active { background: #6e2222; box-shadow: inset 0 2px 0 #ff6b6b; }
+        /* A window with nothing to show: its tab dimmed, its stack minimised among empty ones. */
+        .lm_header .lm_tab.empty .lm_title { opacity: 0.55; font-style: italic; }
         .panel-window.loud { box-shadow: inset 0 0 0 2px #ff6b6b, inset 0 0 18px rgba(255, 107, 107, 0.35); }
         .panel-window.loud > .panel { background: #22191a; }
         .panel-window.loud.alert { animation: loud-alert 0.9s ease-out 2; }
@@ -1304,14 +1306,19 @@
 
             // A link into the world with a panel open: the Bench, or a board's Machine
             // in its window, pinned in this site or nowhere here, once the site's boards
-            // are known.
+            // are known. A link is a request: a part's opens its parameters, a board's
+            // its state and its log -- each system's `on_link` sections.
             async followDeepLink() {
                 const panel = DEEP_LINK.get('panel');
                 if (panel) this.panels.open(panel);
+                if (INITIAL_FOCUS && this.partSection) this.systems.part.openLinked();
                 const port = DEEP_LINK.get('machine');
                 if (!port || !this.siteName) return;
                 await this.boards.scan();
-                if (this.openMachineFor(port)) this.setStatus(`Opened ${port}'s Machine`, 'success');
+                if (this.openMachineFor(port)) {
+                    this.systems.machine.openLinked();
+                    this.setStatus(`Opened ${port}'s Machine`, 'success');
+                }
             }
 
             initThreeJS() {
@@ -3799,6 +3806,8 @@
                 const editing = this.partSection && this.selectedBodyEl.contains(this.partSection) ? this.partSection : null;
                 for (const [id, host] of Object.entries(part.sections)) {
                     const block = editing?.parts?.[id];
+                    // Nothing to show: its stack gives its room away (panels.js) until it has.
+                    part.setEmpty(id, !block);
                     if (block) { if (host.firstChild !== block) host.replaceChildren(block); continue; }
                     const title = SYSTEMS.find((sys) => sys.id === 'part').sections.find((sec) => sec.id === id).title;
                     const said = editing

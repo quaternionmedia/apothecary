@@ -45,6 +45,8 @@ class Section:
     # The kind of subject it is for (a board that is a printer, or a devkit), where it
     # is for one kind only: a subject of another kind has no such window.
     kind: Optional[str] = None
+    # Opened when a link to its subject is followed: a link is a request for it.
+    on_link: bool = False
 
 
 @dataclass(frozen=True)
@@ -175,6 +177,7 @@ PART = System(
             "the piece's numbers as controls, tied to its text",
             home="column",
             verbs=("part:edit",),
+            on_link=True,
         ),
         # Beside the world, as tall as it.
         Section(
@@ -255,6 +258,7 @@ MACHINE = System(
             home="column",
             verbs=("device:poll",),
             kind="printer",
+            on_link=True,
         ),
         Section(
             "temperature",
@@ -287,6 +291,7 @@ MACHINE = System(
             # A hello heard is said here as well as in the log.
             verbs=("device:query", "device:listen"),
             kind="devkit",
+            on_link=True,
         ),
         Section(
             "flashing",
@@ -302,6 +307,7 @@ MACHINE = System(
             "the board's one log: a printer's comms, or a devkit's serial output",
             home="column",
             verbs=("device:listen", "device:query", "device:probe"),
+            on_link=True,
         ),
     ),  # fmt: skip
     # Every window of the board's kind in view, none behind another: a printer's
@@ -363,6 +369,7 @@ def manifest(systems: Tuple[System, ...] = SYSTEMS) -> List[Dict[str, Any]]:
                     "home": s.home(sec),
                     "verbs": list(sec.verbs),
                     "kind": sec.kind,
+                    "on_link": sec.on_link,
                 }
                 for sec in s.sections
             ],

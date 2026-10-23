@@ -284,19 +284,31 @@ it is. The header's **⊞ Windows** lists the same, a window chosen there openin
 at its place, and above them the **views**: windows laid out together for one
 kind of work, each also a cell of Panels › Windows.
 
+The column beside the world is the one place a window opens by default, and it
+holds four stacks at most: a window opened there while it has fewer is a stack
+of its own, right under the window it follows; once it has four, a tab -- beside
+the window it follows, else at the column's foot. A window with nothing to show
+gives its room away: its tab is dimmed, a window with something to show in its
+stack comes in front of it, and a stack of nothing but such windows is
+minimised to its tabs. It has its height back when one of them has something to
+show, is opened, or has its tab pressed, and that height is what the browser
+remembers.
+
 **Focused systems.** The Part, the Machine and the Airgap are each one subject
 in windows of its own: a main window with the subject and its verbs, and
 sections, each a window, grouped under the system. Opening a system shows its
 main window alone; every section is closed until asked for -- from a stack's +,
 from ⊞ Windows, by a verb that acts on it (a piece's Print opens the Machine's
-Print, Part › Edit the part's Parameters), or by the system's view. Each system
-is one entry of `apothecary/systems.py`, which the page, the ring and the tests
-all read.
+Print, Part › Edit the part's Parameters), by a link to its subject, or by the
+system's view. A link is a request: a part's address (`/viewer/parts/<name>`)
+opens its Parameters, and a board's (`/firmware/monitor?port=`) its Status, or a
+devkit's Sketch, and its Log. Each system is one entry of `apothecary/systems.py`,
+which the page, the ring and the tests all read.
 
 | System | Main window | Sections |
 |---|---|---|
-| Part | Selected: the piece, its part, what it is drawn from, its envelope, and the staged changes' bar (Apply, Revert, Defaults, Undo, Redo, Ghost) | Parameters (in a stack of its own under Selected), SCAD (beside the world), Variants, History, Readiness |
-| Machine | The board's head -- its link verbs, the control latch, ⏹ E-STOP -- what it is and its state | Status, Temperature, Print, Bed level (a printer's); Sketch, Flashing (a devkit's); Log -- those of the board's kind, in one stack under the Machine, so its head stays in view |
+| Part | Selected: the piece, its part, what it is drawn from, its envelope, and the staged changes' bar (Apply, Revert, Defaults, Undo, Redo, Ghost) | Parameters (under Selected, sharing a stack with Variants, History and Readiness), SCAD (beside the world) |
+| Machine | The board's head -- its link verbs, the control latch, ⏹ E-STOP -- what it is and its state | Status, Temperature, Print, Bed level (a printer's); Sketch, Flashing (a devkit's); Log -- those of the board's kind, in one stack under the Machine while the column has room, else tabs beside it |
 | Airgap | The machine drawn at its angle, its scrub and its verbs | Metrics, the field, gap map, inductance, torque, harmonics, run-up, orbit, vibration, Rig, Sweep ([airgap.md](airgap.md#the-panel)) |
 
 | View | |

@@ -128,6 +128,24 @@ VERB = {
 
 CASES = list(OPENING)
 
+# A link to each case's subject: what it opens is the registry's (each section's
+# `on_link`), for the subject's kind.
+LINK = {
+    "part": "/viewer/parts/calibration_cube",
+    "machine-printer": f"/firmware/monitor?port={PRINTER}",
+    "machine-devkit": f"/firmware/monitor?port={UNO}",
+}
+
+# How a case's sections come to have nothing to show, on the page given: a system
+# whose sections can be empty has a line here.
+EMPTY = {
+    # The parts library, nothing selected: no part is being edited.
+    "part": (
+        "/viewer/sites/parts_library",
+        lambda page: page.evaluate("() => window.fractalViewer.deselect()"),
+    ),
+}
+
 
 def _sections(case: str):
     """The sections a case's subject has: its system's, those for another kind of
@@ -158,10 +176,23 @@ def url(start_server):
     return url
 
 
+def _linked(page: Page, case: str) -> list[str]:
+    """The windows a link to the case's subject asks for, waited for until open."""
+    system, sections = _sections(case)
+    linked = [system.window(s.id) for s in sections if s.on_link]
+    for window in linked:
+        page.wait_for_function(
+            "(id) => window.apothecaryPanels.isOpen(id)", arg=window, timeout=RING_MS
+        )
+    return linked
+
+
 def _opened(page: Page, url: str, case: str) -> None:
     opening = OPENING[case]
     page.goto(f"{url}{opening.url}")
     _loaded(page)
+    if opening.url == LINK.get(case):
+        _linked(page, case)  # the link's request answered before the layout is reset
     page.evaluate(
         "() => { localStorage.removeItem('apothecary.layout'); window.apothecaryPanels.reset(); }"
     )
@@ -192,6 +223,12 @@ def test_every_system_and_section_has_a_line_here():
         system.id for system in SYSTEMS if any(s.verbs for s in system.sections)
     }
     assert set(SHOWS) == {system.window(s.id) for system in SYSTEMS for s in system.sections}
+    # A system with sections a link asks for has a link for each kind of its subject.
+    for system in SYSTEMS:
+        kinds = {s.kind for s in system.sections if s.on_link}
+        if kinds:
+            linked = {OPENING[c].kind for c in LINK if OPENING[c].system == system.id}
+            assert linked and kinds - {None} <= linked, system.id
 
 
 @pytest.mark.e2e
@@ -244,14 +281,16 @@ def test_a_reload_keeps_a_lasting_systems_sections_and_forgets_a_passing_ones(
 ):
     _opened(page, url, case)
     system, sections = _sections(case)
-    first = system.window(sections[0].id)
+    # A section no link asks for: an address that keeps the subject (a board's Machine,
+    # ?machine=) is a link a reload follows, and opens what a link asks for.
+    first = system.window(next((s for s in sections if not s.on_link), sections[0]).id)
     windows.from_the_windows_menu(page, first)
     page.wait_for_timeout(400)  # the layout is remembered a moment after it changes
     page.reload()
     _loaded(page)
     state = windows.state(page, first)
     if system.transient:
-        # Its subject is not open after a reload, so neither are its windows.
+        # Not remembered: what was open of it is not, whatever the address asks for.
         assert state is None or state["open"] is False
     else:
         # Open again, and showing its part of the subject, not an empty window.
@@ -290,3 +329,48 @@ def test_a_view_asked_for_without_its_subject_says_how_to_open_it(
     _ring(page, "Panels", "Windows", s.cell)
     expect(page.locator("#status")).to_contain_text(f"open {s.title} first ({s.opened_by})")
     assert windows.state(page, "site") == before
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize("case", list(LINK))
+def test_a_link_to_a_subject_opens_what_it_asks_for(page: Page, url: str, case: str):
+    """A link is a request: the subject's sections the registry names for a link open,
+    the first in front showing its part, and no other."""
+    page.goto(f"{url}{LINK[case]}")
+    _loaded(page)
+    linked = _linked(page, case)
+    assert linked, case
+    expect(windows.panel(page, linked[0]).locator(SHOWS[linked[0]]).first).to_be_visible(
+        timeout=RING_MS
+    )
+    system, sections = _sections(case)
+    for section in sections:
+        window = system.window(section.id)
+        if window not in linked:
+            assert windows.state(page, window)["open"] is False, window
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize("case", list(EMPTY))
+def test_sections_with_nothing_to_show_are_minimised_until_they_have(
+    page: Page, url: str, case: str
+):
+    """Laid out by its view with its subject gone, every section says it is empty and
+    its stack is minimised; the subject back, they have their height again."""
+    where, emptied = EMPTY[case]
+    page.goto(f"{url}{where}")
+    _loaded(page)
+    system, sections = _sections(case)
+    _ring(page, "Panels", "Windows", system.cell)
+    emptied(page)
+    for section in sections:
+        state = windows.state(page, system.window(section.id))
+        assert state["empty"] and state["minimised"], (section.id, state)
+    # Emptied one by one, a stack keeps the window its view put in front.
+    assert windows.state(page, system.window(sections[0].id))["shown"] is True
+    opening = OPENING[case]
+    page.goto(f"{url}{opening.url}")
+    _loaded(page)
+    first = _linked(page, case)[0]
+    assert windows.state(page, first)["minimised"] is False
+    expect(windows.panel(page, first).locator(SHOWS[first]).first).to_be_visible(timeout=RING_MS)

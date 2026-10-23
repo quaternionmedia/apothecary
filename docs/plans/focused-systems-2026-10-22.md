@@ -4,7 +4,10 @@
 and the Machine take the same form, on one foundation that every system is
 configured through, and Board, Lighting, Fit and build and Bench follow on
 it. Decided with the owner: a system opens its main window alone, and every
-section is closed until asked for.*
+section is closed until asked for. Decided 2026-10-23: a link to a subject is a
+request, opening the sections its entry names for a link; the column beside
+the world holds three or four stacks, the rest grouped as tabs; and a window
+with nothing to show is minimised.*
 
 ## What a focused system is
 

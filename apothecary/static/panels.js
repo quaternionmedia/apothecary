@@ -7,13 +7,21 @@
  * remembered layout may hold (`known`), those made for the moment and never
  * remembered (`transient`), and its own layout (`defaultRoot`); each has a default.
  *
- * Where a window opens when it is not in the layout is its `home`: "column", a stack
- * of its own in the column beside the world, right under the window it follows
- * (`after`), where the windows following that one share a stack; "tabs", the stack
- * where the other tabbed windows are; "beside", a stack of its own next to the world,
- * its room taken from the world's; or another window's id, a tab beside it, else
- * beside a window open with the same home. A `loud` window's tab and frame say so.
- * The world's stack maximised is the world alone (the tilde); again, everything back.
+ * Where a window opens when it is not in the layout is its `home`: "column", the one
+ * column beside the world, right under the window it follows (`after`), where the
+ * windows following that one share a stack -- a stack of its own while the column has
+ * fewer than `columnStacks`, else a tab beside the window it follows; "tabs", the
+ * stack where the other tabbed windows are; "beside", a stack of its own next to the
+ * world, its room taken from the world's; or another window's id, a tab beside it,
+ * else beside a window open with the same home. A `loud` window's tab and frame say
+ * so. The world's stack maximised is the world alone (the tilde); again, everything
+ * back.
+ *
+ * A window the page says has nothing to show (setEmpty) gives its room away: in front
+ * of one that has something, it gives that one the front; a stack of nothing but
+ * empty windows, in a column, is minimised to its tabs, and has its height back when
+ * one of them has something to show, is opened, or has its tab pressed. What is
+ * remembered is the height it had.
  *
  * A view is a named arrangement of windows, written in their ids (resolveView), and
  * may name the window it cannot be laid out without (`requires`). Every stack but the
@@ -36,6 +44,8 @@ const WORLD = "world";
 const HOMES = new Set(["column", "tabs", "beside"]);
 // A window opened beside the world takes this share of the world's row (per cent).
 const BESIDE = 28;
+// How low a stack goes, its tabs and a sliver: the height a minimised one is given.
+const LOWEST = 40;
 
 const LAYOUT_SETTINGS = {
     settings: { showPopoutIcon: false, constrainDragToContainer: true, reorderEnabled: true },
@@ -43,7 +53,7 @@ const LAYOUT_SETTINGS = {
     // window alone in its stack could be closed by its tab's ✕ either.
     header: { popout: false, maximise: "Maximise", minimise: "Restore", close: "Close", tabDropdown: "More tabs" },
     // The least a window is dragged down to: its tab and a sliver of it, never nothing.
-    dimensions: { borderWidth: 6, headerHeight: 26, defaultMinItemWidth: "160px", defaultMinItemHeight: "40px" },
+    dimensions: { borderWidth: 6, headerHeight: 26, defaultMinItemWidth: "160px", defaultMinItemHeight: `${LOWEST}px` },
 };
 // The page's own layout when it gives none: the world alone in a row, where every
 // window opens at its home.
@@ -86,7 +96,7 @@ function kept(config, known, transient) {
     return root && world ? { ...config, root } : null;
 }
 
-export function mountPanels({ host, world, storageKey = "apothecary.layout", known = [], transient = [], defaultRoot = WORLD_ONLY } = {}) {
+export function mountPanels({ host, world, storageKey = "apothecary.layout", known = [], transient = [], defaultRoot = WORLD_ONLY, columnStacks = 4 } = {}) {
     const records = new Map();  // id -> the panel: its element, its body, its callbacks
     // The windows made for the moment, never remembered, so a reload does not bring
     // back an empty one.
@@ -109,7 +119,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         const slot = document.createElement("div");
         slot.className = "panel-body-slot";
         el.append(pinned, slot);
-        r = { id, title: id, tab: null, hint: null, flag: null, home: null, after: null, group: null, loud: false, el, slot, mount: null, filled: true, open: false,
+        r = { id, title: id, tab: null, hint: null, flag: null, home: null, after: null, group: null, loud: false, empty: false, el, slot, mount: null, filled: true, open: false,
               registered: false, container: null, onClose: null, onOpen: null, releasing: false };
         records.set(id, r);
         return r;
@@ -133,11 +143,13 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             if (!tab || !tab.element) return;
             tab.element.dataset.panel = id;
             tab.element.classList.toggle("loud", r.loud);
+            tab.element.classList.toggle("empty", r.empty);
             if (r.flag) tab.element.classList.add(r.flag);
             tab.element.title = r.hint || r.title;
             if (!tab.element.dataset.maximises) {
                 tab.element.dataset.maximises = "dblclick";
                 tab.element.addEventListener("dblclick", () => tab.contentItem?.parentItem?.toggleMaximise());
+                tab.element.addEventListener("click", () => { const stack = tab.contentItem?.parentItem; gaveFront.delete(stack); if (minimised.has(stack)) unminimise(stack); });
             }
         };
         markTab(container.tab);
@@ -185,6 +197,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             const resolved = layout.saveLayout();
             const out = kept(JSON.parse(JSON.stringify(resolved)), knownTypes, TRANSIENT);
             if (out) {
+                unminimisedIn(out.root);
                 out.panels = [...records.values()].filter((r) => r.registered && !TRANSIENT.has(r.id)).map((r) => r.id);
                 localStorage.setItem(storageKey, JSON.stringify(out));
             }
@@ -272,6 +285,16 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         const column = (near?.parent?.type === "column" ? near.parent : null)
             || [...records.values()].map((o) => item(o.id)).filter(Boolean)
                 .map((ci) => ci.parentItem?.parent).find((p) => p && p.type === "column");
+        if (column && column.contentItems.length >= columnStacks) {
+            // The column full: a tab beside the window it follows, else at its foot.
+            const stack = near && near.parent === column ? near : column.contentItems[column.contentItems.length - 1];
+            if (stack.isStack) {
+                const before = stack.getActiveComponentItem();
+                stack.addItem(config);
+                if (!front && before) stack.setActiveComponentItem(before, false);
+                return;
+            }
+        }
         if (column) {
             const at = near && near.parent === column ? column.contentItems.indexOf(near) + 1 : undefined;
             column.addItem({ type: "stack", content: [config] }, at);
@@ -309,6 +332,82 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             for (const [c, size] of sizes) if (row.contentItems.includes(c)) c.size = size;
             row.updateSize(false);
         });
+    }
+
+    // ---- a window with nothing to show ------------------------------------------------
+    // A stack of nothing but empty windows, in a column with others to take its room, is
+    // as low as a stack goes, its sliver hidden; `minimised` keeps the height it had.
+    const minimised = new Map();  // stack -> its size before
+    // The window that gave the front away for being empty: in front again once the
+    // whole stack is empty, or once it has something to show, until a tab is pressed.
+    const gaveFront = new Map();  // stack -> component item
+    const isEmpty = (ci) => !!records.get(ci.id)?.empty;
+    function setLow(stack, low) {
+        const items = stack.element.querySelector(":scope > .lm_items");
+        if (items) items.style.visibility = low ? "hidden" : "";
+        stack.element.classList.toggle("minimised", low);
+    }
+    // Sizes the column's stacks so `stack` has `size`, the others keeping their shares.
+    function resize(stack, size) {
+        const column = stack.parent;
+        const others = column.contentItems.filter((c) => c !== stack);
+        const sum = others.reduce((a, c) => a + c.size, 0);
+        if (!sum) return;
+        const room = stack.size - size;
+        for (const c of others) c.size += room * (c.size / sum);
+        stack.size = size;
+        column.updateSize(false);
+    }
+    function minimise(stack) {
+        const column = stack.parent;
+        if (minimised.has(stack) || !column?.isColumn || column.contentItems.length < 2) return;
+        const height = column.element.getBoundingClientRect().height - LAYOUT_SETTINGS.dimensions.borderWidth * (column.contentItems.length - 1);
+        if (height <= 0) return;
+        const low = (100 * LOWEST) / height;
+        if (stack.size <= low) return;
+        minimised.set(stack, stack.size);
+        resize(stack, low);
+        setLow(stack, true);
+    }
+    function unminimise(stack) {
+        if (!minimised.has(stack)) return;
+        const was = minimised.get(stack);
+        minimised.delete(stack);
+        setLow(stack, false);
+        if (stack.parent?.isColumn) resize(stack, was);
+    }
+    // A stack minimised when every window in it is empty, its height back otherwise.
+    function fitEmpty(stack) {
+        if (!stack?.isStack || stack === worldStack()) return;
+        if (stack.contentItems.length && stack.contentItems.every(isEmpty)) {
+            const was = gaveFront.get(stack);
+            if (was && stack.contentItems.includes(was)) stack.setActiveComponentItem(was, false);
+            minimise(stack);
+        } else unminimise(stack);
+    }
+    function fitEveryEmpty() {
+        for (const stack of [...minimised.keys()]) if (!stack.parent) minimised.delete(stack);
+        const stacks = new Set([...records.values()].filter((r) => r.empty).map((r) => item(r.id)?.parentItem).filter(Boolean));
+        for (const stack of stacks) fitEmpty(stack);
+    }
+    // What a browser remembers is each minimised stack at the height it had.
+    function unminimisedIn(root) {
+        const was = new Map();
+        for (const [stack, size] of minimised) if (stack.parent && stack.contentItems[0]) was.set(stack.contentItems[0].id, size);
+        if (!was.size) return;
+        const walk = (node) => {
+            const kids = node.content || [];
+            const hits = kids.filter((k) => k.type === "stack" && was.has(k.content?.[0]?.componentType));
+            if (hits.length) {
+                const total = kids.reduce((a, k) => a + (k.size || 0), 0);
+                const now = hits.reduce((a, k) => a + k.size, 0);
+                const then = hits.reduce((a, k) => a + was.get(k.content[0].componentType), 0);
+                const scale = total - now > 0 ? (total - then) / (total - now) : 1;
+                for (const k of kids) k.size = hits.includes(k) ? was.get(k.content[0].componentType) : k.size * scale;
+            }
+            kids.forEach(walk);
+        };
+        walk(root);
     }
 
     function show(id) {
@@ -557,6 +656,8 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             if (!r || !r.registered) return false;
             if (!item(id)) addAt(r);
             const shown = show(id);
+            const stack = item(id)?.parentItem;
+            if (minimised.has(stack)) unminimise(stack);
             if (shown && r.mount && r.container?.visible) { const mount = r.mount; r.mount = null; mount(r.slot); r.filled = true; }
             return shown;
         },
@@ -564,6 +665,29 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             const ci = item(id);
             if (!ci) return false;
             ci.remove();
+            return true;
+        },
+        /* The window has nothing to show (`empty`), or has again: see the header. */
+        setEmpty(id, empty = true) {
+            const r = records.get(id);
+            if (!r || r.empty === !!empty) return false;
+            r.empty = !!empty;
+            r.container?.tab?.element.classList.toggle("empty", r.empty);
+            const ci = item(id);
+            if (!ci) return true;
+            const stack = ci.parentItem;
+            if (r.empty && stack.getActiveComponentItem() === ci) {
+                const full = stack.contentItems.find((c) => !isEmpty(c));
+                if (full) {
+                    if (!gaveFront.has(stack)) gaveFront.set(stack, ci);
+                    stack.setActiveComponentItem(full, false);
+                }
+            }
+            if (!r.empty && gaveFront.get(stack) === ci) {
+                gaveFront.delete(stack);
+                stack.setActiveComponentItem(ci, false);
+            }
+            fitEmpty(stack);
             return true;
         },
         /* A panel's tab says something new -- a count -- and wears `flag` as a class
@@ -618,6 +742,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
                 id, title: r ? r.title : "World", home: r ? r.home : "world", group: r ? r.group : null, loud: !!(r && r.loud),
                 // A window a remembered layout names is known before it is registered.
                 registered: r ? r.registered : true,
+                empty: !!(r && r.empty), minimised: !!(ci && minimised.has(ci.parentItem)),
                 open: !!ci, shown: this.isShown(id), where: ci ? "layout" : "closed",
                 stack: stack ? stack.contentItems.map((c) => c.id) : [],
             };
@@ -654,6 +779,9 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
                 if (wereOpen.has(r.id) && r.registered && !item(r.id)) addAt(r, false);
             }
             for (const r of records.values()) if (r.container?.visible && r.onOpen && r.filled) r.onOpen();
+            minimised.clear();
+            gaveFront.clear();
+            fitEveryEmpty();
             remember();
             return true;
         },

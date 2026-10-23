@@ -433,6 +433,8 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     windows.from_the_windows_menu(page, "machine-print")
     print_window = windows.panel(page, "machine-print")
     expect(print_window.locator("#print-card")).to_be_visible(timeout=5000)
+    # The column four stacks deep already (Site, Selected, Parameters, Pictures): a tab.
+    assert "machine" in windows.state(page, "machine-print")["stack"]
     makes = machine.locator("#print-part")
     expect(makes.locator(f"option[value='{disc}']")).to_be_attached(timeout=10000)
     expect(machine.locator("#print-where")).to_have_text("in garage")
@@ -480,7 +482,8 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     story.shows(
         "Slice, in printer_1's Machine, slices the piece and chooses its G-code",
         "printer_1's ring, Device › Open: its Machine a tab beside Pictures, below "
-        "Selected, and ⊞ Windows › Print opens its Print from here under it. It lists "
+        "Selected, and ⊞ Windows › Print opens its Print from here, a tab beside it in "
+        "a column already four stacks deep. It lists "
         "the pieces of the garage under makes; "
         f"{disc} chosen, its Slice slices it for printer_1, the slicer's log in the card "
         "while it runs. The G-code "
@@ -493,11 +496,13 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     )
     maximise.click()  # restored: the world beside it again
     expect(page.locator(".lm_maximised")).to_have_count(0)
-    expect(page.locator(MACHINE)).to_be_visible()
+    expect(print_window).to_be_visible()  # in front of the Machine's head, its tab
 
-    # 8. ⚙ Control armed, its pad a loud window of its own beside the world; ▶ Print:
-    # asked first, naming the piece; a job begins.
-    machine.locator("#ctl").check()
+    # 8. Control armed from printer_1's ring, its pad a loud window of its own beside
+    # the world, Print still in front; ▶ Print: asked first, naming the piece; a job
+    # begins.
+    _ring_on(page, "printer_1")
+    _press(page, "Device", "Control", "Arm")
     pad = windows.panel(page, "control")
     expect(pad.locator("#control")).to_be_visible(timeout=5000)
     expect(page.locator("#control")).to_have_class(re.compile(r"\bout\b"))
@@ -522,8 +527,9 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     )
     story.says(
         "Print starts a job that names the piece",
-        "The Machine's ⚙ Control armed -- the latch a print needs, its pad a loud window "
-        "of its own beside the world -- Print from here's ▶ Print asks first, naming the "
+        "printer_1's ring, Device › Control › Arm: the latch a print needs, its pad a "
+        "loud window of its own beside the world, Print still in front. Print from "
+        "here's ▶ Print asks first, naming the "
         f"file, the port and {disc}; then the file streams, one line per ok, and the job "
         "is the newest of printer_1's history, running. The status line names where it is "
         "followed.",
@@ -633,7 +639,8 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
 
     # 14. The Machine stayed open, a tab beside Pictures, and makes lists the new piece
     # without its being opened again; the piece's own ring's Print chooses it there.
-    expect(page.locator(MACHINE)).to_be_visible()
+    stayed = windows.state(page, "machine")
+    assert stayed["open"] and "pictures" in stayed["stack"], stayed
     expect(makes.locator(f"option[value='{plate}']")).to_be_attached(timeout=10000)
     expect(makes).to_have_value(disc)
     _ring_on(page, plate)

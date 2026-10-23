@@ -26,6 +26,8 @@
  *   section for one kind of subject (`kind`) is there only for that kind:
  *   attach({ kind, without }) registers the sections for `kind` but those named in
  *   `without`, and takes away any other, as the subject turns out to be of a kind.
+ *   setEmpty(id, empty) says a section has nothing to show (its stack gives its room
+ *   away), and openLinked() opens the sections a link to the subject asks for.
  */
 
 export function knownWindows(systems) {
@@ -88,6 +90,15 @@ export function mountSystems(panels, systems, hooks = {}) {
             id: system.id, title: system.title, sections,
             widget, mounted: () => handle,
             showSection: (id) => panels.open(system.sections.find((sec) => sec.id === id).window),
+            // A section has nothing to show, or has again (panels.js's setEmpty).
+            setEmpty: (id, empty = true) => panels.setEmpty(system.sections.find((sec) => sec.id === id).window, empty),
+            // A link to its subject followed: the sections it asks for (`on_link`) the
+            // subject has, the first named in front.
+            openLinked: () => {
+                const linked = system.sections.filter((sec) => sec.on_link && panels.state(sec.window)?.registered);
+                for (const sec of [...linked].reverse()) panels.open(sec.window);
+                return linked.map((sec) => sec.window);
+            },
             attach, detach,
         };
     }
