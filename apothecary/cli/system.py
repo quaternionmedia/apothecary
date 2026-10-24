@@ -2,16 +2,57 @@
 
 import importlib.metadata
 import sys
+from importlib import import_module
 
 import click
 
+from ..projects.parts.base import BasePart
 from ..projects.parts.skeleton import ROOT
-from ..projects.parts.stl_renderer import OpenSCADRenderer
+from ..projects.parts.stl_renderer import (
+    OpenSCADRenderer,
+    get_renderer,
+    has_manifold,
+    openscad_version,
+)
 from ..projects.registry import scan_projects
 from .retired import retired
 from .utils import _safe_echo
 
 system = retired("system", "use `apothecary check`")
+
+
+def _parts():
+    """(name, part) for every registered part; part is None where its wrapper
+    does not import."""
+    found = []
+    for item in scan_projects(ROOT):
+        if item.kind != "part":
+            continue
+        if not item.wrapper:
+            found.append((item.name, BasePart(name=item.name, source_file=item.path)))
+            continue
+        try:
+            found.append((item.name, import_module(item.wrapper).DEFAULT))
+        except Exception:
+            found.append((item.name, None))
+    return sorted(found, key=lambda pair: pair[0])
+
+
+def _openscad_for(name: str, part) -> str:
+    """One line: the OpenSCAD this part renders with and whether it has Manifold,
+    or why it cannot be built here."""
+    if part is None:
+        return f"  ✗ {name}: its wrapper does not import"
+    can_build, reason = part.can_generate_stl()
+    if not can_build:
+        return f"  ✗ {name}: {reason}"
+    renderer = get_renderer()
+    exe = part.get_openscad_path() or renderer.openscad_path
+    if exe is None or not exe.exists():
+        return f"  ✗ {name}: no OpenSCAD"
+    version = openscad_version(exe) or "unknown version"
+    manifold = "Manifold" if has_manifold(exe) else "no Manifold"
+    return f"  ✓ {name}: {exe} ({version}; {manifold})"
 
 
 @click.command()
@@ -61,9 +102,22 @@ def check():
         version = renderer.get_version()
         if version:
             _safe_echo(f"  ✓ Version: {version}")
+        if not has_manifold(renderer.openscad_path):
+            _safe_echo(
+                "  • No Manifold: renders use CGAL (slow); "
+                "`apothecary openscad install` fetches a snapshot that has it",
+                fg="yellow",
+            )
     else:
         _safe_echo("  ✗ OpenSCAD not found", fg="yellow")
         click.echo("     STL rendering endpoints and commands will be unavailable")
+        click.echo("     `apothecary openscad install` fetches a snapshot (Linux x86_64)")
+
+    click.echo("")
+
+    click.secho("OpenSCAD by part:", bold=True)
+    for name, part in _parts():
+        _safe_echo(_openscad_for(name, part))
 
     click.echo("")
 

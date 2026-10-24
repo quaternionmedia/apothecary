@@ -33,9 +33,8 @@ from pydantic import BaseModel, Field, create_model
 
 from ..core import OpenSCADObject
 from ..models.bounds import BoundingBox3D
-from ..models.vectors import Vector3D
 from ..projects.parts.base import BasePart, ContestedValue
-from .compose import THICKNESS_GUESS, piece_from_shape
+from .compose import THICKNESS_GUESS, piece_from_shape, turned_box
 from .looks import Made, found_size
 
 SIDES = ("width", "depth", "height")
@@ -160,17 +159,10 @@ class MadePart(BasePart):
 
     def get_bounds(self, params: Optional[Dict] = None) -> BoundingBox3D:
         """The box the piece occupies as built: its sides, standing on its own
-        middle, turned about it by the shape's ``turned_degrees``. A round word
-        fills its longer side both ways, which the piece's footprint does not say
-        either."""
+        middle, turned about it by the shape's ``turned_degrees`` -- the same box
+        as the piece's footprint (``turned_box``)."""
         p = self._params(params)
-        turn = math.radians(self.record.shape.turned_degrees)
-        half_x = abs(p.width / 2 * math.cos(turn)) + abs(p.depth / 2 * math.sin(turn))
-        half_y = abs(p.width / 2 * math.sin(turn)) + abs(p.depth / 2 * math.cos(turn))
-        return BoundingBox3D(
-            min_point=Vector3D(x=-half_x, y=-half_y, z=0.0),
-            max_point=Vector3D(x=half_x, y=half_y, z=p.height),
-        )
+        return turned_box(p.width, p.depth, p.height, self.record.shape.turned_degrees)
 
 
 __all__ = ["MadePart", "PieceParams", "SIDES", "candidates", "piece_params", "word_pattern"]

@@ -100,6 +100,11 @@ The docs' "thirty seconds of OpenSCAD" (`tests/test_staging.py`,
 - Resolve a snapshot through the requirement seam that already exists
   (`openscad_min_version`, `find_openscad`), and pass `--backend=manifold`
   when the chosen OpenSCAD supports it; 2021.01 keeps working, only slower.
+  Landed: `apothecary openscad install [--latest | --snapshot DATE]`
+  (`apothecary/openscad_installer.py`) puts a checksum-verified snapshot in
+  `~/.apothecary/tools/openscad/<date>/`; the resolver
+  (`apothecary/projects/parts/stl_renderer.py`) prefers it, `APOTHECARY_OPENSCAD`
+  overrides, and `apothecary check` names each part's OpenSCAD.
 - A content-addressed variant cache: key on the SCAD and its includes, the
   overrides, the OpenSCAD version and backend; `render_part` renders to any
   path, and the node-STL cache in `api.py` is the precedent (lock, trim).

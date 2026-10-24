@@ -195,3 +195,25 @@ def test_generate_is_503_for_a_part_that_cannot_be_built_here(cube_stl, monkeypa
     assert r.status_code == 503
     assert "needs 2024.x" in r.json()["detail"]
     assert not cube_stl.exists()
+
+
+def test_a_test_that_starts_the_app_starts_no_background_render(monkeypatch, tmp_path):
+    """The lifespan builds missing STLs in the background; inside the suite that
+    would write build products into the checkout from whichever test happened to
+    start the app, and outlive it in a worker thread under the next test's
+    environment. The suite switches it off (tests/conftest.py); the one test of
+    startup generation turns it back on for itself."""
+    from apothecary import api
+    from apothecary.projects.parts.calibration_cube import DEFAULT as cube
+
+    # A part whose STL is missing, so a render would start if anything allowed it.
+    entry = next(p for p in api.scan_projects(api.ROOT) if p.name == "calibration_cube")
+    monkeypatch.setattr(api, "scan_projects", lambda root: [entry])
+    monkeypatch.setattr(type(cube), "get_stl_output_path", lambda self: tmp_path / "cube.stl")
+    started = []
+    monkeypatch.setattr(api, "build_stl", lambda *a, **k: started.append(a))
+    with TestClient(app) as client:
+        assert client.get("/health").status_code == 200
+        task = app.state.stl_generation_task
+    assert task.done()
+    assert started == []

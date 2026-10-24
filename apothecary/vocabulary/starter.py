@@ -15,7 +15,7 @@ from ..booleans import Difference
 from ..hierarchy import Assembly
 from ..models.vectors import Vector3D
 from ..primitives import Cube, Cylinder
-from ..transforms import Translate
+from ..transforms import Scale, Translate
 from .word import Word, WordList, WordShape
 
 
@@ -38,14 +38,28 @@ def _corner_at_origin(shape: WordShape, round_thing) -> Translate:
     )
 
 
+def _round(shape: WordShape):
+    """A cylinder whose footprint is ``width`` x ``depth``: a circle when the two
+    are equal, else that circle squeezed along its shorter side into the ellipse
+    the shape was found as. Building a circle of the longer side put a mesh
+    wider than the footprint, the bounds and the editor all said it was."""
+    across = max(shape.width, shape.depth)
+    circle = Cylinder(h=shape.height, r=across / 2)
+    if shape.width == shape.depth:
+        return circle
+    # The circle keeps the longer side's radius, so it is faceted as finely as
+    # it always was; a unit circle scaled up would be faceted as a pentagon.
+    return Scale(
+        v=Vector3D(x=shape.width / across, y=shape.depth / across, z=1.0), children=[circle]
+    )
+
+
 def _disc(name: str, shape: WordShape) -> Assembly:
     """A round flat piece. The default reading of a circle."""
     return Assembly(
         name=name,
         role="word",
-        base=_corner_at_origin(
-            shape, Cylinder(h=shape.height, r=max(shape.width, shape.depth) / 2)
-        ),
+        base=_corner_at_origin(shape, _round(shape)),
     )
 
 
@@ -54,9 +68,7 @@ def _post(name: str, shape: WordShape) -> Assembly:
     return Assembly(
         name=name,
         role="word",
-        base=_corner_at_origin(
-            shape, Cylinder(h=shape.height, r=max(shape.width, shape.depth) / 2)
-        ),
+        base=_corner_at_origin(shape, _round(shape)),
     )
 
 

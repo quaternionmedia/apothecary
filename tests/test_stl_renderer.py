@@ -33,6 +33,12 @@ needs_openscad = pytest.mark.skipif(
 class TestOpenSCADRenderer:
     """Tests for OpenSCAD renderer."""
 
+    @pytest.fixture(autouse=True)
+    def _nothing_installed_here(self, tmp_path, monkeypatch):
+        """No snapshot `apothecary openscad install` put down, and no override."""
+        monkeypatch.setenv("APOTHECARY_TOOLS_DIR", str(tmp_path / "tools"))
+        monkeypatch.delenv("APOTHECARY_OPENSCAD", raising=False)
+
     def test_detect_openscad_on_path(self, monkeypatch):
         monkeypatch.setattr("shutil.which", lambda name: "/opt/bin/openscad")
         assert OpenSCADRenderer()._detect_openscad() == Path("/opt/bin/openscad")
@@ -84,7 +90,10 @@ class TestOpenSCADRenderer:
         """OpenSCAD writes a temporary file that replaces the STL only on success."""
         hangs = tmp_path / "openscad"
         # Writes half a file where it was told to, then never finishes.
-        hangs.write_text('#!/bin/sh\nprintf "solid partial\\n" > "$2"\nexec sleep 30\n')
+        hangs.write_text(
+            '#!/bin/sh\n[ "$1" = --version ] && echo "OpenSCAD version 2021.01" >&2 && exit 0\n'
+            'printf "solid partial\\n" > "$2"\nexec sleep 30\n'
+        )
         hangs.chmod(hangs.stat().st_mode | stat.S_IEXEC)
         scad = tmp_path / "part.scad"
         scad.write_text("cube(1);")

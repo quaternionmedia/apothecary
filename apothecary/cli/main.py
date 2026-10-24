@@ -6,6 +6,7 @@ from .census import census
 from .docs import docs
 from .firmware import firmware
 from .inventory import inventory
+from .openscad import openscad
 from .parts import parts
 from .photo import photo
 from .preflight import preflight
@@ -47,6 +48,7 @@ cli.add_command(test)
 cli.add_command(docs)
 cli.add_command(census)
 cli.add_command(firmware)
+cli.add_command(openscad)
 
 
 def main():  # pragma: no cover - entry point

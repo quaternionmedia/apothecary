@@ -15,12 +15,30 @@ Apothecary builds 3D-printable things from Python and keeps the parts it has bui
   Arduinos and ESP32s; a Marlin printer is monitored, and drives its node in the viewer.
 - **Photographs into pieces.** A picture becomes named, placed pieces you can build.
 - **It stays on this machine.** The server answers this machine only, and the process
-  connects nowhere else but to fetch the firmware toolchain (`apothecary/stays_local.py`).
+  connects nowhere else but to fetch its tools, the firmware toolchain and OpenSCAD
+  (`apothecary/stays_local.py`).
 
 ## Install
 
-Python 3.11+ and [uv](https://docs.astral.sh/uv/). Rendering STLs needs the `openscad` CLI
-on `PATH`; nothing else does.
+Python 3.11+ and [uv](https://docs.astral.sh/uv/). Rendering STLs needs OpenSCAD; nothing
+else does. `uv run apothecary openscad install` puts a development snapshot into
+`~/.apothecary/tools`, and renders use it, with Manifold; otherwise the `openscad` CLI on
+`PATH` is used. `APOTHECARY_OPENSCAD` names another. What it installs is native to the
+machine:
+
+- **Linux x86_64**: the night's AppImage from files.openscad.org; where there is no FUSE,
+  the AppImage is extracted and its `AppRun` used.
+- **macOS**, Intel and Apple Silicon: `OpenSCAD.app`, copied out of the night's disk image
+  (attached read-only with `hdiutil`, then detached). The app is universal.
+- **Windows x64**: the night's portable zip, unpacked; no installer, no admin.
+- **Linux arm64**: no current build is published, so it is built here from OpenSCAD's
+  source at the night's date (cmake, headless, with Manifold; `--jobs N`). What the build
+  needs is checked first, and anything missing is refused with the `sudo apt install` line
+  that adds it; it never runs sudo itself. The build takes long on a small board.
+- **Windows on ARM** is not supported yet; it is a planned item.
+
+`uv run apothecary openscad status` says, for each install, its platform, how it was
+installed, whether it runs natively here, and whether it has Manifold.
 
 ```bash
 git clone --recurse-submodules https://github.com/quaternionmedia/apothecary.git

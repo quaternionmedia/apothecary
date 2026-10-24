@@ -11,6 +11,7 @@ here: run `apothecary problems`.
   not in it, so an installed wheel cannot render a part.
 - The one-screen move, phases 4-5: [docs/plans/one-screen-2026-09-20.md](docs/plans/one-screen-2026-09-20.md).
 - Designing a part from the browser, a spike with a recommended order: [docs/plans/part-editing-in-the-browser-2026-09-27.md](docs/plans/part-editing-in-the-browser-2026-09-27.md).
+- Consolidation: one page, Site and Selected panels, one Machine per board, the Bench, one Pictures panel, jobs over machine kinds: [docs/plans/consolidation-2026-10-03.md](docs/plans/consolidation-2026-10-03.md).
 - Pictures, captures and found shapes in the world, the camera panel retired: [docs/plans/pictures-in-the-world-2026-09-26.md](docs/plans/pictures-in-the-world-2026-09-26.md).
 - Optional local models behind the shape finder: [docs/plans/photo-finders-local-models-2026-09-21.md](docs/plans/photo-finders-local-models-2026-09-21.md).
 

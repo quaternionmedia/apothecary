@@ -41,7 +41,7 @@ from pydantic import BaseModel, Field
 
 from ..hierarchy import Assembly
 from ..models.vectors import Vector3D
-from .compose import piece_from_shape, sides_as_found, thickness_guess
+from .compose import built_sides, piece_from_shape, sides_as_found, thickness_guess
 from .models import FoundShape
 
 # The most shapes a look keeps, the most confident first: the outline budget per mat.
@@ -577,7 +577,7 @@ def make(
             mm_across=look.mm_across,
             pixel_width=look.pixel_width,
             pixel_height=look.pixel_height,
-            parameters=_size_of(piece),
+            parameters=_size_of(found, look.mm_across, look.tallness),
             placed_at=piece.position.model_copy(),
         )
         if looks.record_made(record):
@@ -588,14 +588,11 @@ def make(
     return names, skipped
 
 
-def _size_of(piece: Assembly) -> Dict[str, float]:
-    fp = piece.footprint
-    assert fp is not None
-    return {
-        "width": fp.max_point.x - fp.min_point.x,
-        "depth": fp.max_point.y - fp.min_point.y,
-        "height": fp.max_point.z - fp.min_point.z,
-    }
+def _size_of(shape: FoundShape, per_unit: float, tallness: float, size=None) -> Dict[str, float]:
+    """The sides a piece is built with, before it is turned: its footprint is the
+    box of it as turned, which is not its sides for a turned piece."""
+    width, depth, height = built_sides(shape, per_unit, tallness, size)
+    return {"width": width, "depth": depth, "height": height}
 
 
 def _index_of(site_name: str, site: Assembly, piece: str) -> int:
@@ -652,10 +649,10 @@ def rebuild(
     size = WordShape(**parameters) if parameters else None
     if size is None and record.parameters_stated:
         size = WordShape(**record.parameters)
-    rebuilt = _rebuilt_in_place(
+    _rebuilt_in_place(
         site, index, record, word=new_word, reason=reason, size=size, mm_across=record.mm_across
     )
-    built = _size_of(rebuilt)
+    built = _size_of(record.shape, record.mm_across, record.pixel_height / record.pixel_width, size)
     record = record.model_copy(
         update={
             "word": new_word,
@@ -699,7 +696,10 @@ def rescale_made(site_name: str, site: Assembly, look: Look) -> List[str]:
             size=None,
             mm_across=look.mm_across,
         )
-        update: Dict[str, object] = {"mm_across": look.mm_across, "parameters": _size_of(piece)}
+        update: Dict[str, object] = {
+            "mm_across": look.mm_across,
+            "parameters": _size_of(record.shape, look.mm_across, look.tallness),
+        }
         if stood_still and centre is not None:
             dx, dy = shape_offset(look, record.shape)
             piece.position = Vector3D(x=centre.x + dx, y=centre.y + dy, z=centre.z)

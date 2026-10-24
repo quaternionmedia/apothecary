@@ -15,6 +15,7 @@ PROTOTYPE — not ratified.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional, Tuple
 
@@ -67,6 +68,35 @@ def thickness_guess(width: float, depth: float) -> float:
     """A flat shape's thickness, guessed: ``THICKNESS_GUESS`` of its shorter side,
     never below ``MIN_THICKNESS``. A picture from above cannot see it."""
     return max(min(width, depth) * THICKNESS_GUESS, MIN_THICKNESS)
+
+
+def built_sides(
+    shape: "FoundShape",
+    per_unit: Optional[float],
+    tallness: float,
+    size: Optional["WordShape"] = None,
+) -> Tuple[float, float, float]:
+    """(width, depth, thickness) a piece is built with, before it is turned: a
+    person's ``size`` when one is given, else the sides as found and the
+    thickness guessed from them."""
+    if size is not None:
+        return size.width, size.depth, size.height
+    width, depth = sides_as_found(shape, per_unit, tallness)
+    return width, depth, thickness_guess(width, depth)
+
+
+def turned_box(width: float, depth: float, height: float, turned_degrees: float) -> BoundingBox3D:
+    """The upright box a ``width`` x ``depth`` x ``height`` piece occupies standing
+    on its own middle, turned about it by ``turned_degrees``. A bar lying at 35°
+    reaches further across and down than its own sides; the overlap check, the
+    piece's footprint and its part's bounds all read this box."""
+    turn = math.radians(turned_degrees)
+    half_x = abs(width / 2 * math.cos(turn)) + abs(depth / 2 * math.sin(turn))
+    half_y = abs(width / 2 * math.sin(turn)) + abs(depth / 2 * math.cos(turn))
+    return BoundingBox3D(
+        min_point=Vector3D(x=-half_x, y=-half_y, z=0.0),
+        max_point=Vector3D(x=half_x, y=half_y, z=height),
+    )
 
 
 def picture_to_site(
@@ -201,12 +231,9 @@ def piece_from_shape(
     sized = per_unit is not None
     factor = per_unit if sized else 1.0
 
+    width, depth, thickness = built_sides(shape, per_unit, tallness, size)
     if size is not None:
-        width, depth, thickness = size.width, size.depth, size.height
         sized = sized and size.sized
-    else:
-        width, depth = sides_as_found(shape, per_unit, tallness)
-        thickness = thickness_guess(width, depth)
 
     piece = chosen.make(name, WordShape(width=width, depth=depth, height=thickness, sized=sized))
 
@@ -234,15 +261,9 @@ def piece_from_shape(
         y=(0.5 - centre.y) * tallness * factor,
         z=0.0,
     )
-    # The piece now straddles its own position, so its extent does too.
-    piece.footprint = (
-        BoundingBox3D(
-            min_point=Vector3D(x=-width / 2, y=-depth / 2, z=0.0),
-            max_point=Vector3D(x=width / 2, y=depth / 2, z=thickness),
-        )
-        if sized
-        else None
-    )
+    # The piece now straddles its own position, so its extent does too, and
+    # a turned piece's extent is the box of it as turned.
+    piece.footprint = turned_box(width, depth, thickness, shape.turned_degrees) if sized else None
     piece.status = None if sized else "unsized"
     # The viewer already gathers nodes by category and offers them as
     # filters. Naming the word here means grouping by word costs nothing:
@@ -277,8 +298,10 @@ __all__ = [
     "THICKNESS_GUESS",
     "ScaleUnknown",
     "build",
+    "built_sides",
     "picture_to_site",
     "piece_from_shape",
     "sides_as_found",
     "thickness_guess",
+    "turned_box",
 ]

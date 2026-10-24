@@ -376,6 +376,87 @@ git -C governance/qm log --oneline origin/project/apothecary..adr/firmware-toolc
       pictures or your serial ports (temp state, temp pictures, the scripted
       arduino-cli and the simulated printer).
 
+## 9. OpenSCAD on every platform
+
+`apothecary openscad install` installs a development snapshot natively where
+OpenSCAD publishes one, builds it from source on Linux arm64, and refuses
+Windows on ARM as a planned item. CI does not cover the other platforms yet;
+this section is how they are proven, on the machines themselves. The tools
+folder is `~/.apothecary/tools` (`%USERPROFILE%\.apothecary\tools` on Windows).
+`uv run apothecary openscad status` says, per install, how it was installed,
+whether it runs natively, and whether it has Manifold.
+
+**Linux x86_64**
+
+- [ ] `uv run apothecary openscad install --latest` → downloads the night's
+      AppImage, "SHA-256 verified", `OpenSCAD version <date>`; status reads
+      `AppImage, run through FUSE · native · Manifold`.
+- [ ] On a machine without FUSE (a container without `/dev/fuse`) → "cannot
+      mount itself here (no FUSE); extracting it instead", and status reads
+      `AppImage extracted (no FUSE here)`; a render works.
+
+**macOS (Apple Silicon; Intel too if one is to hand)**
+
+- [ ] `uv run apothecary openscad install --latest` → downloads the `.dmg`,
+      "SHA-256 verified", "A universal app (x86_64 and arm64)", installed at
+      `…/<date>/OpenSCAD.app/Contents/MacOS/OpenSCAD`; no Finder window or
+      desktop volume appears, and afterwards `hdiutil info` lists no
+      OpenSCAD image and `$TMPDIR` holds no `apothecary-openscad-*` folder.
+- [ ] `lipo -archs …/Contents/MacOS/OpenSCAD` → `x86_64 arm64`;
+      `xattr -l …/OpenSCAD.app` → no `com.apple.quarantine`;
+      `codesign --verify --deep --strict …/OpenSCAD.app` passes, and
+      `codesign -dv` names "Developer ID Application: Marius Kintel
+      (28U8KJ6T2P)". Write down what `spctl -a -vv` says; the first run shows
+      no Gatekeeper prompt.
+- [ ] Status → `OpenSCAD.app from the disk image · native (universal) ·
+      Manifold`; `uv run pytest -q --slow` renders with it, and Activity
+      Monitor shows OpenSCAD's Kind as Apple.
+- [ ] From an x86_64 Python (`uv run --python cpython-3.12-macos-x86_64-none
+      apothecary openscad status`) → "emulated: x86_64 under Rosetta 2", and
+      a render from it shows Kind Intel.
+
+**Windows x64 (a normal user, PowerShell)**
+
+- [ ] `uv run apothecary openscad install --latest` → downloads the
+      `-x86-64.zip`, "SHA-256 verified", "Unpacking", `OpenSCAD version
+      <date>`, installed at `…\<date>\openscad.exe`, with `openscad.com`,
+      `libraries`, `fonts` and `install.json` beside it. If it fails with
+      "reports no version", write it down (the fix is to ask `openscad.com`).
+- [ ] Status → `portable zip, unpacked · native · Manifold`, not "unknown
+      version" (a first scan by Defender can outlast the 10 s version check);
+      `uv run pytest -q --slow` renders; note any SmartScreen or Defender
+      prompt.
+- [ ] `install --snapshot <date> --force` replaces it in place, with no
+      `.tmp` folders left.
+
+**Windows on ARM (a Snapdragon PC, if one is to hand)**
+
+- [ ] `uv run apothecary openscad install`, from an ARM64 and from an x64
+      Python → both refuse with "Windows on ARM is not supported yet (a
+      planned item)", and download nothing.
+
+**Linux arm64 (a Raspberry Pi 4/5 on 64-bit Raspberry Pi OS, or another
+arm64 board)**
+
+- [ ] Before installing anything, `uv run apothecary openscad install` →
+      refuses, lists what the build needs and prints the `sudo apt install …`
+      line; nothing is read or downloaded.
+- [ ] Run that line, then the install again, in tmux → "building <date> from
+      source", the commit and six submodule lines, seven downloads,
+      "Configuring (cmake)", "Building with N jobs", "Built in N min",
+      "Manifold X.Y.Z: a cube renders with it", installed at
+      `…/<date>/bin/openscad`. Write down N, the wall time, peak memory
+      (`free -h`), whether it swapped, and the build folder's peak size. A
+      failure keeps its log at `~/.apothecary/tools/openscad/build-<date>.log`.
+- [ ] `grep -iE "download|fetchcontent"` over the kept build log → nothing
+      fetched during the build.
+- [ ] Status → `built from source at <sha> · native · Manifold X.Y.Z`;
+      `…/bin/openscad --info` (write down whether its OpenGL part works
+      headless); `uv run apothecary parts generate-stl gridfinity --force`
+      renders.
+- [ ] On a 2 GB board, `--jobs 1` completes; `install --snapshot <same date>`
+      again says "already installed" and fetches nothing.
+
 ## Results
 
 Fill this in as you go; anything refused or slow gets its time, port and
@@ -394,3 +475,48 @@ goes to `todo.md` or an issue; a door found open goes to the record's risk regis
 | 6. Printer (hardware) | / 2 + the bench record | |
 | 7. Docs | / 4 | |
 | 8. Suites | / 2 | |
+| 9. OpenSCAD, Linux x86_64 | / 2 | |
+| 9. OpenSCAD, macOS | / 4 | |
+| 9. OpenSCAD, Windows x64 | / 3 | |
+| 9. OpenSCAD, Windows on ARM | / 1 | |
+| 9. OpenSCAD, Linux arm64 | / 5 | |
+
+## For a person, and follow-ups
+
+What this branch leaves to a person, and the hardening that comes after it.
+Each item names what done looks like.
+
+**Governance, a person's acts**
+
+- [ ] **Ratify the records on qm#121** (`adr/firmware-toolchain-seam` into
+      `project/apothecary`), first *Personal data stays on the device*: its
+      §2 names the OpenSCAD installer as the second caller of the tool fetch
+      and `files.openscad.org`, `api.github.com` and `codeload.github.com`
+      as its sources, and §6 the rules for views. Done: the status flipped
+      and a number assigned by a human commit, the PR merged.
+- [ ] **Bump apothecary's governance pin** to the ratified
+      `project/apothecary` (`git -C governance/qm checkout <commit>`, commit
+      the pin alone). Done: `check-submodule-refs` green on the bump's PR.
+- [ ] **rad#7** proposes opening a ring entered at an item for rad's host
+      standard; apothecary's ring follows whatever rad decides (its host
+      record's revision trigger).
+
+**Hardening, after this branch**
+
+- [ ] **GPG signatures** on downloads: check the `.asc` beside each
+      OpenSCAD AppImage, zip and installer against OpenSCAD's signing key,
+      and the same for arduino-cli's releases where one is published, before
+      a download is accepted (needs GnuPG and the key, carried or fetched
+      once as a tool).
+- [ ] **macOS code signature in code**, not only on the checklist: the
+      app's signature verified and its Team ID (28U8KJ6T2P) checked, and its
+      notarisation; the `.dmg` has no `.asc`.
+- [ ] **Windows Authenticode** on `openscad.exe`, if it is signed.
+- [ ] **Source-build integrity**: codeload tarballs have no published
+      checksum; check the unpacked files against the git tree the API
+      returns, and record each tarball's SHA-256 in `install.json`.
+- [ ] **Nested submodules** in a source build (none at today's pins), and
+      the `.1` second builds some nights publish (the plain name is used).
+- [ ] **One day: Windows on ARM**, natively. No ARM64 snapshot is published;
+      today the installer refuses it as a planned item.
+
