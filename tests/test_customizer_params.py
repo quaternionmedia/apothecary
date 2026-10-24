@@ -338,22 +338,7 @@ class TestTheCheckAndTheRender:
 # --- the library's parts, with a real OpenSCAD that lists them ---------------------------
 
 
-def _a_listing_openscad():
-    """An OpenSCAD on this machine that lists a SCAD's parameters, or None."""
-    for path in stl_renderer._openscad_candidates():
-        if lists_parameters(path):
-            return path
-    return None
-
-
-LISTING = _a_listing_openscad()
-needs_a_listing_openscad = pytest.mark.skipif(
-    LISTING is None, reason="no OpenSCAD here lists parameters (`apothecary openscad install`)"
-)
-
-
-@needs_a_listing_openscad
-def test_a_real_snapshot_lists_every_kind(tmp_path):
+def test_a_real_snapshot_lists_every_kind(tmp_path, listing_openscad):
     scad = tmp_path / "every_kind.scad"
     scad.write_text(
         "/* [Size] */\n// The width of it\nwidth = 34; // [10:100]\nheight = 5.5; // [1:0.5:20]\n"
@@ -361,7 +346,7 @@ def test_a_real_snapshot_lists_every_kind(tmp_path):
         "named = 2; // [1:one, 2:two]\nvec = [1, 2, 3];\n/* [Hidden] */\nsecret = 9;\n"
         "cube([width, height, 3]);\n"
     )
-    check = customizer.check_scad(scad, OpenSCADRenderer(str(LISTING)))
+    check = customizer.check_scad(scad, OpenSCADRenderer(str(listing_openscad)))
     assert check.ok and check.lists and check.messages == []
     fields = {f.name: f for f in scad_fields(check.parameters)}
     assert list(fields) == ["width", "height", "hollow", "label", "shape", "named", "vec"]
@@ -378,12 +363,13 @@ def test_a_real_snapshot_lists_every_kind(tmp_path):
     assert fields["height"].step == 0.5 and fields["width"].description == "The width of it"
 
 
-@needs_a_listing_openscad
-def test_a_real_snapshot_gives_the_librarys_model_less_parts_controls(monkeypatch):
+def test_a_real_snapshot_gives_the_librarys_model_less_parts_controls(
+    monkeypatch, listing_openscad
+):
     """solderfan has no Python model; its SCAD's own numbers are its controls."""
     from apothecary.projects.parts.solderfan import DEFAULT as solderfan
 
-    spec = customizer_spec(solderfan, OpenSCADRenderer(str(LISTING)))
+    spec = customizer_spec(solderfan, OpenSCADRenderer(str(listing_openscad)))
     fields = {f.name: f for f in spec.fields}
     assert spec.source == "customizer" and {"filterW", "fanW", "wall"} <= set(fields)
     assert all(fields[n].type == "number" for n in ("filterW", "fanW", "wall"))
