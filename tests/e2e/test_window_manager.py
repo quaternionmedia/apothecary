@@ -24,10 +24,12 @@ from __future__ import annotations
 import json
 import mimetypes
 import re
+from pathlib import Path
 from urllib.parse import urlparse
 
 import pytest
 import windows
+from browsers import CHROMIUM_MISSING
 from playwright.sync_api import Page, expect
 
 from apothecary.projects.parts.skeleton import ROOT
@@ -156,15 +158,26 @@ def _serve(route) -> None:
     route.fulfill(path=str(file), content_type=kind or "application/octet-stream")
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _chromium_here(browser_type):
+    """This page needs no server, only Chromium, so it runs wherever Playwright has
+    installed Chromium -- `uv run pytest` too -- and skips where it has not, before a
+    browser is launched."""
+    if not Path(browser_type.executable_path).exists():
+        pytest.skip(CHROMIUM_MISSING)
+
+
 @pytest.fixture
-def browser_context_args(request):
-    """Run with the browser tests (--start-server or --base-url), and start no server:
-    this page is served from the checkout by the browser's own routing."""
-    if not (request.config.getoption("--start-server") or request.config.getoption("--base-url")):
-        pytest.skip(
-            "browser tests run with --start-server or --base-url; this one starts no server"
-        )
+def browser_context_args():
+    """No server's address: this page is served from the checkout by the browser's own
+    routing."""
     return {}
+
+
+@pytest.fixture(scope="session")
+def _verify_url():
+    """pytest-base-url checks the server's address before every test, asking for one;
+    this page has none to check."""
 
 
 @pytest.fixture

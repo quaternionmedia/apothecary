@@ -201,7 +201,7 @@ this file's summary of the corpus instead of the corpus.
 ```bash
 uv sync                        # install dependencies
 uv run apothecary test run     # the ordinary test command: unit tests and the walkthrough
-uv run pytest                  # the quick inner loop: unit tests and the walkthrough; browser tests skip
+uv run pytest                  # the quick inner loop: unit tests, the walkthrough and the window manager's page; other browser tests skip
 uv run apothecary test all     # unit tests and the walkthrough, then every browser test
 uv run apothecary serve        # the viewer at :8000/viewer; docs at /docs, the API at /openapi.json
 uv run apothecary serve --demo # the same on a state folder of its own, a simulated printer and devkit
