@@ -79,8 +79,9 @@ touches shared ground (the page, the app, this suite's helpers and conftest, the
 dependencies), a browser file itself when it changes, none when it reaches no area.
 The change is what the checkout holds against `--since`, the branch's upstream
 when it is not given; `--list` names the files and runs nothing. A new browser file
-goes in one area, and `tests/test_areas.py` fails until it is in one. The whole
-suite, `apothecary test all`, runs before a pull request is ready.
+goes in one area, and `tests/test_areas.py` fails until it is in one. It is for
+while working and is never the gate: the whole suite, `apothecary test all`, runs
+before every merge, on the tree that lands (`CONTRIBUTING.md`, "The loop").
 
     uv run apothecary test changed --list --since origin/main
 

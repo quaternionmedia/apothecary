@@ -86,9 +86,9 @@ HELP = """Run the test suite, exiting as pytest does.
   apothecary test all   the same, then every browser test (--workers N in
                         parallel; further arguments go to pytest)
   apothecary test changed
-                        the unit tests and the walkthrough, then the browser
-                        files of the areas a change reaches (--since REF; the
-                        branch's upstream by default)
+                        while working: the unit tests and the walkthrough, then
+                        the browser files of the areas a change reaches (--since
+                        REF; the branch's upstream by default)
   uv run pytest         the quick inner loop, browser tests skipped
 
 The walkthrough's demonstration and every browser test drive Chromium:
@@ -227,7 +227,8 @@ def test_changed(since: str | None, only_list: bool, workers: int, pytest_args: 
     reaches (tests/e2e/areas.py): every browser file when it touches shared ground, a
     browser file itself when it changes, none when it reaches no area. The change is
     what this checkout holds against --since, uncommitted and new files included;
-    without it, against the branch's upstream. The whole suite is `test all`'s."""
+    without it, against the branch's upstream. It is for while working: the run before
+    a merge is `test all`'s, the whole suite."""
     changed = changed_paths(since)
     if only_list:
         areas = _areas()
