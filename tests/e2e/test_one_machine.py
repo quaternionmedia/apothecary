@@ -24,6 +24,9 @@ import httpx
 import pytest
 import windows
 from playwright.sync_api import Page, expect
+from rings import by_label as _wedges
+from rings import open_on_row as _ring_on
+from rings import press as _choose
 
 PRINTER = "/dev/ttyFAKE1"
 UNO = "/dev/ttyFAKE0"
@@ -62,30 +65,6 @@ def _open_viewer(page: Page, url: str) -> None:
 def _select(page: Page, path: str) -> None:
     page.locator(f"#contents-list .contents-item[data-path='{path}']").click()
     expect(page.locator("#selected-body .prop-row", has_text="Name")).to_be_visible(timeout=5000)
-
-
-def _wedges(page: Page) -> dict:
-    """label -> cell of every wedge of the open ring that holds something."""
-    return page.evaluate(
-        """() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]
-            .filter((w) => !w.classList.contains('empty'))
-            .map((w) => [w.getAttribute('aria-label'), w.dataset.cell]))"""
-    )
-
-
-def _choose(page: Page, *labels: str) -> None:
-    """From the ring open on the selected piece, the cells named, by their labels."""
-    for label in labels:
-        cells = _wedges(page)
-        assert label in cells, f"no {label!r} in this ring: {sorted(cells)}"
-        page.keyboard.press(cells[label])
-
-
-def _ring_on(page: Page, path: str) -> None:
-    page.locator(f"#contents-list .contents-item[data-path='{path}']").click(
-        button="right", modifiers=["Control"]
-    )
-    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
 
 
 MACHINE = windows.MACHINE

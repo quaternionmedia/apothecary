@@ -20,6 +20,8 @@ import httpx
 import pytest
 import windows
 from playwright.sync_api import Page, expect
+from rings import by_label
+from rings import press as _ring_labels
 from viewer_ready import FREE_SPOT, settled
 
 ROW = "#contents-list .contents-item[data-path='{}']"
@@ -806,17 +808,13 @@ def test_ctrl_s_saves_the_variant_from_anywhere_while_the_editor_is_open(page: P
 # Addresses that hold still; confirming by consequence
 # --------------------------------------------------------------------------
 
-WEDGES = """() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]
-    .filter((w) => !w.classList.contains('empty'))
-    .map((w) => [w.getAttribute('aria-label'), w.dataset.cell]))"""
-
 
 def _canvas_ring(page: Page) -> dict:
     _world(page)
     page.keyboard.press("Shift+M")
     expect(page.locator(RING)).to_be_visible(timeout=5000)
     page.wait_for_function("() => document.querySelectorAll('#ring-overlay .wedge').length > 0")
-    cells = page.evaluate(WEDGES)
+    cells = by_label(page)
     page.keyboard.press("Escape")
     expect(page.locator(RING)).to_have_count(0)
     return cells
@@ -889,17 +887,6 @@ def test_rebuild_asks_twice_on_its_wedge_and_the_emergency_stop_never_asks(page:
 # --------------------------------------------------------------------------
 
 PINNED = ".panel[data-panel='selected'] .panel-pinned"
-
-
-def _ring_labels(page: Page, *labels: str) -> None:
-    for label in labels:
-        page.wait_for_function(
-            "(l) => [...document.querySelectorAll('#ring-overlay .wedge')]"
-            ".some((w) => w.getAttribute('aria-label') === l)",
-            arg=label,
-            timeout=5000,
-        )
-        page.keyboard.press(page.evaluate(WEDGES)[label])
 
 
 @pytest.mark.e2e

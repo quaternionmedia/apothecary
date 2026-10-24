@@ -73,10 +73,6 @@ def _open(page: Page, url: str) -> None:
     settled(page)
 
 
-def _press(page: Page, *labels: str) -> None:
-    rings.press(page, *labels)
-
-
 def _ring(page: Page, *labels: str, part: str = PART) -> None:
     rings.on_row(page, part, *labels)
 

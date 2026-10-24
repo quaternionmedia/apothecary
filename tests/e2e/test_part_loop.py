@@ -37,6 +37,8 @@ import pytest
 import windows
 from doc_capture import moments
 from playwright.sync_api import Page, expect
+from rings import RING_MS
+from rings import press as _press
 from viewer_ready import (
     MARKED_LINE_FIRST,
     STAGE_BAR_AT_THE_TOP,
@@ -122,12 +124,6 @@ BESIDE = """(part) => {
     return [others[0].name];
 }"""
 
-WEDGES = (
-    "() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]"
-    ".filter((w) => !w.classList.contains('empty'))"
-    ".map((w) => [w.dataset.cell, w.getAttribute('aria-label')]))"
-)
-
 
 @pytest.fixture(scope="module")
 def loop_url(base_url, start_server, every_stl_built, tmp_path_factory):
@@ -195,10 +191,6 @@ def _drawn(page: Page) -> None:
     settled(page)
 
 
-# How long a ring may take to open: it asks the server what to offer, and on a
-# machine loaded with OpenSCAD runs that answer can take over 5 s.
-RING_MS = 15000
-
 # The widths the page is laid out for (the column beside the world, and the narrower).
 WIDTHS = ((1024, 768), (1280, 800))
 
@@ -208,17 +200,6 @@ def _reloaded(page: Page) -> None:
     expect(page.locator("#status")).to_contain_text("Loaded", timeout=20000)
     _drawn(page)
     settled(page, 4)
-
-
-def _press(page: Page, *labels: str) -> None:
-    for label in labels:
-        page.wait_for_function(
-            f"() => [...document.querySelectorAll('#ring-overlay .wedge')]"
-            f".some((w) => w.getAttribute('aria-label') === {label!r})",
-            timeout=RING_MS,
-        )
-        cell = next(c for c, got in page.evaluate(WEDGES).items() if got == label)
-        page.keyboard.press(cell)
 
 
 def _edit(page: Page) -> None:

@@ -12,15 +12,17 @@ from __future__ import annotations
 import pytest
 import windows
 from playwright.sync_api import Page, expect
+from rings import on_row
 from viewer_ready import settled
+
+
+def _ring(page: Page, *labels: str) -> None:
+    """The part's ring, from its row in Site, and the cells ``labels`` name."""
+    on_row(page, PART, *labels)
+
 
 PART = "calibration_cube"
 SIZES = ((1280, 800), (1024, 700))
-WEDGES = (
-    "() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]"
-    ".filter((w) => !w.classList.contains('empty'))"
-    ".map((w) => [w.getAttribute('aria-label'), w.dataset.cell]))"
-)
 
 # Every control of `root` in view -- inside the window and inside each scrolling box it
 # is in -- with what stands at the middle of the part of it in view, when that is
@@ -72,24 +74,6 @@ SCROLLED = """([selector, fraction]) => {
         if (s && s.scrollHeight > s.clientHeight) s.scrollTop = fraction * (s.scrollHeight - s.clientHeight);
     }
 }"""
-
-
-def _press(page: Page, *labels: str) -> None:
-    for label in labels:
-        page.wait_for_function(
-            f"() => [...document.querySelectorAll('#ring-overlay .wedge')]"
-            f".some((w) => w.getAttribute('aria-label') === {label!r})",
-            timeout=15000,
-        )
-        page.keyboard.press(page.evaluate(WEDGES)[label])
-
-
-def _ring(page: Page, *labels: str) -> None:
-    page.locator(f"#contents-list .contents-item[data-path='{PART}']").click(
-        button="right", modifiers=["Control"]
-    )
-    expect(page.locator("#ring-overlay")).to_be_visible(timeout=15000)
-    _press(page, *labels)
 
 
 def _nothing_covered(page: Page, selector: str, how: str) -> int:

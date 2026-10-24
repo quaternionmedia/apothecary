@@ -23,6 +23,7 @@ import httpx
 import pytest
 import windows
 from playwright.sync_api import Page, expect
+from rings import cells as _wedges
 
 from apothecary.systems import by_id
 
@@ -58,15 +59,6 @@ def _open_viewer(page: Page, url: str, node: str = "printer_1"):
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     page.locator("#contents-list .contents-item", has_text=node).first.click()
     expect(page.locator("#selected-body .prop-row", has_text="Name")).to_be_visible(timeout=5000)
-
-
-def _wedges(page: Page) -> dict:
-    """cell -> label of every wedge that holds something."""
-    return page.evaluate(
-        """() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]
-            .filter((w) => !w.classList.contains('empty'))
-            .map((w) => [w.dataset.cell, w.getAttribute('aria-label')]))"""
-    )
 
 
 def _title(page: Page) -> str:
