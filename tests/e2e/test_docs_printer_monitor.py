@@ -228,6 +228,11 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     )
     page.evaluate("() => window.fractalViewer.closeMachine()")
 
+    # The address followed by a browser that has laid nothing out: the page's own
+    # layout, not the Machine view this walk laid out above, which a browser remembers
+    # -- and saves again as it leaves the page, so it is forgotten from another one.
+    page.goto(f"{base_url}/health")
+    page.evaluate("() => localStorage.removeItem('apothecary.layout')")
     page.goto(f"{base_url}/firmware/monitor?port=/dev/ttyFAKE1")
     expect(page).to_have_url(re.compile(r"/viewer/sites/garage\?machine=%2Fdev%2FttyFAKE1$"))
     expect(page.locator("#c-state")).to_contain_text("printing", timeout=15000)
