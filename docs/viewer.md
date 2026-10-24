@@ -280,7 +280,7 @@ layout puts every window where the page puts it.
 Every stack but the world's wears a **+** beside its ☐: it lists every window
 by its group -- Site, Selected, Pictures, Tools, Part, Machine, Airgap -- and a
 closed one chosen opens as a tab of that stack; an open one comes in front where
-it is. The header's **⊞ Windows** lists the same, a window chosen there opening
+it is. The header's **⊞ Windows** (⊞ alone on a narrow page) lists the same, a window chosen there opening
 at its place, and above them the **views**: windows laid out together for one
 kind of work, each also a cell of Panels › Windows.
 

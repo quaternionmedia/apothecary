@@ -185,6 +185,14 @@
         /* ⊞ Windows and a stack's + list: the views, then every window by its group,
            ● open, ○ closed. */
         .windows-menu-body { min-width: 15rem; max-height: 70vh; overflow-y: auto; padding: 0.2rem 0; }
+        /* Narrow, the header gives its room to the trail and a stack to its tabs: ⊞
+           Windows is its sign alone (its name its label and tooltip), and a tab's sides
+           are closer, so four tabs and a stack's + fit the column at 1024 px. */
+        @media (max-width: 1180px) {
+            .toolbar .wide-only { display: none; }
+            .lm_header .lm_tab { padding-left: 6px; margin-right: 1px; }
+            .lm_header .lm_tab:not(.lm_active) { padding-right: 6px; }
+        }
         .spawn-group { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em; color: #7a808a; padding: 0.45rem 0.7rem 0.15rem; }
         .window-item {
             display: block; width: 100%; text-align: left; background: none; border: 0; color: #a8adb5;
@@ -699,7 +707,7 @@
                 </div>
             </details>
             <details id="windows-menu" class="view-menu windows-menu">
-                <summary title="Every window by its group, and the views that lay them out together: a window chosen opens, or comes in front; a stack's + opens one there (Panels › Windows on the ring)">⊞ Windows</summary>
+                <summary title="Every window by its group, and the views that lay them out together: a window chosen opens, or comes in front; a stack's + opens one there (Panels › Windows on the ring)" aria-label="Windows">⊞<span class="wide-only"> Windows</span></summary>
                 <div class="view-menu-body windows-menu-body"></div>
             </details>
             <a id="docs-link" class="docs-link" href="/docs" target="_blank" rel="noopener" title="The documentation in a new tab: the guides, and the walkthrough, each of its pages a run of the tests (Panels › Docs on the ring)">Docs</a>

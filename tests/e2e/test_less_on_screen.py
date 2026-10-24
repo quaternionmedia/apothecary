@@ -489,7 +489,7 @@ def _canvas_ring(page: Page) -> None:
 @pytest.mark.e2e
 def test_the_header_is_one_row_at_1024_px(page: Page, bench: str):
     """At 1024 px wide the header is one row, at the top of the site and deep in it: the
-    site's drop-down (choosing loads), the trail, ⚙ View,
+    site's drop-down (choosing loads), the trail, ⚙ View, ⊞ (Windows, its sign alone),
     the ring and the problems' count, and a short pill whose tooltip is the whole of it."""
     page.set_viewport_size({"width": 1024, "height": 700})
     _open(page, bench)
@@ -500,6 +500,10 @@ def test_the_header_is_one_row_at_1024_px(page: Page, bench: str):
     expect(pill).to_have_attribute("title", "FRACTAL VIEWER — unratified prototype")
     row = page.evaluate(ONE_ROW)
     assert row["spread"] < 4 and row["height"] < 60, row
+    # ⊞ Windows is its sign alone, its name its label, so the trail has the room.
+    windows_menu = page.locator("#windows-menu > summary")
+    expect(windows_menu).to_have_text("⊞", use_inner_text=True)
+    expect(windows_menu).to_have_attribute("aria-label", "Windows")
 
     # Deep in the site the trail is longest; still one row, the level in view.
     page.evaluate("() => window.fractalViewer.selectAtItsLevel('printer_1.frame_system.mainboard')")
