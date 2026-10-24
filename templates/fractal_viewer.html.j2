@@ -37,6 +37,8 @@
         .toolbar button:hover { background: #505050; }
         .toolbar button:disabled { opacity: 0.4; cursor: not-allowed; }
         .toolbar .spacer { flex: 1; }
+        .toolbar .toolbar-link { color: #9cd2ff; font-size: 0.85rem; text-decoration: none; }
+        .toolbar .toolbar-link:hover { text-decoration: underline; }
         .validity-indicator {
             font-size: 0.85rem; padding: 0.35rem 0.75rem; border-radius: 4px;
             font-weight: 600;
@@ -51,8 +53,11 @@
             display: flex; align-items: center; gap: 0.35rem;
             font-size: 0.85rem; color: #ccc; cursor: pointer; user-select: none;
         }
+        .toolbar .toolbar-toggle select { font-size: 0.75rem; background: #1e1e1e; color: #ccc; border: 1px solid #444; border-radius: 3px; padding: 0.05rem 0.2rem; min-width: 0; width: auto; }
+        .device-section input[type="text"] { font-size: 0.72rem; padding: 0.15rem 0.4rem; background: #1e1e1e; color: #ddd; border: 1px solid #444; border-radius: 3px; width: 9.5rem; }
+        .device-section .device-query { margin-top: 0.3rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #9cd2ff; white-space: pre-wrap; }
 
-        .viewer-panel { flex: 2; position: relative; background: #111; }
+        .viewer-panel { flex: 2; min-width: 0; position: relative; background: #111; }
         #viewer-canvas { width: 100%; height: 100%; display: block; }
         .viewer-hint {
             position: absolute; bottom: 1rem; left: 1rem;
@@ -64,6 +69,48 @@
         /* Minimap: a very abstract depth ladder, not a node-link graph --
            one tick per possible depth in the loaded tree, filled from the
            root to however deep the current focus is. */
+        /* Serial log overlay: a terminal floating over the 3D world (toggle in the toolbar) */
+        #serial-overlay {
+            position: absolute; right: 1rem; bottom: 3rem; width: min(46%, 560px); height: 40%;
+            display: flex; flex-direction: column; border-radius: 6px; overflow: hidden;
+            background: rgba(8, 10, 12, 0.82); border: 1px solid #2f3a2f;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.6); backdrop-filter: blur(2px); z-index: 20;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+        #serial-overlay[hidden] { display: none; }
+        #serial-head {
+            display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.6rem;
+            background: rgba(20, 24, 20, 0.9); border-bottom: 1px solid #2f3a2f; font-size: 0.72rem; color: #9fb89f;
+        }
+        #serial-head select {
+            min-width: 0; padding: 0.15rem 0.3rem; font-size: 0.72rem; font-family: inherit;
+            background: #1c221c; border: 1px solid #3a4a3a; color: #cfe3cf;
+        }
+        #serial-head .dot { width: 8px; height: 8px; border-radius: 50%; background: #555; flex: 0 0 auto; }
+        #serial-head .dot.on { background: #6fdb75; box-shadow: 0 0 6px #6fdb75; }
+        #serial-head .spacer { flex: 1; }
+        #serial-head button {
+            padding: 0.1rem 0.45rem; font-size: 0.7rem; background: #263026; color: #cfe3cf; border: 1px solid #3a4a3a; white-space: nowrap;
+        }
+        #serial-head button:hover { background: #33403a; }
+        #serial-head a { font-size: 0.7rem; color: #9cd2ff; text-decoration: none; padding: 0.1rem 0.45rem; border: 1px solid #3a4a3a; background: #263026; white-space: nowrap; }
+        #serial-head a[hidden] { display: none; }
+        #serial-meta { padding: 0.25rem 0.6rem; font-size: 0.7rem; color: #8aa08a; border-bottom: 1px solid #23302a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #serial-meta b { color: #cfe3cf; }
+        #serial-query-row { display: flex; gap: 0.35rem; padding: 0.25rem 0.6rem; border-bottom: 1px solid #23302a; }
+        #serial-query-row[hidden] { display: none; }
+        #serial-query-row input { flex: 1; font: inherit; font-size: 0.72rem; background: #101510; color: #cfe3cf; border: 1px solid #2f3f2f; border-radius: 3px; padding: 0.15rem 0.45rem; }
+        #serial-query-row button { padding: 0.1rem 0.45rem; font-size: 0.7rem; background: #263026; color: #cfe3cf; border: 1px solid #3a4a3a; }
+        #serial-body .query { color: #9cd2ff; font-weight: 600; }
+        #serial-meta .ok { color: #6fdb75; } #serial-meta .bad { color: #ff8080; } #serial-meta .warn { color: #ffcc66; }
+        #serial-body {
+            flex: 1; margin: 0; padding: 0.4rem 0.6rem; overflow: auto; font-size: 0.72rem; line-height: 1.4;
+            color: #b8e6b8; white-space: pre-wrap; word-break: break-all;
+        }
+        #serial-body .banner { color: #9cd2ff; font-weight: 600; }
+        #serial-body .marker { color: #ffcc66; }
+        #serial-body .sys { color: #6f7f6f; font-style: italic; }
+        #serial-body .temp { color: #e8c98a; }
         #minimap {
             position: absolute; top: 1rem; right: 1rem;
             display: flex; flex-direction: column; gap: 4px;
@@ -75,17 +122,103 @@
         }
         .minimap-tick.filled { background: #0d6efd; border-color: #9cd2ff; }
 
-        .side-panel {
-            flex: 1; min-width: 320px; max-width: 420px;
-            background: #1e1e1e; border-left: 1px solid #333;
-            display: flex; flex-direction: column; overflow-y: auto;
+        /* Panels (panels.js): the side column is a rail of them; any can float. */
+        .side-panel { display: none; }
+        .panel-rail {
+            flex: 0 0 auto; width: min(400px, 33vw); background: #1e1e1e; position: relative;
+            display: flex; flex-direction: column; min-height: 0;
         }
-        .panel-section { border-bottom: 1px solid #333; }
-        .panel-header {
-            padding: 0.6rem 1rem; background: #252525;
-            font-weight: 600; font-size: 0.85rem; color: #ccc;
+        .panel-rail[hidden] { display: none; }
+        .panel-rail-right { border-left: 1px solid #333; }
+        .panel-rail-left { border-right: 1px solid #333; }
+        .panel-rail-head {
+            display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.5rem 0.25rem 0.4rem; background: #191919;
+            border-bottom: 1px solid #333; font-size: 0.72rem; color: #777; text-transform: uppercase; letter-spacing: 0.05em; user-select: none;
         }
-        .panel-body { padding: 0.75rem 1rem; }
+        .panel-rail-grip { cursor: grab; color: #666; letter-spacing: -2px; padding: 0 0.2rem; }
+        .panel-rail-grip:hover { color: #ccc; }
+        .panel-rail-head button { background: none; border: 0; color: #888; font: inherit; font-size: 0.8rem; cursor: pointer; padding: 0 0.3rem; line-height: 1; }
+        .panel-rail-head button:hover { color: #eee; }
+        .panel-rail-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+        .panel-rail-resizer { position: absolute; top: 0; bottom: 0; width: 6px; cursor: ew-resize; z-index: 2; }
+        .panel-rail-right .panel-rail-resizer { left: -3px; }
+        .panel-rail-left .panel-rail-resizer { right: -3px; }
+        .panel-rail-resizer:hover { background: rgba(111, 179, 232, 0.35); }
+        .panel { border-bottom: 1px solid #333; background: #1e1e1e; display: flex; flex-direction: column; min-height: 0; position: relative; }
+        .panel-resizer { height: 6px; cursor: ns-resize; flex: 0 0 auto; }
+        .panel-resizer:hover { background: rgba(111, 179, 232, 0.35); }
+        .panel-resizer[hidden] { display: none; }
+        .panel.free {
+            position: absolute; width: min(380px, 80%); max-height: 75%; border: 1px solid #3a3a3a;
+            border-radius: 6px; box-shadow: 0 8px 28px rgba(0,0,0,0.55); overflow: auto; resize: both; min-width: 220px; min-height: 40px; pointer-events: auto;
+        }
+        .panel-title {
+            display: flex; align-items: center; gap: 0.35rem; padding: 0.45rem 0.6rem 0.45rem 0.75rem; background: #252525;
+            font-weight: 600; font-size: 0.85rem; color: #ccc; user-select: none;
+        }
+        .panel.free .panel-title { cursor: grab; }
+        .panel-title .panel-spacer { flex: 1; }
+        .panel-title button {
+            background: none; border: 0; color: #888; font: inherit; font-size: 0.8rem; cursor: pointer; padding: 0 0.3rem; line-height: 1;
+        }
+        .panel-title button:hover { color: #eee; }
+        /* A docked panel keeps its height when the panel below it grows on a
+           selection -- a list a person is scrolling does not shrink under the
+           pointer, and a form's button does not slide under the next title.
+           Each body scrolls inside itself past 40% of the page; the rail
+           scrolls as a whole when the panels outgrow it. */
+        .panel-rail-body > .panel { flex: 0 0 auto; }
+        .panel-body-slot { padding: 0.75rem 1rem; overflow: auto; max-height: 40vh; }
+        .panel.free .panel-body-slot { max-height: none; flex: 1; }
+        .panel.collapsed .panel-body-slot { display: none; }
+        .panel-free-layer { position: absolute; inset: 0; pointer-events: none; }
+        .panel-free-layer .panel { pointer-events: auto; }
+        .panel-leaders { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+        .panel-leader { stroke: #6fb3e8; stroke-width: 1.5; stroke-dasharray: 4 3; opacity: 0.8; }
+        .panel-tabs { position: absolute; right: 0.5rem; bottom: 2.6rem; display: flex; gap: 0.3rem; pointer-events: auto; }
+        .panel-tabs[hidden] { display: none; }
+        .panel-tab {
+            background: #252525; color: #bbb; border: 1px solid #3a3a3a; border-radius: 4px; padding: 0.2rem 0.55rem;
+            font: inherit; font-size: 0.78rem; cursor: pointer;
+        }
+        .panel-tab:hover { color: #fff; border-color: #666; }
+        /* The machine popup: the monitor's body in a tethered panel (widgets/machine.js). */
+        .panel[data-panel="machine"].free { width: min(500px, 90%); }
+        .panel[data-panel="machine"] .panel-body-slot, .panel[data-panel="log"] .panel-body-slot { padding: 0; }
+        .panel[data-panel="log"] .machine-log { height: 100%; }
+        /* The camera panel (widgets/camera.js) */
+        .camera { font-size: 0.8rem; color: #bbb; display: flex; flex-direction: column; gap: 0.4rem; }
+        .camera .row { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+        .camera .grow { flex: 1; }
+        .camera .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: #777; margin-top: 0.3rem; }
+        .camera .note { color: #8a9a8a; font-style: italic; } .camera .note.bad, .camera .bad { color: #ff8080; font-style: normal; }
+        .camera button, .camera select, .camera input:not([type=checkbox]), .camera textarea { font: inherit; font-size: 0.78rem; background: #232823; color: #ddd; border: 1px solid #3a443a; border-radius: 4px; padding: 0.2rem 0.45rem; }
+        .camera button:hover { background: #2f382f; } .camera button:disabled { opacity: 0.45; }
+        .camera button.warm { border-color: #7a5a1a; }
+        .camera video { width: 100%; max-height: 200px; background: #000; border-radius: 4px; }
+        .camera .pics { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 0.3rem; max-height: 220px; overflow: auto; }
+        .camera .pic { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.7rem; cursor: pointer; }
+        .camera .pic img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 3px; border: 1px solid #333; }
+        .camera .pic span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .camera textarea { width: 100%; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; }
+        .camera .group { padding: 0.15rem 0; } .camera .group.alone { color: #8a9a8a; }
+        .camera .aside { color: #b08a8a; }
+        .camera .question { border-top: 1px solid #2a332a; padding: 0.3rem 0; }
+        .camera pre { white-space: pre-wrap; font-size: 0.7rem; color: #aaa; max-height: 200px; overflow: auto; }
+        .camera .pic { position: relative; }
+        .camera .pic .pic-forget { position: absolute; top: 2px; right: 2px; padding: 0 0.3rem; font-size: 0.7rem; line-height: 1.3; opacity: 0.7; }
+        .camera .pic .pic-forget:hover { opacity: 1; border-color: #7a3a3a; color: #ff8080; }
+        .camera input[type=file] { font-size: 0.72rem; max-width: 100%; }
+        .camera .kept { display: flex; flex-direction: column; gap: 0.2rem; max-height: 160px; overflow: auto; }
+        .camera .kept-row { display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; padding: 0.15rem 0.3rem; border-radius: 3px; background: #1d221d; }
+        .camera .kept-row span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .camera .kept-row.here { border-left: 2px solid #4a6fa8; }
+        .camera .kept-row.stale span { color: #b08a8a; }
+        /* The camera's mark in the world. Not `.camera`: that is the panel's own
+           class above, and its `display: flex` would override the `hidden` the
+           anchor layer sets when the mark's piece is out of view. */
+        .world-badge.camera-mark { border-color: #7a5a1a; color: #ffcc66; }
+        .world-badge.camera-mark::after { border-top-color: #7a5a1a; }
 
         .contents-list { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; }
         .contents-item {
@@ -134,6 +267,43 @@
             width: 90px;
         }
         .prop-readonly { font-size: 0.78rem; color: #888; margin-top: 0.4rem; line-height: 1.5; }
+        /* Device section of the Selected panel: which board is pinned to this node, and what it says */
+        .device-section { margin-top: 0.7rem; padding-top: 0.55rem; border-top: 1px solid #2a2a2a; font-size: 0.78rem; }
+        .device-section .device-title { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: #777; margin-bottom: 0.3rem; }
+        .device-section .device-line { color: #bbb; line-height: 1.5; }
+        .device-section .device-line b { color: #ddd; font-weight: 600; }
+        .device-section .device-line .ok { color: #6fdb75; } .device-section .device-line .warn { color: #ffcc66; } .device-section .device-line .bad { color: #ff8080; }
+        .device-section .temps { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #e8c98a; }
+        .device-section .device-actions { display: flex; gap: 0.35rem; margin-top: 0.4rem; flex-wrap: wrap; align-items: center; }
+        .device-section button, .device-section select {
+            font-size: 0.72rem; padding: 0.15rem 0.5rem; background: #263026; color: #cfe3cf; border: 1px solid #3a4a3a; border-radius: 3px; cursor: pointer;
+        }
+        .device-section button:hover { background: #33403a; }
+        .device-section a.dev-monitor { font-size: 0.72rem; color: #9cd2ff; text-decoration: none; padding: 0.15rem 0.5rem; border: 1px solid #3a4a3a; border-radius: 3px; background: #263026; }
+        .device-section select { background: #1e1e1e; color: #ddd; border-color: #444; max-width: 100%; }
+        .device-section .device-empty { color: #666; font-style: italic; }
+        .contents-item .dev-badge {
+            flex: 0 0 auto; font-size: 0.66rem; padding: 0 0.35rem; border-radius: 8px; background: #1f2a1f; color: #b8e6b8; border: 1px solid #2f3f2f;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap;
+        }
+        .contents-item .dev-badge.off { background: #2a2424; color: #b08a8a; border-color: #3f2f2f; }
+        .contents-item .dev-badge.printing { background: #2a2410; color: #ffcc66; border-color: #4a3f1a; }
+        .contents-item .dev-badge.via { opacity: 0.75; }
+        /* Anchors: badges fixed to a point in the world (anchors.js) */
+        .world-badge {
+            font: 0.7rem/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; cursor: pointer;
+            padding: 0.2rem 0.5rem; border-radius: 6px; background: rgba(20, 28, 20, 0.92); color: #b8e6b8; border: 1px solid #3a4a3a;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5); user-select: none; transition: opacity 0.2s;
+        }
+        .world-badge::after { content: ""; position: absolute; left: 50%; bottom: -6px; margin-left: -5px; border: 5px solid transparent; border-bottom: 0; border-top-color: #3a4a3a; }
+        .world-badge .state { color: #8fc78f; }
+        .world-badge.printing { border-color: #7a5a1a; color: #ffcc66; background: rgba(42, 36, 16, 0.92); }
+        .world-badge.printing::after { border-top-color: #7a5a1a; }
+        .world-badge.offline { color: #b08a8a; border-color: #3f2f2f; }
+        .world-badge.job { border-color: #4a6fa8; }
+        .world-badge.behind { opacity: 0.45; }
+        .world-badge[hidden] { display: none; }
+        .world-badge:hover { opacity: 1; filter: brightness(1.15); }
         .no-selection { color: #666; font-size: 0.85rem; font-style: italic; }
         .zoom-in-btn {
             margin-top: 0.6rem; padding: 0.4rem 0.6rem; border-radius: 4px; cursor: pointer;
@@ -194,6 +364,50 @@
         .code-header {
             padding: 0.4rem 0; font-weight: 600; font-size: 0.8rem; color: #ccc;
         }
+        .check { display: flex; gap: 8px; margin: 4px 0; align-items: baseline; }
+        .check .mark { font-size: 10px; font-weight: 700; padding: 1px 5px;
+                       border-radius: 3px; flex: none; }
+        .mark.pass { background: #1f4d33; color: #7fe0a5; }
+        .mark.blocked { background: #5c1f1f; color: #ff9b9b; }
+        .mark.unknown { background: #4a4326; color: #e0cf8e; }
+        .check .body { min-width: 0; }
+        .check .why { color: #8a929e; font-size: 11px; display: block; }
+        .verdict { font-weight: 700; margin: 8px 0 4px; }
+        .verdict.ready { color: #5ec27e; }
+        .verdict.not-ready { color: #e0a33e; }
+        .staged { border-left: 3px solid #4a9eff; padding-left: 9px; }
+        .staged .val { color: #4a9eff; font-weight: 700; }
+        .was { color: #8a929e; font-size: 11px; }
+        #stage-bar { position: sticky; top: 0; z-index: 2; background: #1b1e24;
+                     border-bottom: 1px solid #2a2f38; padding: 8px 0; margin-bottom: 6px; }
+        #stage-summary { font-size: 12px; margin-bottom: 6px; }
+        #stage-summary.clean { color: #8a929e; }
+        #stage-summary.valid { color: #5ec27e; }
+        #stage-summary.invalid { color: #ff9b9b; }
+        .stage-actions { display: flex; gap: 6px; }
+        .stage-actions button { flex: 1; padding: 6px; border: 0; border-radius: 4px;
+                                font-weight: 700; cursor: pointer; font: inherit; }
+        #apply-btn { background: #4a9eff; color: #0b0d10; }
+        #apply-btn:disabled { opacity: .4; cursor: default; }
+        #revert-btn { background: #2a2f38; color: #d7dae0; }
+        .param { margin: 10px 0 12px; }
+        .param.is-contested { border-left: 3px solid #e0a33e; padding-left: 9px; }
+        .param .head { display: flex; justify-content: space-between; align-items: baseline; }
+        .param .name { font-weight: 600; }
+        .param .val { font-variant-numeric: tabular-nums; color: #4a9eff; }
+        .param input[type=range] { width: 100%; margin-top: 4px; accent-color: #4a9eff; }
+        .param select { width: 100%; background: #14161a; color: #d7dae0;
+                        border: 1px solid #2a2f38; padding: 3px; }
+        .badge-contested { background: #e0a33e; color: #14161a; font-size: 10px;
+                           font-weight: 700; padding: 1px 5px; border-radius: 999px; }
+        .cand { display: block; width: 100%; text-align: left; margin-top: 5px;
+                padding: 5px 7px; background: #14161a; color: #d7dae0;
+                border: 1px solid #2a2f38; border-radius: 4px; cursor: pointer; font: inherit; }
+        .cand:hover { border-color: #e0a33e; }
+        .cand.active { border-color: #e0a33e; background: #2a2318; }
+        .cand b { color: #e0a33e; font-variant-numeric: tabular-nums; }
+        .cand .src, .cand .note { color: #8a929e; font-size: 11px; display: block; }
+        .envelope { font-variant-numeric: tabular-nums; color: #5ec27e; margin: 6px 0; }
         .code-content {
             font-family: 'Consolas', 'Monaco', 'Menlo', monospace;
             font-size: 0.72rem; line-height: 1.4; color: #9cdcfe;
@@ -211,7 +425,7 @@
 
         @media (max-width: 768px) {
             .main-content { flex-direction: column; }
-            .side-panel { max-width: none; max-height: 50%; }
+            .panel-rail { width: 100% !important; max-height: 50%; }
         }
     </style>
 </head>
@@ -229,17 +443,62 @@
             <label class="toolbar-toggle" title="Snap dragged positions to a 50mm grid -- keeps hand-placed layouts exact instead of off by a few millimeters">
                 <input type="checkbox" id="snap-toggle" checked> Snap to grid
             </label>
+            <label class="toolbar-toggle" title="How much of each compound node to draw. Full renders its real geometry; Black box draws only its bounding extent; Dot collapses it to a marker. Leaves always render in full -- they have no subassembly to stand in for. Set per node from the Selected panel.">
+                Detail
+                <select id="detail-mode">
+                    <option value="full">Full</option>
+                    <option value="box">Black box</option>
+                    <option value="dot">Dot</option>
+                </select>
+            </label>
+            <label class="toolbar-toggle" title="Outline each compound node's full assembly extent, so a subassembly reads as one thing even when its parts are drawn separately">
+                <input type="checkbox" id="overlay-toggle" checked> Assembly outlines
+            </label>
+            <label class="toolbar-toggle" title="Rescan devices and re-poll bound printers on a schedule, so a replugged or renamed board shows up without a reload">
+                <input type="checkbox" id="devices-auto"> ↻ Devices
+                <select id="devices-interval" title="Refresh interval">
+                    <option value="5000">5 s</option><option value="10000" selected>10 s</option><option value="30000">30 s</option>
+                </select>
+            </label>
+            <label class="toolbar-toggle" title="Float a live serial log from a connected board over the 3D view (streams via /firmware/devices/stream)">
+                <input type="checkbox" id="serial-toggle"> ⌨ Serial log
+            </label>
             <div class="spacer"></div>
+            <a href="{{ base_url }}/firmware" id="firmware-link" class="toolbar-link" title="Install the firmware toolchain and program boards from sketches under parts/">⚡ Firmware</a>
+            <a href="{{ base_url }}/firmware/monitor" id="monitor-link" class="toolbar-link" title="Focused printer monitor: status, temperature history, full comms log, reconnect/reset">🖨 Monitor</a>
+            <button type="button" id="ring-open" title="Open the ring for the chosen piece (m, or right-click a piece). Digits choose cells as on a numeric keypad; 5 backs out.">⌗ Ring</button>
             <span id="validity-indicator" class="validity-indicator valid">Layout valid</span>
         </div>
         <div class="main-content">
             <div class="viewer-panel">
                 <canvas id="viewer-canvas"></canvas>
+                <div id="serial-overlay" hidden>
+                    <div id="serial-head">
+                        <span class="dot" id="serial-dot"></span>
+                        <select id="serial-port"><option value="">no devices</option></select>
+                        <select id="serial-baud">
+                            <option>9600</option><option>57600</option><option selected>115200</option><option>230400</option><option>460800</option><option>921600</option>
+                        </select>
+                        <span class="spacer"></span>
+                        <button type="button" id="serial-refresh" title="Rescan devices">⟳</button>
+                        <button type="button" id="serial-identify" title="Ask M115: is this a printer mainboard? (no reset; the server then holds the port and polls it instead of streaming)">🖨 identify</button>
+                        <a id="serial-monitor" href="{{ base_url }}/firmware/monitor" target="_blank" title="Open the focused monitor for this port: status, temperature history, full comms log, reconnect/reset" hidden>⤢ monitor</a>
+                        <button type="button" id="serial-clear">clear</button>
+                        <button type="button" id="serial-close">✕</button>
+                    </div>
+                    <div id="serial-meta">—</div>
+                    <form id="serial-query-row" hidden autocomplete="off">
+                        <input id="serial-query" list="serial-query-codes" placeholder="report code — M503, M119, M20, M420 V …" spellcheck="false">
+                        <datalist id="serial-query-codes"></datalist>
+                        <button type="submit">send</button>
+                    </form>
+                    <pre id="serial-body"></pre>
+                </div>
                 <div id="minimap"></div>
                 <div class="viewer-hint">Click to select • Double-click (or scroll past the edge) to zoom in • Drag arrows to move • Shift+drag to pan</div>
             </div>
             <div class="side-panel">
-                <div class="panel-section">
+                <div class="panel-section" data-panel="contents">
                     <div class="panel-header">Contents</div>
                     <div class="panel-body">
                         <div id="category-filters" class="category-filters"
@@ -247,13 +506,13 @@
                         <ul id="contents-list" class="contents-list contents-tree"></ul>
                     </div>
                 </div>
-                <div class="panel-section">
+                <div class="panel-section" data-panel="selected">
                     <div class="panel-header">Selected</div>
                     <div class="panel-body" id="selected-body">
                         <div class="no-selection">Click a node to select it</div>
                     </div>
                 </div>
-                <div class="panel-section" id="jobs-section" style="display: none;">
+                <div class="panel-section" id="jobs-section" data-panel="jobs" style="display: none;">
                     <div class="panel-header">Jobs</div>
                     <div class="panel-body">
                         <form id="job-form" class="job-form">
@@ -268,14 +527,14 @@
                         <ul id="job-list" class="job-list"></ul>
                     </div>
                 </div>
-                <div class="panel-section">
+                <div class="panel-section" data-panel="validation">
                     <div class="panel-header">Layout Validation</div>
                     <div class="panel-body">
                         <ul id="violations-list" class="violations-list"></ul>
                         <div id="violations-clean" class="violations-clean">Layout valid</div>
                     </div>
                 </div>
-                <div class="panel-section">
+                <div class="panel-section" data-panel="scad">
                     <div class="panel-header">Generated OpenSCAD</div>
                     <div class="panel-body">
                         <div id="code-content" class="code-content">Load a site to see generated OpenSCAD</div>
@@ -286,11 +545,20 @@
         <div id="status" class="status">Loading site…</div>
     </div>
 
+    {% if not three_is_vendored %}
+    <div style="background:#7f1d1d;color:#fff;padding:12px 16px;font:14px/1.5 system-ui">
+        <strong>The 3D library is missing.</strong>
+        Nothing will render below. It is checked in under
+        <code>apothecary/static/vendor/three/</code>; restore it from the
+        repository, then reload.
+    </div>
+    {% endif %}
+    <link rel="stylesheet" href="{{ base_url }}/static/widgets/machine.css">
     <script type="importmap">
     {
         "imports": {
-            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            "three": "/static/vendor/three/three.module.js",
+            "three/addons/": "/static/vendor/three/addons/"
         }
     }
     </script>
@@ -299,10 +567,15 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { TransformControls } from 'three/addons/controls/TransformControls.js';
         import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+        import { mountAnchors } from '/static/anchors.js';
+        import { mountPanels } from '/static/panels.js';
+        import { mountMachine } from '/static/widgets/machine.js';
+        import { mountCamera } from '/static/widgets/camera.js';
+        import { makeMachineMarks, toScene as marksToScene } from '/static/machine_marks.js';
 
-        const BASE_URL = "{{ base_url }}";
-        const DEFAULT_SITE = "{{ default_site }}";
-        const INITIAL_FOCUS = "{{ focus_path }}";
+        const BASE_URL = {{ base_url | tojson }};
+        const DEFAULT_SITE = {{ default_site | tojson }};
+        const INITIAL_FOCUS = {{ focus_path | tojson }};
 
         // Subsystem colors -- a node's own ``category`` if set, else
         // whatever the nearest ancestor's was (already resolved server-side,
@@ -319,6 +592,37 @@
             electrical: 0xd8c11a,
         };
         const DEFAULT_COLOR = 0x4488cc;
+
+        // A colour for a group nobody wrote down in advance.
+        //
+        // CATEGORY_COLORS above is a fixed list, which was fine while every
+        // group was written into the program. It stopped being fine when groups
+        // started coming from a picture: a word is whatever the vocabulary
+        // holds, and the vocabulary is meant to grow. A group not on the list
+        // got no colour and, worse, no filter chip at all — so it was invisible
+        // rather than merely plain.
+        //
+        // Same name, same colour, every time, so a group does not change colour
+        // between one look and the next.
+        function colorForCategory(category) {
+            if (CATEGORY_COLORS[category] !== undefined) return CATEGORY_COLORS[category];
+            let hash = 0;
+            for (let i = 0; i < category.length; i++) {
+                hash = (hash * 31 + category.charCodeAt(i)) >>> 0;
+            }
+            const hue = hash % 360;
+            const [r, g, b] = hslToRgb(hue / 360, 0.42, 0.55);
+            return (r << 16) | (g << 8) | b;
+        }
+
+        function hslToRgb(h, s, l) {
+            const f = (n) => {
+                const k = (n + h * 12) % 12;
+                const a = s * Math.min(l, 1 - l);
+                return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))));
+            };
+            return [f(0), f(8), f(4)];
+        }
         const PART_COLOR = 0x66cc66;
         const SUBTRACTION_COLOR = 0xcc7733;
         const SELECTED_EDGE_COLOR = 0xffffff;
@@ -339,6 +643,31 @@
         const PLACEHOLDER_PITCH = 60;  // mm -- spacing between footprint-less siblings
         const WHEEL_RESISTANCE_THRESHOLD = 500;
         const SNAP_INCREMENT = 50;    // mm -- matches WALL_THICKNESS; fine enough for by-hand placement
+
+        // How far out of the current level you can dolly, as a multiple of the
+        // framing distance. This is also where the "scroll past the edge to
+        // zoom out" gesture fires (see onWheel), because that gesture triggers
+        // at the clamp -- so raising it buys viewing range and moves the
+        // gesture's edge outward by the same amount, deliberately.
+        const MAX_DOLLY_FACTOR = 8;
+        const MIN_DOLLY_FACTOR = 0.08;
+        // The far plane has to clear the furthest the camera can dolly plus the
+        // scene's own extent behind the target, or the world is clipped away
+        // exactly when you pull back to look at the largest scale. This used to
+        // be a fixed 20000 while the dolly clamp reached ~54000 on the garage.
+        const FAR_PLANE_HEADROOM = 2.5;
+        const MIN_FAR_PLANE = 40000;
+
+        // Detail levels for a compound node (one with children). A leaf has no
+        // subassembly to stand in for, so it always renders full.
+        const DETAIL_FULL = 'full';   // fetch or build its real geometry
+        const DETAIL_BOX = 'box';     // black box: its bounding box, nothing inside
+        const DETAIL_DOT = 'dot';     // a marker at its center, minimal footprint
+        const DETAIL_LABELS = { full: 'Full', box: 'Black box', dot: 'Dot' };
+        const COMPOUND_OVERLAY_COLOR = 0xffcc44;
+        const OVERLAY_INFLATE = 1.02;  // keeps the outline off the node's own faces
+        const DOT_RADIUS_FRACTION = 0.06;  // of the node's own span
+        const DOT_MIN_RADIUS = 8;          // mm -- still clickable when zoomed out
 
         function maxDepth(node) {
             if (!node.children.length) return 0;
@@ -366,7 +695,7 @@
                 ? PART_COLOR
                 : node.composition === 'subtraction'
                 ? SUBTRACTION_COLOR
-                : (statusColor ?? CATEGORY_COLORS[node.category] ?? DEFAULT_COLOR);
+                : (statusColor ?? (node.category ? colorForCategory(node.category) : DEFAULT_COLOR));
         }
 
         // STLLoader hands back raw OpenSCAD-space geometry: apothecary's own
@@ -477,6 +806,8 @@
                 this.loadBtn = document.getElementById('load-btn');
                 this.zoomOutBtn = document.getElementById('zoom-out-btn');
                 this.snapToggle = document.getElementById('snap-toggle');
+                this.detailModeEl = document.getElementById('detail-mode');
+                this.overlayToggle = document.getElementById('overlay-toggle');
                 this.breadcrumbEl = document.getElementById('breadcrumb');
                 this.minimapEl = document.getElementById('minimap');
                 this.categoryFiltersEl = document.getElementById('category-filters');
@@ -511,6 +842,12 @@
                                                  // hierarchy tree -- independent of whether
                                                  // that subtree is actually rendered
                 this.buildVolumeMeshByName = {};
+                this.compoundOverlayByKey = {};  // nodeKey() -> the assembly-extent wireframe
+                this.showCompoundOverlays = true;
+                this.detailMode = DETAIL_FULL;   // default for every compound node
+                this.detailOverrides = new Map();  // nodeKey() -> detail level, set per node
+                                                    // from the Selected panel; survives a
+                                                    // re-render but not a zoom to a new level
                 this.violationNames = new Set();
                 this.wheelResistance = 0;
                 this.stlLoader = new STLLoader();
@@ -536,7 +873,7 @@
                 this.camera.position.set(600, 500, 800);
 
                 this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
-                this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight);
+                this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight, false);
                 this.renderer.setPixelRatio(window.devicePixelRatio);
 
                 this.orbitControls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -568,6 +905,58 @@
                 this.axesHelper = new THREE.AxesHelper(150);
                 this.scene.add(this.axesHelper);
 
+                // What stands in front of the world (anchors.js) and what a
+                // machine wears in it (machine_marks.js): badges above every
+                // pinned machine, and its nozzle, bed and reading at its node.
+                // Both survive renderFocus(), which clears only the nodes' meshes.
+                this.anchors = mountAnchors({ container: this.canvas.parentElement, canvas: this.canvas, camera: this.camera, scene: this.scene });
+                // The side column's sections become panels: docked in the right
+                // rail, each one closable, collapsible and draggable free; what a
+                // person did to them is remembered per browser (panels.js).
+                this.panels = mountPanels({ container: document.querySelector('.main-content'), overlay: this.canvas.parentElement });
+                for (const section of document.querySelectorAll('.side-panel [data-panel]')) {
+                    const id = section.dataset.panel;
+                    const el = this.panels.register(id, {
+                        title: section.querySelector('.panel-header').textContent.trim(),
+                        body: section.querySelector('.panel-body'),
+                    });
+                    if (section.id === 'jobs-section') { this.jobsSectionEl = el; }  // shown when a site has build volumes
+                    if (section.style.display === 'none') el.style.display = 'none';
+                }
+                document.querySelector('.side-panel')?.remove();
+                this.machine = null;
+                // The camera and the pictures on this machine: the photo workflow,
+                // as a panel (closed until asked for). A placed camera is drawn in
+                // the world at its node, in every browser.
+                this.cameras = [];
+                this.cameraMarks = {};
+                this.cameraWidget = null;
+                this.panels.register('camera', {
+                    title: 'Camera & pictures', where: 'right', open: false,
+                    body: (slot) => {
+                        this.cameraWidget = mountCamera(slot, {
+                            base: BASE_URL,
+                            log: (t) => this.setStatus(t, 'success'),
+                            world: {
+                                siteName: () => this.siteName,
+                                selectedPath: () => this.selectedName,
+                                placed: () => this.cameras,
+                                refreshCameras: () => this.syncCameras(),
+                                openSite: (name) => this.openSite(name),
+                                // A pin of this site taken back from the panel's list:
+                                // the node's row, badge and marks go now, not at the
+                                // next poll.
+                                unpinned: (path) => { delete this.bindings[path]; this.queryResult = null; this.renderDeviceViews(); this.syncWorldMarks(); },
+                            },
+                        });
+                        window.apothecaryCamera = this.cameraWidget;
+                    },
+                });
+                window.apothecaryPanels = this.panels;
+                this.onResize();
+                this.marks = {};       // bearer path -> { marks, port, where }
+                this.whereByPort = {}; // port -> Promise of GET /firmware/printers/where
+
                 this.raycaster = new THREE.Raycaster();
                 this.pointer = new THREE.Vector2();
             }
@@ -578,6 +967,19 @@
                 this.zoomOutBtn.addEventListener('click', () => this.zoomOut());
                 this.snapToggle.addEventListener('change', () => {
                     this.transformControls.setTranslationSnap(this.snapToggle.checked ? SNAP_INCREMENT : null);
+                });
+                // Changing the global default drops every per-node override:
+                // otherwise picking "Dot" would silently leave whichever nodes
+                // you had already set to Full still rendering full, and the
+                // control would look broken rather than overridden.
+                this.detailModeEl.addEventListener('change', () => {
+                    this.detailMode = this.detailModeEl.value;
+                    this.detailOverrides.clear();
+                    this.renderFocus();
+                });
+                this.overlayToggle.addEventListener('change', () => {
+                    this.showCompoundOverlays = this.overlayToggle.checked;
+                    this.renderFocus();
                 });
                 this.canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
                 this.canvas.addEventListener('dblclick', (e) => this.onDoubleClick(e));
@@ -593,6 +995,68 @@
                     this.createJob();
                 });
                 window.addEventListener('resize', () => this.onResize());
+                // Device bindings of the loaded site (path -> NodeBinding row
+                // from GET /sites/{name}/devices), the detected devices a node
+                // can be pinned to, and any toolchain problem to show instead.
+                this.bindings = {};
+                this.siteDevices = [];
+                this.devicesProblem = null;
+                this.bindingsLoaded = false;
+                this.bindingsInFlight = false;
+                this.queryResult = null;  // last "Query" answer shown in the Device section
+                // Auto-refresh: rescan + re-poll on a schedule (self-scheduled,
+                // never overlapping, paused while the tab is hidden).
+                this.autoEl = document.getElementById('devices-auto');
+                this.intervalEl = document.getElementById('devices-interval');
+                this.autoTimer = null;
+                try {
+                    this.autoEl.checked = localStorage.getItem('apothecary.devices.auto') !== '0';
+                    const iv = localStorage.getItem('apothecary.devices.interval');
+                    if (iv) this.intervalEl.value = iv;
+                } catch (e) { /* storage blocked: defaults */ }
+                this.autoEl.addEventListener('change', () => {
+                    try { localStorage.setItem('apothecary.devices.auto', this.autoEl.checked ? '1' : '0'); } catch (e) { /* ignore */ }
+                    this.scheduleAutoRefresh();
+                });
+                this.intervalEl.addEventListener('change', () => {
+                    try { localStorage.setItem('apothecary.devices.interval', this.intervalEl.value); } catch (e) { /* ignore */ }
+                    this.scheduleAutoRefresh();
+                });
+                document.addEventListener('visibilitychange', () => this.scheduleAutoRefresh());
+                // The serial overlay polls printers. Every poll updates the
+                // bound row in place (panel temps, tree badge); a poll that
+                // changed a node's status re-fetches the tree so the mesh
+                // recolours (STATUS_COLORS) without a manual reload.
+                window.addEventListener('apothecary:printer-status', (ev) => {
+                    const st = ev.detail;
+                    let touched = false;
+                    for (const row of Object.values(this.bindings)) {
+                        if (row.device && row.device.port === st.port) { row.printer_status = st; touched = true; }
+                    }
+                    // A changed status is patched onto the tree and the mesh
+                    // recoloured in place: a full refreshTree() would reset the
+                    // camera, wipe the panel and reload meshes every time a
+                    // flaky link flips idle/offline.
+                    let recoloured = false;
+                    for (const n of st.synced || []) {
+                        if (n.changed && n.site === this.siteName) recoloured = this.applyNodeStatus(n.path, n.status) || recoloured;
+                    }
+                    if (touched || recoloured) { this.updateDeviceViews(); this.syncWorldMarks(); }
+                });
+                // A bed reading shown in the machine popup lands on the marks, and a
+                // jog sent from it moves the nozzle ahead of the poll that confirms it.
+                window.addEventListener('apothecary:mesh', (ev) => {
+                    for (const m of Object.values(this.marks)) if (m.marks && ev.detail && ev.detail.port === m.port) m.marks.setMesh(ev.detail);
+                });
+                window.addEventListener('apothecary:position', (ev) => {
+                    if (!ev.detail || ev.detail.source !== 'jog') return;
+                    for (const m of Object.values(this.marks)) if (m.marks && ev.detail.port === m.port) m.marks.setPosition(ev.detail.position);
+                });
+                // The overlay identified a board (M115) or rescanned: the
+                // binding rows' device info is stale until re-fetched.
+                window.addEventListener('apothecary:devices-changed', () => {
+                    this.loadBindings().then(() => this.afterBindings());
+                });
             }
 
             onResize() {
@@ -600,12 +1064,15 @@
                 const height = this.canvas.clientHeight;
                 this.camera.aspect = width / height;
                 this.camera.updateProjectionMatrix();
-                this.renderer.setSize(width, height);
+                this.renderer.setSize(width, height, false);
             }
 
             animate() {
                 requestAnimationFrame(() => this.animate());
                 this.orbitControls.update();
+                for (const m of Object.values(this.marks)) if (m.marks) m.marks.tick();
+                this.anchors.update();
+                this.panels.update((key) => this.anchors.at(key));
                 this.renderer.render(this.scene, this.camera);
             }
 
@@ -634,12 +1101,122 @@
                     this.focusPath = this.resolveFocusPath(focusPathStr);
                     this.selectedName = null;
                     this.jobs = this.hasBuildVolumes ? await this.fetchJobs() : [];
+                    if (data.scad) this.codeContentEl.textContent = data.scad;
                     this.renderFocus();
+                    // A ?focus= deep link should land on the part, not one
+                    // click short of it. /viewer/parts/<name> promises the
+                    // parameter controls, and those only exist once a node is
+                    // selected -- focusing alone left the panel unbuilt.
+                    this.selectFocusedPart();
                     this.setStatus(`Loaded: ${data.name}`, 'success');
+                    // Bindings shell out to arduino-cli (a second or two):
+                    // fetched after the scene is on screen, never before.
+                    this.loadBindings().then(() => { this.afterBindings(); this.scheduleAutoRefresh(); });
+                    this.syncCameras();
                 } catch (err) {
                     this.setStatus(`Error: ${err.message}`, 'error');
                     console.error(err);
                 }
+            }
+
+            // A site built while the server runs (from a picture, from a gathering)
+            // is not in the picker yet: add it, then load it in place -- the world
+            // changes site without leaving the page or dropping the camera.
+            openSite(name) {
+                if (![...this.siteSelect.options].some((o) => o.value === name)) {
+                    const opt = document.createElement('option');
+                    opt.value = name; opt.textContent = name;
+                    this.siteSelect.appendChild(opt);
+                }
+                this.siteSelect.value = name;
+                const url = new URL(location.href);
+                url.pathname = url.pathname.replace(/\/viewer\/sites\/[^/]+/, `/viewer/sites/${encodeURIComponent(name)}`);
+                history.replaceState(null, '', url);
+                return this.loadSite(name);
+            }
+
+            // The cameras placed in this site: a badge above each and a small
+            // frustum at its node, from GET /cameras, kept for every browser.
+            async syncCameras() {
+                let placed = [];
+                try {
+                    const r = await fetch(`${BASE_URL}/cameras?site=${encodeURIComponent(this.siteName)}`);
+                    placed = r.ok ? await r.json() : [];
+                } catch (err) { placed = []; }
+                this.cameras = placed;
+                const wanted = new Set();
+                for (const cam of placed) {
+                    const key = `camera:${cam.id}`;
+                    wanted.add(key);
+                    let badge = this.anchors.get(key);
+                    if (!badge) {
+                        badge = document.createElement('div');
+                        badge.className = 'world-badge camera-mark';
+                        badge.dataset.camera = cam.id;
+                        badge.dataset.path = cam.path;
+                        badge.title = 'Open the camera panel on this camera';
+                        badge.addEventListener('click', () => this.openCamera(cam.id));
+                        this.anchors.add(key, badge, () => this.anchorPointFor(cam.path), { offset: { x: 0, y: -30 } });
+                    }
+                    badge.textContent = `📷 ${cam.label || 'camera'}`;
+                    if (!this.cameraMarks[key]) {
+                        const node = this.nodeByPath(cam.path);
+                        const b = node ? envelopeBounds(node) : null;
+                        if (b) {
+                            const cx = (b.min[0] + b.max[0]) / 2, cy = (b.min[1] + b.max[1]) / 2, top = b.max[2];
+                            // A small frustum at the top of the node, looking along +Y.
+                            const apex = new THREE.Vector3(cx, top + 20, cy);
+                            const far = cy + 140;
+                            const corners = [[-50, 40], [50, 40], [50, -40], [-50, -40]].map(([dx, dz]) => new THREE.Vector3(cx + dx, top + 20 + dz, far));
+                            const pts = [];
+                            for (let i = 0; i < 4; i++) { pts.push(apex, corners[i]); pts.push(corners[i], corners[(i + 1) % 4]); }
+                            const lines = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xffcc66, transparent: true, opacity: 0.8 }));
+                            lines.userData.path = cam.path;
+                            this.scene.add(lines);
+                            this.cameraMarks[key] = lines;
+                        }
+                    }
+                }
+                for (const key of this.anchors.keys()) if (key.startsWith('camera:') && !wanted.has(key)) this.anchors.remove(key);
+                for (const [key, lines] of Object.entries(this.cameraMarks)) if (!wanted.has(key)) { this.scene.remove(lines); lines.geometry.dispose(); lines.material.dispose(); delete this.cameraMarks[key]; }
+                this.refreshCameraMarks();
+                if (this.cameraWidget) this.cameraWidget.renderPlacement();
+            }
+            // A camera's frustum is drawn only while its piece is at the level
+            // being looked at -- the same rule its badge follows through
+            // anchorPointFor -- so zooming into something else leaves neither
+            // behind. Called from renderFocus, and after the cameras sync.
+            refreshCameraMarks() {
+                for (const lines of Object.values(this.cameraMarks)) lines.visible = this.anchorPointFor(lines.userData.path) !== null;
+            }
+            openCamera(id) {
+                this.panels.open('camera');
+                if (this.cameraWidget && id) {
+                    const pick = this.cameraWidget.state.cameras.some((c) => c.deviceId === id);
+                    if (pick) this.cameraWidget.useCamera(id); else this.setStatus('That camera belongs to another browser; this one cannot show it', 'error');
+                }
+            }
+
+            // Select whatever the deep link was aiming at, so the part
+            // panel is open on arrival.
+            //
+            // A part usually appears twice on the way down: once as the
+            // structure the focus path names, and once as the leaf inside it
+            // carrying the geometry. Focusing lands on the former; the
+            // parameters live on the latter.
+            selectFocusedPart() {
+                if (!this.focusPath.length) return;
+                const focus = this.currentFocusNode();
+                const prefix = this.focusPath.join('.');
+                if (!focus.children.length) {
+                    this.selectChild(prefix);  // focus is itself the leaf
+                    return;
+                }
+                const wanted = this.focusPath[this.focusPath.length - 1];
+                const child =
+                    focus.children.find((c) => c.name === wanted) ||
+                    (focus.children.length === 1 ? focus.children[0] : null);
+                if (child) this.selectChild(pathForChild(prefix, child.name));
             }
 
             // Validates a dotted path against the loaded tree, truncating at
@@ -684,7 +1261,11 @@
             zoomIn(name) {
                 const focus = this.currentFocusNode();
                 const child = findChild(focus, name);
-                if (!child || !child.children.length) return;
+                // A leaf is a legitimate destination: it renders as itself, and
+                // reaching one is how the parts library gives back the old
+                // part-viewer experience. Refusing childless nodes made every
+                // entry in a catalog of leaves un-navigable.
+                if (!child) return;
                 this.focusPath = [...this.focusPath, name];
                 this.selectedName = null;
                 this.renderFocus();
@@ -728,6 +1309,14 @@
             currentRenderNodes(focus) {
                 const focusPrefix = this.focusPath.join('.');
                 const nodes = [];
+                // A leaf has nothing beneath it, and rendering "the focus
+                // node's children" therefore rendered an empty scene for the
+                // one thing a reader was asking to look at -- no meshes, no
+                // contents, no geometry fetched at all. Zooming into a part
+                // shows the part.
+                if (!focus.children.length) {
+                    return [{ ...focus, _path: focusPrefix }];
+                }
                 for (const child of focus.children) {
                     const path = pathForChild(focusPrefix, child.name);
                     if (child.children.length && this.expandedCategories.has(child.category)) {
@@ -759,6 +1348,9 @@
                     for (const child of node.children) addAll(child, pathForChild(path, child.name));
                 };
                 for (const child of focus.children) addAll(child, pathForChild(focusPrefix, child.name));
+                // Same reason as currentRenderNodes: a focused leaf is its own
+                // render node, so it needs a key or selecting it finds nothing.
+                if (!focus.children.length) addAll(focus, focusPrefix);
             }
 
             renderFocus() {
@@ -777,6 +1369,7 @@
                 this.renderJobsSection();
                 this.frameCameraForChildren(renderNodes);
                 this.scheduleWaveLoad(renderNodes);
+                this.refreshCameraMarks();
             }
 
             // ---------------------------------------------------------------
@@ -795,8 +1388,14 @@
                     mesh.geometry.dispose();
                     mesh.material.dispose();
                 }
+                for (const overlay of Object.values(this.compoundOverlayByKey)) {
+                    this.scene.remove(overlay);
+                    overlay.geometry.dispose();
+                    overlay.material.dispose();
+                }
                 this.meshByName = {};
                 this.buildVolumeMeshByName = {};
+                this.compoundOverlayByKey = {};
             }
 
             // Axis convention throughout: apothecary (x, y, z) with z-up maps
@@ -852,10 +1451,79 @@
                 return envelopeBounds(node) || this.placeholderBounds(node, index);
             }
 
-            buildChildMeshes(children) {
-                children.forEach((child, index) => {
+            // A leaf is always drawn in full -- "black box" and "dot" exist to
+            // stand in for a subassembly, and a leaf has no inside to hide. So
+            // the detail level only ever applies to a node with children, and
+            // a per-node override beats the toolbar default.
+            effectiveDetailFor(node, key) {
+                if (!node.children || !node.children.length) return DETAIL_FULL;
+                return this.detailOverrides.get(key) || this.detailMode;
+            }
+
+            // A marker sized from the node it replaces rather than a fixed
+            // radius: one constant would be invisible on the garage and
+            // swallow a Feature. Kept clickable at the far end by a floor.
+            buildDotMesh(size, center) {
+                const span = Math.max(size[0], size[1], size[2]);
+                const radius = Math.max(DOT_MIN_RADIUS, span * DOT_RADIUS_FRACTION);
+                const geometry = new THREE.SphereGeometry(radius, 16, 12);
+                // Colour is left to colorMesh, like every other mesh -- it
+                // recolours the whole scene on each selection change, so a
+                // colour set here would be overwritten on the first click.
+                const material = new THREE.MeshPhongMaterial({ transparent: true, opacity: 0.9 });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(center[0], center[1], center[2]);
+                return mesh;
+            }
+
+            // The outline is what makes a subassembly read as one object
+            // when its children are drawn separately -- without it, an
+            // expanded subsystem is just loose parts sharing a neighbourhood.
+            // Slightly inflated so it never z-fights the node's own box.
+            addCompoundOverlay(key, size, center) {
+                const geometry = new THREE.BoxGeometry(1, 1, 1);
+                const edges = new THREE.EdgesGeometry(geometry);
+                const overlay = new THREE.LineSegments(
+                    edges,
+                    new THREE.LineBasicMaterial({
+                        color: COMPOUND_OVERLAY_COLOR, transparent: true, opacity: 0.55,
+                    })
+                );
+                overlay.scale.set((size[0] || 1) * OVERLAY_INFLATE, (size[1] || 1) * OVERLAY_INFLATE, (size[2] || 1) * OVERLAY_INFLATE);
+                overlay.position.set(center[0], center[1], center[2]);
+                overlay.renderOrder = 1;
+                this.scene.add(overlay);
+                this.compoundOverlayByKey[key] = overlay;
+            }
+
+            // ``indexOffset`` keeps a single-node rebuild (rebuildDetailForKey)
+            // landing on the same synthetic placeholder slot it had in the
+            // full pass -- placeholderBounds positions footprint-less siblings
+            // purely by index, so rebuilding one as index 0 would teleport it.
+            buildChildMeshes(children, indexOffset = 0) {
+                children.forEach((child, i) => {
+                    const index = indexOffset + i;
                     const bounds = this.boundsFor(child, index);
                     const { size, center } = this.boxFromBounds(bounds);
+                    const key = nodeKey(child);
+                    const detail = this.effectiveDetailFor(child, key);
+                    const isCompound = !!(child.children && child.children.length);
+
+                    if (isCompound && this.showCompoundOverlays) {
+                        this.addCompoundOverlay(key, size, center);
+                    }
+
+                    if (detail === DETAIL_DOT) {
+                        const dot = this.buildDotMesh(size, center);
+                        dot.userData.key = key;
+                        dot.userData.isPlaceholder = false;
+                        dot.userData.isDot = true;
+                        this.scene.add(dot);
+                        this.meshByName[key] = dot;
+                        this.colorMesh(key, child);
+                        this.updateBuildVolumeIndicator(child, bounds);
+                        return;
+                    }
 
                     const geometry = new THREE.BoxGeometry(1, 1, 1);
                     const material = new THREE.MeshPhongMaterial({ transparent: true, opacity: 0.65 });
@@ -868,7 +1536,6 @@
                     mesh.add(wireframe);
                     mesh.scale.set(size[0] || 1, size[1] || 1, size[2] || 1);
                     mesh.position.set(center[0], center[1], center[2]);
-                    const key = nodeKey(child);
                     mesh.userData.key = key;
                     // A unit BoxGeometry stretched to size via mesh.scale --
                     // rebuildSingleMesh needs to tell this apart from a
@@ -898,6 +1565,12 @@
                 mesh.material.color.set(isViolating ? VIOLATION_COLOR : baseColorFor(node));
                 const edges = mesh.getObjectByName('edges');
                 if (edges) edges.material.color.set(isSelected ? SELECTED_EDGE_COLOR : 0x000000);
+                // A dot has no edge wireframe to brighten, so selection shows
+                // as emissive instead -- otherwise clicking one gives no
+                // feedback at all.
+                if (mesh.userData.isDot && mesh.material.emissive) {
+                    mesh.material.emissive.set(isSelected ? SELECTED_EDGE_COLOR : 0x000000);
+                }
             }
 
             // A wireframe-only box showing the usable print area within a
@@ -917,9 +1590,13 @@
                 }
 
                 const [bvApX, bvApY, bvApZ] = node.build_volume;
-                const centerApX = (bounds.min[0] + bounds.max[0]) / 2;
-                const centerApY = (bounds.min[1] + bounds.max[1]) / 2;
-                const baseApZ = bounds.min[2];
+                // A machine that says where its volume starts (build_origin,
+                // in its own frame) is drawn there; a block is centred on its
+                // footprint with the volume on the floor.
+                const origin = node.build_origin;
+                const centerApX = origin ? node.position.x + origin[0] + bvApX / 2 : (bounds.min[0] + bounds.max[0]) / 2;
+                const centerApY = origin ? node.position.y + origin[1] + bvApY / 2 : (bounds.min[1] + bounds.max[1]) / 2;
+                const baseApZ = origin ? node.position.z + origin[2] : bounds.min[2];
                 const size = [bvApX, bvApZ, bvApY];
                 const center = [centerApX, baseApZ + bvApZ / 2, centerApY];
 
@@ -967,11 +1644,35 @@
                     targetZAp + distance * 0.55,
                     targetYAp + distance * 0.7
                 );
-                this.orbitControls.minDistance = Math.max(10, maxSpan * 0.08);
-                this.orbitControls.maxDistance = Math.max(500, distance * 5);
+                this.orbitControls.minDistance = Math.max(10, maxSpan * MIN_DOLLY_FACTOR);
+                this.orbitControls.maxDistance = Math.max(2000, distance * MAX_DOLLY_FACTOR);
                 this.orbitControls.update();
 
+                this.updateCameraClipping(maxSpan);
                 this.updateHelpersForSpan(maxSpan);
+            }
+
+            // The far plane was a fixed 20000 set once at startup, while the
+            // dolly clamp is derived per level and reaches roughly 9x the
+            // framing distance -- about 54000 on the garage. Everything
+            // between those two numbers was being clipped away, so pulling
+            // back to look at the largest scale emptied the view instead of
+            // widening it. Both ends now move together, per level.
+            //
+            // Near moves with the scene too: holding near at 1 while far grows
+            // past 10^5 spends most of the depth buffer on the first
+            // millimetre and z-fights at the far end. It stays small enough
+            // not to clip a Feature you have zoomed right into.
+            updateCameraClipping(span) {
+                const far = Math.max(
+                    MIN_FAR_PLANE,
+                    this.orbitControls.maxDistance * FAR_PLANE_HEADROOM + span * 4
+                );
+                const near = Math.min(1, Math.max(0.05, span * 0.0004));
+                if (this.camera.far === far && this.camera.near === near) return;
+                this.camera.far = far;
+                this.camera.near = near;
+                this.camera.updateProjectionMatrix();
             }
 
             // The grid/axes helpers are fixed-size by default, which is
@@ -981,8 +1682,13 @@
             // is actually in view, the same way the old standalone part
             // viewer's updateHelpersForSize did for a single loaded part.
             updateHelpersForSpan(span) {
-                const gridSize = Math.max(100, Math.ceil((span * 2.5) / 50) * 50);
-                const gridDivisions = Math.max(10, Math.round(gridSize / (span < 100 ? 5 : 50)));
+                // Reaches further than the old 2.5x so the ground plane does
+                // not simply end mid-view once you dolly out to the new clamp;
+                // divisions are capped because cell count, not extent, is what
+                // costs anything to draw.
+                const gridSize = Math.max(100, Math.ceil((span * 6) / 50) * 50);
+                const rawDivisions = Math.round(gridSize / (span < 100 ? 5 : 50));
+                const gridDivisions = Math.min(200, Math.max(10, rawDivisions));
 
                 this.scene.remove(this.gridHelper);
                 this.gridHelper = new THREE.GridHelper(gridSize, gridDivisions, 0x444444, 0x2a2a2a);
@@ -1054,7 +1760,13 @@
                 });
                 if (present.size === 0) return;
 
-                for (const category of Object.keys(CATEGORY_COLORS).filter((c) => present.has(c))) {
+                // The ones written down first, in the order they were written,
+                // then anything else in alphabetical order. Every group present
+                // gets a chip: a group with no chip cannot be filtered, and a
+                // group that cannot be filtered may as well not be there.
+                const known = Object.keys(CATEGORY_COLORS).filter((c) => present.has(c));
+                const rest = [...present].filter((c) => !(c in CATEGORY_COLORS)).sort();
+                for (const category of [...known, ...rest]) {
                     const chip = document.createElement('span');
                     const active = this.expandedCategories.has(category);
                     chip.className = 'category-chip' + (active ? ' active' : '');
@@ -1062,7 +1774,7 @@
 
                     const swatch = document.createElement('span');
                     swatch.className = 'chip-swatch';
-                    swatch.style.background = '#' + CATEGORY_COLORS[category].toString(16).padStart(6, '0');
+                    swatch.style.background = '#' + colorForCategory(category).toString(16).padStart(6, '0');
                     chip.appendChild(swatch);
                     chip.appendChild(document.createTextNode(category));
 
@@ -1086,12 +1798,22 @@
             // (render-dot, driven by meshByName -- see currentRenderNodes/
             // expandedCategories for what controls that).
             renderContentsList(focus) {
+                // Rebuilt in place, so a list long enough to scroll (a catalog of
+                // twenty parts) stays where the person had scrolled it: a click
+                // re-renders, and the row under the pointer must still be there
+                // for the second click of a double-click.
+                const scroller = this.contentsEl.closest('.panel-body-slot') || this.contentsEl;
+                const scrolled = scroller.scrollTop;
                 this.contentsEl.innerHTML = '';
                 const focusPrefix = this.focusPath.join('.');
-                focus.children.forEach((child) => {
-                    const path = pathForChild(focusPrefix, child.name);
+                // A focused leaf lists itself, for the same reason it renders
+                // itself: the panel is about what is on screen.
+                const listed = focus.children.length ? focus.children : [focus];
+                listed.forEach((child) => {
+                    const path = child === focus ? focusPrefix : pathForChild(focusPrefix, child.name);
                     this.contentsEl.appendChild(this.buildTreeRows(child, path, 0));
                 });
+                scroller.scrollTop = scrolled;
             }
 
             buildTreeRows(node, path, depth) {
@@ -1101,6 +1823,7 @@
 
                 const li = document.createElement('li');
                 li.className = 'contents-item' + (this.selectedName === path ? ' selected' : '');
+                li.dataset.path = path;
                 li.style.paddingLeft = `${0.5 + depth * 0.9}rem`;
 
                 const caret = document.createElement('span');
@@ -1131,6 +1854,8 @@
                 const inside = hasChildren ? ` — ${node.children.length} inside` : '';
                 label.textContent = `${node.name} (${node.role})${inside}`;
                 li.appendChild(label);
+                const badge = this.deviceBadgeHtml(path);
+                if (badge) li.appendChild(badge);
 
                 // Click/double-click anywhere on the row (matching the old
                 // flat list's behavior, and what tests click on) -- only the
@@ -1169,7 +1894,10 @@
                 const node = this.renderNodeByKey[key];
                 const mesh = this.meshByName[key];
 
-                if (mesh && node && this.isEditableSelection(focus, node) && !node.part_ref) {
+                // A catalog leaf is not moved by hand (the library lays itself
+                // out); a machine that is a part with things inside it moves
+                // like any other structure.
+                if (mesh && node && this.isEditableSelection(focus, node) && !(node.part_ref && node.children.length === 0)) {
                     this.transformControls.attach(mesh);
                 } else {
                     this.transformControls.detach();
@@ -1187,19 +1915,27 @@
             // so anything deeper -- or any leaf shown via "show all levels"
             // that isn't itself a direct child -- gets a read-only panel.
             renderSelectedPanel() {
+                if (this.cameraWidget) this.cameraWidget.renderPlacement();  // "Place at selected" follows the selection
                 const focus = this.currentFocusNode();
                 const selected = this.renderNodeByKey[this.selectedName];
                 if (!selected) {
                     this.selectedBodyEl.innerHTML = '<div class="no-selection">Click a node to select it</div>';
                     return;
                 }
-                if (selected.part_ref) {
-                    this.renderPartPanel(selected);
-                } else if (this.isEditableSelection(focus, selected)) {
+                // A node is a node first (its name, its place, its status); a
+                // node that is a registered part -- a machine drawn as itself, a
+                // catalog leaf -- carries the part's own section after that.
+                if (this.isEditableSelection(focus, selected)) {
                     this.renderEditablePanel(selected);
                 } else {
                     this.renderGenericPanel(selected);
                 }
+                // A leaf that is a part gets the part's whole section; a machine
+                // that is a part with things inside it gets the one row that
+                // says so, and keeps its panel the height a machine's panel is.
+                if (selected.part_ref) this.appendPartPanel(selected, selected.children.length === 0);
+                this.selectedBodyEl.insertAdjacentHTML('beforeend', this.deviceSectionHtml(this.selectedName));
+                this.bindDeviceSection(this.selectedName);
             }
 
             zoomInAffordanceHtml(node) {
@@ -1212,6 +1948,66 @@
                     ?.addEventListener('click', () => this.zoomIn(node.name));
             }
 
+            // Per-node detail, offered only where it means something: a leaf
+            // has no subassembly to collapse, so it gets no control rather
+            // than a control that does nothing.
+            detailAffordanceHtml(node) {
+                if (!node.children.length) return '';
+                const current = this.effectiveDetailFor(node, this.selectedName);
+                const options = Object.entries(DETAIL_LABELS)
+                    .map(([value, label]) =>
+                        `<option value="${value}"${value === current ? ' selected' : ''}>${label}</option>`)
+                    .join('');
+                return `<div class="prop-row">
+                          <label>Detail</label>
+                          <select class="detail-select" title="How much of this subassembly to draw. Overrides the toolbar default for this node only.">${options}</select>
+                        </div>`;
+            }
+
+            bindDetailAffordance() {
+                const select = this.selectedBodyEl.querySelector('.detail-select');
+                if (!select) return;
+                const key = this.selectedName;
+                select.addEventListener('change', () => {
+                    // Matching the toolbar default is stored as "no override",
+                    // so a later change to the default still reaches this node
+                    // instead of it being silently pinned.
+                    if (select.value === this.detailMode) this.detailOverrides.delete(key);
+                    else this.detailOverrides.set(key, select.value);
+                    this.rebuildDetailForKey(key);
+                });
+            }
+
+            // Rebuilds just this node rather than the whole level: a full
+            // renderFocus would reframe the camera, which is disorienting when
+            // all you did was collapse one subassembly.
+            rebuildDetailForKey(key) {
+                const node = this.renderNodeByKey[key];
+                if (!node) return;
+                const existing = this.meshByName[key];
+                if (existing) {
+                    this.transformControls.detach();
+                    this.scene.remove(existing);
+                    existing.geometry.dispose();
+                    existing.material.dispose();
+                    delete this.meshByName[key];
+                }
+                const overlay = this.compoundOverlayByKey[key];
+                if (overlay) {
+                    this.scene.remove(overlay);
+                    overlay.geometry.dispose();
+                    overlay.material.dispose();
+                    delete this.compoundOverlayByKey[key];
+                }
+                const index = this.currentRenderNodes(this.currentFocusNode())
+                    .findIndex((n) => nodeKey(n) === key);
+                this.buildChildMeshes([node], Math.max(0, index));
+                if (this.effectiveDetailFor(node, key) === DETAIL_FULL) {
+                    this.scheduleWaveLoad([node]);
+                }
+                this.renderSelectedPanel();
+            }
+
             renderGenericPanel(node) {
                 this.selectedBodyEl.innerHTML = `
                     <div class="prop-row"><label>Name</label><span>${node.name}</span></div>
@@ -1221,8 +2017,10 @@
                         Comment: ${node.comment ?? '—'}<br>
                         Footprint: ${node.footprint ? node.footprint.max.map((v, i) => (v - node.footprint.min[i]).toFixed(0)).join(' × ') + ' mm' : '—'}
                     </div>
+                    ${this.detailAffordanceHtml(node)}
                     ${this.zoomInAffordanceHtml(node)}
                 `;
+                this.bindDetailAffordance();
                 this.bindZoomInAffordance(node);
             }
 
@@ -1248,8 +2046,10 @@
                               + `<span style="display:inline-block;width:8px;height:8px;border:1px solid #${BUILD_VOLUME_COLOR.toString(16).padStart(6, '0')};vertical-align:middle;"></span>`
                             : '—'}
                     </div>
+                    ${this.detailAffordanceHtml(node)}
                     ${this.zoomInAffordanceHtml(node)}
                 `;
+                this.bindDetailAffordance();
                 for (const axis of ['x', 'y', 'z']) {
                     document.getElementById(`pos-${axis}`).addEventListener('change', (e) => {
                         node.position[axis] = parseFloat(e.target.value) || 0;
@@ -1265,19 +2065,327 @@
                 this.bindZoomInAffordance(node);
             }
 
-            renderPartPanel(node) {
-                this.selectedBodyEl.innerHTML = `
-                    <div class="prop-row"><label>Part</label><span>${node.part_ref}</span></div>
+            appendPartPanel(node, full = true) {
+                const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+                if (!full) {
+                    this.selectedBodyEl.insertAdjacentHTML('beforeend', `
+                        <div class="prop-row"><label>Part</label><span title="The part this machine is drawn as">${esc(node.part_ref)}</span></div>`);
+                    return;
+                }
+                this.selectedBodyEl.insertAdjacentHTML('beforeend', `
+                    <div class="prop-row"><label>Part</label><span>${esc(node.part_ref)}</span></div>
+                    <div class="envelope" id="part-envelope"></div>
                     <div class="part-actions">
                         <button type="button" id="part-regenerate-btn">⚙️ Regenerate STL</button>
                         <a href="${BASE_URL}/parts/${encodeURIComponent(node.part_ref)}/scad">💾 Download SCAD</a>
                     </div>
+                    <div class="code-header">Build readiness</div>
+                    <div id="part-checklist">Loading…</div>
+                    <div class="code-header">Parameters</div>
+                    <div id="stage-bar">
+                      <div id="stage-summary" class="clean">No staged changes</div>
+                      <div class="stage-actions">
+                        <button type="button" id="apply-btn" disabled>Apply</button>
+                        <button type="button" id="revert-btn">Revert</button>
+                      </div>
+                    </div>
+                    <div id="part-params">Loading…</div>
                     <div class="code-header">SCAD Source (the absorbed part view)</div>
                     <div id="part-scad-content" class="code-content">Loading…</div>
-                `;
+                `);
                 this.loadPartScad(node.part_ref);
+                this.loadPartChecklist(node.part_ref);
+                this.loadPartParams(node.part_ref);
                 document.getElementById('part-regenerate-btn')
                     .addEventListener('click', () => this.regeneratePart(node.part_ref));
+            }
+
+            // Whether the part is ready to print and check against a real one.
+            // The same assessment the CLI prints, so the two cannot disagree
+            // about what is buildable.
+            async loadPartChecklist(name) {
+                const host = document.getElementById('part-checklist');
+                try {
+                    const response = await fetch(
+                        `${BASE_URL}/parts/${encodeURIComponent(name)}/checklist`);
+                    if (!response.ok) { host.textContent = 'No checklist available.'; return; }
+                    const report = await response.json();
+                    host.innerHTML = '';
+
+                    const verdict = document.createElement('div');
+                    verdict.className = 'verdict ' + (report.ready ? 'ready' : 'not-ready');
+                    verdict.textContent = report.ready
+                        ? 'Ready to build'
+                        : `Not ready — ${report.blocked} blocking, ${report.unknown} unanswered`;
+                    host.appendChild(verdict);
+
+                    for (const check of report.checks) {
+                        const row = document.createElement('div');
+                        row.className = 'check';
+                        const mark = document.createElement('span');
+                        mark.className = 'mark ' + check.state;
+                        mark.textContent = { pass: 'OK', blocked: 'STOP', unknown: '?' }[check.state];
+                        const body = document.createElement('div');
+                        body.className = 'body';
+                        body.textContent = check.name;
+                        // An unanswered question shows its reason and its fix;
+                        // a tick does not need explaining.
+                        if (check.state !== 'pass' && (check.detail || check.fix)) {
+                            const why = document.createElement('span');
+                            why.className = 'why';
+                            why.textContent = [check.detail, check.fix].filter(Boolean).join(' — ');
+                            body.appendChild(why);
+                        }
+                        row.append(mark, body);
+                        host.appendChild(row);
+                    }
+                } catch (err) {
+                    host.textContent = `Could not read the checklist: ${err.message}`;
+                }
+            }
+
+            // ---- staging -------------------------------------------------
+            //
+            // A slider moves a staged value, never the design. The staged set
+            // is validated against the part's own model on every change --
+            // which costs nothing -- and only a valid set can be applied,
+            // which is the thirty seconds of OpenSCAD.
+
+            stagedDiff() {
+                const diff = {};
+                for (const [name, value] of Object.entries(this.partParams ?? {})) {
+                    const was = this.committedParams?.[name];
+                    if (Number(value) !== Number(was) && value !== was) {
+                        diff[name] = { from: was, to: value };
+                    }
+                }
+                return diff;
+            }
+
+            markStagedControls(diff) {
+                for (const wrap of document.querySelectorAll('.param')) {
+                    const label = wrap.querySelector('.name');
+                    if (!label) continue;
+                    const name = label.childNodes[0].textContent.trim();
+                    const entry = diff[name];
+                    wrap.classList.toggle('staged', Boolean(entry));
+                    const existing = wrap.querySelector('.was');
+                    if (existing) existing.remove();
+                    if (entry) {
+                        const was = document.createElement('span');
+                        was.className = 'was';
+                        was.textContent = ` was ${entry.from}`;
+                        wrap.querySelector('.val').after(was);
+                    }
+                }
+            }
+
+            async refreshStage() {
+                const name = this.partParamsFor;
+                const summary = document.getElementById('stage-summary');
+                const apply = document.getElementById('apply-btn');
+                if (!name || !summary || !apply) return;
+
+                const diff = this.stagedDiff();
+                const count = Object.keys(diff).length;
+                this.markStagedControls(diff);
+
+                if (!count) {
+                    summary.className = 'clean';
+                    summary.textContent = 'No staged changes';
+                    apply.disabled = true;
+                    apply.textContent = 'Apply';
+                    return;
+                }
+
+                summary.className = 'clean';
+                summary.textContent = `Validating ${count} change${count > 1 ? 's' : ''}…`;
+                apply.disabled = true;
+
+                const seq = (this._stageSeq = (this._stageSeq ?? 0) + 1);
+                let report;
+                try {
+                    const response = await fetch(
+                        `${BASE_URL}/parts/${encodeURIComponent(name)}/validate`,
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ params: this.partParams }),
+                        }
+                    );
+                    report = await response.json();
+                } catch (err) {
+                    summary.className = 'invalid';
+                    summary.textContent = `Could not validate: ${err.message}`;
+                    return;
+                }
+                // A slower validation must not overwrite a newer one.
+                if (seq !== this._stageSeq) return;
+
+                this.stagedValid = Boolean(report.valid);
+                if (!report.valid) {
+                    summary.className = 'invalid';
+                    summary.textContent = report.errors
+                        .map((e) => `${e.field}: ${e.message}`)
+                        .join('; ');
+                    apply.disabled = true;
+                    return;
+                }
+
+                summary.className = 'valid';
+                const size = report.bounds?.size;
+                const envelope = size
+                    ? ` → ${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)} mm`
+                    : '';
+                summary.textContent =
+                    `${count} change${count > 1 ? 's' : ''} staged, valid${envelope}`;
+                apply.disabled = false;
+                apply.textContent = `Apply ${count} change${count > 1 ? 's' : ''}`;
+                this.showEnvelope(report.bounds);
+            }
+
+            bindStageActions(name) {
+                const apply = document.getElementById('apply-btn');
+                const revert = document.getElementById('revert-btn');
+                if (apply) {
+                    apply.onclick = async () => {
+                        if (!this.stagedValid) return;
+                        await this.regeneratePart(name);
+                        // What rendered is now what is committed.
+                        this.committedParams = { ...this.partParams };
+                        this.refreshStage();
+                    };
+                }
+                if (revert) {
+                    revert.onclick = () => {
+                        this.partParams = { ...this.committedParams };
+                        this.loadPartParams(name);
+                    };
+                }
+            }
+
+            // The part's parameters, as controls, in the one panel that already
+            // describes a part. A separate dashboard page would be a second
+            // entry point onto the same object, and this viewer is the only one.
+            async loadPartParams(name) {
+                const host = document.getElementById('part-params');
+                // `committed` is what the STL on disk was rendered from;
+                // `staged` is what the sliders currently say. Nothing renders
+                // until the difference has been validated and applied.
+                this.partParams = {};
+                this.committedParams = {};
+                this.partParamsFor = name;
+                this.stagedValid = true;
+                try {
+                    const response = await fetch(
+                        `${BASE_URL}/parts/${encodeURIComponent(name)}/params`);
+                    if (!response.ok) { host.textContent = 'No parameters declared.'; return; }
+                    const spec = await response.json();
+                    this.showEnvelope(spec.bounds);
+                    host.innerHTML = '';
+                    // Contested first: a number the sources disagree about is the
+                    // one a reader most needs to find.
+                    const ordered = [...spec.fields].sort(
+                        (a, b) => b.contested.length - a.contested.length);
+                    for (const field of ordered) {
+                        this.partParams[field.name] = field.default;
+                        this.committedParams[field.name] = field.default;
+                        host.appendChild(this.buildParamControl(field));
+                    }
+                    this.bindStageActions(name);
+                    this.refreshStage();
+                } catch (err) {
+                    host.textContent = `Could not read parameters: ${err.message}`;
+                }
+            }
+
+            showEnvelope(bounds) {
+                const el = document.getElementById('part-envelope');
+                if (!el) return;
+                el.textContent = bounds
+                    ? `envelope ${bounds.size.x.toFixed(2)} × ${bounds.size.y.toFixed(2)}`
+                      + ` × ${bounds.size.z.toFixed(2)} mm`
+                    : '';
+            }
+
+            buildParamControl(field) {
+                const wrap = document.createElement('div');
+                wrap.className = 'param' + (field.contested.length ? ' is-contested' : '');
+                const head = document.createElement('div');
+                head.className = 'head';
+                const name = document.createElement('span');
+                name.className = 'name';
+                name.textContent = field.name;
+                if (field.contested.length) {
+                    const badge = document.createElement('span');
+                    badge.className = 'badge-contested';
+                    badge.textContent = 'contested';
+                    name.append(' ', badge);
+                }
+                const val = document.createElement('span');
+                val.className = 'val';
+                head.append(name, val);
+                wrap.appendChild(head);
+
+                if (field.type === 'enum') {
+                    const select = document.createElement('select');
+                    for (const option of (field.pattern.match(/\w+/g) || [])) {
+                        const el = document.createElement('option');
+                        el.value = el.textContent = option;
+                        if (option === field.default) el.selected = true;
+                        select.appendChild(el);
+                    }
+                    val.textContent = field.default;
+                    select.onchange = () => {
+                        this.partParams[field.name] = select.value;
+                        val.textContent = select.value;
+                        this.refreshStage();
+                    };
+                    wrap.appendChild(select);
+                } else if (field.type === 'number') {
+                    const input = document.createElement('input');
+                    input.type = 'range';
+                    input.min = field.min; input.max = field.max;
+                    input.step = (field.max - field.min) / 200;
+                    input.value = field.default;
+                    val.textContent = Number(field.default).toFixed(2);
+                    input.oninput = () => {
+                        this.partParams[field.name] = Number(input.value);
+                        val.textContent = Number(input.value).toFixed(2);
+                        this.markCandidates(field, wrap);
+                        this.refreshStage();
+                    };
+                    wrap.appendChild(input);
+                    wrap._input = input;
+                }
+
+                for (const candidate of field.contested) {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'cand';
+                    button.dataset.value = candidate.value;
+                    button.innerHTML =
+                        `<b>${candidate.value}</b><span class="src">${candidate.source}</span>`
+                        + (candidate.note ? `<span class="note">${candidate.note}</span>` : '');
+                    button.onclick = () => {
+                        this.partParams[field.name] = candidate.value;
+                        if (wrap._input) wrap._input.value = candidate.value;
+                        val.textContent = Number(candidate.value).toFixed(2);
+                        this.markCandidates(field, wrap);
+                        this.refreshStage();
+                    };
+                    wrap.appendChild(button);
+                }
+                if (field.contested.length) this.markCandidates(field, wrap);
+                return wrap;
+            }
+
+            markCandidates(field, wrap) {
+                for (const button of wrap.querySelectorAll('.cand')) {
+                    button.classList.toggle(
+                        'active',
+                        Number(button.dataset.value) === Number(this.partParams[field.name]));
+                }
             }
 
             async loadPartScad(name) {
@@ -1294,11 +2402,27 @@
             async regeneratePart(name) {
                 this.setStatus(`Regenerating ${name}...`, 'loading');
                 try {
+                    // Whatever the controls are set to, so turning a contested
+                    // number and pressing regenerate shows what it does.
+                    const params = this.partParamsFor === name ? (this.partParams ?? {}) : {};
                     const response = await fetch(
                         `${BASE_URL}/parts/${encodeURIComponent(name)}/stl/generate?force=true`,
-                        { method: 'POST' }
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ params }),
+                        }
                     );
-                    if (!response.ok) throw new Error(`Regenerate failed (${response.status})`);
+                    if (!response.ok) {
+                        const detail = await response.text();
+                        throw new Error(`${response.status}: ${detail.slice(0, 140)}`);
+                    }
+                    const body = await response.json();
+                    this.showEnvelope(body.bounds);
+                    // The mesh on screen is the old geometry until it reloads.
+                    const target = Object.values(this.renderNodeByKey ?? {})
+                        .find((n) => n.part_ref === name);
+                    if (target) this.rebuildSingleMesh(target);
                     this.setStatus(`${name} regenerated`, 'success');
                 } catch (err) {
                     this.setStatus(`Error: ${err.message}`, 'error');
@@ -1336,6 +2460,14 @@
                     mesh.scale.set(size[0] || 1, size[1] || 1, size[2] || 1);
                 }
                 mesh.position.set(center[0], center[1], center[2]);
+                // The assembly outline is a separate scene object, so it does
+                // not inherit the drag -- without this it stays behind at the
+                // node's old position and reads as a second, phantom assembly.
+                const overlay = this.compoundOverlayByKey[key];
+                if (overlay) {
+                    overlay.scale.set((size[0] || 1) * OVERLAY_INFLATE, (size[1] || 1) * OVERLAY_INFLATE, (size[2] || 1) * OVERLAY_INFLATE);
+                    overlay.position.set(center[0], center[1], center[2]);
+                }
                 this.updateBuildVolumeIndicator(node, bounds);
                 if (this.selectedName === key) this.transformControls.attach(mesh);
             }
@@ -1455,6 +2587,527 @@
 
             // Re-fetches the whole tree (status/violations/positions may have
             // changed) without disturbing navigation state.
+            // ---------------------------------------------------------------
+            // Devices bound to nodes (firmware seam). Non-fatal: a site
+            // without the toolchain still loads; the panel says why.
+            // ---------------------------------------------------------------
+
+            async loadBindings(fresh = false) {
+                if (!this.siteName || this.bindingsInFlight) return;
+                this.bindingsInFlight = true;
+                try {
+                    const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/devices${fresh ? '?fresh=1' : ''}`);
+                    if (!response.ok) throw new Error(`devices (${response.status})`);
+                    const data = await response.json();
+                    this.bindings = Object.fromEntries(data.bindings.map((row) => [row.path, row]));
+                    this.siteDevices = data.devices.map((v) => v.device);
+                    this.devicesProblem = data.problem;
+                } catch (err) {
+                    this.bindings = {};
+                    this.siteDevices = [];
+                    this.devicesProblem = err.message;
+                } finally {
+                    this.bindingsLoaded = true;
+                    this.bindingsInFlight = false;
+                }
+            }
+
+            // Rescan (fresh port scan) + re-poll held printers, then again after
+            // the chosen interval -- scheduled only once the previous round
+            // returns, and not while the tab is hidden.
+            scheduleAutoRefresh() {
+                clearTimeout(this.autoTimer);
+                this.autoTimer = null;
+                if (!this.autoEl.checked || !this.siteName || document.hidden) return;
+                const ms = Number(this.intervalEl.value) || 10000;
+                this.autoTimer = setTimeout(async () => {
+                    await this.loadBindings(true);
+                    this.afterBindings();
+                    this.scheduleAutoRefresh();
+                }, ms);
+            }
+
+            async rescanDevices() {
+                this.setStatus('Rescanning devices...', 'loading');
+                await this.loadBindings(true);
+                this.afterBindings();
+                this.setStatus(this.devicesProblem ? `Devices: ${this.devicesProblem}` : `${this.siteDevices.length} device(s) detected`, this.devicesProblem ? 'error' : 'success');
+            }
+
+            // One poll of a bound printer from the panel, without the overlay.
+            async pollNow(port) {
+                try {
+                    const response = await fetch(`${BASE_URL}/firmware/printers/status?port=${encodeURIComponent(port)}`);
+                    if (!response.ok) throw new Error((await response.json()).detail || `status (${response.status})`);
+                    window.dispatchEvent(new CustomEvent('apothecary:printer-status', { detail: await response.json() }));
+                } catch (err) {
+                    this.setStatus(`Poll failed: ${err.message}`, 'error');
+                }
+            }
+
+            // Ask a detected port what it is (M115) without pinning it.
+            async queryPort(port, path) {
+                this.queryResult = { port, text: 'asking M115…' };
+                this.updateDeviceViews();
+                try {
+                    const response = await fetch(`${BASE_URL}/firmware/devices/identify`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ port }),
+                    });
+                    const body = await response.json();
+                    if (!response.ok) throw new Error(body.detail || `identify (${response.status})`);
+                    const pr = body.device.printer;
+                    this.queryResult = { port, text: `${port}: ${pr.firmware_name}${pr.machine_type ? ' · ' + pr.machine_type : ''}` };
+                    window.dispatchEvent(new CustomEvent('apothecary:devices-changed'));
+                } catch (err) {
+                    this.queryResult = { port, text: `${port}: not a G-code printer (${err.message})` };
+                    this.updateDeviceViews();
+                }
+            }
+
+            // After bindings arrive: the server polls held printer links while
+            // answering that request, and a poll may have moved a node's
+            // status. If a bound printer's state disagrees with the tree we
+            // hold, the tree is stale -- refresh it (which also redraws the
+            // device views); otherwise redraw just those.
+            afterBindings() {
+                // The server may have moved a node's status while answering the
+                // bindings request; patch those in place rather than re-render.
+                for (const [path, row] of Object.entries(this.bindings)) {
+                    const st = row.printer_status;
+                    if (!st || !PRINTER_STATUSES.includes(st.state)) continue;
+                    const node = this.statusBearerFor(path);
+                    if (node && node.status !== 'maintenance' && node.status !== st.state) this.applyNodeStatus(node._path || this.pathOf(node), st.state);
+                }
+                this.updateDeviceViews();
+                this.syncWorldMarks();
+            }
+
+            // The path of the node a poll on `path` drives (statusBearerFor, as a path).
+            bearerPathFor(path) {
+                const parts = path.split('.');
+                for (let depth = parts.length; depth > 0; depth--) {
+                    const candidate = parts.slice(0, depth).join('.');
+                    const node = this.nodeByPath(candidate);
+                    if (node && node.status !== null && node.status !== undefined) return candidate;
+                }
+                return path;
+            }
+
+            // Where a badge stands: the top centre of the node's envelope, in
+            // scene coordinates -- or nowhere while the node is outside the
+            // level being looked at (its badge would float over nothing).
+            anchorPointFor(path) {
+                const node = this.nodeByPath(path);
+                const bounds = node ? envelopeBounds(node) : null;
+                if (!bounds) return null;
+                const focus = this.focusPath.join('.');
+                if (focus && path !== focus && !path.startsWith(focus + '.') && !focus.startsWith(path + '.')) return null;
+                return new THREE.Vector3((bounds.min[0] + bounds.max[0]) / 2, bounds.max[2], (bounds.min[1] + bounds.max[1]) / 2);
+            }
+
+            // One badge above every pinned, connected board, and a printer's
+            // marks (nozzle, bed, reading) at its node -- made once, updated in
+            // place from the same rows the tree badges read, removed when the
+            // pin goes. Called after bindings load and after every poll.
+            syncWorldMarks() {
+                const wanted = new Set();
+                for (const [path, row] of Object.entries(this.bindings)) {
+                    if (!row.device) continue;
+                    const isPrinter = !!row.device.printer;
+                    const anchorPath = isPrinter ? this.bearerPathFor(path) : path;
+                    wanted.add(anchorPath);
+                    let badge = this.anchors.get(anchorPath);
+                    if (!badge) {
+                        badge = document.createElement('div');
+                        badge.className = 'world-badge';
+                        badge.dataset.path = anchorPath;
+                        badge.title = isPrinter ? 'Select this machine and open it' : 'Select this piece';
+                        badge.addEventListener('click', () => { this.selectPath(anchorPath); if (isPrinter) this.openMachine(anchorPath); });
+                        this.anchors.add(anchorPath, badge, () => this.anchorPointFor(anchorPath));
+                    }
+                    this.fillBadge(badge, row, isPrinter);
+                    if (isPrinter && row.device.port) this.ensureMarks(anchorPath, row);
+                }
+                // The machines' badges are this method's; a camera's badge is
+                // syncCameras', and stays whichever of the two runs last.
+                for (const key of this.anchors.keys()) if (!wanted.has(key) && !key.startsWith('camera:')) this.anchors.remove(key);
+                for (const [key, m] of Object.entries(this.marks)) if (!wanted.has(key)) { m.marks.destroy(); delete this.marks[key]; }
+            }
+
+            fillBadge(badge, row, isPrinter) {
+                const st = row.printer_status;
+                const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+                badge.classList.remove('printing', 'offline', 'job');
+                if (!isPrinter) {
+                    // What apothecary last flashed to it; what it says it runs is
+                    // the firmware page's to hear, until the bench stands here too.
+                    const rec = row.expected && row.expected.record;
+                    badge.innerHTML = `⚡ ${esc(this.deviceLabel(row.device))}${rec && rec.sketch ? ` · <span class="state">${esc(rec.sketch)}</span>` : ''}`;
+                    return;
+                }
+                if (!st) { badge.innerHTML = `🖨 ${esc(this.deviceLabel(row.device))} · <span class="state">not polled</span>`; return; }
+                const t = st.hotends && st.hotends[0] ? st.hotends[0].actual.toFixed(0) : '?';
+                const b = st.bed ? st.bed.actual.toFixed(0) : '?';
+                const parts = [`🖨 <span class="state">${esc(st.state)}</span>`, `${t}°/${b}°`];
+                if (st.sd_printing && st.sd_progress != null) parts.push(`${(st.sd_progress * 100).toFixed(0)}%`);
+                if (st.job) {
+                    parts.push(st.job.kind === 'print' ? `print ${(st.job.progress * 100).toFixed(0)}%` : `${esc(st.job.kind)}: ${esc(st.job.stage)}`);
+                    badge.classList.add('job');
+                }
+                badge.innerHTML = parts.join(' · ');
+                if (st.state === 'printing') badge.classList.add('printing');
+                if (st.state === 'offline') badge.classList.add('offline');
+            }
+
+            // The machine in front of the world: the monitor's body (widgets/
+            // machine.js) in a panel tethered to the printer, its comms log in
+            // a panel of its own, for the port pinned at or under `path`. One
+            // at a time; opening another closes the first.
+            openMachine(path) {
+                const { row } = this.bindingFor(path);
+                const port = row && row.device && row.device.port;
+                if (!port) { this.setStatus(`${path}: no board pinned here`, 'error'); return false; }
+                const bearer = this.bearerPathFor(path);
+                if (this.machine && this.machine.port === port) { this.panels.open('machine'); this.panels.tether('machine', bearer); return true; }
+                this.closeMachine();
+                // The log takes the left rail, so the world keeps its middle; closed until asked for.
+                const logEl = this.panels.register('log', { title: `Comms log · ${port}`, where: 'left', open: false, body: (slot) => { slot.dataset.port = port; } });
+                const logSlot = logEl.querySelector('.panel-body-slot');
+                let handle = null;
+                this.panels.register('machine', {
+                    title: `${bearer} · ${port}`, where: 'free', open: true,
+                    body: (slot) => { handle = mountMachine(slot, { base: BASE_URL, port, host: 'popup', logRoot: logSlot }); },
+                });
+                this.panels.tether('machine', bearer);
+                this.machine = { port, path: bearer, handle };
+                window.apothecaryMachine = handle;
+                return true;
+            }
+            closeMachine() {
+                if (!this.machine) return;
+                this.machine.handle.destroy();
+                this.panels.unregister('machine');
+                this.panels.unregister('log');
+                this.machine = null;
+                window.apothecaryMachine = null;
+            }
+
+            // A printer's marks at its node, from what GET /firmware/printers/where
+            // answers for its port (asked once per port), positioned by each
+            // poll and wearing the newest bed reading.
+            ensureMarks(path, row) {
+                const port = row.device.port;
+                const st = row.printer_status;
+                const have = this.marks[path];
+                if (have) {
+                    if (have.marks && st && st.position) have.marks.setPosition(st.position);
+                    if (have.marks) this.refreshReading(path);
+                    return;
+                }
+                if (this.whereByPort[port] === undefined) {
+                    this.whereByPort[port] = fetch(`${BASE_URL}/firmware/printers/where?port=${encodeURIComponent(port)}`)
+                        .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+                }
+                this.marks[path] = { marks: null, port, pending: true };
+                this.whereByPort[port].then(async (where) => {
+                    if (!this.marks[path] || !this.marks[path].pending) return;
+                    if (!where || !where.printer || !where.printer.build_volume) { delete this.marks[path]; return; }
+                    // The world already draws each printer's build volume (updateBuildVolumeIndicator).
+                    const marks = makeMachineMarks(where.printer, { drawVolume: false });
+                    marks.group.position.copy(marksToScene(where.printer.position));
+                    this.scene.add(marks.group);
+                    const first = this.bindings[row.path] && this.bindings[row.path].printer_status;
+                    if (first && first.position) marks.setPosition(first.position, { immediate: true });
+                    this.marks[path] = { marks, port, where, readingAt: 0, readingId: null };
+                    this.refreshReading(path);
+                });
+            }
+
+            // The newest bed reading for a printer's port, laid over its bed;
+            // asked again at most every few seconds, on the device refresh, so
+            // a reading taken on the monitor page shows up here without a reload.
+            refreshReading(path) {
+                const m = this.marks[path];
+                if (!m || !m.marks || Date.now() - m.readingAt < 5000) return;
+                m.readingAt = Date.now();
+                fetch(`${BASE_URL}/firmware/printers/leveling?port=${encodeURIComponent(m.port)}`)
+                    .then((r) => (r.ok ? r.json() : []))
+                    .then((records) => {
+                        const newest = records[0];
+                        if (this.marks[path] !== m || !newest || newest.id === m.readingId) return;
+                        m.readingId = newest.id;
+                        m.marks.setMesh(newest);
+                    })
+                    .catch(() => {});
+            }
+
+            // Set `status` on the node at `path` in this.tree and on its render
+            // entry, and recolour its mesh if it is on screen. Returns whether
+            // anything changed.
+            applyNodeStatus(path, status) {
+                const node = this.nodeByPath(path);
+                if (!node || node.status === status) return false;
+                node.status = status;
+                const entry = this.renderNodeByKey[path];
+                if (entry) {
+                    entry.status = status;
+                    if (this.meshByName[path]) this.colorMesh(path, entry);
+                }
+                if (this.selectedName === path) {
+                    const sel = document.getElementById('status-select');
+                    if (sel && document.activeElement !== sel) sel.value = status;
+                }
+                return true;
+            }
+
+            pathOf(node) {
+                const walk = (n, prefix) => {
+                    for (const c of n.children || []) {
+                        const p = prefix ? `${prefix}.${c.name}` : c.name;
+                        if (c === node) return p;
+                        const found = walk(c, p);
+                        if (found) return found;
+                    }
+                    return null;
+                };
+                return walk(this.tree, '');
+            }
+
+            // The node a poll on `path` drives: itself if it carries a status,
+            // else the nearest ancestor that does (a board inside a printer
+            // drives the printer) -- mirrors api.py's status_bearer_for.
+            statusBearerFor(path) {
+                const parts = path.split('.');
+                for (let depth = parts.length; depth > 0; depth--) {
+                    const node = this.nodeByPath(parts.slice(0, depth).join('.'));
+                    if (node && node.status !== null && node.status !== undefined) return node;
+                }
+                return null;
+            }
+
+            // The binding that speaks for `path`: its own row, else a row on
+            // a descendant (the printer's mainboard), reported with `via`.
+            bindingFor(path) {
+                if (this.bindings[path]) return { row: this.bindings[path], via: null };
+                const prefix = path + '.';
+                const below = Object.entries(this.bindings).filter(([p]) => p.startsWith(prefix));
+                if (!below.length) return { row: null, via: null };
+                below.sort(([, a], [, b]) => (b.device ? 1 : 0) - (a.device ? 1 : 0));
+                const [viaPath, row] = below[0];
+                return { row, via: viaPath.slice(prefix.length) };
+            }
+
+            nodeByPath(path) {
+                let node = this.tree;
+                for (const name of path.split('.')) {
+                    node = (node?.children || []).find((c) => c.name === name);
+                    if (!node) return null;
+                }
+                return node;
+            }
+
+            // Select a piece by its dotted path from anywhere beneath the
+            // focus: open every Contents branch above it so its row is on
+            // screen, then select it. What a ring's `select:` intent does.
+            // Returns whether the path was one this level can reach.
+            selectPath(path) {
+                if (!this.renderNodeByKey[path]) return false;
+                const parts = path.split('.');
+                for (let i = 1; i < parts.length; i++) this.treeExpanded.add(parts.slice(0, i).join('.'));
+                this.renderContentsList(this.currentFocusNode());
+                this.selectChild(path);
+                return true;
+            }
+
+            // Re-render only what shows device state: the tree badges and
+            // the Selected panel. Cheaper than renderFocus() and keeps the
+            // 3D view untouched. Used after a pin/unpin.
+            renderDeviceViews() {
+                this.renderContentsList(this.currentFocusNode());
+                this.renderSelectedPanel();
+                // A pin made or taken back here shows in the panel's list of pins too.
+                if (this.cameraWidget && this.cameraWidget.loadPins) this.cameraWidget.loadPins();
+            }
+
+            // Every 2 s while the overlay polls: swap only the badge spans
+            // and the panel's Device section in place. Rebuilding the
+            // whole panel would blow away a position edit in progress.
+            updateDeviceViews() {
+                for (const li of this.contentsEl.querySelectorAll('li[data-path]')) {
+                    const fresh = this.deviceBadgeHtml(li.dataset.path);
+                    const old = li.querySelector('.dev-badge');
+                    if (old && fresh) old.replaceWith(fresh);
+                    else if (old) old.remove();
+                    else if (fresh) li.appendChild(fresh);
+                }
+                const section = this.selectedBodyEl.querySelector('.device-section');
+                if (section && this.selectedName) {
+                    // Leave it alone while the user is in it (typing an identity,
+                    // choosing a port): the next poll will catch up.
+                    const manual = section.querySelector('.dev-manual');
+                    const active = document.activeElement;
+                    const editing = active && section.contains(active) && active.matches('input, select');
+                    if (editing || (manual && manual.value)) return;
+                    const picked = section.querySelector('.dev-pick')?.value;
+                    section.outerHTML = this.deviceSectionHtml(this.selectedName);
+                    const pick = this.selectedBodyEl.querySelector('.device-section .dev-pick');
+                    if (pick && picked && [...pick.options].some((o) => o.value === picked)) pick.value = picked;
+                    this.bindDeviceSection(this.selectedName);
+                }
+            }
+
+            deviceLabel(d) {
+                if (!d) return '';
+                if (d.printer) return (d.printer.firmware_name || 'printer').replace(/\s*\(.*$/, '') + (d.printer.machine_type ? ` · ${d.printer.machine_type}` : '');
+                if (d.chip) return `${d.chip}${d.mac ? ' · ' + d.mac : ''}`;
+                return d.board_name || `${d.vid ?? '?'}:${d.pid ?? '?'}`;
+            }
+
+            heaterText(h) { return h ? `${h.actual.toFixed(1)}/${h.target.toFixed(0)}°` : '—'; }
+
+            deviceBadgeHtml(path) {
+                const { row, via } = this.bindingFor(path);
+                if (!row) return null;
+                const span = document.createElement('span');
+                span.className = 'dev-badge' + (via ? ' via' : '');
+                if (!row.device) {
+                    span.classList.add('off');
+                    span.textContent = '⌁ off';
+                    span.title = row.note || 'device not connected';
+                    return span;
+                }
+                const st = row.printer_status;
+                if (row.device.printer && st && st.state !== 'offline') {
+                    const t = st.hotends[0] ? st.hotends[0].actual.toFixed(0) : '?';
+                    const b = st.bed ? st.bed.actual.toFixed(0) : '?';
+                    span.textContent = `🖨 ${t}°/${b}°${st.sd_printing && st.sd_progress != null ? ' ' + (st.sd_progress * 100).toFixed(0) + '%' : ''}`;
+                    if (st.state === 'printing') span.classList.add('printing');
+                    span.title = `${this.deviceLabel(row.device)} — ${st.state} · hotend ${this.heaterText(st.hotends[0])} bed ${this.heaterText(st.bed)}`;
+                } else if (row.device.printer) {
+                    span.textContent = '🖨';
+                    span.title = `${this.deviceLabel(row.device)} on ${row.device.port} — open the ⌨ Serial log to poll it`;
+                } else {
+                    span.textContent = '⚡';
+                    span.title = `${this.deviceLabel(row.device)} on ${row.device.port}`;
+                }
+                if (via) span.title = `via ${via}: ` + span.title;
+                return span;
+            }
+
+            deviceSectionHtml(path) {
+                const { row, via } = this.bindingFor(path);
+                const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+                const viaLine = via
+                    ? `<div class="device-line" style="color:#777">via <a href="#" class="dev-via" data-path="${esc(path + '.' + via)}" style="color:#9cd2ff">${esc(via)}</a> — the board inside; its polls drive this node's status</div>`
+                    : '';
+                let body;
+                if (row && row.device) {
+                    const d = row.device, st = row.printer_status;
+                    const source = row.binding_source === 'manual' ? 'pinned' : `via sketch ${esc(row.sketch)}`;
+                    let live = '';
+                    if (d.printer) {
+                        if (!st) live = `<div class="device-line device-empty">not polled yet — Watch to poll it</div>`;
+                        else if (st.state === 'offline') live = `<div class="device-line"><span class="bad">offline</span> ${esc((st.raw || [])[0] || '')}</div>`;
+                        else {
+                            const state = st.state === 'printing' ? '<span class="ok">printing</span>' : (st.heating ? '<span class="warn">heating</span>' : 'idle');
+                            const temps = `T ${this.heaterText(st.hotends[0])}${st.bed ? ' · B ' + this.heaterText(st.bed) : ''}`;
+                            const pos = st.position ? ` · X${st.position.x.toFixed(0)} Y${st.position.y.toFixed(0)} Z${st.position.z.toFixed(1)}` : '';
+                            const sd = st.sd_printing && st.sd_progress != null ? ` · ${(st.sd_progress * 100).toFixed(1)}%` : '';
+                            const fil = st.filament_present === false ? ' · <span class="bad">filament out</span>' : '';
+                            live = `<div class="device-line">${state}${sd} <span class="temps">${esc(temps)}</span>${esc(pos)}${fil}</div>`;
+                        }
+                    } else if (row.expected && row.expected.record) {
+                        const rec = row.expected.record;
+                        live = `<div class="device-line">should run <b>${esc(rec.sketch || 'raw image')}</b>${row.expected.source_changed ? ' <span class="warn">(source edited since)</span>' : ''}</div>`;
+                    }
+                    body = `
+                        <div class="device-line"><b>${esc(d.port)}</b> · ${esc(this.deviceLabel(d))} <span style="color:#777">(${source})</span></div>
+                        ${live}
+                        ${viaLine}
+                        <div class="device-actions">
+                            <button type="button" class="dev-watch" data-port="${esc(d.port)}">⌨ Watch</button>
+                            ${d.printer ? `<button type="button" class="dev-poll" data-port="${esc(d.port)}" title="One poll now, without the overlay">⟳ Poll now</button>` : ''}
+                            ${d.printer ? `<a class="dev-monitor" href="${BASE_URL}/firmware/monitor?port=${encodeURIComponent(d.port)}" target="_blank" title="Focused monitor: status, temperature history, full comms log, reconnect/reset">⤢ Monitor</a>` : ''}
+                            ${row.binding_source === 'manual' && !via ? '<button type="button" class="dev-unpin">Unpin</button>' : ''}
+                        </div>`;
+                } else if (row) {
+                    body = `<div class="device-line"><span class="warn">${esc(row.note || 'not connected')}</span></div>
+                        ${viaLine}
+                        <div class="device-actions">
+                            <button type="button" class="dev-rescan" title="Fresh port scan">⟳ Rescan</button>
+                            ${row.binding_source === 'manual' && !via ? '<button type="button" class="dev-unpin">Unpin</button>' : ''}
+                        </div>`;
+                } else {
+                    const free = this.siteDevices.filter((d) => !Object.values(this.bindings).some((r) => r.device && r.device.port === d.port));
+                    const manual = `<div class="device-actions">
+                            <input type="text" class="dev-manual" placeholder="or a port, S/N or MAC, e.g. /dev/ender" spellcheck="false">
+                            <button type="button" class="dev-pin-manual" title="Pin by identity even if it is not detected right now">Pin</button>
+                            <button type="button" class="dev-rescan" title="Fresh port scan">⟳ Rescan</button>
+                        </div>`;
+                    const q = this.queryResult ? `<div class="device-query">${esc(this.queryResult.text)}</div>` : '';
+                    if (!this.bindingsLoaded) body = `<div class="device-line device-empty">scanning devices…</div>`;
+                    else if (this.devicesProblem) body = `<div class="device-line device-empty">${esc(this.devicesProblem)}</div>${manual}`;
+                    else if (!free.length) body = `<div class="device-line device-empty">${this.siteDevices.length ? 'every detected device is already pinned' : 'no devices detected'}</div>${manual}`;
+                    else body = `<div class="device-actions">
+                            <select class="dev-pick">${free.map((d) => `<option value="${esc(d.port)}"${this.queryResult && this.queryResult.port === d.port ? ' selected' : ''}>${esc(d.port)} · ${esc(this.deviceLabel(d))}</option>`).join('')}</select>
+                            <button type="button" class="dev-query" title="Ask M115 what this is, without pinning">Query</button>
+                            <button type="button" class="dev-pin">Pin</button>
+                        </div>${q}${manual}`;
+                }
+                return `<div class="device-section"><div class="device-title">Device</div>${body}</div>`;
+            }
+
+            bindDeviceSection(path) {
+                const el = this.selectedBodyEl;
+                el.querySelector('.dev-watch')?.addEventListener('click', (e) => {
+                    window.dispatchEvent(new CustomEvent('apothecary:watch-port', { detail: { port: e.currentTarget.dataset.port } }));
+                });
+                el.querySelector('.dev-unpin')?.addEventListener('click', () => this.setNodeDevice(path, null));
+                el.querySelector('.dev-pin')?.addEventListener('click', () => {
+                    const port = el.querySelector('.dev-pick')?.value;
+                    if (port) this.setNodeDevice(path, port);
+                });
+                el.querySelector('.dev-query')?.addEventListener('click', () => {
+                    const port = el.querySelector('.dev-pick')?.value;
+                    if (port) this.queryPort(port, path);
+                });
+                el.querySelector('.dev-poll')?.addEventListener('click', (e) => this.pollNow(e.currentTarget.dataset.port));
+                el.querySelector('.dev-via')?.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.selectPath(e.currentTarget.dataset.path);
+                });
+                el.querySelector('.dev-rescan')?.addEventListener('click', () => this.rescanDevices());
+                const manualIn = el.querySelector('.dev-manual');
+                const pinManual = () => {
+                    const identity = (manualIn?.value || '').trim();
+                    if (identity) this.setNodeDevice(path, identity);
+                };
+                el.querySelector('.dev-pin-manual')?.addEventListener('click', pinManual);
+                manualIn?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); pinManual(); } });
+            }
+
+            async setNodeDevice(path, identity) {
+                const url = `${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/nodes/${encodeURIComponent(path)}/device`;
+                this.setStatus(identity ? `Pinning ${identity} to ${path}...` : `Unpinning ${path}...`, 'loading');
+                try {
+                    const response = await fetch(url, identity
+                        ? { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ identity }) }
+                        : { method: 'DELETE' });
+                    if (!response.ok) throw new Error((await response.json()).detail || `device (${response.status})`);
+                    // The reply is the node's new binding row (or a stub with
+                    // no binding_source once unpinned): apply it directly
+                    // rather than paying for another arduino-cli scan.
+                    const row = await response.json();
+                    if (row.binding_source) this.bindings[path] = row; else delete this.bindings[path];
+                    this.queryResult = null;
+                    this.renderDeviceViews();
+                    this.setStatus(identity ? `${path} ← ${identity}` : `${path}: device unpinned`, 'success');
+                } catch (err) {
+                    this.setStatus(`Error: ${err.message}`, 'error');
+                    console.error(err);
+                }
+            }
+
             async refreshTree() {
                 const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}`);
                 if (!response.ok) throw new Error(`Failed to refresh site (${response.status})`);
@@ -1483,6 +3136,8 @@
 
             renderJobs() {
                 this.jobListEl.innerHTML = '';
+                // A job's name is whatever was posted; everything from the server is escaped here.
+                const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
                 for (const job of this.jobs) {
                     const li = document.createElement('li');
                     li.className = 'job-item';
@@ -1492,21 +3147,21 @@
                     if (job.status === 'queued') {
                         actionsHtml = job.compatible_printers.length
                             ? `<select class="job-printer-select">
-                                 ${job.compatible_printers.map((p) => `<option value="${p}">${p}</option>`).join('')}
+                                 ${job.compatible_printers.map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join('')}
                                </select>
                                <button type="button" class="job-assign-btn">Assign</button>`
                             : '<span class="job-no-printers">No idle printer fits this job</span>';
                     } else if (job.status === 'assigned' || job.status === 'printing') {
-                        actionsHtml = `<span class="job-assigned-to">on ${job.assigned_printer}</span>
+                        actionsHtml = `<span class="job-assigned-to">on ${esc(job.assigned_printer)}</span>
                                        <button type="button" class="job-complete-btn">Mark Done</button>`;
                     } else {
-                        actionsHtml = `<span class="job-done">done${job.assigned_printer ? ' on ' + job.assigned_printer : ''}</span>`;
+                        actionsHtml = `<span class="job-done">done${job.assigned_printer ? ' on ' + esc(job.assigned_printer) : ''}</span>`;
                     }
 
                     li.innerHTML = `
                         <div class="job-item-header">
-                            <strong>${job.name}</strong>
-                            <span class="job-status job-status-${job.status}">${job.status}</span>
+                            <strong>${esc(job.name)}</strong>
+                            <span class="job-status job-status-${esc(job.status)}">${esc(job.status)}</span>
                         </div>
                         <div class="job-item-dims">${dims} mm</div>
                         <div class="job-item-actions">${actionsHtml}</div>
@@ -1656,7 +3311,7 @@
                 const focus = this.currentFocusNode();
                 if (!focus.children.length) return;
                 const selected = this.selectedName ? this.renderNodeByKey[this.selectedName] : null;
-                if (selected && selected.children.length && focus.children.some((c) => c.name === selected.name)) {
+                if (selected && focus.children.some((c) => c.name === selected.name)) {
                     this.zoomIn(selected.name);
                     return;
                 }
@@ -1664,7 +3319,6 @@
                 let closest = null;
                 let closestDist = Infinity;
                 focus.children.forEach((child, index) => {
-                    if (!child.children.length) return;
                     const { center } = this.boxFromBounds(this.boundsFor(child, index));
                     const dist = Math.hypot(center[0] - target.x, center[1] - target.y, center[2] - target.z);
                     if (dist < closestDist) {
@@ -1825,13 +3479,490 @@
                 // upgrade a mesh belonging to the level they've since left.
                 const generation = ++this.loadGeneration;
                 for (const node of renderNodes) {
+                    // A node the user asked to see as a black box or a dot is
+                    // the one case where not fetching is the point: skipping
+                    // here is what makes the control save the render, rather
+                    // than just draw something else over it.
+                    if (this.effectiveDetailFor(node, nodeKey(node)) !== DETAIL_FULL) continue;
                     const mesh = await this.loadNodeGeometry(node);
                     if (mesh && generation === this.loadGeneration) this.upgradeMesh(node, mesh);
                 }
             }
         }
 
-        new FractalViewer();
+        // Exposed so tests can assert against the actual scene -- camera
+        // clipping, mesh counts, overlay presence -- rather than against a
+        // screenshot, which cannot tell "drawn" from "drawn correctly".
+        window.fractalViewer = new FractalViewer();
+    </script>
+
+    <script>
+    // Serial log overlay -- independent of the viewer module so it can load either way.
+    (() => {
+        const BASE = {{ base_url | tojson }};
+        const $ = (id) => document.getElementById(id);
+        const overlay = $("serial-overlay"), body = $("serial-body"), meta = $("serial-meta");
+        const portSel = $("serial-port"), baudSel = $("serial-baud"), toggle = $("serial-toggle"), dot = $("serial-dot");
+        let es = null, devices = [], observed = null, retryTimer = null, pollTimer = null, printerStatus = null, pollGen = 0;
+        const POLL_MS = 2000;
+        const queryRow = $("serial-query-row"), queryIn = $("serial-query");
+        let queryCodesLoaded = false;
+        async function loadQueryCodes() {
+            if (queryCodesLoaded) return;
+            try {
+                const r = await fetch(`${BASE}/firmware/printers/queries`);
+                if (!r.ok) return;
+                $("serial-query-codes").innerHTML = (await r.json()).map((q) => `<option value="${esc(q.command)}">${esc(q.reports)}</option>`).join("");
+                queryCodesLoaded = true;
+            } catch (e) { /* the box still works without suggestions */ }
+        }
+        const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+        // Storage can be blocked (private window, sandboxed embed); the overlay
+        // must still open and connect, just without remembering.
+        const store = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* ignore */ } };
+        const load = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+
+        function line(text, cls) {
+            const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 30;
+            const span = document.createElement("span");
+            span.textContent = text + "\n";
+            if (cls) span.className = cls;
+            else if (/apothecary\s+\S+:\s*hello/.test(text)) span.className = "banner";
+            else if (text.startsWith("[apothecary:")) span.className = "marker";
+            body.appendChild(span);
+            while (body.childNodes.length > 600) body.removeChild(body.firstChild);
+            if (atBottom) body.scrollTop = body.scrollHeight;
+        }
+
+        const fmtHeater = (h) => h ? `${h.actual.toFixed(1)}/${h.target.toFixed(0)}°` : "—";
+        const shortFirmware = (p) => (p.firmware_name || "").replace(/\s*\(.*$/, "");
+
+        function renderPrinterMeta(d) {
+            const p = d.printer, st = printerStatus;
+            let head = `<b>${esc(shortFirmware(p))}</b>${p.machine_type ? " · " + esc(p.machine_type) : ""}`;
+            if (!st) { meta.innerHTML = head + " — polling…"; return; }
+            if (st.state === "offline") { meta.innerHTML = head + ` — <span class='bad'>offline</span> ${esc(st.raw[0] || "")}`; return; }
+            const state = st.state === "printing" ? "<span class='ok'>printing</span>" : (st.heating ? "<span class='warn'>heating</span>" : "idle");
+            let temps = st.hotends.map((h, i) => `T${i} ${fmtHeater(h)}`).join(" ");
+            if (st.bed) temps += ` bed ${fmtHeater(st.bed)}`;
+            let extra = "";
+            if (st.sd_printing && st.sd_progress != null) extra += ` · ${(st.sd_progress * 100).toFixed(1)}%`;
+            if (st.position) extra += ` · X${st.position.x.toFixed(1)} Y${st.position.y.toFixed(1)} Z${st.position.z.toFixed(2)}`;
+            if (st.filament_present === false) extra += " · <span class='bad'>filament out</span>";
+            meta.innerHTML = `${head} — ${state} · ${temps}${extra}`;
+        }
+
+        function renderMeta() {
+            const v = devices.find((d) => d.device.port === portSel.value);
+            if (!v) { meta.innerHTML = devices.length ? "select a port" : "no devices detected — <a href='" + BASE + "/firmware' id='firmware-page-link' style='color:#9cd2ff'>firmware page</a>"; return; }
+            const d = v.device, rec = v.expected.record;
+            if (d.printer) { renderPrinterMeta(d); return; }
+            const chip = d.chip ? `${esc(d.chip)} rev ${esc(d.revision || "?")} · ${esc(d.mac)}` : (d.board_name ? esc(d.board_name) : "unprobed board");
+            let should = rec ? `should run <b>${esc(rec.sketch || "raw image")}</b>` : "<span class='warn'>nothing flashed from apothecary</span>";
+            if (v.expected.source_changed) should += " <span class='warn'>(source edited since)</span>";
+            if (observed && rec) should += observed === rec.sketch ? ` · <span class='ok'>observed ✓</span>` : ` · <span class='bad'>observed ${esc(observed)} ✗</span>`;
+            else if (observed) should += ` · observed <b>${esc(observed)}</b>`;
+            meta.innerHTML = `${chip} — ${should}`;
+        }
+
+        async function loadDevices(fresh = false) {
+            if (!devices.length) meta.textContent = "scanning devices…";
+            try {
+                const r = await fetch(`${BASE}/firmware/devices${fresh ? "?fresh=1" : ""}`);
+                if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+                devices = (await r.json()).devices;
+            } catch (e) { devices = []; meta.textContent = "firmware API: " + e.message; }
+            const prev = portSel.value || load("apothecary.serial.port") || "";
+            const tag = (d) => d.printer ? " · " + shortFirmware(d.printer) : (d.chip ? " · " + d.chip : "");
+            portSel.innerHTML = devices.length
+                ? devices.map((v) => `<option value="${esc(v.device.port)}">${esc(v.device.port)}${esc(tag(v.device))}</option>`).join("")
+                : '<option value="">no devices</option>';
+            if (devices.some((v) => v.device.port === prev)) portSel.value = prev;
+            renderMeta();
+        }
+
+        // A printer is polled over the server's held-open link, never streamed:
+        // opening the port for a monitor would pulse DTR and reset the board.
+        // Each poll schedules the next only after it returns, so a slow one
+        // (a link being reopened, a firmware busy homing) never stacks
+        // requests behind it; `gen` lets a port change orphan an old chain.
+        async function pollPrinter(port, gen) {
+            if (gen !== pollGen) return;
+            try {
+                const r = await fetch(`${BASE}/firmware/printers/status?port=${encodeURIComponent(port)}`);
+                if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+                const fresh = await r.json();
+                if (gen !== pollGen) return;  // the user moved on while this was in flight
+                printerStatus = fresh;
+                dot.classList.toggle("on", printerStatus.state !== "offline");
+                const st = printerStatus;
+                let text = `${st.polled_at.slice(11, 19)} ${st.state}`;
+                if (st.hotends.length) text += `  T ${fmtHeater(st.hotends[0])}`;
+                if (st.bed) text += `  B ${fmtHeater(st.bed)}`;
+                if (st.sd_printing && st.sd_progress != null) text += `  ${(st.sd_progress * 100).toFixed(1)}%`;
+                line(text, st.state === "offline" ? "sys" : "temp");
+                for (const n of st.synced || []) {
+                    if (n.changed) line(`— ${n.site}/${n.path} is now ${n.status} —`, "banner");
+                }
+                window.dispatchEvent(new CustomEvent("apothecary:printer-status", { detail: st }));
+            } catch (e) {
+                if (gen !== pollGen) return;
+                dot.classList.remove("on");
+                line("— poll failed: " + e.message + " —", "sys");
+            }
+            if (gen !== pollGen) return;
+            renderMeta();
+            pollTimer = setTimeout(() => pollPrinter(port, gen), POLL_MS);
+        }
+
+        function connect() {
+            disconnect();
+            const port = portSel.value;
+            if (!port) return;
+            store("apothecary.serial.port", port);
+            const v = devices.find((d) => d.device.port === port);
+            const monitorLink = $("serial-monitor");
+            monitorLink.hidden = !(v && v.device.printer);
+            monitorLink.href = `${BASE}/firmware/monitor?port=${encodeURIComponent(port)}`;
+            if (v && v.device.printer) {
+                printerStatus = null;
+                queryRow.hidden = false;
+                loadQueryCodes();
+                line(`— polling ${port} (${shortFirmware(v.device.printer)}) every ${POLL_MS / 1000} s —`, "sys");
+                pollPrinter(port, ++pollGen);
+                return;
+            }
+            queryRow.hidden = true;
+            es = new EventSource(`${BASE}/firmware/devices/stream?port=${encodeURIComponent(port)}&baud=${encodeURIComponent(baudSel.value)}`);
+            es.addEventListener("open", () => { dot.classList.add("on"); line(`— connected ${port} @ ${baudSel.value} —`, "sys"); });
+            es.onmessage = (ev) => {
+                line(ev.data);
+                const m = ev.data.match(/apothecary\s+([A-Za-z0-9_.\-]+):\s*hello/);
+                if (m && observed !== m[1]) { observed = m[1]; renderMeta(); }
+            };
+            es.addEventListener("close", () => { line("— monitor stopped (a task took the port?) — retrying in 5 s —", "sys"); scheduleRetry(); });
+            es.onerror = () => { dot.classList.remove("on"); if (es && es.readyState === EventSource.CLOSED) { line("— disconnected — retrying in 5 s —", "sys"); scheduleRetry(); } };
+        }
+
+        function scheduleRetry() {
+            disconnect(false);
+            clearTimeout(retryTimer);
+            if (!overlay.hidden) retryTimer = setTimeout(() => { loadDevices().then(connect); }, 5000);
+        }
+
+        function disconnect(clearTimer = true) {
+            if (es) { es.close(); es = null; }
+            queryRow.hidden = true;
+            $("serial-monitor").hidden = true;
+            pollGen++;
+            if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+            dot.classList.remove("on");
+            if (clearTimer) clearTimeout(retryTimer);
+        }
+
+        function show(on) {
+            overlay.hidden = !on;
+            toggle.checked = on;
+            store("apothecary.serial.open", on ? "1" : "0");
+            if (on) loadDevices().then(connect); else disconnect();
+        }
+
+        queryRow.addEventListener("submit", async (ev) => {
+            ev.preventDefault();
+            const command = queryIn.value.trim(), port = portSel.value;
+            if (!command || !port) return;
+            line(`> ${command}`, "query");
+            queryIn.disabled = true;
+            try {
+                const r = await fetch(`${BASE}/firmware/printers/query`, {
+                    method: "POST", headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({ port, command }),
+                });
+                const body = await r.json();
+                if (!r.ok) throw new Error(body.detail || r.statusText);
+                for (const ln of body.lines) line(ln);
+                queryIn.value = "";
+            } catch (e) { line("— query refused: " + e.message + " —", "sys"); }
+            queryIn.disabled = false; queryIn.focus();
+        });
+        toggle.addEventListener("change", () => show(toggle.checked));
+        $("serial-close").onclick = () => show(false);
+        $("serial-clear").onclick = () => { body.textContent = ""; };
+        $("serial-refresh").onclick = () => loadDevices(true).then(connect);
+        $("serial-identify").onclick = async () => {
+            const port = portSel.value;
+            if (!port) return;
+            disconnect();
+            line(`— identifying ${port} (M115, no reset) —`, "sys");
+            try {
+                const r = await fetch(`${BASE}/firmware/devices/identify`, {
+                    method: "POST", headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({port, baud: Number(baudSel.value)}),
+                });
+                if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+                const v = await r.json();
+                line(`— ${v.device.printer.firmware_name} · ${v.device.printer.machine_type || ""} —`, "banner");
+                window.dispatchEvent(new CustomEvent("apothecary:devices-changed"));
+            } catch (e) { line("— not a G-code printer: " + e.message + " —", "sys"); }
+            loadDevices().then(connect);
+        };
+        portSel.addEventListener("change", () => { observed = null; renderMeta(); connect(); });
+        baudSel.addEventListener("change", connect);
+        window.addEventListener("beforeunload", () => disconnect());
+        // The Selected panel's "Watch" button: open the overlay on that port.
+        window.addEventListener("apothecary:watch-port", async (ev) => {
+            const port = ev.detail.port;
+            overlay.hidden = false; toggle.checked = true;
+            store("apothecary.serial.open", "1");
+            await loadDevices();
+            if (devices.some((v) => v.device.port === port)) portSel.value = port;
+            observed = null; renderMeta(); connect();
+        });
+        if (load("apothecary.serial.open") === "1") show(true);
+    })();
+    </script>
+
+    <script type="module">
+    // The ring. Drawing and keys live in /static/ring.js; this is only the
+    // wiring: what the ring opens on, what each chosen verb calls, and the
+    // addresses written onto the controls the page already has. No
+    // addEventListener here on purpose -- the census reads this file, and the
+    // ring's own listeners are the ring's, counted once behind `ring-open`.
+    import { installRing, annotate, resolveRing } from '/static/ring.js';
+
+    (() => {
+        const BASE = {{ base_url | tojson }};
+        const viewer = window.fractalViewer;
+        if (!viewer) return;
+
+        // The Device section's buttons, by the verb each one is.
+        const DEVICE_VERBS = [
+            ['.dev-watch', 'device:watch'], ['.dev-poll', 'device:poll'], ['.dev-monitor', 'device:monitor'],
+            ['.dev-query', 'device:query'], ['.dev-pin', 'device:pin'], ['.dev-pin-manual', 'device:pin'],
+            ['.dev-unpin', 'device:unpin'], ['.dev-rescan', 'device:rescan'],
+            ['#serial-identify', 'device:query'], ['#serial-monitor', 'device:monitor'],
+            ['#serial-refresh', 'device:rescan'], ['#serial-query-row', null],
+        ];
+
+        // What the page knows about the board under a node, in the shape the
+        // resolver is told it. A node with nothing pinned gets no `device`,
+        // and so no Device option -- absent, not greyed.
+        function deviceFor(path) {
+            const { row } = viewer.bindingFor(path);
+            if (!row || !row.device) return undefined;
+            return { port: row.device.port, printer: !!row.device.printer, armed: false, bound: true };
+        }
+        const nodeSpec = (path, at) => ({
+            context: { pointing: 'node', targets: [path], where: at || { x: 0, y: 0 } },
+            site: viewer.siteName, device: deviceFor(path), at,
+        });
+        // The canvas ring stands on the level you are looking at: its Pieces
+        // are that node's children and Up steps back out. At the root the
+        // target list is empty, and the resolver offers no Up.
+        const canvasSpec = (at) => {
+            const focus = viewer.focusPath.join('.');
+            return {
+                context: { pointing: 'canvas', targets: focus ? [focus] : [], where: at || { x: 0, y: 0 } },
+                site: viewer.siteName, at,
+            };
+        };
+
+        // Right-click on a Contents row or on a piece in the 3D view opens the
+        // node ring for that piece (and selects it, so the panel agrees); on
+        // empty canvas the canvas ring. The key and the button open the ring
+        // for whatever is selected, at the centre of the screen.
+        function whatFor(event) {
+            if (!viewer.siteName) return null;
+            if (!event) return viewer.selectedName ? nodeSpec(viewer.selectedName, null) : canvasSpec(null);
+            const at = { x: event.clientX, y: event.clientY };
+            const row = event.target.closest('#contents-list .contents-item');
+            if (row) {
+                if (viewer.renderNodeByKey[row.dataset.path]) viewer.selectChild(row.dataset.path);
+                return nodeSpec(row.dataset.path, at);
+            }
+            if (event.target === viewer.canvas) {
+                const key = viewer.raycastChild(event);
+                if (key) { viewer.selectChild(key); return nodeSpec(key, at); }
+                return canvasSpec(at);
+            }
+            return null;
+        }
+
+        async function post(path, body) {
+            const r = await fetch(BASE + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(typeof data.detail === 'string' ? data.detail : r.statusText);
+            return data;
+        }
+
+        // Each verb calls the function its button already calls. Anything not
+        // named here is the server's: posted as the intent, and its answer
+        // shown in the status line -- including a refusal, which is the point.
+        async function carry(intent) {
+            const action = intent.action, path = intent.context.targets[0] || '';
+            const port = intent.device ? intent.device.port : null;
+            const tail = ` (⌗${intent.address})`;
+            try {
+                // A verb of the machine standing open in front of the world goes to it.
+                const open = viewer.machine && (!port || viewer.machine.port === port) ? viewer.machine.handle : null;
+                if (open && /^(control:|level:|print:|device:(poll|query|watch|reconnect|reset|release))/.test(action)) {
+                    if (await open.carry(intent)) { viewer.setStatus(`${intent.label}${tail}`, 'success'); return; }
+                }
+                if (action.startsWith('camera:')) {
+                    viewer.panels.open('camera');
+                    const verb = action.slice('camera:'.length);
+                    if (viewer.cameraWidget && viewer.cameraWidget.act(verb)) viewer.setStatus(`Camera: ${intent.label}${tail}`, 'success');
+                    else viewer.setStatus(`${intent.label}: the camera panel cannot do that${tail}`, 'error');
+                    return;
+                }
+                if (action === 'panel:rail:toggle') {
+                    const hidden = viewer.panels.hideRail('right', !viewer.panels.railHidden('right'));
+                    viewer.setStatus(`${hidden ? 'Hid' : 'Showed'} the rail${tail}`, 'success');
+                    return;
+                }
+                if (action === 'panel:toggle:machine') {
+                    if (viewer.machine && viewer.panels.isOpen('machine')) { viewer.panels.close('machine'); viewer.setStatus(`Closed the machine${tail}`, 'success'); }
+                    else if (viewer.machine) { viewer.panels.open('machine'); viewer.setStatus(`Opened the machine${tail}`, 'success'); }
+                    else if (viewer.selectedName && viewer.openMachine(viewer.selectedName)) viewer.setStatus(`Opened ${viewer.selectedName}${tail}`, 'success');
+                    else viewer.setStatus(`Select a machine with a board pinned to it first${tail}`, 'error');
+                    return;
+                }
+                if (action.startsWith('select:')) {
+                    const target = action.slice('select:'.length);
+                    if (viewer.selectPath(target)) viewer.setStatus(`Selected ${target}${tail}`, 'success');
+                    else viewer.setStatus(`${target} is not at this level${tail}`, 'error');
+                } else if (action === 'zoom-out') {
+                    viewer.zoomOut();
+                    viewer.setStatus(`Up${tail}`, 'success');
+                } else if (action === 'zoom-in') {
+                    const name = path.split('.').pop();
+                    if (viewer.currentFocusNode().children.some((c) => c.name === name)) viewer.zoomIn(name);
+                    else if (viewer.renderNodeByKey[path]) viewer.selectChild(path);
+                    viewer.setStatus(`Zoomed into ${name}${tail}`, 'success');
+                } else if (action === 'move') {
+                    if (viewer.renderNodeByKey[path]) viewer.selectChild(path);
+                    viewer.setStatus(viewer.transformControls.object ? `Drag the handle to move ${path}${tail}` : `${path} cannot be moved from here: only a direct child of the site can${tail}`, 'success');
+                } else if (action.startsWith('panel:toggle:')) {
+                    const id = action.slice('panel:toggle:'.length);
+                    const open = viewer.panels.toggle(id) && viewer.panels.isOpen(id);
+                    viewer.setStatus(`${open ? 'Opened' : 'Closed'} the ${id} panel${tail}`, 'success');
+                } else if (action === 'fit' || action === 'fit-selection') {
+                    const focus = viewer.currentFocusNode();
+                    const nodes = viewer.currentRenderNodes(focus);
+                    const chosen = action === 'fit-selection' ? nodes.filter((n) => intent.context.targets.includes(n._path)) : nodes;
+                    viewer.frameCameraForChildren(chosen.length ? chosen : nodes);
+                    viewer.setStatus(`Framed ${chosen.length || nodes.length} piece(s)${tail}`, 'success');
+                } else if (action === 'explain') {
+                    const node = viewer.renderNodeByKey[path] || viewer.nodeByPath(path);
+                    viewer.setStatus(node ? `${path}: a ${node.role}${node.category ? ' in ' + node.category : ''}${node.part_ref ? ', from part ' + node.part_ref : ''}, ${node.children.length} inside${tail}` : `${path}: not on screen${tail}`, 'success');
+                } else if (action.startsWith('site:')) {
+                    const name = action.slice(5);
+                    viewer.siteSelect.value = name;
+                    viewer.loadSite(name);
+                } else if (action.startsWith('group:')) {
+                    const group = action.slice(6);
+                    if (viewer.expandedCategories.has(group)) viewer.expandedCategories.delete(group); else viewer.expandedCategories.add(group);
+                    viewer.renderFocus();
+                    viewer.setStatus(`${viewer.expandedCategories.has(group) ? 'Expanded' : 'Collapsed'} ${group}${tail}`, 'success');
+                } else if (action === 'device:watch') {
+                    if (port) window.dispatchEvent(new CustomEvent('apothecary:watch-port', { detail: { port } }));
+                } else if (action === 'device:poll') {
+                    if (port) await viewer.pollNow(port);
+                } else if (action === 'device:monitor') {
+                    // The machine opens here, in front of the world; the monitor page is a click away in its title.
+                    if (viewer.openMachine(path)) viewer.setStatus(`Opened ${path}${tail}`, 'success');
+                    else if (port) window.open(`${BASE}/firmware/monitor?port=${encodeURIComponent(port)}`, '_blank');
+                } else if (action === 'device:query') {
+                    const picked = viewer.selectedBodyEl.querySelector('.dev-pick')?.value || port;
+                    if (picked) await viewer.queryPort(picked, path);
+                } else if (action === 'device:pin') {
+                    const picked = viewer.selectedBodyEl.querySelector('.dev-pick')?.value
+                        || viewer.selectedBodyEl.querySelector('.dev-manual')?.value.trim() || port;
+                    if (picked) await viewer.setNodeDevice(path, picked);
+                } else if (action === 'device:unpin') {
+                    await viewer.setNodeDevice(path, null);
+                } else if (action === 'device:rescan') {
+                    await viewer.rescanDevices();
+                } else {
+                    const answer = await post('/menu/intent', {
+                        intent: { action, context: intent.context, option_id: intent.option_id, address: intent.address },
+                        site: intent.site || viewer.siteName,
+                    });
+                    viewer.setStatus(`${intent.label}: ${answer.did}${tail}`, 'success');
+                    if (action === 'reset') viewer.loadSite(viewer.siteName);
+                }
+            } catch (err) {
+                viewer.setStatus(`${intent.label}: ${err.message}${tail}`, 'error');
+            }
+        }
+
+        // "Appear as generated": the ring for the selected node is resolved
+        // (once per distinct context) and its addresses written onto the
+        // Device section and the serial overlay, so ⌗2728 is visible on the
+        // button it names. Re-applied whenever the panel is redrawn.
+        const rings = new Map();
+        let lastRing = null;
+        async function ringForCanvas() {
+            if (!viewer.siteName) return null;
+            const spec = canvasSpec(null);
+            const key = JSON.stringify({ canvas: spec.context.targets, s: spec.site });
+            if (!rings.has(key)) rings.set(key, resolveRing({ base: BASE, context: spec.context, site: spec.site }).catch(() => null));
+            return rings.get(key);
+        }
+        async function ringForSelected() {
+            if (!viewer.siteName || !viewer.selectedName) return null;
+            const spec = nodeSpec(viewer.selectedName, null);
+            const key = JSON.stringify({ c: spec.context.targets, s: spec.site, d: spec.device || null });
+            if (!rings.has(key)) rings.set(key, resolveRing({ base: BASE, context: spec.context, site: spec.site, device: spec.device }).catch(() => null));
+            return rings.get(key);
+        }
+        function annotateControls(ring) {
+            if (!ring) return;
+            lastRing = ring;
+            const pairs = [];
+            for (const [selector, action] of DEVICE_VERBS) {
+                for (const el of document.querySelectorAll(selector)) pairs.push([el, action]);
+            }
+            for (const el of document.querySelectorAll('.zoom-in-btn')) pairs.push([el, 'zoom-in']);
+            annotate(ring, pairs);
+        }
+        // The list, from the canvas ring: each row at this level is a piece the
+        // ring's Pieces cell reaches, and the step-out button is its Up.
+        function annotateList(ring) {
+            if (!ring) return;
+            const pairs = [];
+            for (const li of viewer.contentsEl.querySelectorAll('li[data-path]')) pairs.push([li, `select:${li.dataset.path}`]);
+            pairs.push([viewer.zoomOutBtn, 'zoom-out']);
+            annotate(ring, pairs);
+        }
+        let pending = null;
+        function refreshAddresses() {
+            if (pending) return;
+            pending = Promise.resolve().then(async () => {
+                pending = null;
+                const [forSelected, forCanvas] = await Promise.all([ringForSelected(), ringForCanvas()]);
+                if (forSelected) annotateControls(forSelected);
+                if (forCanvas) annotateList(forCanvas);
+            });
+        }
+        new MutationObserver(refreshAddresses).observe(viewer.contentsEl, { childList: true });
+        new MutationObserver(refreshAddresses).observe(viewer.selectedBodyEl, { childList: true, subtree: true });
+        // Only `hidden`: the annotation itself writes attributes in there, and
+        // watching those would be a loop.
+        new MutationObserver(refreshAddresses).observe(document.getElementById('serial-overlay'), { attributes: true, attributeFilter: ['hidden'] });
+
+        installRing({
+            base: BASE,
+            whatFor,
+            onIntent: carry,
+            onResolved: (ring, spec) => {
+                if (spec.context.pointing === 'node') { rings.set(JSON.stringify({ c: spec.context.targets, s: spec.site, d: spec.device || null }), Promise.resolve(ring)); annotateControls(ring); }
+            },
+            onError: (err) => viewer.setStatus(`Ring: ${err.message}`, 'error'),
+        });
+        window.apothecaryRing.lastRing = () => lastRing;
+        window.apothecaryRing.refreshAddresses = refreshAddresses;
+    })();
     </script>
 </body>
 </html>

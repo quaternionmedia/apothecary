@@ -17,6 +17,20 @@ if TYPE_CHECKING:
     from .part_files import PartFiles
 
 
+class ContestedValue(BaseModel):
+    """One source's answer for a parameter that sources disagree about.
+
+    A number two documents state differently is not a detail to be settled by
+    whoever edits last. Recording the candidates with their provenance puts the
+    disagreement somewhere a person can see it -- and, through the part
+    dashboard, turn instead of argue about.
+    """
+
+    value: float
+    source: str
+    note: str = ""
+
+
 class BasePart(BaseModel):
     """Base metadata wrapper for a single SCAD part."""
 
@@ -38,6 +52,10 @@ class BasePart(BaseModel):
     # Display orientation: rotation [rx, ry, rz] in degrees to apply
     # for preferred "up" orientation (Z-up, sitting on ground plane)
     display_rotation: Vector3D = Field(default_factory=Vector3D)
+
+    # Parameters whose value is genuinely in dispute, keyed by parameter name.
+    # Empty for a part nobody disagrees about, which is most of them.
+    contested: Dict[str, List[ContestedValue]] = Field(default_factory=dict)
 
     @property
     def exists(self) -> bool:

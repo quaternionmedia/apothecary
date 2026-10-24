@@ -13,7 +13,7 @@ A calibration cube that:
 - Can be printed solid or with configurable wall thickness
 - Includes a corner notch for orientation
 
-![Calibration Cube Preview](https://via.placeholder.com/400x300?text=Calibration+Cube)
+*(A preview picture belongs here; nothing on this page is loaded from elsewhere.)*
 
 ## Part 1: The OpenSCAD File
 

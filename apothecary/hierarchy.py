@@ -43,9 +43,25 @@ from .core import OpenSCADObject
 from .models.bounds import BoundingBox3D
 from .models.units import PrintSettings
 from .models.vectors import Vector3D
-from .primitives import Cylinder
+from .primitives import Cylinder, Import
 from .scene import Scene
 from .transforms import Translate
+
+
+def part_stl_path(part_ref: str) -> Optional[str]:
+    """A registered part's STL, relative to the repository root, or None.
+
+    Imported lazily: the registry reaches back into this package, and a
+    top-level import would close the loop.
+    """
+    from .projects.parts.skeleton import ROOT
+    from .projects.registry import scan_projects
+
+    for entry in scan_projects(ROOT):
+        if entry.kind == "part" and entry.name == part_ref:
+            stl = entry.path.with_suffix(".stl")
+            return stl.relative_to(ROOT).as_posix() if stl.exists() else None
+    return None
 
 
 class Assembly(BaseModel):
@@ -70,6 +86,19 @@ class Assembly(BaseModel):
     walking up to the nearest ancestor that set one (see api.py's
     ``_assembly_tree``), so tagging a handful of top-level Structures is
     enough for every Substructure/Feature beneath them to inherit it.
+
+    ``sketch_ref``, when set, names a sketch under ``parts/`` (see
+    ``firmware.sketches.discover_sketches``) that runs on this node's board,
+    for nodes that are not themselves registered parts -- a bare devkit
+    sitting on the bench. A ``part_ref`` node needs no ``sketch_ref``: its
+    part folder's sketch is found automatically (``firmware.bindings``).
+
+    ``build_origin``, on a node with a ``build_volume``, says where that
+    volume's (0, 0, 0) is in the node's own frame -- where the nozzle stands
+    at home, on the bed's surface. A machine drawn as it is (an Ender 3's
+    bed is 95 mm up and off-centre of a frame that carries a power supply on
+    one side) needs it; without it a viewer centres the volume on the
+    footprint and puts it on the floor, which is right for a block.
     """
 
     name: str
@@ -78,6 +107,7 @@ class Assembly(BaseModel):
     footprint: Optional[BoundingBox3D] = None
     material: Optional[str] = None
     build_volume: Optional[Vector3D] = None
+    build_origin: Optional[Vector3D] = None
     status: Optional[str] = None
     base: Optional[OpenSCADObject] = None
     additions: List["Assembly"] = Field(default_factory=list)
@@ -86,6 +116,7 @@ class Assembly(BaseModel):
     comment: Optional[str] = None
     part_ref: Optional[str] = None
     category: Optional[str] = None
+    sketch_ref: Optional[str] = None
 
     def world_bounds(self) -> Optional[BoundingBox3D]:
         """This node's ``footprint``, offset by ``position`` into the parent's frame.
@@ -100,7 +131,7 @@ class Assembly(BaseModel):
             max_point=self.footprint.max_point + self.position,
         )
 
-    def to_scad_object(self) -> OpenSCADObject:
+    def to_scad_object(self, strict: bool = False) -> OpenSCADObject:
         """Compile this node (and everything beneath it) to one OpenSCAD object.
 
         The single algorithm that replaces what the four fixed classes used
@@ -116,8 +147,35 @@ class Assembly(BaseModel):
         positives: List[OpenSCADObject] = []
         if self.base is not None:
             positives.append(self.base)
-        positives.extend(addition.to_scad_object() for addition in self.additions)
-        positives.extend(child.to_scad_object() for child in self.children)
+        positives.extend(addition.to_scad_object(strict) for addition in self.additions)
+        positives.extend(child.to_scad_object(strict) for child in self.children)
+
+        # A node that refers to a registered part and describes no shape of
+        # its own is that part: its geometry is imported rather than
+        # constructed, and whatever it holds (a board inside a printer) is
+        # drawn inside it. Without this a whole site of them -- which is
+        # what the parts library is -- cannot render at all, and the viewer's
+        # canvas, contents and generated-OpenSCAD panel all come up empty
+        # together. A node with a ``base`` keeps it: the part is then the
+        # viewer's picture of it and the base is the site render's envelope.
+        if self.base is None and self.part_ref is not None:
+            stl = part_stl_path(self.part_ref)
+            if stl is None:
+                unbuilt = (
+                    f"{self.role.capitalize()} {self.name!r} refers to part "
+                    f"{self.part_ref!r}, which is not registered or has no STL. "
+                    f"Generate one with `apothecary parts generate-stl {self.part_ref}`."
+                )
+                if strict:
+                    raise ValueError(unbuilt)
+                # STLs are build artifacts, so a catalog routinely contains a
+                # part nobody has built yet. It says so; it does not take every
+                # other part on the site down with it.
+                if not positives:
+                    return Union(children=[], comment=unbuilt)
+                positives.insert(0, Union(children=[], comment=unbuilt))
+            else:
+                positives.insert(0, Import(file=stl))
 
         if not positives:
             raise ValueError(
@@ -131,10 +189,8 @@ class Assembly(BaseModel):
 
         body: OpenSCADObject
         if self.subtractions:
-            subtraction_objs = [s.to_scad_object() for s in self.subtractions]
-            body = Difference(
-                children=[positive, *subtraction_objs], comment=self.comment or label
-            )
+            subtraction_objs = [s.to_scad_object(strict) for s in self.subtractions]
+            body = Difference(children=[positive, *subtraction_objs], comment=self.comment or label)
         else:
             positive.comment = self.comment or label
             body = positive
@@ -258,11 +314,17 @@ def Structure(
     footprint: Optional[BoundingBox3D] = None,
     material: Optional[str] = None,
     build_volume: Optional[Vector3D] = None,
+    build_origin: Optional[Vector3D] = None,
     status: Optional[str] = None,
     category: Optional[str] = None,
+    part_ref: Optional[str] = None,
     substructures: Optional[List[Assembly]] = None,
 ) -> Assembly:
-    """An independently-manufactured or independently-sourced rigid grouping within a Site."""
+    """An independently-manufactured or independently-sourced rigid grouping within a Site.
+
+    ``part_ref`` names the registered part the structure is -- a machine
+    drawn as itself, with its substructures inside it.
+    """
     return Assembly(
         name=name,
         role="structure",
@@ -270,8 +332,10 @@ def Structure(
         footprint=footprint,
         material=material,
         build_volume=build_volume,
+        build_origin=build_origin,
         status=status,
         category=category,
+        part_ref=part_ref,
         children=substructures or [],
     )
 
@@ -285,12 +349,16 @@ def Substructure(
     additions: Optional[List[Assembly]] = None,
     subtractions: Optional[List[Assembly]] = None,
     children: Optional[List[Assembly]] = None,
+    part_ref: Optional[str] = None,
+    comment: Optional[str] = None,
 ) -> Assembly:
     """A named system within a Structure (mounting, cable-routing, ...).
 
     Composes a ``base`` (optional existing geometry), ``additions`` (bosses,
     ribs — unioned in), ``subtractions`` (holes, slots — differenced out),
-    and nested child Substructures, into one addressable, named node.
+    and nested child Substructures, into one addressable, named node. A
+    ``part_ref`` in place of a base makes the node that registered part (a
+    board in its box).
     """
     return Assembly(
         name=name,
@@ -301,6 +369,8 @@ def Substructure(
         additions=additions or [],
         subtractions=subtractions or [],
         children=children or [],
+        part_ref=part_ref,
+        comment=comment,
     )
 
 
@@ -349,7 +419,9 @@ class Feature:
         height: float,
     ) -> Assembly:
         """A cylindrical boss (a positive standoff, e.g. for a self-tapping screw)."""
-        geometry = Translate(v=position, children=[Cylinder(h=height, r=diameter / 2, center=False)])
+        geometry = Translate(
+            v=position, children=[Cylinder(h=height, r=diameter / 2, center=False)]
+        )
         return Assembly(name=name, role="feature", base=geometry)
 
 

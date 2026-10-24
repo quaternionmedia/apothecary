@@ -54,6 +54,12 @@ def renderer() -> OpenSCADRenderer:
     return get_renderer()
 
 
+# Parts whose render genuinely takes longer than the default budget.
+PART_RENDER_BUDGET = {
+    "gridfinity": 240.0,
+}
+
+
 @pytest.mark.parametrize("part_name,part", ALL_PARTS, ids=[p[0] for p in ALL_PARTS])
 class TestPartSTLGeneration:
     """Test STL generation for each registered part."""
@@ -99,7 +105,11 @@ class TestPartSTLGeneration:
         result = part_renderer.render_stl(
             scad_path=part.source_file,
             stl_path=stl_output,
-            timeout=60.0,  # 1 minute per part
+            # gridfinity renders in ~52s on an idle machine, against a 60s
+            # budget -- seven seconds of margin, so this test failed whenever
+            # anything else was running. The budget is per part rather than a
+            # flat minute: a slow part is a slow part, not a broken one.
+            timeout=PART_RENDER_BUDGET.get(part.name, 60.0),
         )
 
         if not result.success:

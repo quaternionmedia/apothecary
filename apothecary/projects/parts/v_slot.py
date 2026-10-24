@@ -37,7 +37,7 @@ class VSlotPart(BasePart):
 
 
 def create(metadata_root: Path) -> VSlotPart:
-    scad = metadata_root / "parts" / "V-Slot" / "V-Slot.scad"
+    scad = metadata_root / "parts" / "v_slot" / "v_slot.scad"
     return VSlotPart(
         name="v_slot",
         source_file=scad,

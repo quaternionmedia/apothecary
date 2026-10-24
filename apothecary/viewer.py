@@ -55,6 +55,7 @@ class ViewerRenderer:
         base_url: str,
         default_site: Optional[str] = None,
         focus_path: str = "",
+        three_is_vendored: bool = True,
     ) -> str:
         """Render the fractal zoom viewer HTML page (prototype).
 
@@ -90,6 +91,7 @@ class ViewerRenderer:
             base_url=base_url.rstrip("/"),
             default_site=default_site or "",
             focus_path=focus_path or "",
+            three_is_vendored=three_is_vendored,
         )
 
 
@@ -110,6 +112,7 @@ def render_fractal_viewer_page(
     base_url: str,
     default_site: Optional[str] = None,
     focus_path: str = "",
+    three_is_vendored: bool = True,
 ) -> str:
     """
     Convenience function to render the fractal zoom viewer page (prototype).
@@ -124,5 +127,5 @@ def render_fractal_viewer_page(
         Complete HTML page as a string
     """
     return get_viewer_renderer().render_fractal_viewer(
-        site_names, base_url, default_site, focus_path
+        site_names, base_url, default_site, focus_path, three_is_vendored
     )

@@ -1,0 +1,34 @@
+{
+  "name": "esp32_devkitc",
+  "description": "ESP32-DevKitC V4: a 55 x 28 mm devkit from Espressif's drawing, standing on its pins -- the board the garage's esp32_blink runs on.",
+  "category": "electrical",
+  "tags": [
+    "board",
+    "esp32",
+    "devkit",
+    "wifi"
+  ],
+  "preview_color": [
+    0.1,
+    0.1,
+    0.1
+  ],
+  "source": {
+    "title": "esp32_devkitc from published dimensions",
+    "author": "Quaternion Media",
+    "license": "MIT",
+    "note": "Built in OpenSCAD from the maker's published board drawing; no mesh of anyone's was used."
+  },
+  "bounds": {
+    "min": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "max": [
+      56.0,
+      28.0,
+      17.1
+    ]
+  }
+}

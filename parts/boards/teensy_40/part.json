@@ -1,0 +1,34 @@
+{
+  "name": "teensy_40",
+  "description": "Teensy 4.0: a 35.56 x 17.78 mm board from the published card, standing on its pins as on a breadboard.",
+  "category": "electrical",
+  "tags": [
+    "board",
+    "teensy",
+    "arm",
+    "devkit"
+  ],
+  "preview_color": [
+    0.0,
+    0.4,
+    0.1
+  ],
+  "source": {
+    "title": "teensy_40 from published dimensions",
+    "author": "Quaternion Media",
+    "license": "MIT",
+    "note": "Built in OpenSCAD from the maker's published board drawing; no mesh of anyone's was used."
+  },
+  "bounds": {
+    "min": [
+      -1.5,
+      0.0,
+      0.0
+    ],
+    "max": [
+      36.83,
+      17.78,
+      17.1
+    ]
+  }
+}

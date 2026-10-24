@@ -1,18 +1,25 @@
 """Docs generation CLI: regenerate docs/generated/ from the E2E doc-workflow tests.
 
-The doc-workflow tests (tests/e2e/test_docs_*.py, marked both `e2e` and
-`docs`) are the single source of truth: each `docs.step("...")` call inside
-one of them is both an assertion point and a documentation paragraph. This
-module runs those tests with screenshot/video capture turned on
-(`--generate-docs`, see tests/e2e/conftest.py) and turns the results into,
-per workflow: Markdown, a step-by-step animated GIF (the deliverable meant
-for embedding somewhere a real video won't play, e.g. a PR description),
-and the actual Playwright screen recording of that same run, embedded in
-the Markdown as real video -- so editing a test is how you edit the docs.
+**This does not produce the walkthrough.** The walkthrough is written by the run
+that asserts it, on the ordinary test command -- see
+tests/e2e/test_docs_photo_walkthrough.py and the guards in
+tests/test_the_walkthrough_is_named.py. It was produced here once, which made
+the viewer half of one path a second page behind a command somebody had to
+remember, and the remembered page went stale. What is left here is the fractal
+viewer workflow, which nothing else describes.
+
+The doc-workflow tests (tests/e2e/test_docs_*.py marked `docs`) are the single
+source of truth for what they cover: each `docs.step("...")` call inside one of
+them is both an assertion point and a documentation paragraph. This module runs
+those tests with screenshot/video capture turned on (`--generate-docs`, see
+tests/e2e/conftest.py) and turns the results into, per workflow: Markdown, a
+step-by-step animated GIF (the deliverable meant for embedding somewhere a real
+video will not play, e.g. a PR description), and the actual Playwright screen
+recording of that same run, embedded in the Markdown as real video -- so editing
+a test is how you edit those docs.
 
 Everything under docs/generated/ is a build artifact (see .gitignore) --
-regenerate it with `apothecary docs generate` whenever the doc-workflow
-tests change.
+regenerate it with `apothecary docs generate` whenever those tests change.
 """
 
 from __future__ import annotations
@@ -22,8 +29,10 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 import click
@@ -71,13 +80,32 @@ def docs():
     is_flag=True,
     help="Keep the raw Playwright .webm recordings (normally deleted after GIF assembly)",
 )
-def generate(host: str, port: int, keep_raw_video: bool):
+@click.option(
+    "--real-devices",
+    is_flag=True,
+    help=(
+        "Use the host's arduino-cli and serial ports instead of the scripted fake ports and "
+        "the simulated printer the doc server normally runs with"
+    ),
+)
+def generate(host: str, port: int, keep_raw_video: bool, real_devices: bool):
     """Run the doc-workflow E2E tests and render Markdown + GIFs from the results.
 
     Starts its own temporary server (STL generation skipped, for speed),
     runs only the tests marked 'docs', then assembles a GIF and a Markdown
     page per workflow into docs/generated/.
+
+    The doc server sees two scripted serial ports and a simulated printer
+    mid-print (see firmware.gcode.SimulatedPrinter), and keeps its firmware
+    state in a temp dir, so the screenshots are the same on every machine
+    and never depend on -- or touch -- a real board.
     """
+    from ..stays_local import require_loopback
+
+    try:
+        host = require_loopback(host)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from None
     # A previous invocation's raw recordings (especially from a run that
     # failed before reaching cleanup, below) must not still be here --
     # _extract_workflow_videos picks "the" video for a given test out of
@@ -87,8 +115,16 @@ def generate(host: str, port: int, keep_raw_video: bool):
     if raw_video_dir.exists():
         shutil.rmtree(raw_video_dir)
 
+    from ..docs_site import note_refresh
+
+    started = datetime.now(timezone.utc).isoformat()
+    note_refresh(started=started, finished=None, ok=None, error=None)
     click.echo(f"Starting temporary server at http://{host}:{port} for doc generation...")
-    server_proc, base_url = _start_server(host, port)
+    try:
+        server_proc, base_url = _start_server(host, port, simulated_devices=not real_devices)
+    except Exception as exc:
+        note_refresh(finished=datetime.now(timezone.utc).isoformat(), ok=False, error=str(exc))
+        raise
 
     try:
         click.echo("Running doc-workflow E2E tests...")
@@ -114,6 +150,11 @@ def generate(host: str, port: int, keep_raw_video: bool):
             server_proc.kill()
 
     if result.returncode != 0:
+        note_refresh(
+            finished=datetime.now(timezone.utc).isoformat(),
+            ok=False,
+            error=f"doc-workflow tests failed (exit {result.returncode})",
+        )
         raise SystemExit(
             f"Doc-workflow tests failed (exit {result.returncode}); docs were not regenerated."
         )
@@ -136,6 +177,7 @@ def generate(host: str, port: int, keep_raw_video: bool):
     if raw_video_dir.exists() and not keep_raw_video:
         shutil.rmtree(raw_video_dir)
 
+    note_refresh(finished=datetime.now(timezone.utc).isoformat(), ok=True, error=None)
     click.secho(f"Docs generated at {GENERATED_DOCS_ROOT}", fg="green")
 
 
@@ -149,10 +191,38 @@ def clean():
         click.echo("Nothing to clean (docs/generated/ does not exist)")
 
 
-def _start_server(host: str, port: int):
+def _simulated_device_env(env: dict) -> dict:
+    """Point the doc server at scripted ports and the simulated printer.
+
+    The scripted ``arduino-cli`` is the unit tests' fake (tests/firmware_helpers.py):
+    a doc-generation command borrowing a test helper is the right layering
+    for something whose whole job is to run tests.
+    """
+    sys.path.insert(0, str(ROOT / "tests"))
+    from firmware_helpers import write_fake_arduino_cli  # noqa: E402
+
+    tmp = Path(tempfile.mkdtemp(prefix="apothecary-docs-"))
+    env["ARDUINO_CLI"] = str(write_fake_arduino_cli(tmp / "arduino-cli"))
+    env["APOTHECARY_TOOLS_DIR"] = str(tmp / "tools")
+    env["APOTHECARY_STATE_DIR"] = str(tmp / "state")
+    env["APOTHECARY_SERIAL_ENGINE"] = "simulated"
+    env["APOTHECARY_SIMULATED_PRINTER"] = "printing"
+    return env
+
+
+def _start_server(host: str, port: int, simulated_devices: bool = True):
     env = os.environ.copy()
     env["APOTHECARY_SKIP_STL_GENERATION"] = "1"
     env["APOTHECARY_VIEWER_PATH"] = ""
+    # The picture walkthrough asks the server to look at a picture, and the
+    # server reads pictures from one folder and refuses everywhere else. Both
+    # sides have to agree which folder that is, so it is decided here and
+    # handed to the server and to the tests alike.
+    pictures = Path(tempfile.mkdtemp(prefix="apothecary-docs-pictures-"))
+    env["APOTHECARY_PICTURE_ROOT"] = str(pictures)
+    os.environ["APOTHECARY_PICTURE_ROOT"] = str(pictures)
+    if simulated_devices:
+        env = _simulated_device_env(env)
 
     server_cmd = [
         sys.executable,
@@ -244,7 +314,9 @@ def _extract_workflow_videos() -> None:
             )
         video_path = videos[0]
 
-        workflows = [line.strip() for line in marker.read_text(encoding="utf-8").splitlines() if line.strip()]
+        workflows = [
+            line.strip() for line in marker.read_text(encoding="utf-8").splitlines() if line.strip()
+        ]
         for workflow in workflows:
             workflow_dir = GENERATED_DOCS_ROOT / workflow
             workflow_dir.mkdir(parents=True, exist_ok=True)

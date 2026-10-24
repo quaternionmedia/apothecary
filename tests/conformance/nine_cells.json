@@ -1,0 +1,1927 @@
+{
+  "version": "0.1.0",
+  "notes": "Nine cells numbered as a numeric keypad: 7 8 9 / 4 5 6 / 1 2 3. Cell 5 (back) holds nothing. placement[i] is the cell of the i-th option; compass[s] is the cell of compass wedge s, up first and clockwise, s = angleToIndex(theta, 8) with startDeg -90. nearest: from the cell (5 when nothing is highlighted), a candidate is any occupied cell other than the current one whose displacement has a positive component along the direction; the best has the smallest offset aside, then the smallest distance along, then the lowest number; with no candidate the highlight stays where it was (null when nothing was highlighted). An address is the digits pressed through nested rings; the rings below are the ones its addresses are computed on.",
+  "placement": [
+    8,
+    6,
+    2,
+    4,
+    9,
+    3,
+    1,
+    7
+  ],
+  "back": 5,
+  "compass": [
+    8,
+    9,
+    6,
+    3,
+    2,
+    1,
+    4,
+    7
+  ],
+  "cells": {
+    "7": [
+      0,
+      0
+    ],
+    "8": [
+      1,
+      0
+    ],
+    "9": [
+      2,
+      0
+    ],
+    "4": [
+      0,
+      1
+    ],
+    "5": [
+      1,
+      1
+    ],
+    "6": [
+      2,
+      1
+    ],
+    "1": [
+      0,
+      2
+    ],
+    "2": [
+      1,
+      2
+    ],
+    "3": [
+      2,
+      2
+    ]
+  },
+  "directions": {
+    "up": [
+      0,
+      -1
+    ],
+    "down": [
+      0,
+      1
+    ],
+    "left": [
+      -1,
+      0
+    ],
+    "right": [
+      1,
+      0
+    ]
+  },
+  "nearest": [
+    {
+      "occupied": [
+        8,
+        6,
+        2,
+        4
+      ],
+      "from": 8,
+      "direction": "left",
+      "expect": 4
+    },
+    {
+      "occupied": [
+        8,
+        6,
+        2,
+        4
+      ],
+      "from": 8,
+      "direction": "right",
+      "expect": 6
+    },
+    {
+      "occupied": [
+        8,
+        6,
+        2,
+        4
+      ],
+      "from": 8,
+      "direction": "down",
+      "expect": 2
+    },
+    {
+      "occupied": [
+        8,
+        6,
+        2,
+        4
+      ],
+      "from": 4,
+      "direction": "up",
+      "expect": 8
+    },
+    {
+      "occupied": [
+        8,
+        6,
+        2,
+        4,
+        9,
+        3,
+        1,
+        7
+      ],
+      "from": null,
+      "direction": "up",
+      "expect": 8
+    },
+    {
+      "occupied": [
+        8,
+        6,
+        2,
+        4,
+        9,
+        3,
+        1,
+        7
+      ],
+      "from": 8,
+      "direction": "up",
+      "expect": 8
+    },
+    {
+      "occupied": [
+        8,
+        6,
+        2,
+        4,
+        9,
+        3,
+        1,
+        7
+      ],
+      "from": 9,
+      "direction": "left",
+      "expect": 8
+    },
+    {
+      "occupied": [
+        8,
+        6,
+        2,
+        4,
+        9,
+        3,
+        1,
+        7
+      ],
+      "from": 7,
+      "direction": "down",
+      "expect": 4
+    },
+    {
+      "occupied": [
+        8,
+        6,
+        2,
+        4,
+        9,
+        3,
+        1,
+        7
+      ],
+      "from": 1,
+      "direction": "right",
+      "expect": 2
+    },
+    {
+      "occupied": [
+        8,
+        6,
+        2,
+        4
+      ],
+      "from": null,
+      "direction": "left",
+      "expect": 4
+    },
+    {
+      "occupied": [
+        8,
+        6,
+        2,
+        4
+      ],
+      "from": null,
+      "direction": "down",
+      "expect": 2
+    },
+    {
+      "occupied": [
+        8,
+        6,
+        2,
+        4,
+        9,
+        3,
+        1,
+        7
+      ],
+      "from": null,
+      "direction": "right",
+      "expect": 6
+    },
+    {
+      "occupied": [
+        9,
+        3
+      ],
+      "from": null,
+      "direction": "up",
+      "expect": 9
+    },
+    {
+      "occupied": [
+        7,
+        1
+      ],
+      "from": null,
+      "direction": "down",
+      "expect": 1
+    },
+    {
+      "occupied": [
+        8,
+        6,
+        2,
+        4,
+        9,
+        3,
+        1,
+        7
+      ],
+      "from": 8,
+      "direction": "left",
+      "expect": 7
+    },
+    {
+      "occupied": [
+        8,
+        6,
+        2,
+        4,
+        9,
+        3,
+        1,
+        7
+      ],
+      "from": 4,
+      "direction": "up",
+      "expect": 7
+    },
+    {
+      "occupied": [
+        8,
+        6,
+        2,
+        4
+      ],
+      "from": 6,
+      "direction": "left",
+      "expect": 4
+    },
+    {
+      "occupied": [
+        8,
+        6,
+        2,
+        4,
+        9
+      ],
+      "from": 4,
+      "direction": "right",
+      "expect": 6
+    },
+    {
+      "occupied": [
+        9,
+        4,
+        2
+      ],
+      "from": 9,
+      "direction": "down",
+      "expect": 2
+    },
+    {
+      "occupied": [
+        8,
+        6,
+        2,
+        4
+      ],
+      "from": 2,
+      "direction": "down",
+      "expect": 2
+    },
+    {
+      "occupied": [
+        8,
+        6,
+        2,
+        4
+      ],
+      "from": 4,
+      "direction": "left",
+      "expect": 4
+    },
+    {
+      "occupied": [
+        8
+      ],
+      "from": 8,
+      "direction": "down",
+      "expect": 8
+    },
+    {
+      "occupied": [
+        8,
+        3
+      ],
+      "from": 8,
+      "direction": "down",
+      "expect": 3
+    },
+    {
+      "occupied": [
+        7,
+        2
+      ],
+      "from": 7,
+      "direction": "right",
+      "expect": 2
+    },
+    {
+      "occupied": [
+        8,
+        9,
+        3,
+        1,
+        7
+      ],
+      "from": 8,
+      "direction": "down",
+      "expect": 1
+    },
+    {
+      "occupied": [
+        8,
+        6,
+        2,
+        4
+      ],
+      "from": 5,
+      "direction": "up",
+      "expect": 8
+    },
+    {
+      "occupied": [
+        8,
+        6,
+        2,
+        4,
+        9,
+        3,
+        1,
+        7
+      ],
+      "from": 3,
+      "direction": "up",
+      "expect": 6
+    },
+    {
+      "occupied": [
+        8,
+        6,
+        2,
+        4,
+        9,
+        3,
+        1,
+        7
+      ],
+      "from": 3,
+      "direction": "left",
+      "expect": 2
+    }
+  ],
+  "addresses": [
+    {
+      "ring": "control",
+      "path": [
+        "Jog",
+        "Y+"
+      ],
+      "address": "28"
+    },
+    {
+      "ring": "control",
+      "path": [
+        "Jog",
+        "Z-"
+      ],
+      "address": "23"
+    },
+    {
+      "ring": "control",
+      "path": [
+        "Heat",
+        "Bed on"
+      ],
+      "address": "82"
+    },
+    {
+      "ring": "control",
+      "path": [
+        "Home",
+        "All"
+      ],
+      "address": "68"
+    },
+    {
+      "ring": "control",
+      "path": [
+        "Stop"
+      ],
+      "address": "1"
+    },
+    {
+      "ring": "control",
+      "path": [
+        "Arm"
+      ],
+      "address": "7"
+    },
+    {
+      "ring": "device",
+      "path": [
+        "Control",
+        "Jog",
+        "Y+"
+      ],
+      "address": "728"
+    },
+    {
+      "ring": "device",
+      "path": [
+        "Unpin"
+      ],
+      "address": "9"
+    },
+    {
+      "ring": "node",
+      "path": [
+        "Device",
+        "Control",
+        "Jog",
+        "Y+"
+      ],
+      "address": "2728"
+    },
+    {
+      "ring": "node",
+      "path": [
+        "Why this"
+      ],
+      "address": "4"
+    }
+  ],
+  "every_address": {
+    "control": {
+      "88": "control:hotend-on",
+      "86": "control:hotend-off",
+      "82": "control:bed-on",
+      "84": "control:bed-off",
+      "89": "control:fan-on",
+      "83": "control:fan-off",
+      "68": "control:home",
+      "66": "control:home-xy",
+      "62": "control:home-z",
+      "28": "control:jog:Y+",
+      "26": "control:jog:X+",
+      "22": "control:jog:Y-",
+      "24": "control:jog:X-",
+      "29": "control:jog:Z+",
+      "23": "control:jog:Z-",
+      "48": "level:probe",
+      "46": "level:read",
+      "42": "control:mesh-on",
+      "44": "control:mesh-off",
+      "49": "control:corner:BR",
+      "43": "control:corner:FR",
+      "41": "control:corner:FL",
+      "47": "control:corner:BL",
+      "98": "control:sd-resume",
+      "96": "control:sd-pause",
+      "92": "control:sd-abort",
+      "94": "print:start",
+      "38": "control:motors-off",
+      "36": "control:quickstop",
+      "32": "control:break-wait",
+      "1": "control:estop",
+      "7": "control:arm"
+    },
+    "device": {
+      "8": "device:watch",
+      "6": "device:poll",
+      "2": "device:monitor",
+      "4": "device:query",
+      "9": "device:unpin",
+      "3": "device:rescan",
+      "18": "device:reconnect",
+      "16": "device:reset",
+      "12": "device:release",
+      "788": "control:hotend-on",
+      "786": "control:hotend-off",
+      "782": "control:bed-on",
+      "784": "control:bed-off",
+      "789": "control:fan-on",
+      "783": "control:fan-off",
+      "768": "control:home",
+      "766": "control:home-xy",
+      "762": "control:home-z",
+      "728": "control:jog:Y+",
+      "726": "control:jog:X+",
+      "722": "control:jog:Y-",
+      "724": "control:jog:X-",
+      "729": "control:jog:Z+",
+      "723": "control:jog:Z-",
+      "748": "level:probe",
+      "746": "level:read",
+      "742": "control:mesh-on",
+      "744": "control:mesh-off",
+      "749": "control:corner:BR",
+      "743": "control:corner:FR",
+      "741": "control:corner:FL",
+      "747": "control:corner:BL",
+      "798": "control:sd-resume",
+      "796": "control:sd-pause",
+      "792": "control:sd-abort",
+      "794": "print:start",
+      "738": "control:motors-off",
+      "736": "control:quickstop",
+      "732": "control:break-wait",
+      "71": "control:estop",
+      "77": "control:arm"
+    },
+    "node": {
+      "8": "zoom-in",
+      "6": "move",
+      "28": "device:watch",
+      "26": "device:poll",
+      "22": "device:monitor",
+      "24": "device:query",
+      "29": "device:unpin",
+      "23": "device:rescan",
+      "218": "device:reconnect",
+      "216": "device:reset",
+      "212": "device:release",
+      "2788": "control:hotend-on",
+      "2786": "control:hotend-off",
+      "2782": "control:bed-on",
+      "2784": "control:bed-off",
+      "2789": "control:fan-on",
+      "2783": "control:fan-off",
+      "2768": "control:home",
+      "2766": "control:home-xy",
+      "2762": "control:home-z",
+      "2728": "control:jog:Y+",
+      "2726": "control:jog:X+",
+      "2722": "control:jog:Y-",
+      "2724": "control:jog:X-",
+      "2729": "control:jog:Z+",
+      "2723": "control:jog:Z-",
+      "2748": "level:probe",
+      "2746": "level:read",
+      "2742": "control:mesh-on",
+      "2744": "control:mesh-off",
+      "2749": "control:corner:BR",
+      "2743": "control:corner:FR",
+      "2741": "control:corner:FL",
+      "2747": "control:corner:BL",
+      "2798": "control:sd-resume",
+      "2796": "control:sd-pause",
+      "2792": "control:sd-abort",
+      "2794": "print:start",
+      "2738": "control:motors-off",
+      "2736": "control:quickstop",
+      "2732": "control:break-wait",
+      "271": "control:estop",
+      "277": "control:arm",
+      "4": "explain"
+    }
+  },
+  "rings": {
+    "control": {
+      "title": "Control",
+      "options": [
+        {
+          "id": "control:heat",
+          "label": "Heat",
+          "action": null,
+          "enabled": true,
+          "destructive": false,
+          "children": [
+            {
+              "id": "control:hotend-on",
+              "label": "Hotend on",
+              "action": "control:hotend-on",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 8
+            },
+            {
+              "id": "control:hotend-off",
+              "label": "Hotend off",
+              "action": "control:hotend-off",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 6
+            },
+            {
+              "id": "control:bed-on",
+              "label": "Bed on",
+              "action": "control:bed-on",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 2
+            },
+            {
+              "id": "control:bed-off",
+              "label": "Bed off",
+              "action": "control:bed-off",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 4
+            },
+            {
+              "id": "control:fan-on",
+              "label": "Fan on",
+              "action": "control:fan-on",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 9
+            },
+            {
+              "id": "control:fan-off",
+              "label": "Fan off",
+              "action": "control:fan-off",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 3
+            }
+          ],
+          "cell": 8
+        },
+        {
+          "id": "control:home",
+          "label": "Home",
+          "action": null,
+          "enabled": true,
+          "destructive": false,
+          "children": [
+            {
+              "id": "control:home:all",
+              "label": "All",
+              "action": "control:home",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 8
+            },
+            {
+              "id": "control:home-xy",
+              "label": "XY",
+              "action": "control:home-xy",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 6
+            },
+            {
+              "id": "control:home-z",
+              "label": "Z",
+              "action": "control:home-z",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 2
+            }
+          ],
+          "cell": 6
+        },
+        {
+          "id": "control:jog",
+          "label": "Jog",
+          "action": null,
+          "enabled": true,
+          "destructive": false,
+          "children": [
+            {
+              "id": "control:jog:Y+",
+              "label": "Y+",
+              "action": "control:jog:Y+",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 8
+            },
+            {
+              "id": "control:jog:X+",
+              "label": "X+",
+              "action": "control:jog:X+",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 6
+            },
+            {
+              "id": "control:jog:Y-",
+              "label": "Y-",
+              "action": "control:jog:Y-",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 2
+            },
+            {
+              "id": "control:jog:X-",
+              "label": "X-",
+              "action": "control:jog:X-",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 4
+            },
+            {
+              "id": "control:jog:Z+",
+              "label": "Z+",
+              "action": "control:jog:Z+",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 9
+            },
+            {
+              "id": "control:jog:Z-",
+              "label": "Z-",
+              "action": "control:jog:Z-",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 3
+            }
+          ],
+          "cell": 2
+        },
+        {
+          "id": "control:level",
+          "label": "Level",
+          "action": null,
+          "enabled": true,
+          "destructive": false,
+          "children": [
+            {
+              "id": "level:probe",
+              "label": "Probe",
+              "action": "level:probe",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 8
+            },
+            {
+              "id": "level:read",
+              "label": "Read",
+              "action": "level:read",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 6
+            },
+            {
+              "id": "control:mesh-on",
+              "label": "Mesh on",
+              "action": "control:mesh-on",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 2
+            },
+            {
+              "id": "control:mesh-off",
+              "label": "Mesh off",
+              "action": "control:mesh-off",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 4
+            },
+            {
+              "id": "control:corner:BR",
+              "label": "Back right",
+              "action": "control:corner:BR",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 9
+            },
+            {
+              "id": "control:corner:FR",
+              "label": "Front right",
+              "action": "control:corner:FR",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 3
+            },
+            {
+              "id": "control:corner:FL",
+              "label": "Front left",
+              "action": "control:corner:FL",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 1
+            },
+            {
+              "id": "control:corner:BL",
+              "label": "Back left",
+              "action": "control:corner:BL",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 7
+            }
+          ],
+          "cell": 4
+        },
+        {
+          "id": "control:sd",
+          "label": "Print",
+          "action": null,
+          "enabled": true,
+          "destructive": false,
+          "children": [
+            {
+              "id": "control:sd-resume",
+              "label": "Resume",
+              "action": "control:sd-resume",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 8
+            },
+            {
+              "id": "control:sd-pause",
+              "label": "Pause",
+              "action": "control:sd-pause",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 6
+            },
+            {
+              "id": "control:sd-abort",
+              "label": "Abort",
+              "action": "control:sd-abort",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 2
+            },
+            {
+              "id": "print:start",
+              "label": "Send file",
+              "action": "print:start",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 4
+            }
+          ],
+          "cell": 9
+        },
+        {
+          "id": "control:motors",
+          "label": "Motors",
+          "action": null,
+          "enabled": true,
+          "destructive": false,
+          "children": [
+            {
+              "id": "control:motors-off",
+              "label": "Off",
+              "action": "control:motors-off",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 8
+            },
+            {
+              "id": "control:quickstop",
+              "label": "Quickstop",
+              "action": "control:quickstop",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 6
+            },
+            {
+              "id": "control:break-wait",
+              "label": "Break wait",
+              "action": "control:break-wait",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 2
+            }
+          ],
+          "cell": 3
+        },
+        {
+          "id": "control:estop",
+          "label": "Stop",
+          "action": "control:estop",
+          "enabled": true,
+          "destructive": true,
+          "children": null,
+          "cell": 1
+        },
+        {
+          "id": "control:arm",
+          "label": "Arm",
+          "action": "control:arm",
+          "enabled": true,
+          "destructive": false,
+          "children": null,
+          "cell": 7
+        }
+      ]
+    },
+    "device": {
+      "title": "ttyUSB0",
+      "options": [
+        {
+          "id": "device:watch",
+          "label": "Watch",
+          "action": "device:watch",
+          "enabled": true,
+          "destructive": false,
+          "children": null,
+          "cell": 8
+        },
+        {
+          "id": "device:poll",
+          "label": "Poll",
+          "action": "device:poll",
+          "enabled": true,
+          "destructive": false,
+          "children": null,
+          "cell": 6
+        },
+        {
+          "id": "device:monitor",
+          "label": "Monitor",
+          "action": "device:monitor",
+          "enabled": true,
+          "destructive": false,
+          "children": null,
+          "cell": 2
+        },
+        {
+          "id": "device:query",
+          "label": "Query",
+          "action": "device:query",
+          "enabled": true,
+          "destructive": false,
+          "children": null,
+          "cell": 4
+        },
+        {
+          "id": "device:unpin",
+          "label": "Unpin",
+          "action": "device:unpin",
+          "enabled": true,
+          "destructive": false,
+          "children": null,
+          "cell": 9
+        },
+        {
+          "id": "device:rescan",
+          "label": "Rescan",
+          "action": "device:rescan",
+          "enabled": true,
+          "destructive": false,
+          "children": null,
+          "cell": 3
+        },
+        {
+          "id": "device:link",
+          "label": "Link",
+          "action": null,
+          "enabled": true,
+          "destructive": false,
+          "children": [
+            {
+              "id": "device:reconnect",
+              "label": "Reconnect",
+              "action": "device:reconnect",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 8
+            },
+            {
+              "id": "device:reset",
+              "label": "Reset",
+              "action": "device:reset",
+              "enabled": true,
+              "destructive": true,
+              "children": null,
+              "cell": 6
+            },
+            {
+              "id": "device:release",
+              "label": "Release",
+              "action": "device:release",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 2
+            }
+          ],
+          "cell": 1
+        },
+        {
+          "id": "control",
+          "label": "Control",
+          "action": null,
+          "enabled": true,
+          "destructive": false,
+          "children": [
+            {
+              "id": "control:heat",
+              "label": "Heat",
+              "action": null,
+              "enabled": true,
+              "destructive": false,
+              "children": [
+                {
+                  "id": "control:hotend-on",
+                  "label": "Hotend on",
+                  "action": "control:hotend-on",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 8
+                },
+                {
+                  "id": "control:hotend-off",
+                  "label": "Hotend off",
+                  "action": "control:hotend-off",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 6
+                },
+                {
+                  "id": "control:bed-on",
+                  "label": "Bed on",
+                  "action": "control:bed-on",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 2
+                },
+                {
+                  "id": "control:bed-off",
+                  "label": "Bed off",
+                  "action": "control:bed-off",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 4
+                },
+                {
+                  "id": "control:fan-on",
+                  "label": "Fan on",
+                  "action": "control:fan-on",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 9
+                },
+                {
+                  "id": "control:fan-off",
+                  "label": "Fan off",
+                  "action": "control:fan-off",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 3
+                }
+              ],
+              "cell": 8
+            },
+            {
+              "id": "control:home",
+              "label": "Home",
+              "action": null,
+              "enabled": true,
+              "destructive": false,
+              "children": [
+                {
+                  "id": "control:home:all",
+                  "label": "All",
+                  "action": "control:home",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 8
+                },
+                {
+                  "id": "control:home-xy",
+                  "label": "XY",
+                  "action": "control:home-xy",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 6
+                },
+                {
+                  "id": "control:home-z",
+                  "label": "Z",
+                  "action": "control:home-z",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 2
+                }
+              ],
+              "cell": 6
+            },
+            {
+              "id": "control:jog",
+              "label": "Jog",
+              "action": null,
+              "enabled": true,
+              "destructive": false,
+              "children": [
+                {
+                  "id": "control:jog:Y+",
+                  "label": "Y+",
+                  "action": "control:jog:Y+",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 8
+                },
+                {
+                  "id": "control:jog:X+",
+                  "label": "X+",
+                  "action": "control:jog:X+",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 6
+                },
+                {
+                  "id": "control:jog:Y-",
+                  "label": "Y-",
+                  "action": "control:jog:Y-",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 2
+                },
+                {
+                  "id": "control:jog:X-",
+                  "label": "X-",
+                  "action": "control:jog:X-",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 4
+                },
+                {
+                  "id": "control:jog:Z+",
+                  "label": "Z+",
+                  "action": "control:jog:Z+",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 9
+                },
+                {
+                  "id": "control:jog:Z-",
+                  "label": "Z-",
+                  "action": "control:jog:Z-",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 3
+                }
+              ],
+              "cell": 2
+            },
+            {
+              "id": "control:level",
+              "label": "Level",
+              "action": null,
+              "enabled": true,
+              "destructive": false,
+              "children": [
+                {
+                  "id": "level:probe",
+                  "label": "Probe",
+                  "action": "level:probe",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 8
+                },
+                {
+                  "id": "level:read",
+                  "label": "Read",
+                  "action": "level:read",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 6
+                },
+                {
+                  "id": "control:mesh-on",
+                  "label": "Mesh on",
+                  "action": "control:mesh-on",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 2
+                },
+                {
+                  "id": "control:mesh-off",
+                  "label": "Mesh off",
+                  "action": "control:mesh-off",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 4
+                },
+                {
+                  "id": "control:corner:BR",
+                  "label": "Back right",
+                  "action": "control:corner:BR",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 9
+                },
+                {
+                  "id": "control:corner:FR",
+                  "label": "Front right",
+                  "action": "control:corner:FR",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 3
+                },
+                {
+                  "id": "control:corner:FL",
+                  "label": "Front left",
+                  "action": "control:corner:FL",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 1
+                },
+                {
+                  "id": "control:corner:BL",
+                  "label": "Back left",
+                  "action": "control:corner:BL",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 7
+                }
+              ],
+              "cell": 4
+            },
+            {
+              "id": "control:sd",
+              "label": "Print",
+              "action": null,
+              "enabled": true,
+              "destructive": false,
+              "children": [
+                {
+                  "id": "control:sd-resume",
+                  "label": "Resume",
+                  "action": "control:sd-resume",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 8
+                },
+                {
+                  "id": "control:sd-pause",
+                  "label": "Pause",
+                  "action": "control:sd-pause",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 6
+                },
+                {
+                  "id": "control:sd-abort",
+                  "label": "Abort",
+                  "action": "control:sd-abort",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 2
+                },
+                {
+                  "id": "print:start",
+                  "label": "Send file",
+                  "action": "print:start",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 4
+                }
+              ],
+              "cell": 9
+            },
+            {
+              "id": "control:motors",
+              "label": "Motors",
+              "action": null,
+              "enabled": true,
+              "destructive": false,
+              "children": [
+                {
+                  "id": "control:motors-off",
+                  "label": "Off",
+                  "action": "control:motors-off",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 8
+                },
+                {
+                  "id": "control:quickstop",
+                  "label": "Quickstop",
+                  "action": "control:quickstop",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 6
+                },
+                {
+                  "id": "control:break-wait",
+                  "label": "Break wait",
+                  "action": "control:break-wait",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 2
+                }
+              ],
+              "cell": 3
+            },
+            {
+              "id": "control:estop",
+              "label": "Stop",
+              "action": "control:estop",
+              "enabled": true,
+              "destructive": true,
+              "children": null,
+              "cell": 1
+            },
+            {
+              "id": "control:arm",
+              "label": "Arm",
+              "action": "control:arm",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 7
+            }
+          ],
+          "cell": 7
+        }
+      ]
+    },
+    "node": {
+      "title": "printer_1",
+      "options": [
+        {
+          "id": "zoom",
+          "label": "Zoom in",
+          "action": "zoom-in",
+          "enabled": true,
+          "destructive": false,
+          "children": null,
+          "cell": 8
+        },
+        {
+          "id": "move",
+          "label": "Move",
+          "action": "move",
+          "enabled": true,
+          "destructive": false,
+          "children": null,
+          "cell": 6
+        },
+        {
+          "id": "device",
+          "label": "Device",
+          "action": null,
+          "enabled": true,
+          "destructive": false,
+          "children": [
+            {
+              "id": "device:watch",
+              "label": "Watch",
+              "action": "device:watch",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 8
+            },
+            {
+              "id": "device:poll",
+              "label": "Poll",
+              "action": "device:poll",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 6
+            },
+            {
+              "id": "device:monitor",
+              "label": "Monitor",
+              "action": "device:monitor",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 2
+            },
+            {
+              "id": "device:query",
+              "label": "Query",
+              "action": "device:query",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 4
+            },
+            {
+              "id": "device:unpin",
+              "label": "Unpin",
+              "action": "device:unpin",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 9
+            },
+            {
+              "id": "device:rescan",
+              "label": "Rescan",
+              "action": "device:rescan",
+              "enabled": true,
+              "destructive": false,
+              "children": null,
+              "cell": 3
+            },
+            {
+              "id": "device:link",
+              "label": "Link",
+              "action": null,
+              "enabled": true,
+              "destructive": false,
+              "children": [
+                {
+                  "id": "device:reconnect",
+                  "label": "Reconnect",
+                  "action": "device:reconnect",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 8
+                },
+                {
+                  "id": "device:reset",
+                  "label": "Reset",
+                  "action": "device:reset",
+                  "enabled": true,
+                  "destructive": true,
+                  "children": null,
+                  "cell": 6
+                },
+                {
+                  "id": "device:release",
+                  "label": "Release",
+                  "action": "device:release",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 2
+                }
+              ],
+              "cell": 1
+            },
+            {
+              "id": "control",
+              "label": "Control",
+              "action": null,
+              "enabled": true,
+              "destructive": false,
+              "children": [
+                {
+                  "id": "control:heat",
+                  "label": "Heat",
+                  "action": null,
+                  "enabled": true,
+                  "destructive": false,
+                  "children": [
+                    {
+                      "id": "control:hotend-on",
+                      "label": "Hotend on",
+                      "action": "control:hotend-on",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 8
+                    },
+                    {
+                      "id": "control:hotend-off",
+                      "label": "Hotend off",
+                      "action": "control:hotend-off",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 6
+                    },
+                    {
+                      "id": "control:bed-on",
+                      "label": "Bed on",
+                      "action": "control:bed-on",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 2
+                    },
+                    {
+                      "id": "control:bed-off",
+                      "label": "Bed off",
+                      "action": "control:bed-off",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 4
+                    },
+                    {
+                      "id": "control:fan-on",
+                      "label": "Fan on",
+                      "action": "control:fan-on",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 9
+                    },
+                    {
+                      "id": "control:fan-off",
+                      "label": "Fan off",
+                      "action": "control:fan-off",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 3
+                    }
+                  ],
+                  "cell": 8
+                },
+                {
+                  "id": "control:home",
+                  "label": "Home",
+                  "action": null,
+                  "enabled": true,
+                  "destructive": false,
+                  "children": [
+                    {
+                      "id": "control:home:all",
+                      "label": "All",
+                      "action": "control:home",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 8
+                    },
+                    {
+                      "id": "control:home-xy",
+                      "label": "XY",
+                      "action": "control:home-xy",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 6
+                    },
+                    {
+                      "id": "control:home-z",
+                      "label": "Z",
+                      "action": "control:home-z",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 2
+                    }
+                  ],
+                  "cell": 6
+                },
+                {
+                  "id": "control:jog",
+                  "label": "Jog",
+                  "action": null,
+                  "enabled": true,
+                  "destructive": false,
+                  "children": [
+                    {
+                      "id": "control:jog:Y+",
+                      "label": "Y+",
+                      "action": "control:jog:Y+",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 8
+                    },
+                    {
+                      "id": "control:jog:X+",
+                      "label": "X+",
+                      "action": "control:jog:X+",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 6
+                    },
+                    {
+                      "id": "control:jog:Y-",
+                      "label": "Y-",
+                      "action": "control:jog:Y-",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 2
+                    },
+                    {
+                      "id": "control:jog:X-",
+                      "label": "X-",
+                      "action": "control:jog:X-",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 4
+                    },
+                    {
+                      "id": "control:jog:Z+",
+                      "label": "Z+",
+                      "action": "control:jog:Z+",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 9
+                    },
+                    {
+                      "id": "control:jog:Z-",
+                      "label": "Z-",
+                      "action": "control:jog:Z-",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 3
+                    }
+                  ],
+                  "cell": 2
+                },
+                {
+                  "id": "control:level",
+                  "label": "Level",
+                  "action": null,
+                  "enabled": true,
+                  "destructive": false,
+                  "children": [
+                    {
+                      "id": "level:probe",
+                      "label": "Probe",
+                      "action": "level:probe",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 8
+                    },
+                    {
+                      "id": "level:read",
+                      "label": "Read",
+                      "action": "level:read",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 6
+                    },
+                    {
+                      "id": "control:mesh-on",
+                      "label": "Mesh on",
+                      "action": "control:mesh-on",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 2
+                    },
+                    {
+                      "id": "control:mesh-off",
+                      "label": "Mesh off",
+                      "action": "control:mesh-off",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 4
+                    },
+                    {
+                      "id": "control:corner:BR",
+                      "label": "Back right",
+                      "action": "control:corner:BR",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 9
+                    },
+                    {
+                      "id": "control:corner:FR",
+                      "label": "Front right",
+                      "action": "control:corner:FR",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 3
+                    },
+                    {
+                      "id": "control:corner:FL",
+                      "label": "Front left",
+                      "action": "control:corner:FL",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 1
+                    },
+                    {
+                      "id": "control:corner:BL",
+                      "label": "Back left",
+                      "action": "control:corner:BL",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 7
+                    }
+                  ],
+                  "cell": 4
+                },
+                {
+                  "id": "control:sd",
+                  "label": "Print",
+                  "action": null,
+                  "enabled": true,
+                  "destructive": false,
+                  "children": [
+                    {
+                      "id": "control:sd-resume",
+                      "label": "Resume",
+                      "action": "control:sd-resume",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 8
+                    },
+                    {
+                      "id": "control:sd-pause",
+                      "label": "Pause",
+                      "action": "control:sd-pause",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 6
+                    },
+                    {
+                      "id": "control:sd-abort",
+                      "label": "Abort",
+                      "action": "control:sd-abort",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 2
+                    },
+                    {
+                      "id": "print:start",
+                      "label": "Send file",
+                      "action": "print:start",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 4
+                    }
+                  ],
+                  "cell": 9
+                },
+                {
+                  "id": "control:motors",
+                  "label": "Motors",
+                  "action": null,
+                  "enabled": true,
+                  "destructive": false,
+                  "children": [
+                    {
+                      "id": "control:motors-off",
+                      "label": "Off",
+                      "action": "control:motors-off",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 8
+                    },
+                    {
+                      "id": "control:quickstop",
+                      "label": "Quickstop",
+                      "action": "control:quickstop",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 6
+                    },
+                    {
+                      "id": "control:break-wait",
+                      "label": "Break wait",
+                      "action": "control:break-wait",
+                      "enabled": true,
+                      "destructive": false,
+                      "children": null,
+                      "cell": 2
+                    }
+                  ],
+                  "cell": 3
+                },
+                {
+                  "id": "control:estop",
+                  "label": "Stop",
+                  "action": "control:estop",
+                  "enabled": true,
+                  "destructive": true,
+                  "children": null,
+                  "cell": 1
+                },
+                {
+                  "id": "control:arm",
+                  "label": "Arm",
+                  "action": "control:arm",
+                  "enabled": true,
+                  "destructive": false,
+                  "children": null,
+                  "cell": 7
+                }
+              ],
+              "cell": 7
+            }
+          ],
+          "cell": 2
+        },
+        {
+          "id": "why",
+          "label": "Why this",
+          "action": "explain",
+          "enabled": true,
+          "destructive": false,
+          "children": null,
+          "cell": 4
+        }
+      ]
+    }
+  }
+}

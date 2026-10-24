@@ -96,21 +96,38 @@ uv run apothecary parts render parametric_star -o star.scad
 
 ## Start the Web Interface
 
-Launch the FastAPI server with an interactive 3D viewer:
+The fractal viewer serves three.js from this origin rather than a CDN, and the
+library is checked in under `apothecary/static/vendor/three/`, so nothing needs
+installing for it. The separate JSCAD viewer is optional and is fetched once
+with:
 
 ```bash
-# Quick start (generates missing STLs and starts server)
+uv run apothecary install     # or: npm install --ignore-scripts
+```
+
+Then start the server:
+
+```bash
+# Generates any missing STLs, then serves
 uv run apothecary dev
 
-# Or start server only
+# Or serve only
 uv run apothecary serve
+uv run apothecary serve --port 8765
 
-# Open in browser
-# http://127.0.0.1:8000/viewer  - 3D parts browser
+# In a browser
+# http://127.0.0.1:8000/viewer  - the viewer
 # http://127.0.0.1:8000/docs    - API documentation
 ```
 
-The viewer loads `elephant_walk` by default – a preview showing all parts arranged in a line.
+`uv run apothecary check` tells you whether OpenSCAD and the 3D library are
+both present before you wonder why something is empty.
+
+**`/viewer` is the only entry point.** It opens on the `garage` site; the
+dropdown switches sites, and `parts_library` is every registered part. Select a
+part and its panel carries the part's parameters, its generated OpenSCAD, and
+any values this project's sources disagree about. There is no separate parts
+browser — a link like `/viewer/parts/datum_core` redirects here.
 
 > **Note**: STL files are generated automatically on server startup if OpenSCAD is installed.
 > They're not stored in git (see `.gitignore`). To manually regenerate all STLs:
@@ -133,6 +150,12 @@ The viewer loads `elephant_walk` by default – a preview showing all parts arra
 ```bash
 # System info
 apothecary system
+
+# Program a board (Arduino, ESP32, ...) from a sketch under parts/
+apothecary firmware install --avr      # one-time: arduino-cli + the AVR core
+apothecary firmware boards             # what's plugged in
+apothecary firmware upload footpedal   # compile + upload; or use the /firmware page
+apothecary firmware printer /dev/ttyUSB1   # a 3D printer's board: identify + poll (see docs/firmware.md)
 
 # Initialize/update git submodules (Gridfinity, etc.)
 apothecary submodules

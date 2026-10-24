@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apothecary Printer Monitor</title>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "/static/vendor/three/three.module.js",
+            "three/addons/": "/static/vendor/three/addons/"
+        }
+    }
+    </script>
+    <link rel="stylesheet" href="{{ base_url }}/static/widgets/machine.css">
+    <style>
+        :root {
+            --bg: #141614; --panel: #1c1f1c; --line: #2a302a; --ink: #d8e0d8; --ink-2: #9aa89a; --ink-3: #66746a;
+            --ok: #6fdb75; --warn: #ffcc66; --bad: #ff8080; --tx: #9cd2ff;
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: var(--bg); color: var(--ink); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; }
+        a { color: var(--tx); }
+        /* The page's own bar: its name, the ring, the way to the other pages. The
+           machine (widgets/machine.js) draws its own head row beneath it. */
+        .top { display: flex; align-items: center; gap: 0.75rem; padding: 0.45rem 1rem; background: #1a1d1a; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+        .top h1 { font-size: 1.05rem; margin: 0; font-weight: 600; white-space: nowrap; }
+        .top .grow { flex: 1; }
+        .top button { font: inherit; font-size: 0.8rem; background: #232823; color: var(--ink); border: 1px solid #3a443a; border-radius: 4px; padding: 0.25rem 0.55rem; }
+        .top button:hover { background: #2f382f; }
+        .top .links a { font-size: 0.8rem; margin-left: 0.6rem; }
+    </style>
+</head>
+<body>
+    <header class="top">
+        <h1>🖨 Printer monitor</h1>
+        <span class="grow"></span>
+        <button type="button" id="ring-open" title="Open the device ring (m, or right-click). Digits choose cells as on a numeric keypad; 5 backs out.">⌗ Ring</button>
+        <span class="links"><a href="{{ base_url }}/firmware">⚡ Firmware</a><a href="{{ base_url }}/viewer">◱ Viewer</a></span>
+    </header>
+    <div id="machine"></div>
+
+    <script type="module">
+    // The machine -- cards, chart, log, latch and control pad, bed reading, print
+    // from here -- is one module the world mounts too (widgets/machine.js);
+    // this page mounts it as its whole body, for the port in the URL.
+    import { mountMachine } from '/static/widgets/machine.js';
+    window.apothecaryMonitor = mountMachine(document.getElementById("machine"), {
+        base: "{{ base_url }}", port: {{ port_json }}, host: "page",
+    });
+    </script>
+
+    <script type="module">
+    // The board in its printer, drawn from the same STL routes the viewer
+    // uses, with the nozzle where the board last said it was. Mounted when a
+    // port is chosen and that port is pinned to a node somewhere.
+    import { mountBoardView, whereIs } from '/static/board_view.js';
+    (() => {
+        const BASE = {{ base_url | tojson }};
+        const $ = (id) => document.getElementById(id);
+        let view = null, viewPort = null;
+        async function mountFor(port) {
+            if (view) { view.destroy(); view = null; }
+            viewPort = port;
+            const card = $("view-card");
+            if (!port) { card.hidden = true; return; }
+            const where = await whereIs(BASE, port).catch(() => null);
+            if (port !== viewPort) return;  // the user moved on while we asked
+            if (!where) { card.hidden = true; return; }
+            card.hidden = false;
+            window.dispatchEvent(new CustomEvent("apothecary:where", { detail: where }));  // the level card sizes its corners from it
+            const base = ` · ${where.site} › ${(where.printer || where.board).path}`;
+            const notes = new Map();  // by key, so the mesh note is replaced, not repeated
+            $("view-note").textContent = base;
+            view = mountBoardView($("board-view"), { base: BASE, where, onNote: (t, key) => { notes.set(key || t, t); $("view-note").textContent = base + [...notes.values()].map((x) => ` · ${x}`).join(""); } });
+            const st = window.apothecaryMonitor.state.status;
+            if (st && st.position) view.setPosition(st.position, { immediate: true });
+            view.setMesh(window.apothecaryMonitor.level.shown());
+            window.apothecaryBoardView = view;
+        }
+        window.addEventListener("apothecary:position", (ev) => { if (view) view.setPosition(ev.detail.position); });
+        window.addEventListener("apothecary:mesh", (ev) => { if (view) view.setMesh(ev.detail); });
+        // Follow the port picker; also (re)mount once a pin appears for it.
+        const portSel = $("port");
+        portSel.addEventListener("change", () => mountFor(portSel.value));
+        const m = window.apothecaryMonitor;
+        if (m.state.port) mountFor(m.state.port);
+        new MutationObserver(() => { if (m.state.port !== viewPort) mountFor(m.state.port); }).observe($("ident"), { childList: true });
+    })();
+    </script>
+
+    <script type="module">
+    // The device ring on this page: opened by m, right-click or ⌗ Ring, for
+    // the port being watched. The machine carries each verb exactly as its
+    // button would; the addresses are written onto those buttons so the
+    // numpad index shows where the control is.
+    import { installRing, annotate, resolveRing } from '/static/ring.js';
+
+    (() => {
+        const BASE = {{ base_url | tojson }};
+        const m = window.apothecaryMonitor;
+        const $ = (id) => document.getElementById(id);
+
+        function spec(at) {
+            if (!m.state.port) { m.logLine("sys", "ring: pick a port first"); return null; }
+            return {
+                context: { pointing: "device", targets: [m.state.port], where: at || { x: 0, y: 0 } },
+                device: m.device(), at,
+            };
+        }
+        async function carry(intent) {
+            if (await m.carry(intent)) return;
+            const action = intent.action;
+            if (action === "device:monitor") { m.logLine("sys", "this is the monitor"); return; }
+            if (action === "device:pin" || action === "device:unpin") {
+                m.logLine("sys", `${intent.label}: pin and unpin from the viewer's Device section`);
+                return;
+            }
+            m.logLine("sys", `${intent.label} (⌗${intent.address}): nothing on this page carries it out`);
+        }
+
+        const rings = new Map();
+        async function refreshAddresses() {
+            if (!m.state.port) return;
+            const d = m.device();
+            const key = JSON.stringify(d);
+            if (!rings.has(key)) {
+                rings.set(key, resolveRing({ base: BASE, context: { pointing: "device", targets: [d.port] }, device: d }).catch(() => null));
+            }
+            const ring = await rings.get(key);
+            if (ring) annotate(ring, m.pairs());
+        }
+        // The latch and the identification both change which ring this is.
+        new MutationObserver(refreshAddresses).observe($("ctl-label"), { attributes: true, attributeFilter: ["class"] });
+        new MutationObserver(refreshAddresses).observe($("ident"), { childList: true });
+
+        installRing({
+            base: BASE,
+            whatFor: (event) => spec(event ? { x: event.clientX, y: event.clientY } : null),
+            onIntent: carry,
+            onResolved: (ring, s) => { rings.set(JSON.stringify(s.device), Promise.resolve(ring)); annotate(ring, m.pairs()); },
+            onError: (err) => m.logLine("sys", "ring: " + err.message),
+        });
+        window.apothecaryRing.refreshAddresses = refreshAddresses;
+        refreshAddresses();
+    })();
+    </script>
+</body>
+</html>
