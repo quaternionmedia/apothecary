@@ -61,3 +61,29 @@ def test_the_step_through_tests_skip_unless_asked_for():
     with none named, skip for that reason instead)."""
     assert "runs with --steps, or one step with --step N" in _skipped()
     assert "runs with --steps" not in _skipped("--steps")
+
+
+def test_in_ci_a_recorded_browser_test_is_capped_at_twice_its_time_and_no_other_is():
+    """tests/e2e/conftest.py's caps: twice the recorded time, for a recorded test with
+    no cap of its own; none for one with no record, or with its own."""
+    import importlib.util
+    import json
+
+    root = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location("e2e_conftest", root / "tests/e2e/conftest.py")
+    conftest = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(conftest)
+
+    class Item:
+        def __init__(self, nodeid, own=None):
+            self.nodeid, self._own = nodeid, own
+
+        def get_closest_marker(self, name):
+            return self._own if name == "timeout" else None
+
+    known = json.loads((root / "tests" / "e2e" / "durations.json").read_text())
+    nodeid, seconds = next(iter(known.items()))
+    assert conftest.recorded_caps(
+        [Item(nodeid), Item("tests/e2e/test_new.py::test_unrecorded")], known
+    ) == {nodeid: -(-2 * seconds // 1)}
+    assert conftest.recorded_caps([Item(nodeid, own=1)], known) == {}
