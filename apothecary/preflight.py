@@ -55,6 +55,17 @@ LOCAL_DIFFERENCES: Dict[str, Difference] = {
             "on a pull request's body before it is posted."
         ),
     ),
+    "rust.yml": Difference(
+        why=(
+            "runs the runner's own stable `cargo`, which a machine with no Rust on its "
+            "PATH has not (the ESP32's Rust, under the tools dir, is a toolchain of its "
+            "own and stays off it)"
+        ),
+        covered_by=(
+            "`cargo check --workspace --all-targets --locked` at the repository's root, "
+            "with any stable Rust."
+        ),
+    ),
 }
 
 

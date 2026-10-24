@@ -1,6 +1,7 @@
 # The Rust workspace: two stubs that build and do nothing yet. See
-# docs/plans/rust-2026-10-08.md ("Planned and stubbed only"). Neither is built
-# or run by the Python suites or CI, and the wheel carries neither.
+# docs/plans/rust-2026-10-08.md ("Planned and stubbed only"). CI checks that both
+# compile (.github/workflows/rust.yml); the Python suites do not run them, and the
+# wheel carries neither.
 #
 # It sits at the repository root so one `cargo check` and one Cargo.lock cover
 # every crate the repository owns, and the crates live under crates/ so the
