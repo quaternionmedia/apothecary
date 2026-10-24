@@ -38,7 +38,9 @@ uv run --group preflight apothecary preflight   # the CI workflows, run here, be
 `apothecary test run` is the one to run before a commit; it runs the window manager's
 browser tests too, which start no server. A browser test needs a server of
 its own (`--start-server`) or one named for it (`--base-url`); with neither it skips, and it
-never uses a server that happens to be listening.
+never uses a server that happens to be listening. Each test has ten minutes (pyproject's
+`timeout`, pytest-timeout), so a hung wait fails that test alone; one that needs longer says
+so with `@pytest.mark.timeout(...)`.
 
 `walkthrough/` is executable: its pages are doctests. Pages 01 and 02 are written by their
 browser tests, and a loop's page (03, 04, 05, 06) by the browser suite alone; commit what a

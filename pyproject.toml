@@ -34,6 +34,9 @@ dev = [
     "pytest-playwright>=0.4.0",
     "ruff>=0.5.0",
     "pytest-xdist>=3.8.0",
+    # Every test's own time limit (timeout, below), so a hung wait fails that test
+    # rather than the whole run.
+    "pytest-timeout>=2.3.0",
     "httpx2>=2.13.1",
     # Reading a workflow as `apothecary preflight` stages it (tests/test_preflight_staging.py).
     "pyyaml>=6.0",
@@ -73,6 +76,11 @@ addopts = "--doctest-glob=*.md"
 testpaths = ["walkthrough", "tests"]
 # A deprecation warning raised from apothecary's own code fails the run.
 filterwarnings = ["error::DeprecationWarning:apothecary"]
+# Each test's limit, setup included: the slowest browser loop takes a minute and a
+# half here, so ten minutes fails only a test that has stopped, and fails it alone
+# rather than the CI job's twenty minutes. A test that needs longer says so with
+# @pytest.mark.timeout(...).
+timeout = 600
 markers = [
     "e2e: end-to-end tests using Playwright",
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",

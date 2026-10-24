@@ -137,3 +137,20 @@ def test_without_chromium_the_browser_part_says_how_to_install_it_in_one_line(tm
         "the browser tests need Chromium, which Playwright has not installed here: "
         "run `uv run playwright install chromium`"
     ]
+
+
+def test_each_test_has_a_limit_above_the_slowest_and_under_a_ci_job():
+    """pytest-timeout's limit (pyproject's ``timeout``) fails a test that has stopped,
+    alone: above twice the slowest test the browser suite records, and under the
+    shortest limit a CI job of the tests has, so a hung wait never takes the job."""
+    import json
+    import re
+    import tomllib
+
+    limit = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["tool"]["pytest"][
+        "ini_options"
+    ]["timeout"]
+    slowest = max(json.loads((ROOT / "tests" / "e2e" / "durations.json").read_text()).values())
+    workflow = (ROOT / ".github" / "workflows" / "pytest.yml").read_text(encoding="utf-8")
+    job = min(int(m) for m in re.findall(r"timeout-minutes: (\d+)", workflow)) * 60
+    assert 2 * slowest < limit < job, (slowest, limit, job)
