@@ -85,6 +85,15 @@ editing this code and having that edit reviewed:
    that file -- is a tool fetch in all but mechanism, and nothing personal is
    in it.
 
+5. **Two things may arrive from the local network, and nothing may leave:** a
+   lighting console's sACN (ANSI E1.31) stream, the stage's own DMX levels, and
+   the console's OSC status messages (Eos sends UDP to an address it is told).
+   ``console_listener(port)`` is the only way to bind a socket to anything but
+   loopback, and it binds a UDP socket on ``SACN_PORT`` (5568) or ``OSC_PORT``
+   (8001) alone. The socket it returns is as guarded as any other -- it connects
+   and sends nowhere but loopback -- so it receives and cannot answer. A test
+   holds its callers to the receivers in apothecary/console_feedback.py.
+
 **The named exception:** *secured user accounts*. A record may let data leave
 this machine for an account the person holds and has authenticated, with
 consent given per account and revocable. Until such a record is Accepted there
@@ -179,6 +188,11 @@ _original_gethostbyaddr: Optional[Callable] = None
 _original_getnameinfo: Optional[Callable] = None
 _original_ssl_connect: Optional[Callable] = None
 
+SACN_PORT = 5568
+OSC_PORT = 8001  # one of the two UDP ports ETC suggests for OSC (8000 is the viewer's)
+CONSOLE_PORTS = frozenset({SACN_PORT, OSC_PORT})
+_listening = threading.local()
+
 
 def _allowed_now() -> bool:
     return bool(getattr(_fetching, "hosts", None))
@@ -264,6 +278,40 @@ def _check(sock, where: str, address) -> None:
     _refuse(where, address)
 
 
+def _is_console_bind(sock, address) -> bool:
+    """The one non-loopback bind: ``console_listener``'s UDP socket, on the port it was asked for."""
+    return (
+        getattr(sock, "type", None) == socket.SOCK_DGRAM
+        and getattr(_listening, "port", None) is not None
+        and _port_of(address) == _listening.port
+    )
+
+
+def console_listener(port: int = SACN_PORT) -> socket.socket:
+    """A UDP socket bound to every interface on a console port, to receive what a console sends.
+
+    ``port`` is ``SACN_PORT`` or ``OSC_PORT``, no other. Receive only: the socket is
+    guarded like any other, so it cannot connect or send beyond this machine. The
+    caller joins the multicast groups it wants.
+    """
+    if port not in CONSOLE_PORTS:
+        raise ValueError(f"{port} is not a console port ({sorted(CONSOLE_PORTS)})")
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if hasattr(socket, "SO_REUSEPORT"):
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        _listening.port = port
+        try:
+            sock.bind(("", port))
+        finally:
+            _listening.port = None
+    except BaseException:
+        sock.close()
+        raise
+    return sock
+
+
 def _guarded(base: type, name: str) -> type:
     """A subclass of ``base`` whose connects are checked; ``base`` itself is left as it is."""
 
@@ -290,7 +338,11 @@ def _guarded(base: type, name: str) -> type:
             # A listener is this machine's or it is not one: 0.0.0.0, a LAN
             # address or a name that is not ours are refused here, before
             # the middleware ever sees a request.
-            if getattr(self, "family", None) != socket.AF_UNIX and not is_loopback(address):
+            if (
+                getattr(self, "family", None) != socket.AF_UNIX
+                and not is_loopback(address)
+                and not _is_console_bind(self, address)
+            ):
                 _refuse(f"{name}.bind", address)
             return super().bind(address)
 

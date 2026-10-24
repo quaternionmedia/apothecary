@@ -97,8 +97,10 @@ from .projects.parts.variants import (
 )
 from .projects.parts.variants import wants as request_wants
 from .projects.registry import ProjectInfo, _sanitize_module_name, scan_projects
+from .routes import lighting as lighting_routes
 from .routes.cameras import router as cameras_router
 from .routes.jobs import router as jobs_router
+from .routes.lighting import router as lighting_router
 from .routes.part_edits import router as part_edits_router
 from .routes.pictures import router as pictures_router
 from .routes.views import router as views_router
@@ -112,6 +114,7 @@ from .slicer.modules import SlicerError
 from .slicer.profiles import Declared
 from .stays_local import LocalOnly
 from .templates import TemplateRenderer
+from .theatre_site import create_theatre_site, load_theatre_rig, validate_theatre
 from .transforms import Translate
 from .viewer import render_fractal_viewer_page
 from .vocabulary.word import WORD_PRINT_SETTINGS_STUB
@@ -177,7 +180,9 @@ async def lifespan(app: FastAPI):
     # Startup
     stl_task = asyncio.create_task(_generate_missing_stls_in_background())
     app.state.stl_generation_task = stl_task  # keep a strong reference (asyncio GC gotcha)
+    lighting_routes.start_console_feeds()
     yield
+    lighting_routes.stop_console_feeds()
     # Shutdown: don't leave a render subprocess dangling if we're still generating
     if not stl_task.done():
         stl_task.cancel()
@@ -249,6 +254,7 @@ app.include_router(jobs_router)
 app.include_router(slicer_router)
 # A part's SCAD edited: drafts checked and rendered, and saves as variants in git.
 app.include_router(part_edits_router)
+app.include_router(lighting_router)
 THREE_DIR = STATIC_ROOT / "vendor" / "three"
 THREE_IS_VENDORED = (THREE_DIR / "three.module.js").is_file()
 
@@ -1195,8 +1201,11 @@ _site_store = SiteStore(
         "garage": (create_example_site, validate_garage_layout),
         "parts_library": (create_parts_library_site, validate_parts_library),
         "datum_core": (create_datum_core_site, validate_datum_core),
+        # A theatre's shell with sliders, and its lighting rig: theatre_site.py.
+        "theatre": (create_theatre_site, validate_theatre),
     }
 )
+lighting_routes.RIG_LOADERS["theatre"] = load_theatre_rig
 # The site /viewer opens on. Named rather than "whichever sorts first", so that
 # registering a new site cannot silently move the front door.
 DEFAULT_VIEWER_SITE = "garage"

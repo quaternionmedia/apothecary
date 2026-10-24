@@ -7,6 +7,7 @@ from .docs import docs
 from .firmware import firmware
 from .inventory import inventory
 from .kernels import kernel_reference
+from .lighting import lighting
 from .openscad import openscad
 from .parts import parts
 from .photo import photo
@@ -86,6 +87,7 @@ cli.add_command(kernel_reference)
 cli.add_command(firmware)
 cli.add_command(openscad)
 cli.add_command(slicer)
+cli.add_command(lighting)
 
 
 def main():  # pragma: no cover - entry point

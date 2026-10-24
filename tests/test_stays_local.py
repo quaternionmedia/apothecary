@@ -1184,3 +1184,40 @@ def test_every_url_the_slicer_installer_fetches_is_a_tool_source_by_the_pinned_v
     assert asked[-1].endswith("/" + asset.name)
     with pytest.raises(stays_local.LeftTheMachine):
         stays_local.tool_fetch("https://objects.example/OrcaSlicer.AppImage")
+
+
+def test_the_console_listener_is_the_one_bind_beyond_loopback_and_it_cannot_send():
+    from apothecary.stays_local import SACN_PORT, LeftTheMachine, console_listener
+
+    listener = console_listener()
+    try:
+        assert listener.type == socket.SOCK_DGRAM and listener.getsockname()[1] == SACN_PORT
+        for way_out in (
+            lambda: listener.sendto(b"x", ("192.168.1.10", 5568)),
+            lambda: listener.connect(("192.168.1.10", 5568)),
+        ):
+            with pytest.raises(LeftTheMachine):
+                way_out()
+    finally:
+        listener.close()
+    # Nothing else binds: not another port, not a stream, and the permission is not left on.
+    for kind, port in ((socket.SOCK_DGRAM, 5569), (socket.SOCK_STREAM, SACN_PORT), (socket.SOCK_DGRAM, SACN_PORT)):
+        with socket.socket(socket.AF_INET, kind) as s, pytest.raises(LeftTheMachine):
+            s.bind(("0.0.0.0", port))
+    # The OSC port is the other one, and only for the listener; any other port is refused to ask for.
+    osc = console_listener(stays_local.OSC_PORT)
+    osc.close()
+    with pytest.raises(ValueError):
+        console_listener(80)
+
+
+def test_console_listener_has_one_caller_the_console_receivers():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "apothecary"
+    callers = sorted(
+        str(p.relative_to(root))
+        for p in root.rglob("*.py")
+        if "console_listener(" in p.read_text() and p.name != "stays_local.py"
+    )
+    assert callers == ["console_feedback.py"]
