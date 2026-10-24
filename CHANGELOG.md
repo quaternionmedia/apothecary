@@ -131,6 +131,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Fixed
 
+- A kept print file's id that starts with a dot or holds a separator names no file, to read, delete or print. ([code](apothecary/firmware/devices.py))
 - A printer's control latch runs on the monotonic clock: a step of the wall clock neither ends an armed window nor lengthens one. ([code](apothecary/firmware/gcode.py))
 - The emergency stop is written at once, ahead of an exchange in flight (a homing, a bed probe), and the board's halt line is its answer rather than an error. ([doc](docs/firmware.md))
 - `apothecary parts render` refuses to write over the part's own source file. ([code](apothecary/cli/parts.py))

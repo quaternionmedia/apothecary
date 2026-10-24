@@ -52,6 +52,7 @@ from ..stamped import claim, stamp
 from ..stays_local import subprocess_env
 from . import gcode
 from .models import (
+    PRINT_FILE_ID,
     BoardInfo,
     DeviceInfo,
     ExpectedFirmware,
@@ -983,7 +984,14 @@ def print_files() -> List[PrintFile]:
     return sorted(files, key=lambda f: f.uploaded_at, reverse=True)
 
 
+def _is_print_id(file_id: str) -> bool:
+    """Whether ``file_id`` has a kept file's shape: an id of any other names no file."""
+    return re.fullmatch(PRINT_FILE_ID, file_id) is not None
+
+
 def print_file(file_id: str) -> Optional[PrintFile]:
+    if not _is_print_id(file_id):
+        return None
     path = _print_meta_path(file_id)
     if not path.is_file() or not _print_file_path(file_id).is_file():
         return None
@@ -995,6 +1003,8 @@ def print_file(file_id: str) -> Optional[PrintFile]:
 
 def delete_print_file(file_id: str) -> bool:
     """Forget a kept file; refused while a print streams it."""
+    if not _is_print_id(file_id):
+        return False
     for job in _PRINTS.values():
         if job.file.id == file_id and job.finished is None:
             raise PortHeld(f"{file_id}: a print is streaming it")

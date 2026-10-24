@@ -20,6 +20,7 @@ from apothecary import jobs
 from apothecary.api import app
 from apothecary.cli import cli
 from apothecary.firmware import devices, gcode
+from apothecary.firmware.models import PrintRequest
 from apothecary.firmware.toolchains import PortHeld, ToolchainError
 
 BOOT = [
@@ -1378,6 +1379,20 @@ def test_print_files_are_kept_checked_and_forgotten(fake_arduino_cli):
     assert devices.delete_print_file(bad.id) is True
     assert devices.delete_print_file(bad.id) is False
     assert [f.id for f in devices.print_files()] == [kept.id]
+
+
+@pytest.mark.parametrize("file_id", [".hidden", ".", "..", "..x", "-", "a/b"])
+def test_an_id_of_another_shape_names_no_kept_file(fake_arduino_cli, file_id):
+    """A kept file's id starts with its keeping time: one that starts with a dot or holds
+    a separator names no file, to read, delete or print, even one in the prints folder."""
+    devices.private_folder(devices.prints_dir())
+    for suffix in (".gcode", ".json"):
+        (devices.prints_dir() / f".hidden{suffix}").write_text("{}", encoding="utf-8")
+    assert devices.print_file(file_id) is None
+    assert devices.delete_print_file(file_id) is False
+    assert (devices.prints_dir() / ".hidden.gcode").is_file()
+    with pytest.raises(ValueError):
+        PrintRequest(port="/dev/ttyFAKE1", file_id=file_id)
 
 
 def test_two_files_kept_in_one_millisecond_are_both_kept(fake_arduino_cli, monkeypatch):
