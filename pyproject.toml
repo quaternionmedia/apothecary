@@ -84,7 +84,7 @@ markers = [
 line-length = 100
 target-version = "py311"
 # Vendored and submodule code is not ours to lint.
-extend-exclude = ["parts/gridfinity/gridfinity-rebuilt-openscad", "governance/qm", ".github/qm-seed"]
+extend-exclude = ["parts/gridfinity/gridfinity-rebuilt-openscad", "governance/qm"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B"]
