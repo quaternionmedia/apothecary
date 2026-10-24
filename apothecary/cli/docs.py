@@ -43,6 +43,8 @@ GENERATED_DOCS_ROOT = ROOT / "docs" / "generated"
 
 WORKFLOW_DOC_TEMPLATE = """# {title}
 
+{made}
+
 {intro}
 
 {stls}{steps}
@@ -251,6 +253,34 @@ def _start_server(host: str, port: int, simulated_devices: bool = True):
     return server_proc, base_url
 
 
+def made_from(root: Path = ROOT) -> str:
+    """When a generated page was made and from which commit, said on the page: a page
+    the code has moved past since says so. A checkout that differs from its commit is
+    said to; a folder that is no git checkout gives the date alone."""
+    when = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    try:
+        sha = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        ).stdout.strip()
+        changed = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=no"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return f"*Made by `apothecary docs generate` on {when}.*"
+    mark = ", with changes not committed" if changed else ""
+    return f"*Made by `apothecary docs generate` on {when}, from commit `{sha}`{mark}.*"
+
+
 def _render_workflow(workflow_dir: Path) -> None:
     manifest_path = workflow_dir / "manifest.json"
     if not manifest_path.exists():
@@ -273,6 +303,7 @@ def _render_workflow(workflow_dir: Path) -> None:
     video_section = VIDEO_SECTION_TEMPLATE.format(workflow=workflow) if has_video else ""
     doc = WORKFLOW_DOC_TEMPLATE.format(
         title=manifest["title"],
+        made=made_from(),
         intro=manifest["intro"],
         # Which OpenSCAD built the STLs the pictures draw (tests/e2e/parts_built.py).
         stls=f"{manifest['stls']}\n\n" if manifest.get("stls") else "",
