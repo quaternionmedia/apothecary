@@ -134,6 +134,22 @@ def test_the_docs_index_links_every_plan_and_record():
     assert pages and not [page for page in pages if page not in linked]
 
 
+def test_the_configuration_page_names_every_variable_the_code_reads():
+    """docs/configuration.md says it names every ``APOTHECARY_*`` variable: each one the
+    package reads is in its table, and each in its table is read."""
+    pattern = re.compile(r"APOTHECARY_[A-Z_]+")
+    read = {
+        name
+        for path in (ROOT / "apothecary").rglob("*.py")
+        for name in pattern.findall(path.read_text(encoding="utf-8"))
+    }
+    page = (ROOT / "docs" / "configuration.md").read_text(encoding="utf-8")
+    table = page.split("## Other variables")[0]
+    named = set(pattern.findall(table))
+    assert read - named == set(), "read by the code, missing from the page"
+    assert named - read == set(), "on the page, read by no code"
+
+
 def test_the_parts_authoring_wrapper_builds_a_part():
     """The wrapper docs/parts-authoring.md gives, run as a module of the parts
     package, builds a part whose bounds follow its parameters."""

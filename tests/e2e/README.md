@@ -35,7 +35,7 @@ not answer `/health` stops the run.
 | `--base-url URL` | Uses a server you started yourself for the tests instead. Tests that show the server a picture skip unless `APOTHECARY_PICTURE_ROOT` names the folder that server reads. The Bench's and the Machines' tests expect the scripted toolchain, so they fail against a real one. |
 | `--slow` | Also runs tests marked `slow`: full renders and accuracy benches. |
 | `--generate-docs` | Runs the tests marked `docs`, which skip without it, and turns on their `doc_recorder` screenshots (below). Pass it through `apothecary docs generate`, not by hand. |
-| `--step N` | With `--base-url` naming the demo (`apothecary serve --demo`): a step-through test (`test_steps_*.py`) runs only its step N, on the demo, in the visible Chromium answering DevTools at 127.0.0.1:9222, in its tab named `apothecary-walk`, and leaves the tab there, its picture in `.cache/walk/<loop>-step-N.png`. Each step first checks that the tab is where the step before leaves it, and does nothing otherwise. Without `--step` the test runs every step on a server of its own. What they share is `stepping.py`. |
+| `--step N` | With `--base-url` naming the demo (`apothecary serve --demo`): a step-through test (`test_steps_*.py`) runs only its step N, on the demo, in the visible Chromium answering DevTools at 127.0.0.1:9222 (or the address `APOTHECARY_WALK_DEVTOOLS` names), in its tab named `apothecary-walk`, and leaves the tab there, its picture in `.cache/walk/<loop>-step-N.png`. Each step first checks that the tab is where the step before leaves it, and does nothing otherwise. Without `--step` the test runs every step on a server of its own. What they share is `stepping.py`. |
 | `--headed`, `--slowmo 500`, `--tracing on` | pytest-playwright's own flags, for debugging. Open a trace with `uv run playwright show-trace test-results/<test>/trace.zip`. |
 
 Every server comes from one factory, the `start_server` fixture in
@@ -50,7 +50,9 @@ module for the bench its loop needs:
 mainboard with a scripted OrcaSlicer, `test_part_loop.py` an OpenSCAD that
 refuses one size, `test_scad_loop.py` this machine's OpenSCAD, and
 `test_the_firmware_loop.py` scripted arduino-cli, cargo and espflash around one
-simulated devkit. Every other module uses the session's server, which lives
+simulated devkit; `test_the_demo.py` runs `serve --demo` itself, with a guard that
+logs any serial port it touches to the file `APOTHECARY_TEST_SERIAL_GUARD` names, and
+fails on any. Every other module uses the session's server, which lives
 for the whole run: take back what a test pins, places or adds, or the tests
 after it see it.
 
