@@ -39,13 +39,16 @@ clone serves it with no install step; the README beside it says how to update it
 ## One page
 
 The viewer is the only page. `/firmware` opens it with the Bench in front of
-the world, and `/firmware/monitor?port=…` with that board's Machine:
+the world, and `/firmware/monitor?port=…` with that board's Machine and the
+sections a link asks for -- a printer's Status and Log, a devkit's Sketch and
+Log:
 
     >>> r = client.get("/firmware", follow_redirects=False)
     >>> r.status_code, r.headers["location"]
     (307, '/viewer/sites/garage?panel=bench')
 
-A part's address opens the catalog, focused on the part:
+A part's address opens the catalog, focused on the part, its Parameters
+open:
 
     >>> r = client.get("/viewer/parts/datum_core", follow_redirects=False)
     >>> r.status_code, r.headers["location"]
