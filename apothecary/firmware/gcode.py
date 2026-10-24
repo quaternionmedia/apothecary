@@ -1127,6 +1127,8 @@ class ControlLatch:
     Arming is an explicit act with a lifetime; every accepted command
     renews it, silence lets it lapse. It exists so the control overlay of a
     printer's Machine cannot heat or move a machine from a stray click.
+    Its lifetime runs on the monotonic clock, so a step of the wall clock (NTP,
+    a suspend) neither ends an armed window nor lengthens one.
     """
 
     def __init__(self):
@@ -1135,7 +1137,7 @@ class ControlLatch:
 
     def arm(self, port: str, ttl: float = CONTROL_TTL_S) -> float:
         with self._lock:
-            self._until[port] = time.time() + ttl
+            self._until[port] = time.monotonic() + ttl
             return self._until[port]
 
     def disarm(self, port: str) -> None:
@@ -1147,7 +1149,7 @@ class ControlLatch:
             until = self._until.get(port)
             if until is None:
                 return False
-            if until <= time.time():
+            if until <= time.monotonic():
                 del self._until[port]
                 return False
             return True
@@ -1155,7 +1157,7 @@ class ControlLatch:
     def seconds_left(self, port: str) -> float:
         with self._lock:
             until = self._until.get(port)
-            return max(0.0, until - time.time()) if until else 0.0
+            return max(0.0, until - time.monotonic()) if until else 0.0
 
     def renew(self, port: str, ttl: float = CONTROL_TTL_S) -> None:
         if self.armed(port):
