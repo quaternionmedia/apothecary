@@ -125,7 +125,7 @@ pages 01 and 02 come from the two other `test_docs_*.py` files, which are
 marked `walkthrough` and write `walkthrough/`, not `docs/generated/`.)
 
 Until they are generated the folder does not exist; once generated, each
-page is at its path under `/docs/`:
+page is at its path under `/docs/`, and says under its title the day it was made and the commit it was made from:
 
 | Page | Written to |
 |---|---|
