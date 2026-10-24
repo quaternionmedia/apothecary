@@ -9,7 +9,9 @@ each test. Every behaviour the viewer builds on is held here, case by case:
 - views: what they lay out, what they need, what they leave;
 - what a browser remembers of the layout, and what it forgets;
 - a window's life: its body filled when first shown, told when shown again and
-  when closed, taken away and registered again;
+  when closed, taken away and registered again; a loud one's tab and frame;
+- what a person moves: a tab dropped on another stack or beside the world, the
+  splitter beside the world, kept through a reload and undone by a reset;
 - focused systems from a registry: sections closed until asked for, opened by the
   verbs that act on them, a system made for the moment attached and detached;
 - a stack's + and the world alone.
@@ -25,6 +27,7 @@ import re
 from urllib.parse import urlparse
 
 import pytest
+import windows
 from playwright.sync_api import Page, expect
 
 from apothecary.projects.parts.skeleton import ROOT
@@ -379,10 +382,15 @@ def test_a_window_with_nothing_to_show_gives_its_room_away(wm: Page, case):
 
 
 @pytest.mark.e2e
-def test_with_the_world_alone_on_the_root_a_window_opens_beside_it(wm: Page):
+@pytest.mark.parametrize("reloaded", [False, True], ids=["at-once", "after-a-reload"])
+def test_with_the_world_alone_on_the_root_a_window_opens_beside_it(wm: Page, reloaded: bool):
     """Every window closed, GoldenLayout lays the world's stack on the root, where
-    nothing can stand beside it: a window opened is laid out in a row with it."""
+    nothing can stand beside it: a window opened is laid out in a row with it, at once
+    or once the page has remembered the world alone."""
     _js(wm, "() => { for (const id of ['a', 'b', 'sel', 't1', 't2']) P.close(id); }")
+    if reloaded:
+        _reload(wm)
+        assert _js(wm, "() => ['a', 'b', 'sel', 't1', 't2'].some((id) => P.isOpen(id))") is False
     _js(wm, "() => P.open('sel')")
     assert _where(wm, "sel")["parent"] in ("row", "column")
     assert _where(wm, "world")["parent"] == "row"
@@ -535,6 +543,120 @@ def test_a_tab_says_something_new_and_wears_its_flag(wm: Page):
     expect(tab).to_contain_text("b (3)")
     _js(wm, "() => P.retitle('b', 'b')")
     expect(tab).not_to_have_class(re.compile(r"\bbad\b"))
+
+
+@pytest.mark.e2e
+def test_a_loud_window_wears_it_on_its_tab_and_its_frame(wm: Page):
+    _js(wm, "() => H.reg('x', { home: 'beside', loud: true })")
+    expect(wm.locator(".lm_tab[data-panel='x']")).to_have_class(re.compile(r"\bloud\b"))
+    expect(
+        wm.locator(".panel-window.loud", has=wm.locator(".panel[data-panel='x']"))
+    ).to_have_count(1)
+
+
+# --- what a person moves ----------------------------------------------------------------
+
+
+def _tab(page: Page, pid: str):
+    return page.locator(f".lm_tab[data-panel='{pid}']")
+
+
+def _onto_the_worlds_left(page: Page, pid: str) -> None:
+    """A window's tab dropped on the world's left edge: a stack of its own there."""
+    world = page.locator("#world").bounding_box()
+    windows.drag(page, _tab(page, pid), (world["x"] + 30, world["y"] + world["height"] / 2))
+    page.wait_for_function(
+        "(id) => H.where(id).stack.length === 1 && H.where(id).at < H.where('world').at", arg=pid
+    )
+
+
+def _onto_sels_stack(page: Page, pid: str) -> None:
+    """A window's tab dropped on sel's header, just after sel's tab."""
+    tab = _tab(page, "sel").bounding_box()
+    windows.drag(
+        page, _tab(page, pid), (tab["x"] + tab["width"] + 20, tab["y"] + tab["height"] / 2)
+    )
+    page.wait_for_function("(id) => H.where(id).stack.includes('sel')", arg=pid)
+
+
+def _on_another_stack_it_stays_there_when_opened_again(page):
+    _onto_sels_stack(page, "t2")
+    _js(page, "() => P.open('t2')")
+    w = _where(page, "t2")
+    assert w["stack"] == ["sel", "t2"] and w["front"] == "t2"
+
+
+def _on_the_worlds_left_it_is_a_window_of_its_own_with_a_tab(page):
+    _onto_the_worlds_left(page, "sel")
+    _js(page, "() => P.open('sel')")
+    assert _where(page, "sel")["parent"] == "row"
+    expect(_tab(page, "sel")).to_be_visible()
+    assert page.locator("#world").bounding_box()["x"] > 100
+
+
+def _on_the_worlds_right_quarter_it_is_a_window_of_its_own_with_a_tab(page):
+    world = page.locator("#world").bounding_box()
+    to = (world["x"] + world["width"] * 0.85, world["y"] + world["height"] / 2)
+    windows.drag(page, _tab(page, "t1"), to)
+    page.wait_for_function("() => H.where('t1').stack.length === 1")
+    expect(_tab(page, "t1")).to_be_visible()
+    # The world's own stack still shows no header.
+    expect(page.locator(".lm_stack:has(#world) > .lm_header")).to_be_hidden()
+
+
+def _moved_it_is_where_it_was_put_after_a_reload(page):
+    _onto_the_worlds_left(page, "sel")
+    _reload(page)
+    w = _where(page, "sel")
+    assert w["stack"] == ["sel"] and w["at"] < _where(page, "world")["at"]
+
+
+def _reset_puts_every_window_back_at_its_home(page):
+    before = {pid: _where(page, pid) for pid in ("sel", "t2")}
+    _onto_the_worlds_left(page, "sel")
+    _onto_sels_stack(page, "t2")
+    _js(page, "() => P.reset()")
+    assert {pid: _where(page, pid) for pid in ("sel", "t2")} == before
+
+
+def _made_for_the_moment_closed_and_opened_again_it_is_at_its_home(page):
+    _mount(page, transient=["m"])
+    _js(page, "() => { H.reg('m', { home: 'tabs', open: false }); P.open('m'); }")
+    _onto_sels_stack(page, "m")
+    _js(page, "() => P.open('m')")
+    assert _where(page, "m")["stack"] == ["sel", "m"]
+    _js(page, "() => { P.close('m'); P.open('m'); }")
+    w = _where(page, "m")
+    assert w["stack"] == ["t1", "t2", "m"] and w["front"] == "m"
+
+
+def _the_splitter_beside_the_world_keeps_its_width_after_a_reload(page):
+    before = _js(page, "() => H.size('world')")
+    splitter = page.locator(".lm_root > .lm_row > .lm_splitter").first
+    box = splitter.bounding_box()
+    windows.drag(page, splitter, (box["x"] - 120, box["y"] + box["height"] / 2))
+    page.wait_for_function("(w) => H.size('world') < w - 5", arg=before)
+    moved = _js(page, "() => H.size('world')")
+    _reload(page)
+    assert _js(page, "() => H.size('world')") == pytest.approx(moved, abs=0.5)
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize(
+    "case",
+    [
+        _on_another_stack_it_stays_there_when_opened_again,
+        _on_the_worlds_left_it_is_a_window_of_its_own_with_a_tab,
+        _on_the_worlds_right_quarter_it_is_a_window_of_its_own_with_a_tab,
+        _moved_it_is_where_it_was_put_after_a_reload,
+        _reset_puts_every_window_back_at_its_home,
+        _made_for_the_moment_closed_and_opened_again_it_is_at_its_home,
+        _the_splitter_beside_the_world_keeps_its_width_after_a_reload,
+    ],
+    ids=lambda f: f.__name__.strip("_"),
+)
+def test_a_window_a_person_moves_stays_where_it_is_put(wm: Page, case):
+    case(wm)
 
 
 # --- focused systems ------------------------------------------------------------------

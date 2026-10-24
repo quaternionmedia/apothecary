@@ -46,7 +46,7 @@ requires, hint })`, its layout written in window ids; a focused system's view
 is defined from the registry, so a page defines none by hand.
 
 **Tests.** Where a window opens, what a view lays out, what a browser
-remembers, a window's life and the column's limit are
+remembers, a window's life, what a person moves and the column's limit are
 `tests/e2e/test_window_manager.py`'s, on a page of its own with no server: a
 new case is a parameter there. A feature's test opens a window through
 `tests/e2e/windows.py` and asserts what the feature does, not where the window
