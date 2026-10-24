@@ -46,8 +46,10 @@ Machine, Ctrl + right-click opens the board's own ring (the device ring); from
 ## A. The link, nothing armed
 
 - [ ] Open the printer's Machine: click its ⚡ badge, or `printer_1`'s ring ›
-      Device › Open (⌗78). It opens as a tab beside Pictures: state `idle`, temperatures
-      near the room's, the chart filling after a few polls.
+      Device › Open (⌗78). It opens as a tab beside Pictures, its state `idle`;
+      the canvas ring's Panels › Windows › Machine view lays its sections out:
+      temperatures near the room's in Status, the chart filling after a few
+      polls in Temperature, the log in Log.
 - [ ] Pull the filament out of the runout sensor: within one poll the endstop
       chip reads `filament OUT`; push it back → `present`.
 - [ ] **⏻ Reboot**, pressed twice (the button says *again to reboot* after the first press), or the
