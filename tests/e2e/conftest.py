@@ -5,6 +5,7 @@ pytest tests/e2e --base-url URL          # a server you started yourself
 """
 
 import json
+import math
 import os
 import re
 import socket
@@ -91,9 +92,28 @@ def pytest_sessionfinish(session):
     DURATIONS.write_text(json.dumps(dict(sorted(kept.items())), indent=1) + "\n")
 
 
+def recorded_caps(items, known: dict) -> dict:
+    """In CI, each browser test's own cap: twice the time this suite records for it
+    (setup, call and teardown), over its call alone, so a hung wait fails that test
+    and its traceback names it. A test with no record, or a cap of its own, has none
+    from here; the job's cap bounds the rest."""
+    return {
+        item.nodeid: math.ceil(2 * known[item.nodeid])
+        for item in items
+        if item.nodeid in known and not item.get_closest_marker("timeout")
+    }
+
+
 def pytest_collection_modifyitems(config, items):
-    """Keep this shard's files; tests marked docs run only with --generate-docs."""
+    """Keep this shard's files; tests marked docs run only with --generate-docs; in
+    CI, each recorded test has its own cap."""
     _keep_this_shard(config, items)
+    if os.environ.get("CI"):
+        known = json.loads(DURATIONS.read_text()) if DURATIONS.exists() else {}
+        caps = recorded_caps(items, known)
+        for item in items:
+            if item.nodeid in caps:
+                item.add_marker(pytest.mark.timeout(caps[item.nodeid], func_only=True))
     if config.getoption("--generate-docs"):
         return
     skip = pytest.mark.skip(reason="doc capture: runs with --generate-docs (`apothecary docs`)")

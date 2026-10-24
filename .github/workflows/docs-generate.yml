@@ -1,12 +1,13 @@
 name: 📸 Generated docs
 
 # The doc-capture tests (tests marked `docs`) run only under --generate-docs, which
-# no other workflow passes: here they run once a week, and on demand, through
-# `apothecary docs generate`, and what they write is kept as an artifact. A schedule
-# and a manual run start from the default branch's copy of this file.
+# no other workflow passes: here they run at a version tag, and on demand, through
+# `apothecary docs generate`, and what they write is kept as an artifact. No cap of
+# this file's: it has no record yet to take one from.
 on:
-  schedule:
-  - cron: "17 6 * * 1"
+  push:
+    tags:
+    - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -16,7 +17,6 @@ jobs:
   generate:
     name: 📸 apothecary docs generate
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
     steps:
     - name: 📰 Checkout
       uses: actions/checkout@v6
