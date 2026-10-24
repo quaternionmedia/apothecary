@@ -54,6 +54,14 @@ def pytest_addoption(parser):
         "it there.",
     )
     parser.addoption(
+        "--steps",
+        action="store_true",
+        default=False,
+        help="Browser tests only: also run the step-through tests (tests/e2e/test_steps_*.py) "
+        "whole, each on a server of its own. Without it, or --step N, they skip: each walks "
+        "a loop another browser test holds end to end. The weekly steps workflow passes it.",
+    )
+    parser.addoption(
         "--slow",
         action="store_true",
         default=False,

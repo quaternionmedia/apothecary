@@ -4,7 +4,7 @@ Machine; then from the Machine's Flashing card the Rust one, compiled with cargo
 with espflash and heard again; Listen; and the card opened again on the Rust build.
 
 Each step first checks that the page is where the step before it leaves it, then acts as
-a person does and holds what the page says. In the suite every step runs in order on a
+a person does and holds what the page says. Under ``--steps`` every step runs in order on a
 server of the test's own: arduino-cli, cargo and espflash scripted in one folder, and the
 simulated devkit on ``/dev/ttyFAKE2`` that runs what was last flashed to it
 (tests/firmware_helpers.py), as the demo's are. Given ``--step N`` and ``--base-url``
