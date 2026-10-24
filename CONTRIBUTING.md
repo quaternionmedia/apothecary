@@ -112,6 +112,9 @@ a message that ends a step names the next one.
 ## Where things go
 
 - A part: [docs/parts-authoring.md](docs/parts-authoring.md).
+- A command: a module under `apothecary/cli/`, added to `cli` in `apothecary/cli/main.py`;
+  `tests/test_every_command.py` asks every command for its `--help`, and a test of its own
+  runs it.
 - A scene primitive: `apothecary/primitives.py`, exported from `apothecary/__init__.py`,
   tested in `tests/test_primitives_transforms.py`, its JSON in
   [docs/scene-json.md](docs/scene-json.md).
