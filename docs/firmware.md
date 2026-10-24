@@ -484,7 +484,10 @@ What can be sent is a bounded allowlist, `firmware.gcode.CONTROL_CODES`
 on and off, probing, break wait, quickstop), with heater, travel and feed
 caps beside it. Out-of-bounds values are refused before they reach the port;
 there is no EEPROM write and no firmware configuration. A jog is three lines
-(`G91`, `G1 …`, `G90`), so the board is left in absolute mode.
+(`G91`, `G1 …`, `G90`), so the board is left in absolute mode. The travel cap
+bounds each move, not where the head ends up: jogs one after another add up,
+and the firmware's soft endstops (after a homing) are what keeps the head on
+the machine.
 
 ```
 POST /firmware/printers/control  {"port": …, "armed": true, "ttl_s": 300}
