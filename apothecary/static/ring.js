@@ -111,7 +111,7 @@ export function withCells(options) {
 }
 
 // Every action a ring can produce, and the digits that reach it. The first
-// time an action turns up wins, as every_action() in menu.py does.
+// time an action turns up wins, as every_action() in tests/ring_helpers.py does.
 export function addresses(ring) {
     const found = {};
     const walk = (options, prefix) => {

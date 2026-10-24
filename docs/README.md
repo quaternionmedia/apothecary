@@ -29,8 +29,8 @@ HTTP API is described at `/openapi.json`, the commands by `apothecary --help`.
 | Page | |
 |---|---|
 | [Scene JSON format](scene-json.md) | Scenes, primitives, booleans and transforms as JSON |
-| [Parts authoring](parts-authoring.md) | How to create and register a part |
-| [Fitting a part](fitting-a-part.md) | Which numbers belong to a consumer and which to this repository |
+| [Parts authoring](parts-authoring.md) | How to add a part, override its parameters, and check it |
+| [Fitting a part](fitting-a-part.md) | Which numbers belong to a consumer and which to this repository, and who owns each open problem |
 | [Geometry models](models.md) | Vectors, bounds, colors, shapes and units |
 | [Geometry made elsewhere](geometry-from-elsewhere.md) | An STL or OBJ as a part (`apothecary parts import`), and a part described by a sidecar |
 | [Firmware](firmware.md) | Programming boards from sketches kept with their parts; monitoring a G-code printer from its scene node |
@@ -48,8 +48,10 @@ HTTP API is described at `/openapi.json`, the commands by `apothecary --help`.
 
 `apothecary docs generate` writes these into `docs/generated/`, which is not
 committed, from the browser tests marked `docs`: each `docs.step(...)` in
-`tests/e2e/test_docs_*.py` is an assertion and a paragraph.
-`apothecary serve --refresh-docs` does the same in the background.
+`tests/e2e/test_docs_*.py` is an assertion and a paragraph. Those tests run
+only under `--generate-docs`, which the command passes; an ordinary browser
+run skips them. `apothecary serve --refresh-docs` does the same in the
+background.
 
 | Page | |
 |---|---|

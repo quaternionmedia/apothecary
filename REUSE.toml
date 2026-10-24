@@ -27,10 +27,3 @@ path = "apothecary/static/vendor/three/**"
 precedence = "override"
 SPDX-FileCopyrightText = "Copyright (c) 2010-2023 three.js authors"
 SPDX-License-Identifier = "MIT"
-
-# The governance submodule is licensed in its own repository.
-[[annotations]]
-path = "governance/**"
-precedence = "override"
-SPDX-FileCopyrightText = "Copyright (c) 2026 Quaternion Media"
-SPDX-License-Identifier = "CC-BY-SA-4.0"

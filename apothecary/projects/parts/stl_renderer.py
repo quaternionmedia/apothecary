@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -16,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel
 
@@ -104,7 +105,7 @@ class OpenSCADRenderer:
         "/snap/bin/openscad",
     ]
 
-    # Nightly/development build paths (newer features)
+    # Where development snapshots install; ``openscad-nightly`` on PATH is one too.
     OPENSCAD_NIGHTLY_PATHS = [
         # Windows
         r"C:\Program Files\OpenSCAD (Nightly)\openscad.exe",
@@ -139,7 +140,9 @@ class OpenSCADRenderer:
         return self._detected_path
 
     def _detect_openscad(self) -> Optional[Path]:
-        """OpenSCAD on PATH, else at one of the usual install locations."""
+        """OpenSCAD on PATH, else at one of the usual install locations, else a
+        development snapshot: on a machine that has only a snapshot, it is the
+        OpenSCAD every build uses."""
         found = shutil.which("openscad")
         if found:
             return Path(found)
@@ -147,60 +150,16 @@ class OpenSCADRenderer:
             path = Path(path_str)
             if path.exists():
                 return path
-        return None
+        return next(iter(_snapshots()), None)
 
     @property
     def is_available(self) -> bool:
         """Check if OpenSCAD is available."""
         return self.openscad_path is not None and self.openscad_path.exists()
 
-    def find_nightly(self) -> Optional[Path]:
-        """
-        Find OpenSCAD Nightly/development build.
-
-        Returns:
-            Path to nightly OpenSCAD executable if found, None otherwise.
-        """
-        for path_str in self.OPENSCAD_NIGHTLY_PATHS:
-            path = Path(path_str)
-            if path.exists():
-                return path
-        return None
-
-    def get_nightly_version(self) -> Optional[str]:
-        """
-        Get version string of the nightly build if available.
-
-        Returns:
-            Version string or None if nightly not found.
-        """
-        nightly = self.find_nightly()
-        if not nightly:
-            return None
-
-        try:
-            result = subprocess.run(
-                [str(nightly), "--version"], capture_output=True, text=True, timeout=10
-            )
-            version = result.stderr.strip() or result.stdout.strip()
-            return version if version else None
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return None
-
     def get_version(self) -> Optional[str]:
-        """Get OpenSCAD version string."""
-        if not self.is_available:
-            return None
-
-        try:
-            result = subprocess.run(
-                [str(self.openscad_path), "--version"], capture_output=True, text=True, timeout=10
-            )
-            # Version is usually in stderr for OpenSCAD
-            version = result.stderr.strip() or result.stdout.strip()
-            return version if version else None
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return None
+        """What ``openscad --version`` prints, or None when OpenSCAD is missing."""
+        return openscad_version(self.openscad_path) if self.is_available else None
 
     def render_stl(
         self,
@@ -328,6 +287,8 @@ def params_sidecar_path(stl_path: Path) -> Path:
 def _recordable(value: object) -> object:
     if isinstance(value, Enum):
         return value.value
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json")
     raise TypeError(f"{type(value).__name__} cannot be recorded in a params sidecar")
 
 
@@ -374,21 +335,159 @@ def get_renderer() -> OpenSCADRenderer:
     return _renderer
 
 
-def _sources(part: BasePart) -> List[Path]:
-    """What a part's STL is built from: its SCAD, and the module (a described
-    part's part.json) that sets its rotation and output path.
+SNAPSHOTS_URL = "https://openscad.org/downloads.html#snapshots"
 
-    The module is found as the loaded wrapper whose DEFAULT is this part.
-    """
+# ``--version`` output by executable path, each asked once per process: the API
+# asks every part whether it can be built here on each metadata request.
+_VERSIONS: Dict[str, Optional[str]] = {}
+
+
+# "OpenSCAD version 2021.01"; failing that, a line that is only a version
+# (a part's "2021.08.24"). Whatever else an executable prints first, such as
+# a Qt warning with numbers in it, is not read as its version.
+_NAMED_VERSION = re.compile(r"version\s+(\d{4})\.(\d{1,2})(?:\.(\d{1,2}))?", re.I)
+_BARE_VERSION = re.compile(r"^\s*(\d{4})\.(\d{1,2})(?:\.(\d{1,2}))?(?:\.\S*)?\s*$", re.M)
+
+
+def parse_openscad_version(text: Optional[str]) -> Optional[Tuple[int, ...]]:
+    """An OpenSCAD version as a comparable tuple: ``OpenSCAD version 2021.01`` is
+    (2021, 1), a snapshot's ``2024.12.06.ai21474`` is (2024, 12, 6). None when
+    the text names no version."""
+    match = _NAMED_VERSION.search(text or "") or _BARE_VERSION.search(text or "")
+    if match is None:
+        return None
+    return tuple(int(group) for group in match.groups() if group is not None)
+
+
+def _version_line(text: str) -> Optional[str]:
+    """The line of ``--version`` output that names the version, else its first line."""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    for pattern in (_NAMED_VERSION, _BARE_VERSION):
+        for line in lines:
+            if pattern.search(line):
+                return line
+    return lines[0] if lines else None
+
+
+def openscad_version(executable: Path) -> Optional[str]:
+    """The line of ``executable --version`` that names its version (OpenSCAD
+    writes it to stderr), or None when it does not run."""
+    key = str(executable)
+    if key not in _VERSIONS:
+        try:
+            done = subprocess.run(
+                [key, "--version"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=10,
+            )
+            _VERSIONS[key] = _version_line(f"{done.stderr}\n{done.stdout}")
+        except (OSError, subprocess.SubprocessError):
+            _VERSIONS[key] = None
+    return _VERSIONS[key]
+
+
+def _snapshots() -> List[Path]:
+    """Development snapshots on this machine: ``openscad-nightly`` on PATH,
+    then the places snapshots install."""
+    found = [Path(p) for p in [shutil.which("openscad-nightly")] if p]
+    return found + [Path(p) for p in OpenSCADRenderer.OPENSCAD_NIGHTLY_PATHS if Path(p).exists()]
+
+
+def _openscad_candidates() -> List[Path]:
+    """The default OpenSCAD, then development snapshots, each path once. Two
+    links to one executable stay two: a snap links every app in /snap/bin to
+    /usr/bin/snap, which runs the one its name says."""
+    default = get_renderer()
+    found = [default.openscad_path] if default.is_available else []
+    unique: Dict[str, Path] = {}
+    for path in found + _snapshots():
+        unique.setdefault(os.path.abspath(path), path)
+    return list(unique.values())
+
+
+def _wanted(min_version: str) -> Tuple[int, ...]:
+    wanted = parse_openscad_version(min_version)
+    if wanted is None:
+        raise ValueError(f"{min_version!r} is not an OpenSCAD version")
+    return wanted
+
+
+def _new_enough(executable: Path, wanted: Tuple[int, ...]) -> bool:
+    have = parse_openscad_version(openscad_version(executable))
+    return have is not None and have >= wanted
+
+
+def _too_old(min_version: str, executables: List[Path]) -> str:
+    found = "; ".join(
+        f"{path} is {openscad_version(path) or 'of unknown version'}" for path in executables
+    )
+    return (
+        f"needs OpenSCAD {min_version} or newer ({found or 'none is installed'}); "
+        f"development snapshots: {SNAPSHOTS_URL}"
+    )
+
+
+def openscad_meets(executable: Path, min_version: str) -> Tuple[bool, str]:
+    """Whether ``executable`` is OpenSCAD ``min_version`` or newer:
+    ``(True, "")``, or ``(False, why not)``."""
+    if _new_enough(executable, _wanted(min_version)):
+        return True, ""
+    return False, _too_old(min_version, [executable])
+
+
+def find_openscad(min_version: str) -> Tuple[Optional[Path], str]:
+    """The first OpenSCAD that is ``min_version`` or newer, the default install
+    before any development snapshot: ``(path, "")``, or ``(None, why not)``."""
+    wanted = _wanted(min_version)
+    candidates = _openscad_candidates()
+    for path in candidates:
+        if _new_enough(path, wanted):
+            return path, ""
+    return None, _too_old(min_version, candidates)
+
+
+def geometry_scad(part: BasePart, params: dict) -> Optional[str]:
+    """The SCAD a part's Python geometry renders to for already-validated
+    ``params``, or None when its SCAD file is the source. An ``Import`` in it
+    is written absolute, so the text renders from wherever it is saved."""
+    from apothecary.primitives import absolute_imports
+
+    built = part.geometry(params)
+    if built is None:
+        return None
+    with absolute_imports(part.part_dir):
+        return built.render() + "\n"
+
+
+def _sources(part: BasePart) -> List[Path]:
+    """What a part's STL is built from: its SCAD, and each loaded wrapper
+    module whose DEFAULT is this part (a described part's part.json), which
+    sets its rotation and output path. A part built by Python geometry is
+    also built from its code: the module that defines its class, and every
+    module of a wrapper that is a package."""
+    python = part.geometry({}) is not None
     sources = [part.source_file]
-    for name, module in list(sys.modules.items()):
-        if name.startswith("apothecary.projects.parts.") and (
-            getattr(module, "DEFAULT", None) is part
-        ):
-            if getattr(module, "__file__", None):
-                sources.append(Path(module.__file__))
-            break
-    return sources
+    modules = [
+        module
+        for name, module in list(sys.modules.items())
+        if name.startswith("apothecary.projects.parts.")
+        and getattr(module, "DEFAULT", None) is part
+    ]
+    if python:
+        modules.append(sys.modules.get(type(part).__module__))
+    for module in modules:
+        path = Path(module.__file__) if getattr(module, "__file__", None) else None
+        if path is None:
+            continue
+        if python and path.name == "__init__.py":
+            sources.extend(sorted(path.parent.glob("*.py")))
+        else:
+            sources.append(path)
+    # A part's class may live in the module that is also its wrapper.
+    return list(dict.fromkeys(sources))
 
 
 def _is_fresh(part: BasePart, stl_path: Path, params: dict) -> bool:
@@ -404,6 +503,17 @@ def _is_fresh(part: BasePart, stl_path: Path, params: dict) -> bool:
     return all(src.stat().st_mtime <= built for src in _sources(part) if src.exists())
 
 
+def _scratch_beside(stl_path: Path) -> tempfile.TemporaryDirectory:
+    """A scratch directory of one render's own, beside ``stl_path``: where
+    OpenSCAD writes its output, it can read. A snap's OpenSCAD has a /tmp of
+    its own. The name is hidden, and ``*.tmp`` in .gitignore should a killed
+    process leave it behind."""
+    stl_path.parent.mkdir(parents=True, exist_ok=True)
+    return tempfile.TemporaryDirectory(
+        prefix=f".{stl_path.stem}.", suffix=".tmp", dir=stl_path.parent
+    )
+
+
 def _render_rotated(
     renderer: OpenSCADRenderer,
     scad_path: Path,
@@ -414,9 +524,10 @@ def _render_rotated(
 ) -> RenderResult:
     """Render upright into a scratch directory, then turn it with a one-line wrapper.
 
-    Nothing is written beside the source, so two renders of one part cannot collide.
+    Nothing is written beside the source, and each render has a scratch
+    directory of its own, so two renders of one part cannot collide.
     """
-    with tempfile.TemporaryDirectory(prefix="apothecary-rotate-") as tmp:
+    with _scratch_beside(stl_path) as tmp:
         upright = Path(tmp) / "upright.stl"
         first = renderer.render_stl(scad_path, upright, timeout, params=params or None)
         if not first.success:
@@ -431,6 +542,36 @@ def _render_rotated(
     return second
 
 
+def render_part(
+    part: BasePart,
+    stl_path: Path,
+    params: Optional[dict] = None,
+    timeout: float = 120.0,
+    renderer: Optional[OpenSCADRenderer] = None,
+    rotation: Optional[List[float]] = None,
+) -> RenderResult:
+    """Render a part with already-validated ``params`` to ``stl_path``, and
+    nothing more: no freshness check, no sidecar. A part with Python geometry
+    is rendered from that geometry's SCAD, written to a scratch file beside
+    ``stl_path``; any other from its SCAD file, the params reaching it through
+    ``part.scad_overrides``. ``rotation`` turns the result; ``renderer``
+    defaults to the OpenSCAD the part asks for."""
+    if renderer is None:
+        own = part.get_openscad_path()
+        renderer = OpenSCADRenderer(str(own)) if own else get_renderer()
+    params = params or {}
+    with _scratch_beside(stl_path) as tmp:
+        text = geometry_scad(part, params)
+        if text is None:
+            scad, definitions = part.source_file, part.scad_overrides(params)
+        else:
+            scad, definitions = Path(tmp) / part.source_file.name, {}
+            scad.write_text(text, encoding="utf-8")
+        if rotation and any(rotation):
+            return _render_rotated(renderer, scad, stl_path, rotation, timeout, definitions)
+        return renderer.render_stl(scad, stl_path, timeout, params=definitions or None)
+
+
 def build_stl(
     part: BasePart,
     params: Optional[dict] = None,
@@ -442,30 +583,26 @@ def build_stl(
 
     Overrides are checked against the part's ``params_model`` (ValueError on a
     bad one). The STL on disk is kept (``skipped="fresh"``) unless ``force``, a
-    newer SCAD or wrapper, or different recorded parameters say otherwise. A
-    part that cannot be built here is refused (``skipped="refused"``). The
-    render is turned by ``display_rotation``; non-default parameters are
-    recorded in the params sidecar, and a default build removes it.
-    ``renderer`` overrides the OpenSCAD the part would choose for itself.
+    newer SCAD, wrapper or geometry code, or different recorded parameters say
+    otherwise. A part that cannot be built here is refused
+    (``skipped="refused"``). It is rendered as ``render_part`` renders it,
+    turned by ``display_rotation``; non-default parameters are
+    recorded in the params sidecar as validated, not as ``scad_overrides``
+    translates them, and a default build removes it. ``renderer`` overrides
+    the OpenSCAD the part would choose for itself, and is the one checked
+    against the part's ``openscad_min_version``.
     """
     params = part.validate_overrides(params)
     stl_path = part.get_stl_output_path()
     if not force and _is_fresh(part, stl_path, params):
         return RenderResult(success=True, stl_path=stl_path, skipped="fresh")
 
-    can_build, reason = part.can_generate_stl()
+    can_build, reason = part.can_generate_stl(renderer.openscad_path if renderer else None)
     if not can_build:
         return RenderResult(success=False, error_message=reason, skipped="refused")
 
-    if renderer is None:
-        own = part.get_openscad_path()
-        renderer = OpenSCADRenderer(str(own)) if own else get_renderer()
-
     rotation = part.display_rotation.to_list()
-    if any(rotation):
-        result = _render_rotated(renderer, part.source_file, stl_path, rotation, timeout, params)
-    else:
-        result = renderer.render_stl(part.source_file, stl_path, timeout, params=params or None)
+    result = render_part(part, stl_path, params, timeout, renderer, rotation)
 
     if result.success:
         if params:

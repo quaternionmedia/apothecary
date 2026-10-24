@@ -1491,7 +1491,7 @@ def _describe_for_view(
     }
 
 
-@app.get("/firmware/printers/where")
+@app.get("/firmware/printers/where", tags=["firmware"])
 def printer_where(port: str):
     """Where a port is pinned, with the geometry a board view needs.
 
@@ -1530,7 +1530,7 @@ def printer_where(port: str):
     return {"port": port, "site": None, "board": None, "printer": None}
 
 
-@app.get("/firmware/pins")
+@app.get("/firmware/pins", tags=["firmware"])
 def every_pin(fresh: bool = False):
     """Every pin on this machine, whatever site it names -- the management view.
 
@@ -1570,7 +1570,7 @@ def every_pin(fresh: bool = False):
     return {"pins": rows, "problem": problem}
 
 
-@app.delete("/firmware/pins/{site}/{path:path}")
+@app.delete("/firmware/pins/{site}/{path:path}", tags=["firmware"])
 def unpin_anywhere(site: str, path: str):
     """Take a pin back by what it names, whether or not its site or node still exists."""
     if not firmware_devices.get_state().clear_binding(site, path):

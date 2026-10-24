@@ -40,17 +40,17 @@ params = BinParams(
 bounds = DEFAULT.get_bounds(params.model_dump())
 print(f"Volume: {bounds.volume:.0f} mm³")
 
-# Get OpenSCAD customizer parameters
-scad_params = DEFAULT.get_scad_customizer_params(params.model_dump())
+# The customizer variables a build passes to OpenSCAD as -D for these overrides
+scad_params = DEFAULT.scad_overrides(params.model_dump())
 ```
 
 ### Available Parameters
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `gridx` | 1 | Grid units in X (1 unit = 42mm) |
-| `gridy` | 1 | Grid units in Y |
-| `gridz` | 3 | Height units (1 unit = 7mm) |
+| `gridx` | 3 | Grid units in X (1 unit = 42mm) |
+| `gridy` | 2 | Grid units in Y |
+| `gridz` | 6 | Height units (1 unit = 7mm) |
 | `divx` | 1 | X compartment divisions |
 | `divy` | 1 | Y compartment divisions |
 | `include_lip` | true | Include stacking lip |

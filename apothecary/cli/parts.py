@@ -253,10 +253,9 @@ def parts_verify(
 
     Renders to a temporary file, so the STL you are iterating on is untouched.
     """
-    from ..projects.parts.stl_renderer import get_renderer
+    from ..projects.parts.stl_renderer import get_renderer, render_part
 
-    renderer = get_renderer()
-    if not renderer.is_available:
+    if not get_renderer().is_available:
         raise click.ClickException("OpenSCAD not found; cannot measure geometry.")
 
     if verify_all:
@@ -285,11 +284,14 @@ def parts_verify(
             skipped.append((part_name, "declares no bounds"))
             continue
 
+        can_build, reason = part.can_generate_stl()
+        if not can_build:
+            skipped.append((part_name, f"cannot build here: {reason}"))
+            continue
+
         with tempfile.TemporaryDirectory() as tmp:
             measured_stl = Path(tmp) / f"{part_name}.stl"
-            result = renderer.render_stl(
-                part.source_file, measured_stl, timeout=timeout, params=params or None
-            )
+            result = render_part(part, measured_stl, params, timeout=timeout)
             if not result.success:
                 skipped.append((part_name, f"render failed: {result.error_message}"))
                 continue
@@ -442,11 +444,11 @@ def parts_render(name: str, params_json: str | None, template: str | None, outpu
     params_json_out = params.model_dump_json() if params else "{}"
     output_path = Path(output)
 
-    # Special case: rc.snowplow is a Python parametric part, generate SCAD from Python
-    if part.name == "rc.snowplow":
-        from ..projects.parts.rc.snowplow import snowplow_assembly
+    # A part built by Python geometry is written out as that geometry's SCAD.
+    from ..projects.parts.stl_renderer import geometry_scad
 
-        code = snowplow_assembly(**(params.model_dump() if params else {})).render()
+    code = geometry_scad(part, params.model_dump() if params else {})
+    if code is not None:
         output_path.write_text(code, encoding="utf-8")
         click.echo(f"Rendered parametric part '{part.name}' -> {output_path}")
         return

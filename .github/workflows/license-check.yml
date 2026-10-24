@@ -31,12 +31,14 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked --dev
 
-      - name: Generate license report
+      - name: Enforce OSI/FSF allowlist and write the license report
+        # A package outside the allowlist is named in the log and no report is written.
         run: |
           uv run --with pip-licenses pip-licenses \
             --format=json \
             --with-urls \
             --ignore-packages apothecary \
+            --allow-only="MIT;MIT License;MIT-CMU;MIT AND Python-2.0;BSD License;BSD-2-Clause;BSD-3-Clause;Apache Software License;Apache-2.0;Apache Software License; BSD License;Apache Software License; MIT License;Mozilla Public License 2.0 (MPL 2.0);MPL-2.0;PSF-2.0;Python Software Foundation License;Unlicense;Artistic License; GNU General Public License (GPL); GNU General Public License v2 or later (GPLv2+)" \
             --output-file=licenses.json
 
       - name: Upload license report
@@ -45,8 +47,10 @@ jobs:
           name: license-report
           path: licenses.json
 
-      - name: Enforce OSI/FSF allowlist
+      - name: No locked dependency has a known vulnerability
+        # Audits uv.lock as exported, not the environment: apothecary itself is
+        # not on PyPI, so a plain `pip-audit --strict` fails on it.
         run: |
-          uv run --with pip-licenses pip-licenses \
-            --ignore-packages apothecary \
-            --allow-only="MIT;MIT License;MIT-CMU;MIT AND Python-2.0;BSD License;BSD-2-Clause;BSD-3-Clause;Apache Software License;Apache-2.0;Apache Software License; BSD License;Apache Software License; MIT License;Mozilla Public License 2.0 (MPL 2.0);MPL-2.0;PSF-2.0;Python Software Foundation License;Unlicense;Artistic License; GNU General Public License (GPL); GNU General Public License v2 or later (GPLv2+)"
+          requirements=$(mktemp)
+          uv export --no-hashes --no-emit-project --format requirements-txt > "$requirements"
+          uv run --with pip-audit pip-audit --strict --disable-pip --no-deps -r "$requirements"

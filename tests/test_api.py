@@ -188,7 +188,9 @@ def test_generate_keeps_a_fresh_stl(cube_stl):
 
 
 def test_generate_is_503_for_a_part_that_cannot_be_built_here(cube_stl, monkeypatch):
-    monkeypatch.setattr(type(CUBE), "can_generate_stl", lambda self: (False, "needs 2024.x"))
+    monkeypatch.setattr(
+        type(CUBE), "can_generate_stl", lambda self, openscad=None: (False, "needs 2024.x")
+    )
     r = TestClient(app).post("/parts/calibration_cube/stl/generate?force=true")
     assert r.status_code == 503
     assert "needs 2024.x" in r.json()["detail"]

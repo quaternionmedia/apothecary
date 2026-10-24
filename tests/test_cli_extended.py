@@ -126,6 +126,22 @@ def test_cli_parts_render_snowplow_uses_validated_params(tmp_path):
     assert "200" in text and "cube" in text.lower()
 
 
+def test_cli_parts_render_writes_any_parts_python_geometry(tmp_path, monkeypatch):
+    """Not a name check: any part whose geometry() returns an object is written as its SCAD."""
+    from apothecary import Cube
+    from apothecary.projects.parts.calibration_cube import DEFAULT as cube
+
+    monkeypatch.setattr(
+        type(cube), "geometry", lambda self, params: Cube(size=params.get("size", 1) * 2)
+    )
+    out = tmp_path / "cube.scad"
+    r = CliRunner().invoke(
+        cli, ["parts", "render", "calibration_cube", "--params-json", '{"size": 7}', "-o", str(out)]
+    )
+    assert r.exit_code == 0, r.output
+    assert out.read_text(encoding="utf-8") == "cube(14.0, center=false);\n"
+
+
 def test_cli_parts_render_snowplow_rejects_bad_params(tmp_path):
     out = tmp_path / "snowplow.scad"
     r = CliRunner().invoke(

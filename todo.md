@@ -12,6 +12,31 @@ here: run `apothecary problems`.
 - The one-screen move, phases 4-5: [docs/plans/one-screen-2026-09-20.md](docs/plans/one-screen-2026-09-20.md).
 - Optional local models behind the shape finder: [docs/plans/photo-finders-local-models-2026-09-21.md](docs/plans/photo-finders-local-models-2026-09-21.md).
 
+## Next round
+
+Decided, not started. Each waits on what its line names.
+
+- Photo gathering becomes an optional extra (decided 2026-09-26).
+  `apothecary/gathering/` and its benches move behind
+  `pip install apothecary[photos]`, and `photo gather` names the extra when
+  it is missing. How much of `apothecary/vision/` goes with it is settled
+  then: the API's photo routes and `vocabulary/match.py` import from it. The
+  `/cameras` routes and Pillow stay in core, because the bench walkthrough and
+  `apothecary docs generate` use them. Split `gather` into steps only after
+  the move.
+- `api.py` into routers, with a lock on the site store; first a pure move,
+  then the behaviour changes.
+- The viewer template's inline script into modules, with the ring's verbs
+  declared once (`data-action`) and a test that holds them.
+- One registry for firmware ports and a job object. It drives real heaters
+  and motion, so it lands with a bench session on the Ender
+  (`docs/validation/2026-09-20-ender-bench.md`).
+- Data-only part wrappers become `part.json`; the import hook goes; the
+  snowplow gets one name.
+- The unit suite under pytest-xdist.
+- The hidden command stubs (`system`, `install`, `testrun`, `dev`,
+  `inventory`, `submodules`) are removed one release after they were hidden.
+
 ## For a person to decide
 
 - What counts as "this machine": a home cluster, or the one machine? The draft

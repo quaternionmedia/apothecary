@@ -17,6 +17,11 @@ from apothecary.projects.parts.gridfinity import (
     TabStyle,
     get_bin_dimensions,
 )
+from apothecary.projects.parts.stl_renderer import (
+    RenderResult,
+    build_stl,
+    read_params_sidecar,
+)
 
 
 class TestGridfinityConstants:
@@ -39,11 +44,11 @@ class TestBinParams:
     """Tests for BinParams model."""
 
     def test_default_params(self):
-        """Test default parameter values."""
+        """The defaults are gridfinity-rebuilt-bins.scad's own."""
         params = BinParams()
-        assert params.gridx == 1
-        assert params.gridy == 1
-        assert params.gridz == 3
+        assert params.gridx == 3
+        assert params.gridy == 2
+        assert params.gridz == 6
         assert params.include_lip is True
         assert params.divx == 1
         assert params.divy == 1
@@ -112,11 +117,16 @@ class TestGridfinityBinPart:
         bounds = DEFAULT.get_bounds()
 
         assert isinstance(bounds, BoundingBox3D)
-        # 1x1x3 bin: 42mm x 42mm x (3*7 + 3.55)mm
-        assert bounds.size.x == pytest.approx(GRID_SIZE_MM, abs=0.1)
-        assert bounds.size.y == pytest.approx(GRID_SIZE_MM, abs=0.1)
-        expected_height = 3 * HEIGHT_UNIT_MM + STACKING_LIP_MM
+        # 3x2x6 bin: 126mm x 84mm x (6*7 + 3.55)mm
+        assert bounds.size.x == pytest.approx(3 * GRID_SIZE_MM, abs=0.1)
+        assert bounds.size.y == pytest.approx(2 * GRID_SIZE_MM, abs=0.1)
+        expected_height = 6 * HEIGHT_UNIT_MM + STACKING_LIP_MM
         assert bounds.size.z == pytest.approx(expected_height, abs=0.1)
+
+    def test_get_bounds_of_one_override_keeps_the_other_defaults(self):
+        bounds = DEFAULT.get_bounds({"gridx": 1})
+        assert bounds.size.x == pytest.approx(GRID_SIZE_MM, abs=0.1)
+        assert bounds.size.y == pytest.approx(2 * GRID_SIZE_MM, abs=0.1)
 
     def test_get_bounds_custom(self):
         """Test bounds calculation with custom params."""
@@ -134,17 +144,52 @@ class TestGridfinityBinPart:
         expected_height = 3 * HEIGHT_UNIT_MM  # No lip
         assert bounds.size.z == pytest.approx(expected_height, abs=0.1)
 
-    def test_get_scad_customizer_params(self):
-        """Customizer params are flat, and an enum arrives as its plain int."""
-        scad_params = DEFAULT.get_scad_customizer_params(
-            {"gridx": 2, "gridy": 2, "style_tab": TabStyle.LEFT}
+    def test_scad_overrides_translate_only_what_was_given(self):
+        """Customizer names are flat: hole_options is the SCAD's six booleans,
+        an enum is its plain int, and a default build passes nothing."""
+        given = DEFAULT.validate_overrides(
+            {"gridx": 2, "style_tab": TabStyle.LEFT, "hole_options": {"magnet_holes": True}}
         )
+        scad = DEFAULT.scad_overrides(given)
+        assert scad == {
+            "gridx": 2,
+            "style_tab": 2,
+            "refined_holes": True,
+            "magnet_holes": True,
+            "screw_holes": False,
+            "crush_ribs": True,
+            "chamfer_holes": True,
+            "printable_hole_top": True,
+        }
+        assert type(scad["style_tab"]) is int
+        assert DEFAULT.scad_overrides({}) == {}
 
-        assert scad_params["gridx"] == 2
-        assert scad_params["gridy"] == 2
-        assert type(scad_params["style_tab"]) is int
-        assert scad_params["style_tab"] == 2
-        assert scad_params["magnet_holes"] is False  # from hole_options
+    # That each name it emits is a variable of the SCAD, and each default the
+    # SCAD's own, is tests/test_parameter_coverage.py's, for every part.
+
+    def test_build_stl_hands_openscad_the_customizer_names(self, tmp_path, monkeypatch):
+        stl = tmp_path / "gridfinity.stl"
+        monkeypatch.setattr(GridfinityBinPart, "get_stl_output_path", lambda self: stl)
+        monkeypatch.setattr(
+            GridfinityBinPart, "can_generate_stl", lambda self, openscad=None: (True, "")
+        )
+        handed = []
+
+        class Renderer:
+            openscad_path = None
+
+            def render_stl(self, scad_path, stl_path=None, timeout=120.0, params=None):
+                handed.append(params)
+                stl_path.write_text("solid fake\nendsolid fake\n")
+                return RenderResult(success=True, stl_path=stl_path)
+
+        given = {"gridx": 2, "hole_options": {"magnet_holes": True}}
+        assert build_stl(DEFAULT, given, renderer=Renderer()).success
+        assert "hole_options" not in handed[0]
+        assert handed[0]["gridx"] == 2 and handed[0]["magnet_holes"] is True
+        recorded = read_params_sidecar(stl)["params"]
+        assert recorded["gridx"] == 2 and recorded["hole_options"]["magnet_holes"] is True
+        assert build_stl(DEFAULT, given, renderer=Renderer()).skipped == "fresh"
 
     def test_get_stl_output_path(self):
         """Test STL output path is not in submodule."""

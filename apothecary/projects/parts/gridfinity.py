@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -38,13 +38,10 @@ GRID_SIZE_MM = 42.0  # Standard gridfinity grid unit in mm
 HEIGHT_UNIT_MM = 7.0  # Height unit in mm
 STACKING_LIP_MM = 3.55  # Stacking lip height (with fillet)
 
-# `openscad --version` years that predate the syntax the library needs (2024.x+).
-_PRE_2024_YEARS = ("2019", "2020", "2021", "2022", "2023")
-
-
-def _too_old(version: Optional[str]) -> bool:
-    """Whether an ``openscad --version`` string is older than the library supports."""
-    return bool(version) and any(year in version for year in _PRE_2024_YEARS)
+# The library's 2.0.0 source ends a call's arguments with a comma, which
+# OpenSCAD accepts from openscad/openscad#3814 (merged 2021-08-24), and relies
+# on `$` variable scoping that 2021.01 does not have.
+OPENSCAD_MIN_VERSION = "2021.08.24"
 
 
 class GridzDefine(int, Enum):
@@ -91,10 +88,11 @@ class BinParams(BaseModel):
         - Z unit 6 → 46.4mm total (7×6 + 4.4mm lip)
     """
 
-    # Grid dimensions
-    gridx: int = Field(1, ge=1, le=10, description="Number of bases along X-axis")
-    gridy: int = Field(1, ge=1, le=10, description="Number of bases along Y-axis")
-    gridz: float = Field(3, ge=1, le=20, description="Bin height in units (1 unit = 7mm)")
+    # Grid dimensions. Every default is gridfinity-rebuilt-bins.scad's own: a
+    # build with no overrides passes no -D and renders what the file says.
+    gridx: int = Field(3, ge=1, le=10, description="Number of bases along X-axis")
+    gridy: int = Field(2, ge=1, le=10, description="Number of bases along Y-axis")
+    gridz: float = Field(6, ge=1, le=20, description="Bin height in units (1 unit = 7mm)")
 
     # Height options
     gridz_define: GridzDefine = Field(
@@ -140,30 +138,9 @@ class GridfinityBinPart(BasePart):
         - Height unit: 7mm
         - Stacking lip: ~3.55mm (added if include_lip=True)
         """
-        if params:
-            gridx = params.get("gridx", 1)
-            gridy = params.get("gridy", 1)
-            gridz = params.get("gridz", 3)
-            include_lip = params.get("include_lip", True)
-            half_grid = params.get("half_grid", False)
-            gridz_define = params.get("gridz_define", 0)
-        elif self.params_model:
-            defaults = self.params_model()
-            gridx = defaults.gridx
-            gridy = defaults.gridy
-            gridz = defaults.gridz
-            include_lip = defaults.include_lip
-            half_grid = defaults.half_grid
-            gridz_define = (
-                defaults.gridz_define.value
-                if hasattr(defaults.gridz_define, "value")
-                else defaults.gridz_define
-            )
-        else:
-            gridx, gridy, gridz = 1, 1, 3
-            include_lip = True
-            half_grid = False
-            gridz_define = 0
+        p = BinParams(**(params or {}))
+        gridx, gridy, gridz = p.gridx, p.gridy, p.gridz
+        include_lip, half_grid, gridz_define = p.include_lip, p.half_grid, p.gridz_define
 
         # Calculate dimensions
         grid_unit = GRID_SIZE_MM / (2 if half_grid else 1)
@@ -190,36 +167,17 @@ class GridfinityBinPart(BasePart):
             max_point=Vector3D(x=width_x, y=width_y, z=height),
         )
 
-    def get_scad_customizer_params(self, params: Optional[Dict] = None) -> Dict:
-        """
-        Convert Python params to OpenSCAD customizer format.
-
-        Returns a dict that can be passed to OpenSCAD via -D flags.
-        """
-        if params is None:
-            params = {}
-
-        bin_params = BinParams(**params) if params else BinParams()
-
-        return {
-            "gridx": bin_params.gridx,
-            "gridy": bin_params.gridy,
-            "gridz": bin_params.gridz,
-            "gridz_define": bin_params.gridz_define.value,
-            "include_lip": bin_params.include_lip,
-            "half_grid": bin_params.half_grid,
-            "divx": bin_params.divx,
-            "divy": bin_params.divy,
-            "style_tab": bin_params.style_tab.value,
-            "scoop": bin_params.scoop,
-            "only_corners": bin_params.only_corners,
-            "refined_holes": bin_params.hole_options.refined_holes,
-            "magnet_holes": bin_params.hole_options.magnet_holes,
-            "screw_holes": bin_params.hole_options.screw_holes,
-            "crush_ribs": bin_params.hole_options.crush_ribs,
-            "chamfer_holes": bin_params.hole_options.chamfer_holes,
-            "printable_hole_top": bin_params.hole_options.printable_hole_top,
-        }
+    def scad_overrides(self, params: Mapping[str, Any]) -> Dict[str, Any]:
+        """The overrides given, under gridfinity-rebuilt-bins.scad's customizer
+        names: ``hole_options`` as the six booleans the SCAD bundles itself,
+        an enum as its number."""
+        scad: Dict[str, Any] = {}
+        for name, value in params.items():
+            if name == "hole_options":
+                scad.update(HoleOptions.model_validate(value).model_dump())
+            else:
+                scad[name] = value.value if isinstance(value, Enum) else value
+        return scad
 
     @property
     def submodule_initialized(self) -> bool:
@@ -235,70 +193,11 @@ class GridfinityBinPart(BasePart):
         """parts/gridfinity/gridfinity.stl, outside the submodule's working tree."""
         return ROOT / "parts" / "gridfinity" / "gridfinity.stl"
 
-    @property
-    def requires_dev_openscad(self) -> bool:
-        """
-        Whether this part requires a development build of OpenSCAD.
-
-        gridfinity-rebuilt-openscad uses newer OpenSCAD syntax features
-        that require version 2024.x+ (development snapshots).
-        """
-        return True
-
-    @property
-    def openscad_min_version(self) -> str:
-        """Minimum OpenSCAD version required for this part."""
-        return "2024.01"
-
-    def can_generate_stl(self) -> tuple[bool, str]:
-        """
-        Check if STL generation is possible.
-
-        Returns:
-            Tuple of (can_generate, reason_if_not)
-        """
-        from .stl_renderer import get_renderer
-
+    def can_generate_stl(self, openscad: Optional[Path] = None) -> Tuple[bool, str]:
+        """The submodule's SCAD is present, and an OpenSCAD new enough for it."""
         if not self.submodule_initialized:
             return False, "Submodule not initialized. Run: git submodule update --init"
-
-        renderer = get_renderer()
-        if not renderer.is_available:
-            return False, "OpenSCAD not installed"
-
-        version = renderer.get_version()
-        if _too_old(version):
-            nightly = renderer.find_nightly()
-            if nightly:
-                nightly_version = renderer.get_nightly_version()
-                return True, f"Will use nightly build: {nightly} ({nightly_version})"
-            else:
-                return False, (
-                    f"{version} is too old. gridfinity requires 2024.x+ "
-                    f"(development build). Install OpenSCAD Nightly from "
-                    f"https://openscad.org/downloads.html#snapshots"
-                )
-
-        return True, "Ready"
-
-    def get_openscad_path(self) -> Optional[Path]:
-        """
-        Get the appropriate OpenSCAD path for this part.
-
-        Returns nightly build if stable version is too old.
-        """
-        from .stl_renderer import get_renderer
-
-        renderer = get_renderer()
-        if not renderer.is_available:
-            return None
-
-        if _too_old(renderer.get_version()):
-            nightly = renderer.find_nightly()
-            if nightly:
-                return nightly
-
-        return renderer.openscad_path
+        return super().can_generate_stl(openscad)
 
 
 def create(metadata_root: Path) -> GridfinityBinPart:
@@ -321,6 +220,7 @@ def create(metadata_root: Path) -> GridfinityBinPart:
         readme_path=metadata_root / "parts" / "gridfinity" / "README.md",
         preview_color=Color.from_hex("#4A90D9"),  # Gridfinity blue
         module_name="gridfinity-rebuilt-bins",
+        openscad_min_version=OPENSCAD_MIN_VERSION,
         print_settings=PrintSettings(
             nozzle_diameter=0.4,
             layer_height=0.2,

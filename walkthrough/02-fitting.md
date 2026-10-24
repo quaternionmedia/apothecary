@@ -8,7 +8,7 @@ every dimension in it one of two kinds, and the split is the whole seam:
 > The consumer owns requirements and interfaces.
 > Apothecary owns realization and manufacturability.
 
-`docs/fitting-a-part.md` is the standard. This page is how you drive it.
+[`docs/fitting-a-part.md`](../docs/fitting-a-part.md) is the standard. This page is how you drive it.
 
 ## Manufacturing facts carry house defaults
 

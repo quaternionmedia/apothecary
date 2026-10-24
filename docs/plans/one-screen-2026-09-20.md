@@ -3,8 +3,8 @@
 *Phases 0-3 have landed: the census counts all three screens, the anchor
 layer and machine badges (`anchors.js`, `machine_marks.js`), the panel
 manager and rail (`panels.js`), and the machine as one module with two hosts
-(`widgets/machine.js`). [Firmware](../firmware.md) describes them as they
-are. Phases 4 and 5 are open.*
+(`widgets/machine.js`). The pages `apothecary docs generate` writes show
+them as they are. Phases 4 and 5 are open.*
 
 ## The end state
 
