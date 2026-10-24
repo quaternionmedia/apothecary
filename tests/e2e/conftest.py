@@ -28,7 +28,6 @@ from ports import refuse_a_held_port  # noqa: E402
 from shards import shard_of  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
-EXTERNAL_PORT = 8765  # a server you started, when neither --start-server nor --base-url is given
 
 # The app under uvicorn, with the simulated boards answering at once, as the unit
 # suite's do (tests/conftest.py): a real board's silences -- 1.5 s after every link
@@ -200,12 +199,18 @@ def base_url(request, test_server):
     if not url and test_server:
         return test_server
     if not url:
-        url = f"http://127.0.0.1:{request.config.getoption('--server-port') or EXTERNAL_PORT}"
+        # A plain `pytest` is the unit run. A server that happens to be listening is
+        # never taken: the browser tests reset sites, add and remove cameras and
+        # forget pictures, and a person's own server holds their state and their
+        # pinned boards. Only a scripted server, or one named on purpose, is used.
+        pytest.skip(
+            "browser tests need a server of their own: pass --start-server, "
+            "or --base-url URL for a server you started for them"
+        )
     try:
         response = httpx.get(f"{url}/health", timeout=2.0)
     except (httpx.ConnectError, httpx.TimeoutException):
-        # A plain `pytest` is the unit run: the browser tests say why they did not run.
-        pytest.skip(f"browser tests need a server: pass --start-server (or serve on {url})")
+        pytest.exit(f"--base-url {url} does not answer /health", returncode=1)
     if response.status_code != 200:
         pytest.exit(f"Server at {url} returned status {response.status_code}.", returncode=1)
     return url

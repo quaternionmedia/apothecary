@@ -76,6 +76,9 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     _expand_to(page, BOARD)
     section = page.locator("#selected-body .device-section")
     expect(section.locator(".dev-pick")).to_be_visible(timeout=10000)
+    # The Device section is below the board's rows and its part: scrolled into view.
+    section.evaluate("(el) => el.scrollIntoView({ block: 'center' })")
+    page.wait_for_timeout(200)
     docs.step(
         "Open printer_1 › frame_system › mainboard in Site's tree: the board's Device section "
         "offers the detected ports to pin, a Query button, and a box to pin by typed identity"
@@ -107,14 +110,25 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
         "section says which board speaks for it"
     )
 
+    # The root frames the whole building, where the printer is a few pixels: the view
+    # is framed on the bench and the printer on it, so its badge is seen at its board.
+    page.evaluate(
+        """() => {
+            const v = window.fractalViewer;
+            const on = new Set(['workbench', 'printer_1']);
+            const level = v.currentRenderNodes(v.currentFocusNode());
+            v.frameCameraForChildren(level.filter((n) => on.has(n.name)));
+        }"""
+    )
     world_badge = page.locator(".world-badge[data-path='printer_1']")
     expect(world_badge).to_contain_text("printing", timeout=10000)
     page.wait_for_timeout(600)
     docs.step(
-        "The world wears its machines: a badge stands above the printer in the 3D view -- "
-        "state, hotend and bed, progress, a job's stage -- fixed to the printer and following "
-        "it as the camera moves; a click selects it. Inside the printer the nozzle marker "
-        "sits where the board last said, and a bed reading lies over the bed"
+        "The world wears its machines: a ⚡ badge stands at the printer's board in the 3D "
+        "view, following it as the camera moves; its words -- state, hotend and bed, "
+        "progress, a job's stage, the port -- open on hover or while the printer is "
+        "selected, and a click selects it. Inside the printer the nozzle marker sits where "
+        "the board last said, and a bed reading lies over the bed"
     )
 
     world_badge.click()
@@ -123,12 +137,12 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     page.wait_for_timeout(2500)
     docs.step(
         "Click the badge, or Open, or Device › Open on the ring, and the printer's Machine "
-        "opens in front of the world: the monitor's own body -- cards, chart, the latch and "
-        "control pad, the bed reading, the print from here -- with the board's one log in "
-        "it, in a panel tethered to the printer. It is the one place for the board, and "
+        "opens in the rail's tab strip, beside Pictures and the Bench: the monitor's own "
+        "body -- cards, chart, the latch and control pad, the bed reading, the print from "
+        "here -- with the board's one log in it. It is the one place for the board, and "
         "the one thing that polls it: the badges and Selected's line say what its polls "
-        "said. Drag it to let go of the tether, or dock it into the rail's strip; the "
-        "ring's control verbs go to it"
+        "said. Float it from its tab to have it over the world; the ring's control verbs "
+        "go to it"
     )
 
     machine.locator("#q").fill("M119")
@@ -187,12 +201,13 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     page.locator("#q").fill("M119")
     page.locator("#qform button").click()
     expect(page.locator("#log")).to_contain_text("y_min: TRIGGERED", timeout=8000)
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
     docs.step(
         "The printer monitor's address, /firmware/monitor?port=, opens the viewer on the "
-        "site the port is pinned in with the printer's Machine open in front of the world: "
-        "status cards, temperature history, the port's comms log with its query box, and "
-        "Reconnect / Reset / Release for the link. A board pinned nowhere opens on the "
-        "default site, its Machine floating"
+        "site the port is pinned in with the printer's Machine open, a tab of the rail's "
+        "strip: status cards, temperature history, the port's comms log with its query box, "
+        "and Reconnect / Reset / Release for the link. A board pinned nowhere opens on the "
+        "default site, its Machine in the rail the same way"
     )
 
     page.locator("#ctl").check()

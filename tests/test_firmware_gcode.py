@@ -10,6 +10,7 @@ import json
 import os
 import threading
 import time
+from datetime import datetime, timezone
 
 import pytest
 from click.testing import CliRunner
@@ -1133,6 +1134,42 @@ def test_leveling_job_homes_probes_reads_and_saves(fake_arduino_cli, scripted_li
     assert len(devices.leveling_records(port)) == 2
 
 
+class OneMillisecond(datetime):
+    """A clock stopped at one moment: whatever a module stamps by it is made in the same
+    millisecond, as two records made close together on a fast machine are."""
+
+    @classmethod
+    def now(cls, tz=None):
+        return datetime(2026, 10, 14, 12, 0, 0, 123456, tzinfo=timezone.utc)
+
+
+def test_two_bed_readings_in_one_millisecond_are_both_kept(
+    fake_arduino_cli, scripted_links, monkeypatch
+):
+    """A reading's id is the moment to the millisecond and the port. A second reading in
+    the same millisecond takes that id with -2 after it, and the first is not written over."""
+    port = "/dev/ttyFAKE1"
+
+    class Reads(ScriptedTransport):
+        def __init__(self, port, baud):
+            super().__init__(port, baud, replies=LEVELING)
+
+    scripted_links.factory = Reads
+    monkeypatch.setattr(devices, "datetime", OneMillisecond)
+    first = devices.start_leveling(port, probe=False, note="first", links=scripted_links)
+    first.thread.join(5)
+    second = devices.start_leveling(port, probe=False, note="second", links=scripted_links)
+    second.thread.join(5)
+    assert first.stage == second.stage == "saved" and first.record.at == second.record.at
+    assert sorted(r.note for r in devices.leveling_records(port)) == ["first", "second"]
+    assert first.record.id == "20261014T120000.123-dev_ttyFAKE1"
+    assert second.record.id == "20261014T120000.123-dev_ttyFAKE1-2"
+    kept = {r.id: r.note for r in devices.leveling_records(port)}
+    assert kept == {first.record.id: "first", second.record.id: "second"}
+    assert devices.leveling_record(second.record.id) == second.record
+    assert second.snapshot()["record_id"] == second.record.id
+
+
 def test_leveling_job_reports_a_board_that_will_not_probe(fake_arduino_cli, scripted_links):
     port = "/dev/ttyFAKE1"
     scripted_links.control.arm(port)
@@ -1231,6 +1268,20 @@ def test_print_files_are_kept_checked_and_forgotten(fake_arduino_cli):
     assert devices.delete_print_file(bad.id) is True
     assert devices.delete_print_file(bad.id) is False
     assert [f.id for f in devices.print_files()] == [kept.id]
+
+
+def test_two_files_kept_in_one_millisecond_are_both_kept(fake_arduino_cli, monkeypatch):
+    """A kept file's id is the moment to the millisecond and its name. A second file of
+    the same name kept in the same millisecond takes that id with -2 after it, and the
+    first file's lines are still its own."""
+    monkeypatch.setattr(devices, "datetime", OneMillisecond)
+    first = devices.save_print_file("cube.gcode", b"G28\n")
+    second = devices.save_print_file("cube.gcode", b"G28\nG1 X5\n")
+    assert sorted(f.lines for f in devices.print_files()) == [1, 2]
+    assert first.id == "20261014T120000.123-cube" and second.id == "20261014T120000.123-cube-2"
+    assert {f.id: f.lines for f in devices.print_files()} == {first.id: 1, second.id: 2}
+    assert (devices.prints_dir() / f"{first.id}.gcode").read_text(encoding="utf-8") == "G28\n"
+    assert devices.print_file(second.id) == second
 
 
 def test_print_job_streams_pauses_resumes_and_polls_between_lines(fake_arduino_cli, scripted_links):
@@ -1524,9 +1575,9 @@ def test_a_pin_by_port_is_kept_as_the_board_and_survives_renumbering(
     assert row["identity"] == "FAKESERIAL1" and row["binding_source"] == "manual"
     assert row["device"]["port"] == "/dev/ttyFAKE1"
     # A port with no serial number stays a port.
-    row = c.put("/sites/garage/nodes/printer_2/device", json={"identity": "/dev/ttyFAKE0"}).json()
+    row = c.put("/sites/garage/nodes/cnc_router/device", json={"identity": "/dev/ttyFAKE0"}).json()
     assert row["identity"] == "/dev/ttyFAKE0"
-    c.delete("/sites/garage/nodes/printer_2/device")
+    c.delete("/sites/garage/nodes/cnc_router/device")
     # The board view and the status sync find the pin by the port it is on now.
     assert (
         c.get("/firmware/printers/where", params={"port": "/dev/ttyFAKE1"}).json()["board"]["path"]

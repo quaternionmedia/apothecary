@@ -1,4 +1,4 @@
-"""Creality Ender 3 -- the printers on the garage bench, drawn as the machine is.
+"""Creality Ender 3 -- the printer on the garage bench, drawn as the machine is.
 
 A parametric model built from published dimensions (see ``parts/ender3/ender3.scad``
 for which numbers are specifications and which are measured): the frame of
