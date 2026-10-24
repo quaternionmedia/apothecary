@@ -90,9 +90,12 @@ Rules that hold throughout:
   history), `devices.js` (the cards, minus the board view -- the world
   shows the boards). Mounted as the **Bench** panel, docked right, and as
   `/firmware` in a plain layout.
-- The device cards' verbs join the ring (a board's node ring gains
-  `Probe`, `Identify`, `Live` where they apply), so the firmware page's
-  controls of its own get cells.
+- The device cards' verbs join the ring, so the firmware page's controls
+  of its own get cells: `Probe`, `Identify` and the serial `Listen` (named
+  so, because Camera › Live is the pictures plan's) join Device › Link
+  where they apply, because the Device ring on a printer already holds
+  eight; proposed as an edit to the rad record's Link cell (see the
+  pictures plan's *For a person*).
 - Tests: the firmware-page suite runs on both hosts.
 
 ## Phase 5 — One screen
@@ -109,6 +112,13 @@ Rules that hold throughout:
 - The draft record *One screen* is proposed for ratification with the
   numbers filled in.
 
+## Pictures, in their own plan
+
+Pictures, cameras and found shapes take the same frame in
+[pictures-in-the-world-2026-09-26.md](pictures-in-the-world-2026-09-26.md):
+it retires the camera panel, and its last phase closes the old photo routes
+together with Phase 5 above.
+
 ## What is decided here, and what a person decides
 
 Decided by this plan (change it here, not in the code): the three kinds of
@@ -118,7 +128,8 @@ a cell; the old routes live until Phase 5; the census is the meter.
 For a person: whether the plain layouts survive Phase 5 as kiosk views;
 whether the Bench belongs in the world at all or stays its own page (the
 plan says in the world, docked, since a devkit is a thing at a place too);
-the record's ratification.
+the edit to the rad record's Link cell that Phase 4 proposes; the record's
+ratification.
 
 ## Not in this plan
 

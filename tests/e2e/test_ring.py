@@ -89,8 +89,13 @@ def test_key_m_opens_the_node_ring_in_its_cells(page: Page, ring_url: str):
         "2": "Device",
         "4": "Why this",
         "9": "Into",
+        # A host holds a camera and pictures: appended, so no cell above moved.
+        "3": "Camera",
+        "1": "Picture",
+        # A printer drawn as a part is edited from Part: appended last, the eighth.
+        "7": "Part",
     }
-    assert page.locator("#ring-overlay .wedge.empty").count() == 3
+    assert page.locator("#ring-overlay .wedge.empty").count() == 0
     assert page.locator("#ring-overlay .hub-digit").text_content() == "5"
     assert _title(page) == "printer_1"
     # Every wedge shows its digit, occupied or not; a parented option shows a chevron.
@@ -114,7 +119,15 @@ def test_the_toolbar_button_and_right_click_open_it_too(page: Page, ring_url: st
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     assert _title(page) == "printer_2"
     # Nothing pinned: no Device option at all, not a greyed one, so Why this moves up a cell.
-    assert _wedges(page) == {"8": "Zoom in", "6": "Move", "2": "Why this", "4": "Into"}
+    assert _wedges(page) == {
+        "8": "Zoom in",
+        "6": "Move",
+        "2": "Why this",
+        "4": "Into",
+        "9": "Camera",
+        "3": "Picture",
+        "1": "Part",
+    }
     expect(page.locator("#contents-list .contents-item[data-path='printer_2']")).to_have_class(
         "contents-item selected"
     )
@@ -276,9 +289,25 @@ def test_the_pointer_uses_the_same_cells(page: Page, ring_url: str):
     # The menu names its highlighted item by that item's id.
     expect(page.locator("#ring-overlay")).to_have_attribute("aria-activedescendant", "ring-cell-6")
     expect(page.locator("#ring-cell-6")).to_have_attribute("data-cell", "6")
+    # Over an empty cell the pointer highlights nothing. printer_1's ring is
+    # full (its eighth cell is Part), so that is shown on printer_2's, which
+    # has no board pinned and leaves cell 7 empty.
+    page.keyboard.press("Escape")
+    expect(page.locator("#ring-overlay")).to_have_count(0)
+    page.locator("#contents-list .contents-item[data-path='printer_2']").click(button="right")
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    assert _title(page) == "printer_2"
+    box = page.locator("#ring-svg").bounding_box()
+    cx, cy = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
     page.mouse.move(cx - 51, cy - 51)  # up-left: cell 7, empty on this ring, so nothing
     expect(page.locator("#ring-overlay .wedge.hot")).to_have_count(0)
     assert page.locator("#ring-overlay").get_attribute("aria-activedescendant") is None
+    page.keyboard.press("Escape")
+    expect(page.locator("#ring-overlay")).to_have_count(0)
+    page.locator("#contents-list .contents-item[data-path='printer_1']").click(button="right")
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    box = page.locator("#ring-svg").bounding_box()
+    cx, cy = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
     page.mouse.move(cx, cy + 72)
     page.mouse.click(cx, cy + 72)  # down: Device, a submenu
     assert _title(page) == "Device"
@@ -481,7 +510,8 @@ def test_a_panel_closes_to_a_tab_and_collapses(page: Page, ring_url: str):
     A closed panel leaves a tab that brings it back; a collapsed one keeps its title."""
     rail, world = _open_panels(page, ring_url)
     ids = page.evaluate("() => window.apothecaryPanels.list().map((p) => p.id)")
-    assert ids == ["contents", "selected", "jobs", "validation", "scad", "camera"]
+    assert ids == ["contents", "selected", "jobs", "validation", "scad", "kept", "camera"]
+    assert page.evaluate("() => window.apothecaryPanels.state('kept').open") is False
     assert page.evaluate("() => window.apothecaryPanels.state('camera').open") is False
     expect(rail.locator(".panel[data-panel='contents']")).to_be_visible()
     assert world.bounding_box()["width"] >= page.viewport_size["width"] / 2
@@ -492,7 +522,7 @@ def test_a_panel_closes_to_a_tab_and_collapses(page: Page, ring_url: str):
     expect(rail.locator(".panel[data-panel='validation']")).to_have_count(0)
     page.locator(".panel-tab[data-panel='validation']").click()
     expect(rail.locator(".panel[data-panel='validation']")).to_be_visible(timeout=1000)
-    expect(page.locator(".panel-tab")).to_have_count(1)  # the camera's, closed by default
+    expect(page.locator(".panel-tab")).to_have_count(2)  # Kept's and Gather's, closed by default
 
     # Collapse: the body folds, the title stays.
     page.locator(".panel[data-panel='contents'] .panel-collapse").click()
@@ -554,12 +584,26 @@ def test_a_closed_panel_stays_closed_and_the_ring_reopens_it(page: Page, ring_ur
     page.keyboard.press(scad_cell)
     expect(page.locator("#ring-overlay")).to_have_count(0)
     expect(rail.locator(".panel[data-panel='scad']")).to_be_visible(timeout=2000)
-    expect(page.locator(".panel-tab")).to_have_count(1)  # the camera's, closed by default
+    expect(page.locator(".panel-tab")).to_have_count(2)  # Kept's and Gather's, closed by default
 
-    # Every panel closed: the world has the whole width, and six tabs wait.
-    for pid in ["contents", "selected", "jobs", "validation", "scad"]:
+    # Panels › Pictures holds Kept and the gathering; Kept opens from there.
+    page.locator("#viewer-canvas").click(button="right", position={"x": 30, "y": 30})
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    page.keyboard.press(panels_cell)
+    expect(page.locator("#ring-overlay .title")).to_have_text("Panels")
+    pictures_cell = next(cell for cell, label in _wedges(page).items() if label == "Pictures")
+    page.keyboard.press(pictures_cell)
+    expect(page.locator("#ring-overlay .title")).to_have_text("Pictures")
+    assert sorted(_wedges(page).values()) == ["Gather", "Kept"]
+    kept_cell = next(cell for cell, label in _wedges(page).items() if label == "Kept")
+    page.keyboard.press(kept_cell)
+    expect(rail.locator(".panel[data-panel='kept']")).to_be_visible(timeout=2000)
+    expect(page.locator(".panel-tab")).to_have_count(1)  # Gather's
+
+    # Every panel closed: the world has the whole width, and seven tabs wait.
+    for pid in ["contents", "selected", "jobs", "validation", "scad", "kept"]:
         page.evaluate("(id) => window.apothecaryPanels.close(id)", pid)
-    expect(page.locator(".panel-tab")).to_have_count(6, timeout=2000)
+    expect(page.locator(".panel-tab")).to_have_count(7, timeout=2000)
     _world_is(page, page.viewport_size["width"])
 
 

@@ -59,8 +59,11 @@ control is deleted.
   markup is the meter.
 - The drawing library's own listeners (turning and sliding the view) are not in
   this count.
-- It is one page at a time, plus the widget modules the page imports. The
-  command line, direct requests and the other pages are not in the number.
+- It is one page at a time, plus the widget modules the page imports and the
+  marks modules it imports by name (`MARKS`: what the world wears -- a
+  machine's marks, a picture's). `ring.js`, `panels.js` and `anchors.js` stay
+  off the meter as chrome with their own tests. The command line, direct
+  requests and the other pages are not in the number.
 - It refuses when it finds nothing, because a page it failed to read and a page
   with no controls must not produce the same answer.
 """
@@ -290,33 +293,27 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "dev-printer": (WIDGET, WHAT_YOU_SEE, "a button that asks M115, or polls a printer once"),
     "dev-live": (WIDGET, WHAT_YOU_SEE, "a button that streams the board's serial output"),
     # ---- the camera panel, apothecary/static/widgets/camera.js ------------
-    # The photo workflow from the browser: a camera, its frame kept here, the
-    # pictures on this machine gathered, and what a person says about them.
-    "cam-pick": (WIDGET, WHAT_YOU_SEE, "a drop-down of the browser's cameras"),
-    "cam-allow": (WIDGET, WHAT_YOU_SEE, "a button that asks the browser for its cameras"),
-    "cam-refresh": (WIDGET, WHAT_YOU_SEE, "a button that lists the cameras again"),
-    "cam-name": (WIDGET, WHAT_YOU_SEE, "a box for what the next capture is called"),
-    "cam-width": (WIDGET, WHAT_YOU_SEE, "a box for how wide the picture is, in millimetres"),
-    "cam-capture": (WIDGET, WHAT_IS_THERE, "a button that keeps a frame as a picture here"),
-    "cam-look": (WIDGET, WHAT_IS_THERE, "a button that captures, looks, and opens the result"),
-    "cam-place": (WIDGET, WHAT_IS_THERE, "a button that stands the camera at the chosen piece"),
-    "cam-unplace": (WIDGET, WHAT_IS_THERE, "a button that takes the camera out of the world"),
+    # What is left of it until gathering leaves core: the pictures on this
+    # machine, gathered into a report, and what a person says about them, and
+    # a file picker that keeps pictures here pinned nowhere. The camera itself
+    # is pinned, shown live and looked with from its host's ring.
     "pic-all": (WIDGET, WHAT_YOU_SEE, "a tick-box that ticks every picture"),
-    "pic-refresh": (WIDGET, WHAT_YOU_SEE, "a button that lists the pictures again"),
     "pic-gather": (WIDGET, WHAT_YOU_SEE, "a button that gathers the ticked pictures"),
-    "pic-open": (WIDGET, WHAT_IS_THERE, "a button that builds one arrangement and opens it"),
     "gather-answers": (WIDGET, WHAT_YOU_SEE, "a box for what you know about the pictures"),
     "answer": (WIDGET, WHAT_YOU_SEE, "a button that answers one of the machine's questions"),
-    # What the browser put on this machine, taken back from the same panel:
-    # pictures added from a file picker, kept pictures forgotten one at a
-    # time or all at once, the cameras placed in the world and the boards
-    # pinned to pieces listed (every site's) with the button that takes each back.
     "pic-file": (WIDGET, WHAT_YOU_SEE, "a file picker that keeps chosen pictures on this machine"),
-    "pic-purge": (WIDGET, WHAT_YOU_SEE, "a button that forgets every picture the browser put here"),
-    "pic-forget": (WIDGET, WHAT_YOU_SEE, "a button that forgets one kept picture"),
-    "cam-unplace-one": (WIDGET, WHAT_IS_THERE, "a button that takes one placed camera away"),
-    "pin-refresh": (WIDGET, WHAT_YOU_SEE, "a button that lists the pins again"),
-    "pin-unpin": (WIDGET, WHAT_IS_THERE, "a button that takes one pin back, wherever it points"),
+    # ---- Kept, apothecary/static/widgets/kept.js --------------------------
+    # What a page pinned or kept, every site's, each taken back from its row
+    # (TAKEN_BACK), and Purge.
+    "kept-refresh": (WIDGET, WHAT_YOU_SEE, "a button that lists what is pinned and kept again"),
+    "kept-purge": (WIDGET, WHAT_YOU_SEE, "a button that forgets every picture the browser put here"),
+    "kept-camera-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins one camera, in any site"),
+    "kept-look-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins one look, in any site"),
+    "kept-board-unpin": (WIDGET, WHAT_IS_THERE, "a button that takes one board's pin back"),
+    "kept-forget": (WIDGET, WHAT_YOU_SEE, "a button that forgets one kept picture"),
+    # Selected: the one width a look is sized by (a chosen shape's long side
+    # when one is chosen). A number the ring cannot type; Size puts the cursor in it.
+    "look-width": (WIDGET, WHAT_IS_THERE, "a box for how wide a picture is, or one shape's side"),
     # printing from here: a kept file, streamed
     "print-file": (WIDGET, WHAT_YOU_SEE, "a file picker that keeps a G-code file on the host"),
     "print-pick": (WIDGET, WHAT_YOU_SEE, "a drop-down of the files kept on the host"),
@@ -394,17 +391,14 @@ RING_BACKED: Dict[str, str] = {
     "dev-printer": "device:poll",
     "dev-live": "device:watch",
     "boards-btn": "device:rescan",
-    # The camera panel's buttons, each a cell of the canvas ring's Camera.
-    "cam-allow": "camera:allow",
-    "cam-capture": "camera:capture",
-    "cam-look": "camera:look",
-    "cam-place": "camera:place",
-    "cam-unplace": "camera:unplace",
+    # Gather and Kept's Purge are cells of the canvas ring's Pictures. Kept's
+    # per-row buttons are not here: see TAKEN_BACK.
     "pic-gather": "camera:gather",
-    "pic-open": "camera:open",
-    # Behind the Camera cell's Kept: the file picker opens, the purge asks first.
-    "pic-file": "camera:add",
-    "pic-purge": "camera:purge",
+    "kept-purge": "picture:purge",
+    # A file dropped on the world, or chosen in the dialog Picture › Add opens.
+    "canvas:drop:onDropFiles": "picture:add",
+    "input:change:addFiles": "picture:add",
+    "row:click:drawLook": "picture:draw:look_1",
     # The Print cell's verbs go to whichever print is running, the card's or
     # the one from here; Send file is the one from here alone.
     "print-start": "print:start",
@@ -423,6 +417,24 @@ RING_BACKED: Dict[str, str] = {
     "reset": "device:reset",
     "release": "device:release",
     "ctl:change:arm": "control:arm",
+}
+
+# A control kept on purpose beside the ring: the button on a row of Kept that
+# takes back what the row names -- a camera or a look unpinned, a board's pin
+# taken back, a kept picture forgotten -- in whichever site it stands. §6 of the
+# draft record *Personal data stays on the device* asks that what a page placed
+# or pinned be listed by the same page, every site's, and taken back the same
+# way, and a ring cell reaches another site's pin only from that site. So these
+# are a lasting exception, the one the pictures plan asks the *rad host
+# integration* record's §5 to name, and are **not** ring-backed: the meter
+# counts them, and never expects them to go. Keyed like RING_BACKED, by the
+# control's name or its listening key; the value is what the row takes back.
+TAKEN_BACK: Dict[str, str] = {
+    "kept-camera-unpin": "a camera's pin, every site's",
+    "kept-look-unpin": "a look, every site's",
+    "kept-board-unpin": "a board's pin, every site's",
+    "kept-forget": "a picture the browser kept",
+    "kept-list:click:closest": "any of those, from its row",
 }
 
 MARKUP = re.compile(
@@ -491,7 +503,10 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "jobFormEl:submit:createJob": (WIDGET, WHAT_IS_THERE, "sending the job form"),
     "posAxis:change:recomputeWorldBounds": (WIDGET, WHAT_IS_THERE, "typing a position"),
     "statusSelect:change:submitStatus": (WIDGET, WHAT_IS_THERE, "choosing a state"),
-    "regenerateBtn:click:regeneratePart": (WIDGET, WHAT_IS_THERE, "the rebuild button"),
+    # The editor's Regenerate STL: the staged set applied to its target, a
+    # part's STL rendered again (a made piece has no such button: Apply is its
+    # rebuild).
+    "regenerateBtn:click:applyEditor": (WIDGET, WHAT_IS_THERE, "the rebuild button"),
     "jobBtn:click:assignJob": (WIDGET, WHAT_IS_THERE, "giving a job to a machine"),
     "jobBtn:click:completeJob": (WIDGET, WHAT_IS_THERE, "finishing a job"),
     "zoomInLink:click:zoomIn": (WIDGET, WHAT_YOU_SEE, "the go-in button on the chosen piece"),
@@ -506,15 +521,63 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "li:click:selectChild": (LIST, WHAT_YOU_SEE, "picking a piece from the list"),
     # An anchor: a machine's badge standing over it in the world (anchors.js).
     "badge:click:selectPath": (LIST, WHAT_YOU_SEE, "picking the machine a badge stands over"),
-    "badge:click:openCamera": (LIST, WHAT_YOU_SEE, "picking the camera a badge stands over"),
+    # A place badge: a host's camera and look, or the floor's (picture_marks.js).
+    "badge:click:onSelect": (
+        LIST,
+        WHAT_YOU_SEE,
+        "picking the place a badge stands over: a structure, or the floor",
+    ),
+    # ---- pictures in the world: a drop, a paste, Selected's width and rows --
+    "canvas:dragover:(nothing)": (
+        GESTURE,
+        NOTHING,
+        "holding a file over the world, so that it can be dropped there",
+    ),
+    "canvas:drop:onDropFiles": (
+        GESTURE,
+        WHAT_IS_THERE,
+        "dropping pictures on a structure or the floor: kept, pinned there, found",
+    ),
+    "window:paste:onPaste": (
+        GESTURE,
+        WHAT_IS_THERE,
+        "pasting a picture: kept, pinned at the selected place, found",
+    ),
+    "widthBox:change:setWidth": (WIDGET, WHAT_IS_THERE, "typing a picture's width, or a shape's"),
+    "row:click:drawLook": (LIST, WHAT_YOU_SEE, "a look's row in Selected, drawing that look"),
+    # pictures.js: the browser's cameras and the dialog Picture › Add opens.
+    "mediaDevices:devicechange:listCameras": (
+        AUTOMATIC,
+        NOTHING,
+        "a camera plugged in or out, and the list of this browser's cameras follows",
+    ),
+    "status:change:listCameras": (
+        AUTOMATIC,
+        NOTHING,
+        "the camera allowed or refused for this site in the address bar, "
+        "and the list of this browser's cameras follows",
+    ),
+    "video:loadeddata:resolve": (
+        AUTOMATIC,
+        NOTHING,
+        "a camera's first frame arrived, so a look can keep one",
+    ),
+    "input:change:addFiles": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "the pictures chosen in the dialog Picture › Add opens: kept and pinned there",
+    ),
     # ---- the camera panel --------------------------------------------------
-    "cam-pick:change:useCamera": (WIDGET, WHAT_YOU_SEE, "choosing which camera is live"),
     "pic-all:change:(nothing)": (WIDGET, WHAT_YOU_SEE, "ticking every picture at once"),
     "gather-out:click:closest": (WIDGET, WHAT_YOU_SEE, "answering a question with a button"),
-    "pic-list:click:closest": (WIDGET, WHAT_YOU_SEE, "forgetting a kept picture, from its own"),
     "pic-file:change:addFiles": (WIDGET, WHAT_YOU_SEE, "adding the chosen pictures"),
-    "cam-placed:click:closest": (WIDGET, WHAT_IS_THERE, "taking a placed camera out of the world"),
-    "pin-list:click:closest": (WIDGET, WHAT_IS_THERE, "taking one pin back from the list"),
+    # ---- Kept --------------------------------------------------------------
+    "kept-list:click:closest": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "taking back what a row names -- a camera, a look, a board's pin, a kept picture -- "
+        "whatever site it is in",
+    ),
     "li:dblclick:zoomIn": (LIST, WHAT_YOU_SEE, "going into a piece from the list"),
     "rootCrumb:click:jumpTo": (LIST, WHAT_YOU_SEE, "the top of the trail"),
     "crumb:click:jumpTo": (LIST, WHAT_YOU_SEE, "a step on the trail"),
@@ -687,6 +750,9 @@ class Found:
     # with one of these is a control the ring has already replaced in all but
     # deletion.
     ring_action: Optional[str] = None
+    # What the control takes back, when it is one of Kept's rows' buttons
+    # (TAKEN_BACK): kept beside the ring on purpose, and never ring-backed.
+    taken_back: Optional[str] = None
     # Where the control is written: the page itself, or a widget module the
     # page mounts (apothecary/static/widgets/*.js). A widget's controls are
     # the page's on every page that mounts it, and one thing across pages.
@@ -713,6 +779,10 @@ class Census:
     def ring_backed(self) -> Tuple[Found, ...]:
         """The part of the meter that is also on the ring, and so can go."""
         return tuple(f for f in self.controls_of_its_own() if f.ring_action)
+
+    def taken_back(self) -> Tuple[Found, ...]:
+        """The part of the meter kept beside the ring on purpose: Kept's rows."""
+        return tuple(f for f in self.controls_of_its_own() if f.taken_back)
 
     def sentence(self) -> str:
         own = len(self.controls_of_its_own())
@@ -856,6 +926,7 @@ def _from_markup(text: str) -> List[Found]:
                 how="markup",
                 key=name,
                 ring_action=RING_BACKED.get(name),
+                taken_back=TAKEN_BACK.get(name),
             )
         )
     return found
@@ -882,6 +953,7 @@ def _from_listening(text: str) -> List[Found]:
                 how="listening",
                 key=key,
                 ring_action=RING_BACKED.get(key),
+                taken_back=TAKEN_BACK.get(key),
             )
         )
     return found
@@ -897,17 +969,36 @@ def widgets_of(page: Path) -> List[Path]:
     return [WIDGETS / f"{name}.js" for name in WIDGET_IMPORT.findall(text)]
 
 
+STATIC = TEMPLATES.parent / "apothecary" / "static"
+# The marks modules: what a thing wears in the world, drawn beside the page's own
+# scene and listening, when they listen, on what they draw. Counted with the page
+# that imports one directly, each entry saying which module it came from; a page
+# that reaches one only through another module (the monitor, through
+# board_view.js) is not counted for it.
+MARKS = ("machine_marks.js", "picture_marks.js", "pictures.js")
+STATIC_IMPORT = re.compile(r"from\s+[\"']/static/([\w-]+\.js)[\"']")
+
+
+def marks_of(page: Path) -> List[Path]:
+    """The marks modules a page imports directly, in the order it imports them."""
+    text = page.read_text(encoding="utf-8")
+    return [STATIC / name for name in STATIC_IMPORT.findall(text) if name in MARKS]
+
+
 def take(page: Path | None = None) -> Census:
     """Count what a person can operate, from the page itself.
 
     The viewer unless told otherwise; ``take(MONITOR)`` counts the monitor
     page. One page at a time, and the numbers are never added -- except
     that a widget module the page mounts (``/static/widgets/*.js``, its
-    markup written in the module) is counted as part of the page, each
-    entry saying which module it came from.
+    markup written in the module) and a marks module it imports (``MARKS``)
+    are counted as part of the page, each entry saying which module it came
+    from.
     """
     page = page or VIEWER
-    sources = [(page, "")] + [(w, w.name) for w in widgets_of(page) if w.is_file()]
+    sources = [(page, "")] + [
+        (module, module.name) for module in widgets_of(page) + marks_of(page) if module.is_file()
+    ]
     from_markup: List[Found] = []
     from_listening: List[Found] = []
     for path, label in sources:
@@ -944,6 +1035,8 @@ def report(page: Path | None = None) -> str:
             lines.append(f"  {surface} ({len(of_surface)})")
             for entry in sorted(of_surface, key=lambda f: f.line):
                 backed = f"  ⌗ {entry.ring_action}" if entry.ring_action else ""
+                if entry.taken_back:
+                    backed = f"  ⤺ takes back {entry.taken_back}"
                 lines.append(
                     f"    line {entry.line:>5}  {entry.effect:<14}  {entry.description}{backed}"
                 )

@@ -443,6 +443,77 @@ def test_the_picture_root_is_a_folder_of_pictures_never_everything(monkeypatch, 
     assert here.get("/photos/pictures/file", params={"path": "fake.png"}).status_code == 415
 
 
+def test_looks_write_nothing_outside_the_root_its_two_folders_and_the_state_folder(
+    monkeypatch, tmp_path
+):
+    """Pinning, sizing, making, dropping and forgetting a look keeps nothing anywhere
+    but the picture root's own two folders and the state folder (cameras.json): looks,
+    made pieces and the finder cache are held in memory. And no picture the server
+    answers with -- whole, or at a size for a mat -- may enter the browser's disk cache."""
+    import io
+
+    from PIL import Image, ImageDraw
+
+    from apothecary.api import _site_store
+    from apothecary.vision import cache as cache_module
+    from apothecary.vision import looks as looks_module
+
+    root, state = tmp_path / "pics", tmp_path / "state"
+    root.mkdir()
+    monkeypatch.setenv("APOTHECARY_PICTURE_ROOT", str(root))
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", str(state))
+    monkeypatch.setattr(looks_module, "_store", looks_module.Looks())
+    monkeypatch.setattr(cache_module, "_cache", cache_module.FinderCache())
+    image = Image.new("L", (400, 200), 245)
+    ImageDraw.Draw(image).rectangle((40, 40, 160, 120), fill=20)
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    (root / "own.png").write_bytes(buf.getvalue())
+
+    def everything():
+        return {p for p in tmp_path.rglob("*")} | set(Path.cwd().iterdir())
+
+    before = everything()
+    here = TestClient(app)
+    try:
+        here.put("/cameras/cam1", json={"site": "garage", "path": "workbench"})
+        kept = here.post(
+            "/photos/pictures",
+            params={
+                "name": "desk",
+                "kept": "upload",
+                "site": "garage",
+                "host": "workbench",
+                "camera": "cam1",
+            },
+            content=buf.getvalue(),
+        ).json()
+        captured = here.post(
+            "/photos/pictures",
+            params={"name": "frame", "site": "garage", "host": ""},
+            content=buf.getvalue(),
+        ).json()
+        own = here.post("/sites/garage/looks", json={"host": "workbench", "picture": "own.png"})
+        for look in (kept["look"], captured["look"], own.json()):
+            here.put(f"/sites/garage/looks/{look['id']}/scale", json={"mm_across": 400})
+            made = here.post(f"/sites/garage/looks/{look['id']}/make", json={"all": True}).json()
+            for piece in made["made"][:1]:
+                here.delete(f"/sites/garage/made/{piece}")
+        for path in ("own.png", kept["path"]):
+            for params in ({"path": path}, {"path": path, "px": 256}):
+                answer = here.get("/photos/pictures/file", params=params)
+                assert answer.status_code == 200
+                assert answer.headers["cache-control"] == "no-store", params
+        here.delete(f"/photos/pictures/{kept['path']}")
+        here.delete("/photos/pictures")
+    finally:
+        _site_store.reset("garage")
+    written = everything() - before
+    allowed = (root / "captures", root / "uploads", state)
+    stray = [p for p in written if not any(p == a or a in p.parents for a in allowed)]
+    assert not stray, stray
+
+
 def test_what_is_kept_is_the_persons_alone(monkeypatch, tmp_path):
     """The state folder and a camera's captures are this account's alone, whatever the umask."""
     import stat

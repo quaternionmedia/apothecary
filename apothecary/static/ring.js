@@ -165,10 +165,14 @@ export function annotate(ring, pairs) {
     return count;
 }
 
-export async function resolveRing({ base = "", context, site, device }) {
+/* `picture` is what the page knows about pictures and cameras where the ring
+ * stands (apothecary/menu.py's PictureContext), or a promise of it. */
+export async function resolveRing({ base = "", context, site, device, picture }) {
     const body = { context };
     if (site) body.site = site;
     if (device) body.device = device;
+    const told = await picture;
+    if (told) body.picture = told;
     const r = await fetch(`${base}/menu/resolve`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
@@ -240,15 +244,18 @@ export function close() {
 
 /* Open the ring. Resolves the options from the server, draws them at `at`
  * (or the viewport's centre), and calls onIntent once when something is
- * chosen; onClose when it goes away for any reason.
+ * chosen; onClose when it goes away for any reason. With `into`, the id or
+ * label of an option with children, the ring opens entered down to it, as if
+ * its digits had been pressed.
  */
-export async function openRing({ base = "", context, site, device, at = null, onIntent, onClose }) {
+export async function openRing({ base = "", context, site, device, picture, at = null, into = null, onIntent, onClose }) {
     close();
-    const ring = await resolveRing({ base, context, site, device });
+    const ring = await resolveRing({ base, context, site, device, picture });
     if (current) current.close(false); // somebody opened another while we fetched
     const instance = new RingInstance({ ring, context, site, device, at, onIntent, onClose });
     current = instance;
     instance.mount();
+    if (into) instance.enter(into);
     return instance;
 }
 
@@ -440,10 +447,33 @@ class RingInstance {
             label: option.label,
             site: this.site,
             device: this.device,
+            at: { x: this.cx, y: this.cy }, // where the ring stood, for one that follows from it
         };
         this.close(true);
         window.dispatchEvent(new CustomEvent("apothecary:intent", { detail: intent }));
         if (this.onIntent) this.onIntent(intent);
+    }
+
+    /* Down to the option `target` names -- an id or a label, wherever it is in
+     * this ring's tree -- as if its digits had been pressed from the top: the
+     * ring then shows that option's children, and the address so far is theirs.
+     * False, and nothing pressed, when there is no such option or it is a leaf.
+     */
+    enter(target) {
+        const find = (options, trail) => {
+            for (const option of options) {
+                const here = [...trail, option];
+                if (option.id === target || option.label === target) return option.children ? here : null;
+                const deeper = option.children ? find(option.children, here) : null;
+                if (deeper) return deeper;
+            }
+            return null;
+        };
+        const path = find(this.root.options, []);
+        if (!path) return false;
+        while (this.stack.length > 1) this.back();
+        for (const option of path) this.commit(option.cell);
+        return true;
     }
 
     // One level out; at the top, away.
@@ -490,7 +520,9 @@ export function installRing({ base = "", whatFor, onIntent, onResolved, onError,
                 context: spec.context,
                 site: spec.site,
                 device: spec.device,
+                picture: spec.picture,
                 at: at ?? spec.at ?? null,
+                into: spec.into ?? null,
                 onIntent,
                 onClose: spec.onClose,
             });

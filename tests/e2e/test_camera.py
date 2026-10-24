@@ -1,11 +1,12 @@
-"""The photo workflow from the browser, with a camera: the camera's first sanity check
+"""A camera in the browser, at the place it is pinned: the camera's first sanity check
 is to record its own surroundings.
 
 Runs against the shared test server (its picture folder is a temp folder the
 fixture names) in a browser of its own, launched with Chromium's fake camera
-(the `camera_page` fixture in conftest) so there is a camera to allow, to see
-live, to capture from and to place in the world on every machine, and no real
-camera is ever opened by a test.
+(the `camera_page` fixture in conftest) so there is a camera to pin, to see
+live and to keep a frame from on every machine, and no real camera is ever
+opened by a test. The camera's verbs are its host's ring's (Camera › Pin here,
+Live, Look, Keep, Unpin); tests/e2e/test_the_loop.py takes a look with them.
 
 What the browser put here, it can take back: the bench walkthrough
 (test_docs_bench_walkthrough.py) is that check.
@@ -13,14 +14,22 @@ What the browser put here, it can take back: the bench walkthrough
 
 from __future__ import annotations
 
+import re
+
 import pytest
-from PIL import Image, ImageDraw
+from PIL import Image
 from playwright.sync_api import expect
 
 WEDGES = (
     "() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]"
     ".filter((w) => !w.classList.contains('empty'))"
     ".map((w) => [w.dataset.cell, w.getAttribute('aria-label')]))"
+)
+
+
+# Whether each camera's frustum is drawn (picture_marks.js).
+FRUSTA = (
+    "() => window.apothecaryPictures.state().filter((e) => e.frustum).map((e) => e.frustum.visible)"
 )
 
 
@@ -54,57 +63,53 @@ def leaves_no_trace(camera_page, base_url: str, picture_folder):
 
 
 @pytest.mark.e2e
-def test_a_camera_records_its_own_surroundings(
+def test_a_camera_is_pinned_at_the_bench_and_records_its_surroundings(
     camera_page, base_url: str, picture_folder, leaves_no_trace
 ):
-    """Allow, see it live, place it in the world, capture a frame that is kept on this
-    machine, look at it and open what the finder made of it in the world; then gather
-    two captures and open them as one arrangement -- all from the browser."""
+    """From the bench's own ring: the browser's camera pinned there (a badge and a
+    frustum, kept for every browser), shown live on the bench's mat, a frame kept on
+    this machine under its camera's id, and unpinned again -- no panel, no site
+    switched."""
     page = camera_page
     before = leaves_no_trace
-    # Two drawn pictures of one bench in the folder, beside what the camera will
-    # capture: the fake camera's frame is a test pattern the finder reads little
-    # from, and a gathering needs pictures it can read to have anything to say.
-    for name in ("bench.png", "bench_again.png"):
-        drawn = Image.new("L", (640, 480), 245)
-        pen = ImageDraw.Draw(drawn)
-        pen.rectangle((40, 40, 260, 160), fill=30)
-        pen.ellipse((360, 60, 520, 220), fill=20)
-        pen.polygon([(80, 420), (300, 420), (190, 280)], fill=25)
-        drawn.save(picture_folder / name)
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.goto(f"{base_url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
     page.evaluate("() => localStorage.removeItem('apothecary.panels')")
+    url = page.url
+    status = page.locator("#status")
 
-    # The panel, from the ring's Panels cell, and the cameras once allowed.
-    page.locator("#viewer-canvas").click(button="right", position={"x": 30, "y": 30})
-    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    page.keyboard.press(_cell(page, "Panels"))
-    page.keyboard.press(_cell(page, "Camera"))
-    panel = page.locator(".panel[data-panel='camera']")
-    expect(panel).to_be_visible(timeout=3000)
-    expect(panel.locator("#cam-capture")).to_be_visible()
-    panel.locator("#cam-allow").click()
-    page.wait_for_function(
-        "() => window.apothecaryCamera && window.apothecaryCamera.live()", timeout=8000
-    )
-    expect(panel.locator("#cam-preview")).to_be_visible()
-    assert page.evaluate("() => window.apothecaryCamera.state.cameras.length") >= 1
-    expect(panel.locator("#cam-note")).to_contain_text("is live")
+    def ring_on(path):
+        page.locator(f"#contents-list .contents-item[data-path='{path}']").click(button="right")
+        expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
 
-    # Placed at the workbench: a badge and a frustum in the world, kept for every browser.
-    page.locator("#contents-list .contents-item[data-path='workbench']").click()
-    expect(panel.locator("#cam-place")).to_be_enabled(timeout=3000)
-    panel.locator("#cam-place").click()
-    expect(panel.locator("#cam-place-note")).to_contain_text("placed at workbench", timeout=5000)
-    expect(page.locator(".world-badge.camera-mark")).to_be_visible(timeout=5000)
-    assert page.evaluate("() => Object.keys(window.fractalViewer.cameraMarks).length") == 1
+    def press(label):
+        page.wait_for_function(
+            "(label) => [...document.querySelectorAll('#ring-overlay .wedge')]"
+            ".some((w) => w.getAttribute('aria-label') === label)",
+            arg=label,
+            timeout=5000,
+        )
+        page.keyboard.press(_cell(page, label))
+
+    # Camera › Pin here names this browser's cameras once it is allowed to.
+    page.evaluate("() => window.apothecaryPictureVerbs.ready")
+    mine = page.evaluate("() => window.apothecaryPictureVerbs.state.cameras[0]")
+    assert mine and mine["id"]
+    ring_on("workbench")
+    press("Camera")
+    press("Pin here")
+    press(page.evaluate(WEDGES)["8"])
+    expect(status).to_contain_text("pinned at workbench", timeout=5000)
+    expect(status).not_to_have_class(re.compile(r"\berror\b"))
+    expect(page.locator(".world-badge.place-mark.has-camera")).to_be_visible(timeout=5000)
+    assert page.evaluate(FRUSTA) == [True]
     cameras = page.request.get(f"{base_url}/cameras?site=garage").json()
-    assert len(cameras) == 1 and cameras[0]["path"] == "workbench"
+    assert [(c["id"], c["path"]) for c in cameras] == [(mine["id"], "workbench")]
+    assert page.locator(".panel[data-panel='camera']").count() == 0  # never opened
 
-    # Choosing pieces redraws the placement from what the page knows, asking nothing.
+    # Choosing pieces asks nothing about cameras: the page already knows.
     asked = []
 
     def camera_request(request):
@@ -114,7 +119,6 @@ def test_a_camera_records_its_own_surroundings(
     page.on("request", camera_request)
     for path in ("printer_1", "workbench"):
         page.locator(f"#contents-list .contents-item[data-path='{path}']").click()
-    expect(panel.locator("#cam-place-note")).to_contain_text("placed at workbench")
     with page.expect_request("**/health"):
         page.evaluate("() => fetch('/health')")
     page.remove_listener("request", camera_request)
@@ -123,75 +127,89 @@ def test_a_camera_records_its_own_surroundings(
     # The mark follows the focus: looking into another piece, neither the badge
     # nor the frustum stays behind; zooming back out brings both back.
     page.evaluate("() => window.fractalViewer.zoomIn('printer_1')")
-    expect(page.locator(".world-badge.camera-mark")).to_be_hidden(timeout=5000)
-    assert page.evaluate(
-        "() => Object.values(window.fractalViewer.cameraMarks).map((l) => l.visible)"
-    ) == [False]
+    expect(page.locator(".world-badge.place-mark.has-camera")).to_be_hidden(timeout=5000)
+    assert page.evaluate(FRUSTA) == [False]
     page.evaluate("() => window.fractalViewer.zoomOut()")
-    expect(page.locator(".world-badge.camera-mark")).to_be_visible(timeout=5000)
-    assert page.evaluate(
-        "() => Object.values(window.fractalViewer.cameraMarks).map((l) => l.visible)"
-    ) == [True]
+    expect(page.locator(".world-badge.place-mark.has-camera")).to_be_visible(timeout=5000)
+    assert page.evaluate(FRUSTA) == [True]
 
-    # Its own surroundings: a frame kept on this machine, looked at, opened in the world.
-    panel.locator("#cam-name").fill("surroundings")
-    panel.locator("#cam-width").fill("800")
-    panel.locator("#cam-look").click()
-    page.wait_for_function("() => window.fractalViewer.siteName === 'surroundings'", timeout=15000)
+    # Live: the video is the bench's mat; selecting elsewhere ends it.
+    ring_on("workbench")
+    press("Camera")
+    press("Live")
+    page.wait_for_function(
+        "() => window.apothecaryPictures.state().some((e) => e.host === 'workbench' && e.live)",
+        timeout=8000,
+    )
+    expect(status).to_contain_text("is live on workbench")
+    page.locator("#contents-list .contents-item[data-path='printer_1']").click()
+    page.wait_for_function("() => window.apothecaryPictureVerbs.live() === null", timeout=3000)
+
+    # Its own surroundings: a frame kept on this machine, named for its camera.
+    ring_on("workbench")
+    press("Camera")
+    press("Keep")
+    expect(status).to_contain_text("kept captures/", timeout=10000)
     kept = [
         p
         for p in page.request.get(f"{base_url}/photos/pictures").json()
         if p["captured"] and p["path"] not in before
     ]
-    assert len(kept) == 1 and kept[0]["name"].endswith("-surroundings.png")
+    assert len(kept) == 1 and kept[0]["name"].endswith(f"-{mine['id'][:60]}.png")
     assert (picture_folder / kept[0]["path"]).is_file()
-    album = page.request.get(f"{base_url}/photos/surroundings").json()
-    assert album["picture"].endswith("-surroundings") and album["sized"] is True
-    expect(page.locator("#site-select")).to_have_value("surroundings")
-    expect(panel.locator("#pic-list .pic")).to_have_count(
-        len(before) + 3, timeout=5000
-    )  # two drawn, one captured
+    assert page.request.get(f"{base_url}/sites/garage/attached").json()["looks"] == []
 
-    # Back in the garage the camera still stands where it was placed.
-    page.evaluate("() => window.fractalViewer.openSite('garage')")
-    page.wait_for_function("() => window.fractalViewer.siteName === 'garage'", timeout=15000)
-    expect(page.locator(".world-badge.camera-mark")).to_be_visible(timeout=5000)
-
-    # Two captures gathered: the report, and the two opened as one arrangement.
-    panel.locator("#cam-name").fill("again")
-    panel.locator("#cam-capture").click()
-    expect(panel.locator("#pic-list .pic")).to_have_count(len(before) + 4, timeout=8000)
-    panel.locator("#pic-all").check()
-    panel.locator("#pic-gather").click()
-    expect(panel.locator("#gather-out")).to_contain_text("Groups", timeout=20000)
-    expect(panel.locator("#gather-out")).to_contain_text(
-        "bench"
-    )  # the two drawings are of one thing
-    expect(panel.locator("#gather-out details")).to_be_visible()
-    panel.locator("#pic-open").click()
-    try:
-        page.wait_for_function(
-            "() => window.fractalViewer.siteName.startsWith('gathered_')", timeout=20000
-        )
-    except Exception:
-        raise AssertionError(
-            "the gathering did not open: "
-            + panel.locator("#gather-out").inner_text()[:600]
-            + " | note: "
-            + panel.locator("#cam-note").inner_text()
-        ) from None
-    assert page.request.get(
-        f"{base_url}/sites/{page.evaluate('() => window.fractalViewer.siteName')}"
-    ).ok
-
-    # Unplaced, the camera leaves the world.
-    page.evaluate("() => window.fractalViewer.openSite('garage')")
-    page.wait_for_function("() => window.fractalViewer.siteName === 'garage'", timeout=15000)
-    expect(page.locator(".world-badge.camera-mark")).to_be_visible(timeout=5000)
-    panel.locator("#cam-unplace").click()
-    expect(page.locator(".world-badge.camera-mark")).to_have_count(0, timeout=5000)
+    # Unpinned from the same ring, the camera leaves the world.
+    ring_on("workbench")
+    press("Camera")
+    press("Unpin")
+    expect(page.locator(".world-badge.place-mark.has-camera")).to_have_count(0, timeout=5000)
     assert page.request.get(f"{base_url}/cameras?site=garage").json() == []
+    assert page.url == url
     assert errors == []
+
+
+@pytest.mark.e2e
+def test_a_place_badge_selects_its_host_and_opens_nothing(
+    camera_page, base_url: str, leaves_no_trace
+):
+    """A place badge is read, not operated: a click selects the host its camera is
+    pinned at, whether the camera is this browser's or another's, on a page whose
+    camera panel was never mounted, and mounts nothing and goes live nowhere."""
+    page = camera_page
+    page.goto(f"{base_url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
+    page.evaluate("() => localStorage.removeItem('apothecary.panels')")
+    mine = page.evaluate(
+        "async () => (await navigator.mediaDevices.enumerateDevices())"
+        ".find((d) => d.kind === 'videoinput').deviceId"
+    )
+    assert mine
+    for camera, path in ((mine, "workbench"), ("another_browsers_camera", "printer_1")):
+        placed = page.request.put(
+            f"{base_url}/cameras/{camera}",
+            data={"label": camera[:12], "site": "garage", "path": path},
+        )
+        assert placed.ok, placed.text()
+    # Not a reload: Chromium may hand a reloaded page other device ids.
+    page.evaluate("() => window.apothecaryPictures.refresh()")
+    badges = page.locator(".world-badge.place-mark.has-camera")
+    expect(badges).to_have_count(2, timeout=5000)
+    assert page.evaluate(FRUSTA) == [True, True]
+
+    status = page.locator("#status")
+    page.locator(f".world-badge.place-mark[data-camera='{mine}']").click()
+    assert page.evaluate("() => window.fractalViewer.selectedName") == "workbench"
+    expect(page.locator("#selected-body [data-facts='camera']")).to_contain_text(mine[:12])
+    page.locator(".world-badge.place-mark[data-camera='another_browsers_camera']").click()
+    assert page.evaluate("() => window.fractalViewer.selectedName") == "printer_1"
+    # Selected says whose it is, and how a picture is taken here all the same.
+    expect(page.locator("#selected-body [data-facts='camera-verbs']")).to_contain_text(
+        "another browser's camera: a picture is taken here with one of this browser's "
+        "cameras pinned in its place (⌗ Camera › Pin here)"
+    )
+    assert page.evaluate("() => window.apothecaryCamera === undefined")  # never mounted
+    expect(status).not_to_have_class(re.compile(r"\berror\b"))
 
 
 @pytest.mark.e2e

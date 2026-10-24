@@ -189,7 +189,7 @@
         .panel[data-panel="machine"].free { width: min(500px, 90%); }
         .panel[data-panel="machine"] .panel-body-slot, .panel[data-panel="log"] .panel-body-slot { padding: 0; }
         .panel[data-panel="log"] .machine-log { height: 100%; }
-        /* The camera panel (widgets/camera.js) */
+        /* The camera panel (widgets/camera.js) and Kept (widgets/kept.js), which shares its look */
         .camera { font-size: 0.8rem; color: #bbb; display: flex; flex-direction: column; gap: 0.4rem; }
         .camera .row { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
         .camera .grow { flex: 1; }
@@ -209,19 +209,23 @@
         .camera .question { border-top: 1px solid #2a332a; padding: 0.3rem 0; }
         .camera pre { white-space: pre-wrap; font-size: 0.7rem; color: #aaa; max-height: 200px; overflow: auto; }
         .camera .pic { position: relative; }
-        .camera .pic .pic-forget { position: absolute; top: 2px; right: 2px; padding: 0 0.3rem; font-size: 0.7rem; line-height: 1.3; opacity: 0.7; }
-        .camera .pic .pic-forget:hover { opacity: 1; border-color: #7a3a3a; color: #ff8080; }
         .camera input[type=file] { font-size: 0.72rem; max-width: 100%; }
         .camera .kept { display: flex; flex-direction: column; gap: 0.2rem; max-height: 160px; overflow: auto; }
         .camera .kept-row { display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; padding: 0.15rem 0.3rem; border-radius: 3px; background: #1d221d; }
         .camera .kept-row span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .camera .kept-row.here { border-left: 2px solid #4a6fa8; }
         .camera .kept-row.stale span { color: #b08a8a; }
-        /* The camera's mark in the world. Not `.camera`: that is the panel's own
-           class above, and its `display: flex` would override the `hidden` the
-           anchor layer sets when the mark's piece is out of view. */
-        .world-badge.camera-mark { border-color: #7a5a1a; color: #ffcc66; }
-        .world-badge.camera-mark::after { border-top-color: #7a5a1a; }
+        .camera .kept-row img { width: 32px; height: 24px; object-fit: cover; border-radius: 2px; }
+        .kept-panel .kept { max-height: 260px; }
+        /* The place badge: a host's (or the floor's) camera and look, in the
+           world (picture_marks.js). Not `.camera`: that is the panel's own class
+           above, and its `display: flex` would override the `hidden` the anchor
+           layer sets when the host is out of view. */
+        .world-badge.place-mark { border-color: #7a5a1a; color: #ffcc66; }
+        .world-badge.place-mark::after { border-top-color: #7a5a1a; }
+        .picture-facts .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: #777; margin-top: 0.3rem; }
+        .picture-facts .look-row.drawn { color: #ffcc66; }
+        .picture-facts .chosen-shape { color: #9cd2ff; }
 
         .contents-list { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; }
         .contents-item {
@@ -576,7 +580,10 @@
         import { mountPanels } from '/static/panels.js';
         import { mountMachine } from '/static/widgets/machine.js';
         import { mountCamera } from '/static/widgets/camera.js';
+        import { mountKept } from '/static/widgets/kept.js';
         import { makeMachineMarks, toScene as marksToScene } from '/static/machine_marks.js';
+        import { mountPictureMarks } from '/static/picture_marks.js';
+        import { mountPictures } from '/static/pictures.js';
 
         const BASE_URL = {{ base_url | tojson }};
         const DEFAULT_SITE = {{ default_site | tojson }};
@@ -652,6 +659,11 @@
         const WAVE_CONCURRENCY = 3;    // real-geometry loads in flight at once
         const WHEEL_RESISTANCE_THRESHOLD = 500;
         const SNAP_INCREMENT = 50;    // mm -- matches WALL_THICKNESS; fine enough for by-hand placement
+        // The site's floor: a selection but not a node. Its key in the page; "" in every
+        // look and camera route. Floor things stand this far past the site's roots in +x
+        // (vision/looks.py's FLOOR_MARGIN_MM).
+        const FLOOR_KEY = '@floor';
+        const FLOOR_MARGIN_MM = 200;
 
         // How far out of the current level you can dolly, as a multiple of the
         // framing distance. This is also where the "scroll past the edge to
@@ -867,8 +879,11 @@
                 this.loadGeneration = 0;  // guards against a slow real-geometry
                                           // fetch upgrading a mesh after the
                                           // user has already navigated away
-                this.partStages = {};      // part name -> { staged, committed } parameter values
+                this.partStages = {};      // editor target key -> { staged, committed } parameter values
                 this.partSection = null;   // the Selected panel's section for the part being edited
+                this.editorTarget = null;  // what the editor edits: a part, or a piece made from a picture
+                this.editorOpenFor = null; // a machine drawn as a part whose editor Part › Edit opened
+                this.editorFocusWanted = null;  // the target key whose first control Part › Edit focuses
                 this.nodeLoads = new Map();  // nodeKey() -> token of its newest load
                 this.waveDone = Promise.resolve();  // settles when the level's geometry has loaded
 
@@ -942,29 +957,89 @@
                 }
                 document.querySelector('.side-panel')?.remove();
                 this.machine = null;
-                // The camera and the pictures on this machine: the photo workflow,
-                // as a panel (closed until asked for). A placed camera is drawn in
-                // the world at its node, in every browser.
+                // What a picture wears in the world (picture_marks.js): each look
+                // as a mat on its host's top or on the floor, its shapes as
+                // outlines, a camera's frustum looking down onto it, and one place
+                // badge per host -- from one GET /sites/{s}/attached per site, asked
+                // again after anything that moves a host or pins something.
                 this.cameras = [];
-                this.cameraMarks = {};
+                this.pictureMarks = mountPictureMarks({
+                    scene: this.scene, anchors: this.anchors, base: BASE_URL,
+                    hostBounds: (host) => { const node = this.tree && this.nodeByPath(host); return node ? envelopeBounds(node) : null; },
+                    hostInView: (host) => (host === '' ? this.focusPath.length === 0 : this.anchorPointFor(host) !== null),
+                    atTopLevel: () => this.focusPath.length === 0,
+                    floorPoint: (made) => this.floorPoint(made),
+                    onSelect: (host) => this.selectPlace(host),
+                    onChange: (attached) => {
+                        this.cameras = attached.cameras;
+                        if (this.keptWidget) this.keptWidget.load();
+                        // Selected is redrawn only when what it says of the pictures changed,
+                        // so a position being typed is not swept away by an answer.
+                        if (this.selectedName && this.pictureFactsHtml(this.selectedName) !== this.shownFacts) this.renderSelectedPanel();
+                    },
+                });
+                window.apothecaryPictures = this.pictureMarks;
+                // The loop's verbs at a host (pictures.js): a camera pinned, live and
+                // looked with; pictures added, dropped, pasted, pinned, found, sized;
+                // looks drawn and unpinned. Each is a ring cell; none has markup.
+                this.pictures = mountPictures({
+                    base: BASE_URL, marks: this.pictureMarks,
+                    log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
+                    world: {
+                        siteName: () => this.siteName,
+                        select: (host) => { if (this.hostKey() !== host) this.selectPlace(host); },
+                        // A picture lands at the top level, where mats are drawn: step out
+                        // first, as ◀ out does -- a view change, never a site switch.
+                        stepOut: () => { if (this.focusPath.length) this.jumpTo(0); },
+                        focusWidth: () => { this.panels.open('selected'); this.selectedBodyEl.querySelector('.look-width')?.focus(); },
+                        openPanel: (id) => this.panels.open(id),
+                        frameFloor: () => this.frameFloor(),
+                        rendered: () => this.renderSelectedPanel(),
+                        // The ring again at a host, entered to the option named: how
+                        // Allow hands over to Pin here when the browser named several cameras.
+                        reopenRing: (host, into, at) => { if (window.apothecaryRing && window.apothecaryRing.openOn) window.apothecaryRing.openOn(host, into, at); },
+                        // A re-scale that rebuilt made pieces answers with the site.
+                        applySite: (site) => this.applySite(site),
+                    },
+                });
+                window.apothecaryPictureVerbs = this.pictures;
+                // Kept: every camera, look and board a page pinned, every site's, and
+                // every picture the browser kept, each taken back from its row
+                // without switching the site (closed until asked for).
+                this.keptWidget = null;
+                this.panels.register('kept', {
+                    title: 'Kept', where: 'right', open: false,
+                    body: (slot) => {
+                        this.keptWidget = mountKept(slot, {
+                            base: BASE_URL,
+                            log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
+                            world: {
+                                siteName: () => this.siteName,
+                                // Taken back in this site, or a picture forgotten
+                                // (its looks go wherever they were): the world's
+                                // marks are fetched again. Another site's row
+                                // changes nothing on screen.
+                                changed: (site) => (site === null || site === this.siteName ? this.pictureMarks.refresh() : null),
+                                // A board's pin of this site taken back: the node's
+                                // row, badge and marks go now, not at the next poll.
+                                unpinned: (site, path) => { if (site !== this.siteName) return; delete this.bindings[path]; this.queryResult = null; this.renderDeviceViews(); this.syncWorldMarks(); },
+                                picturesChanged: () => { if (this.cameraWidget) this.cameraWidget.loadPictures(); },
+                            },
+                        });
+                        window.apothecaryKept = this.keptWidget;
+                    },
+                });
+                // What is left of the camera panel until gathering leaves core: the
+                // pictures on this machine and the gathering's report (closed until
+                // asked for).
                 this.cameraWidget = null;
                 this.panels.register('camera', {
-                    title: 'Camera & pictures', where: 'right', open: false,
+                    title: 'Gather pictures', where: 'right', open: false,
                     body: (slot) => {
                         this.cameraWidget = mountCamera(slot, {
                             base: BASE_URL,
-                            log: (t) => this.setStatus(t, 'success'),
-                            world: {
-                                siteName: () => this.siteName,
-                                selectedPath: () => this.selectedName,
-                                placed: () => this.cameras,
-                                refreshCameras: () => this.syncCameras(),
-                                openSite: (name) => this.openSite(name),
-                                // A pin of this site taken back from the panel's list:
-                                // the node's row, badge and marks go now, not at the
-                                // next poll.
-                                unpinned: (path) => { delete this.bindings[path]; this.queryResult = null; this.renderDeviceViews(); this.syncWorldMarks(); },
-                            },
+                            log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
+                            world: { kept: () => { if (this.keptWidget) this.keptWidget.load(); } },
                         });
                         window.apothecaryCamera = this.cameraWidget;
                     },
@@ -1001,6 +1076,11 @@
                 this.canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
                 this.canvas.addEventListener('dblclick', (e) => this.onDoubleClick(e));
                 this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: true });
+                // A file dropped on a structure is kept and pinned at its root (at the
+                // floor, on empty canvas); a pasted picture, at the selected place.
+                this.canvas.addEventListener('dragover', (e) => e.preventDefault());
+                this.canvas.addEventListener('drop', (e) => this.onDropFiles(e));
+                window.addEventListener('paste', (e) => this.onPaste(e));
                 window.addEventListener('keydown', (e) => {
                     if (e.key === 'Backspace' && document.activeElement.tagName !== 'INPUT') {
                         e.preventDefault();
@@ -1120,6 +1200,7 @@
                     this.isValid = data.is_valid;
                     this.focusPath = this.resolveFocusPath(focusPathStr);
                     this.selectedName = null;
+                    this.editorOpenFor = null;
                     this.jobs = this.hasBuildVolumes ? await this.fetchJobs() : [];
                     if (data.scad) this.codeContentEl.textContent = data.scad;
                     this.renderFocus();
@@ -1132,89 +1213,49 @@
                     // Bindings shell out to arduino-cli (a second or two):
                     // fetched after the scene is on screen, never before.
                     this.loadBindings().then(() => { this.afterBindings(); this.scheduleAutoRefresh(); });
-                    this.syncCameras();
+                    this.pictureMarks.unchoose();
+                    this.pictures.still();
+                    this.pictureMarks.load(name);
                 } catch (err) {
                     this.setStatus(`Error: ${err.message}`, 'error');
                     console.error(err);
                 }
             }
 
-            // A site built while the server runs (from a picture, from a gathering)
-            // is not in the picker yet: add it, then load it in place -- the world
-            // changes site without leaving the page or dropping the camera.
-            openSite(name) {
-                if (![...this.siteSelect.options].some((o) => o.value === name)) {
-                    const opt = document.createElement('option');
-                    opt.value = name; opt.textContent = name;
-                    this.siteSelect.appendChild(opt);
-                }
-                this.siteSelect.value = name;
-                const url = new URL(location.href);
-                url.pathname = url.pathname.replace(/\/viewer\/sites\/[^/]+/, `/viewer/sites/${encodeURIComponent(name)}`);
-                history.replaceState(null, '', url);
-                return this.loadSite(name);
+            // The selection as a place a picture or camera stands at: a node's
+            // path, "" for the floor, null for nothing selected.
+            hostKey() {
+                if (this.selectedName === FLOOR_KEY) return '';
+                return this.selectedName;
             }
 
-            // The cameras placed in this site: a badge above each and a small
-            // frustum at its node, from GET /cameras, kept for every browser.
-            async syncCameras() {
-                let placed = [];
-                try {
-                    const r = await fetch(`${BASE_URL}/cameras?site=${encodeURIComponent(this.siteName)}`);
-                    placed = r.ok ? await r.json() : [];
-                } catch (err) { placed = []; }
-                this.cameras = placed;
-                const wanted = new Set();
-                for (const cam of placed) {
-                    const key = `camera:${cam.id}`;
-                    wanted.add(key);
-                    let badge = this.anchors.get(key);
-                    if (!badge) {
-                        badge = document.createElement('div');
-                        badge.className = 'world-badge camera-mark';
-                        badge.dataset.camera = cam.id;
-                        badge.dataset.path = cam.path;
-                        badge.title = 'Open the camera panel on this camera';
-                        badge.addEventListener('click', () => this.openCamera(cam.id));
-                        this.anchors.add(key, badge, () => this.anchorPointFor(cam.path), { offset: { x: 0, y: -30 } });
-                    }
-                    badge.textContent = `📷 ${cam.label || 'camera'}`;
-                    if (!this.cameraMarks[key]) {
-                        const node = this.nodeByPath(cam.path);
-                        const b = node ? envelopeBounds(node) : null;
-                        if (b) {
-                            const cx = (b.min[0] + b.max[0]) / 2, cy = (b.min[1] + b.max[1]) / 2, top = b.max[2];
-                            // A small frustum at the top of the node, looking along +Y.
-                            const apex = new THREE.Vector3(cx, top + 20, cy);
-                            const far = cy + 140;
-                            const corners = [[-50, 40], [50, 40], [50, -40], [-50, -40]].map(([dx, dz]) => new THREE.Vector3(cx + dx, top + 20 + dz, far));
-                            const pts = [];
-                            for (let i = 0; i < 4; i++) { pts.push(apex, corners[i]); pts.push(corners[i], corners[(i + 1) % 4]); }
-                            const lines = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xffcc66, transparent: true, opacity: 0.8 }));
-                            lines.userData.path = cam.path;
-                            this.scene.add(lines);
-                            this.cameraMarks[key] = lines;
-                        }
-                    }
+            // The floor's mat (or where it would lie), framed from above and in front.
+            frameFloor() {
+                const entry = this.pictureMarks.state().find((e) => e.host === '');
+                let box;
+                if (entry && entry.mat) {
+                    const [x, y, z] = entry.mat.centre, w = entry.mat.width / 2, d = entry.mat.depth / 2;
+                    box = { min: [x - w, y - d, z], max: [x + w, y + d, z + 1] };
+                } else {
+                    const [x, y, z] = this.floorPoint(Object.keys((this.pictureMarks.attached() || {}).made || {}));
+                    box = { min: [x, y - 300, z], max: [x + 600, y + 300, z + 1] };
                 }
-                for (const key of this.anchors.keys()) if (key.startsWith('camera:') && !wanted.has(key)) this.anchors.remove(key);
-                for (const [key, lines] of Object.entries(this.cameraMarks)) if (!wanted.has(key)) { this.scene.remove(lines); lines.geometry.dispose(); lines.material.dispose(); delete this.cameraMarks[key]; }
-                this.refreshCameraMarks();
-                if (this.cameraWidget) this.cameraWidget.renderPlacement();
+                this.frameCameraForChildren([{ world_bounds: box, children: [] }]);
             }
-            // A camera's frustum is drawn only while its piece is at the level
-            // being looked at -- the same rule its badge follows through
-            // anchorPointFor -- so zooming into something else leaves neither
-            // behind. Called from renderFocus, and after the cameras sync.
-            refreshCameraMarks() {
-                for (const lines of Object.values(this.cameraMarks)) lines.visible = this.anchorPointFor(lines.userData.path) !== null;
-            }
-            openCamera(id) {
-                this.panels.open('camera');
-                if (this.cameraWidget && id) {
-                    const pick = this.cameraWidget.state.cameras.some((c) => c.deviceId === id);
-                    if (pick) this.cameraWidget.useCamera(id); else this.setStatus('That camera belongs to another browser; this one cannot show it', 'error');
+
+            // Where the floor's things stand when no look says: past the +x edge
+            // of the site's roots (made pieces left out), level with their middle,
+            // on the ground -- where vision/looks.py lays a floor look's anchor.
+            floorPoint(made = []) {
+                const skip = new Set(made);
+                let box = null;
+                for (const child of (this.tree && this.tree.children) || []) {
+                    if (skip.has(child.name) || !child.world_bounds) continue;
+                    const b = child.world_bounds;
+                    box = box ? { min: box.min.map((v, i) => Math.min(v, b.min[i])), max: box.max.map((v, i) => Math.max(v, b.max[i])) } : { min: [...b.min], max: [...b.max] };
                 }
+                if (!box) return [0, 0, 0];
+                return [box.max[0] + FLOOR_MARGIN_MM, (box.min[1] + box.max[1]) / 2, 0];
             }
 
             // Select whatever the deep link was aiming at, so the part
@@ -1366,6 +1407,7 @@
             }
 
             renderFocus() {
+                if (this.focusPath.length && this.pictures) this.pictures.still();
                 const focus = this.currentFocusNode();
                 const renderNodes = this.currentRenderNodes(focus);
                 this.rebuildRenderNodeByKey(focus);
@@ -1381,7 +1423,7 @@
                 this.renderJobsSection();
                 this.frameCameraForChildren(renderNodes);
                 this.scheduleWaveLoad(renderNodes);
-                this.refreshCameraMarks();
+                this.pictureMarks.sync();
             }
 
             // ---------------------------------------------------------------
@@ -1895,6 +1937,9 @@
             }
 
             selectChild(key) {
+                this.pictureMarks.unchoose();
+                if (key !== this.selectedName) this.pictureMarks.untrace();
+                this.pictures.selectionChanged(key);
                 this.selectedName = key;
                 const focus = this.currentFocusNode();
                 const node = this.renderNodeByKey[key];
@@ -1921,7 +1966,13 @@
             // so anything deeper -- or any leaf of an expanded category that
             // isn't itself a direct child -- gets a read-only panel.
             renderSelectedPanel() {
-                if (this.cameraWidget) this.cameraWidget.renderPlacement();  // "Place at selected" follows the selection
+                this.shownFacts = this.selectedName ? this.pictureFactsHtml(this.selectedName) : '';
+                if (this.selectedName === FLOOR_KEY) {
+                    this.selectedBodyEl.innerHTML = `<div class="prop-row"><label>Name</label><span>the floor</span></div>
+                        <div class="prop-readonly">Beside the site, on the ground: a picture of something loose on the bench or on paper is pinned here.</div>${this.shownFacts}`;
+                    this.bindPictureFacts();
+                    return;
+                }
                 const focus = this.currentFocusNode();
                 const selected = this.renderNodeByKey[this.selectedName];
                 if (!selected) {
@@ -1939,9 +1990,98 @@
                 // A leaf that is a part gets the part's whole section; a machine
                 // that is a part with things inside it gets the one row that
                 // says so, and keeps its panel the height a machine's panel is.
-                if (selected.part_ref) this.appendPartPanel(selected, selected.children.length === 0);
+                // A machine drawn as a part shows the one row until Part › Edit asks
+                // for its editor (openEditor); a leaf that is a part has it always.
+                if (selected.part_ref) this.appendPartPanel(selected, selected.children.length === 0 || this.editorOpenFor === this.selectedName);
                 this.selectedBodyEl.insertAdjacentHTML('beforeend', this.deviceSectionHtml(this.selectedName));
                 this.bindDeviceSection(this.selectedName);
+                this.selectedBodyEl.insertAdjacentHTML('beforeend', this.shownFacts);
+                this.bindPictureFacts();
+                // A piece made from a picture is a part: its editor, under its provenance.
+                const made = this.pictureMarks.madeRecord(this.selectedName);
+                if (made) this.appendEditor(this.pieceTarget(this.selectedName, made));
+            }
+
+            // The width box sets the drawn look's scale (a chosen shape's long side
+            // when one is chosen); a look's row draws that look.
+            bindPictureFacts() {
+                const host = this.hostKey();
+                const widthBox = this.selectedBodyEl.querySelector('.look-width');
+                if (widthBox) widthBox.addEventListener('change', () => this.pictures.setWidth(host, Number(widthBox.value)).catch((e) => this.setStatus(e.message, 'error')));
+                for (const row of this.selectedBodyEl.querySelectorAll('.look-row')) {
+                    row.addEventListener('click', () => this.pictures.drawLook(row.dataset.host, row.dataset.look));
+                }
+            }
+
+            // What the pictures know about the selection, as facts (no verb:
+            // verbs are the ring's): a host's or the floor's camera and looks,
+            // the shape chosen on its mat, a made piece's provenance.
+            pictureFactsHtml(selection) {
+                const pm = this.pictureMarks;
+                const host = selection === FLOOR_KEY ? '' : selection;
+                const made = pm.madeRecord(host);
+                const where = (h) => (h === '' ? 'the floor' : h);
+                if (made) {
+                    // Whose the size is: a person's, or as found, with the found size
+                    // beside a person's; the thickness is a guess until a person states
+                    // one; and whether the piece still stands where it was made.
+                    const mm = (v) => String(Number(Number(v).toFixed(1)));
+                    const p = made.parameters, f = made.found;
+                    const guessed = f && Math.abs(p.height - f.height) < 1e-6;
+                    const node = this.nodeByPath(host);
+                    const moved = node && made.placed_at && ['x', 'y', 'z'].some((k) => Math.abs(node.position[k] - made.placed_at[k]) > 1e-6);
+                    const size = `${mm(p.width)} × ${mm(p.depth)} × ${mm(p.height)} mm`
+                        + (made.parameters_stated ? `, a person's${f ? ` (found ${mm(f.width)} × ${mm(f.depth)})` : ''}` : ', as found')
+                        + `; thickness ${guessed ? 'a guess' : "a person's"}`
+                        + (moved ? '; moved since it was made' : '');
+                    return `<div class="prop-readonly picture-facts" data-facts="made">
+                        From a picture: ${esc(made.picture)}${made.picture_forgotten ? ' (forgotten)' : ''}, shape ${made.shape_index} of a look at ${esc(where(made.host))}${made.look_pinned ? '' : ' (no longer pinned)'}<br>
+                        A ${esc(made.word)} because ${esc(made.reason)}${made.word_stated ? ' (a person said so)' : ''}; found by ${esc(made.finder)}, confidence ${Number(made.confidence).toFixed(2)}<br>
+                        Scale: ${Number(made.mm_across).toFixed(0)} mm across the picture<br>
+                        Size: ${size}
+                    </div>`;
+                }
+                const cam = pm.cameraAt(host);
+                const looks = pm.looksAt(host);
+                // A verb's place on the ring, named as text: the floor's verbs are under
+                // the canvas ring's Pictures › Floor, and its Add is Pictures › Add.
+                const ring = (verb) => `⌗ ${host === '' ? 'Pictures › Floor › ' : ''}${verb}`;
+                // Nothing here yet: the way in, so the durable hint is where the person
+                // looks. The verbs stay the ring's.
+                if (!cam && !looks.length) return `<div class="prop-readonly picture-facts" data-facts="${host === '' ? 'floor' : 'host'}"><div class="k">Pictures at ${esc(where(host))}</div><div data-facts="way-in">${ring('Camera › Pin here')} puts this browser's camera at ${esc(where(host))}; ${host === '' ? '⌗ Pictures › Add' : '⌗ Picture › Add'} pins a picture from disk; m, or right-click, opens the ring</div></div>`;
+                const drawn = pm.drawnAt(host);
+                const rows = [];
+                if (cam) {
+                    rows.push(`<div data-facts="camera">📷 ${esc(cam.label || 'camera')}${cam.mm_across ? ` · ${Number(cam.mm_across).toFixed(0)} mm across, from the last width typed` : ''}</div>`);
+                    // Whose camera it is decides what can be done with it from here.
+                    const mine = !!(this.pictures && this.pictures.state.cameras.some((c) => c.id === cam.id));
+                    rows.push(`<div data-facts="camera-verbs">${mine
+                        ? `${ring('Camera › Look')} takes a picture and finds its shapes; Live shows the camera on the mat; Keep keeps a frame on this machine`
+                        : `another browser's camera: a picture is taken here with one of this browser's cameras pinned in its place (${ring('Camera › Pin here')})`}</div>`);
+                }
+                for (const look of [...looks].reverse()) {
+                    const size = look.mat && look.mat.width ? `${Number(look.mat.width).toFixed(0)} mm across` : 'unsized';
+                    const madeCount = Object.keys(look.made || {}).length;
+                    rows.push(`<div class="look-row${look === drawn ? ' drawn' : ''}" data-host="${esc(host)}" data-look="${esc(look.id)}" title="Draw this look">${look === drawn ? '▸ ' : ''}${esc(look.picture)} · ${esc(look.finder)} · ${look.shapes.length} shape(s)${look.left_out ? ` (+${look.left_out} left out)` : ''} · ${size}${madeCount ? ` · ${madeCount} made` : ''}</div>`);
+                }
+                const chosen = pm.chosen();
+                const look = chosen && looks.find((l) => l.id === chosen.look);
+                const shape = look && look.shapes.find((sh) => sh.index === chosen.index);
+                if (shape) {
+                    const tall = look.pixel_height / look.pixel_width;
+                    const across = shape.long_side > 0 && shape.short_side > 0 ? shape.long_side : Math.max(shape.max[0] - shape.min[0], (shape.max[1] - shape.min[1]) * tall);
+                    const long = look.mat && look.mat.width ? `${(across * look.mat.width).toFixed(0)} mm` : 'no size yet';
+                    const status = shape.status === 'made' ? `made: ${esc(shape.piece)}` : shape.status === 'already_made' ? `already made (${esc(shape.piece)})` : 'found';
+                    rows.push(`<div class="chosen-shape" data-facts="shape">Shape ${shape.index}: a ${esc(shape.word)} (${esc(shape.kind)}) because ${esc(shape.reason)}${shape.word_stated ? ' (a person said so)' : ''}; confidence ${Number(shape.confidence).toFixed(2)}; long side ${long}; ${status}</div>`);
+                }
+                // The one width: the drawn look's (or, with no look, its camera's
+                // next), or with a shape chosen, that shape's long side.
+                const bySide = shape && drawn && look === drawn;
+                const width = bySide
+                    ? (look.mat && look.mat.width ? Math.round((shape.long_side > 0 ? shape.long_side : shape.max[0] - shape.min[0]) * look.mat.width) : '')
+                    : (drawn ? (drawn.mat && drawn.mat.width ? Math.round(drawn.mat.width) : '') : (cam && cam.mm_across ? Math.round(cam.mm_across) : ''));
+                rows.push(`<div class="prop-row" data-facts="width"><label>${bySide ? "this shape's long side, mm" : 'picture width, mm'}</label><input type="number" class="look-width" min="1" step="1" value="${width}" title="${bySide ? 'How long this shape is in the world, in millimetres: the look is sized by it' : 'How wide the whole picture is in the world, in millimetres'}"></div>`);
+                return `<div class="prop-readonly picture-facts" data-facts="${host === '' ? 'floor' : 'host'}"><div class="k">Pictures at ${esc(where(host))}</div>${rows.join('')}</div>`;
             }
 
             zoomInAffordanceHtml(node) {
@@ -2029,13 +2169,16 @@
             }
 
             renderEditablePanel(node) {
-                const statusRow = node.status !== null
+                // Only a printer's status is chosen here. Any other status (a
+                // piece from a picture is "unsized") is a fact shown as text:
+                // a drop-down would show a printer status the node does not have.
+                const statusRow = PRINTER_STATUSES.includes(node.status)
                     ? `<div class="prop-row"><label>Status</label>
                          <select id="status-select">
                            ${PRINTER_STATUSES.map((s) => `<option value="${s}"${s === node.status ? ' selected' : ''}>${s}</option>`).join('')}
                          </select>
                        </div>`
-                    : '';
+                    : node.status ? `<div class="prop-row"><label>Status</label><span>${esc(node.status)}</span></div>` : '';
                 this.selectedBodyEl.innerHTML = `
                     <div class="prop-row"><label>Name</label><span>${esc(node.name)}</span></div>
                     ${statusRow}
@@ -2044,6 +2187,7 @@
                     <div class="prop-row"><label>Z (mm)</label><input type="number" id="pos-z" step="10" value="${node.position.z}"></div>
                     <div class="prop-readonly">
                         Material: ${esc(node.material ?? '—')}<br>
+                        ${node.comment ? `Comment: ${esc(node.comment)}<br>` : ''}
                         Footprint: ${node.footprint ? node.footprint.max.map((v, i) => (v - node.footprint.min[i]).toFixed(0)).join(' × ') + ' mm' : '—'}<br>
                         Build volume: ${node.build_volume
                             ? node.build_volume.map((v) => v.toFixed(0)).join(' × ') + ' mm '
@@ -2069,31 +2213,119 @@
                 this.bindZoomInAffordance(node);
             }
 
+            // ---- the editor ----------------------------------------------
+            //
+            // One editor for a part and for a piece made from a picture, over a
+            // *target*: what it edits and how. Both answer the one parameter
+            // contract (apothecary/projects/parts/params.py) -- fields, defaults,
+            // ranges, contested candidates; a staged set validated -- so the
+            // controls below are built the same way for either. What differs is
+            // in the target: where it reads (paramsUrl, validateUrl, scadUrl,
+            // checklistUrl, null for a section it lacks), what Apply does
+            // (apply(params) -> the answer), and what follows (onApplied(body)
+            // -> what the status line says). The staged and committed values
+            // are kept per target key, so a piece left and come back to has
+            // what was staged on it.
+
+            // A part from the parts folder: read and validated at /parts/{name},
+            // applied by re-rendering its STL, which every node drawn from the
+            // part then reloads.
+            partTarget(ref) {
+                const base = `${BASE_URL}/parts/${encodeURIComponent(ref)}`;
+                return {
+                    key: `part:${ref}`, label: ref, part: ref,
+                    paramsUrl: `${base}/params`, validateUrl: `${base}/validate`,
+                    scadUrl: `${base}/scad`, checklistUrl: `${base}/checklist`,
+                    apply: async (params) => {
+                        const response = await fetch(`${base}/stl/generate?force=true`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ params }),
+                        });
+                        if (!response.ok) {
+                            const detail = await response.text();
+                            throw new Error(`${response.status}: ${detail.slice(0, 140)}`);
+                        }
+                        return response.json();
+                    },
+                    onApplied: async () => {
+                        // Every piece on screen drawn from this part loads the new STL.
+                        const url = `${base}/stl?t=${Date.now()}`;
+                        const reloads = Object.values(this.renderNodeByKey)
+                            .filter((n) => n.part_ref === ref && this.meshByName[nodeKey(n)]
+                                && this.effectiveDetailFor(n, nodeKey(n)) === DETAIL_FULL)
+                            .map((n) => this.loadAndUpgrade(n, this.loadGeneration, () => this.loadSTLMesh(n, url)));
+                        await this.addToWave(Promise.all(reloads));
+                        return `${ref} regenerated`;
+                    },
+                };
+            }
+
+            // A piece made from a picture: read and validated at the made routes,
+            // applied by PUT {params}, which rebuilds it where it stands. The site
+            // comes back as it is now and is drawn without moving the camera; the
+            // selection is not touched, so the piece's outline and thread stay.
+            pieceTarget(name, record) {
+                const base = `${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/made/${encodeURIComponent(name)}`;
+                const mm = (v) => String(Number(Number(v).toFixed(1)));
+                return {
+                    key: `made:${this.siteName}:${name}`, label: name, part: null,
+                    paramsUrl: `${base}/params`, validateUrl: `${base}/validate`,
+                    scadUrl: `${base}/scad`, checklistUrl: null,
+                    apply: async (params) => {
+                        const response = await fetch(base, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ params }),
+                        });
+                        const body = await response.json().catch(() => ({}));
+                        if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : response.statusText);
+                        return body;
+                    },
+                    onApplied: async (body) => {
+                        await this.applySite(body.site);
+                        const p = body.provenance, size = body.bounds && body.bounds.size;
+                        const built = size ? ` ${mm(size.x)} × ${mm(size.y)} × ${mm(size.z)} mm` : '';
+                        if (!p || !p.found) return `${name} rebuilt${built}`;
+                        const guessed = Math.abs(p.parameters.height - p.found.height) < 1e-6;
+                        return `${name} rebuilt${built}; found ${mm(p.found.width)} × ${mm(p.found.depth)}, thickness ${guessed ? 'a guess' : "a person's"}`;
+                    },
+                };
+            }
+
             appendPartPanel(node, full = true) {
                 if (!full) {
                     this.selectedBodyEl.insertAdjacentHTML('beforeend', `
                         <div class="prop-row"><label>Part</label><span title="The part this machine is drawn as">${esc(node.part_ref)}</span></div>`);
                     return;
                 }
-                // The part being edited keeps its section across a redraw of the
-                // panel (re-selecting it, a right-click, a pin): nothing is
-                // fetched again and the sliders stay where they were.
-                if (this.partSection && this.partSection.dataset.part === node.part_ref) {
+                this.appendEditor(this.partTarget(node.part_ref));
+            }
+
+            // The editor's section in Selected, for a target. The section being
+            // edited keeps itself across a redraw of the panel (re-selecting it, a
+            // right-click, a pin, the site drawn again after Apply): nothing is
+            // fetched again and the controls stay where they were.
+            appendEditor(target) {
+                if (this.partSection && this.partSection.dataset.target === target.key) {
                     this.selectedBodyEl.appendChild(this.partSection);
                     return;
                 }
                 this.partSection = document.createElement('div');
-                this.partSection.dataset.part = node.part_ref;
+                this.partSection.className = 'part-editor';
+                this.partSection.dataset.target = target.key;
                 this.selectedBodyEl.appendChild(this.partSection);
+                // The same element ids for either target; a section the target
+                // lacks (a made piece's checklist, its Regenerate STL) is not written.
                 this.partSection.innerHTML = `
-                    <div class="prop-row"><label>Part</label><span>${esc(node.part_ref)}</span></div>
+                    ${target.part ? `<div class="prop-row"><label>Part</label><span>${esc(target.part)}</span></div>` : ''}
                     <div class="envelope" id="part-envelope"></div>
                     <div class="part-actions">
-                        <button type="button" id="part-regenerate-btn">⚙️ Regenerate STL</button>
-                        <a href="${BASE_URL}/parts/${encodeURIComponent(node.part_ref)}/scad">💾 Download SCAD</a>
+                        ${target.checklistUrl ? `<button type="button" id="part-regenerate-btn">⚙️ Regenerate STL</button>` : ''}
+                        <a class="part-scad-download" href="${target.scadUrl}">💾 Download SCAD</a>
                     </div>
-                    <div class="code-header">Build readiness</div>
-                    <div id="part-checklist">Loading…</div>
+                    ${target.checklistUrl ? `<div class="code-header">Build readiness</div>
+                    <div id="part-checklist">Loading…</div>` : ''}
                     <div class="code-header">Parameters</div>
                     <div id="stage-bar">
                       <div id="stage-summary" class="clean">No staged changes</div>
@@ -2103,24 +2335,46 @@
                       </div>
                     </div>
                     <div id="part-params">Loading…</div>
-                    <div class="code-header">SCAD Source (the absorbed part view)</div>
+                    <div class="code-header">${target.part ? 'SCAD Source (the absorbed part view)' : 'SCAD (a few lines, from its shape)'}</div>
                     <div id="part-scad-content" class="code-content">Loading…</div>
                 `;
-                this.loadPartScad(node.part_ref);
-                this.loadPartChecklist(node.part_ref);
-                this.loadPartParams(node.part_ref);
+                this.loadPartScad(target);
+                if (target.checklistUrl) this.loadPartChecklist(target);
+                this.loadPartParams(target);
                 document.getElementById('part-regenerate-btn')
-                    .addEventListener('click', () => this.regeneratePart(node.part_ref));
+                    ?.addEventListener('click', () => this.applyEditor(target));
+            }
+
+            // Part › Edit: the editor in Selected, the cursor in its first control.
+            // A machine drawn as a part shows the one row that says so until it is
+            // asked for; asked for, its editor opens under the machine's panel.
+            openEditor(path) {
+                const node = this.renderNodeByKey[path];
+                const made = this.pictureMarks.madeRecord(path);
+                if (!node || !(node.part_ref || made)) return false;
+                this.editorOpenFor = path;
+                this.editorFocusWanted = made ? `made:${this.siteName}:${path}` : `part:${node.part_ref}`;
+                if (this.selectedName !== path) this.selectPath(path); else this.renderSelectedPanel();
+                this.panels.open('selected');
+                this.focusEditor();
+                return true;
+            }
+
+            focusEditor() {
+                if (!this.partSection || this.editorFocusWanted !== this.partSection.dataset.target) return;
+                const first = this.partSection.querySelector('#part-params input, #part-params select, #part-params button');
+                if (!first) return;  // not built yet: loadPartParams calls again
+                this.editorFocusWanted = null;
+                first.focus();
             }
 
             // Whether the part is ready to print and check against a real one.
             // The same assessment the CLI prints, so the two cannot disagree
             // about what is buildable.
-            async loadPartChecklist(name) {
+            async loadPartChecklist(target) {
                 const host = document.getElementById('part-checklist');
                 try {
-                    const response = await fetch(
-                        `${BASE_URL}/parts/${encodeURIComponent(name)}/checklist`);
+                    const response = await fetch(target.checklistUrl);
                     if (!response.ok) { host.textContent = 'No checklist available.'; return; }
                     const report = await response.json();
                     host.innerHTML = '';
@@ -2160,9 +2414,9 @@
             // ---- staging -------------------------------------------------
             //
             // A slider moves a staged value, never the design. The staged set
-            // is validated against the part's own model on every change --
+            // is validated against the target's own model on every change --
             // which costs nothing -- and only a valid set can be applied,
-            // which is the thirty seconds of OpenSCAD.
+            // which is the render (a part) or the rebuild (a made piece).
 
             stagedDiff() {
                 const diff = {};
@@ -2194,10 +2448,10 @@
             }
 
             async refreshStage() {
-                const name = this.partParamsFor;
+                const target = this.editorTarget;
                 const summary = document.getElementById('stage-summary');
                 const apply = document.getElementById('apply-btn');
-                if (!name || !summary || !apply) return;
+                if (!target || !summary || !apply) return;
 
                 const diff = this.stagedDiff();
                 const count = Object.keys(diff).length;
@@ -2215,17 +2469,15 @@
                 summary.textContent = `Validating ${count} change${count > 1 ? 's' : ''}…`;
                 apply.disabled = true;
 
+                // The target's validateUrl: a check against its own model, no render.
                 const seq = (this._stageSeq = (this._stageSeq ?? 0) + 1);
                 let report;
                 try {
-                    const response = await fetch(
-                        `${BASE_URL}/parts/${encodeURIComponent(name)}/validate`,
-                        {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ params: this.partParams }),
-                        }
-                    );
+                    const response = await fetch(target.validateUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ params: this.partParams }),
+                    });
                     report = await response.json();
                 } catch (err) {
                     summary.className = 'invalid';
@@ -2257,35 +2509,35 @@
                 this.showEnvelope(report.bounds);
             }
 
-            bindStageActions(name) {
-                const stage = this.partStages[name];
+            bindStageActions(target) {
+                const stage = this.partStages[target.key];
                 document.getElementById('apply-btn').onclick = () => {
-                    if (this.stagedValid) this.regeneratePart(name);
+                    if (this.stagedValid) this.applyEditor(target);
                 };
                 document.getElementById('revert-btn').onclick = () => {
                     Object.assign(stage.staged, stage.committed);
-                    this.loadPartParams(name);
+                    this.loadPartParams(target);
                 };
             }
 
             // The part's parameters, as controls, in the one panel that already
             // describes a part. A separate dashboard page would be a second
             // entry point onto the same object, and this viewer is the only one.
-            async loadPartParams(name) {
+            async loadPartParams(target) {
                 const host = document.getElementById('part-params');
-                // Kept per part, so a part left and come back to has what was
-                // staged on it. `committed` is what the STL on disk was rendered
-                // from; `staged` is what the sliders say. Nothing renders until
-                // the difference has been validated and applied.
-                const stage = (this.partStages[name] ??= { staged: {}, committed: {} });
+                // Kept per target, so a part left and come back to has what was
+                // staged on it. `committed` is what the STL on disk, or the piece
+                // in the site, was built from; `staged` is what the controls say.
+                // Nothing is built until the difference has been validated and
+                // applied.
+                const stage = (this.partStages[target.key] ??= { staged: {}, committed: {} });
                 this.partParams = stage.staged;
                 this.committedParams = stage.committed;
-                this.partParamsFor = name;
+                this.editorTarget = target;
                 this.stagedValid = true;
                 try {
-                    const response = await fetch(
-                        `${BASE_URL}/parts/${encodeURIComponent(name)}/params`);
-                    if (this.partParamsFor !== name) return;  // another part was chosen meanwhile
+                    const response = await fetch(target.paramsUrl);
+                    if (this.editorTarget?.key !== target.key) return;  // another target was chosen meanwhile
                     if (!response.ok) { host.textContent = 'No parameters declared.'; return; }
                     const spec = await response.json();
                     this.showEnvelope(spec.bounds);
@@ -2299,8 +2551,9 @@
                         stage.staged[field.name] ??= stage.committed[field.name];
                         host.appendChild(this.buildParamControl(field, stage.staged[field.name]));
                     }
-                    this.bindStageActions(name);
+                    this.bindStageActions(target);
                     this.refreshStage();
+                    this.focusEditor();
                 } catch (err) {
                     host.textContent = `Could not read parameters: ${err.message}`;
                 }
@@ -2318,6 +2571,7 @@
             buildParamControl(field, value) {
                 const wrap = document.createElement('div');
                 wrap.className = 'param' + (field.contested.length ? ' is-contested' : '');
+                wrap.dataset.field = field.name;
                 const head = document.createElement('div');
                 head.className = 'head';
                 const name = document.createElement('span');
@@ -2395,49 +2649,37 @@
                 }
             }
 
-            async loadPartScad(name) {
+            async loadPartScad(target) {
                 try {
-                    const response = await fetch(`${BASE_URL}/parts/${encodeURIComponent(name)}/scad`);
+                    const response = await fetch(target.scadUrl);
                     const text = response.ok ? await response.text() : `(no SCAD source: ${response.status})`;
                     const el = document.getElementById('part-scad-content');
-                    if (el) el.textContent = text;
+                    if (el && this.editorTarget?.key === target.key) el.textContent = text;
                 } catch (err) {
                     console.error(err);
                 }
             }
 
-            async regeneratePart(name) {
-                this.setStatus(`Regenerating ${name}...`, 'loading');
+            // Apply: the staged set goes to the target -- a part's STL rendered
+            // again, a made piece rebuilt where it stands -- and what was sent is
+            // then what is committed. The controls are read again afterwards,
+            // since what a made piece offers (the found sides, once a person has
+            // stated others) follows what it is.
+            async applyEditor(target) {
+                this.setStatus(`Applying ${target.label}...`, 'loading');
                 try {
                     // Whatever the controls are set to, so turning a contested
-                    // number and pressing regenerate shows what it does.
-                    const stage = this.partStages[name];
+                    // number and pressing Apply shows what it does.
+                    const stage = this.partStages[target.key];
                     const params = { ...(stage?.staged ?? {}) };
-                    const response = await fetch(
-                        `${BASE_URL}/parts/${encodeURIComponent(name)}/stl/generate?force=true`,
-                        {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ params }),
-                        }
-                    );
-                    if (!response.ok) {
-                        const detail = await response.text();
-                        throw new Error(`${response.status}: ${detail.slice(0, 140)}`);
-                    }
-                    const body = await response.json();
+                    const body = await target.apply(params);
                     this.showEnvelope(body.bounds);
-                    // What rendered is now what is committed.
+                    // What was built is now what is committed.
                     if (stage) Object.assign(stage.committed, params);
-                    if (this.partParamsFor === name) this.refreshStage();
-                    // Every piece on screen drawn from this part loads the new STL.
-                    const url = `${BASE_URL}/parts/${encodeURIComponent(name)}/stl?t=${Date.now()}`;
-                    const reloads = Object.values(this.renderNodeByKey)
-                        .filter((n) => n.part_ref === name && this.meshByName[nodeKey(n)]
-                            && this.effectiveDetailFor(n, nodeKey(n)) === DETAIL_FULL)
-                        .map((n) => this.loadAndUpgrade(n, this.loadGeneration, () => this.loadSTLMesh(n, url)));
-                    await this.addToWave(Promise.all(reloads));
-                    this.setStatus(`${name} regenerated`, 'success');
+                    if (this.editorTarget?.key === target.key) this.refreshStage();
+                    const said = await target.onApplied(body, params);
+                    if (this.editorTarget?.key === target.key) await this.loadPartParams(target);
+                    this.setStatus(said, 'success');
                 } catch (err) {
                     this.setStatus(`Error: ${err.message}`, 'error');
                     console.error(err);
@@ -2529,11 +2771,14 @@
                 const worldMinApY = mesh.position.z - halfExtentApY;
                 const worldMinApZ = mesh.position.y - halfExtentApZ;
 
-                node.position = {
+                // In place: `node` is renderNodeByKey's copy, and its position is
+                // the tree's own object, which submitLayout sends. A new object
+                // here moved the copy only, and the layout sent the old place.
+                Object.assign(node.position, {
                     x: worldMinApX - node.footprint.min[0],
                     y: worldMinApY - node.footprint.min[1],
                     z: worldMinApZ - node.footprint.min[2],
-                };
+                });
                 this.recomputeWorldBounds(node);
                 // Every frame of a drag: only the numbers move, not the panel.
                 for (const axis of ['x', 'y', 'z']) {
@@ -2577,6 +2822,8 @@
                     this.renderViolations();
                     this.renderSelectedPanel();
                     this.setStatus(this.isValid ? 'Layout valid' : 'Layout has violations', this.isValid ? 'success' : 'error');
+                    // A moved host carries its mat: the server says where it lies now.
+                    this.pictureMarks.refresh();
                 } catch (err) {
                     this.setStatus(`Error: ${err.message}`, 'error');
                     console.error(err);
@@ -2747,9 +2994,9 @@
                     this.fillBadge(badge, row, isPrinter);
                     if (isPrinter && row.device.port) this.ensureMarks(anchorPath, row);
                 }
-                // The machines' badges are this method's; a camera's badge is
-                // syncCameras', and stays whichever of the two runs last.
-                for (const key of this.anchors.keys()) if (!wanted.has(key) && !key.startsWith('camera:')) this.anchors.remove(key);
+                // The machines' badges are this method's; a place badge is
+                // picture_marks.js', and stays whichever of the two runs last.
+                for (const key of this.anchors.keys()) if (!wanted.has(key) && !key.startsWith('place:')) this.anchors.remove(key);
                 for (const [key, m] of Object.entries(this.marks)) if (!wanted.has(key)) { m.marks?.destroy(); delete this.marks[key]; }
                 // The machine's popup goes with its badge: nothing is left polling it unseen.
                 if (this.machine && !wanted.has(this.machine.path)) this.closeMachine();
@@ -2946,14 +3193,32 @@
                 return true;
             }
 
+            // The floor is selected as a node is, without being one: nothing to
+            // move, no row in Contents; Selected shows its camera and looks.
+            selectFloor() {
+                this.pictureMarks.unchoose();
+                this.pictureMarks.untrace();
+                this.pictures.selectionChanged('');
+                this.selectedName = FLOOR_KEY;
+                this.transformControls.detach();
+                this.renderContentsList(this.currentFocusNode());
+                this.renderSelectedPanel();
+                for (const k of Object.keys(this.meshByName)) this.colorMesh(k, this.renderNodeByKey[k]);
+            }
+            // A place a picture or camera is pinned at: a host by its path, "" the floor.
+            selectPlace(host) {
+                if (host === '') { this.selectFloor(); return true; }
+                return this.selectPath(host);
+            }
+
             // Re-render only what shows device state: the tree badges and
             // the Selected panel. Cheaper than renderFocus() and keeps the
             // 3D view untouched. Used after a pin/unpin.
             renderDeviceViews() {
                 this.renderContentsList(this.currentFocusNode());
                 this.renderSelectedPanel();
-                // A pin made or taken back here shows in the panel's list of pins too.
-                if (this.cameraWidget && this.cameraWidget.loadPins) this.cameraWidget.loadPins();
+                // A pin made or taken back here shows in Kept too.
+                if (this.keptWidget) this.keptWidget.load();
             }
 
             // Every 2 s while the overlay polls: swap only the badge spans
@@ -3143,6 +3408,7 @@
                 this.violations = data.violations;
                 this.isValid = data.is_valid;
                 this.renderFocus();
+                this.pictureMarks.refresh();
             }
 
             // ---------------------------------------------------------------
@@ -3277,19 +3543,86 @@
             // Pointer / wheel navigation
             // ---------------------------------------------------------------
 
-            raycastChild(event) {
+            // The nodes' meshes and the pictures' pick meshes (a mat, an outline)
+            // in one depth-sorted cast: the nearest wins, so a printer standing
+            // over an outline is still the printer. Answers { key } for a node,
+            // { pick: { host, look, index } } for a picture's mark, or null.
+            raycastPick(event) {
                 const rect = this.canvas.getBoundingClientRect();
                 this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
                 this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
                 this.raycaster.setFromCamera(this.pointer, this.camera);
-                const intersects = this.raycaster.intersectObjects(Object.values(this.meshByName), false);
-                return intersects.length ? intersects[0].object.userData.key : null;
+                const intersects = this.raycaster.intersectObjects([...Object.values(this.meshByName), ...this.pictureMarks.pickables()], false);
+                if (!intersects.length) return null;
+                const hit = intersects[0].object;
+                const pick = this.pictureMarks.picked(hit);
+                return pick ? { pick } : { key: hit.userData.key };
             }
 
+            // The node under the pointer; a picture's mark stands for its host (the floor's for none).
+            raycastChild(event) {
+                const hit = this.raycastPick(event);
+                if (!hit) return null;
+                if (hit.pick) return hit.pick.host && this.renderNodeByKey[hit.pick.host] ? hit.pick.host : null;
+                return hit.key;
+            }
+
+            // A click on a node selects it. On an outline it selects the host and
+            // chooses the shape; on a mat outside the outlines, the host (or the
+            // floor), clearing the choice.
             onPointerDown(event) {
                 if (this.transformControls.dragging) return;
-                const key = this.raycastChild(event);
-                if (key) this.selectChild(key);
+                const hit = this.raycastPick(event);
+                if (!hit) return;
+                if (!hit.pick) { this.selectChild(hit.key); return; }
+                const { host, look, index } = hit.pick;
+                this.selectPlace(host);
+                if (index !== null && this.pictureMarks.choose(look, index)) this.renderSelectedPanel();
+            }
+
+            // Where a picture lands: a node's root ancestor, a made piece's host, a
+            // mark's host, or the floor for empty canvas. Null for nowhere a
+            // picture can be pinned, with the reason said.
+            placeFor(key) {
+                if (key === null || key === undefined || key === FLOOR_KEY || key === '') return '';
+                const root = key.split('.')[0];
+                const made = this.pictureMarks.madeRecord(root);
+                return made ? made.host : root;
+            }
+
+            async onDropFiles(event) {
+                const files = event.dataTransfer ? [...event.dataTransfer.files] : [];
+                if (!files.length) return;
+                event.preventDefault();
+                const hit = this.raycastPick(event);
+                const host = hit ? (hit.pick ? hit.pick.host : this.placeFor(hit.key)) : '';
+                try { await this.pictures.addFiles(files, host); } catch (e) { this.setStatus(e.message, 'error'); }
+            }
+
+            async onPaste(event) {
+                if (!this.siteName || event.target.closest('input, textarea, [contenteditable]')) return;
+                const item = [...(event.clipboardData ? event.clipboardData.items : [])].find((i) => i.kind === 'file' && i.type.startsWith('image/'));
+                if (!item) return;
+                event.preventDefault();
+                const host = this.placeFor(this.selectedName);
+                try { await this.pictures.paste(item.getAsFile(), host); } catch (e) { this.setStatus(e.message, 'error'); }
+            }
+
+            // What an intent the server carried answers with: the site as it is now,
+            // drawn without moving the camera, and the pictures fetched again.
+            applySite(payload) {
+                this.tree = payload.tree;
+                this.violations = payload.violations;
+                this.isValid = payload.is_valid;
+                if (payload.scad) this.codeContentEl.textContent = payload.scad;
+                if (this.selectedName && this.selectedName !== FLOOR_KEY && !this.nodeByPath(this.selectedName)) this.selectedName = null;
+                const at = this.camera.position.clone(), target = this.orbitControls.target.clone();
+                const near = this.orbitControls.minDistance, far = this.orbitControls.maxDistance;
+                this.renderFocus();
+                this.camera.position.copy(at); this.orbitControls.target.copy(target);
+                this.orbitControls.minDistance = near; this.orbitControls.maxDistance = far;
+                this.orbitControls.update();
+                return this.pictureMarks.refresh();
             }
 
             // A mesh is keyed by its full path and zoomIn takes a bare name:
@@ -3797,18 +4130,24 @@
             if (!row || !row.device) return undefined;
             return { port: row.device.port, printer: !!row.device.printer, armed: false, bound: true };
         }
-        const nodeSpec = (path, at) => ({
+        // What the page knows about pictures at the place a ring stands on (a
+        // node, or on the canvas ring the floor), told to the resolver as a
+        // device is: the pictures list is asked for again as the ring opens.
+        const nodeSpec = (path, at, fresh = true) => ({
             context: { pointing: 'node', targets: [path] },
             site: viewer.siteName, device: deviceFor(path), at,
+            picture: viewer.pictures.context(path, { fresh }),
         });
         // The canvas ring stands on the level you are looking at: its Pieces
         // are that node's children and Up steps back out. At the root the
-        // target list is empty, and the resolver offers no Up.
-        const canvasSpec = (at) => {
+        // target list is empty, and the resolver offers no Up. Its Pictures ›
+        // Floor holds the floor's Camera and Picture.
+        const canvasSpec = (at, fresh = true) => {
             const focus = viewer.focusPath.join('.');
             return {
                 context: { pointing: 'canvas', targets: focus ? [focus] : [] },
                 site: viewer.siteName, at,
+                picture: viewer.pictures.context('', { fresh }),
             };
         };
 
@@ -3818,7 +4157,8 @@
         // for whatever is selected, at the centre of the screen.
         function whatFor(event) {
             if (!viewer.siteName) return null;
-            if (!event) return viewer.selectedName ? nodeSpec(viewer.selectedName, null) : canvasSpec(null);
+            // The floor has no ring of its own: the canvas ring's Pictures › Floor is its.
+            if (!event) return viewer.selectedName && viewer.selectedName !== '@floor' ? nodeSpec(viewer.selectedName, null) : canvasSpec(null);
             const at = { x: event.clientX, y: event.clientY };
             const row = event.target.closest('#contents-list .contents-item');
             if (row) {
@@ -3853,11 +4193,16 @@
                 if (open && /^(control:|level:|print:|device:(poll|query|watch|reconnect|reset|release))/.test(action)) {
                     if (await open.carry(intent)) { viewer.setStatus(`${intent.label}${tail}`, 'success'); return; }
                 }
-                if (action.startsWith('camera:')) {
+                // A camera's or a picture's verb the page carries (pictures.js); the
+                // ones that change the site fall through to the intent route below.
+                if (/^(camera|picture):/.test(action) || action === 'fit:@floor') {
+                    // Kept, when open, lists what the verb pinned, unpinned or kept.
+                    if (await viewer.pictures.carry(intent)) { if (viewer.keptWidget) viewer.keptWidget.load(); return; }
+                }
+                if (action === 'camera:gather') {
                     viewer.panels.open('camera');
-                    const verb = action.slice('camera:'.length);
-                    if (viewer.cameraWidget && viewer.cameraWidget.act(verb)) viewer.setStatus(`Camera: ${intent.label}${tail}`, 'success');
-                    else viewer.setStatus(`${intent.label}: the camera panel cannot do that${tail}`, 'error');
+                    if (viewer.cameraWidget && viewer.cameraWidget.act('gather')) viewer.setStatus(`Gather${tail}`, 'success');
+                    else viewer.setStatus(`${intent.label}: the pictures panel cannot do that${tail}`, 'error');
                     return;
                 }
                 if (action === 'panel:rail:toggle') {
@@ -3869,6 +4214,12 @@
                     if (viewer.machine && viewer.panels.isOpen('machine')) { viewer.panels.close('machine'); viewer.setStatus(`Closed the machine${tail}`, 'success'); }
                     else if (viewer.selectedName && viewer.openMachine(viewer.selectedName)) viewer.setStatus(`Opened ${viewer.selectedName}${tail}`, 'success');
                     else viewer.setStatus(`Select a machine with a board pinned to it first${tail}`, 'error');
+                    return;
+                }
+                // Part › Edit: the one editor, in Selected, for a part or a made piece.
+                if (action === 'part:edit') {
+                    if (viewer.openEditor(path)) viewer.setStatus(`Editing ${path}: its parameters are in Selected${tail}`, 'success');
+                    else viewer.setStatus(`${path} has no parameters to edit${tail}`, 'error');
                     return;
                 }
                 if (action.startsWith('select:')) {
@@ -3896,6 +4247,13 @@
                     viewer.setStatus(`Framed ${nodes.length} piece(s)${tail}`, 'success');
                 } else if (action === 'explain') {
                     const node = viewer.renderNodeByKey[path] || viewer.nodeByPath(path);
+                    // A piece made from a picture is followed back to its outline.
+                    const traced = viewer.pictureMarks.trace(path);
+                    if (traced) {
+                        const at = traced.host === '' ? 'the floor' : traced.host;
+                        viewer.setStatus(`${path}: a ${traced.word} made from shape ${traced.shape_index} of ${traced.picture}${traced.picture_forgotten ? ' (forgotten)' : ''}, seen at ${at}${traced.shown ? '' : '; its look is gone, so the outline is drawn from the copy the piece keeps'}${tail}`, 'success');
+                        return;
+                    }
                     viewer.setStatus(node ? `${path}: a ${node.role}${node.category ? ' in ' + node.category : ''}${node.part_ref ? ', from part ' + node.part_ref : ''}, ${node.children.length} inside${tail}` : `${path}: not on screen${tail}`, 'success');
                 } else if (action.startsWith('site:')) {
                     const name = action.slice(5);
@@ -3932,6 +4290,7 @@
                     });
                     viewer.setStatus(`${intent.label}: ${answer.did}${tail}`, 'success');
                     if (action === 'reset') viewer.loadSite(viewer.siteName);
+                    else if (answer.site) await viewer.applySite(answer.site);
                 }
             } catch (err) {
                 viewer.setStatus(`${intent.label}: ${err.message}${tail}`, 'error');
@@ -3946,16 +4305,23 @@
         let lastRing = null;
         async function ringForCanvas() {
             if (!viewer.siteName) return null;
-            const spec = canvasSpec(null);
-            const key = JSON.stringify({ canvas: spec.context.targets, s: spec.site });
-            if (!rings.has(key)) rings.set(key, resolveRing({ base: BASE, context: spec.context, site: spec.site }).catch(() => null));
+            const spec = canvasSpec(null, false);
+            const picture = await spec.picture;
+            const key = ringKey(spec, picture);
+            if (!rings.has(key)) rings.set(key, resolveRing({ base: BASE, context: spec.context, site: spec.site, picture }).catch(() => null));
             return rings.get(key);
         }
+        // The key a ring is cached by: what it stands on, and what it was told of
+        // the board and the pictures, so a choose, look or make is never answered
+        // from a ring resolved before it.
+        const ringKey = (spec, picture) => JSON.stringify({ p: spec.context.pointing, c: spec.context.targets, s: spec.site, d: spec.device || null, pic: picture || null });
         async function ringForSelected() {
             if (!viewer.siteName || !viewer.selectedName) return null;
-            const spec = nodeSpec(viewer.selectedName, null);
-            const key = JSON.stringify({ c: spec.context.targets, s: spec.site, d: spec.device || null });
-            if (!rings.has(key)) rings.set(key, resolveRing({ base: BASE, context: spec.context, site: spec.site, device: spec.device }).catch(() => null));
+            // The floor's cells are the canvas ring's Pictures › Floor.
+            const spec = viewer.selectedName === '@floor' ? canvasSpec(null, false) : nodeSpec(viewer.selectedName, null, false);
+            const picture = await spec.picture;
+            const key = ringKey(spec, picture);
+            if (!rings.has(key)) rings.set(key, resolveRing({ base: BASE, context: spec.context, site: spec.site, device: spec.device, picture }).catch(() => null));
             return rings.get(key);
         }
         function annotateControls(ring) {
@@ -3966,6 +4332,10 @@
                 for (const el of document.querySelectorAll(selector)) pairs.push([el, action]);
             }
             for (const el of document.querySelectorAll('.zoom-in-btn')) pairs.push([el, 'zoom-in']);
+            // Selected's look rows are Picture › Looks' cells; its width box is Size's.
+            for (const el of viewer.selectedBodyEl.querySelectorAll('.look-row')) pairs.push([el, `picture:draw:${el.dataset.look}`]);
+            const floor = viewer.selectedName === '@floor' ? ':@floor' : '';
+            for (const el of viewer.selectedBodyEl.querySelectorAll('.look-width')) pairs.push([el, `picture:size${floor}`]);
             annotate(ring, pairs);
         }
         // The list, from the canvas ring: each row at this level is a piece the
@@ -3997,13 +4367,19 @@
             base: BASE,
             whatFor,
             onIntent: carry,
-            onResolved: (ring, spec) => {
-                if (spec.context.pointing === 'node') { rings.set(JSON.stringify({ c: spec.context.targets, s: spec.site, d: spec.device || null }), Promise.resolve(ring)); annotateControls(ring); }
+            onResolved: async (ring, spec) => {
+                if (spec.context.pointing === 'node') { rings.set(ringKey(spec, await spec.picture), Promise.resolve(ring)); annotateControls(ring); }
             },
             onError: (err) => viewer.setStatus(`Ring: ${err.message}`, 'error'),
         });
         window.apothecaryRing.lastRing = () => lastRing;
         window.apothecaryRing.refreshAddresses = refreshAddresses;
+        // The ring again on a host, or on the floor through the canvas ring's
+        // Pictures › Floor, entered down to the option `into` names (an id), where
+        // the last ring stood: Allow hands over to Camera › Pin here this way when
+        // the browser named several cameras.
+        window.apothecaryRing.openOn = (host, into, at = null) =>
+            window.apothecaryRing.open({ ...(host === '' ? canvasSpec(at) : nodeSpec(host, at)), into }, at);
     })();
     </script>
 </body>
