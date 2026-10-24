@@ -1,0 +1,8 @@
+{
+  "golden-layout": {
+    "version": "2.6.0",
+    "from": "dist/esm, dist/css, dist/img",
+    "integrity": "sha512-sIVQCiRWOymHbVD1Aw/T9/ijbPYAVGBlgGYd1N9MRKfcyBNSpjr87Vg9nSHm+RCT8ELrvK8IJYJV0QRJuVUkCQ==",
+    "license": "MIT"
+  }
+}

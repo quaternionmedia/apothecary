@@ -26,6 +26,7 @@ from typing import Callable, List, Tuple
 
 import httpx
 import pytest
+import windows
 from playwright.sync_api import Page, expect
 from stepping import ROOT, chosen, where
 from test_the_firmware_loop import ARDUINO, DEVKIT, MACHINE, NODE
@@ -52,13 +53,14 @@ class Walk:
 
     @property
     def pad(self):
-        """The control pad: popped out into the page while armed, the Machine's otherwise."""
+        """The control pad: a loud window of its own beside the world while armed, the
+        Machine's otherwise."""
         return self.page.locator("#control")
 
     def on(self, name: str) -> bool:
         """Whether the Machine is open, and is this board's."""
-        return (
-            self.machine.is_visible() and name in self.machine.locator(".panel-name").inner_text()
+        return self.machine.is_visible() and name in (
+            windows.tab(self.page, "machine").get_attribute("title") or ""
         )
 
     def armed(self) -> None:
@@ -69,7 +71,7 @@ class Walk:
 
 
 def open_(w: Walk) -> None:
-    """printer_1's ring, Device › Open (⌗78): its Machine docked in the rail, idle, at
+    """printer_1's ring, Device › Open (⌗78): its Machine a tab beside Pictures, idle, at
     room temperature, the chart filling as it is polled."""
     w.page.goto(f"{w.base}/viewer/sites/garage")
     expect(w.page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
@@ -77,8 +79,9 @@ def open_(w: Walk) -> None:
     _ring_on(w.page, "printer_1")
     assert _press(w.page, "Device", "Open") == "78"
     expect(w.machine).to_be_visible(timeout=5000)
-    expect(w.machine.locator(".panel-name")).to_contain_text("printer_1")
-    assert w.page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
+    expect(windows.tab(w.page, "machine")).to_contain_text("printer_1")
+    state = windows.state(w.page, "machine")
+    assert state["where"] == "layout" and "pictures" in state["stack"], state
     expect(w.machine.locator("#c-state")).to_contain_text("idle", timeout=WITHIN_A_POLL)
     expect(w.machine.locator("#c-hot")).to_contain_text("/0°")
     expect(w.machine.locator("#c-bed")).to_contain_text("/0°")
@@ -99,34 +102,37 @@ def report(w: Walk) -> None:
 
 
 def arm(w: Walk) -> None:
-    """⚙ Control: the latch armed and counting down from 5:00, the control pad popped out
-    over the world, loud, naming the printer it heats and moves, and printer_1 framed in
-    what the pad leaves of the world. A latch still armed from before is let go first."""
+    """⚙ Control: the latch armed and counting down from 5:00, the control pad a loud
+    window of its own beside the world, naming the printer it heats and moves, and
+    printer_1 framed in the world beside it. A latch still armed from before is let go
+    first."""
     where("Arm", "printer_1's Machine open", w.on("printer_1"))
     if w.machine.locator("#ctl").is_checked():
         w.pad.locator("#ctl-disarm").click()
         expect(w.pad).to_be_hidden(timeout=5000)
     w.machine.locator("#ctl").check()
-    expect(w.pad).to_be_visible(timeout=5000)
+    expect(windows.panel(w.page, "control").locator("#control")).to_be_visible(timeout=5000)
     expect(w.pad).to_have_class(re.compile(r"\bout\b"))
     expect(w.pad.locator(".head")).to_contain_text("printer_1 armed: it can heat and move")
+    expect(windows.tab(w.page, "control")).to_have_class(re.compile(r"\bloud\b"))
     expect(w.machine.locator("#ctl-ttl")).to_have_text(re.compile(r"^[45]:\d\d$"), timeout=5000)
     settled(w.page)
     framed = w.page.evaluate(FRAMED, "printer_1")
-    assert framed["clear_of_the_pad"] and framed["in_the_world"], framed
+    assert framed["pad_beside_the_world"] and framed["in_the_world"], framed
 
 
-# Where a piece's middle is drawn in the page, against the world and the control pad.
+# Where a piece's middle is drawn in the page, against the world, and whether the control
+# pad's window stands beside the world, on its right.
 FRAMED = """(key) => {
     const v = window.fractalViewer, b = v.renderNodeByKey[key].world_bounds;
     const s = v.sceneAt(...b.min.map((m, i) => (m + b.max[i]) / 2)).project(v.camera);
     const world = v.renderer.domElement.getBoundingClientRect();
-    const pad = document.querySelector('#control').getBoundingClientRect();
+    const pad = document.querySelector(".panel[data-panel='control']").getBoundingClientRect();
     const x = world.left + (s.x + 1) / 2 * world.width, y = world.top + (1 - s.y) / 2 * world.height;
     return {
         at: [Math.round(x), Math.round(y)],
         in_the_world: x > world.left && x < world.right && y > world.top && y < world.bottom,
-        clear_of_the_pad: x < pad.left || x > pad.right || y < pad.top || y > pad.bottom,
+        pad_beside_the_world: pad.width > 0 && pad.left >= world.right - 1,
     };
 }"""
 
@@ -188,7 +194,7 @@ def print_(w: Walk) -> None:
 
 
 def disarm(w: Walk) -> None:
-    """🔒 Disarm: the overlay closed; the ring's Control › Jog › Y+ (⌗7728) then refused,
+    """🔒 Disarm: the pad's window gone; the ring's Control › Jog › Y+ (⌗7728) then refused,
     said in the status bar as an error."""
     where("Disarm", "printer_1's Machine open", w.on("printer_1"))
     if w.machine.locator("#ctl").is_checked():
@@ -208,7 +214,7 @@ def devkit(w: Walk) -> None:
     _ring_on(w.page, NODE)
     _press(w.page, "Device", "Open")
     expect(w.machine).to_have_count(1)
-    expect(w.machine.locator(".panel-name")).to_contain_text(NODE, timeout=5000)
+    expect(windows.tab(w.page, "machine")).to_contain_text(NODE, timeout=5000)
     expect(w.machine.locator("#c-board")).to_contain_text(DEVKIT)
     expect(w.machine.locator("#c-sketch")).to_contain_text(f"should run {NODE}@", timeout=8000)
     expect(w.machine.locator("#listen")).to_be_visible()

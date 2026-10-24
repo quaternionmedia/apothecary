@@ -1,8 +1,8 @@
-"""Nothing covers a control: in Selected with a part's editor open --
-docked, floated, and with its SCAD editor floated or over the whole page -- at the
+"""Nothing covers a control: in Selected with a part's editor open -- in its window,
+maximised, and with its SCAD editor popped out or over the whole page -- at the
 widths the page is laid out for, scrolled from top to bottom, every control in view is
-the thing under its own middle; and so is every control of the rail, a tab's panel
-open under it and Selected squeezed. The part editor's stage bar stands pinned above
+the thing under its own middle; and so is every control of the windows beside the
+world, Pictures in front with its folds open. The part editor's stage bar stands pinned above
 Selected's body, in its own space, not over the parameters it heads; squeezed, it
 scrolls in itself.
 """
@@ -10,6 +10,7 @@ scrolls in itself.
 from __future__ import annotations
 
 import pytest
+import windows
 from playwright.sync_api import Page, expect
 from viewer_ready import settled
 
@@ -110,7 +111,7 @@ def test_nothing_covers_a_control_of_the_part_editor(page: Page, base_url: str):
         page.set_viewport_size({"width": width, "height": height})
         page.goto(f"{base_url}/viewer/sites/parts_library")
         expect(page.locator("#status")).to_contain_text("Loaded", timeout=20000)
-        page.evaluate("() => localStorage.removeItem('apothecary.panels')")
+        page.evaluate("() => localStorage.removeItem('apothecary.layout')")
         settled(page)
         _ring(page, "Part", "Edit")
         expect(page.locator(".scad-editor .cm-content")).to_be_visible(timeout=20000)
@@ -122,35 +123,33 @@ def test_nothing_covers_a_control_of_the_part_editor(page: Page, base_url: str):
         expect(pinned).to_be_visible()
         selected = ".panel[data-panel='selected']"
         assert _nothing_covered(page, selected, f"docked at {width}") > 10
-        # The whole rail, Site and the tab strip with it; then squeezed, a tab's panel
-        # open under the strip with its folds open, Selected as short as it goes: its
-        # bar scrolls in itself, and nothing of it spills over the strip.
-        assert _nothing_covered(page, ".panel-rail", f"the rail at {width}") > 15
-        tab = page.locator(".panel-rail .rail-tab[data-panel='pictures'] .rail-tab-name")
-        tab.click()
+        # Every window beside the world, Site and the tabs with it; then Pictures in
+        # front with its folds open: nothing of one window spills over another.
+        assert _nothing_covered(page, ".lm_goldenlayout", f"the windows at {width}") > 15
+        windows.show(page, "pictures")
         page.evaluate(
             "() => document.querySelectorAll(\".panel[data-panel='pictures'] details\")"
             ".forEach((d) => { d.open = true; })"
         )
-        assert _nothing_covered(page, ".panel-rail", f"squeezed at {width}") > 15
-        tab.click()
+        assert _nothing_covered(page, ".lm_goldenlayout", f"Pictures open at {width}") > 15
 
-        # Selected floated over the world.
-        page.locator(f"{selected} .panel-float").click()
-        expect(page.locator(f"{selected}.free")).to_be_visible()
-        assert _nothing_covered(page, selected, f"floated at {width}") > 5
-        page.locator(f"{selected} .panel-float").click()
-        expect(page.locator(f"{selected}.free")).to_have_count(0)
+        # Selected maximised: its window the whole of the layout; again, restored.
+        maximise = page.locator(".lm_stack", has=page.locator(selected)).locator(".lm_maximise")
+        maximise.click()
+        expect(page.locator(".lm_maximised", has=page.locator(selected))).to_be_visible()
+        assert _nothing_covered(page, selected, f"maximised at {width}") > 5
+        maximise.click()
+        expect(page.locator(".lm_maximised")).to_have_count(0)
 
-        # The SCAD editor floated, then over the whole page.
-        _ring(page, "Part", "View", "Float")
-        floated = ".panel[data-panel='scad-editor']"
-        expect(page.locator(f"{floated}.free")).to_be_visible()
-        assert _nothing_covered(page, floated, f"SCAD floated at {width}") > 3
-        assert _nothing_covered(page, selected, f"docked beside the SCAD floated at {width}") > 5
+        # The SCAD editor popped out, then over the whole page.
+        _ring(page, "Part", "View", "Pop out")
+        popped = ".panel[data-panel='scad-editor']"
+        expect(page.locator(popped)).to_be_visible()
+        assert _nothing_covered(page, popped, f"SCAD popped out at {width}") > 3
+        assert _nothing_covered(page, selected, f"beside the SCAD popped out at {width}") > 5
         page.locator("#scad-fullscreen").click()
         expect(page.locator(".scad-editor.fullscreen")).to_be_visible()
         assert _nothing_covered(page, ".scad-editor.fullscreen", f"fullscreen at {width}") > 3
         page.keyboard.press("Escape")
-        _ring(page, "Part", "View", "Float")
-        expect(page.locator(floated)).to_have_count(0)
+        _ring(page, "Part", "View", "Pop out")
+        expect(page.locator(popped)).to_have_count(0)

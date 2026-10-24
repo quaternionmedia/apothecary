@@ -1007,19 +1007,20 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert [c.destructive for c in pictures.children] == [False, False, True, False]
     assert carried_by("picture:add:@floor").name == "VIEWER"
     assert carried_by("picture:purge").name == "VIEWER"
-    # Site (Contents, its problems, its SCAD, Pinned, the site's jobs), Selected,
-    # Pictures (every picture, and the gathering) and a board's Machine (its log in
-    # it) each a cell; then the rail; then the Bench, a group of its own: the panel
-    # and its verbs. A print is the job: Jobs is no panel. Then Docs: the
-    # documentation and the walkthrough in a new tab, as the header's Docs opens them;
-    # last, Control pad: an armed printer's pad out over the world or back in its
-    # Machine. Each seated after the others so none of them moves.
+    # Site, a ring of Site (its chips and its Contents) and its own windows --
+    # Problems, Pinned, Jobs, SCAD; Selected, Pictures (every picture, and the
+    # gathering) and a board's Machine (its log in it) each a cell; then Windows:
+    # the world alone and the page's own layout again; then the Bench, a group of
+    # its own: the panel and its verbs. Then Docs: the documentation and the
+    # walkthrough in a new tab, as the header's Docs opens them; last, Control pad:
+    # an armed printer's pad in a loud window of its own or back in its Machine.
+    # Each seated after the others so none of them moves.
     assert [(c.label, c.action, c.cell) for c in panels.children] == [
-        ("Site", "panel:toggle:site", 8),
+        ("Site", None, 8),
         ("Selected", "panel:toggle:selected", 6),
-        ("Pictures", "panel:toggle:pictures", 2),
+        ("Pictures", None, 2),
         ("Machine", "panel:toggle:machine", 4),
-        ("Rail", "panel:rail:toggle", 9),
+        ("Windows", None, 9),
         ("Bench", None, 3),
         ("Docs", "panel:docs", 1),
         ("Control pad", "panel:pad", 7),
@@ -1028,10 +1029,31 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert carried_by("panel:docs").name == "VIEWER"
     assert address_of(root, "panel:pad") == "47"
     assert carried_by("panel:pad").name == "VIEWER"
-    assert address_of(root, "panel:site") == "48"  # by the option's id
-    assert address_of(root, "panel:pictures") == "42"
+    site = next(c for c in panels.children if c.label == "Site")
+    assert [(c.label, c.action, c.cell) for c in site.children] == [
+        ("Site", "panel:toggle:site", 8),
+        ("Problems", "panel:toggle:problems", 6),
+        ("Pinned", "panel:toggle:pinned", 2),
+        ("Jobs", "panel:toggle:jobs", 4),
+        ("SCAD", "panel:toggle:scad", 9),
+    ]
+    assert address_of(root, "panel:site") == "488"  # by the option's id
+    assert address_of(root, "panel:problems") == "486"
+    pictures = next(c for c in panels.children if c.label == "Pictures")
+    assert [(c.label, c.action, c.cell) for c in pictures.children] == [
+        ("Pictures", "panel:toggle:pictures", 8),
+        ("Gather", "panel:toggle:gather", 6),
+    ]
+    assert address_of(root, "panel:pictures") == "428"
     assert address_of(root, "panel:machine") == "44"
-    assert address_of(root, "panel:rail") == "49"
+    assert address_of(root, "panel:windows") == "49"
+    windows = next(c for c in panels.children if c.label == "Windows")
+    assert [(c.label, c.action, c.cell) for c in windows.children] == [
+        ("World alone", "panel:world:toggle", 8),
+        ("Reset layout", "panel:layout:reset", 6),
+    ]
+    assert carried_by("panel:world:toggle").name == "VIEWER"
+    assert carried_by("panel:layout:reset").name == "VIEWER"
     bench = next(c for c in panels.children if c.label == "Bench")
     assert [(c.label, c.action, c.cell) for c in bench.children] == [
         ("Bench", "panel:toggle:bench", 8),
@@ -1076,7 +1098,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     ):
         assert carried_by(f"bench:{verb}").name == "VIEWER"
     # No ring offers a panel the page does not have: the Comms log is in the Machine.
-    for gone in ("contents", "validation", "scad", "kept", "camera", "jobs", "log"):
+    for gone in ("contents", "validation", "kept", "camera", "log"):
         assert f"panel:toggle:{gone}" not in set(every_action([root])), gone
     # The page's sections are marked in its markup; Pictures is registered at
     # start and a board's Machine when one is opened. Both lists are the
@@ -1084,13 +1106,16 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     page = VIEWER.read_text(encoding="utf-8")
     marked = re.findall(r'class="panel-section"[^>]*data-panel="([\w-]+)"', page)
     registered = re.findall(r"panels\.register\('([\w-]+)'", page)
-    # The SCAD editor floated out of Selected is a panel only while it floats, and
-    # Part › Float's rather than one of Panels: it is Selected's, put back there.
-    assert "scad-editor" in registered
-    registered = [pid for pid in registered if pid != "scad-editor"]
+    # The SCAD editor popped out of Selected is a panel only while it is out, and
+    # Part › Pop out's rather than one of Panels: it is Selected's, put back there;
+    # an armed printer's control pad is Panels › Control pad's, not a toggle; and a
+    # rig's Lighting is the lighting overlay's, there while the site has a rig.
+    made = ("scad-editor", "control", "lighting")
+    assert all(pid in registered for pid in made)
+    registered = [pid for pid in registered if pid not in made]
     assert marked == [pid for pid, _ in PANELS[: len(marked)]]
     assert sorted(registered) == sorted(pid for pid, _ in PANELS[len(marked) :])
-    for gone in ("contents", "validation", "scad", "kept", "camera", "jobs", "log"):
+    for gone in ("contents", "validation", "kept", "camera", "log"):
         assert f'data-panel="{gone}"' not in page and f"register('{gone}'" not in page
 
 
@@ -1322,9 +1347,9 @@ def test_part_holds_the_loop_edit_keeping_its_address():
 # --- the SCAD editor on the ring --------------------------------------------------------
 #
 # A part from the parts folder, told by the server what its SCAD is (``picture.part``):
-# Save, Float and Fullscreen after Revert, so the loop's cells keep their seats, and
+# Save, Pop out and Fullscreen after Revert, so the loop's cells keep their seats, and
 # Variants last, the saved ones, which the first save brings and so moves nothing. A
-# part built by Python reads its generated SCAD: Float and Fullscreen, no Save and no
+# part built by Python reads its generated SCAD: Pop out and Fullscreen, no Save and no
 # Variants. A made piece and a camera have none of them.
 
 
@@ -1344,11 +1369,11 @@ def test_a_part_s_ring_holds_its_scad_editor_too():
         ("View", "part:view"),
         ("History", "part:history"),
     ]
-    # A ring holds eight: Float and Fullscreen are under View, beside the ghost and Fit,
+    # A ring holds eight: Pop out and Fullscreen are under View, beside the ghost and Fit,
     # and History holds Undo and Redo.
     view, history = part.children[5:7]
     assert [(c.label, c.action) for c in view.children] == [
-        ("Float", "part:float"),
+        ("Pop out", "part:popout"),
         ("Fullscreen", "part:fullscreen"),
         ("Ghost", "part:ghost"),
         ("Fit", "part:fit"),
@@ -1358,7 +1383,7 @@ def test_a_part_s_ring_holds_its_scad_editor_too():
         ("Redo", "part:redo"),
     ]
     ring = resolve(on, garage, picture=told)
-    assert address_of(ring, "part:float")[:-1] == address_of(ring, "part:save")[:-1] + "3"
+    assert address_of(ring, "part:popout")[:-1] == address_of(ring, "part:save")[:-1] + "3"
     assert address_of(ring, "part:undo")[:-1] == address_of(ring, "part:save")[:-1] + "1"
     variants = part.children[-1]
     assert (variants.label, variants.id) == ("Variants", "part:variants")
@@ -1378,7 +1403,7 @@ def test_a_part_s_ring_holds_its_scad_editor_too():
     variants_at = address_of(ring, "part:variants")
     assert address_of(ring, "part:variant:draw:wider") == variants_at + "68"
     assert len(part.children) <= MOST_OPTIONS
-    for action in ("part:save", "part:float", "part:fullscreen", "part:variant:draw:wider"):
+    for action in ("part:save", "part:popout", "part:fullscreen", "part:variant:draw:wider"):
         assert carried_by(action).name == "VIEWER"
     # Something deleted: Deleted, last under Variants, holds the trash -- each deleted
     # variant Restore and Forget -- and Empty.
@@ -1418,17 +1443,17 @@ def test_a_part_s_ring_holds_its_scad_editor_too():
     # None saved yet: no Variants, and nothing before it moved.
     bare = resolve(on, garage, picture=PictureContext(part=PartSeen(editable=True)))
     first = resolve(on, garage, picture=told)
-    for action in ("part:edit", "part:save", "part:float", "part:fullscreen", "part:undo"):
+    for action in ("part:edit", "part:save", "part:popout", "part:fullscreen", "part:undo"):
         assert address_of(bare, action) == address_of(first, action)
     assert "part:variants" not in [c.id for c in bare.options[-1].children]
-    # Built by Python: its SCAD is read, so Float and Fullscreen and nothing to save.
+    # Built by Python: its SCAD is read, so Pop out and Fullscreen and nothing to save.
     python = resolve(on, garage, picture=PictureContext(part=PartSeen(editable=False)))
     assert [c.action or c.id for c in python.options[-1].children][4:] == [
         "part:view",
         "part:history",
     ]
     assert [c.action for c in python.options[-1].children[4].children][:2] == [
-        "part:float",
+        "part:popout",
         "part:fullscreen",
     ]
     # Untold, the ring is the part loop's, its View the ghost and Fit.

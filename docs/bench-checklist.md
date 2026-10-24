@@ -46,7 +46,7 @@ Machine, Ctrl + right-click opens the board's own ring (the device ring); from
 ## A. The link, nothing armed
 
 - [ ] Open the printer's Machine: click its ⚡ badge, or `printer_1`'s ring ›
-      Device › Open (⌗78). It docks in the rail: state `idle`, temperatures
+      Device › Open (⌗78). It opens as a tab beside Pictures: state `idle`, temperatures
       near the room's, the chart filling after a few polls.
 - [ ] Pull the filament out of the runout sensor: within one poll the endstop
       chip reads `filament OUT`; push it back → `present`.
@@ -56,10 +56,10 @@ Machine, Ctrl + right-click opens the board's own ring (the device ring); from
 
 ## B. Armed: heat
 
-- [ ] **⚙ Control**: the control pad pops out over the world by the rail,
+- [ ] **⚙ Control**: the control pad pops out into a red window beside the world,
       headed *printer_1 armed: it can heat and move*, counting down from 5:00;
-      its ⇥ puts it in the Machine and ⧉ out again; the ring's Control › (⌗77)
-      reads *Disarm*.
+      its ⇥ Put back puts it in the Machine and ⧉ Pop out out again; the ring's
+      Control › (⌗77) reads *Disarm*.
 - [ ] Bed **45** → Set: `M140 S45` in the log, the bed card's target `/45°` on
       the next poll, the bar filling. **Off** → target 0.
 - [ ] Hotend **150** → Set; watch it climb; **Off**. (Below printing

@@ -21,6 +21,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+import windows
 from playwright.sync_api import Page, expect
 
 PRINTER = "/dev/ttyFAKE1"
@@ -530,25 +531,14 @@ def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: s
 
 
 def _open_panels(page: Page, url: str):
-    """The garage viewer with the rail as it starts (each test has fresh storage)."""
+    """The garage viewer with its windows as they start (each test has fresh storage)."""
     page.goto(f"{url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
-    return page.locator(".panel-rail"), page.locator(".viewer-panel")
-
-
-def _world_is(page: Page, width: float):
-    page.wait_for_function(
-        "(w) => Math.abs(document.querySelector('.viewer-panel').offsetWidth - w) <= 2", arg=width
-    )
-
-
-def _tab(page: Page, pid: str):
-    """A docked panel's tab in the rail's strip."""
-    return page.locator(f".panel-rail .rail-tab[data-panel='{pid}']")
+    return page.locator(windows.WORLD)
 
 
 def _second_tab(page: Page):
-    """A second tab in the strip, as a docked Machine is: registered the way the page
+    """A second tab among Pictures', as a Machine is: registered the way the page
     registers one, with a body of its own."""
     page.evaluate(
         """() => {
@@ -560,40 +550,58 @@ def _second_tab(page: Page):
     )
 
 
+def _panels_ring(page: Page) -> dict:
+    """The canvas ring opened on Panels: its cells."""
+    page.locator("#viewer-canvas").click(
+        button="right", modifiers=["Control"], position={"x": 30, "y": 30}
+    )
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    page.keyboard.press(next(cell for cell, label in _wedges(page).items() if label == "Panels"))
+    expect(page.locator("#ring-overlay .title")).to_have_text("Panels")
+    return _wedges(page)
+
+
 @pytest.mark.e2e
-def test_one_rail_stacks_site_and_selected_over_a_strip_of_tabs(page: Page, ring_url: str):
-    """One rail, on the right of the world: Site and Selected stacked in it, both
-    shown, and below them a strip of tabs -- Pictures, the Bench, Settings, and a docked
-    Machine when one is open -- none shown until pressed, one at a time, pressed again to
-    fold away. The other side is world."""
-    rail, world = _open_panels(page, ring_url)
+def test_the_world_and_the_panels_are_windows_of_one_layout(page: Page, ring_url: str):
+    """The world and every panel are windows of one layout: Site above Selected in the
+    column on the world's right, Pictures, the Bench and Settings tabs below them, the
+    first in front. A panel the page registers later joins those tabs behind the one in
+    front; a tab pressed brings its panel in front."""
+    world = _open_panels(page, ring_url)
     ids = page.evaluate("() => window.apothecaryPanels.list().map((p) => p.id)")
-    assert ids == ["site", "selected", "pictures", "bench", "settings"]
-    expect(page.locator(".panel-rail")).to_have_count(1)
-    expect(rail).to_have_attribute("data-side", "right")
-    site = rail.locator(".panel[data-panel='site']")
-    selected = rail.locator(".panel[data-panel='selected']")
-    expect(site).to_be_visible()
-    expect(selected).to_be_visible()
-    assert site.bounding_box()["y"] < selected.bounding_box()["y"]  # stacked, Site on top
-    assert rail.bounding_box()["x"] >= world.bounding_box()["x"] + world.bounding_box()["width"] - 1
-    assert world.bounding_box()["x"] <= 1  # nothing docked on the other side
-    assert world.bounding_box()["width"] >= page.viewport_size["width"] / 2
-    # The strip: a tab for each, in the order they were registered, none shown.
-    expect(rail.locator(".rail-tab")).to_have_count(3)
-    _second_tab(page)
-    expect(rail.locator(".rail-tab")).to_have_count(4)
-    assert rail.locator(".rail-tab").evaluate_all("(ts) => ts.map((t) => t.dataset.panel)") == [
+    assert ids == [
+        "world",
+        "site",
+        "problems",
+        "pinned",
+        "jobs",
+        "scad",
+        "selected",
         "pictures",
         "bench",
         "settings",
-        "second",
+        "gather",
     ]
-    expect(rail.locator(".panel[data-panel='pictures']")).to_be_hidden()
-    expect(rail.locator(".panel[data-panel='second']")).to_be_hidden()
-    strip = rail.locator(".panel-tabstrip").bounding_box()
-    assert strip["y"] > selected.bounding_box()["y"]  # below the stack
-    expect(page.locator(".panel-tab")).to_have_count(0)  # nothing closed
+    expect(page.locator(".lm_goldenlayout")).to_have_count(1)
+    expect(windows.tab(page, "world")).to_have_count(0)  # the world's window has no tab
+    site, selected = windows.panel(page, "site"), windows.panel(page, "selected")
+    expect(site).to_be_visible()
+    expect(selected).to_be_visible()
+    assert site.bounding_box()["y"] < selected.bounding_box()["y"]  # Site on top
+    wb = world.bounding_box()
+    assert site.bounding_box()["x"] >= wb["x"] + wb["width"] - 1  # on the world's right
+    assert wb["x"] <= 1 and wb["width"] >= page.viewport_size["width"] / 2
+    assert windows.state(page, "pictures")["stack"] == ["pictures", "bench", "settings"]
+    assert windows.state(page, "pictures")["shown"] is True
+    expect(windows.panel(page, "bench")).to_be_hidden()
+    pictures_y = windows.panel(page, "pictures").bounding_box()["y"]
+    assert pictures_y > selected.bounding_box()["y"]  # below Selected
+    # Registered later: a tab of the same stack, behind the one in front.
+    _second_tab(page)
+    expect(windows.tab(page, "second")).to_have_count(1)
+    assert windows.state(page, "second")["stack"] == ["pictures", "bench", "settings", "second"]
+    expect(windows.panel(page, "second")).to_be_hidden()
+    expect(windows.panel(page, "pictures")).to_be_visible()
     # Selecting a piece from Site's tree fills Selected and moves nothing in Site.
     before = site.bounding_box()
     row = page.locator("#contents-list .contents-item[data-path='printer_1']")
@@ -602,253 +610,177 @@ def test_one_rail_stacks_site_and_selected_over_a_strip_of_tabs(page: Page, ring
     expect(selected.locator("#pos-x")).to_be_visible(timeout=5000)
     assert site.bounding_box() == before and row.bounding_box() == at
 
-    # A tab pressed shows its panel under the strip; another tab, that one instead.
-    _tab(page, "pictures").locator(".rail-tab-name").click()
-    pictures = rail.locator(".panel-tabbody .panel[data-panel='pictures']")
-    expect(pictures).to_be_visible()
-    expect(pictures.locator("#pictures-list")).to_be_visible(timeout=5000)
-    expect(_tab(page, "pictures")).to_have_class(re.compile(r"\bactive\b"))
-    # Under the strip, which Site gave room for.
-    assert pictures.bounding_box()["y"] > rail.locator(".panel-tabstrip").bounding_box()["y"]
-    _tab(page, "second").locator(".rail-tab-name").click()
-    expect(rail.locator(".panel[data-panel='second']")).to_be_visible()
-    expect(pictures).to_be_hidden()
-    # Pressed again, it folds away; Site and Selected stay.
-    _tab(page, "second").locator(".rail-tab-name").click()
-    expect(rail.locator(".panel[data-panel='second']")).to_be_hidden()
-    expect(site).to_be_visible()
-    expect(selected).to_be_visible()
+    # A tab pressed: its panel in front, the other behind it.
+    windows.show(page, "second")
+    expect(page.locator("#second-body")).to_be_visible()
+    expect(windows.panel(page, "pictures")).to_be_hidden()
+    windows.show(page, "pictures")
+    expect(page.locator("#pictures-list")).to_be_visible(timeout=5000)
+    expect(windows.tab(page, "pictures")).to_have_class(re.compile(r"\blm_active\b"))
 
 
 @pytest.mark.e2e
-def test_a_panel_closes_to_a_tab_and_collapses(page: Page, ring_url: str):
-    """A closed panel leaves a tab that brings it back -- a stacked one to the stack,
-    a tab of the strip to the strip, shown; a collapsed one keeps its title."""
-    rail, world = _open_panels(page, ring_url)
-    # Close a tab of the strip: gone from it, a tab over the world remains, and brings it back.
-    _tab(page, "pictures").locator(".rail-tab-name").click()
-    _tab(page, "pictures").locator(".rail-tab-close").click()
-    expect(page.locator(".panel-tab[data-panel='pictures']")).to_be_visible()
-    expect(_tab(page, "pictures")).to_have_count(0)
-    expect(rail.locator(".panel[data-panel='pictures']")).to_have_count(0)
-    page.locator(".panel-tab[data-panel='pictures']").click()
-    expect(rail.locator(".panel[data-panel='pictures']")).to_be_visible()
-    expect(_tab(page, "pictures")).to_have_class(re.compile(r"\bactive\b"))
-    expect(page.locator(".panel-tab")).to_have_count(0)
-
-    # A stacked one closes the same way and comes back to the stack.
-    page.locator(".panel[data-panel='selected'] .panel-close").click()
-    expect(page.locator(".panel-tab[data-panel='selected']")).to_be_visible()
-    page.locator(".panel-tab[data-panel='selected']").click()
-    expect(rail.locator(".panel[data-panel='selected']")).to_be_visible()
-
-    # Collapse: the body folds, the title stays.
-    page.locator(".panel[data-panel='site'] .panel-collapse").click()
-    expect(page.locator("#contents-list")).to_be_hidden()
-    expect(page.locator(".panel[data-panel='site'] .panel-title")).to_be_visible()
-    page.locator(".panel[data-panel='site'] .panel-collapse").click()
-    expect(page.locator("#contents-list")).to_be_visible()
-
-
-@pytest.mark.e2e
-def test_a_panel_floats_drags_and_docks(page: Page, ring_url: str):
-    """Floated, a panel leaves the rail, follows the pointer, stays on the page, docks
-    back where it was: a stacked one in the stack, a tab of the strip in the strip."""
-    rail, world = _open_panels(page, ring_url)
-    page.locator(".panel[data-panel='selected'] .panel-float").click()
-    free = page.locator(".panel-free-layer .panel[data-panel='selected']")
-    expect(free).to_be_visible()
-    before = free.bounding_box()
-    title = free.locator(".panel-title")
-    tb = title.bounding_box()
-    page.mouse.move(tb["x"] + 120, tb["y"] + tb["height"] / 2)
-    page.mouse.down()
-    page.mouse.move(tb["x"] + 120 - 200, tb["y"] + tb["height"] / 2 - 150, steps=8)
-    page.mouse.up()
-    after = free.bounding_box()
-    assert after["x"] == pytest.approx(before["x"] - 200, abs=3)
-    assert after["y"] == pytest.approx(before["y"] - 150, abs=3)
-    # Dragged past the edge, it is clamped to the page.
-    tb = title.bounding_box()
-    page.mouse.move(tb["x"] + 120, tb["y"] + tb["height"] / 2)
-    page.mouse.down()
-    page.mouse.move(-500, tb["y"] + tb["height"] / 2, steps=6)
-    page.mouse.up()
-    wb = world.bounding_box()
-    assert free.bounding_box()["x"] >= wb["x"] - 1
-    # Dock it back: in the stack, under Site.
-    free.locator(".panel-float").click()
-    docked = rail.locator(".panel[data-panel='selected']")
-    expect(docked).to_be_visible()
-    assert (
-        docked.bounding_box()["y"] > rail.locator(".panel[data-panel='site']").bounding_box()["y"]
-    )
-
-    # A tab floated from the strip, and docked back to it, shown.
-    _tab(page, "pictures").locator(".rail-tab-name").click()
-    _tab(page, "pictures").locator(".rail-tab-float").click()
-    floated = page.locator(".panel-free-layer .panel[data-panel='pictures']")
-    expect(floated).to_be_visible()
-    expect(floated.locator(".panel-title")).to_be_visible()
-    expect(_tab(page, "pictures")).to_have_count(0)
-    floated.locator(".panel-float").click()
-    expect(rail.locator(".panel-tabbody .panel[data-panel='pictures']")).to_be_visible()
-    expect(_tab(page, "pictures")).to_have_class(re.compile(r"\bactive\b"))
-
-
-@pytest.mark.e2e
-def test_a_closed_panel_stays_closed_and_the_ring_reopens_it(page: Page, ring_url: str):
-    """What was done survives a reload; the ring's Panels cell reaches a panel by address;
-    with every panel closed the world has the whole width."""
-    rail, world = _open_panels(page, ring_url)
-    page.locator(".panel[data-panel='site'] .panel-close").click()
+def test_a_closed_window_stays_closed_and_the_ring_reopens_it(page: Page, ring_url: str):
+    """A window closed by its tab's ✕ stays closed after a reload; the ring's Panels
+    reaches it by address and opens it in front; with every panel closed the world has
+    the whole width."""
+    world = _open_panels(page, ring_url)
+    windows.close(page, "site")
+    expect(windows.panel(page, "site")).to_have_count(0)
     page.reload()
-    expect(page.locator(".panel-tab[data-panel='site']")).to_be_visible(timeout=15000)
-    assert page.evaluate("() => window.apothecaryPanels.state('site').open") is False
+    expect(world).to_be_visible(timeout=15000)
+    page.wait_for_function("() => window.apothecaryPanels && window.apothecaryPanels.state('site')")
+    assert windows.state(page, "site")["open"] is False
 
-    # From the ring: Panels › Site reopens it by address, in the rail.
-    page.locator("#viewer-canvas").click(
-        button="right", modifiers=["Control"], position={"x": 30, "y": 30}
-    )
-    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    wedges = _wedges(page)
-    panels_cell = next(cell for cell, label in wedges.items() if label == "Panels")
-    page.keyboard.press(panels_cell)
-    assert _title(page) == "Panels"
-    inner = _wedges(page)
+    # From the ring: Panels › Site opens it by address.
+    inner = _panels_ring(page)
     assert sorted(inner.values()) == [
         "Bench",
         "Control pad",
         "Docs",
         "Machine",
         "Pictures",
-        "Rail",
         "Selected",
         "Site",
+        "Windows",
     ]
-    site_cell = next(cell for cell, label in inner.items() if label == "Site")
-    page.keyboard.press(site_cell)
+    page.keyboard.press(next(cell for cell, label in inner.items() if label == "Site"))
+    # Panels › Site is a ring of Site and its own windows: Site first.
+    site_ring = _wedges(page)
+    assert sorted(site_ring.values()) == ["Jobs", "Pinned", "Problems", "SCAD", "Site"]
+    page.keyboard.press(next(cell for cell, label in site_ring.items() if label == "Site"))
     expect(page.locator("#ring-overlay")).to_have_count(0)
-    expect(rail.locator(".panel[data-panel='site']")).to_be_visible()
+    expect(windows.panel(page, "site")).to_be_visible()
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
-    expect(page.locator(".panel-tab")).to_have_count(0)
 
-    # Panels › Pictures shows Pictures, its tab in the strip.
-    page.locator("#viewer-canvas").click(
-        button="right", modifiers=["Control"], position={"x": 30, "y": 30}
-    )
-    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    page.keyboard.press(panels_cell)
-    expect(page.locator("#ring-overlay .title")).to_have_text("Panels")
-    pictures_cell = next(cell for cell, label in _wedges(page).items() if label == "Pictures")
-    page.keyboard.press(pictures_cell)
-    expect(rail.locator(".panel[data-panel='pictures']")).to_be_visible()
-    expect(_tab(page, "pictures")).to_have_class(re.compile(r"\bactive\b"))
-    expect(page.locator(".panel-tab")).to_have_count(0)
+    # Panels › Bench › Bench brings the Bench in front of Pictures.
+    inner = _panels_ring(page)
+    page.keyboard.press(next(cell for cell, label in inner.items() if label == "Bench"))
+    page.keyboard.press(next(cell for cell, label in _wedges(page).items() if label == "Bench"))
+    expect(windows.panel(page, "bench")).to_be_visible(timeout=5000)
+    expect(windows.panel(page, "pictures")).to_be_hidden()
 
-    # Every panel closed: the world has the whole width, and a tab for each waits.
-    for pid in ["site", "selected", "pictures", "bench", "settings"]:
-        page.evaluate("(id) => window.apothecaryPanels.close(id)", pid)
-    expect(page.locator(".panel-tab")).to_have_count(5)
-    expect(rail).to_be_hidden()
-    _world_is(page, page.viewport_size["width"])
+    # Every panel closed: the world has the whole width.
+    for state in page.evaluate("() => window.apothecaryPanels.list()")[1:]:
+        page.evaluate("(id) => window.apothecaryPanels.close(id)", state["id"])
+    expect(page.locator(".panel")).to_have_count(0)
+    windows.world_is(page, page.viewport_size["width"])
+    # The world alone in the layout, a panel opens beside it again, after a reload too.
+    page.wait_for_timeout(400)  # the layout is remembered a moment after it changes
+    page.reload()
+    expect(world).to_be_visible(timeout=15000)
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    inner = _panels_ring(page)
+    page.keyboard.press(next(cell for cell, label in inner.items() if label == "Site"))
+    page.keyboard.press(next(cell for cell, label in _wedges(page).items() if label == "Site"))
+    expect(windows.panel(page, "site")).to_be_visible(timeout=5000)
+    expect(page.locator(windows.WORLD_HEADER)).to_be_hidden()
+    assert world.bounding_box()["width"] < page.viewport_size["width"] - 100
+    assert errors == [], errors
 
 
 @pytest.mark.e2e
-def test_the_tilde_hides_the_rail_and_the_ring_does_too(page: Page, ring_url: str):
-    """The tilde hides and shows the one rail (a tab stands in meanwhile, and the world
-    has the whole width); typed into a box it is typing; Panels › Rail hides it too."""
-    rail, world = _open_panels(page, ring_url)
+def test_a_window_dragged_beside_the_world_is_remembered_until_the_layout_is_reset(
+    page: Page, ring_url: str
+):
+    """Pictures' tab dragged onto the world's left edge: a window of its own on the
+    world's left, the world narrower; a reload finds it there. Panels › Windows ›
+    Reset layout puts every window where the page puts it."""
+    world = _open_panels(page, ring_url)
+    wb = world.bounding_box()
+    windows.drag(page, windows.tab(page, "pictures"), (wb["x"] + 30, wb["y"] + wb["height"] / 2))
+    pictures = windows.panel(page, "pictures")
+    expect(pictures).to_be_visible()
+    page.wait_for_function(
+        "() => document.querySelector(\".panel[data-panel='pictures']\").getBoundingClientRect().x < 2"
+    )
+    # The world on its right.
+    assert world.bounding_box()["x"] >= pictures.bounding_box()["width"] - 1
+    assert windows.state(page, "pictures")["stack"] == ["pictures"]
+    assert windows.state(page, "bench")["stack"] == ["bench", "settings"]
+    page.wait_for_timeout(400)  # the layout is remembered a moment after it changes
+    page.reload()
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    assert pictures.bounding_box()["x"] < 2
+    assert windows.state(page, "pictures")["stack"] == ["pictures"]
+    expect(page.locator(windows.WORLD_HEADER)).to_be_hidden()  # still no tab of its own
+
+    inner = _panels_ring(page)
+    page.keyboard.press(next(cell for cell, label in inner.items() if label == "Windows"))
+    assert sorted(_wedges(page).values()) == ["Reset layout", "World alone"]
+    page.keyboard.press(
+        next(cell for cell, label in _wedges(page).items() if label == "Reset layout")
+    )
+    expect(page.locator("#status")).to_contain_text("The page's own layout again")
+    assert windows.state(page, "pictures")["stack"] == ["pictures", "bench", "settings"]
+    assert world.bounding_box()["x"] <= 1
+
+    # A tab dropped on the world's own right quarter: a window of its own there, with
+    # its tab to drag, close and find it by; the world's window still has none.
+    wb = world.bounding_box()
+    to = (wb["x"] + wb["width"] * 0.85, wb["y"] + wb["height"] / 2)
+    windows.drag(page, windows.tab(page, "bench"), to)
+    page.wait_for_function("() => window.apothecaryPanels.state('bench').stack.length === 1")
+    expect(windows.tab(page, "bench")).to_be_visible()
+    expect(page.locator(windows.WORLD_HEADER)).to_be_hidden()
+
+
+@pytest.mark.e2e
+def test_the_tilde_shows_the_world_alone_and_the_ring_does_too(page: Page, ring_url: str):
+    """The tilde shows the world alone, the whole width, and again every window back;
+    typed into a box it is typing; Panels › Windows › World alone does it too."""
+    _open_panels(page, ring_url)
     full = page.viewport_size["width"]
-    _tab(page, "pictures").locator(".rail-tab-name").click()
-    page.locator("#pictures-gather summary").click()
+    before = windows.world_width(page)
+    page.evaluate("() => window.apothecaryPanels.open('gather')")
     page.locator("#gather-answers").focus()
     page.keyboard.press("`")  # typing a tilde into a box is typing, not a toggle
     expect(page.locator("#gather-answers")).to_have_value("`")
-    expect(rail).to_be_visible()
+    expect(windows.panel(page, "site")).to_be_visible()
     page.locator("#viewer-canvas").click(position={"x": 200, "y": 200})
     page.keyboard.press("`")
-    expect(rail).to_be_hidden()
-    expect(page.locator(".panel-tab-rail")).to_be_visible()
-    _world_is(page, full)
+    windows.world_is(page, full)
+    expect(windows.panel(page, "site")).to_be_hidden()
+    assert page.evaluate("() => window.apothecaryPanels.isWorldAlone()") is True
     page.keyboard.press("`")
-    expect(rail).to_be_visible()
+    expect(windows.panel(page, "site")).to_be_visible()
+    windows.world_is(page, before)
     page.keyboard.press("~")
-    expect(rail).to_be_hidden()
-    page.locator(".panel-tab-rail").click()
-    expect(rail).to_be_visible()
+    windows.world_is(page, full)
+    page.keyboard.press("~")
+    windows.world_is(page, before)
 
-    # From the ring: Panels > Rail hides it too.
-    page.locator("#viewer-canvas").click(
-        button="right", modifiers=["Control"], position={"x": 30, "y": 30}
+    # From the ring: Panels › Windows › World alone.
+    inner = _panels_ring(page)
+    page.keyboard.press(next(cell for cell, label in inner.items() if label == "Windows"))
+    page.keyboard.press(
+        next(cell for cell, label in _wedges(page).items() if label == "World alone")
     )
-    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    page.keyboard.press(next(cell for cell, label in _wedges(page).items() if label == "Panels"))
-    page.keyboard.press(next(cell for cell, label in _wedges(page).items() if label == "Rail"))
-    expect(rail).to_be_hidden()
-    page.keyboard.press("`")
-    expect(rail).to_be_visible()
+    windows.world_is(page, full)
+    expect(page.locator("#status")).to_contain_text("The world alone")
+    # A panel opened from anywhere ends it: the panels are back.
+    page.evaluate("() => window.apothecaryPanels.open('selected')")
+    expect(windows.panel(page, "selected")).to_be_visible()
+    windows.world_is(page, before)
 
 
 @pytest.mark.e2e
-def test_the_rails_width_is_dragged_and_remembered(page: Page, ring_url: str):
-    """The rail's inner edge drags it wider, never past half the page; the width it was
-    dragged to is what it has after a reload."""
-    rail, world = _open_panels(page, ring_url)
-    full = page.viewport_size["width"]
-    before = page.evaluate("() => window.apothecaryPanels.railWidth()")
-    edge = rail.locator(".panel-rail-resizer").bounding_box()
-    page.mouse.move(edge["x"] + 3, edge["y"] + 200)
-    page.mouse.down()
-    page.mouse.move(edge["x"] + 3 - 80, edge["y"] + 200, steps=6)
-    page.mouse.up()
-    wider = page.evaluate("() => window.apothecaryPanels.railWidth()")
-    assert wider == pytest.approx(before + 80, abs=3)
-    _world_is(page, full - wider)
+def test_the_splitter_beside_the_world_is_dragged_and_remembered(page: Page, ring_url: str):
+    """The splitter between the world and the column drags the column wider; the
+    width it was dragged to is what it has after a reload."""
+    world = _open_panels(page, ring_url)
+    before = windows.world_width(page)
+    splitter = page.locator(".lm_root > .lm_row > .lm_splitter").first
+    sb = splitter.bounding_box()
+    windows.drag(page, splitter, (sb["x"] - 120, sb["y"] + sb["height"] / 2))
+    page.wait_for_function(
+        "(w) => document.querySelector('.viewer-panel').offsetWidth < w - 80", arg=before
+    )
+    narrower = windows.world_width(page)
+    page.wait_for_timeout(400)  # the layout is remembered a moment after it changes
     page.reload()
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
-    assert page.evaluate("() => window.apothecaryPanels.railWidth()") == pytest.approx(wider, abs=1)
-
-    # Far past the limit, it stops at half the page.
-    edge = rail.locator(".panel-rail-resizer").bounding_box()
-    page.mouse.move(edge["x"] + 3, edge["y"] + 200)
-    page.mouse.down()
-    page.mouse.move(-2000, edge["y"] + 200, steps=6)
-    page.mouse.up()
-    assert page.evaluate("() => window.apothecaryPanels.railWidth()") <= full / 2 + 1
-    assert world.bounding_box()["width"] >= full / 2 - 2
-
-
-@pytest.mark.e2e
-def test_the_rail_swaps_to_the_left_and_is_remembered_there(page: Page, ring_url: str):
-    """⇄ moves the one rail, every panel in it, to the left of the world, and a reload
-    finds it there; its grip dragged across brings it back to the right."""
-    rail, world = _open_panels(page, ring_url)
-    _tab(page, "pictures").locator(".rail-tab-name").click()
-    rail.locator(".panel-rail-swap").click()
-    expect(rail).to_have_attribute("data-side", "left")
-    rb, wb = rail.bounding_box(), world.bounding_box()
-    assert rb["x"] <= 1 and wb["x"] >= rb["width"] - 1  # the world is on its right
-    for pid in ("site", "selected", "pictures"):
-        expect(rail.locator(f".panel[data-panel='{pid}']")).to_be_visible()
-    expect(_tab(page, "pictures")).to_be_visible()
-    page.reload()
-    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
-    expect(rail).to_have_attribute("data-side", "left")
-    assert rail.bounding_box()["x"] <= 1
-    assert page.evaluate("() => window.apothecaryPanels.railSide()") == "left"
-    expect(
-        rail.locator(".panel[data-panel='pictures']")
-    ).to_be_visible()  # the tab shown stays shown
-
-    # The grip, dragged across the page: back on the right.
-    grip = rail.locator(".panel-rail-grip").bounding_box()
-    page.mouse.move(grip["x"] + 5, grip["y"] + 5)
-    page.mouse.down()
-    page.mouse.move(page.viewport_size["width"] - 100, grip["y"] + 5, steps=8)
-    page.mouse.up()
-    expect(rail).to_have_attribute("data-side", "right")
-    assert world.bounding_box()["x"] <= 1
-    page.reload()
-    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
-    expect(rail).to_have_attribute("data-side", "right")
+    windows.world_is(page, narrower)
+    assert world.bounding_box()["width"] < before - 80
+    expect(page.locator(windows.WORLD_HEADER)).to_be_hidden()  # still no tab of its own

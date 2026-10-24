@@ -1,5 +1,6 @@
-"""The theatre as a site: its shell the theatre part, the example rig hung in it, another
-rig in its place, and the shell's sliders as the SCAD draws them."""
+"""The theatre as a site: its shell the theatre part, the example rig hung in it by its
+positions, the scenery beside it, another rig in its place, and the shell's sliders as
+the SCAD draws them."""
 
 from __future__ import annotations
 
@@ -17,26 +18,63 @@ from apothecary.projects.parts.stl_renderer import get_renderer
 client = TestClient(app)
 
 
-def test_the_shell_is_the_theatre_part_at_its_defaults():
+def _subsystem(site, name):
+    (node,) = [c for c in site.children if c.name == name]
+    return node
+
+
+def test_the_shell_is_the_theatre_part_at_its_defaults_and_its_walls():
+    """The shell is the building's walls, as the garage's are: drawn faded, a click
+    passing through it to what hangs inside."""
     site = theatre_site.create_theatre_site()
-    (shell,) = [c for c in site.children if c.category == "architecture"]
-    assert shell.part_ref == "theatre"
+    shell = _subsystem(site, "theatre")
+    assert (shell.part_ref, shell.category) == ("theatre", "wall")
     assert shell.footprint == theatre.DEFAULT.get_bounds()
 
 
-def test_the_example_rig_hangs_every_located_patch_and_checks_clean():
+def test_the_example_rig_hangs_on_its_positions_and_checks_clean():
+    """The site's pieces are its subsystems: the shell, the lighting by its hanging
+    positions, the scenery; every located patch is in one of them, and it checks clean."""
     site = theatre_site.create_theatre_site()
+    assert [(c.name, c.category) for c in site.children] == [
+        ("theatre", "wall"),
+        ("lighting", "lighting"),
+        ("scenery", "scenic"),
+    ]
+    lighting, scenery = _subsystem(site, "lighting"), _subsystem(site, "scenery")
+    assert [position.name for position in lighting.children] == [
+        "foh",
+        "1st_electric",
+        "2nd_electric",
+        "3rd_electric_cyc",
+        "groundrow",
+        "house",
+    ]
     rig = theatre_site.load_theatre_rig()
     located = [p for p in rig.patches if p.location is not None]
-    assert len(site.children) == 1 + len(located)
-    assert {c.category for c in site.children} == {"architecture", "lighting", "scenic"}
+    hung = [f for position in lighting.children for f in position.children]
+    assert len(hung) + len(scenery.children) == len(located)
+    assert all(f.name.startswith("ch") for f in hung + scenery.children)
+    foh = next(position for position in lighting.children if position.name == "foh")
+    assert {f.name for f in foh.children} == {
+        f"ch{p.channel}_FOH_{p.label.split()[-1]}" for p in located if p.label.startswith("FOH")
+    }
     assert theatre_site.validate_theatre(site).violations == []
 
 
 def test_site_units_are_millimetres_and_the_rig_is_in_metres():
+    """A fixture stands where the rig's exports place it, in the site's frame: its
+    subsystem and its position stand at the site's origin."""
     site = theatre_site.create_theatre_site()
     first = next(p for p in theatre_site.load_theatre_rig().patches if p.location is not None)
-    node = next(c for c in site.children if c.name.startswith(f"ch{first.channel}_"))
+    lighting = _subsystem(site, "lighting")
+    assert lighting.position == lighting.children[0].position == type(lighting.position)()
+    node = next(
+        f
+        for position in lighting.children
+        for f in position.children
+        if f.name.startswith(f"ch{first.channel}_")
+    )
     assert (node.position.x, node.position.y) == pytest.approx(
         (first.location.x * 1000, first.location.y * 1000)
     )
@@ -56,10 +94,14 @@ def test_another_rig_stands_in_and_one_hung_outside_is_named(monkeypatch, tmp_pa
     (tmp_path / "fixture-parameters.csv").write_text(PARAMS, encoding="utf-8")
     monkeypatch.setenv(theatre_site.RIG_ENV, str(tmp_path))
     site = theatre_site.create_theatre_site()
-    assert [c.name for c in site.children] == [
-        "theatre",
-        "ch1_Over_the_stage",
-        "ch2_In_the_car_park",
+    assert [c.name for c in site.children] == ["theatre", "lighting"]
+    # Labels with no number: each its own position.
+    assert [
+        (position.name, [f.name for f in position.children])
+        for position in _subsystem(site, "lighting").children
+    ] == [
+        ("over_the_stage", ["ch1_Over_the_stage"]),
+        ("in_the_car_park", ["ch2_In_the_car_park"]),
     ]
     report = theatre_site.validate_theatre(site)
     assert [(v.kind, v.structures) for v in report.violations] == [

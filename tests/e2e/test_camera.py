@@ -23,6 +23,7 @@ from __future__ import annotations
 import re
 
 import pytest
+import windows
 from PIL import Image
 from playwright.sync_api import expect
 from test_picture_in_the_world import leaves_garage_as_found  # noqa: F401 - a fixture
@@ -278,8 +279,8 @@ def test_a_camera_removed_from_sites_pinned_leaves_the_tree_and_the_world(
         lambda r: loads.append(r.url) if r.url.split("?")[0].endswith("/sites/garage") else None,
     )
 
-    pinned = page.locator(".panel[data-panel='site'] #site-pinned")
-    pinned.locator("summary").click()
+    pinned = windows.panel(page, "pinned")
+    windows.show(page, "pinned")
     camera_row = pinned.locator(".pin-row.camera", has_text=f"garage › {name}")
     expect(camera_row).to_have_count(1, timeout=5000)
     camera_row.locator(".pinned-camera-remove").click()
@@ -537,8 +538,10 @@ def test_gather_says_what_it_refused_and_what_it_set_aside(
         timeout=5000,
     )
     page.keyboard.press(_cell(page, "Gather"))
-    panel = page.locator(".panel[data-panel='pictures']")
-    expect(panel.locator("#pictures-gather")).to_have_attribute("open", "", timeout=3000)
+    # Gather, a window beside Pictures, in front.
+    panel = windows.panel(page, "gather")
+    expect(panel).to_be_visible(timeout=3000)
+    expect(windows.tab(page, "gather")).to_have_class(re.compile(r"\blm_active\b"))
     expect(page.locator("#status")).to_contain_text("tick at least two pictures to gather")
     expect(panel.locator("#pic-list .pic")).to_have_count(len(leaves_no_trace) + 42, timeout=5000)
 

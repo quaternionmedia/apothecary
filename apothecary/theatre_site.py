@@ -1,7 +1,15 @@
 """A theatre as a navigable site: its shell, a lighting rig, and scenery.
 
-The shell is the ``theatre`` part (parts/theatre/theatre.scad), stood at the site's
-origin: Part › Edit on it sizes the stage, walls, opening and pit with sliders.
+The site's pieces are its subsystems, as the garage's are:
+
+- ``theatre``, the shell, is the building's walls (category ``wall``): drawn faded,
+  a click passing through it to what hangs inside. It is the ``theatre`` part
+  (parts/theatre/theatre.scad), stood at the site's origin: Part › Edit on it sizes
+  the stage, walls, opening and pit with sliders.
+- ``lighting`` holds the rig by its hanging positions -- ``foh``, ``1st_electric``
+  and so on, each the fixtures whose label names it ("FOH 3" hangs on ``foh``) --
+  so a step into it shows the positions and a step into one its fixtures.
+- ``scenery`` holds the scenic elements the rig patches (a ``Scenic`` type).
 The rig is a folder of a lighting console's two exports, ``patches.csv`` and
 ``fixture-parameters.csv`` (apothecary/lighting.py reads them): the folder
 ``APOTHECARY_THEATRE_RIG`` names, else the example rig in examples/theatre-rig/,
@@ -21,7 +29,7 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from .hierarchy import Assembly, LayoutReport, LayoutViolation, Site, Structure, Substructure
 from .lighting import LightingRig, Patch, load_rig, validate_rig
@@ -70,8 +78,20 @@ def _shell() -> Assembly:
         "theatre",
         position=Vector3D(),
         footprint=theatre.DEFAULT.get_bounds(),
-        category="architecture",
+        category="wall",
         part_ref="theatre",
+    )
+
+
+def _cube(name: str, mm: float) -> Assembly:
+    half = mm / 2
+    return Substructure(
+        name,
+        base=Cube(size=mm, center=True),
+        footprint=BoundingBox3D(
+            min_point=Vector3D(x=-half, y=-half, z=-half),
+            max_point=Vector3D(x=half, y=half, z=half),
+        ),
     )
 
 
@@ -79,41 +99,63 @@ def _fixture(p: Patch) -> Assembly:
     loc = p.location
     mm = MOVER_MM if p.fixture_type in MOVERS else FIXTURE_MM
     half = mm / 2
-    return Structure(
+    return Substructure(
         f"ch{p.channel}_{_name(p.label or p.fixture_type)}",
         position=Vector3D(x=loc.x * 1000, y=loc.y * 1000, z=loc.z * 1000),
         footprint=BoundingBox3D(
             min_point=Vector3D(x=-half, y=-half, z=-half),
             max_point=Vector3D(x=half, y=half, z=half),
         ),
-        category="lighting",
-        substructures=[Substructure("housing", base=Cube(size=mm, center=True))],
+        children=[_cube("housing", mm)],
     )
 
 
 def _scenic(p: Patch) -> Assembly:
     loc = p.location
     half = SCENIC_MM / 2
-    return Structure(
+    return Substructure(
         f"ch{p.channel}_{_name(p.label or p.fixture_type)}",
         position=Vector3D(x=loc.x * 1000, y=loc.y * 1000, z=loc.z * 1000 + half),
         footprint=BoundingBox3D(
             min_point=Vector3D(x=-half, y=-half, z=-half),
             max_point=Vector3D(x=half, y=half, z=half),
         ),
-        category="scenic",
-        substructures=[Substructure("element", base=Cube(size=SCENIC_MM, center=True))],
+        children=[_cube("element", SCENIC_MM)],
     )
 
 
+def hanging_position(p: Patch) -> str:
+    """The position a fixture hangs on: its label without its number ("FOH 3" hangs on
+    ``foh``, "3rd Electric Cyc 2" on ``3rd_electric_cyc``), else its type's name."""
+    words = re.sub(r"\s*\d+\s*$", "", p.label or "").strip() or p.fixture_type
+    return _name(words).lower()
+
+
+def _subsystem(name: str, category: str, children: List[Assembly]) -> Assembly:
+    """A subsystem at the site's origin, in the site's frame, so what it holds stands
+    where the rig's exports place it."""
+    return Structure(name, position=Vector3D(), category=category, substructures=children)
+
+
 def create_theatre_site() -> Assembly:
-    """The shell, and the rig's every located fixture and scenic element."""
+    """The shell; the rig's every located fixture on its hanging position, under
+    ``lighting``; and its located scenic elements, under ``scenery``."""
     children: List[Assembly] = [_shell()]
     rig = load_theatre_rig()
+    positions: Dict[str, List[Assembly]] = {}
+    scenery: List[Assembly] = []
     for p in rig.patches if rig else []:
         if p.location is None:
             continue  # listed by the lighting route; there is no place for it in the room
-        children.append(_scenic(p) if p.fixture_type.startswith("Scenic") else _fixture(p))
+        if p.fixture_type.startswith("Scenic"):
+            scenery.append(_scenic(p))
+        else:
+            positions.setdefault(hanging_position(p), []).append(_fixture(p))
+    if positions:
+        hung = [Substructure(name, children=fixtures) for name, fixtures in positions.items()]
+        children.append(_subsystem("lighting", "lighting", hung))
+    if scenery:
+        children.append(_subsystem("scenery", "scenic", scenery))
     return Site(SITE, structures=children)
 
 

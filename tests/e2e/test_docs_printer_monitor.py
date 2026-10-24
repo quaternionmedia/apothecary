@@ -17,6 +17,7 @@ import re
 import time
 
 import pytest
+import windows
 from doc_capture import FOLDER, TEMPERATURE, moments
 from playwright.sync_api import Page, expect
 from viewer_ready import by_hand
@@ -156,12 +157,12 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     expect(machine.locator("#chart-span")).to_contain_text("poll", timeout=10000)
     docs.step(
         "Click the badge, or Open, or Device › Open on the ring, and the printer's Machine "
-        "opens in the rail's tab strip, beside Pictures and the Bench: the monitor's own "
+        "opens as a tab beside Pictures and the Bench, in front: the monitor's own "
         "body -- cards, chart, the latch and control pad, the bed reading, the print from "
         "here -- with the board's one log in it. It is the one place for the board, and "
         "the one thing that polls it: the badges and Selected's line say what its polls "
-        "said. Float it from its tab to have it over the world; the ring's control verbs "
-        "go to it",
+        "said. Dragged by its tab it is a window wherever it is dropped, beside the world "
+        "too; the ring's control verbs go to it",
         blank=CHANGING,
     )
 
@@ -203,7 +204,7 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     machine.locator("#listen").click()
     expect(machine.locator("#log")).to_contain_text("hello", timeout=10000)
     expect(machine.locator("#c-sketch")).to_contain_text("observed", timeout=5000)
-    # The sketch at the top of the popup, the Flashing card and the log below it.
+    # The sketch at the top of the Machine, the Flashing card and the log below it.
     page.evaluate(
         "() => document.querySelector(\"#sketch-card\").scrollIntoView({ block: 'start' })"
     )
@@ -228,29 +229,30 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     page.locator("#q").fill("M119")
     page.locator("#qform button").click()
     expect(page.locator("#log")).to_contain_text("y_min: TRIGGERED", timeout=8000)
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
+    machine_state = windows.state(page, "machine")
+    assert machine_state["where"] == "layout" and "pictures" in machine_state["stack"]
     # The status cards at the top of the Machine, which the log scrolled away.
     page.locator("#c-state").evaluate(
         "(el) => el.closest('.card').scrollIntoView({ block: 'start' })"
     )
     docs.step(
         "The printer monitor's address, /firmware/monitor?port=, opens the viewer on the "
-        "site the port is pinned in with the printer's Machine open, a tab of the rail's "
-        "strip: status cards, temperature history, the port's comms log with its query box, "
-        "and Reconnect / Reset / Release for the link. A board pinned nowhere opens on the "
-        "default site, its Machine in the rail the same way",
+        "site the port is pinned in with the printer's Machine open, a tab beside "
+        "Pictures: status cards, temperature history, the port's comms log with its query "
+        "box, and Reconnect / Reset / Release for the link. A board pinned nowhere opens on the "
+        "default site, its Machine a tab beside Pictures the same way",
         blank=CHANGING,
     )
 
     page.locator("#ctl").check()
-    expect(page.locator("#control")).to_be_visible(timeout=5000)
+    expect(windows.panel(page, "control").locator("#control")).to_be_visible(timeout=5000)
     page.locator("#h-bed").fill("65")
     page.locator("#control button[data-cmd='M140 S{h-bed}']").click()
     expect(page.locator("#c-bed")).to_contain_text("/65°", timeout=8000)
     docs.step(
-        "⚙ Control arms a latch for five minutes of activity and opens the control overlay: "
-        "heaters, fan, homing, bounded jogs, SD pause/resume/abort. Here the bed target is set "
-        "to 65 °C; the card follows on the next poll and the line is in the log in amber. "
+        "⚙ Control arms a latch for five minutes of activity and opens the control pad, a "
+        "loud window of its own beside the world: heaters, fan, homing, bounded jogs, SD "
+        "pause/resume/abort. Here the bed target is set to 65 °C; the card follows on the next poll and the line is in the log in amber. "
         "Disarmed, nothing on the page can heat or move the machine; E-STOP always can",
         blank=CHANGING,
     )
@@ -274,9 +276,10 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
         " return m && m.marks && m.marks.mesh(); }",
         timeout=10000,
     )
-    # The Machine docked into the rail's strip, and the world zoomed into the printer, so
-    # its bed is in view.
-    page.evaluate("() => window.apothecaryPanels.dock('machine')")
+    # The Machine in front among its tabs, and the world zoomed into the printer, so its
+    # bed is in view.
+    windows.show(page, "machine")
+    expect(windows.panel(page, "control")).to_be_visible()
     page.evaluate("() => window.fractalViewer.zoomIn('printer_1')")
     expect(page.locator("#contents-list .contents-item", has_text="gantry_system")).to_be_visible(
         timeout=10000
@@ -284,8 +287,9 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     docs.step(
         "The reading is drawn in the world too: the printer's marks lay the mesh over its "
         "bed as a relief, stretched so the tilt can be seen and coloured as the heatmap is. "
-        "It follows whichever reading the card shows. Here the Machine is docked, a tab of "
-        "the rail's strip, and the world is zoomed into the printer",
+        "It follows whichever reading the card shows. Here the Machine is a tab beside "
+        "Pictures, the control pad's window beside the world, and the world is zoomed "
+        "into the printer",
         blank=CHANGING,
     )
     page.evaluate("() => window.fractalViewer.jumpTo(0)")
@@ -330,9 +334,9 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     expect(bench.locator(".tc-status")).to_contain_text("arduino-cli", timeout=15000)
     expect(bench.locator(".sketch-select option[value='footpedal@arduino']")).to_have_count(1)
     docs.step(
-        "The firmware page's address, /firmware, opens the viewer with the Bench, a tab of "
-        "the rail's strip: the toolchain as installed with Install / Update, the suggested "
-        "cores, libraries, the sketches under parts/ each with its board, Compile and "
+        "The firmware page's address, /firmware, opens the viewer with the Bench in front, "
+        "a tab beside Pictures: the toolchain as installed with Install / Update, the "
+        "suggested cores, libraries, the sketches under parts/ each with its board, Compile and "
         "Compile & upload to any detected port, raw flash with esptool, and the task log. "
         "Each verb is a cell of the ring's Panels › Bench too",
         blank=(

@@ -249,17 +249,15 @@ def test_the_ring_module_opens_three_ways_and_the_pages_import_it():
 
 
 def test_the_panel_module_keeps_its_chrome_to_itself():
-    """panels.js listens on the elements it makes, and on the window only for
-    the tilde key and the pointer moves that finish a drag, each taken off
-    again; the viewer loads it."""
+    """panels.js leaves the windows' own chrome -- tabs, splitters, a stack's
+    maximise and close -- to GoldenLayout, and listens on the window only for the
+    tilde key and the page going (the layout saved at once), each taken off again;
+    the viewer loads it."""
     text = (STATIC / "panels.js").read_text(encoding="utf-8")
-    assert _on_the_page(text) == [
-        ("window", "keydown"),
-        ("window", "pointermove"),
-        ("window", "pointerup"),
-    ]
-    for event in ("keydown", "pointermove", "pointerup"):
+    assert _on_the_page(text) == [("window", "keydown"), ("window", "pagehide")]
+    for event in ("keydown", "pagehide"):
         assert f'window.removeEventListener("{event}"' in text
+    assert 'from "golden-layout"' in text
     assert "/static/panels.js" in census.VIEWER.read_text(encoding="utf-8")
 
 

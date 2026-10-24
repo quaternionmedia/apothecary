@@ -609,8 +609,8 @@ def test_shift_m_opens_the_canvas_ring_whatever_is_selected(page: Page, url: str
 def test_one_key_check_for_every_shortcut(page: Page, url: str):
     """A slider focused takes Page Down -- it moves, and nothing steps -- and lets m open
     the ring; Ctrl+Backspace steps out of nothing, Backspace does; the ring's key is
-    matched by where it is (Cyrillic ь on the M key) and with Caps Lock on; the rail's
-    tilde by where it is, a dead key there included."""
+    matched by where it is (Cyrillic ь on the M key) and with Caps Lock on; the tilde,
+    the world alone, by where it is, a dead key there included."""
     page.goto(f"{url}/viewer/sites/parts_library")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     page.locator(ROW.format("calibration_cube")).click()
@@ -646,9 +646,9 @@ def test_one_key_check_for_every_shortcut(page: Page, url: str):
     expect(page.locator(f"{RING} .title")).to_have_text(re.compile("^calibr"), timeout=5000)
     page.keyboard.press("Escape")
     page.evaluate(press, ["Dead", "Backquote", False])
-    assert page.evaluate("() => window.apothecaryPanels.railHidden()") is True
+    assert page.evaluate("() => window.apothecaryPanels.isWorldAlone()") is True
     page.evaluate(press, ["§", "Backquote", False])
-    assert page.evaluate("() => window.apothecaryPanels.railHidden()") is False
+    assert page.evaluate("() => window.apothecaryPanels.isWorldAlone()") is False
 
 
 @pytest.mark.e2e

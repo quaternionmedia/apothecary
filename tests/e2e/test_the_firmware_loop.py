@@ -25,6 +25,7 @@ flashing the bench's own ESP32 is section H of the bench checklist
 from __future__ import annotations
 
 import pytest
+import windows
 from doc_capture import FOLDER, all_words
 from firmware_helpers import write_fake_arduino_cli, write_fake_cargo, write_fake_espflash
 from playwright.sync_api import Page, expect
@@ -217,13 +218,24 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     expect(bench.locator(".fqbn-input")).to_have_value("esp32:esp32:esp32")
     bench.locator(".port-select").select_option(DEVKIT)
     expect(bench.locator(".tc-module[data-id='rust-esp32']")).to_contain_text("installed")
-    # Floated from its tab, as a person floats a panel to see more of it: its toolchains
-    # and its sketch in one picture, where the rail's strip shows a few lines of either.
-    page.locator(".panel-rail .rail-tab[data-panel='bench'] .rail-tab-float").click()
-    floated = page.locator(".panel-free-layer .panel[data-panel='bench']")
-    expect(floated).to_be_visible(timeout=5000)
-    floated.locator(".bench-build").evaluate("(el) => el.scrollIntoView({ block: 'start' })")
-    installed = floated.locator(".tc-module").evaluate_all(
+    # Maximised from its stack, as a person maximises a window to see more of it: its
+    # toolchains and its sketch in one picture, where its tab beside Pictures shows a
+    # few lines of either.
+    maximise = page.locator(".lm_stack", has=bench).locator(".lm_maximise")
+    maximise.click()
+    expect(page.locator(".lm_stack.lm_maximised", has=bench)).to_be_visible(timeout=5000)
+    page.wait_for_function(  # the whole of the layout, the world's room too
+        """() => document.querySelector(".panel[data-panel='bench']").offsetWidth
+            >= document.querySelector('.lm_goldenlayout').offsetWidth - 20"""
+    )
+    # Its sketch scrolled to the top of its body, as far as the body scrolls: the page
+    # under the layout stays where it is.
+    bench.locator(".bench-build").evaluate(
+        """(el) => { const body = el.closest('.panel-body-slot');
+            body.scrollTop += el.getBoundingClientRect().top
+                - body.getBoundingClientRect().top; }"""
+    )
+    installed = bench.locator(".tc-module").evaluate_all(
         "(ms) => ms.map((m) => `${m.dataset.id ?? m.dataset.slicer}: "
         "${/not installed/.test(m.textContent)"
         " ? 'not installed' : 'installed'}`)"
@@ -232,8 +244,8 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     assert "orcaslicer: not installed" in installed, installed
     story.shows(
         "The Bench lists both builds of esp32_blink, each with its toolchain",
-        "Panels › Bench › Bench on the canvas ring opens the Bench, floated here from its "
-        "tab: arduino-cli's status and its cores, and under them the other modules as "
+        "Panels › Bench › Bench on the canvas ring opens the Bench, maximised here from its "
+        "stack: arduino-cli's status and its cores, and under them the other modules as "
         "installed -- Rust for the ESP32, and the slicer, OrcaSlicer, which this run "
         "leaves uninstalled -- "
         "and the sketches under parts/, each named with its toolchain: the Arduino "
@@ -243,9 +255,10 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
         shown="\n".join([*installed, *(r for r in rows if r.startswith("esp32_blink"))]),
         blank=CHANGING,
     )
-    floated.locator(".panel-float").click()  # docked again, a tab of the rail's strip
-    expect(page.locator(".panel-free-layer .panel[data-panel='bench']")).to_have_count(0)
+    maximise.click()  # restored: a tab beside Pictures, the world beside it
+    expect(page.locator(".lm_maximised")).to_have_count(0)
     expect(bench).to_be_visible(timeout=5000)
+    assert windows.state(page, "bench")["shown"] is True
 
     # 2. Compile, from the ring: Panels › Bench › Compile.
     _canvas_ring(page, "4", "3", "2")
@@ -274,7 +287,7 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     # 4. The node its sketch draws is bound to the board that runs it: its Machine.
     badge = page.locator(f".world-badge[data-path='{NODE}']")
     expect(badge).to_be_visible(timeout=15000)
-    page.locator(".panel-rail .rail-tab[data-panel='bench'] .rail-tab-name").click()  # fold it
+    windows.show(page, "pictures")  # Pictures in front: the Bench behind it
     expect(bench).to_be_hidden(timeout=5000)
     _ring_on(page, NODE)
     _choose(page, "Device", "Open")
@@ -489,7 +502,7 @@ def test_with_rust_alone_the_loop_goes_round_with_no_arduino_cli(page: Page, rus
 
     badge = page.locator(f".world-badge[data-path='{NODE}']")
     expect(badge).to_be_visible(timeout=15000)
-    page.locator(".panel-rail .rail-tab[data-panel='bench'] .rail-tab-name").click()
+    windows.show(page, "pictures")
     expect(bench).to_be_hidden(timeout=5000)
     _ring_on(page, NODE)
     _choose(page, "Device", "Open")

@@ -19,7 +19,7 @@ Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its ser
 
 ## 1. Part › Edit opens the part's editor at what is drawn
 
-The parts library, /viewer/sites/parts_library (the site drop-down's parts_library): calibration_cube's row in Site, its ring, Part › Edit: its parameters in Selected. They start from what is drawn, the part's own STL as its params sidecar records it, and beside the envelope the part declares is what that STL measures. Nothing marks it: it is the saved part. The view is brought to it by hand, Shift+drag and the wheel, as the library frames a whole shelf of parts; in this page's pictures of the editor, Site is folded to its title by its ▾, so Selected has the rail. A slider is the next step.
+The parts library, /viewer/sites/parts_library (the site drop-down's parts_library): calibration_cube's row in Site, its ring, Part › Edit: its parameters in Selected. They start from what is drawn, the part's own STL as its params sidecar records it, and beside the envelope the part declares is what that STL measures. Nothing marks it: it is the saved part. The view is brought to it by hand, Shift+drag and the wheel, as the library frames a whole shelf of parts; in this page's pictures of the editor, Site's window and the tabs under Selected are dragged short by their splitters, so Selected has the column. A slider is the next step.
 
 ![Part › Edit opens the part's editor at what is drawn](screenshots/04-01-part-edit-opens-the-part-s-editor-at-what-is-drawn.png)
 

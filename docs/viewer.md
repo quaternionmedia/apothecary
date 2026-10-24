@@ -1,7 +1,7 @@
 # The viewer
 
 `apothecary serve` serves one page, the viewer: a three.js world that zooms
-through a site's tree at any depth, with one rail of panels beside it and a
+through a site's tree at any depth, with its panels as windows beside it and a
 ring that holds every verb by address. This page describes the page's own
 controls as they are. The loops through them are walkthrough pages
 [03](../walkthrough/03-a-picture-to-a-print.md) to
@@ -38,7 +38,7 @@ Left to right, one row:
 - **⌗ Ring** opens the ring for the chosen piece, as `m` does; its tooltip names
   the key and the modifier Settings gives the ring.
 - **The validity count**, "Layout valid" or the number of violations: a click
-  unfolds the site's problems in Site.
+  brings Problems, beside Site, in front.
 
 Under `apothecary serve --demo`, one quiet line above the header says it is
 the demo -- a simulated printer and ESP32, scripted firmware tools, its own
@@ -146,7 +146,7 @@ ring's View is, which adds **Fit**: frame the pieces at this level (Shift+F;
 | Detail: Full, Black box, Dot | How much of each compound piece to draw: its real geometry, its bounding box, or a marker. Leaves are always drawn in full; Selected's Detail overrides it for one piece |
 | Outlines | Outlines each compound piece's whole extent, so a subassembly reads as one thing (on at first) |
 | Select walls | A click in the world picks a wall again, until the page is left (off at first) |
-| Settings | Opens the Settings panel in the rail ([below](#settings)) |
+| Settings | Opens the Settings panel, its tab in front ([below](#settings)) |
 
 None of the first four is remembered: a reload starts from the defaults.
 Settings are kept by this browser.
@@ -207,12 +207,13 @@ site built again from its factory, as it was first built: chosen twice); then
 Step out 1 (when stepped in) and Group (each category of the site's pieces:
 expand it, as its chip in Site does; 7 when stepped in, 1 at the top).
 
-- **Panels** › Site, Selected, Pictures, Machine (the selected board's), Rail
-  (as `~`), Bench › Bench (show it), Install (a cell per toolchain
-  module, then the slicer), Compile, Upload, Raw flash, Cancel, Cores,
-  Libraries; Docs (the documentation in a new tab, as the header's Docs); and
-  Control pad (an armed printer's pad out over the world or back in its
-  Machine, as the pad's ⇥ and ⧉).
+- **Panels** › Site › Site, Problems, Pinned, Jobs and SCAD; Selected;
+  Pictures › Pictures and Gather; Machine (the selected board's),
+  Windows › World alone (as `~`) and Reset layout, Bench › Bench (show it),
+  Install (a cell per toolchain module, then the slicer), Compile, Upload, Raw
+  flash, Cancel, Cores, Libraries; Docs (the documentation in a new tab, as the
+  header's Docs); and Control pad (an armed printer's pad in a loud window of
+  its own or back in its Machine, as the pad's ⧉ Pop out and ⇥ Put back).
 - **Pictures** › Add (a picture pinned at the floor), Floor (the floor's
   Fit, Camera and Picture), Purge and Gather.
 
@@ -228,7 +229,7 @@ pieces it holds: a digit selects one), then what the piece is:
 - a piece made from a picture: **Picture** › Word, Drop (chosen twice);
 
 then **Part** (a part, a camera or a made piece; [below](#the-part-editor): Edit,
-Defaults, Apply, Revert, Save, View › Float, Fullscreen, Ghost and Fit,
+Defaults, Apply, Revert, Save, View › Pop out, Fullscreen, Ghost and Fit,
 History › Undo and Redo, and Variants › each saved variant › Draw, Rename,
 Duplicate, History, Compare and Delete, and Variants › Deleted), and, when a printer is pinned in the site, **Print** (a made piece) and
 **Slice** (a made piece, or a part not inside a printer and not a board: a
@@ -255,22 +256,30 @@ variant's Forget and Empty, a board's Reboot, a print's Cancel and Abort -- is
 chosen twice: chosen once, its wedge (or its button) says "again to …", and
 choosing it again does it. What heats, moves or flashes a machine -- Probe the
 bed, Print, Compile and upload, Raw flash -- asks in a dialog; the control
-pad's own buttons stand behind its armed latch, the pad popped out over the
-world while it is armed ([firmware.md](firmware.md#control-behind-a-latch)).
+pad's own buttons stand behind its armed latch, the pad in a loud window of its
+own beside the world while it is armed ([firmware.md](firmware.md#control-behind-a-latch)).
 The emergency stop never asks.
 
-## The rail
+## The windows
 
-One rail beside the world, on the right until ⇄ (or dragging its ⋮⋮ grip
-across the page) moves it; its edge sets its width, up to half the page. ✕,
-`~` or the ring's Panels › Rail hides it, and `~` brings it back.
+The world and every panel are windows of one layout. As the page lays them out,
+the world takes the left two thirds, and a column on its right holds Site above
+Selected, with the tabs below them. Any window is dragged by its tab -- into
+another window's tabs, or to an edge of any window to split it -- and a
+splitter between two windows sets their sizes. A stack's ☐ maximises it over
+the whole layout, and its ✕ (or a tab's) closes it; the ring's Panels opens a
+closed one again. `~` or the ring's Panels › Windows › World alone shows the
+world alone, the whole layout, and `~` again brings every window back. The
+layout a person makes is remembered by this browser; Panels › Windows › Reset
+layout puts every window where the page puts it.
 
-- **Site**: the site's problems in one fold (each row selects its piece, at
-  its level), its category chips, the **Contents** tree (a click selects a
-  row, a double-click steps in, ⚠ marks a piece in a problem), then folds for
-  what is **Pinned** in every site (each with its Remove or Unpin), the
-  site's **Jobs** (a row opens its machine) and its **SCAD**, generated from
-  the tree.
+- **Site**: its category chips and the **Contents** tree (a click selects a
+  row, a double-click steps in, ⚠ marks a piece in a problem). Site's own
+  windows are tabs beside it, each reached by Panels › Site too:
+  **Problems** (its tab counts them, red while there are any; each row selects
+  its piece, at its level), what is **Pinned** in every site (each with its
+  Remove or Unpin), the site's **Jobs** (its tab counts them and the running
+  ones; a row opens its machine) and its **SCAD**, generated from the tree.
 - **Selected**: the selected piece -- its name, place and footprint, a
   compound piece's Detail, "⤵ Step into" for one with children -- then its
   part editor, its Device line where a board belongs -- on a board, a printer,
@@ -278,15 +287,22 @@ across the page) moves it; its edge sets its width, up to half the page. ✕,
   pinned board's port and state, with Open and Unpin; for one with none, the
   detected ports to pin) -- and what a camera or a picture's piece knows. A
   plain printed part, a bin, a piece made from a picture has no Device line.
-- **The strip of tabs** below them, one shown at a time: **Pictures**, the
-  **Bench**, **Settings**, and a **Machine** for each board opened. A tab
-  pressed again folds away.
+- **The tabs** below them, one in front at a time: **Pictures**, the
+  **Bench**, **Settings**, and a **Machine** for each board opened, which opens
+  in front. Only the tab in front wears its ✕. **Gather**, the gathering of
+  several pictures, is a tab beside Pictures when asked for (the canvas ring's
+  Pictures › Gather, or Panels › Pictures › Gather), and a site with a lighting
+  rig adds **Lighting** ([lighting.md](lighting.md)).
+- **The control pad**: an armed printer's pad opens as a window of its own
+  beside the world, its tab and frame red, its frame pulsing as it opens, and
+  the printer framed in the world that is left. Its ⇥ Put back, its tab's ✕,
+  the ring's Panels › Control pad or disarming put it back in the Machine, and
+  the world takes its room back.
+- **The SCAD editor**, popped out of Selected (Part › View › Pop out), is a
+  window of its own beside the world, the code filling it.
 
-Each panel's title bar collapses it (▾), floats it over the world (⧉; ⇥
-docks it again) or closes it (✕); a closed panel keeps a tab at the world's
-corner, and the ring's Panels opens it too. A floating panel is dragged by
-its title and sized from its corner. The rail's side, width and shown tab,
-and each panel's place and state, are remembered by this browser.
+A window the page makes for the moment -- a Machine, the pad, the editor popped
+out -- is left out of the layout this browser remembers.
 
 ## The part editor
 
@@ -472,8 +488,8 @@ Outside the editor F5, F6 and Ctrl+Enter are the browser's.
   overlaid (blue and orange, seen through) or side by side, framed, with each
   one's measured size, every number that differs and what the SCAD changes.
   Close draws the part as it was.
-- **Part › View › Float** floats the editor over the world (its Dock puts it
-  back); **Part › View › Fullscreen** gives it the page (Escape gives it back).
+- **Part › View › Pop out** puts the editor in a window of its own beside the
+  world (its Dock, or Pop out again, puts it back in Selected); **Part › View › Fullscreen** gives it the page (Escape gives it back).
 
 A part built by Python geometry shows the SCAD its geometry generates, read
 only, and has no Save; a made piece shows its few lines, read only; a camera
@@ -482,7 +498,7 @@ has none. The routes are `/parts/{name}/draft/check`, `/draft/render` and
 
 ## Settings
 
-**Settings**, a tab of the rail's strip, holds every shortcut and navigation
+**Settings**, a tab beside Pictures, holds every shortcut and navigation
 setting of the page, and is the reference for every binding. ⚙ View ›
 Settings and the canvas ring's View › Settings open it. Each row says its default under its name, and its ↺ puts it back;
 **Reset all**, at the foot, puts every one back. A change applies at once,
@@ -524,7 +540,7 @@ defaults, and a change holds until the page is left.
 | Page Down | Steps in: the selection, else what the middle of the view shows (Settings' Step in), while the world has the keys |
 | Page Up, or Backspace | Steps out a level (Settings' Step out), Page Up while the world has the keys |
 | Arrows, Shift+arrows | Pan, and turn, the view, while the world has the keyboard's focus |
-| `~` (or the key left of 1) | Hides or shows the rail |
+| `~` (or the key left of 1) | Shows the world alone, or every window back |
 | `P` | Takes a picture, with a camera selected |
 | `?` | Shows or hides the hint bar |
 | Escape | One thing a press: folds ⚙ View; puts a drag back where it began, nothing saved; lets go of the selection. In the ring it closes the ring, in the SCAD editor's fullscreen it leaves it, in Pictures it lets go of the picture chosen, in a Settings field it lets go of the field |

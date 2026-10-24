@@ -2,6 +2,7 @@
 which is also the parts browser: the parts library is a site like any other."""
 
 import pytest
+import windows
 from playwright.sync_api import Page, expect
 
 
@@ -47,10 +48,11 @@ def test_viewer_has_canvas(page: Page, base_url: str):
 
 @pytest.mark.e2e
 def test_viewer_has_code_panel(page: Page, base_url: str):
-    """The site's generated OpenSCAD is Site's SCAD section, shown when unfolded."""
+    """The site's generated OpenSCAD is Site's SCAD window, a tab beside Site, shown when
+    its tab is pressed."""
     page.goto(f"{base_url}/viewer/sites/garage")
 
-    page.locator(".panel[data-panel='site'] #site-scad summary").click()
+    windows.show(page, "scad")
     code_content = page.locator("#code-content")
     expect(code_content).to_be_visible()
 

@@ -22,6 +22,7 @@ from __future__ import annotations
 import re
 
 import pytest
+import windows
 from browsers import launch
 from PIL import Image, ImageDraw
 from playwright.sync_api import expect
@@ -551,8 +552,8 @@ def test_a_dropped_file_is_pinned_where_it_lands(
     assert [vw["host"] for vw in _attached(page, base_url)["views"]].count("") == 1
 
     # A view's row in Site's Pinned unpins it.
-    pinned = page.locator(".panel[data-panel='site'] #site-pinned")
-    pinned.locator("summary").click()
+    pinned = windows.panel(page, "pinned")
+    windows.show(page, "pinned")
     row = pinned.locator(f".pin-row.view:has(.pinned-view-unpin[data-id='{views[0]['id']}'])")
     expect(row).to_be_visible(timeout=5000)
     row.locator(".pinned-view-unpin").click()

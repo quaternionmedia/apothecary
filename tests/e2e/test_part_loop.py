@@ -179,7 +179,7 @@ def cube_as_it_was():
 def _open(page: Page, url: str) -> None:
     page.goto(url)
     expect(page.locator("#status")).to_contain_text("Loaded", timeout=20000)
-    page.evaluate("() => localStorage.removeItem('apothecary.panels')")
+    page.evaluate("() => localStorage.removeItem('apothecary.layout')")
     settled(page)
     _drawn(page)
 
@@ -198,7 +198,7 @@ def _drawn(page: Page) -> None:
 # machine loaded with OpenSCAD runs that answer can take over 5 s.
 RING_MS = 15000
 
-# The widths the page is laid out for (the rail beside the world, and the narrower).
+# The widths the page is laid out for (the column beside the world, and the narrower).
 WIDTHS = ((1024, 768), (1280, 800))
 
 
@@ -291,9 +291,10 @@ def _envelope(page: Page) -> str:
 
 
 def _shown_whole(page: Page, show) -> None:
-    """``show()``, the picture taken with Site folded to its title by its ▾, so Selected
-    has the rail: the editor from its stage bar down, its sizes and, under them, what
-    the STL measures beside what the part declares."""
+    """``show()``, the picture taken with Site's window and the tabs under Selected
+    dragged short by their splitters, so Selected has the column: the editor from its
+    stage bar down, its sizes and, under them, what the STL measures beside what the
+    part declares."""
     with site_folded(page):
         page.evaluate(STAGE_BAR_AT_THE_TOP)
         show()
@@ -765,8 +766,9 @@ def test_designing_a_part_twice_round(
             "and beside the envelope the part declares is what that STL measures. Nothing "
             "marks it: it is the saved part. The view is brought to it by hand, Shift+drag "
             "and the wheel, as the library frames a whole shelf of parts; in this page's "
-            "pictures of the editor, Site is folded to its title by its ▾, so Selected has "
-            "the rail. A slider is the next step.",
+            "pictures of the editor, Site's window and the tabs under Selected are dragged "
+            "short by their splitters, so Selected has the column. A slider is the next "
+            "step.",
             shown=_envelope(page),
         ),
     )

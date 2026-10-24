@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from typing import Callable, List, Tuple
 
 import pytest
+import windows
 from firmware_helpers import write_fake_arduino_cli, write_fake_cargo, write_fake_espflash
 from playwright.sync_api import Page, expect
 from stepping import chosen, where
@@ -88,7 +89,13 @@ def bench(w: Walk) -> None:
     expect(w.bench.locator(".fqbn-input")).to_have_value("esp32:esp32:esp32")
     w.bench.locator(".port-select").select_option(DEVKIT)
     expect(w.bench.locator(".tc-module[data-id='rust-esp32']")).to_contain_text("installed")
-    w.bench.locator(".bench-build").evaluate("(el) => el.scrollIntoView({ block: 'start' })")
+    # Its sketch scrolled to the top of its body, as far as the body scrolls: the page
+    # under the layout stays where it is.
+    w.bench.locator(".bench-build").evaluate(
+        """(el) => { const body = el.closest('.panel-body-slot');
+            body.scrollTop += el.getBoundingClientRect().top
+                - body.getBoundingClientRect().top; }"""
+    )
 
 
 def _bench_ready(w: Walk) -> bool:
@@ -133,7 +140,7 @@ def hello(w: Walk) -> None:
         w.page.locator(f".world-badge[data-path='{NODE}']").is_visible(),
     )
     if w.bench.is_visible():
-        w.page.locator(".panel-rail .rail-tab[data-panel='bench'] .rail-tab-name").click()
+        windows.show(w.page, "pictures")  # Pictures in front: the Bench behind it
         expect(w.bench).to_be_hidden(timeout=5000)
     _ring_on(w.page, NODE)
     _choose(w.page, "Device", "Open")
