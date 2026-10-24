@@ -137,3 +137,34 @@ def test_without_chromium_the_browser_part_says_how_to_install_it_in_one_line(tm
         "the browser tests need Chromium, which Playwright has not installed here: "
         "run `uv run playwright install chromium`"
     ]
+
+
+def test_changed_runs_the_unit_part_then_the_browser_files_the_change_reaches():
+    """A change to a board's code reaches the machine area's files alone; one to the
+    page reaches every browser file; one that reaches no area runs the unit part alone."""
+    unit, browser = testing.changed_commands(["apothecary/firmware/gcode.py"])
+    assert unit == testing.unit_command()
+    files = [a for a in _args(browser) if a.startswith("tests/e2e/")]
+    assert "tests/e2e/test_one_machine.py" in files and "tests/e2e/test_ring.py" not in files
+    assert _args(browser)[-1] == "--start-server"
+    _, every = testing.changed_commands(["templates/fractal_viewer.html.j2"], workers=3)
+    assert _args(every) == ["-q", "tests/e2e", "--start-server", "-n", "3", "--dist", "loadfile"]
+    assert testing.changed_commands(["docs/viewer.md"]) == [testing.unit_command()]
+
+
+def test_changed_exits_with_the_first_failing_code_and_lists_without_running(
+    pytest_exits, monkeypatch
+):
+    monkeypatch.setattr(testing, "changed_paths", lambda since: ["apothecary/lighting.py"])
+    ran = pytest_exits(0, 1)
+    done = CliRunner().invoke(cli, ["test", "changed"])
+    assert done.exit_code == 1 and len(ran) == 2
+    assert "tests/e2e/test_lighting_overlay.py" in _args(ran[1])
+    listed = CliRunner().invoke(cli, ["test", "changed", "--list"])
+    assert listed.exit_code == 0 and listed.output.strip() == "tests/e2e/test_lighting_overlay.py"
+    assert len(ran) == 2  # --list ran nothing
+
+
+def test_changed_says_what_to_name_when_there_is_nothing_to_compare_with():
+    done = CliRunner().invoke(cli, ["test", "changed", "--list", "--since", "no-such-ref-here"])
+    assert done.exit_code != 0 and "name a ref with --since" in done.output

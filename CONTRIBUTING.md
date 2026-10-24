@@ -25,6 +25,7 @@ trying it, and names the optional installs: the slicer and each firmware toolcha
 ```bash
 uv run apothecary test run                      # the ordinary command: unit tests and the walkthrough, whose demonstration drives Chromium
 uv run apothecary test all                      # the same, then every browser test
+uv run apothecary test changed                  # the unit tests and the walkthrough, then the browser files the change reaches
 uv run apothecary test all --workers 2 -k part  # the browser part on two workers; further arguments narrow both parts
 uv run apothecary test all --record-durations   # the same, the browser tests' times written into tests/e2e/durations.json
 uv run apothecary test all --steps              # the same, and the step-through tests, which every other run skips
