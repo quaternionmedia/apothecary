@@ -190,7 +190,7 @@ def test_a_layout_remembered_with_a_retired_panel_is_harmless(page, base_url: st
     page.wait_for_function(
         "() => document.querySelector(\".panel[data-panel='site']\").getBoundingClientRect().x < 2"
     )
-    page.wait_for_timeout(400)  # the layout is remembered a moment after it changes
+    windows.remembered(page)
     page.evaluate(WITH_KEPT)
     assert "kept" in page.evaluate("() => localStorage.getItem('apothecary.layout')")
     errors = []
@@ -205,7 +205,7 @@ def test_a_layout_remembered_with_a_retired_panel_is_harmless(page, base_url: st
     # Pictures, opened from the ring's Panels as a person would, is a tab beside the Bench.
     page.evaluate("() => window.apothecaryPanels.open('pictures')")
     expect(windows.panel(page, "pictures")).to_be_visible()
-    page.wait_for_timeout(400)
+    windows.remembered(page)
     remembered = page.evaluate("() => localStorage.getItem('apothecary.layout')")
     assert "kept" not in remembered and "pictures" in remembered
     assert errors == []

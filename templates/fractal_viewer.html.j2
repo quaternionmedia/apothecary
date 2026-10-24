@@ -4348,7 +4348,7 @@
             async applyNow(target, label = target.label) {
                 const scad = this.scadStages[target.key];
                 // An Apply asked for is the render; one waiting for the quiet is not needed.
-                if (scad) { clearTimeout(scad.checkTimer); clearTimeout(scad.renderTimer); scad.seq += 1; }
+                if (scad) { clearTimeout(scad.checkTimer); clearTimeout(scad.renderTimer); scad.seq += 1; scad.answered = true; }
                 if (!this.canBuild(target)) return `${label}: ${this.partStages[target.key]?.buildNote || 'this OpenSCAD cannot build it'}`;
                 if (this.toSaved(target)) { await this.drawSaved(target); return null; }
                 const count = Object.keys(this.stagedDiff()).length;
@@ -4429,6 +4429,7 @@
                     clearTimeout(scad.checkTimer);
                     clearTimeout(scad.renderTimer);
                     scad.seq += 1;
+                    scad.answered = true;
                     if (scad.text !== scad.own) scad.version = (scad.version ?? 0) + 1;
                     scad.text = scad.own;
                     scad.check = null;
@@ -5209,6 +5210,7 @@
                 clearTimeout(scad.checkTimer);
                 clearTimeout(scad.renderTimer);
                 scad.seq += 1;
+                scad.answered = true;
                 if (scad.text !== text) scad.version = (scad.version ?? 0) + 1;
                 scad.text = text;
                 scad.drawnText = text;
@@ -5906,12 +5908,16 @@
                 this.syncFromText(target);
                 this.keepWork(target);
                 this.scadEditor?.say(staged ? 'Staged: checked once the controls rest; Apply draws it' : 'Edited: checked once typing stops, rendered once it reads', 'loading');
+                // Answered once its check has, and the render that follows, if one does: what
+                // the editor says by then is the last it says of this edit.
+                scad.answered = false;
                 scad.checking = new Promise((resolve) => {
                     scad.checkTimer = setTimeout(() => this.checkScad(target, seq).then(resolve, () => resolve(null)), SCAD_CHECK_MS);
                 });
                 scad.checking.then((check) => {
-                    if (seq !== scad.seq || !check || !check.valid || !scad.typedPending) return;
-                    scad.renderTimer = setTimeout(() => this.renderScad(target, seq), SCAD_RENDER_AFTER_CHECK_MS);
+                    if (seq !== scad.seq) return;
+                    if (!check || !check.valid || !scad.typedPending) { scad.answered = true; return; }
+                    scad.renderTimer = setTimeout(() => this.renderScad(target, seq).finally(() => { if (seq === scad.seq) scad.answered = true; }), SCAD_RENDER_AFTER_CHECK_MS);
                 });
             }
 
@@ -5992,6 +5998,7 @@
                 clearTimeout(scad.checkTimer);
                 clearTimeout(scad.renderTimer);
                 const seq = (scad.seq += 1);
+                scad.answered = true;
                 this.setStatus(`${target.label}: checking its SCAD (F5)`, 'loading');
                 scad.checking = this.checkScad(target, seq).catch(() => null);
                 const check = await scad.checking;
@@ -6140,6 +6147,7 @@
                 clearTimeout(scad.renderTimer);
                 scad.text = editor.text();
                 const seq = (scad.seq += 1);
+                scad.answered = true;
                 scad.checking = this.checkScad(target, seq).catch(() => null);
                 await this.loadSavedVariants(target, name);
                 await this.renderScad(target, seq);

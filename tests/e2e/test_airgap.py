@@ -216,7 +216,7 @@ def test_the_airgap_view_lays_out_every_section_and_is_remembered(page: Page, ur
         drawn = _section(page, sid).locator(f"canvas[data-airgap='{canvas}']")
         expect(drawn).to_be_visible()
         assert drawn.bounding_box()["height"] > 150
-    page.wait_for_timeout(400)  # the layout is remembered a moment after it changes
+    windows.remembered(page)
     page.reload()
     expect(page.locator("#status")).to_contain_text("Loaded", timeout=20000)
     expect(_section(page, "field").locator("canvas[data-airgap='mmf']")).to_be_visible(

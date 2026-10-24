@@ -694,6 +694,8 @@ export function installRing({ base = "", whatFor, onIntent, onResolved, onError,
         annotate,
         resolve: (spec) => resolveRing({ base, ...spec }),
         current: () => current,
+        /* Whether an arrow pressed now would make a corner with the last one. */
+        chordOpen: () => !!(current && current.lastArrow && performance.now() - current.lastArrow.t <= GEOMETRY.chordMs),
         PLACEMENT,
         COMPASS,
         GEOMETRY,

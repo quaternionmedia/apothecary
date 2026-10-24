@@ -191,6 +191,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
     // Remembered a moment after a change, so a drag is saved once; and at once when
     // the page goes, so a window closed just before a reload stays closed.
     let saving = null;
+    const whenSaved = [];
     function save() {
         saving = null;
         try {
@@ -202,6 +203,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
                 localStorage.setItem(storageKey, JSON.stringify(out));
             }
         } catch (e) { /* private window, blocked storage: the layout still works */ }
+        for (const done of whenSaved.splice(0)) done();
     }
     function remember() {
         if (!saving) saving = setTimeout(save, 200);
@@ -750,6 +752,9 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         list() { return [WORLD, ...records.keys()].map((id) => this.state(id)); },
         /* The page's own layout again, whatever a person made of it. */
         reset() { return this.applyView("default"); },
+        /* Settled once the layout as it stands is remembered: at once when nothing is
+         * waiting to be, else when the change waiting is written. */
+        saved() { return saving ? new Promise((done) => whenSaved.push(done)) : Promise.resolve(); },
         /* A view: a named arrangement of windows, the page's own ("default") or one a
          * page defines -- `layout` in rows, columns and stacks of window ids (see
          * resolveView), the window it cannot be laid out without (`requires`) and how a
