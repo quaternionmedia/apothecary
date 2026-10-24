@@ -36,14 +36,16 @@ uv run --group preflight apothecary preflight   # the CI workflows, run here, be
 ```
 
 `apothecary test run` is the one to run before a commit; it runs the window manager's
-browser tests too, which start no server. Before a pull request is marked ready,
-`apothecary test all` runs here, and its body says what ran and what it said: a pull
-request's CI runs the governance checks and lint alone, and the tests run in CI at a version
-tag. A browser test needs a server of its own (`--start-server`) or one named for it
+browser tests too, which start no server. A pull request's CI runs the governance checks
+and lint alone, and the tests run in CI at a version tag, so the whole suite runs here
+before every merge: `apothecary test all`, on the pull request's head merged onto its
+base's tip, before it is marked ready and again before it merges if that tree has changed.
+Its body says what ran and what it said, and the merge commit says it for the tree that
+landed. A browser test needs a server of its own (`--start-server`) or one named for it
 (`--base-url`); with neither it skips, and it never uses a server that happens to be
-listening. No limit is chosen by hand: in CI a browser test's cap is twice the time recorded
-for it, so a hung wait fails that test and names it, and a job's is twice its recorded
-median. Run here, nothing is capped.
+listening. No limit is chosen by hand: in CI a browser test's cap is twice the time
+recorded for it, so a hung wait fails that test and names it, and a job's is twice its
+recorded median. Run here, nothing is capped.
 
 `walkthrough/` is executable: its pages are doctests. Pages 01 and 02 are written by their
 browser tests, and a loop's page (03, 04, 05, 06) by the browser suite alone; commit what a
