@@ -80,6 +80,44 @@ jobs:
         /tmp/wheel-venv/bin/apothecary render --scene-file /tmp/scene.json -o /tmp/scene.scad
         grep -q "cube(\[1.0, 2.0, 3.0\]" /tmp/scene.scad
 
+  # The newest Python, beside the floor: the unit tests and the walkthrough, which is
+  # where a newer interpreter breaks things. Lint and the wheel are the floor's.
+  unit-newest:
+    name: 🐍 Walkthrough and unit tests on the newest Python
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+    - name: 📰 Checkout
+      uses: actions/checkout@v6
+      with:
+        submodules: true
+
+    - name: 😎 Setup uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        python-version: "3.14"
+
+    - name: 📐 Install OpenSCAD
+      run: command -v openscad || { sudo apt-get update && sudo apt-get install -y openscad; }
+
+    - name: 🚧 Install dependencies
+      run: uv sync --locked
+
+    - name: 🗃️ Cache the OpenSCAD snapshot
+      uses: actions/cache@v5
+      with:
+        path: ~/.apothecary/tools/openscad
+        key: openscad-${{ runner.os }}-2026.09.27
+
+    - name: 📐 An OpenSCAD snapshot for the unit tests
+      run: uv run apothecary openscad install --snapshot 2026.09.27 --extract
+
+    - name: 📖 Run the walkthrough
+      run: uv run pytest walkthrough -q
+
+    - name: 🔬 Unit tests
+      run: uv run pytest tests -m "not e2e" -q --slow
+
   # Three runners, each a third of the suite by recorded time (tests/e2e/durations.json);
   # a file never splits, since the walkthroughs and the ring build on earlier steps.
   # Three jobs rather than a matrix, so `apothecary preflight` can run them here; the
