@@ -27,11 +27,12 @@ main
             └─ #55 build/integration   (every pull request above merged into one tree)
                └─ #56 build/grid-and-fit ─ #57 scene-not-mirrored ─ #58 picture-fits-the-host
                   ─ #59 control-popped-out
-                  └─ theatre ─ build/qm-propagation ─ build/golden-layout ─ build/airgap
-                     ─ build/window-views
+                  └─ #62 theatre ─ #63 build/qm-propagation ─ #64 build/golden-layout
+                     ─ #65 build/airgap ─ #66 build/window-views
 ```
 
-The five branches from `theatre` up have no pull requests yet (step 1).
+The five branches from `theatre` up are drafts #62 to #66, opened on
+2026-10-23 (step 1).
 `build/window-views` contains every pull request beneath it:
 
 ```sh
@@ -44,15 +45,16 @@ done
 
 The governance side is a stack in qm, on `project/apothecary`: qm#171
 `fix/apothecary-seed-refresh`, then qm#172 `propagate/apothecary-2026-10-13`,
-then qm#197 `adr/apothecary-review-the-whole`, then
-`adr/apothecary-airgap-metrics` (the Airgap's metrics record, no pull request
-yet). `build/qm-propagation` pins qm#197's head and `build/airgap` pins the
+then qm#197 `adr/apothecary-review-the-whole`, then qm#211
+`adr/apothecary-airgap-metrics` (the Airgap's metrics record). `build/qm-propagation` pins qm#197's head and `build/airgap` pins the
 Airgap record's; `git ls-tree <branch> governance/qm` shows each pin.
 `submodule-check.yml` fails a branch whose pin qm's remote does not have.
 
 ## 1. Before anything merges
 
-Each of these is done on origin, by the owner or with them.
+Each of these is done on origin, by the owner or with them. *Done by
+2026-10-23: the signing key; qm#211; the theatre as #62, a new pull request,
+#54 pointing to it; #63 to #66.*
 
 1. **The signing key on GitHub**, so the stack's signed commits show as
    verified: `gh auth refresh -h github.com -s admin:ssh_signing_key` (a
@@ -129,6 +131,11 @@ Known and not fixed, for the approval to name or for a pull request of its
 own: the airgap part stands below the floor (its Readiness window says so, at
 `/viewer/parts/airgap`).
 
+Known and fixed at the top only: the license check's dependency audit fails on
+every branch below #66, on advisories published in October 2026 against the
+locked certifi and pillow. #66 locks their fix versions; at landing the same
+lock change goes on #21's branch and is merged up, as a red check is.
+
 ## 3. Landing: bottom first
 
 **qm first**, because apothecary pins its records: qm#171 into
@@ -146,8 +153,7 @@ checks (depth first from the base, oldest first on each):
    the page and tests stack #48, #49, #52; then #53
 5. #55, whose diff is then its own: the merges' resolutions and the README's map
 6. #56, #57, #58, #59
-7. the theatre's pull request, then `build/qm-propagation`,
-   `build/golden-layout`, `build/airgap`, `build/window-views`
+7. #62 (the theatre), then #63, #64, #65, #66
 
 Each is merged the same way:
 
