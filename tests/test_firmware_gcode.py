@@ -901,7 +901,8 @@ def test_control_route_requires_the_latch(fake_arduino_cli, fresh_task_runner, s
         "M112": ["Error:Printer halted. kill() called!"],
     }
     r = c.post("/firmware/printers/command", json={"port": port, "command": "M112"})
-    assert r.status_code == 503 and "halted" in r.json()["detail"]  # the board says so; it was sent
+    assert r.status_code == 200, r.text  # the board's halt line is the stop's answer
+    assert any("halted" in line for line in r.json()["lines"])
     assert ScriptedTransport.instances[0].sent[-1] == "M112"
 
     # Release drops the latch with the link.
@@ -910,6 +911,38 @@ def test_control_route_requires_the_latch(fake_arduino_cli, fresh_task_runner, s
     assert (
         c.get("/firmware/printers/info", params={"port": port}).json()["control"]["armed"] is False
     )
+
+
+def test_the_emergency_stop_is_written_ahead_of_an_exchange_in_flight():
+    """M112 waits for no exchange: sent while a homing holds the link, waiting for its
+    `ok`, it is on the wire at once, and the homing ends with the board's halt line."""
+    halt = "Error:Printer halted. kill() called!"
+    transport = ScriptedTransport(
+        "/dev/ttyFAKE1", 115200, replies={**REPLIES, "G28": [], "M112": [halt]}
+    )
+    link = gcode.GcodeLink("/dev/ttyFAKE1", 115200, transport)
+    homing: dict = {}
+
+    def home():
+        try:
+            gcode.control_printer(link, "G28", timeout=3)
+        except ToolchainError as exc:
+            homing["ended"] = str(exc)
+
+    thread = threading.Thread(target=home)
+    thread.start()
+    deadline = time.monotonic() + 5
+    while "G28" not in transport.sent and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert transport.sent[-1] == "G28"
+    lines = gcode.control_printer(link, "M112")
+    # Written while the homing still holds the link; the homing reads the reply.
+    assert transport.sent[-2:] == ["G28", "M112"] and thread.is_alive() is True
+    assert lines == []
+    thread.join(10)
+    assert "halted" in homing["ended"]
+    sent = [e["text"] for e in link.log.since(0)["entries"] if e["kind"] == "tx"]
+    assert sent[-2:] == ["G28", "M112"]
 
 
 def test_simulator_honours_controls(monkeypatch):
@@ -930,8 +963,7 @@ def test_simulator_honours_controls(monkeypatch):
     assert gcode.poll_printer(link).state == "printing"
     gcode.control_printer(link, "M25")
     assert gcode.poll_printer(link).state == "idle"
-    with pytest.raises(ToolchainError, match="halted"):
-        gcode.control_printer(link, "M112")
+    assert any("halted" in line for line in gcode.control_printer(link, "M112"))
     with pytest.raises(ToolchainError, match="halted"):
         gcode.poll_printer(link)
 
@@ -1474,8 +1506,7 @@ def test_print_job_cancel_sends_the_safe_off_and_a_stop_does_not(fake_arduino_cl
     job = devices.start_print(port, kept.id, links=scripted_links)
     time.sleep(0.1)
     transport.replies = {**REPLIES, "M112": ["Error:Printer halted. kill() called!"]}
-    with pytest.raises(ToolchainError, match="halted"):
-        devices.printer_control(port, "M112", links=scripted_links)
+    devices.printer_control(port, "M112", links=scripted_links)
     job.thread.join(5)
     assert job.stage == "cancelled" and job.record.outcome == "cancelled"
     assert "emergency stop" in job.record.reason

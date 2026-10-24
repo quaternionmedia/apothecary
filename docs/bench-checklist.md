@@ -131,6 +131,10 @@ Machine, Ctrl + right-click opens the board's own ring (the device ring); from
 - [ ] With the printer idle, **⏹ E-STOP** (⌗71): it never asks; `Error:Printer
       halted. kill() called!` in the log, the next poll `offline`. **⏻ Reboot**
       brings it back.
+- [ ] Armed, **Home all**, and **⏹ E-STOP** while it homes: `M112` is in the log
+      before the homing's answer, and the axes stop at once if the firmware
+      parses M112 early (`EMERGENCY_PARSER`), else when the homing ends -- note
+      which. **⏻ Reboot** brings it back.
 - [ ] **Release**: the link drops, the latch with it; `uv run apothecary
       firmware printer <the printer's port>` from a terminal answers without a
       boot banner; **⇄ Reconnect** in the Machine holds it again, also
